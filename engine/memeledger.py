@@ -236,6 +236,38 @@ def _median(xs: list[float]):
     return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2.0
 
 
+#: RETURN BUCKETS, log-ish on purpose. A meme call's outcome spans -100%
+#: to +1000% and a linear histogram spends seven of its eight bars on the
+#: interval between "lost everything" and "lost most of it", which is the
+#: one stretch nobody needs resolution in. These edges put the detail
+#: where the decisions are: did it double, did it rug, did it do nothing.
+#: Lower bound inclusive, upper exclusive; the last bucket is open.
+DIST_EDGES = (-0.80, -0.50, -0.20, 0.0, 0.50, 2.00, 10.0)
+DIST_LABELS = ("≤ -80%", "-80 to -50%", "-50 to -20%", "-20 to 0%",
+               "0 to +50%", "+50 to +200%", "+200 to +1000%", "> +1000%")
+
+
+def distribution(values) -> list[dict]:
+    """How the calls actually landed, as counts — not a mean, not a range.
+
+    Ethan, 2026-08-20: "of our last 40 calls, the median peaked +31% and
+    ended -83%; here's the distribution." The medians are the headline and
+    the shape is the finding: a book whose median is -83% because
+    everything lost a bit is a different product from one whose median is
+    -83% because four calls in forty went up ten times and the rest went
+    to zero. Only the histogram tells those apart.
+    """
+    out = [{"label": lab, "n": 0} for lab in DIST_LABELS]
+    for v in values:
+        if v is None:
+            continue
+        i = 0
+        while i < len(DIST_EDGES) and v >= DIST_EDGES[i]:
+            i += 1
+        out[i]["n"] += 1
+    return out
+
+
 def _summarise(rows: list[sqlite3.Row]) -> dict:
     """One channel at one horizon. Median leads; the mean is not shown.
 
@@ -303,6 +335,11 @@ def report(conn, now: float | None = None) -> dict:
             "median_last": _median([r["last"] for r in seen]),
             "gone": sum(1 for r in path if r["gone"]),
             "never_marked": sum(1 for r in path if r["seen"] == 0),
+            # The shape behind the medians. Two of them, because the whole
+            # point of keeping the path is that a call's best moment and
+            # its last moment are different facts.
+            "dist_peak": distribution([r["up"] for r in seen]),
+            "dist_last": distribution([r["last"] for r in seen]),
         }
         out["channels"][channel] = ch
     return out

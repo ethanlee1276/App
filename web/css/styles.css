@@ -1942,6 +1942,24 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 .rec-kpis .tile.lead::after { opacity: .16; }
 .rec-kpis .tile.lead .v { font-size: var(--fs-4xl); }
+/* A FULL SEASON'S RECORD IS NINE CHARACTERS AND IT WAS BREAKING. Measured
+   2026-08-20 at 1280px — the width the renders are drawn at — a record of
+   "135-112-0" wrapped its final digit onto a line of its own, so the tile
+   read as two numbers. It only shows on a book with three-digit counts,
+   which is why nothing caught it: the container's journal has one bet.
+
+   THE FIRST FIX WAS `white-space: nowrap` ON `.tile .v` AND IT IS BANNED,
+   for a reason test_number_type already records: it was tried, and it
+   turned a wrap into a clip — an unbreakable value ran 56px out of a
+   320px phone tile and lost its "pts" entirely. Two lines on a phone is
+   fine; losing the unit is not.
+
+   So the break is prevented in the STRING instead. The record's separators
+   are U+2011 NON-BREAKING HYPHENs (see recTile callers), which stops the
+   score splitting without stopping the legitimate break between a number
+   and its unit. A floor on the size keeps the long form inside its tile. */
+.rec-kpis .tile.lead .v {
+  font-size: clamp(var(--fs-2xl), 3.2vw, var(--fs-4xl)); }
 @supports not (background: color-mix(in srgb, red 10%, transparent)) {
   .rec-kpis .tile.lead { border-color: rgba(90, 140, 255, .35); }
 }
@@ -4385,6 +4403,69 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   background-image: var(--grad-card); }
 .bk-note { margin: 14px 0 0; color: var(--text-mute); font-size: var(--fs-sm);
   line-height: var(--lh-body); max-width: var(--measure); }
+
+/* ---------------- The verdict panel — the Record page's lead ------------ */
+/* Five numbers and one picture. The tiles are deliberately NOT `.stats`:
+   that class is shared by eleven containers and pinning a five-track grid
+   on it pushed the Record page's own KPI row onto a second line once
+   already (see test_newlook). This grid is its own. */
+.rv-card { margin-bottom: 22px; }
+.rv-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px; background: var(--border-soft); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); overflow: hidden; margin-top: 14px; }
+.rv-tile { background: var(--panel); padding: 15px 14px; }
+.rv-v { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 700;
+  color: var(--text); line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
+.rv-tile.good .rv-v { color: var(--good); }
+.rv-tile.warn .rv-v { color: var(--warn); }
+.rv-k { margin-top: 6px; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-mute); }
+.rv-s { margin-top: 3px; font-size: var(--fs-xs); color: var(--text-mute); }
+.rv-read { display: grid; grid-template-columns: 320px minmax(0, 1fr);
+  gap: 22px; align-items: start; margin-top: 18px; }
+.rv-says p { margin: 0 0 10px; color: var(--text-body); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+.rv-says p:last-child { margin-bottom: 0; }
+.rv-says b { color: var(--text); }
+.rv-early { margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.rv-early b { color: var(--text); }
+
+@media (max-width: 900px) {
+  /* Five across is unreadable on a phone; two rows of the same tiles is
+     the same information at a size a thumb can read. */
+  .rv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rv-read { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
+
+/* ---------------- The meme verdict's distribution bars ----------------- */
+.md-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.md-read { grid-template-columns: minmax(280px, 1fr) minmax(0, 1fr); }
+.md-bars { display: grid; gap: 5px; }
+.md-row { display: grid; grid-template-columns: 106px minmax(0, 1fr) 30px;
+  gap: 9px; align-items: center; }
+.md-lab { font-size: var(--fs-2xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.md-track { height: 14px; background: var(--panel-2); border-radius: 3px;
+  overflow: hidden; }
+.md-fill { display: block; height: 100%; border-radius: 3px; }
+/* Green above flat, red below — the same two colours the prop charts use
+   for over and under, so the reader learns one convention, not two. */
+.md-fill.up { background: var(--good); }
+.md-fill.down { background: var(--bad); }
+.md-n { font-family: var(--font-mono); font-size: var(--fs-xs);
+  color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+.md-cap { margin: 10px 0 0; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+.md-warn { color: var(--text-mute) !important; font-size: var(--fs-xs) !important;
+  border-top: var(--hairline) solid var(--border-soft); padding-top: 10px; }
+
+@media (max-width: 900px) {
+  .md-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md-read { grid-template-columns: minmax(0, 1fr); }
+  .md-row { grid-template-columns: 96px minmax(0, 1fr) 26px; gap: 7px; }
+}
 
 /* ---------------- Soft radii for the system's shared shapes ---------------- */
 .card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }

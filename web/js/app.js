@@ -6568,7 +6568,7 @@ function recLooseSection(lo) {
       ${recTile("Flat-stake ROI", graded ? (lo.roi >= 0 ? "+" : "") + (lo.roi * 100).toFixed(1) + "%" : "—",
                 `${(lo.net_units || 0) >= 0 ? "+" : ""}${(lo.net_units || 0).toFixed(2)}u on ${(lo.units_staked || 0).toFixed(1)}u`,
                 { lead: true, tone: toneOf(lo.roi || 0) })}
-      ${recTile("Record", `${lo.wins || 0}-${lo.losses || 0}`, `${lo.open || 0} open`)}
+      ${recTile("Record", `${lo.wins || 0}\u2011${lo.losses || 0}`, `${lo.open || 0} open`)}
       ${recTile("Toward the bar", `${graded}/100`,
                 graded >= 100 ? "sample reached — read the ROI" : "graded picks needed")}
     </div>
@@ -7284,6 +7284,133 @@ function recEdgePanel(e, trend) {
   </div>`;
 }
 
+/* ============================================================
+   THE VERDICT — "is this thing working?", in one screen
+   ============================================================ */
+/* Ethan, 2026-08-20: "Nobody visiting for the first time can tell in ten
+   seconds whether the model is good."
+
+   He is right, and the cause is not a shortage of measurement — it is a
+   surplus. Calibration by market and by horizon, CLV coverage, the
+   hypothesis lab, restated performance, blind-spot patterns: all honest,
+   all already computed, each answering its own narrow question on its own
+   page. Nowhere does the site simply say what happened.
+
+   Five numbers and one picture, in the order a sceptic asks them:
+
+     how many        a rate without a denominator is a slogan
+     claimed         what the model said would happen
+     landed          what happened
+     CLV             whether the price moved our way, which shows up
+                     before the results do
+     net             what it paid
+
+   THE READING IS DERIVED, NOT WRITTEN. Every sentence below is generated
+   from the numbers above it, so it cannot drift into optimism the data
+   does not support. "Claims more than it lands" is a subtraction.
+
+   AND IT REFUSES TO GIVE A VERDICT ON A THIN BOOK. `MIN_GRADED_FOR_SIGNAL`
+   is 30 in engine/ledger.py and the payload carries it. Under that, this
+   panel prints the count and says it is too early — because the single
+   most dishonest thing this page could do is turn a 1-0 record into
+   "landed 100%", and a panel built to be persuasive is exactly the one
+   that would. */
+function recordVerdictHTML(src, scopeLabel) {
+  const o = (src && src.overall) || {};
+  const cal = src && src.calibration;
+  const buckets = ((cal || {}).buckets || []).filter((b) => b.n > 0);
+  const need = src.min_graded || 30;
+  const settled = o.settled || 0;
+
+  // Claimed and landed, population-weighted across the buckets. Weighted,
+  // because an unweighted mean of bucket midpoints describes the BUCKETS
+  // rather than the book — a single 95% bucket holding two bets would
+  // count as much as a 55% bucket holding four hundred.
+  let claimed = null, landed = null, calN = 0;
+  for (const b of buckets) { calN += b.n; }
+  if (calN > 0) {
+    claimed = buckets.reduce((a, b) => a + b.predicted * b.n, 0) / calN;
+    landed = buckets.reduce((a, b) => a + b.actual * b.n, 0) / calN;
+  }
+
+  const tile = (label, value, sub, tone) => `
+    <div class="rv-tile${tone ? " " + tone : ""}">
+      <div class="rv-v">${value}</div>
+      <div class="rv-k">${escapeHtml(label)}</div>
+      ${sub ? `<div class="rv-s">${sub}</div>` : ""}
+    </div>`;
+
+  const sign = (x, d = 1) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const thin = settled < need;
+
+  /* THE READING. Built out of the same numbers the tiles show, in the
+     order that matters: calibration first (does it know what it knows),
+     then CLV (did the price agree), then money (which is the noisiest of
+     the three and therefore last). */
+  const lines = [];
+  if (calN > 0) {
+    const gap = (claimed - landed) * 100;
+    lines.push(Math.abs(gap) < 1
+      ? `Claimed and landed agree to within a point across ${calN} graded
+         pick${calN === 1 ? "" : "s"} — the model knows what it knows.`
+      : gap > 0
+        ? `The model <b>claims ${gap.toFixed(1)} points more than it
+           lands</b>, across ${calN} graded pick${calN === 1 ? "" : "s"}. An
+           over-claim of that size is the thing to fix before chasing ROI.`
+        : `The model <b>lands ${Math.abs(gap).toFixed(1)} points more than
+           it claims</b>, across ${calN} graded pick${calN === 1 ? "" : "s"} —
+           under-confident, which costs stake size rather than accuracy.`);
+  }
+  if (cal && cal.brier_model != null && cal.brier_market != null) {
+    const e = cal.brier_edge;
+    lines.push(e == null ? "" : e > 0
+      ? `On its own picks it out-forecasts the de-vigged close
+         (Brier ${cal.brier_model} against the market’s ${cal.brier_market}).`
+      : `The de-vigged close out-forecasts it on its own picks
+         (Brier ${cal.brier_model} against the market’s ${cal.brier_market}) —
+         which means the edge story is not yet supported.`);
+  }
+  if (o.avg_clv != null && o.clv_n) {
+    lines.push(o.avg_clv > 0
+      ? `The line moved our way by ${o.avg_clv.toFixed(2)} points on average
+         over ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}.`
+      : `The line moved against us by ${Math.abs(o.avg_clv).toFixed(2)} points
+         on average over ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}.`);
+  }
+
+  const chart = buckets.length >= 2 ? reliabilityDiagram(cal.buckets) : "";
+
+  return `<section class="card rv-card">
+    <div class="section-title">The verdict
+      <span class="sub">— ${escapeHtml(scopeLabel)}, everything journaled at
+      its real price and graded in public</span></div>
+    <div class="rv-tiles">
+      ${tile("settled", String(settled),
+             o.open ? `${o.open} still open` : "graded picks")}
+      ${tile("claimed", claimed == null ? "—" : (claimed * 100).toFixed(1) + "%",
+             "what the model said")}
+      ${tile("landed", landed == null ? "—" : (landed * 100).toFixed(1) + "%",
+             "what happened",
+             claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
+      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + " pts",
+             o.clv_n ? `on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}`
+                     : "accrues as closes are captured",
+             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
+      ${tile("net", sign(o.net_units || 0, 2) + "u",
+             `${sign((o.roi || 0) * 100)}% on ${(o.units_staked || 0).toFixed(1)}u`,
+             (o.net_units || 0) >= 0 ? "good" : "warn")}
+    </div>
+    ${thin ? `<p class="rv-early">${icon("warn", 14)}
+        <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
+        against the ${need} this page needs before a rate means anything.
+        The numbers above are real and they are not yet a verdict — judge the
+        process by CLV until the count catches up.</p>`
+      : `<div class="rv-read">${chart}
+          <div class="rv-says">${lines.filter(Boolean).map((t) => `<p>${t}</p>`).join("")}</div>
+        </div>`}
+  </section>`;
+}
+
 async function renderRecord() {
   const host = document.getElementById("record-body");
   if (!host) return;
@@ -7378,10 +7505,17 @@ async function renderRecord() {
      main book, and slicing it per sport would print a number that was
      never calculated. See docs/THE_INFORMATION_TEST.md. */
   const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend);
+  /* THE VERDICT LEADS. Everything below it is the working; this is the
+     answer, and a first-time reader should not have to assemble it from
+     six panels. Scoped correctly by construction — `src` is already the
+     scoped object, so a per-sport verdict cannot quietly print the
+     combined number. */
+  const verdict = recordVerdictHTML(src, scope === "all"
+    ? "all sports" : ((SPORT_META[scope] || {}).name || scope.toUpperCase()));
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  const receipts = edgePanel + `
+  const receipts = verdict + edgePanel + `
     <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
@@ -7402,7 +7536,7 @@ async function renderRecord() {
           (o.avg_price_clv >= 0 ? "+" : "") + (o.avg_price_clv * 100).toFixed(2) + ' <span class="unit">pts</span>',
           `how the PRICE moved on ${o.price_clv_n ?? 0} over${o.price_clv_n === 1 ? "" : "s"} — the only CLV a 0.5 line has`,
           { lead: true, tone: toneOf(o.avg_price_clv) })}
-      ${recTile("Record", `${o.wins}-${o.losses}-${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
+      ${recTile("Record", `${o.wins}\u2011${o.losses}\u2011${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
       ${/* The break-even is read off the prices this book ACTUALLY took,
             not assumed to be -110. A book that buys short prices needs far
             more than 52.4%: on the MLB journal the real bar is near 58%,
@@ -10211,6 +10345,111 @@ function memeChannelHTML(name, label, ch, horizons) {
   </div>`;
 }
 
+/* ============================================================
+   THE MEME VERDICT — the medians, and the shape behind them
+   ============================================================ */
+/* Ethan, 2026-08-20: "of our last 40 calls, the median peaked +31% and
+   ended -83%; here's the distribution."
+
+   That sentence is the product. Every meme account on the internet posts
+   the one call that went up; almost nobody posts what the median call did
+   after they posted it, and nobody at all posts the shape. A ledger that
+   keeps the PATH — peak and trough, not just the endpoint — is what makes
+   it sayable, and it has been keeping it since it shipped.
+
+   THE HISTOGRAM IS NOT DECORATION. A median of -83% because everything
+   sagged is a completely different product from a median of -83% because
+   four calls in forty went up tenfold and the rest went to zero. The
+   medians cannot tell those apart and the bars can, which is the only
+   reason they are here. */
+function memeDistBars(dist, total) {
+  const rows = (dist || []).filter((b) => b.n > 0);
+  if (!rows.length) return "";
+  const max = Math.max(...rows.map((b) => b.n));
+  return `<div class="md-bars">${(dist || []).map((b) => {
+    // Colour by which side of flat the bucket sits on, so the shape reads
+    // before the labels do.
+    const up = b.label.indexOf("+") === 0 || b.label.indexOf("> +") === 0;
+    const w = max ? Math.round((b.n / max) * 100) : 0;
+    return `<div class="md-row">
+      <span class="md-lab">${escapeHtml(b.label)}</span>
+      <span class="md-track"><span class="md-fill${up ? " up" : " down"}"
+        style="width:${w}%"></span></span>
+      <span class="md-n">${b.n}</span>
+    </div>`;
+  }).join("")}</div>
+  <p class="md-cap">${total} call${total === 1 ? "" : "s"} old enough to have a
+  path. Buckets are wider at the top because the interesting question up
+  there is “did it double”, not “by how much exactly”.</p>`;
+}
+
+/* Below this many followed calls the medians are a small sample wearing a
+   percentage. Same principle as the Record page's own gate, and the same
+   reason: this panel exists to be believed, so it has to refuse when it
+   cannot support the claim. */
+const MEME_MIN_CALLS = 20;
+
+function memeVerdictHTML(rec) {
+  const chans = (rec && rec.channels) || {};
+  const r = (chans.rocket || {}).path || {};
+  const marks = ((chans.rocket || {}).marks || {})["24h"] || {};
+  const followed = r.followed || 0;
+  const pc = (v) => v == null ? "—"
+    : (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+  const tile = (label, value, sub, tone) => `
+    <div class="rv-tile${tone ? " " + tone : ""}">
+      <div class="rv-v">${value}</div>
+      <div class="rv-k">${escapeHtml(label)}</div>
+      ${sub ? `<div class="rv-s">${sub}</div>` : ""}
+    </div>`;
+
+  const thin = followed < MEME_MIN_CALLS;
+  const say = thin ? "" : (() => {
+    const peak = r.median_peak, last = r.median_last;
+    if (peak == null || last == null) return "";
+    const gave = (peak - last) * 100;
+    return `<p>Of ${followed} call${followed === 1 ? "" : "s"} we could follow,
+      the <b>median peaked ${pc(peak)}</b> and <b>ended ${pc(last)}</b>${
+      gave > 5 ? ` — giving back ${gave.toFixed(0)} points between its best
+      moment and its last one` : ""}.${
+      r.gone ? ` ${r.gone} went to zero and stayed there; they are counted
+      here, not dropped.` : ""}</p>
+      ${marks.hit_rate != null ? `<p>At 24 hours, <b>${(marks.hit_rate * 100).toFixed(0)}%
+      were above the price we called them at</b>${
+      marks.down_80 ? `, and ${marks.down_80} had lost four fifths or more` : ""}.</p>` : ""}`;
+  })();
+
+  return `<section class="card rv-card">
+    <div class="section-title">The verdict
+      <span class="sub">— what happened to the coins this page called, including
+      the ones that went to zero</span></div>
+    <div class="rv-tiles md-tiles">
+      ${tile("calls", String(r.n || 0),
+             followed ? `${followed} followable` : "none old enough yet")}
+      ${tile("median peak", pc(r.median_peak), "best moment after the call",
+             r.median_peak != null && r.median_peak > 0 ? "good" : "")}
+      ${tile("median now", pc(r.median_last), "where they sit today",
+             r.median_last != null && r.median_last >= 0 ? "good" : "warn")}
+      ${tile("gone", String(r.gone || 0), "stopped quoting entirely",
+             r.gone ? "warn" : "")}
+    </div>
+    ${thin ? `<p class="rv-early">${icon("warn", 14)}
+        <b>Too early to call.</b> ${followed} followable call${followed === 1 ? "" : "s"}
+        against the ${MEME_MIN_CALLS} this panel needs before a median means
+        anything. The rows below are the record so far and they are real —
+        they are just not yet a pattern.</p>`
+      : `<div class="rv-read md-read">
+          <div>${memeDistBars(r.dist_last, followed)}</div>
+          <div class="rv-says">${say}
+            <p class="md-warn">This is what the radar said, not a return anyone
+            could have earned — it assumes nothing about entry, exit, slippage
+            or the size you could actually fill. Most memecoins go to zero.
+            Publishing this is the point.</p>
+          </div>
+        </div>`}
+  </section>`;
+}
+
 function memeRecordHTML(rec) {
   if (!rec || !rec.calls_total) {
     return `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
@@ -10222,7 +10461,8 @@ function memeRecordHTML(rec) {
   }
   const hz = rec.horizons || ["1h", "6h", "24h", "7d"];
   const recent = (rec.recent || []).slice(0, 30);
-  return `${memeChannelHTML("rocket", "Rockets — what we called up",
+  return `${memeVerdictHTML(rec)}
+    ${memeChannelHTML("rocket", "Rockets — what we called up",
       (rec.channels || {}).rocket, hz)}
     ${memeChannelHTML("exit", "Danger — what we called broken",
       (rec.channels || {}).exit, hz)}
