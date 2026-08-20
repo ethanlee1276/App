@@ -523,6 +523,11 @@ function normalizeSlate(d) {
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
+  // What this machine's rebuild actually costs, so "stale" can mean
+  // "later than this box's own normal" instead of a typed constant.
+  // Not awaited: the freshness chip re-reads it on the next tick, and a
+  // slow heartbeat must never hold up the board behind it.
+  loadHeartbeat();
   // The brand IS the refresh control now — it spins while data loads, so
   // a tap always has visible feedback even though the button is gone.
   const refreshBtn = document.getElementById("brand-home");
@@ -633,10 +638,48 @@ function manageAutoRefresh() {
   updateAgo();
 }
 
-// The refresh loop rebuilds every board every 60s. Past a few minutes with
-// no new build, something on the machine has stopped — asleep, crashed,
-// off the network — and the number on screen is history, not tonight.
-const STALE_AFTER_MS = 8 * 60 * 1000;
+// WHAT "STALE" MEANS HERE IS MEASURED, NOT ASSUMED.
+//
+// This constant used to be the whole answer, above a comment claiming
+// "the refresh loop rebuilds every board every 60s". Sixty seconds is the
+// loop's SLEEP; the work after it is a maintenance pass, an auto-settle
+// and a refresh_all() that rebuilds thirteen boards, which on a two-vCPU
+// droplet takes minutes. So a board's real age swings between one cycle
+// and two, and the page was calling a perfectly healthy sixteen-minute
+// board stale — Ethan, 2026-08-20: "it's now saying the site is stale 16
+// mins. I thought every 8 mins it refreshes."
+//
+// The machine now times its own cycles and publishes the median in
+// data/heartbeat.json, and staleness is read off that: about two cycles
+// plus slack, because just before the next rebuild a board legitimately
+// IS two cycles old. This floor stays as the fastest we will ever
+// complain — on a quick box the threshold must not become so tight that
+// every board flickers stale between builds — and there is deliberately
+// no ceiling, because "this is as fresh as this machine gets" is the true
+// sentence for a slow one. Genuine death is caught by STALE_LOUD_MS
+// below, which answers a different question entirely.
+const STALE_FLOOR_MS = 8 * 60 * 1000;
+//: The machine's own measured cadence, once the heartbeat has been read.
+let _cycleMs = null;
+
+function staleAfterMs() {
+  if (!_cycleMs) return STALE_FLOOR_MS;
+  return Math.max(STALE_FLOOR_MS, _cycleMs * 2 + 60000);
+}
+
+/* One small file, read on the same cycle as everything else. Absent, or
+   too new to have timed two cycles, leaves the floor in place — a page
+   that cannot measure the machine keeps the conservative guess rather
+   than inventing a looser one. */
+async function loadHeartbeat() {
+  try {
+    const res = await boardFetch("data/heartbeat.json?t=" + (Date.now() / 60000 | 0));
+    if (!res.ok) return;
+    const hb = await res.json();
+    const p50 = Number(hb.cycle_p50_s);
+    if (isFinite(p50) && p50 > 0) _cycleMs = p50 * 1000;
+  } catch (e) {}
+}
 //: Past this, the site is not slow — it is BROKEN, and quietly. The
 //: server keeps serving whatever is on disk when the refresh loop dies,
 //: so every board goes on presenting a dead slate as tonight's. That is
@@ -774,7 +817,7 @@ function updateAgo() {
     : s < 3600 ? `${Math.round(s / 60)}m`
     : s < 172800 ? `${Math.round(s / 3600)}h`
     : `${Math.round(s / 86400)}d`;
-  const stale = known && (Date.now() - state.builtAt) > STALE_AFTER_MS;
+  const stale = known && (Date.now() - state.builtAt) > staleAfterMs();
   // Same wording either way so the chip's width barely moves; the live dot
   // is what says "and it's polling because games are running".
   // Two widths of the same fact: the sentence for desktop, the bare age
@@ -790,10 +833,18 @@ function updateAgo() {
   renderStaleBar(known ? Date.now() - state.builtAt : null, ago);
   el.classList.toggle("idle", !state.livePolling && !stale);
   el.classList.toggle("stale", stale);
-  el.title = stale
+  // The cadence, said out loud. An age with no yardstick is why sixteen
+  // minutes read as broken: the reader has no way to know whether that is
+  // late or simply what a rebuild costs here.
+  const cadence = _cycleMs
+    ? ` This machine takes about ${Math.round(_cycleMs / 60000)} min to rebuild `
+      + `every board, so anything under ${Math.round(staleAfterMs() / 60000)} min `
+      + `is normal.`
+    : "";
+  el.title = (stale
     ? "The server hasn’t rebuilt the board in a while — check that the "
       + "laptop is awake and python3 launch.py is still running."
-    : "How long ago the server last rebuilt this board.";
+    : "How long ago the server last rebuilt this board.") + cadence;
 }
 
 function passesFilters(r) {

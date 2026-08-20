@@ -1823,6 +1823,37 @@ _WARMING = True
 _BOOT_AT = time.time()
 
 
+#: How long the last few full refresh cycles actually took, newest first.
+#: THE SLEEP IS NOT THE CADENCE, and confusing the two is what made the
+#: site call itself stale. `interval` is how long the loop waits BEFORE
+#: doing the work; the work is a maintenance pass, an auto-settle, and a
+#: refresh_all() that rebuilds thirteen boards. On a two-vCPU box that
+#: adds minutes, so a board's real age at any moment is roughly the sleep
+#: plus a whole cycle — and the front end was calling anything past eight
+#: minutes stale on the strength of a comment that said "every 60s".
+#: Measured here so the number the page uses comes from this machine
+#: rather than from an assumption about it.
+_CYCLE_S: list[float] = []
+_CYCLE_KEEP = 20
+
+
+def _note_cycle(seconds: float) -> None:
+    _CYCLE_S.insert(0, round(float(seconds), 1))
+    del _CYCLE_S[_CYCLE_KEEP:]
+
+
+def _cycle_p50() -> float | None:
+    """The typical cycle, or None until a couple have been timed.
+
+    Median, not mean: one pathological cycle (a cold cache, a feed
+    timing out) must not redefine what normal looks like."""
+    if len(_CYCLE_S) < 2:
+        return None
+    xs = sorted(_CYCLE_S)
+    n = len(xs)
+    return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
+
+
 def _background_refresher(interval: int) -> None:
     """Keep the served data fresh while the server runs (quiet after startup).
 
@@ -1836,6 +1867,7 @@ def _background_refresher(interval: int) -> None:
     wrist). `_auto_updater` above has carried the same guard all along."""
     while True:
         time.sleep(interval)
+        _cycle_started = time.time()
         try:
             # Catches the date rolling over while the server runs overnight.
             _run_maintenance()
@@ -1854,6 +1886,11 @@ def _background_refresher(interval: int) -> None:
                     _BUILD_LOCK.release()
         except Exception as exc:                   # noqa: BLE001
             print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
+        # Timed whether it succeeded or failed: a cycle that dies halfway
+        # still tells us how long this box takes to get that far, and a
+        # run of short failing cycles must not make the page believe the
+        # machine got fast.
+        _note_cycle(time.time() - _cycle_started)
         # Proof of life, written whether the cycle succeeded or not: the
         # heartbeat answers "is the LOOP alive", which file mtimes cannot —
         # a failing build and a dead thread both leave boards old, and only
@@ -1870,6 +1907,14 @@ def _write_heartbeat(interval: int) -> None:
             "at_epoch": round(time.time()),
             "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "interval_s": interval,
+            # What a rebuild COSTS on this machine, beside what the timer
+            # was set to. The page reads these to decide what "stale"
+            # means here rather than carrying a constant that was true of
+            # somebody's laptop. None until two cycles have been timed —
+            # absent, the page keeps its own floor.
+            "cycle_s": _CYCLE_S[0] if _CYCLE_S else None,
+            "cycle_p50_s": _cycle_p50(),
+            "cycles_timed": len(_CYCLE_S),
         }))
         os.replace(tmp, p)
     except OSError:

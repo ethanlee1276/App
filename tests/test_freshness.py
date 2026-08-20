@@ -101,11 +101,11 @@ def test_the_chip_prefers_the_build_time_over_the_fetch_time():
 
 def test_a_frozen_board_is_called_out():
     app = _app_js()
-    m = re.search(r"STALE_AFTER_MS = (\d+) \* 60 \* 1000", app)
-    assert m, "no staleness threshold"
-    # The refresh loop rebuilds every 60s. Long enough not to flicker on a
-    # slow cycle, short enough to catch a sleeping laptop within a coffee
-    # break.
+    m = re.search(r"STALE_FLOOR_MS = (\d+) \* 60 \* 1000", app)
+    assert m, "no staleness floor"
+    # The fastest we will ever complain. Long enough not to flicker
+    # between builds on a quick box; the real threshold is measured (see
+    # the test below).
     assert 3 <= int(m.group(1)) <= 20
     fn = app[app.index("function updateAgo()"):]
     fn = fn[:fn.index("\n}\n")]
@@ -114,6 +114,59 @@ def test_a_frozen_board_is_called_out():
     # A stale board must not also show the live-game dot; "a game is running
     # right now" is a claim frozen data cannot make.
     assert "state.livePolling && !stale" in fn
+
+
+def test_stale_is_measured_against_this_machine_not_a_constant():
+    """Ethan, 2026-08-20: "it's now saying the site is stale 16 mins. I
+    thought every 8 mins it refreshes."
+
+    He was reading the comment this code used to carry — "the refresh loop
+    rebuilds every board every 60s". Sixty seconds is the loop's SLEEP.
+    The work after it is a maintenance pass, an auto-settle and a
+    refresh_all() over thirteen boards, and nobody had ever timed it. So a
+    board's true age swings between one cycle and two, and on a two-vCPU
+    droplet that is minutes — the page was calling a healthy board stale
+    on the strength of a number describing a timer rather than the work.
+
+    The machine now times its own cycles and publishes the median; the
+    threshold is read off that. The floor stays so a fast box does not
+    flicker between builds, and there is deliberately NO ceiling: "this is
+    as fresh as this machine gets" is the true sentence for a slow one,
+    and genuine death is a different question that STALE_LOUD_MS answers.
+    """
+    app = _app_js()
+    i = app.index("function staleAfterMs(")
+    fn = app[i:app.index("\n}", i)]
+    assert "STALE_FLOOR_MS" in fn, "the floor is gone — a fast box will flicker"
+    assert "_cycleMs" in fn, "the threshold ignores what a rebuild costs here"
+    assert "Math.max" in fn, "the measurement can now undercut the floor"
+    # And it has to actually be read from the machine.
+    assert "cycle_p50_s" in app, "nothing reads the measured cadence"
+    assert "data/heartbeat.json" in app, "the heartbeat is never fetched"
+    # Absent or too new to have timed two cycles, keep the conservative
+    # guess rather than inventing a looser one.
+    j = app.index("async function loadHeartbeat(")
+    hb = app[j:app.index("\n}", j)]
+    assert "isFinite(p50) && p50 > 0" in hb, \
+        "a missing or zero cadence would set the threshold to the floor by accident"
+
+
+def test_the_machine_times_its_own_refresh_cycle():
+    """The measurement has to exist server-side or the page is reading a
+    field nobody writes."""
+    with open(os.path.join(ROOT, "launch.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "_note_cycle(" in src and "def _cycle_p50(" in src
+    assert '"cycle_p50_s"' in src, "the heartbeat does not publish the cadence"
+    # Median, not mean: one pathological cycle must not redefine normal.
+    fn = src[src.index("def _cycle_p50("):]
+    fn = fn[:fn.index("\ndef ")]
+    assert "sorted(" in fn, "the typical cycle is no longer a median"
+    # Timed around the WHOLE cycle, including a failing one.
+    loop = src[src.index("def _background_refresher("):]
+    loop = loop[:loop.index("\ndef ")]
+    assert loop.index("_cycle_started = time.time()") < loop.index("_note_cycle("), \
+        "the cycle clock does not bracket the work"
 
 
 def _css():
