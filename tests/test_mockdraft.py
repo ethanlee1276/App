@@ -314,6 +314,76 @@ def test_the_season_says_which_of_its_inputs_is_not_measured():
     assert "mk-hist" in body, "the distribution is not drawn"
 
 
+def test_a_keeper_costs_the_round_it_was_kept_in():
+    """Ethan, 2026-08-20: "do the keeper shit too."
+
+    A keeper is not a player crossed off a list. It is a player crossed
+    off AND A PICK THAT NEVER HAPPENS — the round he cost belongs to the
+    room that kept him, and the draft moves straight past the slot. That
+    second half is what most keeper toggles leave out, and it is the half
+    that changes when players come off the board: a keeper league falls
+    differently precisely because eleven rooms pick in round three instead
+    of twelve, and the survival odds are wrong by exactly that much if the
+    slot is left in.
+
+    Verified on a twelve-team, eleven-round board with three keepers: the
+    skipped indexes map to exactly the three (room, round) pairs kept and
+    no others, the draft runs 129 picks instead of 132, and the user's own
+    turns move from 5, 18, 29, 42 to 5, 18, 42, 53 — index 29 was his
+    round-three pick and it is gone.
+    """
+    assert "function _mockSkipSet(" in APP
+    # Every reader of the draft order has to honour it, or the predictor
+    # describes a draft with a phantom room in it.
+    sim = APP[APP.index("function mockSurvival("):]
+    sim = sim[:sim.index("\n}\n")]
+    assert "_mockSkipped(m, pickIdx)" in sim, \
+        "the predictor still simulates a pick that does not happen"
+    adv = APP[APP.index("function _mockAdvance("):]
+    adv = adv[:adv.index("\n}")]
+    assert "_mockSkipped(" in adv, "the live draft still plays the kept slot"
+    turn = APP[APP.index("function _mockNextTurn("):]
+    turn = turn[:turn.index("\n}")]
+    assert "skip.has(i)" in turn, "'my next turn' ignores the skipped picks"
+
+
+def test_a_kept_player_joins_the_roster_that_kept_him():
+    """Not merely deleted. On the roster, every rule that reads one — need,
+    the caps, the line-up, the bye clash — sees him with no special case
+    anywhere. Verified in a browser across three drafts: all three keepers
+    absent from the best-available column, and the user's own sitting top
+    of his roster before he has picked."""
+    i = APP.index("function _mockStart(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "_mock.rosters[k.team].push(p)" in body, \
+        "a keeper is deleted rather than owned"
+    assert "_mock.pool = _mock.pool.filter" in body, \
+        "a keeper is still draftable"
+    # A league that shrinks must not keep a player owned by a room that
+    # no longer exists.
+    assert "k.team < teams" in body, "keepers survive a smaller league"
+
+
+def test_the_keeper_editor_will_not_take_an_impossible_entry():
+    """A room has one pick per round to give up, so it cannot keep two
+    players in the same one — and the same man cannot be kept twice."""
+    i = APP.index('if (t.id === "mk-keep-add")')
+    body = APP[i:i + 900]
+    assert "k.player === who" in body, "the same player can be kept twice"
+    assert "k.team === team && k.round === round" in body, \
+        "one room can keep two players with one pick"
+
+
+def test_keepers_survive_a_reload():
+    """Somebody preparing for a real keeper league runs the same mock a
+    dozen times against the same four players. Re-entering them each time
+    is how a feature goes unused."""
+    assert "MOCK_KEEPER_KEY" in APP and "localStorage" in APP
+    i = APP.index("let _mockKeepers = ")
+    assert "Array.isArray(v)" in APP[i:i + 400], \
+        "a corrupt store would throw on the next draft"
+
+
 def test_the_simulation_reports_the_count_it_actually_ran():
     """A phone that cannot finish twenty thousand must not claim it.
     The loop is time-boxed and the page prints `sims`, which is the

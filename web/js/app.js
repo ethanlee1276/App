@@ -14631,6 +14631,23 @@ const MOCK_FORMATS = {
 };
 let _mockFormat = "ppr";
 
+/* Keepers survive a reload. Somebody preparing for a real keeper league
+   runs the same mock a dozen times against the same four players, and
+   re-entering them each time is how a feature goes unused. */
+const MOCK_KEEPER_KEY = "qb_mock_keepers";
+let _mockKeepers = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(MOCK_KEEPER_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((k) => k && k.player) : [];
+  } catch (e) { return []; }
+})();
+
+function _mockSaveKeepers() {
+  try {
+    localStorage.setItem(MOCK_KEEPER_KEY, JSON.stringify(_mockKeepers));
+  } catch (e) {}
+}
+
 function _mockFmt() { return MOCK_FORMATS[_mockFormat] || MOCK_FORMATS.ppr; }
 
 /* The board under this format's scoring, with VORP re-derived from the
@@ -14949,9 +14966,43 @@ let _mockChaos = 35;
 const MOCK_SIM_BUDGET_MS = 800;
 
 /* Your next turn after `from`, or null if the draft ends first. */
-function _mockNextTurn(from, teams, you, rounds) {
+/* ---- Keepers ---------------------------------------------------------
+   Ethan, 2026-08-20: "do the keeper shit too."
+
+   A keeper is not a player crossed off a list. It is a player crossed off
+   AND A PICK THAT NEVER HAPPENS — the round the keeper costs belongs to
+   the room that kept him, and the draft moves straight past it. Getting
+   that half wrong is what makes most keeper toggles cosmetic: the board
+   falls differently in a keeper league precisely because eleven rooms
+   pick in round three instead of twelve, and the survival odds are wrong
+   by exactly that much if the slot is left in.
+
+   So a keeper is stored as (player, room, round) and turns into two
+   things: the player leaves the pool and joins that room's roster, and
+   the pick index he cost goes into a skip set that every reader of the
+   draft order honours — the live draft, the predictor, and "when is my
+   next turn". One set, every caller, same reason as the scoring rule. */
+function _mockSkipSet(m) {
+  const skip = new Set();
+  for (const k of m.keepers || []) {
+    const r = (k.round || 1) - 1;
+    if (r < 0 || r >= m.rounds) continue;
+    // The index in the snake where that room picks in that round.
+    for (let i = r * m.teams; i < (r + 1) * m.teams; i++) {
+      if (_mockPicker(i, m.teams) === k.team) { skip.add(i); break; }
+    }
+  }
+  return skip;
+}
+
+function _mockSkipped(m, i) {
+  return !!(m.skip && m.skip.has(i));
+}
+
+function _mockNextTurn(from, teams, you, rounds, skip) {
   const total = teams * rounds;
   for (let i = from; i < total; i++) {
+    if (skip && skip.has(i)) continue;
     if (_mockPicker(i, teams) === you) return i;
   }
   return null;
@@ -14979,7 +15030,7 @@ function mockSurvival(m, sims) {
   // clock the reference point is simply your next turn.
   const onClock = _mockPicker(m.pick, m.teams) === m.you;
   const from = m.pick + (onClock ? 1 : 0);
-  const mine = _mockNextTurn(from, m.teams, m.you, m.rounds);
+  const mine = _mockNextTurn(from, m.teams, m.you, m.rounds, m.skip);
   if (mine == null || mine <= from) return null;
   const gap = mine - from;                   // picks by other rooms first
   if (!gap) return null;
@@ -15015,6 +15066,10 @@ function mockSurvival(m, sims) {
     let cursor = 0;
     for (let k = 0; k < gap; k++) {
       const pickIdx = from + k;
+      // A kept round is a pick that does not happen. Left in, the
+      // simulator would have a phantom room taking a player who is in
+      // fact still on the board when it comes back to you.
+      if (_mockSkipped(m, pickIdx)) continue;
       const team = _mockPicker(pickIdx, m.teams);
       const round = Math.floor(pickIdx / m.teams);
       const arch = m.personas[team];
@@ -15129,6 +15184,9 @@ function _mockStart(teams, slot) {
   // not a manager. Your own seat gets one too, unused, so the array
   // indexes by team without a special case.
   const personas = Array.from({ length: teams }, () => _mockDrawArchetype());
+  // Keepers whose room still exists in this league size — shrinking from
+  // twelve teams to eight must not leave a keeper owned by room ten.
+  const keepers = (_mockKeepers || []).filter((k) => k.team < teams);
   _mock = { teams, you: slot - 1, pool, pick: 0,
             // LEAVE THE BOARD SOME SLACK, because it has no kickers or
             // defences to absorb the end of a draft. Drafting it to the
@@ -15146,7 +15204,19 @@ function _mockStart(teams, slot) {
             // the draft eleven rounds long instead of ten.
             rounds: Math.min(14, Math.floor(pool.length * 0.88 / teams)),
             rosters: Array.from({ length: teams }, () => []), log: [],
-            personas, chaos: _mockChaos, sim: null, market };
+            personas, chaos: _mockChaos, sim: null, market, keepers };
+  // The skip set needs `rounds` and `teams`, so it is built once the
+  // state exists and before anybody reads the draft order.
+  _mock.skip = _mockSkipSet(_mock);
+  // Kept players leave the board and join the roster that kept them, so
+  // every rule that reads a roster — need, caps, the line-up, the bye
+  // clash — sees them without a special case anywhere.
+  for (const k of keepers) {
+    const p = _mock.pool.find((x) => x.player === k.player);
+    if (!p) continue;
+    _mock.pool = _mock.pool.filter((x) => x !== p);
+    _mock.rosters[k.team].push(p);
+  }
   _mockAdvance();
 }
 
@@ -15203,8 +15273,9 @@ function _mockTake(ti, player) {
 
 function _mockAdvance() {
   const total = _mock.teams * _mock.rounds;
-  while (_mock.pick < total
-         && _mockPicker(_mock.pick, _mock.teams) !== _mock.you) {
+  while (_mock.pick < total) {
+    if (_mockSkipped(_mock, _mock.pick)) { _mock.pick += 1; continue; }
+    if (_mockPicker(_mock.pick, _mock.teams) === _mock.you) break;
     _mockCpuPick(_mockPicker(_mock.pick, _mock.teams));
   }
   _mockRender();
@@ -15265,6 +15336,64 @@ function _mockAdvice() {
       <b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
   }
   return line;
+}
+
+/* The keeper editor, in the setup panel. A player, the room that keeps
+   him, and the round it costs — those three facts are the whole feature,
+   and the round is the one people forget, which is why it is not
+   optional here. */
+function _mockKeeperHTML(teams) {
+  const kit = _mockKit || {};
+  const board = (kit.board || []);
+  const rows = _mockKeepers.map((k, i) => {
+    const p = board.find((x) => x.player === k.player);
+    return `<div class="mk-keep-row">
+      <span class="mk-keep-who"><b>${escapeHtml(k.player)}</b>${p
+        ? ` <i>${escapeHtml(p.position)} · ${escapeHtml(p.team)}</i>`
+        : ` <i class="mk-keep-gone">not on this board</i>`}</span>
+      <span class="mk-keep-at">${k.team === 0 ? "You" : "Room " + (k.team + 1)}
+        · round ${k.round}</span>
+      <button class="btn ghost mk-keep-del" data-kdel="${i}"
+        aria-label="Remove ${escapeAttr(k.player)}">Remove</button></div>`;
+  }).join("");
+  return `<details class="mk-keepers"${_mockKeepers.length ? " open" : ""}>
+    <summary>Keepers${_mockKeepers.length ? ` (${_mockKeepers.length})` : ""}</summary>
+    <p class="mk-keep-note">A keeper costs the round you name: that room
+      does not pick in it, and the draft moves straight past the slot.
+      That is the half a keeper toggle usually leaves out, and it is the
+      half that changes when players come off the board.</p>
+    ${rows ? `<div class="mk-keep-list">${rows}</div>` : ""}
+    <div class="mk-keep-add">
+      <input list="mk-keep-names" id="mk-keep-name" class="mk-sel"
+             placeholder="Player" autocomplete="off">
+      <datalist id="mk-keep-names">${board.slice(0, 150).map((p) =>
+        `<option value="${escapeAttr(p.player)}">`).join("")}</datalist>
+      <select id="mk-keep-team" class="mk-sel">
+        <option value="0">You</option>
+        ${Array.from({ length: Math.max(0, teams - 1) }, (_, i) =>
+          `<option value="${i + 1}">Room ${i + 2}</option>`).join("")}
+      </select>
+      <select id="mk-keep-round" class="mk-sel">
+        ${Array.from({ length: 14 }, (_, i) =>
+          `<option value="${i + 1}">Round ${i + 1}</option>`).join("")}
+      </select>
+      <button class="btn" id="mk-keep-add">Add</button>
+    </div>
+  </details>`;
+}
+
+/* What the keepers did to the draft, said once at the top of the room —
+   a reader who set them up should not have to infer it from a board that
+   is quietly four players shorter. */
+function _mockKeeperNote(m) {
+  const n = (m.keepers || []).length;
+  if (!n) return "";
+  const mine = m.keepers.filter((k) => k.team === m.you).length;
+  const rounds = [...new Set(m.keepers.filter((k) => k.team === m.you)
+    .map((k) => k.round))].sort((a, b) => a - b);
+  return `<div class="mk-keep-banner">${n} keeper${n === 1 ? "" : "s"} off the
+    board${mine ? ` — ${mine} of them yours, costing you round${
+      rounds.length === 1 ? "" : "s"} ${rounds.join(", ")}` : ""}.</div>`;
 }
 
 /* ---- Byes -----------------------------------------------------------
@@ -15653,6 +15782,7 @@ function mockDraftHTML() {
             </select></label>
           <button class="btn primary" id="mk-start">Start the draft</button>
         </div>
+        ${_mockKeeperHTML(12)}
         <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
           Every rival room is dealt one of ${MOCK_ARCHETYPES.length} builds and
           keeps it all draft — Zero RB, Hero RB, WR hoarder, early QB, elite
@@ -15754,6 +15884,7 @@ function mockDraftHTML() {
       </div>
       <div class="mk-prog"><i style="width:${(m.pick / total * 100).toFixed(1)}%"></i></div>
     </div>
+    ${_mockKeeperNote(m)}
     ${yourTurn ? `<div class="card mk-advice">
       <div class="mk-advice-head">Your pick — round ${round}</div>
       <div>${_mockAdvice()}</div></div>` : ""}
@@ -15801,6 +15932,28 @@ function _mockBind(host) {
   });
   room.addEventListener("click", (e) => {
     const t = e.target;
+    if (t.id === "mk-keep-add") {
+      const name = (document.getElementById("mk-keep-name") || {}).value || "";
+      const team = parseInt((document.getElementById("mk-keep-team") || {}).value, 10) || 0;
+      const round = parseInt((document.getElementById("mk-keep-round") || {}).value, 10) || 1;
+      const who = name.trim();
+      // A room cannot keep two players in the same round — it only has
+      // the one pick to give up — and the same man cannot be kept twice.
+      const clash = _mockKeepers.some((k) =>
+        k.player === who || (k.team === team && k.round === round));
+      if (who && !clash) {
+        _mockKeepers.push({ player: who, team, round });
+        _mockSaveKeepers();
+        _mockRender();
+      }
+      return;
+    }
+    if (t.dataset && t.dataset.kdel != null) {
+      _mockKeepers.splice(parseInt(t.dataset.kdel, 10), 1);
+      _mockSaveKeepers();
+      _mockRender();
+      return;
+    }
     if (t.id === "mk-start") {
       const teams = parseInt(document.getElementById("mk-teams").value, 10);
       const slot = Math.min(teams,
