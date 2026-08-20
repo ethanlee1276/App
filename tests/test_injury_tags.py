@@ -25,6 +25,7 @@ Run directly: `python3 tests/test_injury_tags.py`
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -111,6 +112,69 @@ def test_the_short_map_reads_longest_first():
 def test_the_tag_is_styled():
     assert ".inj-tag {" in CSS
     assert ".ffd-injline {" in CSS
+
+
+# ---- The pick's own player, on the pick's own card (2026-08-20) --------
+# Ethan: "push injuries/weather signals into the board rather than beside
+# it." The watch box answers "who is hurt tonight"; the card has to answer
+# the only version of that question it is about — is the man we are
+# betting on hurt. The environment half is pinned in tests/test_envband.py.
+
+def test_the_card_carries_the_note_above_the_models_own_warnings():
+    """A wire report is a different KIND of fact from a sentence the model
+    wrote, and it is the one that decides whether to read the rest."""
+    i = APP.index("function cardHTML(r) {")
+    body = APP[i:APP.index("</article>", i)]
+    assert "${pickInjuryNote(r)}" in body, "the card lost the injury note"
+    assert body.index("${pickInjuryNote(r)}") < body.index("${warnings}"), \
+        "the wire report was pushed below the model's own warnings"
+
+
+def test_the_note_is_a_note_and_never_a_gate():
+    """A card must not quietly become a different card because a fetch was
+    slow. The feed can be cold, late or missing; none of that may change
+    which picks exist or what they are staked at."""
+    i = APP.index("function pickInjuryNote(")
+    j = APP.index("\nfunction ", i + 1)
+    body = APP[i:j]
+    for banned in ("recommended", "stake", "_ok", "r ="):
+        assert banned not in body, \
+            f"pickInjuryNote touches {banned!r} — it decides display, nothing else"
+    assert re.search(r"\br\.\w+\s*=[^=]", body) is None, \
+        "pickInjuryNote writes back onto the pick it was handed"
+
+
+def test_one_file_has_one_cache():
+    """The box beside the board and the note on the card read the same
+    data/injuries.json. Two caches with two TTLs meant the box could call a
+    man questionable while his own card said nothing — the exact
+    disagreement the box exists to prevent."""
+    assert "_injCache" not in APP, "a second injury cache is back"
+    i = APP.index("async function renderInjuryWatch(")
+    body = APP[i:APP.index("\nfunction ", i)]
+    assert "await loadInjuryBoard()" in body, \
+        "the watch box fetches the board on its own again"
+    # Three readers: the injuries page, the watch box, the note on each
+    # card. Exactly one of them may own the fetch.
+    assert APP.count('boardFetch("data/injuries.json') == 1, \
+        "data/injuries.json is fetched from more than one place again"
+    i = APP.index("async function renderInjuries(")
+    page = APP[i:APP.index("\nfunction ", i)]
+    assert "await loadInjuryBoard()" in page, \
+        "the injuries page fetches the board on its own again"
+
+
+def test_a_feed_that_lands_late_redraws_the_board_once():
+    """cardHTML is synchronous and runs before this await resolves, so on a
+    cold load every note came back empty — and would stay empty for the
+    life of the page. Once, on the first landing, not on every refresh:
+    re-rendering on the ten-minute cycle would restart the card reveal
+    animation under a reader mid-scroll."""
+    i = APP.index("async function renderInjuryWatch(")
+    body = APP[i:APP.index("\nfunction ", i)]
+    assert "const cold = !_injBoard;" in body
+    assert "if (cold && _injBoard) renderRecommended();" in body, \
+        "a cold feed no longer redraws the cards"
 
 
 if __name__ == "__main__":

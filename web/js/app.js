@@ -2451,7 +2451,11 @@ function renderRestWatch() {
    is already in every number on this site. Context that shades a pick
    without being one, so it lives in the Watchlists room and journals
    nothing. */
-let _injCache = { at: 0, data: null };
+/* ONE cache for one file. This box and the per-pick note on every card
+   read the same data/injuries.json; two caches with two TTLs meant the
+   board could say a man was questionable in the box beside it while his
+   own card said nothing, which is the disagreement the box exists to
+   prevent. loadInjuryBoard() below the fold owns the fetch now. */
 
 /* ESPN names teams in full ("Arizona Cardinals"); the slate carries
    abbreviations. The join goes through the sport's own TEAMS table by
@@ -2474,13 +2478,14 @@ function injAbbrIndex() {
 async function renderInjuryWatch() {
   const host = document.getElementById("injury-watch");
   if (!host) return;
-  if (Date.now() - _injCache.at > 10 * 60e3) {
-    try {
-      const res = await boardFetch("data/injuries.json?t=" + Date.now());
-      if (res.ok) _injCache = { at: Date.now(), data: await res.json() };
-    } catch (e) {}
-  }
-  const rows = ((_injCache.data || {}).sports || {})[state.sport] || [];
+  // Whether the feed was already in hand decides one thing below: the
+  // cards were drawn before this awaited, so on a cold load every
+  // pickInjuryNote() came back empty and would stay empty for the life of
+  // the page. Landing the feed for the first time re-draws them once.
+  const cold = !_injBoard;
+  await loadInjuryBoard();
+  if (cold && _injBoard) renderRecommended();
+  const rows = ((_injBoard || {}).sports || {})[state.sport] || [];
   const games = (state.data || {}).games || [];
   if (!rows.length || !games.length) { host.innerHTML = ""; return; }
 
@@ -3422,6 +3427,141 @@ function qualityChip(r) {
     Q ${r.quality}/100</span>`;
 }
 
+/* ---- The environment, on the card instead of beside it ---------------
+   Ethan, 2026-08-20: "push injuries/weather signals into the board rather
+   than beside it." Both signals already existed on this site and both sat
+   somewhere other than the pick they bear on — the injury feed in a box
+   next to the board, the park and wind only inside the journal.
+
+   The bands below are PORTS, not new thresholds. engine/losspatterns.py
+   slices settled bets on exactly these cuts, and the whole point of
+   printing them is that the reader sees the same word the miner convicts
+   on. tests/test_envband.py reads both files and fails if a number in one
+   stops matching the other, because two vocabularies for one fact is how
+   a page starts disagreeing with its own model.
+
+   Football bands on wind SPEED (no center field to blow out of — magnitude
+   is what leans on the passing game). Baseball bands on SIGNED wind
+   against the park's real center-field bearing, because direction is the
+   physics of a fly ball. Indoors has no wind dimension at all; the park
+   band says "roof closed/dome" and a second chip would double-count it. */
+function windBand(windOut, roofed, sport) {
+  if (roofed || windOut == null) return null;
+  const w = Number(windOut);
+  if (!isFinite(w)) return null;
+  if (sport === "nfl" || sport === "cfb") {
+    const m = Math.abs(w);
+    if (m < 8) return "calm (<8mph)";
+    if (m < 15) return "windy (8-15mph)";
+    return "howling (15mph+)";
+  }
+  if (w <= -8) return "wind in hard";
+  if (w <= -3) return "wind in";
+  if (w < 3) return "calm/cross";
+  if (w < 8) return "wind out";
+  return "wind out hard";
+}
+
+function parkBand(hrIndex, roofed) {
+  if (roofed) return "roof closed/dome";
+  if (hrIndex == null) return null;
+  const idx = Number(hrIndex);
+  if (!isFinite(idx)) return null;
+  if (idx < 0.90) return "suppressing park";
+  if (idx > 1.10) return "boosting park";
+  return "neutral park";
+}
+
+/* Markets the environment actually bites. A dome does not change a
+   strikeout number and a 12mph crosswind does not change a rushing line,
+   so those cards say nothing — an env chip on every card is an env chip
+   nobody reads. */
+const ENV_AERIAL = ["pass_yds", "rec_yds", "receptions"];
+const ENV_POWER = ["home_runs", "total_bases"];
+
+/* Wind and park, as the chip the miner would file it under.
+   Draws NOTHING for the neutral band, and nothing at all on markets the
+   environment does not reach.
+
+   THE TONE IS ABOUT THIS PICK, not about the weather: wind blowing out
+   helps a home-run OVER and hurts the UNDER, so the same 14mph is green
+   on one card and amber on the next. And the tooltip has to say the
+   projection already carries it — a green chip that reads as "edge the
+   price has not noticed" would be a lie by styling. */
+function envChip(r) {
+  const sport = state.sport;
+  const football = sport === "nfl" || sport === "cfb";
+  const market = r.market || "";
+  const relevant = football
+    ? ENV_AERIAL.includes(market)
+    : sport === "mlb" && ENV_POWER.includes(market);
+  if (!relevant) return "";
+  const over = /^over$/i.test(r.side || "");
+  const priced = "This is already inside the projection — it is on the card "
+    + "so you can see what the number rests on, not as an extra edge.";
+  const out = [];
+
+  const park = parkBand(r.park_hr, r.roofed);
+  if (park === "roof closed/dome") {
+    return `<span class="chip" title="Roof shut, so there is no wind or `
+         + `air dimension tonight. ${priced}">${iconMark("stadium", 11)}`
+         + `Roof closed</span>`;
+  }
+  if (park === "boosting park" || park === "suppressing park") {
+    const pctv = Math.round((Number(r.park_hr) - 1) * 100);
+    const helps = (pctv > 0) === over;
+    out.push(`<span class="chip ${helps ? "up" : "down"}" title="`
+      + `The miner files this park as a ${escapeAttr(park)}. ${priced}">`
+      + `${iconMark("stadium", 11)}Park ${pctv > 0 ? "+" : "−"}`
+      + `${Math.abs(pctv)}% HR</span>`);
+  }
+
+  const wind = windBand(r.wind_out, r.roofed, sport);
+  if (wind && wind !== "calm (<8mph)" && wind !== "calm/cross") {
+    const w = Number(r.wind_out);
+    // Football: wind is a tax on the passing game either way, so it is
+    // always the OVER it works against. Baseball: the sign is the answer.
+    const helps = football ? !over : (w > 0) === over;
+    const what = football
+      ? `${Math.abs(Math.round(w))} mph wind`
+      : `${Math.abs(Math.round(w))} mph ${w > 0 ? "out" : "in"}`;
+    out.push(`<span class="chip ${helps ? "up" : "down"}" title="`
+      + `The miner files this as "${escapeAttr(wind)}". ${priced}">`
+      + `${iconMark("cloud", 11)}${escapeHtml(what)}</span>`);
+  }
+  return out.join("");
+}
+
+/* The designation on THIS pick's own player, on this pick's own card.
+   The injury watch box beside the board answers "who is hurt tonight";
+   this answers the only version of that question the card is about — is
+   the man we are betting on hurt.
+
+   Silence when the feed has not landed yet, which is why it is a note and
+   not a gate: a card must never quietly become a different card because a
+   fetch was slow. renderInjuryWatch re-renders the board once the feed
+   arrives so the note appears rather than being missed forever.
+
+   MLB says this already and says it better — its IL warnings come off the
+   transactions wire, not off ESPN's page — so we stand down when one is
+   already on the card rather than printing the same fact twice in two
+   wordings. */
+function pickInjuryNote(r) {
+  const inj = injFind(state.sport, r.player);
+  if (!inj) return "";
+  const said = (r.warnings || []).some(
+    (w) => /injured list|activated from the il/i.test(String(w)));
+  if (said) return "";
+  const bits = [inj.injury, inj.return_date ? `expected back ${inj.return_date}` : ""]
+    .filter(Boolean).join(" · ");
+  const tone = injTone(inj.status);
+  return `<div class="warning pick-inj" style="border-color:${tone}">`
+       + `${icon("warn")} <b style="color:${tone}">${escapeHtml(inj.status)}</b>`
+       + ` — ${escapeHtml(r.player)} is on tonight’s injury report`
+       + `${bits ? ` (${escapeHtml(bits)})` : ""}. Filed ${injWhen(Date.parse(inj.date || "") || 0)}.`
+       + ` The projection is built on games he played healthy.</div>`;
+}
+
 function cardHTML(r) {
   const reasons = (r.reasons || []).map(
     (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
@@ -3456,8 +3596,8 @@ function cardHTML(r) {
       </div>
       ${confMeter(r)}
       ${propAnalysis(r)}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${booksChip(r)}${stakeChip}</div>
-      ${corr}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}</div>
+      ${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
             it afterwards, and that is the order the argument runs in.
@@ -12609,11 +12749,11 @@ function injRow(r, withTeam) {
 async function renderInjuries() {
   const host = document.getElementById("injuries-body");
   if (!host) return;
-  let d = null;
-  try {
-    const res = await boardFetch("data/injuries.json?t=" + Date.now());
-    if (res.ok) d = await res.json();
-  } catch (e) {}
+  // Third reader of one file, and the last one to stop fetching it for
+  // itself. The page, the watch box beside the board and the note on each
+  // card must agree about who is hurt; three fetches with three lifetimes
+  // is how they stop agreeing.
+  const d = await loadInjuryBoard();
   const sport = state.sport || "nfl";
   const rows = (((d || {}).sports) || {})[sport] || [];
   if (!rows.length) {

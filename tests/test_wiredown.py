@@ -50,7 +50,14 @@ def test_every_board_payload_goes_through_the_wrapper():
     bare = re.findall(r'await fetch\((["`]data/[^)]*)', APP)
     assert not bare, \
         f"these board fetches bypass boardFetch, so their failures are invisible: {bare}"
-    assert len(re.findall(r"await boardFetch\(", APP)) >= 20, \
+    # A canary against a wholesale rip-out, not a census. It moved from 20
+    # to 18 on 2026-08-20 when the injury watch box and the injuries page
+    # both stopped fetching data/injuries.json for themselves and went
+    # through loadInjuryBoard() — two call sites fewer because one file is
+    # now read once instead of three times, which is the opposite of
+    # losing coverage. Lower it only for a reason you can write down like
+    # this one.
+    assert len(re.findall(r"await boardFetch\(", APP)) >= 18, \
         "the wrapper lost call sites — did a refactor drop them?"
 
 

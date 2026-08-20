@@ -886,6 +886,11 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   color: var(--text-body); font-size: var(--fs-sm); padding: 7px 0 7px 13px;
   border-radius: var(--radius-sm); }
 
+/* The injury note is a fact somebody else reported, not a sentence the
+   model wrote. A faint wash separates the two KINDS of note without
+   adding a second border weight to a card that already has one. */
+.pick-inj { background: rgba(255,255,255,.03); padding-right: 10px; }
+
 /* ---------------- Sparkline ---------------- */
 .spark { display: block; width: 100%; height: auto; }
 /* §3.4: 1.1s, and an entrance animation. The line is just drawn. */
