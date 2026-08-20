@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Does the site still LOOK like the renders — and if not, which part moved?
 
-Ethan, 2026-08-18, with the four Zenos render images: "i really love the
+Ethan, 2026-08-18, with the four render images: "i really love the
 graphics and layouts of these renders so i wanna follow that pixel for
 pixel." Every screen in that pack shipped over the two days that followed
 and `docs/RENDER_SPEC.md` writes down what each one is.

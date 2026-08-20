@@ -129,7 +129,7 @@ console.log("ok");
 
 
 def test_the_render_pass_landed_honest():
-    """Ethan's Zenos calendar render, followed with only real numbers:
+    """Ethan's calendar render, followed with only real numbers:
     month navigation, a play-quality legend whose "elite" cut is computed
     from the season itself, the day-summary strip, checklist cards, and
     a weekly-range strip on the profile sourced from the player's own
@@ -141,7 +141,7 @@ def test_the_render_pass_landed_honest():
     for hook in ('data-calnav="-1"', 'data-calnav="1"', 'data-calnav="first"'):
         assert hook in body, f"month nav lost {hook}"
     assert "ffcal-legend" in body and "ELITE SLATE" in body
-    # The Zenos three-column layout: grid left, ranked plays middle, the
+    # The render's three-column layout: grid left, ranked plays middle, the
     # selected player's read right — one panel, tap a card to load it.
     assert "ffcal-layout" in body and "ffcal-panel" in body
     assert "ffCalPanelHTML(" in body, "the layout must mount the read panel"

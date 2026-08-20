@@ -67,7 +67,7 @@
 }
 
 /* ============================================================
-   Qellys Book — design system
+   Qellys Books — design system
    Cohesive dark palette: indigo/blue anchor, cyan + violet accents,
    semantic green/amber/red tuned to the same chroma family.
    ============================================================ */
@@ -4426,6 +4426,43 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
     transform: translateX(-102%); transition: transform var(--dur-base) var(--ease-spring);
     border-right: var(--hairline) solid var(--border); box-shadow: none; }
   body.menu-open .sidebar { transform: translateX(0); box-shadow: var(--glow-soft); }
+
+  /* THUMB TARGETS IN THE DRAWER. Measured 2026-08-20 across six widths:
+     the group folds were 279x13 and the two switches 271x22 — wide, and
+     far too short to hit reliably with a thumb. Apple asks for 44pt and
+     these were a third of that in the one place the site is used
+     one-handed.
+
+     The folds buy their height with padding and give most of it back
+     with a negative margin, so the hit box roughly triples while the
+     drawer grows about 8px per group: the rail's vertical rhythm is
+     deliberate and this is a touch fix, not a redesign. The switches
+     take the full 44px because they are the only real controls in here
+     and their knob already carries 22 of it. */
+  .sb-fold { padding: 15px 0; margin: -11px 0; }
+  .sb-hcm-switch { min-height: 44px; padding: 11px 0; }
+
+  /* The league chips are the most-tapped control on the site — three to a
+     row in the drawer, and how you change sport at all. They were 27px.
+     The "more" affordances below are standalone links rather than links
+     inside a sentence (`display:inline-block` with their own top margin),
+     so they get a real target too.
+
+     DELIBERATELY NOT SWEPT: links that sit inside prose. WCAG 2.5.8
+     exempts them, and padding every inline link to 44px would break the
+     line rhythm of every paragraph on the site to fix something nobody
+     mis-taps. The rule is "standalone control" versus "word in a
+     sentence", not a number applied to every anchor. */
+  .sb-chips .sport-btn { min-height: 44px; }
+  /* The drawer's footer pair (Why Us / About) are `.sport-btn` too, but
+     they sit in `.sb-foot-links` and never inherited the chip padding —
+     55x27 and 47x27. Standalone controls, so they take a target; found
+     only by listing every under-32px element WITH ITS PARENT, because
+     "sport-btn is 27px" was false of the chips and true of these two. */
+  .sb-foot-links .sport-btn { min-height: 36px; padding: 8px 10px; }
+  .tp-add { min-height: 40px; padding: 10px 13px; }
+  .tp-more, .rail-more, .perf-link { min-height: 32px;
+    display: inline-flex; align-items: center; }
   /* Both, because the ROOT is the scroller: overflow on body alone
      still let the page scroll under the open drawer (measured — a
      programmatic scroll completed with the body rule in place). The
@@ -5746,7 +5783,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .gp-shape-radar[data-echarted] { height: 280px; }
 .gp-shape-tbl { max-width: 360px; }
 
-/* --- The render-copy prediction board (Zenos renders, 2026-08-18) --------
+/* --- The render-copy prediction board (the 2026-08-18 render pack) --------
    Table left, detail panel right, exactly the render's structure — our
    tokens. The panel is sticky on a desk and stacks under the tabs on a
    phone. The NO column joins the grid (render shows both sides priced),

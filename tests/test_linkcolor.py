@@ -10,7 +10,7 @@ a component did not style itself fell through to the user agent, and what
 fell through was
 
   * the legal footer — on EVERY view, so it was on screen most of the time
-  * both legal pages' "← Back to Qellys Book"
+  * both legal pages' "← Back to Qellys Books"
   * the 404 and maintenance pages' wordmark and quick links
   * the sign-in card's "Terms" and "Privacy Policy"
 

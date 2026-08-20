@@ -1,4 +1,4 @@
-"""The Qellys Book brand mark has to stay one mark.
+"""The Qellys Books brand mark has to stay one mark.
 
 The Q is drawn three times — as CSS-styled SVG in the header, as a
 standalone favicon, and rasterised into the iOS home-screen icon. Nothing
@@ -140,11 +140,22 @@ def test_the_old_name_is_gone():
 def test_the_name_is_spelled_the_same_everywhere():
     html = _read("web", "index.html")
     # NEW LOOK (2026-08-11): the wordmark is two words in one h1 — the
-    # span carries the quieter BOOK; CSS uppercases both. The spelling is
+    # span carries the quieter BOOKS; CSS uppercases both. The spelling is
     # still typed exactly once and matches the title/og everywhere.
-    assert "<h1>Qellys <span>Book</span></h1>" in html
-    assert "<title>Qellys Book" in html
-    assert 'apple-mobile-web-app-title" content="Qellys Book"' in html
+    #
+    # PLURAL SINCE 2026-08-20, on Ethan's instruction ("The company /
+    # product name is: QELLYS BOOKS"). The rename is caught here rather
+    # than by the `Qelly(?!s)` sweep below, because markup splits the
+    # name: a search-and-replace over "Qellys Book" cannot see
+    # `Qellys <span>Book</span>` and left the wordmark singular while
+    # every other surface moved. That is the half-applied rename this
+    # test exists for, and it caught it.
+    assert "<h1>Qellys <span>Books</span></h1>" in html
+    # And the singular must not survive anywhere in the shipped shell.
+    assert not re.search(r"Qellys Book(?!s)", html), \
+        "a singular 'Qellys Book' survived the rename"
+    assert "<title>Qellys Books" in html
+    assert 'apple-mobile-web-app-title" content="Qellys Books"' in html
     # A bare "Qelly" anywhere means a rename only got half-applied.
     for name in ("README.md", "GUIDE.md", "LAUNCH.md", "STRATEGY.md",
                  "server.py", "launch.py",

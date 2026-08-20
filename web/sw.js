@@ -1,4 +1,4 @@
-/* Qellys Book — service worker.
+/* Qellys Books — service worker.
  *
  * WHY THIS IS NETWORK-FIRST AND NOT CACHE-FIRST, which is the opposite of
  * the usual advice. This site's entire value is that its numbers are

@@ -2221,7 +2221,7 @@ def _reachable(url: str, timeout: int = 6, ua: str = "qellys-book/preflight") ->
 def preflight() -> None:
     """Print a readiness checklist — what's live-ready and what still needs a step."""
     ok, warn, bad = "  ✅", "  ⚠️ ", "  ❌"
-    print("Qellys Book — preflight check\n")
+    print("Qellys Books — preflight check\n")
 
     v = sys.version_info
     print(f"{ok if v >= (3, 9) else warn} Python {v.major}.{v.minor}"
@@ -6824,7 +6824,7 @@ def main() -> None:
     ports = [a for a in argv if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
 
-    print("Qellys Book — grabbing the newest live data for both leagues…")
+    print("Qellys Books — grabbing the newest live data for both leagues…")
     # BEFORE the build, not after: if the ring is spent, the board about
     # to be built is priced on cached or proxy lines, and that is worth
     # knowing while it is happening rather than in a post-mortem.
@@ -6850,7 +6850,7 @@ def main() -> None:
         # afraid of their own tool.
         if getattr(exc, "errno", None) not in (48, 98, 10048):
             raise
-        print(f"\n  ⚠️  Port {port} is already in use — Qellys Book is almost "
+        print(f"\n  ⚠️  Port {port} is already in use — Qellys Books is almost "
               f"certainly already running.\n"
               f"\n  Open it:            http://localhost:{port}\n"
               f"  Or use another port: python3 launch.py {port + 1}\n"
@@ -6951,7 +6951,7 @@ def main() -> None:
         except Exception:
             pass
 
-    print(f"\nQellys Book running (LIVE data) → http://localhost:{port}")
+    print(f"\nQellys Books running (LIVE data) → http://localhost:{port}")
     if _WARMING:
         print("  Serving the boards already on disk while tonight's rebuild "
               "runs behind it —\n  the freshness chip in the header says how "

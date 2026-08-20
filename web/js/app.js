@@ -1,4 +1,4 @@
-/* Qellys Book — app shell.
+/* Qellys Books — app shell.
  *
  * A small client-side router over three views (Recommended / Trending /
  * Players) sharing one data fetch. Rendering helpers draw the pick cards,
@@ -8395,7 +8395,7 @@ function pmVenueRows(kx, d) {
   return rows;
 }
 
-/* --- The render-copy board (Ethan's Zenos renders, 2026-08-18) ----------
+/* --- The render-copy board (Ethan's 2026-08-18 render pack) ----------
    "i really love the graphics and layouts of these renders so i wanna
    follow that pixel for pixel." The layout is the render's: category
    tabs, four stat tiles, the market table on the left, and a detail
@@ -11469,7 +11469,7 @@ function acctScreenHTML() {
       </span>
       <span class="acct-hero-words">Qellys <span>Book</span></span>
       <span class="acct-hero-tag">Priced by a model. Graded in public.</span>
-      <p class="acct-screen-sub acct-hero-sub">Sign in to Qellys Book —
+      <p class="acct-screen-sub acct-hero-sub">Sign in to Qellys Books —
         one account carries your bet log, your fantasy leagues and your
         subscription to every device you use.</p>
     </div>
@@ -15134,7 +15134,7 @@ function renderAbout() {
 
   host.innerHTML = `
     <div class="about-lede">
-      <p><strong>Qellys Book is one book for everything a sharp bettor keeps
+      <p><strong>Qellys Books is one book for everything a sharp bettor keeps
       open in ten tabs.</strong> Six leagues priced nightly by named models.
       A full fantasy football suite with its own draft room. Prediction-market
       intelligence. A live meme-coin radar. And underneath all of it, the one

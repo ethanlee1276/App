@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rasterise the Qellys Book "Q" mark into the home-screen icon.
+"""Rasterise the Qellys Books "Q" mark into the home-screen icon.
 
 iOS ignores SVG for "Add to Home Screen", so the phone needs a real PNG.
 Rather than commit a binary nobody can regenerate, this draws it from the

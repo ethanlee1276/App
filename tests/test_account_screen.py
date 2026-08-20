@@ -78,9 +78,9 @@ def test_sign_in_is_the_primary_action_on_the_sign_in_screen():
 
 
 def test_the_screen_does_not_carry_two_competing_headings():
-    """"Sign in to Qellys Book" above a card headed "Make an account" tells
+    """"Sign in to Qellys Books" above a card headed "Make an account" tells
     a visitor they are on the wrong page."""
-    assert "Sign in to Qellys Book" in APP
+    assert "Sign in to Qellys Books" in APP
     assert "<div class=\"player\">Make an account</div>" not in APP
 
 
