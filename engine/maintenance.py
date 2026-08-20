@@ -218,11 +218,49 @@ def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
 # odds_budget.json (credit accounting) — plus expensive downloads
 # (pbp_*.csv is ~100MB). A denylist would quietly destroy the next such
 # file someone adds; an allowlist can only ever delete what it names.
+#: PER-KEY CACHES — one file per game, per date, per market, per mint.
+#: These are the ones that grow without a ceiling, and every one of them
+#: is free to fetch again.
+#:
+#: THE LIST WENT STALE, WHICH IS WHY tests/test_cacheclass.py EXISTS.
+#: `mlb_pbp_` was missed when it shipped: play-by-play payloads are about
+#: 640 KB and a night's starters are ~150 of them, so the cache grew
+#: roughly 96 MB a night and `prune_cache` never touched a byte of it.
+#: Every other MLB prefix was here; that one was typed nowhere. So were
+#: `wnba_box_` (while `nba_box_` was present), every Polymarket prefix,
+#: and Rocket Radar's per-mint holder files. A list somebody has to
+#: remember to extend is the same failure as a cache version somebody has
+#: to remember to bump — so the test now requires every cache filename in
+#: the source to appear in THIS tuple or in KEEP_CACHE_PREFIXES, with a
+#: reason. Adding a new fetch and no classification fails the suite.
 PRUNABLE_CACHE_PREFIXES = (
     "mlb_box_", "mlb_line_", "mlb_live_", "mlb_schedule_", "mlb_teamsched_",
     "mlb_results_", "mlb_tx_", "mlb_log_", "mlb_person_", "mlb_splits_",
-    "nba_box_", "espn_mma_", "meteo_",
+    "mlb_pbp_", "mlb_roster_", "mlb_pensched_", "mlb_watchsched_",
+    "standings_mlb_",
+    "nba_box_", "wnba_box_", "wnba_schedule_",
+    "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
+    "mma_scoreboard_", "mma_live_", "mma_ev_", "mma_comp_", "mma_cptr_",
+    "pm_evt_", "pm_mkt_", "pm_wtrades_", "pm_pnl_", "pm_leaderboard_",
+    "nws_pt_", "nws_fc_", "sol_holders_", "sleeper_trend_",
 )
+
+#: DELIBERATELY KEPT, each for a reason that costs something to ignore.
+#: The value is why, and the test prints it when a classification is
+#: missing — so the next person deciding is deciding, not guessing.
+KEEP_CACHE_PREFIXES = {
+    "odds_": "paid API credits — refetching spends real quota",
+    "savant_": "per pitcher-season, bounded by roster size, and slow to rebuild",
+    "pbp_": "nflverse per-SEASON bulk (~100 MB each); bounded, not per-game",
+    "pbp_participation_": "nflverse per-season bulk, same",
+    "player_stats_": "nflverse per-season bulk, same",
+    "snap_counts_": "nflverse per-season bulk, same",
+    "depth_charts_": "nflverse per-season bulk, same",
+    "roster_": "nflverse per-season bulk, same",
+    "injuries_": "nflverse per-season bulk, same",
+    "line_": "line_history.jsonl is accumulated history, not a fetch cache",
+    "maintenance": "this module's own state",
+}
 CACHE_KEEP_DAYS = 30
 
 

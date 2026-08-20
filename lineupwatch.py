@@ -96,9 +96,18 @@ def posted_live(date: str) -> tuple[int, int]:
     from engine.mlb.sources.mlbstats import STATS_BASE, _get_json
     from engine.mlb.sources.statslogs import fetch_boxscore
 
+    # ITS OWN CACHE FILE, and the name is the whole fix. This asked for
+    # the schedule WITHOUT `&hydrate=probablePitcher,venue` and stored the
+    # answer as `mlb_schedule_{date}.json` — the exact filename the
+    # builder reads, from a different URL. `_get_json` keys on the
+    # filename and never compares URLs, so any build inside that 600s TTL
+    # got an unhydrated payload: no probable pitchers, therefore no
+    # pitcher props at all, and `park="generic"` on every game. This is
+    # not wired into launch.py, so it took a hand-run to fire — which is
+    # the only reason it was never seen in production.
     sched = _get_json(
         f"{STATS_BASE}/schedule?sportId=1&startDate={date}&endDate={date}",
-        f"mlb_schedule_{date}.json", ttl=600)
+        f"mlb_watchsched_{date}.json", ttl=600)
     # A CARD DOES NOT UN-POST. Games already recorded up today need no
     # boxscore at all, so a poll late in the afternoon fetches only the
     # handful still waiting instead of the whole slate every ten minutes.

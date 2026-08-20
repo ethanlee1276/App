@@ -249,6 +249,14 @@ PRESEASON_READERS = {
     # never vary (the parser is not storing the market). The first message
     # alone sent the reader to re-run the thing that already worked.
     "launch.py",
+    # `--todo` COUNTS THE FINALS AND PRICES NOTHING. It reports whether the
+    # collection step has run — "0 preseason games with a final score" is
+    # the difference between "we measured August and found nothing" and
+    # "we never measured", which are different sentences the board is
+    # required to keep apart. Read-only, and the number never reaches a
+    # projection. Added 2026-08-20 when this guard caught it, which is the
+    # guard working: a new reader has to show up in a diff as a decision.
+    "engine/todo.py",
 }
 
 #: `preseason_games` — the finals — is under the same rule, added with the

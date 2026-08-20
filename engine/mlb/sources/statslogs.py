@@ -291,6 +291,8 @@ def build_live_slate(date: str, season: int | None = None,
 
     games: list[MLBGame] = []
     props: list[MLBProp] = []
+    # Kept, not swallowed — see _add_prop and the check below.
+    refusals: list = []
 
     # Pass 1: games. Props are built in a second pass because doubleheaders
     # need the full day known first — the same pair twice must be numbered,
@@ -463,7 +465,8 @@ def build_live_slate(date: str, season: int | None = None,
                     _add_prop(props, entry.person_id, entry.name, team_ab,
                               opp_ab, entry.position or person.get("position", ""),
                               market, season, entry.spot, person.get("bats", "R"),
-                              log_limit=limit, game_number=prop_gn)
+                              log_limit=limit, game_number=prop_gn,
+                              refusals=refusals)
 
         # Pitcher strikeout props from probable starters.
         if include_pitchers:
@@ -480,14 +483,37 @@ def build_live_slate(date: str, season: int | None = None,
                               team_ab, opp_ab, "SP", mkt, season,
                               lineup_spot=1, bats="R",
                               throws=pp.get("pitchHand", {}).get("code", "R"),
-                              log_limit=limit, game_number=prop_gn)
+                              log_limit=limit, game_number=prop_gn,
+                              refusals=refusals)
+
+    # AN EMPTY BOARD THE WIRE REFUSED IS NOT AN EMPTY BOARD. Publishing
+    # one looks identical to a quiet slate and reports success, which is
+    # how "0 props" reached launch.py's log as a healthy build. A slate
+    # with nothing on it AND a wire that said no is a failure, and it
+    # says so loudly enough that the caller cannot record it as fine.
+    if refusals and not props:
+        codes = sorted({str(c) for _, _, c in refusals})
+        raise DataUnavailable(
+            f"{len(refusals)} game-log request(s) were refused "
+            f"(HTTP {', '.join(codes)}) and no prop survived. This is a "
+            f"refused board, not a quiet one — publishing it would hide a "
+            f"rate limit behind an empty slate. Retry when the wire lets us; "
+            f"QB_MLB_WORKERS=1 slows the pool if it keeps happening.",
+            status=refusals[0][2])
 
     return MLBSlate(date=date, games=games, props=props)
 
 
+#: HTTP statuses that mean "the host refused us", not "there is no such
+#: record". A 429 is the wire asking us to slow down and a 5xx is the wire
+#: being broken; both come back later with real data, and both used to be
+#: indistinguishable here from a rookie with no game log.
+REFUSAL_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
 def _add_prop(props, person_id, name, team, opp, position, market, season,
               lineup_spot, bats, throws="R", log_limit: int | None = 15,
-              game_number: int = 0):
+              game_number: int = 0, refusals: list | None = None):
     if not person_id:
         return
     group = MARKET_GROUP[market]
@@ -507,7 +533,17 @@ def _add_prop(props, person_id, name, team, opp, position, market, season,
         # in hand and being thrown away. Parsing the cached response a
         # second time costs no request.
         season_logs = parse_game_log(raw, market, limit=None)
-    except DataUnavailable:
+    except DataUnavailable as exc:
+        # A REFUSAL IS NOT AN ABSENCE. This used to `return` on any
+        # DataUnavailable, which made a rate-limited wire look exactly
+        # like a slate of players who happen to have no game logs:
+        # reproduced with every game log answering 429, the build handed
+        # back 15 games and 0 props, raised nothing, and launch.py
+        # recorded a successful build over an empty board. Nobody
+        # downstream could tell, because by then the information was
+        # gone. It is kept now and the caller decides.
+        if refusals is not None and getattr(exc, "status", None) in REFUSAL_STATUSES:
+            refusals.append((name, market, exc.status))
         return
     if len(logs) < 3:
         return

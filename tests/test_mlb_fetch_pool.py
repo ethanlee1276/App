@@ -45,6 +45,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.mlb.sources import mlbstats as ms          # noqa: E402
+from engine.sources.fetch import DataUnavailable      # noqa: E402
 from engine.mlb.sources import statslogs as sl         # noqa: E402
 from engine.mlb.models import TOTAL_BASES, HITS, HOME_RUNS  # noqa: E402
 from engine.sources.fetch import DataUnavailable       # noqa: E402
@@ -395,8 +396,15 @@ DOUBLEHEADER = {"on": False}
 
 
 def _cold_build(workers: str, fail=None, no_cards: bool = False,
-                doubleheader: bool = False):
-    """One cold build against the fake wire. Returns (slate, url counts)."""
+                doubleheader: bool = False, allow_refusal: bool = False):
+    """One cold build against the fake wire. Returns (slate, url counts).
+
+    `allow_refusal` is for the tests that ask a question about the
+    REQUESTS rather than about the board. A wholly-refused slate now
+    raises (see test_a_wholly_refused_slate_raises), and the counts are
+    still the answer those tests want — so they opt in and get
+    ``(None, counts)`` instead of losing the measurement to the traceback.
+    """
     import tempfile
     from pathlib import Path
     counts: dict = {}
@@ -410,7 +418,12 @@ def _cold_build(workers: str, fail=None, no_cards: bool = False,
             os.environ["QB_MLB_WORKERS"] = workers
             NO_CARDS["on"] = no_cards
             DOUBLEHEADER["on"] = doubleheader
-            slate = sl.build_live_slate("2026-08-16")
+            try:
+                slate = sl.build_live_slate("2026-08-16")
+            except DataUnavailable:
+                if not allow_refusal:
+                    raise
+                slate = None
         finally:
             ms.CACHE_DIR, urllib.request.urlopen = saved_cache, saved_open
             NO_CARDS["on"] = DOUBLEHEADER["on"] = False
@@ -519,13 +532,57 @@ def _log_requests(counts) -> int:
     return sum(n for u, n in counts.items() if "stats=gameLog" in u)
 
 
-def test_a_rate_limited_slate_does_not_take_the_whole_build_down():
-    """If MLB does start refusing us mid-slate, the board loses the players
-    it could not price and keeps the games. It must not raise: `mlb_build.py`
-    turns an exception here into `sys.exit(2)` and no board at all."""
-    slate, _counts = _cold_build("4", fail=lambda u: "stats=gameLog" in u)
+def test_a_wholly_refused_slate_raises():
+    """THIS TEST USED TO ASSERT THE OPPOSITE, and the reason it changed is
+    worth keeping.
+
+    It read: "it must not raise: `mlb_build.py` turns an exception here
+    into `sys.exit(2)` and no board at all." That reasoning had one fact
+    wrong. `sys.exit(2)` happens BEFORE anything is written, so the
+    previous board stays on disk untouched — the same "keep the last
+    board" behaviour the CFB builder uses when its schedule goes quiet.
+    So the real choice was never "a board or nothing". It was:
+
+      raise    → yesterday's honest board stays up, the failure is in the
+                 journal, and the staleness bar says the numbers are old
+      publish  → today's board shows fifteen games and no picks, which is
+                 exactly what a genuinely quiet slate looks like, and the
+                 log records a healthy build
+
+    The second is worse, and its own docstring said so: "making the build
+    itself notice that it is being refused, rather than publishing a
+    silently empty board, is a separate and larger change (docs/NEXT.md)."
+    That change is this one.
+    """
+    try:
+        _cold_build("4", fail=lambda u: "stats=gameLog" in u)
+    except DataUnavailable as exc:
+        assert "429" in str(exc), f"the status is missing from the message: {exc}"
+        assert "refused board" in str(exc)
+    else:
+        raise AssertionError(
+            "a slate whose every game log was refused published an empty "
+            "board and reported success")
+
+
+def test_a_partly_refused_slate_still_publishes():
+    """THE HALF THE OLD TEST WAS RIGHT TO PROTECT. A board that loses some
+    players to a blip and keeps the rest is a good board, and taking it
+    off the site would be the cure being worse. The refusal check fires
+    only when NOTHING survived."""
+    only_first = {"seen": False}
+
+    def flaky(u):
+        if "stats=gameLog" not in u:
+            return False
+        if only_first["seen"]:
+            return False
+        only_first["seen"] = True
+        return True
+
+    slate, _counts = _cold_build("4", fail=flaky)
     assert len(slate.games) == GAMES
-    assert slate.props == [], "priced a prop off a log we never got"
+    assert slate.props, "a single refused log took the whole board down"
 
 
 def test_the_warm_waves_stand_down_instead_of_piling_on():
@@ -539,11 +596,13 @@ def test_the_warm_waves_stand_down_instead_of_piling_on():
     810 the old code already made. Making the build itself notice that it
     is being refused, rather than publishing a silently empty board, is a
     separate and larger change (docs/NEXT.md)."""
-    _s, hot = _cold_build("4", fail=lambda u: "stats=gameLog" in u)
+    _s, hot = _cold_build("4", fail=lambda u: "stats=gameLog" in u,
+                          allow_refusal=True)
     saved = ms.BACKOFF_STATUS
     try:
         ms.BACKOFF_STATUS = set()                  # the same run, fuel on
-        _s2, blind = _cold_build("4", fail=lambda u: "stats=gameLog" in u)
+        _s2, blind = _cold_build("4", fail=lambda u: "stats=gameLog" in u,
+                                allow_refusal=True)
     finally:
         ms.BACKOFF_STATUS = saved
     assert _log_requests(hot) < _log_requests(blind) - 200, \

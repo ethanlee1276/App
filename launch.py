@@ -6496,6 +6496,9 @@ def main() -> None:
     if "--prereg" in argv:
         show_prereg()
         return
+    if "--todo" in argv:
+        from engine import todo as _todo
+        sys.exit(_todo.main(argv))
     if "--learning" in argv:
         show_learning()
         return

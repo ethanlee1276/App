@@ -30,40 +30,68 @@ out of his own board.
 ## 2. Smaller, known, not urgent
 
 * Player photos are missing for MLB / NFL / NBA — faces are captured
-  during ingest, so a re-read picks them up. Cosmetic; cards show initials.
-* `launch.py --check` reports ~19 unregistered knowledge-tier openings
-  (umpire and barrel-rate strings). Add them to `engine/knowledge.py`
-  PREFIXES.
-* `deploy.sh` runs the full 4,550-test suite on the production droplet,
-  which takes ~15 minutes and competes with the live app for CPU. The gate
-  is right; the venue is wrong. CI or the Mac is the better place, with a
-  fast smoke check on the box.
+  during ingest, so a re-read picks them up. Cosmetic; cards show
+  initials. `python3 launch.py --todo` reports which leagues still have
+  none and prints the ingest command for each.
+* `launch.py --check` reports unregistered knowledge-tier openings. The
+  barrel-rate half is registered now (`elite barrel rate`, `low barrel
+  rate` — the percentage rides in the opening, so the prefix stops before
+  it). The umpire strings are NOT, and cannot be honestly added from
+  here: the exact openings only exist on a board with a live slate, and
+  guessing at them would register prefixes that match nothing while the
+  real strings stay unlabelled. Re-run `--check` on the laptop with a
+  live board and paste the list.
+* ~~`deploy.sh` runs the full suite on the production droplet.~~ DONE —
+  the normal deploy is `--no-tests`, gated on the GitHub Actions tick,
+  and deploy.sh says so in its own header. Worth knowing: the suite is
+  now ~an hour on that box, and `tests/test_isotonic.py` alone is 5m17s
+  (two 30,000-sample fits). That is a real cost if the gate ever moves
+  back onto the droplet.
 * Two service stop/start pairs on 2026-08-16 at 16:15 and 16:33 were never
   explained. If they recur, find out what is restarting the live site.
 
-### Three found while fixing the props build, none of them its cause
+### Three found while fixing the props build — ALL FIXED 2026-08-20
 
-* **A rate-limited board publishes EMPTY and reports success.** `_get_json`
-  turns a 429 into `DataUnavailable`, `_add_prop` catches that and returns,
-  and `build_live_slate` hands back its games with zero props. Reproduced:
-  every game log answering 429 gives 15 games, 0 props, no exception —
-  and `launch.py` logs a successful build. The pool now stands down on the
-  first 429 rather than piling on, but nothing yet makes the *build* say
-  it was refused. This is the one on this list that can be silently wrong.
-* **`lineupwatch.py:99` writes another module's cache file.** It fetches
-  `{STATS_BASE}/schedule?sportId=1&startDate=…&endDate=…` and caches it as
-  `mlb_schedule_{date}.json` — the same filename `build_live_slate` reads,
-  from a URL with no `&hydrate=probablePitcher,venue`. `_get_json` keys on
-  the filename and never compares URLs, so a build inside that 600s TTL
-  gets an unhydrated payload: no probable pitchers, so no pitcher props at
-  all, and `park="generic"` everywhere. It is not wired into `launch.py`,
-  so this needs someone to run `lineupwatch.py` by hand to fire — but the
-  fix is a distinct `cache_name` and costs nothing.
-* **`mlb_pbp_` is missing from `PRUNABLE_CACHE_PREFIXES`**
-  (`engine/maintenance.py:208`). Play-by-play payloads are ~640 KB each and
-  a night's starters are ~150 of them, so the cache grows ~96 MB a night
-  and `prune_cache` never touches it. Every other MLB prefix is in the
-  list; this one was just missed.
+They sat here for three days. Written down is not fixed, and a document
+is a worse place to keep a defect than a failing test, so each one now
+has one. `tests/test_cacheclass.py`.
+
+* **A rate-limited board published EMPTY and reported success.** FIXED.
+  `_get_json` turned a 429 into `DataUnavailable`, `_add_prop` caught it
+  and returned, and `build_live_slate` handed back its games with zero
+  props — reproduced with every game log answering 429: 15 games, 0
+  props, no exception, and `launch.py` logging a healthy build. A refusal
+  is not an absence. The status is kept now (`REFUSAL_STATUSES` — 429 and
+  the 5xx family), and a board that is EMPTY *and* was refused raises
+  instead of publishing. A 404 still reads as an ordinary absent player,
+  which is the half that stops this becoming "raise on any error", and a
+  board that lost three props out of two hundred still publishes.
+
+* **`lineupwatch.py` wrote another module's cache file.** FIXED. It
+  fetched the schedule without `&hydrate=probablePitcher,venue` and
+  stored it as `mlb_schedule_{date}.json` — the exact name the builder
+  reads, from a different URL, and `_get_json` keys on the filename and
+  never compares URLs. Any build inside that 600s TTL got an unhydrated
+  payload: no probable pitchers, so no pitcher props at all, and
+  `park="generic"` everywhere. It now writes `mlb_watchsched_{date}.json`.
+
+* **`mlb_pbp_` was missing from `PRUNABLE_CACHE_PREFIXES`.** FIXED, and
+  the audit found far more than the one name. `wnba_box_` was missing
+  while `nba_box_` was present; every Polymarket prefix, Rocket Radar's
+  per-mint holder files, `espn_cfb_` and the MMA caches were all absent.
+  ~640 KB per play-by-play payload and ~150 starters a night is ~96 MB a
+  night that nothing would ever have deleted.
+
+  **The generalisation is the actual fix.** A list somebody must remember
+  to extend is the same failure as a cache version somebody must remember
+  to bump. Every cache filename in the source must now be classified as
+  prunable or explicitly kept WITH A REASON, and
+  `test_every_cache_name_is_classified` fails the suite otherwise — it
+  caught two more (`espn_cfb_`, `injuries_`) on its first run, after a
+  by-hand audit had already been over the same ground. The keep list
+  earns its exemptions: `odds_*` costs paid API credits to refetch, and
+  the nflverse `pbp_*` / `player_stats_*` / `depth_charts_*` files are
+  per-SEASON bulk (~100 MB each) that is bounded rather than per-game.
 
 ---
 
