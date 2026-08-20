@@ -13315,6 +13315,14 @@ function ffLineupHTML(d) {
         store the component. These could not be adjusted for:
         <b>${(L.missing || []).map(escapeHtml).join(", ")}</b> \u2014 so those
         rules are not reflected.</p>` : ""}
+      ${(L.projected || []).length ? `<p class="rank-help">${icon("warn")}
+        Valued from the draft board, not from games played:
+        <b>${(L.projected || []).map(escapeHtml).join(", ")}</b>. They have no
+        logs to average \u2014 rookies, or anyone who missed the season \u2014 so
+        each is carried at the projection the board gives him, which is the
+        market\u2019s draft rank rather than a read of ours. Before this they were
+        scored at zero and benched behind anyone with a pulse; a projection is
+        better than that, and still not a measurement.</p>` : ""}
       <p class="rank-help">${escapeHtml(L.note || "")}</p>
     </div>`;
 }

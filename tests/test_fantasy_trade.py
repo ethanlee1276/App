@@ -250,6 +250,134 @@ def test_the_endpoint_only_offers_trades_when_it_knows_your_roster():
     assert "if mine and rivals else []" in body
 
 
+# --- the player nobody could trade, because he was worth nothing ---------------
+# Found 2026-08-20 while auditing the trade evaluator against the newly
+# placed rookies. It turned out not to be about rookies, and not to be new:
+# ANY player absent from player_game_logs was already scored at zero.
+
+
+def _means():
+    return {
+        "Vet RB A": {"position": "RB", "fp_ppr": 15.0, "receptions": 3.0, "_games": 16},
+        "Vet RB B": {"position": "RB", "fp_ppr": 11.0, "receptions": 2.0, "_games": 16},
+        "Vet WR A": {"position": "WR", "fp_ppr": 14.0, "receptions": 6.0, "_games": 16},
+        "Vet WR B": {"position": "WR", "fp_ppr": 9.0, "receptions": 4.0, "_games": 16},
+        "Vet TE": {"position": "TE", "fp_ppr": 8.0, "receptions": 5.0, "_games": 16},
+        "Vet QB": {"position": "QB", "fp_ppr": 18.0, "_games": 16},
+        "Scrub WR": {"position": "WR", "fp_ppr": 4.0, "receptions": 2.0, "_games": 16},
+    }
+
+
+_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "BN", "BN"]
+
+
+def _roster(means):
+    r = [{"player": n, "position": m["position"]} for n, m in means.items()]
+    return r + [{"player": "Rookie Star", "position": "RB"}]
+
+
+def test_a_player_with_no_game_logs_is_no_longer_worth_zero():
+    """`league_points` starts from `float(means.get("fp_ppr") or 0.0)`, so a
+    player absent from the logs scored EXACTLY ZERO. Measured before the
+    fix on this fixture: the lineup benched a first-round rookie back
+    behind a 4.0-point receiver and reported the result as optimal.
+
+    An absent measurement scored as a measured zero — the same mistake as
+    a zero in a usage column, except this one was never disclosed, because
+    a benched player reads as a judgement rather than as a gap."""
+    from engine import fantasy_lineup as fl
+    means = _means()
+    roster = _roster(means)
+    before = fl.lineup(roster, _SLOTS, {}, means)
+    assert not any(s.get("player") == "Rookie Star" for s in before["starters"]), \
+        "fixture no longer reproduces the bug it exists to pin"
+
+    board = [{"player": "Rookie Star", "position": "RB", "proj": 13.5,
+              "rec_pg": 3.2, "source": "market", "rookie": True}]
+    after = fl.lineup(roster, _SLOTS, {}, fl.with_board(means, board))
+    assert any(s.get("player") == "Rookie Star" for s in after["starters"]), \
+        "still benched behind a 4.0-point receiver"
+    assert after["total"] > before["total"]
+
+
+def test_a_projection_never_overrides_a_season_of_real_games():
+    """The board carries a `proj` for everyone, not only the placed
+    players. Letting it win over measured logs would quietly replace
+    every player's season with a forecast."""
+    from engine import fantasy_lineup as fl
+    means = _means()
+    filled = fl.with_board(means, [
+        {"player": "Vet RB A", "position": "RB", "proj": 99.0}])
+    assert filled["Vet RB A"]["fp_ppr"] == 15.0, "a projection beat a measurement"
+    assert not filled["Vet RB A"].get("_from_board")
+
+
+def test_the_lineup_names_who_was_valued_from_the_board():
+    """A starting eleven built partly on projections must not look like
+    one built on results. Named rather than counted — "three of your
+    starters are projected" is a caveat a manager can act on."""
+    from engine import fantasy_lineup as fl
+    means = _means()
+    board = [{"player": "Rookie Star", "position": "RB", "proj": 13.5,
+              "rec_pg": 3.2, "source": "market"}]
+    out = fl.lineup(_roster(means), _SLOTS, {}, fl.with_board(means, board))
+    assert out["projected"] == ["Rookie Star"]
+    assert all(not r["projected"] for r in out["bench"] if r["player"] != "Rookie Star")
+
+
+def test_receptions_come_across_or_a_ppr_league_scores_him_catchless():
+    """The PPR-to-league conversion multiplies a reception rate. Without
+    it, a half-PPR or TE-premium league would adjust a board-valued
+    player as though he catches nothing — the same defect already fixed
+    once in the mock draft's scoring."""
+    from engine import fantasy_lineup as fl
+    filled = fl.with_board({}, [{"player": "Rookie Te", "position": "TE",
+                                 "proj": 10.0, "rec_pg": 5.0}])
+    assert filled["Rookie Te"]["receptions"] == 5.0
+    half = fl.league_points(filled["Rookie Te"], {"rec": 0.5})
+    full = fl.league_points(filled["Rookie Te"], {"rec": 1.0})
+    assert half["points"] < full["points"], \
+        "reception scoring makes no difference, so the rate is not being used"
+
+
+def test_no_deal_involving_him_could_ever_be_proposed():
+    """The consequence in THIS file. Giving away a zero costs nothing, so
+    the rival's side never clears MIN_GAIN and every such trade is
+    filtered out before anyone sees it. Measured: 0 trades before, 3
+    after, on the same rosters."""
+    from engine import fantasy_lineup as fl
+    means = _means()
+    roster = _roster(means)
+    rivals = {"Rival": [{"player": "Their RB", "position": "RB"},
+                        {"player": "Their WR", "position": "WR"}]}
+    extra = {"Their RB": {"position": "RB", "fp_ppr": 16.0, "receptions": 3.0, "_games": 16},
+             "Their WR": {"position": "WR", "fp_ppr": 13.0, "receptions": 5.0, "_games": 16}}
+    before = ft.generate(roster, rivals, _SLOTS, {}, {**means, **extra})
+    assert not any("Rookie Star" in (t["give"] + t["get"]) for t in before), \
+        "fixture no longer reproduces the bug"
+
+    board = [{"player": "Rookie Star", "position": "RB", "proj": 13.5,
+              "rec_pg": 3.2, "source": "market"}]
+    after = ft.generate(roster, rivals, _SLOTS, {},
+                        fl.with_board({**means, **extra}, board))
+    assert any("Rookie Star" in (t["give"] + t["get"]) for t in after), \
+        "he is still untradeable in both directions"
+
+
+def test_every_endpoint_that_values_a_roster_uses_the_board():
+    """Three endpoints call per_game — the Sleeper roster, the ESPN
+    league and the saved-league view. A fallback wired into two of them
+    is a bug report waiting on whichever one the user opens."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "server.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert src.count("per_game(") == src.count("with_board("), (
+        f"{src.count('per_game(')} roster valuations but "
+        f"{src.count('with_board(')} board fallbacks — one path still "
+        "scores an unlogged player at zero")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

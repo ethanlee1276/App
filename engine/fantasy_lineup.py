@@ -116,6 +116,69 @@ def per_game(conn, season: int, markets=None) -> dict:
     return out
 
 
+def with_board(means: dict, board: list[dict] | None) -> dict:
+    """`means` plus a projected fallback for anyone it has never seen.
+
+    THE BUG THIS CLOSES, measured 2026-08-20 on a fixture roster. `per_game`
+    reads `player_game_logs`; a player with no rows there is absent from
+    `means`, and `league_points` starts from `float(means.get("fp_ppr") or
+    0.0)` — so he is worth EXACTLY ZERO POINTS. Consequences, all of them
+    live before this:
+
+      * the lineup optimiser benched a first-round rookie running back
+        behind a 4.0-point receiver, and reported the lineup as optimal;
+      * `fantasy_trade` proposed no deal involving him in either
+        direction — giving him away costs nothing by this arithmetic, so
+        the rival's side never clears MIN_GAIN and every such trade is
+        filtered out before anyone sees it.
+
+    It is the same mistake as a zero in a usage column: an ABSENT
+    measurement scored as a measured zero. The difference is that this one
+    was not disclosed anywhere, because a benched player looks like a
+    judgement rather than a gap.
+
+    The fix is only possible now. The draft board carries a projection for
+    precisely these people — rookies and anyone who missed the season are
+    placed at the market's own draft rank (engine/draftmarket.py) — and
+    `proj` is in the same unit as `fp_ppr`, PPR points per game. So the
+    board answers where the logs cannot.
+
+    Two rules that keep this honest:
+
+      * A MEASUREMENT IS NEVER OVERRIDDEN. Only players absent from
+        `means` are filled. A projection must not quietly replace a season
+        of real games.
+      * THE ROW SAYS SO. `_from_board` rides along, `_games` stays 0, and
+        `lineup()` lists every player valued this way, so a starting
+        eleven built partly on projections cannot be mistaken for one
+        built on results.
+
+    Receptions come across too, because the PPR-to-league conversion needs
+    them — without it a half-PPR or TE-premium league would adjust a
+    board-valued player as though he catches nothing, which is the defect
+    already fixed once in the mock draft's scoring.
+
+    Returns a NEW dict; the input is not mutated.
+    """
+    if not board:
+        return means or {}
+    out = dict(means or {})
+    for r in board or []:
+        name = r.get("player")
+        if not name or name in out:
+            continue
+        proj = r.get("proj")
+        if not isinstance(proj, (int, float)):
+            continue
+        row = {"position": (r.get("position") or "").upper(),
+               "fp_ppr": float(proj), "_games": 0, "_from_board": True}
+        rec = r.get("rec_pg")
+        if isinstance(rec, (int, float)):
+            row["receptions"] = float(rec)
+        out[name] = row
+    return out
+
+
 def league_points(means: dict, scoring: dict) -> dict:
     """One player's per-game points under this league. ``{points, exact, missing}``.
 
@@ -226,6 +289,10 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
             "missing": scored["missing"], "base_ppr": scored["base_ppr"],
             "games": int(m.get("_games") or 0),
             "thin": int(m.get("_games") or 0) < min_games,
+            # Valued from the draft board rather than from games he
+            # played. Distinct from `exact`, which is about whether this
+            # LEAGUE's scoring could be applied — a different question.
+            "projected": bool(m.get("_from_board")),
         })
     seated = assign(rows, slots)
     starters = []
@@ -259,6 +326,9 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
         "total": round(sum(s["points"] for s in starters), 2),
         "swaps": sorted(swaps, key=lambda s: -s["gain"]),
         "exact": all(r["exact"] for r in rows) if rows else True,
+        # Named, not just counted: "three of your starters are projected"
+        # is a caveat a manager can act on, a bare flag is not.
+        "projected": sorted(r["player"] for r in rows if r.get("projected")),
         "missing": sorted({k for r in rows for k in r["missing"]}),
         "note": ("Scored under your league's own settings, starting from "
                  "nflverse's PPR total and applying only the differences. "

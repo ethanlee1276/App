@@ -655,6 +655,24 @@ class Handler(BaseHTTPRequestHandler):
             body.get("sections"))
         self._send(code, json.dumps(out).encode(), ".json")
 
+    @staticmethod
+    def _kit_board() -> list:
+        """The draft board off the built payload, or [] if it is not there.
+
+        Handed to `fantasy_lineup.with_board` so that a player with no
+        game logs is valued at his projection instead of at zero. Before
+        this, the optimiser benched a first-round rookie behind a
+        4.0-point receiver and `fantasy_trade` proposed no deal involving
+        him in either direction — measured on a fixture roster
+        2026-08-20. Never fatal: no payload means the old behaviour, not
+        a dead endpoint.
+        """
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            return []
+        return (blob.get("draft_kit") or {}).get("board") or []
+
     def _draft_advice(self, query: dict):
         """Pick-by-pick advice for a live Sleeper draft.
 
@@ -815,6 +833,7 @@ class Handler(BaseHTTPRequestHandler):
                 "SELECT DISTINCT season FROM player_game_logs WHERE sport='nfl'"
             ).fetchall()), default=0)
             means = fantasy_lineup.per_game(conn, season) if season else {}
+            means = fantasy_lineup.with_board(means, self._kit_board())
         finally:
             conn.close()
 
@@ -862,6 +881,7 @@ class Handler(BaseHTTPRequestHandler):
             ).fetchall()), default=0)
             means = (fantasy_lineup.per_game(conn, stat_season)
                      if stat_season else {})
+            means = fantasy_lineup.with_board(means, self._kit_board())
         finally:
             conn.close()
 
@@ -1465,6 +1485,7 @@ class Handler(BaseHTTPRequestHandler):
             ).fetchall()), default=0)
             means = (fantasy_lineup.per_game(conn, stat_season)
                      if stat_season else {})
+            means = fantasy_lineup.with_board(means, self._kit_board())
         finally:
             conn.close()
 
