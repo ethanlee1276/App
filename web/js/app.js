@@ -14569,6 +14569,106 @@ let _mock = null;                 // an in-progress draft survives re-renders
 let _mockKit = null;              // the fantasy payload's draft kit, captured at render
 
 //: Starting lineup a roster is judged on (bench fills the rest).
+/* ---- League formats ---------------------------------------------------
+   Ethan, 2026-08-20: "continue on what was still on your list with the bye
+   week shit and te premium and shit like that."
+
+   A format is not a cosmetic setting. Superflex moves quarterbacks from
+   the tenth round to the first, because the position stops having a free
+   replacement — and that changes which players survive to your next pick,
+   which is the whole product. TE premium does the same thing one position
+   over. A simulator that offers one format is a simulator of one league.
+
+   EACH FORMAT IS A LINE-UP AND A SCORING TWEAK, and everything else falls
+   out of those two by arithmetic: the line-up decides replacement level,
+   replacement level decides VORP, VORP decides our board, and the market
+   board is built from positional share which the format also sets. No
+   format carries a hand-tuned ranking of its own.
+
+   TE PREMIUM IS EXACT, NOT ESTIMATED. It is a bonus per RECEPTION, and
+   receptions are now carried on every board row (engine/fantasy_draft.py)
+   rather than guessed from targets times an assumed catch rate — which
+   would have invented the one number the format turns on. */
+const MOCK_FORMATS = {
+  ppr: {
+    name: "PPR",
+    slots: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2 },
+    // Share of picks by position, by band — see _mockMarketOrder.
+    share: [
+      { until: 12, share: { RB: 0.45, WR: 0.53, TE: 0.02, QB: 0.00 } },
+      { until: 60, share: { RB: 0.38, WR: 0.42, TE: 0.11, QB: 0.09 } },
+      { until: Infinity, share: { RB: 0.32, WR: 0.34, TE: 0.17, QB: 0.17 } },
+    ],
+    caps: { QB: 2, TE: 2, RB: 6, WR: 7 },
+    // Points added per reception, over the PPR the projections already
+    // carry. Zero here because the board is already full PPR.
+    bonus: {},
+  },
+  superflex: {
+    name: "Superflex",
+    slots: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, SFLEX: 1 },
+    // A second startable quarterback per team is the whole format: the
+    // position runs out, so it goes early and it goes often.
+    share: [
+      { until: 12, share: { RB: 0.32, WR: 0.36, TE: 0.02, QB: 0.30 } },
+      { until: 60, share: { RB: 0.30, WR: 0.33, TE: 0.09, QB: 0.28 } },
+      { until: Infinity, share: { RB: 0.30, WR: 0.32, TE: 0.16, QB: 0.22 } },
+    ],
+    caps: { QB: 4, TE: 2, RB: 6, WR: 7 },
+    bonus: {},
+  },
+  te_prem: {
+    name: "TE premium",
+    slots: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2 },
+    share: [
+      { until: 12, share: { RB: 0.43, WR: 0.49, TE: 0.08, QB: 0.00 } },
+      { until: 60, share: { RB: 0.36, WR: 0.39, TE: 0.16, QB: 0.09 } },
+      { until: Infinity, share: { RB: 0.31, WR: 0.33, TE: 0.19, QB: 0.17 } },
+    ],
+    caps: { QB: 2, TE: 3, RB: 6, WR: 7 },
+    bonus: { TE: 0.5 },
+  },
+};
+let _mockFormat = "ppr";
+
+function _mockFmt() { return MOCK_FORMATS[_mockFormat] || MOCK_FORMATS.ppr; }
+
+/* The board under this format's scoring, with VORP re-derived from the
+   line-up it implies. A format that changed projections and left VORP
+   alone would move every tight end up the page and leave the number that
+   decides the draft describing a different league. */
+function _mockScoreBoard(board, fmt) {
+  const rows = board.map((p) => {
+    const per = (fmt.bonus || {})[p.position] || 0;
+    const proj = per ? +( (p.proj || 0) + per * (p.rec_pg || 0) ).toFixed(1)
+                     : (p.proj || 0);
+    return { ...p, proj };
+  });
+  // Replacement is the last STARTER at the position across the league —
+  // the best player everyone else can have for nothing. Superflex moves
+  // it for quarterbacks by roughly a full round of them, which is the
+  // entire reason the format drafts differently.
+  const teams = (_mock && _mock.teams) || 12;
+  const starters = { QB: fmt.slots.QB + (fmt.slots.SFLEX || 0),
+                     RB: fmt.slots.RB, WR: fmt.slots.WR, TE: fmt.slots.TE };
+  const byPos = {};
+  for (const r of rows) (byPos[r.position] = byPos[r.position] || []).push(r);
+  for (const pos in byPos) {
+    byPos[pos].sort((a, b) => b.proj - a.proj);
+    // The flex eats into backs and receivers beyond their own slots.
+    const flexShare = (pos === "RB" || pos === "WR")
+      ? Math.round((fmt.slots.FLEX || 0) * teams * 0.45) : 0;
+    const rank = Math.max(1, Math.round((starters[pos] || 1) * teams) + flexShare);
+    const base = byPos[pos][Math.min(rank, byPos[pos].length) - 1];
+    const baseline = base ? base.proj : 0;
+    byPos[pos].forEach((r, i) => {
+      r.pos_rank = i + 1;
+      r.vorp = +(r.proj - baseline).toFixed(1);
+    });
+  }
+  return rows.sort((a, b) => b.vorp - a.vorp);
+}
+
 const MOCK_SLOTS = { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2 };
 const MOCK_FLEX = new Set(["RB", "WR", "TE"]);
 
@@ -14675,8 +14775,9 @@ const MOCK_SHARE_BANDS = [
 ];
 
 function _mockShareAt(slot) {
-  for (const b of MOCK_SHARE_BANDS) if (slot < b.until) return b.share;
-  return MOCK_SHARE_BANDS[MOCK_SHARE_BANDS.length - 1].share;
+  const bands = (_mockFmt().share) || MOCK_SHARE_BANDS;
+  for (const b of bands) if (slot < b.until) return b.share;
+  return bands[bands.length - 1].share;
 }
 
 function _mockMarketOrder(board) {
@@ -14743,10 +14844,18 @@ function _mockLean(arch, pos, round) {
    the whole cost of the loop. */
 function _mockNeedCounts(counts, pos, round) {
   const n = counts[pos] || 0;
-  if (n >= (MOCK_ROSTER_CAP[pos] || 99)) return 0;
+  const caps = (_mockFmt().caps) || MOCK_ROSTER_CAP;
+  if (n >= (caps[pos] || 99)) return 0;
   // A second quarterback or tight end is a bench luxury all draft, not
   // just before round nine. Measured: relaxing it late pushed rooms to
   // 1.85 QBs each, where a twelve-round league runs about 1.3.
+  //
+  // EXCEPT WHERE THE FORMAT STARTS TWO. In superflex the second
+  // quarterback is a STARTER, and treating him as a luxury would have
+  // rooms leaving a line-up slot empty to hold a fourth receiver. The
+  // line-up decides this, not a special case for a format name.
+  const starts = (_mockFmt().slots.QB || 0) + (_mockFmt().slots.SFLEX || 0);
+  if (pos === "QB" && n < starts) return 1.0;
   if (pos === "QB" || pos === "TE") return n >= 1 ? (round < 9 ? 0.05 : 0.18) : 1.0;
   if (pos === "RB" || pos === "WR") return n >= 5 ? 0.3 : 1.0;
   return n >= 2 ? 0.2 : 1.0;
@@ -15009,8 +15118,7 @@ function _mockPicker(pickIdx, teams) {
 function _mockStart(teams, slot) {
   const kit = _mockKit || {};
   // OUR order — value over replacement — is what the human is shown.
-  const pool = (kit.board || []).slice()
-    .sort((a, b) => (b.vorp || 0) - (a.vorp || 0));
+  const pool = _mockScoreBoard((kit.board || []).slice(), _mockFmt());
   // THE ROOM'S order is the market's, and the gap between the two is the
   // value column. Built once per draft, deterministic, and carried as a
   // rank per player so both the live CPU and the Monte Carlo read the
@@ -15110,16 +15218,27 @@ function _mockLineup(roster) {
   roster.forEach((p) => (by[p.position] || []).push(p));
   Object.values(by).forEach((l) => l.sort((a, b) => (b.proj || 0) - (a.proj || 0)));
   const starters = [];
-  for (const [pos, want] of Object.entries(MOCK_SLOTS)) {
-    if (pos === "FLEX") continue;
+  for (const [pos, want] of Object.entries(_mockFmt().slots)) {
+    if (pos === "FLEX" || pos === "SFLEX") continue;
     for (let i = 0; i < want; i++) {
       starters.push([want > 1 ? pos + (i + 1) : pos, by[pos].shift() || null]);
     }
   }
   const flexPool = [...by.RB, ...by.WR, ...by.TE]
     .sort((a, b) => (b.proj || 0) - (a.proj || 0));
-  for (let i = 0; i < MOCK_SLOTS.FLEX; i++) {
+  for (let i = 0; i < (_mockFmt().slots.FLEX || 0); i++) {
     starters.push(["FLEX" + (i + 1), flexPool.shift() || null]);
+  }
+  // Superflex last, and it takes a quarterback if one is spare — the slot
+  // is QB-eligible, which is the point of the format.
+  for (let i = 0; i < (_mockFmt().slots.SFLEX || 0); i++) {
+    const spare = [...by.QB, ...flexPool]
+      .sort((a, b) => (b.proj || 0) - (a.proj || 0))[0] || null;
+    if (spare) {
+      const fi = flexPool.indexOf(spare);
+      if (fi >= 0) flexPool.splice(fi, 1); else by.QB.shift();
+    }
+    starters.push(["SFLEX", spare]);
   }
   const chosen = new Set(starters.map(([, p]) => p).filter(Boolean));
   const bench = roster.filter((p) => !chosen.has(p));
@@ -15146,6 +15265,38 @@ function _mockAdvice() {
       <b>${escapeHtml(bestThin.player)}</b> (+${(bestThin.vorp || 0).toFixed(1)}).`;
   }
   return line;
+}
+
+/* ---- Byes -----------------------------------------------------------
+   The one fact on the board. Everything else in the kit is a projection
+   and can be argued with; the schedule is published. It decides whether
+   the roster you just drafted has three starters missing in week eleven,
+   and until now the room had no idea the concept existed.
+
+   THE WARNING IS ABOUT STARTERS, not about the roster. Two backup tight
+   ends sharing a bye costs nothing — you were never starting them. The
+   count that matters is how many of your best eleven go dark at once, so
+   that is what is counted. */
+function _mockByeClash(roster) {
+  const lineup = _mockLineup(roster);
+  const weeks = {};
+  for (const [, p] of lineup.starters) {
+    if (p && p.bye) weeks[p.bye] = (weeks[p.bye] || 0) + 1;
+  }
+  return Object.entries(weeks)
+    .map(([wk, n]) => ({ wk: +wk, n }))
+    .filter((x) => x.n >= 3)
+    .sort((a, b) => b.n - a.n);
+}
+
+function _mockByeHTML(roster) {
+  const clash = _mockByeClash(roster);
+  if (!clash.length) return "";
+  return `<div class="mk-bye-warn">${clash.map((c) => `
+    <span class="chip ${c.n >= 4 ? "down" : ""}"
+      title="Starters on the same bye. Three is a hole in your week; four
+             is a loss unless the waiver wire is kind.">
+      Week ${c.wk}: <b>${c.n}</b> starters out</span>`).join("")}</div>`;
 }
 
 /* Cached per pick: the board only changes when somebody drafts, so
@@ -15305,6 +15456,12 @@ function mockDraftHTML() {
             <select id="mk-slot" class="mk-sel">
               ${Array.from({ length: 12 }, (_, i) => `<option>${i + 1}</option>`).join("")}
             </select></label>
+          <label>Format
+            <select id="mk-format" class="mk-sel">
+              ${Object.entries(MOCK_FORMATS).map(([k, f]) =>
+                `<option value="${k}"${k === "ppr" ? " selected" : ""}>${
+                  escapeHtml(f.name)}</option>`).join("")}
+            </select></label>
           <label>Room chaos
             <select id="mk-chaos" class="mk-sel">
               <option value="10">Chalk</option>
@@ -15320,6 +15477,13 @@ function mockDraftHTML() {
           TE and the rest — so the board falls differently every time and a
           run on a position is sometimes real. <b>Room chaos</b> sets how far
           they will stray from the board to do it.</p>
+        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
+          <b>Superflex</b> starts a second quarterback, so the position stops
+          having a free replacement and goes in the first round instead of
+          the tenth. <b>TE premium</b> pays half a point per tight-end
+          catch, computed from real receptions rather than a guessed catch
+          rate. Each format re-derives every projection, every VORP and the
+          order the rooms draft in — nothing here is a re-skin.</p>
         <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
           On every one of your picks the draft ahead of you is simulated
           ${MOCK_SIMS.toLocaleString()} times, and each available player
@@ -15338,7 +15502,8 @@ function mockDraftHTML() {
   const idBlock = (p, meta) => `
     <span class="mk-id" data-dossier="${escapeAttr(p.player)}"><b>${escapeHtml(p.player)}</b>${injTag("nfl", p.player)}
       <span class="mk-meta">${teamMark(p.team, 14, nflMap(), "nfl")}
-        ${escapeHtml(p.team)} · ${escapeHtml(p.position)}${meta}</span></span>`;
+        ${escapeHtml(p.team)} · ${escapeHtml(p.position)}${
+        p.bye ? ` · <span class="mk-bye">bye ${p.bye}</span>` : ""}${meta}</span></span>`;
 
   if (m.pick >= total) {
     const scores = m.rosters.map((r, i) => ({ i, ppg: _mockStartersPPG(r) }))
@@ -15361,6 +15526,7 @@ function mockDraftHTML() {
           <div class="v">${place} of ${m.teams}</div>
           <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">by projected starters</div></div>
       </div>
+      ${_mockByeHTML(m.rosters[m.you])}
       <div class="section-title minor">Your starting lineup</div>
       <div class="card mk-panel">${lineup.starters.map(starterRow).join("")}</div>
       ${lineup.bench.length ? `<div class="section-title minor">Bench</div>
@@ -15419,6 +15585,7 @@ function mockDraftHTML() {
       </div>
       <div class="mk-col">
         <div class="section-title minor">Your roster</div>
+        ${_mockByeHTML(m.rosters[m.you])}
         <div class="card mk-panel">${roster || `<div class="mk-log-row">
           <span class="mk-meta">Empty until your first pick.</span></div>`}</div>
         <div class="section-title minor">Last round of picks</div>
@@ -15457,6 +15624,10 @@ function _mockBind(host) {
         parseInt(document.getElementById("mk-slot").value, 10));
       const ch = document.getElementById("mk-chaos");
       if (ch) _mockChaos = parseInt(ch.value, 10) || 35;
+      const fm = document.getElementById("mk-format");
+      // Set BEFORE _mockStart: the format decides the scoring, which
+      // decides VORP, which decides both boards.
+      if (fm && MOCK_FORMATS[fm.value]) _mockFormat = fm.value;
       _mockStart(teams, slot);
     } else if (t.id === "mk-reset" || t.id === "mk-again") {
       _mock = null; _mockRender();

@@ -5328,6 +5328,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* The other end of the same distribution: from the 1.01 seat every name
    on the board is gone by your next turn, so a column of 0% is honest and
    useless by itself. These are the men who actually survive. */
+/* The bye, on every row, and the clash it can cause. Counted over
+   STARTERS: two backup tight ends sharing a week costs nothing. */
+.mk-bye { color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.mk-bye-warn { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .mk-plan { margin-top: 10px; display: grid; gap: 4px; }
 .mk-plan-head { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
   text-transform: uppercase; color: var(--text-mute); }

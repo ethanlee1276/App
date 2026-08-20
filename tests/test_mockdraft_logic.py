@@ -41,6 +41,10 @@ function grab(name, end) {
   return src.slice(i, j + end.length);
 }
 const code = [
+  // Formats: the line-up, caps and share bands the rest reads from.
+  grab("const MOCK_FORMATS = {", "\n};"),
+  "let _mockFormat = 'ppr';",
+  grab("function _mockFmt(", "\n}"),
   grab("const MOCK_SLOTS", ";"),
   // The caps the need curve now enforces — a room that only ever
   // SOFTENED finished with six quarterbacks.

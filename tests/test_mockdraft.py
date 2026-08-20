@@ -42,8 +42,16 @@ def test_the_pool_is_the_kits_own_board():
     i = APP.index("function _mockStart(")
     body = APP[i:i + 400]
     assert "_mockKit || {}" in body
-    assert "(b.vorp || 0) - (a.vorp || 0)" in body, \
-        "the pool must be ordered by the kit's own value metric"
+    # VORP-ordered, but RE-DERIVED under the chosen format first: a
+    # format that changed projections and left VORP alone would move every
+    # tight end up the page while the number that decides the draft went
+    # on describing a different league.
+    assert "_mockScoreBoard(" in body, \
+        "the pool no longer scores the board under the league's format"
+    fn = APP[APP.index("function _mockScoreBoard("):]
+    fn = fn[:fn.index("\n}")]
+    assert "b.vorp - a.vorp" in fn, "the board is not value-ordered"
+    assert "r.proj - baseline" in fn, "VORP is not re-derived from replacement"
 
 
 def test_the_cpu_is_stated_not_hidden():
@@ -176,6 +184,71 @@ def test_a_build_moves_a_player_in_slots_not_in_multipliers():
     # roughly 1.5 tight-end chasers in every draft.
     j = APP.index("function _mockDrawArchetype(")
     assert "MOCK_ARCH_TOTAL" in APP[j:j + 300], "the draw ignores the weights"
+
+
+def test_a_format_re_derives_the_board_rather_than_re_skinning_it():
+    """Ethan, 2026-08-20: "te premium and shit like that."
+
+    A format is not a cosmetic setting. Superflex moves quarterbacks from
+    the tenth round to the first, because the position stops having a free
+    replacement — and that changes which players survive to your next
+    pick, which is the whole product. Verified on the real board: the
+    first quarterback moves from market slot 19 to slot 3, and six of them
+    go before your second pick where under PPR it is 0.9.
+
+    Everything falls out of the line-up by arithmetic: the line-up decides
+    replacement level, replacement decides VORP, VORP decides our board,
+    and the market board is built from a share the format also sets. No
+    format carries a ranking of its own.
+    """
+    i = APP.index("const MOCK_FORMATS = {")
+    block = APP[i:APP.index("\n};", i)]
+    for key in ("ppr", "superflex", "te_prem"):
+        assert f"{key}:" in block, f"lost the {key} format"
+    assert "SFLEX" in block, "superflex has no extra starting slot"
+    # The pieces that must follow the format rather than a constant.
+    for fn, what in (("_mockShareAt", "share"), ("_mockNeedCounts", "caps"),
+                     ("_mockLineup", "slots")):
+        j = APP.index(f"function {fn}(")
+        body = APP[j:APP.index("\n}", j)]
+        assert "_mockFmt()" in body, f"{fn} ignores the format's {what}"
+
+
+def test_te_premium_is_arithmetic_on_real_receptions():
+    """The bonus is per RECEPTION. Estimating receptions from targets times
+    an assumed catch rate would invent the one number the format turns on,
+    so the board carries them (engine/fantasy_draft.py) and this multiplies
+    them. Verified on the real board: McBride 17.7 -> 21.4, which is
+    exactly 0.5 x his 7.41 catches a game."""
+    i = APP.index("function _mockScoreBoard(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "p.rec_pg" in body, "the bonus is no longer per reception"
+    assert "targets" not in body, "receptions are being estimated from targets"
+
+
+def test_superflex_makes_a_second_quarterback_a_starter():
+    """Treating him as a bench luxury would have rooms leave a starting
+    slot empty to hold a fourth receiver. The LINE-UP decides this, not a
+    special case keyed off a format name."""
+    i = APP.index("function _mockNeedCounts(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "SFLEX" in body, "the need rule cannot see the superflex slot"
+    assert "n < starts" in body, "a second QB is a luxury even where he starts"
+    assert '"superflex"' not in body, "the rule is keyed off a format name"
+
+
+def test_the_bye_warning_counts_starters_not_the_roster():
+    """Two backup tight ends sharing a bye costs nothing — you were never
+    starting them. What matters is how many of your best eleven go dark at
+    once. Verified on a fixture: three starters on week 11 with two bench
+    players also on 11 reports 3, not 5."""
+    i = APP.index("function _mockByeClash(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "_mockLineup(roster)" in body, "the clash counts the whole roster"
+    assert "lineup.starters" in body
+    assert "x.n >= 3" in body, "the threshold for a real hole is gone"
+    # And a board with no bye data must draw nothing rather than zeroes.
+    assert "p.bye" in body
 
 
 def test_the_simulation_reports_the_count_it_actually_ran():

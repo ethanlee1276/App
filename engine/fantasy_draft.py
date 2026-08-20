@@ -62,6 +62,12 @@ def _players(conn, season: int) -> list[dict]:
         ppg = sum(m.get("fp_ppr", 0.0) for m in p["weeks"].values()) / n
         tgt = sum(m.get("targets", 0.0) for m in p["weeks"].values()) / n
         car = sum(m.get("carries", 0.0) for m in p["weeks"].values()) / n
+        # RECEPTIONS, carried so a PPR variant is arithmetic rather than a
+        # guess. The alternative was estimating them from targets times an
+        # assumed catch rate, which invents the one number the format
+        # turns on. They are already in the weekly pull; only the board
+        # dropped them.
+        rec = sum(m.get("receptions", 0.0) for m in p["weeks"].values()) / n
         att = sum(m.get("pass_att", 0.0) for m in p["weeks"].values()) / n
 
         xfp_vals = [m["xfp"] for m in pbp.get(_short_key(player, p["team"]),
@@ -88,6 +94,7 @@ def _players(conn, season: int) -> list[dict]:
             "games": n, "ppg": round(ppg, 1), "xppg": round(xppg, 1),
             "proj": round(proj, 1), "basis": basis,
             "targets_pg": round(tgt, 1), "carries_pg": round(car, 1),
+            "rec_pg": round(rec, 2),
             "pass_att_pg": round(att, 1),
             "small_sample": n < MIN_GAMES,
         })
@@ -130,6 +137,13 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS) -> dict:
 
     board = sorted(players, key=lambda r: r["vorp"], reverse=True)
 
+    # THE ONE FACT ON THE BOARD. Everything else here is a projection and
+    # can be argued with; the schedule is published. A bye decides whether
+    # the roster somebody just drafted has three starters missing in week
+    # eleven, and the kit had no idea the concept existed.
+    from .byes import bye_weeks, attach as _attach_byes
+    _attach_byes(board, bye_weeks(conn, season))
+
     # Usage says buy: expected clearly above actual — the draft-day version
     # of buy-low. (Sell-highs matter less at the table: the market already
     # prices last year's points; the board's lower proj handles it.)
@@ -153,5 +167,8 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS) -> dict:
             "VORP is points over the best freely-available player at the "
             "same position — it is why the 4th-best QB is worth less than "
             "the 15th-best WR.",
+            "Bye weeks come off the published schedule, not a table — a "
+            "hard-coded one is silently wrong the year the league moves a "
+            "week, and it moves most years.",
         ],
     }
