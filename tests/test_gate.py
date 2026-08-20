@@ -338,11 +338,37 @@ def test_a_signed_in_visitor_without_a_subscription_gets_402_not_403():
 
 def test_a_broken_billing_lookup_does_not_become_a_free_read():
     """The failure everybody notices is a paying customer refused. The
-    failure nobody notices is the product given away."""
+    failure nobody notices is the product given away.
+
+    ANCHORED ON THE BILLING CALL, not on the first `except` in the
+    function — the redemption-code lookup was added ahead of it on
+    2026-08-20 and has its own, deliberately different, handler. Anchoring
+    by position made this test about whichever guard happened to be first,
+    which is not the property it exists to defend.
+    """
     src = _server()
-    body = src[src.index("def _entitled"):][:1400]
-    tail = body[body.index("except Exception"):][:400]
+    body = src[src.index("def _entitled"):][:2200]
+    tail = body[body.index("BI.status_for"):]
+    tail = tail[tail.index("except Exception"):][:400]
     assert "return False" in tail, "an exception falls through to entitled"
+
+
+def test_a_broken_code_lookup_costs_a_code_holder_not_a_subscriber():
+    """The redemption guard is deliberately NOT fail-closed, and the
+    asymmetry is the point. Codes are checked before the processor; if
+    that lookup throws and it returned False there, a paying subscriber
+    would lose their board over a failure in a feature they never used.
+    It falls through to the billing check instead, which still fails
+    closed — so the composite is closed and the blast radius of a broken
+    code table is code holders alone."""
+    src = _server()
+    body = src[src.index("def _entitled"):][:2200]
+    head = body[body.index("RD.init("):body.index("BI.status_for")]
+    guard = head[head.index("except Exception"):]
+    assert "return True" not in guard, \
+        "a broken code lookup grants access — that is fail-OPEN"
+    assert "pass" in guard, \
+        "it no longer falls through to the billing check"
 
 
 

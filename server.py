@@ -1228,12 +1228,25 @@ class Handler(BaseHTTPRequestHandler):
         from engine import billing as BI
         from engine import gate
         from engine import paddle as PAY
+        from engine import redeem as RD
         if not gate.enabled():
             return True
         if not who:
             return False
         if gate.comped(who.get("email")):
             return True
+        # A REDEEMED CODE IS AN ENTITLEMENT, checked before the processor
+        # and independent of it. This is what lets the paywall be switched
+        # on before Paddle is live: comp addresses and codes are then the
+        # two ways in, both under Ethan's hand. Its own try, so that a
+        # broken redemption lookup cannot cost a PAYING subscriber their
+        # board — the billing check below still runs.
+        try:
+            RD.init(conn)
+            if RD.active(conn, who["id"]):
+                return True
+        except Exception:                                    # noqa: BLE001
+            pass
         try:
             BI.init(conn)
             st = BI.status_for(conn, who["id"], describe_with=PAY.describe)
@@ -1341,7 +1354,59 @@ class Handler(BaseHTTPRequestHandler):
             if who:
                 out.update(BI.status_for(conn, who["id"],
                                          describe_with=PAY.describe))
+                # Codes ride alongside rather than inside the subscription
+                # status: a redeemed code is not a subscription and saying
+                # it is would put a status on the page that no processor
+                # would recognise if support ever had to look it up.
+                from engine import redeem as RD
+                RD.init(conn)
+                out["codes"] = RD.describe(conn, who["id"])
+                if out["codes"]["active"]:
+                    out["entitled"] = True
+            # Whether the gate is even on. The account page cannot tell
+            # "you need to subscribe" from "everything is free right now"
+            # without it, and it has been guessing.
+            from engine import gate as GATE
+            out["paywall"] = GATE.enabled()
             return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _billing_redeem(self, raw: bytes):
+        """Apply a discount code. Signed-in accounts only.
+
+        The account requirement is not ceremony: a grant has to attach to
+        somebody, the one-per-account rule needs an account to be per, and
+        the rate limiter needs a subject to count. An anonymous redemption
+        is an unlimited redemption.
+        """
+        from engine import redeem as RD
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401,
+                    b'{"error":"Sign in first, then redeem your code."}', ".json")
+            try:
+                body = json.loads(raw.decode() or "{}")
+            except Exception:                                # noqa: BLE001
+                body = {}
+            code = str(body.get("code") or "")
+            try:
+                got = RD.redeem(conn, who["id"], code)
+            except RD.RedeemError as exc:
+                # 200 with an error field, not a 4xx: this is an expected
+                # answer to a normal question, and a 400 in the console on
+                # every mistyped promo code trains everyone to ignore the
+                # console.
+                return self._send(200, json.dumps(
+                    {"ok": False, "error": str(exc)}).encode(), ".json")
+            return self._send(200, json.dumps({
+                "ok": True, "code": got["code"], "months": got["months"],
+                "granted_to": got["granted_to"],
+                "note": f"{got['months']} month(s) of full access added.",
+            }).encode(), ".json")
         finally:
             conn.close()
 
@@ -1351,6 +1416,8 @@ class Handler(BaseHTTPRequestHandler):
         A = _acct()
         if path == "webhook":
             return self._billing_webhook(raw)
+        if path == "redeem":
+            return self._billing_redeem(raw)
         if path not in ("checkout", "portal"):
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")

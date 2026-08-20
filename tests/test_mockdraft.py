@@ -520,6 +520,30 @@ def test_the_advice_bar_only_appears_when_it_disagrees_with_the_card():
         "the bar renders even when _mockAdvice returned null"
 
 
+def test_the_week_by_week_panel_is_the_only_thing_that_already_happened():
+    """The render's "Fantasy Points Trend" was its best idea, and it is
+    the one panel on this card made of results rather than forecasts.
+    24.5 a game off six huge weeks and eleven quiet ones is a different
+    player from 24.5 every Sunday, and no mean tells them apart.
+
+    Loaded AFTER the card renders, because it is a fetch and a card must
+    not wait on the network to appear — the same pattern the dossier
+    uses. Verified in Chromium with a stubbed log: 17 bars, best 35.1,
+    worst 9.8, mean rule drawn."""
+    fn = APP[APP.index("async function _mockTrend("):]
+    fn = fn[:fn.index("\nfunction _mockRender(")]
+    assert "leagueLogs(" in fn, "the panel invented a series instead of reading one"
+    assert "not a projection" in fn, \
+        "nothing tells the reader these are results, beside four simulated numbers"
+    # The card can move on while a fetch is in flight; a late reply must
+    # not paint one player's season into another player's card.
+    assert fn.count("dataset.mktrend !== name") >= 2, \
+        "a slow response can land on the wrong player"
+    # Two silences, told apart: never played vs not ingested here.
+    assert "has not played an NFL snap" in fn and "on this machine" in fn
+    assert "--mk-mean" in CSS, "the mean rule has no scale to sit on"
+
+
 def test_there_is_no_opposing_defence_panel():
     """The render had "Matchup vs Opponent" — defensive ranks, yards
     allowed, a "+8% Fantasy Boost". There is no opponent in a draft.

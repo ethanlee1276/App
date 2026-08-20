@@ -12175,13 +12175,13 @@ async function renderBilling() {
     s = await r.json();
   } catch (e) { slot.innerHTML = ""; return; }
   if (!s || !s.signed_in) { slot.innerHTML = ""; return; }
-  if (!s.configured) {
-    // Say nothing to a user; this is a note for whoever runs the server.
-    slot.innerHTML = `<p class="rank-help">Subscriptions are not switched on
-      yet — see <b>docs/BILLING.md</b>.</p>`;
-    return;
-  }
-  slot.innerHTML = `
+  /* THE CODE BOX DOES NOT DEPEND ON THE PROCESSOR, and the old shape did:
+     an unconfigured Paddle returned early and took the whole panel with
+     it. A redeemed code involves no money and no processor, so it has to
+     survive that — it is the ONLY way in while Paddle is still being set
+     up, which is exactly the state the site is in today. */
+  const codes = s.codes || {};
+  slot.innerHTML = (s.configured ? `
     <div class="acct-row">
       <span class="bill-state${s.entitled ? " on" : ""}">${
         escapeHtml(s.note || "")}</span>
@@ -12191,8 +12191,71 @@ async function renderBilling() {
       ${s.live === false ? `<span class="chip warn">Paddle sandbox —
         no real money moves</span>` : ""}
     </div>
-    ${billPlansHTML(s)}`;
+    ${billPlansHTML(s)}`
+  : `<p class="rank-help">${s.paywall
+      ? `Card payment is not switched on yet. Access is by code for now — if
+         you have one, enter it below.`
+      : `Everything is free right now, so there is nothing to pay for. A code
+         still works and starts its clock from the day you enter it.`}</p>`)
+    + codeBoxHTML(codes);
 }
+
+/* "Have a code?" — Ethan, 2026-08-20. Kept beside the subscribe control
+   rather than on a page of its own, because somebody holding a code and
+   somebody about to pay are at the same moment in the same decision, and
+   a code box nobody finds is a support email. */
+function codeBoxHTML(codes) {
+  const held = (codes.codes || []).map((c) => `
+    <div class="mk-kv"><span>${escapeHtml(c.code)}</span>
+      <b>${c.months} month${c.months === 1 ? "" : "s"} · through ${
+        new Date((c.granted_to || 0) * 1000).toLocaleDateString()}</b></div>`).join("");
+  return `
+    <div class="code-box">
+      <div class="code-head">Have a code?</div>
+      <div class="acct-row">
+        <input class="acct-in code-in" id="code-in" type="text"
+               autocomplete="off" spellcheck="false"
+               placeholder="Enter your code" aria-label="Discount code">
+        <button class="btn" onclick="redeemCode(this)">Apply</button>
+      </div>
+      <p class="acct-note code-note" id="code-note"></p>
+      ${held ? `<div class="code-held">${held}</div>` : ""}
+      ${codes.active ? `<p class="rank-help">Your code covers you through
+        <b>${new Date((codes.granted_to || 0) * 1000).toLocaleDateString()}</b>.
+        No card is involved and there is nothing to cancel.</p>` : ""}
+    </div>`;
+}
+
+window.redeemCode = async function (btn) {
+  const input = document.getElementById("code-in");
+  const note = document.getElementById("code-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  const code = (input && input.value || "").trim();
+  if (!code) return say("Enter the code first.");
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = "Checking…";
+  try {
+    const r = await fetch("/api/billing/redeem", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const d = await r.json().catch(() => null);
+    if (!d) { say("Server not reachable."); return; }
+    if (!d.ok) { say(d.error || "That code is not valid."); return; }
+    say(d.note || "Code applied.");
+    if (input) input.value = "";
+    // Re-read rather than patch the DOM: entitlement changed, and every
+    // board on the page is now allowed to show more than it is showing.
+    setTimeout(() => { renderBilling(); load(true); }, 400);
+  } catch (e) {
+    say("Server not reachable.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+};
 
 async function _billGo(btn, path) {
   const was = btn.textContent;
@@ -16171,6 +16234,11 @@ function _mockPlayerCardHTML(m, p, sim) {
         opposing-defence panel here. There is no opponent in a draft, so this
         answers the question a drafter actually has instead.</p>
     </div>
+    <div class="card mk-panel mk-trend" id="mk-trend"
+         data-mktrend="${escapeAttr(p.player)}">
+      <div class="mk-h">Last season, week by week</div>
+      <p class="mk-fine">Loading his game log\u2026</p>
+    </div>
     <div class="card mk-panel mk-why">
       <div class="mk-h">Why he is worth the pick</div>
       <ul class="mk-whylist">${why.map((w) => `<li>${iconMark("check", 14)}<span>${w}</span></li>`).join("")}</ul>
@@ -16414,9 +16482,67 @@ function mockDraftHTML() {
     <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
 }
 
+/* THE ONE PANEL ON THIS CARD MADE OF THINGS THAT ALREADY HAPPENED.
+
+   The render had a "Fantasy Points Trend" bar chart, and it is the best
+   idea in it: everything else on the card is a projection or a
+   simulation, and a drafter deciding between two men wants to see the
+   shape of the season behind the average. 24.5 a game off six good weeks
+   and eleven quiet ones is a different player from 24.5 every Sunday, and
+   no mean can tell them apart.
+
+   Loaded after the card renders rather than with it, because it is a
+   fetch and the card must not wait on the network to appear — the same
+   pattern the fantasy dossier uses. A player with no logs says so
+   plainly, and says WHICH kind of nothing it is: a rookie has never
+   played, and that is not the same as a machine that has not ingested
+   him. */
+const MK_TREND_WEEKS = 18;
+async function _mockTrend(name) {
+  const zone = document.getElementById("mk-trend");
+  if (!zone || zone.dataset.mktrend !== name) return;
+  const row = (_mock && _mock.all || []).find((x) => x.player === name) || {};
+  const stats = await leagueLogs(name);
+  // The card may have moved on while the fetch was in flight.
+  const z = document.getElementById("mk-trend");
+  if (!z || z.dataset.mktrend !== name) return;
+  const series = stats["Fantasy Points"] || stats["fp_ppr"]
+    || stats[Object.keys(stats).find((k) => /fantasy|ppr/i.test(k)) || ""] || [];
+  const vals = series.slice(-MK_TREND_WEEKS)
+    .map((v) => (typeof v === "object" ? +v.value : +v))
+    .filter((v) => Number.isFinite(v));
+  const head = `<div class="mk-h">Last season, week by week</div>`;
+  if (!vals.length) {
+    z.innerHTML = head + `<p class="mk-fine">${row.source === "market"
+      ? `No game log — he has not played an NFL snap${
+          row.rookie ? " (rookie)" : ""}, which is why his projection is the
+         market’s draft rank rather than a read of ours.`
+      : `No game log on this machine. The droplet and the laptop fill these
+         in; the projection above does not depend on it.`}</p>`;
+    return;
+  }
+  const max = Math.max(...vals, 1);
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const bars = vals.map((v, i) => `<span class="mk-bar" style="height:${
+    Math.max(3, v / max * 100).toFixed(1)}%" title="Week ${i + 1}: ${
+    v.toFixed(1)}"></span>`).join("");
+  const best = Math.max(...vals), worst = Math.min(...vals);
+  z.innerHTML = head
+    + `<div class="mk-bars" style="--mk-mean:${(mean / max * 100).toFixed(1)}%">${bars}</div>`
+    + `<div class="mk-kv"><span>Best week</span><b>${best.toFixed(1)}</b></div>`
+    + `<div class="mk-kv"><span>Worst week</span><b>${worst.toFixed(1)}</b></div>`
+    + `<div class="mk-kv"><span>Weeks played</span><b>${vals.length}</b></div>`
+    + `<p class="mk-fine">Actual scoring, not a projection — the dashed
+       line is his own average. The floor and ceiling above are simulated
+       forward; this is what already happened.</p>`;
+}
+
 function _mockRender() {
   const room = document.getElementById("mock-room");
-  if (room) room.innerHTML = mockDraftHTML();
+  if (!room) return;
+  room.innerHTML = mockDraftHTML();
+  const z = room.querySelector("#mk-trend");
+  if (z) _mockTrend(z.dataset.mktrend);
 }
 
 function _mockBind(host) {

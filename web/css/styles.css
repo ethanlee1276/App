@@ -5482,6 +5482,23 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .mk-svbar { position: relative; height: 4px; margin-top: 10px; border-radius: 2px;
   background: var(--fill-subtle); overflow: hidden; }
 .mk-svbar > i { position: absolute; inset: 0 auto 0 0; background: var(--good); }
+/* The one panel on the card made of things that already happened. The
+   dashed rule is his own average, drawn from a custom property the JS
+   sets, so the bar heights and the mean line can never disagree about
+   which scale they are on. */
+.mk-bars { display: flex; align-items: flex-end; gap: 3px; height: 84px;
+  position: relative; margin: 2px 0 12px;
+  /* Declared here so the property exists in the stylesheet even though
+     the real value is written inline per player. A var that only ever
+     appears as a reference is indistinguishable from a typo. */
+  --mk-mean: 50%;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.mk-bars::after { content: ""; position: absolute; left: 0; right: 0;
+  bottom: var(--mk-mean, 50%); border-top: 1px dashed var(--text-mute);
+  opacity: .55; }
+.mk-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0;
+  background: color-mix(in oklab, var(--good) 68%, transparent); }
+.mk-bar:hover { background: var(--good); }
 .mk-whylist { list-style: none; margin: 0; padding: 0; }
 .mk-whylist li { display: flex; gap: 8px; align-items: flex-start;
   font-size: var(--fs-sm); line-height: var(--lh-snug); }
@@ -5794,6 +5811,17 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    Wraps rather than scrolls: on a phone the email, the password and the
    two buttons stack, which is the only arrangement where all four stay
    tappable at 390px. */
+/* The code box. Set apart from the subscribe control by a rule rather
+   than a card, because it is an ALTERNATIVE route to the same thing and
+   a second card would read as a second product. */
+.code-box { margin-top: 14px; padding-top: 14px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.code-head { font-size: var(--fs-sm); font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-mute); margin-bottom: 8px; }
+.code-in { text-transform: uppercase; letter-spacing: .08em;
+  font-weight: 700; }
+.code-note:empty { display: none; }
+.code-held { margin-top: 10px; }
 .acct-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   margin-top: 10px; }
 .acct-row input { flex: 1 1 200px; min-width: 0; padding: 9px 12px;

@@ -1,0 +1,177 @@
+# Ideas — what this site could add next
+
+Ethan, 2026-08-20: *"think of more ideas to add to th website."*
+
+Written as a working list, not a wish list. Every entry says what it is,
+**what it would be built from**, and what it costs — because the ideas
+that die here are the ones that need data we do not have, and it is
+cheaper to find that out in a document than in a branch.
+
+Ordered by *value per unit of work*, not by size.
+
+---
+
+## The rule this list is filtered through
+
+A feature earns a place only if its numbers can be **derived from
+something we already hold or can legitimately fetch**. Anything whose
+centre is a number somebody would have to invent belongs in the last
+section, and stays there until the data exists.
+
+That rule already killed three obvious ones: a "trade acceptance
+percentage" (no proposal has ever been logged, so there is nothing to
+fit), a "confidence score" on a projection (nothing fits it), and an
+opposing-defence panel inside a draft (there is no opponent).
+
+---
+
+## 1. Auction values — the last snake-only gap in the draft kit
+
+**What:** a dollar figure per player for auction and salary-cap leagues,
+which are a large minority of drafts and get nothing from the kit today.
+
+**Built from:** VORP, which we already compute. The standard construction
+is real arithmetic, not a guess: total budget across the league, minus one
+dollar per roster slot, divided across the sum of positive VORP. Every
+term is ours.
+
+**Cost:** small. One function in `fantasy_draft.py`, a column on the
+board, a budget input on the page.
+
+**Why it is first:** draft season is now, it is the only format the kit
+cannot serve at all, and nothing has to be invented.
+
+---
+
+## 2. Waiver-wire and streamer board (in-season, matters from Week 1)
+
+**What:** every week, who to add and who to start from the free-agent
+pool — the question a manager asks fourteen times a season versus once at
+the draft.
+
+**Built from:** `fantasy_lineup.per_game` for the pool, the injury board
+for who just lost a job, `preseason.camp_report`'s depth-chart diffing
+(already written, already tracking daily) for who just won one, and the
+game scripts for the matchup. All four exist.
+
+**Cost:** medium. Mostly assembly.
+
+**Why:** the draft kit is a two-week product. This is the one that keeps
+somebody coming back every Tuesday from September to December.
+
+---
+
+## 3. "What changed since you last looked"
+
+**What:** a single strip at the top of the board naming what moved since
+the reader's last visit — lines that moved past a threshold, picks that
+appeared or disappeared, players newly ruled out.
+
+**Built from:** `odds_history` and `engine/linetape.py`, both live. The
+reader's last-visit timestamp is a `localStorage` value.
+
+**Cost:** small.
+
+**Why:** the site currently answers "what is true now" and never "what is
+different". Returning readers re-read the whole board to find the two rows
+that changed.
+
+---
+
+## 4. Bet-slip export — for the sportsbook, never here
+
+**What:** a copyable summary of the picks a reader wants to place, so
+they can key them into their own book without re-reading the board.
+
+**Built from:** the recommended board.
+
+**Constraint, and it is absolute:** this site takes no wagers. Not a
+slip, not a "Place Bet", not a balance, no "To Win" figure. This is text
+to copy, and the tests that forbid a betting interface stay exactly as
+they are. If that line feels thin, do not build it.
+
+**Cost:** small. **Value:** removes the most obvious friction between
+reading a pick and acting on it.
+
+---
+
+## 5. A public model-versus-market scoreboard
+
+**What:** one page answering "does this thing beat the closing line",
+cut by sport and market, with the sample size beside every number.
+
+**Built from:** the CLV work already in the ledger and `engine/coverage.py`.
+
+**Cost:** medium, mostly presentation of numbers that exist.
+
+**Why:** it is the single most persuasive thing a paid product can show,
+and it is persuasive precisely because it can come out badly.
+
+---
+
+## 6. Alerts that fire on a condition, not a schedule
+
+**What:** "tell me when a line I care about moves past X", delivered to
+the phone.
+
+**Built from:** the Routines infrastructure and the push path already
+wired for the nightly summary.
+
+**Cost:** medium — the condition language is the hard part; keep it to
+three shapes rather than building a query builder nobody uses.
+
+---
+
+## 7. Head-to-head league sync for the fantasy page
+
+**What:** read the reader's actual league — their roster, their
+opponent's, the standings — and answer start/sit against the team they
+are actually playing this week.
+
+**Built from:** the Sleeper public API, already fetched daily.
+
+**Cost:** medium-large.
+
+**Note:** Sleeper only. ESPN and Yahoo need session cookies or an OAuth
+app, and this repo does not take credentials.
+
+---
+
+## 8. A "why is this board empty" panel, everywhere
+
+**What:** every empty state names the reason and the fix.
+
+**Built from:** the status fields already emitted (`odds_status`,
+`injury_status` shipped 2026-08-20).
+
+**Cost:** small, spread thin.
+
+**Why:** an empty board and a broken board look identical today on most
+pages, and the difference is the whole trust question.
+
+---
+
+## Ideas that need data we do not have
+
+Kept so they are not re-proposed every month.
+
+* **Trade acceptance probability.** Needs a corpus of proposed and
+  accepted trades. `log_proposal` writes one; ask again after a season.
+* **A confidence score on a projection.** Nothing fits it. The floor and
+  ceiling on the draft card are the honest version.
+* **Ownership and leverage for DFS.** Needs contest ownership data, which
+  is paid and licence-restricted.
+* **Beat-writer and news sentiment.** Needs a text corpus and a fitted
+  model; without both it is a vibe with a number printed on it.
+* **In-game live win probability.** Needs play-by-play at a latency we do
+  not have.
+
+---
+
+## Where the real constraint is
+
+Not ideas. Nearly everything above is assembly of things already built.
+The binding constraints are the ones no branch fixes: Phase 0 in
+`docs/LAUNCH.md`, the Paddle verification, and the Michigan question.
+Those gate *charging money*, not shipping features, and they are named in
+`docs/NEXT.md` and `docs/WHEN_HOME.md`.

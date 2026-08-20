@@ -9,6 +9,70 @@ want it live.
 
 ---
 
+## Turning it on — Ethan, 2026-08-20
+
+*"lets get the pay wall going. i want it 100% full force so we can start
+charging for the site."*
+
+**The switch works today. Charging cards does not, and the gap between
+those two sentences is the whole of this section.**
+
+### What you can do right now
+
+Switch the gate on and let people in with **codes**. A code is a real
+entitlement with no processor behind it (`engine/redeem.py`), so it works
+with Paddle still unbuilt. On the droplet, in `/etc/qellys/env`:
+
+```
+QB_COMP_EMAILS=ethanlee1276@gmail.com
+QB_CODES=USFARATHANE:12:100
+QB_PAYWALL=1
+```
+
+then `sudo systemctl restart qellys`.
+
+**`QB_COMP_EMAILS` FIRST, IN THAT ORDER, ALWAYS.** Setting `QB_PAYWALL=1`
+with an empty comp list locks you out of your own board and there is no
+account that can pay to get back in. `python3 launch.py --todo` checks
+that ordering and will say so.
+
+`USFARATHANE:12:100` is `CODE:months:max_uses` — twelve months, a hundred
+accounts. Change the cap or add more codes as a comma-separated list. A
+redemption is one per account, cannot be re-run when it lapses, and the
+attempt limiter stops anyone guessing at the rest.
+
+### What still stands between you and money
+
+None of this is code, and none of it is something I can finish:
+
+1. **A Paddle account, and a real test webhook sent through it.** The
+   signature verifier in `engine/paddle.py` was written from memory with
+   the API unreachable and is flagged UNVERIFIED in the file. It is the
+   one place where being wrong is both silent and dangerous: a verifier
+   that wrongly accepts is a free-subscription generator, and one that
+   wrongly rejects loses payments nobody sees fail.
+2. **The LLC and a business bank account.** Paddle pays out to a business.
+3. **Phase 0 in `docs/LAUNCH.md`** — commercial-use terms for around
+   twenty-five data feeds, and the Michigan/MGCB question. Charging for a
+   product built on feeds whose terms forbid commercial use is the kind
+   of problem that arrives as a letter, not as a bug.
+
+Until those are done the honest configuration is **paywall on, codes and
+comps as the way in**. That is a real gate — the boards are genuinely
+redacted for everyone else — and it is the state the code is built for.
+
+### Checking it worked
+
+```
+curl -s https://qellysbook.com/data/recommendations.json | head -c 400
+```
+
+Signed out, that should show the schedule and a `locked` block rather
+than picks. If it still shows picks, the flag did not take: check the env
+file and that the restart actually happened.
+
+---
+
 ## The processor is Paddle, not Stripe
 
 **Stripe said no**, on the category rather than on anything we do
