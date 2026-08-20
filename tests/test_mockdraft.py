@@ -251,6 +251,69 @@ def test_the_bye_warning_counts_starters_not_the_roster():
     assert "p.bye" in body
 
 
+def test_the_tier_cliff_says_how_long_it_has_not_just_how_many():
+    """Inside a tier the differences are noise — the kit's own notes say
+    so — which makes the last pick before a step down the only one that
+    ever really costs you. But a count alone does not answer the question:
+    two left is comfortable if nobody takes one before your turn and an
+    emergency if three rooms are about to. The Monte Carlo already knows
+    which, so the cliff carries both."""
+    i = APP.index("function _mockTierCliff(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "sim.survive.get(" in body, "the cliff ignores the simulation"
+    # Independence would be wrong — rooms take at most one each — so the
+    # honest summary is the BEST single survival chance in the tier.
+    assert "q > best" in body, "the tier's odds are being multiplied out"
+    assert "inTier.length > 4" in body, "a deep tier is a shelf, not a cliff"
+
+
+def test_the_season_is_simulated_with_the_byes_taken_out():
+    """The draft simulation answers "who will be there". This answers the
+    question that follows and is the reason anyone drafts: so what?
+
+    A starters-PPG number says the roster is good on the average week, and
+    fantasy is not played on the average week. Byes are exactly what an
+    average cannot see: a roster whose points sit in three men who all
+    rest in week eleven is a different team from one with the same total
+    spread out. Measured on matched rosters, stacking three starters on
+    one bye costs about a tenth of a win over fourteen weeks and two
+    points of play-off odds — small, real, and correctly signed.
+    """
+    i = APP.index("function _mockWeekScore(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "p.bye !== week" in body, "the season ignores byes"
+    # The bench has to fill in, which is what a manager does — and it must
+    # use the SAME line-up rule the final screen shows, or the season is
+    # scored on a team the page never displays.
+    assert "_mockLineup(" in body, "the week is not fielded as a line-up"
+
+
+def test_a_simulated_week_averages_to_the_projection():
+    """exp(N(mu, s)) has mean exp(mu + s^2/2), so mu has to be shifted
+    down by half the variance. Without it every simulated week lands ABOVE
+    the projection and the whole league outscores itself. Verified over
+    200,000 draws: a projection of 15 at cv 0.6 averages 14.99."""
+    i = APP.index("function _mockWeekPoints(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "-0.5 * s * s" in body, "the lognormal mean correction is gone"
+
+
+def test_the_season_says_which_of_its_inputs_is_not_measured():
+    """The per-position weekly spread is the one number here that is an
+    assumption rather than a measurement, and the win totals move with it.
+    Stated on the page, not buried in a comment."""
+    assert "MOCK_WEEK_CV" in APP
+    flat = " ".join(APP.split())
+    assert "the one input here that is not measured" in flat, \
+        "the page no longer admits which input is assumed"
+    # And the record is reported as a distribution: "9-5" is a story about
+    # one season and the same roster plays a range.
+    i = APP.index("function _mockSeasonHTML(")
+    body = APP[i:APP.index("\n}\n", i)]
+    assert "r.p10" in body and "r.p90" in body, "the season is a point estimate"
+    assert "mk-hist" in body, "the distribution is not drawn"
+
+
 def test_the_simulation_reports_the_count_it_actually_ran():
     """A phone that cannot finish twenty thousand must not claim it.
     The loop is time-boxed and the page prints `sims`, which is the

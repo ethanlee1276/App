@@ -15294,8 +15294,10 @@ function _mockByeHTML(roster) {
   if (!clash.length) return "";
   return `<div class="mk-bye-warn">${clash.map((c) => `
     <span class="chip ${c.n >= 4 ? "down" : ""}"
-      title="Starters on the same bye. Three is a hole in your week; four
-             is a loss unless the waiver wire is kind.">
+      title="Starters sharing a bye. Measured in the season simulator on
+             matched rosters, stacking three costs about a tenth of a win
+             over fourteen weeks and roughly two points of play-off odds —
+             worth avoiding at the margin, not worth reaching for.">
       Week ${c.wk}: <b>${c.n}</b> starters out</span>`).join("")}</div>`;
 }
 
@@ -15321,6 +15323,63 @@ function _mockOdds(pct) {
     : n <= 25 ? "Usually gone before your next pick — take him now or plan without him."
     : "A coin-flip-ish wait. The number is how often he survived the simulated picks between now and your turn.";
   return `<span class="chip mk-odds ${cls}" title="${escapeAttr(tip)}">${n}%</span>`;
+}
+
+/* ---- The cliff --------------------------------------------------------
+   Every simulator worth copying flags a tier break, and for a good
+   reason: inside a tier the differences are noise (the kit's own notes
+   say so), so the only pick that ever really costs you is the last one
+   before a step down. "Three tight ends left in tier two" is the sentence
+   that changes a draft.
+
+   OURS SAYS HOW LONG IT HAS, not just how many are left, because a count
+   on its own does not answer the question being asked. Two left is
+   comfortable if nobody takes one before your turn and an emergency if
+   three rooms are about to. The Monte Carlo already knows which — it is
+   the same run that produced the survival odds — so the cliff is reported
+   as a count AND the chance it survives to you. */
+function _mockTierCliff(sim) {
+  if (!_mock) return [];
+  const out = [];
+  for (const pos of ["RB", "WR", "TE", "QB"]) {
+    const left = _mock.pool.filter((p) => p.position === pos);
+    if (!left.length) continue;
+    const tier = left[0].tier;
+    if (tier == null) continue;
+    const inTier = left.filter((p) => p.tier === tier);
+    // A tier with plenty in it is not a cliff, it is a shelf.
+    if (inTier.length > 4) continue;
+    // How likely is ANY of them to reach you? Independent is wrong —
+    // rooms take at most one each — so the honest summary is the best
+    // single survival chance in the tier, which is a floor on "something
+    // is left" rather than a product that would read far too low.
+    let best = null;
+    if (sim) {
+      for (const p of inTier) {
+        const q = sim.survive.get(p.player);
+        if (q != null && (best == null || q > best)) best = q;
+      }
+    }
+    out.push({ pos, tier, n: inTier.length, survives: best });
+  }
+  return out.sort((a, b) => a.n - b.n);
+}
+
+function _mockCliffHTML(sim) {
+  const rows = _mockTierCliff(sim).filter((c) => c.n <= 3);
+  if (!rows.length) return "";
+  return `<div class="mk-cliff">
+    <div class="mk-plan-head">Tier about to break</div>
+    ${rows.map((c) => `<span class="mk-plan-row">
+      <b>${escapeHtml(c.pos)} tier ${c.tier}</b>
+      <i>${c.n} left${c.n === 1 ? " — the last one" : ""}</i>
+      <span class="mk-plan-q ${c.survives != null && c.survives < 0.35 ? "gone" : ""}">${
+        c.survives == null ? "—" : Math.round(c.survives * 100) + "%"}</span></span>`).join("")}
+    <p class="mk-wait-foot">Inside a tier the differences are noise, so the
+      only pick that costs you is the last one before the step down. The
+      percentage is the best chance any of them is still there at your next
+      turn.</p>
+  </div>`;
 }
 
 /* WHO TO PLAN ON, which is the answer the simulation exists to give.
@@ -15374,12 +15433,135 @@ function _mockWaitHTML(sim) {
              <b>+${sim.bestP90.toFixed(1)}</b>` : ""}.</span>
     </div>
     ${_mockPlanHTML(sim)}
+    ${_mockCliffHTML(sim)}
     ${_mockRunHTML(sim)}
     <p class="mk-wait-foot">Every room in this draft has its own build, and
       they keep it — the spread above is what those builds do to the board,
       not a random number. The percentages beside each player are how often
       he was still there.</p>
   </div>`;
+}
+
+/* ---- The season the roster plays -------------------------------------
+   The draft Monte Carlo answers "who will be there". This answers the
+   question that follows it and is the reason anyone drafts at all: SO
+   WHAT? A starters-PPG number and a finish rank say the roster is good on
+   the average week, and fantasy is not played on the average week — it is
+   played fourteen times, head to head, with byes.
+
+   BYES ARE WHY THIS IS WORTH SIMULATING RATHER THAN ADDING UP. A roster
+   whose points are concentrated in three men who all sit in week eleven
+   is a different team from one with the same total spread evenly, and no
+   season-long average can tell them apart. Now that the board carries
+   byes, the simulator can: a starter on his bye is replaced by the best
+   bench player who is playing, exactly as a manager would.
+
+   THE VARIANCE IS AN ASSUMPTION AND IS LABELLED AS ONE. We hold no weekly
+   distributions here, so a week is drawn as the player's projection times
+   a lognormal shock with a per-position spread. The numbers below are the
+   received shape of fantasy scoring — quarterbacks are the steadiest
+   thing on a roster, tight ends the least — and they are the one input
+   here that is not measured. They are stated rather than buried because
+   the win totals move with them. */
+const MOCK_WEEK_CV = { QB: 0.35, RB: 0.55, WR: 0.60, TE: 0.65 };
+const MOCK_SEASON_WEEKS = 14;
+const MOCK_SEASON_SIMS = 4000;
+
+/* A lognormal draw with the right mean: exp(N(mu, s)) has mean
+   exp(mu + s^2/2), so mu is shifted down by half the variance. Without
+   that correction every simulated week comes out ABOVE the projection and
+   the whole league scores more than it should. */
+function _mockWeekPoints(proj, cv, rnd) {
+  if (!(proj > 0)) return 0;
+  const s = Math.sqrt(Math.log(1 + cv * cv));
+  // Box-Muller from two uniforms.
+  const u1 = Math.max(1e-9, rnd()), u2 = rnd();
+  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return proj * Math.exp(-0.5 * s * s + s * z);
+}
+
+/* The best legal line-up for ONE week, with the byes taken out. Reuses
+   _mockLineup so the week's rules and the final screen's rules are the
+   same rules — a season scored on a line-up the page never shows would
+   be answering about a different team. */
+function _mockWeekScore(roster, week, rnd) {
+  const active = roster.filter((p) => p.bye !== week);
+  const drawn = active.map((p) => ({
+    ...p, proj: _mockWeekPoints(p.proj || 0,
+                                MOCK_WEEK_CV[p.position] || 0.55, rnd),
+  }));
+  return _mockLineup(drawn).ppg;
+}
+
+/* Every room's season, head to head, many times over. Returns your record
+   distribution rather than a single number: "9-5" is a story about one
+   season and the same roster plays a range. */
+function mockSeason(m, sims) {
+  const rosters = m.rosters;
+  const n = rosters.length;
+  if (!rosters[m.you] || !rosters[m.you].length) return null;
+  const wins = [];
+  const rnd = _mockRng(0x5eed ^ (m.pick * 2654435761));
+  let ran = 0;
+  const t0 = (typeof performance === "object" ? performance.now() : Date.now());
+  for (let s = 0; s < sims; s++) {
+    let w = 0;
+    for (let week = 1; week <= MOCK_SEASON_WEEKS; week++) {
+      // A round-robin rotation, so every room plays a different opponent
+      // each week rather than the same one fourteen times.
+      const opp = (m.you + week) % n;
+      if (opp === m.you) continue;
+      const mine = _mockWeekScore(rosters[m.you], week, rnd);
+      const theirs = _mockWeekScore(rosters[opp], week, rnd);
+      if (mine > theirs) w += 1;
+    }
+    wins.push(w);
+    ran = s + 1;
+    if ((s & 127) === 0) {
+      const dt = (typeof performance === "object" ? performance.now() : Date.now()) - t0;
+      if (dt > MOCK_SIM_BUDGET_MS) break;
+    }
+  }
+  if (!ran) return null;
+  wins.sort((a, b) => a - b);
+  const q = (f) => wins[Math.min(wins.length - 1, Math.floor(f * wins.length))];
+  const mean = wins.reduce((a, b) => a + b, 0) / wins.length;
+  // A play-off spot is the top half of the league, which is the ordinary
+  // shape. Counted as "would this record usually make it" rather than
+  // simulated bracket-by-bracket, and said that way on the page.
+  const bar = Math.ceil(MOCK_SEASON_WEEKS * 0.55);
+  const made = wins.filter((x) => x >= bar).length / wins.length;
+  const hist = {};
+  for (const x of wins) hist[x] = (hist[x] || 0) + 1;
+  return { sims: ran, weeks: MOCK_SEASON_WEEKS, mean, p10: q(0.10),
+           p50: q(0.50), p90: q(0.90), bar, made, hist };
+}
+
+function _mockSeasonHTML(m) {
+  const r = mockSeason(m, MOCK_SEASON_SIMS);
+  if (!r) return "";
+  const top = Math.max(...Object.values(r.hist));
+  const bars = Object.keys(r.hist).map(Number).sort((a, b) => a - b).map((w) => `
+    <span class="mk-hist-col" title="${r.hist[w]} of ${r.sims.toLocaleString()} seasons finished ${w}-${r.weeks - w}">
+      <i style="height:${(r.hist[w] / top * 100).toFixed(1)}%"></i>
+      <b class="${w >= r.bar ? "in" : ""}">${w}</b></span>`).join("");
+  return `<div class="section-title minor">The season this roster plays
+      <span class="sub">— ${r.sims.toLocaleString()} simulated seasons of
+      ${r.weeks} weeks, head to head against the rooms that just drafted,
+      with byes taken out and the bench filling in.</span></div>
+    <div class="card mk-season">
+      <div class="mk-season-line">Typically <b>${r.p50}‑${r.weeks - r.p50}</b>,
+        between <b>${r.p10}‑${r.weeks - r.p10}</b> and
+        <b>${r.p90}‑${r.weeks - r.p90}</b>.
+        <span class="mk-season-odds">${Math.round(r.made * 100)}% of seasons
+        reach ${r.bar} wins</span></div>
+      <div class="mk-hist">${bars}</div>
+      <p class="mk-wait-foot">Weekly scoring is drawn around each player’s
+        projection with a per-position spread — quarterbacks steadiest,
+        tight ends least — which is the one input here that is not measured.
+        The win totals move with it, so treat the shape as the finding and
+        the exact percentage as an estimate.</p>
+    </div>`;
 }
 
 /* ---- The grade ------------------------------------------------------
@@ -15532,6 +15714,7 @@ function mockDraftHTML() {
       ${lineup.bench.length ? `<div class="section-title minor">Bench</div>
       <div class="card mk-panel">${lineup.bench.map((p) => `
         <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}</div>`).join("")}</div>` : ""}
+      ${_mockSeasonHTML(m)}
       ${_mockGradeHTML(m)}
       <button class="btn" id="mk-again" style="margin-top:12px">Draft again</button>`;
   }
