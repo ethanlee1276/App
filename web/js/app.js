@@ -14019,9 +14019,22 @@ async function _ffDossierCharts(name, position) {
     .concat(Object.keys(stats).filter((s) => !want.includes(s)))
     .filter((s, i, a) => a.indexOf(s) === i).slice(0, 2);
   if (!have.length) {
-    zone.innerHTML = `<div class="ffd-h">Weekly volume</div>
-      <p class="ffd-note">No game logs on this machine — the droplet and
-      the laptop fill these in.</p>`;
+    /* TWO DIFFERENT SILENCES, and the old copy told the wrong story for
+       one of them. "The droplet and the laptop fill these in" promises
+       data that is merely elsewhere — true for a veteran on a machine
+       without the logs, and false for a player who has never taken an
+       NFL snap. Since rookies are on this board now (they are placed at
+       the market's rank, see engine/draftmarket.py), that promise would
+       be made about players for whom no game log exists anywhere. */
+    const row = (_ffDossierInfo(name) || {}).kit;
+    zone.innerHTML = `<div class="ffd-h">Weekly volume</div>`
+      + (row && row.source === "market"
+        ? `<p class="ffd-note">No game log — he has not played an NFL
+           snap${row.rookie ? " (rookie)" : " in the season this board is built from"}.
+           That is why his projection is the market\u2019s draft rank rather than a
+           read of ours, and why there is nothing to chart.</p>`
+        : `<p class="ffd-note">No game logs on this machine — the droplet and
+           the laptop fill these in.</p>`);
     return;
   }
   zone.innerHTML = `<div class="ffd-h">Weekly volume — last ${
@@ -16207,13 +16220,30 @@ async function dkAdvice(draftId) {
           take.verdict === "safe" ? "will last" : "toss-up"} · ${
           pct(take.survives)} to be here at ${a.next_pick || "your next pick"}</span>
         ${take.fills_need ? `<span class="chip up">fills a starting slot</span>` : ""}
+        ${mkt(take) ? `<span class="chip" title="No last-season usage to project from, so he sits at the market\u2019s own draft rank and takes the points our board shows there. This is the room\u2019s read, not ours.">market\u2019s number, not ours</span>` : ""}
       </div>` : ""}
       ${a.can_wait && a.can_wait.length ? `<div class="dk-wait">
         <span class="dk-bl">Can wait</span>
         ${a.can_wait.slice(0, 4).map((r) => `<span class="chip">${
-          escapeHtml(r.player)} · ${pct(r.survives)}</span>`).join("")}</div>` : ""}
+          escapeHtml(r.player)}${mkt(r)} · ${
+          pct(r.survives)}</span>`).join("")}</div>` : ""}
       <div class="dk-advice-note">${escapeHtml(a.note || "")}</div>
     </div>`;
+}
+
+/* A "+7.8" beside a rookie is the market's opinion wearing our
+   formatting. On the board that is disclosed in a sentence; here, where
+   somebody is on the clock with seconds to decide, it has to fit in a
+   chip. */
+function mkt(r) {
+  /* TWO SHAPES REACH THIS. "Best available" reads raw kit rows, which
+     carry source:"market"; the advice box reads the server's rows, which
+     carry market:true (fantasy_pick.advice). Accepting either is the
+     difference between one marker and a marker that is silently missing
+     on whichever surface got refactored last. */
+  return r && (r.source === "market" || r.market === true)
+    ? ` <span class="dk-market" title="No last-season usage to project from — he sits at the market\u2019s draft rank and takes the points our board shows there.">MKT</span>`
+    : "";
 }
 
 function dkBestAvailable(taken) {
@@ -16226,10 +16256,10 @@ function dkBestAvailable(taken) {
   for (const r of avail) if (!byPos[r.position]) byPos[r.position] = r;
   host.innerHTML = `
     <div class="dk-bestrow"><span class="dk-bl">Best available</span>
-      ${top.map((r) => `<span class="chip up">${escapeHtml(r.player)} · +${r.vorp}${injTag("nfl", r.player)}</span>`).join("")}</div>
+      ${top.map((r) => `<span class="chip up">${escapeHtml(r.player)}${mkt(r)} · +${r.vorp}${injTag("nfl", r.player)}</span>`).join("")}</div>
     <div class="dk-bestrow"><span class="dk-bl">By position</span>
       ${["QB", "RB", "WR", "TE"].map((p) => byPos[p]
-        ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)} (+${byPos[p].vorp})${injTag("nfl", byPos[p].player)}</span>` : "")
+        ? `<span class="chip">${p}: ${escapeHtml(byPos[p].player)}${mkt(byPos[p])} (+${byPos[p].vorp})${injTag("nfl", byPos[p].player)}</span>` : "")
         .join("")}</div>`;
 }
 

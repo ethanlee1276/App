@@ -234,6 +234,14 @@ def advice(draft: dict, picks: list, ranks: dict, board: list,
     positions = {r.get("key"): (r.get("position") or "").upper()
                  for r in board or [] if r.get("key")}
     vorp = {r.get("key"): r.get("vorp") for r in board or [] if r.get("key")}
+    # WHOSE NUMBER IS THIS. A player with no last-season usage is on the
+    # board at the market's own draft rank rather than on a projection of
+    # ours (engine/draftmarket.py), and the VORP beside his name here is
+    # therefore a deferral, not a read. That matters more at a live draft
+    # than anywhere else on the site: "Best available: +7.8" is advice,
+    # and advice should say when it is repeating the room back to itself.
+    market = {r.get("key") for r in board or []
+              if r.get("key") and r.get("source") == "market"}
     names = {r.get("key"): r.get("player") for r in board or [] if r.get("key")}
     for p in picks or []:
         if p.get("key") and p.get("player"):
@@ -260,6 +268,7 @@ def advice(draft: dict, picks: list, ranks: dict, board: list,
             "survives": round(p, 3),
             "verdict": verdict(p),
             "fills_need": bool(short.get(positions.get(key) or "")),
+            "market": key in market,
         })
 
     # THE ONE THAT CANNOT WAIT. Among the players worth taking at all,
@@ -279,6 +288,7 @@ def advice(draft: dict, picks: list, ranks: dict, board: list,
         "take": take[0] if take else None,
         "board": rows[:limit],
         "can_wait": [r for r in rows[:limit * 3] if r["verdict"] == "safe"][:limit],
+        "market_rows": sum(1 for r in rows[:limit] if r["market"]),
         "note": ("Survival is measured from THIS room — how far off "
                  "consensus its picks have actually reached — not from a "
                  "national average. It does not know who is about to be "

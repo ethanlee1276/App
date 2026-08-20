@@ -201,7 +201,15 @@ def place_missing(board: list[dict], players: dict | None,
             # from a missing key. Every consumer that reasons about
             # sample size reads this field.
             "games": 0,
-            "ppg": 0.0, "xppg": 0.0,
+            # NOT 0.0. He did not average zero points, he did not play,
+            # and the two render differently everywhere it matters: the
+            # calendar card prints "· {ppg} FPPG last season" whenever
+            # ppg is non-null, so a zero would have claimed a rookie
+            # scored nothing per game all last year. The dossier's stat()
+            # drops a null row and prints a zero one. Nothing computes
+            # with these on a market row — the sleepers filter excludes
+            # basis "market" before it ever subtracts them.
+            "ppg": None, "xppg": None,
             "proj": round(proj, 1),
             "basis": "market",
             "source": "market",

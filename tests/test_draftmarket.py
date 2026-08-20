@@ -258,6 +258,81 @@ def test_the_boards_own_note_no_longer_claims_rookies_are_absent():
     assert "market" in notes, "the note never mentions where they came from"
 
 
+# --- every surface that reads a board row -------------------------------------
+# Putting rookies on the board put them on SIX other surfaces at once, and
+# each had its own way of being wrong about a player who has never played.
+# Found by walking every consumer rather than by waiting for a screenshot.
+
+
+def test_a_placed_player_never_claims_he_averaged_zero():
+    """ppg/xppg were 0.0 in the first cut, and zero is a MEASUREMENT.
+    The calendar card prints "· {ppg} FPPG last season" for any non-null
+    ppg, so a rookie would have been captioned as scoring nothing per game
+    all last season. The dossier's stat() likewise drops a null row and
+    prints a zero one — verified in Chromium: the market dossier now shows
+    Proj/VORP/Tier and no "Last season" line at all, beside a veteran's
+    that shows "Last season 24.1"."""
+    board = _board()
+    r = place_missing(board, _blob(board, [
+        _sleeper("Rookie", "Back", "RB", 4, exp=0)]))[0]
+    assert r["ppg"] is None and r["xppg"] is None, \
+        "a zero here reads as 'measured zero points', which is a lie"
+    app = _read("web", "js", "app.js")
+    assert "r.ppg != null ?" in app, \
+        "the calendar card no longer guards on null before captioning FPPG"
+
+
+def test_the_live_draft_advice_says_whose_number_it_is():
+    """The board discloses provenance in a sentence. The advice box has to
+    do it in a chip, and it matters MORE there: somebody is on the clock
+    with seconds to decide, and "Best available: +7.8" is a
+    recommendation. `fantasy_pick.advice` therefore carries the flag
+    through to every row it emits."""
+    from engine import fantasy_pick
+    board = [{"key": f"v{i}", "player": f"Vet {i}", "position": "RB",
+              "vorp": 10.0 - i, "source": "usage"} for i in range(8)]
+    board.append({"key": "rk", "player": "Rookie Runner", "position": "RB",
+                  "vorp": 8.5, "source": "market"})
+    order = ["v0", "v1", "rk"] + [f"v{i}" for i in range(2, 8)]
+    ranks = {k: i + 1 for i, k in enumerate(order)}
+    a = fantasy_pick.advice(
+        {"settings": {"teams": 12, "rounds": 15}, "type": "snake",
+         "draft_order": {"u1": 1}}, [], ranks, board, "u1",
+        slots={"RB": 2, "WR": 2})
+    flags = {r["player"]: r["market"] for r in a["board"]}
+    assert flags.get("Rookie Runner") is True, "the flag is dropped in advice()"
+    assert not any(v for k, v in flags.items() if k != "Rookie Runner"), \
+        "measured players are being labelled as the market's call"
+    assert a["market_rows"] == 1
+
+
+def test_one_marker_reads_both_row_shapes():
+    """Two different shapes reach the same chip: "Best available" reads
+    raw kit rows (source:"market") and the advice box reads the server's
+    rows (market:true). A marker that knew only one would go silently
+    missing on whichever surface was refactored last."""
+    app = _read("web", "js", "app.js")
+    i = app.index("function mkt(")
+    body = app[i:app.index("\n}", i)]
+    assert 'source === "market"' in body and "market === true" in body, \
+        "mkt() handles only one row shape"
+
+
+def test_an_empty_game_log_does_not_promise_data_that_cannot_exist():
+    """The old copy — "No game logs on this machine, the droplet and the
+    laptop fill these in" — is true for a veteran whose logs live
+    elsewhere and FALSE for a player who has never taken an NFL snap.
+    Rookies are on this board now, so that promise would be made about
+    players for whom no log exists anywhere. Both branches verified in
+    Chromium."""
+    app = _read("web", "js", "app.js")
+    i = app.index("async function _ffDossierCharts(")
+    body = app[i:i + 2200]
+    assert 'source === "market"' in body, \
+        "one empty state for two different silences"
+    assert "has not played an NFL" in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
