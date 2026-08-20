@@ -5974,7 +5974,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   margin-bottom: 18px;
 }
 .ffcal-cell {
-  min-height: 62px; padding: 4px; border-radius: var(--radius);
+  /* 68, not 62: the score sits at --fs-sm now rather than --fs-xs, and
+     the extra six pixels are what keep the face and the number off each
+     other's baselines in the shortest cells. */
+  min-height: 68px; padding: 5px; border-radius: var(--radius);
   background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
   display: flex; flex-direction: column; gap: 2px; min-width: 0;
 }
@@ -5985,12 +5988,49 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .ffcal-num { font-size: var(--fs-xs); color: var(--text-mute);
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ffcal-n { font-size: var(--fs-xs); color: var(--text-dim); }
-.ffcal-best { display: flex; align-items: center; gap: 3px; min-width: 0;
-  font-size: var(--fs-xs); margin-top: auto; }
-.ffcal-best b { overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; min-width: 0; }
-.ffcal-pts { color: var(--good); font-weight: 700;
-  font-variant-numeric: tabular-nums; margin-left: auto; }
+/* THE SURNAME IS GONE FROM THE CELL, and that is the fix rather than a
+   casualty of it. Measured in Chromium at five widths on the real
+   September 2026 board: at 1800 it truncated to "Mc..." for THREE
+   different players on the same board (McCaffrey, McBride, McLaurin —
+   an abbreviation that identifies the wrong man is worse than none); at
+   1440 the cell is 56px and it rendered as one stray character with no
+   room even for the ellipsis ("S 18.9", "N 24.2"); at 390 it was clipped
+   to nothing at all. There is no width at which it worked.
+
+   What is left is what a calendar cell is actually for: WHICH DAYS ARE
+   GOOD, answered by a face and a number. Identity still lives on the
+   avatar (headshot and team colour), in the cell's title for a pointer,
+   and in the panel that opens on tap — which names him and the four
+   behind him. */
+.ffcal-best { display: flex; align-items: center; gap: 5px; min-width: 0;
+  margin-top: auto; }
+/* flex: none on BOTH. The score had no shrink guard, so flexbox squeezed
+   it below its own text: "18.9" needs ~25px at --fs-xs and was measured
+   at 18.4px in every viewport from 1800 down to 390. That is the
+   "doesn't fit the numbers" Ethan reported, and it was width-independent
+   because a shrinking flex item is not a narrow-screen problem. */
+.ffcal-best > :first-child { flex: none; }
+/* THE NAME IS BACK, ON THE CELL'S TERMS RATHER THAN THE VIEWPORT'S.
+   This is the first container query in the file and it is here because
+   this bug WAS the argument for one: the viewport tells you nothing
+   about how wide a day cell is. Measured on the same board — a 1800px
+   window gave an 80px cell, and a 1100px window gave 112px. Every media
+   query in the world would have got that backwards, which is how the
+   name came to be truncated to "Mc..." for three different players
+   (McCaffrey, McBride, McLaurin) on one screen.
+
+   140px is where a surname fits WHOLE rather than nearly: the cell keeps
+   10px of padding, the face 18, the score 20 and two 5px gaps, leaving
+   ~82px — past the longest common surname at --fs-xs. Below it the name
+   is not shrunk or ellipsed, it is simply absent, because a name cut to
+   two letters is not a shorter name, it is a wrong one. */
+.ffcal-cell { container-type: inline-size; }
+.ffcal-name { display: none; font-size: var(--fs-xs); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; }
+@container (min-width: 140px) { .ffcal-name { display: block; } }
+.ffcal-pts { color: var(--good); font-weight: 700; font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; margin-left: auto; flex: none; }
 .ffcal-card { display: block; margin-bottom: 12px; cursor: pointer; }
 .ffcal-cardhead { display: flex; align-items: center; gap: 12px; }
 .ffcal-rank { color: var(--text-mute); font-size: var(--fs-sm);
@@ -6065,9 +6105,35 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   text-align: center; }
 .ffcal-vs-t.lead { border-color: color-mix(in oklab, var(--brand) 45%, var(--border-soft)); }
 .ffcal-open { width: 100%; margin-top: 12px; }
-@media (max-width: 1200px) {
+/* 1500, NOT 1200 — a seven-column calendar has a floor, and between
+   those two widths it was under it. Measured on the September 2026
+   board: at 1280 the calendar was column one of three (1.05fr | .95fr |
+   320px) beside a 280px sidebar, which left each day 44.3px. The face
+   and the score need 18 + 5 + 20 = 43px inside 5px of padding, so they
+   overlapped by ten. The giveaway that this was the LAYOUT and not the
+   cell: at 1100 the same cell measures 112px, because there the calendar
+   already spans the full row. A day cell was more than twice as wide on
+   a smaller screen. */
+@media (max-width: 1500px) {
   .ffcal-layout { grid-template-columns: minmax(0, 1fr) 300px; }
   .ffcal-left { grid-column: 1 / -1; }
+}
+/* A PHONE CANNOT WIN THIS ROW SIDE BY SIDE. Seven columns in 390px of
+   viewport is a 48.8px cell whatever the layout does — there is no
+   column count left to trade away. Measured there: face and score
+   overlapped by 6.1px, and by 10.4px on a 360px phone.
+
+   So below 520 they stack instead of sitting in a row, which removes the
+   width pressure entirely rather than shrinking either one to fit. The
+   face keeps its size (it is drawn at 18px by a shared helper with an
+   inline width, so shrinking it from here would mean !important), and
+   the number keeps --fs-sm, which is the one thing in the cell that has
+   to stay readable at arm's length. */
+@media (max-width: 520px) {
+  .ffcal-cell { min-height: 78px; }
+  .ffcal-best { flex-direction: column; gap: 1px; align-items: center;
+    justify-content: flex-end; }
+  .ffcal-pts { margin-left: 0; }
 }
 @media (max-width: 760px) {
   .ffcal-layout { grid-template-columns: minmax(0, 1fr); }

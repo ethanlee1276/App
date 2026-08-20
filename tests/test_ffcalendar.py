@@ -185,6 +185,108 @@ def test_the_page_is_wired_and_the_why_is_printed():
         assert sel in CSS, f"{sel} is unstyled"
 
 
+# --- the day cell has to hold what it prints -----------------------------------
+# Ethan, 2026-08-20: "the calander doesnt fir the numbers and shit so fix
+# that. issue on both mobile and website." Measured in Chromium at twelve
+# widths on the real September 2026 board before touching anything, which
+# is the only reason the causes below are stated rather than guessed —
+# there were three, and only one of them was about a phone.
+
+
+def test_the_score_can_never_be_squeezed_by_its_own_row():
+    """CAUSE ONE, and the width-independent one. `.ffcal-pts` had no
+    shrink guard, so flexbox compressed it below its own text: "18.9"
+    needs ~20px at its size and was measured at 18.4px in EVERY viewport
+    from 1800 down to 390. A shrinking flex item is not a small-screen
+    problem, which is why this showed on the desktop too."""
+    i = CSS.index(".ffcal-pts {")
+    rule = CSS[i:CSS.index("}", i)]
+    assert "flex: none" in rule, \
+        "the score can be shrunk below its digits again"
+    j = CSS.index(".ffcal-best > :first-child {")
+    assert "flex: none" in CSS[j:CSS.index("}", j)], \
+        "the face can be squashed, which pushes the score off its baseline"
+
+
+def test_the_calendar_stops_being_a_column_before_it_gets_too_narrow():
+    """CAUSE TWO, and the one that looked like a cell bug and was not.
+    Three columns (calendar | best plays | panel) beside a 280px sidebar
+    left each day 44.3px at a 1280px window — while the SAME cell measured
+    112px at 1100px, where the calendar already spans the row. A day cell
+    twice as wide on a smaller screen is a layout fault, not a styling
+    one. The breakpoint now sits where three columns actually stop
+    fitting: at 1501 a cell is 60.8px and passes; below 1500 the calendar
+    takes the whole row."""
+    i = CSS.index(".ffcal-layout { display: grid")
+    tail = CSS[i:]
+    k = tail.index("grid-template-columns: minmax(0, 1fr) 300px")
+    head = tail[:k]
+    q = head.rindex("@media (max-width:")
+    width = int(head[q:].split("max-width:")[1].split("px")[0].strip())
+    assert width >= 1400, (
+        f"the three-column layout survives down to {width}px, where the "
+        "calendar column is too narrow for seven days")
+
+
+def test_a_phone_stacks_the_cell_instead_of_shrinking_either_half():
+    """CAUSE THREE. Seven columns in 390px is a 48.8px cell whatever the
+    layout does — there is no column count left to trade away, and the
+    face and score overlapped by 6.1px (10.4px at 360px). They stack
+    below 520 instead, which removes the width pressure rather than
+    shrinking either one to fit."""
+    # BY CONTENT, not by position — styles.css already had an unrelated
+    # `@media (max-width: 520px)` a few thousand lines earlier, and
+    # indexing for the string found that one instead. Find the narrow
+    # block that actually mentions the calendar cell.
+    import re
+    block = None
+    for m in re.finditer(r"@media \(max-width: (\d+)px\) \{", CSS):
+        if int(m.group(1)) > 560:
+            continue
+        body = CSS[m.end():CSS.index("\n}", m.end())]
+        if ".ffcal-best" in body:
+            block = body
+            break
+    assert block, "no narrow-width block styles the calendar cell at all"
+    assert "column" in block, \
+        "the narrow-cell stack is gone; face and score will overlap again"
+    assert ".ffcal-pts" in block and "margin-left: 0" in block, \
+        "the score keeps its auto margin while stacked, which off-centres it"
+
+
+def test_the_name_is_gated_on_the_CELL_not_the_viewport():
+    """THE REASON THIS BUG EXISTED AT ALL. The viewport says nothing about
+    how wide a day cell is — measured on one board, an 1800px window gave
+    an 80px cell and an 1100px window gave 112px. Any media query gets
+    that backwards, and this one did: the surname truncated to "Mc..." for
+    THREE different players on a single screen (McCaffrey, McBride,
+    McLaurin), to one stray letter at 1440, and to nothing at 390.
+
+    A name cut to two letters is not a shorter name, it is a wrong one.
+    So it is hidden by default and revealed by a container query only
+    where it fits whole."""
+    assert "container-type: inline-size" in CSS, \
+        "the cell is not a container; the name cannot know its own width"
+    assert "@container" in CSS, "the name is back on a viewport rule"
+    i = CSS.index(".ffcal-name {")
+    assert "display: none" in CSS[i:CSS.index("}", i)], \
+        "the name shows by default, so narrow cells truncate it again"
+    j = CSS.index("@container")
+    assert "min-width" in CSS[j:CSS.index("}", CSS.index("{", j) + 1) + 1], \
+        "the container query is not keyed on width"
+
+
+def test_nothing_in_the_cell_relies_on_a_name_that_may_be_absent():
+    """The name is display:none in most cells, so it cannot be the thing
+    that carries identity. The face is always drawn, and the cell titles
+    itself for a pointer — tapping opens the panel that names him."""
+    i = APP.index('class="ffcal-cell')
+    cell = APP[i:APP.index("</div>`);", i)]
+    assert "playerAvatar(" in cell, "no face; a nameless cell identifies nobody"
+    assert "title=" in cell, \
+        "no hover name, so a mouse user cannot recover who the number is"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

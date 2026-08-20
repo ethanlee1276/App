@@ -14444,12 +14444,14 @@ function ffCalendarHTML(d) {
     cells.push(`<div class="ffcal-cell${q ? "" : " ffcal-empty"}${
         inMonth ? "" : " ffcal-other"}${iso === _ffCalSel ? " sel" : ""}${
         q && q.tier === "elite" ? " ffcal-elite" : ""}"${
-        q ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}>
+        q ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}${
+        q && q.best ? ` title="${escapeAttr(q.best.r.player)} \u2014 ${
+          q.best.score.toFixed(1)} projected"` : ""}>
       <span class="ffcal-num">${dt.getUTCDate()}</span>
       ${q ? `<span class="ffcal-mark ${q.tier}"></span>` : ""}
       ${q && q.best ? `<span class="ffcal-best">${playerAvatar(q.best.r.player,
           q.best.r.team, { size: 18, map: nflMap(), headshot: q.best.r.headshot })}
-        <b>${escapeHtml((q.best.r.player || "").split(" ").slice(-1)[0])}</b>
+        <b class="ffcal-name">${escapeHtml((q.best.r.player || "").split(" ").slice(-1)[0])}</b>
         <span class="ffcal-pts">${q.best.score.toFixed(1)}</span></span>` : ""}
     </div>`);
   }
