@@ -4006,6 +4006,15 @@ body.ffd-open { overflow: hidden; }
   /* Light lives in tokens so every glow on the site is the SAME glow. */
   --glow: 0 0 0 1px rgba(141, 91, 242, .28), 0 6px 28px rgba(141, 91, 242, .16);
   --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
+  /* THE VIOLET THAT CAN CARRY WHITE TEXT. `--brand` is #8D5BF2 and
+     white on it measures 4.28:1 — under the 4.5 AA wants for small text,
+     and no ink fixes it (#F1F1FA is worse at 3.81). It is the identity
+     colour, so it does not move; a solid fill BEHIND WHITE TEXT uses this
+     instead. The value is the midpoint of --grad-brand below, so it is a
+     colour the system already contains rather than a new one, and it
+     measures 5.56:1. Found 2026-08-20 by sweeping every rendered text
+     node against its composited background. */
+  --brand-solid: #7C43E4;
   --grad-brand: linear-gradient(135deg, #8D5BF2, #6B2BD6);
   --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(141, 91, 242, .18), rgba(7, 7, 12, 0) 62%);
   --grad-chip: linear-gradient(180deg, rgba(141, 91, 242, .22), rgba(141, 91, 242, .08));
@@ -4830,7 +4839,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .mbc-chip { background: var(--panel-2); color: var(--text-mute);
   border: var(--hairline) solid var(--border); border-radius: var(--radius);
   padding: 6px 13px; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
-.mbc-chip.active { background: var(--brand); border-color: var(--brand);
+.mbc-chip.active { background: var(--brand-solid); border-color: var(--brand-solid);
   color: #fff; }
 .mbc-sport { margin-left: auto; }
 /* Cards / Table switch (render 12's dense log). Same rows either way —
@@ -4840,7 +4849,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .mbc-view { background: var(--panel-2); color: var(--text-mute);
   border: var(--hairline) solid var(--border); border-radius: var(--radius);
   padding: 6px 12px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.mbc-view.active { background: var(--brand); border-color: var(--brand);
+.mbc-view.active { background: var(--brand-solid); border-color: var(--brand-solid);
   color: #fff; }
 .mb-table-wrap { padding: 0; overflow-x: auto; margin-bottom: 18px; }
 .mb-table { width: 100%; }
@@ -4876,7 +4885,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .ra-range { background: none; color: var(--text-mute);
   border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
-.ra-range.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ra-range.active { background: var(--brand-solid); border-color: var(--brand-solid);
+  color: #fff; }
 /* (.ra-stats/.ra-tiles/.ra-alltime retired 2026-08-17 with the record
    declutter — their numbers repeated the scoreboard and now live on the
    .ra-line ledger rows.) */
@@ -4999,7 +5009,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
 /* The avatar chip — initials when signed in, no balance beside it ever. */
 .nav-acct-init { display: inline-grid; place-items: center; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--brand); color: #fff;
+  border-radius: 50%; background: var(--brand-solid); color: #fff;
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .02em; }
 
 /* Bankroll — the goal bar and the logged-P&L chart. */
@@ -5328,7 +5338,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .stub-sub { color: var(--text-dim); font-size: var(--fs-sm);
   line-height: var(--lh-body); margin: 0 auto; }
 .stub-cta { display: inline-block; margin-top: 22px; padding: 10px 22px;
-  background: var(--brand); border-color: var(--brand); color: #fff;
+  background: var(--brand-solid); border-color: var(--brand-solid); color: #fff;
   font-weight: 700; text-decoration: none; }
 .stub-cta:hover { background: var(--brand-2); border-color: var(--brand-2); }
 .stub-links { display: flex; flex-wrap: wrap; justify-content: center;
@@ -5349,7 +5359,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); background: var(--panel-2);
   color: var(--text-dim); font-size: var(--fs-xs); font-weight: 700; }
 .al-cat:hover { color: var(--text); border-color: var(--brand); }
-.al-cat.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.al-cat.on { background: var(--brand-solid); border-color: var(--brand-solid);
+  color: #fff; }
 .al-n { color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .al-cat.on .al-n { color: color-mix(in oklab, #fff 75%, transparent); }
 .al-list { padding: 0; }
@@ -5382,7 +5393,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    the inset box-shadow form is reserved for brand SELECTION. */
 .plan.current { border-left: 3px solid var(--good); }
 .plan-band { position: absolute; top: 0; right: 0;
-  padding: 3px 10px; background: var(--brand); color: #fff;
+  padding: 3px 10px; background: var(--brand-solid); color: #fff;
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; }
 .plan-name { color: var(--text-mute); font-size: var(--fs-2xs);
