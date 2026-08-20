@@ -48,7 +48,21 @@ def _run(env) -> int:
         # zero: a file that stops running and still shows ✅ is how
         # coverage disappears without anyone noticing.
         why = re.search(r"^SKIP (.+)$", r.stdout, re.M)
-        if r.returncode == 0:
+        if r.returncode == 0 and not why and n == 0:
+            # …and the same argument applies one step further in. The
+            # comment above was written about a file that bows out; it
+            # says "never a green zero", but nothing enforced it, so a
+            # file that exited 0 while reporting no count still printed
+            # ✅ with a 0 beside it. Fourteen files were doing exactly
+            # that — their runners printed "all good" instead of "N tests
+            # passed", so 142 real tests were absent from the headline
+            # number. The dangerous part was never the miscount: a file
+            # whose tests had stopped running altogether would have
+            # printed the identical line. Zero passing tests and no
+            # stated reason is not a pass.
+            failed.append(name)
+            print(f"  ❌ {name:28} ran no tests and gave no SKIP reason")
+        elif r.returncode == 0:
             total += n
             if why:
                 skipped.append(name)

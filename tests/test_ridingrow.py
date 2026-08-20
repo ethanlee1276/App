@@ -135,14 +135,18 @@ def test_a_night_with_no_new_picks_still_shows_what_is_held():
 
 
 if __name__ == "__main__":
-    fails = 0
+    fails = ran = 0
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
             try:
                 fn()
+                ran += 1
                 print(f"  ok  {name}")
             except AssertionError as exc:
                 fails += 1
                 print(f"  FAIL {name}: {exc}")
-    print("all good" if not fails else f"{fails} failed")
+    # run_tests.py counts a file's tests by reading "N tests passed" off
+    # this line. "all good" matches nothing, so this file scored zero and
+    # was still drawn green — say the number instead.
+    print(f"\n{ran} tests passed." if not fails else f"{fails} failed")
     sys.exit(1 if fails else 0)
