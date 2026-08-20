@@ -14572,6 +14572,256 @@ let _mockKit = null;              // the fantasy payload's draft kit, captured a
 const MOCK_SLOTS = { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2 };
 const MOCK_FLEX = new Set(["RB", "WR", "TE"]);
 
+/* ---- Who is in the room --------------------------------------------
+   Ethan, 2026-08-20: "look at what other features and shit we can add to
+   it... we should add where we run the simulation like 20k times over to
+   see all the different outcomes."
+
+   The second half of that is only worth anything if the first half is
+   real. A room of nine identical value-maximisers produces a draft with
+   almost no variance, and running THAT twenty thousand times just
+   measures the noise term — a confident-looking probability about a
+   league nobody plays in.
+
+   So the CPUs get personas. Every rival simulator worth copying does
+   this (FanSpeak assigns archetypes, RotoWire and FantasyPros vary how
+   strictly rooms follow rankings), and it is the difference between "the
+   board falls the same way every time" and a draft where the run on tight
+   ends is sometimes real. The personas below are the recognisable
+   season-long builds, not invented flavour: a Zero-RB room genuinely will
+   not take a back in the first five, and that is exactly the behaviour
+   that decides whether your target survives.
+
+   ONE RULE, TWO CALLERS. _mockScore is used by the CPU that is actually
+   drafting AND by the Monte Carlo that predicts it. If the predictor had
+   its own copy they would drift, and the page would publish a probability
+   about a room that does not exist. */
+const MOCK_ARCHETYPES = [
+  { key: "bpa", name: "Best available", lean: {} },
+  { key: "zero_rb", name: "Zero RB", through: 6, lean: { RB: 0.35, WR: 1.40, TE: 1.15 } },
+  { key: "hero_rb", name: "Hero RB", through: 2, lean: { RB: 1.55 },
+    after: { RB: 0.55, WR: 1.30 } },
+  { key: "robust_rb", name: "Robust RB", through: 4, lean: { RB: 1.50, WR: 0.85 } },
+  { key: "wr_room", name: "WR hoarder", through: 8, lean: { WR: 1.45, RB: 0.80 } },
+  { key: "early_qb", name: "Early QB", through: 5, lean: { QB: 2.40 } },
+  { key: "elite_te", name: "Elite TE", through: 5, lean: { TE: 2.60 } },
+  { key: "late_round", name: "Late-round everything", through: 3,
+    lean: { QB: 0.25, TE: 0.35 } },
+];
+
+/* Rank decay, precomputed. exp(-i/2.5) for the eight candidates a room
+   ever considers — a table because the Monte Carlo evaluates this a few
+   million times and Math.exp in that loop is most of the run. */
+const MOCK_DECAY = Array.from({ length: 8 }, (_, i) => Math.exp(-i / 2.5));
+const MOCK_TOPK = 8;
+
+function _mockLean(arch, pos, round) {
+  const table = (arch.through != null && round >= arch.through)
+    ? (arch.after || {}) : (arch.lean || {});
+  return table[pos] || 1;
+}
+
+/* Positional need from COUNTS rather than a roster array: the simulator
+   carries counts, and rebuilding a roster array per simulated pick was
+   the whole cost of the loop. */
+function _mockNeedCounts(counts, pos, round) {
+  const n = counts[pos] || 0;
+  if ((pos === "QB" || pos === "TE") && n >= 1 && round < 9) return 0.1;
+  if (pos === "RB" || pos === "WR") return n >= 5 ? 0.3 : 1.0;
+  return n >= 2 ? 0.2 : 1.0;
+}
+
+/* The chaos dial, as every simulator worth copying has: at 0 the rooms
+   follow the board almost exactly and the draft is predictable; at 100
+   they reach and slide constantly. It widens the multiplicative noise
+   band around each candidate — 0 gives a band of ±0, 100 gives roughly
+   0.2x–1.8x, which is enough to move a player a full round. */
+function _mockNoiseBand(chaos) {
+  return 0.2 + (Math.max(0, Math.min(100, chaos)) / 100) * 1.4;
+}
+
+/* THE one scoring rule. `health` is passed in rather than looked up so
+   the Monte Carlo can precompute it once instead of normalising a name
+   per candidate per simulated pick. */
+function _mockScore(p, rank, counts, round, arch, band, rnd, health) {
+  const noise = 1 - band / 2 + rnd() * band;
+  return MOCK_DECAY[rank] * _mockNeedCounts(counts, p.position, round)
+       * _mockLean(arch, p.position, round) * health
+       * (noise > 0.03 ? noise : 0.03);
+}
+
+/* A small seeded generator, so the same board and the same draft state
+   produce the same probabilities twice running. Math.random would make
+   every re-render jitter the numbers, and a probability that changes
+   while you stare at it is one nobody believes — correctly. */
+function _mockRng(seed) {
+  let a = (seed >>> 0) || 1;
+  return function () {
+    a ^= a << 13; a >>>= 0;
+    a ^= a >> 17;
+    a ^= a << 5; a >>>= 0;
+    return a / 4294967296;
+  };
+}
+
+/* ---- Twenty thousand drafts, to answer one question ------------------
+   Ethan: "run the simulation like 20k times over to see all the different
+   outcomes and then use that data to better display what the simulation
+   would carry out."
+
+   The question worth that many runs is the one every drafter actually
+   asks on the clock: IF I WAIT, WHO IS STILL THERE? A single mock answers
+   it once, which is an anecdote. Twenty thousand answers it as a
+   distribution — "Bijan survives 12% of the time, Nabers 61%" — and that
+   is a number you can draft against. FantasyPros charges for this (their
+   Pick Predictor); the arithmetic is not the hard part, an honest room
+   model is, which is what the personas above are for.
+
+   ONLY THE PICKS THAT MATTER ARE SIMULATED. Playing out whole drafts
+   would be twenty thousand times fourteen rounds to learn something that
+   is decided in the next twenty picks. The sim runs from here to your
+   next turn, which on a twelve-team board is at most twenty-two picks —
+   about half a million simulated picks for a full run, which is a few
+   hundred milliseconds rather than a minute.
+
+   WHAT IT REPORTS is deliberately three things and not a single number:
+   who survives, what the BEST thing left is likely to be worth, and how
+   many of each position go off the board first. The third is the run
+   warning every simulator has and the only one of the three that changes
+   what you do about a position rather than about a player. */
+
+//: Simulated drafts per run. Capped by measurement rather than faith:
+//: _mockSims backs this off if a device cannot do it inside a frame
+//: budget, and the page prints the count it actually managed.
+const MOCK_SIMS = 20000;
+//: How hard the rooms deviate from the board, 0-100. 35 is a real draft:
+//: reaches happen, but the first round is mostly the first round.
+let _mockChaos = 35;
+//: Measured, not guessed: 20,000 runs of the longest gap a twelve-team
+//: board produces (22 picks, from the 1.01 seat) takes ~540ms in a
+//: browser, and every later pick is shorter. 800 leaves room for a slower
+//: phone to still finish the full count, and a device that genuinely
+//: cannot gets fewer runs and a page that says how many.
+const MOCK_SIM_BUDGET_MS = 800;
+
+/* Your next turn after `from`, or null if the draft ends first. */
+function _mockNextTurn(from, teams, you, rounds) {
+  const total = teams * rounds;
+  for (let i = from; i < total; i++) {
+    if (_mockPicker(i, teams) === you) return i;
+  }
+  return null;
+}
+
+function mockSurvival(m, sims) {
+  const pool = m.pool;
+  const n = pool.length;
+  // THE QUESTION IS ABOUT THE TURN AFTER THIS ONE. On the clock, "who is
+  // still there?" means when it comes BACK to you — the pick in front of
+  // you is yours to make, so simulating up to it answers nothing. Off the
+  // clock the reference point is simply your next turn.
+  const onClock = _mockPicker(m.pick, m.teams) === m.you;
+  const from = m.pick + (onClock ? 1 : 0);
+  const mine = _mockNextTurn(from, m.teams, m.you, m.rounds);
+  if (mine == null || mine <= from) return null;
+  const gap = mine - from;                   // picks by other rooms first
+  if (!gap) return null;
+
+  // Precomputed once, not per simulated pick: name normalisation inside
+  // the loop was the difference between 300ms and half a minute.
+  const health = new Float64Array(n);
+  for (let i = 0; i < n; i++) health[i] = _mockHealth(pool[i].player);
+  const posOf = pool.map((p) => p.position);
+  const vorpOf = pool.map((p) => p.vorp || 0);
+  const band = _mockNoiseBand(m.chaos == null ? 35 : m.chaos);
+
+  const survived = new Float64Array(n);
+  const takenBy = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  const bestVorp = [];
+  // Version stamps instead of clearing an array 20,000 times.
+  const stamp = new Int32Array(n);
+  const counts = [];                          // per team, per position
+  const t0 = (typeof performance === "object" ? performance.now() : Date.now());
+  let ran = 0;
+
+  for (let s = 1; s <= sims; s++) {
+    for (let t = 0; t < m.teams; t++) {
+      counts[t] = counts[t] || {};
+      counts[t].QB = 0; counts[t].RB = 0; counts[t].WR = 0; counts[t].TE = 0;
+    }
+    // What each room already holds this draft.
+    for (const e of m.log) {
+      const c = counts[e.team];
+      if (c && c[e.player.position] != null) c[e.player.position] += 1;
+    }
+    const rnd = _mockRng(s * 2654435761);
+    let cursor = 0;
+    for (let k = 0; k < gap; k++) {
+      const pickIdx = from + k;
+      const team = _mockPicker(pickIdx, m.teams);
+      const round = Math.floor(pickIdx / m.teams);
+      const arch = m.personas[team];
+      while (cursor < n && stamp[cursor] === s) cursor++;
+      // The top MOCK_TOPK still available, walking past what is gone.
+      const idx = [];
+      for (let i = cursor; i < n && idx.length < MOCK_TOPK; i++) {
+        if (stamp[i] !== s) idx.push(i);
+      }
+      if (!idx.length) break;
+      let total = 0;
+      const w = [];
+      for (let j = 0; j < idx.length; j++) {
+        const i = idx[j];
+        const x = _mockScore(pool[i], j, counts[team], round, arch, band,
+                             rnd, health[i]);
+        w.push(x); total += x;
+      }
+      let roll = rnd() * total, chosen = idx[0];
+      for (let j = 0; j < idx.length; j++) {
+        roll -= w[j];
+        if (roll <= 0) { chosen = idx[j]; break; }
+      }
+      stamp[chosen] = s;
+      const c = counts[team];
+      if (c[posOf[chosen]] != null) c[posOf[chosen]] += 1;
+      takenBy[posOf[chosen]] = (takenBy[posOf[chosen]] || 0) + 1;
+    }
+    // Who is left, and what the best of them is worth.
+    let best = 0;
+    for (let i = 0; i < n; i++) {
+      if (stamp[i] !== s) {
+        survived[i] += 1;
+        if (vorpOf[i] > best) best = vorpOf[i];
+      }
+    }
+    bestVorp.push(best);
+    ran = s;
+    // Measured, not assumed. A slow phone gets fewer runs and the page
+    // says how many rather than claiming twenty thousand it never did.
+    if ((s & 255) === 0) {
+      const dt = (typeof performance === "object" ? performance.now() : Date.now()) - t0;
+      if (dt > MOCK_SIM_BUDGET_MS) break;
+    }
+  }
+  if (!ran) return null;
+
+  bestVorp.sort((a, b) => a - b);
+  const q = (f) => bestVorp[Math.min(bestVorp.length - 1,
+                                     Math.floor(f * bestVorp.length))];
+  const byPlayer = new Map();
+  for (let i = 0; i < n; i++) byPlayer.set(pool[i].player, survived[i] / ran);
+  return {
+    sims: ran, gap, nextPick: mine,
+    survive: byPlayer,
+    // What the board will be worth when it comes back to you, as a range
+    // rather than a point — the median alone reads as a promise.
+    bestP10: q(0.10), bestP50: q(0.50), bestP90: q(0.90),
+    // Expected departures per position before your turn: the run warning.
+    goneBy: Object.fromEntries(Object.entries(takenBy)
+      .map(([k, v]) => [k, v / ran])),
+  };
+}
+
 function _mockPicker(pickIdx, teams) {
   const round = Math.floor(pickIdx / teams);
   const i = pickIdx % teams;
@@ -14582,20 +14832,19 @@ function _mockStart(teams, slot) {
   const kit = _mockKit || {};
   const pool = (kit.board || []).slice()
     .sort((a, b) => (b.vorp || 0) - (a.vorp || 0));
+  // Every room gets a persona, drawn once and kept for the draft — a
+  // manager who is Zero-RB in round two and Robust-RB in round three is
+  // not a manager. Your own seat gets one too, unused, so the array
+  // indexes by team without a special case.
+  const personas = Array.from({ length: teams }, () =>
+    MOCK_ARCHETYPES[Math.floor(Math.random() * MOCK_ARCHETYPES.length)]);
   _mock = { teams, you: slot - 1, pool, pick: 0,
             rounds: Math.min(14, Math.floor(pool.length / teams)),
-            rosters: Array.from({ length: teams }, () => []), log: [] };
+            rosters: Array.from({ length: teams }, () => []), log: [],
+            personas, chaos: _mockChaos, sim: null };
   _mockAdvance();
 }
 
-function _mockNeed(roster, pos, round) {
-  const n = roster.filter((p) => p.position === pos).length;
-  // Onesie positions: a second QB/TE before the bench rounds is a
-  // wasted pick, and even a CPU should know it.
-  if ((pos === "QB" || pos === "TE") && n >= 1 && round < 9) return 0.1;
-  if (pos === "RB" || pos === "WR") return n >= 5 ? 0.3 : 1.0;
-  return n >= 2 ? 0.2 : 1.0;
-}
 
 /* A CPU manager reads the injury report. A man ruled out or on IR is
    not worth a premium pick to a season-long roster; a Questionable in
@@ -14608,13 +14857,19 @@ function _mockHealth(name) {
   return injTone(r.status) === "var(--bad)" ? 0.25 : 0.85;
 }
 
+/* The room that is actually drafting, through the SAME rule the Monte
+   Carlo predicts with. Two copies would drift, and the page would be
+   publishing probabilities about a room that does not exist. */
 function _mockCpuPick(ti) {
   const round = Math.floor(_mock.pick / _mock.teams);
   const roster = _mock.rosters[ti];
-  const cands = _mock.pool.slice(0, 8).map((p, i) => ({
-    p, w: Math.exp(-i / 2.5) * _mockNeed(roster, p.position, round)
-          * _mockHealth(p.player)
-          * (0.6 + Math.random() * 0.8) }));
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const p of roster) if (counts[p.position] != null) counts[p.position] += 1;
+  const arch = (_mock.personas || [])[ti] || MOCK_ARCHETYPES[0];
+  const band = _mockNoiseBand(_mock.chaos == null ? 35 : _mock.chaos);
+  const cands = _mock.pool.slice(0, MOCK_TOPK).map((p, i) => ({
+    p, w: _mockScore(p, i, counts, round, arch, band, Math.random,
+                     _mockHealth(p.player)) }));
   const total = cands.reduce((s, c) => s + c.w, 0) || 1;
   let roll = Math.random() * total;
   let choice = cands[0].p;
@@ -14684,6 +14939,142 @@ function _mockAdvice() {
   return line;
 }
 
+/* Cached per pick: the board only changes when somebody drafts, so
+   re-running twenty thousand drafts on every re-render would burn a
+   phone's battery to produce the identical number. */
+function _mockSim() {
+  if (!_mock) return null;
+  if (_mock.sim && _mock.simAt === _mock.pick) return _mock.sim;
+  _mock.sim = mockSurvival(_mock, MOCK_SIMS);
+  _mock.simAt = _mock.pick;
+  return _mock.sim;
+}
+
+/* A survival chance, said the way a drafter reads it. The bands are the
+   decision, not decoration: over 80% is a player you can wait on, under
+   25% is one you take now or lose. */
+function _mockOdds(pct) {
+  if (pct == null) return "";
+  const n = Math.round(pct * 100);
+  const cls = n >= 80 ? "up" : n <= 25 ? "down" : "";
+  const tip = n >= 80 ? "Very likely still here at your next pick."
+    : n <= 25 ? "Usually gone before your next pick — take him now or plan without him."
+    : "A coin-flip-ish wait. The number is how often he survived the simulated picks between now and your turn.";
+  return `<span class="chip mk-odds ${cls}" title="${escapeAttr(tip)}">${n}%</span>`;
+}
+
+/* WHO TO PLAN ON, which is the answer the simulation exists to give.
+   From the 1.01 seat every name on the best-available list is gone by
+   your next turn, so a column of 0% is honest and useless on its own.
+   The useful half is the other end of the same distribution: the best
+   players who are actually likely to still be sitting there. */
+function _mockPlanHTML(sim) {
+  if (!sim || !_mock) return "";
+  const likely = _mock.pool
+    .map((p) => ({ p, q: sim.survive.get(p.player) || 0 }))
+    .filter((x) => x.q >= 0.4)
+    .slice(0, 5);
+  if (!likely.length) return "";
+  return `<div class="mk-plan">
+    <div class="mk-plan-head">Likely still there</div>
+    ${likely.map(({ p, q }) => `<span class="mk-plan-row">
+      <b>${escapeHtml(p.player)}</b>
+      <i>${escapeHtml(p.position)} · +${(p.vorp || 0).toFixed(1)}</i>
+      <span class="mk-plan-q">${Math.round(q * 100)}%</span></span>`).join("")}
+  </div>`;
+}
+
+/* THE RUN WARNING, which is the one output that changes what you do about
+   a POSITION rather than about a player. Expected departures before your
+   turn, from the same simulation. */
+function _mockRunHTML(sim) {
+  if (!sim) return "";
+  const rows = Object.entries(sim.goneBy)
+    .filter(([, v]) => v >= 0.8)
+    .sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return "";
+  return `<div class="mk-runs">${rows.map(([pos, v]) => `
+    <span class="chip ${v >= 3 ? "down" : ""}" title="Expected number of ${escapeHtml(pos)}s taken across ${sim.sims.toLocaleString()} simulated drafts of the picks between now and your turn.">
+      ${escapeHtml(pos)} <b>−${v.toFixed(1)}</b> before you</span>`).join("")}</div>`;
+}
+
+/* What the board is worth when it comes back to you. A range, not a
+   point: the median alone reads as a promise about one draft. */
+function _mockWaitHTML(sim) {
+  if (!sim) return "";
+  const spread = sim.bestP90 - sim.bestP10;
+  return `<div class="card mk-wait">
+    <div class="mk-wait-head">If you wait
+      <span class="sub">— ${sim.sims.toLocaleString()} simulated drafts of the
+      ${sim.gap} pick${sim.gap === 1 ? "" : "s"} between now and your turn</span></div>
+    <div class="mk-wait-body">
+      <span>Best value still on the board when it comes back:
+        <b>+${sim.bestP50.toFixed(1)}</b> VORP typically${spread > 0.4
+          ? `, between <b>+${sim.bestP10.toFixed(1)}</b> and
+             <b>+${sim.bestP90.toFixed(1)}</b>` : ""}.</span>
+    </div>
+    ${_mockPlanHTML(sim)}
+    ${_mockRunHTML(sim)}
+    <p class="mk-wait-foot">Every room in this draft has its own build, and
+      they keep it — the spread above is what those builds do to the board,
+      not a random number. The percentages beside each player are how often
+      he was still there.</p>
+  </div>`;
+}
+
+/* ---- The grade ------------------------------------------------------
+   Round-weighted value against where a player actually went, with the
+   steals and the reaches named. Every simulator worth copying ends on
+   this and ours ended on a PPG number with nothing to compare it to.
+
+   VALUE IS MEASURED AGAINST THE BOARD, not against a letter somebody
+   fitted: a pick is a steal by however far it outran the best player
+   still available when it was made, in VORP. That is a fact about this
+   draft rather than a grade about taste. */
+function _mockGrade(m) {
+  const board = new Map((_mockKit.board || []).map((p, i) => [p.player, i]));
+  const mine = m.log.filter((e) => e.team === m.you);
+  const marks = mine.map((e) => {
+    const at = board.get(e.player.player);
+    // Where he was on the board vs where he was taken overall.
+    const edge = at == null ? 0 : (e.pick - at);
+    return { ...e, at, edge };
+  });
+  const steals = marks.filter((x) => x.edge >= 8)
+    .sort((a, b) => b.edge - a.edge).slice(0, 3);
+  const reaches = marks.filter((x) => x.edge <= -8)
+    .sort((a, b) => a.edge - b.edge).slice(0, 3);
+  const net = marks.reduce((s, x) => s + x.edge, 0) / Math.max(1, marks.length);
+  return { marks, steals, reaches, net };
+}
+
+function _mockGradeHTML(m) {
+  const g = _mockGrade(m);
+  if (!g.marks.length) return "";
+  const row = (x, kind) => `<div class="mk-log-row">
+    <span class="chip ${kind === "steal" ? "up" : "down"}">${
+      kind === "steal" ? "+" : ""}${x.edge}</span>
+    <span class="mk-id"><b>${escapeHtml(x.player.player)}</b>
+      <span class="mk-meta">${escapeHtml(x.player.position)} · taken
+        ${Math.floor(x.pick / m.teams) + 1}.${String(x.pick % m.teams + 1).padStart(2, "0")}
+        · board rank ${x.at == null ? "—" : x.at + 1}</span></span></div>`;
+  return `<div class="section-title minor">Where you won and lost value
+      <span class="sub">— each pick against where that player sat on the
+      kit’s own board. Positive means he was still there later than his
+      rank said he should be.</span></div>
+    <div class="card mk-panel">
+      <div class="mk-log-row"><span class="mk-meta">Average
+        <b style="color:${g.net >= 0 ? "var(--good)" : "var(--warn)"}">${
+          g.net >= 0 ? "+" : ""}${g.net.toFixed(1)}</b> slots of value per pick
+        across ${g.marks.length}.</span></div>
+      ${g.steals.map((x) => row(x, "steal")).join("")}
+      ${g.reaches.map((x) => row(x, "reach")).join("")}
+      ${!g.steals.length && !g.reaches.length ? `<div class="mk-log-row">
+        <span class="mk-meta">No pick ran more than eight slots from its board
+        rank — a draft taken straight off the board.</span></div>` : ""}
+    </div>`;
+}
+
 function mockDraftHTML() {
   const kit = _mockKit || {};
   if (!(kit.board || []).length) {
@@ -14705,14 +15096,28 @@ function mockDraftHTML() {
             <select id="mk-slot" class="mk-sel">
               ${Array.from({ length: 12 }, (_, i) => `<option>${i + 1}</option>`).join("")}
             </select></label>
+          <label>Room chaos
+            <select id="mk-chaos" class="mk-sel">
+              <option value="10">Chalk</option>
+              <option value="35" selected>Realistic</option>
+              <option value="65">Wild</option>
+              <option value="100">Chaos</option>
+            </select></label>
           <button class="btn primary" id="mk-start">Start the draft</button>
         </div>
+        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
+          Every rival room is dealt one of ${MOCK_ARCHETYPES.length} builds and
+          keeps it all draft — Zero RB, Hero RB, WR hoarder, early QB, elite
+          TE and the rest — so the board falls differently every time and a
+          run on a position is sometimes real. <b>Room chaos</b> sets how far
+          they will stray from the board to do it.</p>
         <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
-          CPU rooms pick the best value available with a little human noise —
-          they reach, but rarely far, and nobody drafts two quarterbacks in
-          the first eight rounds. Your finished roster is judged on its
-          starters\u2019 projected PPG against the room, not on a letter grade
-          nobody fitted.</p>
+          On every one of your picks the draft ahead of you is simulated
+          ${MOCK_SIMS.toLocaleString()} times, and each available player
+          carries how often he was still there when it came back to you.
+          Your finished roster is judged on its starters\u2019 projected PPG
+          against the room, and on where each pick beat or missed the board
+          — not on a letter grade nobody fitted.</p>
       </div>`;
   }
   const m = _mock;
@@ -14752,37 +15157,66 @@ function mockDraftHTML() {
       ${lineup.bench.length ? `<div class="section-title minor">Bench</div>
       <div class="card mk-panel">${lineup.bench.map((p) => `
         <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}</div>`).join("")}</div>` : ""}
+      ${_mockGradeHTML(m)}
       <button class="btn" id="mk-again" style="margin-top:12px">Draft again</button>`;
   }
 
+  const sim = _mockSim();
   const avail = m.pool.slice(0, 12).map((p) => `
     <div class="mk-log-row">
       ${face(p, 32)}
       ${idBlock(p, ` · VORP +${(p.vorp || 0).toFixed(1)} · Tier ${p.tier || "—"}`)}
+      ${sim ? _mockOdds(sim.survive.get(p.player)) : ""}
       <button class="btn mk-take" data-mkp="${escapeAttr(p.player)}"
         ${yourTurn ? "" : "disabled"}>Draft</button></div>`).join("");
   const recent = m.log.slice(-m.teams).reverse().map((e) => `
     <div class="mk-log-row${e.team === m.you ? " you" : ""}">
       <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
-      <span class="mk-room">${e.team === m.you ? "You" : "Room " + (e.team + 1)}</span>
+      <span class="mk-room" title="${escapeAttr(e.team === m.you ? "Your pick"
+        : ((m.personas || [])[e.team] || {}).name || "")}">${
+        e.team === m.you ? "You" : "Room " + (e.team + 1)}${
+        e.team === m.you ? "" : `<i class="mk-arch">${escapeHtml(
+          (((m.personas || [])[e.team] || {}).name || "").split(" ")[0])}</i>`}</span>
       ${idBlock(e.player, "")}
       <span class="chip">${escapeHtml(e.player.position)}</span></div>`).join("");
   const roster = m.rosters[m.you].map((p) => `
     <div class="mk-log-row">${face(p, 28)}${idBlock(p, ` · proj ${p.proj}`)}
       <span class="chip">${escapeHtml(p.position)}</span></div>`).join("");
-  return `<div class="section-title">Round ${round} of ${m.rounds}
-      <span class="sub">— pick ${m.pick + 1} of ${total}</span></div>
+  // A draft room reads left to right: what is on the clock, what is
+  // available, what you already have. Three columns on a desktop, one
+  // stack on a phone — the board first either way, because that is the
+  // thing you are choosing from.
+  const onClock = yourTurn ? "You are on the clock"
+    : `Room ${_mockPicker(m.pick, m.teams) + 1} is picking`;
+  return `<div class="mk-room-head">
+      <div class="mk-clock ${yourTurn ? "you" : ""}">
+        <span class="mk-round">Round ${round}<i>of ${m.rounds}</i></span>
+        <span class="mk-pickno-lg">${round}.${String(m.pick % m.teams + 1).padStart(2, "0")}</span>
+        <span class="mk-onclock">${escapeHtml(onClock)}</span>
+      </div>
+      <div class="mk-prog"><i style="width:${(m.pick / total * 100).toFixed(1)}%"></i></div>
+    </div>
     ${yourTurn ? `<div class="card mk-advice">
       <div class="mk-advice-head">Your pick — round ${round}</div>
       <div>${_mockAdvice()}</div></div>` : ""}
-    <div class="section-title minor">Best available</div>
-    <div class="card mk-panel">${avail}</div>
-    <div class="section-title minor">Last round of picks</div>
-    <div class="card mk-panel">${recent || `<div class="mk-log-row">
-      <span class="mk-meta">Nobody has picked yet.</span></div>`}</div>
-    <div class="section-title minor">Your roster</div>
-    <div class="card mk-panel">${roster || `<div class="mk-log-row">
-      <span class="mk-meta">Empty until your first pick.</span></div>`}</div>
+    ${yourTurn ? _mockWaitHTML(sim) : ""}
+    <div class="mk-cols">
+      <div class="mk-col">
+        <div class="section-title minor">Best available${sim
+          ? ` <span class="sub">— the percentage is how often each man was
+              still there at your next pick across ${sim.sims.toLocaleString()}
+              simulated drafts</span>` : ""}</div>
+        <div class="card mk-panel">${avail}</div>
+      </div>
+      <div class="mk-col">
+        <div class="section-title minor">Your roster</div>
+        <div class="card mk-panel">${roster || `<div class="mk-log-row">
+          <span class="mk-meta">Empty until your first pick.</span></div>`}</div>
+        <div class="section-title minor">Last round of picks</div>
+        <div class="card mk-panel">${recent || `<div class="mk-log-row">
+          <span class="mk-meta">Nobody has picked yet.</span></div>`}</div>
+      </div>
+    </div>
     <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
 }
 
@@ -14812,6 +15246,8 @@ function _mockBind(host) {
       const teams = parseInt(document.getElementById("mk-teams").value, 10);
       const slot = Math.min(teams,
         parseInt(document.getElementById("mk-slot").value, 10));
+      const ch = document.getElementById("mk-chaos");
+      if (ch) _mockChaos = parseInt(ch.value, 10) || 35;
       _mockStart(teams, slot);
     } else if (t.id === "mk-reset" || t.id === "mk-again") {
       _mock = null; _mockRender();

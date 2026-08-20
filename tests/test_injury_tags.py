@@ -78,7 +78,15 @@ def test_the_cpu_reads_the_injury_report():
     body = APP[i:APP.index("\n}", i)]
     assert "injFind(" in body and "0.25" in body
     j = APP.index("function _mockCpuPick(")
-    assert "_mockHealth(p.player)" in APP[j:j + 500]
+    body = APP[j:APP.index("\n}", j)]
+    assert "_mockHealth(p.player)" in body, "the drafting CPU stopped reading it"
+    # And the Monte Carlo that PREDICTS that CPU has to weigh it the same
+    # way, or the survival odds describe a room that ignores injuries
+    # while the room drafting does not.
+    k = APP.index("function mockSurvival(")
+    sim = APP[k:APP.index("\n}\n", k)]
+    assert "_mockHealth(" in sim, \
+        "the predictor ignores the injury report the drafting room reads"
 
 
 def test_the_draft_day_panels_tag_too():

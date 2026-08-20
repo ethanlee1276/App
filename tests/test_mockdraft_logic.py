@@ -44,7 +44,7 @@ const code = [
   grab("const MOCK_SLOTS", ";"),
   grab("const MOCK_FLEX", ";"),
   grab("function _mockPicker(", "\n}"),
-  grab("function _mockNeed(", "\n}"),
+  grab("function _mockNeedCounts(", "\n}"),
   grab("function _mockLineup(", "\n}"),
   grab("function _mockStartersPPG(", "\n}"),
 ].join("\n");
@@ -55,11 +55,13 @@ const out = {};
 out.snake = [];
 for (let p = 0; p < 36; p++) out.snake.push(_mockPicker(p, 12));
 
-// Need discipline: a room holding one QB, asked about a second.
-const qbRoster = [{ position: "QB" }];
-out.qb_early = _mockNeed(qbRoster, "QB", 3);
-out.qb_late = _mockNeed(qbRoster, "QB", 10);
-out.rb_always = _mockNeed(qbRoster, "RB", 3);
+// Need discipline: a room holding one QB, asked about a second. Counts
+// rather than a roster array — the Monte Carlo carries counts, and
+// rebuilding a roster per simulated pick was the whole cost of the loop.
+const qbCounts = { QB: 1, RB: 0, WR: 0, TE: 0 };
+out.qb_early = _mockNeedCounts(qbCounts, "QB", 3);
+out.qb_late = _mockNeedCounts(qbCounts, "QB", 10);
+out.rb_always = _mockNeedCounts(qbCounts, "RB", 3);
 
 // The judge: a full roster with a known best lineup.
 const roster = [

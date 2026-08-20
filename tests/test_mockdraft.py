@@ -49,11 +49,60 @@ def test_the_pool_is_the_kits_own_board():
 def test_the_cpu_is_stated_not_hidden():
     i = APP.index("function _mockCpuPick(")
     body = APP[i:APP.index("\n}", i)]
-    assert "_mockNeed(" in body and "Math.exp(" in body
-    j = APP.index("function _mockNeed(")
+    assert "_mockScore(" in body, "the CPU's rule is no longer a named function"
+    j = APP.index("function _mockNeedCounts(")
     need = APP[j:APP.index("\n}", j)]
     assert '(pos === "QB" || pos === "TE")' in need, \
         "the onesie discipline is the one rule a CPU must know"
+
+
+def test_the_predictor_and_the_room_share_one_rule():
+    """Ethan, 2026-08-20: "run the simulation like 20k times over to see
+    all the different outcomes."
+
+    The whole value of that number is that it describes THIS room. If the
+    Monte Carlo carried its own copy of the pick logic the two would
+    drift — silently, because both would keep producing plausible numbers
+    — and the page would publish a probability about a draft nobody is
+    having. One scoring function, two callers, pinned here.
+    """
+    live = APP[APP.index("function _mockCpuPick("):]
+    live = live[:live.index("\n}")]
+    sim = APP[APP.index("function mockSurvival("):]
+    sim = sim[:sim.index("\n}\n")]
+    assert "_mockScore(" in live and "_mockScore(" in sim, \
+        "the predictor and the room no longer score picks the same way"
+    # And the personas have to reach both, or the sim predicts a room of
+    # value-maximisers while the draft runs a room of characters.
+    assert "personas" in live and "m.personas" in sim
+
+
+def test_the_rooms_are_people_not_one_algorithm_twelve_times():
+    """A room of identical value-maximisers produces a draft with almost
+    no variance, and running THAT twenty thousand times just measures the
+    noise term — a confident-looking probability about a league nobody
+    plays in."""
+    i = APP.index("const MOCK_ARCHETYPES = [")
+    block = APP[i:APP.index("];", i)]
+    for build in ("Zero RB", "Hero RB", "WR hoarder", "Early QB", "Elite TE"):
+        assert build in block, f"lost the {build} room"
+    # Dealt once and kept: a manager who is Zero-RB in round two and
+    # Robust-RB in round three is not a manager.
+    start = APP[APP.index("function _mockStart("):]
+    start = start[:start.index("\n}")]
+    assert "personas" in start, "rooms no longer carry a build"
+
+
+def test_the_simulation_reports_the_count_it_actually_ran():
+    """A phone that cannot finish twenty thousand must not claim it.
+    The loop is time-boxed and the page prints `sims`, which is the
+    number that happened."""
+    sim = APP[APP.index("function mockSurvival("):]
+    sim = sim[:sim.index("\n}\n")]
+    assert "MOCK_SIM_BUDGET_MS" in sim, "the run is unbounded on a slow device"
+    assert "sims: ran" in sim, "the report does not carry the real count"
+    assert "sim.sims.toLocaleString()" in APP, \
+        "the page states a count that is not the measured one"
 
 
 def test_the_end_is_arithmetic_not_a_letter_grade():
