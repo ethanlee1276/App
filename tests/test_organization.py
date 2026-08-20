@@ -118,6 +118,30 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     assert "receipts]," in js[i:i + 2600]
 
 
+def test_the_receipts_room_opens_on_the_receipts():
+    """Ethan, 2026-08-20: "remove the paper bet section on the record page.
+    its taking up to much space and we dont really need that area any more."
+
+    It opened the tab with a paper/money split and a second list of a
+    hundred paper bets, pushing the actual receipts below a screenful of
+    apparatus. Nothing left the record with it: `overall` is
+    `performance(conn)`, whose category default is ("main", "paper"), so
+    both books were already pooled into every headline number and the
+    panel only re-split what the curve had added together.
+
+    IF IT IS EVER REBUILT, build it from `performance(conn, category="main")`.
+    The removed version passed the POOLED book as its "Money rows" line, so
+    the comparison it drew was paper against paper-plus-money — which is
+    why this test pins the absence with the reason rather than just the
+    absence.
+    """
+    js = _js()
+    assert "recPaperBook" not in js, \
+        "the paper/money split is back above the receipts"
+    assert "paper_recent" not in js, \
+        "the page is reading the hundred paper rows again"
+
+
 def test_the_fantasy_page_is_four_rooms():
     js = _js()
     i = js.index("host.innerHTML = _ffLead + subtabbedHTML(")

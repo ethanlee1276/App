@@ -7983,7 +7983,22 @@ async function renderRecord() {
       shown when it was recommended. One entry per player &amp; market per day.
       Long Shots and stale-line flags are tracked in their own buckets at a flat
       0.1u — never mixed into this record — and the Edge Board is a watchlist,
-      not tracked bets.`)}
+      not tracked bets.${/* THE PAPER BOOK, disclosed here rather than in a
+        panel of its own. It used to open the Receipts tab as a two-row
+        split with standard errors and a hundred-row list beneath it, which
+        Ethan removed for the space — but the FACT it carried has to
+        survive, because these rows are inside the headline ROI and a
+        reader has no other way to learn that. A collapsed disclosure costs
+        nothing until it is opened, and this is the question a reader opens
+        it to ask. Drawn only when the book has rows, so it never describes
+        something that never happened. */
+        !((d.paper || {}).settled) ? "" : ` <strong>Paper rows are in these
+        numbers.</strong> ${d.paper.settled} of the settled bets here were
+        journalled while paper mode was on — same pick, same price, same
+        settlement, no money on them — and they are already added into
+        every figure above. Unit ROI pools honestly because the stakes were
+        kept as sized; dollars stay real-money-only, and no paper row has
+        ever moved the bankroll.`}`)}
     ${unstaked}
     ${small}
     ${recAnalytics(src.curve, o)}
@@ -8029,7 +8044,19 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   return subtabbedHTML("record", [
     ["receipts", "Receipts",
      "what happened, in units — the curve, the splits, every settled pick",
-     (scoped ? "" : recPaperBook(d.paper, d.overall, d.paper_mode, d.paper_recent)) + receipts],
+     // The paper/money split used to open this tab. Ethan, 2026-08-20:
+     // "remove the paper bet section on the record page. its taking up to
+     // much space and we dont really need that area any more."
+     //
+     // Nothing leaves the record by removing it. `overall` has always been
+     // `performance(conn)`, whose category default is ("main", "paper") —
+     // the two books were ALREADY pooled into every headline number above,
+     // and the panel only re-split what the curve had added together. It
+     // also mislabelled its own second line "Money rows" while passing
+     // that pooled book, so the comparison it drew was paper against
+     // paper-plus-money. If the split is ever wanted back, build it from
+     // `performance(conn, category="main")`.
+     receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
@@ -8061,11 +8088,10 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
 }
 
-/* One settled row. Extracted so the paper book renders through the SAME
-   function as the main receipts rather than a lookalike — Ethan asked for
-   the paper bets posted, and a second copy of this markup would drift
-   from the first the next time either is touched, leaving two lists that
-   disagree about what a "lucky" chip means. */
+/* One settled row, shared by every list that posts settled bets rather
+   than copied into each — a second copy of this markup drifts from the
+   first the next time either is touched, leaving two lists that disagree
+   about what a "lucky" chip means. */
 function recSettledRow(b) {
         const won = b.status === "won";
         const push = b.status === "push";
@@ -8095,79 +8121,6 @@ function recSettledRow(b) {
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;
       }
-
-/* The paper book, which the export has always carried and the page has
-   never shown. Ethan, 2026-08-16: "so did we learn something in paper
-   mode??? i see its +17% roi but im not seeing that reflected in the roi
-   on the website." He was right that it was missing and right to ask —
-   `record.json` carries `paper` and `paper_mode` and nothing read either.
-
-   The block leads with the fact that makes the comparison mean something:
-   paper mode does not change a pick, a price or a settlement. It changes
-   the row's category and the dollar column. So a gap between the two
-   books is not something paper mode DID — it is an era effect, and the
-   question it raises is what else changed on that date. */
-function recPaperBook(paper, main, on, recent) {
-  if (!paper || !(paper.settled || paper.wins || paper.losses)) return "";
-  const band = (perf) => {
-    const n = (perf.wins || 0) + (perf.losses || 0);
-    if (!n) return null;
-    const hit = (perf.wins || 0) / n;
-    const staked = perf.units_staked || 0;
-    let b = perf.wins ? ((perf.net_units || 0) / perf.wins)
-                        / Math.max(staked / n, 1e-9) : 1;
-    b = Math.min(Math.max(b, 0.5), 5);
-    const se = Math.sqrt(Math.max(hit * (1 - hit), 1e-9)) * (1 + b) / Math.sqrt(n);
-    return { n, roi: perf.roi || 0, se, z: se ? (perf.roi || 0) / se : 0 };
-  };
-  const rows = [["Paper rows — no money on them", paper],
-                ["Money rows", main]]
-    .map(([label, perf]) => {
-      const s = band(perf);
-      if (!s) return "";
-      const sig = Math.abs(s.z) >= 2
-        ? "distinguishable from zero"
-        : `${Math.abs(s.z).toFixed(1)} SE from zero — not yet a result`;
-      return `<div style="display:flex;gap:12px;align-items:baseline;
-                  padding:9px 0;border-bottom:var(--hairline) solid var(--border-soft)">
-        <span style="flex:1;min-width:0">${escapeHtml(label)}
-          <span class="sub">${perf.wins || 0}&ndash;${perf.losses || 0} ·
-          ${(perf.units_staked || 0).toFixed(1)}u staked</span></span>
-        <span style="font-variant-numeric:tabular-nums" class="${toneOf(s.roi)}">
-          <strong>${s.roi >= 0 ? "+" : ""}${(s.roi * 100).toFixed(1)}%</strong>
-          ± ${(s.se * 100).toFixed(1)}%</span>
-        <span class="chip" style="flex-shrink:0">${sig}</span></div>`;
-    }).join("");
-  return `<div class="section-title">Inside the record
-      <span class="sub">— the same model, split by whether money rode on
-      it.</span></div>
-    <div class="card">
-      <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--text-mute)">
-        <b style="color:var(--text)">These two lines are already added
-        together in the record above.</b> Ethan, 2026-08-13: "combine our
-        paper record and normal money record." They are one strategy, because
-        paper mode${on ? " is on and" : ""} changes exactly two things — which
-        book a row is filed in, and the dollar column. The pick, the price, the
-        settlement and the CLV are identical, so there is no second model here
-        to separate out. The split is kept below only because the DOLLARS
-        differ: unit ROI pools honestly, dollars stay real-money-only, and no
-        paper row has ever moved the bankroll.</p>
-      ${rows}
-      <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-faint)">
-        Each line carries a standard error because neither half is large, and
-        a gap between them is an <b style="color:var(--text)">era</b> effect
-        rather than something paper mode did — which is why pooling them is
-        the honest read and separating them was the misleading one. A
-        percentage on 74 bets without an error bar is how a coin flip gets
-        read as a turnaround.</p>
-    </div>
-    ${!(recent || []).length ? "" : `
-      <div class="section-title minor">Every paper bet
-        <span class="sub">— all ${recent.length}, newest first, at the price
-        we would have got. Same list, same grading, same closing-line check
-        as the money book above it.</span></div>
-      <div class="card rec-list">${recent.map(recSettledRow).join("")}</div>`}`;
-}
 
 /* The stale-line sampler: every pre-game scanner flag, journaled at a flat
    nominal stake and settled like any bet. The signal's CLV was measured on

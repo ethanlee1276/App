@@ -4103,20 +4103,25 @@ def export_json(conn, path) -> None:
         # `edge_trend` the series. See docs/THE_INFORMATION_TEST.md.
         "edge_now": _edge_snapshot(conn),
         "edge_trend": _edge_series(conn),
-        # THE PAPER BOOK, reported beside the real one and never inside
-        # it. Same shape as `overall`, so the page can render one against
-        # the other: this is what the model would have returned over the
-        # stretch where we deliberately were not paying it.
+        # THE PAPER BOOK as a summary. Note that it is not a book kept
+        # OUTSIDE the record: `overall` above defaults to BOOK, which is
+        # ("main", "paper"), so these rows are already in every headline
+        # number. This line exists so the export still says how much of
+        # that pool was staked on paper.
         "paper": performance(conn, category="paper"),
         "paper_mode": paper_mode(conn),
-        # THE PAPER BETS THEMSELVES, not just their total. Ethan,
-        # 2026-08-16: "post all of those bets please." The book was
-        # already exported as a summary and the page did not even show
-        # that; a percentage with no rows under it is a claim, and this
-        # book's whole purpose is to be checkable. Same shape and same
-        # function as the main receipts, so the two lists read alike and
-        # can be compared line for line.
-        "paper_recent": recent_settled(conn, 100, category="paper"),
+        # `paper_recent` — the hundred paper rows themselves — was dropped
+        # on 2026-08-20 along with the Record page panel that was its only
+        # reader (Ethan: "we dont really need that area any more").
+        #
+        # Say the consequence plainly rather than let it be discovered: no
+        # page now LISTS an individual paper bet, because `recent_settled`
+        # defaults to category="main". Their totals are unaffected — every
+        # headline number above pools both books — but the row-by-row
+        # receipts below them are money rows only. If those rows are ever
+        # wanted back, the honest fix is to widen the main receipts list to
+        # BOOK rather than to re-add a second list beside it, since the
+        # curve those receipts sit under already counts them.
         # Per-sport, so each model can be tuned on its own evidence rather
         # than on the average of six.
         "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},
