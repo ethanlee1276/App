@@ -13743,9 +13743,56 @@ function initRankBoard() {
   renderRankBoard();
 }
 
+/* What the market placed, counted rather than described. Two states and
+   both matter at a draft table: some players are on this board on the
+   market\u2019s word rather than ours, or \u2014 when Sleeper could not be
+   reached \u2014 the rookie class is missing entirely, which also silently
+   empties it out of the mock draft\u2019s pool. Saying neither would leave
+   a reader to assume the board is complete, and in August it is the one
+   assumption most likely to be wrong. */
+function marketLine(kit) {
+  const m = (kit || {}).market || {};
+  if (m.placed) {
+    const pos = Object.entries(m.by_position || {})
+      .sort().map(([p, n]) => `${n} ${p}`).join(", ");
+    return `<p class="dk-marketline"><b>${m.placed} player${
+      m.placed === 1 ? "" : "s"} here are the market\u2019s call, not ours</b>
+      \u2014 ${m.rookies} rookie${m.rookies === 1 ? "" : "s"}${
+      pos ? ` (${escapeHtml(pos)})` : ""}. They have no ${
+      kit.season || "prior"} usage to project from, so each sits at the rank
+      Sleeper drafts him and takes the points our own board shows at that
+      rank. They can never read as a value or a reach, because we have no
+      independent opinion on them.</p>`;
+  }
+  // placed:0 with a board we did see means Sleeper answered and had
+  // nothing to add; placed:0 with nothing seen means it never answered.
+  if (!m.board_seen) {
+    return `<p class="dk-marketline"><b>Rookies are not on this board.</b>
+      The market feed could not be reached on the last build, so players
+      with no ${kit.season || "prior"} usage are missing \u2014 from the
+      board, from the tiers, and from the mock draft\u2019s pool. A mock run
+      now will not offer you a single rookie.</p>`;
+  }
+  return "";
+}
+
 function draftKitHTML(kit) {
   if (!kit || !(kit.board || []).length) return "";
   const BOARD_SHOWN = 15;
+  /* A player with no last-season usage cannot be projected, so he is
+     placed at the market\u2019s own draft rank instead (engine/
+     draftmarket.py). "0 gm" plus a small-sample warning is technically
+     true of such a row and tells the reader nothing useful \u2014 it
+     reads as a thin measurement rather than as an absent one. This says
+     which it is, and whose opinion the number is. */
+  const marketNote = (r) => `<span class="dk-market" title="No ${
+      kit.season || "last-season"} usage to project from, so this player sits where the
+      market drafts him \u2014 his points are read off our own board at that rank.
+      We have no independent read on him.">${
+      r.rookie ? "ROOKIE" : "NO " + (kit.season || "") + " USAGE"} \u00b7 market #${
+      r.market_rank}</span>`;
+  const basisNote = (r) => r.source === "market" ? marketNote(r)
+    : `${r.games} gm${r.small_sample ? ` ${icon("warn")} small sample` : ""}`;
   const moveNote = (r) => r.moved_from
     ? ` · <span class="dk-moved" title="Traded or signed since these stats — the volume behind this projection came in ${escapeHtml(nflName(r.moved_from))}'s offense">NEW TEAM, was ${escapeHtml(r.moved_from)}</span>`
     : r.roster_flag
@@ -13756,7 +13803,7 @@ function draftKitHTML(kit) {
       <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
         <span><strong>${escapeHtml(r.player)}</strong>${injTag("nfl", r.player)}
           <span class="dl-sub">${escapeHtml(r.position)}${r.pos_rank} · ${nflName(r.team)}
-            · ${r.games} gm${r.small_sample ? ` ${icon('warn')} small sample` : ""}${moveNote(r)}</span></span></span>
+            · ${basisNote(r)}${moveNote(r)}</span></span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
       <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>
@@ -13780,7 +13827,8 @@ function draftKitHTML(kit) {
         <span class="dk-pr">${r.pos_rank}</span>
         ${playerAvatar(r.player, r.team, { size: 18, map: nflMap(), headshot: r.headshot })}
         <span class="dk-pn">${escapeHtml(r.player)}${injTag("nfl", r.player)}
-          <span class="dk-pt">${nflName(r.team)}</span></span>
+          <span class="dk-pt">${nflName(r.team)}${
+            r.source === "market" ? ` \u00b7 <span class="dk-market">mkt #${r.market_rank}</span>` : ""}</span></span>
         <span class="dk-pp">${r.proj}</span>
       </div>`;
     }).join("");
@@ -13832,6 +13880,7 @@ function draftKitHTML(kit) {
         <span class="sub">— expected points clearly above what they actually scored;
         the draft-day version of buy-low</span></div>
       <div class="card" style="padding:0">${sleepers}</div>` : ""}
+    ${marketLine(kit)}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">
       ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
 }

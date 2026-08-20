@@ -111,10 +111,28 @@ def _assign_tiers(rows: list[dict], gap: float = TIER_GAP) -> None:
         r["tier"] = tier
 
 
-def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS) -> dict:
+def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
+                    sleeper: dict | None = None) -> dict:
     """The full kit: per-position tiers, a VORP-ordered overall board,
-    replacement baselines, and the usage-says-buy sleepers list."""
+    replacement baselines, and the usage-says-buy sleepers list.
+
+    `sleeper` is the players blob. Handed in rather than fetched, and
+    optional: without it the board is exactly what it was before — last
+    season's usage and nobody else. With it, players the market drafts
+    that this board cannot see are placed at the market's own rank (see
+    engine/draftmarket.py), which matters most for the mock simulator,
+    whose draft pool IS this board.
+    """
     players = _players(conn, season)
+
+    # BEFORE tiers, VORP and replacement, deliberately. Placing them
+    # afterwards would rank them against a replacement level computed as
+    # though they did not exist — and the whole reason a missing rookie
+    # class distorts the board is that it moves who is actually free.
+    from .draftmarket import place_missing, summary as _market_summary
+    placed = place_missing(players, sleeper)
+    players = players + placed
+    market = _market_summary(placed)
 
     by_pos: dict[str, list[dict]] = {}
     for r in players:
@@ -147,21 +165,31 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS) -> dict:
     # Usage says buy: expected clearly above actual — the draft-day version
     # of buy-low. (Sell-highs matter less at the table: the market already
     # prices last year's points; the board's lower proj handles it.)
+    # A market-placed player can never be a sleeper: "usage says buy"
+    # compares expected against actual, and he has neither. The zeroes he
+    # carries would fail the gap test anyway — excluded explicitly so a
+    # later change to those defaults cannot quietly let him in.
     sleepers = sorted(
         (r for r in players
-         if r["basis"] != "points" and r["xppg"] - r["ppg"] >= SLEEPER_GAP),
+         if r["basis"] not in ("points", "market")
+         and r["xppg"] - r["ppg"] >= SLEEPER_GAP),
         key=lambda r: r["xppg"] - r["ppg"], reverse=True)[:10]
 
     return {
         "season": season, "teams": teams,
         "replacement": baselines,
+        "market": market,
         "board": board[:150],
         "tiers": {pos: rows[:40] for pos, rows in by_pos.items()},
         "sleepers": sleepers,
         "notes": [
-            "Projections are last season's volume run forward — the board "
-            "knows nothing about rookies (they are not on it), coaching "
-            "changes, or free agency.",
+            "Projections are last season's volume run forward. Players "
+            "with no last-season usage \u2014 rookies, and anyone who "
+            "missed the year \u2014 are placed at the market\u2019s own "
+            "draft rank instead, marked \u201cmarket\u201d, because we "
+            "have no independent read on a player we have never seen "
+            "play. The board still knows nothing about coaching changes "
+            "or scheme.",
             "Draft by tier, not rank: inside a tier the differences are "
             "noise, and your read on camp news beats the model's.",
             "VORP is points over the best freely-available player at the "

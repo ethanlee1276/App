@@ -135,15 +135,21 @@ def main() -> None:
                "note": "No NFL usage data ingested yet — run "
                        "`python3 ingest.py nfl` once."}
     else:
-        kit = fantasy_draft.build_draft_kit(conn, season)
+        # THE BLOB MOVED UP. It used to load after the kit, because its
+        # only job was stamping current teams onto rows that already
+        # existed. The kit now needs it while it is still building: the
+        # players the market drafts and our usage rows cannot see are
+        # placed BEFORE tiers and replacement level, so that every other
+        # player's VORP is measured against a pool that includes them.
+        # Still optional — None means Sleeper was unreachable and the
+        # board is exactly what it was before.
+        blob = offseason.load_sleeper_players()
+        kit = fantasy_draft.build_draft_kit(conn, season, sleeper=blob)
         try:
             from engine.sources.nflverse import load_schedules
             sched = load_schedules()
         except DataUnavailable:
             sched = []
-        # build_offseason stamps the kit's rows with current teams, so it
-        # must run before the kit is serialized.
-        blob = offseason.load_sleeper_players()
         off = offseason.build_offseason(sched, blob, kit=kit)
         # Waiver-wire pulse: what every Sleeper league grabbed/dumped in
         # the last 24h. None (unreachable) simply omits the section.
@@ -260,6 +266,24 @@ def main() -> None:
     # second fetch. Written to its own file so the NFL page never has to
     # load the whole fantasy payload to answer "who is on this team".
     _write_rosters(p.parent / "rosters_nfl.json", blob)
+    mk = ((out.get("draft_kit") or {}).get("market") or {})
+    if mk.get("placed"):
+        print(f"Draft board: {mk['placed']} player(s) placed at the market\u2019s "
+              f"rank ({mk.get('rookies', 0)} rookie(s)) \u2014 "
+              + ", ".join(f"{n} {pos}" for pos, n
+                          in sorted((mk.get("by_position") or {}).items()))
+              + f", deepest rank {mk.get('deepest')}"
+              + f" \u00b7 {mk.get('anchor_pct')}% of our board joined "
+                f"Sleeper by name ({mk.get('anchored')}/{mk.get('board_seen')})")
+        if (mk.get("anchor_pct") or 0) < 60:
+            print("  \u26a0\ufe0f  that join is thin \u2014 placements are "
+                  "interpolated between OUR players at THEIR market ranks, so "
+                  "a low join means the curve is drawn through very few "
+                  "points. Check the name normaliser before trusting them.")
+    elif blob is None:
+        print("Draft board: Sleeper unreachable \u2014 no market placements, "
+              "so rookies and anyone who missed last season are OFF the board "
+              "(and out of the mock draft's pool).")
     bs = out.get("buy_sell") or {}
     print(f"Fantasy: season {out['season']}, {len(out['usage'])} usage rows, "
           f"{len(bs.get('buy_low', []))} buy-low / {len(bs.get('sell_high', []))} "

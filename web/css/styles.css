@@ -2401,6 +2401,18 @@ select.calc-in { width: auto; font-weight: 600; }
   .dk-row .dl-num:not(.strong) { display: none; }
 }
 .dk-moved { color: var(--warn); font-weight: 700; }
+/* "This row is here on the market's word, not ours." Deliberately NOT
+   --warn, which .dk-moved already owns for a real change of situation: a
+   market placement is a statement about the SOURCE of a number, not a
+   flag on the player, and colouring them alike would say a rookie and a
+   traded veteran carry the same kind of caveat. Muted and lettered
+   instead, so it reads as provenance. */
+.dk-market { color: var(--text-mute); font-weight: 700;
+  font-size: var(--fs-2xs); letter-spacing: .04em; }
+.dk-marketline { color: var(--text-mute); font-size: var(--fs-sm);
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radius);
+  border-left: 2px solid var(--brand); background: var(--fill-subtle); }
+.dk-marketline b { color: var(--text); }
 
 /* Mock draft. Row-list panels share the injuries board's two-line
    discipline: identity on the left (face, name, quiet meta), the one
