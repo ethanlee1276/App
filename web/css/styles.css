@@ -4467,6 +4467,26 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .md-row { grid-template-columns: 96px minmax(0, 1fr) 26px; gap: 7px; }
 }
 
+/* -------- A pick whose price moved, sitting beside the ones that did not -- */
+/* Ethan, 2026-08-20: show them in the same box, "just make a note on the
+   prop in the yellow lettering that the price has changed since we took
+   the pick."
+
+   The note is warn-coloured and the chip says RIDING rather than a grade,
+   because the row has to be readable as a DIFFERENT SENTENCE at a glance:
+   the rows above it mean "bet this at tonight's number", this one means
+   "you already hold this and would not buy it today". Same box, same
+   scan, different instruction. */
+.grade.riding { background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 38%, transparent); }
+@supports not (background: color-mix(in srgb, red 10%, transparent)) {
+  .grade.riding { background: rgba(247, 157, 0, .16); color: var(--warn);
+    border-color: rgba(247, 157, 0, .38); }
+}
+.pick-moved { display: block; margin-top: 4px; color: var(--warn);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.pick-moved svg { vertical-align: -1px; margin-right: 3px; }
+
 /* ---------------- Soft radii for the system's shared shapes ---------------- */
 .card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }
 .btn { border-color: var(--border); }

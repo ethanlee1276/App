@@ -1355,6 +1355,55 @@ async function renderBestBets() {
   // not know that will read them as the model's raw opinion.
   const haircutNote = haircutLine(rec.selection_haircut);
 
+  /* ============================================================
+     A pick whose price moved is still a pick we made
+     ============================================================ */
+  /* Ethan, 2026-08-20: "bets that we recommended but doesn't pass the bar
+     anymore should still be shown in the green recommended box with the
+     rest of the props, we should just make a note on the prop in the
+     yellow lettering that the price has changed since we took the pick."
+
+     They used to sit in a separate orange card below, which asked a
+     reader to look in two places for one night's book and made an open
+     position feel like a footnote. One list now.
+
+     WHAT MUST NOT BLUR, and it is the reason this row is shaped
+     differently rather than just appended. Two different sentences live
+     in this box:
+
+         "bet this, at tonight's number"        — the ranked picks
+         "you already hold this; the number has
+          moved and it would not qualify today" — these
+
+     So a riding row takes no rank (the ranked list stays 1..N over the
+     things you can actually act on), wears RIDING where a grade would
+     be, and carries the price move in warn colour on its own line. The
+     headline count above still counts ONLY the actionable picks, and
+     says separately how many are riding — because "3 picks tonight"
+     when one of them is un-bettable is the kind of small lie this whole
+     page exists not to tell. */
+  const ridingRow = ({ b, cur }) => `
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+                border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="opacity:.45;min-width:18px;font-weight:700">·</span>
+      <span class="grade riding" style="flex-shrink:0">RIDING</span>
+      <span style="flex:1;min-width:0"><strong>${b.market === "moneyline"
+          ? `${escapeHtml(teamName(b.player))} Moneyline`
+          : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
+        <span class="pick-moved">${icon("warn", 12)} ${cur && cur.odds != null
+          ? `The price has changed since we took this pick — placed at
+             ${american(b.odds)}, now ${american(cur.odds)}${
+             cur.line != null && Number(cur.line) !== Number(b.line)
+               ? ` (line now ${cur.line})` : ""}. It no longer clears the bar
+             at that number: the bet rides as placed, but don’t add more.`
+          : `The price has changed since we took this pick — placed at
+             ${american(b.odds)}, and there is no live quote for this market
+             right now. The bet rides as placed; don’t add more.`}</span>
+      </span>
+      <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
+        ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
+    </div>`;
+
   const pickRow = (p, i) => `
     <div class="${p.open ? "openable" : ""}"${p.open || ""}
          style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
@@ -1375,12 +1424,16 @@ async function renderBestBets() {
   const picksBlock = picks.length ? `
     <div class="card" style="padding:0;border-left:3px solid var(--good)">
       <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
-        <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>
+        <b style="color:var(--text)">${picks.length} pick${picks.length === 1 ? "" : "s"} tonight — this is the whole list.</b>${
+        ridden.length ? ` <b style="color:var(--warn)">${ridden.length} more
+        ${ridden.length === 1 ? "is" : "are"} riding</b> from an earlier pull at a
+        price that no longer qualifies — marked below, and not part of that count.` : ""}
         Same count as the tile above, ranked by quality. ${escapeHtml(journalNote)}${
         asOf ? ` Prices are from the ${escapeHtml(asOf)} odds pull — always confirm the number still stands before betting.` : ""}
         Every journaled bet is tracked on the <b style="color:var(--text)">Live</b> tab through settlement.</p>
       ${haircutNote}
       ${picks.map(pickRow).join("")}
+      ${ridden.map(ridingRow).join("")}
       <details class="rec-disclose" style="margin:2px 14px 10px">
         <summary>Why only ${picks.length}? — where the other props died</summary>
         ${censusFunnelHTML()}
@@ -1414,6 +1467,16 @@ async function renderBestBets() {
             and it would have been worse — `renderBestBets` is async, so
             which block won the race would change between refreshes and
             the table would appear to move around the page. */""}
+      ${/* A NIGHT WITH NOTHING NEW STILL HAS AN OPEN POSITION. Without
+            this the riding rows exist only on the branch that HAS picks,
+            so the one evening a reader most needs to see what they are
+            still holding — nothing new qualified — is the evening the
+            page forgets to mention it. */ ridden.length ? `
+        <p style="margin:10px 0 0;padding:0 14px;color:var(--text-mute);font-size:var(--fs-sm)">
+          <b style="color:var(--warn)">${ridden.length}
+          ${ridden.length === 1 ? "bet is" : "bets are"} still riding</b> from an
+          earlier pull — placed when they cleared the bar, and held since.</p>
+        <div style="margin-top:8px">${ridden.map(ridingRow).join("")}</div>` : ""}
     </div>`;
 
   // ======= SPACE 2: tracked signals — measurements, NOT picks =======
@@ -1469,32 +1532,9 @@ async function renderBestBets() {
       </div>
     </details>` : "";
 
-  // ======= the bets already placed whose price moved off the bar =======
-  const riddenBlock = ridden.length ? `
-    <div class="card" style="padding:0;border-left:3px solid var(--warn);margin-top:10px">
-      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
-        <b style="color:var(--text)">Riding from earlier pulls (${ridden.length}).</b>
-        These WERE tonight’s picks — journaled when they cleared the bar. The line has
-        moved since, and at the current number they no longer qualify, so: the bet rides
-        as placed, but don’t add more at today’s price. Tracked live on the Live tab.</p>
-      ${ridden.map(({ b, cur }) => `
-        <div style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
-                    border-bottom:1px solid rgba(255,255,255,.05);opacity:.85">
-          <span class="chip" style="flex-shrink:0">OPEN</span>
-          <span style="flex:1;min-width:0">
-            <strong>${b.market === "moneyline"
-              ? `${escapeHtml(teamName(b.player))} Moneyline`
-              : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
-            <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
-              placed ${american(b.odds)}${cur && cur.odds != null
-                ? ` · current best ${american(cur.odds)}${cur.line != null && Number(cur.line) !== Number(b.line)
-                    ? ` (line now ${cur.line})` : ""} — doesn’t clear the bar at this number`
-                : ` · no live quote for this market right now`}</span>
-          </span>
-          <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
-            ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
-        </div>`).join("")}
-    </div>` : "";
+  /* The separate orange "Riding from earlier pulls" card was retired on
+     2026-08-20 at Ethan's request — its rows now sit in the recommended
+     box beside the picks, marked in warn colour. One night, one list. */
 
   if (!picks.length && !signals.length && !ridden.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
@@ -1502,7 +1542,6 @@ async function renderBestBets() {
       <span class="sub">— the one designated space for what we’d actually bet. If it isn’t
       in this box, it isn’t a pick.</span></div>
     ${picksBlock}
-    ${riddenBlock}
     ${signalsBlock}`;
 }
 
