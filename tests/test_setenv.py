@@ -21,6 +21,7 @@ a secret.
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -173,6 +174,137 @@ def test_a_secret_can_be_given_without_putting_it_in_history():
     assert "read -rsp" in src, \
         "the prompt no longer reads silently, so the value is echoed"
     assert "$# -ge 2" in src, "there is no prompt path any more"
+
+
+def test_the_cli_tools_read_the_file_the_server_actually_uses():
+    """THE ONE THAT WASTED AN EVENING.
+
+    On the droplet the keys live in /etc/qellys/env and nowhere else —
+    there is no secrets.local on that box. systemd reads it as
+    `EnvironmentFile=` when it starts the SERVICE, and injects it into
+    nothing else. So `python3 launch.py --stripe`, `--stripe-setup` and
+    `--todo`, all of which are run by hand over ssh, saw an empty
+    environment and reported five things missing that were correctly
+    configured three inches away.
+
+    The advice that report then gives — "put the key in the file" — is
+    advice to redo the thing that already worked, which is how somebody
+    ends up convinced the setup is broken when it is fine.
+    """
+    import importlib
+    with Env() as e:
+        with open(e.path, "w", encoding="utf-8") as fh:
+            fh.write("STRIPE_SECRET_KEY=sk_test_fromthesystemfile\n")
+        got = subprocess.run(
+            [sys.executable, "-c",
+             "from engine import secrets; secrets.load_local_secrets();"
+             "import os; print(os.environ.get('STRIPE_SECRET_KEY',''))"],
+            capture_output=True, text=True, cwd=ROOT, timeout=60,
+            env=dict(os.environ, QB_ENV_FILE=e.path))
+        assert "sk_test_fromthesystemfile" in got.stdout, (
+            "the secrets loader does not read the production env file, so "
+            "every CLI check reports config missing that is set: "
+            + (got.stdout + got.stderr)[:400])
+
+
+def test_the_real_environment_still_wins():
+    """Additive only. The service already has these from systemd, and a
+    file that could overwrite them would let a stale line on disk beat
+    what the unit was actually started with."""
+    with Env() as e:
+        with open(e.path, "w", encoding="utf-8") as fh:
+            fh.write("STRIPE_SECRET_KEY=sk_test_fromfile\n")
+        got = subprocess.run(
+            [sys.executable, "-c",
+             "from engine import secrets; secrets.load_local_secrets();"
+             "import os; print(os.environ.get('STRIPE_SECRET_KEY',''))"],
+            capture_output=True, text=True, cwd=ROOT, timeout=60,
+            env=dict(os.environ, QB_ENV_FILE=e.path,
+                     STRIPE_SECRET_KEY="sk_test_fromenviron"))
+        assert "sk_test_fromenviron" in got.stdout
+
+
+def test_an_unreadable_env_file_is_a_quiet_miss_not_a_crash():
+    """/etc/qellys/env is mode 600 and root-owned. A developer running a
+    script as themselves gets a PermissionError, and that must not be a
+    traceback in every tool that touches a key."""
+    with Env() as e:
+        with open(e.path, "w", encoding="utf-8") as fh:
+            fh.write("STRIPE_SECRET_KEY=sk_test_x\n")
+        os.chmod(e.path, 0o000)
+        try:
+            got = subprocess.run(
+                [sys.executable, "-c",
+                 "from engine import secrets; secrets.load_local_secrets();"
+                 "print('survived')"],
+                capture_output=True, text=True, cwd=ROOT, timeout=60,
+                env=dict(os.environ, QB_ENV_FILE=e.path))
+        finally:
+            os.chmod(e.path, 0o600)
+        # Running as root reads it anyway; either way it must not throw.
+        assert "survived" in got.stdout, got.stderr[:400]
+
+
+def test_the_wizard_exists_and_is_runnable():
+    path = os.path.join(ROOT, "deploy", "golive.sh")
+    assert os.path.isfile(path), "deploy/golive.sh is gone"
+    assert os.access(path, os.X_OK), "golive.sh is not executable"
+    got = subprocess.run(["bash", "-n", path], capture_output=True, text=True)
+    assert got.returncode == 0, "golive.sh has a syntax error: " + got.stderr
+
+
+def test_the_wizard_refuses_to_run_without_a_terminal():
+    """It is a conversation. Piped or from cron, every prompt returns
+    immediately and it charges through eight steps answering nothing."""
+    got = subprocess.run(["bash", os.path.join(ROOT, "deploy", "golive.sh")],
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                         timeout=60, env=dict(os.environ, QB_ENV_FILE="/tmp/nope"))
+    assert got.returncode != 0
+    assert "terminal" in got.stdout.lower() + got.stderr.lower()
+
+
+def test_the_wizard_cannot_loop_for_ever_on_a_bad_value():
+    """The first version did. `setenv.sh` fails on a rejected value AND
+    on end-of-input with the same code, so a closed stdin spun it at full
+    speed printing "try again" until the terminal filled."""
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "tries < 3" in src, "the retry loop has no cap again"
+    assert "while true" not in src.split("ask()")[1].split("\n}")[0],         "ask() is an unbounded loop again"
+
+
+def test_the_wizard_passes_the_env_file_through_sudo():
+    """`sudo` strips the environment, so `QB_ENV_FILE=x sudo cmd` writes
+    to /etc/qellys/env instead — fine in production and wrong everywhere
+    else, including in a test, which is how it was found."""
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert 'env QB_ENV_FILE="$ENV_FILE"' in src
+    # …and nothing calls setenv.sh past the helper.
+    body = re.sub(r"(?m)^\s*#.*$", "", src)
+    assert 'sudo "$SETENV"' not in body,         "a direct sudo call would lose the env override"
+
+
+def test_the_wizard_writes_the_price_ids_rather_than_asking_for_them():
+    """Transcribing three price ids is where a swapped pair comes from,
+    and a swapped pair charges the wrong amount without failing."""
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "--stripe-setup --print-env" in src
+    for key in ("STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_SIXMONTH",
+                "STRIPE_PRICE_YEARLY"):
+        assert f'ask {key}' not in src, f"the wizard asks for {key} by hand"
+
+
+def test_the_runbook_says_which_machine_each_command_is_for():
+    """The whole reason this page was rewritten. A command with no
+    location on it gets run wherever the reader happens to be."""
+    with open(os.path.join(ROOT, "docs", "GOLIVE.md"), encoding="utf-8") as fh:
+        doc = fh.read()
+    for marker in ("Mac Terminal", "Droplet", "Browser"):
+        assert marker in doc, f"the runbook never says {marker}"
+    assert "root@ubuntu" in doc,         "it does not show what the droplet prompt looks like"
+    assert "ethancarson@Ethans-MacBook-Air" in doc,         "it does not show what the Mac prompt looks like"
 
 
 def test_the_runbook_has_no_editor_step_left():

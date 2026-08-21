@@ -6542,7 +6542,8 @@ def main() -> None:
         show_prereg()
         return
     if "--stripe" in argv or "--stripe-setup" in argv:
-        _stripe_cli(create="--stripe-setup" in argv)
+        _stripe_cli(create="--stripe-setup" in argv,
+                    print_env="--print-env" in argv)
         return
     if "--seal" in argv:
         # Redact every board already on the public path, now, without
@@ -7065,7 +7066,7 @@ def main() -> None:
         print("\nStopped.")
 
 
-def _stripe_cli(create: bool = False) -> None:
+def _stripe_cli(create: bool = False, print_env: bool = False) -> None:
     """`--stripe` reports; `--stripe-setup` also creates what is missing.
 
     TWO FLAGS AND NOT ONE, because they need different amounts of trust.
@@ -7082,6 +7083,37 @@ def _stripe_cli(create: bool = False) -> None:
     """
     from engine import billing as BI
     from engine import stripeset as SS
+
+    if print_env:
+        # MACHINE-READABLE MODE, for deploy/golive.sh. Bare KEY=VALUE on
+        # stdout and nothing else, so the wizard can write the three price
+        # ids itself instead of asking somebody to copy them out of a
+        # report — which is the step where a swapped pair comes from, and
+        # a swapped pair charges the wrong amount without failing.
+        #
+        # Everything human goes to stderr, so a caller reading stdout gets
+        # only the lines it can act on.
+        sk = os.environ.get(BI.ENV_SECRET, "").strip()
+        if not sk:
+            print(f"{BI.ENV_SECRET} is not set", file=sys.stderr)
+            sys.exit(1)
+        try:
+            res = SS.ensure_catalogue(sk, create=create)
+        except BI.BillingUnavailable as exc:
+            print(f"Stripe would not answer: {exc}", file=sys.stderr)
+            sys.exit(1)
+        problems = []
+        for plan_id in BI.PLAN_ORDER:
+            got = res["prices"].get(plan_id) or {}
+            for problem in got.get("problems") or []:
+                problems.append(f"{BI.PLANS[plan_id]['name']}: {problem}")
+        if problems:
+            for row in problems:
+                print(f"MISMATCH {row}", file=sys.stderr)
+            sys.exit(2)
+        for line in res["env"]:
+            print(line)
+        return
 
     print("\nStripe\n" + "=" * 62)
     checks = SS.preflight()
