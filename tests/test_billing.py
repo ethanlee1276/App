@@ -305,36 +305,48 @@ def test_checkout_and_portal_need_a_signed_in_account():
 
 
 # --- what is switched off, on purpose ----------------------------------------
-def test_nothing_is_gated_yet_and_that_is_written_down():
-    """The plumbing is complete and no feature asks "has this person
-    paid?". Turning a paywall on before Ethan has said what is behind it
-    would lock him out of his own board on an inference."""
-    doc = _read("docs", "BILLING.md")
-    assert "Nothing is charging anyone yet" in doc
-    assert "No feature checks entitlement" in doc
-    # Entitlement is computed and reported, and read by nothing else.
-    #
-    # CODE, NOT PROSE. This grepped whole files, so engine/paddle.py
-    # failed it the day it was added — for explaining in a docstring why
-    # `entitled()` refuses an unknown status. That is the same mistake as
-    # a password check that fires on its own comment about passwords: the
-    # guard should describe behaviour, and a guard that a comment can trip
-    # gets "fixed" by deleting the comment.
-    #
-    # Docstrings and # comments are stripped first, so the billing
-    # PROVIDER modules are still checked properly rather than exempted —
-    # paddle.py passes because it genuinely never calls entitled(), not
-    # because it is on a list.
-    def _code(name):
-        src = _read("engine", name)
-        src = re.sub(r'"""(?:.|\n)*?"""', "", src)
-        src = re.sub(r"'''(?:.|\n)*?'''", "", src)
-        return re.sub(r"(?m)#.*$", "", src)
+def test_what_gates_is_written_down_and_the_record_stays_free():
+    """This used to assert the opposite.
 
-    hits = [f for f in os.listdir(os.path.join(ROOT, "engine"))
-            if f.endswith(".py") and f not in ("billing.py",)
-            and "entitled" in _code(f)]
-    assert not hits, f"something started gating on entitlement: {hits}"
+    Until 2026-08-21 it said "Nothing is charging anyone yet" and checked
+    that NO engine module read entitlement — the plumbing was complete
+    and deliberately not connected, because switching a paywall on before
+    Ethan had said what was behind it would have locked him out of his
+    own board on an inference.
+
+    He has said. The Stripe account is approved and the gate is on, so the
+    test now pins the shape of the thing that replaced it: which check
+    gates, in what order, and what is free regardless.
+    """
+    doc = _read("docs", "BILLING.md")
+    assert "_entitled" in doc, \
+        "the doc does not name the single function that decides access"
+    assert "Record page stays free" in doc, \
+        "the one permanent exemption is no longer written down"
+
+    # THE ORDER IS THE POINT. The flag is read before the account, so a
+    # site with the paywall off behaves as it always did instead of
+    # refusing everyone; a comp address and a redeemed code both come
+    # before the processor, so Ethan can let somebody in without Stripe
+    # being involved at all.
+    src = _read("server.py")
+    i = src.index("def _entitled(")
+    fn = src[i:src.index("\n    def ", i + 1)]
+    for a, b in (("gate.enabled()", "gate.comped("),
+                 ("gate.comped(", "RD.active("),
+                 ("RD.active(", "BI.status_for(")):
+        assert fn.index(a) < fn.index(b), \
+            f"{a} is no longer checked before {b}"
+
+
+def test_the_gate_is_not_a_check_in_front_of_a_file():
+    """A paywall enforced by a check is only as good as the number of
+    places that remember to check. This one is not a check: the file on
+    the public path IS the redacted one, and the full copy is written
+    outside the web root."""
+    doc = _read("docs", "BILLING.md")
+    assert "data/built/" in doc
+    assert "outside the web root" in doc
 
 
 def test_the_unverified_parts_are_named_rather_than_implied_to_work():
@@ -346,11 +358,26 @@ def test_the_unverified_parts_are_named_rather_than_implied_to_work():
 
 
 def test_the_setup_order_is_written_down():
-    """The webhook secret does not exist until the endpoint does, so the
-    steps only work in one order."""
+    """The webhook secret does not exist until the endpoint does, and the
+    endpoint needs a public address, so the steps only work in one order.
+
+    Checked as an ORDERING, not as a list of headings, because the thing
+    that breaks a runbook is somebody moving a step rather than deleting
+    one. The last pair is the one that costs money: the paywall must come
+    after a real test purchase, or the first person to hit the site is
+    also the first person to find out the integration is wrong.
+    """
     doc = _read("docs", "BILLING.md")
-    assert "in this order" in doc
-    assert doc.index("A Product with a recurring Price") < doc.index("The webhook, last")
+    assert "in order" in doc
+    for earlier, later in (
+            ("Get the secret key", "Create the Product and the three Prices"),
+            ("Create the Product and the three Prices", "A public HTTPS address"),
+            ("A public HTTPS address", "The webhook, last"),
+            ("The webhook, last", "Buy something, with a test card"),
+            ("Buy something, with a test card", "Switch to live"),
+            ("Switch to live", "Only then, the paywall")):
+        assert doc.index(earlier) < doc.index(later), \
+            f"'{earlier}' now comes after '{later}' and the runbook does not work"
 
 
 if __name__ == "__main__":

@@ -90,26 +90,156 @@ class BillingUnavailable(RuntimeError):
 
 
 # --- configuration -----------------------------------------------------------
+#: The three plans, and the ONLY place their money lives on this side.
+#:
+#: `web/js/app.js` has a `PLANS` array that draws the same three cards.
+#: These two lists are the same rule with two callers, and
+#: `tests/test_stripe_plans.py` fails if their prices ever disagree — a
+#: page advertising $125 while Checkout charges $225 is not a display bug,
+#: it is a chargeback.
+#:
+#: `months` is what a discount code has to cover to make a term free, and
+#: it is why 6 months is `interval=month, interval_count=6` rather than
+#: some fraction of a year: Stripe bills on the interval it is given, and
+#: "every 6 months" is a real recurring interval there.
+PLANS = {
+    "monthly": {
+        "id": "monthly", "name": "Monthly", "months": 1, "cents": 2500,
+        "interval": "month", "interval_count": 1,
+        "env": "STRIPE_PRICE_MONTHLY", "lookup_key": "qellys_monthly",
+    },
+    "sixmonth": {
+        "id": "sixmonth", "name": "6 months", "months": 6, "cents": 12500,
+        "interval": "month", "interval_count": 6,
+        "env": "STRIPE_PRICE_SIXMONTH", "lookup_key": "qellys_sixmonth",
+    },
+    "yearly": {
+        "id": "yearly", "name": "Yearly", "months": 12, "cents": 22500,
+        "interval": "year", "interval_count": 1,
+        "env": "STRIPE_PRICE_YEARLY", "lookup_key": "qellys_yearly",
+    },
+}
+
+#: Display order, and the fallback when a request names no plan.
+PLAN_ORDER = ("monthly", "sixmonth", "yearly")
+DEFAULT_PLAN = "monthly"
+
+#: What the product is called in Stripe's own catalogue. The dashboard,
+#: the invoice and the customer's card statement all read from this.
+PRODUCT_NAME = "Qellys Books"
+PRODUCT_DESC = ("Subscription access to sports analytics: model "
+                "projections, probability estimates and research tools.")
+
+ENV_SECRET = "STRIPE_SECRET_KEY"
+ENV_WEBHOOK_SECRET = "STRIPE_WEBHOOK_SECRET"
+#: The pre-plan single price. Still read, as `monthly`, so an install
+#: configured before there were three plans keeps working.
+ENV_LEGACY_PRICE = "STRIPE_PRICE_ID"
+
+
+def _env() -> None:
+    from . import secrets as _s
+    _s.load_local_secrets()
+
+
 def keys() -> tuple[str, str, str]:
-    """``(secret_key, webhook_secret, price_id)`` from secrets.local.
+    """``(secret_key, webhook_secret, monthly_price_id)``.
 
     Raises with the setup steps rather than returning blanks: an empty
     key produces a Stripe error about authentication that says nothing
     about what to go and do.
+
+    THE THIRD ELEMENT IS THE MONTHLY PRICE, not "the" price — there are
+    three now. Callers that want a specific plan use `price_for()`. This
+    shape is kept because `configured()` and every existing caller test
+    the same thing through it: can we charge anybody at all.
     """
-    from . import secrets as _s
-    _s.load_local_secrets()
-    sk = os.environ.get("STRIPE_SECRET_KEY", "").strip()
-    wh = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
-    price = os.environ.get("STRIPE_PRICE_ID", "").strip()
+    _env()
+    sk = os.environ.get(ENV_SECRET, "").strip()
+    wh = os.environ.get(ENV_WEBHOOK_SECRET, "").strip()
+    price = _price_env("monthly")
     if not sk or not price:
         raise BillingUnavailable(
-            "Stripe is not set up yet. In the Stripe dashboard: create a "
-            "Product with a recurring Price, then put STRIPE_SECRET_KEY "
-            "and STRIPE_PRICE_ID in secrets.local. Add "
+            "Stripe is not set up yet. Run `python3 launch.py "
+            "--stripe-setup` to create the Product and the three Prices, "
+            "then put STRIPE_SECRET_KEY and the three STRIPE_PRICE_* "
+            "lines it prints into secrets.local. Add "
             "STRIPE_WEBHOOK_SECRET once the webhook endpoint exists. "
             "docs/BILLING.md has the order to do it in.")
     return sk, wh, price
+
+
+def _price_env(plan_id: str) -> str:
+    """The configured price id for a plan, or ``""``.
+
+    Reads the environment on every call rather than caching. Caching
+    would mean a price corrected in secrets.local needs a restart to take
+    effect, and the failure mode of a stale price id is charging the
+    wrong amount.
+    """
+    plan = PLANS.get(plan_id)
+    if not plan:
+        return ""
+    got = os.environ.get(plan["env"], "").strip()
+    if not got and plan_id == "monthly":
+        got = os.environ.get(ENV_LEGACY_PRICE, "").strip()
+    return got
+
+
+def price_for(plan_id: str) -> str:
+    """The Stripe price id to charge for this plan.
+
+    REFUSES AN UNKNOWN PLAN RATHER THAN FALLING BACK. A request naming a
+    plan we do not have is either a typo in our own front end or somebody
+    poking the endpoint, and quietly substituting the monthly price means
+    charging $25 to a person who believes they bought a year.
+    """
+    _env()
+    if plan_id not in PLANS:
+        raise BillingUnavailable(f"No such plan: {plan_id!r}.")
+    got = _price_env(plan_id)
+    if not got:
+        raise BillingUnavailable(
+            f"The {PLANS[plan_id]['name']} plan has no price configured. "
+            f"Set {PLANS[plan_id]['env']} in secrets.local — "
+            "`python3 launch.py --stripe-setup` prints all three.")
+    return got
+
+
+def plan_of(price_id: str) -> str | None:
+    """Which of our plans a price id belongs to, or None.
+
+    Used to label a subscription after the fact. A price id we do not
+    recognise is not an error — it could be a legacy price, or one
+    created by hand in the dashboard — so this returns None rather than
+    guessing, and the caller says "subscribed" instead of naming a term
+    it cannot prove.
+    """
+    if not price_id:
+        return None
+    _env()
+    for pid in PLAN_ORDER:
+        if _price_env(pid) == str(price_id):
+            return pid
+    return None
+
+
+def plan_catalogue() -> list:
+    """The three plans, each marked with whether it can be sold today.
+
+    The page needs this: a plan whose price id is missing must not render
+    a buy button that produces a 502 after the customer has committed.
+    """
+    _env()
+    out = []
+    for pid in PLAN_ORDER:
+        plan = dict(PLANS[pid])
+        plan["ready"] = bool(_price_env(pid))
+        plan["price"] = plan["cents"] / 100.0
+        plan.pop("env", None)
+        plan.pop("lookup_key", None)
+        out.append(plan)
+    return out
 
 
 def configured() -> bool:
@@ -227,14 +357,51 @@ def _form(pairs: dict) -> bytes:
         {k: v for k, v in pairs.items() if v not in (None, "")}).encode()
 
 
+#: How long a double-tap is treated as one click, in seconds.
+#:
+#: Idempotency keys are bucketed by this. Longer is not safer: the key
+#: also decides how soon somebody may deliberately start a SECOND
+#: checkout — after cancelling, or to switch plans — and Stripe replays
+#: the first session's response for 24 hours to a repeated key. Ten
+#: minutes covers a slow phone and a fat thumb without stranding anyone.
+IDEMPOTENCY_WINDOW = 600
+
+
+def idempotency_key(user_id: int, plan_id: str, now: float | None = None) -> str:
+    """The value for Stripe's `Idempotency-Key` HEADER.
+
+    THIS USED TO BE A FORM FIELD NAMED `idempotency_key`, which is not a
+    thing. Stripe reads idempotency from a header; a body parameter by
+    that name is simply not the feature, so the double-tap protection the
+    comment claimed was never switched on.
+
+    It also used to be `qb-checkout-{user_id}` with no time component,
+    which is worse than nothing had it worked: a fixed key per account
+    means Stripe replays that account's FIRST session forever, so
+    somebody who cancelled and came back — or who bought monthly and
+    wanted yearly — would be handed a stale Checkout URL for the old
+    plan, or a dead one, and no error would say why.
+    """
+    now = time.time() if now is None else float(now)
+    bucket = int(now // IDEMPOTENCY_WINDOW)
+    return f"qb-{int(user_id)}-{plan_id}-{bucket}"
+
+
 def checkout_request(secret_key: str, price_id: str, user_id: int,
-                     email: str, success_url: str,
-                     cancel_url: str) -> tuple[str, dict, bytes]:
+                     email: str, success_url: str, cancel_url: str,
+                     plan_id: str = DEFAULT_PLAN,
+                     now: float | None = None) -> tuple[str, dict, bytes]:
     """``(url, headers, body)`` for a Checkout Session.
 
     `client_reference_id` is how the webhook finds its way back to a row
     in our own users table. Without it a completed payment arrives with a
     Stripe customer id and no way to say whose it is.
+
+    The plan is stamped into metadata in BOTH places — on the session and
+    on the subscription — because they are different objects and the
+    later `customer.subscription.updated` events carry only the
+    subscription's own. Stamped one place, the plan is known at purchase
+    and forgotten at the first renewal.
     """
     body = _form({
         "mode": "subscription",
@@ -244,13 +411,24 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
         "cancel_url": cancel_url,
         "client_reference_id": str(int(user_id)),
         "customer_email": email,
-        # Stripe deduplicates on this, so a double-tap on a slow phone
-        # does not create two subscriptions for one person.
-        "idempotency_key": f"qb-checkout-{int(user_id)}",
+        "metadata[plan]": plan_id,
+        "metadata[user_id]": str(int(user_id)),
+        "subscription_data[metadata][plan]": plan_id,
+        "subscription_data[metadata][user_id]": str(int(user_id)),
+        # An address is collected because a card issuer's AVS check wants
+        # one, not because we want the address. Stripe holds it.
+        "billing_address_collection": "auto",
+        # NO `allow_promotion_codes`. Discount codes on this site are
+        # ours (engine/redeem.py) and grant entitlement directly, with no
+        # card and no subscription. Switching Stripe's on too would give
+        # the site two coupon systems that know nothing about each other,
+        # and "why did USFARATHANE work on the account page but not at
+        # checkout" is a support question with no good answer.
     })
     return f"{API}/checkout/sessions", {
         "Authorization": f"Bearer {secret_key}",
         "Content-Type": "application/x-www-form-urlencoded",
+        "Idempotency-Key": idempotency_key(user_id, plan_id, now),
     }, body
 
 
@@ -291,12 +469,41 @@ def _post(url: str, headers: dict, body: bytes, timeout: int = 20) -> dict:
         raise BillingUnavailable(f"Could not reach Stripe: {exc}") from exc
 
 
+def _get(url: str, secret_key: str, timeout: int = 20) -> dict:
+    """A read from Stripe. SAME RULE AS `_post`: the key never escapes.
+
+    Separate from `_post` rather than a mode flag on it, because the two
+    have different failure meanings — a failed read is "we could not
+    check", a failed write may be "we charged somebody and lost the
+    reply" — and a caller that cannot tell them apart retries the wrong
+    one.
+    """
+    req = urllib.request.Request(
+        url, headers={"Authorization": f"Bearer {secret_key}"}, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            said = json.loads(exc.read().decode("utf-8", "replace"))
+            detail = str((said.get("error") or {}).get("message") or "")
+        except Exception:                                # noqa: BLE001
+            detail = ""
+        raise BillingUnavailable(
+            f"Stripe refused the request (HTTP {exc.code})."
+            f"{' ' + detail if detail else ''}") from exc
+    except Exception as exc:                             # noqa: BLE001
+        raise BillingUnavailable(f"Could not reach Stripe: {exc}") from exc
+
+
 def start_checkout(user_id: int, email: str, success_url: str,
-                   cancel_url: str) -> str:
+                   cancel_url: str, plan_id: str = DEFAULT_PLAN) -> str:
     """The Stripe-hosted URL to send the customer to."""
-    sk, _wh, price = keys()
+    sk, _wh, _monthly = keys()
+    price = price_for(plan_id)
     url, headers, body = checkout_request(sk, price, user_id, email,
-                                          success_url, cancel_url)
+                                          success_url, cancel_url, plan_id)
     out = _post(url, headers, body)
     got = out.get("url")
     if not got:
@@ -332,7 +539,17 @@ def read_event(payload: dict) -> dict | None:
         return None
     obj = (((payload or {}).get("data") or {}).get("object") or {})
     out = {"event": kind, "customer_id": None, "subscription_id": None,
-           "user_id": None, "status": None, "period_end": None}
+           "user_id": None, "status": None, "period_end": None,
+           "plan": None}
+    # Stamped by `checkout_request` on both the session and the
+    # subscription, so it survives past the first renewal. Read here
+    # rather than looked up from the price, because a price id we no
+    # longer have in our env — an old one, or one made by hand in the
+    # dashboard — would come back None and blank a plan we already knew.
+    meta = obj.get("metadata")
+    if isinstance(meta, dict):
+        got = str(meta.get("plan") or "")
+        out["plan"] = got if got in PLANS else None
 
     if kind == "checkout.session.completed":
         ref = obj.get("client_reference_id")
@@ -357,6 +574,17 @@ def read_event(payload: dict) -> dict | None:
     # customer.subscription.*
     out["customer_id"] = obj.get("customer")
     out["subscription_id"] = obj.get("id")
+    if not out["plan"]:
+        # No metadata: an older subscription, or one created by hand.
+        # The price id on the first line item still identifies the plan
+        # when it is one of ours, and identifies nothing when it is not,
+        # which `plan_of` reports as None rather than a guess.
+        try:
+            items = ((obj.get("items") or {}).get("data") or [])
+            out["plan"] = plan_of(((items[0] or {}).get("price")
+                                   or {}).get("id"))
+        except (IndexError, AttributeError, TypeError):
+            out["plan"] = None
     out["status"] = ("canceled" if kind.endswith(".deleted")
                      else str(obj.get("status") or "none"))
     end = obj.get("current_period_end")
@@ -388,6 +616,14 @@ def init(conn) -> None:
         seen_at  REAL NOT NULL
       );
     """)
+    # `plan` arrived after the table did, so it is added rather than
+    # declared. ALTER TABLE ADD COLUMN throws when the column is already
+    # there and there is no IF NOT EXISTS for it in SQLite, so the
+    # existing columns are read first — cheaper and clearer than
+    # catching an exception whose message we would have to match on.
+    have = {r[1] for r in conn.execute("PRAGMA table_info(subscriptions)")}
+    if "plan" not in have:
+        conn.execute("ALTER TABLE subscriptions ADD COLUMN plan TEXT")
     conn.commit()
 
 
@@ -437,16 +673,20 @@ def apply_event(conn, event: dict) -> bool:
         return False
     conn.execute(
         "INSERT INTO subscriptions (user_id, customer_id, subscription_id, "
-        "status, period_end, updated_at) VALUES (?,?,?,?,?,?) "
+        "status, period_end, plan, updated_at) VALUES (?,?,?,?,?,?,?) "
         "ON CONFLICT(user_id) DO UPDATE SET "
         "  customer_id=COALESCE(excluded.customer_id, customer_id), "
         "  subscription_id=COALESCE(excluded.subscription_id, subscription_id), "
         "  status=excluded.status, "
         "  period_end=COALESCE(excluded.period_end, period_end), "
+        # COALESCE, so an event that carries no plan — an
+        # invoice.payment_failed, say — leaves the known one alone
+        # instead of blanking the term off the account page.
+        "  plan=COALESCE(excluded.plan, plan), "
         "  updated_at=excluded.updated_at",
         (int(uid), event.get("customer_id"), event.get("subscription_id"),
          str(event.get("status") or "none"), event.get("period_end"),
-         time.time()))
+         event.get("plan"), time.time()))
     conn.commit()
     return True
 
@@ -464,12 +704,14 @@ def status_for(conn, user_id: int, describe_with=None) -> dict:
     """
     say = describe_with or describe
     row = conn.execute(
-        "SELECT customer_id, subscription_id, status, period_end "
+        "SELECT customer_id, subscription_id, status, period_end, plan "
         "FROM subscriptions WHERE user_id=?", (int(user_id),)).fetchone()
     if row is None:
-        return {"status": "none", "entitled": False,
-                "note": say("none"), "customer_id": None}
+        return {"status": "none", "entitled": False, "plan": None,
+                "plan_name": None, "note": say("none"), "customer_id": None}
     st, end = row["status"], row["period_end"]
-    return {"status": st, "period_end": end,
+    plan = row["plan"] if "plan" in row.keys() else None
+    return {"status": st, "period_end": end, "plan": plan,
+            "plan_name": (PLANS[plan]["name"] if plan in PLANS else None),
             "entitled": entitled(st, end), "note": say(st, end),
             "customer_id": row["customer_id"]}

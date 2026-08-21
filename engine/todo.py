@@ -405,6 +405,47 @@ def config_items(env=None) -> list[Item]:
                          if comps else "; set QB_COMP_EMAILS before ever turning "
                          "it on")))
 
+    # --- Stripe -------------------------------------------------------
+    #
+    # THE ORDER THESE FAIL IN IS THE ORDER THEY MATTER IN, and the worst
+    # one is silent: with the paywall ON and the webhook secret missing,
+    # the endpoint refuses every event, so people can pay and never get
+    # in. Nothing errors on this side — the money arrives, Stripe's
+    # dashboard shows a failing endpoint, and the site just looks like
+    # nobody is subscribing.
+    try:
+        from . import stripeset as _ss
+        stripe_checks = _ss.preflight()
+    except Exception:                                        # noqa: BLE001
+        stripe_checks = []
+    missing = [h for ok, h, _ in stripe_checks if not ok]
+    if not stripe_checks:
+        pass
+    elif not missing:
+        out.append(Item("config", "Stripe", DONE,
+                        "keys, three prices and the webhook secret are all set"))
+    elif len(missing) == len(stripe_checks) - 1:
+        # Nothing at all configured. That is a state, not a fault: the
+        # site runs free and says so.
+        out.append(Item("config", "Stripe", TODO,
+                        "not configured on this machine — nobody can be "
+                        "charged", "python3 launch.py --stripe"))
+    else:
+        out.append(Item("config", "Stripe", TODO,
+                        f"{len(missing)} piece(s) missing: "
+                        + "; ".join(missing[:3])
+                        + ("…" if len(missing) > 3 else ""),
+                        "python3 launch.py --stripe"))
+    if paywall in ("1", "true", "yes", "on") and stripe_checks and any(
+            "WEBHOOK" in h for h in missing):
+        out.append(Item(
+            "config", "Stripe webhook", TODO,
+            "the paywall is ON and STRIPE_WEBHOOK_SECRET is missing — the "
+            "webhook endpoint refuses every event, so a customer can pay "
+            "and never get access, and nothing on this side reports it",
+            "add the endpoint in Stripe, then put its signing secret in "
+            "/etc/qellys/env and restart"))
+
     if env.get("ODDS_API_KEY"):
         out.append(Item("config", "ODDS_API_KEY", DONE, "set"))
     else:

@@ -12181,26 +12181,30 @@ window.acctAuth = async function (btn, mode) {
    sells a subscription; the day something becomes paid is a decision, not
    a deployment.
 
-   AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Paddle
-   page; Manage billing hands off to Paddle's portal, which is also where
-   cancelling happens. A company that builds its own cancel flow is
-   deciding how hard it is to leave, and this one is not going to be
-   that. */
-/* Render 21's plan cards, in the only honest form this site can print.
-   Their page shows three tiers with prices on them. There is ONE real
-   plan (a single Paddle price) and the server does not know its amount
-   — the number lives at Paddle, which is the only place it is true —
-   so: two cards, no invented tiers, no invented prices, and the split
-   between them is read straight off the gate (engine/gate.py's
-   FREE_FILES vs PAID_FILES), not off a marketing page. */
+   AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Stripe
+   Checkout page; Manage billing hands off to Stripe's customer portal,
+   which is also where cancelling happens. A company that builds its own
+   cancel flow is deciding how hard it is to leave, and this one is not
+   going to be that. */
+/* Render 21's plan cards. This card is the FREE-vs-PAID split, not the
+   price list: the split is read straight off the gate (engine/gate.py's
+   FREE_FILES vs PAID_FILES) rather than off a marketing page, and the
+   three prices live on the plans page, which is one screen away.
+
+   ONE PRICING SURFACE, DELIBERATELY. Printing $25 / $125 / $225 here too
+   would be a second place for them to be wrong, and the failure is not
+   cosmetic — a page advertising one number while Checkout charges
+   another is a chargeback. So the paid card sends people to the plans
+   page and names no figure. */
 function billPlansHTML(s) {
   const line = (ok, t) => `<li class="${ok ? "yes" : "no"}">${
     icon(ok ? "check" : "dash", 13)} <span>${t}</span></li>`;
   const entitled = !!(s && s.entitled);
   return `
     <div class="section-title">What an account costs
-      <span class="sub">— the free half is free forever; the price of the
-      other half is shown by Paddle before you agree to anything.</span></div>
+      <span class="sub">— the free half is free forever; the other half is
+      three plans, and you see the exact total before you enter a
+      card.</span></div>
     <div class="plan-grid">
       <div class="card plan${entitled ? "" : " current"}">
         <div class="plan-name">Free</div>
@@ -12218,7 +12222,7 @@ function billPlansHTML(s) {
       <div class="card plan raised${entitled ? " current" : ""}">
         <div class="plan-band">The whole board</div>
         <div class="plan-name">Member</div>
-        <div class="plan-price">Paddle<span>shows the price at checkout</span></div>
+        <div class="plan-price">$25<span>a month, or less on a longer plan</span></div>
         <ul class="plan-list">
           ${line(true, "Everything in Free")}
           ${line(true, "Every priced pick, with its edge and the reasons")}
@@ -12228,11 +12232,11 @@ function billPlansHTML(s) {
         </ul>
         ${entitled
           ? `<div class="plan-cta plan-cur">Your plan now</div>`
-          : `<button class="btn plan-btn" onclick="billSubscribe(this)">See the price</button>`}
+          : `<button class="btn plan-btn" onclick="billSeePlans()">See the plans</button>`}
       </div>
     </div>
     <p class="rank-help">No card number ever reaches this server — checkout
-      and cancellation both happen on Paddle’s own pages. The site still
+      and cancellation both happen on Stripe’s own pages. The site still
       takes no bets and holds no money.</p>`;
 }
 
@@ -12303,9 +12307,10 @@ const FAQ = [
    "a six-month or yearly plan runs to the date you paid through. Nothing " +
    "auto-renews without telling you first."],
   ["What payment methods do you accept?",
-   "Checkout is handled by Paddle, who are the merchant of record — they " +
-   "take the payment and we never see or store a card number. Which cards " +
-   "and wallets appear is decided on their page, not ours."],
+   "Checkout runs on Stripe. Card details are typed on Stripe\u2019s own " +
+   "page and never reach this server \u2014 we store a customer id and " +
+   "whether the subscription is active, and nothing else about the card. " +
+   "Which cards and wallets appear is decided there, not here."],
   ["Is there a free trial?",
    "There is no trial, and there is something better: the Record page is " +
    "free and always will be. Every pick is graded in public, wins and " +
@@ -12436,8 +12441,9 @@ function paywallHTML(rec, status) {
         <summary>${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`).join("")}</div>
 
     <footer class="pw-foot">
-      <p><b>Checkout is handled by Paddle</b>, the merchant of record. Card
-        details go to them and never touch this server.</p>
+      <p><b>Checkout is handled by Stripe.</b> Card details are typed on
+        their page and never touch this server. Cancel any time from your
+        account — it opens Stripe’s own portal.</p>
       <p class="pw-legal">This site publishes a model’s estimates. It is
         not betting advice. You must be 21 or older to bet. Never bet money
         you cannot afford to lose — if gambling stops being fun, free and
@@ -12479,6 +12485,46 @@ async function paywallCheck() {
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
 }
 
+/* ---- coming back from Stripe -----------------------------------------
+   THE GAP BETWEEN PAYING AND BEING ENTITLED IS REAL, and it is the one
+   moment this whole flow can feel broken. Stripe redirects the browser
+   back the instant the card clears; entitlement moves when the SIGNED
+   WEBHOOK arrives, which is a separate request over a separate
+   connection. Usually that is under a second. It is not always, and the
+   two are not ordered.
+
+   So `?paid=1` is treated as "a payment probably just happened", never as
+   proof of one — the browser saying "I paid" is a claim from an
+   untrusted party, and anybody can type that URL. It grants nothing. All
+   it does is poll the real status for a few seconds before letting the
+   page draw, so somebody who genuinely just paid does not land on a wall
+   telling them to subscribe.
+
+   Gives up after ~12 seconds and says what to do, rather than spinning
+   for ever: at that point something is actually wrong (the webhook is
+   not configured, or Stripe cannot reach us) and a spinner would hide
+   it. */
+const PAID_WAIT_MS = 12000;
+const PAID_POLL_MS = 1200;
+
+async function paidReturnWait() {
+  if (!new URLSearchParams(location.search).has("paid")) return false;
+  // Take it out of the URL immediately, so a refresh or a shared link is
+  // an ordinary page load and this never runs twice.
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("paid");
+    history.replaceState(null, "", u.toString());
+  } catch (e) {}
+  const until = Date.now() + PAID_WAIT_MS;
+  while (Date.now() < until) {
+    await paywallCheck();
+    if (_pwStatus && _pwStatus.entitled) return true;
+    await new Promise((r) => setTimeout(r, PAID_POLL_MS));
+  }
+  return false;
+}
+
 /* ========================= CHECKOUT =========================
    Built to the render Ethan sent (a competitor's checkout, 2026-08-20):
    order summary on the left, what you are buying on the right, the
@@ -12489,10 +12535,15 @@ async function paywallCheck() {
    card box are Stripe's iframe, running on Stripe's origin. That is the
    only acceptable arrangement: a card number typed into a field this
    repo serves would put us inside PCI scope, and this codebase's
-   standing rule is that card details never touch this server. So the
-   payment block below is a SLOT. Whoever the processor turns out to be
-   drops their element into it, and until then it says so plainly rather
-   than drawing a convincing box that does nothing.
+   standing rule is that card details never touch this server.
+
+   SO THIS PAGE HANDS OFF RATHER THAN EMBEDS. The button below asks our
+   server for a Checkout Session and sends the browser to the URL Stripe
+   returns. The whole card step happens on Stripe's origin and comes back
+   here as `?paid=1`. Embedding their Elements would have looked more
+   like the render and would have put a card field on our page for no
+   gain — Checkout already carries Link, wallets and 3-D Secure, none of
+   which we would have to maintain.
 
    A HUNDRED PERCENT OFF NEEDS NO PROCESSOR AT ALL, which is why this
    page is worth having today. Apply a code that covers the whole term
@@ -12549,12 +12600,17 @@ function checkoutHTML() {
         ` : `
           <div class="co-pay" id="co-pay">
             <div class="co-payhead">Payment</div>
-            <p class="co-note">Card payment is not switched on yet — we are
-              still settling which processor handles it. When it is, the card
-              form appears here and it belongs to them: card details are typed
-              on the processor’s own secure field and never reach this server.</p>
-            <p class="co-note">If you have a code, enter it below and it
-              applies straight away.</p>
+            <button class="btn primary co-go" data-plan="${escapeAttr(pl.id)}"
+                    onclick="coPay(this)">
+              Continue to secure checkout — $${pl.price}</button>
+            <p class="co-note" id="co-pay-note"></p>
+            <p class="co-note">Your card is entered on Stripe’s own page,
+              not this one. Nothing about it reaches this server — we keep
+              a customer id and whether the subscription is active, and
+              that is the whole record.</p>
+            <p class="co-note">Cancel any time from your account page, which
+              opens Stripe’s portal. A plan you cancel runs to the date you
+              have already paid through.</p>
           </div>
         `}
 
@@ -12666,10 +12722,10 @@ async function renderBilling() {
   } catch (e) { slot.innerHTML = ""; return; }
   if (!s || !s.signed_in) { slot.innerHTML = ""; return; }
   /* THE CODE BOX DOES NOT DEPEND ON THE PROCESSOR, and the old shape did:
-     an unconfigured Paddle returned early and took the whole panel with
-     it. A redeemed code involves no money and no processor, so it has to
-     survive that — it is the ONLY way in while Paddle is still being set
-     up, which is exactly the state the site is in today. */
+     an unconfigured processor returned early and took the whole panel
+     with it. A redeemed code involves no money and no processor, so it
+     has to survive that — it is the only way in before the Stripe keys
+     are on the box, and it stays the way Ethan comps somebody after. */
   const codes = s.codes || {};
   slot.innerHTML = (s.configured ? `
     <div class="acct-row">
@@ -12678,13 +12734,13 @@ async function renderBilling() {
       ${s.entitled || s.customer_id
         ? `<button class="btn ghost" onclick="billPortal(this)">Manage billing</button>`
         : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`}
-      ${s.live === false ? `<span class="chip warn">Paddle sandbox —
+      ${s.live === false ? `<span class="chip warn">Stripe test mode —
         no real money moves</span>` : ""}
     </div>
     ${billPlansHTML(s)}`
   : `<p class="rank-help">${s.paywall
-      ? `Card payment is not switched on yet. Access is by code for now — if
-         you have one, enter it below.`
+      ? `Card payment is not switched on on this server yet. Access is by
+         code for now — if you have one, enter it below.`
       : `Everything is free right now, so there is nothing to pay for. A code
          still works and starts its clock from the day you enter it.`}</p>`)
     + codeBoxHTML(codes);
@@ -12747,18 +12803,19 @@ window.redeemCode = async function (btn) {
   }
 };
 
-async function _billGo(btn, path) {
+async function _billGo(btn, path, payload) {
   const was = btn.textContent;
-  btn.textContent = "Opening Paddle…";
+  btn.textContent = "Opening secure checkout…";
   btn.disabled = true;
   try {
     const r = await fetch(`/api/billing/${path}`, {
       method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" }, body: "{}",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
     });
     const d = await r.json();
     if (!r.ok || !d.url) throw new Error((d && d.error) || `Failed (${r.status}).`);
-    // Paddle's own page, in this tab: it is a payment flow and a popup
+    // Stripe's own page, in this tab: it is a payment flow and a popup
     // blocker eating it would look like a broken button.
     location.href = d.url;
   } catch (e) {
@@ -12777,8 +12834,64 @@ window.coStart = function (btn) {
   window.scrollTo({ top: 0, behavior: "auto" });
 };
 
-window.billSubscribe = (btn) => _billGo(btn, "checkout");
+window.billSubscribe = (btn) => _billGo(btn, "checkout",
+                                       { plan: (_coPlan || PLANS[0]).id });
 window.billPortal = (btn) => _billGo(btn, "portal");
+
+/* The account card does not price anything — one pricing surface, and it
+   is the plans page. This just goes there. */
+window.billSeePlans = function () {
+  renderPaywall();
+  _switchViewNow("paywall", false, 0);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+/* Buy. The one button on this site that spends somebody's money.
+   ---------------------------------------------------------------------
+   THE PLAN IS READ OFF THE BUTTON, not off `_coPlan`. They are the same
+   value today and they are not the same KIND of value: the dataset
+   attribute is what the person actually clicked, and `_coPlan` is module
+   state that a stray `coStart` or a re-render could have moved underneath
+   them. When the two could ever disagree, charge for the one they saw.
+
+   SIGNED OUT IS NOT AN ERROR, it is a step. The server answers 401 with
+   "sign in first", and printing that verbatim leaves somebody staring at
+   a checkout page with no way forward — so it is turned into a sentence
+   that says where to go, and the account view is opened for them. */
+window.coPay = async function (btn) {
+  const note = document.getElementById("co-pay-note");
+  const say = (t) => { if (note) note.textContent = t; };
+  const plan = btn.dataset.plan || (_coPlan || PLANS[0]).id;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Opening secure checkout…";
+  say("");
+  try {
+    const r = await fetch("/api/billing/checkout", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+    });
+    const d = await r.json().catch(() => null);
+    if (r.status === 401) {
+      say("Sign in first — your subscription has to attach to an account. "
+        + "Opening that now; come back here when you are in.");
+      setTimeout(() => { _switchViewNow("account", false, 0); }, 900);
+      btn.disabled = false; btn.textContent = was;
+      return;
+    }
+    if (!r.ok || !d || !d.url) {
+      throw new Error((d && d.error) || `Checkout could not start (${r.status}).`);
+    }
+    // Stripe's own page, in this tab. A popup blocker eating a payment
+    // flow looks exactly like a broken button.
+    location.href = d.url;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = was;
+    say(String((e && e.message) || e));
+  }
+};
 
 window.acctChangePassword = async function (btn) {
   const card = btn.closest(".card");
@@ -12912,7 +13025,7 @@ function acctScreenHTML() {
     ${acctSignInHTML()}
     <ul class="acct-assure">
       <li>The site takes no bets and never holds your money.</li>
-      <li>Card details go to Paddle, never to this server.</li>
+      <li>Card details go to Stripe, never to this server.</li>
       <li>Delete the account whenever you like, from this page.</li>
     </ul>
     ${legacy}
@@ -20491,7 +20604,12 @@ async function renderLiveBoard() {
      the plans". Asked of the server, because the client is not the thing
      that decides — and does not need to be, since every board it can
      reach was already redacted on the way out. */
-  paywallCheck().then((walled) => {
+  /* `paidReturnWait` resolves immediately unless `?paid=1` is on the
+     URL, in which case it holds for up to twelve seconds waiting for the
+     webhook to land. That wait is the difference between "you are in"
+     and "please subscribe" for somebody whose card cleared four seconds
+     ago, and it grants nothing on its own — see the function. */
+  paidReturnWait().then(() => paywallCheck()).then((walled) => {
     if (!walled) return;
     document.body.classList.add("walled");
     renderPaywall();

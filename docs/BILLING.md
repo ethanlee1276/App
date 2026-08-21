@@ -3,158 +3,208 @@
 Ethan, 2026-08-15: *"we will be accepting money for people to use the
 website once it is complete."*
 
-Built 2026-08-15. **Nothing is charging anyone yet, and nothing is gated
-yet** — see "What is switched off" below. This page is what to do when you
-want it live.
+**The processor is Stripe. The account is live, the code is wired to it,
+and the only thing between here and taking money is putting four values
+into a config file on the droplet.** This page is the runbook for that,
+in the order the steps actually work in.
 
 ---
 
-## Turning it on — Ethan, 2026-08-20
+## What it costs, and where those numbers live
 
-*"lets get the pay wall going. i want it 100% full force so we can start
-charging for the site."*
+| Plan | Price | Billed |
+|---|---|---|
+| Monthly | $25 | every month |
+| 6 months | $125 | every 6 months |
+| Yearly | $225 | every year |
 
-**The switch works today. Charging cards does not, and the gap between
-those two sentences is the whole of this section.**
+Every plan is the same product. Length of commitment is the only axis —
+a tier that withheld features would need a second entitlement model and a
+second way to be wrong about what somebody paid for.
 
-### What you can do right now
-
-Switch the gate on and let people in with **codes**. A code is a real
-entitlement with no processor behind it (`engine/redeem.py`), so it works
-with Paddle still unbuilt. On the droplet, in `/etc/qellys/env`:
-
-```
-QB_COMP_EMAILS=ethanlee1276@gmail.com
-QB_CODES=USFARATHANE:12:100
-QB_PAYWALL=1
-```
-
-then **two** commands, not one:
-
-```bash
-sudo systemctl restart qellys
-cd /srv/qellys && python3 launch.py --seal
-```
-
-The restart alone is not enough, and this is the trap. `redact()` runs
-inside `publish()`, so turning the flag on changes what the NEXT build
-writes and does not touch one file already on disk. Measured 2026-08-20
-by running the real server with the flag on and curling the picks file:
-it returned all 293 recommendations. A restart does rebuild most boards,
-so the site mostly seals itself — "mostly" and "by accident" are not a
-paywall, and a board whose build fails stays public forever.
-
-`launch.py --seal` strips every board on the public path immediately,
-prints what it removed, and exits non-zero if anything still carries a
-paid row. `launch.py --todo` checks the same thing on every run.
-
-**`QB_COMP_EMAILS` FIRST, IN THAT ORDER, ALWAYS.** Setting `QB_PAYWALL=1`
-with an empty comp list locks you out of your own board and there is no
-account that can pay to get back in. `python3 launch.py --todo` checks
-that ordering and will say so.
-
-`USFARATHANE:12:100` is `CODE:months:max_uses` — twelve months, a hundred
-accounts. Change the cap or add more codes as a comma-separated list. A
-redemption is one per account, cannot be re-run when it lapses, and the
-attempt limiter stops anyone guessing at the rest.
-
-### What still stands between you and money
-
-None of this is code, and none of it is something I can finish:
-
-1. **A Paddle account, and a real test webhook sent through it.** The
-   signature verifier in `engine/paddle.py` was written from memory with
-   the API unreachable and is flagged UNVERIFIED in the file. It is the
-   one place where being wrong is both silent and dangerous: a verifier
-   that wrongly accepts is a free-subscription generator, and one that
-   wrongly rejects loses payments nobody sees fail.
-2. **The LLC and a business bank account.** Paddle pays out to a business.
-3. **Phase 0 in `docs/LAUNCH.md`** — commercial-use terms for around
-   twenty-five data feeds, and the Michigan/MGCB question. Charging for a
-   product built on feeds whose terms forbid commercial use is the kind
-   of problem that arrives as a letter, not as a bug.
-
-Until those are done the honest configuration is **paywall on, codes and
-comps as the way in**. That is a real gate — the boards are genuinely
-redacted for everyone else — and it is the state the code is built for.
-
-### Checking it worked
-
-```
-curl -s https://qellysbook.com/data/recommendations.json | head -c 400
-```
-
-Signed out, that should show the schedule and a `locked` block rather
-than picks. If it still shows picks, the flag did not take: check the env
-file and that the restart actually happened.
+**These numbers are stated in two places and they must agree.**
+`engine/billing.PLANS` decides what Stripe charges; the `PLANS` array in
+`web/js/app.js` decides what the page advertises. Nothing connects them at
+runtime — the browser sends a plan *id* and the server looks up a price by
+that id — so they can drift apart silently and the site keeps working. It
+just advertises $125 and charges $225, which is a chargeback the customer
+is right about. `tests/test_stripe_plans.py` parses the JavaScript and
+compares every number, both directions. **If you change a price, change
+both.**
 
 ---
 
-## The processor is Paddle, not Stripe
+## Setting it up — the whole thing, in order
 
-**Stripe said no**, on the category rather than on anything we do
-(Ethan, 2026-08-15: *"no we cant use stripe so we gotta find a different
-alternative"*). Paddle is the replacement, and the reasoning is worth
-keeping because the alternatives look superficially reasonable:
+The order matters: the webhook secret does not exist until the endpoint
+does, and the endpoint needs a public address.
 
-* **PaymentCloud / PayKings — rejected.** They are high-risk merchant
-  account brokers. They advertise to gambling-adjacent businesses because
-  they charge for it: 4–6% plus a rolling reserve and a multi-year
-  contract, for what is factually a software subscription. We would be
-  buying gambling-merchant pricing for a SaaS product.
-* **Adyen / Nuvei — right destination, wrong stage.** Both genuinely
-  handle regulated verticals and both underwrite you properly. Both also
-  want enterprise volume and a trading history we do not have. Nuvei is
-  the fallback if Paddle declines.
-* **Worldpay** — will probably take us, but it is a traditional acquirer:
-  contracts, PCI paperwork, and a developer experience a decade behind.
+### 1. Get the secret key
 
-**Paddle is a merchant of record.** They are the legal seller; they take
-the payment, own the risk assessment, handle sales tax and VAT, and pay us
-out. Two things follow. The category question is theirs and already
-answered, so we are not re-litigating "sports betting" with every
-processor. And digital-goods sales tax across fifty states never becomes
-our problem. The price is roughly 5% + 50¢ against Stripe's 2.9% + 30¢ —
-about two points for someone else to own risk and tax.
+Stripe dashboard → Developers → API keys → **Secret key**.
 
-**How to describe the product when applying**, because the wording is what
-gets screened: *subscription access to sports analytics software; no
-wagering, no funds held, no payouts*. `docs/ACCOUNTS.md` and the Record
-page are the supporting evidence, and both are accurate.
+Use the **test** key (`sk_test_…`) first, all the way through step 6. Test
+and live are the same Stripe account distinguished by that prefix, so
+going live later is one line and nothing else moves. The billing card
+shows a "Stripe test mode" chip so you can tell at a glance which one is
+loaded.
 
-### What survived the switch, and what did not
+Put it in `secrets.local` (laptop) or `/etc/qellys/env` (droplet):
 
-The split was deliberate. `engine/billing.py` holds everything about what
-a payment **means** — which statuses grant access, the paid-through date,
-the replay guard, the schema, `status_for`. `engine/paddle.py` holds only
-the processor half, and its `read_event` returns the identical dict, so
-the storage layer cannot tell which processor produced it. A test asserts
-those two shapes stay equal, because a silent divergence there loses a
-field and nobody notices until a subscription goes missing.
+```
+STRIPE_SECRET_KEY=sk_test_...
+```
 
-The Stripe functions are still in `billing.py`. They are not wired to
-anything and are kept in case Paddle also declines — deleting them would
-throw away the working half of a day.
+### 2. Create the Product and the three Prices
 
-### ⚠️ Two things that are NOT done
+```
+python3 launch.py --stripe-setup
+```
 
-**The signature scheme is unverified.** `paddle.verify_signature` was
-written from memory: the dev container's egress blocks
-`developer.paddle.com` and `api.paddle.com`, so it could not be checked
-against their documentation or a real payload. The tests prove the
-construction is self-consistent and has the properties a verifier needs —
-accepts a correctly signed body, rejects a changed byte, a changed
-timestamp, a stale one, and never compares digests with `==`. They do
-**not** prove it is Paddle's construction. **First thing after the account
-exists:** send a test webhook from the dashboard, confirm it is accepted,
-then change one byte and confirm it is refused. A verifier that is wrong
-in the accepting direction is indistinguishable from a working one.
+This creates them in your Stripe account and prints three lines to paste.
+**Do not transcribe price ids from the dashboard by hand.** A swapped pair
+does not fail; it charges the wrong amount to somebody who chose the other
+plan, and nothing anywhere reports it.
 
-**Paddle's checkout needs a CSP change.** Their overlay runs Paddle.js
-loaded from `cdn.paddle.com`, and our `script-src` is `'self'`. So the
-checkout will silently not appear until that host is allowed — exactly
-the failure the Rocket Radar charts had. Add it when the integration
-lands, with the same rule as `frame-src`: name the host, never `https:`.
+It is safe to run twice — every price carries a `lookup_key`, which Stripe
+enforces as unique, so a second run finds what exists and creates nothing.
+It never edits an existing price: Stripe prices are immutable on purpose,
+since a price somebody is subscribed to must not change under them. If one
+disagrees with `billing.PLANS` it says so and stops.
+
+Paste what it prints:
+
+```
+STRIPE_PRICE_MONTHLY=price_...
+STRIPE_PRICE_SIXMONTH=price_...
+STRIPE_PRICE_YEARLY=price_...
+```
+
+### 3. A public HTTPS address
+
+Stripe has to reach the webhook, so `localhost` will not do. The droplet
+already has one (`qellysbook.com`). On a laptop, `tailscale serve --bg
+8000` prints one — and you need HTTPS for accounts anyway, since passwords
+are refused over cleartext (`docs/ACCOUNTS.md`).
+
+If the site answers on more than one hostname, pin the return trip:
+
+```
+QB_SITE_URL=https://qellysbook.com
+```
+
+Without it the address Stripe sends the customer back to is whatever they
+typed — which for somebody who arrived on a bare IP is a certificate
+warning after they have paid.
+
+### 4. The webhook, last
+
+Developers → Webhooks → **Add endpoint**, pointing at
+
+```
+https://qellysbook.com/api/billing/webhook
+```
+
+subscribed to exactly these events:
+
+```
+checkout.session.completed
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+invoice.payment_failed
+```
+
+Copy its **signing secret** (`whsec_…`) in as `STRIPE_WEBHOOK_SECRET`, and
+restart.
+
+**Until that secret is set, the endpoint refuses every event.** That is
+deliberate — an unsigned webhook that gets accepted is a free-subscription
+button for whoever finds the URL. But understand what it means with the
+paywall on: **people can pay and never get access**, the money arrives,
+Stripe's dashboard shows a failing endpoint, and this side reports
+nothing. `launch.py --todo` calls that state out by name for exactly this
+reason.
+
+### 5. Check what the server sees
+
+```
+python3 launch.py --stripe
+```
+
+Reports the key and its mode, all three prices, the webhook secret and the
+return URL. It never prints a key value — a key in a terminal is a key in
+a scrollback buffer, a screenshot and a support thread.
+
+### 6. Buy something, with a test card
+
+**This is the step that has no substitute.** Everything above can be
+correct while the integration is broken, because the pieces are tested in
+isolation and a verifier that works and is never called looks exactly like
+one that works.
+
+With the test key loaded, on the real site: sign in, pick a plan, pay with
+
+```
+4242 4242 4242 4242   any future expiry   any CVC   any ZIP
+```
+
+Then check three things:
+
+1. you land back on the site and it lets you in — within a second or two,
+   not after a refresh;
+2. Stripe → Developers → Webhooks shows the delivery **succeeded**;
+3. your account page says which plan you are on.
+
+If (1) fails but (2) succeeded, the return-trip poll is the suspect. If
+(2) failed, it is the signature or the URL, and Stripe shows you the
+response body.
+
+### 7. Switch to live
+
+Replace `STRIPE_SECRET_KEY` with the `sk_live_…` key, re-run
+`--stripe-setup` (the live account has its own separate catalogue, so it
+creates the three prices again and prints live price ids), swap those in,
+add a webhook endpoint in the live dashboard and swap its secret in.
+Restart. `launch.py --stripe` should say LIVE.
+
+### 8. Only then, the paywall
+
+`QB_PAYWALL=1`. **`QB_COMP_EMAILS` must contain your own address first**,
+or the first thing the paywall does is lock you out of your own board.
+Then `python3 launch.py --seal`, because turning the flag on changes what
+the *next* build writes and touches nothing already on disk.
+
+---
+
+## Discount codes are ours, not Stripe's
+
+`engine/redeem.py` grants entitlement directly for a number of months. No
+card, no subscription, nothing to cancel. `USFARATHANE` is 12 months at
+100%.
+
+Stripe's own promotion codes are **deliberately switched off**
+(`allow_promotion_codes` is absent from the Checkout request). Two coupon
+systems that know nothing about each other makes "why did my code work on
+the account page but not at checkout" a question with no good answer.
+
+A code that covers the whole term means there is nothing to charge, so
+checkout skips the processor entirely and writes the grant. A code that
+covers *less* than the term says so and does not pretend to be free.
+
+---
+
+## Sales tax is ours now
+
+This is the one real cost of Stripe over a merchant of record. Paddle
+would have been the legal seller and would have handled digital-goods
+sales tax across fifty states. **Stripe is a processor, not a seller — we
+are the seller.** Prices are set `tax_behavior: inclusive`, so the price on
+the page is the price charged and nothing is added at checkout.
+
+Registration thresholds are a real obligation and not a code problem.
+`docs/LAUNCH.md` Phase 0 has it alongside the other things that need an
+accountant rather than a commit.
 
 ---
 
@@ -236,19 +286,25 @@ Card `4242 4242 4242 4242`, any future expiry, any CVC.
 
 ---
 
-## What is switched off
+## What gates, and what stays free
 
-**No feature checks entitlement.** The plumbing is complete and the status
-is real, but nothing anywhere asks "has this person paid?" before
-answering. That is deliberate rather than unfinished: the site is free
-today, and switching a paywall on before you have said what is behind it
-would lock you out of your own board on the strength of an inference.
+**`server._entitled` is the one check**, and the order inside it matters:
+the paywall flag first, then a comped address, then a redeemed code, then
+the subscription. A site running with the flag off behaves exactly as it
+did before any of this existed, rather than refusing everyone.
 
-When you decide, the check is one call — `billing.status_for(conn, uid)`
-returns `entitled` — and the decision worth making first is what stays
-free. A tout site that hides its record behind a paywall is asking to be
-trusted about the one number it will not show, and this project's
-positioning is the opposite of that (`docs/COMPETITIVE_RECIPE.md`).
+The gate is not a check in front of a file, though — that would be a
+decoration. `engine/gate.py` publishes the **redacted board to the public
+path** and keeps the full one in `data/built/`, outside the web root.
+There is no full copy in the served tree to leak.
+`tests/test_paywall_bypass.py` walks the surface anyway.
+
+**The Record page stays free, permanently.** Every pick graded in public,
+wins and losses. A tout site that hides its record behind a paywall is
+asking to be trusted about the one number it will not show, and this
+project's positioning is the opposite of that
+(`docs/COMPETITIVE_RECIPE.md`). The account page stays reachable too, or
+somebody who has paid cannot sign in to prove it.
 
 ---
 
@@ -336,7 +392,10 @@ rather than implied to work.
 secret, replayed and tampered payloads; idempotency on retry; the status
 state machine; entitlement including the `past_due` grace; the request
 shapes; the full checkout → renewal → cancellation sequence driven through
-the real endpoint with a fake signing secret.
+the real endpoint with a fake signing secret. `tests/test_billing_e2e.py`
+does that last one over actual HTTP against a real `server.py` process, so
+"the verifier works but nothing calls it" is covered too — that is the
+failure every unit test above would have passed through.
 
 **Not verified, and cannot be from here:** that Stripe accepts our
 Checkout Session parameters, that the live event JSON matches the shapes
@@ -352,7 +411,17 @@ error — so treat the first live run as the real test.
 
 | | |
 |---|---|
-| `engine/billing.py` | signatures, state, request shapes, storage |
+| `engine/billing.py` | plans, prices, signatures, state, request shapes, storage |
+| `engine/stripeset.py` | creating the catalogue; `--stripe` / `--stripe-setup` |
+| `engine/redeem.py` | discount codes — no card, no processor |
+| `engine/gate.py` | what gets redacted on the way out, and `--seal` |
 | `server.py` | `_billing_get` / `_billing_post` / `_billing_webhook`, raw-body handling |
-| `web/js/app.js` | the subscription row on the account card |
+| `web/js/app.js` | `PLANS`, the plans page, the checkout page, the return trip |
 | `tests/test_billing.py` | the security properties, pinned |
+| `tests/test_stripe_plans.py` | the page's prices vs the ones Stripe is told |
+| `tests/test_stripe_wiring.py` | the request shape and what can grant access |
+| `tests/test_billing_e2e.py` | a real server, a real HTTP purchase, over the wire |
+| `tests/test_paywall_bypass.py` | every way somebody could read a paid board free |
+
+`engine/paddle.py` is **not wired to anything** — see its header, and
+`docs/PROCESSOR.md` for what it would take to swap back.

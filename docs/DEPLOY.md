@@ -112,9 +112,90 @@ and has nothing to do with deploying.
 
 ---
 
-## Turning the paywall on (separate job, done once)
+## Going live with Stripe (one job, done once)
 
-Not part of a deploy. On the droplet, edit `/etc/qellys/env`:
+Not part of a deploy, and the ordering is not optional — see
+`docs/BILLING.md` for why each step depends on the one before it. This is
+the condensed version for the droplet.
+
+**Do the whole thing in TEST mode first.** Test and live are the same
+Stripe account distinguished by the key prefix, so the switch at the end
+is one line and nothing else moves.
+
+### A. On the droplet, put the keys in
+
+`sudo nano /etc/qellys/env`:
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+QB_SITE_URL=https://qellysbook.com
+```
+
+### B. Create the catalogue and paste back what it prints
+
+```bash
+cd /srv/qellys && python3 launch.py --stripe-setup
+```
+
+It prints three `STRIPE_PRICE_*` lines. Put them in `/etc/qellys/env`.
+Do not type price ids out of the dashboard by hand — a swapped pair
+charges the wrong amount and nothing reports it.
+
+### C. Add the webhook, then its secret
+
+Stripe dashboard → Developers → Webhooks → Add endpoint:
+
+```
+https://qellysbook.com/api/billing/webhook
+```
+
+Events: `checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`,
+`invoice.payment_failed`.
+
+Copy its signing secret into `/etc/qellys/env`:
+
+```
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Then `sudo systemctl restart qellys`.
+
+**Nothing works until this secret is set** — the endpoint refuses every
+unsigned event, which means somebody can pay and never get in, with no
+error on our side.
+
+### D. Check, then actually buy something
+
+```bash
+cd /srv/qellys && python3 launch.py --stripe
+```
+
+Every line should say `ok`. Then, on the real site with the test key
+loaded: sign in, pick a plan, pay with `4242 4242 4242 4242`, any future
+expiry, any CVC.
+
+Three things must be true afterwards:
+
+1. the site lets you in within a second or two of landing back;
+2. Stripe → Webhooks shows the delivery **succeeded**;
+3. your account page names the plan you bought.
+
+**This step has no substitute.** Everything can be configured correctly
+while the integration is broken.
+
+### E. Switch to live
+
+Replace the key with `sk_live_...`, re-run `--stripe-setup` (the live
+account has its own catalogue, so it makes new prices and prints new
+ids), paste those in, add a webhook endpoint in the LIVE dashboard, paste
+its secret in, restart. `launch.py --stripe` should now say LIVE.
+
+---
+
+## Turning the paywall on (do this AFTER Stripe works)
+
+On the droplet, `/etc/qellys/env`:
 
 ```
 QB_COMP_EMAILS=ethanlee1276@gmail.com
@@ -149,9 +230,10 @@ Signed out, that should show the schedule and a `locked` block — never a
 pick. If you see picks, the seal did not run.
 
 **`QB_COMP_EMAILS` first, in that order, always.** Setting the flag with
-an empty comp list locks you out of your own board, and with no processor
-live there is no account that can pay to get back in. `launch.py --todo`
-checks that ordering.
+an empty comp list locks you out of your own board. `launch.py --todo`
+checks that ordering, and also checks that the Stripe webhook secret is
+present whenever the paywall is on — because the combination of "gate on,
+webhook off" is the one that takes money and grants nothing.
 
 To turn it back off, delete the `QB_PAYWALL` line and restart. It is a
 true no-op when unset — a test pins that.

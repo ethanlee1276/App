@@ -1,11 +1,37 @@
 # Taking payment — where we are and what to try next
 
-Ethan, 2026-08-20: *"i just went on paddles website and they dont support
-websites like ours so we gotta keep looking."*
+## ✅ RESOLVED, 2026-08-21: it is Stripe
 
-So both routes we had are shut: Stripe declined on the category, and
-Paddle's own acceptable-use rules exclude us. This page is what to do
-about it, and the first section is the one that matters.
+The appeal worked. The **Qellysbook** account shows compliance
+requirements met, and `server.py` is wired to `engine/billing.py` for
+every payment path. **The runbook is `docs/BILLING.md`; this page is now
+history plus a fallback plan.**
+
+Worth keeping for two reasons. The reasoning in §"The distinction the
+whole thing turns on" is what the approved application was built on, so
+if the categorisation is ever questioned again it is the argument to
+repeat. And §3–§4 are the plan if the account is ever closed — an event
+this business should be prepared for rather than surprised by.
+
+`engine/paddle.py` is still in the tree and is **not wired to anything**.
+Swapping back is four call sites in `server.py` — `start_checkout`,
+`open_portal`, `verify_signature`, `read_event` — plus the signature
+header name and the event-id field, both of which differ. Two test files
+pin the current direction: `tests/test_paddle.py` asserts no `PAY.` call
+survives in `server.py`, and `tests/test_stripe_wiring.py` asserts the
+Stripe ones are there.
+
+---
+
+## How it looked on 2026-08-20, before the appeal
+
+Ethan: *"i just went on paddles website and they dont support websites
+like ours so we gotta keep looking."*
+
+So both routes we had were shut: Stripe declined on the category, and
+Paddle's own acceptable-use rules excluded us. This page was what to do
+about it, and the first section was the one that mattered — it is the one
+that turned out to be right.
 
 **What I can and cannot tell you here.** I cannot reach a processor's
 website from the container I run in, so nothing below is me reading a

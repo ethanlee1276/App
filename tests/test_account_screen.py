@@ -126,7 +126,11 @@ def test_the_screen_still_promises_only_things_that_are_true():
     expensive. Each of these is a fact about how the site is built."""
     i = APP.index("acct-assure")
     block = APP[i:i + 700]
-    assert "Paddle" in block, "the card promise no longer names the processor"
+    # NAMED, not just gestured at. "Card details go to our payment
+    # provider" is a sentence that reassures nobody. Stripe since
+    # 2026-08-21; this said Paddle for the five days that was the plan,
+    # which is the reason it is asserted rather than left to drift.
+    assert "Stripe" in block, "the card promise no longer names the processor"
     assert "takes no bets" in block
     # …and not the claim that was already made twice on the same screen.
     assert block.count("sportsbook or ESPN password") == 0

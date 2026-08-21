@@ -1,4 +1,24 @@
-"""Paddle as the payment processor, after Stripe refused the category.
+"""Paddle as a payment processor. NOT WIRED TO ANYTHING — see below.
+
+2026-08-21: THE APPEAL WORKED AND THE PROCESSOR IS STRIPE. The account
+(Qellysbook) came back with compliance requirements met, and server.py
+calls engine/billing.py for every payment path — checkout, portal,
+webhook signature, event reading. Nothing in this file runs in
+production, and `tests/test_paddle.py` asserts that: it checks for the
+ABSENCE of every `PAY.` call in server.py.
+
+The file stays because the seam it proves is the reason a processor swap
+costs one module instead of a rewrite, and because a tested adapter is
+worth more than the memory of having written one if the Stripe account is
+ever closed. Rewiring it is the same four call sites in reverse, listed
+in docs/PROCESSOR.md.
+
+Everything below is unchanged and still correct as a description of
+Paddle. Read it as a design document, not as a live code path.
+
+--- as written, when Paddle was the plan -------------------------------
+
+Paddle as the payment processor, after Stripe refused the category.
 
 PADDLE SAID NO TOO — Ethan, 2026-08-20: "i just went on paddles website
 and they dont support websites like ours so we gotta keep looking." So
@@ -267,7 +287,15 @@ def read_event(payload: dict) -> dict | None:
         return None
     data = (payload or {}).get("data") or {}
     out = {"event": kind, "customer_id": None, "subscription_id": None,
-           "user_id": None, "status": None, "period_end": None}
+           "user_id": None, "status": None, "period_end": None,
+           # Always None here, and present anyway. The shape has to match
+           # Stripe's exactly — `billing.apply_event` reads one dict and
+           # does not ask who made it — and a KEY THAT IS SOMETIMES
+           # ABSENT is worse than one that is always empty: apply_event
+           # would fall to `.get("plan") -> None` either way, so the
+           # missing key would never fail loudly, it would just mean this
+           # adapter had quietly stopped matching.
+           "plan": None}
 
     if kind == "transaction.completed":
         # A completed transaction proves money moved, and carries the

@@ -75,7 +75,14 @@ from pathlib import Path
 #: is not on the backup list and that nobody would think to look for.
 #: Found by doing it by accident from a scratch directory. ledger.py and
 #: db.py both anchor this way; this was the one that did not.
-DB_PATH = Path(__file__).resolve().parents[1] / "data" / "accounts.db"
+#:
+#: QB_ACCOUNTS_DB OVERRIDES IT, and exists for one reason: an end-to-end
+#: test has to start a real server and sign a real account up, and doing
+#: that against the file real accounts live in is how a test deletes
+#: somebody. The override is read once, at import, so nothing can move
+#: the database out from under a running process.
+DB_PATH = Path(os.environ.get("QB_ACCOUNTS_DB", "").strip()
+               or Path(__file__).resolve().parents[1] / "data" / "accounts.db")
 
 #: scrypt work factors. 128 * N * r bytes per guess = 16MB here.
 SCRYPT_N = 1 << 14

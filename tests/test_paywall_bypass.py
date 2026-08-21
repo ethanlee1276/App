@@ -352,8 +352,16 @@ def test_no_card_field_is_ever_served_by_us():
     for bad in ("card number", "cardnumber", "cvc", "cvv", "expiry",
                 "exp-month", "autocomplete=\"cc-", "type=\"tel\""):
         assert bad not in low, f"a card field appeared in our own markup: {bad!r}"
-    assert "never reach this server" in fn or "belongs to them" in fn, \
-        "nothing tells the reader whose field will go there"
+    # …AND THE PAGE HAS TO SAY WHOSE PAGE TAKES IT. This used to accept
+    # "whoever the processor turns out to be", because there wasn't one.
+    # There is now (Stripe, 2026-08-21), so the weaker wording is no
+    # longer good enough: somebody about to be redirected off this site
+    # to type a card should be told, on this page, where they are going.
+    assert "Stripe" in fn, \
+        "the payment block does not name the processor it hands off to"
+    assert ("reaches this server" in fn or "never reach this server" in fn
+            or "belongs to them" in fn), \
+        "nothing tells the reader the card does not come here"
 
 
 def test_a_code_covering_the_term_needs_no_processor_at_all():
@@ -402,7 +410,10 @@ def test_the_wall_does_not_bounce_a_reader_out_of_checkout():
     # THE WALL'S guard, not the app's. There are two hashchange listeners
     # and the router's own comes first in the file, so anchoring on the
     # string found the wrong one.
-    i = app.index("paywallCheck().then(")
+    # The boot call is now `paidReturnWait().then(() => paywallCheck())`
+    # — the return trip from Stripe holds the wall for a few seconds
+    # while the webhook lands. Anchor on the guard's own body.
+    i = app.index("document.body.classList.add(\"walled\")")
     guard = app[i:i + 1200]
     assert "hashchange" in guard, "the wall no longer watches the hash at all"
     assert 'state.view === "checkout"' in guard, \

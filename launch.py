@@ -6541,6 +6541,9 @@ def main() -> None:
     if "--prereg" in argv:
         show_prereg()
         return
+    if "--stripe" in argv or "--stripe-setup" in argv:
+        _stripe_cli(create="--stripe-setup" in argv)
+        return
     if "--seal" in argv:
         # Redact every board already on the public path, now, without
         # waiting for a rebuild. See engine/gate.seal for why this has to
@@ -7051,6 +7054,106 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+
+
+def _stripe_cli(create: bool = False) -> None:
+    """`--stripe` reports; `--stripe-setup` also creates what is missing.
+
+    TWO FLAGS AND NOT ONE, because they need different amounts of trust.
+    Reporting is safe to run anywhere, any number of times, and is what
+    you want when the answer to "is billing on?" is unclear. Creating
+    writes to a live Stripe account, and a command that quietly creates
+    things while you thought you were checking them is how you end up
+    with duplicate prices and no idea which one the site charges.
+
+    Neither one ever prints a key. The report says a key is set and which
+    MODE it is in — that is the fact you need, and the value is the one
+    thing that must not appear in a terminal, a screenshot or a scrollback
+    buffer.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+
+    print("\nStripe\n" + "=" * 62)
+    checks = SS.preflight()
+    for ok, headline, detail in checks:
+        print(f"  {'ok  ' if ok else 'MISS'}  {headline}")
+        print(f"        {detail}")
+    bad = [h for ok, h, _ in checks if not ok]
+
+    if not create:
+        print()
+        if bad:
+            print(f"{len(bad)} thing(s) to fix. `python3 launch.py "
+                  "--stripe-setup` creates the Product and Prices; the "
+                  "webhook secret comes from the Stripe dashboard once "
+                  "the endpoint exists.")
+            print("docs/BILLING.md has the order.")
+        else:
+            print("Billing is configured. QB_PAYWALL is what turns the "
+                  "gate on — see `python3 launch.py --todo`.")
+        return
+
+    sk = os.environ.get(BI.ENV_SECRET, "").strip()
+    if not sk:
+        print(f"\nCannot create anything without {BI.ENV_SECRET}. "
+              "Put it in secrets.local first.")
+        sys.exit(1)
+
+    mode = "LIVE" if BI.live_mode(sk) else "TEST"
+    print(f"\nCreating the catalogue in {mode} mode…")
+    if mode == "LIVE":
+        # Not a confirmation prompt — this creates prices, it does not
+        # charge anybody, and prices are free to create and harmless to
+        # leave unused. It is a line of text because somebody who meant
+        # to be in test mode should find out here rather than later.
+        print("  (This is the live account. Creating prices charges "
+              "nobody; it is safe.)")
+    try:
+        res = SS.ensure_catalogue(sk, create=True)
+    except BI.BillingUnavailable as exc:
+        print(f"\nStripe would not answer: {exc}")
+        sys.exit(1)
+
+    print(f"\nProduct: {res['product']}")
+    problems = []
+    for plan_id in BI.PLAN_ORDER:
+        got = res["prices"].get(plan_id) or {}
+        plan = BI.PLANS[plan_id]
+        state = "created" if got.get("created") else "already there"
+        print(f"  {plan['name']:<10} {got.get('id') or '—'}  ({state})")
+        for problem in got.get("problems") or []:
+            problems.append(f"{plan['name']}: {problem}")
+
+    if problems:
+        # An existing price that disagrees with billing.PLANS is NOT
+        # edited — Stripe prices are immutable on purpose, since a price
+        # somebody is subscribed to must not change under them. Say what
+        # is wrong and stop.
+        print("\nA price in Stripe does not match what this repo says:")
+        for row in problems:
+            print(f"  - {row}")
+        print("\nStripe prices cannot be edited — that is deliberate, "
+              "because a price someone is subscribed to must not change "
+              "underneath them. To change a price: archive the old one in "
+              "the dashboard, change billing.PLANS, and run this again. "
+              "Existing subscribers keep the price they signed up at "
+              "until they cancel.")
+        sys.exit(2)
+
+    if res["env"]:
+        print("\nPaste these into secrets.local:\n")
+        for line in res["env"]:
+            print(f"  {line}")
+    print("\nThen: add the webhook endpoint in the Stripe dashboard "
+          "(Developers → Webhooks) pointing at")
+    print("  https://<your-domain>/api/billing/webhook")
+    print("with these events:")
+    for ev in BI.HANDLED:
+        print(f"  - {ev}")
+    print("\nand put the signing secret it shows you into "
+          "STRIPE_WEBHOOK_SECRET. Nothing grants access until that is "
+          "set — the endpoint refuses every unsigned event.")
 
 
 if __name__ == "__main__":

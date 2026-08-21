@@ -1216,7 +1216,7 @@ class Handler(BaseHTTPRequestHandler):
                 "charged and we lose the record of whose card it is. "
                 "Once it is cancelled, delete works normally.")
 
-    # --- billing: Paddle holds the card, we hold a status ------------------
+    # --- billing: Stripe holds the card, we hold a status ------------------
     def _entitled(self, conn, who) -> bool:
         """May this caller read a full board?
 
@@ -1227,7 +1227,6 @@ class Handler(BaseHTTPRequestHandler):
         """
         from engine import billing as BI
         from engine import gate
-        from engine import paddle as PAY
         from engine import redeem as RD
         if not gate.enabled():
             return True
@@ -1237,7 +1236,7 @@ class Handler(BaseHTTPRequestHandler):
             return True
         # A REDEEMED CODE IS AN ENTITLEMENT, checked before the processor
         # and independent of it. This is what lets the paywall be switched
-        # on before Paddle is live: comp addresses and codes are then the
+        # on before Stripe is live: comp addresses and codes are then the
         # two ways in, both under Ethan's hand. Its own try, so that a
         # broken redemption lookup cannot cost a PAYING subscriber their
         # board — the billing check below still runs.
@@ -1249,7 +1248,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
         try:
             BI.init(conn)
-            st = BI.status_for(conn, who["id"], describe_with=PAY.describe)
+            st = BI.status_for(conn, who["id"])
         except Exception:                                    # noqa: BLE001
             # A billing lookup that breaks must not become a lockout. The
             # failure everybody notices is a paying customer refused; the
@@ -1335,7 +1334,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _billing_get(self, path: str):
         from engine import billing as BI
-        from engine import paddle as PAY
         A = _acct()
         if path != "status":
             return self._send(404, b'{"error":"unknown billing endpoint"}',
@@ -1344,16 +1342,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             BI.init(conn)
             who = self._account(conn)
-            out = {"configured": PAY.configured(), "signed_in": bool(who)}
-            if PAY.configured():
-                # Paddle's sandbox is a SEPARATE account with separate
-                # keys, so "are we live" is a question about which base
-                # URL the requests go to — not, as with Stripe, a prefix
-                # on the key.
-                out["live"] = not PAY.sandbox()
+            out = {"configured": BI.configured(), "signed_in": bool(who)}
+            # WHICH PLANS CAN ACTUALLY BE SOLD, sent whether or not
+            # anybody is signed in, because the plans page renders before
+            # sign-in. A plan with no price id configured must not draw a
+            # buy button that 502s after the customer has committed.
+            out["plans"] = BI.plan_catalogue()
+            if BI.configured():
+                # Test and live are the SAME Stripe account distinguished
+                # by a key prefix — unlike Paddle, where the sandbox is a
+                # separate account entirely. So "are we live" is a
+                # question about the key we are holding.
+                try:
+                    out["live"] = BI.live_mode(BI.keys()[0])
+                except BI.BillingUnavailable:
+                    out["live"] = False
             if who:
-                out.update(BI.status_for(conn, who["id"],
-                                         describe_with=PAY.describe))
+                out.update(BI.status_for(conn, who["id"]))
                 # Codes ride alongside rather than inside the subscription
                 # status: a redeemed code is not a subscription and saying
                 # it is would put a status on the page that no processor
@@ -1412,7 +1417,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def _billing_post(self, path: str, raw: bytes):
         from engine import billing as BI
-        from engine import paddle as PAY
         A = _acct()
         if path == "webhook":
             return self._billing_webhook(raw)
@@ -1430,19 +1434,29 @@ class Handler(BaseHTTPRequestHandler):
             base = self._site_base()
             try:
                 if path == "checkout":
-                    url = PAY.start_checkout(
-                        who["id"], who["email"], f"{base}/?paid=1#mybets")
+                    try:
+                        body = json.loads(raw.decode() or "{}")
+                    except Exception:                        # noqa: BLE001
+                        body = {}
+                    # NOT DEFAULTED. `price_for` refuses an unknown plan,
+                    # and that refusal is the point: substituting the
+                    # monthly price for a plan we do not recognise means
+                    # charging $25 to somebody who believes they bought a
+                    # year. An absent plan is the front end's own default,
+                    # which is a different thing from a wrong one.
+                    plan = str(body.get("plan") or BI.DEFAULT_PLAN)
+                    url = BI.start_checkout(
+                        who["id"], who["email"],
+                        f"{base}/?paid=1#account",
+                        f"{base}/#paywall", plan)
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:
                         return self._send(400, json.dumps(
                             {"error": "No subscription to manage yet."}
                         ).encode(), ".json")
-                    url = PAY.open_portal(cust, f"{base}/#mybets")
+                    url = BI.open_portal(cust, f"{base}/#account")
             except BI.BillingUnavailable as exc:
-                # paddle re-exports this class deliberately, so one except
-                # covers both halves and the caller never has to know
-                # which processor is behind the endpoint.
                 return self._send(502, json.dumps({"error": str(exc)}).encode(),
                                   ".json")
             return self._send(200, json.dumps({"url": url}).encode(), ".json")
@@ -1450,20 +1464,34 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
 
     def _site_base(self) -> str:
-        """The address this browser reached us on, for Paddle's return trip.
+        """The address this browser reached us on, for Stripe's return trip.
 
         Read from the request rather than configured, because this site
         answers on localhost, a LAN address and a tailscale name, and a
         hardcoded one would send two of those three somewhere they cannot
         get back from.
+
+        QB_SITE_URL OVERRIDES IT, and exists for the case the header
+        cannot cover: `Host` is whatever the CUSTOMER typed. Somebody who
+        reaches the site on a bare IP, or on a hostname that has no TLS
+        certificate, gets sent back there after paying — to a browser
+        warning, or to nothing. Setting it pins the return trip to the
+        one address that is known to work.
         """
+        # secrets.local is where QB_SITE_URL is written alongside the
+        # Stripe keys, and the loader is a no-op after the first call.
+        from engine import secrets as _s
+        _s.load_local_secrets()
+        pinned = os.environ.get("QB_SITE_URL", "").strip().rstrip("/")
+        if pinned:
+            return pinned
         host = (self.headers.get("X-Forwarded-Host")
                 or self.headers.get("Host") or "127.0.0.1:8000")
         scheme = "https" if self._is_https() else "http"
         return f"{scheme}://{host}"
 
     def _billing_webhook(self, raw: bytes):
-        """Paddle telling us somebody paid. THE ONLY THING THAT GRANTS
+        """Stripe telling us somebody paid. THE ONLY THING THAT GRANTS
         ACCESS, and a public URL, so it lives or dies on the signature.
 
         Refuses outright when no notification secret is configured. An
@@ -1476,21 +1504,20 @@ class Handler(BaseHTTPRequestHandler):
         and makes an honest payload fail to verify.
         """
         from engine import billing as BI
-        from engine import paddle as PAY
         A = _acct()
         try:
-            _api_key, whsec, _price = PAY.keys()
+            _sk, whsec, _price = BI.keys()
         except BI.BillingUnavailable:
             return self._send(503, b'{"error":"billing not configured"}',
                               ".json")
         if not whsec:
             return self._send(503, json.dumps(
-                {"error": f"No {PAY.ENV_WEBHOOK_SECRET} set, so this endpoint "
-                          "cannot tell a real Paddle event from a forged "
+                {"error": f"No {BI.ENV_WEBHOOK_SECRET} set, so this endpoint "
+                          "cannot tell a real Stripe event from a forged "
                           "one. Refusing rather than trusting it."}).encode(),
                 ".json")
-        sig = self.headers.get("Paddle-Signature") or ""
-        if not PAY.verify_signature(raw, sig, whsec):
+        sig = self.headers.get("Stripe-Signature") or ""
+        if not BI.verify_signature(raw, sig, whsec):
             return self._send(400, b'{"error":"bad signature"}', ".json")
         try:
             payload = json.loads(raw or b"{}")
@@ -1502,19 +1529,20 @@ class Handler(BaseHTTPRequestHandler):
             BI.init(conn)
             # A retry is not a second grant.
             #
-            # `event_id`, NOT `id`. Paddle names it differently from
-            # Stripe, and the failure is silent in the worst direction:
-            # already_handled() treats an empty id as "not seen before"
-            # and returns False every time, so the replay guard would
-            # have been switched off while still looking present. A
-            # retried subscription.created is then a second grant.
-            if BI.already_handled(conn, payload.get("event_id")
-                                  or payload.get("id")):
+            # Stripe names the event `id`; Paddle named it `event_id`,
+            # and this reads both because getting it wrong is silent in
+            # the worst direction: already_handled() treats an empty id
+            # as "not seen before" and returns False every time, so the
+            # replay guard would be switched off while still looking
+            # present. A retried subscription.created is then a second
+            # grant.
+            if BI.already_handled(conn, payload.get("id")
+                                  or payload.get("event_id")):
                 return self._send(200, b'{"received":true,"duplicate":true}',
                                   ".json")
-            event = PAY.read_event(payload)
+            event = BI.read_event(payload)
             applied = BI.apply_event(conn, event) if event else False
-            # 200 EVEN WHEN WE DID NOTHING. Paddle retries anything that is
+            # 200 EVEN WHEN WE DID NOTHING. Stripe retries anything that is
             # not 2xx, so an event we do not act on must still be
             # acknowledged or it comes back forever.
             return self._send(200, json.dumps(

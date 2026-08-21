@@ -94,22 +94,39 @@ def test_the_alerts_page_reports_feeds_and_sells_no_subscription():
         assert sel in CSS, f"{sel} is unstyled"
 
 
-def test_the_plan_cards_invent_no_tier_and_no_price():
-    """Render 21 shows three priced tiers. There is ONE real plan — a
-    single Paddle price the server does not know the amount of — so the
-    page ships two cards, quotes no number it cannot source, and splits
-    the features the way engine/gate.py actually splits the files."""
+def test_the_plan_cards_invent_no_tier_and_quote_no_unsourced_price():
+    """Render 21 shows three priced tiers. This card is not the price
+    list — it is the FREE-vs-PAID split, drawn from engine/gate.py's own
+    FREE_FILES/PAID_FILES rather than from a marketing page. Two cards,
+    no invented tiers.
+
+    IT USED TO QUOTE NO PRICE AT ALL, because there was none to quote:
+    one plan, at a Paddle price this side did not know. Since 2026-08-21
+    there are three real prices in `billing.PLANS`, and this card names
+    the cheapest as an entry point and sends people to the plans page for
+    the rest.
+
+    ONE PRICING SURFACE IS THE RULE. Printing all three here as well
+    would be a second place for them to be wrong, and the failure is not
+    cosmetic — a page advertising one number while Checkout charges
+    another is a chargeback. So exactly two figures are allowed: $0 for
+    free, and the monthly price, which must equal the one in
+    `billing.PLANS` rather than being typed.
+    """
+    from engine import billing
     i = APP.index("function billPlansHTML(")
     body = APP[i:APP.index("\nasync function renderBilling(", i)]
     assert body.count('class="card plan') == 2, "a third tier was invented"
-    # The one number on the page is the free one, which is true.
-    assert "$0" in body
     prices = re.findall(r"\$\d[\d.,]*", body)
-    assert prices == ["$0"], f"invented a price: {prices}"
-    for word in ("Premium", "Elite", "/mo", "per month"):
+    monthly = f"${billing.PLANS['monthly']['cents'] // 100}"
+    assert prices == ["$0", monthly], (
+        f"the plan card quotes {prices}; it may quote only $0 and the "
+        f"monthly price ({monthly}), and the other two plans belong on "
+        "the plans page where the buy buttons are")
+    for word in ("Premium", "Elite", "/mo"):
         assert word not in body, f"invented a tier or a term: {word}"
-    assert "Paddle" in body and "billSubscribe(this)" in body, \
-        "the paid card must go to the real checkout"
+    assert "Stripe" in body and "billSeePlans()" in body, \
+        "the paid card must name the processor and reach the plans page"
     # And the free half is the gate's own free half.
     for free in ("Record page", "injury report", "fantasy room"):
         assert free.lower() in body.lower(), f"free list lost {free}"

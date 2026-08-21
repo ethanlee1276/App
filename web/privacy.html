@@ -57,8 +57,10 @@
       <li><b>Your sportsbook passwords.</b> We never ask for them and
         there is nowhere to enter one. A DraftKings or FanDuel login can
         move real money and cannot be scoped or revoked by us.</li>
-      <li><b>Card numbers.</b> Payments, when they exist, go through
-        Paddle's own hosted page. Card details never reach our server.</li>
+      <li><b>Card numbers.</b> Payments go through Stripe’s own hosted
+        Checkout page. Card details never reach our server; we store a
+        Stripe customer reference and whether the subscription is
+        active.</li>
       <li><b>Advertising or tracking cookies.</b> There are none. No
         analytics tags, no pixels, no third-party scripts.</li>
       <li><b>Your location.</b> We do not ask for it or infer it.</li>
@@ -67,8 +69,9 @@
     <h2>Who else sees it</h2>
     <p>Two parties, both because they have to be involved:</p>
     <ul>
-      <li><b>Paddle</b>, if you subscribe — they are the seller of record, and they handle the payment and
-        hold the card details we deliberately never see.</li>
+      <li><b>Stripe</b>, if you subscribe — they process the payment and
+        hold the card details we deliberately never see. They receive your
+        email address so the receipt reaches you.</li>
       <li><b>Yahoo</b>, only if you connect a Yahoo fantasy league, and
         only to read that league. You approve it on Yahoo's own screen and
         can revoke it from your Yahoo account at any time.</li>

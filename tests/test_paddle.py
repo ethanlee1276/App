@@ -25,6 +25,20 @@ which statuses grant access, the replay guard, the schema, the paid-through
 date — stayed in engine/billing.py and is reused unchanged. `read_event`
 here returns the identical dict, so the storage layer cannot tell which
 processor produced it. Changing processor is one file.
+
+2026-08-21: AND IT WAS CHANGED BACK. Paddle does not serve this business
+model — Ethan checked their own site — and the Stripe account was
+approved on appeal, so server.py is wired to Stripe again. That did not
+make this file dead: engine/paddle.py stays correct and tested, the
+adapter contract it proves (an identical event dict, so the storage layer
+cannot tell the difference) is what makes the swap one file in either
+direction, and it is the fallback if the Stripe account is ever closed.
+
+What changed is the wiring tests at the bottom. They used to assert that
+server.py calls PAY; they now assert the opposite — that nothing does —
+because an adapter that is half-wired is worse than one that is not
+wired, and "which of these two modules grants entitlement" must have
+exactly one answer. tests/test_stripe_wiring.py holds the other half.
 """
 
 import hashlib
@@ -273,35 +287,6 @@ def test_the_notification_secret_is_not_the_api_key():
     assert "API_KEY" not in vs
 
 
-def test_the_secrets_template_names_the_variables_the_code_reads():
-    """A template that names the wrong variables is worse than none.
-
-    It described Stripe for a day after the processor changed, so anyone
-    following it on a fresh server would have filled in four keys the code
-    never reads and then wondered why billing stayed switched off — with
-    nothing failing, because unset billing is a supported state.
-
-    Derived from the module's own ENV_ constants rather than typed twice.
-    """
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    with open(os.path.join(root, "secrets.local.example"), encoding="utf-8") as fh:
-        tmpl = fh.read()
-    for var in (paddle.ENV_API_KEY, paddle.ENV_WEBHOOK_SECRET,
-                paddle.ENV_PRICE_ID, paddle.ENV_SANDBOX):
-        assert f"\n{var}=" in tmpl, f"{var} is not in secrets.local.example"
-    assert "STRIPE_SECRET_KEY=" not in tmpl, \
-        "the template still asks for Stripe keys nothing reads"
-    # The VALUE must stay empty — the template is tracked in git, and
-    # "every value here is blank" is the rule that stops a real key being
-    # committed by someone who edited the template instead of their copy.
-    # So the sandbox instruction lives in the prose above it instead.
-    assert f"\n{paddle.ENV_SANDBOX}=\n" in tmpl, "the flag carries a value"
-    i = tmpl.index(f"\n{paddle.ENV_SANDBOX}=")
-    assert "SANDBOX=1" in tmpl[max(0, i - 700):i], \
-        "nothing tells the reader to switch sandbox on first"
-
-
-
 # --- checkout and portal: the two calls that must go out ---------------------
 #
 # Same rule as the signature above: what is proved here is the SHAPE of
@@ -434,74 +419,129 @@ def _server() -> str:
     return open(os.path.join(root, "server.py"), encoding="utf-8").read()
 
 
-def test_the_webhook_reads_paddles_header_not_stripes():
-    """A verifier pointed at a header that never arrives sees "" every
-    time, fails every signature, and rejects every real event — which at
-    least fails loudly. The same mistake in the other direction is what
-    the tolerance checks above are for."""
-    s = _server()
-    assert 'self.headers.get("Paddle-Signature")' in s
-    assert "Stripe-Signature" not in s, "still reading Stripe's header"
+# --- and the wiring, which now points the other way --------------------------
+#
+# These five used to say "server.py must call PAY". Reversed on
+# 2026-08-21, when Paddle turned out not to serve this business model and
+# the Stripe account came back approved. They still exist, and still
+# assert something worth asserting: that the swap is COMPLETE. A codebase
+# with two live processors has two answers to "what grants access", and
+# the second one is the one nobody is watching.
 
 
-def test_the_replay_guard_reads_the_field_paddle_actually_sends():
-    """Paddle names the event id `event_id`; Stripe names it `id`. Asking
-    for the wrong one yields None, already_handled() treats a falsy id as
-    "never seen", and the guard returns False for every event — switched
-    off while still looking present. A retried subscription.created is
-    then a second grant. Found by reading Paddle's payload shape against
-    code that had been copied from the Stripe path."""
-    s = _server()
-    i = s.index("def _billing_webhook")
-    body = s[i:i + 3000]
-    assert 'payload.get("event_id")' in body, \
-        "the replay guard reads Stripe's field name and never fires"
-    assert "already_handled" in body
+def _server():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "server.py"), encoding="utf-8") as fh:
+        return fh.read()
 
 
-def test_the_server_calls_paddle_for_money_and_billing_only_for_storage():
-    """The split the two modules were built around. Storage (init,
-    apply_event, status_for, already_handled) is provider-neutral and
-    stays in billing; anything that talks to a processor or verifies its
-    signature must come from paddle, or the swap is cosmetic."""
+def test_paddle_is_not_wired_to_anything():
+    """No call path from the server reaches this module.
+
+    Named per-call rather than checking for the string "paddle", because
+    the honest mentions — a comment explaining why the module is still
+    here — must not fail. This is the same trap that has bitten this repo
+    repeatedly: a test that fires on the comment warning about the thing
+    it checks for.
+    """
     s = _server()
     for call in ("PAY.start_checkout(", "PAY.open_portal(",
                  "PAY.verify_signature(", "PAY.read_event(",
-                 "PAY.configured()"):
-        assert call in s, f"server.py never calls {call}"
-    for dead in ("BI.start_checkout(", "BI.open_portal(",
+                 "PAY.configured()", "PAY.describe", "PAY.keys("):
+        assert call not in s, (
+            f"server.py still calls {call} — the processor swap is half "
+            "done, and two things can grant entitlement")
+    assert "from engine import paddle" not in s, \
+        "server.py still imports paddle"
+
+
+def test_the_webhook_reads_stripes_header_not_paddles():
+    """One header, and it is the one the live processor sends.
+
+    Reading the wrong one is not a loud failure. `headers.get` returns "",
+    verification fails, and every real event is refused with a 400 —
+    which looks from here like nobody is paying, and looks from Stripe's
+    dashboard like our endpoint is broken.
+    """
+    s = _server()
+    assert 'self.headers.get("Stripe-Signature")' in s
+    assert 'self.headers.get("Paddle-Signature")' not in s, \
+        "still reading Paddle's header"
+
+
+def test_the_replay_guard_reads_the_field_stripe_actually_sends():
+    """Stripe names the event `id`; Paddle named it `event_id`. Asking for
+    the wrong one yields None, already_handled() treats a falsy id as
+    "never seen", and the guard returns False for every event — switched
+    off while still looking present. A retried checkout.session.completed
+    is then a second grant.
+
+    Both names are read, `id` first. That is not indecision: it costs
+    nothing, and it means a replayed event is still caught if this ever
+    swaps back.
+    """
+    s = _server()
+    i = s.index("def _billing_webhook")
+    body = s[i:i + 3000]
+    assert 'payload.get("id")' in body, \
+        "the replay guard does not read Stripe's field name"
+    assert "already_handled" in body
+
+
+def test_the_server_calls_stripe_for_money_and_billing_for_storage():
+    """The split both modules were built around, pointing at Stripe.
+
+    Stripe is unusual here in being BOTH halves — engine/billing.py holds
+    the storage layer and the Stripe adapter — so this reads as one
+    module where the Paddle version read as two. The split still exists,
+    it is just internal, and tests/test_stripe_wiring.py checks the parts
+    that must not blur.
+    """
+    s = _server()
+    for call in ("BI.start_checkout(", "BI.open_portal(",
                  "BI.verify_signature(", "BI.read_event(",
                  "BI.live_mode("):
-        assert dead not in s, f"server.py still uses the Stripe path {dead}"
-    # …and the storage half is still the shared one.
+        assert call in s, f"server.py never calls {call}"
     for kept in ("BI.init(", "BI.apply_event(", "BI.status_for(",
                  "BI.already_handled("):
         assert kept in s, f"storage call {kept} disappeared in the swap"
 
 
-def test_the_status_card_uses_paddles_wording_for_paddles_statuses():
-    """`paused` is Paddle-only. billing.describe has never heard of it and
-    falls through to "No subscription." — telling somebody who chose to
-    pause that they have nothing. status_for takes the processor's
-    describe for exactly this."""
-    s = _server()
-    assert "describe_with=PAY.describe" in s, \
-        "the account card would call a paused subscription 'none'"
+def test_paused_is_still_handled_even_though_stripe_does_not_send_it():
+    """`paused` is Paddle-only wording, and the row can still hold it.
+
+    A subscription paused under Paddle and stored before the swap keeps
+    that status in the database for ever. `entitled()` refuses it, which
+    is right. What must not happen is the account page calling it "No
+    subscription." — that tells somebody who deliberately paused that
+    they have nothing.
+    """
+    assert not billing.entitled("paused"), \
+        "a paused subscription would be treated as paying"
     assert "paused" in paddle.describe("paused").lower()
     assert "No subscription" not in paddle.describe("paused")
 
 
-def test_no_stripe_environment_variable_is_still_being_read():
-    """A leftover STRIPE_* lookup is a config the deploy notes no longer
-    mention, so it reads as unset for ever and takes a code path nobody
-    tests."""
-    s = _server()
-    assert "STRIPE_" not in s, "server.py still reads a Stripe env var"
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    tmpl = open(os.path.join(root, "secrets.local.example"),
-                encoding="utf-8").read()
-    assert "STRIPE_" not in tmpl, "the secrets template still offers Stripe"
+def test_the_secrets_template_has_swapped_back_too():
+    """A template naming variables nothing reads is worse than none.
 
+    Whoever sets up a fresh server follows this file. Left on Paddle it
+    would have them fill in four keys the code never looks at, and then
+    wonder why billing stayed off — with nothing failing, because unset
+    billing is a supported state.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "secrets.local.example"),
+              encoding="utf-8") as fh:
+        tmpl = fh.read()
+    for var in ("STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+                "STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_SIXMONTH",
+                "STRIPE_PRICE_YEARLY"):
+        assert f"\n{var}=" in tmpl, f"{var} is not in secrets.local.example"
+    for var in (paddle.ENV_API_KEY, paddle.ENV_PRICE_ID,
+                paddle.ENV_SANDBOX):
+        assert f"\n{var}=" not in tmpl, \
+            f"the template still asks for {var}, which nothing reads"
 
 
 if __name__ == "__main__":
