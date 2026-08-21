@@ -1964,6 +1964,51 @@ def _lan_ip():
         return None
 
 
+def seal_on_boot() -> None:
+    """Redact every board on the public path, before anything is served.
+
+    CALLED FROM BOTH ENTRYPOINTS, and that is the whole reason it is a
+    function. It lived inline in `server.main()` for a day — which is dev
+    only. Production runs `launch.py`, which builds its own
+    ThreadingHTTPServer around the same Handler and never calls
+    `server.main()`, so the seal never fired on the one machine it
+    existed for. Found by reading the systemd unit rather than the code.
+
+    WHY IT HAS TO HAPPEN AT BOOT. Redaction happens inside `publish()`,
+    so turning QB_PAYWALL on changes what the NEXT build writes and
+    touches nothing already on disk. Every board written before the flag
+    went on stays whole and public, and in production Caddy serves those
+    files straight off disk without the app ever seeing the request —
+    there is no later place to catch it. `launch.py --seal` has always
+    fixed it, and depending on an operator to remember a command is not a
+    paywall. A restart is the one thing that reliably happens on every
+    deploy, including the one that turns the flag on.
+
+    NON-FATAL BY DESIGN. A seal that throws must not stop the site
+    booting: refusing to start turns a redaction problem into an outage.
+    It says so loudly instead, and `--todo` reports the same thing.
+    """
+    try:
+        from engine import gate as _gate
+        if not _gate.enabled():
+            return
+        res = _gate.seal(web_data=WEB / "data", verbose=False)
+        n = len(res.get("sealed") or [])
+        if n:
+            print(f"Paywall ON — sealed {n} board(s) on the public path "
+                  "at startup.")
+        left = _gate.unsealed(web_data=WEB / "data")
+        if left:
+            rows = sum(r["rows"] for r in left)
+            print(f"  WARNING: {len(left)} board(s) still carry {rows} "
+                  "paid row(s) after sealing. Anyone can read them. "
+                  "Run: python3 launch.py --seal")
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  WARNING: could not seal the public boards at startup: "
+              f"{exc}\n  Run `python3 launch.py --seal` and check "
+              "`--todo` before letting anyone in.")
+
+
 def main() -> None:
     args = sys.argv[1:]
     live = "--live" in args
@@ -1980,44 +2025,7 @@ def main() -> None:
     ports = [a for a in args if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
 
-    # SEAL BEFORE ACCEPTING A SINGLE REQUEST.
-    #
-    # Found 2026-08-21 by curling the site with the paywall on: 293 picks,
-    # no cookie, no subscription. Not a bug in the gate — a bug in WHEN it
-    # runs. Redaction happens inside `publish()`, so turning QB_PAYWALL on
-    # changes what the NEXT build writes and touches nothing already on
-    # disk. Every board written before the flag went on stays whole and
-    # public, and in production Caddy serves those files straight off disk
-    # without the app ever seeing the request, so there is no later place
-    # to catch it.
-    #
-    # `launch.py --seal` has always fixed this, and depending on an
-    # operator to remember a command is not a paywall. A restart is the
-    # one thing that reliably happens on every deploy and every config
-    # change, including the change that turns the flag on — so the seal
-    # rides on that.
-    #
-    # NON-FATAL BY DESIGN. A seal that throws must not stop the site
-    # booting: refusing to start turns a redaction problem into an outage.
-    # It says so loudly instead, and `--todo` reports the same thing.
-    try:
-        from engine import gate as _gate
-        if _gate.enabled():
-            res = _gate.seal(web_data=WEB / "data", verbose=False)
-            n = len(res.get("sealed") or [])
-            if n:
-                print(f"Paywall ON — sealed {n} board(s) on the public path "
-                      "at startup.")
-            left = _gate.unsealed(web_data=WEB / "data")
-            if left:
-                rows = sum(r["rows"] for r in left)
-                print(f"  WARNING: {len(left)} board(s) still carry {rows} "
-                      "paid row(s) after sealing. Anyone can read them. "
-                      "Run: python3 launch.py --seal")
-    except Exception as exc:                                 # noqa: BLE001
-        print(f"  WARNING: could not seal the public boards at startup: "
-              f"{exc}\n  Run `python3 launch.py --seal` and check "
-              "`--todo` before letting anyone in.")
+    seal_on_boot()
 
     server = ThreadingHTTPServer((bind, port), Handler)
     server.live_mode = live  # read by Handler._api

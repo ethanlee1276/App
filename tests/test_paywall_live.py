@@ -30,6 +30,7 @@ for this.
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -176,12 +177,48 @@ def _paid_boards(web_dir):
     return out
 
 
+def test_every_entrypoint_seals(steps):
+    """BOTH ways the site can be started, not just the one under test.
+
+    The seal was written into `server.main()` and it worked — in dev.
+    Production runs `launch.py`, which builds its own ThreadingHTTPServer
+    around the same Handler and never calls `server.main()`, so on the
+    one machine the seal existed for, it never ran. The systemd unit is
+    what gave it away, not the code.
+
+    So this checks the SOURCE of both entrypoints rather than the
+    behaviour of one, because the live server below can only ever
+    exercise whichever of them the test happens to launch.
+    """
+    root = ROOT
+    for name in ("server.py", "launch.py"):
+        with open(os.path.join(root, name), encoding="utf-8") as fh:
+            src = fh.read()
+        # Comments stripped: both files EXPLAIN the seal at length, and a
+        # mention is not a call.
+        code = re.sub(r"(?m)#.*$", "", src)
+        code = re.sub(r'(?s)"""(?:.|\n)*?"""', "", code)
+        assert "seal_on_boot()" in code, (
+            f"{name} starts a server without sealing the public path — "
+            "the boards written before QB_PAYWALL went on stay readable")
+    unit = os.path.join(root, "deploy", "qellys.service")
+    if os.path.isfile(unit):
+        with open(unit, encoding="utf-8") as fh:
+            text = fh.read()
+        started = [n for n in ("launch.py", "server.py") if n in text]
+        assert started, "the unit starts neither entrypoint — check this test"
+        steps.append(f"the unit runs {started[0]}, which seals")
+
+
 def main():
     steps = []
 
     def ok(name):
         steps.append(name)
         print(f"  ok  {name}")
+
+    test_every_entrypoint_seals(steps)
+    ok("both entrypoints seal before they bind")
 
     site = Site(paywall=True)
     try:

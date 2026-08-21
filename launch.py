@@ -37,7 +37,7 @@ import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from server import Handler, LIVE_FILES  # reuse the --live server
+from server import Handler, LIVE_FILES, seal_on_boot  # reuse the --live server
 from engine.secrets import load_local_secrets
 
 ROOT = Path(__file__).parent
@@ -6914,6 +6914,15 @@ def main() -> None:
     # NOTE: the boards are NOT built here. Binding comes first and the
     # build runs in `_startup_chores` below — see the comment there for
     # why, and for what that costs.
+
+    # THE PAYWALL SEAL, BEFORE THE SOCKET OPENS.
+    #
+    # This is the production entrypoint — the systemd unit runs launch.py,
+    # not server.py — so the seal has to be here as well as there. It was
+    # only in `server.main()` for a day, which is the dev path, and that
+    # meant the one machine it was written for never ran it. Same function
+    # in both, so they cannot drift.
+    seal_on_boot()
 
     try:
         server = ThreadingHTTPServer((bind, port), Handler)
