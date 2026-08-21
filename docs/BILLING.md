@@ -234,6 +234,45 @@ change the line, restart.
 Terms §5.7 covers the rest — Discord is a third party, their rules govern
 conduct there, and access ends when the subscription does.
 
+### The page it lives on
+
+`#discord` is a real view with a nav row of its own, and it is the same
+page in three states:
+
+| State | What it shows |
+|---|---|
+| Just paid | "Account created", the welcome hero, and the join button |
+| Member, later | The same page without the toast or the eyebrow |
+| Not subscribed | The same page as a sales page — "See the plans" where the join button goes, and **no invite in the HTML at all** |
+
+The welcome is a one-shot. It is armed at account creation and again when
+a payment lands (the two are different moments behind the wall: you sign
+up, hit the wall, and pay), and it is spent the first time the page draws.
+`localStorage`, because a piece of confetti does not earn an account
+field, and every read is inside a `try` — a private window throws on
+access and an uncaught throw at boot is a blank site.
+
+The nav row exists because the welcome is seen once. Ethan, 2026-08-21:
+*"if someone doesnt join immedietly, they still have the option to join
+later."*
+
+### QB_INSTAGRAM
+
+```
+QB_INSTAGRAM=https://instagram.com/yourhandle
+```
+
+Optional and **not a secret** — it is quoted to people who have not
+subscribed, which is the point of quoting it, so it rides on the status
+payload outside the entitled branch. Unset, the Discord page simply drops
+the sentence that mentions it.
+
+The `+400 units` beside it is Ethan's own count of his own page, and the
+page says so in those words. It is not a figure this site graded. What
+this site stands behind is the Record page, and the sentence points at it
+in the same breath — a performance number stated flatly in the site's own
+voice is a claim the site is making, and this one is not ours to make.
+
 ---
 
 ## Sales tax is ours now

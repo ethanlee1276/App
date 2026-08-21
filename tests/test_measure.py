@@ -92,8 +92,16 @@ def test_no_prose_measure_is_written_as_a_bare_ch():
     measure."""
     left = set(re.findall(r"max-width:\s*([0-9.]+ch)", DECLS))
     assert left <= {"34ch"}, left - {"34ch"}
-    i = DECLS.index("max-width: 34ch")
-    assert "nowrap" in DECLS[max(0, i - 300):i]
+    # EVERY one of them, not just the first. There are two now — the
+    # truncated handle and the signed-in address on the wall — and
+    # checking only DECLS.index() would have let a second, unrelated
+    # 34ch through on the strength of the first one's nowrap.
+    n = 0
+    for m in re.finditer(r"max-width:\s*34ch", DECLS):
+        n += 1
+        assert "nowrap" in DECLS[max(0, m.start() - 300):m.start()], (
+            "a 34ch measure on wrapping prose at offset %d" % m.start())
+    assert n, "the exception is allowed but nothing uses it"
 
 
 def test_every_measure_sits_inside_the_readable_band():

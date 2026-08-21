@@ -330,6 +330,20 @@ here
 ask_or_default QB_DISCORD_INVITE \
   "the invite for the members' room" \
   "${QB_DEFAULT_DISCORD:-https://discord.gg/vCAZjntyX}"
+# Optional, and it is fine to skip: the Discord page just drops the
+# sentence that cites it. Not a secret — it is quoted TO people who have
+# not paid, which is why it is not gated the way the invite is.
+if have QB_INSTAGRAM; then
+  ok "QB_INSTAGRAM is already set"
+else
+  echo "      Your Instagram profile URL (optional — press Enter to skip)."
+  read -rp "      QB_INSTAGRAM: " _gram || true
+  if [ -n "${_gram:-}" ]; then
+    as_root "$SETENV" QB_INSTAGRAM "$_gram" >/dev/null && ok "QB_INSTAGRAM set"
+  else
+    ok "skipped — the Discord page will simply not mention Instagram"
+  fi
+fi
 if have QB_CODES; then
   ok "QB_CODES is already set"
 else

@@ -1343,6 +1343,7 @@ class Handler(BaseHTTPRequestHandler):
         if path != "status":
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")
+        from engine import gate as GATE_
         conn = A.connect()
         try:
             BI.init(conn)
@@ -1363,6 +1364,13 @@ class Handler(BaseHTTPRequestHandler):
                 except BI.BillingUnavailable:
                     out["live"] = False
             if who:
+                # Their OWN address, same-origin, already available from
+                # /api/account/me. The plans page shows it so that a
+                # signed-in reader who has not subscribed is told they are
+                # signed in — landing them on a page headed "Log in" is
+                # how this looked when Ethan reported that signing in
+                # never says it worked.
+                out["email"] = who["email"]
                 out.update(BI.status_for(conn, who["id"]))
                 # Codes ride alongside rather than inside the subscription
                 # status: a redeemed code is not a subscription and saying
@@ -1373,6 +1381,29 @@ class Handler(BaseHTTPRequestHandler):
                 out["codes"] = RD.describe(conn, who["id"])
                 if out["codes"]["active"]:
                     out["entitled"] = True
+                # AND THE COMP LIST, which this endpoint did not know
+                # about. `_entitled` — the method that actually decides
+                # whether a full board goes out — checks `gate.comped`
+                # first, so a comped address was already being served
+                # unredacted data while this endpoint kept answering
+                # "entitled: false". The browser believed the endpoint,
+                # kept the wall up, and drew a plans page on top of a
+                # board the reader was entitled to.
+                #
+                # Two answers to one question is the bug; this is the
+                # second place that question gets asked and both places
+                # now agree.
+                if GATE_.comped(who.get("email")):
+                    out["entitled"] = True
+                    out["comped"] = True
+                    # And SAY so. `status_for` reads the subscriptions
+                    # table, which has no row for a comped address, so its
+                    # sentence is "No subscription." — printed in the
+                    # entitled style next to a working site. Whatever the
+                    # reader concluded from that, it was not the truth.
+                    if out.get("status") in (None, "none"):
+                        out["note"] = ("Comped account — full access, no "
+                                       "card on file.")
                 # THE DISCORD INVITE, AND ONLY HERE. Inside the `if who`
                 # block and behind the entitlement it has just computed,
                 # so it is never in an anonymous response — and never in
@@ -1386,11 +1417,21 @@ class Handler(BaseHTTPRequestHandler):
                     invite = os.environ.get("QB_DISCORD_INVITE", "").strip()
                     if invite:
                         out["discord"] = invite
+            # THE INSTAGRAM IS NOT THE INVITE and is not gated like one.
+            # It is a public page anybody can already find; the Discord
+            # welcome cites it because it is where this desk's picks have
+            # been posted, and citing it to somebody who has not
+            # subscribed is the entire point of a sales page. Outside the
+            # `if who` block for that reason.
+            from engine import secrets as _s2
+            _s2.load_local_secrets()
+            gram = os.environ.get("QB_INSTAGRAM", "").strip()
+            if gram:
+                out["instagram"] = gram
             # Whether the gate is even on. The account page cannot tell
             # "you need to subscribe" from "everything is free right now"
             # without it, and it has been guessing.
-            from engine import gate as GATE
-            out["paywall"] = GATE.enabled()
+            out["paywall"] = GATE_.enabled()
             return self._send(200, json.dumps(out).encode(), ".json")
         finally:
             conn.close()

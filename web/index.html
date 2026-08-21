@@ -322,6 +322,16 @@
         <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
           The Lab</button>
+        <!-- Ethan, 2026-08-21: "we should add a discord tab or something
+             so if someone doesnt join immedietly, they still have the
+             option to join later." Its own accent because it is the one
+             row that leaves the site, and because the welcome screen that
+             hands out the invite is seen once — this is how it is found
+             again. -->
+        <button class="nav-btn sb-item sb-disc" data-view="discord"
+                data-hint="the members’ room, where the picks get posted">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8.4 17.4c-2.4-.6-4-1.7-4-1.7.4-3.9 1.8-7 1.8-7a12.4 12.4 0 013.4-1.4l.6 1.2a15 15 0 013.6 0l.6-1.2a12.4 12.4 0 013.4 1.4s1.4 3.1 1.8 7c0 0-1.6 1.1-4 1.7l-.9-1.5"/><path d="M7.2 15.9c2.9 1.35 6.7 1.35 9.6 0"/><path d="M9.5 13v.01M14.5 13v.01"/></svg>
+          Discord</button>
         <button class="nav-btn sb-item" data-view="bankroll" data-hint="size your units">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.7 2.5 1.7c0 2.6-5 1.6-5 4.2 0 1 1 1.7 2.5 1.7s2.5-.7 2.5-1.7"/></svg>
           Bankroll</button>
@@ -601,6 +611,13 @@
          fields are NOT here and never will be — they belong to whichever
          processor takes over, on their origin, in their iframe. -->
     <section class="view" id="view-checkout"></section>
+
+    <!-- The members' Discord. Built entirely in JS because what it says
+         depends on the answer to "has this reader paid" — the invite
+         itself is only ever sent to somebody the server has decided is
+         entitled, so it cannot be sitting in this file, which is a
+         static asset served to everybody. -->
+    <section class="view" id="view-discord"></section>
 
     <!-- Track Record -->
     <section class="view" id="view-record">

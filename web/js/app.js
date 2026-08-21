@@ -454,6 +454,18 @@ const ICON_PATHS = {
          + '<path d="M4.8 11V7.6M7.6 11V4.6M10.4 11V8.8M13 11V6"/>',
   glove: '<path d="M3.4 13.4V7.2a1.6 1.6 0 013.2 0V4.2a1.6 1.6 0 013.2 0v3'
          + 'a1.6 1.6 0 013.2 0v3.4a3.8 3.8 0 01-3.8 3.8z"/>',
+  people: '<circle cx="5.9" cy="5.6" r="2.3"/>'
+          + '<path d="M1.7 13.4v-1a3.4 3.4 0 013.4-3.4h1.6a3.4 3.4 0 013.4 3.4v1"/>'
+          + '<path d="M10.7 3.6a2.3 2.3 0 010 4.3"/>'
+          + '<path d="M11.6 9.2h.4a2.9 2.9 0 012.9 2.9v1.3"/>',
+  // Discord's mark, drawn rather than fetched — the CSP on this site
+  // blocks every external host, and a logo that 404s is worse than none.
+  // Used only as the label on links that genuinely go to Discord.
+  discord: '<path d="M5.6 11.6c-1.6-.4-2.7-1.1-2.7-1.1.3-2.6 1.2-4.7 1.2-4.7'
+           + 'A8.3 8.3 0 016.4 4.7l.4.8a10 10 0 012.4 0l.4-.8a8.3 8.3 0 012.3.'
+           + '9s.9 2.1 1.2 4.7c0 0-1.1.7-2.7 1.1l-.6-1"/>'
+           + '<path d="M4.8 10.6c1.9.9 4.5.9 6.4 0"/>'
+           + '<path d="M6.3 8.7v.01M9.7 8.7v.01"/>',
 };
 
 function icon(name, size = 13) {
@@ -12172,28 +12184,104 @@ window.acctAuth = async function (btn, mode) {
     card.querySelector(".acct-pw").value = "";
     _acctNote = mode === "signup" ? "Account created — this device is synced."
                                   : "Signed in — pulling your data…";
+    // "once someone makes an account … the first thing we should do is
+    // give them the link to join the discord server." Armed here, at the
+    // moment the account exists; spent the first time this reader is
+    // entitled, which behind the wall is after they pay and not before.
+    if (mode === "signup") dcMarkWelcome();
     await acctSync();
     if (typeof renderGreeting === "function") renderGreeting();
     if (state.view === "mybets") renderMyBets();
     else if (state.view === "fantasy") renderFantasy();
+    // AND THEN GO SOMEWHERE. Signing in used to leave you on the sign-in
+    // screen with "synced 6:18 PM" under it, which is a status line, not
+    // an answer — Ethan: "it doesn't tell you it logged you in and then
+    // take you to the main website pages."
+    //
+    // Where to is not a preference, it is the entitlement question, and
+    // the server has just been asked it as part of the sync.
+    await acctLandAfterAuth(say);
   } catch (e) {
     say("The live server is not reachable — accounts need the site served "
         + "by launch.py, not a static copy.");
   }
 };
 
+/* Where a fresh sign-in belongs.
+   ---------------------------------------------------------------------
+   Signing in used to end at the sign-in form with "synced 6:18 PM" under
+   it. That is a status line, not an answer — Ethan: "it doesn’t tell you
+   it logged you in and then take you to the main website pages."
+
+   Paid, or the wall is off  -> the board. That is what they came for.
+   Not paid, wall on         -> the plans. Nobody reaches the picks
+                                without a subscription, and landing them
+                                on a board they cannot read would be a
+                                worse answer than landing them on a price.
+
+   WHICH ONE IS THE SERVER’S ANSWER, NOT THIS SCRIPT’S. `paywallCheck`
+   asks /api/billing/status with the session cookie that was set a
+   moment ago. The client is not trusted with entitlement and does not
+   have to be: every board it can reach was redacted on the way out.
+
+   IF THE WALL STATE CHANGED, RELOAD. Every board this tab holds was
+   fetched as whoever they were before — for someone who just signed in
+   from behind the wall, that is a stranger, so the copies in memory are
+   the redacted ones. Re-rendering would show a subscriber the free
+   version of their own product and look like the payment had not worked.
+   A reload re-fetches with the new cookie and recomputes the wall from
+   scratch, which is why `coApplyFree` reloads after a code is redeemed.
+
+   It cuts the other way too: a visitor who arrived un-walled and signed
+   in to an UNPAID account has to reload, because the hashchange guard
+   that keeps the wall from being hash-hopped is installed at boot and
+   only when the wall is up. Rendering the plans without it would leave a
+   wall any typed URL could walk around. */
+async function acctLandAfterAuth(say = () => {}) {
+  const was = document.body.classList.contains("walled");
+  // Nulled so that a failed request is distinguishable from a cached
+  // answer. `paywallCheck` swallows its own errors and returns false,
+  // and false means "come in" — which is the wrong way to fail.
+  const prev = _pwStatus;
+  _pwStatus = null;
+  const walled = await paywallCheck();
+  if (!_pwStatus) {
+    _pwStatus = prev;
+    return say("Signed in, but the server did not answer when asked which "
+               + "plan you are on. Reload the page in a moment.");
+  }
+
+  if (walled !== was) {
+    say(walled ? "Signed in — this account does not have a plan yet."
+               : "Signed in — taking you in…");
+    location.hash = walled ? "#paywall" : dcFirstStop();
+    return location.reload();
+  }
+
+  if (walled) {
+    say("Signed in. This account does not have a plan yet — here are the "
+        + "options.");
+    renderPaywall();
+    _switchViewNow("paywall", false, 0);
+  } else {
+    say("Signed in — taking you in…");
+    switchView(dcFirstStop().replace("#", ""), true);
+  }
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 /* ---------------- Subscription -----------------------------------------
 
    Ethan, 2026-08-15: "we will be accepting money for people to use the
    website once it is complete."
 
-   NOTHING IS GATED YET, and that is deliberate rather than unfinished.
-   The plumbing is here and the status is real, but no feature checks
-   entitlement — the site is free today, and switching a paywall on
-   before Ethan has said what is behind it would lock him out of his own
-   board on the strength of an inference. This card reports the truth and
-   sells a subscription; the day something becomes paid is a decision, not
-   a deployment.
+   THE WALL IS UP as of 2026-08-20 and it is a server decision, not a
+   client one. `QB_PAYWALL` gates the boards on the way out of the
+   process — `gate.redact()` empties the paid lists before the JSON is
+   written, and `seal_on_boot()` rewrites anything already on disk at
+   startup — so the picks are not in the browser to be un-hidden. What
+   this card does is report entitlement and sell a subscription. Nothing
+   here is load-bearing for access.
 
    AND THE CARD NEVER TOUCHES A CARD. Subscribe hands off to a Stripe
    Checkout page; Manage billing hands off to Stripe's customer portal,
@@ -12515,7 +12603,12 @@ function paywallHTML(rec, status) {
     <header class="pw-top">
       <span class="pw-brand">${brandMarkHTML(30)}
         <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
-      <button class="btn ghost pw-login" onclick="pwSignIn()">Log in</button>
+      ${status && status.signed_in
+        ? `<span class="pw-who" title="${escapeHtml(status.email || "")}">
+             <b>Signed in</b>${status.email
+               ? `<span>${escapeHtml(status.email)}</span>` : ""}</span>
+           <button class="btn ghost pw-login" onclick="pwSignIn()">Account</button>`
+        : `<button class="btn ghost pw-login" onclick="pwSignIn()">Log in</button>`}
     </header>
 
     <section class="pw-hero">
@@ -12626,6 +12719,254 @@ function paywallHTML(rec, status) {
 
 /* The wall hides the whole chrome, including the way in. Somebody who
    already pays and is merely signed out lands here and needs a door. */
+/* ======================= THE DISCORD =======================
+   Ethan, 2026-08-21, with a render: "once someone makes an account …
+   the first thing we should do is give them the link to join the discord
+   server … also we should add a discord tab or something so if someone
+   doesn't join immediately, they still have the option to join later. i
+   do wanna add the main purpose of this discord server is for me to
+   select and pick out picks i think are winners."
+
+   SO IT IS TWO THINGS IN ONE PAGE. Arrived at right after paying, it is
+   a welcome: the account is made, here is the door, walk through it.
+   Reached from the nav later, it is the same page without the confetti —
+   which is the whole reason it is a VIEW and not a one-shot screen. A
+   welcome you can only see once is a welcome you cannot go back to, and
+   "I closed it, where was that link" is the support email this exists to
+   prevent.
+
+   THE INVITE IS STILL ONLY SENT TO PAID READERS. `s.discord` arrives on
+   the status payload or it does not arrive at all — the server decides,
+   and web/js/app.js never holds it otherwise. An unsubscribed reader
+   gets this same page as a SALES page: everything about what is inside,
+   and a button to the plans where the join button would be. That is
+   deliberate. The Discord is where the picks get posted, so handing the
+   invite out at signup would hand out the product to anyone who can type
+   an email address. */
+
+const DISCORD_PERKS = [
+  "Ethan’s own picks — the ones he is actually on",
+  "Live line-movement alerts",
+  "Injury news and late scratches",
+  "Lineup breakdowns and projections",
+  "Fantasy picks and strategy",
+  "Community chat and discussion",
+  "Giveaways and contests",
+  "Direct access to the Qellys desk",
+];
+
+const DISCORD_INSIDE = [
+  ["target", "Daily picks",
+   "The plays Ethan has picked out himself, posted as he takes them."],
+  ["bolt", "Live alerts",
+   "Line moves, steam and injury news while there is still time to act."],
+  ["chart", "Projections",
+   "The model’s numbers behind the calls, and where they disagree."],
+  ["people", "Community",
+   "A room of people betting the same card, comparing notes."],
+  ["gem", "Giveaways",
+   "Contests and drops that run in the server and nowhere else."],
+  ["inbox", "Support",
+   "Ask a question and get an answer from the person who built it."],
+];
+
+/* The channel list from the render. Names only — nothing in this panel
+   pretends to be a message somebody sent. An illustration of a chat room
+   is fine; inventing posts, members and reaction counts to sit inside it
+   would be inventing a track record, and this site has a Record page for
+   exactly the reason that claims here have to be real ones. */
+const DISCORD_ROOMS = [
+  ["Welcome", ["welcome", "announcements", "rules", "get-started"]],
+  ["Premium", ["premium-picks", "player-props", "live-alerts",
+               "lineup-drops", "nba-dfs", "nfl-dfs", "mlb-dfs"]],
+  ["Community", ["chat", "wins", "giveaways", "feedback"]],
+];
+
+function discordRoomsHTML() {
+  return `
+    <div class="dc-mock" aria-hidden="true">
+      <div class="dc-mock-head">${iconMark("discord", 15)}
+        <b>QELLYS BOOKS</b></div>
+      ${DISCORD_ROOMS.map(([group, rooms]) => `
+        <div class="dc-mock-group">${escapeHtml(group)}</div>
+        <ul class="dc-mock-list">${rooms.map((r) => `
+          <li><span class="dc-hash">#</span>${escapeHtml(r)}</li>`).join("")}
+        </ul>`).join("")}
+    </div>`;
+}
+
+function discordPageHTML(s, welcome) {
+  const invite = s && s.discord;
+  const gram = s && s.instagram;
+  const year = new Date().getFullYear();
+
+  /* The one button, in its three honest states. Entitled with an invite
+     configured: go. Entitled with none: say so plainly rather than
+     drawing a dead button — that is a server that has not been finished
+     being set up, and pretending otherwise wastes the reader's click.
+     Not entitled: the plans. */
+  const cta = invite
+    ? `<a class="btn primary dc-go" href="${escapeAttr(invite)}"
+          target="_blank" rel="noopener noreferrer">
+         ${iconMark("discord", 18)} Join the Discord</a>`
+    : (s && s.entitled
+        ? `<p class="dc-pending">The invite link is not configured on this
+             server yet. It will appear here the moment it is.</p>`
+        : `<button class="btn primary dc-go" onclick="dcSeePlans()">
+             See the plans</button>`);
+
+  const note = invite
+    ? `<span class="dc-fine">${icon("lock")} Private server · included
+         with your plan</span>`
+    : (s && s.entitled ? ""
+        : `<span class="dc-fine">${icon("lock")} The server is for
+             subscribers — the picks are posted there.</span>`);
+
+  return `
+  <div class="dc">
+    ${welcome ? `
+    <div class="dc-toast" role="status">
+      <span class="dc-toast-ic">${iconMark("check", 16)}</span>
+      <div><b>Account created</b><span>Welcome to Qellys Books.</span></div>
+    </div>` : ""}
+
+    <header class="dc-hero">
+      ${welcome ? `<p class="dc-eyebrow">Welcome to</p>` : ""}
+      <h1 class="dc-h1">QELLYS <b>BOOKS</b></h1>
+      ${welcome
+        ? `<p class="dc-lede">Your account is all set. You’re in.</p>
+           <p class="dc-sub">The next step is the room where the picks get
+             posted — our ${'' /* no superlatives we cannot stand behind */}
+             members’ Discord.</p>`
+        : `<p class="dc-lede">The members’ Discord.</p>
+           <p class="dc-sub">The room where the picks get posted, and where
+             you can ask about any of them.</p>`}
+    </header>
+
+    <section class="card dc-main">
+      <div class="dc-main-words">
+        <h2 class="dc-h2">Join the <em>Qellys</em> Discord</h2>
+        <p class="dc-body">This is the point of the server: Ethan goes
+          through the board and picks out the ones he thinks are winners,
+          and posts them as he takes them. Everything else — the alerts,
+          the projections, the chat — is around that.</p>
+        ${gram ? `<p class="dc-body">It is the same thing he has been
+          posting publicly on <a href="${escapeAttr(gram)}" target="_blank"
+          rel="noopener noreferrer">Instagram</a> — he puts that run at
+          <b>+400 units</b>. That is his own count, on his own page;
+          what this site publishes is graded here, pick by pick, on the
+          <a href="#record">Record</a> page.</p>`
+        : `<p class="dc-body">Every pick this site makes is graded in
+          public on the <a href="#record">Record</a> page — the Discord is
+          where the ones Ethan is personally on get called out.</p>`}
+        <ul class="dc-perks">
+          ${DISCORD_PERKS.map((p) => `
+            <li>${iconMark("check", 15)}${escapeHtml(p)}</li>`).join("")}
+        </ul>
+      </div>
+      ${discordRoomsHTML()}
+    </section>
+
+    <section class="card dc-cta">
+      <div class="dc-cta-ic">${iconMark("discord", 30)}</div>
+      <div class="dc-cta-words">
+        ${invite || (s && s.entitled)
+          ? `<h2 class="dc-h2">Don’t miss the edge</h2>
+             <p class="dc-body">Join now and we’ll see you inside.</p>`
+          // Telling somebody who cannot get in that we will see them
+          // inside is the kind of small lie that makes a whole page
+          // read like marketing rather than a product.
+          : `<h2 class="dc-h2">The room comes with the plan</h2>
+             <p class="dc-body">Subscribe and the invite is waiting on your
+               account page — every plan, same room.</p>`}
+      </div>
+      <div class="dc-cta-go">${cta}${note}</div>
+    </section>
+
+    <h2 class="dc-h2 dc-h2-mid">What you get inside</h2>
+    <div class="dc-grid">
+      ${DISCORD_INSIDE.map(([ic, title, body]) => `
+        <article class="card dc-card">
+          <div class="dc-card-ic">${iconMark(ic, 20)}</div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(body)}</p>
+        </article>`).join("")}
+    </div>
+
+    <footer class="dc-foot">
+      <div>
+        <span class="pw-brand small">${brandMarkHTML(22)}
+          <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+        <p>© ${year} Qellys Books. All rights reserved.</p>
+      </div>
+      <div>
+        <b>${icon("shield")} Your details stay yours</b>
+        <p>We never sell or share your information. See the
+          <a href="privacy.html">Privacy Policy</a>.</p>
+      </div>
+      <div>
+        <b>Not sure where to start?</b>
+        <p>Read <a href="#why">how the picks are made</a>${invite
+          ? `, or ask in the server — somebody will answer`
+          : `, and check the <a href="#record">Record</a> before you pay
+             for anything`}.</p>
+      </div>
+    </footer>
+  </div>`;
+}
+
+/* Where an entitled reader goes first. The Discord ONCE, then the board
+   for ever after — Ethan: "the first thing we should do is give them the
+   link to join the discord server". Doing it every sign-in would put a
+   sales page between a subscriber and the thing they subscribed to. */
+function dcFirstStop() {
+  let pending = false;
+  try { pending = localStorage.getItem(DC_WELCOME_KEY) === "1"; }
+  catch (e) { pending = false; }
+  return pending ? "#discord" : "#recommended";
+}
+
+window.dcSeePlans = function () {
+  renderPaywall();
+  _switchViewNow("paywall", true, 0);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+/* `welcome` is a one-shot: set the moment an account first becomes
+   entitled, spent the first time this page draws. Stored per browser
+   because that is the only place there is to store it without inventing
+   an account field for a piece of confetti. */
+const DC_WELCOME_KEY = "qb.discord.welcome";
+
+function dcMarkWelcome() {
+  try { localStorage.setItem(DC_WELCOME_KEY, "1"); } catch (e) {}
+}
+
+function dcTakeWelcome() {
+  let had = false;
+  try {
+    had = localStorage.getItem(DC_WELCOME_KEY) === "1";
+    if (had) localStorage.removeItem(DC_WELCOME_KEY);
+  } catch (e) {}
+  return had;
+}
+
+async function renderDiscord() {
+  const host = document.getElementById("view-discord");
+  if (!host) return;
+  const welcome = dcTakeWelcome();
+  // Drawn twice on purpose: once immediately from whatever the last
+  // status call left behind, so the page is never blank while a request
+  // is in flight, and again when the fresh answer lands. The invite is
+  // the whole point of the page and it is the part that arrives late.
+  host.innerHTML = discordPageHTML(_pwStatus || {}, welcome);
+  try {
+    const r = await fetch("/api/billing/status", { credentials: "same-origin" });
+    _pwStatus = await r.json();
+    host.innerHTML = discordPageHTML(_pwStatus, welcome);
+  } catch (e) { /* the first draw stands */ }
+}
+
 window.pwSignIn = function () {
   _switchViewNow("account", false, 0);
   window.scrollTo({ top: 0, behavior: "auto" });
@@ -12916,9 +13257,15 @@ async function renderBilling() {
     <div class="acct-row">
       <span class="bill-state${s.entitled ? " on" : ""}">${
         escapeHtml(s.note || "")}</span>
-      ${s.entitled || s.customer_id
+      ${s.customer_id
         ? `<button class="btn ghost" onclick="billPortal(this)">Manage billing</button>`
-        : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`}
+        : (s.entitled
+            // Entitled with nobody to bill: a comped address or a
+            // redeemed code. "Manage billing" opened Stripe's portal for
+            // a customer that does not exist and came back an error, and
+            // "Subscribe" would sell them what they already have.
+            ? ""
+            : `<button class="btn" onclick="billSubscribe(this)">Subscribe</button>`)}
       ${s.live === false ? `<span class="chip warn">Stripe test mode —
         no real money moves</span>` : ""}
     </div>
@@ -19087,7 +19434,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -19104,7 +19451,40 @@ const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "s
    Skipped when the reader asked for less motion, when the browser has no
    such API (it falls straight through to the plain swap), and in quiet
    mode — which exists for the same reason. */
+/* THE WALL, ENFORCED IN ONE PLACE.
+   ---------------------------------------------------------------------
+   It used to be enforced in the hashchange listener installed at boot,
+   and that listener lost a race it could not win. The router's own
+   hashchange handler is registered first, so it runs first, and it hands
+   the switch to `document.startViewTransition` — which defers it.
+   `state.view` therefore still said "paywall" when the guard ran, the
+   guard concluded there was nothing to correct, and the deferred switch
+   then put the reader on the board. Typing #recommended walked around
+   the wall, every time, on any browser with View Transitions.
+
+   Racing it better was not the fix. `_switchViewNow` is the one function
+   every route change ends in — tab taps, hash hops, openGame, the boot
+   router — so the question "may this reader see this page" is asked
+   there and nowhere else, and no future caller can forget to ask it.
+
+   WHAT THIS IS NOT. It is not the paywall. The paywall is `gate.redact`
+   emptying the paid lists before the JSON is ever written, and
+   `_entitled` on the server; a reader who defeats every line below finds
+   the same redacted files. This stops the CHROME from lying — it is what
+   keeps somebody from sitting on an empty board wondering why they paid,
+   which is a support email, not a breach.
+
+   Record and Account stay open on purpose: Record is the evidence the
+   subscription is sold on, and Account is where signing in happens. */
+const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord"];
+
+function wallBlocked(name) {
+  return document.body.classList.contains("walled")
+    && !WALL_OPEN.includes(name);
+}
+
 function switchView(name, push = false) {
+  if (wallBlocked(name)) name = "paywall";
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   const go = () => _switchViewNow(name, push, dir);
   if (typeof document.startViewTransition === "function" && !state.quiet
@@ -19117,6 +19497,9 @@ function switchView(name, push = false) {
 }
 
 function _switchViewNow(name, push, dir) {
+  // Late, because a deferred view transition queued before the wall went
+  // up arrives here after it did — see WALL_OPEN above.
+  if (wallBlocked(name)) { name = "paywall"; dir = 0; }
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
@@ -19174,6 +19557,7 @@ function _switchViewNow(name, push, dir) {
   // Found by Ethan doing exactly that on the live site.
   if (name === "paywall") renderPaywall();
   if (name === "checkout") renderCheckout();
+  if (name === "discord") renderDiscord();
   // The escape hatch, on the two pages that stay open behind the wall.
   // Driven from here rather than from each page's own render, because
   // this is the one place that knows which view is showing — and a
@@ -20844,23 +21228,34 @@ async function renderLiveBoard() {
      webhook to land. That wait is the difference between "you are in"
      and "please subscribe" for somebody whose card cleared four seconds
      ago, and it grants nothing on its own — see the function. */
-  paidReturnWait().then(() => paywallCheck()).then((walled) => {
+  paidReturnWait().then((paid) => paywallCheck().then((walled) => {
+    // JUST PAID, AND IN. Stripe sends them back to /?paid=1#account,
+    // which is the receipt page and not a welcome. This is the moment
+    // Ethan asked for — the account exists, the money has cleared, and
+    // the next thing they should see is the door to the room.
+    if (paid && !walled) {
+      dcMarkWelcome();
+      renderDiscord();
+      _switchViewNow("discord", false, 0);
+      return;
+    }
     if (!walled) return;
     document.body.classList.add("walled");
     renderPaywall();
     _switchViewNow("paywall", false, 0);
     // A hash that names a real page must not punch through the wall.
-    // The Record page is the one exception and it is deliberate: it is
-    // the evidence the subscription is sold on, and free by design.
+    // `_switchViewNow` is what refuses it — see WALL_OPEN — and this
+    // listener only has to make sure the plans are DRAWN when it does.
+    // The refusal switches to #paywall; if nothing ever rendered into
+    // that section, the reader gets a blank page instead of a wall.
+    //
+    // Checking state.view here would reintroduce the exact bug this
+    // replaced: the router runs first and defers through
+    // startViewTransition, so state.view is whatever it was a moment ago.
     addEventListener("hashchange", () => {
       const want = (location.hash || "").replace(/^#/, "").split("/")[0];
-      if (want === "record" || want === "account") return;
-      if (state.view === "checkout") return;   // mid-purchase; leave them be
-      if (state.view !== "paywall") {
-        renderPaywall();
-        _switchViewNow("paywall", false, 0);
-      }
+      if (wallBlocked(want)) renderPaywall();
     });
-  });
+  }));
 })();
 

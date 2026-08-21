@@ -65,6 +65,7 @@ That is the only thing you have to go and find. The rest:
 | `STRIPE_WEBHOOK_SECRET` | the script creates the endpoint through Stripe's API and takes the secret from the reply — you never see it |
 | `QB_SITE_URL` | set to `https://qellysbook.com` |
 | `QB_DISCORD_INVITE` | offered as your invite; press Enter |
+| `QB_INSTAGRAM` | optional — your profile URL, or press Enter to skip |
 | `QB_CODES` | set to `USFARATHANE:12:100` |
 | `QB_COMP_EMAILS` | offered as your address; press Enter |
 

@@ -97,6 +97,11 @@ case "$KEY" in
     [[ "$VALUE" == https://* ]] || die "QB_SITE_URL needs the https:// scheme" ;;
   QB_DISCORD_INVITE)
     [[ "$VALUE" == https://discord.gg/* ]] || die "that is not a discord.gg invite" ;;
+  QB_INSTAGRAM)
+    # Unlike the invite, this one is PUBLIC — the Discord page cites it to
+    # people who have not subscribed, which is the point of citing it.
+    [[ "$VALUE" == https://www.instagram.com/* || "$VALUE" == https://instagram.com/* ]] \
+      || die "give the full profile URL, e.g. https://instagram.com/yourhandle" ;;
 esac
 
 mkdir -p "$(dirname "$FILE")"

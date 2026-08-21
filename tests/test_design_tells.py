@@ -780,6 +780,17 @@ def test_the_resolver_takes_the_first_root_block_not_the_last():
 
 # --- motion: compositor only, and short ---------------------------------------
 def _transitions(css):
+    """Every `transition:` declaration — from the CSS, not from a comment.
+
+    COMMENTS ARE STRIPPED FIRST, and that is not fussiness. This is the
+    EIGHTH time in this repo a test has failed on the note explaining the
+    very mistake it checks for: here, a comment saying "no `transition:
+    background-color 9999s`, because this test bans it" was read as an
+    instance of the thing it was warning against. The pattern is always
+    the same, and the fix is always the same — a check should look at
+    behaviour, and a comment has none.
+    """
+    css = re.sub(r"/\*.*?\*/", " ", css, flags=re.S)
     return re.findall(r"transition:\s*([^;]+);", css)
 
 
@@ -873,8 +884,14 @@ def test_nothing_transitions_a_shadow_that_never_exists():
     # through the tokens, so every glow on the site is the SAME glow.
     # A raw box-shadow value is still the tell it always was; it just
     # tells on someone freelancing outside the system now.
+    # --autofill-cover is in this list and is not an elevation. Browsers
+    # refuse background-color on an autofilled input, and an inset shadow
+    # is the one thing they do allow, so it is the only way to keep the
+    # sign-in fields from rendering pale yellow on a near-black page. It
+    # is a paint-over wearing a shadow's property name. It still has to
+    # be a token so there is exactly one of it.
     allowed = re.compile(
-        r"^(none|var\(--glow\)|var\(--glow-soft\)"
+        r"^(none|var\(--glow\)|var\(--glow-soft\)|var\(--autofill-cover\)"
         r"|inset [0-9. px-]+ var\(--brand\))$")
     values = [v.strip() for v in re.findall(r"box-shadow:\s*([^;]+);", css)]
     stray = [v for v in values

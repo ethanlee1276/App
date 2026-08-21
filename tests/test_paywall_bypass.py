@@ -437,32 +437,47 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
         assert hidden_on in block, \
             f"the back link shows on {hidden_on}, where it is nonsense"
 
-    # AND THE TWO LISTS AGREE. The hash guard names the pages that stay
-    # open; the escape hatch has to cover all of them.
-    j = app.index("A hash that names a real page must not punch")
-    guard = app[j:j + 700]
-    exempt = set(re.findall(r'want === "([a-z]+)"', guard))
-    assert exempt, "the guard no longer names its exemptions — this test is blind"
-    assert exempt <= {"record", "account"}, (
+    # AND THE TWO LISTS AGREE. WALL_OPEN names the pages that stay open;
+    # the escape hatch has to cover all of them.
+    #
+    # It used to read the `want === "record"` comparisons out of the
+    # hashchange guard, because that is where the exemptions lived. They
+    # moved: the guard was losing a race against the router's deferred
+    # view transition and let #recommended through, so the refusal is in
+    # `_switchViewNow` now and the exemptions are a named list. See
+    # tests/test_wall_routing.py.
+    m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", app)
+    assert m, "the wall no longer names its exemptions — this test is blind"
+    exempt = set(re.findall(r'"([a-z]+)"', m.group(1)))
+    # The wall itself, and the pages the back link reaches.
+    assert exempt <= {"paywall", "checkout", "record", "account", "discord"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 
 
 def test_the_wall_does_not_bounce_a_reader_out_of_checkout():
+    """This used to be spelled `state.view === "checkout"` inside the
+    hashchange guard, and that read was the bug: `state.view` is set by
+    the last COMPLETED view transition, and the router defers through
+    `startViewTransition`, so during a hashchange it names the page being
+    left. The exemption is a name in WALL_OPEN now, checked against the
+    page being GONE TO, which is the thing the question was always about.
+    """
     app = _read("web", "js", "app.js")
-    # THE WALL'S guard, not the app's. There are two hashchange listeners
-    # and the router's own comes first in the file, so anchoring on the
-    # string found the wrong one.
-    # The boot call is now `paidReturnWait().then(() => paywallCheck())`
-    # — the return trip from Stripe holds the wall for a few seconds
-    # while the webhook lands. Anchor on the guard's own body.
-    i = app.index("document.body.classList.add(\"walled\")")
-    guard = app[i:i + 1200]
-    assert "hashchange" in guard, "the wall no longer watches the hash at all"
-    assert 'state.view === "checkout"' in guard, \
+    m = re.search(r"const WALL_OPEN = \[([^\]]*)\]", app)
+    assert m, "the wall no longer names its exemptions"
+    exempt = set(re.findall(r'"([a-z]+)"', m.group(1)))
+    assert "checkout" in exempt, \
         "changing the hash mid-purchase throws them back to the plans"
-    assert '"record"' in guard, \
+    assert "record" in exempt, \
         "the Record page is no longer exempt, and it is free by design"
+    assert "account" in exempt, \
+        "no way to sign in from the wall, which leaves it with no door"
+    # And the refusal reads the DESTINATION, never the current view.
+    body = app[app.index("function _switchViewNow("):]
+    body = body[:body.index("\n}\n")]
+    assert "wallBlocked(name)" in body
+    assert "state.view" not in body[:body.index("state.view = name")]
 
 
 if __name__ == "__main__":

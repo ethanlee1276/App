@@ -432,9 +432,23 @@ def test_the_token_is_never_put_in_a_response_body():
 def test_the_browser_never_stores_the_password():
     """Typed, POSTed, cleared. A password in localStorage is a password on
     disk in the clear, which is the thing this whole file is about."""
+    # THE FUNCTION, not everything between it and the next one with a
+    # similar name. That slice ran 60,000 characters and swept in whatever
+    # happened to be declared in between, so the first unrelated
+    # localStorage write to land there failed a test about passwords.
     i = APP.index("window.acctAuth")
-    body = APP[i:APP.index("\nwindow.acctChangePassword", i)]
-    assert "localStorage.setItem" not in body
+    depth, seen, body = 0, False, None
+    for j in range(APP.index("{", i), len(APP)):
+        if APP[j] == "{":
+            depth += 1
+            seen = True
+        elif APP[j] == "}":
+            depth -= 1
+            if seen and depth == 0:
+                body = APP[i:j + 1]
+                break
+    assert body and len(body) < 6000, "acctAuth was not bracketed correctly"
+    assert "localStorage" not in body
     assert '.value = ""' in body
 
 
