@@ -223,27 +223,68 @@ site.
 
 ---
 
-## 6. Two things to decide before you send it
+## 6. Review mode — one flag, and what it does
 
-Both are mine to flag and yours to call.
+Ethan called this on 2026-08-20: *"lets remove what you think would hurt
+us in the application till afte the review."* It is done, and it is one
+line.
 
-### The Polymarket links
+```js
+// web/js/app.js
+const EXTERNAL_MARKET_LINKS = false;   // true to restore
+```
 
-Our prediction-market pages link out to `polymarket.com/market/<slug>`
-and `polymarket.com/profile/<wallet>` as **source citations** — "this is
-the market the number came from". That is normal for a research product,
-the same as a news article linking its source.
+**Read this part first: the flag changes nothing this document claims.**
+Every sentence in §3, §4 and §5 is true with it set either way. We take no
+wagers, hold no stakes, quote no odds and operate no trading interface,
+and none of that is a function of a boolean. What the flag removes is
+*ambiguity a reviewer could form in thirty seconds of clicking*, not a
+fact about the business.
 
-But a reviewer who clicks one lands on a trading venue. The risk is a
-wrong impression, not a wrong claim.
+### What it turns off
 
-* **Keep them** — defensible, and citing a source is the honest thing.
-* **Remove them during review** — cheapest possible way to remove an
-  ambiguity from a decision you do not control. Say the word and it is a
-  ten-minute change.
+**Outbound links to `polymarket.com`.** Our prediction-market pages cite
+`polymarket.com/market/<slug>` and `polymarket.com/profile/<wallet>` as
+**source citations** — "this is the market the number came from", the
+same as a news article linking its source. Defensible, and citing a source
+is the honest thing. But a reviewer who clicks one lands on a trading
+venue, and there is nothing to gain from making them think about it. With
+the flag off, the market name and the wallet are still printed — as text
+rather than as an anchor. No citation is lost; only its clickability.
 
-My read: remove them for the application, restore them after. There is
-nothing to gain from making a reviewer think about it.
+**The DexScreener / GeckoTerminal candle chart** embedded on the meme-coin
+page. It is a read-only price chart — we provide no wallet, no swap and no
+custody — but it is an iframe served by a decentralized-exchange
+aggregator sitting inside our product, and it is the single most
+trading-venue-looking pixel on the site. With the flag off the dock renders
+a labelled placeholder saying the chart is hidden pending payment review
+and that our own numbers are unaffected, which is exactly true: every
+metric on that page is computed by us from on-chain data and does not come
+from the embed.
+
+### What it does not do
+
+It does not delete a feature and it does not hide one from the
+application. The crypto page **stays** and §4 point 6 describes it. See
+"Mention the crypto page" below — that reasoning is unchanged and is the
+reason this flag is cosmetic rather than a removal.
+
+### Restoring it
+
+Set the constant to `true`. That is the entire change: the data, the
+labels and the layout are identical either way — only whether a citation
+is an anchor and whether the chart is an iframe. `tests/test_review_mode.py`
+pins the current state, so flipping it fails one assertion that tells you
+to update it in the same commit. That test also enforces the thing that
+makes the promise real: **no hard-coded outbound anchor to a trading venue
+anywhere in `app.js`**. Every citation goes through one `extLink()` helper,
+so a render path added next month cannot quietly route around the flag.
+
+**Do not flip it back on a hunch that review has passed.** "Account
+active" in the Stripe dashboard is not the same as "review complete" —
+accounts can be activated and then reviewed again, and the two fields that
+actually matter are `charges_enabled` and `payouts_enabled`. Flip it when
+both are true and no information request is outstanding.
 
 ### Mention the crypto page — do not hide it
 

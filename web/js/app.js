@@ -18,6 +18,58 @@ const state = {
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
 };
 
+/* ===================== PAYMENT REVIEW MODE =====================
+
+   Ethan, 2026-08-20, on the Stripe application: "lets remove what you
+   think would hurt us in the application till afte the review."
+
+   THIS IS NOT A CLAIM ABOUT WHAT WE ARE. Every sentence in
+   docs/STRIPE_APPLICATION.md is true with this flag either way — we take
+   no wagers, hold no funds, offer no odds, and provide no trading
+   interface. This turns off two things that are ACCURATE but that a
+   reviewer, clicking through in thirty seconds, could misread:
+
+     * outbound links to polymarket.com. They are SOURCE CITATIONS —
+       "this is the market the number came from", the same as a news
+       article linking its source — and a reviewer who clicks one lands
+       on a prediction-market trading venue. The risk is a wrong
+       impression, not a wrong claim;
+     * the DexScreener / GeckoTerminal price chart embedded on the
+       meme-coin page. It is a read-only candle chart and we provide no
+       wallet, swap or custody. But it is an iframe served by a
+       decentralized-exchange aggregator, sitting inside our product, and
+       it is the single most trading-venue-looking pixel on the site.
+
+   Nothing is deleted and nothing is hidden from the application: the
+   crypto page STAYS, and the description we file names it, because a
+   feature a reviewer discovers later that we did not mention is
+   misrepresentation and that is how accounts get terminated with a
+   reserve held. This removes ambiguity from a decision we do not
+   control; it does not remove a fact.
+
+   TO RESTORE AFTER APPROVAL: set this to true. That is the whole change.
+   The data, the labels and the layout are unaffected either way — only
+   whether a citation is an anchor and whether the chart is an iframe. */
+const EXTERNAL_MARKET_LINKS = false;
+
+/* One helper so a citation reads identically whether or not it links.
+   Returns an <a> when the flag is on and a plain <span> when it is off,
+   so the reader still sees the market name and the wallet either way.
+
+   NO CLASS ARGUMENT, deliberately. The first cut took one, and the mono
+   `.wallet` face then lived on whichever element the flag happened to
+   produce — so turning the flag off also un-monospaced every wallet
+   address, which has nothing to do with payment review and is the one
+   place on the site you compare strings character by character. Style
+   the wrapper instead: `<span class="wallet">${extLink(...)}</span>`.
+   The dress stays put and only the anchor moves. */
+function extLink(url, label) {
+  return EXTERNAL_MARKET_LINKS
+    ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener"
+         style="color:inherit">${label}</a>`
+    : `<span>${label}</span>`;
+}
+
 /* ---------------- bankroll sizing ---------------- */
 function loadBankroll() {
   const qp = new URLSearchParams(location.search);
@@ -9051,7 +9103,10 @@ function pmVenueRows(kx, d) {
       venue: "POLY", title: m.question,
       sub: m.end_date ? `resolves ${m.end_date}` : "",
       price: m.yes, model: null, edge: null,
-      vol: m.vol24, basis: "", url: m.slug
+      vol: m.vol24, basis: "",
+      // Gated at the SOURCE rather than at each render, so a consumer
+      // added later cannot resurrect the outbound link by accident.
+      url: (EXTERNAL_MARKET_LINKS && m.slug)
         ? `https://polymarket.com/market/${m.slug}` : "",
       key: `p:${m.slug || m.question}`, sport: "", rec: false, rec_side: "",
       matchup: "", spread_cents: null, ends: m.end_date || "",
@@ -9517,8 +9572,9 @@ async function renderIntel() {
             style="background:conic-gradient(${heat(f.score)} ${f.score * 3.6}deg, rgba(255,255,255,.08) 0)">
             <span>${f.score}</span></div>
           <div>
-            <div class="player"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(f.wallet)}"
-              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(traderLabel(f))}</a></div>
+            <div class="player"><span class="wallet">${extLink(
+              `https://polymarket.com/profile/${f.wallet}`,
+              escapeHtml(traderLabel(f)))}</span></div>
             <div class="subtitle">${pmAgo(f.ts)} · ${f.wallet_trades} trade(s) on our tape</div>
             <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
               <span class="book">· ${usd(f.usd)}</span></div>
@@ -9530,8 +9586,8 @@ async function renderIntel() {
            headline and its main tap target, and needs a thumb-sized hit
            box on a phone. -->
       <div class="pm-title" style="margin:8px 0 10px;font-weight:600;line-height:1.35">
-        <a href="https://polymarket.com/market/${escapeHtml(f.slug)}" target="_blank"
-           rel="noopener" style="color:inherit">${escapeHtml(f.market)}</a></div>
+        ${extLink(`https://polymarket.com/market/${f.slug}`,
+                  escapeHtml(f.market))}</div>
       <div class="metrics">
         <div class="metric"><div class="k">Position</div><div class="v">${usd(f.usd)}</div></div>
         <div class="metric"><div class="k">Entry</div><div class="v">${cents(f.entry_price)}</div></div>
@@ -9561,8 +9617,9 @@ async function renderIntel() {
         <div class="card-id">
           <div class="pm-avatar">${escapeHtml(initials)}</div>
           <div>
-            <div class="player">#${t.rank} <a class="wallet" href="https://polymarket.com/profile/${escapeHtml(t.wallet)}"
-              target="_blank" rel="noopener" style="color:inherit">${escapeHtml(label)}</a></div>
+            <div class="player">#${t.rank} <span class="wallet">${extLink(
+              `https://polymarket.com/profile/${t.wallet}`,
+              escapeHtml(label))}</span></div>
             <div class="subtitle wallet">${shortWallet(t.wallet)}</div>
           </div>
         </div>
@@ -10724,9 +10781,14 @@ window.mcShowChart = function (mint, scroll = true) {
   const ref = mcChartRef(c);
   if (!ref || !MC_B58.test(ref.addr || "")) return;
   _mcOpenMint = mint;
-  const src = ref.kind === "gt"
-    ? `https://www.geckoterminal.com/solana/pools/${ref.addr}?embed=1&info=0&swaps=0`
-    : `https://dexscreener.com/solana/${ref.addr}?embed=1&theme=dark&info=0`;
+  // The candle chart is an iframe served by a decentralized-exchange
+  // aggregator. Read-only, no wallet and no swap — and still the most
+  // trading-venue-looking pixel on the site, which is why it is behind
+  // the review flag. See EXTERNAL_MARKET_LINKS.
+  const src = !EXTERNAL_MARKET_LINKS ? ""
+    : ref.kind === "gt"
+      ? `https://www.geckoterminal.com/solana/pools/${ref.addr}?embed=1&info=0&swaps=0`
+      : `https://dexscreener.com/solana/${ref.addr}?embed=1&theme=dark&info=0`;
   const i = c.ind || {};
   const stat = (k, v, color) => `<div class="metric"><div class="k">${k}</div>
     <div class="v"${color ? ` style="color:${color}"` : ""}>${v}</div></div>`;
@@ -10747,8 +10809,16 @@ window.mcShowChart = function (mint, scroll = true) {
         <span style="color:var(--brand)">${c.momentum}</span>
         <span style="color:var(--text-mute)"> / </span>
         <span style="color:${c.risk >= 60 ? "var(--bad)" : "var(--warn)"}">${c.risk}</span></span></div>
-    <iframe src="${src}" loading="lazy" title="Live pool chart"
-      referrerpolicy="no-referrer" allow="clipboard-write"></iframe></div>`;
+    ${src ? `<iframe src="${src}" loading="lazy" title="Live pool chart"
+      referrerpolicy="no-referrer" allow="clipboard-write"></iframe>`
+      /* NOT an iframe with an empty src — a browser resolves src="" to
+         the CURRENT page, which would load the whole app recursively
+         inside its own chart dock. The placeholder also keeps the
+         "is a chart open" check at mcTick() honest, since that reads
+         for an iframe. */
+      : `<div class="mc-chart-off">Price chart hidden while the payment
+           application is under review. Every number above is ours and is
+           unaffected.</div>`}</div>`;
   document.querySelectorAll("#view-memes .mc-pick").forEach((b) =>
     b.classList.toggle("active", b.dataset.mint === mint));
   const panel = dock.closest(".subgroup");
@@ -17280,8 +17350,9 @@ function intelReportCard(v) {
     </div>`).join("");
   const wallets = (v.wallets || []).map((w) => `
     <div class="dl-row pm-wallet">
-      <span class="dl-main"><a class="wallet" href="https://polymarket.com/profile/${escapeHtml(w.wallet)}" target="_blank"
-        rel="noopener" style="color:inherit;font-weight:600">${escapeHtml(traderLabel(w))}</a></span>
+      <span class="dl-main"><span class="wallet">${extLink(
+        `https://polymarket.com/profile/${w.wallet}`,
+        escapeHtml(traderLabel(w)))}</span></span>
       <span class="dl-num">${w.wins}-${w.n - w.wins}</span>
       <span class="dl-num implied">${pctv(w.hit_rate)} vs ${pctv(w.avg_implied)}</span>
       <span class="dl-num strong" title="calibration z — higher = less like luck">z ${w.z}</span>

@@ -3689,6 +3689,17 @@ body.ffd-open { overflow: hidden; }
 .mc-chart-card iframe { display: block; width: 100%;
   height: clamp(520px, 78vh, 1000px);
   border: 0; margin-top: 8px; background: var(--bg-2); }
+/* Chart dock with the venue embed switched off (EXTERNAL_MARKET_LINKS
+   false in app.js). Same footprint as the iframe so the dock does not
+   collapse to a sliver — the reader should see a deliberate blank, not
+   a broken one. */
+.mc-chart-off { display: flex; align-items: center; justify-content: center;
+  text-align: center; min-height: clamp(220px, 30vh, 340px);
+  margin-top: 8px; padding: 24px 20px; background: var(--bg-2);
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-sm); color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug);
+  max-width: var(--measure); margin-left: auto; margin-right: auto; }
 /* The dock's numbers ride the TITLE line — a separate stats band was
    ~60px between the reader and the candles. Wraps on a phone. */
 .mc-dock-head { flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
