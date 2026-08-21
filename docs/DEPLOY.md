@@ -14,12 +14,15 @@ droplet — a job done once — and this is the job done every day.
 **Almost always, this is the whole thing:**
 
 ```bash
-ssh <the droplet>
+ssh qellys
 cd /srv/qellys
 ./deploy/deploy.sh --no-tests
 ```
 
 Then force-quit the app on your phone and reopen it.
+
+(`qellys` is an `~/.ssh/config` alias — §2 sets it up. Until you have it,
+`ssh root@qellysbook.com`.)
 
 If you did not change any code yourself, you do not need step 0 below and
 you do not need to touch the laptop at all. Claude pushes to GitHub; the
@@ -56,9 +59,26 @@ job.
 ### 2. Get onto the box
 
 ```bash
-ssh <the droplet>
+ssh root@qellysbook.com
 cd /srv/qellys
 ```
+
+**Not `ubuntu-s-1vcpu-1gb-nyc1`.** That is the droplet's NAME in the
+DigitalOcean dashboard, not a hostname — nothing resolves it, and the
+`cd` on the next line then runs on your laptop instead, which is the
+confusing part. The domain is an A record straight to the droplet
+(143.198.169.53), so the domain works as the ssh host.
+
+Better, once: put this in `~/.ssh/config` on the laptop.
+
+```
+Host qellys
+    HostName qellysbook.com
+    User root
+```
+
+Then it is `ssh qellys` for ever, and it keeps working if the IP ever
+changes.
 
 ### 3. Deploy
 

@@ -12594,6 +12594,16 @@ function paywallHTML(rec, status) {
           <p>${escapeHtml(a)}</p></details>`).join("")}</div>
     </div>
 
+    <!-- ONE LINE AND TWO LINKS, which is how every site that takes money
+         for this does it. Ethan, 2026-08-21: "like 2 links under the pay
+         page or something like how other sites have it."
+
+         The full text did not disappear — it moved to where somebody
+         reads it on purpose rather than skims past it: Terms §2, §3 and
+         §4, and the site footer on every signed-in page. What stays here
+         is the part that has to be ON the page taking the payment: the
+         age gate and the helpline. That is the industry pattern, and it
+         is the pattern for a reason. -->
     <footer class="pw-foot">
       <div class="pw-foot-top">
         <span class="pw-brand small">${brandMarkHTML(22)}
@@ -12606,14 +12616,10 @@ function paywallHTML(rec, status) {
             `<span class="pw-card">${escapeHtml(c)}</span>`).join("")}</div>
         </div>
       </div>
-      <p class="pw-legal">This site publishes a model’s estimates. It is
-        not betting advice. Every number here is a probability, not a
-        promise. You must be 21 or older to bet. Never bet money you cannot
-        afford to lose — if gambling stops being fun, free and confidential
-        help is available 24/7 in the US at 1-800-GAMBLER.</p>
+      <p class="pw-legal">21+ · Not betting advice · Gambling problem?
+        Call <b>1-800-GAMBLER</b></p>
       <p class="pw-copy">© ${new Date().getFullYear()} Qellys Books ·
-        <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a>
-        · <a href="#record">Record</a></p>
+        <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
     </footer>
   </div>`;
 }
@@ -12815,11 +12821,9 @@ function checkoutHTML() {
         </div>
       </aside>
     </div>
-    <p class="pw-legal co-legal">This site publishes a model’s estimates.
-      It is not betting advice. Every number here is a probability, not a
-      promise. You must be 21 or older to bet. Never bet money you cannot
-      afford to lose — if gambling stops being fun, free and confidential
-      help is available 24/7 in the US at 1-800-GAMBLER.</p>
+    <p class="pw-legal co-legal">21+ · Not betting advice · Gambling
+      problem? Call <b>1-800-GAMBLER</b> ·
+      <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
   </div>`;
 }
 
