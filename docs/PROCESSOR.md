@@ -63,6 +63,12 @@ the true thing that is not the trigger word.
 
 Cheapest by a mile, and the screenshot says it can work.
 
+**`docs/STRIPE_APPLICATION.md` is the whole thing written out** — the
+categorization, the MCC, paste-ready business and feature descriptions, a
+point-by-point answer to "are you a gambling business", and an audit of
+the codebase confirming every claim in it. Start there rather than from
+the paragraph below, which is the short form.
+
 Ask Stripe support, in writing:
 
 > My business is a subscription analytics platform for sports data. We
