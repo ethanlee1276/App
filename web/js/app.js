@@ -12634,6 +12634,14 @@ window.pwSignIn = function () {
 async function renderPaywall() {
   const host = document.getElementById("view-paywall");
   if (!host) return;
+  // ARRIVED DIRECTLY? Then nobody has asked the server anything yet.
+  // `_pwStatus` is filled by the boot check, which only runs its own
+  // render when the wall goes up — so on a plain #paywall navigation it
+  // is null, and the page would draw with no prices marked sellable and
+  // no code box.
+  if (!_pwStatus) {
+    try { await paywallCheck(); } catch (e) { /* draw what we can */ }
+  }
   let rec = null;
   try {
     // boardFetch, not fetch: every board payload on the site goes
@@ -19158,6 +19166,14 @@ function _switchViewNow(name, push, dir) {
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();
+  // THESE TWO WERE MISSING, and the symptom was a blank page. Both were
+  // only ever reached by a button that rendered them first — the wall
+  // going up, or "See the plans" — so nothing built them on a plain
+  // navigation. Typing qellysbook.com/#paywall, or following a shared
+  // link to it, switched to an empty <section> and showed nothing at all.
+  // Found by Ethan doing exactly that on the live site.
+  if (name === "paywall") renderPaywall();
+  if (name === "checkout") renderCheckout();
   updateAgo();          // reference pages hide the freshness chip
   if (location.hash !== `#${name}`) {
     // A tab TAP is a navigation and earns a history entry, so the phone's

@@ -107,6 +107,52 @@ def test_the_responsible_gambling_line_is_not_hidden():
         assert bad not in block, f"the 1-800-GAMBLER block carries {bad}"
 
 
+def test_every_routable_view_is_actually_drawn_by_the_router():
+    """A view in VIEW_ORDER that nothing renders is a blank page.
+
+    FOUND ON THE LIVE SITE, by typing the URL. `paywall` and `checkout`
+    were added as views and reached only by a button that rendered them
+    first — the wall going up, or "See the plans". So the router switched
+    to an empty <section> for anyone who navigated to #paywall directly
+    or followed a link to it, and showed nothing at all. No error, no
+    console message: an empty div is silent.
+
+    Every view either has a render call in switchView, or is named below
+    with the reason it does not need one. Adding a view now means
+    choosing which.
+    """
+    # Drawn by the shared board render rather than a per-view call: these
+    # are the sport boards, and `load()` fills them all at once.
+    SHARED = {"recommended", "live", "edge", "scanner", "longshots",
+              "futures", "trending", "players", "prop", "game"}
+
+    i = APP.index("const VIEW_ORDER = [")
+    literal = APP[i:APP.index("]", i)]
+    views = re.findall(r'"([a-z]+)"', literal)
+    assert len(views) > 20, "VIEW_ORDER did not parse — this test is blind"
+
+    # TO THE NEXT TOP-LEVEL DECLARATION, not to the first `\n}` — the
+    # function contains nested blocks that close at column 0's indent
+    # depth, so the naive slice ended twenty lines in and reported every
+    # view below that point as missing.
+    # `_switchViewNow`, NOT `switchView`. The latter is a four-line
+    # wrapper that picks a slide direction and hands off; the dispatch
+    # lives in the one it calls. Slicing the wrapper found no render
+    # calls at all and reported every view as missing, which is the shape
+    # of a test that is measuring the wrong thing rather than a codebase
+    # that is broken.
+    j = APP.index("function _switchViewNow(")
+    rest = APP[j + 10:]
+    ends = [m.start() for m in re.finditer(r"\n(?:async )?function ", rest)]
+    router = rest[:ends[0]] if ends else rest
+    missing = [v for v in views
+               if v not in SHARED and f'name === "{v}"' not in router]
+    assert not missing, (
+        f"these views are routable and nothing draws them: {missing}. "
+        "Add a render call in switchView, or add the view to SHARED here "
+        "with the reason it does not need one.")
+
+
 # --- the view list ----------------------------------------------------------
 #  weather + alerts joined 2026-08-12 (Ethan's Zeno sidebar render:
 #  "I like all the page options it offers so let's follow suit").
