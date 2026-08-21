@@ -3297,6 +3297,20 @@ body.ffd-open { overflow: hidden; }
   overflow-x: auto; scrollbar-width: none;
 }
 .rec-scopes::-webkit-scrollbar { display: none; }
+/* ON A PHONE IT WRAPS INSTEAD OF SCROLLING. It is a FILTER row, not a
+   chart: eight short chips that all matter equally, and the reader is
+   choosing between them rather than reading along them.
+
+   Scrolling with the scrollbar hidden — which is right for the bracket
+   and the card strip, where the content genuinely runs off — meant the
+   last chip was sliced by the screen edge with nothing to say it moved.
+   Ethan's screenshot shows "CFB" cut in half, and the reasonable reading
+   of that is that the page is broken, not that it swipes.
+
+   Two rows of chips costs 40px and hides nothing. */
+@media (max-width: 640px) {
+  .rec-scopes { flex-wrap: wrap; overflow-x: visible; }
+}
 /* Ethan, 2026-08-19, with a screenshot ringing this row: "fix these
    buttons on the record page to match all the other buttons which are
    all purple."
@@ -6606,7 +6620,31 @@ body.walled .topbar, body.walled .footer { display: none !important; }
    main landed in the 240px column and the whole shop rendered as a
    narrow strip down the left. Measured at 1400px before the fix. */
 body.walled .shell { grid-template-columns: minmax(0, 1fr); }
-body.walled main { padding-left: 16px; padding-right: 16px; }
+/* THE SAFE AREA CAME OFF WITH THE TOPBAR. `.topbar` carries
+   `padding: env(safe-area-inset-top) …`, and hiding it on the wall took
+   that padding out of the document — so on a phone the page began at
+   y=0, which on iOS is UNDER the status bar. The masthead sat behind the
+   clock, "LOG IN" sat behind the battery, and the strip iOS owns
+   swallowed the taps, so the top row could not be pressed at all.
+   `black-translucent` is what puts our pixels up there; something has to
+   put them back down.
+
+   Both of Ethan's mobile screenshots are this: the wall's own masthead
+   on one, the Record page's title on the other. Record is reachable
+   while walled — it is free by design — so it inherited the same
+   missing padding. */
+body.walled main {
+  padding-left: 16px; padding-right: 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+/* …and the sides too, for a landscape notch. `main` already has 16px of
+   its own; the inset is whatever the hardware adds on top. */
+@supports (padding: env(safe-area-inset-left)) {
+  body.walled main {
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  }
+}
 
 .pw { max-width: 1180px; margin: 0 auto; padding: 8px 0 40px; }
 .pw-hero { text-align: center; padding: 26px 16px 30px; }
