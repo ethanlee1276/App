@@ -51,6 +51,58 @@ The last three are responsible-gambling resources.
 
 ---
 
+## 3a. The onboarding form — what to type in the actual box
+
+Ethan hit this on 2026-08-20: Stripe's activation flow, *"What products
+or services will you offer through Stripe?"*, with a Category dropdown
+and a small Description box. That box wants a few plain sentences, **not
+the long description in §3** — §3 is for a support conversation or an
+appeal, and pasting an essay into an onboarding field reads as somebody
+who knows they have a problem.
+
+**Category:** `Software as a service`. Correct, and already the right
+pick.
+
+**Description — paste this (540 characters):**
+
+> Subscription web application providing sports statistics and analytics.
+> We publish statistical projections for NFL, MLB, NBA, WNBA, college
+> football and UFC, the underlying data and reasoning behind each
+> projection, a public record of our own accuracy, season-long fantasy
+> football tools, and read-only market-data displays (charts and risk
+> indicators only). Revenue is a recurring subscription fee for software
+> access. We do not accept wagers, hold customer funds, offer odds, or
+> settle any transaction — we publish analysis and data only.
+
+**If the field is shorter than that (329 characters):**
+
+> Subscription web application providing sports statistics and analytics.
+> We publish statistical projections for major sports, the data behind
+> them, a public record of our accuracy, and fantasy football tools.
+> Revenue is a recurring subscription fee for software access. We do not
+> accept wagers, hold customer funds, or offer odds.
+
+### Why it is worded that way
+
+* **It opens with what we are, not what we are adjacent to.** "Sports
+  statistics and analytics" is the accurate description of the product.
+  Leading with the word "betting" invites a keyword match to a restricted
+  category before a human ever reads the sentence, and every word here is
+  true regardless.
+* **The last sentence is the whole application.** Four denials in one
+  line — no wagers, no funds, no odds, no settlement — so a reviewer
+  scanning for the risk finds the answer without hunting.
+* **"read-only market-data displays" covers the crypto page on purpose.**
+  The site has a MEME COINS tab in its navigation. A reviewer will see
+  it. A description that mentions only sports, next to a site with a
+  visible token tracker, is the discrepancy that causes the problem — so
+  one clause names it and bounds it in the same breath. Do not remove
+  that clause to make the sentence shorter.
+* **No claims.** Nothing about profits, edges, winning, or how many
+  customers there are.
+
+---
+
 ## 3. The business description — paste this into the application
 
 > Qellys Books is a subscription sports-analytics web application. We
