@@ -238,6 +238,73 @@ def test_a_subscription_without_metadata_still_finds_its_plan():
         os.environ.pop("STRIPE_PRICE_YEARLY", None)
 
 
+def test_the_paid_through_date_is_read_from_where_stripe_now_puts_it():
+    """STRIPE MOVED IT, and a new account gets the new API version.
+
+    `current_period_start/end` used to sit on the Subscription; on recent
+    versions they live on each subscription ITEM, because a subscription
+    can hold items on different cycles. So a brand-new install reads None
+    from the old location and nothing says why.
+
+    Found on the first real purchase — the row came back `active` with
+    the right plan and `period_end` NULL. That looks harmless and is not:
+    see the next test.
+    """
+    now = time.time()
+    ev = billing.read_event({
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": "sub_1", "customer": "cus_1",
+                            "status": "active",
+                            "items": {"data": [
+                                {"current_period_end": now + 2592000}]}}}})
+    assert ev["period_end"] and ev["period_end"] > now, \
+        "the paid-through date on the item was not read"
+
+    # …and the old location still works, for an account on an older
+    # version and for every subscription created before the change.
+    legacy = billing.read_event({
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": "sub_1", "customer": "cus_1",
+                            "status": "active",
+                            "current_period_end": now + 864000}}})
+    assert legacy["period_end"] and legacy["period_end"] > now
+
+    # Several items: access ends when the LAST thing they paid for ends.
+    many = billing.read_event({
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": "s", "customer": "c", "status": "active",
+                            "items": {"data": [
+                                {"current_period_end": now + 100},
+                                {"current_period_end": now + 9999}]}}}})
+    assert abs(many["period_end"] - (now + 9999)) < 1, \
+        "the earliest item won, so access ends before it should"
+
+
+def test_a_null_paid_through_date_silently_kills_the_grace_period():
+    """WHY THE ONE ABOVE MATTERS, stated as the consequence rather than
+    the mechanism.
+
+    `entitled()` grants `past_due` only while the paid-through date is
+    still in the future — a failed renewal is usually an expiry date
+    rather than a decision, and locking somebody out on the first failed
+    charge turns a payment blip into a refund request. With the date
+    null, `bool(period_end)` is False and that whole grace period is off:
+    the customer is cut the instant a renewal fails.
+
+    Nothing errors. The subscription reads `active` and correct right up
+    until the day it does not.
+    """
+    now = time.time()
+    assert billing.entitled("past_due", now + 86400, now=now), \
+        "a past-due subscription inside its paid period was refused"
+    assert not billing.entitled("past_due", None, now=now), \
+        "this test no longer describes the code it is protecting"
+    assert not billing.entitled("past_due", now - 1, now=now)
+    # active does not depend on the date, which is why the null was
+    # invisible on the first purchase.
+    assert billing.entitled("active", None, now=now)
+
+
 def test_a_malformed_subscription_payload_does_not_throw():
     """Webhook handlers that raise get retried forever. Every shape below
     is one Stripe could send on an edge case."""

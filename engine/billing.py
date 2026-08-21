@@ -587,12 +587,48 @@ def read_event(payload: dict) -> dict | None:
             out["plan"] = None
     out["status"] = ("canceled" if kind.endswith(".deleted")
                      else str(obj.get("status") or "none"))
+    out["period_end"] = _period_end(obj)
+    return out
+
+
+def _period_end(obj: dict) -> float | None:
+    """Paid-through, from wherever this API version keeps it.
+
+    STRIPE MOVED IT. `current_period_start/end` used to sit on the
+    Subscription; on recent API versions they live on each subscription
+    ITEM instead, because a subscription can hold items on different
+    cycles. A new account gets a new API version, so a brand-new install
+    reads None from the old location and nothing says why.
+
+    Found on the first real purchase: the row came back `active` with the
+    right plan and `period_end` NULL. Which looks harmless and is not —
+    `entitled()` grants `past_due` only while the paid-through date is in
+    the future, so a null makes `bool(period_end)` False and cuts a
+    customer off the instant a renewal fails. The whole grace period,
+    which exists because a failed renewal is usually an expiry date
+    rather than a decision, was silently switched off.
+
+    Both locations are read, newest first, and the LATEST item wins when
+    there are several — access should end when the last thing they paid
+    for ends, not the first.
+    """
+    best = None
+    try:
+        for item in ((obj.get("items") or {}).get("data") or []):
+            got = (item or {}).get("current_period_end")
+            if got is None:
+                continue
+            got = float(got)
+            best = got if best is None else max(best, got)
+    except (AttributeError, TypeError, ValueError):
+        best = None
+    if best is not None:
+        return best
     end = obj.get("current_period_end")
     try:
-        out["period_end"] = float(end) if end is not None else None
+        return float(end) if end is not None else None
     except (TypeError, ValueError):
-        out["period_end"] = None
-    return out
+        return None
 
 
 # --- storage ------------------------------------------------------------------
