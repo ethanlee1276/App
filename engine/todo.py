@@ -346,6 +346,39 @@ def book_items(conn=None, hist=None, today: str = "") -> list[Item]:
 
 # --- the environment --------------------------------------------------------
 
+def _backup_freshness() -> Item:
+    """How old the newest local snapshot is.
+
+    LOCAL, not the remote. Reading the remote means a network call and a
+    configured rclone, and `--todo` has to work on a laptop with neither.
+    The local copy is written first and the offsite sync follows it, so a
+    stale local copy means the job is not running at all — which is the
+    failure worth catching. `backup.sh --check` looks at both.
+    """
+    import time
+    root = Path(__file__).resolve().parents[1]
+    dest = Path(os.environ.get("QB_BACKUP_DIR", "") or (root / "backups"))
+    try:
+        snaps = sorted(dest.glob("*.db.gz"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        snaps = []
+    if not snaps:
+        return Item("config", "backups running", TODO,
+                    f"no snapshot has ever been written to {dest}",
+                    "cd /srv/qellys && ./deploy/backup.sh")
+    hours = (time.time() - snaps[-1].stat().st_mtime) / 3600
+    names = {p.name.split("-")[0] for p in snaps}
+    if hours > 48:
+        return Item("config", "backups running", TODO,
+                    f"the newest snapshot is {hours / 24:.1f} days old — the "
+                    "nightly job has stopped, and nothing else would have "
+                    "said so",
+                    "check `crontab -l`, then ./deploy/backup.sh --check")
+    return Item("config", "backups running", DONE,
+                f"newest is {hours:.0f}h old, {len(snaps)} kept "
+                f"({', '.join(sorted(names))})")
+
+
 def config_items(env=None) -> list[Item]:
     """The settings whose absence is silent and expensive."""
     env = env if env is not None else os.environ
@@ -354,6 +387,16 @@ def config_items(env=None) -> list[Item]:
     if env.get("QB_BACKUP_REMOTE"):
         out.append(Item("config", "QB_BACKUP_REMOTE", DONE,
                         "set — the ledger backup has somewhere off this disk to go"))
+        # …AND IS IT STILL HAPPENING? Configured and running are different
+        # facts. A nightly job stops for ordinary reasons — a full disk, a
+        # rotated key, a cron that was edited and lost — and every one of
+        # them is silent. The only day anybody finds out is the day the
+        # backup is needed, which is the one day it cannot be fixed.
+        #
+        # So this reports the AGE of the newest snapshot, which is the
+        # thing that actually decays. Two nights of silence is the
+        # threshold: one missed run is a blip, two is a pattern.
+        out.append(_backup_freshness())
     else:
         out.append(Item(
             "config", "QB_BACKUP_REMOTE", TODO,

@@ -191,6 +191,51 @@ def test_test_remote_does_a_round_trip_rather_than_just_writing():
             "the probe file was left at the destination"
 
 
+def test_the_todo_reports_whether_backups_are_still_HAPPENING():
+    """Configured and running are different facts.
+
+    A nightly job stops for ordinary reasons — a full disk, a rotated
+    key, a cron that was edited and lost — and every one of them is
+    silent. `QB_BACKUP_REMOTE` being set says a destination exists, not
+    that anything reached it last night. The only day anybody finds out
+    is the day the backup is needed, which is the one day it cannot be
+    fixed.
+    """
+    import time
+    from engine import todo
+    with tempfile.TemporaryDirectory() as d:
+        env = {"QB_BACKUP_REMOTE": "b2:x/y"}
+        os.environ["QB_BACKUP_DIR"] = d
+        try:
+            def state():
+                return [i for i in todo.config_items(env)
+                        if "backups running" in i.name][0]
+
+            # Nothing has ever run.
+            it = state()
+            assert it.state == todo.TODO and "ever been written" in it.evidence
+
+            # Two nights of silence is the threshold: one missed run is a
+            # blip, two is a pattern.
+            old_f = os.path.join(d, "ledger-old.db.gz")
+            open(old_f, "w").close()
+            stale = time.time() - 5 * 86400
+            os.utime(old_f, (stale, stale))
+            it = state()
+            assert it.state == todo.TODO, "a 5-day-old backup read as fine"
+            assert "5.0 days" in it.evidence
+            assert "crontab" in (it.command or ""), \
+                "it does not say where to look"
+
+            # …and a fresh one is quiet.
+            open(os.path.join(d, "ledger-new.db.gz"), "w").close()
+            it = state()
+            assert it.state == todo.DONE, it.evidence
+            assert "h old" in it.evidence
+        finally:
+            os.environ.pop("QB_BACKUP_DIR", None)
+
+
 def test_the_todo_still_names_the_setting():
     from engine import todo
     items = todo.config_items({"QB_BACKUP_REMOTE": ""})
