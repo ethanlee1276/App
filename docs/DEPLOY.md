@@ -203,6 +203,17 @@ QB_CODES=USFARATHANE:12:100
 QB_PAYWALL=1
 ```
 
+**Read the code format carefully — the last number is NOT a percentage.**
+It is `CODE:months:max_uses`. So `USFARATHANE:12:100` means *12 months of
+full access, redeemable 100 times in total*. There is no partial-discount
+concept: a code grants the whole site, so "100% off a year" and "12 months
+of access" are the same thing. The cap exists because a code posted
+somewhere public is otherwise unlimited; raise or lower the 100 to taste.
+
+The resemblance between the usage cap and "100% off" is a coincidence and
+a trap — `FRIENDS:1:25` is a one-month code usable 25 times, not a 25%
+discount.
+
 then:
 
 ```bash

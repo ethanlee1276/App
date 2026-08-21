@@ -30,7 +30,12 @@ from engine.mlb.pipeline import run_mlb_slate
 from engine.rules import RuleConfig
 
 ROOT = Path(__file__).parent
-WEB = ROOT / "web"
+#: The served tree. QB_WEB_DIR overrides it, for the same reason
+#: QB_ACCOUNTS_DB overrides the database: a test that has to prove the
+#: paywall seals the public path must not do that to the working copy,
+#: and a test that redacts your real boards as a side effect is worse
+#: than no test. Also useful for a staging tree on the same box.
+WEB = Path(os.environ.get("QB_WEB_DIR", "").strip() or (ROOT / "web"))
 SLATE = ROOT / "data" / "sample_slate.json"
 MLB_SLATE = ROOT / "data" / "mlb_sample_slate.json"
 
@@ -1781,6 +1786,59 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, payload, ".json")
 
     # --- Static files ------------------------------------------------------
+    def _gated_board(self, path: str):
+        """Redact a board on the way out, or None to serve it normally.
+
+        None is the fast path and the common one: the flag is off, the
+        file is free by design, or it is already redacted. Only a file
+        that genuinely still carries paid rows is parsed and rewritten.
+
+        CACHING IS THE SUBTLE RISK HERE and it is already handled, in two
+        places that have to stay consistent. `_send` marks every response
+        this app writes `no-store`, so anything that leaves through here
+        is never cached by anyone. Caddy separately marks /data/*.json
+        `public, max-age=60` — correct only because the files IT serves
+        do not vary by who is asking, being the redacted copy. If a future
+        change ever makes an on-disk board vary by reader, that Caddy
+        header becomes a way to hand a subscriber's copy to the next
+        anonymous visitor: the paywall defeated by a cache rather than by
+        an attacker.
+        """
+        from engine import gate
+        if not gate.enabled():
+            return None
+        name = path[len("/data/"):]
+        if gate.is_free(name):
+            return None
+        target = (WEB / path.lstrip("/")).resolve()
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
+            return None
+        try:
+            payload = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        # Already sealed? Serve the bytes untouched — no rewrite, and the
+        # cache header stays cacheable.
+        try:
+            if not gate._paid_rows(payload, name):
+                return None
+        except Exception:                                    # noqa: BLE001
+            pass
+        A = _acct()
+        conn = A.connect()
+        try:
+            if self._entitled(conn, self._account(conn)):
+                # A paying reader may have the whole thing — but this
+                # response is theirs alone and must never be cached.
+                self._send(200, json.dumps(payload).encode(), ".json")
+                return True
+        finally:
+            conn.close()
+        self._send(200, json.dumps(gate.redact(payload, name)).encode(), ".json")
+        return True
+
     def _static(self, path: str):
         if path in ("/", ""):
             path = "/index.html"
@@ -1804,6 +1862,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, body, ".js",
                            mtime=(WEB / "sw.js").stat().st_mtime)
                 return
+        # THE BACKSTOP, for anything the startup seal did not catch — a
+        # board written by a build that ran without QB_PAYWALL in its
+        # environment, say, which lands on the public path whole and does
+        # not wait for a restart.
+        #
+        # In production Caddy answers /data/*.json off disk and never
+        # reaches this code, which is exactly why the startup seal above
+        # is the primary defence rather than this. This covers `python3
+        # server.py` with no proxy in front, and it costs a parse only on
+        # a paid board while the paywall is on.
+        if path.startswith("/data/") and path.endswith(".json"):
+            gated = self._gated_board(path)
+            if gated is not None:
+                return gated
         target = (WEB / path.lstrip("/")).resolve()
         # Prevent path traversal outside the web root. is_relative_to (not a
         # string prefix) so a sibling like web2/ could never slip through.
@@ -1894,6 +1966,45 @@ def main() -> None:
             args = args[:i] + args[i + 2:]
     ports = [a for a in args if not a.startswith("--")]
     port = int(ports[0]) if ports else 8000
+
+    # SEAL BEFORE ACCEPTING A SINGLE REQUEST.
+    #
+    # Found 2026-08-21 by curling the site with the paywall on: 293 picks,
+    # no cookie, no subscription. Not a bug in the gate — a bug in WHEN it
+    # runs. Redaction happens inside `publish()`, so turning QB_PAYWALL on
+    # changes what the NEXT build writes and touches nothing already on
+    # disk. Every board written before the flag went on stays whole and
+    # public, and in production Caddy serves those files straight off disk
+    # without the app ever seeing the request, so there is no later place
+    # to catch it.
+    #
+    # `launch.py --seal` has always fixed this, and depending on an
+    # operator to remember a command is not a paywall. A restart is the
+    # one thing that reliably happens on every deploy and every config
+    # change, including the change that turns the flag on — so the seal
+    # rides on that.
+    #
+    # NON-FATAL BY DESIGN. A seal that throws must not stop the site
+    # booting: refusing to start turns a redaction problem into an outage.
+    # It says so loudly instead, and `--todo` reports the same thing.
+    try:
+        from engine import gate as _gate
+        if _gate.enabled():
+            res = _gate.seal(web_data=WEB / "data", verbose=False)
+            n = len(res.get("sealed") or [])
+            if n:
+                print(f"Paywall ON — sealed {n} board(s) on the public path "
+                      "at startup.")
+            left = _gate.unsealed(web_data=WEB / "data")
+            if left:
+                rows = sum(r["rows"] for r in left)
+                print(f"  WARNING: {len(left)} board(s) still carry {rows} "
+                      "paid row(s) after sealing. Anyone can read them. "
+                      "Run: python3 launch.py --seal")
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"  WARNING: could not seal the public boards at startup: "
+              f"{exc}\n  Run `python3 launch.py --seal` and check "
+              "`--todo` before letting anyone in.")
 
     server = ThreadingHTTPServer((bind, port), Handler)
     server.live_mode = live  # read by Handler._api

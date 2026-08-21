@@ -6615,6 +6615,15 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    them back. The layout, the rhythm and the three-tier shape are his. */
 body.walled .topbar-nav, body.walled .sidebar, body.walled .tabbar,
 body.walled .nav-btn { display: none !important; }
+/* THE SITE MASTHEAD AND FOOTER GO TOO, and missing them was visible in a
+   screenshot rather than in the markup: the wall draws its OWN lockup and
+   its own legal block, so leaving the site's in place stacked two Qellys
+   Books wordmarks down the top of the page and printed the responsible-
+   gambling notice twice. The wall is a standalone landing page — a person
+   who has never signed in has no use for a search box, a notification
+   bell or a sport switcher, and every one of those was still sitting
+   above the headline. */
+body.walled .topbar, body.walled .footer { display: none !important; }
 /* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is `240px minmax(0,1fr)`;
    display:none takes the sidebar out of the flow but leaves the track, so
    main landed in the 240px column and the whole shop rendered as a
@@ -6652,11 +6661,26 @@ body.walled main { padding-left: 16px; padding-right: 16px; }
 
 /* 14px of top padding, because the "most popular" tag is positioned at
    -11px and the grid was clipping it against the row edge. */
-.pw-plans { display: grid; gap: 14px; align-items: start; padding-top: 14px;
+/* padding-top LEAVES ROOM FOR THE RIBBON. `.pw-tag` is absolutely
+   positioned at top:-11px on the middle card, so with no room above it
+   the "Most popular" pill was sliced in half by the top of the grid —
+   the one ornament the render leans on hardest, cropped. Measured at
+   1440 and at 390. */
+.pw-plans { display: grid; gap: 14px; align-items: start; padding-top: 22px;
   grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
 .pw-plan { position: relative; padding: 22px 20px; text-align: center; }
 .pw-plan.pop { border-color: color-mix(in oklab, var(--brand) 62%, var(--border));
   background: color-mix(in oklab, var(--brand) 7%, var(--panel-2)); }
+/* `.card` is `overflow: hidden` — every card on the site is, so a table
+   or a chart cannot spill past the rounded corner. That clipped the one
+   thing deliberately drawn OUTSIDE the card: the ribbon sat at top:-11px
+   and was sliced in half by its own parent. Room above the grid does not
+   help, because the cut is the card's, not the grid's.
+
+   So the pill sits INSIDE the top edge instead of straddling it. Same
+   read, nothing cropped, and no `overflow: visible` exception that would
+   let some future table escape a card too. */
+.pw-plan.pop { overflow: visible; }
 .pw-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
   padding: 3px 12px; border-radius: 999px; background: var(--brand-solid);
   color: #fff; font-size: var(--fs-2xs); font-weight: 800;
@@ -6725,8 +6749,108 @@ body.walled main { padding-left: 16px; padding-right: 16px; }
 .pw-legal { max-width: var(--measure); margin: 0 auto !important;
   font-size: var(--fs-xs) !important; }
 
+/* The masthead the wall has to draw for itself. `body.walled` hides the
+   site's real one, and the render (2026-08-20) opens with a logo and a
+   Log In button — which is not decoration: somebody who already pays and
+   is merely signed out lands here, and without that button the wall has
+   no door. */
+.pw-top { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 6px 2px 2px; }
+.pw-brand { display: inline-flex; align-items: center; gap: 9px;
+  color: var(--text); }
+.pw-logo { display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand-2); flex: none; }
+.pw-logo svg { width: 100%; height: 100%; }
+.pw-brand-words { font-weight: 800; letter-spacing: .1em;
+  font-size: var(--fs-md); }
+.pw-brand-words b { color: var(--brand-2); font-weight: 800; }
+.pw-brand.small .pw-brand-words { font-size: var(--fs-sm); }
+.pw-login { flex: none; }
+
+/* Sport chips: icon + name, and no league marks — see PW_SPORTS. */
+.pw-sport { display: inline-flex; align-items: center; gap: 7px; }
+.pw-sport .ico-mark { color: var(--brand-2); }
+
+/* The price and its saving on ONE line, as a pill, which is where the
+   render puts it. Underneath it read as a footnote and the whole point
+   of the number is that it is the reason to pick the longer plan. */
+.pw-price-row { display: flex; align-items: center; justify-content: center;
+  gap: 10px; flex-wrap: wrap; }
+.pw-save { display: inline-block; padding: 3px 9px; border-radius: 999px;
+  background: color-mix(in oklab, var(--good) 18%, transparent);
+  color: var(--good); font-weight: 700; font-size: var(--fs-xs);
+  white-space: nowrap; }
+.pw-buy[disabled] { opacity: .55; cursor: not-allowed; }
+
+/* Guarantee beside the record strip. Two claims side by side, and only
+   one of them is a promise we make — the other is arithmetic. */
+.pw-trust { display: grid; gap: 12px; margin-top: 22px;
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .pw-trust { grid-template-columns: minmax(0, 21rem) minmax(0, 1fr);
+    align-items: stretch; }
+  .pw-trust .pw-proof { margin-top: 0; }
+}
+.pw-guar { display: flex; gap: 13px; align-items: flex-start;
+  padding: 18px 20px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel); }
+.pw-guar-ic { color: var(--brand-2); flex: none; }
+.pw-guar b { display: block; font-size: var(--fs-md); }
+.pw-guar p { margin: 6px 0 0; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+
+/* FAQ, with the render's left-hand panel. */
+.pw-faqgrid { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .pw-faqgrid { grid-template-columns: minmax(0, 20rem) minmax(0, 1fr); }
+}
+.pw-unlock { padding: 22px 20px; }
+.pw-unlock-ic { color: var(--brand-2); }
+.pw-unlock h3 { margin: 10px 0 6px; font-size: var(--fs-lg); font-weight: 800; }
+.pw-unlock p { margin: 0 0 14px; color: var(--text-mute);
+  font-size: var(--fs-sm); line-height: var(--lh-snug); }
+/* The default link blue on the panel field is barely legible — measured
+   as unreadable in the 1440 screenshot, which is the only reason it was
+   caught. This is the one link on the page that has a job to do. */
+/* THE SAME FIX, EVERYWHERE IT APPLIES. The default link colour on a
+   panel field is barely legible against it — measured in the 1440
+   screenshot, which is the only reason it was caught, and it hit the two
+   links on the site that have an actual job: "read the Record before you
+   pay" on the wall, and the same sentence on the checkout page. */
+.pw-unlock p a, .co-what-foot a, .pw-proof p a, .pw-guar p a {
+  color: var(--brand-2); font-weight: 700; }
+.pw-unlock-go { width: 100%; padding: 11px; font-weight: 700;
+  background: var(--brand-solid); color: #fff; border-color: transparent; }
+.pw-unlock-go:hover { background: var(--brand-2); }
+
+/* Footer. The card names are NAMES (see PW_CARDS) — a row of brand logos
+   on a checkout page is the oldest tell in the fake-storefront book, and
+   we do not need it to say the true thing. */
+.pw-foot-top { display: flex; flex-wrap: wrap; gap: 16px 24px;
+  align-items: flex-start; justify-content: space-between; text-align: left;
+  padding-bottom: 16px; margin-bottom: 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pw-secure { max-width: var(--measure-tight); }
+.pw-secure-head { display: flex; align-items: center; gap: 7px;
+  font-weight: 700; font-size: var(--fs-sm); }
+.pw-secure-head .ico-mark { color: var(--good); }
+.pw-secure p { margin: 5px 0 9px !important; font-size: var(--fs-xs) !important; }
+.pw-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.pw-card { padding: 3px 9px; border-radius: var(--radius-sm);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2);
+  color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; }
+.pw-copy { font-size: var(--fs-xs) !important; }
+.pw-copy a { color: var(--text-mute); }
+
 @media (max-width: 560px) {
   .pw-hero { padding: 16px 4px 22px; }
+  /* The footer's two blocks stack rather than squeezing to one word each. */
+  .pw-foot-top { flex-direction: column; align-items: center;
+    text-align: center; }
+  .pw-secure-head, .pw-cards { justify-content: center; }
+  .pw-guar { padding: 15px 15px; }
 }
 
 /* ====================== CHECKOUT ======================

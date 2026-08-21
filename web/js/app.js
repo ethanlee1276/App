@@ -376,6 +376,20 @@ function reasonLI(x, tier) {
    -------------------------------------------------------------------- */
 const ICON_PATHS = {
   check: '<path d="M3 8.5l3.2 3.4L13 4.6"/>',
+  // A PAIR OF SCALES. Used four times on the paywall and the checkout
+  // under the
+  // words "graded in public" — and it did not exist, so `icon()` returned
+  // "" and the headline sat with an empty gap where a mark should be.
+  // Silent by construction: an unknown name is not an error, it is
+  // nothing, which is exactly the failure you do not notice in review.
+  scale: '<path d="M8 2.4v11.2M4.6 13.6h6.8M2 5.6h12"/>'
+       + '<path d="M2 5.6L.7 9.4a2.2 2.2 0 004.6 0z"/>'
+       + '<path d="M14 5.6l1.3 3.8a2.2 2.2 0 01-4.6 0z"/>',
+  shield: '<path d="M8 1.6l5.4 2.1v4.1c0 3-2.2 5.4-5.4 6.6'
+        + '-3.2-1.2-5.4-3.6-5.4-6.6V3.7z"/><path d="M5.6 8.1l1.7 1.8 3.2-3.5"/>',
+  bolt: '<path d="M9.2 1.4L3.4 9h3.6l-.6 5.6L12.6 7H9z"/>',
+  lock: '<rect x="3.2" y="7" width="9.6" height="7" rx="1.4"/>'
+      + '<path d="M5.6 7V4.9a2.4 2.4 0 014.8 0V7"/>',
   cross: '<path d="M4 4l8 8M12 4l-8 8"/>',
   dash: '<path d="M3.4 8h9.2"/>',
   // The one filled mark. A live indicator is not a glyph you read, it is a
@@ -12275,6 +12289,17 @@ function billPlansHTML(s) {
    truth, and the truth is the only claim here that a competitor cannot
    also print. */
 
+/* The refund window. STATED ONCE, and read by the plans page, the FAQ,
+   the checkout and docs/BILLING.md's link to the Terms, because a
+   guarantee that says 7 days in one place and 14 in another is not a
+   typo — it is two contradictory promises to a customer who paid.
+
+   IT IS A REAL OBLIGATION. Ethan put it on the render twice, so it is
+   his decision to make and this is where it lives; honouring it is a
+   refund in the Stripe dashboard, which takes about fifteen seconds.
+   Terms §5 carries the binding wording. */
+const REFUND_DAYS = 7;
+
 const PLANS = [
   { id: "monthly", name: "Monthly", price: 25, per: "month", cadence: "Billed monthly. Cancel anytime.",
     save: 0, months: 1 },
@@ -12312,9 +12337,16 @@ const FAQ = [
    "whether the subscription is active, and nothing else about the card. " +
    "Which cards and wallets appear is decided there, not here."],
   ["Is there a free trial?",
-   "There is no trial, and there is something better: the Record page is " +
-   "free and always will be. Every pick is graded in public, wins and " +
-   "losses, before you pay anything."],
+   "There is no trial, and there are two things instead. The Record page " +
+   "is free and always will be \u2014 every pick graded in public, wins " +
+   "and losses, before you pay anything. And if you subscribe and it is " +
+   "not what you expected, email within " + REFUND_DAYS + " days of your " +
+   "first payment and we refund it in full."],
+  ["What is the refund policy?",
+   "Email within " + REFUND_DAYS + " days of your FIRST payment and you " +
+   "get all of it back, no form and no argument. After that, cancelling " +
+   "stops the next charge and you keep access to the end of the period " +
+   "you have already paid for. Terms \u00a75 is the binding version."],
   ["What exactly am I paying for?",
    "A model\u2019s estimates, published early enough to act on, and graded " +
    "afterwards whether they were right or wrong. It is not betting advice " +
@@ -12365,44 +12397,131 @@ function paywallProofHTML(rec) {
       theirs does.</p></div>`;
 }
 
+
+/* Payment methods Stripe Checkout offers on a standard US account with
+   nothing extra switched on. NAMES, NOT LOGOS: the brand marks are
+   trademarks with usage rules, and a wall of them is the oldest trick in
+   the fake-checkout book. Apple Pay and Google Pay are deliberately
+   ABSENT — they need domain verification that has not been done, and
+   advertising a payment method that does not appear at checkout is the
+   kind of small lie that costs the sale in the last five seconds. */
+const PW_CARDS = ["Visa", "Mastercard", "Amex", "Discover"];
+
+/* The brand lockup, for pages that hide the site chrome — the wall and
+   the checkout both do. Same ellipse mark as the masthead in
+   index.html, drawn here rather than cloned from the DOM: on the wall
+   the masthead is display:none, and cloning a hidden node copies the
+   hiding with it. */
+function brandMarkHTML(size = 28) {
+  return `<span class="pw-logo" aria-hidden="true"
+    style="width:${size}px;height:${size}px">
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
+      <ellipse cx="24" cy="24" rx="17" ry="11.5" stroke="currentColor"
+        stroke-width="4"/></svg></span>`;
+}
+
+/* Per-plan lists, in the render's own escalating shape.
+   ---------------------------------------------------------------------
+   The render (Ethan, 2026-08-20) draws three DIFFERENT lists: thirteen
+   lines on monthly, then "Everything In Monthly Plan" plus extras, then
+   "Everything In 6 Month Plan" plus more. Read literally that is tiering,
+   and this site does not tier — every plan is the same product and the
+   only axis is how long you commit for.
+
+   So the SHAPE is copied and the meaning is kept true. Monthly lists what
+   the site actually is. The longer plans inherit it by name — which is
+   what "Everything in…" means when there is one product — and then list
+   what is genuinely different about them, which is the money and the
+   commitment. Nothing appears on a longer plan that a monthly subscriber
+   does not get. */
+const PLAN_EXTRAS = {
+  monthly: [],
+  sixmonth: [
+    "Everything in the Monthly plan",
+    "Save $25 against paying monthly",
+    "One charge every 6 months, not six",
+  ],
+  yearly: [
+    "Everything in the 6-month plan",
+    "Save $75 against paying monthly — the lowest price we offer",
+    "One charge a year, and the price is locked for that year",
+  ],
+};
+
+/* The sports row. Nine chips, and no league logos: the NFL shield and the
+   rest are trademarks, and a subscription site printing them next to a
+   price implies a licence we do not have. Names and our own marks
+   instead. */
+const PW_SPORTS = [
+  ["NFL", "shield"], ["MLB", "target"], ["NBA", "target"],
+  ["WNBA", "target"], ["CFB", "shield"], ["UFC", "glove"],
+  ["Fantasy", "trophy"], ["Prediction markets", "chart"],
+  ["Meme coins", "gem"],
+];
+
 function paywallHTML(rec, status) {
-  const sports = [["NFL", "nfl"], ["MLB", "mlb"], ["NBA", "nba"],
-                  ["WNBA", "wnba"], ["CFB", "cfb"], ["UFC", "ufc"],
-                  ["Fantasy", "fantasy"], ["Prediction markets", "predict"],
-                  ["Meme coins", "memes"]];
   const feature = (icon_, title, body) => `
     <article class="card pw-feat">
       <div class="pw-feat-ic">${iconMark(icon_, 20)}</div>
       <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></article>`;
-  const plan = (pl) => `
+
+  /* A plan whose price id is not configured on the server must not draw
+     a buy button: the customer commits, and the request 502s. `status`
+     comes from /api/billing/status and carries `ready` per plan. When
+     the status call failed entirely we assume ready — a network blip
+     should not hide the shop. */
+  const readiness = {};
+  ((status && status.plans) || []).forEach((p) => { readiness[p.id] = !!p.ready; });
+  const sellable = (id) => (id in readiness ? readiness[id] : true);
+
+  const plan = (pl) => {
+    const lines = pl.id === "monthly"
+      ? PLAN_FEATURES
+      : PLAN_EXTRAS[pl.id].concat(PLAN_FEATURES.slice(0, 4));
+    const ok = sellable(pl.id);
+    return `
     <article class="card pw-plan${pl.popular ? " pop" : ""}">
       ${pl.popular ? `<div class="pw-tag">Most popular</div>` : ""}
       <div class="pw-plan-name">${escapeHtml(pl.name)}</div>
-      <div class="pw-price"><span class="cur">$</span>${pl.price}<i>/${escapeHtml(pl.per)}</i></div>
-      ${pl.save ? `<div class="pw-save">Save $${pl.save} against monthly</div>`
-                : `<div class="pw-save flat">&nbsp;</div>`}
+      <div class="pw-price-row">
+        <div class="pw-price"><span class="cur">$</span>${pl.price}<i>/${
+          escapeHtml(pl.per)}</i></div>
+        ${pl.save ? `<span class="pw-save">Save $${pl.save}</span>` : ""}
+      </div>
       <div class="pw-cadence">${escapeHtml(pl.cadence)}</div>
-      <ul class="pw-list">${PLAN_FEATURES.map((f) =>
+      <ul class="pw-list">${lines.map((f) =>
         `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
-      <button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
-        onclick="coStart(this)">Get started</button>
+      ${ok
+        ? `<button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
+             onclick="coStart(this)">Get started</button>`
+        : `<button class="btn pw-buy" disabled
+             title="This plan is not switched on yet">Not available yet</button>`}
       <div class="pw-fine">${escapeHtml(pl.cadence)}</div>
     </article>`;
+  };
+
   return `
   <div class="pw">
-    <header class="pw-hero">
-      <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
-      <p class="pw-sub">Professional sports intelligence, priced honestly
-        and graded in public.</p>
-      <p class="pw-lede">Qellys Books is one analytics platform for serious
-        bettors, fantasy players and market traders — the model’s
-        estimates, the reasoning behind each one, and a public record of how
-        they turned out.</p>
-      <div class="pw-sports">${sports.map(([label]) =>
-        `<span class="pw-sport">${escapeHtml(label)}</span>`).join("")}</div>
+    <header class="pw-top">
+      <span class="pw-brand">${brandMarkHTML(30)}
+        <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+      <button class="btn ghost pw-login" onclick="pwSignIn()">Log in</button>
     </header>
 
-    <h2 class="pw-h2">Everything you need. <em>All in one place.</em></h2>
+    <section class="pw-hero">
+      <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
+      <p class="pw-sub">Professional sports intelligence. Real-time edges.
+        Every call graded in public.</p>
+      <p class="pw-lede">Qellys Books is one analytics platform for serious
+        bettors, fantasy players and market traders — the model’s
+        estimates, the reasoning behind each one, and a public record of
+        how they turned out.</p>
+      <div class="pw-sports">${PW_SPORTS.map(([label, ic]) =>
+        `<span class="pw-sport">${iconMark(ic, 15)}
+           <span>${escapeHtml(label)}</span></span>`).join("")}</div>
+    </section>
+
+    <h2 class="pw-h2"><em>Everything</em> you need. All in one place.</h2>
     <div class="pw-feats">
       ${feature("target", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
@@ -12410,47 +12529,89 @@ function paywallHTML(rec, status) {
         "Projections, matchup reads and the step-by-step chain from a player’s baseline to the number on the card.")}
       ${feature("trophy", "The full fantasy suite",
         "Draft kit, 20,000-draft mock simulator, lineup optimiser, trade finder, waiver reads and a start calendar.")}
-      ${feature("activity", "Prediction markets",
+      ${feature("rising", "Prediction markets",
         "Live scanning of prediction-market prices for the spots where the crowd and the model disagree.")}
-      ${feature("coin", "Meme coin scanner",
+      ${feature("gem", "Meme coin scanner",
         "Live token discovery with holder concentration, carry tracking and rug checks.")}
       ${feature("clock", "Line movement and shopping",
         "Where each price opened, where it is now, and which book is best right now — in payout space, not in cents.")}
       ${feature("list", "Bet tracker",
         "Log what you actually placed, by hand or by paste, and get ROI, CLV and a record you can argue with.")}
-      ${feature("bell", "Alerts",
+      ${feature("signal", "Alerts",
         "Line moves, injuries and the nightly summary, on your phone.")}
-      ${feature("user", "Player pages",
+      ${feature("book", "Player pages",
         "Every player we hold, with usage, trends, injuries, props and fantasy value in one place.")}
       ${feature("scale", "A public record",
         "Every pick graded afterwards — wins and losses both — on a page that stays free whether you subscribe or not.")}
     </div>
 
-    <h2 class="pw-h2">Simple pricing. <em>One product.</em></h2>
-    <p class="pw-h2sub">Every plan is the same full site. The only
-      difference is how long you commit for and how much you save.</p>
+    <h2 class="pw-h2"><em>Simple pricing.</em> One product.</h2>
+    <p class="pw-h2sub">${iconMark("lock", 13)} Every plan is the same full
+      site. The only difference is how long you commit for and how much you
+      save.</p>
     <div class="pw-plans">${PLANS.map(plan).join("")}</div>
 
     <div class="card pw-code" id="pw-code"></div>
 
-    ${paywallProofHTML(rec)}
+    <div class="pw-trust">
+      <div class="pw-guar">
+        <div class="pw-guar-ic">${iconMark("shield", 22)}</div>
+        <div>
+          <b>${REFUND_DAYS}-day money back</b>
+          <p>Not what you expected? Email within ${REFUND_DAYS} days of your
+            first payment and we refund it in full. No form, no argument.</p>
+        </div>
+      </div>
+      ${paywallProofHTML(rec)}
+    </div>
 
     <h2 class="pw-h2">Questions</h2>
-    <div class="card pw-faq">${FAQ.map(([q, a], i) => `
-      <details class="pw-q"${i === 0 ? " open" : ""}>
-        <summary>${escapeHtml(q)}</summary><p>${escapeHtml(a)}</p></details>`).join("")}</div>
+    <div class="pw-faqgrid">
+      <aside class="card pw-unlock">
+        <div class="pw-unlock-ic">${iconMark("bolt", 24)}</div>
+        <h3>Unlock the edge</h3>
+        <p>Every number on this site is computed, dated and graded. Read the
+          <a href="#record">Record</a> page before you pay — it is free, it
+          stays free, and it is the only claim we make that you can check.</p>
+        <button class="btn primary pw-unlock-go" data-plan="sixmonth"
+          onclick="coStart(this)">Get started</button>
+      </aside>
+      <div class="card pw-faq">${FAQ.map(([q, a], i) => `
+        <details class="pw-q"${i === 0 ? " open" : ""}>
+          <summary>${escapeHtml(q)}</summary>
+          <p>${escapeHtml(a)}</p></details>`).join("")}</div>
+    </div>
 
     <footer class="pw-foot">
-      <p><b>Checkout is handled by Stripe.</b> Card details are typed on
-        their page and never touch this server. Cancel any time from your
-        account — it opens Stripe’s own portal.</p>
+      <div class="pw-foot-top">
+        <span class="pw-brand small">${brandMarkHTML(22)}
+          <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+        <div class="pw-secure">
+          <div class="pw-secure-head">${iconMark("lock", 13)} Secure checkout</div>
+          <p>Payment is taken on Stripe’s own page over an encrypted
+            connection. Nothing about your card reaches this server.</p>
+          <div class="pw-cards">${PW_CARDS.map((c) =>
+            `<span class="pw-card">${escapeHtml(c)}</span>`).join("")}</div>
+        </div>
+      </div>
       <p class="pw-legal">This site publishes a model’s estimates. It is
-        not betting advice. You must be 21 or older to bet. Never bet money
-        you cannot afford to lose — if gambling stops being fun, free and
-        confidential help is available 24/7 in the US at 1-800-GAMBLER.</p>
+        not betting advice. Every number here is a probability, not a
+        promise. You must be 21 or older to bet. Never bet money you cannot
+        afford to lose — if gambling stops being fun, free and confidential
+        help is available 24/7 in the US at 1-800-GAMBLER.</p>
+      <p class="pw-copy">© ${new Date().getFullYear()} Qellys Books ·
+        <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a>
+        · <a href="#record">Record</a></p>
     </footer>
   </div>`;
 }
+
+/* The wall hides the whole chrome, including the way in. Somebody who
+   already pays and is merely signed out lands here and needs a door. */
+window.pwSignIn = function () {
+  _switchViewNow("account", false, 0);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
 
 async function renderPaywall() {
   const host = document.getElementById("view-paywall");

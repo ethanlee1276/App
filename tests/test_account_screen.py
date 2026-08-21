@@ -196,9 +196,17 @@ def test_the_site_still_refuses_to_look_like_it_holds_money():
     and the four that would make this read as a book that takes wagers.
     It takes none. Pinned again here because the renders keep arriving
     with them drawn in."""
+    # COMMENTS STRIPPED FIRST. This has now bitten the repo seven times:
+    # a check for a mistake fires on the note explaining the mistake. Here
+    # it was a comment describing the scales icon, which contained the
+    # word BALANCE in capitals and had nothing to do with money. The
+    # phrases are banned in MARKUP; a comment cannot render.
+    import re as _re
+    code = _re.sub(r"(?s)/\*.*?\*/", " ", APP)
+    code = _re.sub(r"(?m)^[ \t]*//.*$", " ", code)
     for phrase in ("Place Bet", "Bet Slip", "BET SLIP", "To Win $",
                    "BALANCE", "Add to Slip"):
-        assert phrase not in APP, f"the wagering surface crept in: {phrase}"
+        assert phrase not in code, f"the wagering surface crept in: {phrase}"
 
 
 

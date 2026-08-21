@@ -733,10 +733,20 @@ def test_the_privacy_policy_matches_what_is_actually_stored():
     assert "one-way scramble" in doc or "scrypt" in doc
     assert "sportsbook password" in doc.lower()
     assert "Card numbers" in doc
-    # And the controls it promises are ones that exist.
-    for control in ("Download everything", "Delete everything",
-                    "Clear search history"):
-        assert control in doc, control
+    # AND THE CONTROLS IT PROMISES ARE ONES THAT EXIST — checked against
+    # app.js rather than against a list typed here, because that is the
+    # failure mode: the policy names a button, the button gets renamed,
+    # and the policy keeps promising a control nobody can find. This test
+    # itself named "Download everything" and "Delete everything" for
+    # weeks after the buttons became "Download my data" and "Delete my
+    # account", and passed the whole time, because it only ever compared
+    # the policy against itself.
+    app = _read("web", "js", "app.js")
+    for control in ("Download my data", "Clear search history"):
+        assert control in app, \
+            f"the policy names a control that is not in the app: {control}"
+        assert control in doc, \
+            f"the app has a {control!r} button the policy does not mention"
 
 
 def test_a_subscribed_account_is_asked_to_cancel_before_it_can_be_deleted():

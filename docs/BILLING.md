@@ -180,8 +180,24 @@ the *next* build writes and touches nothing already on disk.
 ## Discount codes are ours, not Stripe's
 
 `engine/redeem.py` grants entitlement directly for a number of months. No
-card, no subscription, nothing to cancel. `USFARATHANE` is 12 months at
-100%.
+card, no subscription, nothing to cancel.
+
+```
+QB_CODES=USFARATHANE:12:100
+```
+
+The format is `CODE:months:max_uses`. **The last number is not a
+percentage** — that is `USFARATHANE`, giving 12 months of full access,
+redeemable 100 times in total. There is no partial-discount concept: a
+code opens the whole site, so "100% off a year" and "12 months of access"
+are the same grant. The cap exists because a code posted somewhere public
+is otherwise unlimited.
+
+One redemption per account, enforced by a primary key rather than by a
+check — a check races with itself under two simultaneous requests and a
+primary key does not. Wrong guesses are rate-limited per account and
+answered with the same message and the same timing whether or not the code
+exists, so a fast "no such code" cannot be used to enumerate live ones.
 
 Stripe's own promotion codes are **deliberately switched off**
 (`allow_promotion_codes` is absent from the Checkout request). Two coupon

@@ -114,8 +114,14 @@ def test_the_plan_cards_invent_no_tier_and_quote_no_unsourced_price():
     `billing.PLANS` rather than being typed.
     """
     from engine import billing
+    # THE SLICE IS THE FUNCTION, not everything up to the next async one.
+    # The wider boundary swept in whatever constants happened to live
+    # between the two, and the moment PLAN_EXTRAS landed there — with the
+    # words "Save $25" in it — this test failed on a file it does not
+    # describe. A boundary that drifts makes a passing test meaningless
+    # too, which is the half nobody notices.
     i = APP.index("function billPlansHTML(")
-    body = APP[i:APP.index("\nasync function renderBilling(", i)]
+    body = APP[i:APP.index("\n}\n", i) + 3]
     assert body.count('class="card plan') == 2, "a third tier was invented"
     prices = re.findall(r"\$\d[\d.,]*", body)
     monthly = f"${billing.PLANS['monthly']['cents'] // 100}"
