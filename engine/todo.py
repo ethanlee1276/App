@@ -359,7 +359,7 @@ def config_items(env=None) -> list[Item]:
             "config", "QB_BACKUP_REMOTE", TODO,
             "unset, so every backup sits on the same disk as the thing it is "
             "backing up. The failure it does not survive is the one it exists "
-            "for. Needs a destination first — a box you own, S3, or B2"))
+            "for", "docs/BACKUPS.md — Backblaze B2 is free at this size"))
 
     # The paywall's own foot-gun, in the order it fires.
     paywall = str(env.get("QB_PAYWALL", "")).strip()
