@@ -1373,6 +1373,19 @@ class Handler(BaseHTTPRequestHandler):
                 out["codes"] = RD.describe(conn, who["id"])
                 if out["codes"]["active"]:
                     out["entitled"] = True
+                # THE DISCORD INVITE, AND ONLY HERE. Inside the `if who`
+                # block and behind the entitlement it has just computed,
+                # so it is never in an anonymous response — and never in
+                # web/js/app.js, which is a static asset served to
+                # everybody. It lives in the environment, so it is not in
+                # the repository either and rotating it after a leak is a
+                # config line and a restart.
+                if out.get("entitled"):
+                    from engine import secrets as _s
+                    _s.load_local_secrets()
+                    invite = os.environ.get("QB_DISCORD_INVITE", "").strip()
+                    if invite:
+                        out["discord"] = invite
             # Whether the gate is even on. The account page cannot tell
             # "you need to subscribe" from "everything is free right now"
             # without it, and it has been guessing.

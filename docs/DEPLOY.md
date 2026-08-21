@@ -200,6 +200,7 @@ On the droplet, `/etc/qellys/env`:
 ```
 QB_COMP_EMAILS=ethanlee1276@gmail.com
 QB_CODES=USFARATHANE:12:100
+QB_DISCORD_INVITE=https://discord.gg/vCAZjntyX
 QB_PAYWALL=1
 ```
 
@@ -239,6 +240,14 @@ curl -s https://qellysbook.com/data/recommendations.json | head -c 300
 
 Signed out, that should show the schedule and a `locked` block — never a
 pick. If you see picks, the seal did not run.
+
+**`QB_DISCORD_INVITE` is the members' Discord**, and it lives here rather
+than in the code because `web/js/app.js` is a static asset served to every
+anonymous visitor — an invite compiled into it is public no matter what the
+page chooses to render. The server sends it only in the answer to somebody
+it has already decided is entitled. Leave it blank and the Discord panel
+simply does not appear; nothing breaks. If the invite ever spreads,
+revoke it in Discord, put the new one here and restart — no deploy.
 
 **`QB_COMP_EMAILS` first, in that order, always.** Setting the flag with
 an empty comp list locks you out of your own board. `launch.py --todo`

@@ -43,13 +43,18 @@ NODE = shutil.which("node")
 REQUIRED = [
     "paywallHTML", "checkoutHTML", "renderPaywall", "renderCheckout",
     "paywallCheck", "paidReturnWait", "codeBoxHTML", "billPlansHTML",
-    "extLink", "brandMarkHTML", "iconMark", "escapeHtml",
+    "extLink", "brandMarkHTML", "iconMark", "escapeHtml", "discordHTML",
 ]
 
 #: Top-level constants the pages read. A missing one is a page that
 #: renders `undefined` where a price should be.
+#: REFUND_DAYS was here for one commit and is gone — Ethan withdrew the
+#: money-back guarantee on 2026-08-21, and this test caught the removal,
+#: which is what it is for. DISCORD_INVITE is deliberately NOT here: the
+#: invite is served by the API to entitled callers only, so a constant by
+#: that name in the bundle would be the bug rather than the feature.
 REQUIRED_VALUES = ["PLANS", "PLAN_FEATURES", "PLAN_EXTRAS", "FAQ",
-                   "REFUND_DAYS", "PW_CARDS", "PW_SPORTS", "VIEW_ORDER",
+                   "PW_CARDS", "PW_SPORTS", "VIEW_ORDER",
                    "ICON_PATHS", "EXTERNAL_MARKET_LINKS"]
 
 HARNESS = r"""

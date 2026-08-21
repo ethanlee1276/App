@@ -210,6 +210,32 @@ covers *less* than the term says so and does not pretend to be free.
 
 ---
 
+## The members' Discord
+
+An active subscription includes it. The invite is configured on the box:
+
+```
+QB_DISCORD_INVITE=https://discord.gg/...
+```
+
+**Not in the repository, and not in the JavaScript bundle.** `app.js` is a
+static asset served to every anonymous visitor, so an invite compiled into
+it is public whatever the page renders — the render gate would be on the
+wrong side of the wire. `/api/billing/status` returns it only inside the
+branch that has already established the caller is entitled, and
+`tests/test_paywall_live.py` fetches `/js/app.js`, `/`, both legal pages
+and an anonymous status response to prove the string is in none of them.
+
+It is still not a hard boundary: Discord decides who gets in, and any
+member can paste the link in a group chat. What this buys is that we never
+hand it to a non-member. If it spreads, revoke and reissue in Discord,
+change the line, restart.
+
+Terms §5.7 covers the rest — Discord is a third party, their rules govern
+conduct there, and access ends when the subscription does.
+
+---
+
 ## Sales tax is ours now
 
 This is the one real cost of Stripe over a merchant of record. Paddle

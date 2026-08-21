@@ -46,6 +46,10 @@ from engine import gate                                       # noqa: E402
 
 BOOT_TIMEOUT = 45
 
+#: Not Ethan's real invite. This is a fixture, and the point is that a
+#: stranger never receives whatever string is configured.
+DISCORD_PROBE = "https://discord.gg/PROBEcode"
+
 
 def _free_port() -> int:
     with socket.socket() as s:
@@ -81,6 +85,9 @@ class Site:
             "QB_WEB_DIR": self.web,
             "QB_PAYWALL": "1" if paywall else "",
             "QB_COMP_EMAILS": "",
+            # A real-looking invite, so the checks below are testing the
+            # gate rather than an unset variable.
+            "QB_DISCORD_INVITE": DISCORD_PROBE,
             "STRIPE_SECRET_KEY": "sk_test_wall",
             "STRIPE_WEBHOOK_SECRET": "whsec_wall",
             "STRIPE_PRICE_MONTHLY": "price_m",
@@ -244,6 +251,18 @@ def main():
                 assert gate._paid_rows(payload, "recommendations.json") == 0, \
                     f"{trick} walked around the gate"
         ok("path tricks do not reach an unredacted copy")
+
+        # --- the members' invite ---------------------------------------
+        # STATIC ASSETS ARE THE TRAP. The first version of this feature
+        # put the invite in app.js and gated the render, which ships the
+        # string to every anonymous visitor and hides it with CSS-grade
+        # security. Checked over the wire, where it can be seen.
+        for path in ("/js/app.js", "/", "/terms.html", "/privacy.html",
+                     "/api/billing/status"):
+            code, body = _get(site.base + path)
+            assert DISCORD_PROBE not in body, \
+                f"{path} hands the Discord invite to an anonymous caller"
+        ok("the Discord invite is in nothing a stranger can fetch")
     finally:
         site.stop()
 

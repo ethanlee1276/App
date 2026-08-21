@@ -12289,16 +12289,22 @@ function billPlansHTML(s) {
    truth, and the truth is the only claim here that a competitor cannot
    also print. */
 
-/* The refund window. STATED ONCE, and read by the plans page, the FAQ,
-   the checkout and docs/BILLING.md's link to the Terms, because a
-   guarantee that says 7 days in one place and 14 in another is not a
-   typo — it is two contradictory promises to a customer who paid.
+/* The members' room. Ethan sent the invite on 2026-08-21, after three
+   renders had asked for "VIP Discord Access" and there was no Discord to
+   link to. There is one now.
 
-   IT IS A REAL OBLIGATION. Ethan put it on the render twice, so it is
-   his decision to make and this is where it lives; honouring it is a
-   refund in the Stripe dashboard, which takes about fifteen seconds.
-   Terms §5 carries the binding wording. */
-const REFUND_DAYS = 7;
+   THE LINK IS NOT IN THIS FILE, and that is deliberate. The first cut put
+   it here as a constant and gated the RENDER on entitlement — which
+   looked right and was theatre: app.js is a static asset, so the invite
+   went out in the bundle to every anonymous visitor and was two keystrokes
+   away in view-source. A members' room whose link ships to non-members is
+   not a members' room.
+
+   So the server sends it, on `/api/billing/status`, and only in the
+   answer to somebody it has already decided is entitled. It is read from
+   QB_DISCORD_INVITE on the box, which means it is not in this repository
+   either — and rotating it after a leak is one config line and a restart
+   rather than a deploy. */
 
 const PLANS = [
   { id: "monthly", name: "Monthly", price: 25, per: "month", cadence: "Billed monthly. Cancel anytime.",
@@ -12324,6 +12330,7 @@ const PLAN_FEATURES = [
   "Injury board, weather, game scripts and matchups",
   "Bet tracker, bankroll tools and your own record",
   "Alerts, and the nightly summary",
+  "The members’ Discord",
 ];
 
 const FAQ = [
@@ -12337,17 +12344,20 @@ const FAQ = [
    "whether the subscription is active, and nothing else about the card. " +
    "Which cards and wallets appear is decided there, not here."],
   ["Is there a free trial?",
-   "There is no trial, and there are two things instead. The Record page " +
-   "is free and always will be \u2014 every pick graded in public, wins " +
-   "and losses, before you pay anything. And if you subscribe and it is " +
-   "not what you expected, email within " + REFUND_DAYS + " days of your " +
-   "first payment and we refund it in full."],
+   "No trial, and no refunds \u2014 so the honest answer is: do not pay " +
+   "until you are convinced. The Record page is free and always will be, " +
+   "and every pick is graded on it in public, wins and losses. Read that " +
+   "first. It is the only claim we make that you can check."],
   ["What is the refund policy?",
-   "Email within " + REFUND_DAYS + " days of your FIRST payment and you " +
-   "get all of it back, no form and no argument. After that, cancelling " +
-   "stops the next charge and you keep access to the end of the period " +
-   "you have already paid for. Terms \u00a75 is the binding version."],
-  ["What exactly am I paying for?",
+   "Payments are not refundable. Cancelling stops the next charge and you " +
+   "keep access to the end of the period you have already paid for, so " +
+   "nothing you have paid for is taken away \u2014 but money already paid " +
+   "stays paid. Start on the monthly plan if you are unsure; it is the " +
+   "smallest commitment we offer. Terms \u00a75 is the binding version."],
+  ["How do I get into the Discord?",
+   "Subscribe, then look at your account page \u2014 the invite is there. " +
+   "It is not on this page on purpose: a members\u2019 room whose link is " +
+   "public is not a members\u2019 room."],  ["What exactly am I paying for?",
    "A model\u2019s estimates, published early enough to act on, and graded " +
    "afterwards whether they were right or wrong. It is not betting advice " +
    "and it is not a tip service."],
@@ -12555,11 +12565,13 @@ function paywallHTML(rec, status) {
 
     <div class="pw-trust">
       <div class="pw-guar">
-        <div class="pw-guar-ic">${iconMark("shield", 22)}</div>
+        <div class="pw-guar-ic">${iconMark("lock", 22)}</div>
         <div>
-          <b>${REFUND_DAYS}-day money back</b>
-          <p>Not what you expected? Email within ${REFUND_DAYS} days of your
-            first payment and we refund it in full. No form, no argument.</p>
+          <b>Cancel whenever you like</b>
+          <p>One button on your account page, which opens Stripe’s own
+            portal. No phone call, no retention offer, and no refunds to
+            argue about — cancelling stops the next charge and you keep
+            everything you have already paid for, to the day.</p>
         </div>
       </div>
       ${paywallProofHTML(rec)}
@@ -12904,7 +12916,40 @@ async function renderBilling() {
          code for now — if you have one, enter it below.`
       : `Everything is free right now, so there is nothing to pay for. A code
          still works and starts its clock from the day you enter it.`}</p>`)
-    + codeBoxHTML(codes);
+    + discordHTML(s) + codeBoxHTML(codes);
+}
+
+/* The invite, and the ONE PLACE it is allowed to render.
+   ---------------------------------------------------------------------
+   The invite arrives on the status payload or it does not arrive at all;
+   the browser never holds it otherwise. `/api/billing/status` decides,
+   from the subscription, the comp list and any redeemed code.
+
+   It is still not a security boundary in the end — Discord decides who
+   gets in, an invite is a short string, and any member can paste it in a
+   group chat. What this buys is that it is never HANDED to a non-member,
+   which is the part we control. Rotate it in Discord if it spreads.
+
+   Renders nothing for everybody else, including on the paywall — which
+   mounts the same code box, and where the visitor is unentitled by
+   definition, since that is why the wall is up. */
+function discordHTML(s) {
+  // `s.discord` is present ONLY when the server decided this caller is
+  // entitled. There is nothing to check here beyond "did it send one" —
+  // the decision was made where it can be trusted.
+  const invite = s && s.discord;
+  if (!invite) return "";
+  return `
+    <div class="code-box disc-box">
+      <div class="code-head">${iconMark("inbox", 13)} The members’ Discord</div>
+      <p class="rank-help">Your subscription includes it. The same room for
+        every plan — there is no tier here, and there is no tier
+        there.</p>
+      <a class="btn primary disc-go" href="${escapeAttr(invite)}"
+         target="_blank" rel="noopener noreferrer">Open the Discord</a>
+      <p class="acct-note disc-note">Please keep the invite to yourself —
+        it is part of what a subscription pays for.</p>
+    </div>`;
 }
 
 /* "Have a code?" — Ethan, 2026-08-20. Kept beside the subscribe control

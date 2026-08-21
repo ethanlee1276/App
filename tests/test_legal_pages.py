@@ -70,7 +70,16 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             ("prices", ["$25", "$125", "$225"]),
             ("automatic renewal", ["renews automatically"]),
             ("how to cancel", ["cancel at any time"]),
-            ("refunds", ["money-back guarantee"]),
+            # NO GUARANTEE — Ethan, 2026-08-21: "lets not offer a 7 day
+            # money back guarantee." So the section still has to EXIST
+            # (Stripe requires a stated refund policy, and several states
+            # require one to be conspicuous), and what it has to say is
+            # the opposite. Checked as the plain sentence, because the
+            # failure worth catching is a page that quietly says nothing
+            # about refunds at all.
+            ("refunds", ["Payments are not refundable"]),
+            ("errors still refunded", ["charge made in error"]),
+            ("the members' discord", ["Discord"]),
             ("failed payment", ["renewal charge fails"]),
             ("discount codes", ["creates no subscription"]),
             ("account rules", ["One person per account"]),
@@ -127,16 +136,39 @@ def test_the_prices_in_the_terms_are_the_prices_stripe_charges():
             f"the Terms do not state the {plan['name']} price ({want})"
 
 
-def test_the_refund_window_matches_the_one_the_site_advertises():
-    """The plans page, the FAQ and the Terms all state it. They are read
-    by the same person in the same five minutes."""
+def test_no_refund_guarantee_survives_anywhere():
+    """It was offered for one commit and withdrawn.
+
+    A money-back promise left on any surface — a plan card, an FAQ
+    answer, a footer — is a promise a customer will hold us to, and the
+    Terms now say the opposite. So this looks across everything a reader
+    sees, not just the page it was removed from.
+    """
     app = _read("web", "js", "app.js")
-    m = re.search(r"const REFUND_DAYS = (\d+);", app)
-    assert m, "REFUND_DAYS is gone from app.js"
-    days = m.group(1)
-    assert f"{days} days of your first payment" in TERMS_TEXT, \
-        f"the site promises {days} days and the Terms say something else"
-    assert f"{days}-day money-back" in TERMS_TEXT
+    for surface, blob in (("app.js", app), ("Terms", TERMS_TEXT),
+                          ("Privacy", PRIVACY_TEXT)):
+        # "7-day" ALONE IS NOT A CANDIDATE. app.js carries "7-day" and
+        # "7-IL" in the injury-report code — a seven-day injured list has
+        # nothing to do with refunds, and banning the bare string makes
+        # this test fail on a page it does not describe. The phrases below
+        # can only mean the guarantee.
+        for phrase in ("money back", "money-back", "REFUND_DAYS",
+                       "refund it in full", "7-day money", "7 day money",
+                       "day money back"):
+            assert phrase.lower() not in blob.lower(), \
+                f"{surface} still offers a refund guarantee: {phrase!r}"
+
+
+def test_the_site_and_the_terms_agree_that_there_are_no_refunds():
+    """Two surfaces, one policy. The FAQ is what people actually read."""
+    app = _read("web", "js", "app.js")
+    assert "Payments are not refundable" in TERMS_TEXT
+    assert "not refundable" in app, \
+        "the FAQ no longer states the refund policy the Terms bind us to"
+    # …and both say the part that makes it fair, which is that cancelling
+    # does not take away what has already been paid for.
+    for blob in (app, TERMS_TEXT):
+        assert "end of the period you have already paid for" in blob
 
 
 def test_the_privacy_policy_names_every_table_that_holds_personal_data():
@@ -203,6 +235,63 @@ def test_the_unfinished_parts_are_marked_rather_than_faked():
             "filled in, delete this test in the same commit"
     assert "[LEGAL ENTITY NAME]" in TERMS, \
         "the Terms name a company that may not exist yet"
+
+
+def test_the_discord_invite_is_never_shipped_to_a_non_member():
+    """A members' room whose link ships to non-members is not one.
+
+    THE FIRST CUT OF THIS WAS THEATRE. The invite was a constant in
+    app.js and the RENDER was gated on entitlement — which reads as
+    correct and is not: app.js is a static asset, so the string went out
+    in the bundle to every anonymous visitor and was two keystrokes away
+    in view-source. The gate was on the wrong side of the wire.
+
+    So: not in the repository at all, sent by the server, inside the
+    branch that has already established who is asking.
+    """
+    app = _read("web", "js", "app.js")
+    assert "discord.gg" not in app, (
+        "the invite is compiled into app.js, which is served to every "
+        "anonymous visitor — the render gate cannot help with that")
+    for name in ("terms.html", "privacy.html", "index.html"):
+        assert "discord.gg" not in _read("web", name), \
+            f"the invite is printed on {name}, which is public"
+
+    # The one render, and it uses what the server sent rather than
+    # deciding for itself.
+    fn = app[app.index("function discordHTML("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "s.discord" in fn, \
+        "discordHTML no longer reads the server's answer"
+    assert "if (!invite) return \"\";" in fn, \
+        "there is no early return for a caller the server sent nothing to"
+
+    # And the server only sends it behind the entitlement it computed.
+    server = _read("server.py")
+    i = server.index("def _billing_get(")
+    body = server[i:server.index("\n    def ", i + 1)]
+    j = body.index("QB_DISCORD_INVITE")
+    guard = body[max(0, j - 400):j]
+    assert 'out.get("entitled")' in guard, \
+        "the invite is not behind an entitlement check"
+    assert "if who" in body, "the block is not inside the signed-in branch"
+
+    # The WALL must not render it either. It mounts the same code box,
+    # and the visitor there is unentitled by definition.
+    wall = app[app.index("function paywallHTML("):]
+    wall = wall[:wall.index("\nasync function renderPaywall(")]
+    assert "discordHTML" not in wall
+
+
+def test_the_terms_cover_the_discord_because_it_is_part_of_the_sale():
+    """It is a paid benefit on a platform we do not control, so who
+    governs conduct there and what happens when a subscription ends both
+    need saying."""
+    assert "members’ Discord" in TERMS_TEXT or "members' Discord" in TERMS_TEXT
+    assert "Discord is a third party" in TERMS_TEXT
+    assert "Access ends when your subscription does" in TERMS_TEXT
+    assert "Discord" in PRIVACY_TEXT, \
+        "the privacy policy does not mention a third party we send you to"
 
 
 def test_both_documents_link_to_each_other_and_back():
