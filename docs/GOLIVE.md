@@ -5,6 +5,21 @@ assumes the code is already deployed and working, which it is.
 
 `docs/BILLING.md` has the reasoning; this has only the commands.
 
+> **Every line in a `bash` block below is a command to run.** There is no
+> step where you paste settings into a file — `deploy/setenv.sh` writes
+> them for you. That is deliberate: on the first attempt this page said
+> "open the editor, add these lines", and the settings went into the
+> shell prompt instead, where they set a variable in one SSH session and
+> nothing else. Nothing broke and nothing was configured.
+>
+> Check what is actually set at any point with:
+>
+> ```bash
+> sudo ./deploy/setenv.sh --show
+> ```
+>
+> It prints the names and whether each is set, never the values.
+
 **Do the whole thing in Stripe TEST mode first (steps 1–7), then repeat
 steps 2–5 with the live key (step 8).** Test and live are the same Stripe
 account distinguished by a key prefix, so the switch at the end is one
@@ -27,22 +42,18 @@ Everything below runs on the droplet, in `/srv/qellys`.
 
 ## 1. Put the test key in
 
-```bash
-sudo nano /etc/qellys/env
-```
-
-Add:
-
-```
-STRIPE_SECRET_KEY=sk_test_...
-QB_SITE_URL=https://qellysbook.com
-```
-
-Get the key from **Stripe → Developers → API keys → Secret key**.
-
-Then:
+Get the key from **Stripe → Developers → API keys → Secret key** first —
+have it on your clipboard before you start.
 
 ```bash
+sudo ./deploy/setenv.sh STRIPE_SECRET_KEY
+```
+
+It asks for the value. Paste it, press Enter. Nothing is echoed and it
+does not go into your shell history.
+
+```bash
+sudo ./deploy/setenv.sh QB_SITE_URL https://qellysbook.com
 sudo systemctl restart qellys
 ```
 
@@ -54,17 +65,19 @@ sudo systemctl restart qellys
 cd /srv/qellys && python3 launch.py --stripe-setup
 ```
 
-It prints three lines. Paste them into `/etc/qellys/env`:
+It prints three price ids. Set each one, copying the value it printed:
 
-```
-STRIPE_PRICE_MONTHLY=price_...
-STRIPE_PRICE_SIXMONTH=price_...
-STRIPE_PRICE_YEARLY=price_...
+```bash
+sudo ./deploy/setenv.sh STRIPE_PRICE_MONTHLY   price_xxxxxxxx
+sudo ./deploy/setenv.sh STRIPE_PRICE_SIXMONTH  price_xxxxxxxx
+sudo ./deploy/setenv.sh STRIPE_PRICE_YEARLY    price_xxxxxxxx
 ```
 
 **Do not type price ids out of the dashboard by hand.** A swapped pair
 does not fail — it charges the wrong amount to somebody who chose the
-other plan, and nothing anywhere reports it.
+other plan, and nothing anywhere reports it. `setenv.sh` refuses a
+`prod_...` id, which is the product rather than the price and is the
+easy mistake here.
 
 Safe to run twice: every price carries a `lookup_key` that Stripe
 enforces as unique, so a second run finds what exists and creates
@@ -96,16 +109,15 @@ customer.subscription.deleted
 invoice.payment_failed
 ```
 
-Copy the **Signing secret** it shows you (`whsec_...`) into
-`/etc/qellys/env`:
-
-```
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
+Copy the **Signing secret** it shows you (`whsec_...`), then:
 
 ```bash
+sudo ./deploy/setenv.sh STRIPE_WEBHOOK_SECRET
 sudo systemctl restart qellys
 ```
+
+It asks for the value. That is the WEBHOOK secret, not the API key —
+different string, and `setenv.sh` will refuse the wrong one.
 
 **Nothing works until this secret is set.** The endpoint refuses every
 unsigned event, so a customer can pay and never get access — the money
@@ -150,12 +162,8 @@ response body.
 ## 6. Add the Discord invite and the code
 
 ```bash
-sudo nano /etc/qellys/env
-```
-
-```
-QB_DISCORD_INVITE=https://discord.gg/vCAZjntyX
-QB_CODES=USFARATHANE:12:100
+sudo ./deploy/setenv.sh QB_DISCORD_INVITE https://discord.gg/vCAZjntyX
+sudo ./deploy/setenv.sh QB_CODES USFARATHANE:12:100
 ```
 
 `QB_CODES` is `CODE:months:max_uses`. **The last number is not a
@@ -180,10 +188,11 @@ sit there renewing in test mode and confusing you later.
 ## 8. Switch to live
 
 ```bash
-sudo nano /etc/qellys/env
+sudo ./deploy/setenv.sh STRIPE_SECRET_KEY
 ```
 
-Replace the key with the **live** one (`sk_live_...`).
+Paste the **live** key (`sk_live_...`) at the prompt. It replaces the
+test one rather than adding a second line.
 
 The live account has its own separate catalogue, so:
 
@@ -210,12 +219,8 @@ It should now say **LIVE**.
 ## 9. Turn the paywall on — last
 
 ```bash
-sudo nano /etc/qellys/env
-```
-
-```
-QB_COMP_EMAILS=ethanlee1276@gmail.com
-QB_PAYWALL=1
+sudo ./deploy/setenv.sh QB_COMP_EMAILS ethanlee1276@gmail.com
+sudo ./deploy/setenv.sh QB_PAYWALL 1
 ```
 
 **`QB_COMP_EMAILS` must contain your address.** Setting the flag with an
@@ -269,6 +274,6 @@ git checkout <previous> && ./deploy/deploy.sh --no-tests
 Turn the paywall back off — it is a true no-op when unset:
 
 ```bash
-sudo nano /etc/qellys/env     # delete the QB_PAYWALL line
+sudo ./deploy/setenv.sh --unset QB_PAYWALL
 sudo systemctl restart qellys
 ```
