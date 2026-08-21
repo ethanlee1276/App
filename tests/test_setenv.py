@@ -27,6 +27,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 SCRIPT = os.path.join(ROOT, "deploy", "setenv.sh")
 
 
@@ -294,6 +295,85 @@ def test_the_wizard_writes_the_price_ids_rather_than_asking_for_them():
     for key in ("STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_SIXMONTH",
                 "STRIPE_PRICE_YEARLY"):
         assert f'ask {key}' not in src, f"the wizard asks for {key} by hand"
+
+
+def test_the_only_thing_that_has_to_be_typed_is_the_stripe_key():
+    """Ethan, 2026-08-21: "Idk how to plug that shit in can I just give
+    you all the information so you can plug it in for me."
+
+    No — nobody can write to that box from here, and a live key that can
+    move money should not travel through a chat log. The answerable half
+    is to make almost nothing need typing. Nine settings end up in the
+    file; exactly one of them is a value a human has to fetch and paste.
+
+    This pins that ratio, because the natural drift is back the other
+    way: somebody adds a setting and adds a prompt for it.
+    """
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    code = re.sub(r"(?m)^\s*#.*$", "", src)
+
+    # Prompted for, with no default: the paste-it-yourself list.
+    prompted = set(re.findall(r"(?m)^\s*ask ([A-Z_]+)", code))
+    assert prompted == {"STRIPE_SECRET_KEY"}, (
+        "the wizard prompts for more than the Stripe key now: "
+        f"{sorted(prompted)}. Anything with a known correct value should "
+        "use ask_or_default, and anything Stripe can tell us should be "
+        "fetched rather than asked for.")
+
+    # Offered with a default: Enter accepts.
+    defaulted = set(re.findall(r"ask_or_default ([A-Z_]+)", code))
+    assert {"QB_DISCORD_INVITE", "QB_COMP_EMAILS"} <= defaulted, defaulted
+
+
+def test_the_webhook_is_created_by_the_api_not_by_hand():
+    """The hardest step in the dashboard — a URL pasted exactly, five
+    checkboxes out of about a hundred and fifty, and a `whsec_` string
+    that looks like the API key. Every part of it is an API call."""
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "--stripe-webhook --print-env" in src
+    assert "ask STRIPE_WEBHOOK_SECRET" not in src, \
+        "the wizard asks for the signing secret by hand again"
+
+    from engine import billing, stripeset
+    # The event list comes from the module that READS the events, so an
+    # endpoint cannot be subscribed to a different set than we handle.
+    src_ss = open(os.path.join(ROOT, "engine", "stripeset.py"),
+                  encoding="utf-8").read()
+    fn = src_ss[src_ss.index("def create_webhook("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "BI.HANDLED" in fn, \
+        "the webhook's event list is typed out separately from the one " \
+        "read_event acts on, so the two can drift"
+    assert len(billing.HANDLED) == 5
+
+
+def test_a_pasted_key_is_checked_against_stripe_immediately():
+    """At a silent prompt, "not echoed" and "the paste did not take" look
+    identical, and the difference otherwise surfaces two steps later as
+    an error about something else."""
+    with open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "SS.verify_key" in src, "the key is not checked when it is pasted"
+    assert "would not accept that key" in src, "there is no failure branch"
+    from engine import stripeset
+    assert callable(stripeset.verify_key)
+
+
+def test_an_existing_webhook_is_never_silently_replaced():
+    """Stripe reveals a signing secret only at creation, so an endpoint
+    that already exists cannot have its secret recovered — replacing it
+    is the only way forward, and it is destructive enough to ask about."""
+    src = open(os.path.join(ROOT, "engine", "stripeset.py"),
+               encoding="utf-8").read()
+    fn = src[src.index("def ensure_webhook("):]
+    fn = fn[:fn.index("\n\n\n")]
+    assert "recreate: bool = False" in fn, \
+        "ensure_webhook now deletes an existing endpoint by default"
+    wiz = open(os.path.join(ROOT, "deploy", "golive.sh"), encoding="utf-8").read()
+    assert "[y/N]" in wiz.split("3 of 8")[1].split("4 of 8")[0], \
+        "the wizard replaces an existing endpoint without asking"
 
 
 def test_the_runbook_says_which_machine_each_command_is_for():

@@ -82,6 +82,31 @@ ask() {   # ask KEY "what it is" — prompts, validates via setenv.sh
   exit 1
 }
 
+# ask_or_default KEY "what it is" DEFAULT
+#
+# Offers a value and takes Enter as yes. For the two settings whose
+# correct value is already known — the Discord invite and the owner's own
+# address — there is nothing to look up and nothing to get wrong, so
+# asking somebody to type them is asking them to make a typo. Still a
+# question rather than an assumption: both are his to change.
+ask_or_default() {
+  local key="$1" what="$2" default="$3" reply=""
+  if have "$key"; then
+    ok "$key is already set — leaving it alone"
+    return 0
+  fi
+  printf '\n  %s%s%s — %s\n' "$B" "$key" "$N" "$what"
+  printf '  Press Enter for %s%s%s, or type a different one: ' "$B" "$default" "$N"
+  read -r reply || reply=""
+  [[ -z "$reply" ]] && reply="$default"
+  if as_root "$SETENV" "$key" "$reply" >/dev/null; then
+    ok "$key = $reply"
+  else
+    bad "$key would not take that value"
+    return 1
+  fi
+}
+
 restart() {
   printf '  restarting %s… ' "$SERVICE"
   if as_root systemctl restart "$SERVICE"; then
@@ -150,6 +175,39 @@ cat <<'TXT'
 TXT
 here
 ask STRIPE_SECRET_KEY "the sk_test_... value you just copied"
+
+# CHECKED AGAINST STRIPE THE MOMENT IT IS PASTED. At a silent prompt,
+# "nothing appeared because it is not echoed" and "nothing appeared
+# because the paste did not take" look identical, and the difference
+# does not otherwise surface until two steps later as an error about
+# something else. One API call turns that into a yes or a no, here.
+printf '  checking the key with Stripe… '
+KEYINFO="$(cd "$ROOT" && python3 -c '
+from engine import billing as BI, stripeset as SS
+BI._env()
+import os, sys
+try:
+    got = SS.verify_key(os.environ["STRIPE_SECRET_KEY"])
+except Exception as exc:
+    print("BAD", exc); sys.exit(0)
+print("OK", "LIVE" if got["live"] else "TEST", got["account"], got["name"] or "-")
+' 2>/dev/null)"
+case "$KEYINFO" in
+  OK*)
+    set -- $KEYINFO
+    printf '%sworks%s — %s mode, account %s\n' "$G" "$N" "$2" "$3"
+    if [[ "$2" == "LIVE" ]]; then
+      warn "That is a LIVE key. Real cards will be charged."
+    fi ;;
+  *)
+    bad "Stripe would not accept that key."
+    echo "      ${KEYINFO#BAD }"
+    echo
+    echo "  Clear it and try again:"
+    echo "      sudo ./deploy/setenv.sh --unset STRIPE_SECRET_KEY"
+    echo "      sudo ./deploy/golive.sh"
+    exit 1 ;;
+esac
 # CHECKED, not assumed. This printed "ok" unconditionally, including
 # when setenv had just refused the value — a script that reports success
 # it did not have is worse than one that says nothing.
@@ -192,30 +250,40 @@ step "3 of 8 — the webhook (this is the one that must not be skipped)"
 if have STRIPE_WEBHOOK_SECRET; then
   ok "STRIPE_WEBHOOK_SECRET is already set"
 else
-  browser
-  cat <<TXT
-  Still in the Stripe dashboard, still in TEST MODE.
-
-  Go to:  Developers -> Webhooks -> "Add endpoint"
-
-  Endpoint URL — paste exactly this:
-
-      ${SITE}/api/billing/webhook
-
-  Then "Select events" and tick these five, nothing else:
-
-      checkout.session.completed
-      customer.subscription.created
-      customer.subscription.updated
-      customer.subscription.deleted
-      invoice.payment_failed
-
-  Click "Add endpoint".
-  On the page that appears, find "Signing secret" and click to reveal it.
-  Copy it. It starts with  whsec_   (that is NOT the API key from step 1)
-TXT
   here
-  ask STRIPE_WEBHOOK_SECRET "the whsec_... value you just copied"
+  echo "  Creating the endpoint in Stripe for you — the URL and all five"
+  echo "  events, so none of it is typed."
+  echo
+  WH="$(cd "$ROOT" && python3 launch.py --stripe-webhook --print-env 2>/tmp/golive-wh)"
+  RC=$?
+  if [[ $RC -eq 3 ]]; then
+    # One exists and Stripe will not reveal an old secret — see
+    # ensure_webhook. Replacing it is safe and is the only way forward.
+    sed 's/^/      /' /tmp/golive-wh
+    printf '\n%sReplace it with a fresh one? Nothing is lost. [y/N]%s ' "$B" "$N"
+    read -r yn
+    if [[ "$yn" =~ ^[Yy]$ ]]; then
+      WH="$(cd "$ROOT" && python3 launch.py --stripe-webhook --recreate --print-env 2>/tmp/golive-wh)"
+      RC=$?
+    else
+      bad "cannot continue without the signing secret."
+      exit 1
+    fi
+  fi
+  if [[ $RC -ne 0 || -z "$WH" ]]; then
+    bad "could not create the webhook:"
+    sed 's/^/      /' /tmp/golive-wh
+    exit 1
+  fi
+  sed 's/^/  /' /tmp/golive-wh
+  # WRITTEN, NEVER SHOWN. The signing secret goes from Stripe's reply
+  # straight into the file. It is the one string nobody should have to
+  # handle, and it is the one most often pasted into the wrong slot.
+  while IFS='=' read -r k v; do
+    [[ -z "$k" ]] && continue
+    as_root "$SETENV" "$k" "$v" >/dev/null && ok "$k written"
+  done <<< "$WH"
+  rm -f /tmp/golive-wh
   restart
 fi
 echo
@@ -259,7 +327,9 @@ pause
 # --- 6. discord and the code -------------------------------------------
 step "6 of 8 — the Discord invite and your promo code"
 here
-ask QB_DISCORD_INVITE "the https://discord.gg/... invite for the members' room"
+ask_or_default QB_DISCORD_INVITE \
+  "the invite for the members' room" \
+  "${QB_DEFAULT_DISCORD:-https://discord.gg/vCAZjntyX}"
 if have QB_CODES; then
   ok "QB_CODES is already set"
 else
@@ -280,13 +350,12 @@ else
 
   ${B}Only do this once step 5 worked.${N}
 
-  In Stripe: turn the TEST MODE toggle OFF, then repeat the same two
-  places — Developers -> API keys for the live secret key, and
-  Developers -> Webhooks -> Add endpoint for a live endpoint with the
-  same URL and the same five events.
+  In Stripe: turn the TEST MODE toggle OFF, then Developers -> API keys
+  and copy the LIVE secret key. It starts with  sk_live_
 
-  The live account has its OWN prices and its OWN webhook secret. Both
-  are different strings from the test ones. This script will redo them.
+  That is the only thing you need. The live side of the account has its
+  own prices and its own webhook, both different from the test ones, and
+  this script creates both again — you do not go back to the dashboard.
 
 TXT
   printf '%sSwitch to live now? [y/N]%s ' "$B" "$N"; read -r yn
@@ -315,7 +384,8 @@ else
     echo
     echo "  Your own address goes in FIRST. With an empty comp list the"
     echo "  first thing the paywall does is lock you out of your own board."
-    ask QB_COMP_EMAILS "your email address"
+    ask_or_default QB_COMP_EMAILS "your own email address" \
+      "${QB_DEFAULT_EMAIL:-ethanlee1276@gmail.com}"
   fi
   printf '\n%sTurn the paywall ON now? Everything paid becomes members-only. [y/N]%s ' "$B" "$N"
   read -r yn

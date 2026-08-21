@@ -49,25 +49,35 @@ done.
 
 ---
 
-## What the script asks you for, and where each one comes from
+## What the script asks you for
 
-Four values. Nothing else is typed.
+**One value.** Everything else it fetches, creates, or already knows.
 
 | What it asks for | Where you get it | Looks like |
 |---|---|---|
 | `STRIPE_SECRET_KEY` | 🌐 Stripe → Developers → API keys → Secret key → Reveal | `sk_test_51Abc...` |
-| `STRIPE_WEBHOOK_SECRET` | 🌐 Stripe → Developers → Webhooks → your endpoint → Signing secret | `whsec_1Abc...` |
-| `QB_DISCORD_INVITE` | 🌐 your Discord server → Invite People | `https://discord.gg/vCAZjntyX` |
-| `QB_COMP_EMAILS` | you | `ethanlee1276@gmail.com` |
 
-The three price ids are **not** on that list — the script creates them in
-Stripe and writes them itself. Copying those by hand is where a swapped
-pair comes from, and a swapped pair charges the wrong amount to somebody
-who picked the other plan without failing anywhere.
+That is the only thing you have to go and find. The rest:
 
-**When it asks for a value, nothing appears as you paste.** That is on
+| Setting | How it gets set |
+|---|---|
+| `STRIPE_PRICE_MONTHLY` / `SIXMONTH` / `YEARLY` | created in Stripe by the script, written straight in |
+| `STRIPE_WEBHOOK_SECRET` | the script creates the endpoint through Stripe's API and takes the secret from the reply — you never see it |
+| `QB_SITE_URL` | set to `https://qellysbook.com` |
+| `QB_DISCORD_INVITE` | offered as your invite; press Enter |
+| `QB_CODES` | set to `USFARATHANE:12:100` |
+| `QB_COMP_EMAILS` | offered as your address; press Enter |
+
+Nothing that can be looked up is typed. The three price ids and the
+signing secret are the four strings most often pasted into the wrong
+slot, and a swapped pair of price ids charges the wrong amount to
+somebody who picked the other plan without failing anywhere.
+
+**When it asks for the key, nothing appears as you paste.** That is on
 purpose — the value is not echoed and does not go into your shell
-history. Paste and press Enter.
+history. Paste and press Enter. It checks the key against Stripe
+immediately and tells you the mode and the account name, so you know it
+landed.
 
 ---
 
@@ -160,6 +170,33 @@ making duplicates.
 pay and never get access: the money arrives, Stripe shows a failing
 endpoint, and nothing on our side reports it.
 
+🖥️ **Droplet** — the easy way, which creates it in Stripe for you:
+
+```bash
+python3 launch.py --stripe-webhook
+```
+
+It makes the endpoint with the right URL and all five events, then prints
+`STRIPE_WEBHOOK_SECRET=whsec_...`. Set it:
+
+```bash
+sudo ./deploy/setenv.sh STRIPE_WEBHOOK_SECRET
+sudo systemctl restart qellys
+```
+
+If it says an endpoint already exists, Stripe will not reveal an old
+signing secret — it is only returned at creation. Replace it:
+
+```bash
+python3 launch.py --stripe-webhook --recreate
+```
+
+Nothing is lost: an endpoint holds no history, and Stripe retries
+anything it could not deliver.
+
+<details>
+<summary>Or by hand in the dashboard</summary>
+
 🌐 **Browser:**
 
 1. Still in Stripe, still in **Test mode**
@@ -190,6 +227,8 @@ endpoint, and nothing on our side reports it.
 sudo ./deploy/setenv.sh STRIPE_WEBHOOK_SECRET
 sudo systemctl restart qellys
 ```
+
+</details>
 
 ---
 
@@ -290,12 +329,10 @@ sudo ./deploy/setenv.sh STRIPE_PRICE_SIXMONTH  price_...
 sudo ./deploy/setenv.sh STRIPE_PRICE_YEARLY    price_...
 ```
 
-🌐 **Browser:** add a webhook endpoint in the **live** dashboard — same
-URL, same five events. Copy its signing secret.
-
-🖥️ **Droplet:**
+🖥️ **Droplet** — the live webhook, created the same way:
 
 ```bash
+python3 launch.py --stripe-webhook
 sudo ./deploy/setenv.sh STRIPE_WEBHOOK_SECRET
 sudo systemctl restart qellys
 python3 launch.py --stripe

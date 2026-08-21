@@ -6541,6 +6541,10 @@ def main() -> None:
     if "--prereg" in argv:
         show_prereg()
         return
+    if "--stripe-webhook" in argv:
+        _stripe_webhook_cli(recreate="--recreate" in argv,
+                            print_env="--print-env" in argv)
+        return
     if "--stripe" in argv or "--stripe-setup" in argv:
         _stripe_cli(create="--stripe-setup" in argv,
                     print_env="--print-env" in argv)
@@ -7064,6 +7068,62 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+
+
+def _stripe_webhook_cli(recreate: bool = False, print_env: bool = False) -> None:
+    """Create the webhook endpoint in Stripe, and print its signing secret.
+
+    THE STEP MOST LIKELY TO BE DONE WRONG BY HAND: a URL pasted with a
+    typo, four events ticked instead of five, or the API key copied where
+    the signing secret belongs — all of which fail later and elsewhere.
+    None of it needs a human.
+
+    `--print-env` emits `STRIPE_WEBHOOK_SECRET=whsec_...` and nothing
+    else, for deploy/golive.sh to write straight into the env file, so
+    the one string nobody should have to handle never appears on screen.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+    BI._env()
+
+    sk = os.environ.get(BI.ENV_SECRET, "").strip()
+    if not sk:
+        print(f"{BI.ENV_SECRET} is not set — do that first.",
+              file=sys.stderr if print_env else sys.stdout)
+        sys.exit(1)
+    site = os.environ.get("QB_SITE_URL", "").strip().rstrip("/")
+    if not site:
+        print("QB_SITE_URL is not set, and the endpoint needs a full URL.",
+              file=sys.stderr if print_env else sys.stdout)
+        sys.exit(1)
+    url = f"{site}/api/billing/webhook"
+
+    out = sys.stderr if print_env else sys.stdout
+    try:
+        got = SS.ensure_webhook(sk, url, recreate=recreate)
+    except BI.BillingUnavailable as exc:
+        print(f"Stripe refused: {exc}", file=out)
+        sys.exit(1)
+
+    if got["secret"]:
+        print(f"Webhook endpoint {got['note']}: {url}", file=out)
+        print(f"  {len(BI.HANDLED)} events subscribed.", file=out)
+        if print_env:
+            print(f"STRIPE_WEBHOOK_SECRET={got['secret']}")
+        else:
+            print("\n  Put this in your config:\n", file=out)
+            print(f"  STRIPE_WEBHOOK_SECRET={got['secret']}", file=out)
+            print("\n  Stripe will not show it again — it is only "
+                  "returned at creation.", file=out)
+        return
+
+    # It exists and we cannot read its secret back.
+    print(f"An endpoint already exists for {url}", file=out)
+    print(f"  {got['note']}", file=out)
+    print("\n  Re-run with --recreate to replace it and get a fresh "
+          "secret. Nothing is lost: an endpoint holds no history, and "
+          "Stripe retries anything it could not deliver.", file=out)
+    sys.exit(3)
 
 
 def _stripe_cli(create: bool = False, print_env: bool = False) -> None:

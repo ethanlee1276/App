@@ -41,6 +41,7 @@ Standard library only, through `billing._get` / `billing._post`.
 from __future__ import annotations
 
 import os
+import urllib.request
 
 from . import billing as BI
 
@@ -186,6 +187,105 @@ def ensure_catalogue(secret_key: str, create: bool = True) -> dict:
         if price.get("id"):
             out["env"].append(f"{plan['env']}={price['id']}")
     return out
+
+
+# --- the webhook, created for you ---------------------------------------------
+#
+# THE HARDEST STEP BY HAND, and the one that must not be skipped: without
+# a signing secret the endpoint refuses every event, so somebody can pay
+# and never get access. Doing it in the dashboard means finding
+# Developers → Webhooks → Add endpoint, pasting a URL exactly, ticking
+# five checkboxes out of a list of about a hundred and fifty, and then
+# copying a `whsec_` string that looks confusingly like the API key.
+#
+# Every part of that is an API call, so it does not have to be done by
+# hand at all.
+
+
+def verify_key(secret_key: str) -> dict:
+    """`{ok, live, account, name}` — does this key work, and whose is it?
+
+    Called the moment a key is pasted. "Nothing appeared when I pasted"
+    and "the value is wrong" look identical at a silent prompt, and the
+    difference does not otherwise surface until several steps later, at
+    the point where the error is about something else entirely.
+    """
+    got = BI._get(f"{API}/account", secret_key)
+    return {
+        "ok": True,
+        "live": BI.live_mode(secret_key),
+        "account": got.get("id") or "",
+        "name": (got.get("settings") or {}).get("dashboard", {}).get("display_name")
+                or got.get("business_profile", {}).get("name") or "",
+        "charges_enabled": bool(got.get("charges_enabled")),
+        "payouts_enabled": bool(got.get("payouts_enabled")),
+    }
+
+
+def find_webhook(secret_key: str, url: str) -> dict | None:
+    """Our endpoint, matched on URL. None if there is not one."""
+    got = BI._get(f"{API}/webhook_endpoints?limit=100", secret_key)
+    for row in (got.get("data") or []):
+        if str(row.get("url") or "").rstrip("/") == url.rstrip("/"):
+            return row
+    return None
+
+
+def create_webhook(secret_key: str, url: str) -> dict:
+    """Create it, subscribed to exactly the events `billing.HANDLED` lists.
+
+    The event list comes from the module that READS them, so the two
+    cannot drift. An endpoint subscribed to an event we ignore is noise;
+    one missing an event we act on is a subscription that silently never
+    updates.
+    """
+    pairs = {"url": url, "description": f"{BI.PRODUCT_NAME} — subscriptions",
+             "metadata[owner]": OWNER_TAG}
+    for i, event in enumerate(BI.HANDLED):
+        pairs[f"enabled_events[{i}]"] = event
+    headers = {"Authorization": f"Bearer {secret_key}",
+               "Content-Type": "application/x-www-form-urlencoded"}
+    return BI._post(f"{API}/webhook_endpoints", headers, BI._form(pairs))
+
+
+def delete_webhook(secret_key: str, endpoint_id: str) -> None:
+    req = urllib.request.Request(
+        f"{API}/webhook_endpoints/{endpoint_id}",
+        headers={"Authorization": f"Bearer {secret_key}"}, method="DELETE")
+    try:
+        with urllib.request.urlopen(req, timeout=20):
+            return
+    except Exception as exc:                                 # noqa: BLE001
+        raise BI.BillingUnavailable(f"could not remove the old endpoint: {exc}")
+
+
+def ensure_webhook(secret_key: str, url: str, recreate: bool = False) -> dict:
+    """``{secret, created, id, note}``. The secret is None when unknowable.
+
+    STRIPE ONLY RETURNS THE SIGNING SECRET ONCE, at creation. Listing an
+    endpoint later gives you its id, its URL and its events, and never
+    the secret again — which is correct of them and awkward here: an
+    endpoint that already exists cannot have its secret recovered.
+
+    So when one exists and we do not hold its secret, the only way
+    forward is to replace it. `recreate=True` deletes and remakes, which
+    is safe because an endpoint carries no state — no history is lost, no
+    event is missed while it happens, and any event Stripe cannot deliver
+    it retries for days. Defaulting to False so nothing is destroyed
+    without being asked.
+    """
+    found = find_webhook(secret_key, url)
+    if found and not recreate:
+        return {"secret": None, "created": False, "id": found.get("id"),
+                "note": "an endpoint for this URL already exists, and Stripe "
+                        "only reveals a signing secret at creation. Recreate "
+                        "it to get a fresh one."}
+    if found and recreate:
+        delete_webhook(secret_key, str(found.get("id")))
+    made = create_webhook(secret_key, url)
+    return {"secret": made.get("secret"), "created": True,
+            "id": made.get("id"),
+            "note": "created" if not found else "replaced"}
 
 
 # --- what is configured on this machine ---------------------------------------
