@@ -368,6 +368,19 @@
   </aside>
 
   <main>
+    <!-- THE ONLY WAY BACK WHEN THE WALL IS UP.
+         `body.walled` hides the sidebar, the topbar and the tab bar, and
+         two pages stay reachable behind it on purpose: Record, because it
+         is the evidence the subscription is sold on, and Account, because
+         somebody who has already paid has to be able to sign in. Landing
+         on either left the reader with no navigation at all — Ethan:
+         "there is no back button to get back to the paywall page, so you
+         are just stuck there and have to close the app."
+
+         Hidden by default and shown by the router; see _switchViewNow. -->
+    <a class="wall-back" id="wall-back" href="#paywall" hidden>
+      <span aria-hidden="true">←</span> Back to plans</a>
+
     <!-- Recommended -->
     <section class="view active" id="view-recommended">
       <!-- ORDER: the picks come first.

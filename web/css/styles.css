@@ -6646,6 +6646,22 @@ body.walled main {
   }
 }
 
+/* Shown only while walled, and only away from the wall itself. Sticky
+   rather than static: the Record page is long, and a way out that
+   scrolls off the top is a way out you have to go looking for. */
+.wall-back {
+  position: sticky; top: 0; z-index: 40;
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 0 0 14px; padding: 9px 16px;
+  border-radius: 999px; text-decoration: none;
+  background: var(--panel); border: var(--hairline) solid var(--border);
+  color: var(--text); font-size: var(--fs-sm); font-weight: 700;
+  /* A thumb-sized tap target. This is the only control on the page. */
+  min-height: 40px;
+}
+.wall-back:hover { border-color: var(--brand-2); color: var(--brand-2); }
+.wall-back[hidden] { display: none; }
+
 .pw { max-width: 1180px; margin: 0 auto; padding: 8px 0 40px; }
 .pw-hero { text-align: center; padding: 26px 16px 30px; }
 .pw-h1 { font-size: clamp(34px, 6vw, 62px); font-weight: 900;

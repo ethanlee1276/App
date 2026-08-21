@@ -19174,6 +19174,15 @@ function _switchViewNow(name, push, dir) {
   // Found by Ethan doing exactly that on the live site.
   if (name === "paywall") renderPaywall();
   if (name === "checkout") renderCheckout();
+  // The escape hatch, on the two pages that stay open behind the wall.
+  // Driven from here rather than from each page's own render, because
+  // this is the one place that knows which view is showing — and a
+  // future exempt page would otherwise have to remember to draw its own.
+  const back = document.getElementById("wall-back");
+  if (back) {
+    back.hidden = !(document.body.classList.contains("walled")
+                    && name !== "paywall" && name !== "checkout");
+  }
   updateAgo();          // reference pages hide the freshness chip
   if (location.hash !== `#${name}`) {
     // A tab TAP is a navigation and earns a history entry, so the phone's

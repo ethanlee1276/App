@@ -71,21 +71,24 @@ apt update && apt install -y rclone
 
 ### 3. Configure it
 
-🖥️ **Droplet:**
+🖥️ **Droplet** — paste this **exactly as it is**. There is nothing to
+substitute; it asks you for the two values.
 
 ```bash
-rclone config create b2 b2 account YOUR_KEY_ID key YOUR_APPLICATION_KEY
+read -p "keyID: " KID; read -rsp "applicationKey: " KEY; echo; \
+  rclone config update b2 account "$KID" key "$KEY" 2>/dev/null || \
+  rclone config create b2 b2 account "$KID" key "$KEY"
 ```
 
-Paste your two values in place of `YOUR_KEY_ID` and
-`YOUR_APPLICATION_KEY`.
+The applicationKey is not echoed as you paste it. That is deliberate — it
+keeps the key out of `~/.bash_history`.
 
-> That does put the key in your shell history. To avoid it:
-> ```bash
-> rclone config
-> ```
-> and answer: `n` (new remote) → name `b2` → storage `b2` → paste the key
-> id → paste the application key → Enter through the rest → `q` to quit.
+> **Why it is written this way.** The obvious version of this line has
+> `YOUR_KEY_ID` and `YOUR_APP_KEY` in it, and a command with placeholders
+> in it gets pasted with the placeholders still in it — which writes a
+> config full of the words `YOUR_KEY_ID` and fails later with
+> `401 bad_auth_token`, an error that says nothing about the cause. It
+> has happened here twice. Commands on this page ask rather than tell.
 
 Check it can see the bucket:
 
@@ -93,7 +96,8 @@ Check it can see the bucket:
 rclone lsd b2:
 ```
 
-You should see `qellys-backups`.
+You should see `qellys-backups`. If you get `401 bad_auth_token`, the
+values did not land — run the block above again.
 
 ### 4. Point the backup at it
 

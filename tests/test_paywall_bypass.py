@@ -19,6 +19,7 @@ a claim and claims get stale. Each test names the attack.
 
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -403,6 +404,48 @@ def test_the_buy_button_is_the_loudest_thing_on_the_page():
     j = css.index(".co-back {")
     back = css[j:css.index("}", j)]
     assert "background: none" in back, "the way out is still styled as a call to action"
+
+
+def test_the_pages_open_behind_the_wall_have_a_way_back():
+    """A DEAD END, found on a phone.
+
+    `body.walled` hides the sidebar, the topbar and the tab bar. Two
+    pages stay reachable behind it on purpose — Record, because it is the
+    evidence the subscription is sold on, and Account, because somebody
+    who has already paid has to be able to sign in. Landing on either
+    left the reader with no navigation of any kind. Ethan: "there is no
+    back button to get back to the paywall page, so you are just stuck
+    there and have to close the app."
+
+    Every exemption in the hash guard therefore owes the reader a way
+    out. This checks the exemptions and the escape hatch against each
+    other, so adding a third exempt page without one fails here.
+    """
+    app = _read("web", "js", "app.js")
+    html = _read("web", "index.html")
+
+    assert 'id="wall-back"' in html, "the escape hatch is gone from the page"
+    assert 'href="#paywall"' in html, "it no longer points at the plans"
+
+    # Shown by the ROUTER, which is the one place that knows the current
+    # view — a page drawing its own would have to remember to.
+    i = app.index('const back = document.getElementById("wall-back")')
+    block = app[i:i + 420]
+    assert 'classList.contains("walled")' in block, \
+        "the back link is not gated on the wall being up"
+    for hidden_on in ('"paywall"', '"checkout"'):
+        assert hidden_on in block, \
+            f"the back link shows on {hidden_on}, where it is nonsense"
+
+    # AND THE TWO LISTS AGREE. The hash guard names the pages that stay
+    # open; the escape hatch has to cover all of them.
+    j = app.index("A hash that names a real page must not punch")
+    guard = app[j:j + 700]
+    exempt = set(re.findall(r'want === "([a-z]+)"', guard))
+    assert exempt, "the guard no longer names its exemptions — this test is blind"
+    assert exempt <= {"record", "account"}, (
+        f"a new page is exempt from the wall: {exempt}. Confirm the back "
+        "link reaches it, then add it here.")
 
 
 def test_the_wall_does_not_bounce_a_reader_out_of_checkout():

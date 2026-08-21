@@ -152,6 +152,11 @@ Stripe account, then prints three lines like:
 
 Set each one, pasting the value it printed:
 
+**Replace the `price_...` values below with the ones it just printed** —
+they are examples, not commands to paste as they are. `setenv.sh` refuses
+anything with `...` in it, so pasting these verbatim fails loudly rather
+than writing nonsense, but it is still a wasted minute.
+
 ```bash
 sudo ./deploy/setenv.sh STRIPE_PRICE_MONTHLY   price_1AbcDef...
 sudo ./deploy/setenv.sh STRIPE_PRICE_SIXMONTH  price_1GhiJkl...
