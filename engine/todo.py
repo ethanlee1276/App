@@ -374,6 +374,30 @@ def config_items(env=None) -> list[Item]:
                 "QB_PAYWALL is ON and QB_COMP_EMAILS is EMPTY — the first thing "
                 "it does is lock you out of your own board",
                 "set QB_COMP_EMAILS in /etc/qellys/env, then restart"))
+        # THE SECOND FOOT-GUN, and the quieter one. Redaction happens
+        # inside publish(), so turning the flag on changes what the NEXT
+        # build writes and touches nothing already on disk. Until every
+        # board has been rebuilt, the paid product is public — and a board
+        # whose build fails stays public indefinitely. Found 2026-08-20 by
+        # curling the picks file with the flag on: 293 recommendations.
+        try:
+            from . import gate as _gate
+            leaking = _gate.unsealed()
+        except Exception:                                    # noqa: BLE001
+            leaking = []
+        if leaking:
+            rows = sum(r["rows"] for r in leaking)
+            names = ", ".join(r["board"] for r in leaking[:4])
+            out.append(Item(
+                "config", "paywall boards", TODO,
+                f"the paywall is ON but {len(leaking)} board(s) on the public "
+                f"path still carry {rows} paid row(s) — {names}"
+                + ("…" if len(leaking) > 4 else "")
+                + ". Anyone can curl them",
+                "python3 launch.py --seal"))
+        else:
+            out.append(Item("config", "paywall boards", DONE,
+                            "nothing on the public path carries a paid row"))
     else:
         out.append(Item("config", "paywall", DONE,
                         "off — boards publish whole" +

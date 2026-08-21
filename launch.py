@@ -6541,6 +6541,32 @@ def main() -> None:
     if "--prereg" in argv:
         show_prereg()
         return
+    if "--seal" in argv:
+        # Redact every board already on the public path, now, without
+        # waiting for a rebuild. See engine/gate.seal for why this has to
+        # exist: turning QB_PAYWALL on changes what the NEXT build
+        # writes and touches nothing already written.
+        from engine import gate as _gate
+        if not _gate.enabled():
+            print("QB_PAYWALL is not set in this environment, so there is "
+                  "nothing to seal — the site is meant to be free right now.\n"
+                  "Set it in /etc/qellys/env (with QB_COMP_EMAILS FIRST), "
+                  "restart, then run this.")
+            sys.exit(1)
+        print("Sealing every board on the public path…")
+        res = _gate.seal()
+        left = _gate.unsealed()
+        print(f"\n{len(res['sealed'])} board(s) sealed, "
+              f"{len(res['free'])} left free by design, "
+              f"{len(res['already'])} already sealed.")
+        if left:
+            print("\nSTILL CARRYING PAID ROWS — this is the failure this "
+                  "command exists to prevent:")
+            for row in left:
+                print(f"  {row['board']}: {row['rows']} row(s)")
+            sys.exit(2)
+        print("Nothing on the public path carries a paid row.")
+        sys.exit(0)
     if "--todo" in argv:
         from engine import todo as _todo
         sys.exit(_todo.main(argv))

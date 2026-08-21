@@ -290,6 +290,112 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     return (str(public), str(full))
 
 
+def _paid_rows(payload: dict, name: str) -> int:
+    """How many PAID rows this payload actually still exposes.
+
+    Counted from the paid keys themselves, NOT from the `locked` block.
+    That distinction cost an hour on 2026-08-20: `locked` is a disclosure
+    ("3 picks were withheld") and `redact` copies it through like any
+    other key, so re-redacting an already-sealed board hands back the old
+    counts and a correctly sealed file reads as still leaking.
+    """
+    if is_free(name):
+        return 0
+    if is_wholly_paid(name):
+        # Sealed copies keep only the stamps plus the locked block.
+        return 0 if payload.get("locked_reason") else _size(payload)
+    return sum(_size(v) for k, v in payload.items() if k in PAID_KEYS)
+
+
+def seal(web_data=None, verbose=True) -> dict:
+    """Strip the paid rows out of every board ALREADY on the public path.
+
+    THE HOLE THIS CLOSES, found 2026-08-20 by running the real server with
+    QB_PAYWALL=1 and curling the picks file: it returned all 293
+    recommendations. Redaction happens inside `publish()`, so turning the
+    flag on does not touch one file already written — it only changes what
+    the NEXT build writes. Between the flag going on and every board being
+    rebuilt, the paid product sits on the public path, and any board whose
+    build fails keeps its full copy there indefinitely.
+
+    On the droplet a restart runs `refresh_all()` and most boards do get
+    rewritten, which is why this was invisible: the site mostly seals
+    itself by accident. "Mostly" and "by accident" are not a paywall.
+
+    IT STRIPS, IT DOES NOT REPUBLISH. An earlier cut of this preferred the
+    private copy in data/built/ as the source, which is wrong twice over:
+    it changes WHICH board is public (a stale private copy would go live),
+    and `publish()` writes its input to data/built/ as the full copy — so
+    handing it an already-stripped board destroys the subscribers' data in
+    the name of protecting it. This reads the public file, keeps a full
+    copy if none exists yet, and writes the stripped version back. Safe at
+    any time, safe twice, and it can only ever remove rows.
+    """
+    root = Path(web_data) if web_data else (ROOT / "web" / "data")
+    out = {"sealed": [], "skipped": [], "free": [], "already": []}
+    if not enabled():
+        out["off"] = True
+        return out
+    FULL_DIR.mkdir(parents=True, exist_ok=True)
+    for path in sorted(root.glob("*.json")):
+        name = path.name
+        if is_free(name):
+            out["free"].append(name)
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError):
+            out["skipped"].append(name)
+            continue
+        if not isinstance(payload, dict):
+            out["skipped"].append(name)
+            continue
+        exposed = _paid_rows(payload, name)
+        if not exposed:
+            out["already"].append(name)
+            continue
+        # Keep the full copy the subscriber endpoint reads, but never
+        # overwrite one that is already there — it may be fresher than
+        # this public file, and it is the only surviving full board.
+        full_path = FULL_DIR / name
+        if not full_path.is_file():
+            tmp = full_path.with_suffix(full_path.suffix + ".tmp")
+            tmp.write_text(json.dumps(payload))
+            os.replace(tmp, full_path)
+        stripped = redact(payload, name)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(stripped))
+        os.replace(tmp, path)
+        out["sealed"].append({"board": name, "withheld": exposed})
+        if verbose:
+            print(f"  sealed {name} — {exposed} paid row(s) removed")
+    return out
+
+
+def unsealed(web_data=None) -> list:
+    """Boards on the public path that STILL carry paid rows.
+
+    With the paywall on this must be empty. If it is not, the product is
+    public and nobody has noticed.
+    """
+    root = Path(web_data) if web_data else (ROOT / "web" / "data")
+    bad = []
+    for path in sorted(root.glob("*.json")):
+        name = path.name
+        if is_free(name):
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        n = _paid_rows(payload, name)
+        if n:
+            bad.append({"board": name, "rows": n})
+    return bad
+
+
 def full_board(name: str) -> dict | None:
     """The subscriber's copy, read from outside the web root.
 

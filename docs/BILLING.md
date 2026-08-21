@@ -29,7 +29,24 @@ QB_CODES=USFARATHANE:12:100
 QB_PAYWALL=1
 ```
 
-then `sudo systemctl restart qellys`.
+then **two** commands, not one:
+
+```bash
+sudo systemctl restart qellys
+cd /srv/qellys && python3 launch.py --seal
+```
+
+The restart alone is not enough, and this is the trap. `redact()` runs
+inside `publish()`, so turning the flag on changes what the NEXT build
+writes and does not touch one file already on disk. Measured 2026-08-20
+by running the real server with the flag on and curling the picks file:
+it returned all 293 recommendations. A restart does rebuild most boards,
+so the site mostly seals itself — "mostly" and "by accident" are not a
+paywall, and a board whose build fails stays public forever.
+
+`launch.py --seal` strips every board on the public path immediately,
+prints what it removed, and exits non-zero if anything still carries a
+paid row. `launch.py --todo` checks the same thing on every run.
 
 **`QB_COMP_EMAILS` FIRST, IN THAT ORDER, ALWAYS.** Setting `QB_PAYWALL=1`
 with an empty comp list locks you out of your own board and there is no

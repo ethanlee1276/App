@@ -122,7 +122,31 @@ QB_CODES=USFARATHANE:12:100
 QB_PAYWALL=1
 ```
 
-then `sudo systemctl restart qellys`.
+then:
+
+```bash
+sudo systemctl restart qellys
+cd /srv/qellys && python3 launch.py --seal
+```
+
+**Both commands. The restart is not enough.**
+
+Redaction happens when a board is WRITTEN, so switching the flag on
+changes what the next build writes and touches nothing already on disk.
+Until every board has been rebuilt the picks are still sitting on the
+public path, and any board whose build fails stays public indefinitely.
+`--seal` strips them all immediately, prints how many rows it removed,
+and exits non-zero if anything is still exposed. It is safe to run twice
+and safe to run at any time.
+
+Check it worked from your laptop:
+
+```bash
+curl -s https://qellysbook.com/data/recommendations.json | head -c 300
+```
+
+Signed out, that should show the schedule and a `locked` block — never a
+pick. If you see picks, the seal did not run.
 
 **`QB_COMP_EMAILS` first, in that order, always.** Setting the flag with
 an empty comp list locks you out of your own board, and with no processor

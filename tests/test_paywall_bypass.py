@@ -207,6 +207,132 @@ def test_the_record_stays_free_on_purpose():
         restore()
 
 
+# --- the flag does not seal what is already written ----------------------------
+# Found 2026-08-20 by running the real server with QB_PAYWALL=1 and curling
+# the picks file: it returned all 293 recommendations. This is the gap
+# between "the switch is on" and "the site is sealed", and it is the one
+# that would have bitten on the day Ethan first turned it on.
+
+
+def _boards(tmp, **files):
+    import os
+    os.makedirs(tmp, exist_ok=True)
+    for name, doc in files.items():
+        with open(os.path.join(tmp, name), "w") as fh:
+            json.dump(doc, fh)
+    return tmp
+
+
+def test_turning_the_flag_on_does_not_touch_a_file_already_written():
+    """The thing itself. `redact` runs inside `publish()`, so a board
+    written while the paywall was off stays whole when it goes on. On the
+    droplet a restart rebuilds most boards, which is exactly why nobody
+    noticed: the site mostly seals itself by accident."""
+    from engine import gate
+    restore = _env(QB_PAYWALL="1")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _boards(tmp, **{"recommendations.json": dict(BOARD)})
+            still = gate.unsealed(d)
+            assert still and still[0]["rows"] >= 5, \
+                "a board written before the flag went on reads as sealed"
+    finally:
+        restore()
+
+
+def test_seal_strips_them_and_says_how_many():
+    from engine import gate
+    restore = _env(QB_PAYWALL="1")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _boards(tmp, **{"recommendations.json": dict(BOARD)})
+            res = gate.seal(d, verbose=False)
+            assert res["sealed"] and res["sealed"][0]["withheld"] == 5
+            assert gate.unsealed(d) == []
+            on_disk = json.loads(open(os.path.join(d, "recommendations.json")).read())
+            for paid in ("recommendations", "game_bets", "long_shots"):
+                assert not on_disk.get(paid)
+            assert on_disk.get("games"), "the free half went too"
+            assert on_disk.get("locked"), "nothing says what was withheld"
+    finally:
+        restore()
+
+
+def test_sealing_twice_is_harmless():
+    """It will be run by somebody who is not sure whether they ran it."""
+    from engine import gate
+    restore = _env(QB_PAYWALL="1")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _boards(tmp, **{"recommendations.json": dict(BOARD)})
+            gate.seal(d, verbose=False)
+            first = open(os.path.join(d, "recommendations.json")).read()
+            again = gate.seal(d, verbose=False)
+            assert again["sealed"] == [], "a sealed board was sealed again"
+            assert open(os.path.join(d, "recommendations.json")).read() == first
+    finally:
+        restore()
+
+
+def test_seal_never_overwrites_the_subscribers_full_copy():
+    """THE FOOTGUN AN EARLIER CUT HAD. `publish()` writes its input to
+    data/built/ as the FULL copy, so handing it an already-stripped board
+    destroys the subscribers' data in the name of protecting it. Seal
+    keeps an existing full copy untouched and only writes one when there
+    is none."""
+    from engine import gate
+    src = _read("engine", "gate.py")
+    body = src[src.index("def seal("):src.index("def unsealed(")]
+    # BELOW THE DOCSTRING. seal's own docstring explains at length why it
+    # does not call publish(), and a naive substring check fails on the
+    # explanation rather than on the mistake — the fifth time that shape
+    # has bitten a test today.
+    code = body.split('"""')[2] if body.count('"""') >= 2 else body
+    assert "if not full_path.is_file():" in code, \
+        "seal overwrites data/built unconditionally"
+    assert "publish(" not in code, \
+        "seal republishes rather than stripping, so a stale private copy goes live"
+
+
+def test_the_exposure_count_ignores_the_disclosure_block():
+    """An hour lost to this on 2026-08-20. `locked` is a disclosure —
+    "3 picks were withheld" — and `redact` copies it through like any
+    other key, so counting a re-redaction made a correctly sealed board
+    read as still leaking."""
+    from engine import gate
+    restore = _env(QB_PAYWALL="1")
+    try:
+        sealed = gate.redact(dict(BOARD), "recommendations.json")
+        assert sealed.get("locked"), "fixture is not exercising the case"
+        assert gate._paid_rows(sealed, "recommendations.json") == 0, \
+            "a sealed board is counted as exposed because of its own locked block"
+    finally:
+        restore()
+
+
+def test_todo_shouts_when_boards_are_still_public():
+    """The switch and the seal are two steps, and the second is invisible.
+    `--todo` is where Ethan looks, so it is where this has to appear."""
+    src = _read("engine", "todo.py")
+    assert "unsealed(" in src, "--todo cannot see an unsealed board"
+    i = src.index("unsealed(")
+    assert "--seal" in src[i:i + 900], "it reports the problem without the fix"
+
+
+def test_seal_refuses_politely_when_the_paywall_is_off():
+    from engine import gate
+    restore = _env(QB_PAYWALL=None)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _boards(tmp, **{"recommendations.json": dict(BOARD)})
+            res = gate.seal(d, verbose=False)
+            assert res.get("off") and not res["sealed"]
+            on_disk = json.loads(open(os.path.join(d, "recommendations.json")).read())
+            assert on_disk == BOARD, "it stripped a board on a free site"
+    finally:
+        restore()
+
+
 # --- checkout ------------------------------------------------------------------
 # Ethan sent a competitor's checkout as the render, 2026-08-20. The layout
 # is his; the card fields are the part that must never be copied.
