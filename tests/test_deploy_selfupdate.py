@@ -124,6 +124,49 @@ def test_a_pull_that_adds_a_step_runs_that_step_now():
             assert len(fh.read().split()) == 1, "the backup ran twice"
 
 
+# --- the backup script reads where the value is actually written ------------
+def test_backup_reads_the_env_file_it_is_configured_in():
+    """setenv.sh writes /etc/qellys/env, systemd reads it, and every
+    Python tool reads it through engine/secrets.py. backup.sh did not —
+    so a correctly configured box printed "QB_BACKUP_REMOTE is not set"
+    on every deploy and answered "OFFSITE: none" to --check, which is the
+    one question that command exists to answer."""
+    sh = _backup_code()
+    assert "QB_ENV_FILE" in sh, "backup.sh no longer reads the env file"
+    assert "source" not in sh.split("QB_ENV_FILE")[1][:600], \
+        "the env file holds the Stripe key — parse it, never execute it"
+
+
+def test_the_ambient_environment_still_wins():
+    """The nightly cron puts QB_BACKUP_REMOTE inline on its own line, and
+    a one-off `QB_BACKUP_REMOTE=... ./deploy/backup.sh` has to override
+    the file too. Same rule as engine/secrets.py: additive, never
+    overriding."""
+    sh = _backup_code()
+    i = sh.index("QB_ENV_FILE")
+    guard = sh[i:i + 400]
+    assert '-z "${QB_BACKUP_REMOTE:-}"' in guard, guard
+
+
+def test_reading_the_env_file_survives_it_being_absent_or_unreadable():
+    """Mode 600 and owned by root: a developer running this as themselves
+    gets a PermissionError, and that must be a quiet miss rather than a
+    crash in the one script that protects the data."""
+    sh = _backup_code()
+    i = sh.index("QB_ENV_FILE")
+    assert '-r "$QB_ENV_FILE"' in sh[i:i + 400]
+
+
+def _backup_code():
+    """deploy/backup.sh with comments stripped — the block explaining
+    this bug names every variable in it, so a raw search would pass on
+    the explanation rather than on the code."""
+    with open(os.path.join(ROOT, "deploy", "backup.sh"), encoding="utf-8") as fh:
+        raw = fh.read()
+    return "\n".join(l for l in raw.splitlines()
+                     if not l.lstrip().startswith("#"))
+
+
 def _header():
     """deploy.sh from `set -e` down to the end of the re-exec block.
 

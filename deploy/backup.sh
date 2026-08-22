@@ -35,6 +35,38 @@ KEEP="${QB_BACKUP_KEEP:-14}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DBS=("data/accounts.db" "data/ledger.db")
 
+# /etc/qellys/env IS WHERE THIS IS CONFIGURED, and until 2026-08-22 this
+# script was the one thing that never read it. `setenv.sh` writes there,
+# systemd reads it, engine/secrets.py reads it for every Python tool —
+# and this, the script the variable exists FOR, looked only at whatever
+# shell happened to invoke it.
+#
+# So a correctly configured box reported "QB_BACKUP_REMOTE is not set" on
+# every deploy, and `--check` answered "OFFSITE: none" — the one command
+# whose whole job is to say whether the data is protected, saying no when
+# the answer was yes. Ethan and I both read that as "it was never set up"
+# and nearly redid an hour of work that was already done.
+#
+# The nightly cron was unaffected, because docs/BACKUPS.md puts the
+# variable inline on the cron line — which is what disguised the bug.
+#
+# Same rule as engine/secrets.py: read-only, additive, and the ambient
+# environment always wins, so the cron line and an explicit
+# QB_BACKUP_REMOTE=... prefix still override the file.
+#
+# PARSED, NOT SOURCED. This file holds the Stripe secret key; `source`
+# would execute whatever is in it and pull every secret into a shell
+# that has no use for them. One `sed` for the one variable we want.
+QB_ENV_FILE="${QB_ENV_FILE:-/etc/qellys/env}"
+if [[ -z "${QB_BACKUP_REMOTE:-}" && -r "$QB_ENV_FILE" ]]; then
+  _from_file="$(sed -n 's/^[[:space:]]*QB_BACKUP_REMOTE[[:space:]]*=[[:space:]]*//p' \
+                "$QB_ENV_FILE" | tail -1)"
+  _from_file="${_from_file%\"}"; _from_file="${_from_file#\"}"
+  _from_file="${_from_file%\'}"; _from_file="${_from_file#\'}"
+  [[ -n "$_from_file" ]] && export QB_BACKUP_REMOTE="$_from_file"
+  unset _from_file
+fi
+
 mkdir -p "$DEST"
 
 # OFFSITE IS THE PART THAT MATTERS. A backup on the same disk as the
