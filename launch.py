@@ -1712,6 +1712,8 @@ def odds_doctor() -> None:
         from engine import oddsbudget
         st = oddsbudget.load()
         print(f"\n  budget    {oddsbudget.summary()}")
+        for line in oddsbudget.key_report():
+            print(f"            {line}")
         print(f"            last paid MLB pull: "
               f"{ago(st.sport_ts('mlb') or st.last_refresh_ts)}")
         kicks = _slate_kickoffs(str(path))

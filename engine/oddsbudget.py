@@ -723,6 +723,50 @@ def is_measured(state: BudgetState | None = None) -> bool:
     return bool(state.last_seen_iso)
 
 
+def key_report(path: Path | str = STATE_PATH) -> list[str]:
+    """One line per key on the ring: what it has, and whether it counts.
+
+    The pool is a SUM, so "19,999 left" is the same sentence whether that
+    is one 20k plan or a 100k plan with 80k already gone — and after a
+    top-up or a rotation the two are easy to confuse. Naming each key and
+    saying out loud which ones the pool is actually counting turns "why
+    does it think I'm poor" into a question with a visible answer.
+    """
+    state = load(path)
+    try:
+        from .sources.oddsapi import api_keys
+        ring = [fingerprint(k) for k in api_keys()]
+    except Exception:                                        # noqa: BLE001
+        ring = []
+    out = []
+    for i, fp in enumerate(ring, 1):
+        entry = state.keys.get(fp)
+        if entry is None:
+            out.append(f"key {i} ({fp}): attached, never used — its balance "
+                       f"is unknown, so the pacer counts it as nothing until "
+                       f"the first call reads the meter")
+            continue
+        rem = entry.get("remaining")
+        used = entry.get("used")
+        spent = " · REFUSED for want of credits" if entry.get("spent_ts") else ""
+        out.append(f"key {i} ({fp}): {rem} left, {used} used{spent}")
+    if not ring:
+        # No readable ring means _pool_remaining falls back to counting
+        # every stored key, so nothing here is "not counted" — the shell
+        # simply cannot see which keys are current.
+        for fp in sorted(state.keys):
+            rem = state.keys[fp].get("remaining")
+            out.append(f"key {fp}: {rem} left (last measured)")
+        out.append("no ODDS_API_KEY in this shell, so the ring can't be "
+                   "checked — run this on the server to see which keys are live")
+        return out
+    for fp in sorted(set(state.keys) - set(ring)):
+        rem = state.keys[fp].get("remaining")
+        out.append(f"key {fp}: {rem} left, but NOT on the ring — a rotated or "
+                   f"retyped key. Not counted.")
+    return out
+
+
 def summary(path: Path | str = STATE_PATH) -> str:
     state = load(path)
     if not is_measured(state):

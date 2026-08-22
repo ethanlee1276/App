@@ -356,6 +356,45 @@ def test_unknown_kickoffs_change_nothing():
     assert a == b and a[0] is True
 
 
+def test_key_report_names_each_key_and_whether_it_counts():
+    """"19,999 left" is the same sentence whether that is one 20k plan or a
+    100k plan with 80k gone — and after a top-up the two are easy to
+    confuse. The report exists so the answer is visible instead of
+    inferred."""
+    from engine.oddsbudget import fingerprint, key_report
+    p = _tmp()
+    os.environ["ODDS_API_KEY"] = "live-key"
+    os.environ.pop("ODDS_API_KEYS", None)
+    try:
+        save(BudgetState(remaining=99000, keys={
+            fingerprint("live-key"): {"remaining": 99000, "used": 1000},
+            fingerprint("old-key"): {"remaining": 12, "used": 19988},
+        }), p)
+        lines = key_report(p)
+        live = [l for l in lines if "99000" in l]
+        dead = [l for l in lines if "NOT on the ring" in l]
+        assert live and "key 1" in live[0], lines
+        assert dead and fingerprint("old-key") in dead[0], lines
+    finally:
+        os.environ.pop("ODDS_API_KEY", None)
+
+
+def test_key_report_does_not_call_a_stored_key_dead_when_the_ring_is_unreadable():
+    """With no key in the shell, _pool_remaining counts every stored key —
+    so nothing is "not counted", the shell just can't see which are live.
+    Saying otherwise would send someone hunting a key rotation that never
+    happened."""
+    from engine.oddsbudget import fingerprint, key_report
+    p = _tmp()
+    for var in ("ODDS_API_KEY", "ODDS_API_KEYS", "ODDS_API_KEY_2"):
+        os.environ.pop(var, None)
+    save(BudgetState(remaining=99000,
+                     keys={fingerprint("k"): {"remaining": 99000}}), p)
+    lines = key_report(p)
+    assert not any("NOT on the ring" in l for l in lines), lines
+    assert any("can't be checked" in l for l in lines), lines
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
