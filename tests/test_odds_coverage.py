@@ -125,6 +125,87 @@ def test_the_loose_key_joins_the_names_that_actually_missed():
     assert _name_key_loose("Aaron Judge") == _name_key_loose("Austin Judge")
 
 
+# --- the doctor must not read a redacted board -------------------------------
+def test_the_doctor_reads_the_full_board_not_the_public_one():
+    """web/data/ is what the paywall redacts. With QB_PAYWALL on,
+    `recommendations` is emptied there — so --odds-doctor reported
+    "0 prop(s): 0 with a real book price" on a board that was working,
+    and that number was used to diagnose a bug in the odds pull."""
+    src = _read("launch.py")
+    block = src[src.index("def _odds_doctor") if "def _odds_doctor" in src
+                else src.index("THE FULL COPY, NOT THE PUBLIC ONE"):]
+    block = block[:block.index("gate_census")]
+    assert '"data" / "built"' in block or "'data' / 'built'" in block, \
+        "the doctor is back to reading the redacted public board"
+    assert "read_from" in block, "it no longer says which copy it read"
+
+
+def test_recommendations_really_is_a_redacted_key():
+    """The premise. If `recommendations` stopped being redacted this test
+    should fail loudly rather than the doctor quietly going back to a
+    number that happens to be right."""
+    from engine.gate import PAID_KEYS
+    assert "recommendations" in PAID_KEYS
+
+
+# --- the near-miss report must not advise a wrong join ------------------------
+def test_two_different_players_are_not_reported_as_the_same_one():
+    """Measured 2026-08-22: the report told Ethan that "Enrique Hernández"
+    and "Elieser Hernández" were "almost certainly the same player" and
+    that the fix was the name map. They are two different major leaguers.
+    Doing what it said would attach one man's prices to the other's
+    projections."""
+    from engine.sources.oddsapi import _name_near_misses
+
+    class P:
+        def __init__(self, player, market):
+            self.player, self.market = player, market
+
+    class Slate:
+        props = [P("Enrique Hernandez", "hits")]
+
+    menu = {
+        ("elieserhernandez", "hits"): {"player": "Elieser Hernandez"},
+        ("emmanuelhernandez", "hits"): {"player": "Emmanuel Hernandez"},
+    }
+    assert _name_near_misses(Slate(), menu, set()) == [], \
+        "an ambiguous loose key is still being reported as a near miss"
+
+
+def test_a_genuine_unique_near_miss_is_still_reported():
+    """The guard must not silence the real thing it was built for."""
+    from engine.sources.oddsapi import _name_near_misses
+
+    class P:
+        def __init__(self, player, market):
+            self.player, self.market = player, market
+
+    class Slate:
+        props = [P("Jim Jarvis", "hits")]
+
+    menu = {("jamesjarvis", "hits"): {"player": "James Jarvis"}}
+    got = _name_near_misses(Slate(), menu, set())
+    assert len(got) == 1 and got[0]["book"] == "James Jarvis", got
+
+
+def test_a_price_the_fallback_recovered_is_not_reported_as_lost():
+    """Otherwise it reports a bug that has been fixed, every cycle, for
+    as long as the two names disagree."""
+    from engine.sources.oddsapi import _name_near_misses
+
+    class P:
+        def __init__(self, player, market):
+            self.player, self.market = player, market
+
+    class Slate:
+        props = [P("Jim Jarvis", "hits")]
+
+    menu = {("jamesjarvis", "hits"): {"player": "James Jarvis"}}
+    from engine.sources.oddsapi import normalize_name
+    key = (normalize_name("Jim Jarvis"), "hits")
+    assert _name_near_misses(Slate(), menu, set(), recovered={key}) == []
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

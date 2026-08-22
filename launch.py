@@ -1682,8 +1682,25 @@ def odds_doctor() -> None:
         print(f"\n  board     {MLB_OUT} does not exist — nothing has built.")
         return
     age_min = (time.time() - path.stat().st_mtime) / 60
+    # THE FULL COPY, NOT THE PUBLIC ONE. web/data/ is what the paywall
+    # redacts: with QB_PAYWALL on, `recommendations` is emptied there, so
+    # this reported "0 prop(s): 0 with a real book price" on a board that
+    # was working perfectly — and that number was then used to diagnose a
+    # bug in the odds pull. gate.publish() writes the unredacted board to
+    # data/built/ first, precisely so something like this can read it.
+    #
+    # Third diagnostic this week caught lying about the system's state,
+    # after backup.sh reading the wrong env and --stripe reading the wrong
+    # environment. A tool that reports a healthy system as broken costs
+    # more than no tool: it sends you looking for a fault that is not
+    # there, and it teaches you to discount the next true alarm.
+    read_from = "public"
+    full = ROOT / "data" / "built" / Path(MLB_OUT).name
+    src = path
+    if full.is_file():
+        src, read_from = full, "data/built (full copy)"
     try:
-        board = json.loads(path.read_text())
+        board = json.loads(src.read_text())
     except Exception as exc:
         print(f"\n  board     unreadable: {exc}")
         return
@@ -1692,7 +1709,8 @@ def odds_doctor() -> None:
     census = board.get("gate_census", {}) or {}
     os_ = board.get("odds_status", {}) or {}
     print(f"\n  board     rebuilt {age_min:.0f} min ago · slate {board.get('date')}"
-          f" · {len(board.get('games', []))} game(s)")
+          f" · {len(board.get('games', []))} game(s)"
+          f"{'' if read_from == 'public' else '  [read from ' + read_from + ']'}")
     if census:
         print(f"            {len(props)} prop(s): {priced} with a real book "
               f"price, {census.get('no_real_price', 0)} without")

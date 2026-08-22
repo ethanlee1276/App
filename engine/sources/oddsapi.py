@@ -971,25 +971,45 @@ def _name_key_loose(name: str) -> str:
     return f"{parts[0][:1]} {parts[-1]}"
 
 
-def _name_near_misses(slate, menu: dict, matched_keys: set) -> list[dict]:
+def _name_near_misses(slate, menu: dict, matched_keys: set,
+                      recovered: set | None = None) -> list[dict]:
     """Slate props and book lines that are almost certainly the same player
     but whose exact keys didn't join.
 
     This is the difference between "the book never offered this market"
     (fine, expected — we project more players than books post) and "we paid
     for this price and threw it away" (a bug). Only the second kind belongs
-    in anyone's attention."""
+    in anyone's attention.
+
+    TWO THINGS THIS NO LONGER CLAIMS.
+
+    `recovered` is the props the loose fallback already joined. Reporting
+    those as misses is reporting a bug that has been fixed, every cycle,
+    for as long as the two names disagree.
+
+    And a loose key with SEVERAL book candidates is not a near miss at
+    all. Measured 2026-08-22: this told Ethan that "Enrique Hernández" and
+    "Elieser Hernández" were "almost certainly the same player" and that
+    the fix was the name map. They are two different major leaguers. Doing
+    what it said would have attached one man's prices to the other's
+    projections — a bet at a number nobody offered, arrived at by
+    following the tool's own advice."""
     by_loose: dict[str, list] = {}
     for (nkey, market), info in menu.items():
         if (nkey, market) in matched_keys:
             continue
         by_loose.setdefault(f"{_name_key_loose(info['player'])}|{market}", []).append(info["player"])
     out: list[dict] = []
+    seen = recovered or set()
     for p in slate.props:
         if (normalize_name(p.player), p.market) in menu:
             continue                       # matched exactly — nothing to see
+        if (normalize_name(p.player), p.market) in seen:
+            continue                       # the loose fallback already got it
         cands = by_loose.get(f"{_name_key_loose(p.player)}|{p.market}")
-        if not cands:
+        if not cands or len(set(cands)) != 1:
+            # None: the book never priced this player. Several: a shared
+            # first initial and surname, which is evidence of nothing.
             continue
         out.append({"prop": p.player, "book": cands[0], "market": p.market})
     return out
@@ -1244,6 +1264,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     # outcome than attaching none: a missing price shows as no bet, and a
     # wrong price shows as a bet at a number nobody offered.
     loose: dict[str, list] = {}
+    loose_hits: set = set()
     for (nkey, market), info in menu.items():
         k = f"{_name_key_loose(info['player'])}|{market}"
         loose.setdefault(k, []).append((nkey, market))
@@ -1256,6 +1277,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 lines = index.get(cands[0])
                 if lines:
                     result.loose_matched += 1
+                    loose_hits.add((normalize_name(prop.player), prop.market))
         if lines:
             prop.lines = lines
             result.matched += 1
@@ -1273,7 +1295,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         result.book_only.append({"player": info["player"], "market": k[1],
                                  "home": info["home"], "away": info["away"],
                                  "lines": index.get(k, [])})
-    result.name_misses = _name_near_misses(slate, menu, matched_keys)
+    result.name_misses = _name_near_misses(slate, menu, matched_keys,
+                                           recovered=loose_hits)
 
     # Append a timestamped snapshot so repeated runs build a line-movement
     # history (engine.linemoves reads it; proxy lines are skipped).
