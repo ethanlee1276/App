@@ -56,6 +56,16 @@ CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").rea
 HTML = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
+#: app.js with its comments removed.
+#:
+#: The comments in this file quote the bug, name the events and explain
+#: which approaches were rejected — so a search of the raw source finds
+#: the EXPLANATION and reports it as the code. That shape has cost this
+#: suite four false failures today, one of them while writing the test
+#: below that exists to check for it.
+APP_CODE = re.sub(r"(?m)^\s*//.*$", "",
+                  re.sub(r"/\*.*?\*/", " ", APP, flags=re.S))
+
 #: The drawer's rule lives in the ≤900px block; `.sidebar` also has a
 #: desktop rule, so the phone one is found by the property that only it
 #: sets. Anchoring on the text rather than on a line number because the
@@ -115,6 +125,53 @@ def test_the_tab_bar_is_opaque_without_the_blur():
     # Built from tokens, so it tracks the light theme too rather than
     # being a dark-mode hex that goes invisible at noon.
     assert "var(--panel)" in _TABBAR and "var(--bg)" in _TABBAR
+
+
+# --- zoom ---------------------------------------------------------------------
+def test_the_page_cannot_be_pinched_or_double_tapped_larger():
+    """Ethan, 2026-08-22, with a recording of the fantasy page at four
+    scales: "you should not be able too zoom in or out like in this
+    video."
+
+    THREE MECHANISMS, AND ALL THREE ARE NEEDED. The meta attribute covers
+    Android and the installed home-screen app; iOS Safari in a tab has
+    ignored it deliberately since iOS 10, so the gesture events cover
+    that; and neither of them stops a double tap, which is what
+    `touch-action` is for. Any one alone leaves a way in, which is why
+    they are asserted together rather than in three files."""
+    vp = HTML[HTML.index('name="viewport"'):]
+    vp = vp[:vp.index(">")]
+    assert "user-scalable=no" in vp, "the meta tag allows zooming again"
+    assert "maximum-scale=1" in vp, vp
+    # viewport-fit=cover is what makes the safe-area insets real. Losing
+    # it while editing this line puts the tab bar back under the home
+    # indicator, which is a different bug with the same one-line cause.
+    assert "viewport-fit=cover" in vp, "the notch insets went with it"
+
+    assert "gesturestart" in APP_CODE and "gesturechange" in APP_CODE, \
+        "iOS Safari ignores the meta tag — the gesture events are the fix"
+    i = APP_CODE.index("gesturestart")
+    block = APP_CODE[i:i + 300]
+    assert "preventDefault" in block and "passive: false" in block, \
+        "a passive listener cannot cancel the gesture"
+
+    body = _rule("body {")
+    assert "touch-action: manipulation" in body, \
+        "double-tap zoom is back"
+
+
+def test_the_zoom_block_does_not_cost_scrolling():
+    """Cancelling multi-touch through `touchmove` would need a
+    non-passive listener on every scroll, which turns off the browser's
+    scroll fast path for the whole document — paying for smooth scrolling
+    to prevent a zoom. The gesture events cost nothing until a pinch
+    actually begins."""
+    i = APP_CODE.index("gesturestart")
+    block = APP_CODE[max(0, i - 200):i + 400]
+    assert "touchmove" not in block, \
+        "a non-passive touchmove listener is back on the document"
+    # `none` would kill panning as well as zooming.
+    assert "touch-action: none" not in _rule("body {")
 
 
 def test_the_drawer_outranks_the_scrim():

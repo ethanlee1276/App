@@ -387,6 +387,14 @@ body {
   color: var(--text);
   line-height: var(--lh-snug);
   -webkit-font-smoothing: antialiased;
+  /* DOUBLE-TAP ZOOM, the third way in. The viewport meta closes Android
+     and the installed app, app.js refuses Safari's pinch gestures, and
+     this is what stops a quick double tap enlarging the page. It also
+     removes the 300ms click delay browsers hold in case a second tap is
+     coming, so every button on the site answers faster — `manipulation`
+     keeps panning and normal scrolling, which `none` would not.
+     `svg[data-scrub]` sets its own value later and is unaffected. */
+  touch-action: manipulation;
   /* Every figure on this site sits in a column next to another figure.
      Proportional digits make those columns wobble as the numbers change,
      which on a board that refreshes every minute reads as the page

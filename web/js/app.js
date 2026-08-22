@@ -4514,6 +4514,35 @@ document.addEventListener("click", (e) => {
   openProp(card.dataset.prop);
 });
 
+/* ---- NO PINCH ZOOM ON THE PHONE ---------------------------------------
+   Ethan, 2026-08-22: "you should not be able too zoom in or out like in
+   this video" — the fantasy page pinched to four different scales and
+   left half-off-screen.
+
+   THE META TAG IS NOT ENOUGH, and believing it is would have shipped a
+   fix that works on every device except his. iOS Safari has ignored
+   `user-scalable=no` since iOS 10, deliberately: Apple decided a page
+   should not be able to stop someone enlarging text they cannot read.
+   The attribute still works on Android, and on iOS once the site is
+   installed to the home screen — which is why it is set anyway.
+
+   For Safari in a tab, the pinch arrives as `gesturestart` /
+   `gesturechange` / `gestureend`, which are WebKit's own events and are
+   cancellable. Refusing them is the only thing that stops it.
+
+   DELIBERATELY NOT touchmove. Cancelling multi-touch scrolls would need
+   a non-passive listener on every touchmove, which switches off the
+   browser's scroll fast path for the whole document — paying for smooth
+   scrolling to prevent a zoom. The gesture events cost nothing until a
+   pinch actually starts.
+
+   This is a real accessibility cost and it is worth naming: someone who
+   needs to enlarge text now cannot, on this site, on their phone. The
+   system-wide Display Zoom and VoiceOver still work; page zoom does not.
+   Ethan asked for it knowing the page is his product to shape. */
+["gesturestart", "gesturechange", "gestureend"].forEach((ev) =>
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+
 /* Keyboard parity: a card you can click is a control, and a control that
    only answers a mouse is not finished. */
 document.addEventListener("keydown", (e) => {

@@ -5,7 +5,18 @@
   <!-- viewport-fit=cover + the safe-area insets in styles.css are what
        stop the notch and the home indicator eating the header and the
        tab bar once this runs WITHOUT Safari's chrome around it. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <!-- NO PINCH ZOOM. Ethan, 2026-08-22, with a recording of the fantasy
+       page sliding around at four different scales: "you should not be
+       able too zoom in or out like in this video."
+
+       `user-scalable=no` covers Android Chrome, and iOS honours it when
+       the site has been added to the home screen. It does NOT cover iOS
+       Safari in a tab: Apple has ignored this attribute since iOS 10, on
+       purpose, so that a page cannot lock someone out of reading it.
+       That half is done in app.js by refusing the gesture events, and
+       `touch-action: manipulation` in styles.css handles double-tap. All
+       three are needed; any one alone leaves a way in. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Qellys Book · multi-sport betting model</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
