@@ -27,8 +27,12 @@ import parlaycheck as pc                                      # noqa: E402
 
 
 def _leg(player, team, opp, market="strikeouts", side="OVER"):
+    # game_date rides along because game_key() keys on (teams, date) — two
+    # legs in the same matchup on different dates are a doubleheader, not
+    # one game. Every leg a build writes carries it.
     return {"player": player, "team": team, "opponent": opp,
-            "market": market, "side": side, "line": 4.5, "odds": 102}
+            "market": market, "side": side, "line": 4.5, "odds": 102,
+            "game_date": "2026-08-22"}
 
 
 def _ticket(legs, pairs, kind="A", rank=1):
@@ -129,6 +133,68 @@ def test_an_unbuilt_or_unreadable_board_is_not_a_failure():
     junk = tmp / "junk.json"
     junk.write_text("{not json")
     assert pc.audit_board("nfl", junk, quiet=True) == 0
+
+
+# --- the game a leg belongs to ----------------------------------------------
+
+def _total(line, away, home, player=None):
+    """A GAME total: it belongs to neither side, so `team` and `opponent`
+    are deliberately empty on it (normalize_game_bet says so by name) and
+    the game lives in home/away."""
+    return {"player": player or f"Over {line}", "team": "", "opponent": "",
+            "market": "total", "side": "Over", "line": line, "odds": -105,
+            "away": away, "home": home, "game_date": "2026-08-22"}
+
+
+def test_a_game_total_is_not_reported_as_a_second_matchup():
+    """LIVE FALSE POSITIVE, 2026-08-22, the first night this script could
+    see the boards at all: NFL ticket #2 paired the ATL@PIT game total
+    with ATL's team total and was flagged "its legs sit in 2 different
+    matchups: @ / ATL@PIT". The ticket was fine. This file kept its own
+    `matchup()` off team/opponent, while engine.parlays.game_key() reads
+    home/away first and its docstring explains exactly why — two rules
+    for one question, and the auditor had the wrong one."""
+    t = _ticket([_total(42.5, "ATL", "PIT"),
+                 _leg("ATL Over 20", "ATL", "PIT", market="team_total")],
+                [_pair("Over 42.5", "ATL Over 20", 0.62)], kind="A")
+    assert pc.audit_ticket(t) == []
+
+
+def test_two_different_games_totals_do_not_collide_into_one_matchup():
+    """The direction that matters more, and the one nobody would have
+    noticed: keyed off team/opponent, EVERY game total on the slate keys
+    to ('', '') — so a Type A ticket built from two unrelated games'
+    totals claimed a shared game and this audit agreed with it."""
+    t = _ticket([_total(42.5, "ATL", "PIT"), _total(51.5, "MIA", "BUF")],
+                [_pair("Over 42.5", "Over 51.5", 0.30)], kind="A")
+    bad = pc.audit_ticket(t)
+    assert any("2 different matchups" in b for b in bad), \
+        "two unrelated games' totals passed as one game"
+    assert "ATL@PIT" in bad[0] and "BUF@MIA" in bad[0], bad
+
+
+def test_a_cross_game_total_still_reads_as_cross_game():
+    """The negative control for the fix: a spread in one game and a total
+    in another must stay two matchups."""
+    t = _ticket([_leg("HOU +1.5", "HOU", "BUF", market="spread"),
+                 _total(42.5, "ATL", "PIT")],
+                [_pair("HOU +1.5", "Over 42.5", 0.0)], kind="B")
+    assert pc.audit_ticket(t) == []
+
+
+def test_the_audit_and_the_engine_answer_the_game_question_the_same_way():
+    """Asserted as identity, not as behaviour: the moment this file grows
+    its own copy of the rule again, the two drift and only one of them is
+    the one that priced the ticket."""
+    from engine import parlays as P
+    assert pc.matchup is P.game_key
+
+
+def test_a_total_prints_the_game_it_is_on():
+    """`team=? opp=?` is what a game total rendered as before, which is
+    why the false positive above was hard to read as one."""
+    assert "ATL@PIT" in pc._leg_game(_total(42.5, "ATL", "PIT"))
+    assert "team=HOU" in pc._leg_game(_leg("HOU +1.5", "HOU", "BUF"))
 
 
 def test_every_board_path_names_a_sport_the_engine_screens():

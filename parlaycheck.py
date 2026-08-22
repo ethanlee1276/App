@@ -55,10 +55,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine.parlayledger import BOARD_FILES as BOARDS       # noqa: E402
 
 
-def matchup(leg: dict) -> tuple:
-    """The game a leg belongs to, from its own two team fields."""
-    return tuple(sorted(((leg.get("team") or "").upper(),
-                         (leg.get("opponent") or "").upper())))
+from engine.parlays import game_key as matchup                # noqa: E402
+
+
+def _matchup_label(key) -> str:
+    """A game key as something a person can read."""
+    pair = [t for t in (key[0] if key and isinstance(key[0], tuple) else key)
+            if t]
+    return "@".join(pair) if pair else "unattributed"
+
+
+def _leg_game(leg: dict) -> str:
+    """Which game a leg is on, for the printout.
+
+    A game total belongs to neither side, so `team` and `opponent` are
+    deliberately empty on it and the old line rendered `team=? opp=?` —
+    which is why the false positive below was hard to read as a false
+    positive. home/away is right there on the leg.
+    """
+    t = (leg.get("team") or "").upper()
+    if t:
+        return f"team={t:<5} opp={str(leg.get('opponent') or '?'):<5}"
+    away, home = (leg.get("away") or ""), (leg.get("home") or "")
+    return f"game={(away + '@' + home) if (away or home) else '?':<11}"
 
 
 def audit_ticket(t: dict) -> list[str]:
@@ -73,7 +92,7 @@ def audit_ticket(t: dict) -> list[str]:
     if kind == "A" and len(keys) != 1:
         bad.append(f"published as Type A (same game) but its legs sit in "
                    f"{len(keys)} different matchups: "
-                   + " / ".join("@".join(k) for k in sorted(keys)))
+                   + " / ".join(_matchup_label(k) for k in sorted(keys)))
     if kind == "B" and len(keys) == 1:
         bad.append("published as Type B (cross-game) but both legs share one "
                    "matchup — the correlation tax was never applied")
@@ -125,8 +144,7 @@ def audit_board(sport: str, path: Path, quiet: bool = False) -> int:
         print(("❌" if bad else "✅") + head)
         for l in t.get("legs") or []:
             print(f"       {str(l.get('player')):<24} "
-                  f"team={str(l.get('team') or '?'):<5} "
-                  f"opp={str(l.get('opponent') or '?'):<5} "
+                  f"{_leg_game(l)} "
                   f"{l.get('side')} {l.get('line')} {l.get('market')} "
                   f"{l.get('odds'):+}")
         for p in t.get("pairs") or []:
