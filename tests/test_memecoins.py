@@ -374,7 +374,12 @@ def test_the_page_is_wired_end_to_end():
     assert 'id="memes-body"' in html
     js = open(os.path.join(ROOT, "web/js/app.js"), encoding="utf-8").read()
     assert "async function renderMemes" in js
-    assert 'data/memecoins.json' in js
+    # Through paidFetch since 2026-08-22: `coins`, `rocket` and `exits`
+    # are stripped from the copy Caddy serves off disk, so a straight
+    # `data/memecoins.json` here would hand a SUBSCRIBER the stranger's
+    # board — the scan's counts and none of the scan. paidFetch falls
+    # back to the public file on its own, so the static host still works.
+    assert 'paidFetch("memecoins.json")' in js
     assert 'if (name === "memes") renderMemes();' in js
     modes = js[js.index("const STANDALONE_MODES"):]
     assert '"memes"' in modes[:modes.index("]")]

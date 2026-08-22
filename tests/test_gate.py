@@ -16,6 +16,7 @@ A gate that can be reasoned about beats one that has to be defended.
 
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -641,6 +642,143 @@ def test_the_polymarket_board_is_gated_under_both_of_its_names():
         red = gate.redact({"generated_at": "x", "rows": [1, 2, 3]}, name)
         assert "rows" not in red, f"{name} still carries its picks"
 
+
+
+# --- what the shop promises vs what the gate hands out ----------------------
+
+#: The paywall page's feature list, mapped to the board that backs each
+#: line. Written by hand and on purpose: the list in app.js is sales
+#: copy, and no regex is going to tell you that "the meme-coin scanner"
+#: means memecoins.json. What this buys is that changing either side
+#: without the other is a failing test rather than a quiet giveaway.
+SOLD_AS_PAID = {
+    "The full fantasy suite": "fantasy.json",
+    "the meme-coin scanner": "memecoins.json",
+    "Prediction markets": "predmarkets.json",
+    "game scripts": "fantasy.json",
+}
+
+
+def test_nothing_the_paywall_page_sells_is_published_free():
+    """THE BUG THIS EXISTS FOR, and it was live. Ethan, 2026-08-22,
+    reading his own `--paywall-audit` output: *"remeber we talked about
+    there not being a free plan and only the 3 day trial with full
+    access. so why is it should free for all of that"*.
+
+    He was right. `fantasy.json` and `memecoins.json` sat in FREE_FILES
+    while PLAN_FEATURES sold "The full fantasy suite — draft kit, mock
+    draft, lineups, trades" and "Prediction markets and the meme-coin
+    scanner" as reasons to pay $25 a month. Nobody decided that; the
+    boards were classified before the sales copy was written and never
+    revisited.
+
+    Note what is NOT asserted here: that everything is paid. Rosters,
+    standings, injuries, schedules, live scores and both records stay
+    free, because they are facts and evidence rather than product, and
+    because the trial funnel needs a site worth looking at before you
+    hand over a card. The rule is only that the shop and the gate agree.
+    """
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    features = re.search(r"const PLAN_FEATURES = \[(.*?)\n\];", app, re.S)
+    assert features, "PLAN_FEATURES is not where this test thinks it is"
+    copy = features.group(1)
+    for phrase, board in SOLD_AS_PAID.items():
+        if phrase not in copy:
+            continue                      # line retired from the shop; fine
+        assert not gate.is_free(board), (
+            f"the paywall page sells {phrase!r} and {board} is published "
+            f"whole — an advertised feature given away by omission")
+
+
+def test_the_facts_inside_a_gated_board_stay_free():
+    """Gating fantasy.json outright would take the usage table, the
+    schedule and Sleeper's trending list down with the draft kit, and
+    those are ingested facts that cost a subscription nothing to show.
+    Same reason recommendations.json is key-stripped rather than sealed."""
+    board = {"season": 2026, "usage": [{"player": "x"}], "schedule": [1],
+             "rates": {"ppr": 1}, "trending": [2], "camp": {"risers": []},
+             "draft_kit": [{"player": "y"}], "ranks": {"rows": [1, 2]},
+             "buy_sell": {"buy": [1]}, "scripts": [{"game": "z"}]}
+    red = gate.redact(board, "fantasy.json")
+    for keep in ("season", "usage", "schedule", "rates", "trending", "camp"):
+        assert red.get(keep) == board[keep], f"redaction ate {keep}"
+    for gone in ("draft_kit", "ranks", "buy_sell", "scripts"):
+        assert not red.get(gone), f"{gone} survived on the public path"
+    assert red["locked_reason"] == "subscription"
+    assert set(red["locked"]) == {"draft_kit", "ranks", "buy_sell", "scripts"}
+
+
+def test_the_meme_scan_is_gated_and_its_counts_are_not():
+    """"18 of 42 behind the risk gate" is a disclosure, not a call. It is
+    what makes the locked board say something true instead of nothing."""
+    board = {"status": "live", "n": 42, "gated": 18, "risk_gate": 60,
+             "notes": ["source declined"],
+             "coins": [{"mint": "a", "momentum": 91, "risk": 40}],
+             "rocket": ["a"], "exits": ["b"]}
+    red = gate.redact(board, "memecoins.json")
+    for keep in ("status", "n", "gated", "risk_gate", "notes"):
+        assert red.get(keep) == board[keep], f"redaction ate {keep}"
+    for gone in ("coins", "rocket", "exits"):
+        assert not red.get(gone), f"{gone} survived on the public path"
+
+
+def test_both_records_are_free_because_they_are_the_evidence():
+    """record.json and memerecord.json are graded history — what was
+    called, and what it did afterwards. They are the only claim on this
+    site a stranger can check, and the paywall page's proof block reads
+    from one of them. A proof nobody can read persuades nobody."""
+    for name in ("record.json", "memerecord.json"):
+        assert gate.is_free(name), f"{name} is not free"
+        board = {"rows": [{"pick": "x", "edge": 0.06, "result": "win"}]}
+        assert gate.redact(board, name) == board, f"{name} was redacted"
+
+
+def test_every_gated_board_the_page_reads_has_an_entitled_route():
+    """The other half of every gating change, and the half that gets
+    forgotten: stripping a key without giving subscribers a path to the
+    full copy fixes the leak by breaking the page for the people paying
+    for it. Three shipped that way — the UFC card, the prediction-market
+    record, and the Lab.
+
+    Driven off gate's own tuples, so adding a board to MIXED_FILES or
+    PAID_FILES and fetching it from `data/` cannot pass. Line-by-line
+    rather than by a window into the source: a fixed-width slice around
+    a match is how several checks in this suite have quietly measured
+    the wrong thing.
+
+    SCOPED TO FETCH CALLS, and that is a real limit worth naming rather
+    than hiding. `LIVE_FEEDS` is a table of the same public paths, read
+    by the Live Now board — which wants `games`, a free key, off five
+    gated boards. That is correct and this test cannot tell it apart
+    from the bug, so it does not try: it checks the place all three
+    shipped bugs actually lived, which is a renderer calling fetch on a
+    board it needs the paid half of.
+    """
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    # Comments out first, both kinds. This module's docstring names
+    # `curl https://qellysbook.com/data/recommendations.json` while
+    # explaining the bypass, and a check that reads its own prose as
+    # evidence has caught seven imaginary bugs in this suite already.
+    code = re.sub(r"/\*.*?\*/", " ", app, flags=re.S)
+    lines = [ln for ln in code.splitlines()
+             if not ln.lstrip().startswith("//")]
+    offenders = []
+    for name in sorted(set(gate.MIXED_FILES) | set(gate.PAID_FILES)):
+        entitled = f'paidFetch("{name}")' in code
+        for ln in lines:
+            if f"data/{name}" not in ln or "fetch(" not in ln.lower():
+                continue
+            # `fallback:` is the sport boards' declared shape: an `api:`
+            # route beside a static path used only when there is no API.
+            if "fallback:" in ln or entitled:
+                continue
+            offenders.append(f"{name}: {ln.strip()[:70]}")
+    assert not offenders, (
+        "a gated board read straight off the public path, where the paid "
+        "keys are already gone — subscribers get the stranger's copy: "
+        + "; ".join(offenders))
 
 
 if __name__ == "__main__":

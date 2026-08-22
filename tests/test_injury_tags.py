@@ -100,12 +100,33 @@ def test_the_draft_day_panels_tag_too():
     assert 'injTag("nfl", take.player)' in APP[j:APP.index("\n}", j)]
 
 
+def _fnbody(name):
+    """A function's body by brace matching, not by a byte count.
+
+    The version this replaces read `APP[i:i + 700]` and broke on
+    2026-08-22 for the eighth time this session — not because the code
+    stopped loading the injury board, but because a comment was added
+    above the call and pushed it 40 characters past the window. A test
+    that fails when you explain the line above it is measuring the
+    wrong thing. (There are ~386 more of these across tests/; this
+    fixes the one that was actually failing.)
+    """
+    start = APP.index(name)
+    depth, seen = 0, False
+    for j in range(APP.index("{", start), len(APP)):
+        if APP[j] == "{":
+            depth, seen = depth + 1, True
+        elif APP[j] == "}":
+            depth -= 1
+            if seen and not depth:
+                return APP[start:j + 1]
+    raise AssertionError(name + " never closes")
+
+
 def test_the_pages_load_the_board_before_painting():
-    i = APP.index("async function renderFantasy(")
-    assert "loadInjuryBoard()" in APP[i:i + 700], \
+    assert "loadInjuryBoard()" in _fnbody("async function renderFantasy("), \
         "fantasy renders synchronously from its payload — the board must ride the same await"
-    j = APP.index("async function renderPlayers(")
-    assert "await loadInjuryBoard()" in APP[j:j + 400]
+    assert "await loadInjuryBoard()" in _fnbody("async function renderPlayers(")
 
 
 def test_the_short_map_reads_longest_first():

@@ -11476,7 +11476,10 @@ async function renderMemes() {
   if (!host) return;
   let d = null;
   try {
-    const res = await boardFetch("data/memecoins.json?t=" + Date.now());
+    // paidFetch: `coins`, `rocket` and `exits` are gated, so the public
+    // file carries the counts and none of the scan. The record below
+    // stays on boardFetch — it is free and it is the evidence.
+    const res = await paidFetch("memecoins.json");
     if (res.ok) d = await res.json();
   } catch (e) {}
   // The record is its own file and its own failure: a board with no
@@ -11791,8 +11794,15 @@ async function renderFantasy() {
   try {
     // The injury board rides along so every roster surface can tag a
     // designation — missing is fine, the tags just come back empty.
+    // paidFetch, not fetch: `draft_kit`, `ranks`, `buy_sell` and
+    // `scripts` are stripped from the copy Caddy serves off disk
+    // (gate.PAID_KEYS_BY_FILE), so the static file hands a SUBSCRIBER a
+    // board with no draft kit and no game scripts. The entitled copy
+    // lives behind /api/board. Same fix as the UFC card and the
+    // prediction-market record before it — the third time this exact
+    // shape of bug has been shipped, which is why paidFetch exists.
     const [res] = await Promise.all([
-      fetch("data/fantasy.json?t=" + Date.now()), loadInjuryBoard()]);
+      paidFetch("fantasy.json"), loadInjuryBoard()]);
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.season) {

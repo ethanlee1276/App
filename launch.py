@@ -7307,26 +7307,46 @@ def _paywall_audit_cli() -> None:
             doc = _j.loads(f.read_text())
         except Exception:                                    # noqa: BLE001
             continue
-        found = _gate.leaks(doc, f.name)
         if _gate.is_free(f.name):
             print(f"  free      {f.name}")
             continue
+        # TWO QUESTIONS, NOT ONE, and the second was missing until
+        # 2026-08-22. `leaks()` finds paid rows under a key NOBODY
+        # ANTICIPATED — it is the net for the next UFC. It says nothing
+        # about a key that IS gated and is still sitting on the public
+        # path, which is what `--seal` fixes and what every board looks
+        # like between the flag going on and the next build. A board
+        # carrying all 42 scored memecoins under the gated key `coins`
+        # printed "sealed" before this, because `coins` rows carry a
+        # momentum score rather than a stake and `_looks_staked` is
+        # looking for a stake.
+        found = _gate.leaks(doc, f.name)
+        still = _gate._paid_rows(doc, f.name)
         if found:
             bad += 1
             rows = sum(len(doc.get(k) or []) for k in found)
             print(f"  LEAKING   {f.name}  ->  {', '.join(found)} "
                   f"({rows} staked row(s) readable by anyone)")
+        elif still:
+            bad += 1
+            gated = [k for k in _gate.paid_keys_for(f.name) if doc.get(k)]
+            print(f"  UNSEALED  {f.name}  ->  {', '.join(gated)} "
+                  f"({still} paid row(s) still on the public path)")
         else:
             print(f"  sealed    {f.name}")
     print()
     if bad:
-        print(f"  {bad} board(s) publishing staked rows. Add the key to")
-        print("  engine/gate.PAID_KEYS, and give subscribers a path to it")
-        print("  (paidFetch in web/js/app.js) in the SAME change — gating")
-        print("  a key without that fixes the leak by breaking the page")
-        print("  for the people who pay for it.")
+        print(f"  {bad} board(s) publishing the paid product.")
+        print("  UNSEALED means the gate knows the key and the file "
+              "predates it:")
+        print("    python3 launch.py --seal")
+        print("  LEAKING means the key is not gated at all. Add it to")
+        print("  engine/gate.PAID_KEYS (or PAID_KEYS_BY_FILE), and give")
+        print("  subscribers a path to it (paidFetch in web/js/app.js) in")
+        print("  the SAME change — gating a key without that fixes the")
+        print("  leak by breaking the page for the people who pay for it.")
     else:
-        print("  No board is publishing a staked row.")
+        print("  No board is publishing a paid row.")
 
 
 def _board_size_cli() -> None:

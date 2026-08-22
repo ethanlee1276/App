@@ -117,6 +117,57 @@ PAID_KEYS = (
     "live_picks",
 )
 
+#: PAID KEYS THAT BELONG TO ONE BOARD ONLY.
+#:
+#: `PAID_KEYS` above is applied to every mixed board, which is right for
+#: `recommendations` and wrong for `coins`: the sport boards all speak
+#: roughly the same vocabulary, and a global entry for an ordinary English
+#: word would strip it off any future board that happened to use the name
+#: for something harmless. So a board whose product has a board-specific
+#: name declares it here instead.
+#:
+#: ADDED 2026-08-22, answering Ethan on his own audit output: *"remeber we
+#: talked about there not being a free plan and only the 3 day trial with
+#: full access. so why is it should free for all of that"*. The paywall
+#: page sells "The full fantasy suite — draft kit, mock draft, lineups,
+#: trades" and "the meme-coin scanner" as things you pay for, and both
+#: boards were in FREE_FILES, published whole. That is not a free plan by
+#: policy — it is two advertised features given away by omission, which is
+#: worse, because nobody decided it.
+#:
+#: WHAT IS *NOT* HERE IS THE POINT. Neither board is wholly paid, because
+#: most of what is in them is fact rather than opinion:
+#:
+#:   fantasy.json   free: `usage` (snap counts, target share, air yards —
+#:                  ingested stats), `rates`, `schedule`, `camp`,
+#:                  `trending` (Sleeper's own adds/drops), `season`.
+#:                  paid: `draft_kit` and `ranks` (our board), `buy_sell`
+#:                  (buy-low/sell-high — an opinion about a player's
+#:                  price), `scripts` (game scripts, sold by name on the
+#:                  paywall page).
+#:
+#:   memecoins.json free: `n`, `gated`, `risk_gate`, `notes`, `status` —
+#:                  the counts, which make the locked state say "42
+#:                  scored, 18 behind the risk gate" instead of nothing.
+#:                  paid: `coins` (every coin with our momentum score,
+#:                  risk score and exit signals) and the `rocket`/`exits`
+#:                  lists, which are the scan's two answers.
+PAID_KEYS_BY_FILE = {
+    "fantasy.json": ("draft_kit", "ranks", "buy_sell", "scripts"),
+    "memecoins.json": ("coins", "rocket", "exits"),
+}
+
+
+def paid_keys_for(name: str = "") -> tuple:
+    """Every key that must be stripped from this board.
+
+    Takes a bare file name; anything else gets the global tuple, which is
+    the safe direction — a caller that has lost the name over-gates
+    rather than under-gates.
+    """
+    return PAID_KEYS + PAID_KEYS_BY_FILE.get(Path(str(name or "")).name, ())
+
+
 #: Files that are paid in their entirety — no free half to preserve.
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
@@ -131,12 +182,32 @@ PAID_FILES = (
 )
 
 #: …and the ones that must NEVER be touched, named rather than inferred.
-#: `record.json` is the evidence the subscription is sold on. The rest is
-#: what makes the site worth visiting when you have not paid: scores,
-#: schedules, injuries, standings, rosters, the fantasy tools and the
-#: meme-coin tracker.
+#:
+#: THE TEST FOR THIS LIST IS "IS IT A FACT OR IS IT AN OPINION", not "is
+#: it nice to have". Everything here is either something that happened
+#: (a score, an injury designation, a roster move, a standing, a fixture
+#: list) or something already graded and published as evidence. None of
+#: it is the model's output, so none of it is what the subscription
+#: sells, and gating it would only make the site useless to somebody
+#: deciding whether to start the trial.
+#:
+#: `record.json` and `memerecord.json` are here for a stronger reason
+#: than that: they ARE the pitch. "Every pick graded in public, wins and
+#: losses" is the only claim this site makes that a stranger can check,
+#: and the paywall page's own proof block reads from record.json. A proof
+#: nobody can read persuades nobody.
+#:
+#: WHAT WAS REMOVED FROM THIS LIST, 2026-08-22. Ethan, reading a
+#: `--paywall-audit` run: *"remeber we talked about there not being a
+#: free plan and only the 3 day trial with full access. so why is it
+#: should free for all of that"*. He was right about two of them —
+#: `fantasy.json` and `memecoins.json` were published whole while the
+#: paywall page sold "The full fantasy suite" and "the meme-coin
+#: scanner" as things you pay for. Both are now MIXED_FILES: the facts
+#: inside them (usage, rosters, schedule, the graded record) stay free
+#: and the model's output inside them is stripped. See PAID_KEYS_BY_FILE.
 FREE_FILES = (
-    "record.json", "injuries.json", "fantasy.json", "memecoins.json",
+    "record.json", "memerecord.json", "injuries.json",
     "ufc_live.json",
     # Schedule and scores for the five weeks of preseason. Free
     # because it is structurally priceless — board_payload()
@@ -177,6 +248,12 @@ KNOWN_BOARDS = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
     "record.json", "injuries.json", "fantasy.json", "memecoins.json",
+    # memes_build.py has written this since the meme ledger shipped and
+    # nothing here had ever heard of it — the third time a pipeline grew
+    # a board without telling the gate. Unregistered meant `is_free` said
+    # no, so it went down the MIXED path, matched none of PAID_KEYS and
+    # was published whole anyway. Right answer, reached by accident.
+    "memerecord.json",
     "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
@@ -189,6 +266,12 @@ KNOWN_BOARDS = (
 MIXED_FILES = (
     "recommendations.json", "mlb_recommendations.json", "nba.json",
     "wnba.json", "cfb.json", "ufc.json",
+    # Not sports boards, same shape of problem: a feed's facts and the
+    # model's read of them in one object. Their paid keys are named in
+    # PAID_KEYS_BY_FILE rather than in PAID_KEYS, because `coins` and
+    # `ranks` are ordinary words and a global entry would strip them off
+    # any future board that happened to use the name.
+    "fantasy.json", "memecoins.json",
 )
 
 #: The switch. OFF by default, and that default is the whole reason this
@@ -272,8 +355,9 @@ def redact(payload: dict, name: str = "") -> dict:
         return kept
 
     out, locked = {}, {}
+    paid = paid_keys_for(name)
     for key, value in payload.items():
-        if key in PAID_KEYS:
+        if key in paid:
             n = _size(value)
             if n:
                 locked[key] = n
@@ -338,7 +422,8 @@ def _paid_rows(payload: dict, name: str) -> int:
     if is_wholly_paid(name):
         # Sealed copies keep only the stamps plus the locked block.
         return 0 if payload.get("locked_reason") else _size(payload)
-    return sum(_size(v) for k, v in payload.items() if k in PAID_KEYS)
+    paid = paid_keys_for(name)
+    return sum(_size(v) for k, v in payload.items() if k in paid)
 
 
 def seal(web_data=None, verbose=True) -> dict:
@@ -472,8 +557,9 @@ def leaks(payload: dict, name: str) -> list:
     """
     if not isinstance(payload, dict) or is_free(name) or is_wholly_paid(name):
         return []
+    paid = paid_keys_for(name)
     return sorted(k for k, v in payload.items()
-                  if k not in PAID_KEYS and _looks_staked(v))
+                  if k not in paid and _looks_staked(v))
 
 
 def full_board_file(name: str) -> "Path | None":
