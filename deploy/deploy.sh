@@ -32,21 +32,55 @@ RUN_TESTS=1
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
+# Set when this script has already re-executed itself (see step 3). The
+# backup and the pull are done by then; repeating them would write a
+# second identical backup and pull nothing.
+RESUMED="${QB_DEPLOY_RESUMED:-}"
+
 # --- 1. a way back ---------------------------------------------------
 # Tagged BEFORE anything changes, so rollback is one command and does not
 # depend on remembering what was deployed.
 PREV="$(git rev-parse --short HEAD)"
-say "current: $PREV  (roll back with: git checkout $PREV && ./deploy/deploy.sh)"
+[ -z "$RESUMED" ] && \
+  say "current: $PREV  (roll back with: git checkout $PREV && ./deploy/deploy.sh)"
 
-# --- 2. back up the databases ----------------------------------------
-# Before the code changes, not after. A migration that goes wrong is
-# exactly when the pre-migration copy is the only useful thing on the box.
-say "backing up"
-./deploy/backup.sh
+if [ -z "$RESUMED" ]; then
+  # --- 2. back up the databases --------------------------------------
+  # Before the code changes, not after. A migration that goes wrong is
+  # exactly when the pre-migration copy is the only useful thing on the box.
+  say "backing up"
+  ./deploy/backup.sh
 
-# --- 3. new code ------------------------------------------------------
-say "pulling"
-git pull --ff-only
+  # --- 3. new code ----------------------------------------------------
+  say "pulling"
+  BEFORE="$(git rev-parse HEAD)"
+  git pull --ff-only
+  AFTER="$(git rev-parse HEAD)"
+
+  # THIS SCRIPT JUST OVERWROTE ITSELF, POSSIBLY. Bash does not read a
+  # script into memory — it reads lazily, keeping a byte offset into the
+  # open file. Rewriting the file underneath it means execution continues
+  # at that same offset in the NEW text, which lands wherever the byte
+  # count happens to land: usually a different line, sometimes the middle
+  # of one.
+  #
+  # Measured on 2026-08-22. The pull that ADDED the promo-code step
+  # inserted 27 lines above the restart; bash resumed past them and went
+  # straight to "restarting". The step simply never ran, and nothing said
+  # so. A shorter edit could as easily have resumed inside a word and run
+  # a fragment as a command.
+  #
+  # So: if the pull changed this file, start over from the new copy. The
+  # env var is how the new process knows the backup and the pull are
+  # already done. It also means a step added by a deploy runs on THAT
+  # deploy, rather than silently waiting for the next one.
+  if [ "$BEFORE" != "$AFTER" ] \
+     && ! git diff --quiet "$BEFORE" "$AFTER" -- deploy/deploy.sh; then
+    say "deploy.sh changed in that pull — re-running it on the new version"
+    export QB_DEPLOY_RESUMED=1
+    exec bash "$ROOT/deploy/deploy.sh" "$@"
+  fi
+fi
 
 # --- 4. the gate ------------------------------------------------------
 if [[ "$RUN_TESTS" == "1" ]]; then
