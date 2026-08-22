@@ -598,6 +598,11 @@ function normalizeSlate(d) {
   return d;
 }
 
+/* The last ETag seen per board endpoint. Keyed by URL, so switching
+   sport asks for that sport's board rather than revalidating against
+   another one's tag — which would 200 every time and quietly undo this. */
+const _boardTags = {};
+
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
@@ -628,11 +633,34 @@ async function load(quiet = false) {
     // twenty minutes ago while the timer fired happily every 30 seconds.
     // Closing the tab and reopening it was the only thing that missed the
     // cache, which is exactly the symptom.
-    const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`,
-                            { cache: "no-store" });
-    if (!res.ok) throw new Error("api");
-    stampFrom(res);
-    state.data = normalizeSlate(await res.json());
+    /* REVALIDATE INSTEAD OF RE-DOWNLOADING. This fires every 30 seconds
+       and the launcher rebuilds every 60, so roughly half of these polls
+       ask for a board this tab already has — and used to be handed the
+       whole thing again. Per subscriber, all day, that is the largest
+       recurring cost the site has.
+
+       The tag is kept in memory rather than letting the HTTP cache do
+       this, because the cache would also mean a paid board sitting on
+       disk in the subscriber's browser. `no-store` stays; the server
+       reads the header we send by hand.
+
+       Only sent when there is actually something to keep: a 304 with an
+       empty `state.data` would render a blank board. */
+    const tag = _boardTags[meta.api];
+    const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
+      cache: "no-store",
+      headers: (tag && state.data) ? { "If-None-Match": tag } : {},
+    });
+    if (res.status === 304) {
+      stampFrom(res);                    // the build time has not moved
+    } else if (!res.ok) {
+      throw new Error("api");
+    } else {
+      const got = res.headers.get("ETag");
+      if (got) _boardTags[meta.api] = got; else delete _boardTags[meta.api];
+      stampFrom(res);
+      state.data = normalizeSlate(await res.json());
+    }
   } catch (e) {
     // The fallback file can be missing too (a sport that has never been
     // built). An honest empty slate beats an unhandled rejection that

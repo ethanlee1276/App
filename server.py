@@ -537,31 +537,34 @@ _BOARD_LOCK = threading.Lock()
 
 
 def board_bytes(name: str):
-    """``(body, mtime)`` for a subscriber board, or ``(None, None)``."""
+    """``(body, mtime, etag)`` for a board, or ``(None, None, None)``."""
     from engine import gate
     path = gate.full_board_file(name)
     if path is None:
-        return None, None
+        return None, None, None
     try:
         st = path.stat()
     except OSError:
-        return None, None
+        return None, None, None
     stamp = (st.st_mtime_ns, st.st_size)
     with _BOARD_LOCK:
         hit = _BOARD_CACHE.get(name)
         if hit is not None and hit[0] == stamp:
-            return hit[1], st.st_mtime
+            return hit[1], st.st_mtime, hit[2]
     # Read OUTSIDE the lock: a cold read of a megabyte-and-a-half must
     # not hold every other board's requests behind it, and two threads
     # racing to fill the same entry cost one duplicated parse rather than
     # a queue. The loser overwrites with an identical value.
     payload = gate.full_board(name)
     if payload is None:
-        return None, None
+        return None, None, None
     body = json.dumps(payload).encode()
+    # Hashed once per rebuild, not once per request — it rides in the same
+    # cache entry as the bytes it describes, so the two cannot disagree.
+    etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
     with _BOARD_LOCK:
-        _BOARD_CACHE[name] = (stamp, body)
-    return body, st.st_mtime
+        _BOARD_CACHE[name] = (stamp, body, etag)
+    return body, st.st_mtime, etag
 
 
 def _sw_shell(body: str, web: Path = WEB) -> list[Path]:
@@ -1492,10 +1495,25 @@ class Handler(BaseHTTPRequestHandler):
                                   json.dumps(locked).encode(), ".json")
         finally:
             conn.close()
-        body, _mtime = board_bytes(name)
+        body, mtime, etag = board_bytes(name)
         if body is None:
             return self._send(404, b'{"error":"no such board"}', ".json")
-        return self._send(200, body, ".json")
+        # REVALIDATION, WHICH IS BANDWIDTH RATHER THAN CPU. The page polls
+        # this every 30 seconds and the launcher rebuilds every 60, so
+        # roughly half of all polls ask for a board the caller already
+        # has, and used to be handed the whole thing again. On a board of
+        # any size that is the largest recurring cost the site has, and it
+        # is paid per subscriber per poll, all day.
+        #
+        # Done with an ETag the CLIENT sends back rather than by relaxing
+        # `Cache-Control: no-store`: the browser cache would work, but it
+        # would also mean a subscriber's paid board sitting on disk in
+        # their browser, and that is a property this site chose not to
+        # have. app.js keeps the tag in memory and hands it back.
+        if etag and self.headers.get("If-None-Match") == etag:
+            return self._send_not_modified(etag, mtime)
+        return self._send(200, body, ".json",
+                          headers=[("ETag", etag)] if etag else None)
 
     def _billing_get(self, path: str):
         from engine import billing as BI
@@ -2215,6 +2233,24 @@ class Handler(BaseHTTPRequestHandler):
     #: in the first place.
     server_version = "Qellys"
     sys_version = ""
+
+    def _send_not_modified(self, etag: str, mtime: float | None = None):
+        """304: the caller's copy is still current.
+
+        NO BODY AND NO CONTENT-LENGTH, which is what 304 means. The
+        handler speaks HTTP/1.0 and closes the connection after every
+        response, so there is no framing to get wrong here.
+        """
+        self.send_response(304)
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        if mtime is not None:
+            self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
+            self.send_header("Access-Control-Expose-Headers",
+                             "Last-Modified, ETag")
+        self.end_headers()
 
     def _send(self, code: int, body: bytes, suffix: str, mtime: float | None = None,
               headers: list | None = None):

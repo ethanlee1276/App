@@ -479,13 +479,13 @@ def test_a_rebuild_invalidates_the_cached_board():
     name, path = _bench_board(4)
     try:
         S._BOARD_CACHE.clear()
-        first, _ = S.board_bytes(name)
+        first = S.board_bytes(name)[0]
         doc = _j.loads(path.read_text())
         doc["date"] = "2026-08-23"
         # A rewrite in the same clock tick must still be seen: the stamp
         # is mtime AND size, and this changes neither reliably on its own.
         path.write_text(_j.dumps(doc) + " ")
-        second, _ = S.board_bytes(name)
+        second = S.board_bytes(name)[0]
     finally:
         S._BOARD_CACHE.clear()
         path.unlink(missing_ok=True)
@@ -533,6 +533,88 @@ def test_the_board_name_still_cannot_climb_out_of_its_directory():
                 ".hidden.json", "no_suffix", ""):
         assert gate.full_board_file(bad) is None, bad
         assert S.board_bytes(bad)[0] is None, bad
+
+
+# --- revalidation, which is bandwidth rather than CPU -------------------------
+def test_the_board_is_revalidated_rather_than_re_sent():
+    """The page polls every 30 seconds and the launcher rebuilds every 60,
+    so about half of all polls ask for a board the caller already has. Per
+    subscriber, all day, re-sending it is the largest recurring cost the
+    site has — and it is paid in bandwidth, which the CPU cache above did
+    nothing about."""
+    import json as _j
+    import server as S
+    name, path = _bench_board(4)
+    try:
+        S._BOARD_CACHE.clear()
+        body, _m, etag = S.board_bytes(name)
+        assert etag and etag.startswith('"') and etag.endswith('"'), \
+            f"an ETag must be a quoted string, got {etag!r}"
+        again = S.board_bytes(name)[2]
+        assert again == etag, "the tag moves without the board moving"
+        # A rebuild must move it, or a subscriber is pinned to a stale board.
+        doc = _j.loads(path.read_text())
+        doc["date"] = "2026-08-23"
+        path.write_text(_j.dumps(doc) + " ")
+        assert S.board_bytes(name)[2] != etag, \
+            "the tag survived a rebuild — subscribers would never see it"
+    finally:
+        S._BOARD_CACHE.clear()
+        path.unlink(missing_ok=True)
+
+
+def test_a_304_carries_no_body_and_no_content_length():
+    """That is what 304 means. The handler speaks HTTP/1.0 and closes
+    after every response, so there is no framing to get wrong — but a
+    Content-Length on a bodyless response is the kind of thing a proxy in
+    front of it will one day disagree about."""
+    body = SERVER[SERVER.index("def _send_not_modified("):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "send_response(304)" in body
+    assert "Content-Length" not in body
+    assert "self.wfile.write" not in body, "a 304 with a body"
+    assert 'send_header("ETag"' in body, "the tag has to come back"
+
+
+def test_the_client_handles_304_before_it_checks_ok():
+    """`res.ok` is FALSE for a 304 — verified in Chromium, not assumed.
+    Checked in the wrong order, every successful revalidation throws and
+    falls through to the fallback file, which is the stale board this
+    whole mechanism exists to avoid serving."""
+    i = APP.index("const tag = _boardTags[")
+    block = APP[i:i + 900]
+    assert "res.status === 304" in block, "the 304 is not handled at all"
+    assert block.index("res.status === 304") < block.index("!res.ok"), \
+        "!res.ok is tested first, so every 304 throws"
+
+
+def test_the_client_only_revalidates_when_it_has_something_to_keep():
+    """A 304 against an empty `state.data` renders a blank board."""
+    i = APP.index("const tag = _boardTags[")
+    block = APP[i:i + 500]
+    assert "state.data" in block.split("If-None-Match")[0], \
+        "the tag is sent even with nothing cached to fall back on"
+
+
+def test_the_tags_are_kept_per_endpoint():
+    """Switching sport must ask for THAT sport's board. One shared tag
+    would never match after a switch, which is a silent 200 every time
+    and this mechanism quietly doing nothing."""
+    i = APP.index("const _boardTags")
+    assert "{}" in APP[i:i + 80]
+    assert "_boardTags[meta.api]" in APP, "the tag is not keyed by endpoint"
+
+
+def test_the_paid_board_still_never_lands_in_a_disk_cache():
+    """The browser's own cache would do this revalidation for free, and
+    the price would be a subscriber's paid board sitting on disk in their
+    browser. The tag is kept in memory instead; `no-store` stays."""
+    i = APP.index("const tag = _boardTags[")
+    assert 'cache: "no-store"' in APP[i:i + 500], \
+        "the board response is now storable by the browser"
+    body = SERVER[SERVER.index("def _send_not_modified("):]
+    body = body[:body.index("\n    def ", 1)]
+    assert '"no-store"' in body, "the 304 relaxes what the 200 refuses"
 
 
 def test_the_stripe_webhook_is_not_rate_limited():
