@@ -309,6 +309,11 @@ def create_promotion_code(secret_key: str, promo_id: str,
     # a code that needs a cap needs it now, not later.
     if int(promo.get("max_redemptions") or 0) > 0:
         pairs["max_redemptions"] = str(int(promo["max_redemptions"]))
+    # Refuse the code to anyone who has ever paid an invoice here. Stops
+    # an existing subscriber cancelling and re-buying at a discount; does
+    # NOT stop a brand-new account, which has no history to look at.
+    if promo.get("first_time_only", True):
+        pairs["restrictions[first_time_transaction]"] = "true"
     return _promo_call(
         f"creating promotion code {promo['code']} on coupon {coupon_id} "
         f"({', '.join(sorted(pairs))}) against API {PROMO_API_VERSION}",
@@ -339,6 +344,36 @@ def _coupon_problems(coupon: dict, promo_id: str,
     return bad
 
 
+def _code_problems(existing: dict, promo: dict) -> list:
+    """Ways a promotion code ALREADY at Stripe differs from the config.
+
+    Reported, never fixed. `max_redemptions` and the restrictions are
+    fixed when a promotion code is created — Stripe will not let them
+    change afterwards — so the only remedy is to deactivate the code and
+    make a new one. Saying so is worth more than silently passing a code
+    that has no cap on it.
+    """
+    bad = []
+    want_cap = int(promo.get("max_redemptions") or 0)
+    got_cap = existing.get("max_redemptions")
+    got_cap = int(got_cap) if got_cap is not None else 0
+    if want_cap != got_cap:
+        bad.append(
+            f"the live code allows {got_cap or 'unlimited'} redemption(s), "
+            f"the config says {want_cap or 'unlimited'} — a cap cannot be "
+            f"changed after creation, so this needs a NEW code")
+    want_first = bool(promo.get("first_time_only", True))
+    got_first = bool((existing.get("restrictions") or {})
+                     .get("first_time_transaction"))
+    if want_first != got_first:
+        is_now = ("first-time-only" if got_first
+                  else "open to anyone who has paid before")
+        bad.append(f"the live code is {is_now}, the config says the "
+                   f"opposite — also fixed at creation, so this needs a "
+                   f"NEW code")
+    return bad
+
+
 def ensure_promos(secret_key: str, create: bool = True) -> dict:
     """Make Stripe's coupons match `billing.PROMOS`, or say why they don't.
 
@@ -355,6 +390,9 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
             coupon = existing.get("coupon") or {}
             row["coupon"] = coupon.get("id")
             row["problems"] = _coupon_problems(coupon, promo_id, promo)
+            row["problems"] += _code_problems(existing, promo)
+            row["redeemed"] = int(existing.get("times_redeemed") or 0)
+            row["cap"] = existing.get("max_redemptions")
             if not row["active"]:
                 row["problems"].append(
                     "the code exists at Stripe but is switched OFF — "

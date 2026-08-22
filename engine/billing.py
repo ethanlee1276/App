@@ -164,13 +164,38 @@ TRIAL_PLAN = "monthly"
 #: codes and the reasoning transfers unchanged: a secret belongs in the
 #: environment, which nothing reachable from the web can read.
 #:
-#:     QB_PROMOS="SOMECODE:75:2:monthly:25"
-#:                    │     │  │    │     │
-#:                    │     │  │    │     └── max redemptions (0 = no cap)
-#:                    │     │  │    └──────── which plans may offer it
-#:                    │     │  └───────────── months the discount runs
-#:                    │     └──────────────── percent off
-#:                    └────────────────────── the code, as typed
+#:     QB_PROMOS="SOMECODE:75:2:monthly:1:new"
+#:                    │     │  │    │     │  │
+#:                    │     │  │    │     │  └── "new" (default) or "any"
+#:                    │     │  │    │     └───── max redemptions (0 = no cap)
+#:                    │     │  │    └─────────── which plans may offer it
+#:                    │     │  └──────────────── months the discount runs
+#:                    │     └─────────────────── percent off
+#:                    └───────────────────────── the code, as typed
+#:
+#: HOW A CODE IS STOPPED FROM BEING USED TWICE, which is three separate
+#: mechanisms because no single one covers it:
+#:
+#: * `max redemptions` is a HARD, GLOBAL ceiling that Stripe enforces.
+#:   A code with a cap of 1 is spent the moment anybody uses it, and a
+#:   second account with a second card cannot revive it. This is the only
+#:   one of the three that a determined person cannot walk around, which
+#:   is why `--promo-new` mints one single-use code per friend rather
+#:   than one shared code for all of them.
+#: * "new" sets Stripe's `first_time_transaction` restriction: the code
+#:   is refused for any customer who has ever paid an invoice here. That
+#:   stops an existing subscriber from cancelling and re-buying at 75%
+#:   off. It does NOT stop a fresh account — a new customer has no
+#:   history by definition. Use "any" for a deliberate win-back offer to
+#:   somebody who has already paid.
+#: * One per ACCOUNT, enforced on our side at checkout: an account that
+#:   has ever held a subscription is not offered the box at all.
+#:
+#: What none of these can do is recognise the same PERSON behind a new
+#: email and a new card. Nothing can, short of storing something about
+#: the card — which would change what this site keeps about a payment
+#: method, and the Privacy Policy says plainly that it keeps nothing.
+#: A single-use code per friend makes the question moot instead.
 #:
 #: Unset means NO promo codes at all: Stripe's box never renders, and
 #: there is nothing to guess. That is the right default for a site whose
@@ -219,6 +244,11 @@ def promos(env: dict | None = None) -> dict:
             cap = int(bits[4]) if len(bits) > 4 and bits[4] else 0
         except ValueError:
             continue
+        # First-time-only unless explicitly opened up. The default is the
+        # safe direction: a promo that quietly works for existing
+        # subscribers is a discount on revenue already earned.
+        first_time = str(bits[5]).strip().lower() not in (
+            "any", "all", "anyone") if len(bits) > 5 else True
         # A 0% coupon is a no-op and a 100% one is a free subscription
         # wearing a discount's clothes — that is what QB_CODES is for,
         # and it does not need a card.
@@ -235,6 +265,7 @@ def promos(env: dict | None = None) -> dict:
             "duration_in_months": months,
             "plans": plans,
             "max_redemptions": max(0, cap),
+            "first_time_only": first_time,
             # Named for the dashboard, where Ethan has to recognise it.
             # The code itself is IN the name because Stripe shows coupon
             # names and promotion codes on different screens.
@@ -576,7 +607,8 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
                      email: str, success_url: str, cancel_url: str,
                      plan_id: str = DEFAULT_PLAN,
                      now: float | None = None,
-                     trial_days: int = 0) -> tuple[str, dict, bytes]:
+                     trial_days: int = 0,
+                     allow_promo: bool = True) -> tuple[str, dict, bytes]:
     """``(url, headers, body)`` for a Checkout Session.
 
     `client_reference_id` is how the webhook finds its way back to a row
@@ -617,7 +649,7 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
     # that typing a checkout code into the account page's redeem box now
     # gets told where it actually goes, instead of "that code is not
     # valid".
-    if promos_for(plan_id):
+    if allow_promo and promos_for(plan_id):
         body += b"&" + _form({"allow_promotion_codes": "true"})
     if int(trial_days or 0) > 0:
         # PAYMENT METHOD STILL COLLECTED. Stripe's default for a
@@ -708,18 +740,21 @@ def _get(url: str, secret_key: str, timeout: int = 20,
 
 def start_checkout(user_id: int, email: str, success_url: str,
                    cancel_url: str, plan_id: str = DEFAULT_PLAN,
-                   trial_days: int = 0) -> str:
+                   trial_days: int = 0, allow_promo: bool = True) -> str:
     """The Stripe-hosted URL to send the customer to.
 
-    `trial_days` is decided by the CALLER, from the database, and never
-    from anything the browser sent. A trial length taken off a request
-    body would be a free subscription for anyone who edited it.
+    `trial_days` and `allow_promo` are decided by the CALLER, from the
+    database, and never from anything the browser sent. A trial length
+    taken off a request body would be a free subscription for anyone who
+    edited it, and a promo flag taken off one would let an account that
+    has already subscribed re-buy at a discount by editing a checkbox.
     """
     sk, _wh, _monthly = keys()
     price = price_for(plan_id)
     url, headers, body = checkout_request(sk, price, user_id, email,
                                           success_url, cancel_url, plan_id,
-                                          trial_days=int(trial_days or 0))
+                                          trial_days=int(trial_days or 0),
+                                          allow_promo=bool(allow_promo))
     out = _post(url, headers, body)
     got = out.get("url")
     if not got:

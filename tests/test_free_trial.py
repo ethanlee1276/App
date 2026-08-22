@@ -135,13 +135,20 @@ def test_a_broken_lookup_refuses_the_trial_rather_than_granting_it():
 
 
 def test_the_length_is_never_taken_from_the_request():
+    """THE WHOLE CHECKOUT BLOCK, not a fixed slice forward from the call.
+    This read 260 characters after `trial_days_for(` and broke the moment
+    the eligibility lookup moved onto its own line above it — a passing
+    test turning red for a change that did not touch its subject. The
+    claim is about the handler, so the handler is what it reads."""
     src = _read(SERVER)
-    i = src.index("BI.trial_days_for(")
-    call = src[i:i + 260]
-    assert "body.get" not in call, (
+    block = src[src.index('if path == "checkout":'):]
+    block = block[:block.index("else:")]
+    assert "BI.trial_days_for(" in block
+    assert "body.get" not in block.split("BI.trial_days_for(")[1], (
         "the trial length comes from the request body — anybody can edit "
         "that and give themselves a year")
-    assert "has_subscribed_before" in call
+    assert "has_subscribed_before" in block, (
+        "eligibility is no longer decided from the database")
 
 
 def test_the_checkout_body_carries_the_trial_only_when_there_is_one():

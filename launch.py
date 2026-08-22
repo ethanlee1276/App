@@ -6548,6 +6548,9 @@ def main() -> None:
         _stripe_webhook_cli(recreate="--recreate" in argv,
                             print_env="--print-env" in argv)
         return
+    if "--promo-new" in argv:
+        _promo_new_cli(argv)
+        return
     if "--promos" in argv or "--promos-setup" in argv:
         # NARROW ON PURPOSE, so the deploy can call it. --stripe-setup
         # also creates Products and Prices, and a deploy script that
@@ -7152,6 +7155,80 @@ def _stripe_webhook_cli(recreate: bool = False, print_env: bool = False) -> None
     sys.exit(3)
 
 
+#: Alphabet for a generated code. No 0/O, no 1/I/L — these get read off
+#: a phone screen and typed by somebody else, and "was that a one or an
+#: ell" is a support message about a code that looks broken.
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _promo_new_cli(argv: list) -> None:
+    """Mint N single-use discount codes and print the line to set.
+
+    ONE CODE PER PERSON, CAPPED AT ONE USE, is the only answer to "how do
+    I stop someone using it twice" that a determined person cannot walk
+    around. Stripe enforces the cap globally: once the code is spent it
+    is dead, and a second account with a second card cannot revive it. A
+    shared code is the opposite — every defence on it is a guess about
+    who is behind an email address.
+
+    It also tells you WHOSE code leaked, because you handed each one to
+    exactly one person.
+
+    Printed ONCE, to a terminal, and never stored by this program. The
+    only copy that persists is the one in /etc/qellys/env, which is the
+    same place the Stripe key lives.
+    """
+    import secrets as _secrets
+    from engine import billing as _BI
+
+    n = 5
+    pct, months, plan = 75, 2, "monthly"
+    for i, a in enumerate(argv):
+        if a == "--promo-new" and i + 1 < len(argv):
+            try:
+                n = max(1, min(200, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--percent" and i + 1 < len(argv):
+            try:
+                pct = max(1, min(99, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--months" and i + 1 < len(argv):
+            try:
+                months = max(1, min(24, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--plan" and i + 1 < len(argv) and argv[i + 1] in _BI.PLANS:
+            plan = argv[i + 1]
+
+    codes = []
+    while len(codes) < n:
+        got = "".join(_secrets.choice(_CODE_ALPHABET) for _ in range(10))
+        if got not in codes:
+            codes.append(got)
+
+    plan_name = _BI.PLANS[plan]["name"]
+    print(f"\n{n} single-use code(s) — {pct}% off {months} month(s) on "
+          f"{plan_name}\n" + "=" * 62)
+    for c in codes:
+        print(f"  {c}")
+    line = ",".join(f"{c}:{pct}:{months}:{plan}:1" for c in codes)
+    print("\nGive ONE to each person. Each dies after a single use, so a\n"
+          "second account with a second card cannot use it again — and you\n"
+          "know whose code it was if one turns up somewhere public.\n")
+    print("To activate them:\n")
+    print("  sudo ./deploy/setenv.sh QB_PROMOS")
+    print("  (paste this when it prompts — it keeps it out of shell history)\n")
+    print(f"  {line}\n")
+    print("  sudo systemctl restart qellys")
+    print("  python3 launch.py --promos-setup\n")
+    print("SETENV REPLACES THE WHOLE VALUE. To keep codes you already\n"
+          "handed out, run `sudo ./deploy/setenv.sh --show` first and paste\n"
+          "the old ones back alongside these, separated by commas.\n")
+    print("This is the only time these are printed. Nothing here stores them.")
+
+
 def _stripe_promos_cli(secret_key: str, create: bool) -> None:
     """Report (and with `create`, make) the checkout discount codes.
 
@@ -7188,9 +7265,15 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
             state = "already there"
         else:
             state = "MISSING" if not create else "inactive"
+        used = row.get("redeemed")
+        spent = (f", {used}/{cap} used" if cap and used is not None
+                 else f", {used} used" if used else
+                 f", max {cap} use{'s' if cap != 1 else ''}" if cap else
+                 ", UNLIMITED uses")
         print(f"  {row['code']:<12} {promo['percent_off']}% off "
-              f"{promo['duration_in_months']} months on {plans}"
-              f"{f', max {cap} uses' if cap else ''}  ({state})")
+              f"{promo['duration_in_months']} months on {plans}{spent}"
+              f"{'' if promo.get('first_time_only', True) else ', any customer'}"
+              f"  ({state})")
         for problem in row.get("problems") or []:
             print(f"               ⚠️  {problem}")
     if not create and any(r.get("problems") for r in res.values()):

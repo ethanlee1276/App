@@ -244,6 +244,52 @@ is somebody who was handed it.
 creates what is missing and is safe to run any number of times.
 `python3 launch.py --promos` reports without creating.
 
+#### Stopping a code being used twice
+
+Three mechanisms, because no single one covers it:
+
+| | Stops | Does not stop |
+|---|---|---|
+| **`max_redemptions`** (Stripe) | Any use past the cap, globally and permanently | Nothing — this is the hard one |
+| **`new`** → `first_time_transaction` (Stripe) | Anyone who has ever paid an invoice here | A brand-new customer, who has no history |
+| **One per account** (ours) | An account that already held a subscription | A new email address |
+
+Only the cap is unwalkable. A new account with a new card defeats both of
+the others, because at that point nothing distinguishes the person from a
+genuine new customer.
+
+So the recommended pattern is **one single-use code per friend**:
+
+```
+python3 launch.py --promo-new 10
+```
+
+That mints ten unguessable codes, each capped at one use, and prints the
+`QB_PROMOS` line to set. Hand one to each person. A spent code is dead —
+a second account cannot revive it — and because each person got their
+own, a code that turns up in a group chat says whose it was.
+
+##### What about tracking the card?
+
+Stripe does expose a stable `fingerprint` per card, identical across
+customers, so "this card already used a promo" is technically answerable.
+It is not done here, for three reasons:
+
+1. It only works **after the fact**. The discount is applied during
+   checkout; we do not see the payment method until the webhook arrives,
+   by which point the first discounted invoice may already be paid. The
+   remedy would be stripping the discount from the subscription
+   afterwards, which is a worse customer experience than a code that
+   simply does not work.
+2. It changes what this site stores about a payment method. The Privacy
+   Policy and the checkout page both say we keep a customer id and
+   whether the subscription is active, **and nothing else about the
+   card**. That would stop being true.
+3. Single-use codes make the question moot. There is nothing to reuse.
+
+If a shared multi-use code is ever wanted, revisit this — and update the
+Privacy Policy in the same change.
+
 #### Set the cap when you create it, or not at all
 
 `max_redemptions` is fixed at creation — Stripe will not let it change

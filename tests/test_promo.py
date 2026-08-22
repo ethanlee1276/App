@@ -233,6 +233,120 @@ def test_no_cap_means_no_parameter_rather_than_a_zero():
     assert "max_redemptions" not in sent["body"], sent["body"]
 
 
+# --- stopping a code being used twice -----------------------------------------
+def test_a_single_use_code_is_the_only_defence_that_cannot_be_walked_around():
+    """Ethan: "make sure they are just use once then they can never be
+    used again ... how do we fight someone just making a new account and
+    using the same promo code again?"
+
+    A cap of 1 is enforced globally by Stripe: the code is spent, and a
+    second account with a second card cannot revive it. Everything else
+    is a guess about who is behind an email address."""
+    got = BI.promos({"QB_PROMOS": f"{FAKE}:75:2:monthly:1"})[FAKE]
+    assert got["max_redemptions"] == 1
+
+
+def test_first_time_only_is_the_default():
+    """A promo that quietly works for existing subscribers is a discount
+    on revenue already earned. The safe direction is the default, and
+    opening it up has to be deliberate."""
+    assert BI.promos({"QB_PROMOS": f"{FAKE}:75:2:monthly:1"})[FAKE][
+        "first_time_only"] is True
+    for word in ("any", "ANY", "all", "anyone"):
+        got = BI.promos({"QB_PROMOS": f"{FAKE}:75:2:monthly:0:{word}"})[FAKE]
+        assert got["first_time_only"] is False, word
+
+
+def test_the_restriction_reaches_stripe():
+    from engine import stripeset as SS
+    sent = {}
+
+    def fake_post(url, headers, body, timeout=20):
+        sent["body"] = body.decode()
+        return {"id": "p", "active": True}
+
+    def run(raw):
+        before = os.environ.get("QB_PROMOS")
+        os.environ["QB_PROMOS"] = raw
+        real, BI._post = BI._post, fake_post
+        try:
+            SS.create_promotion_code("sk_x", FAKE, "co_1")
+        finally:
+            BI._post = real
+            if before is None:
+                os.environ.pop("QB_PROMOS", None)
+            else:
+                os.environ["QB_PROMOS"] = before
+        return sent["body"]
+
+    assert "restrictions%5Bfirst_time_transaction%5D=true" in run(
+        f"{FAKE}:75:2:monthly:1")
+    assert "first_time_transaction" not in run(f"{FAKE}:75:2:monthly:0:any")
+
+
+def test_an_account_that_already_subscribed_is_not_offered_the_box():
+    """One promo per ACCOUNT. Stripe's first_time_transaction says the
+    same about the CUSTOMER; the two catch different halves of the same
+    trick, and neither catches a brand-new email with a new card — which
+    is what the single-use cap is for."""
+    def check():
+        _u, _h, fresh = BI.checkout_request(
+            "sk", "p", 7, "a@b.c", "https://s", "https://c",
+            plan_id="monthly", allow_promo=True)
+        _u2, _h2, again = BI.checkout_request(
+            "sk", "p", 7, "a@b.c", "https://s", "https://c",
+            plan_id="monthly", allow_promo=False)
+        assert b"allow_promotion_codes=true" in fresh
+        assert b"allow_promotion_codes" not in again
+    _with_promo(check)
+
+
+def test_the_endpoint_decides_the_promo_flag_from_the_database():
+    """Read off the request body it would be a discount for anyone who
+    opens the network tab."""
+    srv = _read("server.py")
+    block = srv[srv.index("if path == \"checkout\":"):]
+    block = block[:block.index("else:")]
+    assert "allow_promo=fresh" in block
+    assert "has_subscribed_before" in block
+    assert "body.get(\"allow_promo\")" not in block
+    assert "body.get(\"promo\")" not in block
+
+
+def test_a_live_code_with_no_cap_is_reported_not_passed():
+    """max_redemptions and the restrictions are fixed when Stripe creates
+    the promotion code and cannot be changed after. A code already live
+    without its cap needs a NEW code, and saying so is the whole value of
+    checking."""
+    from engine import stripeset as SS
+    spec = BI.promos({"QB_PROMOS": f"{FAKE}:75:2:monthly:1"})[FAKE]
+    problems = SS._code_problems({"max_redemptions": None,
+                                  "restrictions": {}}, spec)
+    assert len(problems) == 2, problems
+    assert any("unlimited" in p and "NEW code" in p for p in problems)
+    assert any("first-time" in p or "paid before" in p for p in problems)
+    ok = {"max_redemptions": 1,
+          "restrictions": {"first_time_transaction": True}}
+    assert SS._code_problems(ok, spec) == []
+
+
+def test_generated_codes_are_unguessable_and_readable():
+    """They are read off a phone and typed by somebody else, so no 0/O
+    and no 1/I/L — and long enough that guessing is not a strategy."""
+    import re as _re
+    src = _read("launch.py")
+    alpha = _re.search(r'_CODE_ALPHABET = "([^"]+)"', src).group(1)
+    for bad in "01OIL":
+        assert bad not in alpha, bad
+    assert len(alpha) >= 30
+    block = src[src.index("def _promo_new_cli"):]
+    block = block[:block.index("\ndef ", 1)]
+    assert "secrets" in block, "codes must not come from `random`"
+    assert "range(10)" in block, "codes got shorter than ten characters"
+    assert ":1\"" in block or ":1'" in block or '}:1' in block, \
+        "generated codes are no longer single-use"
+
+
 # --- the seam with the redemption codes ---------------------------------------
 def test_no_code_belongs_to_both_systems():
     """If a string were both a redemption code and a promotion code,

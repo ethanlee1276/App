@@ -1628,9 +1628,16 @@ class Handler(BaseHTTPRequestHandler):
                     # is a trial or how long it runs. A trial length read
                     # off a request body is a free subscription for
                     # anybody who opens the network tab.
-                    trial = BI.trial_days_for(
-                        plan,
-                        not BI.has_subscribed_before(conn, who["id"]))
+                    fresh = not BI.has_subscribed_before(conn, who["id"])
+                    trial = BI.trial_days_for(plan, fresh)
+                    # ONE PROMO PER ACCOUNT, decided here for the same
+                    # reason the trial is: an account that has already
+                    # held a subscription is not offered the promo box at
+                    # all, so cancelling and re-buying at 75% off is not
+                    # a route. Stripe's own first_time_transaction
+                    # restriction says the same thing about the CUSTOMER;
+                    # this says it about the ACCOUNT, and the two catch
+                    # different halves of the same trick.
                     url = BI.start_checkout(
                         who["id"], who["email"],
                         # THE SESSION ID COMES BACK WITH THEM. It grants
@@ -1640,7 +1647,8 @@ class Handler(BaseHTTPRequestHandler):
                         # which never arrives cannot cost a customer the
                         # thing they just bought.
                         f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
-                        f"{base}/#paywall", plan, trial_days=trial)
+                        f"{base}/#paywall", plan, trial_days=trial,
+                        allow_promo=fresh)
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:
