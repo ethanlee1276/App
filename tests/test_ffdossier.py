@@ -88,7 +88,13 @@ def test_the_overlay_closes_three_ways():
                 APP.index("Mock draft simulator")]
     assert "e.target === ov" in block, "scrim tap must close"
     assert 'closest(".ffd-close")' in block, "the button must close"
-    assert 'e.key === "Escape") closeFfDossier()' in block
+    # THE BEHAVIOUR, NOT THE CHARACTERS. This pinned the exact string
+    # `Escape") closeFfDossier()`, so it broke when a second dialog
+    # started sharing the handler — a change that made Escape close MORE
+    # things, which is the direction this test wants.
+    esc = [l for l in block.splitlines()
+           if 'e.key === "Escape"' in l and "closeFfDossier()" in l]
+    assert esc, "Escape no longer closes the dossier"
 
 
 def test_the_dossier_is_styled():

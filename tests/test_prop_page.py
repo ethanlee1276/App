@@ -230,6 +230,66 @@ def test_a_riding_row_with_nothing_behind_it_stays_inert():
     assert "!b.player" in attrs
 
 
+def test_a_riding_row_opens_a_popup_not_a_page():
+    """Ethan, 2026-08-22: "i dont like how it takes you to the search page
+    and automatically searches the palyer for you, we need to switch it
+    too a pop up window that comes up with the bar graph and shit instead
+    of taking you to a new whole page."
+
+    Right on both counts. Navigating to Players and typing into its search
+    box on the reader's behalf was a lot of machinery to look at one
+    chart, and it lost the place they were reading.
+
+    It also explains his OTHER complaint in the same message — that it
+    "loads you at the bottom of the page". That was not a separate
+    scroll bug; it was this navigation landing on a long page. Verified
+    in Chromium: opening the peek leaves state.view and window.scrollY
+    exactly where they were."""
+    assert "function openPeek(" in APP, "the popup is gone"
+    fn = APP[APP.index("function ridingAttrs("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "data-peek=" in fn, "the riding row navigates again"
+    assert "openPlayer(" not in fn
+
+
+def test_the_peek_does_not_use_the_attribute_the_profile_tabs_use():
+    """`data-player` is already on the profile card's market tabs. A
+    delegated handler on it fires there too — which survives today only
+    because those tabs are <button>s and the handler skips buttons. That
+    is luck, not design, and it stops holding the moment one is restyled
+    as a div."""
+    fn = APP[APP.index("function ridingAttrs("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "data-player=" not in fn
+    assert 'data-player="${escapeAttr(player)}"' in APP, \
+        "the profile tabs stopped using it — this test is now moot"
+
+
+def test_the_popup_reuses_the_profile_card_rather_than_redrawing_it():
+    """profileHTML already draws the head, the market tabs, the bar chart
+    and the log rows. A second implementation is a second thing to keep
+    in step with the first, and it is the chart that would drift."""
+    fn = APP[APP.index("async function openPeek("):]
+    fn = fn[:fn.index("\nfunction closePeek(")]
+    assert "profileHTML(name)" in fn, "the popup draws its own card now"
+    assert "player_stats" in fn and "leagueLogs(" in fn, \
+        "a player with nothing on tonight's board gets no logs"
+
+
+def test_the_popup_can_be_dismissed_every_way_a_dialog_should_be():
+    fn = APP[APP.index("async function openPeek("):]
+    fn = fn[:fn.index("\nfunction closePeek(")]
+    assert "pk-close" in fn and "e.target === ov" in fn, \
+        "no backdrop or close-button dismissal"
+    assert 'role="dialog"' in fn and 'aria-modal="true"' in fn
+    # THE RIGHT Escape HANDLER — app.js has three, and index() finds one
+    # about a dropdown menu. Anchor on the handler that mentions the
+    # dialog rather than on the first that mentions the key.
+    esc = [l for l in APP.splitlines()
+           if 'e.key === "Escape"' in l and "closePeek()" in l]
+    assert esc, "Escape does not close the popup"
+
+
 def test_a_riding_row_opens_even_when_the_board_is_empty():
     """THE HALF THE FIRST FIX MISSED. Rows only opened when the board
     still carried a prop object for that player — and then Ethan sent the
@@ -242,9 +302,9 @@ def test_a_riding_row_opens_even_when_the_board_is_empty():
     and it needs no board at all."""
     fn = APP[APP.index("function ridingAttrs("):]
     fn = fn[:fn.index("\n}") + 2]
-    assert "data-player=" in fn, "there is still no fallback door"
+    assert "data-peek=" in fn, "there is still no fallback door"
     assert "propAttrs(door)" in fn, "the prop page is no longer preferred"
-    assert fn.index("propAttrs(door)") < fn.index("data-player="), \
+    assert fn.index("propAttrs(door)") < fn.index("data-peek="), \
         "the fallback runs before the real prop page"
 
 
@@ -257,7 +317,7 @@ def test_a_moneyline_row_gets_no_player_door():
     assert 'b.market === "moneyline"' in fn
 
 
-def test_the_player_door_is_wired_to_both_mouse_and_keyboard():
+def test_the_peek_is_wired_to_both_mouse_and_keyboard():
     """A card you can click is a control, and a control that only answers
     a mouse is not finished — the same rule the prop doors already keep."""
     # THE RIGHT LISTENER, not the first one with that name — app.js has
@@ -273,8 +333,8 @@ def test_the_player_door_is_wired_to_both_mouse_and_keyboard():
             if "[data-prop]" in chunk:
                 body = chunk
                 break
-        assert "[data-player]" in body, f"the {kind} handler ignores the player door"
-        assert body.index("[data-prop]") < body.index("[data-player]"), \
+        assert "[data-peek]" in body, f"the {kind} handler ignores the peek"
+        assert body.index("[data-prop]") < body.index("[data-peek]"), \
             "a row with a real prop behind it must open the prop page"
 
 

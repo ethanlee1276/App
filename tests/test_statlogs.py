@@ -216,6 +216,93 @@ def test_the_server_serves_both_and_gates_neither():
         assert "_entitled" not in body, f"{fn} grew a paywall"
 
 
+def test_a_search_result_gets_a_face_for_a_sport_the_assets_table_ignores():
+    """Ethan, 2026-08-22: "headshots are not loading on the search page
+    for players."
+
+    ONE TABLE, ONE SPORT. `player_assets` is written only by the hoops
+    ingest — ESPN's box score hands over a photo href, so NBA and WNBA
+    faces are taken. The MLB Stats API publishes no photo URL at all
+    (MLB's face is CONSTRUCTED from the person id), and nothing writes
+    NFL's there either. So the search endpoint asked the one source that
+    could not answer for the sport being searched, and every MLB result
+    came back drawing initials.
+    """
+    import engine.statlogs as SL
+    import engine.rosters as RO
+
+    calls = []
+
+    def fake_face_map(conn, sport, now=None):
+        calls.append(sport)
+        return {RO._norm_key("Andrew Painter"): "https://example/painter.png"}
+
+    real, RO.face_map = RO.face_map, fake_face_map
+    try:
+        got = SL._face_of(None, "mlb", "Andrew Painter")
+        miss = SL._face_of(None, "mlb", "Nobody At All")
+    finally:
+        RO.face_map = real
+    assert got == "https://example/painter.png", got
+    assert miss == "", "an unknown name invented a photo"
+    assert calls == ["mlb", "mlb"]
+
+
+def test_a_dead_roster_feed_costs_a_photo_and_not_the_page():
+    """A search result with no photo looks unfinished. A search endpoint
+    that throws because a feed is down does not load at all."""
+    import engine.statlogs as SL
+    import engine.rosters as RO
+
+    def boom(*a, **kw):
+        raise RuntimeError("feed down")
+
+    real, RO.face_map = RO.face_map, boom
+    try:
+        assert SL._face_of(None, "mlb", "Andrew Painter") == ""
+    finally:
+        RO.face_map = real
+
+
+def test_the_face_map_is_not_rebuilt_per_search_result():
+    """The MLB branch reads the league's active rosters. Doing that once
+    per ROW would turn a twelve-hit search into twelve roster fetches."""
+    import time
+    import engine.rosters as RO
+    RO._FACE_MEMO.clear()
+    built = []
+
+    def fake_faces(conn, sport):
+        built.append(sport)
+        return {"x": "y"}
+
+    real, RO._faces = RO._faces, fake_faces
+    try:
+        now = time.time()
+        for _ in range(20):
+            RO.face_map(None, "mlb", now)
+    finally:
+        RO._faces = real
+        RO._FACE_MEMO.clear()
+    assert built == ["mlb"], f"built the map {len(built)} times"
+
+
+def test_an_empty_face_map_is_not_cached_for_six_hours():
+    """A feed that was briefly unreachable would otherwise cost the page
+    its photos until the process restarts."""
+    import time
+    import engine.rosters as RO
+    RO._FACE_MEMO.clear()
+    real, RO._faces = RO._faces, lambda conn, sport: {}
+    try:
+        now = time.time()
+        RO.face_map(None, "mlb", now)
+        assert "mlb" not in RO._FACE_MEMO, "an empty answer got cached"
+    finally:
+        RO._faces = real
+        RO._FACE_MEMO.clear()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

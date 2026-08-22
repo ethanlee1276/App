@@ -389,6 +389,36 @@ def _mlb_face(person_id) -> str:
     return headshot_url(person_id)
 
 
+#: `_faces` memoised, because callers on a REQUEST path need it.
+#: The MLB branch reads the league's active rosters and the rest read a
+#: table; neither changes inside a browsing session, and the search
+#: endpoint would otherwise redo the whole thing per keystroke.
+_FACE_MEMO: dict = {}
+_FACE_TTL = 6 * 3600
+
+
+def face_map(conn, sport: str, now: float | None = None) -> dict:
+    """`{normalised name: headshot URL}` for one sport. Cached, public.
+
+    `_faces` has been the right answer since the roster page needed it;
+    what it lacked was a caller outside the roster build. The player
+    SEARCH had its own idea of where a face comes from — `player_assets`
+    — and that table is written only by the hoops ingest, so every MLB
+    and NFL search result came back with no photo and drew initials.
+    """
+    import time as _t
+    now = _t.time() if now is None else now
+    hit = _FACE_MEMO.get(sport)
+    if hit and now - hit[0] < _FACE_TTL:
+        return hit[1]
+    got = _faces(conn, sport)
+    # Never cache an empty answer for six hours: a feed that was briefly
+    # unreachable would otherwise cost the page its faces until restart.
+    if got:
+        _FACE_MEMO[sport] = (now, got)
+    return got
+
+
 def _faces(conn, sport: str) -> dict:
     """``{normalised name: headshot URL}`` for one sport, or ``{}``.
 

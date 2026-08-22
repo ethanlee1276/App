@@ -4403,7 +4403,13 @@ function ridingAttrs(b) {
      than a row that does not respond, because it looks broken rather
      than finished. */
   if (!b || !b.player || b.market === "moneyline") return "";
-  return ` data-player="${escapeAttr(b.player)}" tabindex="0" role="link"`;
+  /* `data-peek`, NOT `data-player`: the profile card's own market tabs
+     already carry data-player, and a delegated handler on that attribute
+     would fire on them too. It survives today only because those tabs are
+     <button>s and the handler skips buttons — which is luck, not design,
+     and the kind that stops holding the moment somebody restyles a tab
+     as a div. */
+  return ` data-peek="${escapeAttr(b.player)}" tabindex="0" role="button"`;
 }
 
 /* ---- GAME BETS ARE DOORS TOO -------------------------------------------
@@ -4557,11 +4563,8 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("a, button, input, label, select, .chip")) return;
   const card = e.target.closest("[data-prop]");
   if (card) return openProp(card.dataset.prop);
-  /* The riding rows' fallback door — see `ridingAttrs`. Checked after
-     [data-prop] so a row that has a real prop behind it always opens the
-     prop page rather than the broader player one. */
-  const who = e.target.closest("[data-player]");
-  if (who) openPlayer(who.dataset.player);
+  const who = e.target.closest("[data-peek]");
+  if (who) openPeek(who.dataset.peek);
 });
 
 /* ---- NO PINCH ZOOM ON THE PHONE ---------------------------------------
@@ -4603,10 +4606,10 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     return openProp(card.dataset.prop);
   }
-  const who = e.target.closest("[data-player]");
+  const who = e.target.closest("[data-peek]");
   if (who) {
     e.preventDefault();
-    openPlayer(who.dataset.player);
+    openPeek(who.dataset.peek);
   }
 });
 
@@ -5830,6 +5833,83 @@ function historyProfileHTML(r0, label, logs, chips) {
       <div class="profile-pick"><div class="lbl">${escapeHtml(label)}
         <small>no line on tonight’s board — his last ${logs.length} games, for the read</small></div></div>
     </article>`;
+}
+
+/* ---- THE PLAYER PEEK ---------------------------------------------------
+   Ethan, 2026-08-22: "i dont like how it takes you to the search page and
+   automatically searches the palyer for you, we need to switch it too a
+   pop up window that comes up with the bar graph and shit instead of
+   taking you to a new whole page."
+
+   Right on both counts. Navigating to Players and typing into its search
+   box on the reader's behalf is a lot of machinery to look at one chart,
+   it loses the place they were reading, and it landed them at the BOTTOM
+   of a long page — his other complaint in the same message, and a
+   symptom of the same decision rather than a separate bug.
+
+   THE CARD IS NOT REBUILT HERE. `profileHTML` already draws exactly what
+   was wanted — the head, the market tabs, the bar chart, the log rows —
+   and it reads `_profRows` and `state.data.player_stats`, both of which
+   this can fill. A second implementation of that card would be a second
+   thing to keep in step with the first. */
+async function openPeek(name) {
+  if (!name) return;
+  let ov = document.getElementById("pk-overlay");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "pk-overlay";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov || e.target.closest(".pk-close")) closePeek();
+    });
+  }
+  const shell = (inner) => {
+    ov.innerHTML = `<div class="pk-card" role="dialog" aria-modal="true"
+      aria-label="${escapeAttr(name)}">
+      <button class="pk-close" type="button" aria-label="Close">×</button>
+      ${inner}</div>`;
+  };
+  shell(`<div class="pk-wait">Loading ${escapeHtml(name)}…</div>`);
+  ov.classList.add("open");
+  document.body.classList.add("pk-open");
+
+  // Tonight's board first — it has the priced market and the line. A row
+  // already in _profRows was put there by the Players page and is fine
+  // to reuse.
+  if (!_profRows.has(name)) {
+    const onBoard = allProps().filter((r) => r.player === name);
+    if (onBoard.length) _profRows.set(name, onBoard);
+  }
+  const store = (state.data.player_stats = state.data.player_stats || {});
+  if (!store[name]) {
+    const got = await leagueLogs(name);
+    if (got && Object.keys(got).length) store[name] = got;
+  }
+  if (!_profRows.has(name)) {
+    // Nothing priced tonight: a head-only row, the same shape the
+    // Players page builds for a searched-up name. No market_label, so it
+    // can never masquerade as a priced market.
+    const b = ((state.data || {}).live_picks || [])
+      .find((x) => x.player === name) || {};
+    _profRows.set(name, [{ player: name, team: b.team || "",
+                           position: b.position || "", opponent: "",
+                           headshot: b.headshot || "" }]);
+  }
+  if (!ov.classList.contains("open")) return;      // closed while loading
+  const card = profileHTML(name);
+  shell(card || `<div class="pk-wait">No game logs stored for
+    ${escapeHtml(name)} yet.</div>`);
+  const host = ov.querySelector(".pk-card");
+  if (host) {
+    fillMeters(host);
+    if (typeof mountEChartsPanels === "function") mountEChartsPanels(host);
+  }
+}
+
+function closePeek() {
+  const ov = document.getElementById("pk-overlay");
+  if (ov) ov.classList.remove("open");
+  document.body.classList.remove("pk-open");
 }
 
 function openPlayer(name) {
@@ -16291,7 +16371,7 @@ document.addEventListener("click", (e) => {
   if (t) openFfDossier(t.dataset.dossier);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeFfDossier();
+  if (e.key === "Escape") { closeFfDossier(); closePeek(); }
 });
 
 /* ---------------- The fantasy calendar ----------------
