@@ -1374,6 +1374,32 @@ function betMark(r, size = 30) {
    numbers under it. Silent when it is not: a measured-but-not-applied fit
    is a Record-page detail, and the amber rail means "a condition is live",
    never "there is a page about this somewhere". */
+/* WHAT WE ARE STILL ON, when the number has moved off it.
+   ============================================================
+   Journaled bets whose pick no longer clears the bar at the CURRENT
+   number. A bet doesn't unhappen when the line moves, so it stays on the
+   board — placed price and live price side by side — instead of silently
+   vanishing into the Live tab.
+
+   ONE DEFINITION, because two surfaces count these now: the picks box
+   lists them and the "Recommended bets" tile counts them. Two copies of
+   this filter would drift, and the failure mode is a headline that
+   disagrees with the list directly underneath it. */
+function ridingBets(sig) {
+  const nrm = (s) => String(s || "").toLowerCase().trim();
+  const d = state.data || {};
+  const onKeys = new Set();
+  (sig.props || []).forEach((r) => onKeys.add(`${nrm(r.player)}|${nrm(r.market)}`));
+  [...(sig.sharpBets || []), ...(sig.modelBets || [])].forEach((b) =>
+    [b.team, b.player, b.pick].forEach((t) => t && onKeys.add(`${nrm(t)}|${nrm(b.market)}`)));
+  return (d.live_picks || [])
+    .filter((r) => r.phase === "upcoming" && r.status !== "unmapped"
+      && !onKeys.has(`${nrm(r.player)}|${nrm(r.market)}`))
+    .map((b) => ({ b,
+      cur: (d.recommendations || []).find((r) =>
+        nrm(r.player) === nrm(b.player) && nrm(r.market) === nrm(b.market)) }));
+}
+
 function haircutLine(sh) {
   if (!sh || !sh.live) return "";
   const p = sh.pooled || {};
@@ -1399,8 +1425,10 @@ async function renderBestBets() {
   const ud = unitDollars();
 
   // ============ SPACE 1: TONIGHT'S PICKS — the actual bets ============
-  // Exactly the bets the "Recommended bets" tile counts. Nothing else is
-  // allowed in this box, so it can never contradict the tile again.
+  // Exactly the bets the "Recommended bets" tile counts — the actionable
+  // picks AND the riding ones, which the tile started counting on
+  // 2026-08-22. Nothing else is allowed in this box, so it can never
+  // contradict the tile again; both sides read `ridingBets()`.
   const propKey = (p, m) => `${String(p || "").toLowerCase()}|${String(m || "").toLowerCase()}`;
   const staleByKey = new Map(sig.stale.filter((s) => s.player)
     .map((s) => [propKey(s.player, s.market), s]));
@@ -1463,17 +1491,7 @@ async function renderBestBets() {
   // number. A bet doesn't unhappen when the line moves, so it stays on
   // this board — placed price and live price side by side — instead of
   // silently vanishing into the Live tab.
-  const nrm = (s) => String(s || "").toLowerCase().trim();
-  const onKeys = new Set();
-  sig.props.forEach((r) => onKeys.add(`${nrm(r.player)}|${nrm(r.market)}`));
-  [...sig.sharpBets, ...sig.modelBets].forEach((b) =>
-    [b.team, b.player, b.pick].forEach((t) => t && onKeys.add(`${nrm(t)}|${nrm(b.market)}`)));
-  const ridden = ((state.data || {}).live_picks || [])
-    .filter((r) => r.phase === "upcoming" && r.status !== "unmapped"
-      && !onKeys.has(`${nrm(r.player)}|${nrm(r.market)}`))
-    .map((b) => ({ b,
-      cur: ((state.data || {}).recommendations || []).find((r) =>
-        nrm(r.player) === nrm(b.player) && nrm(r.market) === nrm(b.market)) }));
+  const ridden = ridingBets(sig);
 
   const perf = rec.overall || {};
   const journalNote = perf.settled
@@ -2883,18 +2901,45 @@ function renderStats() {
   // It leads when it is zero too. "No qualifying plays" is this board's
   // most common correct answer and a large honest 0 says so; shrinking it
   // on quiet nights would be the one dishonest version of this layout.
+  // RIDING BETS COUNT HERE TOO. Ethan, 2026-08-22: "if we still
+  // reccomended bets but the line moved and we are still displaying that
+  // we are riding those bets, then we should still be displaying however
+  // many props were reccomended … bc they were still given out and we are
+  // still riding them."
+  //
+  // He is right, and the note above this used to argue the other way: it
+  // said counting an un-bettable pick was "the kind of small lie this
+  // whole page exists not to tell". That was answering "how many can you
+  // bet right now". The question a subscriber actually opens this page
+  // with is "what am I on tonight", and to that question a large honest 0
+  // over seventeen live positions is the bigger lie of the two.
+  //
+  // So the COUNT includes them and the sub-line separates them — new
+  // versus riding, in words, right underneath. What does NOT include them
+  // is Suggested exposure or Avg edge: that money is already staked, and
+  // adding it to a figure headed "suggested" would read as stake it
+  // again. Their edge at tonight's number is precisely why they ride.
+  const riding = ridingBets(sig);
+  const live = staked.length + riding.length;
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const tiles = [
-    { k: "Recommended bets", to: staked.length, dec: 0, lead: true,
-      sub: cfb
-        ? `${nb} game bet${nb === 1 ? "" : "s"} journaled`
-          + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
-        : `${sig.props.length} prop${sig.props.length === 1 ? "" : "s"} · ${nb} game bet${nb === 1 ? "" : "s"} — all journaled` },
+    { k: "Recommended bets", to: live, dec: 0, lead: true,
+      sub: riding.length
+        ? `${staked.length} new · ${plural(riding.length, "riding")} at the `
+          + `price we took — those ride as placed, don’t add at tonight’s number`
+        : cfb
+          ? `${plural(nb, "game bet")} journaled`
+            + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
+          : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")} — all journaled` },
     { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
       sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     ud > 0
-      ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$", sub: `${exposure.toFixed(2)}u across all ${staked.length} bet(s)` }
-      : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u" },
+      ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$",
+          sub: `${exposure.toFixed(2)}u across ${staked.length} new bet(s)`
+            + (riding.length ? ` · riding money is already staked` : "") }
+      : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u",
+          sub: riding.length ? "new bets only — riding money is already staked" : "" },
   ];
   const fmt = (t) => (t.pre || "") + Number(t.to).toFixed(t.dec) + (t.suf || "");
   const instant = state.static || state.quiet;

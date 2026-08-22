@@ -220,6 +220,56 @@ def test_a_riding_row_with_no_history_stays_inert():
     assert 'door ? propAttrs(door) : ""' in attrs
 
 
+def test_the_bets_tile_counts_the_riding_ones_too():
+    """Ethan, 2026-08-22: "if we still reccomended bets but the line moved
+    and we are still displaying that we are riding those bets, then we
+    should still be displaying however many props were reccomended … bc
+    they were still given out and we are still riding them."
+
+    A large honest 0 over seventeen live positions is a worse answer to
+    "what am I on tonight" than counting them and saying which are
+    which."""
+    i = APP.index("const tiles = [")
+    block = APP[i - 1400:i + 900]
+    assert "const riding = ridingBets(sig)" in block
+    assert "const live = staked.length + riding.length" in block
+    assert 'to: live, dec: 0, lead: true' in block
+
+
+def test_the_tile_says_which_are_new_and_which_are_riding():
+    """Counting them without separating them would invite somebody to go
+    and place seventeen bets at numbers that are gone."""
+    i = APP.index('k: "Recommended bets"')
+    block = APP[i:i + 700]
+    assert "new ·" in block and "riding" in block
+    assert "don’t add at tonight’s number" in block
+
+
+def test_riding_money_is_not_counted_as_suggested_exposure():
+    """It is already staked. Adding it to a figure headed "suggested"
+    reads as stake it again."""
+    i = APP.index('k: "Suggested exposure"')
+    block = APP[i:i + 700]
+    assert "already staked" in block
+    # The number itself still comes from `exposure`, which sums `staked`.
+    assert "to: exposure" in block
+
+
+def test_one_definition_of_riding_serves_both_surfaces():
+    """The picks box lists them and the tile counts them. Two copies of
+    the filter would drift, and the failure is a headline disagreeing
+    with the list directly underneath it."""
+    assert APP.count("function ridingBets(") == 1
+    # Assignments only — `function ridingBets(sig)` matches the bare
+    # string too, and counting the definition as a call site is how this
+    # assertion would keep passing after a surface stopped calling it.
+    assert APP.count("= ridingBets(sig)") == 2, \
+        "a surface stopped using the shared definition"
+    fn = APP[APP.index("function ridingBets("):]
+    fn = fn[:fn.index("\nfunction ", 1)]
+    assert "live_picks" in fn and "phase === \"upcoming\"" in fn
+
+
 def test_a_game_bet_is_never_dressed_as_a_prop():
     """Moneylines, spreads and game totals sit in these same lists. They
     have no player and no game log, so a door on one would open a page
