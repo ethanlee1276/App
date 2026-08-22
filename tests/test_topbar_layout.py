@@ -127,18 +127,68 @@ def test_nothing_synthesises_a_click_on_the_hamburger():
 
 
 def test_search_still_reaches_the_player_page():
+    """BOTH buttons, and through one handler. A fixed slice forward from
+    the tab-bar listener used to be enough; it stopped being enough the
+    moment the two buttons started sharing a function, which is a change
+    that made the code better and the test red. The claim was never about
+    adjacency — it is that pressing either control lands on the player
+    page."""
     code = _code()
-    i = code.index('getElementById("tb-search")')
-    body = code[i:i + 320]
-    assert 'switchView("players"' in body, "the search tab goes nowhere"
+    i = code.index("const goSearch =")
+    body = code[i:i + 260]
+    assert 'switchView("players"' in body, "search goes nowhere"
+    for btn in ('getElementById("tb-search")',
+                'getElementById("nav-search")'):
+        j = code.index(btn)
+        assert "goSearch" in code[j:j + 160], f"{btn} is not wired to it"
 
 
-def test_the_top_bar_no_longer_carries_its_own_search():
+def test_the_desktop_bar_has_a_search_control():
+    """Ethan, 2026-08-22: "there is no search button or bar on the website
+    now. its on mobile but not the desktop page."
+
+    Mine. His earlier instruction — "put it on the bottom bar where the
+    menu button is" — describes the phone, because the bottom bar only
+    exists on the phone. I moved the control there and deleted the topbar
+    one, which left every screen over 760px with no way to search."""
     html = _markup()
-    assert 'id="nav-search"' not in html, (
-        "two search buttons is two places to maintain and one of them was "
-        "the one that got clipped")
-    assert 'getElementById("nav-search")' not in _code()
+    assert 'id="nav-search"' in html, "the desktop bar has no search again"
+    i = html.index('id="nav-search"')
+    assert html.rindex('<div class="slate-meta">', 0, i) > 0, \
+        "search is no longer in the topbar's icon row"
+
+
+def test_the_two_search_controls_are_never_both_on_screen():
+    """Two identical buttons on one screen is a worse answer than one,
+    and the icon row running out of room is what clipped a control in the
+    first place."""
+    phone = re.sub(r"\s+", " ", _media("760px"))
+    assert "#nav-search { display: none; }" in phone, \
+        "the phone shows both the topbar icon and the tab bar's Search"
+    assert ".tabbar { display: none; }" in re.sub(r"\s+", " ", _decls()), \
+        "the tab bar is no longer hidden on desktop"
+
+
+def test_the_search_control_exists_on_every_width():
+    """THIS TEST USED TO ASSERT THE OPPOSITE, and it was wrong — it pinned
+    my mistake rather than a requirement. It said the top bar must NOT
+    carry a search button, on the reasoning that two buttons is two places
+    to maintain and one of them was the one that got clipped.
+
+    True about maintenance, and it deleted the feature on desktop: the
+    tab bar that replaced it is `display: none` above 760px, so from
+    2026-08-22 until Ethan noticed, no laptop could search at all. Two
+    controls that share one handler and never appear together is not two
+    places to maintain; it is one destination with two doors, which is
+    what a responsive layout is.
+
+    The real requirement is that SOME search control is reachable at
+    every width."""
+    html = _markup()
+    assert 'id="nav-search"' in html and 'id="tb-search"' in html
+    # And exactly one of them is on screen at any given width.
+    phone = re.sub(r"\s+", " ", _media("760px"))
+    assert "#nav-search { display: none; }" in phone
 
 
 # --- why it broke, so it cannot break the same way --------------------------

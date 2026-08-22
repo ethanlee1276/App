@@ -4953,6 +4953,10 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
      so this takes an OPAQUE surface instead — built from the existing
      tokens so it tracks both themes — and the hairline keeps the
      separation the blur was helping with. */
+  /* The topbar's search icon steps aside for the tab bar's Search, so
+     the phone never carries two of the same control — and the icon row
+     gets one fewer thing to fit, which is what clipped it on 08-22. */
+  #nav-search { display: none; }
   .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
     padding: 6px 4px calc(8px + env(safe-area-inset-bottom));

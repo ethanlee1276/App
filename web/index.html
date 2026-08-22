@@ -123,6 +123,24 @@
       <div class="nav-indicator" id="nav-indicator"></div>
     </nav>
     <div class="slate-meta">
+      <!-- SEARCH, BACK ON THE DESKTOP BAR. Ethan, 2026-08-22: "there is
+           no search button or bar on the website now. its on mobile but
+           not the desktop page."
+
+           Mine. His earlier instruction — "put it on the bottom bar
+           where the menu button is" — describes the PHONE, because the
+           bottom bar only exists on the phone. I moved the control there
+           and deleted this one, which left every screen wider than 760px
+           with no way to search at all.
+
+           So both, each where its own layout has room: this icon above
+           760px, the tab bar's Search below it. `.tabbar` is
+           `display:none` on desktop and this is hidden under 760px, so
+           they are never both on screen and the site never shows two
+           search buttons. -->
+      <button class="meta-ico" id="nav-search" title="Player search" aria-label="Player search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      </button>
       <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>

@@ -21732,11 +21732,19 @@ async function renderLiveBoard() {
   // The drawer opens from the hamburger at top left now, so the tab bar
   // no longer has to synthesise a click on a hidden button to reach it.
   // One less event in the path that opens the menu.
-  const tbSearch = document.getElementById("tb-search");
-  if (tbSearch) tbSearch.addEventListener("click", () => {
+  // ONE HANDLER, TWO BUTTONS. The topbar icon (desktop) and the tab bar's
+  // Search (phone) are the same destination; only one is ever on screen.
+  // Binding them together is what stops the two drifting into "search
+  // works on my laptop but not my phone", which is the shape of the bug
+  // that produced this button in the first place.
+  const goSearch = () => {
     if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
     switchView("players", true);
-  });
+  };
+  const navSearch = document.getElementById("nav-search");
+  if (navSearch) navSearch.addEventListener("click", goSearch);
+  const tbSearch = document.getElementById("tb-search");
+  if (tbSearch) tbSearch.addEventListener("click", goSearch);
   window.addEventListener("resize", () => {
     if (typeof syncStripArrows === "function") syncStripArrows();
   });
