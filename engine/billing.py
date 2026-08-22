@@ -49,6 +49,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -143,54 +144,113 @@ DEFAULT_PLAN = "monthly"
 TRIAL_DAYS = 3
 TRIAL_PLAN = "monthly"
 
-#: Checkout discount codes. Ethan, 2026-08-22: *"Make a promo code for 75%
-#: off the first 2 months. The promo code will be MUDBONE."*
+#: Checkout discount codes — a PERCENTAGE off a real subscription.
 #:
-#: WHY THIS ONE LIVES AT STRIPE WHEN `engine/redeem.py` EXISTS.
+#: WHY THESE LIVE AT STRIPE WHEN `engine/redeem.py` EXISTS.
 #: They are not the same kind of thing. A redemption code grants months of
 #: access with NO payment at all, which is why it never touches a
 #: processor. "75% off" is a payment — a real subscription, a real card,
-#: charged $6.25 instead of $25 — and there is no way to express that
-#: without the thing that moves the money. So this is a Stripe Coupon plus
-#: a Promotion Code, entered in Stripe's own checkout box.
+#: charged less — and there is no way to express that without the thing
+#: that moves the money. So this is a Stripe Coupon plus a Promotion Code,
+#: typed into Stripe's own checkout box.
 #:
-#: MONTHLY ONLY, AND THIS IS THE IMPORTANT PART.
+#: WHY THE CODE IS NOT WRITTEN HERE. Ethan, 2026-08-22: *"we do not want
+#: to display to people that code is a thing. its a secret promo code i
+#: will only be givving my friends."*
+#:
+#: This repository is PUBLIC. A code in this file is a code on the open
+#: internet, and so is one in a docstring, a commit message or a test
+#: fixture. `QB_CODES` already solved exactly this for the redemption
+#: codes and the reasoning transfers unchanged: a secret belongs in the
+#: environment, which nothing reachable from the web can read.
+#:
+#:     QB_PROMOS="SOMECODE:75:2:monthly:25"
+#:                    │     │  │    │     │
+#:                    │     │  │    │     └── max redemptions (0 = no cap)
+#:                    │     │  │    └──────── which plans may offer it
+#:                    │     │  └───────────── months the discount runs
+#:                    │     └──────────────── percent off
+#:                    └────────────────────── the code, as typed
+#:
+#: Unset means NO promo codes at all: Stripe's box never renders, and
+#: there is nothing to guess. That is the right default for a site whose
+#: source anyone can read.
+#:
+#: MONTHLY ONLY, AND THIS IS THE PART THAT COSTS MONEY.
 #: All three plans are Prices on ONE Stripe Product, so Stripe's own
 #: `applies_to` cannot tell them apart — a coupon offered at checkout is
-#: offered on whatever plan is in the cart. And `duration_in_months=2` does
-#: not mean "two billing periods", it means invoices raised in the next two
-#: months. On the yearly plan that is exactly one invoice: 75% off $225, a
-#: full year for $56.25. On six months it is $125 down to $31.25. A promo
-#: meant to cost $37.50 would instead cost $168.75, and nothing would fail
-#: — it would just quietly be the best deal on the site.
+#: offered on whatever plan is in the cart. And a 2-month duration does
+#: not mean "two billing periods", it means invoices raised in the next
+#: two months. On the yearly plan that is exactly one invoice: 75% off
+#: $225, a full year for $56.25. On six months it is $125 down to $31.25.
+#: A promo meant to cost $37.50 would instead cost $168.75, and nothing
+#: would fail — it would just quietly be the best deal on the site.
 #:
 #: So the gate is on OUR side: `allow_promotion_codes` is switched on only
-#: for a plan this table names. On the other two Stripe never renders the
+#: for a plan the entry names. On the other two Stripe never renders the
 #: box, so there is nothing to type a code into.
-#:
-#:   percent_off        how much off
-#:   duration_in_months how long the discount rides the subscription
-#:   plans              which plans may show the promo-code box at all
-PROMOS = {
-    "MUDBONE": {
-        "code": "MUDBONE",
-        "percent_off": 75,
-        "duration": "repeating",
-        "duration_in_months": 2,
-        "plans": ("monthly",),
-        "coupon_name": "MUDBONE — 75% off 2 months",
-    },
-}
+ENV_PROMOS = "QB_PROMOS"
+
+#: Same character rule as a redemption code, and for the same reason: a
+#: code carrying a colon or a comma would break the format it is parsed
+#: out of, and one carrying a space cannot be typed into Stripe's box.
+PROMO_CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{2,31}$")
 
 
-def promos_for(plan_id: str) -> list:
+def promos(env: dict | None = None) -> dict:
+    """`{CODE: {...}}` from the environment. Never raises.
+
+    Malformed entries are DROPPED rather than raising: this is read on
+    the checkout path, and one typo in a comma-separated list must not
+    take the buy button down for everything else in it.
+    """
+    raw = (env if env is not None else os.environ).get(ENV_PROMOS, "") or ""
+    out: dict = {}
+    for part in raw.split(","):
+        bits = [b.strip() for b in part.split(":")]
+        if len(bits) < 4:
+            continue
+        code = bits[0].strip().upper()
+        if not PROMO_CODE_RE.match(code):
+            continue
+        try:
+            pct = int(bits[1])
+            months = int(bits[2])
+            cap = int(bits[4]) if len(bits) > 4 and bits[4] else 0
+        except ValueError:
+            continue
+        # A 0% coupon is a no-op and a 100% one is a free subscription
+        # wearing a discount's clothes — that is what QB_CODES is for,
+        # and it does not need a card.
+        if not (1 <= pct <= 99) or not (1 <= months <= 24):
+            continue
+        plans = tuple(p for p in bits[3].replace("|", " ").split()
+                      if p in PLANS)
+        if not plans:
+            continue
+        out[code] = {
+            "code": code,
+            "percent_off": pct,
+            "duration": "repeating",
+            "duration_in_months": months,
+            "plans": plans,
+            "max_redemptions": max(0, cap),
+            # Named for the dashboard, where Ethan has to recognise it.
+            # The code itself is IN the name because Stripe shows coupon
+            # names and promotion codes on different screens.
+            "coupon_name": f"{code} — {pct}% off {months} months",
+        }
+    return out
+
+
+def promos_for(plan_id: str, env: dict | None = None) -> list:
     """Every promo that may be entered while buying this plan."""
-    return [p for p in PROMOS.values() if str(plan_id) in p["plans"]]
+    return [p for p in promos(env).values() if str(plan_id) in p["plans"]]
 
 
-def promo_named(code: str) -> dict | None:
+def promo_named(code: str, env: dict | None = None) -> dict | None:
     """A promo by code, case-insensitively — people type these by hand."""
-    return PROMOS.get(str(code or "").strip().upper())
+    return promos(env).get(str(code or "").strip().upper())
 
 
 def promo_misdirect() -> dict:
@@ -199,14 +259,19 @@ def promo_misdirect() -> dict:
     The site has two code systems and the person holding a code has no
     reason to know which box theirs goes in. Without this, a checkout
     promo typed into the account page's redemption box is answered "that
-    code is not valid", which reads as "the code Ethan posted is broken".
+    code is not valid", which reads as "the code is broken".
+
+    This reveals nothing: the sentence is only ever reached by somebody
+    who already typed the exact code. A wrong guess still gets the decoy,
+    still counts against the rate limit, and still cannot be told apart
+    from a used-up code.
 
     Living HERE rather than in `redeem.py` is the point: that module
     grants access with no payment and keeps no import from anything that
     moves money. It takes this as plain data.
     """
     out = {}
-    for code, p in PROMOS.items():
+    for code, p in promos().items():
         months = int(p["duration_in_months"])
         out[code] = (
             f"{code} is a checkout code, not a redemption code — it takes "
@@ -214,23 +279,6 @@ def promo_misdirect() -> dict:
             f"month{'s' if months != 1 else ''} of a subscription. Pick a "
             f"plan, then enter it in the promo code box on the payment page.")
     return out
-
-
-def promo_blurb(plan_id: str) -> str:
-    """One sentence for the plan card, or "" when the plan takes no codes.
-
-    Built from the same numbers Stripe is configured with rather than
-    written out by hand: a card advertising a discount the coupon does not
-    actually give is the display bug that turns into a chargeback.
-    """
-    got = promos_for(plan_id)
-    if not got:
-        return ""
-    p = got[0]
-    months = int(p["duration_in_months"])
-    return (f"Have a code? {p['percent_off']}% off your first "
-            f"{months} month{'s' if months != 1 else ''} — enter it at "
-            f"checkout.")
 
 
 def has_subscribed_before(conn, user_id: int) -> bool:

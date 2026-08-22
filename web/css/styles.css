@@ -7384,14 +7384,6 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .co-note { color: var(--text-mute); font-size: var(--fs-sm); margin: 0 0 8px;
   line-height: var(--lh-snug); }
 .co-note:last-child { margin-bottom: 0; }
-/* The promo-code pointer. Reads as a note, not an offer banner — the
-   discount is real but it is an aside to somebody who already decided to
-   buy, and dressing it as a second call to action competes with the pay
-   button it sits under. */
-.co-promo { display: flex; align-items: flex-start; gap: 8px;
-  color: var(--text-body); }
-.co-promo .ico-mark { color: var(--brand); flex: none; transform: translateY(2px); }
-.co-promo b { color: var(--text); }
 
 .co-codebox { margin-top: 14px; padding-top: 14px;
   border-top: var(--hairline) solid var(--border-soft); }

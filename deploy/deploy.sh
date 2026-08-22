@@ -133,12 +133,12 @@ fi
 # Ethan, 2026-08-22, on being told to run --stripe-setup by hand: "why
 # cant you do it for me since you did the USFARATHANE code for me."
 #
-# Correct, and the difference was never about permission. USFARATHANE is
-# an environment variable on this box, so golive.sh could just set it.
-# MUDBONE is an object inside the Stripe ACCOUNT, and the key that
-# creates it lives here in /etc/qellys/env and nowhere else. So the fix
-# is not to ask him to run a command — it is to run it from the place
-# that already holds the key. This is that place.
+# Correct, and the difference was never about permission. A redemption
+# code is an environment variable on this box, so golive.sh could just
+# set it. A checkout promo is an object inside the Stripe ACCOUNT, and
+# the key that creates it lives here in /etc/qellys/env and nowhere
+# else. So the fix is not to ask him to run a command — it is to run it
+# from the place that already holds the key. This is that place.
 #
 # --promos-setup, NOT --stripe-setup: this creates coupons only, never a
 # Product or a Price. A deploy that silently mints prices is the thing

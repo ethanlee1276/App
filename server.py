@@ -1405,16 +1405,12 @@ class Handler(BaseHTTPRequestHandler):
             # for.
             out["trial_days"] = BI.TRIAL_DAYS
             out["trial_plan"] = BI.TRIAL_PLAN
-            # The checkout discount codes, per plan — sent rather than
-            # mirrored in app.js so the percentage on the page and the
-            # percentage the coupon gives cannot drift. Only plans that
-            # actually show Stripe's promo box appear here, so the page
-            # can never invite a code into a checkout that has no box.
-            out["promos"] = {plan: [
-                {"code": pr["code"], "percent_off": pr["percent_off"],
-                 "months": pr["duration_in_months"]}
-                for pr in BI.promos_for(plan)]
-                for plan in BI.PLAN_ORDER if BI.promos_for(plan)}
+            # NO PROMO CODES HERE. This endpoint is public — it renders
+            # the plans page before anybody signs in — so anything in it
+            # is readable by anyone who opens the network tab. A promo
+            # code Ethan hands to friends is a secret, and this response
+            # was publishing it. Stripe's checkout box is enough: it says
+            # "Add promotion code" and names none of them.
             if BI.configured():
                 # Test and live are the SAME Stripe account distinguished
                 # by a key prefix — unlike Paddle, where the sandbox is a

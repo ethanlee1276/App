@@ -13599,28 +13599,6 @@ function _coCovers(plan, code) {
   return !!(code && code.months >= plan.months);
 }
 
-/* WHERE THE DISCOUNT BOX ACTUALLY IS, said before the click.
-   MUDBONE is a Stripe promotion code, so the field it goes in is on
-   Stripe's page, not this one — and this page already has a code box of
-   its own (the redemption codes, which are a different thing entirely).
-   Somebody holding a promo code off Instagram will try that box first,
-   get told it is not valid, and conclude the code is fake. One sentence
-   here is the whole fix.
-
-   The numbers come from the server, never from a copy in this file: a
-   card advertising 75% while the coupon gives 50% is not a display bug,
-   it is a complaint that is correct. */
-function _coPromoNote(pl) {
-  const all = (_pwStatus && _pwStatus.promos) || {};
-  const got = (all[pl.id] || [])[0];
-  if (!got) return "";
-  const m = got.months === 1 ? "month" : "months";
-  return `<p class="co-note co-promo">${iconMark("tag", 13)}
-    <span>Have a discount code? Enter it in the
-    <b>promo code</b> box on the Stripe page — <b>${escapeHtml(got.code)}</b>
-    takes ${got.percent_off}% off your first ${got.months} ${m}.</span></p>`;
-}
-
 function checkoutHTML() {
   const pl = _coPlan || PLANS[0];
   const covered = _coCovers(pl, _coCode);
@@ -13681,7 +13659,6 @@ function checkoutHTML() {
               usually bury. Cancel any time in those ${tDays} days — one
               button on your account page — and nothing is charged.</p>`
               : ""}
-            ${_coPromoNote(pl)}
             <p class="co-note" id="co-pay-note"></p>
             <p class="co-note">Your card is entered on Stripe’s own page,
               not this one. Nothing about it reaches this server — we keep

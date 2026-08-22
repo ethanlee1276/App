@@ -192,15 +192,15 @@ def ensure_catalogue(secret_key: str, create: bool = True) -> dict:
 # --- promotion codes ----------------------------------------------------------
 #
 # A discount at Stripe is TWO objects, and conflating them is the usual
-# way this goes wrong. A *Coupon* is the discount itself — 75%, for two
-# months — and has no name a customer ever types. A *Promotion Code* is
-# the string somebody types (MUDBONE) pointing at a coupon. One coupon can
-# carry several codes, which is how a second code for a different post
-# gets added later without touching the discount.
+# way this goes wrong. A *Coupon* is the discount itself — a percentage,
+# for a number of months — and has no name a customer ever types. A
+# *Promotion Code* is the string somebody types, pointing at a coupon.
+# One coupon can carry several codes, which is how a second code for a
+# different audience gets added later without touching the discount.
 #
-# Both are created here from `billing.PROMOS`, so the number on the plan
-# card, the number in the coupon and the number on the invoice are one
-# number with one source.
+# Both are created from `billing.promos()`, which reads the ENVIRONMENT.
+# The codes are secrets: this repository is public, so a code written in
+# a source file is a code anyone can read. See billing.ENV_PROMOS.
 
 
 #: The Stripe API version the promo calls are made against.
@@ -276,7 +276,7 @@ def find_promotion_code(secret_key: str, code: str) -> dict | None:
 
 
 def create_coupon(secret_key: str, promo_id: str) -> dict:
-    promo = BI.PROMOS[promo_id]
+    promo = BI.promos()[promo_id]
     headers = _promo_headers(secret_key, f"{OWNER_TAG}-coupon-{promo_id}")
     pairs = {
         "percent_off": str(int(promo["percent_off"])),
@@ -293,7 +293,7 @@ def create_coupon(secret_key: str, promo_id: str) -> dict:
 
 def create_promotion_code(secret_key: str, promo_id: str,
                           coupon_id: str) -> dict:
-    promo = BI.PROMOS[promo_id]
+    promo = BI.promos()[promo_id]
     headers = _promo_headers(secret_key,
                              f"{OWNER_TAG}-promocode-{promo_id}")
     pairs = {
@@ -302,20 +302,28 @@ def create_promotion_code(secret_key: str, promo_id: str,
         "metadata[owner]": OWNER_TAG,
         "metadata[promo]": promo_id,
     }
+    # A CAP, IF ONE WAS ASKED FOR. Same reasoning as QB_CODES' max_uses:
+    # a code meant for a dozen friends is otherwise unlimited the moment
+    # one of them screenshots it. Stripe fixes this AT CREATION — a
+    # promotion code's max_redemptions cannot be changed afterwards — so
+    # a code that needs a cap needs it now, not later.
+    if int(promo.get("max_redemptions") or 0) > 0:
+        pairs["max_redemptions"] = str(int(promo["max_redemptions"]))
     return _promo_call(
         f"creating promotion code {promo['code']} on coupon {coupon_id} "
         f"({', '.join(sorted(pairs))}) against API {PROMO_API_VERSION}",
         BI._post, f"{API}/promotion_codes", headers, BI._form(pairs))
 
 
-def _coupon_problems(coupon: dict, promo_id: str) -> list:
+def _coupon_problems(coupon: dict, promo_id: str,
+                     promo: dict | None = None) -> list:
     """Ways a coupon already at Stripe disagrees with `billing.PROMOS`.
 
     Reported, never silently corrected. A live coupon may already be on
     somebody's subscription, and rewriting the discount under them is not
     a thing a setup command should do on its own.
     """
-    promo = BI.PROMOS[promo_id]
+    promo = promo or BI.promos()[promo_id]
     bad = []
     if int(coupon.get("percent_off") or 0) != int(promo["percent_off"]):
         bad.append(f"gives {coupon.get('percent_off')}% off, "
@@ -338,7 +346,7 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
     Idempotent: a code that already exists is inspected, not recreated.
     """
     out: dict = {}
-    for promo_id, promo in BI.PROMOS.items():
+    for promo_id, promo in BI.promos().items():
         row = {"code": promo["code"], "coupon": None, "created": False,
                "active": False, "problems": []}
         existing = find_promotion_code(secret_key, promo["code"])
@@ -346,7 +354,7 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
             row["active"] = bool(existing.get("active"))
             coupon = existing.get("coupon") or {}
             row["coupon"] = coupon.get("id")
-            row["problems"] = _coupon_problems(coupon, promo_id)
+            row["problems"] = _coupon_problems(coupon, promo_id, promo)
             if not row["active"]:
                 row["problems"].append(
                     "the code exists at Stripe but is switched OFF — "
@@ -360,7 +368,7 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
         coupon = find_coupon(secret_key, promo_id) or create_coupon(
             secret_key, promo_id)
         row["coupon"] = coupon.get("id")
-        row["problems"] = _coupon_problems(coupon, promo_id)
+        row["problems"] = _coupon_problems(coupon, promo_id, promo)
         made = create_promotion_code(secret_key, promo_id, str(coupon.get("id")))
         row["created"] = True
         row["active"] = bool(made.get("active"))

@@ -7162,7 +7162,12 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
     """
     from engine import billing as BI
     from engine import stripeset as SS
-    if not BI.PROMOS:
+    configured = BI.promos()
+    if not configured:
+        print(f"\nDiscount codes\n  none configured — set {BI.ENV_PROMOS} to "
+              f"offer one (see docs/BILLING.md). The codes are secrets and "
+              f"this repo is public, so they live in the environment, never "
+              f"in a source file.")
         return
     try:
         res = SS.ensure_promos(secret_key, create=create)
@@ -7174,8 +7179,9 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
         return
     print("\nDiscount codes")
     for promo_id, row in res.items():
-        promo = BI.PROMOS[promo_id]
+        promo = configured[promo_id]
         plans = ", ".join(BI.PLANS[p]["name"] for p in promo["plans"])
+        cap = int(promo.get("max_redemptions") or 0)
         if row.get("created"):
             state = "created"
         elif row.get("active"):
@@ -7183,7 +7189,8 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
         else:
             state = "MISSING" if not create else "inactive"
         print(f"  {row['code']:<12} {promo['percent_off']}% off "
-              f"{promo['duration_in_months']} months on {plans}  ({state})")
+              f"{promo['duration_in_months']} months on {plans}"
+              f"{f', max {cap} uses' if cap else ''}  ({state})")
         for problem in row.get("problems") or []:
             print(f"               ⚠️  {problem}")
     if not create and any(r.get("problems") for r in res.values()):

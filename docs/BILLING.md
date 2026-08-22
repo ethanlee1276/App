@@ -202,31 +202,65 @@ exists, so a fast "no such code" cannot be used to enumerate live ones.
 ### Checkout promo codes (a percentage off a real subscription)
 
 The codes above grant free months with **no payment at all**, which is why
-they never touch Stripe. A percentage discount is a different animal — it
-is a real subscription on a real card, charged less — so it lives at
-Stripe as a Coupon plus a Promotion Code, and is typed into the promo box
-on Stripe's own checkout page.
+they never touch Stripe. A percentage discount is a different animal — a
+real subscription on a real card, charged less — so it lives at Stripe as
+a Coupon plus a Promotion Code, typed into the promo box on Stripe's own
+checkout page.
 
-They are declared in `billing.PROMOS`:
+#### They are secrets, and this repository is public
+
+A promo code written in a source file, a docstring, a test fixture or a
+commit message is a promo code on the open internet. So they live in the
+environment, exactly like `QB_CODES`:
 
 ```
-MUDBONE   75% off, repeating, 2 months, monthly plan only
+QB_PROMOS="SOMECODE:75:2:monthly:25"
+               │     │  │    │     │
+               │     │  │    │     └── max redemptions (0 = no cap)
+               │     │  │    └──────── which plans may offer it
+               │     │  └───────────── months the discount runs
+               │     └──────────────── percent off
+               └────────────────────── the code, as typed
 ```
 
-**Nothing to set by hand.** `deploy/deploy.sh` runs `launch.py
---promos-setup` on every deploy, which creates what is missing and is
-safe to run any number of times. `python3 launch.py --promos` reports
-without creating.
+Set it like anything else, without leaving it in shell history:
+
+```
+sudo ./deploy/setenv.sh QB_PROMOS
+sudo systemctl restart qellys
+python3 launch.py --promos-setup
+```
+
+**Unset means no promo codes at all** — Stripe's box never renders and
+there is nothing to guess. That is the right default for a site whose
+source anyone can read.
+
+Nothing on the site ever names a code. The plans page, the checkout page
+and `/api/billing/status` say nothing about them; Stripe's own box reads
+"Add promotion code" and names none. The only person who can use a code
+is somebody who was handed it.
+
+`deploy/deploy.sh` runs `launch.py --promos-setup` on every deploy, which
+creates what is missing and is safe to run any number of times.
+`python3 launch.py --promos` reports without creating.
+
+#### Set the cap when you create it, or not at all
+
+`max_redemptions` is fixed at creation — Stripe will not let it change
+afterwards. A code meant for a dozen friends is unlimited the moment one
+of them screenshots it, so decide the number before the first run. To
+change it later you must deactivate the code in the dashboard and create
+a new one under a different name.
 
 #### Why a promo names the plans it applies to
 
 All three plans are Prices on **one** Stripe Product, so Stripe's own
 `applies_to` cannot separate them: a coupon offered at checkout applies to
-whatever is in the cart. And `duration_in_months` does not mean "this many
-billing periods" — it means invoices raised in that many months. On the
-yearly plan that is exactly one invoice.
+whatever is in the cart. And the duration does not mean "this many billing
+periods" — it means invoices raised in that many months. On the yearly
+plan that is exactly one invoice.
 
-So an unrestricted MUDBONE would read:
+So a 75%-off-2-months code, left unrestricted, would read:
 
 | Plan | Normal | With the code |
 |---|---|---|
@@ -236,16 +270,16 @@ So an unrestricted MUDBONE would read:
 
 Nothing would fail. It would just quietly be the best deal on the site.
 The gate is therefore ours: `allow_promotion_codes` is sent to Stripe only
-for a plan the promo names, so on the other two the box never renders.
+for a plan the entry names, so on the other two the box never renders.
 
 #### The seam between the two systems
 
 A code may not belong to both (`tests/test_promo.py` fails the build if
-`QB_CODES` and `PROMOS` ever overlap). A checkout code typed into the
+`QB_CODES` and `QB_PROMOS` ever overlap). A checkout code typed into the
 account page's redemption box is told where it actually goes, rather than
-being called invalid — which is what someone who saw the code on Instagram
-would read as *the code is broken*. That wrong-box attempt does not count
-against the anti-guessing rate limit.
+being called invalid. That reveals nothing — the sentence is only reached
+by somebody who typed the exact code — and it does not count against the
+anti-guessing rate limit, so a friend fumbling the box is not locked out.
 
 `engine/redeem.py` still imports nothing that moves money: the promo
 sentences reach it as plain data from the caller.
