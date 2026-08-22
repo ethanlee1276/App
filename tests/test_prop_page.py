@@ -209,15 +209,83 @@ def test_the_riding_door_matches_on_player_and_market_only():
     assert "b.side" not in fn and "b.line" not in fn
 
 
-def test_a_riding_row_with_no_history_stays_inert():
-    """A door onto an empty page is worse than no door. If the board has
-    no object for that player, or has one with under three games, the row
-    renders exactly as it did before."""
+def test_a_riding_row_with_nothing_behind_it_stays_inert():
+    """A door onto an empty page is worse than no door.
+
+    THIS TEST USED TO PIN A STRICTER RULE — that a row opened only when
+    the board carried a prop with three or more games — and that rule was
+    the bug: on a night with no qualifying plays the board carries
+    nothing for anybody, so every row was dead. The prop page is still
+    gated on having something to draw; what changed is that failing that
+    gate now falls back to the player's own page rather than to nothing.
+
+    What must still be inert: a row with no player at all, and a
+    moneyline, whose "player" is a team."""
     fn = APP[APP.index("function ridingDoorProp("):APP.index("function ridingAttrs(")]
     assert "return null" in fn
+    assert "propOpenable(r)" in fn, "the prop page can open with nothing to draw"
     attrs = APP[APP.index("function ridingAttrs("):]
     attrs = attrs[:attrs.index("\n}") + 2]
-    assert 'door ? propAttrs(door) : ""' in attrs
+    assert 'return ""' in attrs, "every row now claims to be a door"
+    assert "!b.player" in attrs
+
+
+def test_a_riding_row_opens_even_when_the_board_is_empty():
+    """THE HALF THE FIRST FIX MISSED. Rows only opened when the board
+    still carried a prop object for that player — and then Ethan sent the
+    same screenshot back with the rows circled again. Of course: a board
+    reading "No qualifying plays at current numbers" has no prop object
+    for ANYBODY, so on exactly the night you most want to look up what
+    you are still riding, every row was inert.
+
+    The player's own page has the form, the logs and the same bar chart,
+    and it needs no board at all."""
+    fn = APP[APP.index("function ridingAttrs("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "data-player=" in fn, "there is still no fallback door"
+    assert "propAttrs(door)" in fn, "the prop page is no longer preferred"
+    assert fn.index("propAttrs(door)") < fn.index("data-player="), \
+        "the fallback runs before the real prop page"
+
+
+def test_a_moneyline_row_gets_no_player_door():
+    """`b.player` holds a TEAM on those. A player page for "TOR" is a
+    search that finds nobody, and an empty page looks broken in a way an
+    unresponsive row does not."""
+    fn = APP[APP.index("function ridingAttrs("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert 'b.market === "moneyline"' in fn
+
+
+def test_the_player_door_is_wired_to_both_mouse_and_keyboard():
+    """A card you can click is a control, and a control that only answers
+    a mouse is not finished — the same rule the prop doors already keep."""
+    # THE RIGHT LISTENER, not the first one with that name — app.js has
+    # five document click handlers, and `index()` finds one at line 211
+    # that has nothing to do with doors. Anchor on what the handler DOES.
+    for kind in ("click", "keydown"):
+        marker = f'document.addEventListener("{kind}"'
+        at, body = -1, None
+        while True:
+            at = APP.find(marker, at + 1)
+            assert at >= 0, f"no {kind} handler mentions [data-prop]"
+            chunk = APP[at:at + 800]
+            if "[data-prop]" in chunk:
+                body = chunk
+                break
+        assert "[data-player]" in body, f"the {kind} handler ignores the player door"
+        assert body.index("[data-prop]") < body.index("[data-player]"), \
+            "a row with a real prop behind it must open the prop page"
+
+
+def test_opening_a_player_cannot_throw_out_of_a_delegated_handler():
+    """It is reached from a document-level listener now. A throw there
+    kills the handler for every OTHER door on the page, not just this
+    one."""
+    fn = APP[APP.index("function openPlayer("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "if (box)" in fn or "box &&" in fn, \
+        "a missing search box would throw and take the listener with it"
 
 
 def test_the_bets_tile_counts_the_riding_ones_too():

@@ -4357,7 +4357,25 @@ function ridingDoorProp(b) {
 
 function ridingAttrs(b) {
   const door = ridingDoorProp(b);
-  return door ? propAttrs(door) : "";
+  if (door) return propAttrs(door);
+  /* NO BOARD OBJECT — WHICH IS THE NIGHT THIS MATTERS MOST.
+     The first cut of this only opened rows the board still carried a
+     prop for, and then Ethan sent the same screenshot again with the
+     rows circled. Of course: a board reading "No qualifying plays at
+     current numbers" has no prop object for ANYBODY, so on exactly the
+     night you most want to look up what you are still riding, every row
+     was inert. The fix was fine and it was aimed at the easy half.
+
+     The player's own page has the form, the game logs and the same bar
+     chart, and it does not need tonight's board to exist. So a row with
+     no prop behind it opens that instead of nothing.
+
+     NOT FOR MONEYLINES. `b.player` holds a TEAM there, and a player page
+     for "TOR" is a search that finds nobody — an empty page is worse
+     than a row that does not respond, because it looks broken rather
+     than finished. */
+  if (!b || !b.player || b.market === "moneyline") return "";
+  return ` data-player="${escapeAttr(b.player)}" tabindex="0" role="link"`;
 }
 
 /* ---- GAME BETS ARE DOORS TOO -------------------------------------------
@@ -4510,8 +4528,12 @@ function allProps() {
 document.addEventListener("click", (e) => {
   if (e.target.closest("a, button, input, label, select, .chip")) return;
   const card = e.target.closest("[data-prop]");
-  if (!card) return;
-  openProp(card.dataset.prop);
+  if (card) return openProp(card.dataset.prop);
+  /* The riding rows' fallback door — see `ridingAttrs`. Checked after
+     [data-prop] so a row that has a real prop behind it always opens the
+     prop page rather than the broader player one. */
+  const who = e.target.closest("[data-player]");
+  if (who) openPlayer(who.dataset.player);
 });
 
 /* ---- NO PINCH ZOOM ON THE PHONE ---------------------------------------
@@ -4547,10 +4569,17 @@ document.addEventListener("click", (e) => {
    only answers a mouse is not finished. */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
-  const card = e.target.closest && e.target.closest("[data-prop]");
-  if (!card || e.target.closest("a, button, input, select")) return;
-  e.preventDefault();
-  openProp(card.dataset.prop);
+  if (!e.target.closest || e.target.closest("a, button, input, select")) return;
+  const card = e.target.closest("[data-prop]");
+  if (card) {
+    e.preventDefault();
+    return openProp(card.dataset.prop);
+  }
+  const who = e.target.closest("[data-player]");
+  if (who) {
+    e.preventDefault();
+    openPlayer(who.dataset.player);
+  }
 });
 
 function openProp(id) {
@@ -5777,7 +5806,11 @@ function historyProfileHTML(r0, label, logs, chips) {
 
 function openPlayer(name) {
   state.search = name;
-  document.getElementById("player-search").value = name;
+  // The input is in index.html and has always been there, but this is
+  // now reached from a delegated click handler: a throw here would kill
+  // the listener for every OTHER door on the page, not just this one.
+  const box = document.getElementById("player-search");
+  if (box) box.value = name;
   switchView("players");
   renderPlayers();
 }
