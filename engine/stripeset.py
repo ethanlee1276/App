@@ -203,9 +203,53 @@ def ensure_catalogue(secret_key: str, create: bool = True) -> dict:
 # number with one source.
 
 
+#: The Stripe API version the promo calls are made against.
+#:
+#: PINNED, and only here. Every other call in this file rides the
+#: account's default version, which is right for them — they read fields
+#: that have never moved. These two endpoints are different: on
+#: 2026-08-22 `POST /v1/promotion_codes` with the documented `coupon`
+#: parameter came back "Received unknown parameter: coupon" from Ethan's
+#: account, which is what a newer default version answers when a
+#: parameter has been renamed or relocated under it. Naming a version
+#: makes the request mean the same thing next year as it does today.
+#:
+#: The fields read back — id, active, percent_off, duration,
+#: duration_in_months — are identical across every version that has ever
+#: had these endpoints, so pinning costs nothing.
+PROMO_API_VERSION = "2024-06-20"
+
+
+def _promo_headers(secret_key: str, idem: str) -> dict:
+    return {"Authorization": f"Bearer {secret_key}",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Stripe-Version": PROMO_API_VERSION,
+            "Idempotency-Key": idem}
+
+
+def _promo_call(what: str, fn, *args, **kw):
+    """Run one Stripe call, and say WHICH ONE when it fails.
+
+    `billing._get` and `billing._post` produce byte-identical text for a
+    refusal, so "Stripe refused the request (HTTP 400)" from anywhere in
+    this file named no endpoint and no parameter. That turned a one-line
+    fix into a guessing exercise. The label is added here rather than in
+    billing so the two transports keep their single, key-safe error path.
+
+    PARAMETER NAMES ONLY — never values, and never headers. The secret
+    key lives in the headers and a key in a traceback is a key in a log.
+    """
+    try:
+        return fn(*args, **kw)
+    except BI.BillingUnavailable as exc:
+        raise BI.BillingUnavailable(f"{what}: {exc}") from exc
+
+
 def find_coupon(secret_key: str, promo_id: str) -> dict | None:
     """Our coupon for a promo, by the owner/promo stamp in its metadata."""
-    got = BI._get(f"{API}/coupons?limit=100", secret_key)
+    got = _promo_call("listing coupons", BI._get,
+                      f"{API}/coupons?limit=100", secret_key,
+                      headers={"Stripe-Version": PROMO_API_VERSION})
     for c in got.get("data") or []:
         meta = c.get("metadata") or {}
         if (str(meta.get("owner") or "") == OWNER_TAG
@@ -222,7 +266,9 @@ def find_promotion_code(secret_key: str, code: str) -> dict | None:
     the dashboard has to be found too — otherwise this creates a second
     one, Stripe refuses the duplicate, and the error says nothing useful.
     """
-    got = BI._get(f"{API}/promotion_codes?code={code}&limit=10", secret_key)
+    got = _promo_call("looking up promotion code " + str(code), BI._get,
+                      f"{API}/promotion_codes?code={code}&limit=10", secret_key,
+                      headers={"Stripe-Version": PROMO_API_VERSION})
     for c in got.get("data") or []:
         if str(c.get("code") or "").upper() == str(code).upper():
             return c
@@ -231,9 +277,7 @@ def find_promotion_code(secret_key: str, code: str) -> dict | None:
 
 def create_coupon(secret_key: str, promo_id: str) -> dict:
     promo = BI.PROMOS[promo_id]
-    headers = {"Authorization": f"Bearer {secret_key}",
-               "Content-Type": "application/x-www-form-urlencoded",
-               "Idempotency-Key": f"{OWNER_TAG}-coupon-{promo_id}"}
+    headers = _promo_headers(secret_key, f"{OWNER_TAG}-coupon-{promo_id}")
     pairs = {
         "percent_off": str(int(promo["percent_off"])),
         "duration": promo["duration"],
@@ -243,21 +287,25 @@ def create_coupon(secret_key: str, promo_id: str) -> dict:
     }
     if promo["duration"] == "repeating":
         pairs["duration_in_months"] = str(int(promo["duration_in_months"]))
-    return BI._post(f"{API}/coupons", headers, BI._form(pairs))
+    return _promo_call(f"creating the coupon ({', '.join(sorted(pairs))})",
+                       BI._post, f"{API}/coupons", headers, BI._form(pairs))
 
 
 def create_promotion_code(secret_key: str, promo_id: str,
                           coupon_id: str) -> dict:
     promo = BI.PROMOS[promo_id]
-    headers = {"Authorization": f"Bearer {secret_key}",
-               "Content-Type": "application/x-www-form-urlencoded",
-               "Idempotency-Key": f"{OWNER_TAG}-promocode-{promo_id}"}
-    return BI._post(f"{API}/promotion_codes", headers, BI._form({
+    headers = _promo_headers(secret_key,
+                             f"{OWNER_TAG}-promocode-{promo_id}")
+    pairs = {
         "coupon": coupon_id,
         "code": promo["code"],
         "metadata[owner]": OWNER_TAG,
         "metadata[promo]": promo_id,
-    }))
+    }
+    return _promo_call(
+        f"creating promotion code {promo['code']} on coupon {coupon_id} "
+        f"({', '.join(sorted(pairs))}) against API {PROMO_API_VERSION}",
+        BI._post, f"{API}/promotion_codes", headers, BI._form(pairs))
 
 
 def _coupon_problems(coupon: dict, promo_id: str) -> list:

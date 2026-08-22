@@ -625,7 +625,8 @@ def _post(url: str, headers: dict, body: bytes, timeout: int = 20) -> dict:
         raise BillingUnavailable(f"Could not reach Stripe: {exc}") from exc
 
 
-def _get(url: str, secret_key: str, timeout: int = 20) -> dict:
+def _get(url: str, secret_key: str, timeout: int = 20,
+         headers: dict | None = None) -> dict:
     """A read from Stripe. SAME RULE AS `_post`: the key never escapes.
 
     Separate from `_post` rather than a mode flag on it, because the two
@@ -634,8 +635,12 @@ def _get(url: str, secret_key: str, timeout: int = 20) -> dict:
     reply" — and a caller that cannot tell them apart retries the wrong
     one.
     """
-    req = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {secret_key}"}, method="GET")
+    # `headers` is for a caller that must pin a Stripe-Version (see
+    # stripeset.PROMO_API_VERSION). The Authorization line is set LAST so
+    # a caller cannot replace the key by passing one of its own.
+    head = dict(headers or {})
+    head["Authorization"] = f"Bearer {secret_key}"
+    req = urllib.request.Request(url, headers=head, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8", "replace"))

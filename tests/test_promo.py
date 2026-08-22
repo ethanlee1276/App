@@ -229,7 +229,9 @@ def test_setup_reports_a_deactivated_code_instead_of_passing_it():
     from engine import stripeset as SS
     calls = {}
 
-    def fake_get(url, key, timeout=20):
+    def fake_get(url, key, timeout=20, headers=None):
+        assert (headers or {}).get("Stripe-Version"), \
+            "the promo reads no longer pin an API version"
         calls["url"] = url
         return {"data": [{"code": "MUDBONE", "active": False,
                           "coupon": {"id": "co_1", "percent_off": 75,
@@ -245,6 +247,92 @@ def test_setup_reports_a_deactivated_code_instead_of_passing_it():
     row = res["MUDBONE"]
     assert row["active"] is False
     assert any("switched OFF" in p for p in row["problems"]), row
+
+
+def test_a_refused_call_says_which_call_it_was():
+    """`billing._get` and `billing._post` produce byte-identical text for
+    a refusal, so "Stripe refused the request (HTTP 400). Received
+    unknown parameter: coupon" named neither an endpoint nor a
+    transport. One round trip was spent working out which of four calls
+    it came from."""
+    from engine import stripeset as SS
+
+    def boom(*a, **kw):
+        raise BI.BillingUnavailable("Received unknown parameter: coupon")
+
+    real = BI._post
+    BI._post = boom
+    try:
+        SS.create_promotion_code("sk_test_x", "MUDBONE", "co_1")
+        raise AssertionError("the failure was swallowed")
+    except BI.BillingUnavailable as exc:
+        said = str(exc)
+    finally:
+        BI._post = real
+    assert "promotion code MUDBONE" in said, said
+    assert "coupon" in said and "co_1" in said, said
+    assert "2024" in said, "the pinned API version is not in the message"
+
+
+def test_no_error_can_carry_the_key():
+    """The one thing that must never end up in a terminal, a screenshot
+    or a scrollback buffer. The label is built from parameter NAMES."""
+    from engine import stripeset as SS
+    secret = "sk_live_do_not_ever_print_me"
+
+    def boom(*a, **kw):
+        raise BI.BillingUnavailable("nope")
+
+    for fn, args in ((SS.create_coupon, (secret, "MUDBONE")),
+                     (SS.create_promotion_code, (secret, "MUDBONE", "co_1"))):
+        real_post, BI._post = BI._post, boom
+        try:
+            fn(*args)
+            raise AssertionError("swallowed")
+        except BI.BillingUnavailable as exc:
+            assert secret not in str(exc), str(exc)
+        finally:
+            BI._post = real_post
+
+
+def test_the_promo_calls_pin_an_api_version():
+    """The failure that started this: a parameter Stripe documents as
+    `coupon` was refused as unknown, which is what a newer default
+    version answers when a parameter has moved. A named version means the
+    request keeps meaning the same thing."""
+    from engine import stripeset as SS
+    head = SS._promo_headers("sk_test_x", "idem-1")
+    assert head["Stripe-Version"] == SS.PROMO_API_VERSION
+    assert head["Idempotency-Key"] == "idem-1"
+    assert SS.PROMO_API_VERSION >= "2020-03-01", \
+        "promotion codes did not exist before this"
+
+
+def test_a_caller_cannot_swap_the_key_through_the_headers():
+    """_get grew a `headers` argument for the version pin. The
+    Authorization line is set last so that argument can never replace
+    the key with one of its own."""
+    import urllib.request
+    seen = {}
+
+    class FakeResp:
+        def read(self): return b"{}"
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_open(req, timeout=None):
+        seen["auth"] = req.get_header("Authorization")
+        return FakeResp()
+
+    real = urllib.request.urlopen
+    urllib.request.urlopen = fake_open
+    try:
+        BI._get("https://x/y", "sk_real",
+                headers={"Authorization": "Bearer sk_attacker",
+                         "Stripe-Version": "2024-06-20"})
+    finally:
+        urllib.request.urlopen = real
+    assert seen["auth"] == "Bearer sk_real", seen
 
 
 def test_the_deploy_creates_the_codes_so_nobody_has_to():
