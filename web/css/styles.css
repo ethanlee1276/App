@@ -4935,10 +4935,28 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
        already pressed. */
     border: 0; background: transparent; color: var(--text-mute); }
   .menu-toggle:hover, body.menu-open .menu-toggle { color: var(--text); }
+  /* NO backdrop-filter. THIRD TIME THIS PROPERTY HAS DONE THIS, and the
+     two notes above are the first two: the scrim escaped into its own
+     compositor layer and painted over the drawer, and the same reasoning
+     retired the blur there.
+
+     Ethan's 2026-08-22 recording is the same failure on this element.
+     Mid-scroll the bar paints as an opaque band across the MIDDLE of the
+     page, with content running on above and below it — a promoted layer
+     drawn at a scroll offset the page has already left. A blurred layer
+     is a layer with a cached backdrop snapshot, iOS promotes
+     position:fixed on its own schedule, and momentum scrolling is where
+     the two disagree.
+
+     The blur was doing nothing here that opacity cannot. `--topbar-bg`
+     is 82% opaque and needed the blur to stay legible over moving text,
+     so this takes an OPAQUE surface instead — built from the existing
+     tokens so it tracks both themes — and the hairline keeps the
+     separation the blur was helping with. */
   .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
     padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
-    background: var(--topbar-bg); backdrop-filter: blur(16px);
+    background: color-mix(in oklab, var(--panel) 55%, var(--bg));
     border-top: var(--hairline) solid var(--border-soft); }
   .tb-item { display: flex; flex-direction: column; align-items: center; gap: 3px;
     border: 0; background: transparent; color: var(--text-mute); cursor: pointer;

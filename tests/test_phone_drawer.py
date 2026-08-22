@@ -73,6 +73,7 @@ def _rule(opener: str) -> str:
 
 _DRAWER = _rule(".sidebar { position: fixed; top: var(--topbar-h)")
 _SCRIM = _rule("body.menu-open #scrim {")
+_TABBAR = _rule(".tabbar { position: fixed; left: 0; right: 0; bottom: 0;")
 
 
 def _z(block: str) -> int:
@@ -87,6 +88,33 @@ def test_the_scrim_carries_no_backdrop_filter():
     z-index says."""
     assert "backdrop-filter" not in _SCRIM, \
         "the scrim is a promoted layer again — it will paint over the drawer"
+
+
+def test_the_tab_bar_carries_no_backdrop_filter_either():
+    """THE SAME MECHANISM, THIRD TIME. Ethan filmed it again on
+    2026-08-22: mid-scroll the bottom bar paints as an opaque band across
+    the MIDDLE of the page, content running on above and below it — a
+    promoted layer drawn at a scroll offset the page has already left.
+
+    A blurred layer is a layer with a cached backdrop snapshot, iOS
+    promotes position:fixed on its own schedule, and momentum scrolling
+    is where the two disagree. The scrim lost its blur for this; the tab
+    bar kept one for three more days because nobody thought to look at
+    the other fixed element on the page."""
+    assert "backdrop-filter" not in _TABBAR, \
+        "the tab bar is a promoted layer again — it will smear mid-scroll"
+
+
+def test_the_tab_bar_is_opaque_without_the_blur():
+    """--topbar-bg is 82% opaque and was relying on the blur to stay
+    legible over moving text. Removing the blur and keeping a translucent
+    background would trade a smear for text showing through the bar."""
+    assert "--topbar-bg" not in _TABBAR, \
+        "the bar is translucent again with nothing blurring behind it"
+    assert "background: color-mix(" in _TABBAR, _TABBAR
+    # Built from tokens, so it tracks the light theme too rather than
+    # being a dark-mode hex that goes invisible at noon.
+    assert "var(--panel)" in _TABBAR and "var(--bg)" in _TABBAR
 
 
 def test_the_drawer_outranks_the_scrim():
