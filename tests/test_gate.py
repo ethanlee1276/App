@@ -381,20 +381,61 @@ def test_the_live_endpoint_is_the_one_the_page_actually_calls():
         "the endpoint the page calls went back to serving one file to all"
 
 
+def test_every_wholly_paid_file_has_an_entitled_path_to_it():
+    """THE SWEEP THE LAST BUG EARNED. `/api/<sport>/recommendations`
+    serving the redacted board to subscribers was found by asking whether
+    paid content ARRIVES, not whether it leaks — and the same question
+    has the same answer for every file in PAID_FILES.
+
+    Those are sealed in their entirety on the public path: Caddy hands
+    out a stub with `locked_reason` and no content. So a page fetching
+    one from `data/` gives a paying subscriber the same empty shell it
+    gives a stranger. That was live on the Record page's
+    prediction-market section, the Lab and the Kalshi board.
+
+    Checked against gate.PAID_FILES rather than a list here, so a file
+    added to that tuple cannot quietly skip this."""
+    import re
+    from engine import gate
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    code = re.sub(r"/\*.*?\*/", " ", app, flags=re.S)
+    offenders = []
+    for name in gate.PAID_FILES:
+        stem = name.split(".")[0]
+        # A template literal covers futures_${sport}.json.
+        for m in re.finditer(r"boardFetch\(\s*[`\"]data/([^`\"]+)", code):
+            got = m.group(1)
+            if stem.split("_")[0] in got:
+                offenders.append(f"{name} fetched directly as data/{got}")
+    assert not offenders, (
+        "a paid file is fetched from the public path, where it is sealed "
+        "for everyone including subscribers: " + "; ".join(offenders))
+
+
+def test_the_paid_fetch_helper_tries_the_entitled_endpoint_first():
+    """One helper, because there were four of these and a fifth will be
+    written by somebody who did not read the comment."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("async function paidFetch(")
+    fn = app[i:app.index("\n}", i) + 2]
+    assert '"/api/board/" + name' in fn, "it does not ask the entitled endpoint"
+    assert "data/${name}" in fn, "no static fallback for a signed-out reader"
+    assert fn.index("/api/board/") < fn.index("data/${name}"), \
+        "the sealed copy is tried first, so a subscriber never sees the real one"
+
+
 def test_the_prediction_market_record_asks_the_entitled_endpoint():
     """predmarkets.json is in PAID_FILES, so the copy on the public path
     is a locked stub with no `validation` key. The Record page read that
     stub and drew nothing."""
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    # Anchored on the CALL, not on the first mention of the filename —
-    # which is now inside the comment explaining this very fix.
-    assert 'boardFetch("/api/board/predmarkets.json")' in app, \
-        "the record page still reads only the sealed public copy"
-    i = app.index('boardFetch("/api/board/predmarkets.json")')
-    after = app[i:i + 400]
-    assert 'data/predmarkets.json' in after, \
-        "the static fallback is gone — a signed-out reader gets an error"
-    assert "res.ok" in after, "the fallback is not conditional on the first failing"
+    # The record page goes through the shared helper now — the entitled
+    # endpoint and the fallback both live there, which is what
+    # test_the_paid_fetch_helper_tries_the_entitled_endpoint_first pins.
+    i = app.index("async function renderRecord")
+    body = app[i:app.index("\nasync function ", i + 10)]
+    assert 'paidFetch("predmarkets.json")' in body, \
+        "the record page still reads the sealed public copy directly"
 
 
 def test_the_flag_is_checked_before_the_account_is():

@@ -858,6 +858,31 @@ async function boardFetch(url, opts) {
   }
 }
 
+/* ---- A WHOLLY-PAID BOARD ------------------------------------------------
+   `gate.PAID_FILES` are sealed in their entirety on the public path: what
+   Caddy serves off disk is a stub carrying `locked_reason` and none of
+   the content. So fetching one from `data/` hands a SUBSCRIBER the same
+   empty shell it hands a stranger, and the page draws nothing.
+
+   That is not a hypothetical — it was live on the Record page's
+   prediction-market section, and on the Lab and the Kalshi board with
+   it. Ethan, 2026-08-22: "the prediction market record page isnt showing
+   anything." The section was fine; it was being handed an empty board.
+
+   `/api/board/<name>` is where an entitled caller's copy lives. The
+   static file stays as the fallback for a signed-out reader (who
+   correctly gets nothing) and for a static host with no API at all.
+
+   ONE HELPER, because there are four of these and a fifth will be added
+   by someone who did not read this. */
+async function paidFetch(name) {
+  try {
+    const res = await boardFetch("/api/board/" + name);
+    if (res.ok) return res;
+  } catch (e) { /* no API here — the static copy is the honest fallback */ }
+  return boardFetch(`data/${name}?t=` + Date.now());
+}
+
 /* The URLs whose most recent attempt never reached the server. */
 function wireDown() {
   return [..._wire.entries()].filter(([, ok]) => !ok).map(([u]) => u);
@@ -1145,7 +1170,7 @@ async function renderFutures() {
   if (d === undefined) {
     host.innerHTML = `<p class="loading">Simulating the season…</p>`;
     try {
-      const res = await boardFetch(`data/futures_${sport}.json?t=` + Date.now());
+      const res = await paidFetch(`futures_${sport}.json`);
       d = res.ok ? await res.json() : null;
     } catch (e) { d = null; }
     _futuresCache[sport] = d;
@@ -8037,7 +8062,7 @@ async function renderLab() {
   if (!host) return;
   let d = null;
   try {
-    const res = await boardFetch("data/backtest.json?t=" + Date.now());
+    const res = await paidFetch("backtest.json");
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.sports) {
@@ -8311,8 +8336,7 @@ async function renderRecord() {
      stays as the fallback for a signed-out reader and for a static host,
      where it correctly yields nothing. */
   try {
-    let res = await boardFetch("/api/board/predmarkets.json");
-    if (!res.ok) res = await boardFetch("data/predmarkets.json?t=" + Date.now());
+    const res = await paidFetch("predmarkets.json");
     if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
@@ -9862,11 +9886,11 @@ async function renderIntel() {
   if (!host) return;
   let d = null, kx = null;
   try {
-    const res = await boardFetch("data/predmarkets.json?t=" + Date.now());
+    const res = await paidFetch("predmarkets.json");
     if (res.ok) d = await res.json();
   } catch (e) {}
   try {
-    const res = await boardFetch("data/kalshi.json?t=" + Date.now());
+    const res = await paidFetch("kalshi.json");
     if (res.ok) kx = await res.json();
   } catch (e) {}
   // Polymarket silent does not mean the page is empty: Kalshi is half of
@@ -21726,7 +21750,7 @@ async function renderRailDesk() {
   if (!host) return;
   if (!_railDeskCache || Date.now() - _railDeskAt > 300000) {
     try {
-      const res = await boardFetch("data/kalshi.json?t=" + Date.now());
+      const res = await paidFetch("kalshi.json");
       if (res.ok) { _railDeskCache = await res.json(); _railDeskAt = Date.now(); }
     } catch (e) { /* the rail just stays quiet */ }
   }

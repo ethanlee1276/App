@@ -182,7 +182,10 @@ def test_the_lab_is_wired_into_the_site():
     assert 'id="view-lab"' in html and 'data-sport="lab"' in html
     assert 'if (name === "lab") renderLab();' in app
     assert '"record", "lab"' in app            # a standalone page, like The Book
-    assert "data/backtest.json" in app
+    # Through paidFetch since 2026-08-22 — backtest.json is in
+    # gate.PAID_FILES, so the public copy is a sealed stub that a paying
+    # subscriber was being served.
+    assert 'paidFetch("backtest.json")' in app
 
 
 def test_the_page_refuses_to_headline_a_thin_or_naive_roi():

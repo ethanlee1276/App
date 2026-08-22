@@ -57,8 +57,19 @@ def test_every_board_payload_goes_through_the_wrapper():
     # now read once instead of three times, which is the opposite of
     # losing coverage. Lower it only for a reason you can write down like
     # this one.
-    assert len(re.findall(r"await boardFetch\(", APP)) >= 18, \
-        "the wrapper lost call sites — did a refactor drop them?"
+    # COUNTS paidFetch TOO, since 2026-08-22. Five call sites moved behind
+    # it that day — the wholly-paid boards, which now ask the entitled
+    # endpoint before the sealed public copy — and paidFetch reaches the
+    # wire through boardFetch itself, twice. So coverage went UP and this
+    # census went down, which is the shape of a canary that would have
+    # been silenced by lowering the number instead of understanding it.
+    n = len(re.findall(r"await (?:board|paid)Fetch\(", APP))
+    assert n >= 18, \
+        f"the wrapper lost call sites ({n}) — did a refactor drop them?"
+    fn = APP[APP.index("async function paidFetch("):]
+    assert "boardFetch(" in fn[:fn.index("\n}") + 2], \
+        "paidFetch stopped going through the wrapper, so its failures " \
+        "are invisible to the offline banner"
 
 
 def test_a_404_is_not_counted_as_the_wire_refusing_us():

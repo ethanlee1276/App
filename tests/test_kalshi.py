@@ -200,7 +200,11 @@ def test_the_page_shows_both_venues_and_names_their_roles():
     assert "function kalshiSectionHTML" not in app
     # boardFetch since 2026-08-20 — the wrapper that tells a refused
     # wire apart from an empty payload. Same URL, same caching.
-    assert 'boardFetch("data/kalshi.json' in app
+    # Through paidFetch since 2026-08-22: kalshi.json is a wholly-paid
+    # file, so the copy on the public path is a sealed stub and a
+    # SUBSCRIBER was being handed it. The helper asks the entitled
+    # endpoint first and keeps the static file as the fallback.
+    assert 'paidFetch("kalshi.json")' in app
     # Named phone columns — every cell is a <span>, and :nth-of-type counts
     # tags, so positional selectors grab the sport chip or nothing.
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
