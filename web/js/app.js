@@ -237,9 +237,7 @@ function applySport() {
   // college football is full-game markets only — there is no CFB player
   // projection layer, so every prop-shaped page goes with it.
   const hidden = HIDDEN_VIEWS[state.sport] || [];
-  document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
-    b.style.display = hidden.includes(b.dataset.view) ? "none" : "";
-  });
+  markOffRows(hidden);
   if (hidden.includes(state.view)) switchView("recommended");
   document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
@@ -250,6 +248,157 @@ function applySport() {
   document.querySelectorAll(".sport-btn").forEach((b) =>
     setSelected(b, !!b.dataset.sport && b.dataset.sport === state.sport));
   markMoreMenu();
+}
+
+
+/* WHY A ROW IS NOT THERE, in the reader's words rather than ours.
+ *
+ * Ethan, 2026-08-22, sending a screenshot of the Library group with four
+ * of its six rows gone: *"where did all the tabs go in the library
+ * section"* — then, on being told: *"the buttons in the menu change
+ * depending on what sport you have selected. That can be confusing for a
+ * user since I didn't even know that."*
+ *
+ * That is the whole argument. HIDDEN_VIEWS is right — a Rosters page for
+ * 134 college programs with no player feed can only ever say "no data",
+ * and a tab that can only say that is worse than no tab. But the rows
+ * vanished SILENTLY, and a silent disappearance reads as a broken site,
+ * not as a decision. The person who built it thought it was a bug; a
+ * subscriber has less reason to assume otherwise.
+ *
+ * Keyed by (sport, view) because the reasons genuinely differ: Weather is
+ * hidden for the NBA because basketball is played indoors and for CFB
+ * because no weather feed covers college venues. One sentence for both
+ * would have to be vague enough to be useless. These mirror the comments
+ * already sitting on HIDDEN_VIEWS above. */
+const HIDDEN_WHY = {
+  nba: { longshots: "no long-shot market exists in basketball — there is "
+                    + "nothing like a home run or an anytime touchdown",
+         weather: "played indoors" },
+  wnba: { longshots: "no long-shot market exists in basketball",
+          futures: "no outrights market is published for the league",
+          weather: "played indoors" },
+  ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
+                  + "fight winners only — there is no pair to screen",
+         futures: "a fight card has no season-long market",
+         injuries: "no commission publishes an MMA injury report",
+         weather: "fights are indoors" },
+  polymarket: { parlays: "prediction-market contracts are not screened as a "
+                         + "parlay", futures: "not a season-long market",
+                weather: "not a sporting venue" },
+  fantasy: { parlays: "not a betting market", futures: "not a betting market",
+             weather: "no single venue to report" },
+  cfb: { longshots: "college football is full-game markets only — there is "
+                    + "no CFB player projection layer",
+         trending: "no free player-level feed covers 134 programs",
+         players: "no free player-level feed covers 134 programs",
+         rosters: "no free player-level feed covers 134 programs",
+         weather: "no weather feed covers college venues" },
+};
+
+const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
+                      wnba: "the WNBA", cfb: "college football",
+                      ufc: "UFC", polymarket: "prediction markets",
+                      fantasy: "fantasy" };
+
+function sportLabel(s) {
+  return SPORT_LABEL[s] || String(s || "").toUpperCase();
+}
+
+/* THE ROWS STAY. They go quiet instead of disappearing.
+ *
+ * The first cut of this counted the missing rows on the group heading and
+ * listed the reasons inside it — an explanation for a menu that still
+ * changed shape underneath you. Ethan: *"or if theres a better and more
+ * professional and user friendly way to solve that issue then do that."*
+ * There is, and it is the older one: a menu whose items never move, some
+ * of which are not available right now.
+ *
+ * What that buys, in order of how much it matters:
+ *
+ *   THE DRAWER IS THE SAME HEIGHT AND THE SAME ORDER IN EVERY SPORT.
+ *   Rankings sits in the same place on CFB as on the NFL, so the muscle
+ *   memory that makes a menu fast to use survives switching leagues.
+ *   Nothing can go missing, so there is no missing-row moment to explain.
+ *
+ *   THE ANSWER IS ON THE THING THAT PROMPTED THE QUESTION. A reader
+ *   wondering about Rosters taps Rosters and is told why, rather than
+ *   finding a count on a heading and having to work out which four rows
+ *   it is counting.
+ *
+ *   IT TEACHES THE PRODUCT. "Rosters — no free player-level feed covers
+ *   134 programs" says the tab exists and works on other sports. A gap
+ *   in a list says nothing at all.
+ *
+ * A DIMMED ROW MUST STILL ANSWER A TAP. A dead button spends the
+ * reader's click to say nothing, which is the complaint that got the
+ * Discord page its `dc-pending` state. Tapping one opens its reason and
+ * closes the previous one; it never navigates.
+ *
+ * IT IS A DISCLOSURE, NOT A DISABLED CONTROL, and that distinction is
+ * load-bearing rather than pedantic. The first cut set
+ * `aria-disabled="true"` — which announces "this does nothing" to a
+ * screen reader while the row in fact opens the one sentence that reader
+ * most needs. Playwright refused to click it for exactly that reason and
+ * was right to. So the row keeps a button's contract and wears
+ * `aria-expanded`, which is what a control that reveals text underneath
+ * itself actually is. The unavailability rides in the accessible
+ * description instead, where it is a fact about the row rather than a
+ * claim that the row is inert. */
+function markOffRows(hidden) {
+  const why = HIDDEN_WHY[state.sport] || {};
+  const label = sportLabel(state.sport);
+  document.querySelectorAll(".nav-btn[data-view]").forEach((b) => {
+    // Anything a previous sport switched off, switched back on. Left to
+    // the class alone this would accumulate: HIDDEN_VIEWS differs per
+    // sport and nothing else ever clears it.
+    b.style.display = "";
+    const off = hidden.includes(b.dataset.view);
+    b.classList.toggle("off", off);
+    const line = b.parentElement
+      && b.parentElement.querySelector(`.sb-why[data-for="${b.dataset.view}"]`);
+    if (!off) {
+      b.removeAttribute("aria-expanded");
+      b.removeAttribute("aria-controls");
+      b.removeAttribute("title");
+      if (line) line.remove();
+      return;
+    }
+    const reason = why[b.dataset.view] || `not available for ${label}`;
+    // Desktop gets it on hover without spending a click; the tap path
+    // below is what carries it on a phone, where there is no hover at
+    // all. `title` is also the accessible description, so this is the
+    // sentence a screen reader reads after the row's name.
+    b.title = `Not available for ${label} — ${reason}`;
+    b.setAttribute("aria-expanded", line ? "true" : "false");
+    if (line) line.querySelector(".sb-why-text").textContent = reason;
+  });
+}
+
+/* The reason, opened under the row that was tapped. */
+function toggleWhyRow(btn) {
+  const view = btn.dataset.view;
+  const open = btn.parentElement
+    && btn.parentElement.querySelector(`.sb-why[data-for="${view}"]`);
+  // One at a time: an open reason under every dimmed row would be the
+  // block of prose this replaced.
+  document.querySelectorAll(".sb-why").forEach((n) => n.remove());
+  document.querySelectorAll(".nav-btn.off").forEach((n) => {
+    n.setAttribute("aria-expanded", "false");
+    n.removeAttribute("aria-controls");
+  });
+  if (open) return;
+  const why = HIDDEN_WHY[state.sport] || {};
+  const label = sportLabel(state.sport);
+  const line = document.createElement("div");
+  line.className = "sb-why";
+  line.dataset.for = view;
+  line.id = `sb-why-${view}`;
+  line.innerHTML = `<span class="sb-why-text">${
+    escapeHtml(why[view] || `not available for ${label}`)}</span>`;
+  btn.insertAdjacentElement("afterend", line);
+  btn.setAttribute("aria-expanded", "true");
+  btn.setAttribute("aria-controls", line.id);
 }
 
 
@@ -20864,8 +21013,16 @@ function initMobileMenu() {
     }));
   // Picking a PAGE is the end of the interaction — never leave the panel
   // covering the thing the tap just navigated to.
+  //
+  // A DIMMED ROW IS NOT PICKING A PAGE. It opens its reason underneath
+  // itself and navigates nowhere, so closing the drawer here would slide
+  // the answer off-screen at the instant it appeared — the reader taps,
+  // the menu vanishes, and nothing has visibly happened. Caught in a
+  // real browser: the reason line rendered 320px to the left of the
+  // viewport, inside a drawer already on its way out.
   document.querySelectorAll(".nav-btn").forEach((b) =>
     b.addEventListener("click", () => {
+      if (b.classList.contains("off")) return;
       closeMobileMenu("nav button"); syncMenuLabel(); }));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMobileMenu("escape key");
@@ -20971,6 +21128,11 @@ function bind() {
       // Without this guard they fell through to switchView(undefined),
       // which is the sport-btn More-toggle bug all over again.
       if (!b.dataset.view) return;
+      // A row this sport cannot serve answers the tap with its reason
+      // rather than with a page that would have nothing on it. It is
+      // still the enforcement point, not just the styling: switchView
+      // would otherwise route to a view HIDDEN_VIEWS bars.
+      if (b.classList.contains("off")) { toggleWhyRow(b); return; }
       // The sidebar keeps page items on screen during standalone pages
       // (memes, My Bets, ...); the old header hid them there. Leaving
       // standalone properly restores the sport chrome first.
