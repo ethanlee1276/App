@@ -124,6 +124,54 @@ PLANS = {
 PLAN_ORDER = ("monthly", "sixmonth", "yearly")
 DEFAULT_PLAN = "monthly"
 
+#: The free trial. Ethan, 2026-08-22: "we should completly get rid of the
+#: free plan and only have the paid plans. if anything we can offer a 3 day
+#: free trial only for the $25 plan."
+#:
+#: MONTHLY ONLY, and that is the whole design. A trial on the yearly plan
+#: would hand three days of the product to somebody who then walks, at the
+#: cost of a $225 commitment they never make; on the monthly plan the
+#: worst case is one $25 conversion lost. It is also the plan somebody
+#: undecided actually picks.
+#:
+#: A CARD IS STILL COLLECTED. Stripe Checkout takes the payment method up
+#: front and converts automatically when the trial ends, which is what
+#: makes this a trial rather than a giveaway — and it is why the Terms have
+#: to say so plainly. A free trial that quietly starts charging is the
+#: single most complained-about pattern in subscriptions, and the law in
+#: several states has a name for it.
+TRIAL_DAYS = 3
+TRIAL_PLAN = "monthly"
+
+
+def has_subscribed_before(conn, user_id: int) -> bool:
+    """True once this account has ever had a subscription row.
+
+    ONE TRIAL PER ACCOUNT, decided here rather than by Stripe — Stripe
+    will happily start a second trial for a returning customer, and
+    "cancel on day two, resubscribe on day four" would be a permanently
+    free account otherwise. `subscriptions` holds one row per user and it
+    is written the moment a purchase or a trial completes, so its
+    existence is the whole test.
+    """
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM subscriptions WHERE user_id=?",
+            (int(user_id),)).fetchone()
+    except Exception:                                        # noqa: BLE001
+        # A lookup that breaks must not hand out a free trial. Refusing
+        # one costs a conversion; granting one to everybody costs the
+        # first month of every subscription on the site.
+        return True
+    return row is not None
+
+
+def trial_days_for(plan_id: str, eligible: bool) -> int:
+    """How many trial days this checkout gets. Zero for every other plan."""
+    if not eligible:
+        return 0
+    return TRIAL_DAYS if str(plan_id) == TRIAL_PLAN else 0
+
 #: What the product is called in Stripe's own catalogue. The dashboard,
 #: the invoice and the customer's card statement all read from this.
 PRODUCT_NAME = "Qellys Books"
@@ -390,7 +438,8 @@ def idempotency_key(user_id: int, plan_id: str, now: float | None = None) -> str
 def checkout_request(secret_key: str, price_id: str, user_id: int,
                      email: str, success_url: str, cancel_url: str,
                      plan_id: str = DEFAULT_PLAN,
-                     now: float | None = None) -> tuple[str, dict, bytes]:
+                     now: float | None = None,
+                     trial_days: int = 0) -> tuple[str, dict, bytes]:
     """``(url, headers, body)`` for a Checkout Session.
 
     `client_reference_id` is how the webhook finds its way back to a row
@@ -425,6 +474,16 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
         # and "why did USFARATHANE work on the account page but not at
         # checkout" is a support question with no good answer.
     })
+    if int(trial_days or 0) > 0:
+        # PAYMENT METHOD STILL COLLECTED. Stripe's default for a
+        # subscription Checkout is to take the card up front and convert
+        # when the trial ends, which is what this is: a trial, not a
+        # giveaway. Left implicit rather than set, because Stripe's
+        # default is the behaviour we want and pinning it here would be a
+        # second place for it to drift from the dashboard.
+        body += b"&" + _form({
+            "subscription_data[trial_period_days]": str(int(trial_days)),
+        })
     return f"{API}/checkout/sessions", {
         "Authorization": f"Bearer {secret_key}",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -498,12 +557,19 @@ def _get(url: str, secret_key: str, timeout: int = 20) -> dict:
 
 
 def start_checkout(user_id: int, email: str, success_url: str,
-                   cancel_url: str, plan_id: str = DEFAULT_PLAN) -> str:
-    """The Stripe-hosted URL to send the customer to."""
+                   cancel_url: str, plan_id: str = DEFAULT_PLAN,
+                   trial_days: int = 0) -> str:
+    """The Stripe-hosted URL to send the customer to.
+
+    `trial_days` is decided by the CALLER, from the database, and never
+    from anything the browser sent. A trial length taken off a request
+    body would be a free subscription for anyone who edited it.
+    """
     sk, _wh, _monthly = keys()
     price = price_for(plan_id)
     url, headers, body = checkout_request(sk, price, user_id, email,
-                                          success_url, cancel_url, plan_id)
+                                          success_url, cancel_url, plan_id,
+                                          trial_days=int(trial_days or 0))
     out = _post(url, headers, body)
     got = out.get("url")
     if not got:

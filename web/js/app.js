@@ -12295,50 +12295,61 @@ async function acctLandAfterAuth(say = () => {}) {
    which is also where cancelling happens. A company that builds its own
    cancel flow is deciding how hard it is to leave, and this one is not
    going to be that. */
-/* Render 21's plan cards. This card is the FREE-vs-PAID split, not the
-   price list: the split is read straight off the gate (engine/gate.py's
-   FREE_FILES vs PAID_FILES) rather than off a marketing page, and the
-   three prices live on the plans page, which is one screen away.
+/* What an account costs, on the account page.
+   ---------------------------------------------------------------------
+   THERE IS NO FREE PLAN, AND THERE HAS NOT BEEN ONE SINCE THE WALL WENT
+   UP. This function used to draw a "Free — $0 always" card next to the
+   paid one, listing the Record page, scores, standings, rosters,
+   injuries, the fantasy room and the bet log as things you got for
+   nothing. Every one of those pages is behind the wall now: WALL_OPEN
+   lets an unpaid reader reach the Record page and the account page and
+   nothing else, so the card was describing a tier the site does not
+   grant.
 
-   ONE PRICING SURFACE, DELIBERATELY. Printing $25 / $125 / $225 here too
-   would be a second place for them to be wrong, and the failure is not
-   cosmetic — a page advertising one number while Checkout charges
-   another is a chargeback. So the paid card sends people to the plans
-   page and names no figure. */
+   Ethan found it from the other side, 2026-08-22: "what exactly is the
+   free plan? i didnt see it on the site or when i went to buy a plan."
+   He had not seen it because it was never on the paywall — only here,
+   after signing in, promising things the wall would refuse. A price list
+   that overstates what is included is not a marketing problem; it is the
+   part of the page a chargeback quotes back at you.
+
+   ONE PRICING SURFACE, DELIBERATELY. The three prices live on the plans
+   page and this card names no figure beyond the entry one, because a
+   page advertising one number while Checkout charges another is a
+   chargeback in the other direction. */
 function billPlansHTML(s) {
   const line = (ok, t) => `<li class="${ok ? "yes" : "no"}">${
     icon(ok ? "check" : "dash", 13)} <span>${t}</span></li>`;
   const entitled = !!(s && s.entitled);
+  const days = (s && s.trial_days) || 0;
+  // Advertised only where it is true. Somebody who has subscribed before
+  // does not get a second trial, and offering one on the page they see
+  // after cancelling would be a promise the checkout then refuses.
+  const trial = days > 0 && s && s.trial_eligible && !entitled;
   return `
     <div class="section-title">What an account costs
-      <span class="sub">— the free half is free forever; the other half is
-      three plans, and you see the exact total before you enter a
-      card.</span></div>
+      <span class="sub">— one subscription, three lengths, and you see the
+      exact total before you enter a card.</span></div>
     <div class="plan-grid">
-      <div class="card plan${entitled ? "" : " current"}">
-        <div class="plan-name">Free</div>
-        <div class="plan-price">$0<span>always</span></div>
-        <ul class="plan-list">
-          ${line(true, "The Record page — every graded pick, win or lose")}
-          ${line(true, "Scores, schedules, standings and rosters")}
-          ${line(true, "The injury report for every league")}
-          ${line(true, "The fantasy room: draft kit, calendar, mock draft")}
-          ${line(true, "Your own bet log and bankroll tools")}
-          ${line(false, "Tonight’s priced picks and edges")}
-        </ul>
-        ${entitled ? "" : `<div class="plan-cta plan-cur">Your plan now</div>`}
-      </div>
       <div class="card plan raised${entitled ? " current" : ""}">
         <div class="plan-band">The whole board</div>
         <div class="plan-name">Member</div>
-        <div class="plan-price">$25<span>a month, or less on a longer plan</span></div>
+        <div class="plan-price">$25<span>a month, or less on a longer
+          plan</span></div>
         <ul class="plan-list">
-          ${line(true, "Everything in Free")}
           ${line(true, "Every priced pick, with its edge and the reasons")}
           ${line(true, "Prop, game-line and long-shot boards, all leagues")}
           ${line(true, "The prediction-market desk and its gate")}
+          ${line(true, "The Record page — every graded pick, win or lose")}
+          ${line(true, "Scores, standings, rosters and the injury report")}
+          ${line(true, "The fantasy room, your bet log and the bankroll tools")}
+          ${line(true, "The members’ Discord")}
           ${line(true, "Cancel from this page whenever you like")}
         </ul>
+        ${trial ? `<p class="plan-trial">${icon("check", 13)}<span>Start
+          with <b>${days} days free</b> on the monthly plan. A card is
+          taken now and charged $25 on day ${days + 1} unless you cancel
+          before then.</span></p>` : ""}
         ${entitled
           ? `<div class="plan-cta plan-cur">Your plan now</div>`
           : `<button class="btn plan-btn" onclick="billSeePlans()">See the plans</button>`}
@@ -12430,19 +12441,20 @@ const PLAN_FEATURES = [
 
 const FAQ = [
   ["Can I cancel anytime?",
-   "Yes. A monthly plan stops at the end of the month you have paid for; " +
-   "a six-month or yearly plan runs to the date you paid through. Nothing " +
-   "auto-renews without telling you first."],
+   "Yes \u2014 one button on your account page, which opens Stripe\u2019s " +
+   "own portal. A plan you cancel runs to the date you have already paid " +
+   "through. Until you cancel, a subscription renews automatically at the " +
+   "end of each term, which is what a subscription is."],
   ["What payment methods do you accept?",
    "Checkout runs on Stripe. Card details are typed on Stripe\u2019s own " +
    "page and never reach this server \u2014 we store a customer id and " +
    "whether the subscription is active, and nothing else about the card. " +
    "Which cards and wallets appear is decided there, not here."],
   ["Is there a free trial?",
-   "No trial, and no refunds \u2014 so the honest answer is: do not pay " +
-   "until you are convinced. The Record page is free and always will be, " +
-   "and every pick is graded on it in public, wins and losses. Read that " +
-   "first. It is the only claim we make that you can check."],
+   "No trial. There are no refunds either, so the honest answer is: do " +
+   "not pay until you are convinced. The Record page is free and always " +
+   "will be, and every pick is graded on it in public, wins and losses. " +
+   "Read that first \u2014 it is the only claim we make that you can check."],
   ["What is the refund policy?",
    "Payments are not refundable. Cancelling stops the next charge and you " +
    "keep access to the end of the period you have already paid for, so " +
@@ -12462,6 +12474,36 @@ const FAQ = [
   ["I have a code.",
    "Enter it in the box above — it applies immediately and needs no card."],
 ];
+
+/* The FAQ as this reader should see it.
+   ---------------------------------------------------------------------
+   `FAQ` above is the no-trial wording and stays the base, because the
+   trial is a server decision and this file must not assert one that the
+   checkout would then refuse. When the server says there IS one — and
+   that this reader can still have it — the trial answer is replaced with
+   the terms in full.
+
+   THE TERMS IN FULL, not a headline. "3 days free" with the conversion
+   left to be discovered is the pattern that fills chargeback forms, and
+   several states legislate against it by name. Card required, what it
+   becomes, when, and how to stop it: all four, on the page, before the
+   click. */
+function faqFor(status) {
+  const days = (status && status.trial_days) || 0;
+  const plan = (status && status.trial_plan) || "";
+  const off = status && status.signed_in && status.trial_eligible === false;
+  if (!days || off) return FAQ;
+  const pl = PLANS.find((p) => p.id === plan) || PLANS[0];
+  return FAQ.map(([q, a]) => q === "Is there a free trial?"
+    ? [q, `Yes \u2014 ${days} days, on the ${pl.name.toLowerCase()} plan ` +
+         `only, one per account. A card is taken at signup and is charged ` +
+         `$${pl.price} on day ${days + 1} unless you cancel first. ` +
+         `Cancelling during the ${days} days costs nothing and takes one ` +
+         `button on your account page. After that the ordinary policy ` +
+         `applies: payments are not refundable, and cancelling keeps your ` +
+         `access to the end of the period you have already paid for.`]
+    : [q, a]);
+}
 
 /* THE ONLY NUMBERS ON THIS PAGE ABOUT HOW GOOD THE PRODUCT IS, and they
    come off the same record.json the free Record page renders. If the
@@ -12579,29 +12621,55 @@ function paywallHTML(rec, status) {
   ((status && status.plans) || []).forEach((p) => { readiness[p.id] = !!p.ready; });
   const sellable = (id) => (id in readiness ? readiness[id] : true);
 
+  /* THE TRIAL, ON ONE CARD. Ethan, 2026-08-22: "we can offer a 3 day free
+     trial only for the $25 plan." Drawn from the server's answer rather
+     than from a constant here — the server is what actually grants it,
+     and a card promising three days that Checkout then refuses is worse
+     than no offer at all. Hidden for anybody who has subscribed before,
+     because they do not get a second one. */
+  const trialDays = (status && status.trial_days) || 0;
+  const trialPlan = (status && status.trial_plan) || "";
+  const trialOK = trialDays > 0
+    && !(status && status.signed_in && status.trial_eligible === false);
+
   const plan = (pl) => {
     const lines = pl.id === "monthly"
       ? PLAN_FEATURES
       : PLAN_EXTRAS[pl.id].concat(PLAN_FEATURES.slice(0, 4));
     const ok = sellable(pl.id);
+    const trial = trialOK && pl.id === trialPlan;
     return `
-    <article class="card pw-plan${pl.popular ? " pop" : ""}">
+    <article class="card pw-plan${pl.popular ? " pop" : ""}${
+      trial ? " pw-trial" : ""}">
       ${pl.popular ? `<div class="pw-tag">Most popular</div>` : ""}
+      ${trial ? `<div class="pw-tag pw-tag-trial">${trialDays} days free</div>`
+        : ""}
       <div class="pw-plan-name">${escapeHtml(pl.name)}</div>
       <div class="pw-price-row">
         <div class="pw-price"><span class="cur">$</span>${pl.price}<i>/${
           escapeHtml(pl.per)}</i></div>
         ${pl.save ? `<span class="pw-save">Save $${pl.save}</span>` : ""}
       </div>
-      <div class="pw-cadence">${escapeHtml(pl.cadence)}</div>
+      <div class="pw-cadence">${trial
+        ? `${trialDays} days free, then $${pl.price} a month.`
+        : escapeHtml(pl.cadence)}</div>
       <ul class="pw-list">${lines.map((f) =>
         `<li>${iconMark("check", 13)}<span>${escapeHtml(f)}</span></li>`).join("")}</ul>
       ${ok
         ? `<button class="btn primary pw-buy" data-plan="${escapeAttr(pl.id)}"
-             onclick="coStart(this)">Get started</button>`
+             onclick="coStart(this)">${
+             trial ? `Start ${trialDays} days free` : "Get started"}</button>`
         : `<button class="btn pw-buy" disabled
              title="This plan is not switched on yet">Not available yet</button>`}
-      <div class="pw-fine">${escapeHtml(pl.cadence)}</div>
+      <div class="pw-fine">${trial
+        // SAID PLAINLY, on the card, before the click. A trial that
+        // collects a card and converts silently is the most complained
+        // about pattern in subscriptions and several states legislate
+        // against it. Terms §5.3 says the same thing at length.
+        ? `Card required. Becomes $${pl.price} a month on day ${
+            trialDays + 1} unless you cancel before then — one button on
+            your account page.`
+        : escapeHtml(pl.cadence)}</div>
     </article>`;
   };
 
@@ -12694,7 +12762,7 @@ function paywallHTML(rec, status) {
         <button class="btn primary pw-unlock-go" data-plan="sixmonth"
           onclick="coStart(this)">Get started</button>
       </aside>
-      <div class="card pw-faq">${FAQ.map(([q, a], i) => `
+      <div class="card pw-faq">${faqFor(status).map(([q, a], i) => `
         <details class="pw-q"${i === 0 ? " open" : ""}>
           <summary>${escapeHtml(q)}</summary>
           <p>${escapeHtml(a)}</p></details>`).join("")}</div>
@@ -13353,7 +13421,14 @@ function _coCovers(plan, code) {
 function checkoutHTML() {
   const pl = _coPlan || PLANS[0];
   const covered = _coCovers(pl, _coCode);
-  const total = covered ? 0 : pl.price;
+  /* THE TRIAL AT THE MOMENT OF COMMITMENT. A code that covers the term
+     wins — it charges nothing and needs no card at all, so a trial on
+     top of it would be a smaller offer described as a bigger one. */
+  const tDays = (_pwStatus && _pwStatus.trial_days) || 0;
+  const trial = !covered && tDays > 0
+    && pl.id === ((_pwStatus && _pwStatus.trial_plan) || "")
+    && !(_pwStatus && _pwStatus.trial_eligible === false);
+  const total = (covered || trial) ? 0 : pl.price;
   return `
   <div class="co">
     <div class="co-grid">
@@ -13369,10 +13444,18 @@ function checkoutHTML() {
             _coCode.months === 1 ? "" : "s"}${covered ? "" : ", less than this term"}</span>
           <button class="co-x" onclick="coDropCode()" aria-label="Remove code">×</button>
         </div>` : ""}
+        ${trial ? `<div class="co-line co-trialline">
+          <div><b>${tDays}-day free trial</b>
+            <span class="co-sub">applied to this plan</span></div>
+          <div class="co-amt">−$${pl.price}</div>
+        </div>` : ""}
         <div class="co-line co-total">
           <div><b>Total due today</b></div>
           <div class="co-amt big">$${total}</div>
         </div>
+        ${trial ? `<p class="co-then">Then <b>$${pl.price} a month</b>,
+          starting in ${tDays} days. Cancel before then and you are not
+          charged anything.</p>` : ""}
 
         ${covered ? `
           <div class="co-free">
@@ -13386,8 +13469,15 @@ function checkoutHTML() {
           <div class="co-pay" id="co-pay">
             <div class="co-payhead">Payment</div>
             <button class="btn primary co-go" data-plan="${escapeAttr(pl.id)}"
-                    onclick="coPay(this)">
-              Continue to secure checkout — $${pl.price}</button>
+                    onclick="coPay(this)">${trial
+              ? `Start my ${tDays} free days`
+              : `Continue to secure checkout — $${pl.price}`}</button>
+            ${trial ? `<p class="co-note"><b>Your card is taken now and
+              charged in ${tDays} days.</b> That is what makes this a trial
+              rather than a giveaway, and it is the part these offers
+              usually bury. Cancel any time in those ${tDays} days — one
+              button on your account page — and nothing is charged.</p>`
+              : ""}
             <p class="co-note" id="co-pay-note"></p>
             <p class="co-note">Your card is entered on Stripe’s own page,
               not this one. Nothing about it reaches this server — we keep

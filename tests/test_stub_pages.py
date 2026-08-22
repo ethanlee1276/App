@@ -122,13 +122,27 @@ def test_the_plan_cards_invent_no_tier_and_quote_no_unsourced_price():
     # too, which is the half nobody notices.
     i = APP.index("function billPlansHTML(")
     body = APP[i:APP.index("\n}\n", i) + 3]
-    assert body.count('class="card plan') == 2, "a third tier was invented"
+    # ONE CARD SINCE 2026-08-22. There were two: a "Free — $0 always" card
+    # beside the paid one, listing the Record page, scores, standings,
+    # rosters, injuries, the fantasy room and the bet log as things you
+    # got for nothing. Every one of those is behind the wall — WALL_OPEN
+    # lets an unpaid reader reach the Record page and the account page and
+    # nothing else — so it described a tier the site does not grant, on
+    # the page a customer reads after paying. Ethan found it by asking
+    # what the free plan was and where it lived.
+    #
+    # The rule this test enforces is unchanged: no tier is invented here,
+    # and only the entry price is quoted. Fewer cards satisfies it; more
+    # would not.
+    assert body.count('class="card plan') == 1, (
+        "a second tier appeared on the account page — the price list "
+        "lives on the plans page, and a free tier does not exist")
     prices = re.findall(r"\$\d[\d.,]*", body)
     monthly = f"${billing.PLANS['monthly']['cents'] // 100}"
-    assert prices == ["$0", monthly], (
-        f"the plan card quotes {prices}; it may quote only $0 and the "
-        f"monthly price ({monthly}), and the other two plans belong on "
-        "the plans page where the buy buttons are")
+    assert set(prices) == {monthly}, (
+        f"the plan card quotes {prices}; it may quote only the monthly "
+        f"price ({monthly}), and the other two plans belong on the plans "
+        "page where the buy buttons are")
     for word in ("Premium", "Elite", "/mo"):
         assert word not in body, f"invented a tier or a term: {word}"
     assert "Stripe" in body and "billSeePlans()" in body, \

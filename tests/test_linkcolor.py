@@ -66,9 +66,20 @@ DEFAULT_BLUE = ("rgb(0, 0, 238)", "rgb(0, 0, 255)", "rgb(85, 26, 139)")
 
 
 # --- the fix is where the defect was ----------------------------------------
-def test_the_four_homes_the_default_was_reaching_are_all_coloured():
+def test_the_homes_the_default_was_reaching_are_all_coloured():
+    """`.pw-legal a` joined the list on 2026-08-22 and by the same route:
+    looking at a screenshot. The paywall and CHECKOUT pages did not exist
+    when this file was written, and the legal line they both draw carries
+    the Terms and Privacy links — rendering at #0000EE under the button
+    where somebody enters a card, which is the worst place on the site for
+    the default to surface.
+
+    That is the second time this class has appeared, and it is worth being
+    clear about why the answer is still not a base `a` rule: the next test
+    holds. Naming each home costs a line per surface; a base rule would
+    silently repaint the ones that inherit on purpose."""
     for sel in (".footer a", ".legal-back a", ".acct-confirm a",
-                ".stub-brand"):
+                ".stub-brand", ".pw-legal a"):
         assert sel in DECLS, f"{sel} lost its colour again"
 
 

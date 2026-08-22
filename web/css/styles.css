@@ -395,6 +395,8 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
+
+
 h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 400; }
 
 /* A heading that breaks "Calibration by market and" / "horizon" has a widow,
@@ -5964,14 +5966,27 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* Plan cards (render 21). Two, not three — there is one real plan, and
    inventing tiers to fill a layout is the same sin as inventing a
    number. The raised card is the paid one, as in the render. */
-.plan-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr;
-  align-items: start; margin-bottom: 12px; }
+/* ONE CARD NOW, not two. This was `1fr 1fr` for the Free-vs-Paid split;
+   with the free card gone the survivor kept half the width and wore its
+   ribbon off the right edge. `auto-fit` with a floor lets one card take
+   a readable column and would still lay two out side by side if a second
+   ever returns — and `minmax(0, …)` because a grid track's default
+   minimum is its content, which is how a long feature line pushes a card
+   wider than its column. */
+.plan-grid { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  margin-bottom: 12px; }
 .plan { position: relative; padding: 18px 18px 20px; }
 .plan.raised { border-color: color-mix(in oklab, var(--brand) 50%, var(--border)); }
 /* Status marker, so it takes the border-left idiom the bet cards use —
    the inset box-shadow form is reserved for brand SELECTION. */
 .plan.current { border-left: 3px solid var(--good); }
+/* Tucked INSIDE the corner it sits in. At top/right 0 on a card with a
+   1px border and a radius, the band's own square corner sat proud of the
+   rounded one — visible as a notch on the account page once the card
+   stopped being clipped by a narrow column. */
 .plan-band { position: absolute; top: 0; right: 0;
+  border-bottom-left-radius: var(--radius-sm);
   padding: 3px 10px; background: var(--brand-solid); color: #fff;
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; }
@@ -5982,6 +5997,20 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .plan-price span { display: block; font-family: var(--font-sans);
   font-size: var(--fs-2xs); font-weight: 400; color: var(--text-mute);
   letter-spacing: 0; text-transform: none; }
+/* The trial, on the account page's single plan card. */
+/* The prose is ONE span, deliberately. Bare text beside a <b> inside a
+   flex container becomes three anonymous flex items sitting in three
+   columns — which is what "Start with / 3 days free / on the monthly
+   plan" looked like on the account page before the span went in. */
+.plan-trial { display: flex; gap: 8px; align-items: baseline; margin: 12px 0 0;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--fill-subtle);
+  border: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); color: var(--text-body);
+  line-height: var(--lh-snug); }
+.plan-trial .ic { color: var(--good); flex: none; }
+.plan-trial b { color: var(--text); }
+
 .plan-list { list-style: none; margin: 0; padding: 0; }
 .plan-list li { display: flex; gap: 8px; align-items: baseline;
   font-size: var(--fs-sm); color: var(--text-dim); padding: 3px 0; }
@@ -6751,6 +6780,15 @@ input:-webkit-autofill:focus {
   padding: 3px 12px; border-radius: 999px; background: var(--brand-solid);
   color: #fff; font-size: var(--fs-2xs); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+/* THE TRIAL RIBBON, on the monthly card only. Same geometry as the
+   "Most popular" ribbon it sits beside on a different card — and the
+   same `overflow: visible`, without which the parent .card clips it to
+   a sliver, which is exactly how the popular ribbon was broken once
+   already. Green rather than violet: it is the one thing on the page
+   that costs nothing, and it should not read as another price. */
+.pw-plan.pw-trial { overflow: visible; border-color: var(--good); }
+.pw-tag-trial { background: var(--good); color: var(--brand-ink); }
+
 .pw-plan-name { font-size: var(--fs-md); font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--brand-2); }
 .pw-price { font-size: var(--fs-price); font-weight: 900; line-height: var(--lh-tight);
@@ -6814,6 +6852,10 @@ input:-webkit-autofill:focus {
 .pw-foot p { color: var(--text-mute); font-size: var(--fs-sm); margin: 0 0 8px; }
 .pw-legal { max-width: var(--measure); margin: 0 auto !important;
   font-size: var(--fs-xs) !important; }
+/* Fine print, so its links are quiet — legible, underlined, and not
+   competing with the buy button two inches above them. */
+.pw-legal a { color: var(--text-dim); text-decoration: underline; }
+.pw-legal a:hover { color: var(--text); }
 
 /* The masthead the wall has to draw for itself. `body.walled` hides the
    site's real one, and the render (2026-08-20) opens with a logo and a
@@ -7169,6 +7211,13 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   font-size: var(--fs-xl); }
 .co-amt.big { font-size: var(--fs-3xl); }
 .co-total { border-bottom: 0; align-items: center; }
+/* The trial as a LINE IN THE ORDER, not a banner over it. It reduces
+   today's total to zero and the reader should see that happen in the
+   arithmetic, next to the thing it is reducing. */
+.co-trialline .co-amt { color: var(--good); }
+.co-then { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-body);
+  line-height: var(--lh-snug); }
+.co-then b { color: var(--text); }
 .co-coupon { display: flex; align-items: center; gap: 8px; margin: 10px 0;
   padding: 8px 10px; border-radius: var(--radius-sm);
   font-size: var(--fs-sm);

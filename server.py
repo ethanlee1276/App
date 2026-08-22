@@ -1389,6 +1389,14 @@ class Handler(BaseHTTPRequestHandler):
             # sign-in. A plan with no price id configured must not draw a
             # buy button that 502s after the customer has committed.
             out["plans"] = BI.plan_catalogue()
+            # THE TRIAL, ADVERTISED TO EVERYONE and granted to fewer. The
+            # plans page renders before anybody signs in, so the offer has
+            # to be outside the `if who` block; whether THIS account
+            # actually gets one is decided at checkout, from the database,
+            # and is reported below for the people we can already answer
+            # for.
+            out["trial_days"] = BI.TRIAL_DAYS
+            out["trial_plan"] = BI.TRIAL_PLAN
             if BI.configured():
                 # Test and live are the SAME Stripe account distinguished
                 # by a key prefix — unlike Paddle, where the sandbox is a
@@ -1406,6 +1414,11 @@ class Handler(BaseHTTPRequestHandler):
                 # how this looked when Ethan reported that signing in
                 # never says it worked.
                 out["email"] = who["email"]
+                # Signed in, so we can say rather than advertise: somebody
+                # who has subscribed before does not get a second trial,
+                # and the plans page should not promise them one.
+                out["trial_eligible"] = not BI.has_subscribed_before(
+                    conn, who["id"])
                 out.update(BI.status_for(conn, who["id"]))
                 # Codes ride alongside rather than inside the subscription
                 # status: a redeemed code is not a subscription and saying
@@ -1588,6 +1601,14 @@ class Handler(BaseHTTPRequestHandler):
                     # year. An absent plan is the front end's own default,
                     # which is a different thing from a wrong one.
                     plan = str(body.get("plan") or BI.DEFAULT_PLAN)
+                    # DECIDED HERE, FROM THE DATABASE. The browser says
+                    # which plan; it does not get a say in whether there
+                    # is a trial or how long it runs. A trial length read
+                    # off a request body is a free subscription for
+                    # anybody who opens the network tab.
+                    trial = BI.trial_days_for(
+                        plan,
+                        not BI.has_subscribed_before(conn, who["id"]))
                     url = BI.start_checkout(
                         who["id"], who["email"],
                         # THE SESSION ID COMES BACK WITH THEM. It grants
@@ -1597,7 +1618,7 @@ class Handler(BaseHTTPRequestHandler):
                         # which never arrives cannot cost a customer the
                         # thing they just bought.
                         f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
-                        f"{base}/#paywall", plan)
+                        f"{base}/#paywall", plan, trial_days=trial)
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
                     if not cust:

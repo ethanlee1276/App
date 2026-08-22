@@ -231,7 +231,7 @@ member can paste the link in a group chat. What this buys is that we never
 hand it to a non-member. If it spreads, revoke and reissue in Discord,
 change the line, restart.
 
-Terms §5.7 covers the rest — Discord is a third party, their rules govern
+Terms §5.8 covers the rest — Discord is a third party, their rules govern
 conduct there, and access ends when the subscription does.
 
 ### The page it lives on
@@ -272,6 +272,68 @@ page says so in those words. It is not a figure this site graded. What
 this site stands behind is the Record page, and the sentence points at it
 in the same breath — a performance number stated flatly in the site's own
 voice is a claim the site is making, and this one is not ours to make.
+
+---
+
+## The 3-day trial
+
+Monthly plan only. `TRIAL_DAYS = 3`, `TRIAL_PLAN = "monthly"` in
+`engine/billing.py`.
+
+**Monthly only is the design, not a limitation.** A trial on the yearly
+plan gives away three days at the cost of a $225 commitment nobody makes;
+on monthly the worst case is one $25 conversion. It is also the plan an
+undecided buyer picks.
+
+**One per account.** `has_subscribed_before()` reads the `subscriptions`
+table — one row per user, written the moment a purchase or trial completes
+— so its existence is the whole test. Without that, "cancel on day two,
+resubscribe on day four" is a permanently free account. A lookup that
+throws returns `True`: refusing a trial costs a conversion, granting one
+to everybody costs the first month of every subscription on the site.
+
+**Decided server-side, never from the request.** `_billing_post` computes
+`trial_days` from the database and passes it to `start_checkout`. A trial
+length read off a request body is a free subscription for anyone who opens
+the network tab.
+
+**A card is collected and it converts automatically on day 4.** That is
+Stripe Checkout's default for a subscription with `trial_period_days`, and
+it is what makes this a trial rather than a giveaway. It is also the part
+these offers usually bury, so it is stated on four surfaces:
+
+| Surface | What it says |
+|---|---|
+| Plan card | "3 days free, then $25 a month" + "Card required. Becomes $25 a month on day 4 unless you cancel before then." |
+| Checkout | A −$25 line, "Total due today $0", and "Your card is taken now and charged in 3 days." |
+| FAQ | The full terms, replacing the no-trial answer, only when the server offers one |
+| Terms §5.3 | Length, plan, one-per-account, card required, day 4, $25, and that cancelling in time costs nothing |
+
+`tests/test_free_trial.py` checks all four. The one that gets forgotten is
+the one a chargeback quotes.
+
+**`trialing` was already entitled** (`ENTITLED` in billing.py) and already
+had a sentence in `describe()`, so nothing about access or the account
+page needed changing.
+
+---
+
+## There is no free plan
+
+There was a card on the **account page** headed "Free — $0 always",
+listing the Record page, scores, standings, rosters, injuries, the fantasy
+room and the bet log. Every one of those is behind the wall: `WALL_OPEN`
+lets an unpaid reader reach the Record page and the account page and
+nothing else.
+
+So it described a tier the site does not grant, on a page customers read
+after paying. It was never on the paywall, which is why Ethan asked what
+the free plan was and where it lived — he had been through checkout
+without ever seeing it.
+
+The Record page **is** genuinely free and stays that way (`gate.FREE_FILES`,
+and `record` in `WALL_OPEN`). That is the thing the site points at instead
+of a trial-by-tier: every pick graded in public, before you pay.
 
 ---
 

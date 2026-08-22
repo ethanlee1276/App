@@ -388,8 +388,18 @@ def test_a_short_code_against_a_long_term_does_not_read_as_free():
     body = body[:body.index("\nfunction renderCheckout(")]
     assert "less than this term" in body, \
         "a partial code is presented as though it covered the whole plan"
-    assert "covered ? 0 : pl.price" in body, \
+    # The expression grew a second term when the 3-day trial landed:
+    # `(covered || trial) ? 0 : pl.price`. The claim is unchanged — the
+    # total is DERIVED from whether this reader owes anything today, not
+    # asserted — so this checks the shape rather than one spelling of it.
+    total = re.search(r"const total = ([^;]+);", body)
+    assert total, "the total is no longer computed in checkoutHTML"
+    assert "covered" in total.group(1), \
         "the total does not depend on whether the code actually covers it"
+    assert "pl.price" in total.group(1), \
+        "the total is not derived from the plan's price"
+    # …and a code that does NOT cover the term must not zero it.
+    assert "covered ?" in body or "covered ||" in body
 
 
 def test_the_buy_button_is_the_loudest_thing_on_the_page():
