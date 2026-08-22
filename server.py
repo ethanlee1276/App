@@ -536,6 +536,34 @@ _BOARD_CACHE: dict = {}
 _BOARD_LOCK = threading.Lock()
 
 
+def file_bytes(path, key: str = ""):
+    """``(body, mtime, etag)`` for a JSON file on disk, cached by stamp.
+
+    The same cache serves the SUBSCRIBER copy in data/built and the
+    redacted public copy in web/data, because both are polled on the same
+    30-second clock by the same page and re-reading either per request
+    costs the same.
+    """
+    key = key or str(path)
+    try:
+        st = path.stat()
+    except OSError:
+        return None, None, None
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _BOARD_LOCK:
+        hit = _BOARD_CACHE.get(key)
+        if hit is not None and hit[0] == stamp:
+            return hit[1], st.st_mtime, hit[2]
+    try:
+        body = path.read_bytes()
+    except OSError:
+        return None, None, None
+    etag = '"%s"' % hashlib.sha256(body).hexdigest()[:20]
+    with _BOARD_LOCK:
+        _BOARD_CACHE[key] = (stamp, body, etag)
+    return body, st.st_mtime, etag
+
+
 def board_bytes(name: str):
     """``(body, mtime, etag)`` for a board, or ``(None, None, None)``."""
     from engine import gate
@@ -1462,6 +1490,46 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, json.dumps(
             ffprofile.profile(player)).encode(), ".json")
 
+    def _serve_board(self, public):
+        """The board this CALLER is entitled to, cached and revalidated.
+
+        THE BUG THIS FIXES, proved 2026-08-22 with a signed-in comped
+        account: this endpoint served `web/data/<board>.json` to
+        everybody, and with QB_PAYWALL on that file is the REDACTED copy —
+        `recommendations: []`. So a paying subscriber's page fetched the
+        stripped board and drew "No qualifying plays at current numbers",
+        which reads as the model finding nothing rather than as the
+        paywall taking it away. `live_picks` is not a paid key, so their
+        riding bets still showed underneath it, which is exactly what
+        Ethan was looking at.
+
+        gate.py has said since it was written that "subscribers get the
+        full board from /api/board/<name>" — and nothing in web/js/app.js
+        has ever called that endpoint. The page only ever asks here. So
+        this is where the entitlement check belongs.
+
+        UNENTITLED CALLERS ARE UNAFFECTED: they get the same redacted file
+        they got before, from the same path, with the same locked markers
+        the paywall page reads.
+        """
+        from engine import gate
+        body = mtime = etag = None
+        if gate.enabled():
+            conn = _acct().connect()
+            try:
+                if self._entitled(conn, self._account(conn)):
+                    body, mtime, etag = board_bytes(public.name)
+            finally:
+                conn.close()
+        if body is None:
+            body, mtime, etag = file_bytes(public)
+        if body is None:
+            return self._send(404, b'{"error":"no board"}', ".json")
+        if etag and self.headers.get("If-None-Match") == etag:
+            return self._send_not_modified(etag, mtime)
+        return self._send(200, body, ".json", mtime=mtime,
+                          headers=[("ETag", etag)] if etag else None)
+
     def _api_board(self, name: str):
         """The subscriber's copy of a board, read from outside the web root.
 
@@ -2070,9 +2138,7 @@ class Handler(BaseHTTPRequestHandler):
         if getattr(self.server, "live_mode", False):
             live = LIVE_FILES.get(sport)
             if live and live.is_file():
-                self._send(200, live.read_bytes(), ".json",
-                           mtime=live.stat().st_mtime)
-                return
+                return self._serve_board(live)
             # No build yet → fall through to the sample pipeline below so the
             # page still loads (with a clear note in LAUNCH.md on how to build).
 

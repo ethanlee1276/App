@@ -2547,6 +2547,22 @@ body.pk-open { overflow: hidden; }
   .pk-card { max-height: 82vh; border-radius: var(--radius); }
 }
 
+/* Menu diagnostics — only rendered when something went wrong, so it is
+   allowed to look like a tool rather than part of the product. */
+.mdg { margin-top: 16px; }
+.mdg-note { margin: 0 0 8px; color: var(--warn); font-size: var(--fs-sm); }
+.mdg-log { display: grid; gap: 2px; margin-bottom: 10px; }
+.mdg-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+  padding: 4px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.mdg-why { color: var(--text-body); }
+.mdg-view { color: var(--text-mute); margin-left: auto; }
+.mdg-acts { display: flex; gap: 8px; margin-bottom: 8px; }
+.mdg-raw { width: 100%; font-family: var(--font-mono);
+  font-size: var(--fs-2xs); background: var(--panel-3); color: var(--text-mute);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px; resize: vertical; }
+
 .ffd-head { display: flex; align-items: center; gap: 12px;
   padding-bottom: 12px; margin-bottom: 4px;
   border-bottom: var(--hairline) solid var(--border); }
@@ -7345,7 +7361,6 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 /* The nav row that leaves the site. Marked, because it is the only one
    that does — and because the welcome screen carrying the invite is seen
    once, so this row is how it gets found again. */
-.sb-disc .sb-ico { color: var(--brand-2); }
 .pw-guar b { display: block; font-size: var(--fs-md); }
 .pw-guar p { margin: 6px 0 0; color: var(--text-mute);
   font-size: var(--fs-sm); line-height: var(--lh-snug); }

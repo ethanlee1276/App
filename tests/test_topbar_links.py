@@ -175,12 +175,29 @@ def test_the_account_panel_no_longer_draws_its_own():
         "the account panel still renders something Discord-shaped")
 
 
-def test_the_two_places_it_does_live_still_work():
-    """Removing the third copy must not remove the first two."""
+def test_the_places_it_does_live_still_work():
+    """Ethan, 2026-08-22: "we can remove the discord button in the 'my
+    book' section since we have one on the top of the page."
+
+    Second row removed, and the same rule applies as when the account
+    panel's copy went: taking one away must not take the others. What is
+    left is the top-bar icon and the #discord page it opens — and the
+    page must stay REACHABLE, which is the thing a sidebar row was doing
+    and now nothing in the markup does."""
     code = _code(_read(APP))
     assert 'barLink("nav-dc"' in code, "the top-bar icon"
     assert "function discordPageHTML(" in code, "the #discord page"
-    assert 'data-view="discord"' in _read(HTML), "the nav row"
+    assert '"discord"' in code and "VIEW_ORDER" in code, \
+        "the view is not routable, so the icon opens nothing"
+    assert '"discord"' in code[code.index("const WALL_OPEN"):
+                               code.index("const WALL_OPEN") + 200], \
+        "the Discord page went behind the paywall when its row was removed"
+
+
+def test_the_sidebar_no_longer_carries_a_discord_row():
+    html = _read(HTML)
+    assert 'data-view="discord"' not in html, (
+        "the sidebar row is back — the top-bar icon already does this")
 
 
 if __name__ == "__main__":

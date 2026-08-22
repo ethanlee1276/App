@@ -8299,8 +8299,20 @@ async function renderRecord() {
     const res = await boardFetch("data/record.json?t=" + Date.now());
     if (res.ok) d = await res.json();
   } catch (e) {}
+  /* THROUGH THE ENTITLED ENDPOINT FIRST. `predmarkets.json` is a wholly
+     paid file — gate.PAID_FILES — so the copy Caddy serves off disk is a
+     locked stub with no `validation` key at all once the paywall is on.
+     This page read that stub and drew nothing, which is Ethan's "the
+     prediction market record page isnt showing anything": the section
+     was not broken, it was being handed an empty board and had nothing
+     to say about it.
+
+     /api/board/ is where a subscriber's copy lives. The static file
+     stays as the fallback for a signed-out reader and for a static host,
+     where it correctly yields nothing. */
   try {
-    const res = await boardFetch("data/predmarkets.json?t=" + Date.now());
+    let res = await boardFetch("/api/board/predmarkets.json");
+    if (!res.ok) res = await boardFetch("data/predmarkets.json?t=" + Date.now());
     if (res.ok) pmv = ((await res.json()) || {}).validation;
   } catch (e) {}
   if (!d || !d.overall || (!d.overall.settled && !d.overall.open)) {
@@ -14442,7 +14454,71 @@ function acctScreenHTML() {
 function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;
-  body.innerHTML = acctScreenHTML();
+  body.innerHTML = acctScreenHTML() + menuDiagHTML();
+}
+
+/* ---- THE DIAGNOSTIC, WHERE IT CAN BE READ -------------------------------
+   `rescueDrawer` has written its findings to localStorage since the
+   second attempt at the menu bug, and nothing has ever displayed them.
+   Three rounds of guessing were done with the evidence sitting on the
+   reporter's own phone, unreachable — no devtools on an installed app.
+
+   It shows only when there is something to show, so it costs a working
+   install nothing and it cannot be mistaken for a normal feature. */
+function menuDiagHTML() {
+  let rescues = [], log = [];
+  try {
+    rescues = JSON.parse(localStorage.getItem(MENU_RESCUE_KEY) || "[]");
+    log = JSON.parse(localStorage.getItem(MENU_LOG_KEY) || "[]");
+  } catch (e) { return ""; }
+  if (!rescues.length && !log.length) return "";
+  const text = JSON.stringify({ rescues, menu: log }, null, 1);
+  const rows = log.slice(0, 14).map((r) =>
+    `<div class="mdg-row"><b>${escapeHtml(r.t || "")}</b>
+       <span>${escapeHtml(r.what || "")}</span>
+       <span class="mdg-why">${escapeHtml(r.why || "")}</span>
+       <span class="mdg-view">${escapeHtml(r.view || "")}${
+         r.standalone ? " · app" : ""}</span></div>`).join("");
+  return `
+    <section class="card mdg">
+      <div class="section-title minor">Menu diagnostics
+        <span class="sub">— recorded on this device because the menu
+        misbehaved here. Send this to support and it can be fixed from
+        the record instead of from a description.</span></div>
+      ${rescues.length ? `<p class="mdg-note">${rescues.length}
+        drawer rescue(s) recorded — the panel did not arrive on its
+        own.</p>` : ""}
+      ${rows ? `<div class="mdg-log">${rows}</div>` : ""}
+      <div class="mdg-acts">
+        <button class="btn" onclick="menuDiagCopy(this)">Copy the record</button>
+        <button class="btn ghost" onclick="menuDiagClear()">Clear it</button>
+      </div>
+      <textarea class="mdg-raw" readonly rows="6"
+        aria-label="Menu diagnostics">${escapeHtml(text)}</textarea>
+    </section>`;
+}
+
+function menuDiagCopy(btn) {
+  const box = document.querySelector(".mdg-raw");
+  if (!box) return;
+  const done = () => { btn.textContent = "Copied"; setTimeout(
+    () => { btn.textContent = "Copy the record"; }, 1600); };
+  // The clipboard API needs a secure context and a permission that an
+  // installed app does not always have; selecting the text is the
+  // fallback that always works, and it is what a person would do anyway.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(box.value).then(done, () => box.select());
+  } else {
+    box.select();
+  }
+}
+
+function menuDiagClear() {
+  try {
+    localStorage.removeItem(MENU_RESCUE_KEY);
+    localStorage.removeItem(MENU_LOG_KEY);
+  } catch (e) {}
+  renderAccount();
 }
 
 /* The compact strip that replaces the full card on My Bets and Fantasy.
@@ -20487,7 +20563,7 @@ function moveIndicator() {
    have no Recommended view, so from there home means "back to the sport
    you were on" — exitStandaloneMode restores its nav and brand. */
 function goHome() {
-  closeMobileMenu();
+  closeMobileMenu("goHome / brand tap");
   if (STANDALONE_MODES.includes(state.view)) {
     exitStandaloneMode();
   } else if (state.view !== "recommended") {
@@ -20498,7 +20574,45 @@ function goHome() {
   load();                                   // always pull current numbers
 }
 
-function closeMobileMenu() {
+/* ---- WHO CLOSED THE MENU ------------------------------------------------
+   Ethan, a fourth time, now from the installed app: "i try to click into
+   the menu and it closes itself and wont let me open it. it opens for a
+   split second and them will close itself over and over."
+
+   THAT IS A NEW SIGNATURE. The three previous reports were the drawer
+   never ARRIVING — the class landed, the page dimmed, no panel — and two
+   real causes were found and fixed for that. This one arrives and is then
+   taken away, which is a different fault: something is removing
+   `menu-open` right after the toggle adds it.
+
+   `rescueDrawer` already writes a diagnostic for the old signature, and
+   it writes it to localStorage — where, on a phone with no devtools, it
+   has never once been read. Three attempts at this bug were made without
+   the evidence the code was already collecting. So this records the new
+   signature too, and BOTH are surfaced on the account page where Ethan
+   can read them and send them back.
+
+   Nine places close this menu and every one is legitimate on its own.
+   Which of them is firing when it should not is the entire question, so
+   each says who it is. */
+const MENU_LOG_KEY = "qb_menu_log";
+
+function menuTrace(what, why) {
+  try {
+    const log = JSON.parse(localStorage.getItem(MENU_LOG_KEY) || "[]");
+    log.unshift({
+      t: new Date().toISOString().slice(11, 23),
+      what, why: String(why || ""),
+      view: (typeof state === "object" && state) ? state.view : "?",
+      standalone: !!(window.matchMedia
+        && window.matchMedia("(display-mode: standalone)").matches),
+    });
+    localStorage.setItem(MENU_LOG_KEY, JSON.stringify(log.slice(0, 60)));
+  } catch (e) { /* private mode — the app still works, we just learn less */ }
+}
+
+function closeMobileMenu(why) {
+  if (document.body.classList.contains("menu-open")) menuTrace("close", why);
   document.body.classList.remove("menu-open");
   // A drawer that had to be forced open must not stay forced.
   releaseDrawer(document.getElementById("sidebar"));
@@ -20660,12 +20774,14 @@ function initMobileMenu() {
       // read as broken ("where did the leagues go?").
       const sb = document.getElementById("sidebar");
       if (sb) sb.scrollTop = 0;
+      menuTrace("open", "hamburger");
       // Trust the stylesheet, then check it. See verifyDrawer().
       verifyDrawer();
     } else {
       // This path closes WITHOUT closeMobileMenu(), so it has to release
       // the rescue itself — otherwise a drawer forced open once stays
       // pinned open by its own inline styles for the rest of the session.
+      menuTrace("close", "hamburger (toggle off)");
       releaseDrawer(document.getElementById("sidebar"));
     }
     btn.setAttribute("aria-expanded", String(open));
@@ -20686,7 +20802,7 @@ function initMobileMenu() {
     if (e.target.closest && e.target.closest("#sidebar, .tabbar, .topbar")) return;
     e.preventDefault();
     e.stopPropagation();
-    closeMobileMenu();
+    closeMobileMenu("tap outside the drawer");
     syncMenuLabel();
   }, true);
   // iOS ignores body{overflow:hidden} for touch scrolling, so the board
@@ -20705,15 +20821,17 @@ function initMobileMenu() {
   // they behave like any other final choice and close.
   document.querySelectorAll(".sport-btn").forEach((b) =>
     b.addEventListener("click", () => {
-      if (STANDALONE_MODES.includes(b.dataset.sport)) closeMobileMenu();
+      if (STANDALONE_MODES.includes(b.dataset.sport))
+        closeMobileMenu("sport button");
       syncMenuLabel();
     }));
   // Picking a PAGE is the end of the interaction — never leave the panel
   // covering the thing the tap just navigated to.
   document.querySelectorAll(".nav-btn").forEach((b) =>
-    b.addEventListener("click", () => { closeMobileMenu(); syncMenuLabel(); }));
+    b.addEventListener("click", () => {
+      closeMobileMenu("nav button"); syncMenuLabel(); }));
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMobileMenu();
+    if (e.key === "Escape") closeMobileMenu("escape key");
   });
   syncMenuLabel();
   syncNavHint();
@@ -22000,7 +22118,7 @@ async function renderLiveBoard() {
     b.addEventListener("click", () => {
       if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
       if (state.view !== "recommended") switchView("recommended", true);
-      closeMobileMenu();
+      closeMobileMenu("sidebar anchor");
       // Through `revealAnchor` for the same reason the preseason pointer
       // is: if a target ever sits in a sub-tab that is not the open one,
       // a bare scroll lands nowhere and the menu item looks broken. Every
@@ -22026,7 +22144,7 @@ async function renderLiveBoard() {
     b.addEventListener("click", () => {
       if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
       if (state.view !== "recommended") switchView("recommended", true);
-      closeMobileMenu();
+      closeMobileMenu("sidebar subtab");
       // The subnav is built by the room machinery after the view lands,
       // so the tab may not exist yet — retry briefly instead of racing.
       let tries = 0;

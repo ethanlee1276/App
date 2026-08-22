@@ -333,6 +333,70 @@ def test_the_board_endpoint_checks_entitlement_before_it_reads():
         "the board is SENT before entitlement is decided"
 
 
+def test_the_page_s_own_board_endpoint_serves_a_subscriber_their_picks():
+    """THE BUG THIS FILE ALMOST MISSED, proved 2026-08-22 against a
+    running server with a signed-in comped account.
+
+    `gate.py` has said since it was written that "subscribers get the
+    full board from /api/board/<name>". Nothing in web/js/app.js has ever
+    called that endpoint — the page fetches SPORT_META.api, which is
+    /api/<sport>/recommendations, and that served `web/data/<board>.json`
+    to everybody. With the paywall on, that file IS the redacted copy.
+
+    So a paying subscriber's page fetched a board with
+    `recommendations: []` and drew "No qualifying plays at current
+    numbers" — which reads as the model finding nothing, not as the
+    paywall taking it away. `live_picks` is not a paid key, so their
+    riding bets still showed underneath, which is exactly the screenshot
+    that was being read as an empty slate.
+
+    Every test here checked the paid file could not LEAK. None checked it
+    still ARRIVED.
+    """
+    src = _server()
+    body = src[src.index("def _serve_board("):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "gate.enabled()" in body, "the flag decides nothing here"
+    assert "self._entitled(" in body, "no entitlement check on the page's board"
+    assert "board_bytes(" in body, "an entitled caller is not given the full copy"
+    # And the unentitled path must still be the redacted public file.
+    assert "file_bytes(public)" in body, \
+        "the redacted copy is no longer the fallback"
+    # The check must gate the FULL copy, not run after it.
+    assert body.index("self._entitled(") < body.index("board_bytes("), \
+        "the full board is read before the caller is identified"
+
+
+def test_the_live_endpoint_is_the_one_the_page_actually_calls():
+    """A fix on an endpoint nobody calls is the shape of the original
+    bug. SPORT_META.api is what load() fetches; that is what has to be
+    entitlement-aware."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("const tag = _boardTags[")
+    assert "meta.api" in app[i:i + 400], "load() no longer fetches meta.api"
+    src = _server()
+    live = src[src.index("def _api(self, query"):]
+    live = live[:live.index("\n    def ", 1)]
+    assert "_serve_board(" in live, \
+        "the endpoint the page calls went back to serving one file to all"
+
+
+def test_the_prediction_market_record_asks_the_entitled_endpoint():
+    """predmarkets.json is in PAID_FILES, so the copy on the public path
+    is a locked stub with no `validation` key. The Record page read that
+    stub and drew nothing."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # Anchored on the CALL, not on the first mention of the filename —
+    # which is now inside the comment explaining this very fix.
+    assert 'boardFetch("/api/board/predmarkets.json")' in app, \
+        "the record page still reads only the sealed public copy"
+    i = app.index('boardFetch("/api/board/predmarkets.json")')
+    after = app[i:i + 400]
+    assert 'data/predmarkets.json' in after, \
+        "the static fallback is gone — a signed-out reader gets an error"
+    assert "res.ok" in after, "the fallback is not conditional on the first failing"
+
+
 def test_the_flag_is_checked_before_the_account_is():
     """Ordering, not style. A site running without a processor must behave
     exactly as it did before any of this was written — refusing everyone

@@ -145,12 +145,26 @@ def test_localstorage_is_never_read_without_a_catch():
 
 
 # --- the way in -------------------------------------------------------------
-def test_there_is_a_tab_and_it_points_at_a_real_view():
+def test_there_is_a_way_back_to_it_and_it_points_at_a_real_view():
+    """Ethan, 2026-08-21: "we should add a discord tab or something so if
+    someone doesnt join immedietly, they still have the option to join
+    later." That requirement stands. What satisfies it changed on
+    2026-08-22 — "we can remove the discord button in the 'my book'
+    section since we have one on the top of the page" — so the sidebar
+    row is gone and the top-bar icon is the way back.
+
+    Asserted as "there IS a way in", not as "there is a sidebar row",
+    because the row was never the requirement. What would break the
+    requirement is BOTH being gone, and that is what this catches."""
     html = _read(HTML)
-    assert 'data-view="discord"' in html, (
-        'Ethan: "we should add a discord tab or something so if someone '
-        'doesnt join immedietly, they still have the option to join later"')
-    assert 'id="view-discord"' in html, "the tab points at nothing"
+    code = _code(_read(APP))
+    ways = [('id="nav-dc"' in html and 'barLink("nav-dc"' in code,
+             "the top-bar icon"),
+            ('data-view="discord"' in html, "a sidebar row")]
+    assert any(ok for ok, _ in ways), (
+        "nothing on the site opens the Discord page any more: "
+        + ", ".join(f"{name} missing" for ok, name in ways if not ok))
+    assert 'id="view-discord"' in html, "the way in points at nothing"
     code = _code(_read(APP))
     order = code[code.index("const VIEW_ORDER"):]
     assert '"discord"' in order[:order.index("\n")], (
@@ -218,7 +232,10 @@ def test_nothing_in_the_room_panel_is_an_invented_message():
 def test_the_page_has_styles():
     css = _read(CSS)
     for cls in ("dc-hero", "dc-main", "dc-mock", "dc-cta", "dc-grid",
-                "dc-foot", "dc-toast", "sb-disc"):
+                # `sb-disc` retired 2026-08-22 with the sidebar row it
+                # styled — "we can remove the discord button in the 'my
+                # book' section since we have one on the top of the page."
+                "dc-foot", "dc-toast"):
         assert "." + cls in css, "unstyled: .%s" % cls
 
 
