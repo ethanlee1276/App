@@ -81,6 +81,20 @@ PAID_KEYS = (
     "parlays",
     "edge_board",
     "futures",
+    # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found
+    # 2026-08-22 with QB_PAYWALL=1 on the box: engine/ufc/model.py returns
+    # its board under `picks`, `pass_list` and `near_misses`, none of
+    # which any entry above matched — so `curl /data/ufc.json` returned
+    # every fighter, price and stake to anyone who asked.
+    #
+    # This is the failure PAID_FILES was added to catch for predmarkets
+    # ("key-stripping only protects boards whose keys were anticipated"),
+    # and UFC slipped through the same gap from the other side: it is not
+    # wholly paid — the card, the weigh-ins and the fight order are free
+    # facts — so only its pick keys can go.
+    "picks",
+    "pass_list",
+    "near_misses",
 )
 
 #: Files that are paid in their entirety — no free half to preserve.
@@ -394,6 +408,45 @@ def unsealed(web_data=None) -> list:
         if n:
             bad.append({"board": name, "rows": n})
     return bad
+
+
+#: Fields that only ever appear on a row we are telling someone to bet.
+#: A list of dicts carrying one of these IS a pick list, whatever the key
+#: is called.
+_STAKE_FIELDS = ("stake_units", "stake_fraction", "units", "stake")
+
+
+def _looks_staked(value) -> bool:
+    """Is this value a list of rows that carry a stake?"""
+    if not isinstance(value, list) or not value:
+        return False
+    for row in value[:8]:
+        if isinstance(row, dict) and any(f in row for f in _STAKE_FIELDS):
+            return True
+    return False
+
+
+def leaks(payload: dict, name: str) -> list:
+    """Keys on this board that carry staked rows and are NOT gated.
+
+    THE HOLE THIS EXISTS TO FIND, live on 2026-08-22 with the paywall on:
+    engine/ufc/model.py returns its board under `picks`, and no entry in
+    PAID_KEYS matched, so `curl /data/ufc.json` handed every fighter,
+    price and stake to anybody. Key-stripping only protects boards whose
+    keys somebody anticipated, and the next board will name its rows
+    something else again.
+
+    So this asks a question that does not depend on the name: does this
+    list contain rows with a STAKE on them? If it does and the key is not
+    paid, that is the paid product on the public path.
+
+    Returns [] for a wholly-paid or free file — the first keeps nothing
+    and the second is a deliberate decision, not an oversight.
+    """
+    if not isinstance(payload, dict) or is_free(name) or is_wholly_paid(name):
+        return []
+    return sorted(k for k, v in payload.items()
+                  if k not in PAID_KEYS and _looks_staked(v))
 
 
 def full_board_file(name: str) -> "Path | None":

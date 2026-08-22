@@ -6588,6 +6588,9 @@ def main() -> None:
         _stripe_webhook_cli(recreate="--recreate" in argv,
                             print_env="--print-env" in argv)
         return
+    if "--paywall-audit" in argv:
+        _paywall_audit_cli()
+        return
     if "--board-size" in argv:
         _board_size_cli()
         return
@@ -7270,6 +7273,60 @@ def _promo_new_cli(argv: list) -> None:
           "handed out, run `sudo ./deploy/setenv.sh --show` first and paste\n"
           "the old ones back alongside these, separated by commas.\n")
     print("This is the only time these are printed. Nothing here stores them.")
+
+
+def _paywall_audit_cli() -> None:
+    """Every board on this box, checked for the paid product on the open path.
+
+    Ethan's site had QB_PAYWALL=1 and was publishing the whole UFC card —
+    fighters, prices, stakes — because engine/ufc/model.py names its rows
+    `picks` and nothing in PAID_KEYS did. Key-stripping only protects
+    boards whose keys somebody anticipated.
+
+    This asks the question that does not depend on the name: does a list
+    on this board contain rows with a STAKE on them, under a key that is
+    not gated? Run it after adding a board or renaming a key.
+    """
+    import json as _j
+    from engine import gate as _gate
+    if not _gate.enabled():
+        print("\nQB_PAYWALL is off — nothing is redacted, so there is "
+              "nothing to audit. This checks what the paywall LETS "
+              "through, and right now it lets everything through by "
+              "design.")
+        return
+    web = ROOT / "web" / "data"
+    boards = sorted(web.glob("*.json"))
+    if not boards:
+        print("\nNo boards on the public path yet.")
+        return
+    print("\nPaywall audit — the paid product on the open path\n" + "=" * 60)
+    bad = 0
+    for f in boards:
+        try:
+            doc = _j.loads(f.read_text())
+        except Exception:                                    # noqa: BLE001
+            continue
+        found = _gate.leaks(doc, f.name)
+        if _gate.is_free(f.name):
+            print(f"  free      {f.name}")
+            continue
+        if found:
+            bad += 1
+            rows = sum(len(doc.get(k) or []) for k in found)
+            print(f"  LEAKING   {f.name}  ->  {', '.join(found)} "
+                  f"({rows} staked row(s) readable by anyone)")
+        else:
+            print(f"  sealed    {f.name}")
+    print()
+    if bad:
+        print(f"  {bad} board(s) publishing staked rows. Add the key to")
+        print("  engine/gate.PAID_KEYS, and give subscribers a path to it")
+        print("  (paidFetch in web/js/app.js) in the SAME change — gating")
+        print("  a key without that fixes the leak by breaking the page")
+        print("  for the people who pay for it.")
+    else:
+        print("  No board is publishing a staked row.")
 
 
 def _board_size_cli() -> None:

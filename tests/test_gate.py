@@ -381,6 +381,58 @@ def test_the_live_endpoint_is_the_one_the_page_actually_calls():
         "the endpoint the page calls went back to serving one file to all"
 
 
+def test_ufcs_picks_are_gated():
+    """LIVE ON 2026-08-22, with QB_PAYWALL=1 on the box.
+    engine/ufc/model.py returns its board under `picks`, `pass_list` and
+    `near_misses`. No entry in PAID_KEYS matched any of them, so
+    `curl /data/ufc.json` handed every fighter, price and stake to
+    anybody who asked — the paid product, on the open path, for as long
+    as the paywall had been on.
+
+    Nothing caught it. Every test in this file asked whether a NAMED key
+    survived redaction; none asked whether an unnamed one did."""
+    from engine import gate
+    mark = "UFC_PICK_MARK"
+    board = {"status": "card", "event_date": "2026-08-23",
+             "weighins": [{"fighter": "free fact"}],
+             "picks": [{"fighter": mark, "odds": -140, "stake_units": 0.6}],
+             "pass_list": [{"fighter": mark}],
+             "near_misses": [{"fighter": mark}]}
+    out = gate.redact(board, "ufc.json")
+    assert mark not in json.dumps(out), "the UFC card is public again"
+    # And the free half of that board must survive — the card, the date
+    # and the weigh-ins are facts, and sealing them would make the page
+    # useless to the visitor it is meant to attract.
+    assert out.get("event_date") == "2026-08-23"
+    assert out.get("weighins"), "the free facts went with the picks"
+
+
+def test_a_staked_row_under_any_key_is_reported():
+    """The general form. Key-stripping only protects boards whose keys
+    somebody anticipated, and the next board will name its rows something
+    else again — so this asks a question that does not depend on the
+    name: does the list carry a STAKE?"""
+    from engine import gate
+    hole = {"whatever_we_call_it_next": [{"who": "x", "stake_units": 0.5}]}
+    assert gate.leaks(hole, "ufc.json") == ["whatever_we_call_it_next"]
+    # A gated key is not a leak, a free file is a decision, and a list
+    # with no stake on it is not a pick list.
+    assert gate.leaks({"recommendations": [{"stake_units": 1}]}, "ufc.json") == []
+    assert gate.leaks(hole, "record.json") == []
+    assert gate.leaks({"games": [{"home": "TOR"}]}, "ufc.json") == []
+
+
+def test_the_audit_is_runnable_on_the_box():
+    """A guard that only runs in CI does not protect a board added on the
+    server. `--paywall-audit` reads the real public path."""
+    src = _read("launch.py") if "_read" in dir() else open(
+        os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _paywall_audit_cli("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert "gate.leaks(" in body or "_gate.leaks(" in body
+    assert '"web" / "data"' in body, "it audits somewhere other than the public path"
+
+
 def test_every_wholly_paid_file_has_an_entitled_path_to_it():
     """THE SWEEP THE LAST BUG EARNED. `/api/<sport>/recommendations`
     serving the redacted board to subscribers was found by asking whether

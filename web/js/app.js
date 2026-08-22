@@ -19361,7 +19361,10 @@ async function renderUFC() {
   }, 10000);
   let d = null;
   try {
-    const res = await boardFetch("data/ufc.json?t=" + Date.now());
+    // Through paidFetch: gating UFC's pick keys without this would fix
+    // the leak by breaking the page for the people who pay for it, which
+    // is the mistake /api/<sport>/recommendations made for months.
+    const res = await paidFetch("ufc.json");
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d) {
