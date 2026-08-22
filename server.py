@@ -508,6 +508,61 @@ _TLS_HINTED = False
 _SW_CACHE: dict = {}
 _SW_LOCK = threading.Lock()
 
+#: The serialized subscriber boards, reused until the file on disk moves.
+#:
+#: WHY THIS EXISTS. `/api/board/<name>` is the hot path — every signed-in
+#: page polls it every 30 seconds — and it was reading the board off
+#: disk, parsing it to a dict, and re-serializing that dict back to bytes
+#: ON EVERY REQUEST, only ever to send exactly what the file already
+#: contained. Measured 2026-08-22 against a board shaped like the real
+#: one (293 recommendations, 884 on the edge board, ~1.7 MB):
+#:
+#:     read + parse    29.4 ms
+#:     re-serialize    32.3 ms
+#:     per request     61.7 ms of pure CPU
+#:
+#: On one vCPU that is 21% of the core at a hundred subscribers and the
+#: WHOLE core at five hundred, for work whose answer is identical every
+#: time until the next rebuild sixty seconds later.
+#:
+#: Keyed by board name, so the table holds at most one entry per board
+#: that exists — six or seven — rather than growing with traffic. The
+#: stamp is the file's mtime and size, the same shape `sw_body` uses:
+#: a rebuild changes it, and nothing else has to remember to invalidate.
+#:
+#: THIS CACHES BYTES, NOT PERMISSION. The entitlement check still runs on
+#: every request, after this, exactly as before.
+_BOARD_CACHE: dict = {}
+_BOARD_LOCK = threading.Lock()
+
+
+def board_bytes(name: str):
+    """``(body, mtime)`` for a subscriber board, or ``(None, None)``."""
+    from engine import gate
+    path = gate.full_board_file(name)
+    if path is None:
+        return None, None
+    try:
+        st = path.stat()
+    except OSError:
+        return None, None
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _BOARD_LOCK:
+        hit = _BOARD_CACHE.get(name)
+        if hit is not None and hit[0] == stamp:
+            return hit[1], st.st_mtime
+    # Read OUTSIDE the lock: a cold read of a megabyte-and-a-half must
+    # not hold every other board's requests behind it, and two threads
+    # racing to fill the same entry cost one duplicated parse rather than
+    # a queue. The loser overwrites with an identical value.
+    payload = gate.full_board(name)
+    if payload is None:
+        return None, None
+    body = json.dumps(payload).encode()
+    with _BOARD_LOCK:
+        _BOARD_CACHE[name] = (stamp, body)
+    return body, st.st_mtime
+
 
 def _sw_shell(body: str, web: Path = WEB) -> list[Path]:
     """The files sw.js precaches, as paths on disk.
@@ -1416,22 +1471,31 @@ class Handler(BaseHTTPRequestHandler):
         may never have this", and the page renders a different thing for
         each.
         """
-        from engine import gate
+        # ENTITLEMENT FIRST, THEN THE FILE. This used to read and parse
+        # the whole board before asking who was calling, so an
+        # unauthenticated request cost a megabyte of disk and CPU to
+        # answer with 401. Nothing about that was exploitable — the board
+        # was never sent — but it made the cheapest request on the site
+        # the most expensive one to refuse, which is the wrong way round
+        # for a public endpoint.
+        #
+        # It also means a stranger can no longer learn which boards exist
+        # by watching 404 and 401 differ.
         A = _acct()
-        payload = gate.full_board(name)
-        if payload is None:
-            return self._send(404, b'{"error":"no such board"}', ".json")
         conn = A.connect()
         try:
             who = self._account(conn)
             if not self._entitled(conn, who):
-                body = {"error": "This board needs a subscription.",
-                        "signed_in": bool(who), "locked": True}
+                locked = {"error": "This board needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
                 return self._send(401 if not who else 402,
-                                  json.dumps(body).encode(), ".json")
+                                  json.dumps(locked).encode(), ".json")
         finally:
             conn.close()
-        return self._send(200, json.dumps(payload).encode(), ".json")
+        body, _mtime = board_bytes(name)
+        if body is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        return self._send(200, body, ".json")
 
     def _billing_get(self, path: str):
         from engine import billing as BI

@@ -428,6 +428,113 @@ def test_a_refused_request_does_not_extend_the_block():
     assert ok, "the refused hits extended the window — this is a lockout"
 
 
+# --- the subscriber board, which is the hot path -----------------------------
+def _bench_board(n=40):
+    """A board on disk under gate.FULL_DIR. Returns (name, path)."""
+    import json as _j
+    import os
+    from engine import gate
+    prop = {"player": "P", "market": "total_bases", "side": "OVER",
+            "line": 1.5, "odds": -115, "has_market": True,
+            "logs": [{"date": "2026-08-11", "value": 2}] * 12}
+    os.makedirs(gate.FULL_DIR, exist_ok=True)
+    path = gate.FULL_DIR / "zz_test_board.json"
+    path.write_text(_j.dumps({"date": "2026-08-22",
+                              "recommendations": [dict(prop)] * n}))
+    return "zz_test_board.json", path
+
+
+def test_the_board_is_not_reserialised_on_every_poll():
+    """THE HOT PATH. Every signed-in page polls /api/board every 30s, and
+    it used to read the file, parse it to a dict and re-serialize that
+    dict back to bytes per request — to send exactly what the file
+    already held. Measured 2026-08-22 on a board shaped like the real one
+    (~1 MB): 29.4 ms to parse, 32.3 ms to re-dump, 61.7 ms of CPU per
+    request. On one vCPU that is the WHOLE core at five hundred
+    subscribers, for an answer identical until the next rebuild."""
+    import time
+    import server as S
+    name, path = _bench_board(400)
+    try:
+        S._BOARD_CACHE.clear()
+        S.board_bytes(name)                       # warm
+        t0 = time.perf_counter()
+        for _ in range(200):
+            S.board_bytes(name)
+        per = (time.perf_counter() - t0) / 200
+    finally:
+        S._BOARD_CACHE.clear()
+        path.unlink(missing_ok=True)
+    assert per < 0.002, (
+        f"{per * 1000:.2f} ms per board request — the per-poll parse and "
+        f"re-serialize is back")
+
+
+def test_a_rebuild_invalidates_the_cached_board():
+    """Cheap and stale is worse than slow and right: the launcher
+    rewrites these every 60 seconds and subscribers are paying for the
+    new numbers."""
+    import json as _j
+    import server as S
+    name, path = _bench_board(4)
+    try:
+        S._BOARD_CACHE.clear()
+        first, _ = S.board_bytes(name)
+        doc = _j.loads(path.read_text())
+        doc["date"] = "2026-08-23"
+        # A rewrite in the same clock tick must still be seen: the stamp
+        # is mtime AND size, and this changes neither reliably on its own.
+        path.write_text(_j.dumps(doc) + " ")
+        second, _ = S.board_bytes(name)
+    finally:
+        S._BOARD_CACHE.clear()
+        path.unlink(missing_ok=True)
+    assert b"2026-08-23" in second and first != second, \
+        "a rebuilt board was served from the cache"
+
+
+def test_the_cache_holds_one_entry_per_board_not_per_caller():
+    """Keyed by board name, so it is bounded by how many boards exist —
+    six or seven — rather than growing with traffic. That is the
+    difference between this and the rate table that had to be capped."""
+    import server as S
+    name, path = _bench_board(4)
+    try:
+        S._BOARD_CACHE.clear()
+        for _ in range(50):
+            S.board_bytes(name)
+        n = len(S._BOARD_CACHE)
+    finally:
+        S._BOARD_CACHE.clear()
+        path.unlink(missing_ok=True)
+    assert n == 1, f"{n} cache entries for one board"
+
+
+def test_caching_bytes_did_not_cache_permission():
+    """The entitlement check must still run per request. A cache that
+    also remembered WHO was allowed would hand a paid board to the next
+    caller, which is the paywall failing in the quietest possible way."""
+    body = SERVER[SERVER.index("def _api_board("):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "board_bytes(" in body, "the endpoint no longer uses the cache"
+    assert "self._entitled(" in body, "the entitlement check is gone"
+    # And it is checked BEFORE the board is sent, not after.
+    assert body.index("self._entitled(") < body.index("self._send(200"), \
+        "the board is sent before entitlement is decided"
+
+
+def test_the_board_name_still_cannot_climb_out_of_its_directory():
+    """`name` comes from a URL. The check moved into gate.full_board_file
+    when the cache needed the path as well as the contents — one copy,
+    two callers, rather than a second place to get this wrong."""
+    import server as S
+    from engine import gate
+    for bad in ("../../etc/passwd", "..%2fsecret.json", "/etc/passwd",
+                ".hidden.json", "no_suffix", ""):
+        assert gate.full_board_file(bad) is None, bad
+        assert S.board_bytes(bad)[0] is None, bad
+
+
 def test_the_stripe_webhook_is_not_rate_limited():
     """It is authenticated by signature already, and a retry burst during
     an incident is exactly when dropping payment events costs most."""

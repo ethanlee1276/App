@@ -396,12 +396,14 @@ def unsealed(web_data=None) -> list:
     return bad
 
 
-def full_board(name: str) -> dict | None:
-    """The subscriber's copy, read from outside the web root.
+def full_board_file(name: str) -> "Path | None":
+    """The file a board name refers to, or None if it refers to no file.
 
-    Refuses anything that is not a bare filename. `name` arrives from a
-    URL, and a path that can climb out of FULL_DIR turns an entitlement
-    check into an arbitrary file read.
+    THE WHOLE SECURITY CHECK, in one place, because there are now two
+    callers: `full_board` below and the byte cache in server.py. `name`
+    arrives from a URL, and a path that can climb out of FULL_DIR turns
+    an entitlement check into an arbitrary file read — so a second copy
+    of this is a second place for that to be got wrong.
     """
     label = str(name or "")
     if not label.endswith(".json") or Path(label).name != label:
@@ -414,6 +416,17 @@ def full_board(name: str) -> dict | None:
         # still point wherever it liked.
         if path.resolve().parent != FULL_DIR.resolve():
             return None
+    except OSError:
+        return None
+    return path
+
+
+def full_board(name: str) -> dict | None:
+    """The subscriber's copy, read from outside the web root."""
+    path = full_board_file(name)
+    if path is None:
+        return None
+    try:
         with open(path) as fh:
             return json.load(fh)
     except (OSError, ValueError):

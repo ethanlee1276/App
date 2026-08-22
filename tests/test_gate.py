@@ -311,11 +311,26 @@ def _server() -> str:
 
 
 def test_the_board_endpoint_checks_entitlement_before_it_reads():
+    """THE ORDER, which is what the name has always claimed and what the
+    code did not do until 2026-08-22: it read and parsed the whole board
+    — a megabyte — and then asked who was calling. Nothing was ever sent
+    to the wrong person, but refusing a stranger was the most expensive
+    request on the site.
+
+    Asserted as positions rather than by naming the reader function: the
+    read went through `gate.full_board` and now goes through the byte
+    cache in server.py, and this test is about neither of those."""
     src = _server()
     assert '/api/board/' in src, "nothing routes to the subscriber boards"
-    body = src[src.index("def _api_board"):][:1800]
-    assert "self._entitled(" in body
-    assert "gate.full_board(" in body
+    body = src[src.index("def _api_board"):]
+    body = body[:body.index("\n    def ", 1)]
+    assert "self._entitled(" in body, "the entitlement check is gone"
+    reads = min(i for i in (body.find("board_bytes("),
+                            body.find("gate.full_board(")) if i > 0)
+    assert body.index("self._entitled(") < reads, \
+        "the board is read from disk before the caller is identified"
+    assert body.index("self._entitled(") < body.index("self._send(200"), \
+        "the board is SENT before entitlement is decided"
 
 
 def test_the_flag_is_checked_before_the_account_is():
