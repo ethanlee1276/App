@@ -95,6 +95,26 @@ PAID_KEYS = (
     "picks",
     "pass_list",
     "near_misses",
+    # MLB'S OWN NAMES FOR THE SAME TWO THINGS, found by looking for the
+    # UFC hole's siblings. `near_miss` rows carry player, side, line,
+    # odds, book, edge, hit_prob and grade — that is a pick with a
+    # sentence about why it was not taken, which is still the product.
+    # `priced_out` is worse: it is filtered straight out of
+    # `recommendations`, so its rows ARE recommendation rows.
+    "near_miss",
+    "priced_out",
+    # TONIGHT'S OPEN POSITIONS. Every row carries player, market, side,
+    # line, the price we took and the stake — which is tonight's card
+    # with "already placed" written on it, and worth exactly as much to
+    # somebody who has not paid.
+    #
+    # It costs a free visitor nothing: renderLivePicks only runs inside
+    # the main board render, and the main board is behind the wall
+    # already, so the only reader losing these is a `curl` of the public
+    # file. The Record page — settled picks, graded, in the past — is
+    # untouched and stays free, because that is the evidence, not the
+    # product.
+    "live_picks",
 )
 
 #: Files that are paid in their entirety — no free half to preserve.
@@ -410,18 +430,25 @@ def unsealed(web_data=None) -> list:
     return bad
 
 
-#: Fields that only ever appear on a row we are telling someone to bet.
-#: A list of dicts carrying one of these IS a pick list, whatever the key
-#: is called.
-_STAKE_FIELDS = ("stake_units", "stake_fraction", "units", "stake")
+#: Fields that only ever appear on a row carrying OUR OPINION of a
+#: market. A stake is the obvious one; the model's own probability and
+#: its disagreement with the price are the same product with the bet
+#: size left off.
+#:
+#: THE FIRST CUT OF THIS LOOKED ONLY FOR A STAKE, and it missed
+#: `near_miss` — ten props a night with player, side, line, book price,
+#: edge and hit probability, and no stake because we did not bet them.
+#: A reader does not need our stake to use our number.
+_PRODUCT_FIELDS = ("stake_units", "stake_fraction", "units", "stake",
+                   "edge", "hit_prob", "ev")
 
 
 def _looks_staked(value) -> bool:
-    """Is this value a list of rows that carry a stake?"""
+    """Is this a list of rows carrying our opinion of a market?"""
     if not isinstance(value, list) or not value:
         return False
     for row in value[:8]:
-        if isinstance(row, dict) and any(f in row for f in _STAKE_FIELDS):
+        if isinstance(row, dict) and any(f in row for f in _PRODUCT_FIELDS):
             return True
     return False
 

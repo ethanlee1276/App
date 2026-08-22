@@ -407,6 +407,52 @@ def test_ufcs_picks_are_gated():
     assert out.get("weighins"), "the free facts went with the picks"
 
 
+def test_the_near_miss_and_priced_out_lists_are_gated():
+    """UFC's hole had siblings on the MLB board, found by looking for
+    them. `near_miss` rows carry player, side, line, book price, edge and
+    hit probability — a pick with a sentence about why it was not taken,
+    which is still the product. `priced_out` is filtered straight out of
+    `recommendations`, so its rows ARE recommendation rows.
+
+    Neither carried a stake, which is why the first version of the audit
+    walked past `near_miss`: a reader does not need our stake to use our
+    number."""
+    from engine import gate
+    mark = "NEAR_MISS_MARK"
+    board = {"date": "2026-08-22",
+             "near_miss": [{"player": mark, "line": 1.5, "odds": -115,
+                            "edge": 0.021, "hit_prob": 0.55}],
+             "priced_out": [{"player": mark, "odds": -115, "edge": 0.03}],
+             "gate_census": {"recommended": 1, "no_real_price": 110},
+             "games": [{"home": "TOR", "away": "NYY"}]}
+    out = gate.redact(board, "mlb_recommendations.json")
+    assert mark not in json.dumps(out), "the near-misses are public again"
+    # The funnel counts and the schedule are facts and stay free — they
+    # are what makes the page worth loading without an account.
+    assert out.get("gate_census"), "the census went with them"
+    assert out.get("games"), "the schedule went with them"
+
+
+def test_tonights_open_positions_are_gated():
+    """live_picks rows carry player, market, side, line, the price we
+    took and the stake. That is tonight's card with "already placed"
+    written on it, and worth the same to somebody who has not paid.
+
+    It costs a free visitor nothing — renderLivePicks only runs inside
+    the main board render, which is behind the wall already — so the only
+    reader losing them is a curl of the public file. The Record page,
+    which is settled picks in the past, is FREE and unaffected: that is
+    the evidence, not the product."""
+    from engine import gate
+    mark = "OPEN_POSITION_MARK"
+    board = {"live_picks": [{"player": mark, "odds": -138,
+                             "stake_units": 0.56, "status": "open"}]}
+    assert mark not in json.dumps(gate.redact(board, "mlb_recommendations.json"))
+    # And the free record is untouched by any of this.
+    assert gate.is_free("record.json")
+    assert mark in json.dumps(gate.redact(board, "record.json"))
+
+
 def test_a_staked_row_under_any_key_is_reported():
     """The general form. Key-stripping only protects boards whose keys
     somebody anticipated, and the next board will name its rows something
@@ -420,6 +466,11 @@ def test_a_staked_row_under_any_key_is_reported():
     assert gate.leaks({"recommendations": [{"stake_units": 1}]}, "ufc.json") == []
     assert gate.leaks(hole, "record.json") == []
     assert gate.leaks({"games": [{"home": "TOR"}]}, "ufc.json") == []
+    # And the widened form: our opinion with no stake on it is still ours.
+    assert gate.leaks({"whatever": [{"player": "x", "edge": 0.02}]},
+                      "ufc.json") == ["whatever"]
+    assert gate.leaks({"whatever": [{"player": "x", "hit_prob": 0.55}]},
+                      "ufc.json") == ["whatever"]
 
 
 def test_the_audit_is_runnable_on_the_box():
