@@ -1,4 +1,4 @@
-/* Qellys Books — app shell.
+/* Qellys Book — app shell.
  *
  * A small client-side router over three views (Recommended / Trending /
  * Players) sharing one data fetch. Rendering helpers draw the pick cards,
@@ -12677,12 +12677,12 @@ function paywallHTML(rec, status) {
   <div class="pw">
     <header class="pw-top">
       <span class="pw-brand">${brandMarkHTML(30)}
-        <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+        <span class="pw-brand-words">QELLYS <b>BOOK</b></span></span>
       ${status && status.instagram
         ? `<a class="pw-ig" href="${escapeAttr(status.instagram)}"
              target="_blank" rel="noopener noreferrer"
-             title="Qellys Books on Instagram"
-             aria-label="Qellys Books on Instagram">${igIcon()}</a>`
+             title="Qellys Book on Instagram"
+             aria-label="Qellys Book on Instagram">${igIcon()}</a>`
         : ""}
       ${status && status.signed_in
         ? `<span class="pw-who" title="${escapeHtml(status.email || "")}">
@@ -12696,7 +12696,7 @@ function paywallHTML(rec, status) {
       <h1 class="pw-h1">Data. <em>Edge.</em> Receipts.</h1>
       <p class="pw-sub">Professional sports intelligence. Real-time edges.
         Every call graded in public.</p>
-      <p class="pw-lede">Qellys Books is one analytics platform for serious
+      <p class="pw-lede">Qellys Book is one analytics platform for serious
         bettors, fantasy players and market traders — the model’s
         estimates, the reasoning behind each one, and a public record of
         how they turned out.</p>
@@ -12781,7 +12781,7 @@ function paywallHTML(rec, status) {
     <footer class="pw-foot">
       <div class="pw-foot-top">
         <span class="pw-brand small">${brandMarkHTML(22)}
-          <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+          <span class="pw-brand-words">QELLYS <b>BOOK</b></span></span>
         <div class="pw-secure">
           <div class="pw-secure-head">${iconMark("lock", 13)} Secure checkout</div>
           <p>Payment is taken on Stripe’s own page over an encrypted
@@ -12792,7 +12792,7 @@ function paywallHTML(rec, status) {
       </div>
       <p class="pw-legal">21+ · Not betting advice · Gambling problem?
         Call <b>1-800-GAMBLER</b></p>
-      <p class="pw-copy">© ${new Date().getFullYear()} Qellys Books ·
+      <p class="pw-copy">© ${new Date().getFullYear()} Qellys Book ·
         <a href="terms.html">Terms</a> · <a href="privacy.html">Privacy</a></p>
     </footer>
   </div>`;
@@ -12828,10 +12828,22 @@ function igIcon(size = 17) {
 }
 
 function igMount() {
-  const url = _pwStatus && _pwStatus.instagram;
-  const el = document.getElementById("nav-ig");
+  barLink("nav-ig", _pwStatus && _pwStatus.instagram);
+  // The Discord invite rides the same wiring and the opposite rule: the
+  // server sends `discord` ONLY to a caller it has decided is entitled,
+  // so for everybody else there is no link to mount and the icon stays
+  // hidden. Nothing here checks entitlement, because nothing here can be
+  // trusted to — the absence of the string IS the check.
+  barLink("nav-dc", _pwStatus && _pwStatus.discord);
+}
+
+/* Point one of the top bar's outbound icons at a link, or hide it.
+   Hidden is the default in the markup, so an install that has configured
+   neither ships neither, rather than shipping an icon that goes to "#". */
+function barLink(id, url) {
+  const el = document.getElementById(id);
   if (!el) return;
-  if (!url) { el.hidden = true; return; }
+  if (!url) { el.hidden = true; el.removeAttribute("href"); return; }
   el.href = url;
   el.hidden = false;
 }
@@ -13072,7 +13084,7 @@ function discordRoomsHTML() {
   return `
     <div class="dc-mock" aria-hidden="true">
       <div class="dc-mock-head">${iconMark("discord", 15)}
-        <b>QELLYS BOOKS</b></div>
+        <b>QELLYS BOOK</b></div>
       ${DISCORD_ROOMS.map(([group, rooms]) => `
         <div class="dc-mock-group">${escapeHtml(group)}</div>
         <ul class="dc-mock-list">${rooms.map((r) => `
@@ -13113,12 +13125,12 @@ function discordPageHTML(s, welcome) {
     ${welcome ? `
     <div class="dc-toast" role="status">
       <span class="dc-toast-ic">${iconMark("check", 16)}</span>
-      <div><b>Account created</b><span>Welcome to Qellys Books.</span></div>
+      <div><b>Account created</b><span>Welcome to Qellys Book.</span></div>
     </div>` : ""}
 
     <header class="dc-hero">
       ${welcome ? `<p class="dc-eyebrow">Welcome to</p>` : ""}
-      <h1 class="dc-h1">QELLYS <b>BOOKS</b></h1>
+      <h1 class="dc-h1">QELLYS <b>BOOK</b></h1>
       ${welcome
         ? `<p class="dc-lede">Your account is all set. You’re in.</p>
            <p class="dc-sub">The next step is the room where the picks get
@@ -13182,8 +13194,8 @@ function discordPageHTML(s, welcome) {
     <footer class="dc-foot">
       <div>
         <span class="pw-brand small">${brandMarkHTML(22)}
-          <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
-        <p>© ${year} Qellys Books. All rights reserved.</p>
+          <span class="pw-brand-words">QELLYS <b>BOOK</b></span></span>
+        <p>© ${year} Qellys Book. All rights reserved.</p>
       </div>
       <div>
         <b>${icon("shield")} Your details stay yours</b>
@@ -13622,40 +13634,13 @@ async function renderBilling() {
          code for now — if you have one, enter it below.`
       : `Everything is free right now, so there is nothing to pay for. A code
          still works and starts its clock from the day you enter it.`}</p>`)
-    + discordHTML(s) + codeBoxHTML(codes);
-}
-
-/* The invite, and the ONE PLACE it is allowed to render.
-   ---------------------------------------------------------------------
-   The invite arrives on the status payload or it does not arrive at all;
-   the browser never holds it otherwise. `/api/billing/status` decides,
-   from the subscription, the comp list and any redeemed code.
-
-   It is still not a security boundary in the end — Discord decides who
-   gets in, an invite is a short string, and any member can paste it in a
-   group chat. What this buys is that it is never HANDED to a non-member,
-   which is the part we control. Rotate it in Discord if it spreads.
-
-   Renders nothing for everybody else, including on the paywall — which
-   mounts the same code box, and where the visitor is unentitled by
-   definition, since that is why the wall is up. */
-function discordHTML(s) {
-  // `s.discord` is present ONLY when the server decided this caller is
-  // entitled. There is nothing to check here beyond "did it send one" —
-  // the decision was made where it can be trusted.
-  const invite = s && s.discord;
-  if (!invite) return "";
-  return `
-    <div class="code-box disc-box">
-      <div class="code-head">${iconMark("inbox", 13)} The members’ Discord</div>
-      <p class="rank-help">Your subscription includes it. The same room for
-        every plan — there is no tier here, and there is no tier
-        there.</p>
-      <a class="btn primary disc-go" href="${escapeAttr(invite)}"
-         target="_blank" rel="noopener noreferrer">Open the Discord</a>
-      <p class="acct-note disc-note">Please keep the invite to yourself —
-        it is part of what a subscription pays for.</p>
-    </div>`;
+    // NO DISCORD BOX HERE ANY MORE. Ethan, 2026-08-22: "we can remove
+    // the discord button in the account tab." There are now two better
+    // places for it — the icon in the top bar, which is on every page,
+    // and the #discord page, which is what the welcome after paying
+    // lands on. A third copy on the account panel was the version
+    // somebody had to go looking for.
+    + codeBoxHTML(codes);
 }
 
 /* "Have a code?" — Ethan, 2026-08-20. Kept beside the subscribe control
@@ -13930,7 +13915,7 @@ function acctScreenHTML() {
       </span>
       <span class="acct-hero-words">Qellys <span>Book</span></span>
       <span class="acct-hero-tag">Priced by a model. Graded in public.</span>
-      <p class="acct-screen-sub acct-hero-sub">Sign in to Qellys Books —
+      <p class="acct-screen-sub acct-hero-sub">Sign in to Qellys Book —
         one account carries your bet log, your fantasy leagues and your
         subscription to every device you use.</p>
     </div>
@@ -19284,7 +19269,7 @@ function renderAbout() {
 
   host.innerHTML = `
     <div class="about-lede">
-      <p><strong>Qellys Books is one book for everything a sharp bettor keeps
+      <p><strong>Qellys Book is one book for everything a sharp bettor keeps
       open in ten tabs.</strong> Six leagues priced nightly by named models.
       A full fantasy football suite with its own draft room. Prediction-market
       intelligence. A live meme-coin radar. And underneath all of it, the one

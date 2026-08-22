@@ -4225,8 +4225,13 @@ html, body { overflow-x: clip; }
 /* An <a> in a row of <button>s: the anchor brings its own underline and
    inherits link colour, and without this it sits a pixel off its
    neighbours' baseline. */
-.nav-ig { text-decoration: none; color: inherit; }
+/* The two outbound icons. Anchors in a row of buttons: the anchor brings
+   its own underline and link colour, and `[hidden]` loses to
+   `.meta-ico { display: grid }` at equal specificity — so without the
+   second rule an icon can be marked hidden and still be on screen. */
+.nav-ig, .nav-dc { text-decoration: none; color: inherit; }
 .nav-ig[hidden] { display: none; }
+.nav-dc[hidden] { display: none; }
 .meta-ico svg { width: 17px; height: 17px; }
 .nav-hint { display: none; }
 
@@ -5869,12 +5874,28 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    Plain documents. Measure capped for reading rather than filling the
    window: legal text is the one thing on this site nobody skims, and a
    140-character line is where people lose their place. */
+/* The legal pages are STANDALONE DOCUMENTS, not app views. They carry no
+   sidebar, so they must not sit inside `.shell` — that is a grid whose
+   first column is 240px wide and reserved for one. With no sidebar to
+   fill it, <main> became the first grid item and the entire Terms of
+   Service rendered in a strip down the left of the screen. It was live
+   like that. */
+.legal-main { display: block; width: 100%; }
 .legal { max-width: var(--measure); margin: 32px auto 64px;
   padding: 0 20px; }
 .legal h1 { font-size: var(--fs-2xl); margin-bottom: 4px; }
 .legal h2 { font-size: var(--fs-lg); margin: 28px 0 8px; }
 .legal p, .legal li { font-size: var(--fs-sm); line-height: var(--lh-body);
   color: var(--text-dim); }
+/* IN-BODY LINKS. `.legal-back a` covered the "← Back" link at the foot
+   and nothing covered the ones inside the prose, so the two cross-links
+   to the Privacy Policy in §1 of the Terms rendered at #0000EE — on the
+   page Ethan was looking at when he reported the layout. Third time this
+   default has surfaced; it surfaces wherever a new surface forgets, and
+   the answer stays "name the surface" rather than a base rule (see
+   tests/test_linkcolor.py for why). */
+.legal a { color: var(--brand-2); text-decoration: underline; }
+.legal a:hover { color: var(--brand); }
 .legal li { margin: 5px 0; }
 .legal-date { color: var(--text-mute); font-size: var(--fs-xs); }
 .legal-draft { padding: 12px 14px; margin-bottom: 24px;

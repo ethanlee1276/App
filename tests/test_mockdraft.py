@@ -558,7 +558,7 @@ def test_there_is_no_opposing_defence_panel():
 
 
 def test_no_confidence_score_and_no_lock():
-    """The render's footer read "QELLYS BOOKS CONFIDENCE: 9.2/10 — LOCK".
+    """The render's footer read "QELLYS BOOK CONFIDENCE: 9.2/10 — LOCK".
     The site's own standing copy is that every number here is a
     probability and not a promise, and "LOCK" is the exact word that
     sentence exists to keep off the page. There is no fitted confidence

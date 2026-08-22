@@ -3,26 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Privacy Policy — Qellys Books</title>
+  <title>Privacy Policy — Qellys Book</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-<div class="shell">
-<main>
+<!-- NO .shell WRAPPER. `.shell` is the app's two-column grid —
+     `240px minmax(0, 1fr)`, sized for the sidebar. These pages have
+     no sidebar, so <main> became the FIRST grid item and rendered
+     inside the 240px column: the whole Terms of Service in a strip
+     down the left of a 1900px screen, with the rest of the page
+     empty. Live and public that way until Ethan sent a screenshot,
+     2026-08-22. 404.html and maintenance.html never used it and are
+     the pattern here. -->
+<main class="legal-main">
   <div class="legal">
-    <p class="legal-draft"><b>DRAFT — written from the database schema and
-      not yet reviewed by a lawyer.</b> Every table this Service creates is
-      listed in §2, by name and by column, because a privacy policy that
-      describes a generic web app is a privacy policy nobody checked. The
-      factual half is therefore right; the rights sections (§8) follow
-      CCPA and GDPR practice and should be read by a Michigan attorney
-      before this site has a large number of subscribers. The items marked
-      <span class="legal-todo">like this</span> need a registered business
-      and a real contact address before launch.</p>
+    
 
     <h1>Privacy Policy</h1>
-    <p class="legal-date">Last updated 21 August 2026</p>
+    <p class="legal-date">Last updated 22 August 2026</p>
 
     <h2>1. The short version</h2>
     <ul>
@@ -164,7 +163,7 @@
       consent to.</p>
 
     <h2>6. Who else sees it</h2>
-    <p>Three parties, each because they have to be involved, and each
+    <p>Each of these because they have to be involved, and each
       receiving the minimum:</p>
     <ul>
       <li><b>Stripe, Inc.</b> — if you subscribe. They receive your email
@@ -172,9 +171,27 @@
         take the payment and send you a receipt. They hold the card
         details we deliberately never see. Stripe’s privacy policy governs
         what they do with it.</li>
-      <li><b>Our hosting provider</b> — the server this Service runs on.
-        They hold the disk the database sits on. <span class="legal-todo"
-        >[Name the provider once it is settled.]</span></li>
+      <li><b>DigitalOcean, LLC</b> — our hosting provider. The
+        Service runs on a virtual server they operate, so they hold the
+        disk the database sits on. They do not use it; they house it.
+        Their privacy policy governs what they do as a provider.</li>
+
+      <li><b>Cloudflare, Inc.</b> — every request to this site passes
+        through their network before it reaches our server. That is what
+        provides the HTTPS certificate, absorbs traffic floods and blocks
+        automated abuse. To do it they necessarily see the same things
+        our own logs see — your IP address, the page requested, your
+        browser’s user-agent string — and they terminate the encrypted
+        connection at their edge, which means they can see the contents
+        of requests in transit. We use their standard proxy and their
+        privacy policy governs what they do with it. We do not run any
+        Cloudflare analytics or tracking product.</li>
+
+      <li><b>Backblaze, Inc.</b> — encrypted backups of the database are
+        copied to their B2 storage service so that a failed disk is not
+        the end of your account. The backup contains the same data
+        described in §2 and nothing more. It is stored in a private
+        bucket that only we can read.</li>
       <li><b>Discord</b> — only if you choose to join our server. We do
         not pass them anything about you: you follow an invite and they
         see whatever your own Discord account shows them. We can see who
@@ -277,14 +294,33 @@
       without undue delay, and comply with applicable breach-notification
       law.</p>
 
-    <h2>11. Do Not Track</h2>
+    <h2>11. Do Not Track, and Global Privacy Control</h2>
     <p>We do not track you, so there is nothing for a Do Not Track signal
-      to switch off. We honour it by construction rather than by policy.</p>
+      to switch off. We honour it by construction rather than by
+      policy.</p>
+    <p>The same goes for the <b>Global Privacy Control</b> signal. Under
+      California law a GPC signal is a request to opt out of the sale or
+      sharing of personal information. We do not sell or share personal
+      information and never have, so there is no sale to opt out of and
+      the signal changes nothing about how we treat you. We are saying
+      that plainly rather than staying silent, because silence on this
+      point is usually the tell.</p>
 
-    <h2>12. Data location</h2>
-    <p>The Service and its database are operated in the United States. If
-      you use it from elsewhere, your information is processed in the
+    <h2>12. Where your data is, and where it travels</h2>
+    <p>The Service, its database and its backups are operated in the
+      <b>United States</b>. If you use the Service from outside the US,
+      your information is transferred to and processed in the US, where
+      privacy law differs from the law where you live. By using the
+      Service you understand that.</p>
+    <p><b>Requests reach us through a global network.</b> Cloudflare
+      operates data centres worldwide and routes each request through the
+      one nearest you, so the request itself — your IP address, the page
+      you asked for, your browser’s user-agent — may pass through a
+      Cloudflare facility outside the US before arriving at our server.
+      The stored data does not: the database and its backups stay in the
       US.</p>
+    <p>We do not currently offer a region choice. If that changes, this
+      section changes with it.</p>
 
     <h2>13. Changes to this policy</h2>
     <p>If this policy changes in a way that materially affects you, we
@@ -292,16 +328,22 @@
       before it takes effect. We will not quietly change the date.</p>
 
     <h2>14. Contact</h2>
-    <p class="legal-todo">[Add the real support address and the
-      registered business address before taking a live payment. A
-      published contact is required to exercise any of the rights in §8,
-      and by Stripe.]</p>
-    <p>Privacy questions: <span class="legal-todo">[privacy@qellysbook.com
-      — create this mailbox]</span></p>
+    <p>To ask what we hold, to get a copy, to correct it, or to have it
+      deleted — anything in §8 — write to us. We will not ask you why.</p>
+    <p><b>Privacy questions:</b>
+      <a href="mailto:privacy@qellysbook.com">privacy@qellysbook.com</a></p>
+    <p><b>Anything else:</b>
+      <a href="mailto:support@qellysbook.com">support@qellysbook.com</a></p>
+    <p><b>Who is responsible for your data:</b> Ethan Lee, sole
+      proprietor, trading as Qellys Book, operator of qellysbook.com.
+      <span class="legal-todo">[Postal address to be added.]</span></p>
+    <p>We answer email, and a request under §8 gets an answer within 30
+      days. If you are in the EU or UK you also have the right to complain
+      to your national data protection authority; we would rather you
+      came to us first.</p>
 
-    <p class="legal-back"><a href="index.html">← Back to Qellys Books</a></p>
+    <p class="legal-back"><a href="index.html">← Back to Qellys Book</a></p>
   </div>
 </main>
-</div>
 </body>
 </html>

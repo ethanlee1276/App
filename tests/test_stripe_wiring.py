@@ -414,7 +414,7 @@ def test_an_existing_price_that_disagrees_is_reported_and_not_edited():
 
 def test_the_product_is_matched_on_metadata_and_never_on_its_name():
     """A name match would attach us to whatever somebody else called
-    "Qellys Books", and renaming a product — allowed, harmless — would
+    "Qellys Book", and renaming a product — allowed, harmless — would
     make setup create a second one."""
     src = _read("engine", "stripeset.py")
     fn = src[src.index("def find_product("):]

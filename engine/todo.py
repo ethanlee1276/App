@@ -430,16 +430,51 @@ def _legal_blanks() -> Item:
         return Item("config", "legal pages complete", DONE,
                     "no placeholders left in the Terms or the Privacy Policy")
     return Item("config", "legal pages complete", TODO,
-                "placeholders still published (" + ", ".join(hits) + ") — "
-                "the entity name and a working support address are what "
-                "Stripe asks for and what a data request needs",
+                "placeholders still published (" + ", ".join(hits) + ")",
                 "search web/terms.html and web/privacy.html for legal-todo")
+
+
+def _legal_mailboxes() -> Item:
+    """The two addresses the legal pages publish have to receive mail.
+
+    NOT CHECKABLE FROM HERE and deliberately reported as unknown rather
+    than assumed: this box cannot send mail to itself and find out. It is
+    on the list because a published contact that bounces is worse than no
+    contact — §8 of the Privacy Policy and §16's "try us first" step both
+    route through it, and Stripe asks for one that works.
+    """
+    return Item("config", "support@ and privacy@ receive mail", UNKNOWN,
+                "published in Terms §18 and Privacy §14; this machine "
+                "cannot test a mailbox",
+                "send a message to support@qellysbook.com from your phone "
+                "and check it arrives")
+
+
+def _legal_review() -> Item:
+    """Whether a lawyer has read the judgement clauses.
+
+    The factual half of both documents is checked against the code —
+    what is collected, stored, charged and refunded. The judgement half
+    is not fact and cannot be: limitation of liability (§12), the
+    arbitration clause and its opt-out (§16), governing law. Those are
+    drafted to ordinary US consumer-software practice, which is a
+    reasonable place to start and is not the same as advice.
+
+    Tracked here because it used to be a banner on the pages themselves,
+    and a live binding contract headed DRAFT is its own problem.
+    """
+    return Item("config", "legal pages reviewed by an attorney", UNKNOWN,
+                "the factual half is checked against the code; §12 and "
+                "§16 are judgement and were drafted to ordinary practice",
+                "a Michigan attorney, before the subscriber count gets "
+                "interesting")
 
 
 def config_items(env=None) -> list[Item]:
     """The settings whose absence is silent and expensive."""
     env = env if env is not None else os.environ
-    out = [_cloudflare_list(), _legal_blanks()]
+    out = [_cloudflare_list(), _legal_blanks(), _legal_mailboxes(),
+           _legal_review()]
 
     if env.get("QB_BACKUP_REMOTE"):
         out.append(Item("config", "QB_BACKUP_REMOTE", DONE,

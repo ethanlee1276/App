@@ -3,32 +3,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Terms of Service — Qellys Books</title>
+  <title>Terms of Service — Qellys Book</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-<div class="shell">
-<main>
+<!-- NO .shell WRAPPER. `.shell` is the app's two-column grid —
+     `240px minmax(0, 1fr)`, sized for the sidebar. These pages have
+     no sidebar, so <main> became the FIRST grid item and rendered
+     inside the 240px column: the whole Terms of Service in a strip
+     down the left of a 1900px screen, with the rest of the page
+     empty. Live and public that way until Ethan sent a screenshot,
+     2026-08-22. 404.html and maintenance.html never used it and are
+     the pattern here. -->
+<main class="legal-main">
   <div class="legal">
-    <p class="legal-draft"><b>DRAFT — written from what the software
-      actually does, and not yet reviewed by a lawyer.</b> Every factual statement
-      below is checked against the code — what is collected, what is
-      stored, what is charged, what is refunded. The parts that are legal
-      judgement rather than fact (limitation of liability, arbitration,
-      governing law) are drafted to ordinary industry practice and should
-      be read by a Michigan attorney before this site has a large number
-      of paying subscribers. The items marked <span class="legal-todo"
-      >like this</span> cannot be filled in from the code — they need a
-      registered business and a real contact address.</p>
+    
 
     <h1>Terms of Service</h1>
-    <p class="legal-date">Last updated 21 August 2026</p>
+    <p class="legal-date">Last updated 22 August 2026</p>
 
     <h2>1. Who we are, and what this agreement is</h2>
     <p>These Terms of Service (the “Terms”) are a binding agreement
-      between you and <span class="legal-todo">[LEGAL ENTITY NAME]</span>
-      (“Qellys Books”, “we”, “us”), operator of
+      between you and <b>Ethan Lee</b>, an individual doing business as
+      “Qellys Book”
+      (“we”, “us”), operator of
       <b>qellysbook.com</b> and the software served from it (the
       “Service”).</p>
     <p>By creating an account, subscribing, or using the Service, you
@@ -36,7 +35,7 @@
       Policy</a>. If you do not accept them, do not use the Service.</p>
 
     <h2>2. What the Service is — and what it is not</h2>
-    <p>Qellys Books publishes statistical models and analysis about
+    <p>Qellys Book publishes statistical models and analysis about
       sports and other public markets. It is an <b>information and
       analytics tool</b>, sold as a software subscription.</p>
     <p><b>We do not take bets. We do not accept wagers.</b> Specifically,
@@ -339,36 +338,124 @@
     <p><b>Try us first.</b> Before starting any formal proceeding, email
       us a description of the dispute and give us 30 days to resolve it.
       Most things are a misunderstanding and a refund.</p>
-    <p class="legal-todo">[Arbitration and class-action waiver — a lawyer
-      should decide whether to include one, and draft it if so. It is
-      standard in US consumer software terms and it is also the clause
-      most often struck down when drafted badly. Left out deliberately
-      rather than copied from another company’s site.]</p>
-    <p>If no arbitration clause applies, any dispute will be brought in
-      the state or federal courts located in Michigan, and both parties
-      consent to that jurisdiction. Nothing here prevents either party
-      from bringing a claim in small-claims court.</p>
+    <h3>16.1 Binding arbitration</h3>
+    <p><b>If we cannot resolve a dispute in those 30 days, you and we
+      agree that it will be settled by binding individual arbitration
+      rather than in court</b>, except as stated below. This is drafted to
+      ordinary practice for US consumer software and it takes away rights
+      you would otherwise have, so it is set out in full rather than
+      folded into a paragraph.</p>
+    <ul>
+      <li><b>What it covers.</b> Any dispute, claim or controversy arising
+        out of or relating to these Terms, the Service, or your
+        subscription — including how it was advertised, charged or
+        cancelled, and including claims that arose before you agreed to
+        these Terms.</li>
+      <li><b>Who runs it.</b> The American Arbitration Association, under
+        its Consumer Arbitration Rules, which are published at adr.org.
+        A single arbitrator decides. The arbitrator may award the same
+        individual relief a court could.</li>
+      <li><b>Where.</b> By written submission or telephone unless the
+        arbitrator decides an in-person hearing is needed, in which case
+        it will be held in the county where you live, or somewhere else
+        we both agree.</li>
+      <li><b>Who pays.</b> Where the AAA Consumer Rules require us to pay
+        the filing and arbitrator fees, we will. If your claim is for
+        $10,000 or less, we will pay those fees regardless, unless the
+        arbitrator finds the claim was frivolous.</li>
+      <li><b>Individually, not as a class.</b> <b>You and we each waive
+        the right to bring or take part in a class, collective,
+        consolidated or representative action</b>, and the arbitrator may
+        not consolidate more than one person’s claims. If this sentence
+        is held unenforceable as to a particular claim, that claim — and
+        only that claim — leaves arbitration and goes to court.</li>
+    </ul>
+
+    <h3>16.2 What is not covered</h3>
+    <ul>
+      <li><b>Small claims.</b> Either of us may bring an individual claim
+        in small-claims court instead, if it qualifies.</li>
+      <li><b>Injunctions over intellectual property.</b> Either of us may
+        ask a court for an injunction over misuse of intellectual property
+        without going through arbitration first.</li>
+      <li><b>Anything a law says cannot be arbitrated.</b> Nothing here
+        waives a right that cannot lawfully be waived, and nothing here
+        prevents you from reporting a concern to a government agency.</li>
+    </ul>
+
+    <h3>16.3 You can opt out, and it costs nothing</h3>
+    <p><b>You have 30 days from the day you first accept these Terms to
+      opt out of §16.1 and §16.2 entirely.</b> Email us — the address is
+      in §18 — with your account email and the words “arbitration opt-out”.
+      That is the whole procedure. Opting out has no effect on your
+      subscription, your price, or anything else about your account, and
+      we will not treat you differently for it. If you opt out, disputes
+      go to the Michigan courts named below.</p>
+    <p>If we ever change §16, the change does not apply to any dispute we
+      already knew about, and you may reject the change by emailing us
+      within 30 days of it being posted.</p>
+
+    <h3>16.4 Courts</h3>
+    <p>Where §16.1 does not apply — because you opted out, because the
+      claim is excluded by §16.2, or because a court holds the clause
+      unenforceable — any dispute will be brought in the state or federal
+      courts located in Michigan, and both parties consent to that
+      jurisdiction and venue.</p>
 
     <h2>17. General</h2>
-    <p>These Terms and the <a href="privacy.html">Privacy Policy</a> are
-      the entire agreement between us about the Service. If any provision
-      is held unenforceable, the rest stays in force. Our failure to
-      enforce a provision is not a waiver of it. You may not assign this
-      agreement; we may assign it to a successor in a merger or sale of
-      the business.</p>
+    <p>These Terms and the Privacy Policy are the entire agreement between
+      us about the Service, and they replace anything said before them.</p>
+    <p><b>Severability.</b> If any provision is held unenforceable, it is
+      limited or removed to the minimum extent necessary and the rest
+      stays in force.</p>
+    <p><b>No waiver.</b> Our failure to enforce a provision is not a
+      waiver of it, and a waiver given once does not apply the next
+      time.</p>
+    <p><b>Assignment.</b> You may not assign this agreement or your
+      account. We may assign it to a successor in a merger, acquisition or
+      sale of the business; your subscription terms travel with it
+      unchanged, and if we change the price afterwards §5.2 still
+      applies.</p>
+    <p><b>Notices, and how we contact you.</b> You agree that we may give
+      you notices electronically — by email to the address on your
+      account, or by posting them in the Service. Keep that address
+      current; a notice sent to a dead address still counts as given.
+      Notices to us go to the address in §18.</p>
+    <p><b>Events outside our control.</b> Neither of us is liable for a
+      failure to perform caused by something genuinely outside our
+      control — an outage at a provider we depend on, a network failure,
+      a natural disaster, a change in the law. This does not excuse us
+      from refunding money owed, and it does not extend to us simply
+      choosing to stop.</p>
+    <p><b>Feedback.</b> If you send us an idea or a suggestion, we may use
+      it without owing you anything for it. We are not asking you to send
+      confidential information and you should not.</p>
+    <p><b>Copyright complaints.</b> If you believe something on this
+      Service infringes your copyright, email us at the address in §18
+      with enough detail to identify the work and where it appears, and a
+      statement that you have a good-faith belief the use is not
+      authorised. We will look at it and remove anything that should not
+      be there.</p>
+    <p><b>Language and headings.</b> These Terms are written in English;
+      headings are for reading convenience and do not change the meaning
+      of what follows them.</p>
+    <p><b>No third-party beneficiaries.</b> This agreement is between you
+      and us. It gives nobody else the right to enforce it.</p>
 
     <h2>18. Contact</h2>
-    <p class="legal-todo">[Add the real support address and the
-      registered business address before taking a live payment. A
-      published contact address is a Stripe requirement, a consumer-law
-      requirement in several states, and the thing that makes §16’s “try
-      us first” mean anything.]</p>
-    <p>Support: <span class="legal-todo">[support@qellysbook.com — create
-      this mailbox]</span></p>
+    <p>Questions about these Terms, notices under §17, a copyright
+      complaint under §17, or the “try us first” step in §16 all go to the
+      same place:</p>
+    <p><b>Email:</b>
+      <a href="mailto:support@qellysbook.com">support@qellysbook.com</a></p>
+    <p><b>Operator:</b> Ethan Lee, sole proprietor, trading as Qellys
+      Book. <span class="legal-todo">[Postal address to be added.]</span></p>
+    <p>We answer email. If you have written to us about a dispute and had
+      no reply within 30 days, §16.1 treats that as the 30 days having
+      run.</p>
 
-    <p class="legal-back"><a href="index.html">← Back to Qellys Books</a></p>
+    <p class="legal-back"><a href="index.html">← Back to Qellys Book</a></p>
   </div>
 </main>
-</div>
 </body>
 </html>

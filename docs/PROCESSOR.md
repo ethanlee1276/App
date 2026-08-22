@@ -62,7 +62,7 @@ application was described tripped a filter that OddsJam's did not.
 
 ## The distinction the whole thing turns on
 
-**Qellys Books does not take wagers.** No bet is placed here, no money is
+**Qellys Book does not take wagers.** No bet is placed here, no money is
 held for a customer, no odds are offered, nothing is settled for anyone.
 It is a subscription to software and information. The tests in this repo
 enforce that — there is no bet slip, no balance, no "place bet", and

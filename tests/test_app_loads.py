@@ -43,7 +43,7 @@ NODE = shutil.which("node")
 REQUIRED = [
     "paywallHTML", "checkoutHTML", "renderPaywall", "renderCheckout",
     "paywallCheck", "paidReturnWait", "codeBoxHTML", "billPlansHTML",
-    "extLink", "brandMarkHTML", "iconMark", "escapeHtml", "discordHTML",
+    "extLink", "brandMarkHTML", "iconMark", "escapeHtml", "barLink",
 ]
 
 #: Top-level constants the pages read. A missing one is a page that

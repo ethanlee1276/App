@@ -151,7 +151,7 @@ fi
 
 clear 2>/dev/null || true
 cat <<BANNER
-${B}Qellys Books — going live${N}
+${B}Qellys Book — going live${N}
 
   This walks the whole thing. It does everything that can be done on this
   box, and stops when you need to do something in a browser.

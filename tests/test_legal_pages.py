@@ -95,7 +95,21 @@ def test_the_terms_cover_every_section_a_paid_service_needs():
             ("governing law", ["State of Michigan"]),
             ("dispute process", ["before starting any formal proceeding"]),
             ("severability", ["unenforceable"]),
-            ("contact", ["Support:"]),
+            # It was "Support:" when the section was one line. §18 now
+            # names the operator, the address and what the address is
+            # for, so the check moved to the thing that has to be there:
+            # a reachable mailbox, spelled out.
+            ("contact", ["support@qellysbook.com"]),
+            ("who the counterparty is", ["Ethan Lee"]),
+            # Added 2026-08-22 when the documents were completed.
+            ("arbitration", ["binding individual arbitration"]),
+            ("class action waiver", ["class, collective"]),
+            ("arbitration opt-out", ["arbitration opt-out", "30 days"]),
+            ("small claims carve-out", ["small-claims court"]),
+            ("electronic notices", ["notices electronically"]),
+            ("assignment", ["may not assign"]),
+            ("force majeure", ["outside our control"]),
+            ("copyright complaints", ["infringes your copyright"]),
     ):
         for needle in needles:
             assert needle.lower() in TERMS_TEXT.lower(), \
@@ -223,18 +237,64 @@ def test_the_policy_does_not_claim_we_avoid_something_we_do():
         f"the policy says one cookie and the server sets {names}"
 
 
-def test_the_unfinished_parts_are_marked_rather_than_faked():
-    """A registered entity name and a support mailbox cannot be invented
-    from the code, and inventing them would be worse than a blank: an
-    address nobody reads is how a consumer-rights request goes nowhere.
-    They are flagged so they cannot ship unnoticed.
+def test_no_document_still_calls_itself_a_draft():
+    """Completed 2026-08-22. Ethan supplied the counterparty (himself, as
+    a sole proprietor) and the contact addresses; the arbitration clause
+    and the remaining boilerplate were drafted to ordinary practice.
+
+    THE BANNER HAD TO GO WITH THEM. A binding contract headed "DRAFT —
+    not yet reviewed by a lawyer" is its own problem: it invites the
+    argument that nothing on the page was meant to bind anybody, on the
+    very page whose whole job is to bind. That an attorney has not yet
+    read §12 and §16 is true and is tracked in `--todo`, which is where
+    an internal action item belongs — not in a customer's contract.
     """
     for doc, name in ((TERMS, "Terms"), (PRIVACY, "Privacy Policy")):
-        assert "legal-todo" in doc, \
-            f"the {name} has no marked gaps — if they are genuinely all " \
-            "filled in, delete this test in the same commit"
-    assert "[LEGAL ENTITY NAME]" in TERMS, \
-        "the Terms name a company that may not exist yet"
+        assert "legal-draft" not in doc, f"the {name} still has the banner"
+        assert "DRAFT" not in doc, f"the {name} still calls itself a draft"
+
+
+def test_the_one_gap_left_is_marked_rather_than_faked():
+    """The postal address, deferred on Ethan's instruction. It cannot be
+    invented — an address nobody reads is how a consumer-rights request
+    goes nowhere — so it is marked in the page and counted by `--todo`.
+
+    If it is ever filled in, this test should go with it rather than
+    being loosened: `legal-todo` existing at all is the signal."""
+    marks = TERMS.count("legal-todo") + PRIVACY.count("legal-todo")
+    assert marks, (
+        "no marked gaps left — if the postal address is genuinely filled "
+        "in, delete this test in the same commit")
+    assert marks <= 2, (
+        "%d gaps; the documents were complete but for the postal address "
+        "on 2026-08-22, so something regressed or something new is "
+        "unfinished" % marks)
+    for doc, name in ((TERMS, "Terms"), (PRIVACY, "Privacy Policy")):
+        assert "[LEGAL ENTITY NAME]" not in doc, (
+            "%s names no counterparty" % name)
+
+
+def test_both_documents_name_the_same_counterparty():
+    """Two documents, one operator. They are read together and a mismatch
+    is the kind of thing that gets a whole agreement argued about."""
+    # The TEXT, not the markup: "Ethan Lee, sole proprietor" wraps across
+    # a line in the source, so the raw HTML does not contain the phrase
+    # even though the page says it. Prose in HTML always needs this.
+    for doc, name in ((TERMS_TEXT, "Terms"), (PRIVACY_TEXT, "Privacy Policy")):
+        assert "Ethan Lee" in doc, "%s does not say who is responsible" % name
+        assert ("sole proprietor" in doc
+                or "an individual doing business" in doc), (
+            "%s names a person without saying in what capacity" % name)
+
+
+def test_both_documents_publish_a_reachable_address():
+    """§8 of the Privacy Policy and §16's "try us first" both route
+    through a mailbox. A policy that grants rights with no way to
+    exercise them grants nothing."""
+    assert "support@qellysbook.com" in TERMS
+    assert "privacy@qellysbook.com" in PRIVACY
+    for doc in (TERMS, PRIVACY):
+        assert "mailto:" in doc, "the address is not clickable"
 
 
 def test_the_discord_invite_is_never_shipped_to_a_non_member():
@@ -257,14 +317,33 @@ def test_the_discord_invite_is_never_shipped_to_a_non_member():
         assert "discord.gg" not in _read("web", name), \
             f"the invite is printed on {name}, which is public"
 
-    # The one render, and it uses what the server sent rather than
-    # deciding for itself.
-    fn = app[app.index("function discordHTML("):]
-    fn = fn[:fn.index("\n}") + 2]
-    assert "s.discord" in fn, \
-        "discordHTML no longer reads the server's answer"
-    assert "if (!invite) return \"\";" in fn, \
-        "there is no early return for a caller the server sent nothing to"
+    # THE RENDERS, and each uses what the server sent rather than
+    # deciding for itself. `discordHTML` — the box on the account panel —
+    # was removed on 2026-08-22 at Ethan's request ("we can remove the
+    # discord button in the account tab"); the two that replaced it are
+    # the top-bar icon and the #discord page.
+    assert "function discordHTML(" not in app, (
+        "the account-panel box is back; if that is deliberate it needs "
+        "the same checks as the two below")
+
+    page = app[app.index("function discordPageHTML("):]
+    page = page[:page.index("\nwindow.dcSeePlans")]
+    assert "s.discord" in page, (
+        "the Discord page no longer reads the server's answer")
+    assert "const invite = s && s.discord" in page, (
+        "the page does not take the invite from the payload")
+
+    # The top-bar icon, which is hidden by the ABSENCE of the string
+    # rather than by a check it makes itself — nothing in the browser is
+    # trusted to decide entitlement.
+    mount = app[app.index("function igMount("):]
+    mount = mount[:mount.index("\n}") + 2]
+    assert "_pwStatus.discord" in mount
+    assert 'id="nav-dc"' in _read("web", "index.html")
+    bar = app[app.index("function barLink("):]
+    bar = bar[:bar.index("\n}") + 2]
+    assert "el.hidden = true" in bar, (
+        "no link and the icon still shows, pointing at nothing")
 
     # And the server only sends it behind the entitlement it computed.
     server = _read("server.py")
@@ -278,9 +357,27 @@ def test_the_discord_invite_is_never_shipped_to_a_non_member():
 
     # The WALL must not render it either. It mounts the same code box,
     # and the visitor there is unentitled by definition.
-    wall = app[app.index("function paywallHTML("):]
-    wall = wall[:wall.index("\nasync function renderPaywall(")]
-    assert "discordHTML" not in wall
+    # THE FUNCTION, brace-matched. Slicing to "the next function that
+    # looks like a renderer" swept in every declaration that happened to
+    # be written in between — which after the Discord page landed there
+    # was the whole Discord section, and this assertion started failing
+    # on code it does not describe. Same trap as the 60,000-character
+    # slice in tests/test_useraccounts.py.
+    start = app.index("function paywallHTML(")
+    depth, seen, wall = 0, False, None
+    for j in range(app.index("{", start), len(app)):
+        if app[j] == "{":
+            depth += 1
+            seen = True
+        elif app[j] == "}":
+            depth -= 1
+            if seen and depth == 0:
+                wall = app[start:j + 1]
+                break
+    assert wall and len(wall) < 20000, "paywallHTML was not bracketed"
+    assert "discord" not in wall.lower(), (
+        "the wall renders something Discord-shaped, and every visitor "
+        "there is unentitled by definition")
 
 
 def test_the_terms_cover_the_discord_because_it_is_part_of_the_sale():

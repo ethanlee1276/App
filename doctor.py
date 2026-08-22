@@ -712,7 +712,7 @@ def main(argv: list[str]) -> int:
     mark = {OK: "✅", WARN: "⚠️ ", FAIL: "❌"}
     rows = [c for c in rep.checks if not quiet or c["status"] != OK]
     if not quiet:
-        print(f"Qellys Books — health check · "
+        print(f"Qellys Book — health check · "
               f"{_dt.datetime.now():%a %b %-d, %-I:%M %p}\n")
     for c in rows:
         print(f"{mark[c['status']]} {c['check']:<16} {c['detail']}")

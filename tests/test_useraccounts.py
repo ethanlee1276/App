@@ -727,14 +727,27 @@ def test_the_sign_in_form_does_not_re_ask_returning_users():
     assert 'mode === "signup" && !confirmed' in body
 
 
-def test_the_documents_exist_and_say_they_are_drafts():
-    """Written from what the code does, which is the half an engineer can
-    get right. Publishing them as finished legal text is not the same
-    thing, and the banner says so."""
+def test_the_documents_exist_and_are_no_longer_drafts():
+    """They carried a DRAFT banner while the counterparty and the contact
+    address were blank, which was right at the time: publishing an
+    unfinished contract as finished would have been the worse error.
+
+    COMPLETED 2026-08-22, once Ethan supplied both. The banner went with
+    them, and not as tidying: a live binding contract headed "DRAFT — not
+    yet reviewed by a lawyer" invites the argument that nothing on the
+    page was meant to bind anybody, on the one page whose whole job is to
+    bind. That an attorney has still not read the judgement clauses is
+    true and is tracked in `--todo`, where an internal action item
+    belongs.
+
+    tests/test_legal_pages.py owns the detail — what each document has to
+    cover, who the counterparty is, and that the addresses are real. This
+    only checks the pages exist and are not calling themselves drafts."""
     for page in ("terms.html", "privacy.html"):
         doc = _read("web", page)
-        assert "DRAFT" in doc and "not yet reviewed by a lawyer" in doc
-        assert "legal-todo" in doc, "nothing is flagged as still needing input"
+        assert "Last updated" in doc, "%s is not a dated document" % page
+        assert "DRAFT" not in doc, "%s still calls itself a draft" % page
+        assert "not yet reviewed by a lawyer" not in doc
 
 
 def test_the_privacy_policy_matches_what_is_actually_stored():

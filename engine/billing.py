@@ -174,7 +174,7 @@ def trial_days_for(plan_id: str, eligible: bool) -> int:
 
 #: What the product is called in Stripe's own catalogue. The dashboard,
 #: the invoice and the customer's card statement all read from this.
-PRODUCT_NAME = "Qellys Books"
+PRODUCT_NAME = "Qellys Book"
 PRODUCT_DESC = ("Subscription access to sports analytics: model "
                 "projections, probability estimates and research tools.")
 

@@ -1,0 +1,192 @@
+"""The two outbound icons in the top bar, and the rule that separates them.
+
+Ethan, 2026-08-22: *"the instagram button works perfect so lets do the same
+for the discord server. then we can remove the discord button in the
+account tab."*
+
+SAME SHAPE, OPPOSITE RULE, and that is the whole point of this file.
+
+  Instagram   a public profile. Sent to everybody, signed in or not.
+              Hiding it from people who have not subscribed would hide it
+              from everyone who might.
+
+  Discord     the members' room, where the picks are posted. The server
+              sends the invite ONLY to a caller it has decided is
+              entitled. The icon is not hidden by a check the browser
+              makes — the string is simply not in the response, and that
+              is the only kind of gate that survives view-source.
+
+Both hide when there is no link. Neither invents one.
+
+    python3 tests/test_topbar_links.py
+"""
+
+import os
+import re
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP = os.path.join(ROOT, "web", "js", "app.js")
+HTML = os.path.join(ROOT, "web", "index.html")
+CSS = os.path.join(ROOT, "web", "css", "styles.css")
+SERVER = os.path.join(ROOT, "server.py")
+
+
+def _read(p):
+    return open(p, encoding="utf-8").read()
+
+
+def _code(text):
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    return re.sub(r"(?m)^\s*//.*$", "", text)
+
+
+def _anchor(html, el_id):
+    i = html.index('id="%s"' % el_id)
+    return html[html.rindex("<a", 0, i):html.index("</a>", i) + 4]
+
+
+# --- both of them -----------------------------------------------------------
+def test_both_icons_exist_in_the_bar():
+    html = _read(HTML)
+    for el_id in ("nav-ig", "nav-dc"):
+        assert 'id="%s"' % el_id in html, "no %s in the top bar" % el_id
+
+
+def test_both_are_links_and_not_buttons():
+    """Middle-click, long-press and "copy link address" are what people do
+    with an icon that leaves the site."""
+    html = _read(HTML)
+    for el_id in ("nav-ig", "nav-dc"):
+        a = _anchor(html, el_id)
+        assert a.startswith("<a"), "%s is not an anchor" % el_id
+        assert "onclick" not in a
+
+
+def test_both_open_away_without_handing_over_the_window():
+    html = _read(HTML)
+    for el_id in ("nav-ig", "nav-dc"):
+        a = _anchor(html, el_id)
+        assert 'target="_blank"' in a, el_id
+        assert "noopener" in a and "noreferrer" in a, el_id
+
+
+def test_both_ship_hidden():
+    """An install that has configured neither must ship neither, rather
+    than two icons pointing at "#"."""
+    html = _read(HTML)
+    for el_id in ("nav-ig", "nav-dc"):
+        a = _anchor(html, el_id)
+        assert re.search(r"\bhidden\b", a.split(">")[0]), el_id
+
+
+def test_both_carry_a_label_for_a_screen_reader():
+    html = _read(HTML)
+    for el_id in ("nav-ig", "nav-dc"):
+        a = _anchor(html, el_id)
+        assert "aria-label=" in a, "%s is an unlabelled icon" % el_id
+
+
+def test_neither_wears_link_styling_in_a_row_of_buttons():
+    """An anchor among <button>s brings its own underline and link
+    colour. Moved here from tests/test_instagram_link.py when the two
+    icons started sharing one rule — that file looked for `.nav-ig {`
+    and the selector became `.nav-ig, .nav-dc {`."""
+    css = _read(CSS)
+    i = css.index(".nav-ig")
+    rule = css[i:css.index("}", i)]
+    assert ".nav-dc" in rule, "the two icons no longer share the rule"
+    assert "text-decoration: none" in rule
+    assert "color: inherit" in rule
+
+
+def test_hiding_them_actually_hides_them():
+    """`[hidden]` loses to `.meta-ico { display: grid }` at equal
+    specificity, so the attribute alone leaves the icon on screen."""
+    css = _read(CSS)
+    for cls in (".nav-ig", ".nav-dc"):
+        assert "%s[hidden] { display: none; }" % cls in css, (
+            "%s can be 'hidden' and still visible" % cls)
+
+
+def test_one_function_mounts_both():
+    """Two copies of "no link, no icon" is two places to get it wrong."""
+    code = _code(_read(APP))
+    mount = code[code.index("function igMount("):]
+    mount = mount[:mount.index("\n}") + 2]
+    assert mount.count("barLink(") == 2, (
+        "the two icons are mounted by different code")
+    assert "instagram" in mount and "discord" in mount
+
+
+def test_neither_invents_a_link():
+    code = _code(_read(APP))
+    bar = code[code.index("function barLink("):]
+    bar = bar[:bar.index("\n}") + 2]
+    assert "el.hidden = true" in bar
+    assert 'removeAttribute("href")' in bar
+    assert "http" not in bar, "a fallback URL, which is somebody else's page"
+
+
+# --- the rule that separates them -------------------------------------------
+def test_the_invite_is_gated_and_the_profile_is_not():
+    """The whole design, checked on the server where it is decided."""
+    src = _read(SERVER)
+    i_disc = src.index('out["discord"] = invite')
+    i_gram = src.index('out["instagram"] = gram')
+
+    def indent_of(pos):
+        line = src[src.rindex("\n", 0, pos) + 1:pos]
+        return len(line) - len(line.lstrip())
+
+    assert indent_of(i_disc) > indent_of(i_gram), (
+        "the invite is no more deeply nested than the public profile — "
+        "one of them is on the wrong side of the entitlement check")
+    guard = src[max(0, i_disc - 500):i_disc]
+    assert 'out.get("entitled")' in guard, (
+        "the Discord invite is not behind an entitlement check")
+
+
+def test_the_browser_makes_no_entitlement_decision_about_the_icon():
+    """If app.js decided, the answer would be in app.js — and app.js is
+    served to every anonymous visitor."""
+    code = _code(_read(APP))
+    mount = code[code.index("function igMount("):]
+    mount = mount[:mount.index("\n}") + 2]
+    for word in ("entitled", "paywall", "walled"):
+        assert word not in mount, (
+            "igMount checks %r; the absence of the string is the gate" % word)
+
+
+def test_no_invite_is_compiled_into_anything_public():
+    for name in ("index.html", "terms.html", "privacy.html",
+                 os.path.join("js", "app.js")):
+        blob = _read(os.path.join(ROOT, "web", name))
+        assert "discord.gg" not in blob, "an invite shipped in %s" % name
+
+
+# --- and it is gone from the account tab ------------------------------------
+def test_the_account_panel_no_longer_draws_its_own():
+    code = _code(_read(APP))
+    assert "function discordHTML(" not in code, (
+        'Ethan: "we can remove the discord button in the account tab"')
+    i = code.index("async function renderBilling(")
+    body = code[i:code.index("\n}", i)]
+    assert "discord" not in body.lower(), (
+        "the account panel still renders something Discord-shaped")
+
+
+def test_the_two_places_it_does_live_still_work():
+    """Removing the third copy must not remove the first two."""
+    code = _code(_read(APP))
+    assert 'barLink("nav-dc"' in code, "the top-bar icon"
+    assert "function discordPageHTML(" in code, "the #discord page"
+    assert 'data-view="discord"' in _read(HTML), "the nav row"
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn()
+        print("  ok  %s" % fn.__name__)
+    print()
+    print("%d tests passed." % len(fns))

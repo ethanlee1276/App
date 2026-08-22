@@ -99,9 +99,16 @@ def test_the_icon_is_hidden_until_the_server_says_there_is_one():
     assert "hidden" in tag, (
         "an install with no QB_INSTAGRAM ships an icon linking to '#'")
     assert 'href="#"' in tag, "the placeholder href is not inert"
-    body = _code(_fn(_code(_read(APP)), "igMount"))
+    # The hiding moved into `barLink`, which igMount now calls once for
+    # Instagram and once for Discord — the Discord icon needs exactly the
+    # same "no link, no icon" behaviour, and two copies of it would be
+    # two places to get it wrong.
+    body = _code(_fn(_code(_read(APP)), "barLink"))
     assert "el.hidden = true" in body, (
         "nothing hides it again if the link is removed")
+    assert 'removeAttribute("href")' in body, (
+        "hidden but still pointing somewhere; a hidden anchor with an "
+        "href is still focusable in some browsers")
 
 
 # --- what happens when it is clicked ----------------------------------------
@@ -175,13 +182,19 @@ def test_it_is_mounted_when_the_status_is_refreshed():
 
 
 # --- the shell --------------------------------------------------------------
-def test_the_anchor_does_not_wear_link_styling_in_a_row_of_buttons():
-    css = _read(CSS)
-    assert ".nav-ig" in css
-    rule = css[css.index(".nav-ig {"):]
-    rule = rule[:rule.index("}")]
-    assert "text-decoration: none" in rule, (
-        "an underline under an icon in the top bar")
+def test_the_shell_rules_live_with_the_other_top_bar_icon():
+    """`.nav-ig` and `.nav-dc` share one rule now, so the assertions about
+    underlines and about `[hidden]` beating `.meta-ico { display: grid }`
+    moved to tests/test_topbar_links.py, where both are checked. Left as
+    a signpost rather than deleted, because "where did that check go" is
+    the question a missing test raises."""
+    other = os.path.join(ROOT, "tests", "test_topbar_links.py")
+    assert os.path.exists(other)
+    src = open(other, encoding="utf-8").read()
+    assert "text-decoration: none" in src, "the underline check went missing"
+    assert "[hidden] { display: none; }" in src, (
+        "the check that `hidden` actually hides went missing")
+
 
 
 def test_hiding_it_actually_hides_it():

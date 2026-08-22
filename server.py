@@ -2278,7 +2278,7 @@ def main() -> None:
     server.live_mode = live  # read by Handler._api
 
     mode = "LIVE data" if live else "sample data"
-    print(f"Qellys Books running ({mode}) → http://localhost:{port}")
+    print(f"Qellys Book running ({mode}) → http://localhost:{port}")
     if bind != "0.0.0.0":
         print(f"  Bound to {bind} only — reachable through a proxy, not directly.")
     lan = _lan_ip() if bind == "0.0.0.0" else None

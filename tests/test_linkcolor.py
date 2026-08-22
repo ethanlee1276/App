@@ -10,7 +10,7 @@ a component did not style itself fell through to the user agent, and what
 fell through was
 
   * the legal footer — on EVERY view, so it was on screen most of the time
-  * both legal pages' "← Back to Qellys Books"
+  * both legal pages' "← Back to Qellys Book"
   * the 404 and maintenance pages' wordmark and quick links
   * the sign-in card's "Terms" and "Privacy Policy"
 
@@ -79,7 +79,7 @@ def test_the_homes_the_default_was_reaching_are_all_coloured():
     holds. Naming each home costs a line per surface; a base rule would
     silently repaint the ones that inherit on purpose."""
     for sel in (".footer a", ".legal-back a", ".acct-confirm a",
-                ".stub-brand", ".pw-legal a"):
+                ".stub-brand", ".pw-legal a", ".legal a"):
         assert sel in DECLS, f"{sel} lost its colour again"
 
 

@@ -79,7 +79,7 @@ def find_product(secret_key: str) -> dict | None:
     """Our product, if it exists. Matched on metadata, never on name.
 
     A name match would attach us to whatever somebody else called
-    "Qellys Books" in the dashboard, and renaming a product — which is
+    "Qellys Book" in the dashboard, and renaming a product — which is
     allowed and harmless — would make this create a second one.
     """
     got = BI._get(f"{API}/products?active=true&limit=100", secret_key)
@@ -104,7 +104,7 @@ def create_product(secret_key: str) -> dict:
         # statement reads however the account is named, and an
         # unrecognised statement line is the single most common cause of
         # a dispute that was never a complaint about the product.
-        "statement_descriptor": "QELLYS BOOKS",
+        "statement_descriptor": "QELLYS BOOK",
     })
     return BI._post(f"{API}/products", headers, body)
 
@@ -315,6 +315,32 @@ def preflight() -> list:
                        "Real cards are charged." if live else
                        "Test mode: nobody is charged and no money moves. "
                        "Use 4242 4242 4242 4242 to walk the flow."))
+
+    # A PRODUCT ALREADY IN STRIPE KEEPS THE NAME IT WAS CREATED WITH.
+    # `PRODUCT_NAME` is only read when the product is created, so editing
+    # the constant renames the site and nothing else: the dashboard, the
+    # invoices and the card statement all keep saying whatever they said
+    # when `--stripe-setup` first ran. Harmless right up until a customer
+    # does not recognise a line on their statement, which is the single
+    # most common cause of a dispute that was never a complaint.
+    #
+    # Reported rather than fixed, like everything else here. Renaming a
+    # live product is a one-line change in the dashboard and not
+    # something this should do behind anybody's back.
+    if sk:
+        try:
+            prod = find_product(sk)
+        except Exception:                                    # noqa: BLE001
+            prod = None
+        if prod and str(prod.get("name") or "") != BI.PRODUCT_NAME:
+            checks.append((
+                False,
+                f"Stripe calls the product {prod.get('name')!r}, this "
+                f"code calls it {BI.PRODUCT_NAME!r}",
+                "Customers see Stripe's name on invoices and receipts. "
+                "Dashboard → Product catalogue → the product → Edit "
+                "name, and check the statement descriptor while you are "
+                "there."))
 
     for plan_id in BI.PLAN_ORDER:
         plan = BI.PLANS[plan_id]

@@ -105,7 +105,7 @@ pick.
 
 ## 3. The business description — paste this into the application
 
-> Qellys Books is a subscription sports-analytics web application. We
+> Qellys Book is a subscription sports-analytics web application. We
 > publish statistical projections for professional and college sports —
 > NFL, MLB, NBA, WNBA, college football and UFC — together with the
 > reasoning behind each projection and a permanent public record of how
