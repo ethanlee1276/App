@@ -37,7 +37,8 @@ import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from server import Handler, LIVE_FILES, seal_on_boot  # reuse the --live server
+from server import (Handler, LIVE_FILES, seal_on_boot,  # reuse the --live server
+                    BoundedHTTPServer)
 from engine.secrets import load_local_secrets
 
 ROOT = Path(__file__).parent
@@ -6930,7 +6931,12 @@ def main() -> None:
     seal_on_boot()
 
     try:
-        server = ThreadingHTTPServer((bind, port), Handler)
+        # THE SAME BOUNDED SERVER server.main() uses. This is the
+        # PRODUCTION entrypoint — the systemd unit runs launch.py — so a
+        # ceiling that existed only in server.main() would be a ceiling on
+        # the one path that never runs on the droplet. Exactly the shape
+        # of the seal_on_boot bug above.
+        server = BoundedHTTPServer((bind, port), Handler)
     except OSError as exc:
         # "Address already in use" is not a crash, it is the single most
         # ordinary thing that can happen: the site is already running in

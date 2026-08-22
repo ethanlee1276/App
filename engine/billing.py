@@ -727,6 +727,72 @@ def apply_event(conn, event: dict) -> bool:
     return True
 
 
+def reconcile_session(conn, user_id: int, session_id: str) -> dict:
+    """Ask Stripe directly whether this Checkout Session was paid, and
+    write the entitlement if it was. Returns the status dict either way.
+
+    WHY THIS EXISTS AT ALL. Entitlement normally moves when the signed
+    webhook arrives, and the webhook is a request from Stripe's servers to
+    ours — not a browser. Anything in front of the site that decides what
+    a robot looks like gets a vote on whether the customer gets what they
+    paid for. Cloudflare's Bot Fight Mode went on over the live site on
+    2026-08-21, and on the free plan it cannot be scoped to skip a path.
+    That is one example; a webhook endpoint being down, slow, or
+    misconfigured are the others, and they all end the same way — money
+    taken, site still locked, and a support email that starts "I paid".
+
+    So the browser coming back from Stripe carries the session id, and we
+    ASK. A read from Stripe is authoritative in a way no webhook delivery
+    can be, because it does not depend on anything reaching us.
+
+    WHAT MAKES THIS SAFE. The session id is not a credential and is not
+    treated as one. It grants nothing by being presented:
+
+      * the session is fetched from Stripe, not read from the request;
+      * Stripe's own `payment_status` must say `paid`;
+      * `client_reference_id` must be THIS user. A session id belonging
+        to somebody else — pasted, guessed, or scraped out of a shared
+        URL — entitles nobody, least of all the person holding it.
+
+    An unpaid or unknown session changes nothing and says so quietly.
+    """
+    out = status_for(conn, user_id)
+    sid = str(session_id or "").strip()
+    if not sid.startswith("cs_") or len(sid) > 200:
+        return out
+    if out.get("entitled"):
+        return out                    # already in; nothing to reconcile
+    secret = keys()[0]
+    sess = _get(f"{API}/checkout/sessions/{sid}?expand[]=subscription",
+                secret)
+    if str(sess.get("payment_status") or "") != "paid":
+        return out
+    # THE OWNERSHIP CHECK, and it is the whole security of this endpoint.
+    ref = str(sess.get("client_reference_id") or "")
+    meta_uid = str((sess.get("metadata") or {}).get("user_id") or "")
+    if ref != str(int(user_id)) and meta_uid != str(int(user_id)):
+        return out
+    sub = sess.get("subscription")
+    if isinstance(sub, str):
+        sub = _get(f"{API}/subscriptions/{sub}", secret)
+    sub = sub or {}
+    apply_event(conn, {
+        "user_id": int(user_id),
+        "customer_id": (sess.get("customer") if isinstance(sess.get("customer"), str)
+                        else (sess.get("customer") or {}).get("id")),
+        "subscription_id": sub.get("id"),
+        # A paid session whose subscription object has not settled yet is
+        # still a paid session. `active` is what Stripe will say; saying
+        # it a second early is right where the alternative is telling a
+        # paying customer they have nothing.
+        "status": str(sub.get("status") or "active"),
+        "period_end": _period_end(sub) if sub else None,
+        "plan": ((sub.get("metadata") or {}).get("plan")
+                 or (sess.get("metadata") or {}).get("plan")),
+    })
+    return status_for(conn, user_id)
+
+
 def status_for(conn, user_id: int, describe_with=None) -> dict:
     """What the page shows. Never a promise the database cannot back.
 

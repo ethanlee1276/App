@@ -953,13 +953,48 @@ class Handler(BaseHTTPRequestHandler):
         i.e. from the proxy on this machine. A direct caller can set the
         header to anything, and believing it would let anyone claim to be
         127.0.0.1.
+
+        AND THEN CLOUDFLARE WENT IN FRONT (2026-08-21), which added a hop
+        the whole scheme above had not accounted for:
+
+            browser → Cloudflare → Caddy → here
+
+        Caddy still reports the peer it saw, and that peer is now a
+        Cloudflare edge server. Every visitor in a city collapsed onto a
+        handful of addresses, so `rate_ok` was counting a whole region
+        into one bucket — 300 API calls and 20 sign-ins a minute for all
+        of them together. Quiet sites never notice. The moment traffic
+        arrives it starts turning real customers away, which is precisely
+        backwards.
+
+        Cloudflare passes the real address in `CF-Connecting-IP`. That
+        header is believed ONLY when the machine that spoke to our proxy
+        was genuinely Cloudflare, checked against their published ranges
+        — see engine/cfips.py for why a header alone will not do, and for
+        what happens when the list is not installed (nothing: this falls
+        through to the last hop, exactly as before).
         """
         peer = (self.client_address or ("",))[0]
         if peer not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
             return peer
         raw = self.headers.get("X-Forwarded-For") or ""
         hops = [p.strip() for p in raw.split(",") if p.strip()]
-        return hops[-1] if hops else peer
+        edge = hops[-1] if hops else peer
+        try:
+            from engine import cfips
+            if cfips.is_cloudflare(edge):
+                # `visitor` refuses anything that is not a public address:
+                # Cloudflare never reports a caller as 127.0.0.1, and
+                # `_local_only` below would believe it.
+                real = cfips.visitor(self.headers.get("CF-Connecting-IP"))
+                if real:
+                    return real
+        except Exception:                                    # noqa: BLE001
+            # Identifying the caller must never be the thing that fails a
+            # request. Worst case we are back to the edge address, which
+            # is what we had a moment ago.
+            pass
+        return edge
 
     def _is_https(self) -> bool:
         """Whether the browser's leg of this request was encrypted.
@@ -1436,6 +1471,53 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+    def _billing_confirm(self, raw: bytes):
+        """"I have just come back from Checkout" — go and ask Stripe.
+
+        THE WEBHOOK IS NOT THE ONLY WAY IN ANY MORE, and it should never
+        have been the only one. A webhook is a request from Stripe's
+        servers to ours, which means every box in front of this site gets
+        an opinion on whether a paying customer gets what they paid for:
+        a WAF that decides robots are suspicious, an expired origin
+        certificate, a restart at the wrong second. Cloudflare's Bot Fight
+        Mode went on over the live site on 2026-08-21 and on the free plan
+        it cannot be told to skip a path.
+
+        None of that reaches this endpoint, because this one is a browser
+        asking on its own behalf, and the answer comes from a READ of
+        Stripe rather than from anything being delivered to us.
+
+        IT IS NOT A WAY IN. The session id in the body grants nothing:
+        Stripe must say the session is paid, and the session's
+        `client_reference_id` must be the account making the request. A
+        session id belonging to somebody else entitles nobody.
+        """
+        from engine import billing as BI
+        A = _acct()
+        conn = A.connect()
+        try:
+            BI.init(conn)
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            try:
+                body = json.loads(raw.decode() or "{}")
+            except Exception:                                # noqa: BLE001
+                body = {}
+            try:
+                out = BI.reconcile_session(
+                    conn, who["id"], str(body.get("session") or ""))
+            except BI.BillingUnavailable as exc:
+                # Not an error the customer can act on, and not a reason
+                # to lose their place: the webhook may still land.
+                return self._send(200, json.dumps(
+                    {"entitled": False, "checked": False,
+                     "note": str(exc)}).encode(), ".json")
+            out["checked"] = True
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
     def _billing_redeem(self, raw: bytes):
         """Apply a discount code. Signed-in accounts only.
 
@@ -1481,6 +1563,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._billing_webhook(raw)
         if path == "redeem":
             return self._billing_redeem(raw)
+        if path == "confirm":
+            return self._billing_confirm(raw)
         if path not in ("checkout", "portal"):
             return self._send(404, b'{"error":"unknown billing endpoint"}',
                               ".json")
@@ -1506,7 +1590,13 @@ class Handler(BaseHTTPRequestHandler):
                     plan = str(body.get("plan") or BI.DEFAULT_PLAN)
                     url = BI.start_checkout(
                         who["id"], who["email"],
-                        f"{base}/?paid=1#account",
+                        # THE SESSION ID COMES BACK WITH THEM. It grants
+                        # nothing — see BI.reconcile_session — it is the
+                        # handle we use to ASK Stripe whether this
+                        # particular payment happened, so that a webhook
+                        # which never arrives cannot cost a customer the
+                        # thing they just bought.
+                        f"{base}/?paid=1&s={{CHECKOUT_SESSION_ID}}#account",
                         f"{base}/#paywall", plan)
                 else:
                     cust = BI.status_for(conn, who["id"]).get("customer_id")
@@ -2005,6 +2095,101 @@ def _lan_ip():
         return None
 
 
+#: How many requests may be in flight at once. Beyond this the server
+#: says 503 and asks for a retry instead of starting another thread.
+#:
+#: WHY THERE IS A CEILING AT ALL. `ThreadingHTTPServer` starts one thread
+#: per connection and never stops. On a 1GB droplet a burst — the site
+#: posted to Instagram, a crawler, someone holding refresh — walks the box
+#: into swap and then into the OOM killer, and what dies is not "some
+#: requests": it is the process, taking every signed-in session with it,
+#: and often sshd's ability to get you back in to fix it.
+#:
+#: A bounded pool converts that into the failure everybody would choose:
+#: a few callers get a 503 with a Retry-After, and everyone already being
+#: served finishes normally. 64 is generous for this workload — Caddy
+#: serves every static file, so the only things reaching Python are API
+#: calls, and each is a sqlite read measured in milliseconds.
+MAX_INFLIGHT = max(4, int(os.environ.get("QB_MAX_INFLIGHT", "") or 64))
+
+def _busy_response() -> bytes:
+    """The 503, assembled so the length is COUNTED rather than typed.
+
+    The first draft typed 78 where the body was 81, and a Content-Length
+    three short of the body is a client that reads a truncated JSON
+    document and, depending on the client, hangs waiting for the rest.
+    A wrong number here would only ever be met under load — which is the
+    one time nobody is reading logs.
+    """
+    body = (b'{"error":"The site is busy for a moment. Try that again in '
+            b'a couple of seconds."}')
+    head = (b"HTTP/1.1 503 Service Unavailable\r\n"
+            b"Retry-After: 2\r\n"
+            b"Content-Type: application/json\r\n"
+            b"Connection: close\r\n"
+            b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n")
+    return head + body
+
+
+_BUSY = _busy_response()
+
+
+class BoundedHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that refuses rather than falls over.
+
+    The semaphore is taken BEFORE the thread is created, which is the
+    only place it helps — checking inside the handler means the thread
+    already exists and the memory is already spent.
+
+    `daemon_threads` is inherited as True, so a shutdown does not wait on
+    in-flight requests. Combined with the ceiling, a restart during a
+    burst takes a second rather than a minute.
+    """
+
+    #: A listen backlog deep enough that a spike queues in the kernel
+    #: instead of being refused at the TCP level, which browsers surface
+    #: as "cannot connect" rather than as a retryable error.
+    request_queue_size = 128
+
+    #: A SLOT IS A CONNECTION, NOT A REQUEST, and the two are the same
+    #: thing here only because `Handler` speaks HTTP/1.0 — the
+    #: BaseHTTPRequestHandler default — so every connection closes after
+    #: one response.
+    #:
+    #: Setting `protocol_version = "HTTP/1.1"` on the handler would turn
+    #: keep-alive on, and then Caddy's idle upstream connections would sit
+    #: in these slots doing nothing. Enough of them and the site refuses
+    #: everybody while completely idle, which is a failure that would take
+    #: a long evening to understand. tests/test_load_shedding.py fails if
+    #: the two are ever changed apart.
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._slots = threading.Semaphore(MAX_INFLIGHT)
+        self.shed = 0
+
+    def process_request(self, request, client_address):
+        if not self._slots.acquire(blocking=False):
+            self.shed += 1
+            try:
+                request.sendall(_BUSY)
+            except Exception:                                # noqa: BLE001
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:                                    # noqa: BLE001
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+
 def seal_on_boot() -> None:
     """Redact every board on the public path, before anything is served.
 
@@ -2068,7 +2253,7 @@ def main() -> None:
 
     seal_on_boot()
 
-    server = ThreadingHTTPServer((bind, port), Handler)
+    server = BoundedHTTPServer((bind, port), Handler)
     server.live_mode = live  # read by Handler._api
 
     mode = "LIVE data" if live else "sample data"

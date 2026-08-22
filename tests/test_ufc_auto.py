@@ -10,6 +10,7 @@ usually uncovered.
 
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -271,7 +272,10 @@ def test_an_already_running_site_is_explained_not_traced():
     # loopback behind a TLS proxy. `(bind, port), Handler` is the better
     # anchor anyway: `Handler` is what makes this the site rather than the
     # sweep, and it does not move when the address becomes configurable.
-    i = src.index("ThreadingHTTPServer((bind, port), Handler)")
+    # Named by shape rather than by class: it became
+    # BoundedHTTPServer when the request ceiling went in, and this
+    # test is about the message after the bind, not the class.
+    i = re.search(r"HTTPServer\(\(bind, port\), Handler\)", src).start()
     block = src[src.rindex("try:", 0, i):src.index("server.live_mode", i)]
     assert "except OSError" in block
     assert "48" in block and "98" in block, "only one platform's errno"

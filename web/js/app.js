@@ -12189,6 +12189,12 @@ window.acctAuth = async function (btn, mode) {
     // moment the account exists; spent the first time this reader is
     // entitled, which behind the wall is after they pay and not before.
     if (mode === "signup") dcMarkWelcome();
+    // "a little popup on the moible site only after someone logs into
+    // there account". Armed on BOTH sign-up and sign-in: somebody
+    // returning on a new phone is exactly who should be offered this,
+    // and they never sign up again. `a2hsTick` decides whether it is
+    // wanted — phone, not installed, not previously dismissed.
+    a2hsArm();
     await acctSync();
     if (typeof renderGreeting === "function") renderGreeting();
     if (state.view === "mybets") renderMyBets();
@@ -12268,6 +12274,7 @@ async function acctLandAfterAuth(say = () => {}) {
     switchView(dcFirstStop().replace("#", ""), true);
   }
   window.scrollTo({ top: 0, behavior: "auto" });
+  a2hsTick();
 }
 
 /* ---------------- Subscription -----------------------------------------
@@ -12719,6 +12726,175 @@ function paywallHTML(rec, status) {
 
 /* The wall hides the whole chrome, including the way in. Somebody who
    already pays and is merely signed out lands here and needs a door. */
+/* ================= ADD TO HOME SCREEN =================
+   Ethan, 2026-08-21: "we also need to add a little popup on the moible
+   site only after someone logs into there account that tells them too add
+   qellysbook to there homescreen so its like a real app."
+
+   EVERYTHING IT NEEDS IS ALREADY SHIPPED — the manifest, the icons, the
+   service worker, `apple-mobile-web-app-capable` and the safe-area insets
+   have been in place since before there was anything to sell. What was
+   missing was anybody ever mentioning it. Installed, the site loses the
+   browser chrome, keeps its session, and opens from the home screen like
+   an app, which is the difference between a bookmark and a habit.
+
+   THREE BROWSERS, THREE ANSWERS, and pretending otherwise is how these
+   things end up lying:
+
+     Android/Chrome  fires `beforeinstallprompt`, so there is a real
+                     button that really installs.
+     iOS/Safari      has no such event and never will. The only way in is
+                     Share → Add to Home Screen, so it gets told exactly
+                     that, with the glyph it is looking for.
+     anything else   the browser menu. Said plainly rather than drawn as
+                     a button that would do nothing.
+
+   AND IT ASKS ONCE. Dismissed is remembered for good; the site is not
+   going to nag somebody who already said no. Already installed, it never
+   appears at all — `display-mode: standalone` on Android, the
+   non-standard `navigator.standalone` on iOS. */
+
+const A2HS_KEY = "qb.a2hs";      // "off" once dismissed or installed
+const A2HS_DUE = "qb.a2hs.due";  // armed by a sign-in, spent by the sheet
+
+let _a2hsEvent = null;
+
+/* Captured at boot because Chrome fires it early and only once. Holding
+   it is what lets the button appear later, when there is a reason to
+   show it, rather than the instant the page loads. */
+addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  _a2hsEvent = e;
+});
+addEventListener("appinstalled", () => {
+  try { localStorage.setItem(A2HS_KEY, "off"); } catch (e) {}
+  const el = document.getElementById("a2hs");
+  if (el) el.remove();
+});
+
+function a2hsInstalled() {
+  try {
+    if (matchMedia("(display-mode: standalone)").matches) return true;
+  } catch (e) {}
+  return !!navigator.standalone;
+}
+
+/* A PHONE, not a narrow window. A desktop browser dragged narrow has no
+   home screen to add anything to, and the pointer test is what tells
+   them apart — `coarse` means a finger. */
+function a2hsMobile() {
+  try {
+    return matchMedia("(max-width: 820px)").matches
+        && matchMedia("(pointer: coarse)").matches;
+  } catch (e) { return false; }
+}
+
+function a2hsIOS() {
+  const ua = navigator.userAgent || "";
+  // iPadOS reports itself as a Mac and is only distinguishable by having
+  // a touchscreen, which no Mac has.
+  return /iPad|iPhone|iPod/.test(ua)
+      || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+window.a2hsArm = function () {
+  try {
+    if (localStorage.getItem(A2HS_KEY) === "off") return;
+    localStorage.setItem(A2HS_DUE, "1");
+  } catch (e) {}
+};
+
+window.a2hsDismiss = function () {
+  try { localStorage.setItem(A2HS_KEY, "off"); } catch (e) {}
+  const el = document.getElementById("a2hs");
+  if (el) el.remove();
+};
+
+window.a2hsInstall = async function (btn) {
+  if (!_a2hsEvent) return a2hsDismiss();
+  btn.disabled = true;
+  try {
+    _a2hsEvent.prompt();
+    await _a2hsEvent.userChoice;
+  } catch (e) { /* the sheet closes either way */ }
+  _a2hsEvent = null;
+  a2hsDismiss();
+};
+
+/* The share glyph iOS actually draws, so the sentence points at something
+   findable rather than describing it. Inline because the CSP allows no
+   external images and a described-but-unshown icon is worse than none. */
+function a2hsShareIcon() {
+  return `<svg class="a2hs-share" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+    stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 3v12"/><path d="M8.5 6.5L12 3l3.5 3.5"/>
+    <path d="M6 11H5a1 1 0 00-1 1v8a1 1 0 001 1h14a1 1 0 001-1v-8a1 1 0
+      00-1-1h-1"/></svg>`;
+}
+
+function a2hsHTML() {
+  const ios = a2hsIOS();
+  const canInstall = !!_a2hsEvent;
+  return `
+  <div class="a2hs-card" role="dialog" aria-modal="false"
+       aria-labelledby="a2hs-t">
+    <button class="a2hs-x" onclick="a2hsDismiss()" aria-label="Not now">
+      ${icon("cross", 14)}</button>
+    <div class="a2hs-row">
+      <img class="a2hs-icon" src="/icon-192.png" alt="" width="44"
+           height="44" />
+      <div>
+        <b id="a2hs-t">Keep Qellys on your home screen</b>
+        <p>It opens like an app — full screen, no address bar, and you stay
+          signed in.</p>
+      </div>
+    </div>
+    ${canInstall
+      ? `<div class="a2hs-go">
+           <button class="btn primary" onclick="a2hsInstall(this)">
+             Add to home screen</button>
+           <button class="btn ghost" onclick="a2hsDismiss()">Not now</button>
+         </div>`
+      : (ios
+        ? `<p class="a2hs-how">Tap ${a2hsShareIcon()} <b>Share</b> at the
+             bottom of Safari, then <b>Add to Home Screen</b>.</p>
+           <div class="a2hs-go">
+             <button class="btn ghost" onclick="a2hsDismiss()">Got it</button>
+           </div>`
+        : `<p class="a2hs-how">Open your browser’s menu and choose
+             <b>Add to Home screen</b>.</p>
+           <div class="a2hs-go">
+             <button class="btn ghost" onclick="a2hsDismiss()">Got it</button>
+           </div>`)}
+  </div>`;
+}
+
+/* Call anywhere. Shows nothing unless a sign-in armed it, this is a
+   phone, the site is not already installed, and nobody has said no. */
+window.a2hsTick = function () {
+  if (document.getElementById("a2hs")) return;
+  let due = false;
+  try {
+    if (localStorage.getItem(A2HS_KEY) === "off") return;
+    due = localStorage.getItem(A2HS_DUE) === "1";
+  } catch (e) { return; }
+  if (!due || !a2hsMobile()) return;
+  if (a2hsInstalled()) {
+    try { localStorage.setItem(A2HS_KEY, "off"); } catch (e) {}
+    return;
+  }
+  try { localStorage.removeItem(A2HS_DUE); } catch (e) {}
+  const host = document.createElement("div");
+  host.id = "a2hs";
+  host.className = "a2hs";
+  host.innerHTML = a2hsHTML();
+  document.body.appendChild(host);
+  // Next frame, so the entrance transition has a start state to move
+  // from. Added straight away it would appear with no animation at all.
+  requestAnimationFrame(() => host.classList.add("in"));
+};
+
 /* ======================= THE DISCORD =======================
    Ethan, 2026-08-21, with a render: "once someone makes an account …
    the first thing we should do is give them the link to join the discord
@@ -13008,8 +13184,17 @@ let _pwStatus = null;
 async function paywallCheck() {
   try {
     const r = await fetch("/api/billing/status", { credentials: "same-origin" });
+    // A 429 IS NOT AN ANSWER. The rate limiter replies with JSON — an
+    // {error} object — so `r.json()` succeeds, `_pwStatus.paywall` is
+    // undefined, and the line below used to conclude "not walled". A
+    // visitor who tripped the limiter was shown the whole site chrome
+    // over boards that are redacted on disk: an empty product that looks
+    // broken rather than a wall that explains itself. Leaving the last
+    // known status in place is the honest failure — see acctLandAfterAuth,
+    // which distinguishes "no answer" from "no wall".
+    if (!r.ok) return document.body.classList.contains("walled");
     _pwStatus = await r.json();
-  } catch (e) { return false; }
+  } catch (e) { return document.body.classList.contains("walled"); }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
 }
 
@@ -13036,14 +13221,43 @@ const PAID_WAIT_MS = 12000;
 const PAID_POLL_MS = 1200;
 
 async function paidReturnWait() {
-  if (!new URLSearchParams(location.search).has("paid")) return false;
+  const q = new URLSearchParams(location.search);
+  if (!q.has("paid")) return false;
+  const session = q.get("s") || "";
   // Take it out of the URL immediately, so a refresh or a shared link is
   // an ordinary page load and this never runs twice.
   try {
     const u = new URL(location.href);
     u.searchParams.delete("paid");
+    u.searchParams.delete("s");
     history.replaceState(null, "", u.toString());
   } catch (e) {}
+
+  // ASK STRIPE FIRST, rather than waiting to be told. The loop below is
+  // the old behaviour and it waits on the webhook — a request from
+  // Stripe's servers to ours, which anything in front of this site gets
+  // to have an opinion about. Cloudflare's Bot Fight Mode went on over
+  // the live site the same evening it launched, and on the free plan it
+  // cannot be told to skip the webhook path.
+  //
+  // This asks on the customer's own connection, which nothing in the
+  // middle is filtering, and the session id it sends grants nothing on
+  // its own — the server checks with Stripe that the session is paid and
+  // that it belongs to this account. See _billing_confirm.
+  if (session) {
+    try {
+      const r = await fetch("/api/billing/confirm", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session }),
+      });
+      if (r.ok) {
+        const said = await r.json();
+        if (said && said.entitled) { await paywallCheck(); return true; }
+      }
+    } catch (e) { /* fall through to the wait — the webhook may land */ }
+  }
+
   const until = Date.now() + PAID_WAIT_MS;
   while (Date.now() < until) {
     await paywallCheck();
@@ -21237,8 +21451,12 @@ async function renderLiveBoard() {
       dcMarkWelcome();
       renderDiscord();
       _switchViewNow("discord", false, 0);
+      a2hsTick();
       return;
     }
+    // Spent here too, because the entitled sign-in RELOADS: the sheet is
+    // armed on one page load and shown on the next.
+    a2hsTick();
     if (!walled) return;
     document.body.classList.add("walled");
     renderPaywall();

@@ -379,10 +379,67 @@ def _backup_freshness() -> Item:
                 f"({', '.join(sorted(names))})")
 
 
+def _cloudflare_list() -> Item:
+    """Whether the app can tell one visitor from another behind the edge.
+
+    Silent when wrong, and wrong only under load: with no list installed
+    every visitor arrives as a Cloudflare edge address and they all share
+    one rate-limit bucket. The site works perfectly while it is quiet and
+    starts refusing paying customers the moment traffic shows up.
+    """
+    from . import cfips
+    d = cfips.describe()
+    if not d["exists"] or not d["count"]:
+        return Item("config", "Cloudflare ranges", TODO,
+                    "not installed — behind Cloudflare every visitor shares "
+                    "one rate-limit bucket, so a traffic spike turns into "
+                    "429s for real customers",
+                    "sudo ./deploy/cfips.sh && sudo systemctl restart qellys")
+    if (d["age_days"] or 0) > 120:
+        return Item("config", "Cloudflare ranges", TODO,
+                    f"{d['count']} ranges, {d['age_days']} days old — "
+                    "Cloudflare's list does change",
+                    "sudo ./deploy/cfips.sh")
+    return Item("config", "Cloudflare ranges", DONE,
+                f"{d['count']} ranges ({d['v4']} v4, {d['v6']} v6), "
+                f"{d['age_days']} days old")
+
+
+def _legal_blanks() -> Item:
+    """The bracketed placeholders still in the published Terms and Privacy.
+
+    NOT A STYLE NOTE NOW THAT THERE ARE CUSTOMERS. A published contract
+    that names no counterparty and a privacy policy that gives no way to
+    reach anybody are the two things a payment processor asks for when it
+    reviews an account, and a subscriber's right to make a data request
+    is not answerable without a mailbox. Every one of these is marked in
+    the page itself, so it is visible to readers too.
+    """
+    root = Path(__file__).resolve().parents[1]
+    hits = []
+    for name in ("terms.html", "privacy.html"):
+        page = root / "web" / name
+        try:
+            text = page.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        n = text.count("legal-todo")
+        if n:
+            hits.append(f"{name}: {n}")
+    if not hits:
+        return Item("config", "legal pages complete", DONE,
+                    "no placeholders left in the Terms or the Privacy Policy")
+    return Item("config", "legal pages complete", TODO,
+                "placeholders still published (" + ", ".join(hits) + ") — "
+                "the entity name and a working support address are what "
+                "Stripe asks for and what a data request needs",
+                "search web/terms.html and web/privacy.html for legal-todo")
+
+
 def config_items(env=None) -> list[Item]:
     """The settings whose absence is silent and expensive."""
     env = env if env is not None else os.environ
-    out = []
+    out = [_cloudflare_list(), _legal_blanks()]
 
     if env.get("QB_BACKUP_REMOTE"):
         out.append(Item("config", "QB_BACKUP_REMOTE", DONE,

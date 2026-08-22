@@ -6881,6 +6881,57 @@ input:-webkit-autofill:focus {
 .disc-go:hover { background: var(--brand-2); }
 .disc-note { margin-top: 8px; }
 
+/* ================== ADD TO HOME SCREEN ==================
+   A sheet on the bottom edge of a phone, shown once after signing in.
+
+   BOTTOM, not centre. It has to sit above the tab bar without covering
+   it — a modal that hides the navigation while asking a favour is how
+   these get closed angrily — and it has to clear the home indicator on a
+   notched phone, which is what the safe-area inset is doing. The tab bar
+   is 64px; this rides on top of it.
+
+   It transitions opacity and transform only. Nothing here animates a
+   layout property, and the whole thing is under the 300ms the motion
+   rules allow. */
+.a2hs { position: fixed; left: 0; right: 0; z-index: 60;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px 10px;
+  opacity: 0; transform: translateY(12px);
+  transition: opacity var(--dur-slow) var(--ease-out),
+              transform var(--dur-slow) var(--ease-out); }
+.a2hs.in { opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .a2hs { transition: none; }
+}
+/* No tab bar on a walled page — it is hidden with the rest of the
+   chrome, so the sheet would float above nothing. */
+body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+
+.a2hs-card { position: relative; max-width: 30rem; margin: 0 auto;
+  padding: 15px 16px; border-radius: var(--radius-lg);
+  background: var(--panel); border: var(--hairline) solid var(--border);
+  box-shadow: var(--glow-soft); }
+.a2hs-x { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: none; color: var(--text-mute); cursor: pointer;
+  border-radius: 50%; }
+.a2hs-x:hover { color: var(--text); background: var(--fill-hover); }
+.a2hs-row { display: flex; align-items: flex-start; gap: 12px;
+  padding-right: 26px; }
+.a2hs-icon { flex: none; border-radius: var(--radius-sm); }
+.a2hs-row b { display: block; font-size: var(--fs-md); line-height: var(--lh-tight); }
+.a2hs-row p { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text-mute);
+  line-height: var(--lh-snug); }
+.a2hs-how { margin: 11px 0 0; font-size: var(--fs-sm); color: var(--text-body);
+  line-height: var(--lh-snug); }
+.a2hs-how b { color: var(--text); }
+.a2hs-share { width: 15px; height: 15px; vertical-align: -3px;
+  color: var(--brand-2); }
+.a2hs-go { display: flex; gap: 8px; margin-top: 12px; }
+.a2hs-go .btn { flex: 1; justify-content: center; text-align: center; }
+.a2hs-go .primary { background: var(--brand-solid); color: #fff;
+  border-color: transparent; font-weight: 700; }
+
 /* ===================== THE MEMBERS' DISCORD =====================
    Ethan's render, 2026-08-21. Same page whether it is the welcome after
    paying or the tab reached three weeks later — the only difference is

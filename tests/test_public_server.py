@@ -265,7 +265,10 @@ def test_the_production_unit_runs_the_process_that_refreshes_the_data():
     i = launch.index('if "--bind" in argv:')
     block = launch[i:i + 400]
     assert "bind = argv[i + 1]" in block
-    assert "ThreadingHTTPServer((bind, port), Handler)" in launch
+    # The class was renamed when the server was given a request
+    # ceiling (BoundedHTTPServer). The claim here is that launch.py
+    # binds the socket itself, not what the class is called.
+    assert re.search(r"HTTPServer\(\(bind, port\), Handler\)", launch)
     assert 'ThreadingHTTPServer(("0.0.0.0"' not in launch, \
         "the site still hard-codes every interface somewhere"
 

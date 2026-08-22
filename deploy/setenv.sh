@@ -97,6 +97,8 @@ case "$KEY" in
     [[ "$VALUE" == https://* ]] || die "QB_SITE_URL needs the https:// scheme" ;;
   QB_DISCORD_INVITE)
     [[ "$VALUE" == https://discord.gg/* ]] || die "that is not a discord.gg invite" ;;
+  QB_MAX_INFLIGHT)
+    [[ "$VALUE" =~ ^[0-9]+$ ]] || die "QB_MAX_INFLIGHT is a number of requests" ;;
   QB_INSTAGRAM)
     # Unlike the invite, this one is PUBLIC — the Discord page cites it to
     # people who have not subscribed, which is the point of citing it.

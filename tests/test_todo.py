@@ -251,6 +251,24 @@ def test_the_launcher_exposes_it():
     assert '"--todo" in argv' in src, "--todo is not wired into the launcher"
 
 
+def test_every_item_lands_in_a_group_that_renders():
+    """An Item whose group is not in GROUPS is dropped by `render` without
+    a word. That is exactly what happened to the legal-pages check on its
+    first run: it was written, it was collected, and it appeared nowhere,
+    which is the worst possible outcome for a reminder."""
+    from engine import todo as T
+    known = {k for k, _ in T.GROUPS}
+    items = T.collect()
+    assert items
+    for i in items:
+        assert i.group in known, (
+            "%r is in group %r, which render() does not print — the item "
+            "exists and nobody will ever see it" % (i.name, i.group))
+    text = T.render(items)
+    for i in items:
+        assert i.name in text, "%r never reaches the report" % i.name
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

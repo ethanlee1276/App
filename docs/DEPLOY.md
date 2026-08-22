@@ -159,3 +159,109 @@ sudo systemctl status qellys                    # is it even running
 sudo journalctl -u qellys --since "10 min ago"  # what it said
 sudo journalctl -u qellys --since "10 min ago" | grep -i "error\|traceback"
 ```
+
+---
+
+## Behind Cloudflare
+
+Cloudflare went in front of the live site on 2026-08-21, which added a hop
+the address logic had not accounted for:
+
+    browser → Cloudflare → Caddy → the app
+
+**Run this once, and after any Cloudflare change:**
+
+```
+sudo /srv/qellys/deploy/cfips.sh
+sudo systemctl restart qellys
+```
+
+### Why it matters
+
+`deploy/Caddyfile` replaces `X-Forwarded-For` with the peer Caddy saw.
+Before Cloudflare that was the browser. After Cloudflare it is a Cloudflare
+edge server — so every visitor in a city arrived as the same handful of
+addresses, and `rate_ok` buckets by caller. That is **300 API calls and 20
+sign-ins a minute shared by all of them**, not each. A quiet site never
+notices; a site that has just been posted to Instagram starts handing 429s
+to paying customers, and the 429 says "slow down".
+
+Cloudflare sends the real address in `CF-Connecting-IP`. That header is
+believed only when the machine that spoke to our proxy was genuinely
+Cloudflare, checked against their published ranges — which is what
+`cfips.sh` installs. Any client can set that header, so believing it on
+sight would let anyone pick their own rate-limit bucket, or fill somebody
+else's.
+
+**Without the list nothing breaks and nothing is exposed** — the app falls
+back to the forwarded hop, exactly as before. It just cannot tell your
+visitors apart. `engine/cfips.py` has the long version.
+
+```
+./deploy/cfips.sh --check      # what is installed, and how old
+```
+
+Cloudflare's ranges change rarely but they do change. Weekly refresh:
+
+```
+0 5 * * 1 /srv/qellys/deploy/cfips.sh >/dev/null 2>&1
+```
+
+### Bot Fight Mode and the Stripe webhook
+
+Bot Fight Mode challenges traffic that does not look like a browser. A
+Stripe webhook is a POST from a datacentre, which is exactly that shape,
+and **on the free plan Bot Fight Mode cannot be scoped to skip a path**.
+
+Check it, do not assume it:
+
+> Stripe → Developers → Webhooks → your endpoint → **Send test webhook**.
+> A delivery that is not `200` means Cloudflare is eating it.
+
+If it is being eaten, the fix is a WAF rule that skips
+`/api/billing/webhook`, or turning Bot Fight Mode off.
+
+**Either way a blocked webhook no longer costs a sale.** The browser comes
+back from Checkout carrying the Checkout Session id, and
+`/api/billing/confirm` asks Stripe directly whether that session was paid
+— see `engine/billing.reconcile_session`. Nothing has to be delivered to
+us for a customer to get in. The webhook is still what keeps the status
+correct afterwards (renewals, cancellations, failed cards), so it is worth
+fixing regardless.
+
+### Lock the origin
+
+Cloudflare only protects what goes through it. The droplet's IP is public,
+and anyone who has it can skip the whole edge. Restrict 80/443 to
+Cloudflare:
+
+```
+sudo ufw allow from 173.245.48.0/20 to any port 443 proto tcp
+# …and the rest of the list in /etc/qellys/cloudflare-ips.txt
+```
+
+---
+
+## When it gets busy
+
+The app serves at most `QB_MAX_INFLIGHT` requests at once (default 64) and
+answers `503` with a `Retry-After` beyond that.
+
+`ThreadingHTTPServer` starts a thread per connection and has no ceiling of
+its own. On a 1GB droplet a burst walks the box into swap and then into
+the OOM killer, and what dies is the whole process — every signed-in
+session with it, and usually the headroom you would have needed to ssh in
+and fix it. A ceiling turns that into the failure anybody would choose:
+a few callers retry, everyone already being served finishes.
+
+Raise it if the box is bigger:
+
+```
+sudo ./deploy/setenv.sh QB_MAX_INFLIGHT 128
+sudo systemctl restart qellys
+```
+
+Caddy serves every static file, so the only things reaching Python are API
+calls. Per signed-in visitor that is roughly one account sync a minute
+plus a status check per page load — the boards themselves come off disk
+through Caddy with a minute of cache in front of them.

@@ -53,9 +53,14 @@ def _calls(node, name):
 
 def test_main_binds_before_it_builds():
     main = _fn("main")
+    # ANY server class, not one name. This pinned the literal
+    # `ThreadingHTTPServer` and started failing the day the server was
+    # given a ceiling and became `BoundedHTTPServer` — a rename, with the
+    # ordering this test is about completely unchanged. What matters is
+    # that a socket is bound, not what the class is called this month.
     binds = [n.lineno for n in ast.walk(main)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-             and n.func.id == "ThreadingHTTPServer"]
+             and n.func.id.endswith("HTTPServer")]
     assert binds, "main() no longer binds a socket"
     # Any build inside main() must live in the nested startup thread,
     # which is defined after the bind. A bare call before it is the bug.

@@ -128,17 +128,46 @@ def test_the_secret_key_travels_in_a_header_and_never_in_the_body():
 
 
 # --- what moves entitlement ----------------------------------------------------
-def test_only_the_webhook_grants_and_the_return_url_cannot():
-    """`?paid=1` is a string anybody can type. It must reach nothing that
-    writes."""
+def test_the_browser_reads_entitlement_and_never_writes_it():
+    """`?paid=1` is a string anybody can type, and it must grant nothing.
+
+    THIS USED TO SAY "only the webhook grants". That was the architecture
+    until 2026-08-21, when it turned out to be a liability rather than a
+    guarantee: a webhook is a request from Stripe's servers to ours, so
+    every box in front of the site — a WAF, a proxy, a firewall rule —
+    gets a vote on whether a paying customer receives what they paid for.
+    Cloudflare's Bot Fight Mode went on over the live site that evening
+    and on the free plan cannot be told to skip the webhook path.
+
+    The return trip may now ASK. What it must never do is DECIDE. The
+    browser sends a session id to our server; our server reads that
+    session from Stripe and checks it was paid and whose it is. The claim
+    still comes from Stripe, and the only thing that changed is the
+    direction the answer travels — see engine/billing.reconcile_session
+    and tests/test_paid_without_webhook.py, which is where the ownership
+    and payment checks are tested.
+
+    So: nothing in the browser writes entitlement, and the return trip
+    must go through the server to get one."""
     app = _app()
     fn = app[app.index("async function paidReturnWait("):]
     fn = fn[:fn.index("\n}\n") + 2]
-    for writer in ("redeem", "apply", "grant", "entitled =", "entitled=true"):
-        assert writer not in fn.lower(), \
+    # Comments here describe what the function refuses to do, and four
+    # other tests in this repo have tripped on exactly that.
+    fn = re.sub(r"/\*.*?\*/", " ", fn, flags=re.S)
+    fn = re.sub(r"(?m)//.*$", "", fn).lower()
+    for writer in ("redeem", "localstorage", "entitled =", "entitled=true",
+                   "entitled = true", "classlist.remove"):
+        assert writer not in fn, \
             f"the return-trip handler contains {writer!r}"
-    assert "paywallCheck()" in fn, \
+    assert "paywallcheck()" in fn, \
         "it does not re-ask the server, so it is asserting rather than checking"
+    # And the asking goes to OUR server, which is what verifies with
+    # Stripe. A fetch straight to Stripe from the page would need a key
+    # in the page.
+    assert "/api/billing/confirm" in fn
+    assert "api.stripe.com" not in fn, \
+        "the page talks to Stripe directly, which means a key in the page"
 
 
 def test_the_return_trip_gives_up_rather_than_spinning_forever():
