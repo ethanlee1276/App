@@ -114,20 +114,32 @@ def test_the_hash_covers_every_file_the_worker_precaches():
 
 
 def test_changing_the_shell_changes_the_name():
-    """The whole property, measured rather than asserted."""
+    """The whole property, measured rather than asserted.
+
+    AGAINST A COPY, not the real web tree. The first version of this
+    appended a line to `web/css/styles.css` and restored it afterwards,
+    which is fine in a serial run and a landmine in a parallel one: three
+    dozen tests read that file, and any of them running during the
+    window would have seen a stylesheet nobody wrote. `sw_body` takes the
+    web directory as an argument precisely so it can be pointed
+    somewhere else.
+    """
+    import shutil
     import server
-    first = server.sw_body().decode()
-    v1 = re.search(r'const VERSION = "([^"]*)";', first).group(1)
-    css = os.path.join(ROOT, "web", "css", "styles.css")
-    original = open(css, "rb").read()
+    tmp = tempfile.mkdtemp(prefix="qb-shell-")
     try:
+        web = os.path.join(tmp, "web")
+        shutil.copytree(os.path.join(ROOT, "web"), web)
+        webp = __import__("pathlib").Path(web)
+        v1 = re.search(r'const VERSION = "([^"]*)";',
+                       server.sw_body(webp).decode()).group(1)
+        css = os.path.join(web, "css", "styles.css")
         with open(css, "ab") as fh:
             fh.write(b"\n/* a change to the shell */\n")
-        second = server.sw_body().decode()
-        v2 = re.search(r'const VERSION = "([^"]*)";', second).group(1)
+        v2 = re.search(r'const VERSION = "([^"]*)";',
+                       server.sw_body(webp).decode()).group(1)
     finally:
-        with open(css, "wb") as fh:
-            fh.write(original)
+        shutil.rmtree(tmp, ignore_errors=True)
     assert v1 != v2, (
         "the shell changed and the cache name did not — every phone keeps "
         "the old bundle")

@@ -1,10 +1,35 @@
 #!/usr/bin/env python3
 """Run every tests/test_*.py (stdlib only — no pytest needed) and summarize.
 
-    python3 run_tests.py
+    python3 run_tests.py            # parallel, workers picked for the box
+    python3 run_tests.py -j 4       # four at a time
+    python3 run_tests.py --serial   # one at a time, the old behaviour
+    python3 run_tests.py --slowest  # …and list where the time went
 
-Each test file runs itself as a script (exit non-zero on failure). Used by CI
-and handy locally.
+Each test file runs itself as a script (exit non-zero on failure). Used by
+the deploy and handy locally.
+
+WHY PARALLEL. Ethan, 2026-08-22, mid-deploy: "its been like 50 mins". The
+droplet is one vCPU, and a serial run is 336 interpreter startups plus
+about two dozen files that boot a real HTTP server and wait for it. Almost
+none of that is CPU — it is process startup and sleeping on a socket — so
+the box was idle for most of an hour while the deploy it was gating held
+a live site on old code.
+
+That is the dangerous part, not the minutes: a suite slow enough to skip
+gets skipped, and `--no-tests` is right there in the deploy's help text.
+
+WHAT MAKES IT SAFE. Every file already runs as its own process, binds port
+0 rather than a fixed port, and puts its fixtures under TMPDIR — which is
+sandboxed below. The one file that wrote into the repo (test_service_worker
+appended a line to styles.css and restored it) was fixed to work against a
+copy in the same commit as this. If a future test needs to mutate the tree,
+it does not belong in a parallel run and this comment is the reason to
+find another way.
+
+OUTPUT IS STILL IN FILE ORDER. Results are held and printed sorted, so a
+parallel run and a serial run produce the same transcript. `doctor.py` and
+the nightly read the summary line, and tests/test_runner.py pins it.
 """
 
 from __future__ import annotations
@@ -16,8 +41,46 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+#: No file should take this long. A hung server boot used to stall the
+#: whole run with nothing to say; now it fails that one file and names it.
+FILE_TIMEOUT = 900
+
+
+def _workers(argv) -> int:
+    if "--serial" in argv:
+        return 1
+    for i, a in enumerate(argv):
+        if a == "-j" and i + 1 < len(argv):
+            return max(1, int(argv[i + 1]))
+        if a.startswith("-j") and a[2:].isdigit():
+            return max(1, int(a[2:]))
+    # MORE THAN THE CORE COUNT, on purpose. The work is dominated by
+    # process startup and by waiting on sockets, so a one-vCPU box still
+    # gains from several in flight — that is the box this was written for.
+    # Capped at 8 because each worker can spawn a server of its own, and
+    # the same droplet has 1GB of memory to spend on them.
+    return min(8, max(2, (os.cpu_count() or 1) * 3))
+
+
+def _run_one(path, env):
+    name = os.path.basename(path)
+    t0 = time.monotonic()
+    try:
+        r = subprocess.run([sys.executable, path], capture_output=True,
+                           text=True, cwd=ROOT, env=env, timeout=FILE_TIMEOUT)
+        out, code = r.stdout, r.returncode
+        err = r.stderr
+    except subprocess.TimeoutExpired as exc:
+        out = (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) \
+            else (exc.stdout or "")
+        err = "TIMED OUT after %ds" % FILE_TIMEOUT
+        code = 1
+    return name, code, out, err, time.monotonic() - t0
 
 
 def main() -> int:
@@ -28,41 +91,47 @@ def main() -> int:
     sandbox = tempfile.mkdtemp(prefix="qellys-tests-")
     env = dict(os.environ, TMPDIR=sandbox, TEMP=sandbox, TMP=sandbox)
     try:
-        return _run(env)
+        return _run(env, sys.argv[1:])
     finally:
         shutil.rmtree(sandbox, ignore_errors=True)
 
 
-def _run(env) -> int:
+def _run(env, argv) -> int:
     files = sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
-    failed, skipped, total = [], [], 0
-    for f in files:
-        name = os.path.basename(f)
-        r = subprocess.run([sys.executable, f], capture_output=True, text=True,
-                           cwd=ROOT, env=env)
-        m = re.search(r"(\d+) tests passed", r.stdout)
+    jobs = _workers(argv)
+    started = time.monotonic()
+    if jobs > 1:
+        print(f"  {len(files)} files, {jobs} at a time\n")
+
+    # Threads, not processes: each one only waits on a subprocess, so the
+    # GIL is never the thing holding anything up.
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results = list(pool.map(lambda f: _run_one(f, env), files))
+
+    failed, skipped, total, times = [], [], 0, []
+    for name, code, out, err, secs in results:      # already in file order
+        times.append((secs, name))
+        m = re.search(r"(\d+) tests passed", out)
         n = int(m.group(1)) if m else 0
         # A file may bow out when the machine can't give it what it needs
         # (Pillow, for the hand-run venue intake tool). It says so on a
         # SKIP line and exits 0. Report that as a skip, never as a green
         # zero: a file that stops running and still shows ✅ is how
         # coverage disappears without anyone noticing.
-        why = re.search(r"^SKIP (.+)$", r.stdout, re.M)
-        if r.returncode == 0 and not why and n == 0:
-            # …and the same argument applies one step further in. The
-            # comment above was written about a file that bows out; it
-            # says "never a green zero", but nothing enforced it, so a
-            # file that exited 0 while reporting no count still printed
-            # ✅ with a 0 beside it. Fourteen files were doing exactly
-            # that — their runners printed "all good" instead of "N tests
-            # passed", so 142 real tests were absent from the headline
-            # number. The dangerous part was never the miscount: a file
-            # whose tests had stopped running altogether would have
-            # printed the identical line. Zero passing tests and no
-            # stated reason is not a pass.
+        why = re.search(r"^SKIP (.+)$", out, re.M)
+        if code == 0 and not why and n == 0:
+            # …and the same argument applies one step further in. A file
+            # that exited 0 while reporting no count still printed ✅
+            # with a 0 beside it. Fourteen files were doing exactly that
+            # — their runners printed "all good" instead of "N tests
+            # passed", so 142 real tests were absent from the headline.
+            # The dangerous part was never the miscount: a file whose
+            # tests had stopped running altogether would have printed the
+            # identical line. Zero passing tests and no stated reason is
+            # not a pass.
             failed.append(name)
             print(f"  ❌ {name:28} ran no tests and gave no SKIP reason")
-        elif r.returncode == 0:
+        elif code == 0:
             total += n
             if why:
                 skipped.append(name)
@@ -72,7 +141,14 @@ def _run(env) -> int:
         else:
             failed.append(name)
             print(f"  ❌ {name:28} FAILED")
-            print((r.stdout + r.stderr)[-800:])
+            print((out + err)[-800:])
+
+    took = time.monotonic() - started
+    if "--slowest" in argv:
+        print(f"\n{'—' * 40}\nSlowest files:")
+        for secs, name in sorted(times, reverse=True)[:12]:
+            print(f"  {secs:6.1f}s  {name}")
+
     print(f"\n{'—' * 40}")
     if failed:
         print(f"FAILED: {', '.join(failed)}  ({total} passed before failure)")
@@ -82,6 +158,7 @@ def _run(env) -> int:
     note = f"  {len(skipped)} skipped: {', '.join(skipped)}." if skipped else ""
     print(f"All green: {total} tests across "
           f"{len(files) - len(skipped)} files.{note}")
+    print(f"  {took:.0f}s wall, {jobs} at a time.")
     return 0
 
 

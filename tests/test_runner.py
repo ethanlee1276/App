@@ -71,9 +71,9 @@ def test_every_test_file_prints_a_countable_footer():
 def test_the_runner_refuses_a_green_zero():
     """The guard itself. A file that exits 0, offers no SKIP reason and
     reports no tests is a failure — not a pass with a 0 in the margin."""
-    assert "if r.returncode == 0 and not why and n == 0:" in RUNNER, \
+    assert "if code == 0 and not why and n == 0:" in RUNNER, \
         "the green-zero guard is gone"
-    i = RUNNER.index("if r.returncode == 0 and not why and n == 0:")
+    i = RUNNER.index("if code == 0 and not why and n == 0:")
     block = RUNNER[i:i + 900]
     assert "failed.append(name)" in block, \
         "a countless file is reported but not actually failed"
@@ -83,10 +83,10 @@ def test_a_stated_skip_is_still_allowed_through():
     """The guard must not swallow the legitimate case it sits next to.
     `test_venue_ingest.py` bows out when Pillow is absent, says why, and
     has to keep reading as a skip rather than a failure."""
-    i = RUNNER.index("if r.returncode == 0 and not why and n == 0:")
+    i = RUNNER.index("if code == 0 and not why and n == 0:")
     after = RUNNER[i:]
     assert 'skipped.append(name)' in after, "the skip branch is unreachable"
-    assert after.index("elif r.returncode == 0:") < after.index(
+    assert after.index("elif code == 0:") < after.index(
         "skipped.append(name)"), "skips no longer get their own branch"
 
 
@@ -109,22 +109,64 @@ def test_the_guard_actually_fires_on_a_silent_file():
     write("test_silent.py", 'print("nothing to see")\n')
     write("test_bows_out.py", 'print("SKIP no Pillow here")\n')
 
+    # BOTH WAYS ROUND. The runner went parallel on 2026-08-22 and the
+    # property that matters is that it did not change its mind about
+    # anything: same verdict, same lines, whether the files run one at a
+    # time or eight. Running it twice here is the cheapest possible
+    # version of that check and it is the one that would catch a result
+    # being attributed to the wrong file.
     keep, run_tests.ROOT = run_tests.ROOT, box
-    out = io.StringIO()
+    seen = {}
     try:
-        with contextlib.redirect_stdout(out):
-            rc = run_tests._run(dict(os.environ))
+        for label, argv in (("serial", ["--serial"]), ("parallel", ["-j", "4"])):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = run_tests._run(dict(os.environ), argv)
+            seen[label] = (rc, out.getvalue())
     finally:
         run_tests.ROOT = keep
         shutil.rmtree(box, ignore_errors=True)
 
-    text = out.getvalue()
-    assert rc == 1, f"a silent file did not fail the run:\n{text}"
-    assert "test_silent.py" in text and "ran no tests" in text, text
-    # …and the two honest files are untouched by the guard.
-    assert "❌ test_counts.py" not in text, text
-    assert "⏭️" in text and "test_bows_out.py" in text, \
-        f"a stated skip was caught by the guard:\n{text}"
+    for label, (rc, text) in seen.items():
+        assert rc == 1, f"[{label}] a silent file did not fail the run:\n{text}"
+        assert "test_silent.py" in text and "ran no tests" in text, text
+        # …and the two honest files are untouched by the guard.
+        assert "❌ test_counts.py" not in text, text
+        assert "⏭️" in text and "test_bows_out.py" in text, \
+            f"[{label}] a stated skip was caught by the guard:\n{text}"
+
+    # The per-file lines have to be identical and in the same order —
+    # only the trailing timing line may differ.
+    def lines(text):
+        return [l for l in text.splitlines()
+                if l.startswith(("  ✅", "  ❌", "  ⏭️", "FAILED:"))]
+    assert lines(seen["serial"][1]) == lines(seen["parallel"][1]), (
+        "a parallel run reports different results, or reports them in a "
+        "different order:\n%r\nvs\n%r"
+        % (lines(seen["serial"][1]), lines(seen["parallel"][1])))
+
+
+def test_a_hung_file_fails_itself_rather_than_the_whole_run():
+    """Serially, a file that never returns stalled everything with
+    nothing to say. In parallel it would hold a worker for ever and the
+    run would end looking merely slow."""
+    assert "FILE_TIMEOUT" in RUNNER
+    assert "TimeoutExpired" in RUNNER
+    i = RUNNER.index("except subprocess.TimeoutExpired")
+    assert "code = 1" in RUNNER[i:i + 400], "a timed-out file still passes"
+
+
+def test_the_worker_count_can_be_pinned():
+    """The droplet has one vCPU and a gigabyte. Whoever is standing in
+    front of it needs to be able to say how many at a time, and to turn
+    it off entirely."""
+    import run_tests
+    assert run_tests._workers(["--serial"]) == 1
+    assert run_tests._workers(["-j", "3"]) == 3
+    assert run_tests._workers(["-j5"]) == 5
+    assert run_tests._workers([]) >= 2
+    assert run_tests._workers([]) <= 8, (
+        "each worker can spawn a server of its own and the box has 1GB")
 
 
 def test_the_summary_line_still_carries_the_count_and_the_skips():

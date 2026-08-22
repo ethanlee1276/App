@@ -28,7 +28,26 @@ CROSSING = [(0.19, 0.14, 0.01), (0.30, 0.26, 0.06), (0.54, 0.58, 0.72),
             (0.66, 0.87, 0.20), (0.83, 0.81, 0.01)]
 
 
+#: THE FIXTURES ARE COMPUTED ONCE. Both are deterministic — a fixed
+#: seed, and a fit that is a pure function of it — so reusing them is not
+#: sharing state between tests, it is not doing the same arithmetic five
+#: times. It matters because this file was the slowest in the suite by a
+#: factor of three: 220 seconds, of which three separate 40-second calls
+#: were `cal.fit` over the same 40,000 points, and with the runner
+#: parallel the slowest single file is what the whole run waits for.
+#:
+#: Both are treated as READ-ONLY by every caller below. If a test ever
+#: needs to mutate one, it should build its own rather than deep-copying
+#: this — the point of a shared fixture is that nobody wonders whether it
+#: was modified.
+_SAMPLE: dict = {}
+_FIT: dict = {}
+
+
 def crossing_sample(n=40000, seed=5):
+    key = (n, seed)
+    if key in _SAMPLE:
+        return _SAMPLE[key]
     rng = random.Random(seed)
     pairs = []
     for said, actual, share in CROSSING:
@@ -36,7 +55,16 @@ def crossing_sample(n=40000, seed=5):
             p = min(0.97, max(0.03, rng.gauss(said, 0.03)))
             pairs.append((p, 1 if rng.random() < actual else 0))
     rng.shuffle(pairs)
+    _SAMPLE[key] = pairs
     return pairs
+
+
+def crossing_fit(sport="mlb", market="hits"):
+    """`cal.fit` over the crossing sample — the expensive one."""
+    key = (sport, market)
+    if key not in _FIT:
+        _FIT[key] = cal.fit(crossing_sample(), sport=sport, market=market)
+    return _FIT[key]
 
 
 def test_pava_is_monotone_and_exact_on_a_known_case():
@@ -213,7 +241,7 @@ def test_a_curve_survives_the_round_trip_through_the_store():
 
     # And through the real store, read by the real accessor.
     d = Path(tempfile.mkdtemp()) / "calibration.json"
-    fit = cal.fit(crossing_sample(), sport="mlb", market="hits")
+    fit = crossing_fit()
     d.write_text(json.dumps({"mlb:hits": fit.to_dict()}))
     curves = cal.load_curves(d)
     assert "mlb:hits" in curves
@@ -228,7 +256,7 @@ def test_the_runtime_path_prefers_the_curve_and_still_honours_the_switch():
     import tempfile
     from pathlib import Path
     d = Path(tempfile.mkdtemp()) / "calibration.json"
-    fit = cal.fit(crossing_sample(), sport="mlb", market="hits")
+    fit = crossing_fit()
     assert fit.curve, "this sample should have produced a curve"
     d.write_text(json.dumps({"mlb:hits": fit.to_dict()}))
     cal.reset_cache()
@@ -269,7 +297,7 @@ def test_a_boundary_fit_is_still_refused_even_with_a_curve():
     import tempfile
     from pathlib import Path
     d = Path(tempfile.mkdtemp()) / "calibration.json"
-    fit = cal.fit(crossing_sample(), sport="mlb", market="hits")
+    fit = crossing_fit()
     entry = fit.to_dict()
     entry["temperature"] = cal.GRID_MAX
     d.write_text(json.dumps({"mlb:hits": entry}))
