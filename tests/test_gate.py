@@ -602,7 +602,14 @@ def test_a_broken_code_lookup_costs_a_code_holder_not_a_subscriber():
 #: calls is the most reassuring kind of dead code.
 GATED_BUILDS = ("nfl_build.py", "mlb_build.py", "nba_build.py",
                 "cfb_build.py", "ufc_build.py", "futures_build.py",
-                "generate.py", "generate_mlb.py", "pm_build.py")
+                "generate.py", "generate_mlb.py", "pm_build.py",
+                # Added 2026-08-22 with the keys they write. Both wrote
+                # their whole board straight to web/data/ while this list
+                # — hand-kept, never re-derived — said the gate was
+                # covered. memes_build rebuilds every 20 seconds, so the
+                # scan went back on the open web a third of a minute
+                # after any --seal.
+                "memes_build.py", "fantasy_build.py")
 
 
 def test_every_build_that_writes_picks_publishes_through_the_gate():
@@ -779,6 +786,110 @@ def test_every_gated_board_the_page_reads_has_an_entitled_route():
         "a gated board read straight off the public path, where the paid "
         "keys are already gone — subscribers get the stranger's copy: "
         + "; ".join(offenders))
+
+
+# --- the registry, checked without needing the machine to have built ---------
+
+def _py_sources():
+    """Every Python file in the project, excluding tests and caches."""
+    for path in sorted(Path(ROOT).rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if rel.parts[0] in ("tests", "__pycache__", ".git"):
+            continue
+        if "__pycache__" in rel.parts:
+            continue
+        yield rel, path.read_text(encoding="utf-8")
+
+
+def test_every_board_path_written_in_the_code_is_a_board_the_gate_knows():
+    """STATIC, so it works in a container that has built nothing.
+
+    `test_a_board_this_machine_has_built_is_one_the_registry_knows`
+    globs web/data/ — which means it is strongest on the droplet and
+    silent here, and heartbeat.json slipped past it for that exact
+    reason: the dev container never runs the refresh loop that writes
+    it, so the glob never saw the file it should have objected to.
+
+    This asks the source instead. It found four more the same day:
+    parlaycheck.py and standings_build.py between them named
+    cfb_recommendations.json, nba_recommendations.json,
+    wnba_recommendations.json and ufc_recommendations.json — four files
+    no builder has ever written, in two tools that fail soft when a
+    board will not open. Neither was leaking anything. Both were
+    silently checking nothing.
+    """
+    pat = re.compile(r"web/data/([A-Za-z0-9_]+\.json)")
+    unknown = {}
+    for rel, src in _py_sources():
+        for name in set(pat.findall(src)):
+            if name not in gate.KNOWN_BOARDS:
+                unknown.setdefault(name, []).append(str(rel))
+    assert not unknown, (
+        "board names the gate has never heard of — either a pipeline grew "
+        "a board without registering it, or a reader is opening a file "
+        "nothing writes: "
+        + "; ".join(f"{n} ({', '.join(w)})" for n, w in sorted(unknown.items())))
+
+
+def test_the_liveness_stamp_is_free():
+    """Every visitor's stale bar reads heartbeat.json, signed in or not.
+    Gating it would break the one line on the page that says whether the
+    numbers in front of you are current."""
+    assert gate.is_free("heartbeat.json")
+
+
+def test_a_tool_that_wants_a_boards_picks_reads_the_private_copy():
+    """The bug that was live in three places at once, and never raised in
+    any of them: `web/data/` is the copy with the picks REMOVED, so a
+    tool reading it with the paywall on finds an empty list and reports
+    honestly about nothing. §10.2's one-parlay-per-slate cap was not
+    being enforced at all; parlaycheck was passing four sports it had
+    never opened.
+
+    Checked as "there is one function that answers this", plus its two
+    known callers, rather than by trying to guess which reads want paid
+    keys — that judgement belongs at the call site."""
+    assert hasattr(gate, "board_source")
+    for rel in ("engine/parlays.py", "parlaycheck.py"):
+        src = (Path(ROOT) / rel).read_text(encoding="utf-8")
+        assert "board_source(" in src, f"{rel} still reads the public copy"
+
+
+def test_board_source_prefers_the_private_copy_and_falls_back():
+    with tempfile.TemporaryDirectory() as td:
+        web = Path(td) / "web" / "data"
+        web.mkdir(parents=True)
+        public = web / "nba.json"
+        public.write_text("{}")
+        # No private copy: the public path is all there is.
+        assert gate.board_source(public) == public
+        built = Path(td) / "data" / "built"
+        built.mkdir(parents=True)
+        (built / "nba.json").write_text("{}")
+        # RESOLVED INSIDE THE CALLER'S OWN TREE. The first cut of this
+        # read gate.FULL_DIR unconditionally, so a caller working in a
+        # temp root got this machine's real boards — which is how
+        # arbitrate_slate's own test failed, correctly.
+        assert gate.board_source(public) == built / "nba.json"
+
+
+def test_board_source_refuses_a_name_that_could_traverse():
+    """It ends up as a path join, same as full_board_file, and it is
+    reached from `SLATE_BOARDS`-shaped config."""
+    for evil in ("../secrets.local", "a/b.json", ".hidden.json"):
+        got = gate.board_source(Path("web/data") / evil)
+        assert "data/built" not in str(got), f"{evil!r} resolved into FULL_DIR"
+
+
+def test_the_slate_cap_covers_every_sport_that_can_publish_a_parlay():
+    """§10.2 says "across all sports" and UFC was not in the map, so a
+    Saturday with a card and a college slate could publish two parlays
+    against a rule that permits one. Checked against the ledger's own
+    board list, which is the map that was right."""
+    from engine.parlayledger import BOARD_FILES
+    from engine.parlays import SLATE_BOARDS
+    missing = sorted(set(BOARD_FILES) - set(SLATE_BOARDS))
+    assert not missing, f"sports that publish a parlay nothing arbitrates: {missing}"
 
 
 if __name__ == "__main__":

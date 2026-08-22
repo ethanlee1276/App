@@ -103,12 +103,53 @@ def test_the_full_board_is_written_outside_the_web_root():
 def test_the_full_copy_is_written_before_the_public_one():
     """A crash between the two writes must not leave the FULL board on the
     public path — the exact failure this module exists to prevent,
-    arriving through the back door."""
-    src = _read("engine", "gate.py")
-    body = src[src.index("def publish("):]
-    body = body[:body.index("\ndef ")]
-    assert body.index("FULL_DIR.mkdir") < body.index("is public"), \
-        "the public path may be written first"
+    arriving through the back door.
+
+    PROVEN BY CRASHING IT, not by reading the source. The version this
+    replaces asserted that the string "FULL_DIR.mkdir" appeared before
+    the string "is public" inside publish(), and it broke on 2026-08-22
+    when that local was renamed — the write order was never touched. A
+    test that fails when you rename a variable is pinned to the spelling
+    of the fix rather than to the thing being guaranteed.
+    """
+    import os as _os
+    import tempfile
+    from pathlib import Path
+    from engine import gate as _gate
+
+    restore = _env(QB_PAYWALL="1")
+    real = _os.replace
+    seen = []
+
+    def crash(src, dst):
+        seen.append(str(dst))
+        if len(seen) == 2:                      # the public write
+            raise RuntimeError("power cut between the two writes")
+        return real(src, dst)
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        public = root / "web" / "data" / "recommendations.json"
+        public.parent.mkdir(parents=True)
+        board = {"date": "x", "games": [1], "recommendations": [1, 2, 3]}
+        _os.replace = crash
+        try:
+            try:
+                _gate.publish(board, public, public.name)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("the fixture never crashed")
+        finally:
+            _os.replace = real
+            restore()
+
+        assert not public.exists(), (
+            "the crash left a board on the PUBLIC path — and since the "
+            "full copy is written first, that board is the full one")
+        full = root / "data" / "built" / "recommendations.json"
+        assert full.is_file(), "the private copy was not written first"
+        assert len(json.loads(full.read_text())["recommendations"]) == 3
 
 
 # --- reaching for the private copy directly ------------------------------------

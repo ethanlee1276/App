@@ -208,6 +208,11 @@ PAID_FILES = (
 #: and the model's output inside them is stripped. See PAID_KEYS_BY_FILE.
 FREE_FILES = (
     "record.json", "memerecord.json", "injuries.json",
+    # The refresher's liveness stamp: when the last cycle finished and
+    # how long cycles take on this box. Every visitor's stale bar reads
+    # it, signed in or not, so gating it would break the one line on the
+    # page that tells a reader whether the numbers are current.
+    "heartbeat.json",
     "ufc_live.json",
     # Schedule and scores for the five weeks of preseason. Free
     # because it is structurally priceless — board_payload()
@@ -253,7 +258,7 @@ KNOWN_BOARDS = (
     # a board without telling the gate. Unregistered meant `is_free` said
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
-    "memerecord.json",
+    "memerecord.json", "heartbeat.json",
     "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
@@ -383,8 +388,9 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     """
     public = Path(public_path)
     label = name or public.name
-    FULL_DIR.mkdir(parents=True, exist_ok=True)
-    full = FULL_DIR / label
+    built = _full_dir_for(public)
+    built.mkdir(parents=True, exist_ok=True)
+    full = built / label
     # Atomic on both copies (tmp + replace, same directory so the rename
     # cannot cross filesystems). The public file is what every phone polls
     # on a 15-30s clock while the refresher rewrites it every cycle — an
@@ -585,6 +591,60 @@ def full_board_file(name: str) -> "Path | None":
     except OSError:
         return None
     return path
+
+
+def _full_dir_for(public_path) -> "Path":
+    """Where THIS board's private copy belongs, given its public path.
+
+    ROOT-RELATIVE, not global, and used by both the writer and the
+    reader so the two cannot drift. `arbitrate_slate` takes a root
+    precisely so it can run against a tree that is not this checkout,
+    and the first cut of `board_source` jumped straight to FULL_DIR — so
+    a caller working in a temp tree read THIS machine's real boards
+    instead of its own, which is how that function's own test failed.
+
+    In production the answer is identical: ROOT/web/data resolves to
+    ROOT/data/built, which is FULL_DIR. Anything not shaped like
+    `<root>/web/data/` falls back to FULL_DIR, because there is no tree
+    to be relative to.
+    """
+    parent = Path(public_path).parent
+    parts = parent.parts
+    if len(parts) >= 2 and parts[-2:] == ("web", "data"):
+        return Path(*parts[:-2]) / "data" / "built"
+    return FULL_DIR
+
+
+def board_source(public_path) -> "Path":
+    """The file to READ a board from, given where its public copy lives.
+
+    THE MISTAKE THIS EXISTS TO STOP MAKING, three times over. Every
+    internal tool that wants a board's picks was opening `web/data/` —
+    which, with the paywall on, is the copy with the picks taken out.
+    Not one of them raised: they all read an empty list and reported
+    honestly on nothing.
+
+      engine/parlays.arbitrate_slate  §10.2 caps the operation at one
+                                      parlay per slate across all sports.
+                                      `parlays` is a paid key, so every
+                                      board looked parlay-less and the cap
+                                      was silently not enforced at all.
+      parlaycheck.py                  printed "every published ticket is
+                                      internally consistent" having found
+                                      no tickets to check.
+      launch.py --odds-doctor         counted priced games off the public
+                                      copy and reported 0 of 15.
+
+    The private copy is the truth; the public one is a derived artifact.
+    Falls back to the public path when there is no private copy — a board
+    built before data/built/ existed, or a machine with the paywall off
+    that has never called publish().
+    """
+    public = Path(public_path)
+    if full_board_file(public.name) is None:
+        return public                        # not a name we will resolve
+    full = _full_dir_for(public) / public.name
+    return full if full.is_file() else public
 
 
 def full_board(name: str) -> dict | None:

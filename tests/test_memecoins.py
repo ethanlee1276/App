@@ -488,11 +488,22 @@ def test_concurrent_builders_cannot_race_the_tape_or_the_board():
         stolen = mb._acquire_lock(out)
         assert stolen is not None, "a dead builder's lock wedged the scan"
         stolen.rmdir()
-    # And the writes themselves: replace, not truncate.
+    # And the writes themselves: replace, not truncate. The board goes
+    # through gate.publish since 2026-08-22 — which is atomic on BOTH
+    # copies for exactly this reason (tmp + os.replace in the same
+    # directory, so the rename cannot cross filesystems). What this
+    # asserts is the property, not the idiom: nothing in the build may
+    # write the board with a plain truncating write.
     build = open(os.path.join(ROOT, "memes_build.py"), encoding="utf-8").read()
     i = build.index("def _build(")
-    assert "os.replace(tmp, out)" in build[i:]
+    assert "gate.publish(board, out" in build[i:], (
+        "the board is written without the gate, so a paid key reaches "
+        "the public path on the next 20-second cycle")
     assert "out.write_text(" not in build[i:], "board still truncate-writes"
+    g = open(os.path.join(ROOT, "engine/gate.py"), encoding="utf-8").read()
+    k = g.index("def publish(")
+    assert "os.replace(tmp, path)" in g[k:g.index("\ndef ", k + 10)], \
+        "publish() truncate-writes the file the page polls every 20s"
     eng = open(os.path.join(ROOT, "engine/memecoins.py"), encoding="utf-8").read()
     j = eng.index("def record_snapshots(")
     body = eng[j:eng.index("\ndef ", j + 10)]

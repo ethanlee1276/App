@@ -282,12 +282,20 @@ def _build(args) -> int:
               + ("; ".join(notes) if notes else ""))
 
     out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    # Atomic replace: the page polls this file every ~20 seconds, and a
-    # truncate-and-write caught mid-poll serves half a JSON document.
-    tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(board, indent=1))
-    os.replace(tmp, out)
+    # THROUGH THE GATE, since 2026-08-22. `coins`, `rocket` and `exits`
+    # became paid keys when memecoins.json moved out of gate.FREE_FILES,
+    # and this builder was still writing the whole board straight to the
+    # public path — so the scan went back on the open web on the next
+    # 20-second cycle, every cycle, no matter how recently `--seal` had
+    # been run. Gating a key and leaving its builder writing directly is
+    # a paywall that is true for exactly as long as it takes to rebuild.
+    #
+    # publish() is atomic on both copies for the same reason the direct
+    # write was: this file is polled every ~20 seconds while it is being
+    # rewritten, and a truncate-and-write caught mid-poll serves half a
+    # JSON document.
+    from engine import gate
+    gate.publish(board, out, out.name)
     print(f"Wrote {out}")
     return 0
 

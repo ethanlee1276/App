@@ -259,7 +259,13 @@ def main() -> None:
     conn.close()
 
     p = Path(args.out)
-    _write_json(p, out)
+    # THROUGH THE GATE, since 2026-08-22 — `draft_kit`, `ranks`,
+    # `buy_sell` and `scripts` are paid keys now, and _write_json puts
+    # whatever it is given on the public path. Same hole as memes_build:
+    # the redaction was correct and the builder walked around it.
+    # `_write_json` stays for rosters_nfl.json, which is free.
+    from engine import gate
+    gate.publish(out, p, p.name)
 
     # Active rosters ride along: the players blob is already in memory and
     # already paid for, so this is a second reading of it rather than a

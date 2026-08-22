@@ -42,14 +42,17 @@ import sys
 from pathlib import Path
 
 # Where each sport's builder writes its board.
-BOARDS = {
-    "mlb": "web/data/mlb_recommendations.json",
-    "nfl": "web/data/recommendations.json",
-    "cfb": "web/data/cfb_recommendations.json",
-    "nba": "web/data/nba_recommendations.json",
-    "wnba": "web/data/wnba_recommendations.json",
-    "ufc": "web/data/ufc_recommendations.json",
-}
+#
+# IMPORTED, NOT RETYPED. This was a fourth hand-copy of the same map and
+# four of its six entries named files that have never existed —
+# cfb_recommendations.json and friends, where the real boards are
+# cfb.json, nba.json, wnba.json and ufc.json. `main` skips a board it
+# cannot open, so this script has been auditing NFL and MLB tickets only
+# and printing "every published ticket is internally consistent" about
+# four sports it never opened. A check that reassures without looking is
+# worse than no check.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from engine.parlayledger import BOARD_FILES as BOARDS       # noqa: E402
 
 
 def matchup(leg: dict) -> tuple:
@@ -144,7 +147,12 @@ def main(argv: list) -> int:
     for sport, rel in BOARDS.items():
         if want and sport not in want:
             continue
-        p = Path(rel)
+        # The PRIVATE copy where there is one: `parlays` is a paid key,
+        # so on a box with QB_PAYWALL=1 the public file has an empty
+        # parlay zone and this audit would pass every sport by finding
+        # no tickets in any of them.
+        from engine import gate
+        p = gate.board_source(Path(rel))
         if not p.is_file():
             continue
         seen += 1

@@ -1644,6 +1644,11 @@ SLATE_BOARDS = {
     "cfb": "web/data/cfb.json",
     "nba": "web/data/nba.json",
     "wnba": "web/data/wnba.json",
+    # UFC was missing from a map whose own heading says "ACROSS ALL
+    # SPORTS", so a Saturday with a card and a college slate could
+    # publish two parlays against a rule that permits one. Nothing
+    # exempted it — it was left out when the sport was added.
+    "ufc": "web/data/ufc.json",
 }
 
 
@@ -1669,19 +1674,33 @@ def arbitrate_slate(root, boards: dict | None = None) -> dict:
     import json
     from pathlib import Path
 
+    from . import gate
+
     root = Path(root)
     boards = boards or SLATE_BOARDS
     loaded, best = {}, None
     for sport, rel in boards.items():
-        f = root / rel
+        public = root / rel
+        # THE FULL COPY, NOT THE PUBLIC ONE. `parlays` is a paid key, so
+        # with QB_PAYWALL=1 the file on the public path carries an empty
+        # parlay zone — which meant `z` was falsy for every sport and
+        # this whole function did NOTHING on the live site. §10.2's one
+        # parlay per slate was not being enforced at all, silently, for
+        # as long as the paywall has been on.
+        #
+        # It also could not write back safely: a straight write_text here
+        # put the mutated board on the public path without going through
+        # redact(). Both halves are fixed by working on the private copy
+        # and republishing it.
+        src = gate.board_source(public)
         try:
-            data = json.loads(f.read_text(encoding="utf-8"))
+            data = json.loads(src.read_text(encoding="utf-8"))
         except Exception:
             continue
         z = data.get("parlays")
         if not z or not z.get("tickets"):
             continue
-        loaded[sport] = (f, data, z)
+        loaded[sport] = (public, src, data, z)
         for t in z["tickets"]:
             if not t.get("qualified"):
                 continue
@@ -1690,7 +1709,7 @@ def arbitrate_slate(root, boards: dict | None = None) -> dict:
                 best = (key, sport, t.get("rank"))
 
     demoted = 0
-    for sport, (f, data, z) in loaded.items():
+    for sport, (public, src, data, z) in loaded.items():
         changed = False
         for t in z["tickets"]:
             if not t.get("qualified"):
@@ -1710,7 +1729,15 @@ def arbitrate_slate(root, boards: dict | None = None) -> dict:
             changed = True
         if changed or (best and sport == best[1]):
             z["slate_cap_applied"] = True
-            f.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            if src is public:
+                # No private copy on this box (a board built before
+                # data/built/ existed). Write back in place — but NEVER
+                # through publish(), which would file this already-public
+                # board as the subscribers' full copy and destroy it.
+                public.write_text(json.dumps(data, indent=2),
+                                  encoding="utf-8")
+            else:
+                gate.publish(data, public, public.name)
     return {"boards": len(loaded), "play": best[1] if best else None,
             "demoted": demoted}
 

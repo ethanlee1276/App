@@ -39,7 +39,12 @@ def cfb_conferences() -> dict:
     September. A missing slate simply means no conference grouping — the
     standings still render, under one heading.
     """
-    p = OUT_DIR / "cfb_recommendations.json"
+    # cfb.json. This read `cfb_recommendations.json` — a file no builder
+    # has ever written — so the except below caught it every single time
+    # and CFB standings have been rendering under one heading instead of
+    # grouped by conference since the day this shipped. The soft failure
+    # documented above is exactly what hid it.
+    p = OUT_DIR / "cfb.json"
     try:
         blob = json.loads(p.read_text())
     except (OSError, ValueError):
