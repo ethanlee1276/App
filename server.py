@@ -184,25 +184,78 @@ RATE_AUTH_PER_MIN = 20
 _RATE: dict = {}
 _RATE_LOCK = threading.Lock()
 
+#: The window every counter is measured over.
+_RATE_WINDOW = 60.0
+#: How often the sweep may run. Once per this many seconds, NOT once per
+#: request — see `_rate_sweep` for what that cost me.
+_RATE_SWEEP_EVERY = 30.0
+#: Hard ceiling on tracked callers, so memory cannot follow traffic
+#: upward without limit on a 1 GB box.
+_RATE_MAX_KEYS = 50_000
+_RATE_SWEPT_AT = 0.0
+
+
+def _rate_sweep(now: float) -> None:
+    """Drop expired counters. CALLER HOLDS `_RATE_LOCK`.
+
+    THIS USED TO RUN ON EVERY REQUEST once the table passed 8192 keys,
+    and it built `list(_RATE.items())` — a full copy of the table — to do
+    it. Under the global lock. Measured 2026-08-22:
+
+           1,000 keys   0.002 ms per request
+           8,000 keys   0.068 ms
+          16,000 keys   3.587 ms
+          64,000 keys  21.982 ms
+
+    Every API request takes this lock, so past ~8k distinct callers the
+    whole site serialises behind one O(n) scan: at 64k tracked addresses
+    that is ~45 requests per second TOTAL, on any hardware. And it is a
+    spiral, not a plateau — the slower it gets the more requests are in
+    flight, the more addresses arrive, the slower it gets.
+
+    That is precisely the shape of the traffic this site was being made
+    ready for: an Instagram post, tens of thousands of phones, most of
+    them new addresses. It would not have crashed. It would have gone
+    treacle-slow at exactly the moment it mattered and recovered by
+    itself afterwards, which is the hardest kind of outage to explain.
+
+    Now: at most once every `_RATE_SWEEP_EVERY` seconds, so the O(n) cost
+    is amortised over thirty seconds of traffic rather than paid per
+    request. Entries older than the window are dead weight by definition
+    — nothing reads them — so the sweep can take all of them at once
+    instead of 2048 at a time.
+    """
+    global _RATE_SWEPT_AT
+    _RATE_SWEPT_AT = now
+    for k in [k for k, v in _RATE.items()
+              if not v or now - v[-1] >= _RATE_WINDOW]:
+        _RATE.pop(k, None)
+    if len(_RATE) <= _RATE_MAX_KEYS:
+        return
+    # Still over after dropping the dead: trim the oldest last-seen first,
+    # since those are the closest to expiring anyway. Down to 90% of the
+    # cap rather than exactly to it, so the next arrival does not trigger
+    # another sweep immediately — which would put the per-request O(n)
+    # straight back.
+    keep = _RATE_MAX_KEYS * 9 // 10
+    for k in sorted(_RATE, key=lambda k: _RATE[k][-1])[:len(_RATE) - keep]:
+        _RATE.pop(k, None)
+
 
 def rate_ok(key: str, limit: int, now: float | None = None) -> bool:
     """Sliding-window counter. False when this caller is over the limit."""
     import time as _t
     now = _t.time() if now is None else now
     with _RATE_LOCK:
-        hits = [t for t in _RATE.get(key, []) if now - t < 60.0]
-        if len(hits) >= limit:
-            _RATE[key] = hits
-            return False
-        hits.append(now)
+        hits = [t for t in _RATE.get(key, []) if now - t < _RATE_WINDOW]
+        over = len(hits) >= limit
+        if not over:
+            hits.append(now)
         _RATE[key] = hits
-        # Bounded: this is memory, and an attacker with a botnet would
-        # otherwise be filling it one key at a time.
-        if len(_RATE) > 8192:
-            for k in [k for k, v in list(_RATE.items())
-                      if not v or now - v[-1] > 120][:2048]:
-                _RATE.pop(k, None)
-        return True
+        if (now - _RATE_SWEPT_AT >= _RATE_SWEEP_EVERY
+                or len(_RATE) > _RATE_MAX_KEYS):
+            _rate_sweep(now)
+        return not over
 
 
 _RATE_LIMITED = ('{"error":"Too many requests — slow down and try again '

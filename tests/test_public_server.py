@@ -325,6 +325,109 @@ def test_the_limits_are_generous_enough_for_normal_use():
     assert auth < read
 
 
+def test_the_limiter_does_not_scan_the_whole_table_per_request():
+    """MEASURED 2026-08-22, and it is the reason this test exists.
+
+    The sweep ran on EVERY request once the table passed 8192 keys, and
+    built `list(_RATE.items())` — a copy of the whole table — to do it,
+    under the global lock every API request takes:
+
+           1,000 keys   0.002 ms per request
+          16,000 keys   3.587 ms
+          64,000 keys  21.982 ms
+
+    At 64k distinct callers that is ~45 requests per second for the whole
+    site on any hardware, and it is a spiral rather than a plateau: the
+    slower it gets, the more requests are in flight, the more addresses
+    arrive. Which is exactly the traffic an Instagram post delivers.
+
+    It would never have crashed. It would have gone treacle-slow at the
+    one moment it mattered and recovered by itself afterwards.
+    """
+    import time
+    import server as S
+    now = time.time()
+    S._RATE.clear()
+    S._RATE_SWEPT_AT = now                      # just swept; none due
+    for i in range(40_000):
+        S._RATE[f"read:k{i}"] = [now]
+    t0 = time.perf_counter()
+    for j in range(200):
+        S.rate_ok(f"read:new{j}", S.RATE_READ_PER_MIN, now)
+    per = (time.perf_counter() - t0) / 200
+    S._RATE.clear()
+    assert per < 0.001, (
+        f"{per * 1000:.3f} ms per request with 40k callers tracked — the "
+        f"per-request table scan is back, and every API request queues "
+        f"behind it")
+
+
+def test_the_sweep_still_collects_what_it_is_for():
+    """Cheap and useless is not the goal. Anything older than the window
+    is dead weight — nothing reads it — so a sweep must take all of it."""
+    import time
+    import server as S
+    now = time.time()
+    S._RATE.clear()
+    S._RATE_SWEPT_AT = 0.0                      # overdue, so it runs
+    for i in range(3_000):
+        S._RATE[f"read:old{i}"] = [now - 300]
+    for i in range(50):
+        S._RATE[f"read:live{i}"] = [now]
+    S.rate_ok("read:trigger", S.RATE_READ_PER_MIN, now)
+    left = len(S._RATE)
+    S._RATE.clear()
+    assert left <= 52, f"{left} entries survived a sweep of 3,000 expired ones"
+
+
+def test_the_table_cannot_grow_without_a_ceiling():
+    """It is memory on a 1 GB box, and the traffic that fills it is the
+    traffic the box is least able to spare it for."""
+    import time
+    import server as S
+    now = time.time()
+    S._RATE.clear()
+    S._RATE_SWEPT_AT = 0.0
+    for i in range(S._RATE_MAX_KEYS * 2):       # all fresh, none evictable
+        S._RATE[f"read:f{i}"] = [now]
+    S.rate_ok("read:trigger", S.RATE_READ_PER_MIN, now)
+    kept = len(S._RATE)
+    S._RATE.clear()
+    assert kept <= S._RATE_MAX_KEYS, f"{kept:,} kept over a {S._RATE_MAX_KEYS:,} cap"
+    # Trimmed BELOW the cap, not exactly to it: landing on the cap means
+    # the next arrival sweeps again, which is the per-request O(n) back.
+    assert kept < S._RATE_MAX_KEYS, "no headroom — the next caller re-sweeps"
+
+
+def test_the_limit_itself_is_still_exact():
+    """All of the above is worthless if it stopped counting correctly."""
+    import time
+    import server as S
+    now = time.time()
+    S._RATE.clear()
+    S._RATE_SWEPT_AT = now
+    allowed = sum(1 for _ in range(320)
+                  if S.rate_ok("read:one", 300, now))
+    S._RATE.clear()
+    assert allowed == 300, f"{allowed} got through a limit of 300"
+
+
+def test_a_refused_request_does_not_extend_the_block():
+    """A caller hammering while limited must not keep pushing their own
+    window forward — that turns a one-minute cool-off into a permanent
+    lockout for anyone who retries."""
+    import server as S
+    S._RATE.clear()
+    S._RATE_SWEPT_AT = 1000.0
+    for _ in range(300):
+        S.rate_ok("read:x", 300, 1000.0)        # fills the budget at t=1000
+    for _ in range(50):
+        S.rate_ok("read:x", 300, 1030.0)        # refused, mid-window
+    ok = S.rate_ok("read:x", 300, 1061.0)       # window has passed
+    S._RATE.clear()
+    assert ok, "the refused hits extended the window — this is a lockout"
+
+
 def test_the_stripe_webhook_is_not_rate_limited():
     """It is authenticated by signature already, and a retry burst during
     an incident is exactly when dropping payment events costs most."""
