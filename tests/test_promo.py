@@ -247,6 +247,36 @@ def test_setup_reports_a_deactivated_code_instead_of_passing_it():
     assert any("switched OFF" in p for p in row["problems"]), row
 
 
+def test_the_deploy_creates_the_codes_so_nobody_has_to():
+    """The reason this is wired into deploy.sh at all: the Stripe key
+    lives in /etc/qellys/env on the server and nowhere else, so the
+    server is the only place that CAN create the coupon. Asking for a
+    hand-run command was making a person do a machine's job."""
+    raw = _read("deploy", "deploy.sh")
+    # COMMENTS STRIPPED FIRST. The block above this step explains at
+    # length why it is --promos-setup and not --stripe-setup, and a
+    # substring search fails on the explanation rather than on the
+    # mistake. That shape has bitten this suite repeatedly.
+    sh = "\n".join(l for l in raw.splitlines() if not l.lstrip().startswith("#"))
+    assert "--promos-setup" in sh, "the deploy no longer creates promo codes"
+    assert "--stripe-setup" not in sh, \
+        "the deploy must never mint Products or Prices unattended"
+    # Never fatal: a Stripe outage is not a reason to refuse a deploy.
+    i = sh.index("--promos-setup")
+    assert "||" in sh[i:i + 200], \
+        "a Stripe failure would abort the deploy (set -e is on)"
+
+
+def test_the_narrow_flag_only_touches_coupons():
+    """--promos-setup is what the deploy calls. If it ever grew the
+    ability to create a Price, the deploy would silently gain it too."""
+    src = _read("launch.py")
+    block = src[src.index('if "--promos" in argv'):]
+    block = block[:block.index('if "--stripe" in argv')]
+    assert "_stripe_promos_cli" in block
+    assert "ensure_catalogue" not in block and "create_price" not in block
+
+
 def test_the_blurb_is_built_from_the_promo_not_written_out():
     assert BI.promo_blurb("yearly") == ""
     said = BI.promo_blurb("monthly")

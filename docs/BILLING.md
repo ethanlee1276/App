@@ -177,7 +177,7 @@ the *next* build writes and touches nothing already on disk.
 
 ---
 
-## Discount codes are ours, not Stripe's
+## Two kinds of code, and which is which
 
 `engine/redeem.py` grants entitlement directly for a number of months. No
 card, no subscription, nothing to cancel.
@@ -198,6 +198,57 @@ check — a check races with itself under two simultaneous requests and a
 primary key does not. Wrong guesses are rate-limited per account and
 answered with the same message and the same timing whether or not the code
 exists, so a fast "no such code" cannot be used to enumerate live ones.
+
+### Checkout promo codes (a percentage off a real subscription)
+
+The codes above grant free months with **no payment at all**, which is why
+they never touch Stripe. A percentage discount is a different animal — it
+is a real subscription on a real card, charged less — so it lives at
+Stripe as a Coupon plus a Promotion Code, and is typed into the promo box
+on Stripe's own checkout page.
+
+They are declared in `billing.PROMOS`:
+
+```
+MUDBONE   75% off, repeating, 2 months, monthly plan only
+```
+
+**Nothing to set by hand.** `deploy/deploy.sh` runs `launch.py
+--promos-setup` on every deploy, which creates what is missing and is
+safe to run any number of times. `python3 launch.py --promos` reports
+without creating.
+
+#### Why a promo names the plans it applies to
+
+All three plans are Prices on **one** Stripe Product, so Stripe's own
+`applies_to` cannot separate them: a coupon offered at checkout applies to
+whatever is in the cart. And `duration_in_months` does not mean "this many
+billing periods" — it means invoices raised in that many months. On the
+yearly plan that is exactly one invoice.
+
+So an unrestricted MUDBONE would read:
+
+| Plan | Normal | With the code |
+|---|---|---|
+| Monthly | $25/mo | $6.25/mo for 2 months — *intended* |
+| 6 months | $125 | $31.25 for the term |
+| Yearly | $225 | **$56.25 for a whole year** |
+
+Nothing would fail. It would just quietly be the best deal on the site.
+The gate is therefore ours: `allow_promotion_codes` is sent to Stripe only
+for a plan the promo names, so on the other two the box never renders.
+
+#### The seam between the two systems
+
+A code may not belong to both (`tests/test_promo.py` fails the build if
+`QB_CODES` and `PROMOS` ever overlap). A checkout code typed into the
+account page's redemption box is told where it actually goes, rather than
+being called invalid — which is what someone who saw the code on Instagram
+would read as *the code is broken*. That wrong-box attempt does not count
+against the anti-guessing rate limit.
+
+`engine/redeem.py` still imports nothing that moves money: the promo
+sentences reach it as plain data from the caller.
 
 Stripe's own promotion codes are **deliberately switched off**
 (`allow_promotion_codes` is absent from the Checkout request). Two coupon

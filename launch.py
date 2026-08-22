@@ -6548,6 +6548,24 @@ def main() -> None:
         _stripe_webhook_cli(recreate="--recreate" in argv,
                             print_env="--print-env" in argv)
         return
+    if "--promos" in argv or "--promos-setup" in argv:
+        # NARROW ON PURPOSE, so the deploy can call it. --stripe-setup
+        # also creates Products and Prices, and a deploy script that
+        # silently mints prices is exactly the thing the --stripe /
+        # --stripe-setup split exists to prevent. A coupon is safe to
+        # create unattended in a way a price is not: it charges nobody,
+        # Stripe enforces one promotion code per name so running it twice
+        # cannot duplicate anything, and a coupon whose terms disagree
+        # with this repo is REPORTED rather than rewritten — somebody may
+        # already be subscribed under it.
+        import os as _os
+        from engine import billing as _BI
+        sk = _os.environ.get(_BI.ENV_SECRET, "").strip()
+        if not sk:
+            print(f"{_BI.ENV_SECRET} is not set — nothing to check.")
+            return
+        _stripe_promos_cli(sk, create="--promos-setup" in argv)
+        return
     if "--stripe" in argv or "--stripe-setup" in argv:
         _stripe_cli(create="--stripe-setup" in argv,
                     print_env="--print-env" in argv)

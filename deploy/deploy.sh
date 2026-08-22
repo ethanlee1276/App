@@ -95,6 +95,33 @@ if [ -f deploy/Caddyfile ] && [ -d /etc/caddy ]; then
   fi
 fi
 
+# --- 4b. the discount codes -------------------------------------------
+# Ethan, 2026-08-22, on being told to run --stripe-setup by hand: "why
+# cant you do it for me since you did the USFARATHANE code for me."
+#
+# Correct, and the difference was never about permission. USFARATHANE is
+# an environment variable on this box, so golive.sh could just set it.
+# MUDBONE is an object inside the Stripe ACCOUNT, and the key that
+# creates it lives here in /etc/qellys/env and nowhere else. So the fix
+# is not to ask him to run a command — it is to run it from the place
+# that already holds the key. This is that place.
+#
+# --promos-setup, NOT --stripe-setup: this creates coupons only, never a
+# Product or a Price. A deploy that silently mints prices is the thing
+# the --stripe / --stripe-setup split exists to prevent. A coupon charges
+# nobody, cannot be duplicated (Stripe enforces one promotion code per
+# name), and one that disagrees with the repo is reported rather than
+# rewritten.
+#
+# Never fatal. A Stripe outage is not a reason to refuse a deploy that
+# has nothing to do with billing.
+if [ -f /etc/qellys/env ]; then
+  say "checking the discount codes at Stripe"
+  python3 launch.py --promos-setup || \
+    echo "  (could not reach Stripe — the deploy is unaffected; "\
+         "run 'python3 launch.py --promos' later to check)"
+fi
+
 say "restarting $SERVICE"
 sudo systemctl restart "$SERVICE"
 sleep 2
