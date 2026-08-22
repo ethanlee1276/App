@@ -429,10 +429,30 @@ def test_the_page_never_pans_sideways():
     cluster shrinks on phones) and the seatbelt (the document refuses
     horizontal overflow, with clip so sticky survives)."""
     assert "html, body { overflow-x: clip; }" in CSS
-    i = CSS.index("@media (max-width: 760px) {", CSS.index("NEW LOOK — 2026-08-11"))
-    block = CSS[i:i + 1600]
-    assert "flex: 1 1 auto; min-width: 0" in block, \
-        "the status cluster stopped shrinking — the sideways pan is back"
+    # THE PROPERTY, NOT ONE SPELLING OF IT. This pinned the literal
+    # `flex: 1 1 auto; min-width: 0` in the ≤760px block, and on
+    # 2026-08-22 the cluster became `flex: 0 1 auto` — still shrinkable,
+    # which is the whole claim, and now shrinkable from 900px rather than
+    # 760 because the band above 760 was overflowing too.
+    #
+    # `1 1` versus `0 1` is grow-versus-not; only the SHRINK half matters
+    # here. What must never come back is `flex-shrink: 0` or the
+    # shorthand's `0 0`, which is what made the bar wider than the phone.
+    import re as _re
+    for width in ("900px", "760px"):
+        i = CSS.find("@media (max-width: %s) {" % width,
+                     CSS.index("NEW LOOK — 2026-08-11"))
+        if i < 0:
+            continue
+        block = CSS[i:i + 2400]
+        for rule in _re.findall(r"\.slate-meta[^{]*\{([^}]*)\}", block):
+            assert "flex: 0 0" not in rule and "flex-shrink: 0" not in rule, (
+                "the status cluster stopped shrinking at %s — the sideways "
+                "pan is back: %r" % (width, rule.strip()))
+            assert "min-width: 0" in rule, (
+                "without min-width:0 a flex item refuses to shrink below "
+                "its content, which is the same bug wearing a different "
+                "property: %r" % rule.strip())
 
 
 def test_ethans_venue_renders_are_plugged_in():

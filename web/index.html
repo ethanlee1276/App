@@ -123,9 +123,6 @@
       <div class="nav-indicator" id="nav-indicator"></div>
     </nav>
     <div class="slate-meta">
-      <button class="meta-ico" id="nav-search" title="Player search" aria-label="Player search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
-      </button>
       <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>
@@ -952,9 +949,22 @@
             title="Every pick journaled and graded in public">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
       Results</button>
-    <button class="tb-item" id="tb-menu" aria-label="Open the full menu">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-      Menu</button>
+    <!-- Ethan, 2026-08-22: "The search button is now gone. Maybe we put
+         it on the bottom bar where the menu button is, then move the menu
+         button too be like three bars on the top left."
+
+         It WAS gone, and not hidden — the top bar's icon row had grown
+         past the space it had and the icons were overflowing their
+         container to the left, sliding underneath the wordmark. Search
+         was the first one off the edge.
+
+         So the drawer moves to a hamburger at top left, where a drawer
+         belongs and where nothing has to compete for the space, and its
+         slot down here goes to search — which is a destination, which is
+         what this bar is for. -->
+    <button class="tb-item" id="tb-search" aria-label="Search for a player">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      Search</button>
   </nav>
 
   <script src="js/teams.js"></script>

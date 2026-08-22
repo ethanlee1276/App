@@ -4675,6 +4675,22 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
      mis-taps. The rule is "standalone control" versus "word in a
      sentence", not a number applied to every anchor. */
   .sb-chips .sport-btn { min-height: 44px; }
+
+  /* THE BAR SHRINKS FROM HERE, not from 760. Drawer mode starts at this
+     width, which is the point at which the bar stops having room — and
+     between 761 and 900 it kept the desktop rules and simply overflowed.
+     Measured at 768: the date and the theme toggle were both off the
+     right edge, unreachable, with nothing to say so.
+
+     Order of what gives way, cheapest first: the freshness stamp and the
+     date (both repeated elsewhere on the page), then the wordmark, and
+     never a control. */
+  .topbar { gap: 12px; }
+  .brand-home { flex: 0 1 auto; min-width: 0; }
+  .slate-meta { flex: 0 1 auto; min-width: 0; justify-content: flex-end; }
+  .meta-ico, .theme-toggle, .menu-toggle { flex-shrink: 0; }
+  #data-source, #slate-date { display: none; }
+
   /* The drawer's footer pair (Why Us / About) are `.sport-btn` too, but
      they sit in `.sb-foot-links` and never inherited the chip padding —
      55x27 and 47x27. Standalone controls, so they take a target; found
@@ -4725,7 +4741,15 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .nav { display: none; }           /* the drawer carries every destination */
   .tagline { display: none; }
   .brand-words h1 { font-size: var(--fs-md); letter-spacing: .26em; }
-  .brand-home { flex-shrink: 0; }
+  /* THE BRAND YIELDS FIRST, and it did not — it was flex-shrink:0, so
+     when the icon row ran out of room the icons overflowed their own
+     container and slid underneath it. `.slate-meta` clips with
+     `justify-content: flex-end`, which means the EARLIEST icon is the one
+     that disappears, silently, with nothing to show a control is missing.
+     Two icons were added on 2026-08-22 and search vanished; Ethan found
+     it by looking at his phone.
+     A wordmark is the thing on this bar that can afford to give way. */
+  .brand-home { flex: 0 1 auto; min-width: 0; }
   #data-source { display: none; }
   /* The root cause of the sideways pan: this cluster was flex:0 0 auto
      from the desktop rule, so at 297-375px wide it OVERFLOWED a 390px
@@ -4733,6 +4757,25 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .slate-meta { gap: 6px; flex: 1 1 auto; min-width: 0; overflow: hidden;
     justify-content: flex-end; }
   .meta-ico, .theme-toggle { flex-shrink: 0; }
+  /* …and below this the words go entirely, so the icons always fit. The
+     ring mark still identifies the site, the tab bar says where you are,
+     and every control stays reachable — which the wordmark is not worth
+     more than. */
+  @media (max-width: 560px) {
+    .brand-words { display: none; }
+  }
+  /* 320px — an iPhone SE or a Mini. The ring mark and six controls do
+     not fit at full size, and at 321px they overlapped by a pixel, which
+     is the warning before they overlap by twenty. Everything gets a
+     little smaller rather than anything disappearing: a control the
+     reader cannot find is worse than one that is 4px narrower. */
+  @media (max-width: 380px) {
+    .topbar { gap: 6px; }
+    .slate-meta { gap: 2px; }
+    .meta-ico { width: 30px; height: 30px; }
+    .menu-toggle { width: 32px !important; height: 32px !important; }
+    .logo { width: 30px; height: 30px; }
+  }
   #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; max-width: 34vw; font-size: var(--fs-xs); }
   .perf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -4876,8 +4919,22 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    per-team SPREAD | TOTAL | ML grid (.lb-table, later in this file). */
 
 @media (max-width: 760px) {
-  /* The tab bar replaces the top-bar hamburger: same drawer, thumb reach. */
-  .menu-toggle { display: none !important; }
+  /* THE HAMBURGER IS BACK AT TOP LEFT. Ethan, 2026-08-22: "move the menu
+     button too be like three bars on the top left that will pull open the
+     menu." It was hidden here and the tab bar's fifth slot opened the
+     drawer instead, by synthesising a click on this very button — a
+     hidden control driving the visible one. That slot is Search now,
+     which is a destination, which is what a tab bar is for.
+
+     Icon only: `.mt-label` is already display:none at this width. */
+  .menu-toggle { display: grid !important; place-items: center;
+    width: 38px; height: 38px; flex: 0 0 auto;
+    /* Borderless, like every other icon on this bar. The 900px rule
+       gives it a box, which suits a wide bar where it sits alone at the
+       left; among five bare glyphs on a phone the box reads as a button
+       already pressed. */
+    border: 0; background: transparent; color: var(--text-mute); }
+  .menu-toggle:hover, body.menu-open .menu-toggle { color: var(--text); }
   .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
     padding: 6px 4px calc(8px + env(safe-area-inset-bottom));

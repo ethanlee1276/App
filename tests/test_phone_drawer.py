@@ -112,23 +112,57 @@ def test_the_scrim_is_painted_before_the_drawer():
         "the scrim now comes after the drawer in the DOM"
 
 
-def test_the_tab_bar_is_the_phone_s_only_way_in():
-    """At ≤760px the header hamburger is `display: none !important` and
-    the tab bar's Menu is what opens the drawer — by clicking the hidden
-    button. If that proxy ever goes, the phone has no menu at all, and
-    nothing else here would notice."""
-    rule = ".menu-toggle { display: none !important; }"
-    assert rule in CSS, \
-        "the header hamburger is back on phones — two ways in, one of them tiny"
-    # And it has to be inside a phone query, not applied everywhere: the
-    # hamburger is the tablet and desktop-narrow way in.
-    head = CSS[:CSS.index(rule)]
-    guard = head[head.rindex("@media"):].split("{")[0]
-    assert "max-width" in guard and int("".join(
-        c for c in guard.split("max-width")[1].split("px")[0] if c.isdigit())) <= 900, \
-        f"the hamburger is hidden outside a phone query: {guard.strip()}"
-    assert 'getElementById("tb-menu")' in APP and 'getElementById("menu-toggle")' in APP, \
-        "the tab bar no longer proxies to the toggle: the phone menu is unreachable"
+def test_the_phone_opens_the_drawer_from_the_hamburger():
+    """THIS USED TO SAY THE OPPOSITE. At ≤760px the hamburger was
+    `display: none !important` and the tab bar's Menu reached the drawer
+    by clicking that hidden button — a control nobody could see driving
+    the one they could.
+
+    Ethan reversed it on 2026-08-22, and for a concrete reason: the top
+    bar's icon row had grown past its space and was clipping its own
+    earliest icons, so the search button silently stopped existing. "Maybe
+    we put it on the bottom bar where the menu button is, then move the
+    menu button too be like three bars on the top left." The drawer has
+    room up there and the tab bar's fifth slot became a destination, which
+    is what a tab bar is for.
+
+    What this file still guards is unchanged: the phone must have exactly
+    one way in and it must not be hidden."""
+    # EVERY ≤760px block, joined. There are a dozen in this sheet and the
+    # browser applies all of them; taking the first found one about
+    # something else entirely and concluded the hamburger was unstyled.
+    import re as _re
+    parts, at = [], 0
+    while True:
+        i = CSS.find("@media (max-width: 760px)", at)
+        if i < 0:
+            break
+        depth, seen, end = 0, False, None
+        for j in range(CSS.index("{", i), len(CSS)):
+            if CSS[j] == "{":
+                depth += 1
+                seen = True
+            elif CSS[j] == "}":
+                depth -= 1
+                if seen and depth == 0:
+                    end = j + 1
+                    break
+        assert end, "a ≤760px block never closes"
+        parts.append(CSS[i:end])
+        at = end
+    assert parts, "no ≤760px block"
+    block = "\n".join(parts)
+    rules = _re.findall(r"\.menu-toggle[^{]*\{([^}]*)\}", block)
+    assert rules, "the phone block says nothing about the hamburger"
+    assert any("display: grid" in r for r in rules), (
+        "the hamburger is hidden on phones again, and the tab bar no "
+        "longer has a Menu button to fall back on — the phone would have "
+        "no way into the drawer at all")
+
+    # And nothing clicks a hidden button on its behalf any more.
+    assert 'getElementById("tb-menu")' not in APP, (
+        "the tab bar still proxies to the toggle; that slot is Search now")
+    assert 'id="tb-search"' in HTML
 
 
 # --------------------------------------------------------------------------

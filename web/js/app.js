@@ -21616,19 +21616,18 @@ async function renderLiveBoard() {
   initHcm();
   initPz();
   initGamesControls();
-  const tbMenu = document.getElementById("tb-menu");
-  if (tbMenu) tbMenu.addEventListener("click", () => {
-    const t = document.getElementById("menu-toggle");
-    if (t) t.click();
+  // The drawer opens from the hamburger at top left now, so the tab bar
+  // no longer has to synthesise a click on a hidden button to reach it.
+  // One less event in the path that opens the menu.
+  const tbSearch = document.getElementById("tb-search");
+  if (tbSearch) tbSearch.addEventListener("click", () => {
+    if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+    switchView("players", true);
   });
   window.addEventListener("resize", () => {
     if (typeof syncStripArrows === "function") syncStripArrows();
   });
-  const search = document.getElementById("nav-search");
-  if (search) search.addEventListener("click", () => {
-    if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
-    switchView("players", true);
-  });
+
   const bell = document.getElementById("nav-bell");
   if (bell) bell.addEventListener("click", () => {
     if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
