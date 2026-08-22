@@ -5547,7 +5547,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   --mk-mean: 50%;
   border-bottom: var(--hairline) solid var(--border-soft); }
 .mk-bars::after { content: ""; position: absolute; left: 0; right: 0;
-  bottom: var(--mk-mean, 50%); border-top: 1px dashed var(--text-mute);
+  bottom: var(--mk-mean); border-top: 1px dashed var(--text-mute);
   opacity: .55; }
 .mk-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0;
   background: color-mix(in oklab, var(--good) 68%, transparent); }
@@ -6995,13 +6995,6 @@ input:-webkit-autofill:focus {
   padding: 18px 20px; border-radius: var(--radius);
   border: var(--hairline) solid var(--border-soft); background: var(--panel); }
 .pw-guar-ic { color: var(--brand-2); flex: none; }
-/* The members' room, on the account panel only — see discordHTML. */
-.disc-box .code-head { display: flex; align-items: center; gap: 7px; }
-.disc-go { display: inline-block; margin-top: 10px; padding: 10px 18px;
-  background: var(--brand-solid); color: #fff; border-color: transparent;
-  font-weight: 700; text-decoration: none; }
-.disc-go:hover { background: var(--brand-2); }
-.disc-note { margin-top: 8px; }
 
 /* ================== ADD TO HOME SCREEN ==================
    A sheet on the bottom edge of a phone, shown once after signing in.
