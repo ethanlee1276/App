@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import time
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
@@ -70,6 +71,10 @@ class BudgetState:
     used: int = 0
     last_refresh_ts: float = 0.0
     last_seen_iso: str = ""
+    # Which touchpoint each sport has already been served today, as
+    # "YYYY-MM-DD:HH" in the touchpoint zone. Per sport, because a slate
+    # each is the point — MLB taking the noon window must not spend NFL's.
+    sport_touchpoint: dict = field(default_factory=dict)
     # Set when an AUTHORIZED paid pull never got an API response (network
     # blip, host down): a short cooldown before retrying, instead of
     # counting a pull that spent nothing as the day's spend.
@@ -107,6 +112,10 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
                 per_sport[str(k)] = float(v)
             except (TypeError, ValueError):
                 continue
+        touch = {}
+        for k, v in (raw.get("sport_touchpoint") or {}).items():
+            if isinstance(v, str):
+                touch[str(k)] = v
         legacy = float(raw.get("last_refresh_ts", 0.0))
         if not per_sport and legacy > 0:
             # Upgrading a pre-split state file: every paid pull to date was
@@ -121,6 +130,7 @@ def load(path: Path | str = STATE_PATH) -> BudgetState:
             last_seen_iso=str(raw.get("last_seen_iso", "")),
             retry_after_ts=float(raw.get("retry_after_ts", 0.0)),
             sport_last_refresh=per_sport,
+            sport_touchpoint=touch,
             keys={str(k): dict(v) for k, v in (raw.get("keys") or {}).items()
                   if isinstance(v, dict)},
         )
@@ -329,6 +339,25 @@ def record_quota(remaining, used=None, path: Path | str = STATE_PATH,
     return state
 
 
+def _claim_touchpoint(state: "BudgetState", sport: str | None,
+                      ts: float) -> None:
+    """Mark the touchpoint this pull sits in as served.
+
+    Whatever authorised the pull claims the window — a pull the pre-game
+    burst paid for still satisfies the 6pm touchpoint, because the point of
+    a touchpoint is a fresh board at that hour, not a second purchase of
+    prices the app already has.
+    """
+    stamp = touchpoint_due(state, sport, ts)
+    if stamp:
+        state.sport_touchpoint[sport or "_all"] = stamp
+        # Keep the ledger from growing a row per sport per day forever.
+        today = stamp.split(":")[0]
+        for k in [k for k, v in state.sport_touchpoint.items()
+                  if not str(v).startswith(today)]:
+            state.sport_touchpoint.pop(k, None)
+
+
 def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
                    sport: str | None = None) -> None:
     state = load(path)
@@ -336,6 +365,7 @@ def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
     state.last_refresh_ts = t
     if sport:
         state.sport_last_refresh[sport] = t
+    _claim_touchpoint(state, sport, t)
     save(state, path)
 
 
@@ -368,6 +398,12 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
         if sport:
             state.sport_last_refresh[sport] = now
         state.retry_after_ts = 0.0
+        # The claim belongs HERE as much as in mark_refreshed: production
+        # confirms its pulls through this function, so a touchpoint claimed
+        # only there would never be claimed at all in the live app — and an
+        # unclaimed window re-authorises every MIN_REFRESH_GAP for the whole
+        # grace period, which is eight paid pulls where one was intended.
+        _claim_touchpoint(state, sport, now)
     else:
         state.retry_after_ts = now + FAILED_PULL_RETRY_S
     save(state, path)
@@ -450,6 +486,93 @@ OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
 # the reserve is still untouchable, and off-peak hours keep the flat rate,
 # so a quiet week accumulates the credits a busy Saturday spends.
 PRIME_BURST = 3.0
+
+# --- guaranteed touchpoints ---------------------------------------------------
+# Ethan, 2026-08-22, with real traffic on the site for the first time:
+# "Today's books prices are not being pulled enough … a window at 7am, a
+# window at noon, and maybe a window at 3? Then one more at 6 or 7."
+#
+# The pacer above is built to spend a credit where a credit buys the most,
+# and it is right that a 7am pull buys worse PRICES than a 5:45pm one —
+# books have not posted, lineups are not confirmed. What it could not
+# know, because until this week nobody was looking, is that a board
+# showing yesterday's numbers at 8am costs something too. That cost is not
+# measured in credits and it lands on somebody who has paid.
+#
+# So: a floor, not a replacement. At each touchpoint the day's first paid
+# pull for a sport is allowed through even though off-peak pacing would
+# have held it — provided the balance covers it and the reserve is
+# untouched. Everything else is unchanged: the pre-game burst still fires,
+# the reserve is still a floor, and a quiet day still banks its credits.
+#
+# LOCAL HOURS, AND LOCAL MEANS EASTERN. The droplet runs UTC — its backups
+# stamp 13:09Z while the clock on the desk says 9:09am — so a naive "7"
+# here would fire at 3am and nobody would notice until the morning board
+# was stale anyway. The zone is explicit and configurable for that reason.
+TOUCHPOINT_TZ = "America/New_York"
+TOUCHPOINTS = (7, 12, 15, 18)
+# How long after the hour a missed touchpoint stays claimable. The refresh
+# loop ticks on a timer and a build can be mid-flight when the hour turns;
+# without this, a touchpoint missed by ninety seconds is missed for good.
+TOUCHPOINT_GRACE_S = 2 * 3600
+
+
+def _touchpoints() -> tuple:
+    raw = os.environ.get("QB_ODDS_WINDOWS", "").strip()
+    if not raw:
+        return TOUCHPOINTS
+    out = []
+    for part in raw.replace(",", " ").split():
+        try:
+            h = int(part)
+        except ValueError:
+            continue
+        if 0 <= h <= 23:
+            out.append(h)
+    return tuple(sorted(set(out))) or TOUCHPOINTS
+
+
+def _local(now: float):
+    """`now` as a datetime in the touchpoint zone.
+
+    Falls back to the machine's own clock if the zone database is missing
+    — a wrong hour is better than a refresh loop that dies on an import.
+    """
+    zone = os.environ.get("QB_ODDS_TZ", "").strip() or TOUCHPOINT_TZ
+    try:
+        from zoneinfo import ZoneInfo
+        return _dt.datetime.fromtimestamp(now, ZoneInfo(zone))
+    except Exception:                                        # noqa: BLE001
+        return _dt.datetime.fromtimestamp(now)
+
+
+def _hour_label(now: float) -> str:
+    """"7am" / "12pm" — spelled out rather than strftime'd, because the
+    "%-I" that produces it is a glibc extension and this string ends up in
+    front of a paying customer."""
+    h = _local(now).hour
+    return f"{(h % 12) or 12}{'am' if h < 12 else 'pm'}"
+
+
+def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
+    """The touchpoint this sport still owes, or None.
+
+    A touchpoint is owed from its hour until TOUCHPOINT_GRACE_S after it,
+    and only once — the stamp is the local date and hour, so a second pull
+    in the same window goes back through ordinary pacing.
+    """
+    local = _local(now)
+    hours = [h for h in _touchpoints() if h <= local.hour]
+    if not hours:
+        return None
+    hour = max(hours)
+    opened = local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if (local - opened).total_seconds() > TOUCHPOINT_GRACE_S:
+        return None                       # the window has closed for today
+    stamp = f"{local.date().isoformat()}:{hour:02d}"
+    if state.sport_touchpoint.get(sport or "_all") == stamp:
+        return None                       # already served
+    return stamp
 
 
 def prime_window(kickoffs, now: float):
@@ -556,6 +679,20 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # refreshes land where the prices are.
         gap = gap * OFFPEAK_STRETCH
     if waited < gap:
+        # …unless a touchpoint is owed. This is the ONE override, and it
+        # buys a board that is current when somebody opens the site in the
+        # morning rather than one that is optimally priced at 6pm and
+        # yesterday's at 8am. It is a floor under the schedule, not a
+        # raise: the reserve stays untouchable, the 15-minute hard gap
+        # still applies, the starvation branch above is reached first when
+        # the day cannot afford a pull at all, and the window is claimed by
+        # the pull that lands so it fires once.
+        per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+        if (touchpoint_due(state, sport, now)
+                and waited >= MIN_REFRESH_GAP
+                and state.remaining - RESERVE >= per_refresh):
+            return True, (f"{_hour_label(now)} refresh window "
+                          f"({state.remaining} credits left this month)")
         why = ("off-peak — saving the odds budget for the pre-game window"
                if window is False else
                f"budgeting {state.remaining} credits to month end")
