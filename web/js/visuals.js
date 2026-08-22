@@ -1592,6 +1592,13 @@ function escapeAttr(s) {
 /* ---------------- instant graph tooltip ----------------
    One floating label for every sparkline dot: appears the moment the
    pointer touches a hit target, follows the cursor, vanishes on leave. */
+
+/* WHAT A FINGERTIP AND THE HAND BEHIND IT HIDE, in CSS pixels. Shared by
+   both tooltips on this page — the per-bar label and the line-chart
+   scrubber — because they are answering the same question about the same
+   finger, and two different numbers would mean one of them is wrong. */
+const FINGER = 46;
+
 (function () {
   let tipEl = null;
   function ensure() {
@@ -1617,8 +1624,6 @@ function escapeAttr(s) {
      and lifted clear of it vertically. When there is no room above — a
      chart near the top of the screen — it goes to the SIDE rather than
      below, because below is under the same finger. */
-  const FINGER = 46;                    // what a fingertip and its hand hide
-
   function place(e) {
     const el = ensure();
     const touch = e.pointerType === "touch" || e.pointerType === "pen";
@@ -1705,7 +1710,7 @@ function escapeAttr(s) {
   function hide() {
     if (tip) { tip.style.display = "none"; rail.style.display = "none"; }
   }
-  function show(svg, clientX) {
+  function show(svg, clientX, clientY, touch) {
     ensure();
     let d = svg._scrub;
     if (!d) {
@@ -1740,9 +1745,28 @@ function escapeAttr(s) {
       + escapeHtml(String(d.v[i]));
     tip.style.display = "block";
     const tw = tip.offsetWidth || 90, th = tip.offsetHeight || 34;
-    tip.style.left = Math.min(window.innerWidth - tw - 6,
-      Math.max(6, snapX - tw / 2)) + "px";
-    tip.style.top = Math.max(6, rect.top - th - 10) + "px";
+    let lx = snapX - tw / 2;
+    /* ABOVE THE CHART IS NOT THE SAME AS CLEAR OF THE FINGER. This put
+       the label ten pixels above the svg's top edge, which is plenty on
+       the tall record chart and nowhere near enough on a sparkline: at
+       40px tall, a finger in the middle of it sits ~30px below the
+       label, and a fingertip covers 46. Ethan reported the bar chart
+       first and then "it also does that for to the line graph for the
+       record page" — same complaint, different code path, because this
+       one measured from the CHART and the other measured from the
+       POINTER, and neither measured from the thing in the way. */
+    let ly = rect.top - th - 10;
+    if (touch) {
+      ly = Math.min(ly, clientY - th - FINGER);
+      if (ly < 8) {
+        // No room above the finger. Beside it — below is the same finger.
+        ly = Math.max(8, Math.min(window.innerHeight - th - 8, clientY - th / 2));
+        lx = snapX + FINGER;
+        if (lx + tw > window.innerWidth - 8) lx = snapX - tw - FINGER;
+      }
+    }
+    tip.style.left = Math.min(window.innerWidth - tw - 6, Math.max(6, lx)) + "px";
+    tip.style.top = Math.max(6, ly) + "px";
     rail.style.display = "block";
     rail.style.left = (snapX - 0.5) + "px";
     rail.style.top = rect.top + "px";
@@ -1751,7 +1775,8 @@ function escapeAttr(s) {
   const over = (e) => {
     const svg = e.target && e.target.closest
       ? e.target.closest("svg[data-scrub]") : null;
-    if (svg) show(svg, e.clientX);
+    if (svg) show(svg, e.clientX, e.clientY,
+                  e.pointerType === "touch" || e.pointerType === "pen");
     else hide();
   };
   document.addEventListener("pointerdown", over, { passive: true });

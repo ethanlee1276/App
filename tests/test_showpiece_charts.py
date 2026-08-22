@@ -156,6 +156,54 @@ def test_the_label_never_leaves_the_screen():
     assert "window.innerWidth" in fn and "Math.max(8" in fn
 
 
+def test_the_line_chart_scrubber_measures_from_the_finger_too():
+    """Ethan, after the bar-chart fix: "it also does that for to the line
+    graph for the record page and the record line graph we show on the
+    reccomended page."
+
+    Same complaint, different code path — and the reason both existed is
+    that neither measured from the thing in the way. The scrubber placed
+    its label ten pixels above the SVG's TOP EDGE, which is plenty of
+    room on the tall record chart and nowhere near enough on a
+    sparkline: at 40px tall, a finger in the middle of it leaves a 30px
+    gap and a fingertip covers 46. Measured in Chromium — tall chart
+    120px of clearance, sparkline 30px before this and 46px after."""
+    vis = _read("web", "js", "visuals.js")
+    i = vis.index("function show(svg,")
+    fn = vis[i:vis.index("\n  }", i) + 4]
+    assert "clientY" in vis[i:i + 60], \
+        "show() still only knows where the finger is horizontally"
+    assert "clientY - th - FINGER" in fn, \
+        "the label is placed from the chart edge, not from the finger"
+    assert "rect.top - th - 10" in fn, \
+        "the chart-relative placement is gone — a mouse gains nothing " \
+        "from a 46px gap it has to travel to read"
+
+
+def test_both_tooltips_agree_on_what_a_finger_hides():
+    """Two numbers for the same finger would mean one of them is wrong."""
+    vis = _read("web", "js", "visuals.js")
+    assert vis.count("const FINGER =") == 1, \
+        "the clearance is declared twice — they will drift"
+    # Each function's OWN body, brace-matched to its closing "\n  }".
+    # A fixed-width window would pass or fail on how long the comments
+    # inside happen to be, which is the trap this suite keeps falling
+    # into — including in the first draft of this very test, where 1400
+    # characters fell 102 short.
+    for marker in ("function place(e) {", "function show(svg,"):
+        j = vis.index(marker)
+        body = vis[j:vis.index("\n  }", j) + 4]
+        assert "FINGER" in body, f"{marker} does not use the shared clearance"
+
+
+def test_the_scrubber_also_moves_aside_near_the_top():
+    vis = _read("web", "js", "visuals.js")
+    i = vis.index("function show(svg,")
+    fn = vis[i:vis.index("\n  }", i) + 4]
+    assert "snapX + FINGER" in fn, "no sideways fallback"
+    assert "snapX - tw - FINGER" in fn, "it can only move one way"
+
+
 def test_a_touch_that_becomes_a_scroll_does_not_strand_the_label():
     """`pointercancel` fires and `pointerout` does not, which left the
     number sitting over whatever scrolled underneath it."""
