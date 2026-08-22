@@ -5628,27 +5628,33 @@ async function renderPlayers() {
     + shown.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
-  // Market chips: swap ONE card in place, keep the rest of the page
-  // still. Delegated and bound once — innerHTML above rebuilds children,
-  // not the host, so a per-card listener would leak one copy per render.
-  if (!host._profBound) {
-    host._profBound = true;
-    host.addEventListener("click", (e) => {
-      const chip = e.target.closest(".prof-tab");
-      if (!chip) return;
-      _profTab[chip.dataset.player] = chip.dataset.mkt;
-      const card = chip.closest(".profile");
-      if (!card) return;
-      const tmp = document.createElement("div");
-      tmp.innerHTML = profileHTML(chip.dataset.player);
-      const fresh = tmp.firstElementChild;
-      if (!fresh) return;
-      fresh.classList.add("reveal", "in");   // already on screen — no re-entrance
-      card.replaceWith(fresh);
-      fillMeters(fresh.parentElement || fresh);
-    });
-  }
 }
+
+/* Market chips: swap ONE card in place and keep everything around it
+   still.
+
+   ON THE DOCUMENT, NOT ON #players. It was bound to that host, which was
+   right while the Players page was the only place a profile card
+   existed. The peek overlay draws the same card outside that element, so
+   the listener never fired and the tabs did nothing at all — Ethan,
+   2026-08-22: "you can't click anything on the menu". One handler that
+   works wherever the card is drawn cannot develop that gap again. */
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest && e.target.closest(".prof-tab");
+  if (!chip) return;
+  _profTab[chip.dataset.player] = chip.dataset.mkt;
+  const card = chip.closest(".profile");
+  if (!card) return;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = profileHTML(chip.dataset.player);
+  const fresh = tmp.firstElementChild;
+  if (!fresh) return;
+  fresh.classList.add("reveal", "in");     // already on screen — no re-entrance
+  card.replaceWith(fresh);
+  fillMeters(fresh.parentElement || fresh);
+  if (typeof mountEChartsPanels === "function")
+    mountEChartsPanels(fresh.parentElement || fresh);
+});
 
 //: The chosen market per player. Outlives renders on purpose: flipping
 //: to Receptions and refreshing the search should not snap you back.
@@ -5852,6 +5858,32 @@ function historyProfileHTML(r0, label, logs, chips) {
    and it reads `_profRows` and `state.data.player_stats`, both of which
    this can fill. A second implementation of that card would be a second
    thing to keep in step with the first. */
+/* THE PAGE BEHIND A DIALOG MUST NOT MOVE.
+   `body { overflow: hidden }` is the usual answer and it does not hold
+   on iOS Safari — the page scrolls anyway, which is the second half of
+   Ethan's 2026-08-22 report: "the page behind it moves when u try too
+   click on the buttons". Pinning the body with `position: fixed` does
+   hold, at the cost of losing the scroll position, so the offset is
+   carried across and put back on close.
+
+   One helper for every dialog, because the fantasy dossier has exactly
+   the same bug for exactly the same reason. */
+let _lockedY = 0;
+
+function lockScroll(on) {
+  const b = document.body;
+  const locked = b.classList.contains("scroll-locked");
+  if (on && !locked) {
+    _lockedY = window.scrollY || window.pageYOffset || 0;
+    b.style.top = `-${_lockedY}px`;
+    b.classList.add("scroll-locked");
+  } else if (!on && locked) {
+    b.classList.remove("scroll-locked");
+    b.style.top = "";
+    window.scrollTo(0, _lockedY);
+  }
+}
+
 async function openPeek(name) {
   if (!name) return;
   let ov = document.getElementById("pk-overlay");
@@ -5872,6 +5904,7 @@ async function openPeek(name) {
   shell(`<div class="pk-wait">Loading ${escapeHtml(name)}…</div>`);
   ov.classList.add("open");
   document.body.classList.add("pk-open");
+  lockScroll(true);
 
   // Tonight's board first — it has the priced market and the line. A row
   // already in _profRows was put there by the Players page and is fine
@@ -5910,6 +5943,7 @@ function closePeek() {
   const ov = document.getElementById("pk-overlay");
   if (ov) ov.classList.remove("open");
   document.body.classList.remove("pk-open");
+  lockScroll(false);
 }
 
 function openPlayer(name) {
@@ -16337,6 +16371,7 @@ function openFfDossier(name) {
     aria-label="Fantasy dossier: ${escapeAttr(name)}">${ffDossierHTML(info)}</div>`;
   ov.classList.add("open");
   document.body.classList.add("ffd-open");
+  lockScroll(true);
   _ffDossierCharts(name, info.position);
   // The full page, when the profile API answers (Ethan's render,
   // 2026-08-18). The compact card above is already on screen, so a
@@ -16362,6 +16397,7 @@ function closeFfDossier() {
   const ov = document.getElementById("ffd-overlay");
   if (ov) ov.classList.remove("open");
   document.body.classList.remove("ffd-open");
+  lockScroll(false);
 }
 
 // Bound ONCE at load — the fantasy page re-renders constantly and a

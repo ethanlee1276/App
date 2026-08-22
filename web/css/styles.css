@@ -2501,7 +2501,7 @@ select.calc-in { width: auto; font-weight: 600; }
   justify-content: center; }
 #ffd-overlay.open { display: flex; }
 body.ffd-open { overflow: hidden; }
-.ffd-card { background: var(--panel-2);
+.ffd-card { overscroll-behavior: contain; background: var(--panel-2);
   border: var(--hairline) solid var(--border);
   width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
   padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
@@ -2517,8 +2517,18 @@ body.ffd-open { overflow: hidden; }
   background: rgba(0, 0, 0, .55); align-items: flex-end;
   justify-content: center; }
 #pk-overlay.open { display: flex; }
+/* THE LOCK THAT HOLDS ON iOS. `overflow: hidden` on body is the usual
+   answer and Safari ignores it — the page scrolls behind the dialog
+   anyway. Pinning the body is what actually stops it; app.js carries the
+   scroll offset across and puts it back on close, which is the one thing
+   `position: fixed` costs. Used by both dialogs. */
+body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%;
+  overflow: hidden; }
 body.pk-open { overflow: hidden; }
-.pk-card { position: relative; background: var(--panel-2);
+/* A scroll that reaches the end of this card must stop there rather
+   than carrying on into the page underneath it. */
+.pk-card { overscroll-behavior: contain;
+  position: relative; background: var(--panel-2);
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
   width: 100%; max-width: 620px; max-height: 86vh; overflow-y: auto;

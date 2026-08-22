@@ -230,6 +230,59 @@ def test_a_riding_row_with_nothing_behind_it_stays_inert():
     assert "!b.player" in attrs
 
 
+def test_the_market_tabs_work_wherever_the_card_is_drawn():
+    """Ethan, 2026-08-22: "the menu pops up but you can't click anything
+    on the menu."
+
+    The tab handler was bound to the #players element, which was right
+    while that page was the only place a profile card existed. The peek
+    draws the same card outside it, so the listener never fired and the
+    tabs did nothing at all. On the document, one handler cannot develop
+    that gap again."""
+    i = APP.index('closest(".prof-tab")')
+    before = APP[:i]
+    # The nearest enclosing addEventListener must be on the document.
+    at = before.rindex("addEventListener(")
+    host = before[max(0, at - 40):at]
+    assert "document." in host, \
+        f"the tab handler is still bound to a host: {host.strip()!r}"
+    assert "host._profBound" not in APP, "the old per-host binding is back"
+
+
+def test_the_page_behind_a_dialog_is_pinned_not_just_hidden():
+    """`body { overflow: hidden }` is the usual answer and iOS Safari
+    ignores it — the page scrolls behind the dialog anyway, which is the
+    second half of the same report: "the page behind it moves when u try
+    too click on the buttons". Pinning it holds; the offset has to be
+    carried across and put back, which is what position:fixed costs."""
+    fn = APP[APP.index("function lockScroll("):]
+    fn = fn[:fn.index("\n}") + 2]
+    assert "scroll-locked" in fn
+    assert "window.scrollY" in fn, "the offset is not remembered"
+    assert "window.scrollTo(" in fn, "the offset is never restored"
+    rule = CSS[CSS.index("body.scroll-locked {"):]
+    rule = rule[:rule.index("}")]
+    assert "position: fixed" in rule, "overflow:hidden alone does not hold"
+
+
+def test_both_dialogs_use_the_one_lock():
+    """The fantasy dossier had the identical bug for the identical
+    reason. Two copies of a scroll lock is two places to lose the
+    restore, and a lost restore dumps the reader at the top of a long
+    page."""
+    for fn in ("openPeek", "closePeek", "openFfDossier", "closeFfDossier"):
+        i = APP.index(f"function {fn}(")
+        body = APP[i:i + 2600]
+        assert "lockScroll(" in body, f"{fn} does not touch the lock"
+
+
+def test_a_dialog_scroll_does_not_chain_into_the_page():
+    for sel in (".pk-card {", ".ffd-card {"):
+        rule = CSS[CSS.index(sel):]
+        rule = rule[:rule.index("}")]
+        assert "overscroll-behavior: contain" in rule, sel
+
+
 def test_a_riding_row_opens_a_popup_not_a_page():
     """Ethan, 2026-08-22: "i dont like how it takes you to the search page
     and automatically searches the palyer for you, we need to switch it
