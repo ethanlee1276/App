@@ -7026,6 +7026,31 @@ input:-webkit-autofill:focus {
 
 /* Sport chips: icon + name, and no league marks — see PW_SPORTS. */
 .pw-sport { display: inline-flex; align-items: center; gap: 7px; }
+/* THE EMOJI ON A SPORT CHIP. Named rather than left to inherit, for two
+   reasons that both bit the drawn set first:
+
+   The FONT. `--font-sans` is self-hosted and has no emoji glyphs, so the
+   browser falls back per-codepoint to whatever it likes. Naming the
+   system emoji families keeps that choice explicit and stops a future
+   webfont from being asked to render a baseball.
+
+   The BASELINE. An emoji is a text glyph, so it rides the baseline and
+   drifts every time the type ramp moves — which is the exact complaint
+   in tests/test_icons.py's header. `line-height: 1` and the flex row
+   centre it against the label instead.
+
+   It is deliberately one step ABOVE the label. The chip's text is
+   --fs-sm and a baseball at 12.5px is a smudge; --fs-lg is the next
+   value on the ramp and reads at arm's length. Still a token, so it
+   moves with the ramp rather than beside it. */
+.pw-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji",
+  "Noto Color Emoji", sans-serif;
+  font-size: var(--fs-lg); line-height: 1; flex: none;
+  /* Emoji are already coloured; inheriting --brand-2 does nothing on a
+     colour glyph and would silently do something on a monochrome
+     fallback. Said once here so nobody adds a colour later expecting it
+     to take. */
+  font-variant-emoji: emoji; }
 .pw-sport .ico-mark { color: var(--brand-2); }
 
 /* The price and its saving on ONE line, as a pill, which is where the

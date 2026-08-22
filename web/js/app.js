@@ -12735,11 +12735,33 @@ const PLAN_EXTRAS = {
    rest are trademarks, and a subscription site printing them next to a
    price implies a licence we do not have. Names and our own marks
    instead. */
+/* THE CHIPS THAT SAY WHAT IS COVERED, and what marks them.
+   ---------------------------------------------------------------------
+   Ethan, 2026-08-22, circling this row: "we should be using emojis
+   matching what we are talking about here."
+
+   The drawn set could not do this job. It has no football and no
+   baseball, so NFL and CFB both got `shield` and MLB, NBA and WNBA all
+   got the same `target` — five chips, two marks, and a row whose whole
+   purpose is to show a reader the breadth at a glance. Three identical
+   circles say the opposite.
+
+   AND THIS IS THE EXEMPTED CASE, not a hole in it. tests/test_icons.py
+   removed emoji from the site because a status mark that changes shape
+   per platform and cannot take the colour of the thing it labels is not
+   an icon set. Its own exemption list names "the sport logos … 
+   illustration, not status marks", and `SPORTS[x].logo` has been 🏈 ⚾ 🏀
+   since long before this row existed. These are the same glyphs doing
+   the same job on the page that sells the thing.
+
+   The five real sports are checked against SPORTS[] by
+   tests/test_paywall_chips.py, so the shop and the app cannot end up
+   disagreeing about what a baseball looks like. */
 const PW_SPORTS = [
-  ["NFL", "shield"], ["MLB", "target"], ["NBA", "target"],
-  ["WNBA", "target"], ["CFB", "shield"], ["UFC", "glove"],
-  ["Fantasy", "trophy"], ["Prediction markets", "chart"],
-  ["Meme coins", "gem"],
+  ["NFL", "🏈"], ["MLB", "⚾"], ["NBA", "🏀"],
+  ["WNBA", "🏀"], ["CFB", "🏈"], ["UFC", "🥊"],
+  ["Fantasy", "🏆"], ["Prediction markets", "📈"],
+  ["Meme coins", "🪙"],
 ];
 
 function paywallHTML(rec, status) {
@@ -12836,8 +12858,11 @@ function paywallHTML(rec, status) {
         bettors, fantasy players and market traders — the model’s
         estimates, the reasoning behind each one, and a public record of
         how they turned out.</p>
-      <div class="pw-sports">${PW_SPORTS.map(([label, ic]) =>
-        `<span class="pw-sport">${iconMark(ic, 15)}
+      <div class="pw-sports">${PW_SPORTS.map(([label, mark]) =>
+        // aria-hidden: the label is the next node, and a screen reader
+        // announcing "American football NFL" is a stutter, not a help.
+        `<span class="pw-sport"><span class="pw-emoji"
+           aria-hidden="true">${mark}</span>
            <span>${escapeHtml(label)}</span></span>`).join("")}</div>
     </section>
 
