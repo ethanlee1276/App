@@ -4220,6 +4220,11 @@ html, body { overflow-x: clip; }
   cursor: pointer; transition: color var(--dur-fast) var(--ease-out),
   background var(--dur-fast) var(--ease-out); }
 .meta-ico:hover { color: var(--text); background: var(--panel-2); }
+/* An <a> in a row of <button>s: the anchor brings its own underline and
+   inherits link colour, and without this it sits a pixel off its
+   neighbours' baseline. */
+.nav-ig { text-decoration: none; color: inherit; }
+.nav-ig[hidden] { display: none; }
 .meta-ico svg { width: 17px; height: 17px; }
 .nav-hint { display: none; }
 
@@ -6827,6 +6832,17 @@ input:-webkit-autofill:focus {
 .pw-brand-words b { color: var(--brand-2); font-weight: 800; }
 .pw-brand.small .pw-brand-words { font-size: var(--fs-sm); }
 .pw-login { flex: none; }
+
+/* Instagram, on the wall. The top bar is hidden behind `body.walled`, so
+   the bar's copy of this icon is invisible to exactly the visitor most
+   worth showing it to. `margin-right: auto` keeps it beside the wordmark
+   rather than joining the buttons on the right. */
+.pw-ig { display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; margin-right: auto; flex: none;
+  border-radius: 50%; color: var(--text-mute);
+  transition: color var(--dur-fast) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out); }
+.pw-ig:hover { color: var(--brand-2); background: var(--fill-hover); }
 
 /* WHO YOU ARE, on the wall itself. A signed-in reader who has not
    subscribed lands here, and the header used to greet them with "Log in"

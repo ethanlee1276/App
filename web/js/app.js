@@ -12610,6 +12610,12 @@ function paywallHTML(rec, status) {
     <header class="pw-top">
       <span class="pw-brand">${brandMarkHTML(30)}
         <span class="pw-brand-words">QELLYS <b>BOOKS</b></span></span>
+      ${status && status.instagram
+        ? `<a class="pw-ig" href="${escapeAttr(status.instagram)}"
+             target="_blank" rel="noopener noreferrer"
+             title="Qellys Books on Instagram"
+             aria-label="Qellys Books on Instagram">${igIcon()}</a>`
+        : ""}
       ${status && status.signed_in
         ? `<span class="pw-who" title="${escapeHtml(status.email || "")}">
              <b>Signed in</b>${status.email
@@ -12726,6 +12732,42 @@ function paywallHTML(rec, status) {
 
 /* The wall hides the whole chrome, including the way in. Somebody who
    already pays and is merely signed out lands here and needs a door. */
+/* The Instagram link in the top bar.
+   ---------------------------------------------------------------------
+   Ethan, 2026-08-22: "add a little instagram icon at the top of the page
+   and if you click it, it will take you right to my instagram page."
+
+   THE HANDLE IS NOT IN THIS FILE. It arrives on the status payload from
+   QB_INSTAGRAM, the same way the Discord page gets it, so there is one
+   place to change it and no dead icon on an install that has not set one.
+   Unlike the Discord invite it is NOT gated on entitlement — a public
+   profile anybody can already find, and showing it to somebody who has
+   not subscribed is the point of showing it at all.
+
+   Called wherever the status is refreshed rather than fetching its own:
+   a decoration must not cost a request.
+
+   IT ALSO GOES ON THE WALL. `body.walled` hides the top bar, so for a
+   visitor who has not paid — the one most worth showing an Instagram to
+   — the bar version is invisible. `paywallHTML` draws its own. */
+function igIcon(size = 17) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"
+    fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
+    focusable="false"><rect x="3" y="3" width="18" height="18" rx="5"/>
+    <circle cx="12" cy="12" r="4"/>
+    <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"
+      stroke="none"/></svg>`;
+}
+
+function igMount() {
+  const url = _pwStatus && _pwStatus.instagram;
+  const el = document.getElementById("nav-ig");
+  if (!el) return;
+  if (!url) { el.hidden = true; return; }
+  el.href = url;
+  el.hidden = false;
+}
+
 /* ================= ADD TO HOME SCREEN =================
    Ethan, 2026-08-21: "we also need to add a little popup on the moible
    site only after someone logs into there account that tells them too add
@@ -13194,6 +13236,7 @@ async function paywallCheck() {
     // which distinguishes "no answer" from "no wall".
     if (!r.ok) return document.body.classList.contains("walled");
     _pwStatus = await r.json();
+    igMount();
   } catch (e) { return document.body.classList.contains("walled"); }
   return !!(_pwStatus && _pwStatus.paywall && !_pwStatus.entitled);
 }
