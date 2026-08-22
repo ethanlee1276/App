@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
-"""Rasterise the Qellys Book "Q" mark into the home-screen icon.
+"""Rasterise the Qellys Book "Q" mark. NO LONGER WHAT SHIPS.
+
+READ THIS BEFORE RUNNING IT. Since 2026-08-22 the home-screen icon is
+Ethan's own render — "Use the actual image, don't make your own" — and
+the source artwork is committed at `brand/appicon-1254.png`. Running this
+and letting it write `web/apple-touch-icon.png` replaces that artwork
+with the flat drawn mark. `tests/test_brand.py` fails if it ever does.
+
+What it is still good for: it documents the 48-unit geometry that
+web/favicon.svg and the <svg class="qmark"> in index.html share, and it
+regenerates a matching PNG at any size if the drawn mark is ever wanted
+somewhere. Write it to a scratch path, not over the icons.
 
 iOS ignores SVG for "Add to Home Screen", so the phone needs a real PNG.
-Rather than commit a binary nobody can regenerate, this draws it from the
-same 48-unit geometry as web/favicon.svg — supersampled and written as a
-bare PNG with nothing but the standard library, like the rest of the app.
+This draws it from the same 48-unit geometry as web/favicon.svg —
+supersampled and written as a bare PNG with nothing but the standard
+library, like the rest of the app.
 
-    python3 make_icon.py                       # web/apple-touch-icon.png
-    python3 make_icon.py /tmp/big.png 512      # any path, any size
+    python3 make_icon.py /tmp/mark.png 512     # any path, any size
+
+To rebuild the SHIPPED icons from Ethan's artwork instead, see
+`tools/appicons.sh`.
 
 Change the geometry here and you must change web/favicon.svg and the
 <svg class="qmark"> in web/index.html to match, or the tab, the home

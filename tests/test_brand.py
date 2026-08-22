@@ -106,10 +106,72 @@ def test_icon_png_is_a_real_180px_png():
     assert (width, height) == (180, 180), "iOS wants the 180pt icon"
 
 
-def test_rendered_icon_is_byte_identical_to_the_committed_one():
-    # Catches a hand-edited PNG as readily as a stale one.
+def test_the_home_screen_icon_is_ethans_artwork_not_the_drawn_mark():
+    """Ethan, 2026-08-22, with a render attached: "can you use this render
+    for the app icon when we save it too our Home Screen for mobile. Use
+    the actual image, don't make your own."
+
+    THIS TEST USED TO ASSERT THE OPPOSITE — that the shipped PNG was
+    byte-identical to `make_icon.render(180)`, which draws the flat Q in
+    pure stdlib. That was the right guard while the icon WAS generated:
+    it caught a hand-edited PNG as readily as a stale one. It is the
+    wrong guard now, because the generator is no longer the source of
+    truth and re-running it would quietly overwrite the artwork.
+
+    So: the shipped icon must NOT be the drawn mark, and the artwork it
+    came from has to be committed beside it. `make_icon.py` still works
+    and still documents the mark; it just no longer decides what ships.
+    """
     with open(os.path.join(WEB, "apple-touch-icon.png"), "rb") as fh:
-        assert fh.read() == make_icon.render(180), "run: python3 make_icon.py"
+        shipped = fh.read()
+    assert shipped != make_icon.render(180), (
+        "the drawn mark is back on the home screen — someone re-ran "
+        "make_icon.py over the artwork")
+    src = os.path.join(ROOT, "brand", "appicon-1254.png")
+    assert os.path.isfile(src), (
+        "the source artwork is not committed, so nothing can be "
+        "regenerated from it")
+    with open(src, "rb") as fh:
+        head = fh.read(24)
+    assert head[:8] == b"\x89PNG\r\n\x1a\n"
+    assert int.from_bytes(head[16:20], "big") >= 512, \
+        "the source is smaller than the largest icon made from it"
+
+
+def test_every_icon_the_manifest_names_exists_at_the_size_it_claims():
+    """A manifest entry pointing at a missing file is an install prompt
+    that silently offers no icon."""
+    import json
+    with open(os.path.join(WEB, "manifest.webmanifest"), encoding="utf-8") as fh:
+        icons = json.load(fh)["icons"]
+    assert icons, "the manifest lists no icons"
+    for row in icons:
+        path = os.path.join(WEB, row["src"])
+        assert os.path.isfile(path), f"{row['src']} is missing"
+        with open(path, "rb") as fh:
+            head = fh.read(24)
+        assert head[:8] == b"\x89PNG\r\n\x1a\n", row["src"]
+        w = int.from_bytes(head[16:20], "big")
+        h = int.from_bytes(head[20:24], "big")
+        assert f"{w}x{h}" == row["sizes"], \
+            f"{row['src']} is {w}x{h}, the manifest says {row['sizes']}"
+
+
+def test_the_maskable_icon_is_not_the_full_bleed_one():
+    """Android crops a maskable icon to a circle and keeps the central
+    80%. Pointing that at the full-bleed artwork loses the crown off the
+    top and the word BOOK off the bottom — on the one icon the reader
+    looks at every day."""
+    import json
+    with open(os.path.join(WEB, "manifest.webmanifest"), encoding="utf-8") as fh:
+        icons = json.load(fh)["icons"]
+    mask = [r for r in icons if r.get("purpose") == "maskable"]
+    assert mask, "no maskable icon — Android will letterbox its own"
+    plain = {r["src"] for r in icons if r.get("purpose") != "maskable"}
+    for r in mask:
+        assert r["src"] not in plain, (
+            f"{r['src']} is served as both maskable and any — one of the "
+            f"two is being cropped wrong")
 
 
 def test_server_serves_icons_as_images():
