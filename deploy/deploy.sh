@@ -50,7 +50,12 @@ git pull --ff-only
 
 # --- 4. the gate ------------------------------------------------------
 if [[ "$RUN_TESTS" == "1" ]]; then
-  say "running the suite (this is the gate, ~12 min)"
+  # The runner went parallel on 2026-08-22 and prints a counter while it
+  # works — the first cut printed nothing at all until the last file
+  # finished, which on this box was eleven silent minutes and read as a
+  # hang. No estimate here on purpose: it depends on the box, and a
+  # number that is wrong is worse than none. The counter says where it is.
+  say "running the suite (this is the gate)"
   if ! python3 run_tests.py; then
     echo
     echo "TESTS FAILED — nothing was restarted, the old code is still serving."

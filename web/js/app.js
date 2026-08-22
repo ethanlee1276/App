@@ -12765,9 +12765,17 @@ const PW_SPORTS = [
 ];
 
 function paywallHTML(rec, status) {
-  const feature = (icon_, title, body) => `
+  /* Same reasoning as the sport chips above: these ten cards are what a
+     visitor scans to decide whether the site does the thing they came
+     for, and the drawn set was repeating itself here too — `target` on
+     Picks and props while the MLB chip also wore `target`, `chart` and
+     `rising` a hair apart, `gem` doing duty for meme coins in two
+     places. Ten cards, ten distinct marks now, and each one is the thing
+     it is about rather than a shape that gestures at it. */
+  const feature = (mark, title, body) => `
     <article class="card pw-feat">
-      <div class="pw-feat-ic">${iconMark(icon_, 20)}</div>
+      <div class="pw-feat-ic"><span class="pw-emoji lg"
+        aria-hidden="true">${mark}</span></div>
       <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></article>`;
 
   /* A plan whose price id is not configured on the server must not draw
@@ -12868,25 +12876,25 @@ function paywallHTML(rec, status) {
 
     <h2 class="pw-h2"><em>Everything</em> you need. All in one place.</h2>
     <div class="pw-feats">
-      ${feature("target", "Picks and props",
+      ${feature("🎯", "Picks and props",
         "Daily best bets, player props and parlay tickets across every sport we cover, each with the arithmetic that produced it.")}
-      ${feature("chart", "The model, shown working",
+      ${feature("📊", "The model, shown working",
         "Projections, matchup reads and the step-by-step chain from a player’s baseline to the number on the card.")}
-      ${feature("trophy", "The full fantasy suite",
+      ${feature("🏆", "The full fantasy suite",
         "Draft kit, 20,000-draft mock simulator, lineup optimiser, trade finder, waiver reads and a start calendar.")}
-      ${feature("rising", "Prediction markets",
+      ${feature("📈", "Prediction markets",
         "Live scanning of prediction-market prices for the spots where the crowd and the model disagree.")}
-      ${feature("gem", "Meme coin scanner",
+      ${feature("🪙", "Meme coin scanner",
         "Live token discovery with holder concentration, carry tracking and rug checks.")}
-      ${feature("clock", "Line movement and shopping",
+      ${feature("🔀", "Line movement and shopping",
         "Where each price opened, where it is now, and which book is best right now — in payout space, not in cents.")}
-      ${feature("list", "Bet tracker",
+      ${feature("📒", "Bet tracker",
         "Log what you actually placed, by hand or by paste, and get ROI, CLV and a record you can argue with.")}
-      ${feature("signal", "Alerts",
+      ${feature("🔔", "Alerts",
         "Line moves, injuries and the nightly summary, on your phone.")}
-      ${feature("book", "Player pages",
+      ${feature("👤", "Player pages",
         "Every player we hold, with usage, trends, injuries, props and fantasy value in one place.")}
-      ${feature("scale", "A public record",
+      ${feature("🧾", "A public record",
         "Every pick graded afterwards — wins and losses both — on a page that stays free whether you subscribe or not.")}
     </div>
 

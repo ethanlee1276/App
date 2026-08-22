@@ -30,6 +30,17 @@ find another way.
 OUTPUT IS STILL IN FILE ORDER. Results are held and printed sorted, so a
 parallel run and a serial run produce the same transcript. `doctor.py` and
 the nightly read the summary line, and tests/test_runner.py pins it.
+
+AND IT SAYS SO WHILE IT WORKS. The first cut held every line until the
+last file finished, which on the droplet — 337 files, three at a time, one
+vCPU — was eleven minutes of a blinking cursor. Ethan, watching a deploy:
+"this has been sitting frozen like this for 10 mins." It was not frozen,
+which is exactly the problem: a gate that looks hung gets killed, and a
+killed gate is a deploy that ships untested.
+
+So failures print the moment they happen, and a counter ticks in between.
+The ordered report still comes at the end; the counter is aggregate, so
+nothing is printed twice.
 """
 
 from __future__ import annotations
@@ -42,7 +53,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -105,11 +116,38 @@ def _run(env, argv) -> int:
 
     # Threads, not processes: each one only waits on a subprocess, so the
     # GIL is never the thing holding anything up.
+    #
+    # Collected in completion order and REPORTED in file order. The
+    # progress ticks below are the only thing that happens while it runs,
+    # and they exist because a silent gate reads as a hung one.
+    got, done, failed_now, last = {}, 0, 0, time.monotonic()
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        results = list(pool.map(lambda f: _run_one(f, env), files))
+        futs = {pool.submit(_run_one, f, env): f for f in files}
+        for fut in as_completed(futs):
+            res = fut.result()
+            got[futs[fut]] = res
+            done += 1
+            name, code = res[0], res[1]
+            if code != 0:
+                # Straight out, in the order they happen. Waiting until
+                # the end to mention a failure is how somebody sits
+                # through eleven more minutes of a run that is already
+                # going to fail.
+                failed_now += 1
+                print(f"  ❌ {name} failed ({done}/{len(files)} run)",
+                      flush=True)
+                last = time.monotonic()
+            elif jobs > 1 and (done % 25 == 0
+                               or time.monotonic() - last > 20):
+                note = f", {failed_now} failed" if failed_now else ""
+                print(f"     …{done}/{len(files)} files{note}", flush=True)
+                last = time.monotonic()
+    results = [got[f] for f in files]
 
+    if jobs > 1:
+        print()
     failed, skipped, total, times = [], [], 0, []
-    for name, code, out, err, secs in results:      # already in file order
+    for name, code, out, err, secs in results:      # back in file order
         times.append((secs, name))
         m = re.search(r"(\d+) tests passed", out)
         n = int(m.group(1)) if m else 0

@@ -1,4 +1,4 @@
-"""The row of chips that says what the site covers.
+"""The chips and the cards that say what the site covers.
 
 Ethan, 2026-08-22, circling it on his phone: *"we should be using emojis
 matching what we are talking about here."*
@@ -15,6 +15,12 @@ and cannot take the colour of the thing it labels is not an icon set. Its
 own exemption list names the sport logos — illustration, not status — and
 `SPORTS[x].logo` has been 🏈 ⚾ 🏀 since long before this row existed.
 These are the same glyphs, on the page that sells the thing they mark.
+
+THE TEN FEATURE CARDS BELOW THE CHIPS have the same story and were done
+in the same pass. The drawn set repeated itself there too: `target` on
+Picks and props while the MLB chip also wore `target`, `chart` and
+`rising` a hair apart from each other, `gem` doing duty for meme coins in
+both rows.
 
     python3 tests/test_paywall_chips.py
 """
@@ -97,6 +103,66 @@ def test_the_real_sports_use_the_same_glyph_the_app_uses():
         assert chips[label] == logos[key], (
             "the shop draws %s for %s and the app draws %s"
             % (chips[label], label, logos[key]))
+
+
+# --- the feature cards ------------------------------------------------------
+def _cards():
+    return re.findall(r'feature\("([^"]+)",\s*"([^"]+)"', APP)
+
+
+def test_every_feature_card_is_marked_with_an_emoji():
+    cards = _cards()
+    assert len(cards) >= 8, "the feature grid lost most of its cards"
+    for mark, title in cards:
+        assert EMOJI.search(mark), (
+            "%r still carries a drawn icon name (%r)" % (title, mark))
+
+
+def test_no_two_cards_wear_the_same_mark():
+    """Unlike the sports, no two of these are the same thing — so any
+    repeat here is the drawn set's problem coming back rather than an
+    honest pair."""
+    by_mark = {}
+    for mark, title in _cards():
+        by_mark.setdefault(mark, []).append(title)
+    dupes = {m: t for m, t in by_mark.items() if len(t) > 1}
+    assert not dupes, "cards sharing a mark: %s" % dupes
+
+
+def test_a_card_and_a_chip_about_the_same_thing_agree():
+    """Prediction markets and meme coins appear in both rows. Two glyphs
+    for one subject on one page is the reader's problem, not a detail."""
+    chips = dict(_chips())
+    cards = {t: m for m, t in _cards()}
+    for chip_label, card_title in (("Prediction markets", "Prediction markets"),
+                                   ("Meme coins", "Meme coin scanner"),
+                                   ("Fantasy", "The full fantasy suite")):
+        if chip_label in chips and card_title in cards:
+            assert chips[chip_label] == cards[card_title], (
+                "the chip draws %s for %s and the card draws %s for %s"
+                % (chips[chip_label], chip_label,
+                   cards[card_title], card_title))
+
+
+def test_the_card_glyph_is_sized_for_a_card():
+    """It replaced a 20px drawn mark, not the chip's 15px one."""
+    i = CSS.index(".pw-emoji.lg")
+    rule = CSS[i:CSS.index("}", i)]
+    assert "var(--fs-" in rule, "a raw size on the card glyph"
+
+
+def test_the_modifier_comes_after_the_rule_it_modifies():
+    """`.pw-emoji.lg` written above `.pw-emoji` loses its font-size to
+    the base rule at equal specificity — and it did, on the first go."""
+    assert CSS.index(".pw-emoji {") < CSS.index(".pw-emoji.lg"), (
+        "the .lg modifier is declared before the base rule and is "
+        "overridden by it")
+
+
+def test_the_card_glyph_is_hidden_from_a_screen_reader():
+    i = APP.index("const feature = (")
+    block = APP[i:i + 500]
+    assert 'aria-hidden="true"' in block
 
 
 # --- how they render --------------------------------------------------------

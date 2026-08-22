@@ -7051,6 +7051,9 @@ input:-webkit-autofill:focus {
      fallback. Said once here so nobody adds a colour later expecting it
      to take. */
   font-variant-emoji: emoji; }
+/* The card version: same glyph, bigger, and it replaced a 20px drawn
+   mark so it takes that size rather than the chip's. */
+.pw-emoji.lg { font-size: var(--fs-2xl); }
 .pw-sport .ico-mark { color: var(--brand-2); }
 
 /* The price and its saving on ONE line, as a pill, which is where the
