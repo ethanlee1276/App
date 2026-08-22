@@ -1511,8 +1511,9 @@ async function renderBestBets() {
      says separately how many are riding — because "3 picks tonight"
      when one of them is un-bettable is the kind of small lie this whole
      page exists not to tell. */
-  const ridingRow = ({ b, cur }) => `
-    <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+  const ridingRow = ({ b, cur }) => ((door) => `
+    <div class="${door ? "openable" : ""}"${door}
+         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
                 border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="opacity:.45;min-width:18px;font-weight:700">·</span>
       <span class="grade riding" style="flex-shrink:0">RIDING</span>
@@ -1531,7 +1532,7 @@ async function renderBestBets() {
       </span>
       <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
         ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
-    </div>`;
+    </div>`)(ridingAttrs(b));
 
   const pickRow = (p, i) => `
     <div class="${p.open ? "openable" : ""}"${p.open || ""}
@@ -4278,6 +4279,40 @@ function propOpenable(r) {
 function propAttrs(r) {
   return propOpenable(r)
     ? ` data-prop="${escapeAttr(propId(r))}" tabindex="0" role="link"` : "";
+}
+
+/* ---- A RIDING ROW IS A DOOR TOO ----------------------------------------
+   Ethan, 2026-08-22, on the riding list: "we should be able to click on
+   these props and just like the other ones and it will pull up the bar
+   graphs and shit for that person."
+
+   Same answer as the game bets in 2026-08-13, and the same cause: the
+   gate was answering the wrong question. A riding row is not a board
+   recommendation — it comes from `live_picks`, the JOURNAL, so it has a
+   price and a stake and no game logs at all. `propOpenable` looked at
+   the bet, found no history on it, and left the row inert.
+
+   The history exists; it is just on the board's own object for that
+   player and market. So: find that object and open ITS door. The id has
+   to come from the board object rather than from the bet, because
+   `openProp` resolves through `allProps()` — an id built from the bet's
+   own side and line would find nothing when the board has since moved
+   the line, which is the exact situation a riding row describes.
+
+   MATCHED ON PLAYER AND MARKET, not on side or line. The row exists
+   because the number moved; requiring the number to match would make it
+   openable only in the case where it would not be riding. */
+function ridingDoorProp(b) {
+  if (!b || !b.player) return null;
+  const key = (s) => String(s || "").toLowerCase().trim();
+  const want = `${key(b.player)}|${key(b.market)}`;
+  return allProps().find(
+    (r) => `${key(r.player)}|${key(r.market)}` === want && propOpenable(r)) || null;
+}
+
+function ridingAttrs(b) {
+  const door = ridingDoorProp(b);
+  return door ? propAttrs(door) : "";
 }
 
 /* ---- GAME BETS ARE DOORS TOO -------------------------------------------

@@ -168,6 +168,58 @@ def test_every_surface_that_lists_a_prop_offers_the_door():
     assert '<div class="tp-card ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}>' in APP
 
 
+def test_a_riding_row_is_a_door_too():
+    """Ethan, 2026-08-22, on the riding list: "we should be able to click
+    on these props and just like the other ones and it will pull up the
+    bar graphs and shit for that person."
+
+    Same cause as the game bets in 2026-08-13. A riding row comes from
+    `live_picks` — the JOURNAL — so it carries a price and a stake and no
+    game logs at all. propOpenable looked at the bet, found no history,
+    and left the row inert while the identical prop opened everywhere
+    else on the page."""
+    i = APP.index("const ridingRow =")
+    # To the end of the arrow function, not a fixed width: the door is
+    # resolved once at the bottom of the template, and a slice chosen by
+    # character count is the trap this suite keeps falling into.
+    row = APP[i:APP.index("(ridingAttrs(b));", i) + len("(ridingAttrs(b));")]
+    assert "ridingAttrs(b)" in row, "the riding row is still inert"
+    assert '"openable"' in row, "it opens but does not look like it does"
+
+
+def test_the_riding_door_opens_the_board_object_not_the_bet():
+    """openProp resolves the id through allProps(). An id built from the
+    BET would find nothing, because a riding row exists precisely when
+    the board's line has moved off the one the bet was placed at."""
+    fn = APP[APP.index("function ridingDoorProp("):APP.index("function ridingAttrs(")]
+    assert "allProps()" in fn
+    assert "propOpenable(r)" in fn, "it can open a prop with nothing to draw"
+    attrs = APP[APP.index("function ridingAttrs("):]
+    attrs = attrs[:attrs.index("\n}") + 2]
+    assert "propAttrs(door)" in attrs, \
+        "the id must come from the board object, not the journalled bet"
+
+
+def test_the_riding_door_matches_on_player_and_market_only():
+    """The row exists BECAUSE the number moved. Matching on side or line
+    would make it openable only in the case where it would not be
+    riding."""
+    fn = APP[APP.index("function ridingDoorProp("):APP.index("function ridingAttrs(")]
+    assert "b.market" in fn and "r.market" in fn
+    assert "b.side" not in fn and "b.line" not in fn
+
+
+def test_a_riding_row_with_no_history_stays_inert():
+    """A door onto an empty page is worse than no door. If the board has
+    no object for that player, or has one with under three games, the row
+    renders exactly as it did before."""
+    fn = APP[APP.index("function ridingDoorProp("):APP.index("function ridingAttrs(")]
+    assert "return null" in fn
+    attrs = APP[APP.index("function ridingAttrs("):]
+    attrs = attrs[:attrs.index("\n}") + 2]
+    assert 'door ? propAttrs(door) : ""' in attrs
+
+
 def test_a_game_bet_is_never_dressed_as_a_prop():
     """Moneylines, spreads and game totals sit in these same lists. They
     have no player and no game log, so a door on one would open a page
