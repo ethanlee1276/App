@@ -929,6 +929,11 @@ class OddsAttachResult:
     # "no real book price" bucket looking like a market the book never
     # offered. Loud on purpose. Each entry: {prop, book, market}.
     name_misses: list = field(default_factory=list)
+    # How many of those were RECOVERED by the loose first-initial+surname
+    # fallback. Counted separately from `matched` so a rise here is
+    # visible: it means the exact name map is drifting, and the fallback
+    # is a safety net rather than a licence to stop maintaining it.
+    loose_matched: int = 0
     # Events the book HAS and we could not place on our slate. Every one of
     # these is a whole game's worth of prices we never looked at, and its
     # props are indistinguishable downstream from props the book never
@@ -1226,8 +1231,31 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 game.sharp_spread, game.sharp_spread_home_odds, \
                     game.sharp_spread_away_odds = ssp
 
+    # THE LOOSE FALLBACK. `_name_key_loose` already knew "Jim Jarvis" and
+    # "James Jarvis" were one player — it was used only to REPORT the miss,
+    # under a comment calling it "we paid for this price and threw it
+    # away", which is exactly what then happened. Measured live on
+    # 2026-08-22: three MLB prices bought and discarded on one slate.
+    #
+    # ONLY WHEN IT IS UNAMBIGUOUS. A first initial and a surname is a weak
+    # key — two "J Rodriguez" on one slate is an ordinary Tuesday — so the
+    # fallback fires only when exactly ONE book entry carries that loose
+    # key for that market. Attaching the wrong player's price is a worse
+    # outcome than attaching none: a missing price shows as no bet, and a
+    # wrong price shows as a bet at a number nobody offered.
+    loose: dict[str, list] = {}
+    for (nkey, market), info in menu.items():
+        k = f"{_name_key_loose(info['player'])}|{market}"
+        loose.setdefault(k, []).append((nkey, market))
+
     for prop in slate.props:
         lines = index.get((normalize_name(prop.player), prop.market))
+        if not lines:
+            cands = loose.get(f"{_name_key_loose(prop.player)}|{prop.market}")
+            if cands and len(cands) == 1:
+                lines = index.get(cands[0])
+                if lines:
+                    result.loose_matched += 1
         if lines:
             prop.lines = lines
             result.matched += 1

@@ -141,6 +141,26 @@ def _slate_kickoffs(path: str) -> list:
     return out
 
 
+def _narrow_pull(out_path: str) -> bool:
+    """Should this background pull price only the six-hour window?
+
+    Only when the day cannot afford the whole slate. See
+    oddsbudget.wide_pull_affordable: the window was a free-plan measure,
+    and on a funded plan it saved ~3% of the day's credits while leaving
+    the evening board with no prices on it at all — which is the thing it
+    was supposed to be protecting.
+
+    Fails to the OLD behaviour if the budget cannot be read: narrowing
+    spends less, and a broken import must not be a way to overspend.
+    """
+    try:
+        from engine.oddsbudget import wide_pull_affordable
+        return not wide_pull_affordable(_games_on_slate(out_path) + 1,
+                                        share=_budget_share())
+    except Exception:                                        # noqa: BLE001
+        return True
+
+
 def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                      cost: int | None = None) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
@@ -226,7 +246,9 @@ def refresh_mlb(quiet: bool = False) -> bool:
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-        if quiet:                     # background cycle: only re-price what's live/soon
+        if quiet and _narrow_pull(out):
+            # Background cycle on a budget that cannot cover the whole
+            # slate: re-price only what is live or starting soon.
             args.append("--active-odds")
     elif _with_odds():
         # Budget says don't SPEND — but the last paid pull's prices are cached
@@ -435,7 +457,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-        if quiet:
+        if quiet and _narrow_pull(out):
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies

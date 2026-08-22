@@ -575,6 +575,45 @@ def touchpoint_due(state: "BudgetState", sport: str | None, now: float):
     return stamp
 
 
+# --- how much of the slate to price ------------------------------------------
+# Background cycles pass --active-odds, which prices only games inside a
+# six-hour window. That was written for a 500-credit free plan, where a
+# full slate was most of a month.
+#
+# MEASURED 2026-08-22, on a 15-game Saturday with 68,663 credits in hand:
+# the day's allowance was 3,408 credits, a full-slate pull costs 128, and
+# the six-hour window cut that to 32. It was saving 96 credits — 2.8% of
+# the day — and the price was a board showing 710 props and no book price
+# on any of them at midday, because at 11am ET a six-hour window reaches
+# the 1:35 games and nothing else. That is the "prices are not being
+# pulled enough" Ethan opened with.
+#
+# Worse, the pacer was already CHARGING for the whole slate: the cost it
+# hands should_refresh is games+1 for every game on the board. So the
+# narrow window did not buy extra pulls — it under-spent an allowance
+# already reserved and left the evening unpriced anyway.
+#
+# So the window is now a poverty measure rather than a default. It stays
+# for the plan it was designed for.
+WIDE_PULL_MARGIN = 8
+
+
+def wide_pull_affordable(requests_per_refresh: int,
+                         state: "BudgetState | None" = None,
+                         today: _dt.date | None = None,
+                         share: float = 1.0) -> bool:
+    """Can today afford to price the WHOLE slate rather than a window?
+
+    True when the day's allowance covers ``WIDE_PULL_MARGIN`` full-slate
+    pulls. Below that the six-hour window earns its keep again, which is
+    what a smaller plan or a nearly spent month looks like.
+    """
+    state = state or load()
+    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+    allowance = int(daily_allowance(state, today) * share)
+    return allowance >= per_refresh * WIDE_PULL_MARGIN
+
+
 def prime_window(kickoffs, now: float):
     """Where ``now`` sits relative to the slate's high-value window.
 
