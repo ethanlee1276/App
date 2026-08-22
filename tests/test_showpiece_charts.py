@@ -105,6 +105,67 @@ def test_the_charts_wear_the_theme_tokens_not_library_defaults():
         "a hardcoded color in the showpiece layer bypasses the theme"
 
 
+# --- a finger is not a cursor -------------------------------------------------
+def _place_fn():
+    vis = _read("web", "js", "visuals.js")
+    i = vis.index("function place(e) {")
+    return vis[i:vis.index("\n  }", i) + 4]
+
+
+def test_the_value_label_is_not_placed_under_the_finger():
+    """Ethan, 2026-08-22, on the popup's bar chart: "when you hold your
+    finger on the graph too see the number, my finger is in the way and i
+    cant see the number."
+
+    The label went 14px right and 30px above the pointer. That is right
+    for a MOUSE — a cursor is a few pixels of arrow and the hand is
+    nowhere near the screen. A fingertip covers roughly 45px and the hand
+    behind it covers everything below and to the right of the contact
+    point, which is precisely where those two offsets put the answer."""
+    fn = _place_fn()
+    assert "pointerType" in fn, "touch and mouse are still placed the same"
+    assert "FINGER" in fn, "no allowance for what a fingertip hides"
+    vis = _read("web", "js", "visuals.js")
+    i = vis.index("const FINGER =")
+    px = int(vis[i:i + 40].split("=")[1].split(";")[0])
+    assert px >= 40, f"{px}px does not clear a fingertip"
+
+
+def test_a_chart_near_the_top_puts_the_label_beside_the_finger():
+    """Below is under the same finger. Falling back downward would be
+    the original bug wearing a different offset."""
+    fn = _place_fn()
+    above = fn.index("e.clientY - h - FINGER")
+    fallback = fn[above:]
+    assert "e.clientX + FINGER" in fallback, \
+        "the no-room-above case does not move sideways"
+    assert "e.clientY + " not in fallback.split("} else {")[0], \
+        "it falls back to BELOW the finger, which the finger also covers"
+
+
+def test_the_mouse_placement_is_left_alone():
+    """Nothing was wrong with it, and a cursor gains nothing from a 46px
+    gap it has to travel to read."""
+    fn = _place_fn()
+    mouse = fn[fn.index("} else {"):]
+    assert "e.clientX + 14" in mouse and "e.clientY - 30" in mouse
+
+
+def test_the_label_never_leaves_the_screen():
+    fn = _place_fn()
+    assert "window.innerWidth" in fn and "Math.max(8" in fn
+
+
+def test_a_touch_that_becomes_a_scroll_does_not_strand_the_label():
+    """`pointercancel` fires and `pointerout` does not, which left the
+    number sitting over whatever scrolled underneath it."""
+    vis = _read("web", "js", "visuals.js")
+    i = vis.index("function place(e) {")
+    block = vis[i:i + 3000]
+    assert "pointercancel" in block, "a cancelled touch leaves it on screen"
+    assert '"scroll"' in block, "scrolling leaves it on screen"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

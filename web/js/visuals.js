@@ -1602,15 +1602,46 @@ function escapeAttr(s) {
     document.body.appendChild(tipEl);
     return tipEl;
   }
+  /* A FINGER IS NOT A CURSOR. Ethan, 2026-08-22, on the popup's bar
+     chart: "when you hold your finger on the graph too see the number,
+     my finger is in the way and i cant see the number."
+
+     This placed the label 14px right and 30px above the pointer, which
+     is correct for a mouse — the cursor is a few pixels of arrow and the
+     hand is nowhere near the screen. A fingertip covers roughly 45px,
+     and the hand behind it covers everything below and to the right of
+     the contact point, which is exactly where those two offsets put the
+     answer.
+
+     So touch gets its own placement: centred on the finger horizontally
+     and lifted clear of it vertically. When there is no room above — a
+     chart near the top of the screen — it goes to the SIDE rather than
+     below, because below is under the same finger. */
+  const FINGER = 46;                    // what a fingertip and its hand hide
+
   function place(e) {
     const el = ensure();
-    const pad = 14;
-    let lx = e.clientX + pad, ly = e.clientY - 30;
-    const w = el.offsetWidth || 80;
-    if (lx + w > window.innerWidth - 8) lx = e.clientX - w - pad;
-    if (ly < 8) ly = e.clientY + pad;
-    el.style.left = lx + "px";
-    el.style.top = ly + "px";
+    const touch = e.pointerType === "touch" || e.pointerType === "pen";
+    const w = el.offsetWidth || 80, h = el.offsetHeight || 28;
+    let lx, ly;
+    if (touch) {
+      lx = e.clientX - w / 2;
+      ly = e.clientY - h - FINGER;
+      if (ly < 8) {
+        // No room above. Beside it, on whichever side has space.
+        ly = Math.max(8, Math.min(window.innerHeight - h - 8,
+                                  e.clientY - h / 2));
+        lx = e.clientX + FINGER;
+        if (lx + w > window.innerWidth - 8) lx = e.clientX - w - FINGER;
+      }
+    } else {
+      lx = e.clientX + 14;
+      ly = e.clientY - 30;
+      if (lx + w > window.innerWidth - 8) lx = e.clientX - w - 14;
+      if (ly < 8) ly = e.clientY + 14;
+    }
+    el.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, lx)) + "px";
+    el.style.top = Math.max(8, ly) + "px";
   }
   document.addEventListener("pointerover", (e) => {
     const t = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
@@ -1628,6 +1659,16 @@ function escapeAttr(s) {
     const t = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
     if (t) tipEl.style.display = "none";
   });
+  /* A touch that turns into a scroll fires `pointercancel` and no
+     `pointerout`, which left the label stranded on screen over whatever
+     scrolled underneath it. Scrolling hides it for the same reason. */
+  ["pointercancel", "pointerup"].forEach((k) =>
+    document.addEventListener(k, () => {
+      if (tipEl) tipEl.style.display = "none";
+    }, { passive: true }));
+  document.addEventListener("scroll", () => {
+    if (tipEl) tipEl.style.display = "none";
+  }, { passive: true, capture: true });
 })();
 
 
