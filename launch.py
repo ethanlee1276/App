@@ -6588,6 +6588,9 @@ def main() -> None:
         _stripe_webhook_cli(recreate="--recreate" in argv,
                             print_env="--print-env" in argv)
         return
+    if "--board-size" in argv:
+        _board_size_cli()
+        return
     if "--promo-new" in argv:
         _promo_new_cli(argv)
         return
@@ -7267,6 +7270,72 @@ def _promo_new_cli(argv: list) -> None:
           "handed out, run `sudo ./deploy/setenv.sh --show` first and paste\n"
           "the old ones back alongside these, separated by commas.\n")
     print("This is the only time these are printed. Nothing here stores them.")
+
+
+def _board_size_cli() -> None:
+    """Where the bytes go, and what they cost at N subscribers.
+
+    THE BOARD IS THE SITE'S LARGEST RECURRING COST and nobody had ever
+    weighed it. Every signed-in page polls /api/board every 30 seconds
+    (120 when nothing is live), the launcher rewrites it every 60, so
+    each subscriber pulls roughly one whole board a minute. CPU for that
+    is solved — the bytes are cached and an unchanged board answers 304 —
+    but a board that genuinely CHANGED has to go down the wire in full,
+    to everyone, once a minute.
+
+    Guessing which key is fat is how you optimise the wrong one, so this
+    weighs them. Run it on the box with the real board.
+    """
+    import json as _j
+    from engine import gate as _gate
+    rows = []
+    for label, path in (("MLB", MLB_OUT), ("NFL", NFL_OUT), ("NBA", NBA_OUT),
+                        ("WNBA", WNBA_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT)):
+        full = ROOT / "data" / "built" / Path(path).name
+        src = full if full.is_file() else ROOT / path
+        if not src.is_file():
+            continue
+        try:
+            doc = _j.loads(src.read_text())
+        except Exception:                                    # noqa: BLE001
+            continue
+        total = src.stat().st_size
+        parts = sorted(((k, len(_j.dumps(v))) for k, v in doc.items()),
+                       key=lambda kv: -kv[1])
+        rows.append((label, src, total, parts))
+
+    if not rows:
+        print("\nNo board on disk yet — run the launcher once first.")
+        return
+
+    print("\nBoard payload — what a subscriber downloads\n" + "=" * 66)
+    for label, src, total, parts in rows:
+        where = "data/built" if "built" in str(src) else "web/data"
+        print(f"\n  {label}  {total / 1024:,.0f} KB  ({where})")
+        for k, n in parts[:8]:
+            if n < 1024:
+                continue
+            print(f"      {n / 1024:>7,.0f} KB  {n * 100 // max(1, total):>3}%  {k}")
+        small = sum(n for k, n in parts if n < 1024)
+        if small:
+            print(f"      {small / 1024:>7,.1f} KB       everything else")
+
+    # The number that decides whether this matters.
+    big = max(rows, key=lambda r: r[2])
+    kb = big[2] / 1024
+    print("\n" + "=" * 66)
+    print(f"  At the {big[0]} board's {kb:,.0f} KB, gzipped to roughly "
+          f"{kb * 0.22:,.0f} KB on the wire:\n")
+    print(f"      {'subscribers':>12}   {'per day':>10}   {'per month':>11}")
+    for n in (50, 100, 300, 1000):
+        # One full board each per rebuild; the launcher rebuilds hourly at
+        # worst and every minute at best. Minute is the honest figure —
+        # that is what the page polls for.
+        per_day = n * kb * 0.22 * 60 * 24 / 1_048_576      # GB
+        print(f"      {n:>12}   {per_day:>8,.1f} GB   {per_day * 30:>9,.0f} GB")
+    print("\n  A basic DigitalOcean droplet includes 1,000 GB a month.")
+    print("  If a row above passes that, the fix is to stop sending the")
+    print("  keys nobody reads on every poll — the table above says which.")
 
 
 def _stripe_promos_cli(secret_key: str, create: bool) -> None:

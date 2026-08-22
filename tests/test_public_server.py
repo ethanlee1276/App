@@ -617,6 +617,24 @@ def test_the_paid_board_still_never_lands_in_a_disk_cache():
     assert '"no-store"' in body, "the 304 relaxes what the 200 refuses"
 
 
+def test_the_board_weigher_reads_the_full_copy_not_the_redacted_one():
+    """--board-size exists to say where a subscriber's bytes go. Reading
+    web/data/ would weigh the PUBLIC board, whose paid keys the paywall
+    has already emptied — so it would report the largest sections as
+    costing nothing and point the optimisation at the wrong ones.
+
+    That is not hypothetical: --odds-doctor did exactly this and reported
+    "0 prop(s)" on a working board, earlier the same day."""
+    src = _read("launch.py")
+    body = src[src.index("def _board_size_cli("):]
+    body = body[:body.index("\ndef ", 1)]
+    assert '"data" / "built"' in body or "'data' / 'built'" in body, \
+        "it weighs the redacted public board"
+    i = body.index("full.is_file()")
+    assert "full if" in body[max(0, i - 40):i], \
+        "the full copy is not preferred when it exists"
+
+
 def test_the_stripe_webhook_is_not_rate_limited():
     """It is authenticated by signature already, and a retry burst during
     an incident is exactly when dropping payment events costs most."""
