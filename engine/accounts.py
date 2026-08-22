@@ -378,6 +378,22 @@ def change_password(conn, user_id: int, old: str, new: str) -> tuple[int, dict]:
     return 200, {"ok": True}
 
 
+def end_all_sessions(conn, user_id: int) -> int:
+    """Sign this account out everywhere, including here. Returns how many.
+
+    A password change already does this, and does it for the same reason.
+    This is the version for somebody who does NOT want to change their
+    password: a laptop left signed in at a library, a phone that was
+    sold. Without it the only way to revoke a session you cannot reach is
+    to change a password you had no other reason to change.
+    """
+    n = conn.execute("SELECT COUNT(*) FROM sessions WHERE user_id=?",
+                     (int(user_id),)).fetchone()[0]
+    conn.execute("DELETE FROM sessions WHERE user_id=?", (int(user_id),))
+    conn.commit()
+    return int(n)
+
+
 # --- sessions ----------------------------------------------------------------
 def _token_hash(token: str) -> str:
     return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()

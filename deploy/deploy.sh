@@ -62,6 +62,34 @@ else
 fi
 
 # --- 5. restart -------------------------------------------------------
+# THE CADDYFILE IS PART OF THE DEPLOY NOW. It was not, and the manual
+# `sudo cp deploy/Caddyfile /etc/caddy/Caddyfile` in its header is the
+# kind of step that gets done once and never again — so a routing change
+# committed to the repo sat there while the box kept its old copy. That
+# is how /sw.js spent every deploy being served off disk instead of
+# through the app, which froze the service worker's cache name and let a
+# stale bundle outlive every fix that shipped for it.
+#
+# Only when it differs, and Caddy validates before it reloads: a bad
+# Caddyfile that gets installed anyway takes the whole site down, and a
+# reload with nothing to reload is noise in the log.
+CADDYFILE="/etc/caddy/Caddyfile"
+if [ -f deploy/Caddyfile ] && [ -d /etc/caddy ]; then
+  if ! sudo cmp -s deploy/Caddyfile "$CADDYFILE"; then
+    say "the Caddyfile changed — validating before installing"
+    if sudo caddy validate --config deploy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
+      sudo cp deploy/Caddyfile "$CADDYFILE"
+      sudo systemctl reload caddy && say "caddy reloaded"
+    else
+      echo
+      echo "  THE NEW CADDYFILE DOES NOT VALIDATE. Left the running one in"
+      echo "  place — the site keeps working on the old config. See:"
+      echo "  caddy validate --config deploy/Caddyfile --adapter caddyfile"
+      echo
+    fi
+  fi
+fi
+
 say "restarting $SERVICE"
 sudo systemctl restart "$SERVICE"
 sleep 2

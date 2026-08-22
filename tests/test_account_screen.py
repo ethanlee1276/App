@@ -64,17 +64,35 @@ def test_the_topbar_chip_says_sign_in_rather_than_showing_a_glyph():
         "the chip still lands somewhere other than the account screen"
 
 
-def test_sign_in_is_the_primary_action_on_the_sign_in_screen():
-    """It shipped the other way round: "Create account" was the filled
-    button and came first, with Sign in as a ghost below it. Most people
-    arriving at a login screen already have an account."""
-    i = APP.index("acctAuth(this, 'login')")
-    j = APP.index("acctAuth(this, 'signup')", i - 400 if i > 400 else 0)
-    # The login button must come first in the markup…
-    assert i < j, "Create account still precedes Sign in"
-    # …and be the filled one, not the ghost.
-    line = APP[APP.rindex("<button", 0, i):i]
-    assert 'class="btn"' in line, "Sign in is still the secondary button"
+def test_sign_in_is_the_only_action_on_the_sign_in_screen():
+    """This used to pin the ORDER of two buttons on one card — log in
+    first and filled, create-account second and ghosted — because most
+    people arriving at a login screen already have an account.
+
+    The question stopped being about order on 2026-08-22. Ethan: "on the
+    login page, the sign up button should link to a new page to sign
+    up. its confusing to someone to type in there email and password
+    into a login section to signup for an account." So each page now has
+    one submit button, and on the sign-in page it is log in.
+    tests/test_signup_page.py owns the other half."""
+    i = APP.index("function acctSignInHTML(")
+    depth, seen, card = 0, False, None
+    for j in range(APP.index("(", i), len(APP)):
+        if APP[j] == "{":
+            depth += 1
+            seen = True
+        elif APP[j] == "}":
+            depth -= 1
+            if seen and depth == 0:
+                card = APP[i:j + 1]
+                break
+    assert card, "acctSignInHTML was not bracketed"
+    assert "acctAuth(this, 'login')" in card or "acctFieldsHTML(\"login\")" in card
+    assert "'signup'" not in card, (
+        "the sign-in card still submits a sign-up, which is the whole "
+        "thing that was confusing")
+    # And the way through is a LINK to the other page, not a second form.
+    assert "acctGoSignup()" in card
 
 
 def test_the_screen_does_not_carry_two_competing_headings():

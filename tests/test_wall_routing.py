@@ -106,8 +106,11 @@ def test_the_pages_that_stay_open_are_named_once():
     # sales page for anyone who has not paid, and the invite on it is
     # sent by the server only to those who have. Paywall and checkout are
     # the wall itself.
+    # Signup joined the list 2026-08-22: creating an account is its own
+    # page now, and somebody who has not paid has by definition not
+    # signed up. Verified in a browser that #wall-back reaches it.
     assert set(open_) == {"paywall", "checkout", "record", "account",
-                          "discord"}, open_
+                          "discord", "signup"}, open_
 
 
 def test_every_open_page_is_a_real_view():

@@ -1137,7 +1137,7 @@ class Handler(BaseHTTPRequestHandler):
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
-                        "delete"):
+                        "delete", "signout-all"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -1170,6 +1170,14 @@ class Handler(BaseHTTPRequestHandler):
             who = A.session_user(conn, token)
             if not who:
                 return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "signout-all":
+                # THIS session too, so the browser is told to forget
+                # itself as well — anything else leaves a page showing an
+                # account for a session that no longer exists.
+                n = A.end_all_sessions(conn, who["id"])
+                return self._send(
+                    200, json.dumps({"ended": n}).encode(), ".json",
+                    headers=self._session_cookie("", clear=True))
             if path == "data":
                 sections = body.get("sections")
                 if not isinstance(sections, dict):

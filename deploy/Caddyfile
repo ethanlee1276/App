@@ -48,6 +48,31 @@ qellysbook.com {
 		}
 	}
 
+	# --- the service worker: THROUGH THE APP, not off disk -----------
+	# sw.js carries `const VERSION = "..."`, and the cache it names is
+	# wiped by `activate` whenever that string changes. server.py rewrites
+	# the line with a HASH OF THE SHELL on the way out, so any change to
+	# index.html, app.js or styles.css renames the cache by itself and a
+	# stale bundle cannot outlive a deploy.
+	#
+	# Served off disk by the block below, that rewrite never ran. The
+	# literal in the file — "qb-v4" — went out to every phone on every
+	# deploy, unchanged, since the day it was written. `activate` deletes
+	# every cache whose key is not VERSION, so with VERSION frozen it
+	# deleted nothing, ever. Network-first limits the damage on a good
+	# connection; on a phone that drops one request for styles.css, the
+	# fallback is whatever that cache happens to hold.
+	#
+	# Same shape as the paywall seal bug: "the app fixes it on the way
+	# out" is not true of a file the app never sees.
+	handle /sw.js {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
 	# --- everything else: files straight off disk --------------------
 	# Python is not in the path for static files at all. The app is a
 	# stdlib http.server; Caddy serves assets far better and it keeps the

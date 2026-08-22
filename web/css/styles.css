@@ -1717,6 +1717,17 @@ td.num, .dl-num, .std-n, .pm-avatar, .odds,
 .btn, .btn:hover { box-shadow: none; }
 .btn { background: var(--panel-2); border: var(--hairline) solid var(--border); color: var(--text); }
 .btn:hover { border-color: var(--brand-2); filter: none; }
+/* THE PRIMARY BUTTON, at last as a rule. `.btn.primary` was used in four
+   places and defined in none — each of them styled its own element
+   instead (.pw-buy, .dc-go, .co-go), so the class was decoration and the
+   fifth use rendered as a plain dark button that reads as disabled. That
+   is what the sign-up page's Create account button looked like.
+   --brand-solid rather than --brand because white on --brand is Lc 74.5;
+   see the token's own note. */
+.btn.primary { background: var(--brand-solid); border-color: transparent;
+  color: #fff; font-weight: 700; }
+.btn.primary:hover { background: var(--brand-2); border-color: transparent;
+  color: #fff; }
 .theme-toggle { box-shadow: none; }
 
 /* Cards: flat, hairline, tight.
@@ -6032,6 +6043,23 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .plan-trial .ic { color: var(--good); flex: none; }
 .plan-trial b { color: var(--text); }
 
+/* WHICH PLAN, on the account page. A panel rather than a sentence,
+   because the four facts people actually want — name, price, what
+   happens next, when — are four facts and a sentence buries three of
+   them. */
+.acct-plan { margin: 0 0 14px; padding: 14px 16px; border-radius: var(--radius);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--border-soft); }
+.acct-plan-head { display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 10px; }
+.acct-plan-name { font-size: var(--fs-lg); font-weight: 800; }
+.plan-kvs { display: grid; gap: 6px; }
+.plan-kv { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; font-size: var(--fs-sm); }
+.plan-kv span { color: var(--text-mute); }
+.plan-kv b { color: var(--text); text-align: right; }
+.acct-plan .rank-help { margin: 10px 0 0; }
+
 .plan-list { list-style: none; margin: 0; padding: 0; }
 .plan-list li { display: flex; gap: 8px; align-items: baseline;
   font-size: var(--fs-sm); color: var(--text-dim); padding: 3px 0; }
@@ -6876,6 +6904,21 @@ input:-webkit-autofill:focus {
 /* Fine print, so its links are quiet — legible, underlined, and not
    competing with the buy button two inches above them. */
 .pw-legal a { color: var(--text-dim); text-decoration: underline; }
+
+/* LINKS INSIDE PROSE. Fourth time the user agent's #0000EE has surfaced
+   on a page — the footer, the legal pages' back link, the checkout's
+   fine print, and now the "the plans are over here" line on the sign-up
+   page. Every one of them was a text block that nobody had thought of as
+   a component.
+   So the fix moves up one level: the small-print classes are named here
+   as a group. This is not the base `a` rule that
+   tests/test_linkcolor.py rejects — that one would repaint the wordmark
+   and the Quick Tools doors, which are anchors that inherit their colour
+   on purpose. These three selectors only ever contain sentences. */
+.rank-help a, .subtitle a, .acct-note a {
+  color: var(--brand-2); text-decoration: underline; }
+.rank-help a:hover, .subtitle a:hover, .acct-note a:hover {
+  color: var(--brand); }
 .pw-legal a:hover { color: var(--text); }
 
 /* The masthead the wall has to draw for itself. `body.walled` hides the

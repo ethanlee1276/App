@@ -1614,7 +1614,17 @@ async function renderBestBets() {
     signals.push({ tag: "ARB",
       label: `${a.bet}: Over ${a.over.line} ${american(a.over.odds)} (${a.over.book}) + Under ${a.under.line} ${american(a.under.odds)} (${a.under.book})`,
       metric: `+${(a.profit_pct * 100).toFixed(1)}%`,
-      why: "locked profit whichever way it lands — price math, no forecast; not journaled (nothing to grade)" });
+      // "LOCKED" IS TRUE OF THE PRICES AND NOT OF THE OUTCOME, and the
+      // difference is the whole risk. It is locked only if BOTH legs
+      // fill at the quoted numbers — books move a line between the two
+      // clicks, cap the stake at a few dollars, or void a bet after the
+      // fact, and any one of those leaves a one-sided position. Saying
+      // "locked profit" and stopping is how somebody learns that with
+      // their own money.
+      why: "the prices lock a margin whichever way it lands — price "
+           + "math, no forecast. Only if BOTH sides actually fill at "
+           + "these numbers: books move lines, cap stakes and void bets. "
+           + "Not journaled (nothing to grade)" });
   }
   const lo = rec.loose_sampler || {};
   const looseRec = (lo.wins || 0) + (lo.losses || 0) > 0
@@ -12051,6 +12061,15 @@ function acctSignedInHTML(u) {
         this”, and leaving those sessions alive would answer it with
         nothing.</p>
       <div class="acct-row">
+        <button class="btn ghost" onclick="acctSignOutAll(this)">Sign out
+          everywhere</button>
+      </div>
+      <p class="rank-help">Ends every session on every device, including
+        this one. For a laptop you left signed in somewhere you cannot get
+        back to — without it, the only way to revoke a session you cannot
+        reach is to change a password you had no other reason to
+        change.</p>
+      <div class="acct-row">
         <button class="btn ghost" onclick="acctExport()">Download my data</button>
         <button class="btn ghost" onclick="acctSearchClear()">Clear search history</button>
         <button class="btn ghost" onclick="acctDelete(this)">Delete my account</button>
@@ -12068,6 +12087,33 @@ function acctSignedInHTML(u) {
    and gives up, and this site asks for ten characters or more. Toggling
    the input type is the whole mechanism; the value never leaves the
    field, so nothing is logged and nothing is sent anywhere. */
+window.acctSignOutAll = async function (btn) {
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Signing out…";
+  try {
+    const r = await fetch("/api/account/signout-all", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const said = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(said.error || r.status);
+    // This session went with the rest, so the page has to stop believing
+    // it is signed in. A reload is the honest version of that.
+    _acctUser = { signed_in: false };
+    _acctNote = `Signed out of ${said.ended || "all"} session${
+      said.ended === 1 ? "" : "s"}.`;
+    location.hash = "#account";
+    location.reload();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = was;
+    _acctNote = "Could not sign out everywhere — try again in a moment.";
+    acctPaintNote();
+  }
+};
+
 window.acctTogglePw = function (btn) {
   const wrap = btn.closest(".acct-pw-wrap");
   const input = wrap && wrap.querySelector("input");
@@ -12112,39 +12158,13 @@ function acctSignInHTML() {
         : `Sign in from the computer running the server, or give it an HTTPS
            address — <code>tailscale serve --bg 8000</code> prints one that
            works from anywhere.`}</div>` : ""}
-    <div class="acct-row">
-      <input type="email" class="acct-email" placeholder="you@example.com"
-        autocomplete="email" maxlength="254" spellcheck="false">
-      <div class="acct-pw-wrap">
-        <input type="password" class="acct-pw" placeholder="password"
-          autocomplete="current-password" maxlength="200">
-        <button type="button" class="acct-eye" aria-label="Show password"
-          aria-pressed="false" onclick="acctTogglePw(this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-6 10-6
-            10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-      </div>
-      <button class="btn" onclick="acctAuth(this, 'login')">Log in</button>
-    </div>
+    ${acctFieldsHTML("login")}
+    <div class="acct-note">${escapeHtml(_acctNote)}</div>
     <div class="acct-alt">
       <span>Don’t have an account?</span>
-      <button class="btn ghost" onclick="acctAuth(this, 'signup')">Sign up</button>
+      <button class="btn ghost" onclick="acctGoSignup()">Create one</button>
     </div>
-    <label class="acct-confirm">
-      <input type="checkbox" class="acct-age">
-      <span>I am 21 or older, and I accept the
-        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
-        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
-        This site publishes model estimates and takes no bets.</span>
-    </label>
-    <div class="acct-note">${escapeHtml(_acctNote)}</div>
-    <p class="rank-help">Ten characters or more — length is what makes a
-      password hard to guess. We store a one-way scramble of it, never the
-      password itself, which is why nobody here can ever tell you what
-      yours is; a lost one gets replaced, not recovered.</p>
-    <p class="rank-help">We still never ask for your sportsbook or ESPN
+    <p class="rank-help">We never ask for your sportsbook or ESPN
       password. Those belong to someone else’s service and could not be
       revoked by us. This one is ours, and you can delete it whenever you
       like.</p>
@@ -12153,6 +12173,122 @@ function acctSignInHTML() {
       It keeps working and nothing has been moved — make an account and
       its data syncs up on the next sync.</p>` : ""}
   </div>`;
+}
+
+/* ===================== THE SIGN-UP PAGE =====================
+   Ethan, 2026-08-22: "on the login page, the sign up button should link
+   to a new page to sign up. its confusing to someone to type in there
+   email and password into a login section to signup for an account."
+
+   He is right, and it was worse than confusing. One card carried one set
+   of fields and two buttons, so the same two boxes meant "the password I
+   already have" under Log in and "a password I am choosing now" under
+   Sign up — and the browser was told `autocomplete="current-password"`,
+   which is the wrong hint for half the people using it. The age and Terms
+   checkbox sat under both and applied to one. A page can only ask for one
+   thing at a time and be clear about it.
+
+   SO: two pages, each asking one question, each linking to the other.
+   The fields are built once (`acctFieldsHTML`) so they cannot drift, and
+   the autocomplete hint follows the page rather than being wrong on one
+   of them — that hint is what decides whether a password manager offers
+   to fill or offers to save. */
+
+function acctFieldsHTML(mode) {
+  const isNew = mode === "signup";
+  return `
+    <div class="acct-row">
+      <input type="email" class="acct-email" placeholder="you@example.com"
+        autocomplete="email" maxlength="254" spellcheck="false"
+        aria-label="Email address">
+      <div class="acct-pw-wrap">
+        <input type="password" class="acct-pw"
+          placeholder="${isNew ? "choose a password" : "password"}"
+          autocomplete="${isNew ? "new-password" : "current-password"}"
+          maxlength="200"
+          aria-label="${isNew ? "Choose a password" : "Password"}">
+        <button type="button" class="acct-eye" aria-label="Show password"
+          aria-pressed="false" onclick="acctTogglePw(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-6 10-6
+            10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn${isNew ? " primary" : ""}"
+        onclick="acctAuth(this, '${isNew ? "signup" : "login"}')">${
+        isNew ? "Create account" : "Log in"}</button>
+    </div>`;
+}
+
+window.acctGoSignup = function () {
+  _acctNote = "";
+  switchView("signup", true);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+window.acctGoLogin = function () {
+  _acctNote = "";
+  switchView("account", true);
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
+
+function signupHTML() {
+  const insecure = _acctUser && _acctUser.insecure;
+  return `
+  <div class="card acct-card">
+    <div class="card-head">
+      <div><div class="player">Create your account</div>
+        <div class="subtitle">One account, every device. Your bets, fantasy
+          leagues and settings follow it.</div></div>
+    </div>
+    ${insecure ? `<div class="warning">${icon("warn")} <b>${
+      _acctUser.allowed ? "This connection is not private."
+                        : "Not over this connection."}</b>
+      This page came over plain HTTP, so a password typed here crosses the
+      network readable by anyone on it.</div>` : ""}
+
+    ${acctFieldsHTML("signup")}
+
+    <label class="acct-confirm">
+      <input type="checkbox" class="acct-age">
+      <span>I am 21 or older, and I accept the
+        <a href="terms.html" target="_blank" rel="noopener">Terms</a> and
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.
+        This site publishes model estimates and takes no bets.</span>
+    </label>
+
+    <div class="acct-note">${escapeHtml(_acctNote)}</div>
+
+    <div class="acct-alt">
+      <span>Already have an account?</span>
+      <button class="btn ghost" onclick="acctGoLogin()">Log in</button>
+    </div>
+
+    <p class="rank-help">Ten characters or more — length is what makes a
+      password hard to guess. We store a one-way scramble of it, never the
+      password itself, which is why nobody here can ever tell you what
+      yours is; a lost one gets replaced, not recovered.</p>
+    <p class="rank-help">We never ask for your sportsbook or ESPN password.
+      Those belong to someone else’s service and could not be revoked by
+      us. This one is ours, and you can delete it whenever you like.</p>
+    <p class="rank-help">Creating an account does not subscribe you to
+      anything and takes no card. ${PLANS[0] ? `The plans are
+      <a href="#paywall">over here</a> when you want them.` : ""}</p>
+  </div>`;
+}
+
+async function renderSignup() {
+  const host = document.getElementById("view-signup");
+  if (!host) return;
+  // Somebody already signed in has no business on this page — send them
+  // to their account rather than offering a second one.
+  await acctWho();
+  if (_acctUser && _acctUser.signed_in) {
+    switchView("account", false);
+    return;
+  }
+  host.innerHTML = signupHTML();
 }
 
 window.acctAuth = async function (btn, mode) {
@@ -13597,6 +13733,59 @@ window.coApplyFree = async function (btn) {
   location.reload();
 };
 
+/* WHICH PLAN, IN WORDS, ON THE ACCOUNT PAGE.
+   ---------------------------------------------------------------------
+   Ethan, 2026-08-22: "on the account page make sure we show exactly what
+   plan they are subscribed too."
+
+   It said "Subscribed — renews 21 Sep 2026." and stopped. That is a
+   status, not an answer: it does not say monthly or yearly, what it
+   costs, or what the next charge will be. Somebody who bought six months
+   and sees a date four weeks out has no way to tell whether they are on
+   the plan they think they are, and the place they go next is a
+   chargeback or a support email.
+
+   Every line here comes from the server's own record of the
+   subscription. Where the server does not know a thing, the line is not
+   drawn — an account page that guesses is worse than one that is quiet. */
+function planPanelHTML(s) {
+  if (!s || !s.entitled) return "";
+  const plan = PLANS.find((p) => p.id === s.plan);
+  const when = s.period_end
+    ? new Date(s.period_end * 1000).toLocaleDateString([],
+        { year: "numeric", month: "long", day: "numeric" })
+    : "";
+  const trial = String(s.status || "") === "trialing";
+  const ending = String(s.status || "") === "canceled";
+
+  const row = (k, v) => v
+    ? `<div class="plan-kv"><span>${k}</span><b>${v}</b></div>` : "";
+
+  return `
+    <div class="acct-plan">
+      <div class="acct-plan-head">
+        <span class="acct-plan-name">${
+          plan ? escapeHtml(plan.name) + " plan"
+               : (s.comped ? "Complimentary access" : "Your subscription")}</span>
+        <span class="chip ${trial ? "warn" : "good"}">${
+          trial ? "Free trial" : ending ? "Ends " + when : "Active"}</span>
+      </div>
+      <div class="plan-kvs">
+        ${row("Price", plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : "")}
+        ${row(trial ? "Trial ends" : ending ? "Access until" : "Renews", when)}
+        ${row(trial && plan ? "Then" : "",
+              trial && plan ? `$${plan.price} per ${escapeHtml(plan.per)}` : "")}
+        ${row("Started with a code", s.codes && s.codes.active ? "Yes" : "")}
+      </div>
+      ${ending ? `<p class="rank-help">Cancelled. Nothing further will be
+        charged and your access runs to the date above.</p>` : ""}
+      ${trial ? `<p class="rank-help">Cancel before the trial ends and you
+        are not charged at all. One button, below.</p>` : ""}
+      ${s.comped ? `<p class="rank-help">This account was given access
+        directly — there is no card on file and nothing to cancel.</p>` : ""}
+    </div>`;
+}
+
 async function renderBilling() {
   const slot = document.getElementById("billing-slot");
   if (!slot) return;
@@ -13613,6 +13802,7 @@ async function renderBilling() {
      are on the box, and it stays the way Ethan comps somebody after. */
   const codes = s.codes || {};
   slot.innerHTML = (s.configured ? `
+    ${planPanelHTML(s)}
     <div class="acct-row">
       <span class="bill-state${s.entitled ? " on" : ""}">${
         escapeHtml(s.note || "")}</span>
@@ -19766,7 +19956,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -19808,7 +19998,8 @@ const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "s
 
    Record and Account stay open on purpose: Record is the evidence the
    subscription is sold on, and Account is where signing in happens. */
-const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord"];
+const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
+                   "signup"];
 
 function wallBlocked(name) {
   return document.body.classList.contains("walled")
@@ -19890,6 +20081,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "paywall") renderPaywall();
   if (name === "checkout") renderCheckout();
   if (name === "discord") renderDiscord();
+  if (name === "signup") renderSignup();
   // The escape hatch, on the two pages that stay open behind the wall.
   // Driven from here rather than from each page's own render, because
   // this is the one place that knows which view is showing — and a

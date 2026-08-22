@@ -460,7 +460,8 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     assert m, "the wall no longer names its exemptions — this test is blind"
     exempt = set(re.findall(r'"([a-z]+)"', m.group(1)))
     # The wall itself, and the pages the back link reaches.
-    assert exempt <= {"paywall", "checkout", "record", "account", "discord"}, (
+    assert exempt <= {"paywall", "checkout", "record", "account", "discord",
+                      "signup"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 
