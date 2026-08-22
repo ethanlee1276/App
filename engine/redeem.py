@@ -190,12 +190,22 @@ class RedeemError(RuntimeError):
 
 
 def redeem(conn, user_id: int, code: str, now: float | None = None,
-           env: dict | None = None) -> dict:
+           env: dict | None = None, elsewhere: dict | None = None) -> dict:
     """Apply a code to an account. Raises RedeemError with a sentence.
 
     ONE GENERIC REFUSAL for "no such code" and for "that code is used
     up". Telling them apart tells an attacker which codes exist, and the
     person holding a real code sees neither message.
+
+    `elsewhere` is ``{CODE: sentence}`` for codes that belong to a
+    DIFFERENT system — today the Stripe checkout promos. Passed in as
+    plain data rather than looked up, because this module grants access
+    without money and must not acquire an import from the thing that
+    moves money to do it; the caller already knows about both systems.
+    Such a code is refused with the caller's sentence and does NOT count
+    as a failed attempt: typing a real code into the wrong box is not a
+    guess, and burning the hourly allowance for it would lock somebody
+    out of the code they are holding.
     """
     now = time.time() if now is None else now
     code = normalize(code)
@@ -215,6 +225,25 @@ def redeem(conn, user_id: int, code: str, now: float | None = None,
         (code, int(user_id))).fetchone()
     if mine:
         raise RedeemError("You have already used this code.")
+
+    if not spec and code in (elsewhere or {}):
+        # A CHECKOUT code typed into the redemption box. These are two
+        # different systems — this one grants free months with no payment,
+        # Stripe's takes a percentage off a real subscription — and the
+        # person holding the code has no reason to know which box it goes
+        # in. Telling them beats "that code is not valid", which reads as
+        # "the code Ethan posted is broken".
+        #
+        # This says a promo EXISTS, which the generic refusal deliberately
+        # never does. That is fine here and only here: a checkout promo is
+        # a marketing code, printed on an Instagram post. There is nothing
+        # to enumerate that is not already public. QB_CODES — the private
+        # 100%-off grants — keep the decoy and the timing they had.
+        #
+        # It is not counted as a failed attempt either. Typing a real code
+        # into the wrong box is not a guess, and burning the hourly
+        # allowance for it would lock somebody out of the code they hold.
+        raise RedeemError(str((elsewhere or {})[code]))
 
     if not spec or (spec["max_uses"] and uses(conn, code) >= spec["max_uses"]):
         _note_attempt(conn, user_id, now)

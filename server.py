@@ -1405,6 +1405,16 @@ class Handler(BaseHTTPRequestHandler):
             # for.
             out["trial_days"] = BI.TRIAL_DAYS
             out["trial_plan"] = BI.TRIAL_PLAN
+            # The checkout discount codes, per plan — sent rather than
+            # mirrored in app.js so the percentage on the page and the
+            # percentage the coupon gives cannot drift. Only plans that
+            # actually show Stripe's promo box appear here, so the page
+            # can never invite a code into a checkout that has no box.
+            out["promos"] = {plan: [
+                {"code": pr["code"], "percent_off": pr["percent_off"],
+                 "months": pr["duration_in_months"]}
+                for pr in BI.promos_for(plan)]
+                for plan in BI.PLAN_ORDER if BI.promos_for(plan)}
             if BI.configured():
                 # Test and live are the SAME Stripe account distinguished
                 # by a key prefix — unlike Paddle, where the sandbox is a
@@ -1560,8 +1570,16 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                                # noqa: BLE001
                 body = {}
             code = str(body.get("code") or "")
+            # The site has two code systems. This endpoint owns the one
+            # that grants free months; Stripe owns the one that discounts
+            # a subscription. Handing the promo sentences down means a
+            # checkout code typed in here is told where it goes instead
+            # of being called invalid — and `redeem` still needs no
+            # import from the module that moves money.
+            from engine import billing as _BI
             try:
-                got = RD.redeem(conn, who["id"], code)
+                got = RD.redeem(conn, who["id"], code,
+                                elsewhere=_BI.promo_misdirect())
             except RD.RedeemError as exc:
                 # 200 with an error field, not a 4xx: this is an expected
                 # answer to a normal question, and a 400 in the console on

@@ -189,6 +189,137 @@ def ensure_catalogue(secret_key: str, create: bool = True) -> dict:
     return out
 
 
+# --- promotion codes ----------------------------------------------------------
+#
+# A discount at Stripe is TWO objects, and conflating them is the usual
+# way this goes wrong. A *Coupon* is the discount itself — 75%, for two
+# months — and has no name a customer ever types. A *Promotion Code* is
+# the string somebody types (MUDBONE) pointing at a coupon. One coupon can
+# carry several codes, which is how a second code for a different post
+# gets added later without touching the discount.
+#
+# Both are created here from `billing.PROMOS`, so the number on the plan
+# card, the number in the coupon and the number on the invoice are one
+# number with one source.
+
+
+def find_coupon(secret_key: str, promo_id: str) -> dict | None:
+    """Our coupon for a promo, by the owner/promo stamp in its metadata."""
+    got = BI._get(f"{API}/coupons?limit=100", secret_key)
+    for c in got.get("data") or []:
+        meta = c.get("metadata") or {}
+        if (str(meta.get("owner") or "") == OWNER_TAG
+                and str(meta.get("promo") or "") == promo_id):
+            return c
+    return None
+
+
+def find_promotion_code(secret_key: str, code: str) -> dict | None:
+    """An existing promotion code by the string customers type.
+
+    Asked of Stripe by `code=`, NOT filtered from a list of ours: the
+    name is unique across the whole account, so a code created by hand in
+    the dashboard has to be found too — otherwise this creates a second
+    one, Stripe refuses the duplicate, and the error says nothing useful.
+    """
+    got = BI._get(f"{API}/promotion_codes?code={code}&limit=10", secret_key)
+    for c in got.get("data") or []:
+        if str(c.get("code") or "").upper() == str(code).upper():
+            return c
+    return None
+
+
+def create_coupon(secret_key: str, promo_id: str) -> dict:
+    promo = BI.PROMOS[promo_id]
+    headers = {"Authorization": f"Bearer {secret_key}",
+               "Content-Type": "application/x-www-form-urlencoded",
+               "Idempotency-Key": f"{OWNER_TAG}-coupon-{promo_id}"}
+    pairs = {
+        "percent_off": str(int(promo["percent_off"])),
+        "duration": promo["duration"],
+        "name": promo["coupon_name"],
+        "metadata[owner]": OWNER_TAG,
+        "metadata[promo]": promo_id,
+    }
+    if promo["duration"] == "repeating":
+        pairs["duration_in_months"] = str(int(promo["duration_in_months"]))
+    return BI._post(f"{API}/coupons", headers, BI._form(pairs))
+
+
+def create_promotion_code(secret_key: str, promo_id: str,
+                          coupon_id: str) -> dict:
+    promo = BI.PROMOS[promo_id]
+    headers = {"Authorization": f"Bearer {secret_key}",
+               "Content-Type": "application/x-www-form-urlencoded",
+               "Idempotency-Key": f"{OWNER_TAG}-promocode-{promo_id}"}
+    return BI._post(f"{API}/promotion_codes", headers, BI._form({
+        "coupon": coupon_id,
+        "code": promo["code"],
+        "metadata[owner]": OWNER_TAG,
+        "metadata[promo]": promo_id,
+    }))
+
+
+def _coupon_problems(coupon: dict, promo_id: str) -> list:
+    """Ways a coupon already at Stripe disagrees with `billing.PROMOS`.
+
+    Reported, never silently corrected. A live coupon may already be on
+    somebody's subscription, and rewriting the discount under them is not
+    a thing a setup command should do on its own.
+    """
+    promo = BI.PROMOS[promo_id]
+    bad = []
+    if int(coupon.get("percent_off") or 0) != int(promo["percent_off"]):
+        bad.append(f"gives {coupon.get('percent_off')}% off, "
+                   f"we say {promo['percent_off']}%")
+    if str(coupon.get("duration") or "") != promo["duration"]:
+        bad.append(f"duration is {coupon.get('duration')!r}, "
+                   f"we say {promo['duration']!r}")
+    if promo["duration"] == "repeating":
+        got = int(coupon.get("duration_in_months") or 0)
+        if got != int(promo["duration_in_months"]):
+            bad.append(f"runs {got} month(s), "
+                       f"we say {promo['duration_in_months']}")
+    return bad
+
+
+def ensure_promos(secret_key: str, create: bool = True) -> dict:
+    """Make Stripe's coupons match `billing.PROMOS`, or say why they don't.
+
+    Returns ``{promo_id: {code, coupon, created, active, problems}}``.
+    Idempotent: a code that already exists is inspected, not recreated.
+    """
+    out: dict = {}
+    for promo_id, promo in BI.PROMOS.items():
+        row = {"code": promo["code"], "coupon": None, "created": False,
+               "active": False, "problems": []}
+        existing = find_promotion_code(secret_key, promo["code"])
+        if existing:
+            row["active"] = bool(existing.get("active"))
+            coupon = existing.get("coupon") or {}
+            row["coupon"] = coupon.get("id")
+            row["problems"] = _coupon_problems(coupon, promo_id)
+            if not row["active"]:
+                row["problems"].append(
+                    "the code exists at Stripe but is switched OFF — "
+                    "nobody can use it until it is reactivated there")
+            out[promo_id] = row
+            continue
+        if not create:
+            row["problems"].append("not created yet")
+            out[promo_id] = row
+            continue
+        coupon = find_coupon(secret_key, promo_id) or create_coupon(
+            secret_key, promo_id)
+        row["coupon"] = coupon.get("id")
+        row["problems"] = _coupon_problems(coupon, promo_id)
+        made = create_promotion_code(secret_key, promo_id, str(coupon.get("id")))
+        row["created"] = True
+        row["active"] = bool(made.get("active"))
+        out[promo_id] = row
+    return out
+
+
 # --- the webhook, created for you ---------------------------------------------
 #
 # THE HARDEST STEP BY HAND, and the one that must not be skipped: without

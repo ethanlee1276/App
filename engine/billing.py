@@ -143,6 +143,95 @@ DEFAULT_PLAN = "monthly"
 TRIAL_DAYS = 3
 TRIAL_PLAN = "monthly"
 
+#: Checkout discount codes. Ethan, 2026-08-22: *"Make a promo code for 75%
+#: off the first 2 months. The promo code will be MUDBONE."*
+#:
+#: WHY THIS ONE LIVES AT STRIPE WHEN `engine/redeem.py` EXISTS.
+#: They are not the same kind of thing. A redemption code grants months of
+#: access with NO payment at all, which is why it never touches a
+#: processor. "75% off" is a payment — a real subscription, a real card,
+#: charged $6.25 instead of $25 — and there is no way to express that
+#: without the thing that moves the money. So this is a Stripe Coupon plus
+#: a Promotion Code, entered in Stripe's own checkout box.
+#:
+#: MONTHLY ONLY, AND THIS IS THE IMPORTANT PART.
+#: All three plans are Prices on ONE Stripe Product, so Stripe's own
+#: `applies_to` cannot tell them apart — a coupon offered at checkout is
+#: offered on whatever plan is in the cart. And `duration_in_months=2` does
+#: not mean "two billing periods", it means invoices raised in the next two
+#: months. On the yearly plan that is exactly one invoice: 75% off $225, a
+#: full year for $56.25. On six months it is $125 down to $31.25. A promo
+#: meant to cost $37.50 would instead cost $168.75, and nothing would fail
+#: — it would just quietly be the best deal on the site.
+#:
+#: So the gate is on OUR side: `allow_promotion_codes` is switched on only
+#: for a plan this table names. On the other two Stripe never renders the
+#: box, so there is nothing to type a code into.
+#:
+#:   percent_off        how much off
+#:   duration_in_months how long the discount rides the subscription
+#:   plans              which plans may show the promo-code box at all
+PROMOS = {
+    "MUDBONE": {
+        "code": "MUDBONE",
+        "percent_off": 75,
+        "duration": "repeating",
+        "duration_in_months": 2,
+        "plans": ("monthly",),
+        "coupon_name": "MUDBONE — 75% off 2 months",
+    },
+}
+
+
+def promos_for(plan_id: str) -> list:
+    """Every promo that may be entered while buying this plan."""
+    return [p for p in PROMOS.values() if str(plan_id) in p["plans"]]
+
+
+def promo_named(code: str) -> dict | None:
+    """A promo by code, case-insensitively — people type these by hand."""
+    return PROMOS.get(str(code or "").strip().upper())
+
+
+def promo_misdirect() -> dict:
+    """``{CODE: sentence}`` for `redeem.redeem(elsewhere=...)`.
+
+    The site has two code systems and the person holding a code has no
+    reason to know which box theirs goes in. Without this, a checkout
+    promo typed into the account page's redemption box is answered "that
+    code is not valid", which reads as "the code Ethan posted is broken".
+
+    Living HERE rather than in `redeem.py` is the point: that module
+    grants access with no payment and keeps no import from anything that
+    moves money. It takes this as plain data.
+    """
+    out = {}
+    for code, p in PROMOS.items():
+        months = int(p["duration_in_months"])
+        out[code] = (
+            f"{code} is a checkout code, not a redemption code — it takes "
+            f"{p['percent_off']}% off your first {months} "
+            f"month{'s' if months != 1 else ''} of a subscription. Pick a "
+            f"plan, then enter it in the promo code box on the payment page.")
+    return out
+
+
+def promo_blurb(plan_id: str) -> str:
+    """One sentence for the plan card, or "" when the plan takes no codes.
+
+    Built from the same numbers Stripe is configured with rather than
+    written out by hand: a card advertising a discount the coupon does not
+    actually give is the display bug that turns into a chargeback.
+    """
+    got = promos_for(plan_id)
+    if not got:
+        return ""
+    p = got[0]
+    months = int(p["duration_in_months"])
+    return (f"Have a code? {p['percent_off']}% off your first "
+            f"{months} month{'s' if months != 1 else ''} — enter it at "
+            f"checkout.")
+
 
 def has_subscribed_before(conn, user_id: int) -> bool:
     """True once this account has ever had a subscription row.
@@ -467,13 +556,21 @@ def checkout_request(secret_key: str, price_id: str, user_id: int,
         # An address is collected because a card issuer's AVS check wants
         # one, not because we want the address. Stripe holds it.
         "billing_address_collection": "auto",
-        # NO `allow_promotion_codes`. Discount codes on this site are
-        # ours (engine/redeem.py) and grant entitlement directly, with no
-        # card and no subscription. Switching Stripe's on too would give
-        # the site two coupon systems that know nothing about each other,
-        # and "why did USFARATHANE work on the account page but not at
-        # checkout" is a support question with no good answer.
     })
+    # The promo-code box, and ONLY on a plan that has a promo. See PROMOS:
+    # the three plans share one Stripe Product, so a coupon offered at
+    # checkout is offered on whatever is in the cart, and a "2 months"
+    # discount against a yearly price is 75% off the whole year.
+    #
+    # This does leave the site with two code systems — Stripe's, here, and
+    # ours in engine/redeem.py — which is the thing the old comment here
+    # refused to do. What makes it survivable is that they cannot both
+    # claim the same code (tests/test_promo.py fails if they overlap) and
+    # that typing a checkout code into the account page's redeem box now
+    # gets told where it actually goes, instead of "that code is not
+    # valid".
+    if promos_for(plan_id):
+        body += b"&" + _form({"allow_promotion_codes": "true"})
     if int(trial_days or 0) > 0:
         # PAYMENT METHOD STILL COLLECTED. Stripe's default for a
         # subscription Checkout is to take the card up front and convert

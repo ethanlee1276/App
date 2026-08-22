@@ -112,13 +112,28 @@ def test_no_card_field_is_ever_sent_to_stripe_by_us():
         assert bad not in low, f"the checkout body carries {bad!r}"
 
 
-def test_stripes_own_promotion_codes_are_not_switched_on():
-    """Discount codes here are ours (engine/redeem.py) and grant
-    entitlement with no card and no subscription. A second coupon system
-    that knows nothing about the first makes "why did my code work on the
-    account page but not at checkout" a question with no good answer."""
-    _h, body = _body()
-    assert "allow_promotion_codes" not in body
+def test_stripes_promotion_codes_only_open_where_a_promo_exists():
+    """This used to assert `allow_promotion_codes` was never sent at all,
+    on the grounds that a second coupon system knowing nothing about the
+    first makes "why did my code work on the account page but not at
+    checkout" unanswerable. That reasoning still stands — but a
+    percentage off a real subscription cannot be expressed by the
+    no-payment grants in engine/redeem.py, so Ethan's MUDBONE needs
+    Stripe's.
+
+    What replaces the blanket refusal: the box opens ONLY on a plan
+    billing.PROMOS names, the two systems may not claim the same code
+    (tests/test_promo.py), and a checkout code typed into the redemption
+    box is told where it goes. The money reason for the narrow gate is
+    that all three plans are Prices on one Product, so a coupon offered
+    at checkout applies to whatever is in the cart — and "2 months" off
+    the yearly price is 75% off a whole year."""
+    for plan_id in billing.PLAN_ORDER:
+        _h, body = _body(plan=plan_id)
+        assert ("allow_promotion_codes=true" in body) is bool(
+            billing.promos_for(plan_id)), plan_id
+    assert not billing.promos_for("yearly"), \
+        "a 2-month discount on the yearly price is 75% off a whole year"
 
 
 def test_the_secret_key_travels_in_a_header_and_never_in_the_body():

@@ -7134,6 +7134,45 @@ def _stripe_webhook_cli(recreate: bool = False, print_env: bool = False) -> None
     sys.exit(3)
 
 
+def _stripe_promos_cli(secret_key: str, create: bool) -> None:
+    """Report (and with `create`, make) the checkout discount codes.
+
+    Folded into --stripe rather than given a flag of its own: a promo is
+    part of the catalogue, and a code that exists in this repo but not at
+    Stripe fails at the one moment it matters — somebody typing it on the
+    payment page after seeing it in a post.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+    if not BI.PROMOS:
+        return
+    try:
+        res = SS.ensure_promos(secret_key, create=create)
+    except BI.BillingUnavailable as exc:
+        print(f"\n  promos    Stripe would not answer: {exc}")
+        return
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"\n  promos    could not be checked: {exc}")
+        return
+    print("\nDiscount codes")
+    for promo_id, row in res.items():
+        promo = BI.PROMOS[promo_id]
+        plans = ", ".join(BI.PLANS[p]["name"] for p in promo["plans"])
+        if row.get("created"):
+            state = "created"
+        elif row.get("active"):
+            state = "already there"
+        else:
+            state = "MISSING" if not create else "inactive"
+        print(f"  {row['code']:<12} {promo['percent_off']}% off "
+              f"{promo['duration_in_months']} months on {plans}  ({state})")
+        for problem in row.get("problems") or []:
+            print(f"               ⚠️  {problem}")
+    if not create and any(r.get("problems") for r in res.values()):
+        print("               `python3 launch.py --stripe-setup` creates "
+              "what is missing.")
+
+
 def _stripe_cli(create: bool = False, print_env: bool = False) -> None:
     """`--stripe` reports; `--stripe-setup` also creates what is missing.
 
@@ -7191,6 +7230,9 @@ def _stripe_cli(create: bool = False, print_env: bool = False) -> None:
     bad = [h for ok, h, _ in checks if not ok]
 
     if not create:
+        sk_ro = os.environ.get(BI.ENV_SECRET, "").strip()
+        if sk_ro:
+            _stripe_promos_cli(sk_ro, create=False)
         print()
         if bad:
             print(f"{len(bad)} thing(s) to fix. `python3 launch.py "
@@ -7249,6 +7291,8 @@ def _stripe_cli(create: bool = False, print_env: bool = False) -> None:
               "Existing subscribers keep the price they signed up at "
               "until they cancel.")
         sys.exit(2)
+
+    _stripe_promos_cli(sk, create=True)
 
     if res["env"]:
         print("\nPaste these into secrets.local:\n")
