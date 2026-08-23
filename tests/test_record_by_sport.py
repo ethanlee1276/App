@@ -12,6 +12,8 @@ combined -7.1%.
 
 import datetime
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -202,6 +204,95 @@ def test_ufc_gets_a_scope_like_every_other_board():
     assert "ufc" in ledger.TRACKED_SPORTS
     js = _read("web", "js", "app.js")
     assert 'scope !== "ufc"' in js, "the UFC bucket ignores the scope"
+
+
+def test_the_running_pnl_marks_where_the_model_changed():
+    """Ethan, 2026-08-23, with the 1W and ALL charts side by side: "how
+    has the mlb been doing so good lately and it's been showing on the
+    weekly graph but it doesn't seem like the all time numbers r moving."
+
+    They were moving — the week climbed 7.05u of a 25.82u hole, 27% of
+    it. But the all-time line draws two different models as one
+    continuous story, so an upturn at the end reads as noise in a long
+    decline rather than as the point where the board started pricing
+    differently. A dashed rule at each era start says what the era table
+    below already says in words.
+
+    Driven under node rather than read, because "the rule lands on the
+    right day" is the only part that matters and it is arithmetic."""
+    node = shutil.which("node")
+    if not node:
+        return
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+
+    # Past the PARAMETER LIST before hunting the body: `opts = {}` is a
+    # brace too, and starting at the first `{` after the name lands on
+    # that default instead of the function.
+    i = app.index("function recCurveChart(")
+    j, depth = app.index("(", i), 0
+    while j < len(app):
+        if app[j] == "(":
+            depth += 1
+        elif app[j] == ")":
+            depth -= 1
+            if not depth:
+                break
+        j += 1
+    start, d = app.index("{", j), 0
+    for k in range(start, len(app)):
+        if app[k] == "{":
+            d += 1
+        elif app[k] == "}":
+            d -= 1
+            if not d:
+                body = app[i:k + 1]
+                break
+
+    check = body + """
+const escapeHtml = (s) => String(s);
+const escapeAttr = escapeHtml;
+const toneOf = (v) => (v > 0 ? "good" : v < 0 ? "bad" : "");
+const F = (m) => { console.error(m); process.exit(1); };
+const curve = []; let cum = 0;
+for (let i = 0; i < 40; i++) {
+  const day = i < 28 ? -0.92 : 0.59; cum += day;
+  curve.push({ date: new Date(Date.UTC(2026, 6, 15 + i)).toISOString().slice(0, 10),
+               cum_u: +cum.toFixed(2), day_u: day, n: 5 });
+}
+const eras = [{ key: "v1", from: null }, { key: "v2", from: "2026-07-29" },
+              { key: "v3", from: "2026-08-13" }];
+const rules = (h) => (h.match(/stroke-dasharray="3 3"/g) || []).length;
+const full = recCurveChart(curve, { head: false, eras });
+if (rules(full) !== 2) F("expected 2 rules, got " + rules(full));
+if (!full.includes(">07/29<") || !full.includes(">08/13<")) F("labels missing");
+// The first era has no start date and must not draw one.
+if (full.includes(">null<")) F("an open-ended era drew a rule");
+// A short window must not stack every marker on its left edge.
+if (rules(recCurveChart(curve.slice(-7), { head: false, eras })))
+  F("a marker outside the window was drawn");
+// Absent, empty and pre-history eras are all harmless.
+if (rules(recCurveChart(curve, { head: false }))) F("no eras still drew one");
+if (rules(recCurveChart(curve, { head: false, eras: [] }))) F("empty eras");
+if (rules(recCurveChart(curve, { head: false,
+    eras: [{ key: "old", from: "2020-01-01" }] })))
+  F("an era older than the whole curve drew a rule at index 0");
+console.log("ok");
+"""
+    out = subprocess.run([node, "-e", check], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr.strip() or out.stdout.strip()
+
+
+def test_the_chart_is_handed_the_eras_it_draws():
+    """The wiring, which the node check above cannot see: the payload
+    already carried model_eras for the table underneath, and the chart
+    was never given them."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    assert "recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])" in app
+    assert "recCurveChart(sliced, { head: false, eras })" in app
 
 
 def test_the_era_row_shows_whether_the_claims_came_true():

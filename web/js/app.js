@@ -6236,6 +6236,36 @@ function recCurveChart(curve, opts = {}) {
         dayU >= 0 ? "+" : ""}${dayU.toFixed(2)}u`;
     }),
   }));
+  /* WHERE THE MODEL CHANGED, on the curve itself.
+     Ethan, 2026-08-23, holding the 1W and ALL charts side by side:
+     "how has the mlb been doing so good lately and it's been showing on
+     the weekly graph but it doesn't seem like the all time numbers r
+     moving."
+
+     They are moving — the week climbed 7.05u of a 25.82u hole — but the
+     all-time line draws two different models as one continuous story, so
+     the upturn reads as noise in a long decline instead of as the point
+     where the board started pricing differently. A dashed rule at each
+     era start is the cheapest way to say "everything left of this was
+     priced by a model that no longer exists", which is the same thing
+     the era table underneath says in words.
+
+     Only eras that START INSIDE the visible window get a rule. A range
+     chip showing the last week would otherwise stack every marker on the
+     left edge, which says nothing and looks like a fault. */
+  const eras = (opts.eras || []).filter((e) => e && e.from);
+  const marks = eras.map((e) => {
+    const i = curve.findIndex((p) => (p.date || "") >= e.from);
+    if (i <= 0) return "";                       // absent, or before the window
+    const px = x(i).toFixed(1);
+    const d = String(e.from).slice(5).replace("-", "/");
+    return `<line x1="${px}" y1="${padT}" x2="${px}" y2="${h - padB}"
+        stroke="currentColor" stroke-width="1" stroke-dasharray="3 3"
+        opacity="0.35"/>
+      <text x="${px}" y="${padT - 5}" text-anchor="middle" font-size="9"
+        fill="currentColor" opacity="0.5">${escapeHtml(d)}</text>`;
+  }).join("");
+
   const yLabel = (v) => `<text x="${padL - 8}" y="${y(v) + 3.5}" text-anchor="end" font-size="10"
       fill="currentColor" opacity="0.45">${v >= 0 ? "+" : ""}${v.toFixed(1)}u</text>`;
   const grid = (v) => `<line x1="${padL}" y1="${y(v)}" x2="${w - padR}" y2="${y(v)}"
@@ -6265,6 +6295,7 @@ function recCurveChart(curve, opts = {}) {
         </linearGradient></defs>
         ${grid(hi)}${lo < 0 ? grid(lo) : ""}
         <path d="${area}" fill="url(#${gid})" stroke="none"/>
+        ${marks}
         <line x1="${padL}" y1="${y(0)}" x2="${w - padR}" y2="${y(0)}"
               stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity="0.3"/>
         ${Math.abs(y(0) - y(hi)) > 14 ? yLabel(hi) : ""}${yLabel(0)}${
@@ -6351,7 +6382,7 @@ function recRecentSection(recent) {
         Show all ${recent.length} settled picks</button>` : ""}
     </div>`;
 }
-function recAnalytics(curve, o) {
+function recAnalytics(curve, o, eras) {
   if (!curve || curve.length < 2) return recCurveChart(curve);
   const spanDays = (new Date(curve[curve.length - 1].date)
                     - new Date(curve[0].date)) / 864e5;
@@ -6410,7 +6441,7 @@ function recAnalytics(curve, o) {
       <span class="sub">— every settled pick, by slate date</span>
       ${raChips(avail, rk)}</div>
     <div class="ra-main">
-      ${recCurveChart(sliced, { head: false })}
+      ${recCurveChart(sliced, { head: false, eras })}
     </div>
     <p class="ra-line">${range}</p>
     ${alltime ? `<p class="ra-line ra-dim">${alltime}</p>` : ""}`;
@@ -8679,7 +8710,7 @@ async function renderRecord() {
         ever moved the bankroll.`}`)}
     ${unstaked}
     ${small}
-    ${recAnalytics(src.curve, o)}
+    ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recSplitsSection(o)}
     ${recRecentSection(src.recent || [])}
   `;
