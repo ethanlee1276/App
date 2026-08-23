@@ -268,6 +268,58 @@ def test_the_daily_check_is_silent_when_nothing_is_wrong():
     assert "if bad:" in block
 
 
+def test_the_suite_ceiling_is_not_shorter_than_the_suite_is_allowed_to_take():
+    """THE HEALTH CHECK FAILED ON THE ONE MACHINE IT IS FOR. Ethan ran
+    `python3 doctor.py` on the droplet — 1 vCPU, the live site beside it,
+    350 test files — and got:
+
+        the check itself failed: TimeoutExpired(['run_tests.py'], 900)
+        ↳ this is a bug in doctor.py, not necessarily in the app
+
+    It was. run_tests.py scales its own PER-FILE ceiling by load, up to an
+    hour for a single file, on the stated grounds that killing a slow run
+    "reports a failure that is really a queue". The doctor then wrapped
+    that whole run in fifteen minutes flat, so the two disagreed: the
+    suite was allowed to take longer than the doctor was willing to wait.
+
+    The doctor's ceiling has to be at least the per-file one it contains,
+    or the containing timeout can fire while a single legal file is still
+    running."""
+    import run_tests
+    idle_file_ceiling = run_tests.FILE_TIMEOUT * 4     # its own hard cap
+    assert doctor._suite_timeout() >= run_tests.FILE_TIMEOUT, (
+        "the doctor would kill the suite while one file is still inside "
+        "its own allowance")
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    i = src.index("def _suite_timeout(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert "getloadavg" in body and "cpu_count" in body, (
+        "the ceiling is fixed again, so a loaded box reports a queue as "
+        "a failure")
+    assert "5400" in body, "there is no cap, so a hung suite hangs the check"
+    assert idle_file_ceiling >= 3600, "run_tests' cap moved; re-check this"
+
+
+def test_a_suite_that_does_not_finish_is_not_reported_as_a_failure():
+    """A red mark for "the box was busy" is how a reader learns to ignore
+    red marks. It is a WARN that names the load and points at the flag
+    that skips the suite."""
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    i = src.index("def check_tests(")
+    body = src[i:src.index("\ndef ", i + 1)]
+    assert "except subprocess.TimeoutExpired:" in body, (
+        "a timeout still escapes to _check, which files it as a doctor bug")
+    j = body.index("except subprocess.TimeoutExpired:")
+    arm = body[j:body.index("return", j)]
+    # CODE ONLY. The comment in that arm says "NOT a FAIL", which the
+    # first cut of this read as the arm filing a FAIL.
+    code = "\n".join(l for l in arm.split("\n")
+                     if not l.strip().startswith("#"))
+    assert "WARN" in code and "FAIL" not in code
+    assert "--skip-tests" in arm, "the reader is not told how to get past it"
+    assert "getloadavg" in arm, "it does not say what made it slow"
+
+
 def test_the_daily_check_does_not_run_the_test_suite_in_the_refresh_loop():
     """The suite takes minutes; the refresh cycle is 60 seconds."""
     src = _launch()

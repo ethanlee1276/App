@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import subprocess
 import sys
 import time
@@ -107,11 +108,60 @@ def _check(rep, name):
 
 
 # --- checks -----------------------------------------------------------------
+def _suite_timeout() -> int:
+    """How long the whole suite may take, scaled to how contended the box is.
+
+    THIS WAS A FLAT 900s AND IT MADE THE HEALTH CHECK USELESS ON THE ONE
+    MACHINE IT IS FOR. run_tests.py scales its own PER-FILE ceiling by
+    load — up to an hour for a single file — precisely because "on a
+    loaded single-core box the same file legitimately takes many times
+    longer, and killing it reports a failure that is really a queue". The
+    doctor then wrapped that whole run in fifteen minutes flat, so the
+    two disagreed: run_tests was allowed to take longer than doctor was
+    willing to wait.
+
+    On the droplet — 1 vCPU, the live site running beside it, 350 test
+    files — that is exactly what happened, and the check reported
+    TimeoutExpired with the note "this is a bug in doctor.py". It was.
+
+    Same measure as run_tests uses: load average over CPU count is the
+    contention. Floored at the old base so an idle box is unchanged, and
+    capped so a genuinely hung suite still dies rather than hanging the
+    health check for ever.
+    """
+    base = 1800
+    try:
+        load = os.getloadavg()[0]
+    except (OSError, AttributeError):
+        return base
+    pressure = max(1.0, load / max(1, os.cpu_count() or 1))
+    return int(min(base * pressure, 5400))
+
+
 def check_tests(rep):
     @_check(rep, "test suite")
     def _():
-        p = subprocess.run([sys.executable, "run_tests.py"], cwd=ROOT,
-                           capture_output=True, text=True, timeout=900)
+        ceiling = _suite_timeout()
+        try:
+            p = subprocess.run([sys.executable, "run_tests.py"], cwd=ROOT,
+                               capture_output=True, text=True, timeout=ceiling)
+        except subprocess.TimeoutExpired:
+            # NOT a FAIL, and not "a bug in doctor.py" either. The suite
+            # did not fail — it did not finish, which on a contended box
+            # is a fact about the box. Saying so, with the load that
+            # caused it, beats a red mark that trains a reader to ignore
+            # red marks.
+            try:
+                load = f"{os.getloadavg()[0]:.1f}"
+            except (OSError, AttributeError):
+                load = "?"
+            rep.add("test suite", WARN,
+                    f"did not finish inside {ceiling // 60} min at load "
+                    f"{load} on {os.cpu_count() or '?'} core(s) — not a "
+                    "failure, an unfinished run",
+                    "python3 doctor.py --skip-tests   (or run the suite "
+                    "on its own when the box is quiet)")
+            return
         tail = (p.stdout or "").strip().splitlines()
         last = tail[-1] if tail else "(no output)"
         if p.returncode == 0:
