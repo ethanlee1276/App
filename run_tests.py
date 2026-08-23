@@ -82,14 +82,32 @@ def _run_one(path, env):
     name = os.path.basename(path)
     t0 = time.monotonic()
     try:
-        r = subprocess.run([sys.executable, path], capture_output=True,
+        # -u: UNBUFFERED, and it is the whole reason a timeout can say
+        # anything. Python buffers stdout when it is not a tty, so every
+        # `ok <name>` a hung file had printed sat in an 8KB buffer and
+        # died with the process — three timeouts on the droplet reported
+        # nothing but the word TIMED OUT, and each one cost an afternoon
+        # of guessing at which test was stuck. Unbuffered, the partial
+        # output survives the kill and the last line names the test that
+        # finished before the one that hung.
+        r = subprocess.run([sys.executable, "-u", path], capture_output=True,
                            text=True, cwd=ROOT, env=env, timeout=FILE_TIMEOUT)
         out, code = r.stdout, r.returncode
         err = r.stderr
     except subprocess.TimeoutExpired as exc:
-        out = (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) \
-            else (exc.stdout or "")
-        err = "TIMED OUT after %ds" % FILE_TIMEOUT
+        def _text(v):
+            if v is None:
+                return ""
+            return v.decode("utf-8", "replace") if isinstance(v, bytes) else v
+        out = _text(exc.stdout)
+        done = [ln for ln in out.splitlines() if ln.strip().startswith("ok ")]
+        where = (f"\n  last test to finish: {done[-1].strip()[3:].strip()}"
+                 f"\n  ({len(done)} passed before it hung — the next one in "
+                 f"the file is the suspect)"
+                 if done else
+                 "\n  it printed nothing at all, so it hung before the "
+                 "first test — an import, or module-level work")
+        err = _text(exc.stderr) + f"TIMED OUT after {FILE_TIMEOUT}s{where}"
         code = 1
     return name, code, out, err, time.monotonic() - t0
 

@@ -152,8 +152,14 @@ def test_a_hung_file_fails_itself_rather_than_the_whole_run():
     run would end looking merely slow."""
     assert "FILE_TIMEOUT" in RUNNER
     assert "TimeoutExpired" in RUNNER
+    # THE HANDLER, not a 400-character window after it. That window
+    # broke on 2026-08-23 when the handler grew a diagnosis, and the
+    # behaviour it checks — a timed-out file exits non-zero — had not
+    # moved at all. Ninth fixed-width slice in this suite to fail for
+    # that reason this week.
     i = RUNNER.index("except subprocess.TimeoutExpired")
-    assert "code = 1" in RUNNER[i:i + 400], "a timed-out file still passes"
+    handler = RUNNER[i:RUNNER.index("\n    return name, code", i)]
+    assert "code = 1" in handler, "a timed-out file still passes"
 
 
 def test_the_worker_count_can_be_pinned():
@@ -249,6 +255,60 @@ def test_the_secrets_leak_the_clean_environment_closes():
         assert run(os.path.join(td, "no-such-env")) == "ABSENT", (
             "pointing QB_ENV_FILE at nothing still leaked the box's config "
             "into the run")
+
+
+def test_a_timeout_says_where_it_hung():
+    """Three timeouts on the droplet reported nothing but the words
+    TIMED OUT, and each one cost an afternoon of guessing which test was
+    stuck. The runner was already capturing the partial stdout — Python
+    just buffers stdout when it is not a tty, so every `ok <name>` the
+    file had printed sat in an 8KB buffer and died with the process.
+
+    `-u` on the child is the whole fix. The partial output survives the
+    kill, and the last line names the test that finished before the one
+    that hung."""
+    import subprocess
+    import tempfile
+    import textwrap
+
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    assert '"-u", path' in src, (
+        "the child buffers its output, so a killed file reports nothing")
+
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, "test_hangs.py")
+        with open(f, "w", encoding="utf-8") as fh:
+            fh.write(textwrap.dedent("""
+                import time
+                def test_aaa(): pass
+                def test_bbb_hangs(): time.sleep(120)
+                if __name__ == "__main__":
+                    for k, v in sorted(globals().items()):
+                        if k.startswith("test_"):
+                            v(); print("  ok  " + k)
+            """))
+        import run_tests
+        was = run_tests.FILE_TIMEOUT
+        run_tests.FILE_TIMEOUT = 3
+        try:
+            _, code, _, err, _ = run_tests._run_one(f, dict(os.environ))
+        finally:
+            run_tests.FILE_TIMEOUT = was
+    assert code != 0
+    assert "TIMED OUT" in err
+    assert "test_aaa" in err, (
+        "the timeout does not name the last test that finished:\n" + err)
+
+
+def test_a_file_that_hangs_before_its_first_test_says_so_too():
+    """"It printed nothing" and "it printed three oks" are different
+    diagnoses — the first is an import or module-level work, and looking
+    for a slow test would be looking in the wrong place entirely."""
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    body = src[src.index("def _run_one("):]
+    body = body[:body.index("\ndef ")]
+    assert "printed nothing at all" in body
+    assert "an import, or module-level work" in body
 
 
 if __name__ == "__main__":
