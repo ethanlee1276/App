@@ -343,6 +343,41 @@ def test_every_surface_quoting_the_record_uses_the_same_window():
     assert "all_time" not in body
 
 
+# --- the command that makes the date a decision --------------------------
+
+def test_the_epoch_can_be_compared_against_the_eras_it_is_not():
+    """Ethan asked what he needs to decide. The date the public record
+    starts from is his call, and it should be made against the real
+    numbers rather than against a feeling about them.
+
+    The dates offered are MODEL_ERAS — the re-tunes this journal has
+    actually had — because an era boundary is a date something CHANGED
+    and any other date is just a date. Only the first kind answers "why
+    does your record start there?" if a subscriber ever asks.
+    """
+    import launch
+    assert hasattr(launch, "show_epoch")
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert '"--epoch" in argv' in src, "the flag is not wired"
+    body = _fn(src, "def show_epoch(")
+    assert "MODEL_ERAS" in body, "it offers dates nothing happened on"
+    assert "RECORD_EPOCH" in body
+    # Read-only: a reporting command that writes is a command nobody runs
+    # on a live journal.
+    for w in ("INSERT", "UPDATE", "DELETE", "export_json", "commit("):
+        assert w not in body, w
+
+
+def test_the_comparison_says_the_journal_is_untouched():
+    """The whole point of the epoch is that it is a display window. A
+    command that prints a smaller record without saying the rest is still
+    there is the command that makes someone think data was deleted."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = _fn(src, "def show_epoch(")
+    assert "stay there" in body or "still" in body
+    assert "only what the SITE shows" in body
+
+
 # --- the information test ------------------------------------------------
 
 def test_the_edge_panel_counts_the_same_bets_as_the_record():

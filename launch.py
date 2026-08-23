@@ -5904,6 +5904,55 @@ def show_unplayed(apply: bool = False) -> None:
         lconn.close(); hconn.close()
 
 
+def show_epoch() -> None:
+    """What the public record reads from each candidate start date.
+
+        python3 launch.py --epoch
+
+    Read-only. The site shows the record from ledger.RECORD_EPOCH
+    onwards, which is a decision about what the number MEANS — picks made
+    by gates that no longer exist say nothing about the model running
+    tonight. Which date to start from is the owner's call, and it should
+    be made against the actual numbers rather than against a feeling
+    about them.
+
+    The dates offered are not arbitrary: they are MODEL_ERAS, the
+    re-tunes this journal has actually had, plus whatever the epoch is
+    set to now. An era boundary is a date something CHANGED; any other
+    date is just a date, and only the first kind defends itself if a
+    subscriber ever asks why the record starts where it does.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        allp = ledger.performance(conn)
+        cands = [e["start"] for e in ledger.MODEL_ERAS if e["start"]]
+        if ledger.RECORD_EPOCH not in cands:
+            cands.append(ledger.RECORD_EPOCH)
+        cands.sort()
+        print(f"\nAll {allp['settled']} settled picks are in the journal and "
+              f"stay there. This is only what the SITE shows.\n")
+        print(f"  {'from':<13}{'record':>13}{'ROI':>9}{'net':>11}"
+              f"{'not shown':>11}")
+        print("  " + "-" * 55)
+        for d in [None] + cands:
+            p = ledger.performance(conn, since=d)
+            hid = allp["settled"] - p["settled"]
+            rec = f"{p['wins']}-{p['losses']}-{p['pushes']}"
+            print(f"  {(d or 'all time'):<13}{rec:>13}"
+                  f"{p['roi'] * 100:>8.1f}%{p['net_units']:>10.2f}u"
+                  f"{hid:>11}"
+                  + ("   <- live now" if d == ledger.RECORD_EPOCH else ""))
+        print("\n  The re-tunes this model has had:")
+        for e in ledger.MODEL_ERAS:
+            print(f"    {e['start'] or '(the beginning)':<13} {e['label']}")
+        print(f"\n  To move it, edit RECORD_EPOCH in engine/ledger.py and "
+              f"re-run a settle.\n  The page states the date and the count "
+              f"it leaves out either way.\n")
+    finally:
+        conn.close()
+
+
 def show_stuck() -> None:
     """Which open bets can never settle, and why.
 
@@ -6949,6 +6998,9 @@ def main() -> None:
         print(f"  net     {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
               f"   ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
         print("Record page updated.")
+        return
+    if "--epoch" in argv:
+        show_epoch()
         return
     if "--stuck" in argv:
         show_stuck()
