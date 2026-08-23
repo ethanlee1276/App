@@ -4366,6 +4366,11 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    drawer is the same height and the same order in every sport, so the
    muscle memory that makes a menu fast survives switching leagues.
    `cursor: help` rather than `not-allowed`: it DOES do something. */
+/* The league-sync zones when the usage feed has nothing: they are the
+   only working thing on the page, so they get room rather than looking
+   like a footnote under an error. */
+.ff-sync-alone { margin-top: 18px; }
+
 .sb-item.off { opacity: .38; cursor: help; }
 .sb-item.off:hover { background: transparent; color: var(--text-dim); }
 .sb-item.off:hover .sb-ico { color: var(--text-mute); }

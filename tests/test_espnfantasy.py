@@ -374,6 +374,41 @@ def test_the_link_can_be_undone():
     assert "removeItem(ESPN_TEAM_KEY)" in zone
 
 
+def test_a_league_can_be_linked_when_the_usage_feed_is_empty():
+    """Ethan, 2026-08-23: "pull the league sync stuff".
+
+    renderFantasy returned early on a payload with no season, which took
+    the Around-the-league tab with it — and that tab is where every
+    connect card lives. So an empty or failed usage build meant nobody
+    could link a league AT ALL, including through the offseason, which
+    is exactly when people are drafting and most want to.
+
+    Sleeper and ESPN read the user's OWN league. Whether we have
+    ingested last season's target shares has nothing to do with it."""
+    app = _app()
+    body = _fn(app, "renderFantasy")
+    head = body[:body.index("setStandaloneSource")]
+    assert "No NFL usage data yet" in head, (
+        "this test no longer covers the early-return branch")
+    assert 'id="espn-zone"' in head and 'id="sleeper-zone"' in head, (
+        "the empty state still hides the connect cards")
+    assert "renderEspnZone()" in head and "renderSleeperZone(" in head, (
+        "the cards are drawn but never wired up")
+
+
+def test_the_empty_state_still_says_what_is_missing():
+    """The zones being reachable must not turn a true statement about
+    the feed into a page that looks fine. Both, in order."""
+    body = _fn(_app(), "renderFantasy")
+    head = body[:body.index("setStandaloneSource")]
+    assert head.index("No NFL usage data yet") < head.index('id="sleeper-zone"'), (
+        "the leagues render above the reason the rest of the page is empty")
+    assert "ff-sync-alone" in head
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ".ff-sync-alone" in css, "unstyled section"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

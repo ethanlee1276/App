@@ -12074,9 +12074,30 @@ async function renderFantasy() {
     if (res.ok) d = await res.json();
   } catch (e) {}
   if (!d || !d.season) {
+    /* YOUR LEAGUE IS NOT DOWNSTREAM OF OUR USAGE FEED.
+       This used to return here, which took the Around-the-league tab
+       with it — and that tab is where all three connect cards live. So
+       an empty or failed usage build meant nobody could link a league
+       AT ALL, including in the offseason, which is exactly when people
+       are drafting and most want to.
+
+       Sleeper and ESPN read the user's own league directly; whether we
+       have ingested last season's target shares has nothing to do with
+       it. The empty state stays — it is true, and it says what to run —
+       and the sync zones render underneath it. */
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
-      <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>`;
+      <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>
+      <div class="ff-sync-alone">
+        <div class="section-title">Your leagues
+          <span class="sub">— these read your own league and do not wait on the
+          usage feed above</span></div>
+        ${acctStripHTML()}
+        <div id="sleeper-zone"></div><div id="league-desk"></div>
+        <div id="espn-zone"></div><div id="espn-desk"></div>
+      </div>`;
+    renderSleeperZone(d || {});
+    renderEspnZone();
     return;
   }
   setStandaloneSource(`Ingested NFL ${d.season} weekly stats (nflverse)`,
