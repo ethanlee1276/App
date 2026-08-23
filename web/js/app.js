@@ -12277,6 +12277,7 @@ async function renderFantasy() {
      "camp, the waiver wire, the offseason and the draft kit",
      acctStripHTML() + `<div id="sleeper-zone"></div>`
      + `<div id="league-desk"></div>`
+     + `<div id="espn-zone"></div><div id="espn-desk"></div>`
      + `<div id="yahoo-zone"></div><div id="yahoo-desk"></div>`
      + campHTML(d.camp)
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
@@ -12295,6 +12296,7 @@ async function renderFantasy() {
   window._ffRanks = d.ranks || null;
   initRankBoard();
   renderSleeperZone(d);
+  renderEspnZone();
   renderYahooZone();
 }
 
@@ -12409,12 +12411,15 @@ function acctGather() {
   const fu = localStorage.getItem("ff_user") || "";
   const fl = localStorage.getItem("ff_league") || "";
   const fd = localStorage.getItem("ff_draft_id") || "";
+  const ea = localStorage.getItem(ESPN_LEAGUE_KEY) || "";
+  const et = localStorage.getItem(ESPN_TEAM_KEY) || "";
   // The pasted ranking rides along: it is typed once and wanted on the
   // phone at the draft table, which is the whole reason accounts exist.
   const fr = localStorage.getItem(FF_IMPORT_KEY) || "";
-  if (fu || fl || fd || fr || ts.fantasy)
+  if (fu || fl || fd || fr || ea || et || ts.fantasy)
     sections.fantasy = { ts: ts.fantasy || 0,
-                         data: { user: fu, league: fl, draft: fd, ranks: fr } };
+                         data: { user: fu, league: fl, draft: fd, ranks: fr,
+                                 espn: ea, espnTeam: et } };
   const bk = localStorage.getItem("ge-bankroll") || "";
   const up = localStorage.getItem("ge-unit-pct") || "";
   if (bk || up || ts.bankroll)
@@ -12445,6 +12450,13 @@ function acctApplySection(name, sec) {
                               : localStorage.removeItem(k);
       put("ff_user", d.user); put("ff_league", d.league);
       put("ff_draft_id", d.draft); put(FF_IMPORT_KEY, d.ranks);
+      // NEW KEYS ON AN OLD SECTION. A profile written before ESPN
+      // existed has no `espn` field, and `put` treats undefined as
+      // "remove" — which would wipe a link the phone had just made
+      // every time an older device synced. Absent means "this copy has
+      // nothing to say about ESPN", not "ESPN was disconnected".
+      if ("espn" in d) put(ESPN_LEAGUE_KEY, d.espn);
+      if ("espnTeam" in d) put(ESPN_TEAM_KEY, d.espnTeam);
     } else if (name === "search") {
       if (Array.isArray(d))
         localStorage.setItem(ACCT_SEARCH_KEY, JSON.stringify(d));
@@ -19296,6 +19308,94 @@ function sleeperConnectHTML(msg) {
     </div>
     ${msg ? `<div class="warning" style="margin-top:10px">${icon('warn')} ${escapeHtml(msg)}</div>` : ""}
   </div>`;
+}
+
+/* ESPN, WHICH WAS BUILT AND UNREACHABLE.
+   engine/sources/espnfantasy.py has 20 passing tests, server.py routes
+   /api/leaguedesk?platform=espn to it, and renderLeagueDesk has taken a
+   platform argument since the day it was written. Nothing on the page
+   ever passed "espn", so a whole finished platform sat behind a door
+   with no handle on it.
+
+   A PUBLIC LEAGUE IS ALL THIS ASKS FOR, and that is the deliberate
+   limit rather than a shortcut: a private ESPN league needs `espn_s2`
+   and `SWID`, session cookies lifted out of a logged-in browser that
+   grant full account access, last months and cannot be scoped to one
+   league. This site does not take credentials. So the card says which
+   ESPN setting to change instead of asking for a cookie.
+
+   The league id is in the URL of your own league page, which is the one
+   place somebody can find it without being told twice. */
+const ESPN_LEAGUE_KEY = "ff_espn_league";
+const ESPN_TEAM_KEY = "ff_espn_team";
+
+function espnConnectHTML(msg) {
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div><div class="player">My league — ESPN sync</div>
+      <div class="subtitle">Read-only and no password. Paste your league id — it is the
+        number after <code>leagueId=</code> in your ESPN league URL. Your league has to be
+        set <b>Viewable by the public</b> (League Settings → Basic Settings);
+        ESPN gives no other way in without handing over an account cookie,
+        and this site does not ask for those.</div></div></div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <input id="espn-league-id" type="text" inputmode="numeric"
+        placeholder="ESPN league id"
+        style="flex:1;min-width:160px;background:var(--panel-2);color:inherit;
+        border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
+      <input id="espn-team-id" type="text" inputmode="numeric"
+        placeholder="Your team id (optional)"
+        style="flex:1;min-width:150px;background:var(--panel-2);color:inherit;
+        border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
+      <button class="btn" id="espn-connect">Connect</button>
+    </div>
+    ${msg ? `<div class="warning" style="margin-top:10px">${icon("warn")} ${escapeHtml(msg)}</div>` : ""}
+  </div>`;
+}
+
+function renderEspnZone(errMsg) {
+  const zone = document.getElementById("espn-zone");
+  if (!zone) return;
+  const league = localStorage.getItem(ESPN_LEAGUE_KEY);
+  if (!league) {
+    zone.innerHTML = espnConnectHTML(errMsg);
+    const btn = document.getElementById("espn-connect");
+    if (btn) btn.addEventListener("click", () => {
+      const id = (document.getElementById("espn-league-id").value || "").trim();
+      // The server refuses anything that is not digits; saying so here
+      // costs a keystroke instead of a round trip and an error card.
+      if (!/^\d{1,25}$/.test(id)) {
+        renderEspnZone("A league id is the number in your ESPN league URL — "
+                       + "digits only.");
+        return;
+      }
+      const team = (document.getElementById("espn-team-id").value || "").trim();
+      localStorage.setItem(ESPN_LEAGUE_KEY, id);
+      if (team) localStorage.setItem(ESPN_TEAM_KEY, team);
+      else localStorage.removeItem(ESPN_TEAM_KEY);
+      // Into the synced section, so linking on the phone is linking
+      // everywhere — the same contract Sleeper has had since accounts
+      // shipped, and the whole point of "connect it once".
+      acctTouch("fantasy");
+      renderEspnZone();
+    });
+    return;
+  }
+  const team = localStorage.getItem(ESPN_TEAM_KEY) || "";
+  zone.innerHTML = `<div class="card" style="margin-bottom:16px">
+    <div class="card-head"><div><div class="player">ESPN league ${escapeHtml(league)}</div>
+      <div class="subtitle">${team ? `your team id ${escapeHtml(team)} · ` : ""}public
+        read, no credential stored</div></div>
+      <button class="btn ghost" id="espn-forget">Disconnect</button></div></div>`;
+  const off = document.getElementById("espn-forget");
+  if (off) off.addEventListener("click", () => {
+    localStorage.removeItem(ESPN_LEAGUE_KEY);
+    localStorage.removeItem(ESPN_TEAM_KEY);
+    acctTouch("fantasy");
+    const desk = document.getElementById("espn-desk");
+    if (desk) desk.innerHTML = "";
+    renderEspnZone();
+  });
+  renderLeagueDesk(league, team, "espn", "espn-desk");
 }
 
 async function renderSleeperZone(d, errMsg) {

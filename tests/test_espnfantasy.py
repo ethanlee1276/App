@@ -268,6 +268,112 @@ def test_unmapped_scoring_reaches_the_page():
     assert '"unmapped_scoring"' in body
 
 
+# --- the door somebody can actually open ------------------------------------
+
+def _app():
+    return open(os.path.join(ROOT, "web", "js", "app.js"),
+                encoding="utf-8").read()
+
+
+def _fn(src, name):
+    """A function body by brace matching, past its parameter list."""
+    i = src.index("function " + name + "(")
+    j, depth = src.index("(", i), 0
+    while j < len(src):
+        if src[j] == "(":
+            depth += 1
+        elif src[j] == ")":
+            depth -= 1
+            if not depth:
+                break
+        j += 1
+    start, d = src.index("{", j), 0
+    for k in range(start, len(src)):
+        if src[k] == "{":
+            d += 1
+        elif src[k] == "}":
+            d -= 1
+            if not d:
+                return src[i:k + 1]
+    raise AssertionError(name + " never closes")
+
+
+def test_the_page_can_reach_the_platform_this_module_implements():
+    """BUILT AND UNREACHABLE until 2026-08-23. This module had twenty
+    passing tests, server.py routed /api/leaguedesk?platform=espn to it,
+    and renderLeagueDesk had taken a platform argument since the day it
+    was written — and nothing on the page ever passed "espn". A finished
+    platform behind a door with no handle."""
+    app = _app()
+    assert 'id="espn-zone"' in app, "no host for the connect card"
+    assert "function renderEspnZone(" in app
+    assert 'renderEspnZone();' in app, "defined but never called"
+    assert '"espn", "espn-desk"' in app, (
+        "the desk is never asked for an ESPN league")
+
+
+def test_the_link_is_remembered_on_the_account_not_just_the_device():
+    """Ethan: "seamlessly sync there fantasy accounts". Sleeper's
+    username has ridden the synced profile since accounts shipped;
+    linking on the phone and finding nothing on the laptop is not
+    connecting once."""
+    app = _app()
+    gather = _fn(app, "acctGather")
+    assert "ESPN_LEAGUE_KEY" in gather and "espn:" in gather, (
+        "the ESPN link never leaves the device it was typed on")
+    apply = _fn(app, "acctApplySection")
+    assert "ESPN_LEAGUE_KEY" in apply, "a synced link is never adopted"
+
+
+def test_a_profile_written_before_espn_existed_does_not_wipe_the_link():
+    """`put` treats undefined as "remove", so a device syncing an older
+    fantasy section would clear a link the phone had just made — every
+    time. Absent means "this copy has nothing to say about ESPN", not
+    "ESPN was disconnected"."""
+    apply = _fn(_app(), "acctApplySection")
+    assert '"espn" in d' in apply, (
+        "an older profile without the field still writes it, which "
+        "unlinks the league")
+    assert '"espnTeam" in d' in apply
+
+
+def test_the_card_refuses_a_league_id_the_server_would_refuse():
+    """server.py answers 400 for anything that is not digits. Saying so
+    in the box costs a keystroke; letting it through costs a round trip
+    and an error card that reads like the league is missing."""
+    zone = _fn(_app(), "renderEspnZone")
+    assert "\\d{1,25}" in zone, "any string is accepted and sent"
+
+
+def test_the_card_names_the_setting_rather_than_asking_for_a_cookie():
+    """The limit this module is built around, restated where somebody
+    hits it. A private ESPN league needs espn_s2 and SWID — session
+    cookies that grant full account access, last months and cannot be
+    scoped to one league — and the answer is the League Settings toggle,
+    not a paste box."""
+    import re as _re
+    html = _fn(_app(), "espnConnectHTML")
+    assert "Viewable by the public" in html
+    # WHAT IT COLLECTS, not what it mentions. The first cut of this
+    # asserted the word "password" was absent and failed on the card's
+    # own reassurance — "Read-only and no password" — which is the
+    # sentence that makes the point it was trying to check.
+    ids = _re.findall(r'<input id="([^"]+)"', html)
+    assert set(ids) <= {"espn-league-id", "espn-team-id"}, (
+        f"the card collects something else: {ids}")
+    assert 'type="password"' not in html
+    assert "espn_s2" not in html and "SWID" not in html
+
+
+def test_the_link_can_be_undone():
+    """A connect with no disconnect is a setting somebody has to clear
+    site data to change."""
+    zone = _fn(_app(), "renderEspnZone")
+    assert "espn-forget" in zone
+    assert "removeItem(ESPN_LEAGUE_KEY)" in zone
+    assert "removeItem(ESPN_TEAM_KEY)" in zone
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
