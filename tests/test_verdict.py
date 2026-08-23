@@ -76,9 +76,18 @@ def _fn(name):
 
 def test_the_verdict_leads_the_record_page():
     """Below the fold it is another panel; above everything it is the
-    answer. `receipts` is the page's first room."""
-    assert "const receipts = verdict + edgePanel" in APP, \
-        "the verdict no longer leads the Record page"
+    answer. `receipts` is the page's first room.
+
+    THE VERDICT'S POSITION, NOT WHAT FOLLOWS IT. This pinned
+    "verdict + edgePanel" and so went red when the EDGE panel moved to
+    the bottom of the room on 2026-08-23 — a change that did not touch
+    the verdict at all, and left it leading more clearly than before.
+    """
+    i = APP.index("const receipts = verdict +")
+    assert i > 0, "the verdict no longer leads the Record page"
+    # And nothing was slipped in front of it inside the string either.
+    body = APP[i:APP.index("\n  `;", i)]
+    assert body.index("verdict") < body.index("recAnalytics")
 
 
 def test_it_refuses_a_verdict_on_a_thin_book():
