@@ -21050,6 +21050,55 @@ function wallBlocked(name) {
     && !WALL_OPEN.includes(name);
 }
 
+/* WHERE A VIEW LANDS YOU.
+   -------------------------------------------------------------------
+   Ethan, 2026-08-23, with a screen recording: "every time on mobile I
+   click on a player to see the chart, it will load me at the bottom of
+   the page which I don't like it need to be at the top of the page."
+
+   Nothing ever scrolled. `_switchViewNow` reset the scroll for exactly
+   one destination — the game page — and every other view inherited
+   whatever offset the page happened to be at. On a desktop board that is
+   invisible, because the boards are short enough that the offset is
+   usually zero. On a phone you scroll a long way down a list of picks,
+   tap one, and the prop page opens at that same offset — and since the
+   prop page is SHORTER than the board, that offset is often past its
+   end, so the browser pins you to the bottom. It looks like the page
+   loaded upside down.
+
+   The fix is not "always jump to the top", because that breaks the other
+   half of it: backing out of a pick you opened from row 30 must not
+   dump you at row 1 of a list you were reading. So:
+
+     * opening a DETAIL page (a prop, a game) remembers where the board
+       was, and lands you at the top of the detail;
+     * leaving that detail back to the view it came from — the button,
+       the phone's back-swipe, any route — puts you back where you were;
+     * every other view change lands at the top, which is what tapping a
+       tab has always been supposed to do.
+
+   `behavior: "instant"`, and the word matters. "auto" does NOT mean
+   instant — it means "defer to CSS", and this stylesheet sets
+   `html { scroll-behavior: smooth }`, so the first version of this fix
+   asked for an immediate jump and got a 600ms animation instead. Caught
+   by measuring: the position was still travelling 243 → 953 → 2076 half
+   a second after the switch, which on a phone is the page visibly
+   scrolling itself while the view transition plays over the top. Only
+   "instant" overrides the sheet. */
+let _boardReturn = null;              // { view, y } while inside a detail
+
+const DETAIL_VIEWS = ["prop", "game"];
+
+function _landScroll(name, leaving) {
+  let y = 0;
+  if (_boardReturn && name === _boardReturn.view
+      && DETAIL_VIEWS.includes(leaving)) {
+    y = _boardReturn.y;
+    _boardReturn = null;
+  }
+  window.scrollTo({ top: y, behavior: "instant" });
+}
+
 function switchView(name, push = false) {
   if (wallBlocked(name)) name = "paywall";
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
@@ -21070,6 +21119,11 @@ function _switchViewNow(name, push, dir) {
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
+  // Captured BEFORE state.view moves: the offset belongs to the view
+  // being left, and one line later there is no way to ask which that was.
+  const leaving = state.view;
+  if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
+    _boardReturn = { view: leaving, y: window.scrollY };
   state.view = name;
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
@@ -21093,7 +21147,7 @@ function _switchViewNow(name, push, dir) {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
     moveIndicator();
-    window.scrollTo({ top: 0, behavior: state.quiet ? "auto" : "smooth" });
+    _landScroll(name, leaving);
     return;
   }
   if (name === "tonight") renderTonight();
@@ -21153,6 +21207,11 @@ function _switchViewNow(name, push, dir) {
   // line telling you where you are was the one line that was wrong.
   syncMenuLabel();
   moveIndicator();
+  // LAST, on purpose. Several branches above render asynchronously, and
+  // a page that grows after it has been scrolled keeps the offset it was
+  // given — so the position has to be set once the switch is otherwise
+  // finished, not scattered through the dispatch above it.
+  _landScroll(name, leaving);
 }
 
 function initialView() {
@@ -21769,6 +21828,15 @@ function bind() {
   document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
   window.addEventListener("resize", moveIndicator);
 }
+
+/* The browser's own scroll restoration and this app's cannot both be
+   right. On a hash-routed SPA the browser restores the offset it saw at
+   the moment the hash changed, which is the OLD view's offset applied to
+   the NEW view's content — the same wrong-place-on-the-page bug
+   `_landScroll` exists to fix, arriving from the other direction and a
+   frame later, so it wins. Taking the wheel means this app now owes every
+   navigation a position, which is what _landScroll gives it. */
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
 initTheme();
 loadBankroll();

@@ -526,10 +526,29 @@ def test_the_wall_does_not_bounce_a_reader_out_of_checkout():
     assert "account" in exempt, \
         "no way to sign in from the wall, which leaves it with no door"
     # And the refusal reads the DESTINATION, never the current view.
+    #
+    # This used to be spelled "no `state.view` appears before the
+    # assignment", which is a proxy rather than the property — and on
+    # 2026-08-23 it convicted an innocent read. `_switchViewNow` now
+    # captures the view it is LEAVING, one line before that assignment, so
+    # a detail page can hand the board back its scroll position on the way
+    # out. That read is ABOUT the current view; it is the one kind that is
+    # always correct. What must never happen is the WALL asking.
     body = app[app.index("function _switchViewNow("):]
     body = body[:body.index("\n}\n")]
-    assert "wallBlocked(name)" in body
-    assert "state.view" not in body[:body.index("state.view = name")]
+    args = re.findall(r"wallBlocked\(([^)]*)\)", body)
+    assert args, "nothing checks the wall on a view change"
+    assert set(args) == {"name"}, (
+        f"the wall is deciding from something other than the destination: "
+        f"{sorted(set(args))}")
+    # The only read of state.view before the assignment is the leaving
+    # capture, and it is named so the next person does not have to guess.
+    before = body[:body.index("state.view = name")]
+    reads = [ln.strip() for ln in before.split("\n")
+             if "state.view" in ln and not ln.strip().startswith("//")]
+    assert reads == ["const leaving = state.view;"], (
+        f"a new read of the current view crept in ahead of the switch: "
+        f"{reads}")
 
 
 if __name__ == "__main__":
