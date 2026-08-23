@@ -135,6 +135,40 @@ def _free_port():
         return int(s.getsockname()[1])
 
 
+def _wait_for_code(get, want, seconds):
+    """Poll until the server answers `want`, and report what it kept
+    answering instead if it never does.
+
+    THIS USED TO BE A `time.sleep(0.6)` AND THAT WAS A BUG IN THE TEST.
+    A slot is taken in `process_request` — after the server accepts the
+    connection — and `socket.create_connection` returns as soon as the
+    kernel finishes the handshake, which it does out of the listen
+    backlog whether or not the server has got round to accepting. So
+    "the four holders are connected" and "the four slots are taken" are
+    different facts, separated by however long the box takes to schedule
+    that process.
+
+    Six tenths of a second covered that gap on an idle machine. The
+    suite runs eight files at a time on four cores, and on a busy one it
+    did not: the fifth caller found a free slot and got a 200, and the
+    assertion then accused the ceiling — the one thing that was working
+    — of doing nothing. A test whose verdict is a race against the
+    scheduler says nothing about the code either way.
+
+    Waiting for the state rather than for the clock keeps the assertion
+    honest in both directions: a ceiling that genuinely does nothing
+    never produces the 503 and still fails, just `seconds` later.
+    """
+    end = time.time() + seconds
+    code = None
+    while time.time() < end:
+        code = get(6)
+        if code == want:
+            return code
+        time.sleep(0.1)
+    return code
+
+
 def test_a_full_server_sheds_instead_of_growing():
     """The behaviour, measured. Slots are filled with connections that are
     opened and left hanging; the next caller must get a 503 rather than a
@@ -176,12 +210,11 @@ def test_a_full_server_sheds_instead_of_growing():
             s = socket.create_connection(("127.0.0.1", port), timeout=5)
             s.sendall(b"GET /api/billing/status HTTP/1.1\r\n")
             held.append(s)
-        time.sleep(0.6)
 
-        code = get(6)
+        code = _wait_for_code(get, 503, 20)
         assert code == 503, (
-            "expected a 503 when every slot is held, got %r — the ceiling "
-            "is not doing anything" % code)
+            "expected a 503 when every slot is held, got %r for 20s — the "
+            "ceiling is not doing anything" % code)
 
         # And the refusal is a retryable one that says so.
         for s in held:
@@ -189,10 +222,10 @@ def test_a_full_server_sheds_instead_of_growing():
                 s.close()
             except Exception:                                # noqa: BLE001
                 pass
-        time.sleep(0.8)
-        assert get() == 200, (
-            "the server did not recover once the slow callers let go, so "
-            "slots are leaking")
+        code = _wait_for_code(get, 200, 20)
+        assert code == 200, (
+            "the server did not recover once the slow callers let go — it "
+            "kept answering %r for 20s — so slots are leaking" % code)
     finally:
         proc.terminate()
         try:
@@ -203,6 +236,39 @@ def test_a_full_server_sheds_instead_of_growing():
             os.unlink("/tmp/qb-shed-%d.db" % port)
         except OSError:
             pass
+
+
+def test_the_wait_gives_up_and_says_what_it_saw():
+    """`_wait_for_code` is now the only thing between a real regression
+    and a quiet timeout, so it has to stop the moment the condition holds
+    and, when it never does, hand back the evidence rather than None.
+
+    Both halves matter. If it returned None on timeout, a broken ceiling
+    would report "got None", which reads like the request failed rather
+    than like the server cheerfully served everybody. And if it did not
+    stop early, every run of the file above would pay the full deadline.
+    """
+    seen = []
+
+    def always_200(_timeout=0):
+        seen.append(1)
+        return 200
+
+    started = time.time()
+    assert _wait_for_code(always_200, 503, 0.5) == 200, (
+        "a wait that never sees what it wants must hand back the last "
+        "answer, which is the whole diagnosis")
+    assert time.time() - started >= 0.4, "it gave up before its deadline"
+    assert len(seen) > 1, "it asked once and called that a wait"
+
+    calls = []
+
+    def turns_503(_timeout=0):
+        calls.append(1)
+        return 503 if len(calls) > 2 else 200
+
+    assert _wait_for_code(turns_503, 503, 30) == 503
+    assert len(calls) == 3, "it kept polling after the answer arrived"
 
 
 def test_the_refusal_is_a_retryable_one():
