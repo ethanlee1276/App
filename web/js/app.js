@@ -22869,7 +22869,8 @@ async function renderHomePerf() {
     }).join("");
     sportsCard = `
       <div class="card perf-card perf-sports-card">
-        <div class="perf-head"><span class="rail-title">Sports breakdown</span></div>
+        <div class="perf-head"><span class="rail-title">Every sport \u00b7
+          settled bets</span></div>
         <div class="perf-donut-row">
           <svg class="perf-donut" viewBox="0 0 100 100" aria-hidden="true">${segs}
             <text x="50" y="47" text-anchor="middle" class="donut-n">${tot}</text>
@@ -22921,7 +22922,25 @@ async function renderHomePerf() {
         ${spark}
       </div>
       <div class="card perf-card perf-donut-card">
-        <div class="perf-head"><span class="rail-title">Performance breakdown</span></div>
+        ${/* THE SCOPE BELONGS IN THE HEADING, not only in the card
+             beside it. Ethan, 2026-08-23: "I thought it meant
+             performance breakdown for the whole site, but then I
+             realized it was just for MLB."
+
+             He read it exactly as written. The card above already says
+             "Your MLB performance" when the panel is sport-scoped, and
+             this one — the same numbers as a ring — said nothing, sitting
+             directly above a SPORTS BREAKDOWN whose total really is the
+             whole book. Two rings, two different totals, one of them
+             unlabelled: 391 above 438, and no way to tell why they
+             disagree.
+
+             So it names its own scope in both directions. "All sports"
+             is stated rather than implied, because an unlabelled number
+             is what caused this. */""}
+        <div class="perf-head"><span class="rail-title">${scopedToSport
+          ? escapeHtml(sportName) + " breakdown"
+          : "All sports \u00b7 breakdown"}</span></div>
         <div class="perf-donut-row">
           <svg class="perf-donut" viewBox="0 0 100 100" aria-hidden="true">
             ${seg(w, "var(--good)", 0)}${seg(l, "var(--bad)", w)}${p ? seg(p, "var(--text-mute)", w + l) : ""}
