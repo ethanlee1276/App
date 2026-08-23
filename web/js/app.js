@@ -588,6 +588,14 @@ const ICON_PATHS = {
   shield: '<path d="M8 1.6l5.4 2.1v4.1c0 3-2.2 5.4-5.4 6.6'
         + '-3.2-1.2-5.4-3.6-5.4-6.6V3.7z"/><path d="M5.6 8.1l1.7 1.8 3.2-3.5"/>',
   bolt: '<path d="M9.2 1.4L3.4 9h3.6l-.6 5.6L12.6 7H9z"/>',
+  // Two more for Ethan's UFC render (2026-08-25): the graded count wears
+  // a star and the venue notice wears an information mark. Same 16-unit
+  // stroke grid as every other one here — an icon library would be the
+  // exact tell the audit above is watching for.
+  star: '<path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6 '
+      + '4.2 13.6l.7-4.3-3.1-3 4.3-.6z"/>',
+  info: '<circle cx="8" cy="8" r="6.4"/><path d="M8 7.4v3.8"/>'
+      + '<path d="M8 4.9h.01"/>',
   lock: '<rect x="3.2" y="7" width="9.6" height="7" rx="1.4"/>'
       + '<path d="M5.6 7V4.9a2.4 2.4 0 014.8 0V7"/>',
   cross: '<path d="M4 4l8 8M12 4l-8 8"/>',
@@ -5951,6 +5959,32 @@ async function renderPlayers() {
   fillMeters(host);
   revealChildren(host);
 }
+
+/* The UFC hero's "view upcoming fights".
+
+   A JUMP, NOT A ROUTE. The fights are already on this page — three
+   screens down on a phone, under the card summary and the venue notice,
+   which is the reason the render put a button on the banner at all.
+   Sending the reader to a different view would be a lie about where they
+   were going, and coming back would cost them their place.
+
+   Delegated at the document, like every other handler here: renderUFC
+   replaces its own innerHTML on each refresh, so anything bound to an
+   element inside it is unbound sixty seconds later. */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-ufc-jump]");
+  if (!b) return;
+  const target = document.getElementById("ufc-fights");
+  if (!target) return;
+  // `behavior: "auto"` is not instant — it defers to CSS, and this
+  // stylesheet sets `scroll-behavior: smooth` on the root. Only
+  // "instant" actually overrides it for someone who asked the OS to
+  // stop the motion.
+  const still = window.matchMedia
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  target.scrollIntoView({ behavior: still ? "instant" : "smooth",
+                          block: "start" });
+});
 
 /* Market chips: swap ONE card in place and keep everything around it
    still.
@@ -20369,6 +20403,21 @@ async function renderLiveFights(host) {
   return true;
 }
 
+/* One number from Ethan's UFC render: mark, label, value, caption.
+
+   A helper rather than five copies of the same markup, because the
+   caption under each is the part that carries the meaning ("books post
+   MMA lines late" is the whole reason a zero there is not alarming) and
+   five hand-written blocks are five chances for one of them to lose it. */
+function statCardHTML(mark, label, value, sub, cls = "") {
+  return `<div class="stat-card">
+    <div class="sc-head"><span class="sc-ico">${icon(mark, 15)}</span>
+      <span>${escapeHtml(label)}</span></div>
+    <div class="v ${cls}">${value}</div>
+    ${sub ? `<div class="sc-sub">${sub}</div>` : ""}
+  </div>`;
+}
+
 /* One corner of a fight, as a block.
 
    HOISTED OUT OF renderUFC, 2026-08-23. It was a closure in there, which
@@ -20583,32 +20632,43 @@ async function renderUFC() {
   const octN = ([...((d.event_date || "") + ((d.card_venue || {}).venue || ""))]
     .reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 6) + 1;
   host.innerHTML = `
-    <img class="ufc-banner" alt="" loading="lazy"
-      src="${venueSrc(`img/venues/variants/octagon-${octN}.jpg`)}" onerror="this.remove()"/>
-    <div class="stats">
-      <div class="tile"><div class="k">Card</div><div class="v">${escapeHtml(d.event_date || "")}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${c.fights || 0} bouts</div></div>
-      <div class="tile"><div class="k">Modeled</div><div class="v">${nModeled}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">priced &amp; run through the model</div></div>
-      <div class="tile"><div class="k">Awaiting prices</div><div class="v">${nWaiting}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">books post MMA lines late</div></div>
-      <div class="tile"><div class="k">Picks</div><div class="v">${c.picks || 0}</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">every fight that clears the bar</div></div>
-      <div class="tile"><div class="k">Card exposure</div><div class="v">${((d.exposure || 0) * 100).toFixed(1)}%</div>
-        <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%,
-          the tightest in the system</div></div>
+    <div class="ufc-hero">
+      <img class="ufc-banner" alt="" loading="lazy"
+        src="${venueSrc(`img/venues/variants/octagon-${octN}.jpg`)}" onerror="this.remove()"/>
+      ${/* The fights are the reason for the page and they sit under three
+            screens of context on a phone. A jump rather than a link: they
+            are on this page, and pretending otherwise would be a lie about
+            where the reader is going. */""}
+      <button type="button" class="btn ufc-hero-cta" data-ufc-jump="1">
+        View upcoming fights ${icon("rising", 13)}</button>
+    </div>
+    <div class="stat-cards">
+      ${statCardHTML("calendar", "Card", escapeHtml(d.event_date || "—"),
+                     `${c.fights || 0} bout${(c.fights || 0) === 1 ? "" : "s"}`)}
+      ${statCardHTML("gem", "Modeled", nModeled,
+                     "priced &amp; run through the model")}
+      ${statCardHTML("clock", "Awaiting prices", nWaiting,
+                     "books post MMA lines late")}
+      ${statCardHTML("target", "Picks", c.picks || 0,
+                     "every fight that clears the bar")}
+      ${statCardHTML("shield", "Card exposure",
+                     `${((d.exposure || 0) * 100).toFixed(1)}%`,
+                     `of bankroll · cap ${((d.card_cap || 0.08) * 100).toFixed(0)}%, the tightest in the system`)}
     </div>
     ${(d.correlation_flags || []).length ? `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
         <div class="player">${icon('warn')} Correlation on this card</div>
         <ul class="reasons">${(d.correlation_flags || []).map((f) =>
           `<li class="neg">${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}
     ${d.card_venue && d.card_venue.venue
-      ? `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} ${escapeHtml(d.card_venue.venue)}${
-          d.card_venue.city ? `, ${escapeHtml(d.card_venue.city)}` : ""} — cage size and altitude
-          are applied to every method and distance price on this card.</div>`
-      : `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} Venue not recorded for this
-          card, so cage size and altitude are unchecked — a 25-foot cage raises finishes and
-          altitude pushes them later. Every price here is set without them.</div>`}
+      ? `<div class="ufc-callout"><span class="co-ico">${icon('stadium', 16)}</span>
+          <div><strong>${escapeHtml(d.card_venue.venue)}${
+          d.card_venue.city ? `, ${escapeHtml(d.card_venue.city)}` : ""}</strong> — cage size and
+          altitude are applied to every method and distance price on this card.</div></div>`
+      : `<div class="ufc-callout"><span class="co-ico">${icon('info', 16)}</span>
+          <div><strong>Venue not recorded</strong> for this card, so cage size and altitude are
+          unchecked — a 25-foot cage raises finishes and altitude pushes them later.
+          Every price here is set without them.</div></div>`}
+    <div id="ufc-fights"></div>
     ${(() => {
       // Fight-by-fight edge table: every PRICED bout on one scannable
       // grid — model vs market vs break-even, and the verdict with its
@@ -20643,18 +20703,51 @@ async function renderUFC() {
       const rec = await loadRecordOnce();
       const u = rec.ufc_record || {};
       if (!u.settled && !u.open) return "";
-      const graded = (u.wins || 0) + (u.losses || 0);
+      const wins = u.wins || 0, losses = u.losses || 0, pushes = u.pushes || 0;
+      // PUSHES COUNT IN THE TOTAL. A record of 2-9 with a push in it is
+      // twelve graded fights, not eleven, and a breakdown whose slices do
+      // not add up to the number in the middle of its own ring is the one
+      // thing this panel must never be.
+      const graded = wins + losses + pushes;
+      const pct = (n) => graded ? `${((n / graded) * 100).toFixed(1)}%` : "—";
+      const legend = [["Wins", wins, "var(--good)"],
+                      ["Losses", losses, "var(--bad)"],
+                      ["Pushes", pushes, "var(--text-mute)"]];
       return `<div class="section-title">UFC record
           <span class="sub">— every journaled pick, graded from fight results after each card.
           Its own bucket until it earns more.</span></div>
-        <div class="stats">
-          <div class="tile"><div class="k">Record</div><div class="v">${u.wins || 0}-${u.losses || 0}</div>
-            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${u.open || 0} open</div></div>
-          <div class="tile"><div class="k">Flat ROI</div><div class="v ${(u.roi || 0) >= 0 ? "pos" : "neg"}">
-            ${(u.roi || 0) >= 0 ? "+" : ""}${((u.roi || 0) * 100).toFixed(1)}%</div>
-            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u</div></div>
-          <div class="tile"><div class="k">Graded</div><div class="v">${graded}</div>
-            <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">judge after 50+, not 5</div></div>
+        <div class="ufc-record">
+          <div class="stat-cards">
+            ${statCardHTML("trophy", "Record", `${wins}-${losses}`,
+                           `${u.open || 0} open · units`)}
+            ${statCardHTML("chart", "Flat ROI",
+                           `${(u.roi || 0) >= 0 ? "+" : ""}${((u.roi || 0) * 100).toFixed(1)}%`,
+                           `${(u.net_units || 0) >= 0 ? "+" : ""}${(u.net_units || 0).toFixed(2)}u return on investment`,
+                           (u.roi || 0) >= 0 ? "pos" : "neg")}
+            ${statCardHTML("star", "Graded", graded, "judge after 50+, not 5")}
+          </div>
+          <div class="ufc-rb">
+            <div class="ufc-rb-head">Record breakdown</div>
+            <div class="ufc-rb-body">
+              ${donutRing(legend.map(([k, n, col]) => ({ label: k, value: n, color: col })),
+                          { caption: "Total fights",
+                            alt: `${graded} graded: ${wins} won, ${losses} lost, ${pushes} pushed` })}
+              <div class="ufc-rb-legend">
+                ${legend.map(([k, n, col]) => `<div class="rb-row">
+                  <span class="rb-dot" style="background:${col}"></span>
+                  <span class="rb-k">${k}</span>
+                  <span class="rb-n">${n}</span>
+                  <span class="rb-p">${pct(n)}</span></div>`).join("")}
+              </div>
+            </div>
+            <details><summary>Every pick. Every fight. No excuses.</summary>
+              <p>Nothing is dropped from this ring. Every fight the desk journaled is in
+              it the moment the card grades — the ones that went badly included, which
+              is the only version of a record worth showing. It stays a bucket of its
+              own until there are enough fights in it to mean something; ${graded}
+              ${graded === 1 ? "is" : "are"} not enough, and a good run at this size
+              would say no more than a bad one.</p></details>
+          </div>
         </div>`;
     })()}
     ${(() => {

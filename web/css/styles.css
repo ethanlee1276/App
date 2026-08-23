@@ -5336,6 +5336,131 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   object-fit: cover; border-radius: var(--radius-lg);
   border: var(--hairline) solid var(--border); margin-bottom: 14px; }
 
+/* ---- Ethan's UFC render, 2026-08-25 ------------------------------------
+
+   SCOPED TO THIS PAGE ON PURPOSE. The render puts every number in a
+   bordered box with an icon on it, and §6.6 says the opposite in as many
+   words — "no card, no background, no border box … four equal bordered
+   tiles with a big number in each is item 6 on the anti-pattern list."
+   Both can be true at once: the doctrine is about the DASHBOARD, where
+   four equal boxes made none of them the answer, and this is a card
+   preview where the five numbers really are peers. What must not happen
+   is the render leaking out of here and flipping every page to the shape
+   the rule was written against, so it rides its own classes rather than
+   redefining `.tile`.
+
+   Corners come from `--radius-lg`, never from a number written here. The
+   token is declared twice — 0 in the base block, 14px in the gold pass
+   that overrides it — so the live value is 14px and this page rounds
+   with everything else. Hardcoding 14 would have produced the identical
+   screenshot today and pinned this page to the old value the day
+   somebody changes the token. */
+.stat-cards {
+  display: grid; gap: 12px; margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+}
+.stat-card {
+  background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg); padding: 15px 17px; min-width: 0;
+}
+.stat-card .sc-head {
+  display: flex; align-items: center; gap: 9px;
+  color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .7px;
+}
+/* The mark carries the page's accent; the number stays the loudest thing
+   in the box. A gold NUMBER beside a gold icon would be two shouts. */
+.stat-card .sc-ico { color: var(--brand); display: inline-flex; flex: none; }
+.stat-card .sc-head span { min-width: 0; overflow-wrap: anywhere; }
+.stat-card .v {
+  font-size: var(--fs-3xl); font-weight: 800; margin-top: 10px;
+  letter-spacing: -0.5px; overflow-wrap: anywhere;
+}
+.stat-card .v.pos { color: var(--good); }
+.stat-card .v.neg { color: var(--bad); }
+.stat-card .sc-sub {
+  color: var(--text-mute); font-size: var(--fs-sm); margin-top: 4px;
+  line-height: var(--lh-snug);
+}
+
+/* The venue notice. A bordered callout rather than the plain grey line it
+   was: it changes how every price on the page should be read, which is
+   not a footnote. */
+.ufc-callout {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel); border: var(--hairline) solid var(--border);
+  border-left: 3px solid var(--brand); border-radius: var(--radius-lg);
+  padding: 14px 16px; margin-bottom: 20px;
+  color: var(--text-body); font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+}
+.ufc-callout .co-ico { color: var(--brand); flex: none; margin-top: 2px; }
+
+/* The record: numbers on the left, the shape of them on the right. */
+.ufc-record {
+  display: grid; gap: 14px; align-items: start; margin-bottom: 20px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+}
+.ufc-record .stat-cards { margin-bottom: 0; }
+.ufc-rb {
+  background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg); padding: 15px 17px; min-width: 0;
+}
+.ufc-rb-head {
+  color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .7px; margin-bottom: 12px;
+}
+.ufc-rb-body { display: flex; gap: 16px; align-items: center; }
+.ufc-rb-body .donut { flex: none; }
+.donut-n { fill: var(--text); font-size: 26px; font-weight: 800; }
+.donut-k { fill: var(--text-mute); font-size: 9px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .6px; }
+.ufc-rb-legend { flex: 1; min-width: 0; }
+.rb-row {
+  display: flex; align-items: center; gap: 9px; padding: 5px 0;
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
+}
+.rb-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.rb-k { flex: 1; min-width: 0; color: var(--text-body); }
+.rb-n { font-weight: 800; }
+.rb-p { color: var(--text-mute); min-width: 48px; text-align: right; }
+.ufc-rb details { margin-top: 10px; }
+.ufc-rb summary {
+  cursor: pointer; color: var(--text-mute); font-size: var(--fs-sm);
+}
+.ufc-rb details p {
+  color: var(--text-body); font-size: var(--fs-sm); margin-top: 6px;
+  line-height: var(--lh-snug);
+}
+
+/* The hero's own call to action: the fights are the reason for the page
+   and they were below three screens of context on a phone. */
+.ufc-hero { position: relative; margin-bottom: 20px; }
+.ufc-hero .ufc-banner { margin-bottom: 0; }
+.ufc-hero-cta {
+  position: absolute; right: 16px; bottom: 16px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+@media (max-width: 860px) {
+  .ufc-record { grid-template-columns: 1fr; }
+}
+/* The phone, in one block rather than two at the same width.
+   MEASURED AT 390x844: `minmax(190px, 1fr)` puts exactly one card per row
+   — 2 x 190 + gap is 392 against a 366px column — so the five card
+   numbers became five full-height blocks with the fights a long way
+   under them. Two up is the same information in half the scroll, and the
+   auto-fit rule stays for every width above this one.
+   The hero button drops out of the art at the same width: the banner is
+   short enough here that a floating button covers the picture it sits
+   on. */
+@media (max-width: 520px) {
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat-card { padding: 12px 13px; }
+  .stat-card .v { font-size: var(--fs-2xl); margin-top: 7px; }
+  .ufc-hero-cta { position: static; margin-top: 10px; width: 100%;
+    justify-content: center; }
+}
+
 /* ---- Render-sheet pass (Ethan, 2026-08-11): My Bets cards, Results
    analytics, Live line grid, Props market tiles, art weather chip. ---- */
 

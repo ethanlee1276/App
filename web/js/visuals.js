@@ -1476,6 +1476,52 @@ function gamelogBars(values, opts = {}) {
 }
 
 /* ---------------- Sparkline (game-log trend) ----------------------------- */
+/* A RING WITH A COUNT IN IT — the record breakdown on Ethan's UFC
+   render (2026-08-25). Wins, losses and pushes as arcs, the total in the
+   middle, and a legend beside it that carries the actual numbers.
+
+   DRAWN, NOT CHARTED. Every other proportion on this site is drawn in
+   plain SVG for the same reason: a chart library is a network request
+   between the reader and a number we already have, and the pages that
+   depend on one go blank when the CDN does. This is four circles.
+
+   A ZERO TOTAL IS A REAL STATE, not a divide-by-zero. A book with
+   nothing settled draws an empty ring and says 0 — which is the honest
+   picture on a Tuesday before the first card, and much better than the
+   NaN arc that the obvious arithmetic produces there. */
+function donutRing(segments, opts = {}) {
+  const size = opts.size || 132;
+  const stroke = opts.stroke || 15;
+  const r = (size - stroke) / 2;
+  const C = 2 * Math.PI * r;
+  const rows = (segments || []).filter((s) => s && (s.value || 0) > 0);
+  const total = (segments || []).reduce((a, s) => a + (s.value || 0), 0);
+  let at = 0;
+  const arcs = rows.map((sg) => {
+    const len = C * ((sg.value || 0) / total);
+    const el = `<circle cx="${size / 2}" cy="${size / 2}" r="${r}"
+      fill="none" stroke="${sg.color}" stroke-width="${stroke}"
+      stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}"
+      stroke-dashoffset="${(-at).toFixed(2)}"/>`;
+    at += len;
+    return el;
+  }).join("");
+  return `<svg class="donut" viewBox="0 0 ${size} ${size}"
+      width="${size}" height="${size}" role="img"
+      aria-label="${escapeAttr(opts.alt || `${total} total`)}">
+    <g transform="rotate(-90 ${size / 2} ${size / 2})">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none"
+        stroke="var(--border-soft)" stroke-width="${stroke}"/>
+      ${arcs}
+    </g>
+    <text class="donut-n" x="${size / 2}" y="${size / 2 - 2}"
+      text-anchor="middle" dominant-baseline="middle">${total}</text>
+    <text class="donut-k" x="${size / 2}" y="${size / 2 + 16}"
+      text-anchor="middle" dominant-baseline="middle">${
+        escapeAttr(opts.caption || "")}</text>
+  </svg>`;
+}
+
 function sparkline(values, opts = {}) {
   const w = opts.w || 240, h = opts.h || 64, pad = 8;
   // A row-sized chart can't legibly hold a full season: cap the window to
