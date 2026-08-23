@@ -80,6 +80,34 @@ def test_the_worker_is_still_told_not_to_cache_itself():
         "the fix is the exact thing the cache stops arriving")
 
 
+def test_the_brand_files_revalidate_like_the_shell_does():
+    """`@shell` covers the document, the scripts and the styles — and
+    nothing else, so every image went out with NO Cache-Control at all
+    and the decision fell to browser heuristics. That is the same
+    sentence the Caddyfile already writes about app.js, where iOS acted
+    on it: a phone kept its old JS under a freshly-fetched index.html and
+    six pages were unreachable.
+
+    It bites hardest on the mark. The header logo and the tab icon
+    changed twice on 2026-08-23; a phone holding the old copy shows a
+    retired logo under a deploy that replaced it, which reads as a deploy
+    that did not work.
+
+    Named one by one rather than `/*.png` on purpose — web/img is 18MB of
+    board art that changes with the data and has no business
+    revalidating on every visit."""
+    conf = _decomment(_read(CADDY))
+    i = conf.index("@brand path")
+    line = conf[i:conf.index("\n", i)]
+    for f in ("/logo-qb.png", "/favicon.svg", "/icon-192.png",
+              "/apple-touch-icon.png", "/manifest.webmanifest"):
+        assert f in line, f"{f} can go stale on a phone after a deploy"
+    assert "no-cache" in conf[i:i + 260], "the matcher sets no policy"
+    # …and it must not have become a blunt instrument.
+    assert "/*.png" not in line and "/img/*" not in line, (
+        "the board art is being revalidated on every visit")
+
+
 def test_the_deploy_installs_the_caddyfile():
     """The routing fix is worthless if the box keeps its old copy, and
     the manual `sudo cp` in the Caddyfile header is exactly the step that

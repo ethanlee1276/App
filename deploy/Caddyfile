@@ -130,6 +130,27 @@ qellysbook.com {
 	@shell path / /index.html /js/* /css/*
 	header @shell Cache-Control "no-cache"
 
+	# THE IDENTITY FILES REVALIDATE TOO, and they were not in the line
+	# above. `@shell` covers the document, the scripts and the styles —
+	# and nothing else, so every image went out with NO Cache-Control at
+	# all and the decision fell to browser heuristics. That is the exact
+	# sentence three paragraphs up about app.js, and iOS acted on it once
+	# already.
+	#
+	# It matters most for these files in particular. On 2026-08-23 the
+	# header logo was cropped, then cut off its background, and the tab
+	# icon changed with it: a phone holding the old copy shows the
+	# retired mark under a deploy that replaced it, which reads as a
+	# deploy that did not work rather than a cache that has not expired.
+	#
+	# `no-cache` is store-and-revalidate, not "do not store": one
+	# conditional request each, a 304 while nothing has changed, and the
+	# new mark on the first open after it does. Named one by one rather
+	# than as `/*.png`, because web/img is 18MB of board art that changes
+	# with the data and has no business revalidating on every visit.
+	@brand path /logo-qb.png /favicon.svg /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /manifest.webmanifest
+	header @brand Cache-Control "no-cache"
+
 	# Caddy's built-in MIME table does not know .webmanifest, so without
 	# this it goes out as text/plain and the install prompt silently never
 	# appears — no error, no console message, just no prompt.
