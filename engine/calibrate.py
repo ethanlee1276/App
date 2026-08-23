@@ -120,6 +120,58 @@ def fit_temperature(pairs: list[tuple[float, int]], min_samples: int = 200) -> f
     return fit_correction(pairs, min_samples=min_samples)[0]
 
 
+def _odds_of(pairs: list) -> tuple[list, list]:
+    """`(odds, outcomes)` — the part of the input the grid never changes.
+
+    `apply_temperature` clamps p and forms `p / (1 - p)` on every call,
+    and the grid calls it once per pair per candidate. The odds are a
+    property of the pair, not of the candidate.
+    """
+    odds, outs = [], []
+    for p, o in pairs:
+        q = min(max(p, 1e-6), 1.0 - 1e-6)
+        odds.append(q / (1.0 - q))
+        outs.append(o)
+    return odds, outs
+
+
+def _brier_odds(odds: list, outs: list, temperature: float,
+                intercept: float) -> float:
+    """Brier from precomputed odds — the grid's inner loop.
+
+    IDENTICAL ARITHMETIC TO `brier(pairs, t, b)`, in the same order, so
+    this returns the same float rather than a close one. What it removes
+    is work that never varied per pair: the clamp and the division above,
+    and — the expensive one — `math.exp(intercept)`, which
+    apply_temperature computed INSIDE the per-pair call. Across a fit
+    that was 293 million exponentials where 1,608 would do.
+
+    Measured on tests/test_isotonic.py, which is nothing but this loop:
+    161s to 22s, and the same seven fits come back bit-identical. It
+    matters off the test bench too — fit_correction runs on every deep
+    calibration sweep, and the sweep is the thing that decides whether
+    the board's probabilities are honest.
+    """
+    if temperature <= 0:
+        return sum((o - p) ** 2 for p, o in zip(odds, outs)) / len(odds)
+    n = len(odds)
+    if temperature == 1.0 and intercept == 0.0:
+        total = 0.0
+        for d, o in zip(odds, outs):
+            p = d / (1.0 + d)
+            total += (p - o) ** 2
+        return total / n
+    inv = 1.0 / temperature
+    eb = math.exp(intercept) if intercept else 1.0
+    total = 0.0
+    for d, o in zip(odds, outs):
+        scaled = d ** inv
+        if intercept:
+            scaled *= eb
+        total += (scaled / (1.0 + scaled) - o) ** 2
+    return total / n
+
+
 def fit_correction(pairs: list[tuple[float, int]],
                    min_samples: int = 200) -> tuple[float, float]:
     """Find ``(temperature, intercept)`` minimising Brier.
@@ -135,17 +187,28 @@ def fit_correction(pairs: list[tuple[float, int]],
     if len(pairs) < min_samples:
         return 1.0, 0.0
 
+    odds, outs = _odds_of(pairs)
     t, b = 1.0, 0.0
-    best = brier(pairs, t, b)
+    best = _brier_odds(odds, outs, t, b)
     for _ in range(4):
+        moved = False
         for cand in _GRID:                       # spread
-            score = brier(pairs, cand, b)
+            score = _brier_odds(odds, outs, cand, b)
             if score < best:
-                best, t = score, cand
+                best, t, moved = score, cand, True
         for cand in _INTERCEPTS:                 # bias
-            score = brier(pairs, t, cand)
+            score = _brier_odds(odds, outs, t, cand)
             if score < best:
-                best, b = score, cand
+                best, b, moved = score, cand, True
+        # A ROUND THAT MOVED NOTHING CANNOT MOVE ANYTHING NEXT TIME.
+        # Both passes are deterministic in (t, b), and a full round
+        # leaving both unchanged means the next round starts from the
+        # identical state and scans the identical grid to the identical
+        # answer. Stopping there is the same result, not an approximation
+        # of it — the fits typically settle in two rounds and the other
+        # two were re-deriving a decision already made.
+        if not moved:
+            break
     return t, b
 
 

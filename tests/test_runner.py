@@ -206,36 +206,49 @@ def test_the_run_gets_a_clean_environment_not_the_boxs():
         "QB_ENV_FILE is set before the sweep that removes it")
 
 
-def test_the_two_files_that_failed_pass_under_that_environment():
-    """The end-to-end version: hand them the box's config and they fail,
-    hand them the runner's and they pass. Written this way because the
-    check above only reads run_tests.py, and this bug was invisible in
-    every file's own source."""
+def test_the_secrets_leak_the_clean_environment_closes():
+    """THE MECHANISM, not another file's behaviour.
+
+    This used to run test_stripe_plans.py and test_backup_remote.py under
+    both environments and assert each FAILED with the box's config in
+    scope. That is a test asserting a bug still exists, and it broke the
+    moment somebody fixed one of them properly: 4c7ae48 gave
+    test_backup_remote a tree of its own, so it stopped caring about the
+    box, and this file went red for a repair.
+
+    The thing worth guarding is the leak itself — that engine.secrets
+    reads /etc/qellys/env into os.environ, so a value a test popped comes
+    straight back — and that pointing QB_ENV_FILE elsewhere closes it.
+    Checked directly, with no other test file involved.
+    """
     import subprocess
     import tempfile
+
+    probe = (
+        "import os, sys; sys.path.insert(0, %r)\n"
+        "from engine import secrets\n"
+        "secrets.load_local_secrets()\n"
+        "print(os.environ.get('STRIPE_PRICE_YEARLY', 'ABSENT'))\n" % (ROOT,))
+
     with tempfile.TemporaryDirectory() as td:
         boxenv = os.path.join(td, "env")
         with open(boxenv, "w", encoding="utf-8") as fh:
-            fh.write("STRIPE_PRICE_YEARLY=price_pretend\n"
-                     "QB_BACKUP_REMOTE=pretend:remote\n")
-        dirty = dict(os.environ, QB_ENV_FILE=boxenv)
-        clean = dict(os.environ, TMPDIR=td, TEMP=td, TMP=td)
-        for name in list(clean):
-            if name.startswith(("STRIPE_", "ODDS_API_KEY", "QB_")):
-                clean.pop(name)
-        clean["QB_ENV_FILE"] = os.path.join(td, "no-such-env")
-        for name in ("test_stripe_plans.py", "test_backup_remote.py"):
-            f = os.path.join(ROOT, "tests", name)
-            bad = subprocess.run([sys.executable, f], capture_output=True,
-                                 text=True, env=dirty, timeout=300)
-            assert bad.returncode != 0, (
-                f"{name} passed with the box's config in scope, so this "
-                f"test no longer reproduces the thing it is guarding")
-            ok = subprocess.run([sys.executable, f], capture_output=True,
-                                text=True, env=clean, timeout=300)
-            assert ok.returncode == 0, (
-                f"{name} still fails under the runner's environment:\n"
-                + ok.stdout[-600:] + ok.stderr[-600:])
+            fh.write("STRIPE_PRICE_YEARLY=price_pretend\n")
+
+        def run(env_file):
+            env = {k: v for k, v in os.environ.items()
+                   if not k.startswith(("STRIPE_", "QB_"))}
+            env["QB_ENV_FILE"] = env_file
+            return subprocess.run([sys.executable, "-c", probe], env=env,
+                                  capture_output=True, text=True,
+                                  timeout=60).stdout.strip()
+
+        assert run(boxenv) == "price_pretend", (
+            "the loader no longer reads QB_ENV_FILE, so this test is not "
+            "reproducing the leak it guards")
+        assert run(os.path.join(td, "no-such-env")) == "ABSENT", (
+            "pointing QB_ENV_FILE at nothing still leaked the box's config "
+            "into the run")
 
 
 if __name__ == "__main__":
