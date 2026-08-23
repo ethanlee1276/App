@@ -361,13 +361,58 @@ def test_a_riding_row_opens_even_when_the_board_is_empty():
         "the fallback runs before the real prop page"
 
 
-def test_a_moneyline_row_gets_no_player_door():
-    """`b.player` holds a TEAM on those. A player page for "TOR" is a
-    search that finds nobody, and an empty page looks broken in a way an
-    unresponsive row does not."""
+def test_no_team_market_gets_a_player_door():
+    """`b.player` holds a TEAM on a moneyline, a spread AND a team total.
+    A player page for "TOR" is a search that finds nobody, and an empty
+    page looks broken in a way an unresponsive row does not.
+
+    THIS TEST ASSERTED `=== "moneyline"` UNTIL 2026-08-23, which was the
+    same mistake as the code it was guarding, spelled shorter: three
+    markets put a team in that field and only one of them was named. It
+    survived because the riding list is mostly props — and it would have
+    shipped the moment the Live tab's open bets became doors, because
+    that list is full of spreads and totals."""
     fn = APP[APP.index("function ridingAttrs("):]
     fn = fn[:fn.index("\n}") + 2]
-    assert 'b.market === "moneyline"' in fn
+    for market in ("moneyline", "spread", "team_total", "total"):
+        assert f'"{market}"' in fn, (
+            f"a {market} row can open a player page for a team name")
+    assert "TEAM_SIDE_MKTS.has(b.market)" in fn, (
+        "the markets are checked one at a time, so the next one added is "
+        "missed by default")
+
+
+def test_an_open_bet_on_the_live_tab_is_a_door():
+    """Ethan, 2026-08-23, with the list circled: "I should be able too
+    click on these bets and it pulls up the bar graphs of the stats and
+    shit just like every other player like cmon man."
+
+    THE THIRD LIST WITH THIS HOLE — the game bets on 2026-08-13, the
+    riding rows on 2026-08-22, and the Live tab's open bets. All three
+    for one reason: these rows are journal entries, not board
+    recommendations, so they carry a price and a stake and no game logs,
+    and `propOpenable` looked at the bet, found no history and left the
+    row inert.
+
+    `ridingAttrs` already answers it — the board's own object for that
+    player and market, matched on player and market rather than side and
+    line because the line may have moved. Reused rather than
+    reimplemented, so a fourth list has one function to reach for."""
+    fn = APP[APP.index("function renderLivePicks("):]
+    fn = fn[:fn.index("\n}\n") + 2]
+    assert "ridingAttrs(r)" in fn, "the open-bet rows are still inert"
+    assert 'class="${door ? "openable" : ""}"' in fn, (
+        "a row that opens something has to say so — no cursor, no hover, "
+        "no focus ring is a door nobody finds")
+
+
+def test_the_three_lists_share_one_definition_of_that_door():
+    """Three surfaces, one function. The alternative is three copies of
+    the player-and-market match drifting apart, which is how the
+    moneyline guard came to be missing two markets."""
+    assert APP.count("function ridingAttrs(") == 1
+    assert APP.count("ridingAttrs(") >= 3, (
+        "a list stopped using the shared definition")
 
 
 def test_the_peek_is_wired_to_both_mouse_and_keyboard():

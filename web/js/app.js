@@ -2326,8 +2326,33 @@ function renderLivePicks() {
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.</span></div>
     <div class="card" style="padding:0;border-left:3px solid ${nLive ? "var(--bad)" : "var(--brand)"}">
-      ${rows.map((r) => `
-        <div style="display:flex;gap:12px;align-items:center;padding:11px 14px;
+      ${/* ---- AN OPEN BET IS A DOOR TOO -------------------------------
+            Ethan, 2026-08-23, with the list circled: "I should be able
+            too click on these bets and it pulls up the bar graphs of the
+            stats and shit just like every other player like cmon man."
+
+            He is right, and this is the THIRD list to have this hole —
+            the game bets on 2026-08-13, the riding rows on 2026-08-22,
+            and now the one on the Live tab. Every one of them for the
+            same reason: these rows are journal entries, not board
+            recommendations, so they carry a price and a stake and no game
+            logs, and `propOpenable` looked at the bet, found no history
+            and left the row inert.
+
+            `ridingAttrs` already answers exactly this. It finds the
+            board's own object for that player and market and opens ITS
+            door — matched on player and market rather than side and line,
+            because the line may have moved since the bet was placed —
+            and falls back to the player's page when tonight's board has
+            no prop for them at all, which is the night somebody most
+            wants to look up what they are holding.
+
+            Nothing new was needed. It is used here rather than
+            reimplemented so the next list to grow rows like these has one
+            function to reach for instead of a fourth variation. */""}
+      ${rows.map((r) => ((door) => `
+        <div class="${door ? "openable" : ""}"${door}
+             style="display:flex;gap:12px;align-items:center;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
           ${r.phase === "live" ? `<span class="live-dot" style="flex-shrink:0"></span>`
             : `<span style="width:8px;flex-shrink:0"></span>`}
@@ -2347,7 +2372,7 @@ function renderLivePicks() {
             ${betTrack(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
-        </div>`).join("")}
+        </div>`)(ridingAttrs(r))).join("")}
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
         ${rows.length} open bet(s) on today’s card${elsewhere
           ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
@@ -4574,11 +4599,22 @@ function ridingAttrs(b) {
      chart, and it does not need tonight's board to exist. So a row with
      no prop behind it opens that instead of nothing.
 
-     NOT FOR MONEYLINES. `b.player` holds a TEAM there, and a player page
-     for "TOR" is a search that finds nobody — an empty page is worse
-     than a row that does not respond, because it looks broken rather
-     than finished. */
-  if (!b || !b.player || b.market === "moneyline") return "";
+     NOT FOR TEAM MARKETS. `b.player` holds a TEAM on a moneyline, a
+     spread and a team total, and a player page for "TOR" is a search that
+     finds nobody — an empty page is worse than a row that does not
+     respond, because it looks broken rather than finished. A game total
+     has no `player` at all and is caught by the check above it.
+
+     THIS SAID `=== "moneyline"` UNTIL 2026-08-23, which was the same
+     mistake spelled shorter: three markets put a team in that field and
+     only one of them was named. It survived because the riding list is
+     mostly props — and it would have shipped the moment the Live tab's
+     open bets became doors, because that list is full of spreads and
+     totals. Named as a SET so the next team market added is caught by
+     construction rather than by somebody remembering this comment. */
+  const TEAM_SIDE_MKTS = new Set(["moneyline", "spread", "team_total",
+                                  "total"]);
+  if (!b || !b.player || TEAM_SIDE_MKTS.has(b.market)) return "";
   /* `data-peek`, NOT `data-player`: the profile card's own market tabs
      already carry data-player, and a delegated handler on that attribute
      would fire on them too. It survives today only because those tabs are
