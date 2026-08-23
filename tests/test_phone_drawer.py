@@ -338,7 +338,15 @@ out.ordering = await p.evaluate(() => {
            walls };
 });
 
-await p.locator('#tb-menu').tap();
+// `#menu-toggle`, NOT `#tb-menu`. This probe tapped the tab bar's Menu
+// button, which was removed when that slot became Search — and the
+// static half of this very file asserts it is gone
+// (`getElementById("tb-menu") not in APP`). So the two halves disagreed
+// and the browser half timed out for thirty seconds waiting for a
+// control the other half requires to be absent. The hamburger is what
+// opens the drawer on a phone now, and the test above this one already
+// says it must be visible there.
+await p.locator('#menu-toggle').tap();
 await p.waitForTimeout(900);                   // past the slide
 
 const r = await p.locator('#sidebar').boundingBox();
@@ -361,7 +369,7 @@ try {
   out.reachable = true;
 } catch (e) { out.reachable = String(e).slice(0, 160); }
 
-await p.locator('#tb-menu').tap();
+await p.locator('#menu-toggle').tap();
 await p.waitForTimeout(900);
 out.closed = await p.evaluate(() => ({
   cls: document.body.classList.contains('menu-open'),
