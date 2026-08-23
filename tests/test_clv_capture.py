@@ -190,14 +190,21 @@ def test_an_explicit_closing_map_still_wins():
 
 
 # --- coverage, reported honestly ---------------------------------------------
-def _settled(conn, sport, n, with_close, close=2.5):
+def _settled(conn, sport, n, with_close, close=2.5,
+             date=None):
+    # Dated ON ledger.RECORD_EPOCH by default. The EXPORT's coverage block
+    # is windowed with the record it sits beside — it prints "N of M
+    # settled picks have a close", and an M that disagreed with the
+    # settled count above it would read as one of the two being wrong.
+    # Pinned to the constant so it cannot drift when the epoch moves.
+    date = date or ledger.RECORD_EPOCH
     for i in range(n):
         conn.execute(
             "INSERT INTO bets (sport,date,player,market,side,line,odds,grade,"
             "stake_units,stake_dollars,status,category,closing_line,pnl_units)"
             " VALUES (?,?,?,'hits','OVER',1.5,-110,'A',1.0,10.0,'won','main',"
             "?,1.0)",
-            (sport, "2026-07-01", f"P{i}", close if i < with_close else None))
+            (sport, date, f"P{i}", close if i < with_close else None))
     conn.commit()
 
 

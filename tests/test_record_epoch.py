@@ -142,16 +142,56 @@ def test_the_export_writes_nothing_back_to_the_journal():
     assert conn.execute("SELECT COUNT(*) FROM bets").fetchone()[0] == before
 
 
-def test_the_tuning_view_still_reads_every_row():
-    """`sport_report` answers "is THIS model any good", which is the
-    question the next change to it depends on. The epoch is about what
-    the site CLAIMS, not about what we let ourselves see."""
-    src = open(os.path.join(ROOT, "engine", "ledger.py"),
-               encoding="utf-8").read()
-    body = _fn(src, "def export_json(")
-    i = body.index('"by_sport"')
-    line = body[i:i + 160]
-    assert "since" not in line, "the tuning view got scoped too"
+def test_every_record_block_on_the_page_uses_the_same_window():
+    """THIS TEST USED TO ASSERT THE OPPOSITE, and it was wrong.
+
+    It pinned `by_sport` as deliberately UNSCOPED, on the reasoning that
+    it was the tuning view and tuning wants every row. Ethan found the
+    hole immediately: "the record page still shows us down 20 units …
+    and thats for every spot on the page." The per-sport tabs read that
+    block, so the headline said one thing and every tab beside it said
+    another.
+
+    The reasoning was wrong on its own terms. record.json is the
+    WEBSITE's payload and nothing else reads it; the tuning that needs
+    every row — the miner, the calibration fits, the era split — runs in
+    Python against the database. "we will keep all the other data that we
+    dont display for ourselves" is exactly right, and the database is
+    where that data lives.
+
+    So: every block on that page that states a RECORD is windowed, or
+    two numbers on one screen disagree.
+    """
+    conn = _journal()
+    path = os.path.join(tempfile.mkdtemp(), "record.json")
+    ledger.export_json(conn, path)
+    d = json.load(open(path))
+    assert d["overall"]["settled"] == 5
+    assert d["by_sport"]["mlb"]["overall"]["settled"] == 5
+    assert d["by_sport"]["mlb"]["curve"] == d["curve"]
+    assert d["restated"]["overall"]["settled"] <= 5
+    for k in ("longshots", "stale_flags", "form_sampler", "loose_sampler",
+              "predmarket", "ufc_record", "paper"):
+        assert d[k]["settled"] == 0, k
+
+
+def test_the_era_split_still_shows_every_era():
+    """The one block that MUST reach back past the epoch. Its entire
+    purpose is to show the model's record split at each re-tune — an era
+    report that starts after the eras it is comparing is nothing."""
+    conn = _journal()
+    path = os.path.join(tempfile.mkdtemp(), "record.json")
+    ledger.export_json(conn, path)
+    eras = json.load(open(path))["model_eras"]["eras"]
+    assert sum(e["settled"] for e in eras) == 11
+
+
+def test_the_database_still_holds_every_row():
+    """The half of the ask that is not about display at all."""
+    conn = _journal()
+    ledger.export_json(conn, os.path.join(tempfile.mkdtemp(), "r.json"))
+    assert conn.execute(
+        "SELECT COUNT(*) FROM bets WHERE date < ?", (EPOCH,)).fetchone()[0] == 6
 
 
 def test_the_calibration_chart_is_not_scoped_either():

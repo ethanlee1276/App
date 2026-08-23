@@ -231,7 +231,14 @@ def test_the_restated_record_scopes_per_sport():
 def test_the_export_and_the_page_carry_the_restated_view():
     src = open(os.path.join(ROOT, "engine", "ledger.py"),
                encoding="utf-8").read()
-    assert '"restated": {"overall": restated_performance(conn),' in src
+    # THE CALL, NOT ITS EXACT ARGUMENT LIST. This pinned the whole line
+    # including the closing paren, so it went red the moment the call
+    # gained the `since=` that windows it with the record it is drawn
+    # beside — a change that FIXED a real disagreement between two
+    # numbers on one screen. The contract is that the export carries a
+    # restated block, per sport as well as overall.
+    assert '"restated": {"overall": restated_performance(conn' in src
+    assert "restated_performance(conn, sp" in src
     app = open(os.path.join(ROOT, "web", "js", "app.js"),
                encoding="utf-8").read()
     i = app.index("function recRestatedSection(")

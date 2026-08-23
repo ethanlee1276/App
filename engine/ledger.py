@@ -721,11 +721,11 @@ def log_near_misses(conn, result: dict, flat_stake: float = 0.1) -> int:
     return n
 
 
-def loose_report(conn) -> dict:
+def loose_report(conn, since: str | None = None) -> dict:
     """The looser-gates scoreboard: flat-stake record for the near-miss
     bucket, plus the decision framing the Record page renders."""
-    p = performance(conn, category="loose")
-    p["recent"] = recent_settled(conn, limit=15, category="loose")
+    p = performance(conn, category="loose", since=since)
+    p["recent"] = recent_settled(conn, limit=15, category="loose", since=since)
     return p
 
 
@@ -878,10 +878,10 @@ def resolve_predmarket(conn, results: dict) -> int:
     return n
 
 
-def predmarket_report(conn) -> dict:
+def predmarket_report(conn, since: str | None = None) -> dict:
     """The desk's own scoreboard — never mixed into the headline record."""
-    p = performance(conn, category="predmarket")
-    p["recent"] = recent_settled(conn, limit=15, category="predmarket")
+    p = performance(conn, category="predmarket", since=since)
+    p["recent"] = recent_settled(conn, limit=15, category="predmarket", since=since)
     return p
 
 
@@ -936,12 +936,12 @@ def log_stale_flags(conn, result: dict, flat_stake: float = 0.1) -> int:
     return n
 
 
-def stale_report(conn) -> dict:
+def stale_report(conn, since: str | None = None) -> dict:
     """The stale-line sampler's scoreboard: flat-stake record, hit rate vs
     the break-even the taken prices implied, and the consensus the flags
     claimed. If hit rate can't beat the taken price's break-even, the
     measured CLV never cashes and the signal stays display-only."""
-    p = performance(conn, category="stale")
+    p = performance(conn, category="stale", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
         "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
@@ -1001,10 +1001,10 @@ def log_form_picks(conn, result: dict, team_form: dict,
     return n
 
 
-def form_report(conn) -> dict:
+def form_report(conn, since: str | None = None) -> dict:
     """The form sampler's scoreboard: does backing hot teams at real prices
     make money? Mirrors stale_report; graded nightly with everything else."""
-    p = performance(conn, category="form")
+    p = performance(conn, category="form", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
         "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
@@ -1080,11 +1080,11 @@ def settle_ufc(conn, fetch_result=None) -> int:
     return settled
 
 
-def ufc_report(conn) -> dict:
+def ufc_report(conn, since: str | None = None) -> dict:
     """The UFC bucket's scoreboard — same shape the other probation
     buckets export, graded fight by fight."""
-    p = performance(conn, category="ufc")
-    p["recent"] = recent_settled(conn, limit=15, category="ufc")
+    p = performance(conn, category="ufc", since=since)
+    p["recent"] = recent_settled(conn, limit=15, category="ufc", since=since)
     return p
 
 
@@ -2665,7 +2665,8 @@ def process_grade(b) -> str | None:
 CLV_MIN_N = 40
 
 
-def clv_coverage(conn, category: str = "main") -> dict:
+def clv_coverage(conn, category: str = "main",
+                 since: str | None = None) -> dict:
     """How much of the record actually has a closing line — per sport.
 
     CLV is the fastest-accruing evidence a bettor has: it grades the
@@ -2677,10 +2678,16 @@ def clv_coverage(conn, category: str = "main") -> dict:
     """
     out: dict = {}
     for sp in TRACKED_SPORTS:
-        bets = conn.execute(
-            "SELECT * FROM bets WHERE status IN ('won','lost','push') "
-            "AND category=? AND stake_units > 0 AND sport=?",
-            (category, sp)).fetchall()
+        # Windowed with the record: this prints "N of M settled picks
+        # have a close", and an M that disagrees with the settled count
+        # above it reads as one of the two numbers being wrong.
+        q = ("SELECT * FROM bets WHERE status IN ('won','lost','push') "
+             "AND category=? AND stake_units > 0 AND sport=?")
+        cargs: list = [category, sp]
+        if since:
+            q += " AND date >= ?"
+            cargs.append(since)
+        bets = conn.execute(q, cargs).fetchall()
         if not bets:
             continue
         clvs = [c for c in (_bet_clv(b) for b in bets) if c is not None]
@@ -3471,7 +3478,8 @@ def _hypothesis_lab_block() -> dict:
                 "n_rejected": 0, "n_collecting": 0, "n_closed": 0}
 
 
-def restated_performance(conn, sport: str | None = None) -> dict:
+def restated_performance(conn, sport: str | None = None,
+                         since: str | None = None) -> dict:
     """The same graded picks, re-sized on TODAY's staking scale.
 
     The official record is receipts — stakes as the bets were actually
@@ -3524,6 +3532,13 @@ def restated_performance(conn, sport: str | None = None) -> dict:
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    # Same window as the record it sits beside. This line's whole job is
+    # to be COMPARED with the headline — "the same nights, priced by the
+    # model we have now" — and two lines drawn over different nights are
+    # not a comparison.
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
     wins = losses = pushes = excluded = 0
     staked = net = 0.0
     for b in conn.execute(q, args):
@@ -3917,7 +3932,7 @@ def account_health(conn) -> dict:
     }
 
 
-def longshot_report(conn) -> dict:
+def longshot_report(conn, since: str | None = None) -> dict:
     """The Long Shots scoreboard.
 
     The W-L / ROI record covers ONLY ``category='longshot'`` — the board's
@@ -4290,7 +4305,8 @@ def move_longshots_out_of_main(conn, stake_units: float = 0.1) -> int:
 TRACKED_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
 
 
-def sport_report(conn, sport: str) -> dict:
+def sport_report(conn, sport: str,
+                 since: str | None = None) -> dict:
     """One sport's whole record — the tuning view.
 
     The combined page answers "is the system making money", which is the
@@ -4300,12 +4316,12 @@ def sport_report(conn, sport: str) -> dict:
     football model reading four points cold average to a perfect
     calibration line nobody should trust.
     """
-    perf = performance(conn, sport)
+    perf = performance(conn, sport, since=since)
     return {
         "sport": sport,
         "overall": perf,
-        "curve": pnl_curve(conn, sport),
-        "recent": recent_settled(conn, 20, sport=sport),
+        "curve": pnl_curve(conn, sport, since=since),
+        "recent": recent_settled(conn, 20, sport=sport, since=since),
         "calibration": calibration(conn, sport=sport),
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"],
                                        sport=sport),
@@ -4413,15 +4429,15 @@ def export_json(conn, path) -> None:
         "curve": pnl_curve(conn, since=since),
         "recent": recent_settled(conn, since=since),
         "model_eras": era_report(conn),
-        "longshots": longshot_report(conn),
-        "stale_flags": stale_report(conn),
-        "form_sampler": form_report(conn),
-        "loose_sampler": loose_report(conn),
+        "longshots": longshot_report(conn, since=since),
+        "stale_flags": stale_report(conn, since=since),
+        "form_sampler": form_report(conn, since=since),
+        "loose_sampler": loose_report(conn, since=since),
         # THE PREDICTION DESK — Kalshi paper book (sports cross-model +
         # weather-vs-forecast), earning its stakes on the same terms as
         # every other unproven bucket. See docs/PREDICTION_DESK.md.
-        "predmarket": predmarket_report(conn),
-        "ufc_record": ufc_report(conn),
+        "predmarket": predmarket_report(conn, since=since),
+        "ufc_record": ufc_report(conn, since=since),
         # IS THERE AN EDGE AT ALL — the 2026-08-09 finding, kept live
         # rather than re-derived by hand. `edge_now` is the latest run,
         # `edge_trend` the series. See docs/THE_INFORMATION_TEST.md.
@@ -4432,7 +4448,7 @@ def export_json(conn, path) -> None:
         # ("main", "paper"), so these rows are already in every headline
         # number. This line exists so the export still says how much of
         # that pool was staked on paper.
-        "paper": performance(conn, category="paper"),
+        "paper": performance(conn, category="paper", since=since),
         "paper_mode": paper_mode(conn),
         # `paper_recent` — the hundred paper rows themselves — was dropped
         # on 2026-08-20 along with the Record page panel that was its only
@@ -4448,11 +4464,21 @@ def export_json(conn, path) -> None:
         # curve those receipts sit under already counts them.
         # Per-sport, so each model can be tuned on its own evidence rather
         # than on the average of six.
-        # NOT scoped. `sport_report` is the tuning view — "is THIS model
-        # any good", the question the next change to it depends on — and
-        # it answers better with every row it has. The epoch is about
-        # what the site CLAIMS, not about what we let ourselves see.
-        "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},
+        # SCOPED, and the first draft of this was not — which is the
+        # whole bug Ethan hit. "the record page still shows us down 20
+        # units … and thats for every spot on the page." The per-sport
+        # tabs read THIS block, so leaving it all-time meant the headline
+        # said one thing and every tab beside it said another.
+        #
+        # The reasoning that left it unscoped was wrong on its own terms:
+        # this is the WEBSITE's payload and nothing else reads it. The
+        # tuning that needs every row — the miner, the calibration fits,
+        # the era split — runs in Python against the database, which is
+        # untouched. "we will keep all the other data that we dont
+        # display for ourselves" is exactly right, and the database is
+        # where that data lives.
+        "by_sport": {sp: sport_report(conn, sp, since=since)
+                     for sp in TRACKED_SPORTS},
         "tracked_sports": list(TRACKED_SPORTS),
         "calibration": calibration(conn),
         # The same chart scoped to the CURRENT model era — the all-time
@@ -4496,13 +4522,14 @@ def export_json(conn, path) -> None:
         # The record re-sized on today's staking scale — receipts above
         # stay receipts; this answers "what WOULD it read" without ever
         # editing a settled row.
-        "restated": {"overall": restated_performance(conn),
-                     "by_sport": {sp: restated_performance(conn, sp)
+        "restated": {"overall": restated_performance(conn, since=since),
+                     "by_sport": {sp: restated_performance(conn, sp,
+                                                           since=since)
                                   for sp in TRACKED_SPORTS}},
         "account_health": account_health(conn),
         # How much of the record has a real closing line behind it — the
         # honest prerequisite for anything that wants to reason from CLV.
-        "clv_coverage": clv_coverage(conn),
+        "clv_coverage": clv_coverage(conn, since=since),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.
