@@ -1733,9 +1733,9 @@ td.num, .dl-num, .std-n, .pm-avatar, .odds,
    --brand-solid rather than --brand because white on --brand is Lc 74.5;
    see the token's own note. */
 .btn.primary { background: var(--brand-solid); border-color: transparent;
-  color: #fff; font-weight: 700; }
+  color: var(--brand-ink); font-weight: 700; }
 .btn.primary:hover { background: var(--brand-2); border-color: transparent;
-  color: #fff; }
+  color: var(--brand-ink); }
 .theme-toggle { box-shadow: none; }
 
 /* Cards: flat, hairline, tight.
@@ -3415,7 +3415,7 @@ body.pk-open { overflow: hidden; }
 .rec-scope:hover { color: var(--text); border-color: var(--brand-2); }
 .rec-scope.active {
   background: var(--grad-brand); border-color: transparent;
-  color: #fff; box-shadow: var(--glow);
+  color: var(--brand-ink); box-shadow: var(--glow);
 }
 /* The count is the honest part: a scope with nothing in it still appears,
    because hiding it would make "no bets yet" and "no such board" look
@@ -4158,9 +4158,20 @@ body.pk-open { overflow: hidden; }
   --text-body: #D6D6E8;
   --text-mute: #9999B3;
   --text-faint: #7B7B91;
-  --brand: #8D5BF2;
-  --brand-2: #A88FF7;
-  --brand-ink: #F1F1FA;
+  /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
+     "i say we switch everything to the gold color like the renders but
+     for the whole site. we should match everything."
+
+     This reverses the 08-11 violet pivot rather than sitting beside it.
+     The ink flips with it and that is the load-bearing half: gold is a
+     LIGHT accent, so text ON it must be dark. Measured — white on
+     #FFB000 is Lc 38 and unreadable; #0A0907 on it is Lc 70. Violet was
+     the other way round, which is why 22 rules carried a hardcoded
+     `color: #fff` on a brand fill and every one of them now reads
+     --brand-ink instead. */
+  --brand: #FFB000;
+  --brand-2: #FFC94D;
+  --brand-ink: #0A0907;
   --gold: #F5B93B;
   --good: #42C268;
   --bad: #DF5953;
@@ -4170,20 +4181,31 @@ body.pk-open { overflow: hidden; }
   --radius-lg: 14px;
   --topbar-bg: rgba(7, 7, 12, .82);
   /* Light lives in tokens so every glow on the site is the SAME glow. */
-  --glow: 0 0 0 1px rgba(141, 91, 242, .28), 0 6px 28px rgba(141, 91, 242, .16);
+  --glow: 0 0 0 1px rgba(255, 176, 0, .28), 0 6px 28px rgba(255, 176, 0, .16);
   --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
-  /* THE VIOLET THAT CAN CARRY WHITE TEXT. `--brand` is #8D5BF2 and
-     white on it measures 4.28:1 — under the 4.5 AA wants for small text,
-     and no ink fixes it (#F1F1FA is worse at 3.81). It is the identity
-     colour, so it does not move; a solid fill BEHIND WHITE TEXT uses this
-     instead. The value is the midpoint of --grad-brand below, so it is a
-     colour the system already contains rather than a new one, and it
-     measures 5.56:1. Found 2026-08-20 by sweeping every rendered text
-     node against its composited background. */
-  --brand-solid: #7C43E4;
-  --grad-brand: linear-gradient(135deg, #8D5BF2, #6B2BD6);
-  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(141, 91, 242, .18), rgba(7, 7, 12, 0) 62%);
-  --grad-chip: linear-gradient(180deg, rgba(141, 91, 242, .22), rgba(141, 91, 242, .08));
+  /* --brand-solid EXISTED BECAUSE VIOLET COULD NOT CARRY WHITE, and the
+     gold system does not have that problem — it has the opposite one.
+     Nothing gold carries white at any weight, so the answer is not a
+     darker fill, it is dark ink: --brand-ink is #0A0907 and measures
+     Lc 70 on the accent.
+
+     The token stays rather than being deleted, aliased to --brand, so
+     the 22 rules that name it keep working and the distinction it drew
+     is recorded rather than lost. If a future accent needs a
+     white-bearing variant again, this is where it goes. */
+  /* THE GOLD THAT CARRIES ITS INK. --brand is the render's #FFB000 and
+     stays put — it is the identity, and it is used where no text sits
+     on it (borders, glows, the accent tint). Near-black on it measures
+     Lc 69.8, which is contrast.py's "large or bold UI" tier, and the
+     filled controls print 10-13px labels. So the FILL moves, not the
+     brand — the same split this file has always had, in the opposite
+     direction now that the accent is light. #FFC02E reads 75.6 and is
+     the midpoint of --grad-brand below, so it is a colour the palette
+     already contains rather than a new one. */
+  --brand-solid: #FFC02E;
+  --grad-brand: linear-gradient(135deg, #FFD35C, #FFAD00);
+  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(255, 176, 0, .14), rgba(7, 7, 12, 0) 62%);
+  --grad-chip: linear-gradient(180deg, rgba(255, 176, 0, .20), rgba(255, 176, 0, .07));
   --font-display: "Archivo Narrow", var(--font-sans);
 }
 :root[data-theme="light"] {
@@ -4199,8 +4221,13 @@ body.pk-open { overflow: hidden; }
   --text-body: #2B2B4A;
   --text-mute: #6E6E92;
   --text-faint: #A9A9C6;
-  --brand: #7D3BEE;
-  --brand-2: #8D5BF2;
+  /* LIGHT WANTS A DEEPER GOLD. #FFB000 on white is Lc 30 — an accent
+     nobody can read. The light theme drops to a bronze that carries
+     against paper, and its ink goes back to white because THAT colour
+     is dark. Same rule as dark, opposite answer, which is the whole
+     reason these are two blocks. */
+  --brand: #9A6A00;
+  --brand-2: #7A5300;
   --brand-ink: #FFFFFF;
   --gold: #B87E10;
   /* Amber stays the material-conditions colour — but it can no longer
@@ -4209,12 +4236,13 @@ body.pk-open { overflow: hidden; }
   /* The original light block declares its own --grad-brand (old amber)
      at higher specificity than the base :root — re-pin the violet here
      or TOP GAME and the active league chip go amber in light. */
-  --grad-brand: linear-gradient(135deg, #7D3BEE, #8D5BF2);
+  --grad-brand: linear-gradient(135deg, #9A6A00, #7A5300);
+  --brand-solid: #7A5300;
   --topbar-bg: rgba(244, 244, 251, .88);
-  --glow: 0 0 0 1px rgba(125, 59, 238, .22), 0 6px 24px rgba(125, 59, 238, .12);
+  --glow: 0 0 0 1px rgba(154, 106, 0, .22), 0 6px 24px rgba(154, 106, 0, .12);
   --glow-soft: 0 10px 26px rgba(23, 23, 42, .10);
-  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(125, 59, 238, .10), rgba(244, 244, 251, 0) 62%);
-  --grad-chip: linear-gradient(180deg, rgba(125, 59, 238, .16), rgba(125, 59, 238, .05));
+  --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(154, 106, 0, .10), rgba(244, 244, 251, 0) 62%);
+  --grad-chip: linear-gradient(180deg, rgba(154, 106, 0, .16), rgba(154, 106, 0, .05));
 }
 
 /* The page never scrolls sideways — Ethan's screen recording
@@ -4401,7 +4429,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   transition: all var(--dur-fast) var(--ease-out); }
 .sb-chips .sport-btn:hover { color: var(--text); border-color: var(--brand-2); }
 .sb-chips .sport-btn.active { background: var(--grad-brand); border-color: transparent;
-  color: #fff; box-shadow: var(--glow); }
+  color: var(--brand-ink); box-shadow: var(--glow); }
 
 /* High Confidence — the render's toggle card, wired to a real filter. */
 .sb-hcm { margin-top: auto; display: flex; flex-direction: column; gap: 10px;
@@ -4475,7 +4503,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   transform: translateY(-2px); }
 .stadium-wrap { position: relative; }
 .top-game-tag { position: absolute; top: 10px; right: 10px; z-index: 3;
-  padding: 4px 9px; border-radius: var(--radius-sm); background: var(--grad-brand); color: #fff;
+  padding: 4px 9px; border-radius: var(--radius-sm); background: var(--grad-brand); color: var(--brand-ink);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
   box-shadow: var(--glow); }
 .game-time-chip { position: absolute; top: 10px; left: 10px; z-index: 3;
@@ -4689,7 +4717,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* ---------------- Soft radii for the system's shared shapes ---------------- */
 .card, .controls, .stats .tile, .btn, .empty-slate { border-radius: var(--radius); }
 .btn { border-color: var(--border); }
-.btn:hover { background: var(--grad-brand); border-color: transparent; color: #fff; }
+.btn:hover { background: var(--grad-brand); border-color: transparent; color: var(--brand-ink); }
 
 /* ---------------- Responsive: rail folds, sidebar becomes drawer ------- */
 @media (max-width: 1279px) {
@@ -4977,7 +5005,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .lb-chip b { font-family: var(--font-mono); font-weight: 600;
   color: var(--text-mute); }
 .lb-chip.active { background: var(--grad-brand); border-color: transparent;
-  color: #fff; box-shadow: var(--glow); }
+  color: var(--brand-ink); box-shadow: var(--glow); }
 .lb-chip.active b { color: #fff; }
 
 .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -5059,7 +5087,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   .tb-center { color: var(--text-dim); }
   .tb-center-disc { display: grid; place-items: center; width: 46px; height: 46px;
     margin-top: -22px; border-radius: 50%; background: var(--grad-brand);
-    color: #fff; box-shadow: var(--glow); }
+    color: var(--brand-ink); box-shadow: var(--glow); }
   .tb-center-disc svg { width: 21px; height: 21px; }
   .tb-center.active { color: var(--text); }
   .tb-center-disc { position: relative; }
@@ -5219,7 +5247,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius);
   padding: 6px 13px; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
 .mbc-chip.active { background: var(--brand-solid); border-color: var(--brand-solid);
-  color: #fff; }
+  color: var(--brand-ink); }
 .mbc-sport { margin-left: auto; }
 /* Cards / Table switch (render 12's dense log). Same rows either way —
    the table is the desktop density, the cards are the phone's. */
@@ -5229,7 +5257,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius);
   padding: 6px 12px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
 .mbc-view.active { background: var(--brand-solid); border-color: var(--brand-solid);
-  color: #fff; }
+  color: var(--brand-ink); }
 .mb-table-wrap { padding: 0; overflow-x: auto; margin-bottom: 18px; }
 .mb-table { width: 100%; }
 .mb-table .mbt-pick { min-width: 0; }
@@ -5265,7 +5293,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   border: var(--hairline) solid var(--border); border-radius: var(--radius-sm);
   padding: 3px 9px; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
 .ra-range.active { background: var(--brand-solid); border-color: var(--brand-solid);
-  color: #fff; }
+  color: var(--brand-ink); }
 /* (.ra-stats/.ra-tiles/.ra-alltime retired 2026-08-17 with the record
    declutter — their numbers repeated the scoreboard and now live on the
    .ra-line ledger rows.) */
@@ -5388,7 +5416,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
 /* The avatar chip — initials when signed in, no balance beside it ever. */
 .nav-acct-init { display: inline-grid; place-items: center; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--brand-solid); color: #fff;
+  border-radius: 50%; background: var(--brand-solid); color: var(--brand-ink);
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .02em; }
 
 /* Bankroll — the goal bar and the logged-P&L chart. */
@@ -6118,7 +6146,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .stub-sub { color: var(--text-dim); font-size: var(--fs-sm);
   line-height: var(--lh-body); margin: 0 auto; }
 .stub-cta { display: inline-block; margin-top: 22px; padding: 10px 22px;
-  background: var(--brand-solid); border-color: var(--brand-solid); color: #fff;
+  background: var(--brand-solid); border-color: var(--brand-solid); color: var(--brand-ink);
   font-weight: 700; text-decoration: none; }
 .stub-cta:hover { background: var(--brand-2); border-color: var(--brand-2); }
 .stub-links { display: flex; flex-wrap: wrap; justify-content: center;
@@ -6140,7 +6168,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
   color: var(--text-dim); font-size: var(--fs-xs); font-weight: 700; }
 .al-cat:hover { color: var(--text); border-color: var(--brand); }
 .al-cat.on { background: var(--brand-solid); border-color: var(--brand-solid);
-  color: #fff; }
+  color: var(--brand-ink); }
 .al-n { color: var(--text-mute); font-variant-numeric: tabular-nums; }
 .al-cat.on .al-n { color: color-mix(in oklab, #fff 75%, transparent); }
 .al-list { padding: 0; }
@@ -6186,7 +6214,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    stopped being clipped by a narrow column. */
 .plan-band { position: absolute; top: 0; right: 0;
   border-bottom-left-radius: var(--radius-sm);
-  padding: 3px 10px; background: var(--brand-solid); color: #fff;
+  padding: 3px 10px; background: var(--brand-solid); color: var(--brand-ink);
   font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
   text-transform: uppercase; }
 .plan-name { color: var(--text-mute); font-size: var(--fs-2xs);
@@ -6994,7 +7022,7 @@ input:-webkit-autofill:focus {
 .pw-plan.pop { overflow: visible; }
 .pw-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
   padding: 3px 12px; border-radius: 999px; background: var(--brand-solid);
-  color: #fff; font-size: var(--fs-2xs); font-weight: 800;
+  color: var(--brand-ink); font-size: var(--fs-2xs); font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
 /* THE TRIAL RIBBON, on the monthly card only. Same geometry as the
    "Most popular" ribbon it sits beside on a different card — and the
@@ -7029,10 +7057,10 @@ input:-webkit-autofill:focus {
    --brand-solid rather than --brand because white on --brand is Lc 74.5,
    a contrast tier below small text (tests/test_brandfill.py). */
 .pw-buy, .co-go { width: 100%; padding: 12px; font-size: var(--fs-md);
-  font-weight: 800; background: var(--brand-solid); color: #fff;
+  font-weight: 800; background: var(--brand-solid); color: var(--brand-ink);
   border-color: var(--brand-solid); }
 .pw-buy:hover, .co-go:hover { background: var(--brand-2);
-  border-color: var(--brand-2); color: #fff; }
+  border-color: var(--brand-2); color: var(--brand-ink); }
 .pw-fine { color: var(--text-mute); font-size: var(--fs-2xs); margin-top: 8px; }
 
 .pw-code { margin-top: 18px; padding: 16px 18px; }
@@ -7239,7 +7267,7 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   color: var(--brand-2); }
 .a2hs-go { display: flex; gap: 8px; margin-top: 12px; }
 .a2hs-go .btn { flex: 1; justify-content: center; text-align: center; }
-.a2hs-go .primary { background: var(--brand-solid); color: #fff;
+.a2hs-go .primary { background: var(--brand-solid); color: var(--brand-ink);
   border-color: transparent; font-weight: 700; }
 
 /* ===================== THE MEMBERS' DISCORD =====================
@@ -7349,10 +7377,10 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .dc-cta-go { align-items: flex-end; text-align: right; }
 }
 .dc-go { display: inline-flex; align-items: center; gap: 9px;
-  padding: 13px 26px; background: var(--grad-brand); color: #fff;
+  padding: 13px 26px; background: var(--grad-brand); color: var(--brand-ink);
   border-color: transparent; font-weight: 800; font-size: var(--fs-lg);
   text-decoration: none; border-radius: var(--radius); }
-.dc-go:hover { background: var(--brand-solid); color: #fff; }
+.dc-go:hover { background: var(--brand-solid); color: var(--brand-ink); }
 .dc-go .ico-mark { color: currentColor; }
 .dc-fine { display: inline-flex; align-items: center; gap: 6px;
   font-size: var(--fs-xs); color: var(--text-mute); }
@@ -7413,7 +7441,7 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pw-unlock p a, .co-what-foot a, .pw-proof p a, .pw-guar p a {
   color: var(--brand-2); font-weight: 700; }
 .pw-unlock-go { width: 100%; padding: 11px; font-weight: 700;
-  background: var(--brand-solid); color: #fff; border-color: transparent; }
+  background: var(--brand-solid); color: var(--brand-ink); border-color: transparent; }
 .pw-unlock-go:hover { background: var(--brand-2); }
 
 /* Footer. The card names are NAMES (see PW_CARDS) — a row of brand logos

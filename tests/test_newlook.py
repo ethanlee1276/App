@@ -412,13 +412,47 @@ def test_the_greeting_never_fakes_a_name():
     assert "Alex" not in APP, "the render's placeholder name shipped"
 
 
-def test_the_wordmark_is_gold_and_the_interface_is_violet():
-    """One gold element — the Qellys mark — on a violet interface. The
-    render's split, pinned so neither leaks into the other's job."""
+def test_the_interface_is_gold_and_its_ink_is_dark():
+    """REVERSED 2026-08-23. This used to read "the wordmark is gold and
+    the interface is violet" — the 08-11 render's split. Ethan, with
+    renders of every page: "i say we switch everything to the gold color
+    like the renders but for the whole site. we should match everything."
+
+    So there is no split to pin any more; there is one accent. What
+    replaces it is the pairing that gold makes load-bearing and violet
+    did not: gold is a LIGHT accent, so text sitting ON it has to be
+    dark. White on #FFB000 measures Lc 38 and cannot be read. Violet ran
+    the other way, which is why 22 rules carried a hardcoded
+    `color: #fff` on a brand fill — every one of them would have gone
+    unreadable the moment the token changed underneath it.
+
+    The wordmark keeps --gold rather than --brand on purpose: it is the
+    identity mark and it should not move if the interface accent is ever
+    tuned again."""
     i = CSS.index(".qmark", CSS.index("NEW LOOK — 2026-08-11"))
     assert "var(--gold)" in CSS[i:i + 200]
-    i = CSS.index("--brand:", CSS.index("NEW LOOK — 2026-08-11"))
-    assert "#8D5BF2" in CSS[i:i + 40]
+    dark = CSS[CSS.index(":root {"):CSS.index(':root[data-theme="light"]')]
+    assert "--brand: #FFB000" in dark, "the dark interface is not gold"
+    assert "--brand-ink: #0A0907" in dark, (
+        "the ink on gold is not dark, so every filled control is "
+        "unreadable")
+
+
+def test_no_rule_paints_white_on_a_brand_fill():
+    """The failure the token swap would otherwise have shipped, in the
+    one shape a palette change cannot catch by itself: a hardcoded
+    colour that was correct for the OLD accent and is invisible on the
+    new one."""
+    import re as _re
+    fill = _re.compile(
+        r"background(?:-color)?\s*:\s*[^;}]*var\(--(?:brand|brand-solid|"
+        r"brand-2)\)|background\s*:\s*var\(--grad-brand\)")
+    bad = []
+    for m in _re.finditer(r"\{[^{}]*\}", CSS, _re.S):
+        body = m.group(0)
+        if fill.search(body) and _re.search(r"color\s*:\s*#fff\b", body, _re.I):
+            bad.append(CSS[:m.start()].count("\n") + 1)
+    assert not bad, f"white text on a gold fill at line(s) {bad}"
 
 
 def test_the_page_never_pans_sideways():

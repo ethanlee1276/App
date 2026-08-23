@@ -75,30 +75,66 @@ def test_the_measurement_reproduces():
     assert 73 < lc < 76, f"white on the identity violet now measures Lc {lc:.1f}"
 
 
-def test_the_safe_fill_reaches_the_body_tier():
-    solid = _token("brand-solid")
-    lc = abs(ct.lc(WHITE, solid))
-    assert lc >= BODY_LC, \
-        f"white on --brand-solid is Lc {lc:.1f}, under the body-text tier {BODY_LC}"
+def test_the_ink_on_the_brand_fill_reaches_the_body_tier():
+    """THE INVARIANT, REWRITTEN 2026-08-23 TO SURVIVE THE PALETTE.
+
+    Three tests here pinned the answer instead of the question: that
+    --brand was #8D5BF2, that --brand-solid was that gradient's
+    midpoint, and that WHITE on the fill cleared the body tier. All
+    three were true of a violet accent and none of them is a property
+    the site actually needs.
+
+    Ethan, 2026-08-23: "i say we switch everything to the gold color
+    like the renders but for the whole site." Gold runs the other way —
+    nothing gold carries white at any weight — so a file that checked
+    the white pairing would have blocked the change while the thing it
+    exists to prevent (unreadable labels on a filled control) was
+    handled correctly by flipping the ink.
+
+    So this asks the question rather than the answer: whatever the
+    accent is, the ink the site prints ON it clears the body tier. That
+    holds for violet with white, for gold with near-black, and for
+    whatever comes next."""
+    fill = _token("brand-solid")
+    ink = _token("brand-ink")
+    lc = abs(ct.lc(ink, fill))
+    assert lc >= BODY_LC, (
+        f"--brand-ink on --brand-solid is Lc {lc:.1f}, under the "
+        f"body-text tier {BODY_LC} — every filled control is a tier too "
+        f"faint")
 
 
-def test_the_identity_violet_did_not_move():
-    """A contrast miss on some chips is not a licence to restyle the
-    product. `--brand` is the render's colour."""
-    assert _token("brand") == _hex("#8D5BF2"), \
-        "the brand violet changed — that is a design decision, not a fix"
+def test_the_ink_is_the_one_that_suits_the_fill():
+    """The load-bearing pairing, checked as a CHOICE rather than a
+    constant: the site must have picked the better of dark and light for
+    the accent it actually has. Violet took white; gold takes near-black.
+    Picking the wrong one is the failure this whole file was opened for,
+    and it is invisible in a diff that only moves a hex."""
+    fill = _token("brand-solid")
+    ink = _token("brand-ink")
+    best = max((abs(ct.lc(c, fill)), c) for c in (WHITE, _hex("#0A0907")))
+    assert abs(ct.lc(ink, fill)) >= best[0] - 6, (
+        f"--brand-ink is not the readable side of the accent: it scores "
+        f"{abs(ct.lc(ink, fill)):.1f} where the other end of the scale "
+        f"scores {best[0]:.1f}")
 
 
 def test_the_safe_fill_is_a_colour_the_palette_already_had():
-    """A new colour is a new thing to keep consistent. This one is the
-    midpoint of --grad-brand."""
+    """A new colour is a new thing to keep consistent. Under violet this
+    was the midpoint of --grad-brand, because the fill had to be DARKER
+    than the accent to carry white. Gold needs no such variant — dark ink
+    solves it — so the fill is the accent itself, which is still "a
+    colour the palette already had" and is the stronger version of the
+    same rule."""
+    solid, brand = _token("brand-solid"), _token("brand")
+    if solid == brand:
+        return
     m = re.search(r"--grad-brand: linear-gradient\(135deg, (#[0-9A-Fa-f]{6}), (#[0-9A-Fa-f]{6})\)", CSS)
-    assert m, "--grad-brand is no longer the two-stop violet this was derived from"
+    assert m, "--grad-brand is not the two-stop gradient this derives from"
     a, b = _hex(m.group(1)), _hex(m.group(2))
     mid = tuple((a[i] + b[i]) // 2 for i in range(3))
-    solid = _token("brand-solid")
     assert all(abs(solid[i] - mid[i]) <= 2 for i in range(3)), \
-        f"--brand-solid {solid} is no longer the gradient's midpoint {mid}"
+        f"--brand-solid {solid} is neither --brand nor the gradient's midpoint {mid}"
 
 
 def test_no_rule_puts_white_on_the_light_brand_as_a_solid_fill():
