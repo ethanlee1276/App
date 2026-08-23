@@ -4347,11 +4347,19 @@ html, body { overflow-x: clip; }
 .logo { width: 38px; height: 38px; display: grid; place-items: center;
   background: none; border: 0; }
 /* THE MARK IS ARTWORK NOW, not a stroked ellipse — Ethan's own QB icon,
-   cropped above the wordmark. `object-fit: contain` rather than a bare
-   width so the tile never distorts if the slot changes, and the radius
-   matches the crop's own so a subpixel edge cannot show. */
-.qmark { width: 100%; height: 100%; object-fit: contain;
-  border-radius: 22%; display: block; }
+   cropped above the wordmark and cut off its background.
+
+   NO RADIUS, deliberately, and the rule that set one is gone rather than
+   zeroed. It existed because the mark still carried the app icon's black
+   tile and needed the tile's own corners; Ethan, 2026-08-23: "remove the
+   shiny lights ... so the logo can look more natural sitting there and
+   not like a picture placed there". There is no tile to round now — the
+   crown and the QB sit on the page's own background — and a radius on a
+   transparent PNG would only clip the mark's corners.
+
+   `object-fit: contain` stays: it is what keeps the mark undistorted if
+   a slot's aspect ever changes. */
+.qmark { width: 100%; height: 100%; object-fit: contain; display: block; }
 .brand-words h1 { font-family: var(--font-display); font-size: var(--fs-xl);
   font-weight: 700; letter-spacing: .34em; line-height: 1; white-space: nowrap;
   text-transform: uppercase; }

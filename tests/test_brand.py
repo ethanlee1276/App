@@ -82,9 +82,18 @@ def test_the_tab_and_the_header_are_cut_from_one_source():
         return
     svg = _read("web", "favicon.svg")
     raw = _b64.b64decode(re.search(r"base64,([A-Za-z0-9+/=]+)", svg).group(1))
-    a = Image.open(_io.BytesIO(raw)).convert("RGB")
-    b = Image.open(os.path.join(ROOT, "web", "logo-qb.png")).convert("RGB")
-    a = a.resize((32, 32)); b = b.resize((32, 32))
+    # COMPOSITED, not converted. Both carry an alpha channel since the
+    # mark was cut off its background (2026-08-23), and `convert("RGB")`
+    # throws that away — leaving the black the source happened to have
+    # behind the transparent pixels, which is not what either file draws.
+    # Dropped onto one ground, they are the same picture or they are not.
+    def _flat(img):
+        img = img.convert("RGBA").resize((32, 32), Image.LANCZOS)
+        bg = Image.new("RGB", (32, 32), (128, 128, 128))
+        bg.paste(img, (0, 0), img)
+        return bg
+    a = _flat(Image.open(_io.BytesIO(raw)))
+    b = _flat(Image.open(os.path.join(ROOT, "web", "logo-qb.png")))
     diff = sum(abs(x - y) for pa, pb in zip(a.getdata(), b.getdata())
                for x, y in zip(pa, pb)) / (32 * 32 * 3)
     assert diff < 12, (
@@ -153,12 +162,92 @@ def test_the_mark_is_the_artwork_and_not_a_drawing():
     assert "data:image/png;base64," in svg
     assert "<ellipse" not in svg and "<circle" not in svg
     assert "stroke" not in svg, "a drawn stroke is back on the mark"
-    # The tile IS rounded now, which the retired test forbade: it reads as
-    # an app icon rather than a photo pasted into the bar, and the radius
-    # is baked into the alpha rather than asserted in CSS.
+    # AND THERE IS NO TILE TO ROUND. This asserted a border-radius for
+    # one day. The radius existed because the mark still carried the app
+    # icon's black square and needed the square's own corners; once the
+    # mark was cut off its background there was nothing left to round,
+    # and a radius on a transparent PNG only clips the crown. Ethan,
+    # 2026-08-23: "so the logo can look more natural sitting there and
+    # not like a picture placed there".
     css = _read("web", "css", "styles.css")
     rule = css[css.index(".qmark {"):]
-    assert "border-radius" in rule[:rule.index("}")]
+    assert "border-radius" not in rule[:rule.index("}")], (
+        "a radius is back on a mark that has no tile to clip")
+
+
+def test_the_mark_is_cut_off_its_background():
+    """Ethan, 2026-08-23, with the header logo circled: "remove the shiny
+    lights on the left and right side of the crown so the logo can look
+    more natural sitting there and not like a picture placed there".
+
+    The lights are painted into brand/appicon-1254.png — two stadium
+    floodlight banks in the upper corners of a full app icon. Right on a
+    phone tile, wrong in a header, where the whole thing read as a
+    photograph of an app icon pasted into the bar.
+
+    Checked in the PIXELS, because every way this can go wrong still
+    produces a picture: a logo that kept the lights and a logo that lost
+    half the crown both render, and neither raises."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    im = Image.open(os.path.join(ROOT, "web", "logo-qb.png"))
+    assert im.mode == "RGBA", "the logo has no alpha, so it still has a tile"
+    a = im.getchannel("A")
+    lo, hi = a.getextrema()
+    assert lo == 0, "nothing is transparent — the background is still there"
+    assert hi == 255, "nothing is opaque — the mark itself is missing"
+    w, h = im.size
+    # The two upper corners are where the floodlights were — the thing
+    # Ethan circled — and the four corners together are where the tile
+    # was. The bottom boxes are small squares rather than the tall bands
+    # the top ones use: the Q's foot and the B's foot legitimately reach
+    # into the lower corners, and a band that catches them is testing the
+    # mark, not the background.
+    for name, box in (("top-left", (0, 0, int(w * .10), int(h * .28))),
+                      ("top-right", (int(w * .90), 0, w, int(h * .28))),
+                      ("bottom-left", (0, int(h * .92), int(w * .08), h)),
+                      ("bottom-right", (int(w * .92), int(h * .92), w, h))):
+        assert a.crop(box).getextrema()[1] < 48, (
+            f"the {name} corner is still painted — the tile or a "
+            "floodlight survived the cut")
+    # And the mark is genuinely there: a third of the frame or so.
+    covered = sum(a.histogram()[9:]) / (w * h)
+    assert 0.20 < covered < 0.45, (
+        f"the mark covers {covered:.0%} of the frame — under a fifth it "
+        "has lost pieces, over half it kept the background")
+
+
+def test_the_cut_refuses_itself_rather_than_shipping_a_bad_one():
+    """The tool that makes it has to fail loudly, because none of its
+    failure modes throw on their own. It shipped a crown missing three of
+    its four balls first — each ball joins its spike only through the
+    mark's black outline, so a threshold set for the gold orphans them —
+    and the render looked fine enough to commit."""
+    src = open(os.path.join(ROOT, "tools", "qbmark.py"),
+               encoding="utf-8").read()
+    assert "BALLS = [" in src, "nothing checks the crown's points survived"
+    assert "floodlight is still in the cut" in src
+    assert src.count("raise SystemExit") >= 3, (
+        "the guards report rather than refuse")
+
+
+def test_the_home_screen_icon_kept_its_background():
+    """Only the SITE logo is cut out. A home-screen tile with
+    transparency is composited by the OS on whatever it likes — black on
+    one phone, white on the next — and the icon is Ethan's artwork, which
+    is a full square picture on purpose."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    for name in ("icon-192.png", "icon-512.png", "apple-touch-icon.png",
+                 "icon-maskable-512.png"):
+        im = Image.open(os.path.join(WEB, name))
+        assert "A" not in im.getbands(), (
+            f"{name} has an alpha channel — the cut was applied to a "
+            "home-screen icon, which the OS will composite unpredictably")
 
 
 def test_the_page_links_both_icons():
