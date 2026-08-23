@@ -152,6 +152,31 @@ def test_a_rate_never_ships_without_its_sample_size():
     assert "o.clv_n" in proof, "the CLV average ships without its n"
 
 
+def test_no_win_rate_is_printed_on_a_sample_that_cannot_carry_one():
+    """CAUGHT IN A SCREENSHOT OF THE LIVE WALL, not in review: the strip
+    printed "100.0% win rate" off a single settled pick, at the top of
+    the page that asks for money. Nobody claimed it — it is one pick that
+    won, divided by one — and it is the worst place on the site for a
+    number that flatters by accident.
+
+    The fourth tile carries the break-even bar instead until the sample
+    can hold a rate. That figure is a fact about the PRICES we took and
+    is true at any n, so the tile still says something rather than going
+    blank."""
+    js = _js()
+    assert "const PROOF_RATE_FLOOR = 30;" in js, "the floor was removed"
+    body = _fn(js, "pwResultsHTML")
+    assert "o.settled >= PROOF_RATE_FLOOR" in body, (
+        "the win rate is printed unconditionally again")
+    # …and the note under it uses the same figure, so the strip and its
+    # own footnote cannot disagree about what counts as a sample.
+    assert "o.settled < PROOF_RATE_FLOOR" in body, (
+        "the caveat sentence has its own hard-coded threshold again")
+    assert "needed at the prices we took" in body, (
+        "the tile goes blank instead of saying the one thing that is "
+        "true at every sample size")
+
+
 def test_it_says_nothing_rather_than_zero_when_there_is_no_record():
     results = _fn(_js(), "pwResultsHTML")
     assert 'if (!o || !o.settled) return "";' in results, (

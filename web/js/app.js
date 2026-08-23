@@ -13530,6 +13530,16 @@ function faqFor(status) {
    renders, and the small-sample sentence is not optional — a strip of
    numbers with no n beside it is the thing every pick-selling site does
    and the reason none of them can be believed. */
+/* Below this many graded picks the shop shows no win RATE. Same rule as
+   the parlay block's, and the reason it is here too is that a screenshot
+   of the live wall caught it printing "100.0% win rate" off a single
+   settled pick — at the top of the page that asks for money, which is
+   the worst place on the site for a number that flatters by accident. It
+   is not a claim anyone made; it is one pick that won, divided by one.
+   Thirty is the same figure the caveat sentence below already used, so
+   the strip and its own footnote now agree. */
+const PROOF_RATE_FLOOR = 30;
+
 function pwResultsHTML(rec) {
   const o = (rec && rec.overall) || null;
   if (!o || !o.settled) return "";
@@ -13544,10 +13554,16 @@ function pwResultsHTML(rec) {
       ${stat(`${o.wins}–${o.losses}${o.pushes ? "–" + o.pushes : ""}`, "record")}
       ${stat(`${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u`,
              "net, flat stakes", net >= 0 ? "pos" : "neg")}
-      ${stat(pct(o.win_rate || 0),
-             `win rate · ${pct(o.breakeven || 0)} needed at our prices`)}
+      ${/* The bar the prices we took actually require is a fact about
+            those prices and true at any sample size, so it is what the
+            fourth tile carries until a win rate means something. */""}
+      ${o.settled >= PROOF_RATE_FLOOR
+        ? stat(pct(o.win_rate || 0),
+               `win rate · ${pct(o.breakeven || 0)} needed at our prices`)
+        : stat(pct(o.breakeven || 0),
+               "needed at the prices we took, to break even")}
     </div>
-    <p class="pw-results-note">${o.settled < 30
+    <p class="pw-results-note">${o.settled < PROOF_RATE_FLOOR
       ? `A sample of ${o.settled} proves nothing, and it is shown anyway
          rather than waited out.`
       : `Every one of them is on the Record page with its price, its date

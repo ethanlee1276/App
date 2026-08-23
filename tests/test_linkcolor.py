@@ -129,6 +129,21 @@ for (const page of PAGES) {
     await p.waitForTimeout(800);
     await scan(p, "index " + v);
   }
+  // THE TWO PAGES THAT ASK FOR MONEY, and neither was ever swept. They
+  // have no nav element to click — the wall appears when the server says
+  // a visitor is not entitled, and checkout when they press buy — so a
+  // list of selectors could never reach them. That gap let a link ship
+  // in default browser blue on the wall itself: `.pw-results-note a`,
+  // added 2026-08-23, was not in the rule that colours the others, and
+  // the sentence it sits in is "read the Record before you pay".
+  if (page === "index.html") for (const v of ["paywall", "checkout"]) {
+    const ok = await p.evaluate((name) => {
+      if (typeof switchView !== "function") return false;
+      switchView(name, false); return true; }, v);
+    if (!ok) continue;
+    await p.waitForTimeout(900);
+    await scan(p, "index #" + v);
+  }
   await p.close();
 }
 console.log(JSON.stringify(hits));
@@ -147,7 +162,7 @@ def _have_node() -> bool:
 
 
 def test_no_rendered_link_is_the_browser_default():
-    """The measurement itself, over five pages and ten in-app views.
+    """The measurement itself, over five pages and twelve in-app views.
 
     Skipped with a reason rather than failed when Node or Playwright is
     absent — the contract `launch.py --check`'s sweep already uses. A test
