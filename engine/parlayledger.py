@@ -452,25 +452,119 @@ def _loss_codes(conn, p, won, lost, singles_pnl: float) -> list[str]:
     codes = []
     if len(lost) == 1 and won:
         codes.append("LEG_ONE_KILLED_IT")
-    if won and lost and _priced_positive_correlation(p):
-        # We priced these legs as moving together and they did not. That is
-        # the correlation being wrong, which is the one input the whole
-        # structure rests on.
-        codes.append("CORRELATION_ERROR")
     if singles_pnl > 0:
         codes.append("TAX_TOO_HIGH")
     return codes
+
+
+#: CORRELATION_ERROR IS NOT ASSIGNED PER TICKET, and was until 2026-08-23.
+#:
+#: The old rule was `won and lost and the ticket priced rho +` — which,
+#: on a two-leg ticket, is the definition of "exactly one leg missed".
+#: The first real record made that visible: LEG_ONE_KILLED_IT 10,
+#: CORRELATION_ERROR 10, the same ten tickets counted twice under two
+#: names, one of which reads as a diagnosis. And a split is the MOST
+#: LIKELY single outcome even when a positive correlation is priced
+#: perfectly — rho +0.38 does not mean the legs land together, it means
+#: they land together slightly more often than chance.
+#:
+#: This is the argument CLASH_MISSED already carries three lines up: a
+#: judgement about the mechanism is not something one outcome can tell
+#: you. Whether the correlation is wrong is an AGGREGATE question, and
+#: `calibration()` answers it properly — observed ticket wins against the
+#: modeled joint, and against the independent joint, over every ticket
+#: that claimed the legs move together.
 
 
 def _priced_positive_correlation(p) -> bool:
     """Did this ticket claim a positive correlation between its legs?
 
     Read back off the reasoning text the screen wrote, which is where the
-    rhos were recorded. A ticket built on a negative or zero rho losing
-    tells us nothing about correlation.
+    rhos were recorded. No longer used to stamp a loss code — see the note
+    above — but kept because it is the only reader of that text and the
+    aggregate check may want it when a ticket has no stored joint.
     """
     text = p["conditional_reasoning"] or ""
     return "rho +" in text
+
+
+def calibration(conn) -> dict:
+    """Did the legs hit at the probability we gave them, and did the
+    tickets hit at the joint we priced?
+
+    THE ONE DIAGNOSTIC THAT SEPARATES THE TWO WAYS A PARLAY MODEL CAN BE
+    WRONG, and until 2026-08-23 nothing computed it — so a record could
+    only ever say "we lost", never which half lost it.
+
+      THE MARGINALS. Every leg carries `p_final`, the prop model's own
+      probability. Sum them and you have how many legs SHOULD have won.
+      If the legs come in under that, the parlay is downstream of a
+      miscalibrated prop model and no amount of correlation work touches
+      it — the singles board is making the same mistake.
+
+      THE JOINT. Every ticket carries `modeled_joint` (our number, with
+      the correlation in it) and `independent_joint` (the same legs
+      multiplied as if unrelated). If the legs hit at their p_final but
+      the TICKETS come in under the modeled joint, the marginals are
+      fine and the correlation is what is wrong.
+
+    And the third case, which the numbers can distinguish and a person
+    cannot: if the observed rate sits at or below the INDEPENDENT joint
+    while we priced a positive correlation, then the legs we said move
+    together do not, and the prior has the wrong sign rather than the
+    wrong size.
+
+    z is a standard normal on a sum of independent Bernoullis — the legs
+    inside one ticket are not independent of each other, so the ticket-level
+    z is the honest one and the leg-level z is slightly optimistic about
+    its own error bars. Reported anyway because the SIGN and the SIZE of
+    the gap are what matter here, not the last decimal of significance.
+    """
+    ensure_schema(conn)
+
+    def _z(actual: int, ps: list) -> float | None:
+        var = sum(p * (1.0 - p) for p in ps)
+        if var <= 0:
+            return None
+        return round((actual - sum(ps)) / math.sqrt(var), 2)
+
+    legs = conn.execute(
+        "SELECT l.p_final AS p, l.status AS st FROM parlay_legs l "
+        "JOIN parlays p ON p.id = l.parlay_id "
+        "WHERE l.p_final IS NOT NULL AND l.status IN ('won','lost') "
+        "AND p.status IN ('won','lost')").fetchall()
+    lp = [float(r["p"]) for r in legs]
+    lw = sum(1 for r in legs if r["st"] == "won")
+
+    tick = conn.execute(
+        "SELECT modeled_joint AS m, independent_joint AS i, status AS st "
+        "FROM parlays WHERE status IN ('won','lost') "
+        "AND modeled_joint IS NOT NULL").fetchall()
+    tm = [float(r["m"]) for r in tick]
+    ti = [float(r["i"]) for r in tick if r["i"] is not None]
+    tw = sum(1 for r in tick if r["st"] == "won")
+
+    # Only the tickets where we actually claimed the legs move together.
+    pos = [r for r in tick
+           if r["i"] is not None and float(r["m"]) > float(r["i"])]
+    pm = [float(r["m"]) for r in pos]
+    pi = [float(r["i"]) for r in pos]
+    pw = sum(1 for r in pos if r["st"] == "won")
+
+    return {
+        "legs": {"n": len(lp), "won": lw,
+                 "expected": round(sum(lp), 2),
+                 "z": _z(lw, lp)},
+        "tickets": {"n": len(tm), "won": tw,
+                    "expected": round(sum(tm), 2),
+                    "expected_independent": round(sum(ti), 2) if ti else None,
+                    "z": _z(tw, tm)},
+        "positive_rho": {"n": len(pm), "won": pw,
+                         "expected": round(sum(pm), 2),
+                         "expected_independent": round(sum(pi), 2),
+                         "z": _z(pw, pm),
+                         "z_independent": _z(pw, pi)},
+    }
 
 
 # --- reporting --------------------------------------------------------------
@@ -514,6 +608,13 @@ def report(conn) -> dict:
                      "Everything here is a tracked observation worth "
                      "nothing."),
         },
+        "calibration": calibration(conn),
+        # THE SPLIT THAT WAS MISSING. log_board journals rank 1 from every
+        # slate whether or not the screen qualified it, so a record read
+        # whole is mostly constructions the model DECLINED. Reporting
+        # those together buries the only rows that are the model's
+        # recommendation under the ones that are its rejects.
+        "by_qualified": _by_qualified(conn),
         "by_grade": _split(conn, "grade"),
         "by_sport": _split(conn, "sport"),
         "by_type": _split(conn, "parlay_type"),
@@ -522,6 +623,30 @@ def report(conn) -> dict:
         "singles_comparison": _singles_comparison(graded),
         "recent": _recent(conn),
     }
+    return out
+
+
+def _by_qualified(conn) -> dict:
+    """Plays and rejects, counted apart.
+
+    `qualified` is the screen's verdict on the ticket; `was_play` is
+    §10.2's one-per-slate winner among the qualified. A ticket that is
+    neither is a construction the page showed to say what tonight
+    offered — the Zone ranks even when nothing clears — and grading it
+    beside a recommendation measures the wrong thing.
+    """
+    out = {}
+    for label, where in (("play", "was_play=1"),
+                         ("qualified", "qualified=1 AND was_play=0"),
+                         ("not_qualified", "qualified=0")):
+        r = conn.execute(
+            "SELECT COUNT(*) n, COALESCE(SUM(status='won'),0) w, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(notional_units),0) s "
+            f"FROM parlays WHERE status IN ('won','lost') AND {where}"
+        ).fetchone()
+        out[label] = {"graded": r["n"], "wins": r["w"],
+                      "net_units": round(r["u"], 2),
+                      "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
     return out
 
 
@@ -628,8 +753,18 @@ def _singles_comparison(graded: list) -> dict:
                 "singles_better": None}
     par = sum(float(r["pnl_units"] or 0.0) for r in graded)
     sing = sum(float(r["singles_pnl_units"] or 0.0) for r in graded)
+    # HOW MUCH BETTER, NOT JUST WHETHER. `singles_better` is a bare sign
+    # test, and on the first real record it was true while singles lost
+    # 15.32u against the tickets' 15.98u — so a report reading only the
+    # flag announced "the legs were fine and wrapping them was the
+    # mistake" about legs that had lost fifteen units. The structure cost
+    # 0.66u of the 15.98u; the legs cost the rest. `structure_cost` is
+    # that difference, and `legs_cost` is what the legs lost on their
+    # own, so the two can be weighed instead of ranked.
     return {"n": len(graded), "parlay_units": round(par, 2),
-            "singles_units": round(sing, 2), "singles_better": sing > par}
+            "singles_units": round(sing, 2), "singles_better": sing > par,
+            "structure_cost": round(sing - par, 2),
+            "legs_cost": round(-sing, 2) if sing < 0 else 0.0}
 
 
 def _recent(conn, limit: int = 15) -> list[dict]:

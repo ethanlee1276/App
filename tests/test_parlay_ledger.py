@@ -328,9 +328,26 @@ def test_one_miss_out_of_three_is_leg_one_killed_it():
     assert "LEG_ONE_KILLED_IT" in codes
 
 
-def test_legs_disagreeing_on_a_positive_rho_is_a_correlation_error():
-    """We priced these as moving together and they moved apart. That is the
-    one input the whole structure rests on being wrong."""
+def test_one_ticket_splitting_is_not_stamped_as_a_correlation_error():
+    """REVERSED 2026-08-23, on the first real record. This used to assert
+    the opposite, and the assertion was wrong.
+
+    The rule was "some legs won, some lost, and the ticket priced rho +".
+    On a two-leg ticket that is the definition of "exactly one leg
+    missed" — so the record came back LEG_ONE_KILLED_IT 10,
+    CORRELATION_ERROR 10: the same ten tickets counted twice, one of them
+    under a name that reads as a diagnosis of the model.
+
+    And a split is the most likely single outcome even when a positive
+    correlation is priced perfectly. rho +0.38 does not mean the legs
+    land together; it means they land together slightly more often than
+    chance. Stamping every split as the correlation being wrong is a
+    conclusion the outcome cannot support — the same argument
+    CLASH_MISSED already carries, applied to the neighbouring code.
+
+    Whether the correlation is wrong is an aggregate question, and
+    `calibration()` answers it: observed ticket wins against the modeled
+    joint and against the independent joint."""
     conn = _conn()
     parlayledger.log_board(conn, _board())
     _single(conn, "Alpha Guy", status="won", actual=3.0)
@@ -338,7 +355,10 @@ def test_legs_disagreeing_on_a_positive_rho_is_a_correlation_error():
     parlayledger.settle(conn)
     codes = json.loads(conn.execute(
         "SELECT loss_codes FROM parlays").fetchone()[0])
-    assert "CORRELATION_ERROR" in codes
+    assert "CORRELATION_ERROR" not in codes, (
+        "one split ticket is being read as proof the correlation is wrong")
+    assert "LEG_ONE_KILLED_IT" in codes, (
+        "the thing that DID happen must still be recorded")
 
 
 def test_both_legs_missing_is_not_a_correlation_error():
@@ -804,6 +824,103 @@ def test_an_empty_report_explains_the_blind_window_rather_than_reading_as_zero()
     i = body.index("Nothing graded yet")
     assert "paid key" in body[i:], (
         "an empty ledger is reported without saying why it might be empty")
+
+
+# --- which half is broken ---------------------------------------------------
+
+def _graded(conn, rows):
+    """rows: (won, modeled, independent, leg_ps, leg_wins, qualified)."""
+    import json as _j
+    parlayledger.ensure_schema(conn)
+    for i, (won, mod, ind, ps, lw, qual) in enumerate(rows):
+        conn.execute(
+            "INSERT INTO parlays (date, sport, parlay_type, grade, qualified,"
+            " was_play, status, pnl_units, notional_units, "
+            "singles_pnl_units, loss_codes, modeled_joint, "
+            "independent_joint, n_legs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"2026-08-{i + 1:02d}", "mlb", "A",
+             "marginal" if qual else "short", 1 if qual else 0, 0,
+             "won" if won else "lost", 1.6 if won else -1.0, 1.0,
+             0.2, _j.dumps([]), mod, ind, len(ps)))
+        pid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for k, pf in enumerate(ps, start=1):
+            conn.execute(
+                "INSERT INTO parlay_legs (parlay_id, leg_no, player, market,"
+                " p_final, status) VALUES (?,?,?,?,?,?)",
+                (pid, k, f"P{i}-{k}", "strikeouts", pf,
+                 "won" if k <= lw else "lost"))
+    conn.commit()
+
+
+def test_calibration_separates_the_legs_from_the_joint():
+    """The one diagnostic that says which half of a parlay model is
+    wrong, and nothing computed it until 2026-08-23 — so a record could
+    say "we lost" and never which half lost it.
+
+    Legs short of their own p_final is a miscalibrated MARGINAL: the prop
+    model is wrong and the singles board is making the same mistake.
+    Legs on target while the TICKETS come in short is the correlation.
+    """
+    conn = _conn()
+    # Legs hit exactly as priced (8 of 16 at p=0.5); tickets do not.
+    _graded(conn, [(False, 0.30, 0.25, [0.5, 0.5], 1, 0) for _ in range(8)])
+    c = parlayledger.calibration(conn)
+    assert c["legs"]["n"] == 16 and c["legs"]["won"] == 8
+    assert abs(c["legs"]["expected"] - 8.0) < 0.01
+    assert abs(c["legs"]["z"]) < 1.0, "on-target legs must not look broken"
+    assert c["tickets"]["won"] == 0
+    assert c["tickets"]["z"] < -1.0, "0 of 8 against a 0.30 joint is a miss"
+
+
+def test_calibration_catches_a_marginal_that_is_simply_wrong():
+    conn = _conn()
+    # Every leg priced at 0.7 and every one loses.
+    _graded(conn, [(False, 0.49, 0.49, [0.7, 0.7], 0, 0) for _ in range(10)])
+    c = parlayledger.calibration(conn)
+    assert c["legs"]["expected"] > c["legs"]["won"]
+    assert c["legs"]["z"] < -2, "legs far under their own number read as fine"
+
+
+def test_a_positive_prior_can_be_shown_to_have_the_wrong_sign():
+    """The third case, which the numbers can tell apart and a person
+    cannot: coming in below even the as-if-unrelated joint means the legs
+    we said move together do not."""
+    conn = _conn()
+    _graded(conn, [(False, 0.40, 0.30, [0.6, 0.6], 1, 0) for _ in range(12)])
+    pos = parlayledger.calibration(conn)["positive_rho"]
+    assert pos["n"] == 12
+    assert pos["expected"] > pos["expected_independent"]
+    assert pos["won"] < pos["expected_independent"]
+    assert pos["z_independent"] is not None
+
+
+def test_the_record_says_what_it_is_a_record_of():
+    """log_board journals rank 1 from every slate whether the screen
+    qualified it or not — the Zone ranks even when nothing clears. Read
+    whole, the first real record was 18 rejects and one recommendation,
+    and the total was being read as the model's performance."""
+    conn = _conn()
+    _graded(conn, [(False, 0.3, 0.25, [0.5, 0.5], 1, 0) for _ in range(6)]
+                  + [(True, 0.3, 0.25, [0.5, 0.5], 2, 1)])
+    q = parlayledger.report(conn)["by_qualified"]
+    assert q["not_qualified"]["graded"] == 6
+    assert q["qualified"]["graded"] == 1 and q["qualified"]["wins"] == 1
+
+
+def test_the_singles_comparison_weighs_the_two_costs_rather_than_ranking():
+    """`singles_better` is a bare sign test, and on the first real record
+    it was true while singles LOST 15.32u against the tickets' 15.98u —
+    so a report reading only the flag announced "the legs were fine and
+    wrapping them was the mistake" about legs that had lost fifteen
+    units. The structure cost 0.66u; the legs cost the rest."""
+    conn = _conn()
+    _graded(conn, [(False, 0.3, 0.25, [0.5, 0.5], 1, 0)])
+    conn.execute("UPDATE parlays SET pnl_units=-15.98, singles_pnl_units=-15.32")
+    conn.commit()
+    sc = parlayledger.report(conn)["singles_comparison"]
+    assert sc["singles_better"] is True, "the old flag still says what it said"
+    assert abs(sc["structure_cost"] - 0.66) < 0.01, sc
+    assert abs(sc["legs_cost"] - 15.32) < 0.01, sc
 
 
 if __name__ == "__main__":

@@ -7410,47 +7410,140 @@ def _parlay_report_cli() -> None:
     z = r["z"]
     print(f"  z {z:+.2f}" if z is not None else "  z —",
           " (a t-statistic on per-ticket P&L; §13 wants 2 or more)")
-    clv = r["avg_leg_clv"]
-    print(f"  leg CLV {clv:+.3f} over {r['leg_clv_n']} leg(s)"
-          if clv is not None else "  leg CLV — (no closing lines captured)")
 
-    # THE QUESTION THAT DECIDES EVERYTHING ELSE.
+    # WHAT THIS RECORD IS A RECORD OF, first, because it is usually not
+    # what it looks like. log_board journals RANK 1 from every slate,
+    # qualified or not — the Zone ranks even when nothing clears — so a
+    # total read whole is mostly constructions the screen declined.
+    q = r.get("by_qualified") or {}
+    shown = [(lbl, q.get(key) or {}) for lbl, key in (
+        ("the slate play (§10.2)", "play"),
+        ("qualified, not the play", "qualified"),
+        ("NOT qualified — shown, not recommended", "not_qualified"))]
+    if any(b.get("graded") for _, b in shown):
+        print("\n  What this is a record OF\n  " + "-" * 46)
+        for label, b in shown:
+            if not b.get("graded"):
+                continue
+            print(f"    {label:<40} {b['graded']:>3} graded  "
+                  f"{b['wins']:>2}W  {b['net_units']:+7.2f}u  "
+                  f"{b['roi'] * 100:+6.1f}%")
+        rejects = (q.get("not_qualified") or {}).get("graded", 0)
+        if rejects and rejects >= n / 2:
+            print(f"\n    {rejects} of {n} are tickets the screen REFUSED. "
+                  f"They are in here")
+            print("    because the page shows what the night offered, not "
+                  "because the")
+            print("    model put its name to them. Read the top line before "
+                  "the total.")
+
+    # THE DIAGNOSTIC THAT SAYS WHICH HALF IS BROKEN.
+    c = r.get("calibration") or {}
+    legs, tick, pos = c.get("legs") or {}, c.get("tickets") or {}, \
+        c.get("positive_rho") or {}
+    if legs.get("n"):
+        print("\n  Did the model's own numbers come true?\n  " + "-" * 46)
+        print(f"    legs      {legs['won']:>3} won of {legs['n']:>3}   "
+              f"model said {legs['expected']:>6.2f}"
+              + (f"   z {legs['z']:+.2f}" if legs.get("z") is not None else ""))
+        if tick.get("n"):
+            line = (f"    tickets   {tick['won']:>3} won of {tick['n']:>3}   "
+                    f"model said {tick['expected']:>6.2f}")
+            if tick.get("z") is not None:
+                line += f"   z {tick['z']:+.2f}"
+            print(line)
+        short = legs["expected"] - legs["won"]
+        if short > 0 and (legs.get("z") or 0) <= -1.5:
+            print("\n    THE LEGS ARE THE PROBLEM. They came in "
+                  f"{short:.1f} short of what the")
+            print("    prop model said they were worth, which is a "
+                  "miscalibrated")
+            print("    marginal — the singles board is making the same "
+                  "mistake, and")
+            print("    no correlation work touches it.")
+        elif tick.get("z") is not None and tick["z"] <= -1.5:
+            print("\n    THE JOINT IS THE PROBLEM. The legs hit at roughly "
+                  "the rate we")
+            print("    gave them and the TICKETS did not, which is the "
+                  "correlation.")
+        elif legs.get("z") is not None:
+            print("\n    Both are inside their error bars on this sample — "
+                  "so far this")
+            print("    is variance, not a broken model.")
+    if pos.get("n"):
+        print(f"\n    Of those, {pos['n']} priced the legs as MOVING "
+              f"TOGETHER:")
+        print(f"      won {pos['won']}   our joint said {pos['expected']:.2f}"
+              f"   as-if-unrelated {pos['expected_independent']:.2f}")
+        zi = pos.get("z_independent")
+        if zi is not None and pos["won"] < pos["expected_independent"] \
+                and zi <= -1.5:
+            print("      Below even the unrelated number: the legs we said "
+                  "move together")
+            print("      do not, and the prior has the wrong SIGN rather "
+                  "than the wrong size.")
+
+    # THE STRUCTURE VS THE LEGS, weighed rather than ranked.
     sc = r["singles_comparison"]
-    print("\n  Same legs, bet as singles" + "\n  " + "-" * 40)
     if sc["n"]:
+        print("\n  Same legs, bet as singles\n  " + "-" * 46)
         print(f"    parlays {sc['parlay_units']:+.2f}u   "
               f"singles {sc['singles_units']:+.2f}u")
-        if sc["singles_better"]:
-            print("    SINGLES WON. On this record the structure is what "
-                  "costs the money —")
-            print("    the legs were fine and wrapping them was the mistake. "
-                  "The repair")
-            print("    is to bet fewer parlays, not to build a better one.")
+        cost = sc.get("structure_cost")
+        legs_cost = sc.get("legs_cost") or 0.0
+        if cost is not None and legs_cost > 0 and cost < legs_cost:
+            print(f"    Wrapping them cost {cost:.2f}u. The legs themselves "
+                  f"lost {legs_cost:.2f}u.")
+            print("    A better parlay model recovers the first number and "
+                  "none of the")
+            print("    second. The legs are where the money went.")
+        elif sc["singles_better"]:
+            print("    Singles did better, and they made money: the legs "
+                  "were fine and")
+            print("    wrapping them was the mistake. Bet fewer parlays "
+                  "rather than")
+            print("    building a better one.")
         else:
             print("    The tickets beat the same legs bet flat, so the "
                   "structure is")
             print("    earning its tax on this sample.")
 
+    clv = r["avg_leg_clv"]
+    if clv is not None:
+        print("\n  Closing line\n  " + "-" * 46)
+        print(f"    leg CLV {clv:+.3f} over {r['leg_clv_n']} leg(s)")
+        if clv < 0:
+            print("    NEGATIVE. The prices we took moved against us before "
+                  "the game —")
+            print("    which is a statement about leg SELECTION and timing, "
+                  "not about")
+            print("    parlays at all. It is the same leg pool the singles "
+                  "board uses.")
+
     if r["loss_codes"]:
-        print("\n  Why the losses lost (§11.1)" + "\n  " + "-" * 40)
+        print("\n  Why the losses lost (§11.1)\n  " + "-" * 46)
         WHAT = {
-            "LEG_ONE_KILLED_IT": "one leg away — variance, not a broken model",
-            "CORRELATION_ERROR": "legs priced as moving together did not",
+            "LEG_ONE_KILLED_IT": "one leg away — the near-miss count",
             "TAX_TOO_HIGH": "singles on the same legs would have paid more",
+            "CORRELATION_ERROR": "RETIRED — see calibration above",
         }
         for row in r["loss_codes"]:
             print(f"    {row['code']:<20} {row['n']:>4}   "
                   f"{WHAT.get(row['code'], '')}")
-        print("\n    CORRELATION_ERROR is the only one of the three that is")
-        print("    a model fault. The other two are the structure and the")
-        print("    price, and they are fixed by betting differently.")
+        if any(row["code"] == "CORRELATION_ERROR" for row in r["loss_codes"]):
+            print("\n    CORRELATION_ERROR rows are from before 2026-08-23, "
+                  "when the code")
+            print("    fired on any split ticket that priced rho + — which "
+                  "on two legs is")
+            print("    just 'one leg missed' under a second name. "
+                  "`--resettle` clears them.")
 
     for label, key in (("By sport", "by_sport"), ("By type", "by_type"),
                        ("By grade", "by_grade")):
         rows = r[key]
         if not rows:
             continue
-        print(f"\n  {label}" + "\n  " + "-" * 40)
+        print(f"\n  {label}\n  " + "-" * 46)
         for row in rows:
             print(f"    {str(row['key']):<12} {row['graded']:>4} graded  "
                   f"{row['wins']:>3}W  {row['net_units']:+7.2f}u  "
