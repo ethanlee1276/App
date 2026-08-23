@@ -35,10 +35,15 @@ def _journal():
     conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
 
     def bet(date, status, pnl, odds=-110, sport="mlb", player="P"):
+        # hit_prob and a close ride along: the calibration block and the
+        # CLV coverage block are two of the surfaces this file checks, and
+        # both are empty without them — a reconciliation test where every
+        # number is 0 reconciles perfectly and proves nothing.
         conn.execute(
             "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
-            "stake_units,stake_dollars,status,category,pnl_units) VALUES "
-            "('x',?,?,?,'hits','OVER',1.5,'DK',?,1.0,10.0,?,'main',?)",
+            "hit_prob,stake_units,stake_dollars,status,category,pnl_units,"
+            "closing_line) VALUES "
+            "('x',?,?,?,'hits','OVER',1.5,'DK',?,0.58,1.0,10.0,?,'main',?,1.6)",
             (sport, date, player, odds, status, pnl))
 
     # Before the epoch: a losing July.
@@ -175,6 +180,57 @@ def test_every_record_block_on_the_page_uses_the_same_window():
         assert d[k]["settled"] == 0, k
 
 
+def test_every_count_on_the_page_reconciles():
+    """Ethan, looking at the deployed page: "you didnt push the mlb
+    reccord back to the 6th. every single reccord and all of that needs
+    to be pushed back. EVERYTHING."
+
+    ALL BETS read 431 while the MLB tab beside it read 625 and the
+    verdict under it read "across 564 graded picks". Three numbers about
+    the same book, on one screen, none of them agreeing.
+
+    So this is not a list of blocks to remember to scope — it is the
+    arithmetic. The tabs must sum to the headline, and every block that
+    counts our settled picks must land on the same total. A block added
+    later that forgets the window fails here without anybody having to
+    think of it.
+    """
+    conn = _journal()
+    conn.execute(
+        "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
+        "stake_units,stake_dollars,status,category,pnl_units,closing_line) "
+        "VALUES ('t','nfl','2026-08-14','QB','hits','OVER',1.5,'DK',-110,"
+        "1.0,10.0,'won','main',0.91,1.6)")
+    conn.execute("UPDATE bets SET hit_prob=0.58 WHERE player='QB'")
+    conn.commit()
+    path = os.path.join(tempfile.mkdtemp(), "record.json")
+    ledger.export_json(conn, path)
+    d = json.load(open(path))
+
+    head = d["overall"]["settled"]
+    assert head == 6, head
+    tabs = sum(d["by_sport"][sp]["overall"]["settled"]
+               for sp in d["tracked_sports"])
+    assert tabs == head, f"tabs sum to {tabs}, headline says {head}"
+    for block, n in (("calibration", d["calibration"]["n"]),
+                     ("clv_coverage", d["clv_coverage"]["settled"]),
+                     ("restated", d["restated"]["overall"]["settled"])):
+        assert n <= head, f"{block} counts {n} against a {head}-pick record"
+    assert d["calibration"]["n"] == head
+
+
+def test_the_verdicts_own_numbers_come_from_the_windowed_calibration():
+    """THE VERDICT's settled tile, its claimed/landed rates and its
+    "across N graded picks" line all read the calibration block. That one
+    slipped through the first pass and was the most visible miss on the
+    page — a 431-pick record explained by a 564-pick calibration."""
+    src = open(os.path.join(ROOT, "engine", "ledger.py"),
+               encoding="utf-8").read()
+    body = _fn(src, "def export_json(")
+    i = body.index('"calibration":')
+    assert "since=since" in body[i:i + 90]
+
+
 def test_the_era_split_still_shows_every_era():
     """The one block that MUST reach back past the epoch. Its entire
     purpose is to show the model's record split at each re-tune — an era
@@ -194,12 +250,30 @@ def test_the_database_still_holds_every_row():
         "SELECT COUNT(*) FROM bets WHERE date < ?", (EPOCH,)).fetchone()[0] == 6
 
 
-def test_the_calibration_chart_is_not_scoped_either():
+def test_the_learning_surfaces_still_read_every_row():
+    """THIS TEST ALSO USED TO ASSERT THE OPPOSITE, for calibration, and
+    that was the most visible miss of the lot: THE VERDICT's settled tile
+    reads the record while its claimed/landed rates and its "across N
+    graded picks" line read calibration, so the page explained a 431-pick
+    record with a 564-pick calibration.
+
+    What stays unscoped is what exists to look BACK across the whole
+    history. The era split's entire purpose is comparing the model before
+    and after each re-tune. The miner is the learning Ethan explicitly
+    asked to keep — "we keep the data and shit for everything from our
+    record so we can still learn" — and it reads the database, which is
+    whole.
+    """
     src = open(os.path.join(ROOT, "engine", "ledger.py"),
                encoding="utf-8").read()
     body = _fn(src, "def export_json(")
-    i = body.index('"calibration":')
-    assert "since=since" not in body[i:i + 120]
+    # THE LINE, not a character window. A 90-character slice here spilled
+    # into the NEXT export key — which is scoped — and failed on its own
+    # first run. Seventh time this suite has made that mistake today.
+    for key in ('"model_eras"', '"loss_patterns"'):
+        i = body.index(key)
+        line = body[i:body.index("\n", i)]
+        assert "since" not in line, f"{key} got scoped: {line}"
 
 
 # --- the disclosure -------------------------------------------------------

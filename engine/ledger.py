@@ -3824,7 +3824,7 @@ HEALTH_BLIND_SPOTS = [
 ]
 
 
-def account_health(conn) -> dict:
+def account_health(conn, since: str | None = None) -> dict:
     """Estimate, per book, how 'sharp' this journal looks to a risk desk.
 
     Books don't publish limit criteria, but the patterns they act on are
@@ -3834,9 +3834,13 @@ def account_health(conn) -> dict:
     limit-risk) — with the drivers and the concrete actions that would
     lower it. It is inference from our own betting record, nothing more:
     no insider knowledge of any book's actual risk rules."""
-    bets = conn.execute(
-        "SELECT * FROM bets WHERE status IN ('won','lost','push') "
-        "AND category='main'").fetchall()
+    q = ("SELECT * FROM bets WHERE status IN ('won','lost','push') "
+         "AND category='main'")
+    args: list = []
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
+    bets = conn.execute(q, args).fetchall()
     by_book: dict[str, list] = {}
     for b in bets:
         by_book.setdefault(b["book"] or "?", []).append(b)
@@ -4350,11 +4354,16 @@ def _parlay_report(conn) -> dict:
         return {"graded": 0, "open": 0, "probation": True}
 
 
-def _edge_rows(conn, category: str = "main") -> list[dict]:
+def _edge_rows(conn, category: str = "main",
+               since: str | None = None) -> list[dict]:
     """Settled bets in the shape the information test wants."""
-    return [dict(r) for r in conn.execute(
-        "SELECT status, hit_prob, odds FROM bets WHERE status IN "
-        "('won','lost') AND category=? AND stake_units > 0", (category,))]
+    q = ("SELECT status, hit_prob, odds FROM bets WHERE status IN "
+         "('won','lost') AND category=? AND stake_units > 0")
+    args: list = [category]
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
+    return [dict(r) for r in conn.execute(q, args)]
 
 
 def record_edge_run(conn, category: str = "main") -> dict | None:
@@ -4480,14 +4489,14 @@ def export_json(conn, path) -> None:
         "by_sport": {sp: sport_report(conn, sp, since=since)
                      for sp in TRACKED_SPORTS},
         "tracked_sports": list(TRACKED_SPORTS),
-        "calibration": calibration(conn),
+        "calibration": calibration(conn, since=since),
         # The same chart scoped to the CURRENT model era — the all-time
         # chart is dominated by picks from gates that no longer exist.
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"]),
         # By market and by horizon: an aggregate hides a model that is hot
         # on one market and cold on another, which is the pair of errors
         # most worth finding.
-        "calibration_splits": calibration_splits(conn),
+        "calibration_splits": calibration_splits(conn, since=since),
         # The selection haircut. Sits beside the calibration chart because
         # it is the same question asked of a different population: that
         # chart grades the probability surface, this grades the SUBSET we
@@ -4526,7 +4535,7 @@ def export_json(conn, path) -> None:
                      "by_sport": {sp: restated_performance(conn, sp,
                                                            since=since)
                                   for sp in TRACKED_SPORTS}},
-        "account_health": account_health(conn),
+        "account_health": account_health(conn, since=since),
         # How much of the record has a real closing line behind it — the
         # honest prerequisite for anything that wants to reason from CLV.
         "clv_coverage": clv_coverage(conn, since=since),

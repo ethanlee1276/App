@@ -281,7 +281,12 @@ def test_the_desk_never_recommends_without_its_reasons():
     # The record carries the bucket.
     LEDGER_SRC = open(os.path.join(ROOT, "engine/ledger.py"),
                       encoding="utf-8").read()
-    assert '"predmarket": predmarket_report(conn),' in LEDGER_SRC
+    # THE BUCKET, NOT THE CALL'S PUNCTUATION. This pinned the line down
+    # to its trailing comma, so it went red when the call gained the
+    # `since=` that windows every record on the page to the same dates.
+    # What this test cares about is that the desk's bucket reaches the
+    # record at all.
+    assert '"predmarket": predmarket_report(conn' in LEDGER_SRC
 
 
 if __name__ == "__main__":
