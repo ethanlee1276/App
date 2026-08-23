@@ -1126,8 +1126,8 @@ function updateAgo() {
       + `is normal.`
     : "";
   el.title = (stale
-    ? "The server hasn’t rebuilt the board in a while — check that the "
-      + "laptop is awake and python3 launch.py is still running."
+    ? "This board hasn’t rebuilt in a while. It catches up on its own — "
+      + "until it does, treat these numbers as old."
     : "How long ago the server last rebuilt this board.") + cadence;
 }
 
@@ -1156,7 +1156,7 @@ function renderDataSource(d) {
   el.innerHTML = `<span class="src-dot"></span>${live ? "Live data" : "Sample data"}`;
   el.title = live
     ? (d.built_at ? `Real data · built ${d.built_at.replace("T", " ")}` : "Real live data")
-    : "Illustrative sample data — run a live build (see LAUNCH.md) for real games";
+    : "Illustrative sample data — these are not real games or real prices";
 }
 
 /* A league whose tuning was fitted somewhere else does not get to bet on
@@ -1475,9 +1475,8 @@ function renderEmptySlate() {
       logs, and this database has
       <b>${gap.players_found || 0}</b> player(s) with any history for tonight’s
       teams — a prop needs three games. Nothing is broken and no odds are
-      wasted; the league just hasn’t been ingested yet.<br><br>
-      Run once, then the board fills on the next refresh:<br>
-      <code>${escapeHtml(gap.fix || "")}</code></div>`;
+      wasted; this league’s game logs just have not been loaded yet, and the
+      board fills on the refresh after they are.</div>`;
     return;
   }
 
@@ -1524,15 +1523,14 @@ function renderEmptySlate() {
   }
   el.innerHTML = state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
-       <div class="es-sub">If <code>launch.py</code> is running, it builds every sport on its next
-       refresh cycle — give it a minute and hit Refresh. Otherwise see LAUNCH.md.</div>`
+       <div class="es-sub">Every sport rebuilds on a refresh cycle — give it a minute
+       and hit Refresh.</div>`
     : live
     ? `<div class="es-icon">${icon("calendar", 30)}</div><div class="es-title">No games on the board right now</div>
        <div class="es-sub">Nothing is scheduled or in progress for this slate yet. Check back closer to
        game time — the board refreshes automatically.</div>`
     : `<div class="es-icon">${icon("stadium", 30)}</div><div class="es-title">No slate loaded</div>
-       <div class="es-sub">Build a live slate (see LAUNCH.md) or run <code>python3 generate.py</code>
-       for the sample board.</div>`;
+       <div class="es-sub">Nothing has been published for this sport yet.</div>`;
   // Nothing else to show; clear the busier sections.
   document.getElementById("games-title").style.display = noProps ? "none" : "";
 }
@@ -2653,7 +2651,7 @@ function preseasonFitHTML(data) {
   const f = (data || {}).fit;
   if (!f || !f.verdict) {
     return `Whether any of it is <i>predictable</i> has not been measured
-      yet — run <code>python3 launch.py --prefit</code>.`;
+      yet, so nothing is claimed either way.`;
   }
   const span = (f.seasons || []).length
     ? ` across ${f.seasons.length} August${f.seasons.length === 1 ? "" : "s"}`
@@ -7480,14 +7478,13 @@ function recHypothesisLab(hl, sport) {
         font-size:.85em;color:var(--text-mute)">· ${escapeHtml(w)}</div>`).join("");
   const empty = (sport && (hl.hypotheses || []).length) ? `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
-      No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The next
-      <code>python3 hypotheses.py</code> run reads every sport’s record —
-      including this one — and proposes wherever the evidence points.</p>` : `
+      No hypothesis touches ${escapeHtml(sport.toUpperCase())} yet. The lab
+      reads every sport’s record — including this one — and proposes
+      wherever the evidence points.</p>` : `
     <p style="padding:12px 14px;margin:0;font-size:.87em;color:var(--text-mute)">
-      The lab is idle. Add <code>ANTHROPIC_API_KEY</code> to secrets.local and
-      run <code>python3 hypotheses.py</code> — the model reads the record’s own
-      summary and proposes slice intersections the miner doesn’t test. Every
-      proposal faces the same statistics as everything else on this page;
+      The lab has nothing open right now. It reads the record’s own summary
+      and proposes slice intersections the miner doesn’t test. Every proposal
+      faces the same statistics as everything else on this page;
       nothing an AI writes here can ever set a probability.</p>`;
   return `
     <div class="section-title">The hypothesis lab
@@ -8396,8 +8393,7 @@ async function renderLab() {
       <div class="es-title">No backtests published yet</div>
       <div class="es-sub">The Lab replays the production model over stored history
       once a week, automatically, as part of the nightly maintenance pass. It
-      appears here after the first run — or immediately with
-      <code>python3 backtest_lab.py --force</code>.</div></div>`;
+      appears here after the first run.</div></div>`;
     return;
   }
   const order = ["mlb", "nfl", "cfb", "nba", "wnba", "ufc"];
@@ -8723,9 +8719,9 @@ async function renderRecord() {
   }
   const unstaked = o.unstaked
     ? `<p class="loading" style="margin-top:10px">${iconMark("dash")}${o.unstaked} older settled pick(s)
-       are held out of this record: a grading bug sized them at 0.00 units, so they were
-       never really bets. Run <code>python3 launch.py --resize-unstaked</code> to stake
-       them at a flat 0.1u and fold the profit (or loss) they produced back in.</p>` : "";
+       are held out of this record: a grading bug sized them at 0.00 units, so they
+       were never really bets. They stay out rather than being quietly restaked at a
+       size nobody chose.</p>` : "";
   const small = o.settled < 100
     ? `<p class="loading" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
        scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
@@ -11894,8 +11890,8 @@ async function renderMemes() {
       <div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No meme-coin data yet</div>
       <div class="es-sub">The launcher polls GeckoTerminal’s new + trending Solana pools and
-      DexScreener’s pair snapshots on every refresh (free, no key). If this persists, run
-      <code>python3 launch.py --memes</code> — it says which feed is declining and why.</div></div>`;
+      DexScreener’s pair snapshots on every refresh (free, no key). If this persists,
+      one of those feeds is declining and the page fills again when it recovers.</div></div>`;
     return;
   }
   setStandaloneSource("DexScreener + GeckoTerminal free feeds",
@@ -12120,7 +12116,7 @@ async function renderMemes() {
       than silently scored as safe. Volume acceleration and the sparklines run off our own
       snapshot tape and need a few sightings of a coin — young boards under-read them
       honestly. The Live chart button opens the venue’s own candle chart for the pool.
-      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; the launcher rescans
+      Updated ${escapeHtml((d.generated_at || "").slice(11, 16))}; this board rescans
       every ~15 seconds (new-coin discovery ~25s — the free feeds’ rate-limit ceiling),
       and this page re-pulls on the same clock without disturbing an open chart.</p>`;
   bindSubtabs(host);
@@ -12193,7 +12189,7 @@ async function renderFantasy() {
        what to run. */
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
-      <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>
+      <div class="es-sub">${escapeHtml((d && d.note) || "This fills once the season’s usage rows — targets, carries, air yards, PPR points — have been ingested. Your own league below does not wait on it.")}</div></div>
       <div class="ff-sync-alone">
         <div class="section-title">Your leagues
           <span class="sub">— these read your own league and do not wait on the
@@ -12889,12 +12885,9 @@ function acctSignInHTML() {
       typed here crosses your network readable by anyone on it — and it is
       usually a password used somewhere else too.
       ${_acctUser.allowed
-        ? `The server was started with <code>QB_ALLOW_INSECURE_LOGIN=1</code>,
-           so it will accept it anyway. That setting removed the refusal,
-           not the risk.`
-        : `Sign in from the computer running the server, or give it an HTTPS
-           address — <code>tailscale serve --bg 8000</code> prints one that
-           works from anywhere.`}</div>` : ""}
+        ? `This server has been set to accept it anyway. That setting removed
+           the refusal, not the risk.`
+        : `Open the site at its <b>https</b> address and sign in there.`}</div>` : ""}
     ${acctFieldsHTML("login")}
     <div class="acct-note">${escapeHtml(_acctNote)}</div>
     <div class="acct-alt">
@@ -13081,8 +13074,7 @@ window.acctAuth = async function (btn, mode) {
     // the server has just been asked it as part of the sync.
     await acctLandAfterAuth(say);
   } catch (e) {
-    say("The live server is not reachable — accounts need the site served "
-        + "by launch.py, not a static copy.");
+    say("The server is not reachable right now — try again in a moment.");
   }
 };
 
@@ -15195,8 +15187,8 @@ window.acctGo = async function (btn, creating) {
         return say((b && b.error) || `Sign-in failed (${r.status}).`);
       }
     } catch (e) {
-      return say("The live server is not reachable — accounts need the site "
-                 + "served by launch.py, not a static copy.");
+      return say("The server is not reachable right now — try again in a "
+                 + "moment.");
     }
   }
   try { localStorage.setItem(ACCT_KEY, JSON.stringify({ name, pin })); } catch (e) {}
@@ -15768,8 +15760,8 @@ async function renderInjuries() {
       ? `College programs have no duty to report, so this feed runs sparse —
          emptiness here is the league’s opacity, not a fault to chase.`
       : `Either nobody in the league carries a designation right now — rare —
-         or the feed declined on the last pull. The launcher retries every
-         refresh, and <code>python3 launch.py --check</code> probes the host.`;
+         or the feed declined on the last pull. It is retried on every
+         refresh.`;
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No injury designations to show</div>
       <div class="es-sub">${note}</div></div>`;
@@ -15801,8 +15793,7 @@ async function renderInjuries() {
       <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These designations are
         ${escapeHtml(ageText(ageS))} old.</b> ESPN’s feed has been declining, so the board is
         being served from the last successful pull — treat every status here as
-        unconfirmed until it clears. Run <code>python3 launch.py --injuries</code> to see
-        the error the feed is returning.</p></div>` : "";
+        unconfirmed until it clears.</p></div>` : "";
 
   const byTeam = {};
   for (const r of parsed) (byTeam[r.team] = byTeam[r.team] || []).push(r);
@@ -15871,7 +15862,7 @@ async function renderStandings() {
   if (!groups.length) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>No standings yet</h3><p>${escapeHtml(d.note
-        || "Run `python3 standings_build.py` once.")}</p></div>`;
+        || "Standings for this sport have not been built yet.")}</p></div>`;
     return;
   }
   const b = d.bracket || {};
@@ -15921,7 +15912,7 @@ async function renderRosters() {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("list", 30)}</div>
       <h3>No roster data for ${escapeHtml(sport.toUpperCase())}</h3>
       <p>${escapeHtml(d.note
-        || "Run `python3 rosters_build.py` once to build this sport’s rosters.")}</p></div>`;
+        || "Rosters for this sport have not been built yet.")}</p></div>`;
     return;
   }
   const q = (state.rosterQuery || "").trim().toLowerCase();
@@ -16126,21 +16117,23 @@ async function renderYahooZone() {
   } catch (e) { zone.innerHTML = ""; return; }
 
   if (!s.app_registered) {
-    zone.innerHTML = `<div class="card">
-      <div class="section-title">Yahoo league
-        <span class="sub">— one free registration, then no password ever</span></div>
-      <p class="rank-help">Yahoo is the only platform here that needs
-        approval, and the only one whose access you can hand back. Register
-        a free app at <b>developer.yahoo.com</b> (any name, permission
-        “Fantasy Sports read”), then put the two values it gives you into
-        <b>secrets.local</b> as <b>YAHOO_CLIENT_ID</b> and
-        <b>YAHOO_CLIENT_SECRET</b>. Restart the server and this panel turns
-        into a connect button.</p>
-      <p class="rank-help">Those identify the APP, not you. On their own
-        they cannot read anybody’s league — a human still has to approve it
-        on Yahoo’s screen.</p></div>`;
+    /* NOTHING. THIS IS A SETUP STEP, NOT A FEATURE.
+
+       It used to render a card telling the reader to register a developer
+       app, paste two values into a config file and restart the server.
+       Ethan, 2026-08-23, with it circled on the live site: "lets get all
+       the little things like this telling ME what to do off the website
+       since this website is live for anyone to use."
+
+       He is right, and it is worse than untidy — every visitor was being
+       handed the operator's to-do list, complete with the names of the
+       settings the server reads. A person who cannot act on an instruction
+       should not be shown one, so until Yahoo is actually connectable this
+       panel does not exist. */
+    zone.innerHTML = "";
     return;
   }
+
   if (!s.connected) {
     zone.innerHTML = `<div class="card">
       <div class="section-title">Yahoo league
@@ -20190,9 +20183,9 @@ async function renderUFC() {
       ? `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} ${escapeHtml(d.card_venue.venue)}${
           d.card_venue.city ? `, ${escapeHtml(d.card_venue.city)}` : ""} — cage size and altitude
           are applied to every method and distance price on this card.</div>`
-      : `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} Venue not set, so cage size and altitude
-          are unchecked — a 25-foot cage raises finishes and altitude pushes them later.
-          Set it with <code>python3 launch.py --card-venue "UFC Apex" "Las Vegas"</code>.</div>`}
+      : `<div class="ls-note" style="margin-bottom:12px">${icon('stadium')} Venue not recorded for this
+          card, so cage size and altitude are unchecked — a 25-foot cage raises finishes and
+          altitude pushes them later. Every price here is set without them.</div>`}
     ${(() => {
       // Fight-by-fight edge table: every PRICED bout on one scannable
       // grid — model vs market vs break-even, and the verdict with its
@@ -20305,10 +20298,10 @@ async function renderUFC() {
       return html || `<div class="section-title">Pass list</div>
         <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
     })()}
-    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Dossiers draft themselves:
-      run <code>python3 ufc_dossiers.py</code> before a card, then review the numbers it prints
-      (red flags block bets until you confirm or delete them). The model refuses any fight
-      missing a dossier. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Every fight is priced
+      off a dossier of measured records, and each one is reviewed before a card — a red flag on
+      a fighter blocks a bet until it is resolved. The model refuses any fight missing a
+      dossier rather than guessing at it. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
 }
 
 /* ============================================================

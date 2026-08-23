@@ -43,16 +43,43 @@ def test_the_build_reports_games_with_no_props_as_a_gap():
     i = BUILD.index('if games and not slate.props:')
     block = BUILD[i:i + 1200]
     assert '"history_gap"' in block, "the gap never reaches the page"
-    for field in ("players_found", "fix", "seasons", "teams"):
+    for field in ("players_found", "seasons", "teams"):
         assert field in block, f"the payload omits {field}"
 
 
 def test_the_fix_command_names_the_league_being_built():
     """`python3 ingest.py nba` on the WNBA board would run for two hours and
-    change nothing about the page you were looking at."""
+    change nothing about the page you were looking at.
+
+    It is now printed only in the TERMINAL — see the test below for why —
+    so this checks the line that still exists rather than the payload
+    field that was removed."""
     i = BUILD.index('if games and not slate.props:')
-    block = BUILD[i:i + 1200]
+    block = BUILD[i:i + 1600]
     assert "ingest.py {args.league}" in block
+    assert '"fix"' not in block, "the command is back in the public payload"
+
+
+def test_the_repair_command_never_reaches_the_public_payload():
+    """Ethan, 2026-08-23, with an operator instruction circled on the live
+    site: "lets get all the little things like this telling ME what to do
+    off the website since this website is live for anyone to use."
+
+    history_gap is served to every visitor. It carried the shell command
+    that repairs the gap, and the page printed it in a <code> block — so
+    the site handed its own to-do list to people who cannot run it and
+    should never have been shown it. The instruction belongs in the
+    terminal, where the person who can act on it is standing, and the
+    print below still carries it."""
+    i = BUILD.index('if games and not slate.props:')
+    block = BUILD[i:i + 1600]
+    payload = block[block.index('out["history_gap"]'):]
+    payload = payload[:payload.index("}")]
+    assert "python3" not in payload and "ingest.py" not in payload, (
+        "the payload is instructing the reader again")
+    assert 'print(f"    Fix: python3 ingest.py' in BUILD, (
+        "the terminal lost the instruction too — this was a move, not a "
+        "deletion")
 
 
 def test_it_only_fires_when_there_are_games():
@@ -84,10 +111,17 @@ def test_the_page_renders_the_gap_even_though_games_exist():
         "the history gap is checked after the early return that skips it"
 
 
-def test_the_message_carries_the_command():
+def test_the_message_says_what_is_missing_without_issuing_an_order():
+    """It used to print the repair command. What a READER needs is the two
+    facts underneath it: this is a data gap, not a verdict on the games,
+    and it clears on its own."""
     fn = _empty_fn()
-    assert "gap.fix" in fn and "<code>" in fn
-    assert "escapeHtml(gap.fix" in fn, "a build-supplied string is injected raw"
+    block = fn[fn.index("state.data.history_gap"):]
+    assert "gap.fix" not in fn, "the command is back on the page"
+    assert "<code>" not in block, "something is still being quoted as a shell line"
+    assert "have not been loaded yet" in block
+    assert "fills on the refresh" in block, (
+        "nothing tells the reader it resolves without them")
 
 
 def test_the_message_does_not_blame_the_model():

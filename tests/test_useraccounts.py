@@ -616,7 +616,13 @@ def test_the_page_warns_before_the_password_is_typed():
     i = APP.index("function acctSignInHTML")
     body = APP[i:APP.index("\nwindow.acctAuth", i)]
     assert "_acctUser.insecure" in body or "insecure" in body
-    assert "tailscale serve" in body
+    # It used to assert the copy printed `tailscale serve --bg 8000`,
+    # which is an instruction only the operator can act on and came off
+    # the public site on 2026-08-23. What a reader needs is the same
+    # thing it was there to give them: somewhere safe to sign in instead
+    # of a dead end.
+    assert "https" in body, "the warning refuses without offering a way through"
+    assert "tailscale" not in body and "python3" not in body
     # And the warning still shows when the override is on, worded for it.
     assert "_acctUser.allowed" in body
     assert "not the risk" in body

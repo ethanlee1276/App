@@ -283,8 +283,15 @@ def test_the_note_distinguishes_never_measured_from_measured_and_null():
     """A block that just stays quiet makes "we checked and there is
     nothing" look identical to "we never checked"."""
     b = _fn("preseasonFitHTML")
-    assert "--prefit" in b
+    # It used to check for the string "--prefit", because the copy named
+    # the command that runs the measurement. That instruction came off the
+    # public site on 2026-08-23 (see tests/test_no_operator_copy.py), and
+    # it was never the property this test was about: what matters is that
+    # the three states stay distinguishable — never measured, measured and
+    # insufficient, measured and negative.
+    assert "has not been measured" in b, "never-measured lost its own wording"
     assert '"insufficient"' in b and '"no"' in b
+    assert "python3" not in b, "the command is back on the page"
 
 
 def test_the_page_says_the_number_is_the_book_s():

@@ -429,11 +429,18 @@ def main() -> None:
         # league had never been ingested. Say which of the two it is — here
         # in the terminal, and on the page via `history_gap` below.
         if games and not slate.props:
+            # NO `fix` COMMAND IN THE PAYLOAD. This dict is served to the
+            # public site, and it used to carry the shell command that
+            # repairs the gap — which the page then printed, in a <code>
+            # block, to every visitor. Ethan, 2026-08-23: "lets get all
+            # the little things like this telling ME what to do off the
+            # website since this website is live for anyone to use." The
+            # instruction still prints below, in the terminal, where the
+            # person who can act on it is standing.
             out["history_gap"] = {
                 "teams": sorted(teams),
                 "players_found": len(hist),
                 "seasons": recent_seasons(args.league, args.date),
-                "fix": f"python3 ingest.py {args.league} --seasons 2021-2026",
             }
             print(f"\n⚠️  {len(games)} {args.league.upper()} game(s) on the "
                   f"schedule and NO props to build.")
