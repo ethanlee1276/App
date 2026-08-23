@@ -415,6 +415,32 @@ def test_the_three_lists_share_one_definition_of_that_door():
         "a list stopped using the shared definition")
 
 
+def test_a_shared_game_bet_link_opened_cold_is_not_a_blank_page():
+    """MEASURED, not reasoned about. Opening `#prop/game|…` with the
+    board fetch blocked rendered an EMPTY view, while the same link to a
+    player prop rendered "That pick is not on tonight's board" correctly.
+
+    `initialView()` routes a deep link before `load()` has answered, so
+    `state.data` is still null — and `allProps()` guards that while
+    `state.data.game_bets` on the line above it did not. The throw was
+    silent: renderPropPage runs inside document.startViewTransition,
+    where an exception becomes a rejected promise the browser swallows.
+    A reader following a shared link got a blank page and the console
+    said nothing, which is the same shape as the thirteen-day team-form
+    bug.
+
+    This is the link Ethan actually shares."""
+    i = APP.index("function renderPropPage(")
+    head = APP[i:APP.index("const r = allProps()", i)]
+    assert "(state.data || {}).game_bets" in head, (
+        "a cold deep link to a game bet dereferences null and renders "
+        "nothing at all")
+    # The player-prop path was already safe because allProps() guards;
+    # that is what made the two links behave differently.
+    j = APP.index("function allProps(")
+    assert "state.data || {}" in APP[j:APP.index("\n}", j)]
+
+
 def test_the_peek_is_wired_to_both_mouse_and_keyboard():
     """A card you can click is a control, and a control that only answers
     a mouse is not finished — the same rule the prop doors already keep."""

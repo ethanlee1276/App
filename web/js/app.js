@@ -1363,7 +1363,8 @@ async function renderFutures() {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">No season to project</div>
       <div class="es-sub">${escapeHtml((d && d.note)
-        || "This sport has no futures board yet — run futures_build.py to make one.")}</div></div>`;
+        || "This sport has no futures board yet. It fills once a season is "
+           + "under way and the season-long markets are priced.")}</div></div>`;
     return;
   }
   host.innerHTML = futuresDoctrine(d) + futuresTeamTable(d) + futuresTotals(d)
@@ -5229,7 +5230,19 @@ function renderPropPage() {
   const host = document.getElementById("prop-body");
   if (!host) return;
   if (String(state.propId || "").startsWith("game|")) {
-    const b = (state.data.game_bets || [])
+    /* `(state.data || {})`, and this one is REACHABLE. A shared game-bet
+       link — #prop/game|… — is opened cold, and `initialView()` routes
+       to it before `load()` has answered, so `state.data` is still null.
+       `state.data.game_bets` then threw, and the throw was SILENT:
+       renderPropPage runs inside document.startViewTransition, where an
+       exception becomes a rejected promise the browser swallows. The
+       reader got a blank page and the console said nothing.
+
+       Measured: opening #prop/game|… with the board fetch blocked
+       rendered an empty view, while the same link to a PLAYER prop
+       rendered "That pick is not on tonight's board" correctly — because
+       `allProps()` already guards and this line did not. */
+    const b = ((state.data || {}).game_bets || [])
       .find((x) => gameBetId(x) === state.propId);
     if (b) return renderGameBetPage(b);
   }
@@ -9366,7 +9379,11 @@ function scanSection(title, sub, rows, rowFn, emptyText) {
 function renderScanner() {
   const host = document.getElementById("scanner-body");
   if (!host) return;
-  const scan = state.data.market_scan || {};
+  // Guarded like its neighbours in the same cascade. renderAll() returns
+  // early on null data so this is not reachable through it today, but the
+  // stake input re-calls this function directly and one unguarded
+  // dereference in a render is what the prop page just paid for.
+  const scan = (state.data || {}).market_scan || {};
   const arbs = scan.arbs || [], middles = scan.middles || [], lows = scan.low_holds || [];
 
   // The scanner feeds on price DISAGREEMENT, which mostly appears when one
