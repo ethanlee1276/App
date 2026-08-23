@@ -308,7 +308,18 @@ def test_the_harness_runs_against_the_real_pages():
     # is that the run produced verdicts and that anything it DID measure
     # measured cleanly.
     assert v["lines"], "no verdicts came back"
+    # DRIFT ONLY, which is what the paragraph above actually says. This
+    # asserted on a list that also carried nav misses, so on a machine
+    # with no fantasy build — no Calendar sub-tab, no draft row to click —
+    # two screens the sweep could not OPEN were reported as two layouts
+    # that had gone wrong. Those are opposite findings: one is a data gap
+    # on the box, the other is a bug on the site.
     assert not v["drift"], f"drift on the real pages: {v['drift']}"
+    # …and an unreachable screen is still worth failing on if EVERY screen
+    # is unreachable, because then the sweep measured nothing and passing
+    # says so about nothing.
+    assert v["measured"] or v["nodata"], (
+        f"nothing was reached at all: {v['unreachable'][:4]}")
 
 
 if __name__ == "__main__":

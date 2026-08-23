@@ -3260,7 +3260,24 @@ function renderSlateHorizon() {
 function renderGames() {
   const games = [...(state.data.games || [])];
   const host = document.getElementById("games");
-  if (!games.length) { host.innerHTML = ""; return; }
+  if (!games.length) {
+    /* TWO DEAD BUTTONS ON AN EMPTY BOARD. This early return skipped the
+       `syncStripArrows()` call further down, so on any night with no
+       games — the offseason, a sport with no slate, a build that has not
+       run yet — the strip's back and forward arrows kept the visible
+       state they have in the markup and scrolled nothing. Found by
+       tests/test_deadcontrols.py, which clicks every control on all 23
+       views and asks whether anything moved: "board: games-prev,
+       games-next".
+
+       Ethan's own rule, 2026-08-20: "Do not leave fake buttons. If
+       something appears interactive, it must behave like an interactive
+       component." An arrow beside an empty strip is the purest form of
+       one. */
+    host.innerHTML = "";
+    if (typeof syncStripArrows === "function") syncStripArrows();
+    return;
+  }
   // Live games float to the front of the strip; behind them, the sort
   // control decides — kickoff order (the render's default) or most picks.
   const rank = (g) => ((g.live || {}).state === "live" ? 0 : (g.live || {}).state === "final" ? 2 : 1);
@@ -10873,7 +10890,21 @@ window.mbBulkFile = function (input) {
 };
 window.mbBulkPaste = function () {
   const ta = document.getElementById("mb-bulk-text");
-  if (ta && ta.value.trim()) mbBulkShow(ta.value);
+  const text = ta ? ta.value.trim() : "";
+  if (text) return mbBulkShow(text);
+  /* A SILENT NO-OP IS A FAKE BUTTON. This returned without a word when
+     the box was empty, so tapping Preview did nothing and explained
+     nothing — found by tests/test_deadcontrols.py, which clicks every
+     control on every view and asks whether anything moved.
+
+     Not disabled instead: a greyed-out button with no reason beside it
+     is the same dead end wearing a different colour, and the box above
+     it is where the answer is. Saying what is missing costs one line and
+     teaches the control. */
+  const box = document.getElementById("mb-bulk-preview");
+  if (box) box.innerHTML = `<div class="mb-import-note">Paste your rows into
+    the box above first — one bet per line, or use Choose CSV.</div>`;
+  if (ta) ta.focus();
 };
 window.mbBulkCommit = function () {
   if (_mbPending && _mbPending.length) {

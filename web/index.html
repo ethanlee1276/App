@@ -531,10 +531,25 @@
            WHEN — and a static title cannot say when. -->
       <div id="slate-horizon"></div>
       <div class="games-outer" id="games-outer">
+        <!-- HIDDEN UNTIL THERE IS SOMEWHERE TO SCROLL. `syncStripArrows()`
+             reveals these and it is the ONLY thing that draws them, so
+             the default has to be the safe state: on a night with no
+             games renderGames() returns before that function is ever
+             reached, and an arrow that defaults to visible is then two
+             dead buttons on the board — which is what
+             tests/test_deadcontrols.py found on 2026-08-23.
+
+             An inline style rather than the `hidden` attribute: the
+             attribute is `display:none` from the user-agent sheet and
+             `.strip-arrow { display: grid }` outranks it, so `hidden`
+             here would do nothing at all. An inline style is what
+             `style.display = ""` clears. -->
         <button class="strip-arrow prev" id="games-prev" aria-label="Scroll games back"
+          style="display:none"
           ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg></button>
         <div class="games-scroller hero-games" id="games"></div>
         <button class="strip-arrow next" id="games-next" aria-label="Scroll games forward"
+          style="display:none"
           ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg></button>
       </div>
 

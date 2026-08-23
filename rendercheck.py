@@ -551,8 +551,17 @@ def run(width: int, port: int, shots: str = "") -> list[dict]:
 def verdicts(rows: list[dict]) -> dict:
     """Fold the raw measurements into the three verdicts, per check."""
     spec = {row[0]: {c[0]: c for c in row[4]} for row in SCREENS}
+    # `unreachable` IS NOT `drift`, and folding them together made this
+    # harness lie in one direction. Drift means "we got to the screen and
+    # the layout was not what the spec says". A nav miss means "we never
+    # got there" — and on a machine with no fantasy build there is no
+    # Calendar sub-tab and no draft row to click, so two screens are
+    # unreachable for a reason that has nothing to do with their layout.
+    # Reported apart, and counted, because coverage is part of a sweep's
+    # result: a run that reached three screens and liked all three is not
+    # the same finding as one that reached twenty-three.
     out = {"measured": 0, "nodata": 0, "off": 0, "slow": 0,
-           "crashed": False, "drift": [], "lines": []}
+           "crashed": False, "drift": [], "unreachable": [], "lines": []}
     for r in rows:
         head = f"{r['name']} @ {r['width']}"
         if r.get("crashed"):
@@ -571,7 +580,7 @@ def verdicts(rows: list[dict]) -> dict:
             out["lines"].append(
                 ("nav", head, f"no way in — {r.get('missing_nav')} is not on "
                               f"the page"))
-            out["drift"].append(f"{head}: nav")
+            out["unreachable"].append(f"{head}: {r.get('missing_nav')}")
             continue
         if not r.get("settled") and not r.get("present"):
             # Slow machine or deleted layout — indistinguishable from
@@ -757,6 +766,17 @@ def main(argv=None) -> int:
               "Re-run before")
         print("  reading anything into it.")
         return 1
+    # UNREACHABLE FIRST, because it bounds everything below it. A screen
+    # the sweep could not open is a screen it has said nothing about, and
+    # a clean drift line under twenty unreachable screens is a clean bill
+    # of health for three of them.
+    if v["unreachable"]:
+        print(f"\n  UNREACHABLE: {len(v['unreachable'])} — no way in from "
+              "this machine's data — "
+              + ", ".join(v["unreachable"][:4])
+              + (" …" if len(v["unreachable"]) > 4 else ""))
+        print("  Not drift: the layout was never seen, so nothing is "
+              "claimed about it.")
     if v["drift"]:
         print(f"\n  DRIFT: {len(v['drift'])} — "
               + ", ".join(v["drift"][:6])
