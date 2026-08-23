@@ -81,6 +81,24 @@ def _js():
                 encoding="utf-8").read()
 
 
+def _fn(src, decl):
+    """One function's source, cut at the next top-level declaration.
+
+    NEVER A FIXED SLICE. `renderPlayers` is the function this suite keeps
+    slicing, it is the one that keeps growing, and a window around it has
+    now produced five false failures — the last of them for a COMMENT
+    added inside it. A test that goes red when a file gets longer teaches
+    people to stop reading it.
+    """
+    i = src.index(decl)
+    j = len(src)
+    for end in ("\nfunction ", "\nasync function ", "\nconst ", "\n/* "):
+        k = src.find(end, i + len(decl))
+        if k != -1:
+            j = min(j, k)
+    return src[i:j]
+
+
 # --- the reader -----------------------------------------------------------
 
 def test_a_fighter_is_findable():
@@ -103,10 +121,20 @@ def test_a_hit_has_no_club_and_carries_its_division_instead():
     assert h["position"] == "light heavyweight"
 
 
-def test_the_deeper_record_leads_among_equals():
+def test_match_quality_leads_and_the_deeper_record_breaks_the_tie():
+    """Two keys, in this order. This test used to assert the fight count
+    alone, which was the whole contract before the search learned to
+    rank a match — and a 15-fight veteran who merely CONTAINS what you
+    typed must not sit above the man whose name starts with it."""
     hits = fighters.search("a", path=_book())
-    assert [h["player"] for h in hits][:2] == ["Islam Makhachev",
-                                               "Alex Pereira"]
+    assert hits[0]["player"] == "Alex Pereira"      # starts with it
+    assert hits[0]["rank"] < hits[1]["rank"]
+    # Among fighters the query fits equally well, the deeper record wins.
+    book = {"Deep Vet": {"name": "Deep Vet", "ufc_fights": 12},
+            "New Guy": {"name": "New Guy", "ufc_fights": 1}}
+    ranked = fighters.search("e", path=_book(book))
+    assert [h["rank"] for h in ranked] == [1, 1]
+    assert [h["player"] for h in ranked] == ["Deep Vet", "New Guy"]
 
 
 def test_a_missing_store_searches_no_fighters_rather_than_failing():
@@ -202,8 +230,7 @@ def test_a_fighter_card_is_never_asked_for_game_logs():
     """A request that can only come back empty, whose empty answer reads
     as "we know nothing about him"."""
     js = _js()
-    i = js.index("async function renderPlayers(")
-    body = js[i:i + 9000]
+    body = _fn(js, "async function renderPlayers(")
     assert 'if (m.sport === "ufc") return;' in body
 
 
@@ -250,10 +277,41 @@ def test_the_corner_block_reads_both_payload_shapes():
 
 def test_a_row_with_no_club_draws_no_team_chip():
     js = _js()
-    i = js.index("async function renderPlayers(")
-    body = js[i:i + 9000]
+    body = _fn(js, "async function renderPlayers(")
     assert "${m.team ? `${teamMarkIn(" in body
     assert "tracked fight(s)" in body
+
+
+# --- the grade-evidence false alarm --------------------------------------
+
+def test_a_ufc_bet_is_never_audited_against_the_games_table():
+    """Ethan's droplet, 2026-08-23: "11 settled game bet(s) have no final
+    score behind them", every one of them a UFC pick.
+
+    A UFC bet is stored with market='moneyline' and graded by settle_ufc
+    from the MMA results feed. There has never been a `games` row behind
+    one and there never will be — so the check could not clear, and it
+    named `--settle all` as the fix, which cannot help. Third time this
+    exact confusion has cost something, which is why the answer now lives
+    at module scope rather than inside whichever audit was written last.
+    """
+    from engine import ledger
+    assert "ufc" in ledger.GRADED_ELSEWHERE
+    assert "predmarket" in ledger.GRADED_ELSEWHERE
+    src = open(os.path.join(ROOT, "doctor.py"), encoding="utf-8").read()
+    i = src.index("def check_premature_evidence(")
+    body = src[i:src.index("\ndef ", i + 10)]
+    assert "GRADED_ELSEWHERE" in body, \
+        "the games-table audit sweeps up buckets graded elsewhere again"
+
+
+def test_the_no_show_sweep_and_the_audit_share_one_answer():
+    """Two copies of this list is how the second one gets missed."""
+    from engine import ledger
+    src = open(os.path.join(ROOT, "engine", "ledger.py"),
+               encoding="utf-8").read()
+    assert src.count('("predmarket", "ufc")') == 1, \
+        "the list is written twice again"
 
 
 if __name__ == "__main__":

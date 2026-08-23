@@ -206,11 +206,13 @@ def test_an_empty_board_is_explained_not_apologised_for():
     apology is reserved for an actual search. Verified in Chromium: the
     NBA page draws 169 characters of explanation against the sample
     data's empty board."""
-    js = _js()
-    i = js.index("async function renderPlayers(")
-    # 4000 → 9000 on 2026-08-18: the league-wide search branch landed
-    # ahead of the empty-board copy and pushed it past the old window.
-    body = js[i:i + 9000]
+    # THE FUNCTION, NOT A NUMBER. This window went 4000 -> 9000 on
+    # 2026-08-18 when the league-wide search branch landed ahead of the
+    # empty-board copy, and blew past 9000 on 2026-08-23 when a COMMENT
+    # was added inside it. Two false failures for one contract that never
+    # changed. `_fn` cuts at the next top-level declaration, so the test
+    # goes red when the ORDER is wrong and never when the file grows.
+    body = _fn(_js(), "async function renderPlayers(")
     # Pinned by the apology's CODE form (curly quote + the interpolation
     # start), not its words — the first draft of this test matched the
     # words inside the fix's own comment, the same trap this suite has
@@ -232,8 +234,7 @@ def test_the_search_reaches_the_league_not_just_the_board():
     row a searched player rides in on must never register as a priced
     market — an unpriced chip would draw the pick block."""
     js = _js()
-    i = js.index("async function renderPlayers(")
-    body = js[i:i + 9000]
+    body = _fn(js, "async function renderPlayers(")
     assert body.index("leagueSearch(q)") < body.index("rosterMatches(q)")
     assert body.count("!== q) return") >= 2, "the stale-keystroke guard"
     j = js.index("function profileHTML(")

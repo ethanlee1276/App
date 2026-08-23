@@ -37,6 +37,29 @@ DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "ledger.db"
 #: failure would be silent in both places at once.
 GAME_MARKETS = ("moneyline", "total", "spread", "team_total")
 
+#: Buckets that DO NOT grade from the history database, whatever market
+#: name they wear.
+#:
+#: Both put something other than a player in the `player` column and both
+#: grade somewhere else entirely: `predmarket` carries an exchange ticker
+#: and is settled by resolve_predmarket against the exchange's own
+#: settlements; `ufc` carries a fighter no player_game_logs row will ever
+#: name and is settled by settle_ufc from the MMA results feed. A UFC pick
+#: is also stored with market='moneyline', so every audit that selects on
+#: GAME_MARKETS sweeps it up.
+#:
+#: THIS IS THE THIRD TIME THAT HAS COST SOMETHING. The no-show sweep
+#: offered to void 104 live desk tickets as scratched lineup players
+#: (2026-08-18). `why_open` aged 130 September contracts off their journal
+#: date and called them stuck (2026-08-23). And the doctor's grade-evidence
+#: check looked for a `games` row behind 11 settled UFC bets — there has
+#: never been one, there never will be, and it named `--settle all` as the
+#: fix, which cannot help. Every one of those was an audit asking a
+#: question that is not true of these two buckets, so the answer lives at
+#: module scope where the next audit will find it rather than inside
+#: whichever function was written last.
+GRADED_ELSEWHERE = ("predmarket", "ufc")
+
 # ``category`` separates the headline record ('main' — picks we stand
 # behind) from measurement-only buckets ('longshot' — the HR board, tracked
 # to learn whether it finds value, never mixed into the record). It is part
@@ -2254,7 +2277,7 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
     # this sweep saw "no stat row" and voided REAL open positions — found
     # 2026-08-18 when the doctor promised to void 104 live desk tickets
     # as scratched lineup players.
-    NEVER_NOSHOW = ("predmarket", "ufc")
+    NEVER_NOSHOW = GRADED_ELSEWHERE
     day_state: dict = {}
     day_players: dict = {}
     voided = 0

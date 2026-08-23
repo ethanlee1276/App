@@ -94,16 +94,22 @@ def search(q: str, limit: int = 12, path: str | None = None) -> list[dict]:
     neither. ``position`` carries his division, which is the thing that
     actually belongs in that slot on the row.
     """
-    q = (q or "").strip().lower()
+    from ..playersearch import rank as _rank
+    q = (q or "").strip()
     if not q:
         return []
     hits = []
     for name, d in load(path).items():
-        if q not in name.lower():
+        # The same matcher the leagues use. A fighter's name is where an
+        # exact-spelling search hurts most — "Kauê", "Ilia Topuria",
+        # "Khamzat" — and a fight card is the one place a reader is
+        # certain to be typing a name they have only ever heard.
+        got = _rank(name, q)
+        if got is None:
             continue
         b = brief(d)
         hits.append({
-            "player": name, "sport": "ufc", "team": "",
+            "player": name, "sport": "ufc", "team": "", "rank": got,
             "position": str(b.get("division") or "").replace("_", " "),
             # The count the row prints. UFC fights are what we have
             # STATS for; the career number rides in the brief beside it.
@@ -112,5 +118,8 @@ def search(q: str, limit: int = 12, path: str | None = None) -> list[dict]:
         })
     # Deepest record first among equals — a 12-fight veteran is the more
     # likely lookup than a debutant with the same surname.
-    hits.sort(key=lambda h: (-h["games"], h["player"].lower()))
+    # Match quality first, then the deeper record among equals — a
+    # 12-fight veteran is the likelier lookup than a debutant sharing a
+    # surname, but never over a man whose name was actually typed.
+    hits.sort(key=lambda h: (h["rank"], -h["games"], h["player"].lower()))
     return hits[:max(0, int(limit))]

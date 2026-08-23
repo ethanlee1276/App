@@ -5867,12 +5867,29 @@ async function renderPlayers() {
           m.sport === "ufc" ? m.fighter : playerStats(m.player));
         const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
         const leagues = [...new Set(hits.map((m) => m.sport).filter(Boolean))];
+        /* SAY WHEN THESE ARE GUESSES. The search reaches past an exact
+           spelling now — swapped first and last name, a missing accent,
+           a wrong letter — which is what stops an empty page for a name
+           typed from memory. But a corrected spelling presented as though
+           it were what you asked for is its own kind of lying, and the
+           heading has to say which it is.
+
+           RANK 3 ONLY. Rank 2 is every word you typed starting a word of
+           the name — "ramirez jose" for José Ramírez — and that is not a
+           guess, it is his name typed backwards. Calling that a "closest
+           match" would apologise for finding exactly the right man. */
+        const guessed = hits.length && hits.every((m) => (m.rank || 0) >= 3);
         host.innerHTML = `
-          <div class="section-title minor">Found across every league
-            <span class="sub">— nothing priced on tonight’s
-            ${escapeHtml(String(state.sport || "").toUpperCase())} board for
-            “${escapeHtml(state.search)}”, so this is what we store on
-            ${drawn.length + rest.length > 1 ? "them" : "him"}${
+          <div class="section-title minor">${
+            guessed ? "Closest matches" : "Found across every league"}
+            <span class="sub">— ${guessed
+              ? `nothing we hold is spelled exactly “${escapeHtml(state.search)}”,
+                 so ${drawn.length + rest.length > 1 ? "these are the nearest names"
+                                                     : "this is the nearest name"}`
+              : `nothing priced on tonight’s
+                 ${escapeHtml(String(state.sport || "").toUpperCase())} board for
+                 “${escapeHtml(state.search)}”, so this is what we store on
+                 ${drawn.length + rest.length > 1 ? "them" : "him"}`}${
               leagues.length
                 ? `. Matches in ${leagues.map((l) =>
                     escapeHtml(LEAGUE_LABEL[l] || l.toUpperCase())).join(", ")}`

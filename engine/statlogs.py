@@ -126,6 +126,72 @@ def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
         conn.close()
 
 
+#: How long a league's name list stays good. Built only when a search
+#: MISSES, so on a healthy query it is never built at all; a name that
+#: first appears within the next quarter of an hour is one keystroke late,
+#: which is a trade any search box makes.
+NAME_INDEX_TTL = 900
+_NAME_INDEX: dict = {}
+
+
+def _name_index(conn, sport: str) -> list[str]:
+    """Every name this league has ever logged.
+
+    Only reached on a miss. The `LIKE` in `_ranked_names` is what the
+    database can answer with an index and it answers the ordinary case;
+    this is for the ones it cannot see at all — an accent in the stored
+    spelling, the words typed in the other order, a letter wrong — where
+    the reader is already looking at an empty page and a slower answer
+    beats no answer.
+    """
+    import time
+    hit = _NAME_INDEX.get(sport)
+    now = time.time()
+    if hit and now - hit[0] < NAME_INDEX_TTL:
+        return hit[1]
+    names = [r[0] for r in conn.execute(
+        "SELECT DISTINCT player FROM player_game_logs WHERE sport=?",
+        (sport,)) if r[0]]
+    _NAME_INDEX[sport] = (now, names)
+    return names
+
+
+def _ranked_names(conn, sport: str, q: str, limit: int) -> dict:
+    """{name: rank} — the substring the index can find, then the rest.
+
+    Ethan, 2026-08-23: "if you dont type the players name in exactly, they
+    dont come up at all which makes it feel broken." It was: the query was
+    one `LIKE '%q%'`, so a circumflex in the stored name, a hyphen, the
+    first and last name typed the other way round, or a single wrong
+    letter each returned nothing whatsoever — and nothing on the page
+    could tell that apart from "we have never heard of him".
+    """
+    from .playersearch import rank
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT DISTINCT player FROM player_game_logs "
+            "WHERE sport=? AND player LIKE ? LIMIT ?",
+            (sport, f"%{q}%", int(limit) * 4)):
+        got = rank(r[0], q)
+        if got is not None:
+            out[r[0]] = got
+    # ANY hit at all ends it, not `limit` of them. Most real searches
+    # return one or two names, so a "did we fill the page" test would
+    # have built the full-scan index on almost every successful query —
+    # the expensive path running constantly to serve the case it was not
+    # for. Ethan's complaint is the empty result, and that is exactly
+    # when this falls through.
+    if out:
+        return out
+    for name in _name_index(conn, sport):
+        if name in out:
+            continue
+        got = rank(name, q)
+        if got is not None:
+            out[name] = got
+    return out
+
+
 def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
     """One league's hits on an already-open connection.
 
@@ -133,12 +199,23 @@ def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
     once per sport — five connections to answer one keystroke, on a box
     with one core, is a cost the page pays on every letter typed.
     """
+    ranked = _ranked_names(conn, sport, q, limit)
+    if not ranked:
+        return []
+    # HOW WELL IT MATCHES FIRST, how recently he played second. Recency is
+    # the right tiebreak between two men who match equally well — a
+    # current starter over a 2021 namesake — and the wrong first key
+    # entirely: it would put a guessed spelling from last night above the
+    # exact name from last week.
+    names = sorted(ranked, key=lambda n: (ranked[n], n))[:int(limit) * 3]
+    marks = ", ".join("?" for _ in names)
     rows = conn.execute(
-        "SELECT player, COUNT(DISTINCT game_id) AS games, "
-        "MAX(season || '-' || period) AS last "
-        "FROM player_game_logs WHERE sport=? AND player LIKE ? "
-        "GROUP BY player ORDER BY last DESC, games DESC LIMIT ?",
-        (sport, f"%{q}%", int(limit))).fetchall()
+        f"SELECT player, COUNT(DISTINCT game_id) AS games, "
+        f"MAX(season || '-' || period) AS last "
+        f"FROM player_game_logs WHERE sport=? AND player IN ({marks}) "
+        f"GROUP BY player ORDER BY last DESC, games DESC",
+        (sport, *names)).fetchall()
+    rows = sorted(rows, key=lambda r: ranked[r["player"]])[:int(limit)]
     out = []
     for r in rows:
         # The team he was LAST seen with — the GROUP BY above would
@@ -184,7 +261,7 @@ def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
         # board, all of which are keyed by abbreviations that collide
         # across leagues (CIN, ATL, SF, TB).
         out.append({"player": r["player"], "games": int(r["games"]),
-                    "sport": sport,
+                    "sport": sport, "rank": ranked[r["player"]],
                     "team": (t["team"] if t else "") or "",
                     "position": (t["position"] if t else "") or "",
                     "headshot": face})

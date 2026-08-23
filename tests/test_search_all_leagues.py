@@ -64,6 +64,24 @@ def _js():
                 encoding="utf-8").read()
 
 
+def _fn(src, decl):
+    """One function's source, cut at the next top-level declaration.
+
+    NEVER A FIXED SLICE. `renderPlayers` is the function this suite keeps
+    slicing, it is the one that keeps growing, and a window around it has
+    now produced five false failures — the last of them for a COMMENT
+    added inside it. A test that goes red when a file gets longer teaches
+    people to stop reading it.
+    """
+    i = src.index(decl)
+    j = len(src)
+    for end in ("\nfunction ", "\nasync function ", "\nconst ", "\n/* "):
+        k = src.find(end, i + len(decl))
+        if k != -1:
+            j = min(j, k)
+    return src[i:j]
+
+
 # --- the search itself ----------------------------------------------------
 
 def test_an_nfl_name_is_found_while_standing_on_the_wnba_tab():
@@ -194,14 +212,12 @@ def test_a_hits_logs_come_from_that_hits_league():
     body = js[i:i + 700]
     assert "leagueLogs(player, sport)" in js[i:i + 120]
     assert "sport || state.sport" in body
-    j = js.index("async function renderPlayers(")
-    assert "leagueLogs(m.player, m.sport)" in js[j:j + 9000]
+    assert "leagueLogs(m.player, m.sport)" in _fn(js, "async function renderPlayers(")
 
 
 def test_a_searched_row_carries_its_league_into_the_profile_card():
     js = _js()
-    j = js.index("async function renderPlayers(")
-    assert "sport: m.sport" in js[j:j + 9000], \
+    assert "sport: m.sport" in _fn(js, "async function renderPlayers("), \
         "the head-only row dropped its league"
     k = js.index("function _profileHead(")
     head = js[k:k + 1200]
@@ -213,8 +229,7 @@ def test_a_searched_row_carries_its_league_into_the_profile_card():
 def test_the_row_says_which_league_it_is_from():
     js = _js()
     assert "function leagueBadge(" in js
-    j = js.index("async function renderPlayers(")
-    assert "leagueBadge(m.sport)" in js[j:j + 9000]
+    assert "leagueBadge(m.sport)" in _fn(js, "async function renderPlayers(")
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()
     assert ".lg-badge" in css, "the badge has no styling at all"
@@ -235,8 +250,7 @@ def test_the_players_page_does_not_need_a_board_to_search():
     And it never needed the board: search reads the history DB. An absent
     board costs you tonight's priced cards, not the page."""
     js = _js()
-    i = js.index("async function renderPlayers(")
-    body = js[i:i + 1600]
+    body = _fn(js, "async function renderPlayers(")
     assert "state.data.recommendations" not in body, \
         "the board is dereferenced unguarded again"
     assert "const board = state.data || {}" in body

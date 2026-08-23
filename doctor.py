@@ -447,9 +447,18 @@ def check_premature_evidence(rep):
         # from the feed — a name-map fix). One extra query separates them,
         # and without it "11" is a number nobody can act on.
         no_day, no_team = [], []
+        # A UFC pick is stored with market='moneyline' and graded from the
+        # MMA results feed — there has never been a `games` row behind one
+        # and there never will be. Selecting on GAME_MARKETS alone put all
+        # 11 of them in this check on Ethan's droplet, with `--settle all`
+        # named as the fix, which cannot help. Same for the desk's
+        # exchange tickers. ledger.GRADED_ELSEWHERE is where that lives.
+        cats = ", ".join("?" for _ in ledger.GRADED_ELSEWHERE)
         for b in c.execute(
                 f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
-                f"AND market IN ({marks})", ledger.GAME_MARKETS).fetchall():
+                f"AND market IN ({marks}) "
+                f"AND COALESCE(category, 'main') NOT IN ({cats})",
+                (*ledger.GAME_MARKETS, *ledger.GRADED_ELSEWHERE)).fetchall():
             where, wargs = ledger._hist_where(b)
             rows, actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
             finals = [g for g in rows if g["home_score"] is not None]
