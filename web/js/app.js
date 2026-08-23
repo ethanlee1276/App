@@ -485,6 +485,36 @@ const american = (o) => (o > 0 ? `+${o}` : trueMinus(`${o}`));
 const activeTeams = () => window.ACTIVE_TEAMS || (typeof TEAMS !== "undefined" ? TEAMS : {});
 const teamName = (a) => (activeTeams()[a] && activeTeams()[a].nick) || a;
 const teamPrimary = (a) => (activeTeams()[a] && activeTeams()[a].primary) || "var(--brand)";
+
+/* THE SAME ABBREVIATION IS FOUR DIFFERENT CLUBS. CIN, ATL, SF and TB all
+   exist in more than one league, and `activeTeams()` is whichever tab the
+   visitor is standing on — so a row that belongs to another league has to
+   name its own, or the Bengals are drawn as the Reds.
+
+   That stopped being an edge case when player search went league-wide
+   (2026-08-23): a result list now mixes leagues by design, and every
+   colour, logo and nickname on it is looked up by an abbreviation that
+   only means something alongside its sport. Falling back to the active
+   tab keeps every existing caller — a row with no sport is a row from
+   the board you are already looking at. */
+const teamsIn = (sport) => (sport && sport !== state.sport)
+  ? teamsForSport(sport) : activeTeams();
+const teamNameIn = (sport, a) => (teamsIn(sport)[a] && teamsIn(sport)[a].nick) || a;
+const teamPrimaryIn = (sport, a) =>
+  (teamsIn(sport)[a] && teamsIn(sport)[a].primary) || "var(--brand)";
+const teamMarkIn = (sport, a, size = 20) =>
+  teamMark(a, size, teamsIn(sport), sport || state.sport);
+
+//: Which league a searched-up player came from, said on the row. Without
+//: it a cross-league result list is a pile of names with no way to tell a
+//: Bengal from a Red.
+const LEAGUE_LABEL = { nfl: "NFL", mlb: "MLB", nba: "NBA", wnba: "WNBA",
+                       cfb: "CFB", ufc: "UFC" };
+function leagueBadge(sport) {
+  const k = String(sport || "").toLowerCase();
+  if (!LEAGUE_LABEL[k]) return "";
+  return `<span class="lg-badge lg-${escapeAttr(k)}">${LEAGUE_LABEL[k]}</span>`;
+}
 /* A reason that WORKS AGAINST the bet must not wear a green check. The
    engine phrases negative factors consistently; match those phrasings and
    render them with a red ✗ instead. */
@@ -5764,8 +5794,19 @@ async function renderPlayers() {
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
   await loadInjuryBoard();
-  let recs = state.data.recommendations;
-  if (q) recs = recs.filter((r) => r.player.toLowerCase().includes(q));
+  /* THE BOARD MAY NOT BE HERE YET, and this function is the reason that
+     went unnoticed. It AWAITS the injury board first, so a throw on the
+     next line is a rejected promise the browser swallows — the cold-open
+     probe's own `try { switchView(...) }` never sees it, and the view
+     reported clean while really rendering nothing. Caught 2026-08-23 by
+     a live page-error listener, on the page Ethan was searching from.
+
+     Not fatal either: search reads the history DB, so it works with no
+     board at all. An absent board costs you tonight's priced cards, not
+     the page. */
+  const board = state.data || {};
+  let recs = board.recommendations || [];
+  if (q) recs = recs.filter((r) => (r.player || "").toLowerCase().includes(q));
   // One CARD per player, every market kept. The old dedupe ("first
   // market listed") threw the rest of a player's rows away — Ethan,
   // 2026-08-17: "when i search an nfl player it will only display yard
@@ -5795,37 +5836,41 @@ async function renderPlayers() {
       if (hits.length) {
         const full = hits.slice(0, 4);
         await Promise.all(full.map(async (m) => {
-          const store = (state.data.player_stats =
-            state.data.player_stats || {});
-          if (!store[m.player]) {
-            const st = await leagueLogs(m.player);
-            if (st && Object.keys(st).length) store[m.player] = st;
+          if (!playerStats(m.player)) {
+            const st = await leagueLogs(m.player, m.sport);
+            if (st && Object.keys(st).length) _searchStats[m.player] = st;
           }
           // A head-only row: profileHTML draws the history card from it
           // plus the injected stats. No market_label, so it can never
-          // masquerade as a priced market.
+          // masquerade as a priced market. It DOES carry the league —
+          // every colour, logo and injury lookup on the card is keyed by
+          // an abbreviation that means nothing without one.
           _profRows.set(m.player, [{ player: m.player, team: m.team,
                                      position: m.position, opponent: "",
-                                     headshot: m.headshot }]);
+                                     headshot: m.headshot,
+                                     sport: m.sport }]);
         }));
         if (state.search.trim().toLowerCase() !== q) return;
-        const drawn = full.filter((m) =>
-          ((state.data.player_stats || {})[m.player]));
+        const drawn = full.filter((m) => playerStats(m.player));
         const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
+        const leagues = [...new Set(hits.map((m) => m.sport).filter(Boolean))];
         host.innerHTML = `
-          <div class="section-title minor">From the
-            ${escapeHtml(String(state.sport || "").toUpperCase())} game logs
-            <span class="sub">— nothing priced on tonight’s board for
-            “${escapeHtml(state.search)}”, so these are the logged games</span></div>
+          <div class="section-title minor">From the game logs
+            <span class="sub">— every league we store, not just
+            ${escapeHtml(String(state.sport || "").toUpperCase())}${
+              leagues.length > 1
+                ? `. “${escapeHtml(state.search)}” matches in
+                   ${leagues.map((l) => escapeHtml(LEAGUE_LABEL[l] || l.toUpperCase())).join(", ")}`
+                : ""}</span></div>
           <div class="player-grid">${drawn.map((m) => profileHTML(m.player)).join("")}</div>
           ${rest.length ? `<div class="section-title minor">Also matching</div>` : ""}
           ${rest.map((m) => `
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
               ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
               <div style="flex:1;min-width:0">
-                <strong>${escapeHtml(m.player)}</strong>${injTag(state.sport || "nfl", m.player)}
+                <strong>${escapeHtml(m.player)}</strong>${leagueBadge(m.sport)}${injTag(m.sport || state.sport || "nfl", m.player)}
                 <div style="font-size:.85em;color:var(--text-mute)">
-                  ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
+                  ${teamMarkIn(m.sport, m.team, 14)} ${escapeHtml(teamNameIn(m.sport, m.team))}
                   · ${escapeHtml(m.position || "—")}
                   · ${m.games} game(s) logged</div>
               </div>
@@ -5926,6 +5971,19 @@ document.addEventListener("click", (e) => {
     mountEChartsPanels(fresh.parentElement || fresh);
 });
 
+//: Logs fetched for a SEARCHED player, held outside the board payload.
+//:
+//: `state.data.player_stats` was the only home, and it is null until the
+//: board answers — so the Players page could not cache anything during a
+//: cold open, and writing to it threw. Search needs no board at all: it
+//: reads the history DB directly. This is where its answers live, and
+//: `playerStats` merges the two so a card cannot tell them apart.
+const _searchStats = {};
+function playerStats(name) {
+  return ((state.data || {}).player_stats || {})[name]
+    || _searchStats[name] || null;
+}
+
 //: The chosen market per player. Outlives renders on purpose: flipping
 //: to Receptions and refreshing the search should not snap you back.
 const _profTab = {};
@@ -5949,27 +6007,44 @@ function playerBrowseCap() {
     && window.matchMedia("(max-width: 760px)").matches) ? 4 : 12;
 }
 
-/* The league-wide search pair. Cached per (sport, query) because the
-   input handler re-renders on every keystroke and the answer for "jud"
-   does not change between letters typed and deleted. A failed fetch
-   caches [] for the session — the roster fallback takes over, and a
-   static host is not retried on every key. */
+/* The all-league search pair.
+
+   EVERY SPORT, WHATEVER TAB YOU ARE ON. Ethan, 2026-08-23: "i want the
+   search bar to be to search any player in every leauge … even if im
+   selected on nfl, i shoudl still be able to look up mlb or ufc or wnba
+   players." It shipped scoped to `state.sport`, which made an empty
+   result mean two very different things at once — "we have no logs on
+   him" and "you are standing on the wrong tab" — and left the visitor
+   no way to tell which. A search box you cannot trust to look is worse
+   than no search box.
+
+   `sport` still rides along as a PREFERENCE: the league you are on
+   leads the ranking, and every other league is behind it rather than
+   missing. Cached per (preference, query) because the input handler
+   re-renders on every keystroke and the answer for "jud" does not change
+   between letters typed and deleted. A failed fetch caches [] for the
+   session — the roster fallback takes over, and a static host is not
+   retried on every key. */
 const _leagueCache = new Map();
 async function leagueSearch(q) {
   const key = `${state.sport}|${q}`;
   if (_leagueCache.has(key)) return _leagueCache.get(key);
   let hits = [];
   try {
-    const r = await fetch(`/api/players/search?sport=${encodeURIComponent(state.sport)}&q=${encodeURIComponent(q)}`);
+    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(state.sport)}`);
     if (r.ok) hits = (await r.json()).players || [];
   } catch (e) {}
   _leagueCache.set(key, hits);
   return hits;
 }
 
-async function leagueLogs(player) {
+/* A hit's logs come from the hit's OWN league. Reading state.sport here
+   asked the NFL endpoint for a WNBA guard and got an empty card back —
+   the exact shape of "search found him but the page has nothing". */
+async function leagueLogs(player, sport) {
+  const lg = sport || state.sport;
   try {
-    const r = await fetch(`/api/players/logs?sport=${encodeURIComponent(state.sport)}&player=${encodeURIComponent(player)}`);
+    const r = await fetch(`/api/players/logs?sport=${encodeURIComponent(lg)}&player=${encodeURIComponent(player)}`);
     if (r.ok) return (await r.json()).stats || {};
   } catch (e) {}
   return {};
@@ -6006,7 +6081,7 @@ function openRoster(team) {
    multipul props." */
 function profileHTML(player) {
   const rows = _profRows.get(player) || [];
-  const stats = ((state.data || {}).player_stats || {})[player] || {};
+  const stats = playerStats(player) || {};
   // A searched-up league player rides in on a HEAD-ONLY row (no
   // market_label) — it feeds _profileHead and must never register as a
   // priced market, or an unpriced chip draws the pick block.
@@ -6032,11 +6107,19 @@ function profileHTML(player) {
 }
 
 //: Shared head: who this is, on the market's accent.
+//:
+//: `r.sport` is set only on a searched-up row from another league, and
+//: every lookup here needs it: CIN is the Bengals and the Reds, and the
+//: injury boards are per-sport too. A row without one is a row from the
+//: board already on screen, so the active tab is the right answer.
 function _profileHead(r, right) {
+  const lg = r.sport || state.sport;
   return `<div class="profile-head">
         ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
-        <div class="meta"><div class="nm">${escapeHtml(r.player)}${injTag(state.sport || "nfl", r.player)}</div>
-          <div class="sub">${teamMark(r.team, 16)} ${[teamName(r.team), r.position, "vs " + teamName(r.opponent)]
+        <div class="meta"><div class="nm">${escapeHtml(r.player)}${
+          r.sport && r.sport !== state.sport ? leagueBadge(r.sport) : ""
+        }${injTag(lg || "nfl", r.player)}</div>
+          <div class="sub">${teamMarkIn(lg, r.team, 16)} ${[teamNameIn(lg, r.team), r.position, "vs " + teamNameIn(lg, r.opponent)]
             .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
         ${right}
       </div>`;
@@ -6093,13 +6176,13 @@ function historyProfileHTML(r0, label, logs, chips) {
   const rows = logs.map((l) => `<tr><td>${escapeHtml(when(l))}</td>
       <td>${l.home ? "vs" : "@"} ${escapeHtml(l.opponent)}</td>
       <td class="num">${l.value}</td></tr>`).join("");
-  const grad = `linear-gradient(135deg, ${teamPrimary(r0.team)}, transparent)`;
+  const grad = `linear-gradient(135deg, ${teamPrimaryIn(r0.sport, r0.team)}, transparent)`;
   return `
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r0, "")}
       ${chips}
       <div class="profile-spark">${gamelogBars(vals, {
-        stroke: teamPrimary(r0.team), w: 320, h: 72,
+        stroke: teamPrimaryIn(r0.sport, r0.team), w: 320, h: 72,
         labels: logs.map((l) => `${when(l)} ${l.home ? "vs" : "@"} ${l.opponent}`),
       })}</div>
       <table class="log-table">
@@ -6183,10 +6266,11 @@ async function openPeek(name) {
     const onBoard = allProps().filter((r) => r.player === name);
     if (onBoard.length) _profRows.set(name, onBoard);
   }
-  const store = (state.data.player_stats = state.data.player_stats || {});
-  if (!store[name]) {
+  // Board-free, for the same reason renderPlayers is: a peek can be
+  // opened from a live row before the board payload has landed.
+  if (!playerStats(name)) {
     const got = await leagueLogs(name);
-    if (got && Object.keys(got).length) store[name] = got;
+    if (got && Object.keys(got).length) _searchStats[name] = got;
   }
   if (!_profRows.has(name)) {
     // Nothing priced tonight: a head-only row, the same shape the
@@ -17045,7 +17129,10 @@ function ffDossierHTML(info) {
 async function _ffDossierCharts(name, position) {
   const zone = document.getElementById("ffd-charts");
   if (!zone) return;
-  const stats = await leagueLogs(name);   // sport-scoped; fantasy is NFL
+  // Fantasy is ALWAYS football, and this used to inherit whichever tab
+  // the reader came from — opening a dossier from the MLB board asked
+  // the baseball endpoint for a wide receiver and drew an empty card.
+  const stats = await leagueLogs(name, "nfl");
   if (!document.getElementById("ffd-charts")) return;   // closed meanwhile
   const want = position === "QB"
     ? ["Passing Yards", "Carries"]
@@ -19469,7 +19556,8 @@ async function _mockTrend(name) {
   const zone = document.getElementById("mk-trend");
   if (!zone || zone.dataset.mktrend !== name) return;
   const row = (_mock && _mock.all || []).find((x) => x.player === name) || {};
-  const stats = await leagueLogs(name);
+  const stats = await leagueLogs(name, "nfl");   // a mock draft is football
+
   // The card may have moved on while the fetch was in flight.
   const z = document.getElementById("mk-trend");
   if (!z || z.dataset.mktrend !== name) return;

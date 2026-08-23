@@ -49,6 +49,24 @@ def _js():
     return _read("web", "js", "app.js")
 
 
+def _fn(js, decl):
+    """One function's source, cut at the next top-level function.
+
+    A FIXED SLICE IS A TRIPWIRE ON THE WRONG THING. This test read
+    `js[i:i + 1200]` and went red on 2026-08-23 because a COMMENT was
+    added above the line it looks for — the contract it exists to protect
+    was untouched. A test that fails when a comment grows is a test that
+    teaches people to stop reading it.
+    """
+    i = js.index(decl)
+    j = len(js)
+    for end in ("\nfunction ", "\nasync function ", "\nconst ", "\n/* ="):
+        k = js.find(end, i + len(decl))
+        if k != -1:
+            j = min(j, k)
+    return js[i:j]
+
+
 # --- the component -----------------------------------------------------------
 def test_a_room_with_nothing_in_it_is_never_given_a_tab():
     """THE RULE THAT MAKES THIS SAFE. The Record page hides most of its
@@ -222,17 +240,28 @@ def test_the_search_reaches_the_league_not_just_the_board():
     assert "rows.filter((r) => r.market_label)" in js[j:j + 700]
     k = js.index("async function leagueSearch(")
     assert "_leagueCache" in js[k:k + 700]
-    assert "/api/players/search?sport=" in js
-    assert "/api/players/logs?sport=" in js
+    # The search hits the ALL-LEAGUE endpoint. Pinning the exact query
+    # string ("?sport=") was pinning the bug: it asserted the request was
+    # scoped to one league, which is the thing Ethan asked us to stop
+    # doing on 2026-08-23. The question is that the search is issued and
+    # that a hit's LOGS come from that hit's own sport.
+    k2 = js.index("async function leagueSearch(")
+    req = js[k2:k2 + 900]
+    assert "/api/players/search?q=" in req
+    assert "sport=${encodeURIComponent(state.sport)}&q=" not in req, \
+        "the search is scoped to one league again"
+    k3 = js.index("async function leagueLogs(")
+    logs = js[k3:k3 + 700]
+    assert "/api/players/logs?sport=" in logs
+    assert "sport || state.sport" in logs, \
+        "a hit's logs must come from the hit's own league"
 
 
 def test_searching_still_reaches_every_player():
     """The cap is on DISPLAY only. A cap applied before the filter would
     make anyone outside the first dozen unfindable, which is worse than the
     problem it fixes."""
-    js = _js()
-    i = js.index("async function renderPlayers(")
-    body = js[i:i + 1200]
+    body = _fn(_js(), "async function renderPlayers(")
     # The dedupe ("const seen") became per-player GROUPING on 2026-08-17
     # — every market kept, one card per player — but the order contract
     # is the same: the search filter runs over the FULL list before any

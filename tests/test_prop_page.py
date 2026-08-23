@@ -325,8 +325,21 @@ def test_the_popup_reuses_the_profile_card_rather_than_redrawing_it():
     fn = APP[APP.index("async function openPeek("):]
     fn = fn[:fn.index("\nfunction closePeek(")]
     assert "profileHTML(name)" in fn, "the popup draws its own card now"
-    assert "player_stats" in fn and "leagueLogs(" in fn, \
+    # A player with nothing priced tonight still gets his logs, and they
+    # must land where the card will look for them.
+    #
+    # THE PATH, NOT THE STORE'S NAME. This asserted the literal string
+    # "player_stats", which was the board payload's key — the only home
+    # those logs had, and it is null until the board answers, so a peek
+    # opened before that threw. The store moved (`_searchStats`, read
+    # through `playerStats`); the contract did not.
+    assert "leagueLogs(" in fn, \
         "a player with nothing on tonight's board gets no logs"
+    assert "playerStats(name)" in fn, "the peek caches into nothing"
+    prof = APP[APP.index("function profileHTML("):]
+    prof = prof[:prof.index("\n}") + 2]
+    assert "playerStats(player)" in prof, \
+        "the card reads a different store from the one the peek fills"
 
 
 def test_the_popup_can_be_dismissed_every_way_a_dialog_should_be():

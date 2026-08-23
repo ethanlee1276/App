@@ -32,6 +32,7 @@ every other DB-backed extra (player faces, team form, venue weather).
 from __future__ import annotations
 
 import os
+import re
 
 from . import db as _db
 
@@ -120,57 +121,151 @@ def search(sport: str, q: str, limit: int = 12, db_path=None) -> list[dict]:
         return []
     conn = _db.connect(path)
     try:
-        rows = conn.execute(
-            "SELECT player, COUNT(DISTINCT game_id) AS games, "
-            "MAX(season || '-' || period) AS last "
-            "FROM player_game_logs WHERE sport=? AND player LIKE ? "
-            "GROUP BY player ORDER BY last DESC, games DESC LIMIT ?",
-            (sport, f"%{q}%", int(limit))).fetchall()
-        out = []
-        for r in rows:
-            # The team he was LAST seen with — the GROUP BY above would
-            # hand back an arbitrary row's team, and a deadline trade is
-            # exactly when someone gets looked up.
-            t = conn.execute(
-                "SELECT team, position FROM player_game_logs "
-                "WHERE sport=? AND player=? "
-                "ORDER BY season DESC, period DESC LIMIT 1",
-                (sport, r["player"])).fetchone()
-            # The face rides along when the ingest has stored one —
-            # player_assets is in the same DB, and a search result
-            # without the photo is the page Ethan keeps noticing.
-            #
-            # AND WHEN IT HAS NOT, WHICH IS MOST SPORTS. Only the hoops
-            # ingest writes `player_assets`: ESPN's box score hands over a
-            # photo href, so NBA and WNBA faces are taken. The MLB Stats
-            # API publishes no photo URL — MLB's face is CONSTRUCTED from
-            # the person id — and nothing writes NFL's here either. So
-            # this table answered for basketball and returned nothing for
-            # everyone else, and every MLB search result drew initials.
-            # Ethan, 2026-08-22: "headshots are not loading on the search
-            # page for players."
-            #
-            # `rosters.face_map` already knew all of this per sport. It
-            # is memoised there, so this is one lookup per request rather
-            # than a roster fetch per row.
-            face = ""
-            try:
-                a = conn.execute(
-                    "SELECT headshot FROM player_assets "
-                    "WHERE sport=? AND player=?",
-                    (sport, r["player"])).fetchone()
-                face = (a["headshot"] if a else "") or ""
-            except Exception:                                # noqa: BLE001
-                face = ""                # a DB predating the assets table
-            if not face:
-                face = _face_of(conn, sport, r["player"])
-            out.append({"player": r["player"], "games": int(r["games"]),
-                        "team": (t["team"] if t else "") or "",
-                        "position": (t["position"] if t else "") or "",
-                        "headshot": face})
-        return out
+        return _search_conn(conn, sport, q, limit)
     finally:
         conn.close()
+
+
+def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
+    """One league's hits on an already-open connection.
+
+    Split out so the all-league search opens the database once instead of
+    once per sport — five connections to answer one keystroke, on a box
+    with one core, is a cost the page pays on every letter typed.
+    """
+    rows = conn.execute(
+        "SELECT player, COUNT(DISTINCT game_id) AS games, "
+        "MAX(season || '-' || period) AS last "
+        "FROM player_game_logs WHERE sport=? AND player LIKE ? "
+        "GROUP BY player ORDER BY last DESC, games DESC LIMIT ?",
+        (sport, f"%{q}%", int(limit))).fetchall()
+    out = []
+    for r in rows:
+        # The team he was LAST seen with — the GROUP BY above would
+        # hand back an arbitrary row's team, and a deadline trade is
+        # exactly when someone gets looked up.
+        t = conn.execute(
+            "SELECT team, position FROM player_game_logs "
+            "WHERE sport=? AND player=? "
+            "ORDER BY season DESC, period DESC LIMIT 1",
+            (sport, r["player"])).fetchone()
+        # The face rides along when the ingest has stored one —
+        # player_assets is in the same DB, and a search result
+        # without the photo is the page Ethan keeps noticing.
+        #
+        # AND WHEN IT HAS NOT, WHICH IS MOST SPORTS. Only the hoops
+        # ingest writes `player_assets`: ESPN's box score hands over a
+        # photo href, so NBA and WNBA faces are taken. The MLB Stats
+        # API publishes no photo URL — MLB's face is CONSTRUCTED from
+        # the person id — and nothing writes NFL's here either. So
+        # this table answered for basketball and returned nothing for
+        # everyone else, and every MLB search result drew initials.
+        # Ethan, 2026-08-22: "headshots are not loading on the search
+        # page for players."
+        #
+        # `rosters.face_map` already knew all of this per sport. It
+        # is memoised there, so this is one lookup per request rather
+        # than a roster fetch per row.
+        face = ""
+        try:
+            a = conn.execute(
+                "SELECT headshot FROM player_assets "
+                "WHERE sport=? AND player=?",
+                (sport, r["player"])).fetchone()
+            face = (a["headshot"] if a else "") or ""
+        except Exception:                                # noqa: BLE001
+            face = ""                # a DB predating the assets table
+        if not face:
+            face = _face_of(conn, sport, r["player"])
+        # The LEAGUE rides on every hit. Search spans all of them
+        # now, so "which sport is this?" is a question the row has to
+        # answer for itself — the page reads it to pick the right
+        # team colours, the right logo host and the right injury
+        # board, all of which are keyed by abbreviations that collide
+        # across leagues (CIN, ATL, SF, TB).
+        out.append({"player": r["player"], "games": int(r["games"]),
+                    "sport": sport,
+                    "team": (t["team"] if t else "") or "",
+                    "position": (t["position"] if t else "") or "",
+                    "headshot": face})
+    return out
+
+
+def _leads_with(name: str, q: str) -> bool:
+    """Does ``q`` start the name, or start any word in it?
+
+    "mahomes" leading Patrick Mahomes has to outrank "mahomes" merely
+    appearing inside somebody else's name, or the league that happens to
+    sort first eats the whole result list.
+    """
+    n = (name or "").lower()
+    ql = (q or "").lower()
+    if not ql:
+        return False
+    return n.startswith(ql) or any(
+        w.startswith(ql) for w in re.split(r"[^a-z0-9]+", n) if w)
+
+
+def search_all(q: str, limit: int = 12, prefer: str = "",
+               db_path=None) -> list[dict]:
+    """Every player in EVERY league whose name contains ``q``.
+
+    Ethan, 2026-08-23: "searching for a player should search through ALL
+    players for ALL sports. so even if im selected on nfl, i shoudl still
+    be able to look up mlb or ufc or wnba players." A search box that
+    silently scopes itself to whichever tab you happen to be on is a
+    search box you cannot trust — you type a name, get nothing, and have
+    no way to tell "he isn't in our data" from "you're on the wrong tab".
+
+    ROUND-ROBIN, NOT ONE BIG SORT. The per-league ranking key is
+    ``season || '-' || period``, and period means different things in
+    different leagues — a zero-padded NFL week ('005') against an ISO
+    baseball date ('2026-08-14'). Those sort against each other as
+    nonsense, so one merged ORDER BY would hand the list to whichever
+    league's format sorts highest and call it relevance. Taking one hit
+    from each league in turn needs no cross-league comparison at all, and
+    guarantees every league a place in a short list.
+
+    Names that START with the query go round first, so an exact lookup
+    still leads even when another league has a longer substring match.
+    ``prefer`` (the league the visitor is on) only chooses who goes first
+    within a tier — it never excludes anyone, which is the whole point.
+    """
+    q = (q or "").strip()
+    if not q:
+        return []
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return []
+    order = ([prefer] if prefer in SPORT_MARKETS else []) + \
+        [s for s in SPORT_MARKETS if s != prefer]
+    conn = _db.connect(path)
+    try:
+        # Each league fetches a full page: four empty leagues must not
+        # cost the fifth its results.
+        per = {s: _search_conn(conn, s, q, limit) for s in order}
+    finally:
+        conn.close()
+    strong = {s: [h for h in per[s] if _leads_with(h["player"], q)]
+              for s in order}
+    weak = {s: [h for h in per[s] if not _leads_with(h["player"], q)]
+            for s in order}
+    out: list[dict] = []
+    for tier in (strong, weak):
+        depth = 0
+        while len(out) < limit:
+            took = False
+            for s in order:
+                lst = tier[s]
+                if depth < len(lst):
+                    out.append(lst[depth])
+                    took = True
+                    if len(out) >= limit:
+                        break
+            if not took:
+                break
+            depth += 1
+    return out[:limit]
 
 
 def for_player(sport: str, player: str, db_path=None) -> dict:

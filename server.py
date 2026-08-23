@@ -1444,7 +1444,7 @@ class Handler(BaseHTTPRequestHandler):
         return bool(st.get("entitled"))
 
     def _players_search(self, q):
-        """League-wide player search, straight off the ingested game logs.
+        """Player search across every league, straight off the game logs.
 
         Ethan, 2026-08-18: "You should be able too look up any player in
         the league too that specific sport." The static board only knows
@@ -1453,14 +1453,27 @@ class Handler(BaseHTTPRequestHandler):
         FACTS, on the same free footing as rosters and injuries
         (engine/statlogs.py's header carries the argument) — the paid
         thing is picks, and none ride here.
+
+        EVERY LEAGUE BY DEFAULT. Ethan, 2026-08-23: "even if im selected
+        on nfl, i shoudl still be able to look up mlb or ufc or wnba
+        players." It shipped filtered to whichever tab the visitor was
+        on, which made an empty result ambiguous in the worst way — "we
+        have nothing on him" and "you are on the wrong tab" looked
+        identical, and the second one is not the visitor's mistake to
+        make. ``sport`` is now a preference that leads the ranking;
+        ``scope=sport`` still pins the search to one league for a caller
+        that means it.
         """
         from engine import statlogs
         sport = (q.get("sport") or [""])[0].lower()
         term = (q.get("q") or [""])[0][:40]
-        if sport not in statlogs.SPORT_MARKETS:
-            return self._send(400, b'{"error":"no log-backed search for '
-                                   b'this sport"}', ".json")
-        hits = statlogs.search(sport, term)
+        if (q.get("scope") or [""])[0].lower() == "sport":
+            if sport not in statlogs.SPORT_MARKETS:
+                return self._send(400, b'{"error":"no log-backed search '
+                                       b'for this sport"}', ".json")
+            hits = statlogs.search(sport, term)
+        else:
+            hits = statlogs.search_all(term, prefer=sport)
         return self._send(200, json.dumps({"players": hits}).encode(),
                           ".json")
 

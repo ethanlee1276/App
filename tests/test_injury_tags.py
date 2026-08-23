@@ -59,8 +59,22 @@ def test_every_roster_surface_carries_the_tag():
     i = APP.index("const idBlock = (p, meta)")
     assert 'injTag("nfl", p.player)' in APP[i:i + 300]
     # Search profiles, the Also-matching rows and the roster-directory
-    # fallback are sport-aware.
-    assert APP.count('injTag(state.sport || "nfl"') >= 3
+    # fallback DERIVE their league instead of naming one.
+    #
+    # THE PROPERTY, NOT THE CHARACTERS. This counted the exact string
+    # `injTag(state.sport || "nfl"` and went red on 2026-08-23 when two of
+    # the three became MORE sport-aware, not less: a cross-league search
+    # result now prefers its own league (`m.sport || state.sport`), which
+    # is the whole point of searching every league at once. Pinning the
+    # spelling made the fix look like the regression.
+    import re
+    derived = [a for a in re.findall(r"injTag\(([^,]+),", APP)
+               if "state.sport" in a or a.strip() in ("sport", "lg")
+               or "sport" in a and not a.strip().startswith('"')]
+    assert len(derived) >= 3, f"only {len(derived)} sport-aware injTag calls"
+    # And a searched row prefers its OWN league over the tab it is drawn on.
+    assert any("m.sport ||" in a for a in derived), \
+        "a cross-league hit is tagged from whichever tab you happen to be on"
     # The Sleeper "My roster" rows tag, and the card leads with NAMES —
     # a count would send the manager hunting through his own list.
     assert 'injTag("nfl", r.name)' in APP

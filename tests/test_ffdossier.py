@@ -78,8 +78,16 @@ def test_sections_render_only_where_the_data_is():
 def test_the_charts_degrade_honestly_without_a_db():
     i = APP.index("async function _ffDossierCharts(")
     body = APP[i:APP.index("function openFfDossier", i)]
-    assert "leagueLogs(name)" in body, \
+    # THE API, NOT THE CALL'S EXACT CHARACTERS. This pinned
+    # `leagueLogs(name)` and so went red when the call gained the league
+    # it should always have named — a change that FIXED a real bug (a
+    # dossier opened from the MLB board asked the baseball endpoint for a
+    # wide receiver). The contract is the API and the player.
+    assert "leagueLogs(name" in body, \
         "the charts must ride the same log API the search uses"
+    # And fantasy is always football, whatever tab the reader came from.
+    assert 'leagueLogs(name, "nfl")' in body, \
+        "the dossier inherits whichever league the visitor was browsing"
     assert "No game logs on this machine" in body
 
 

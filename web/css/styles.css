@@ -3962,6 +3962,25 @@ body.pk-open { overflow: hidden; }
 /* The dossier's full-sentence version under the player's identity. */
 .ffd-injline { font-size: var(--fs-sm); font-weight: 600; margin-top: 3px; }
 
+/* THE LEAGUE, ON THE ROW. Player search spans every sport we store
+   (2026-08-23), so a result list mixes leagues by design — and the
+   abbreviations do not disambiguate themselves: CIN, ATL, SF and TB each
+   name more than one club. The badge is the only thing on the row that
+   says which Bengals-or-Reds you are looking at.
+
+   Quiet on purpose. It sits beside a name that is the actual answer, so
+   it is sized and weighted like the injury tag next to it rather than
+   competing with the name it qualifies. */
+.lg-badge {
+  display: inline-block; margin-left: 6px; vertical-align: 1px;
+  padding: 1px 6px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .06em;
+  color: var(--text-mute);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--border);
+  white-space: nowrap;
+}
+
 .inj-line { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
 .inj-line + .inj-line { border-top: var(--hairline) solid var(--border); }
 .inj-line-main { flex: 1 1 auto; min-width: 0; display: flex;
