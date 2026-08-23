@@ -5836,6 +5836,10 @@ async function renderPlayers() {
       if (hits.length) {
         const full = hits.slice(0, 4);
         await Promise.all(full.map(async (m) => {
+          // A fighter has no game logs to fetch — asking for them would
+          // be a request that can only ever come back empty, and the
+          // empty answer would read as "we know nothing about him".
+          if (m.sport === "ufc") return;
           if (!playerStats(m.player)) {
             const st = await leagueLogs(m.player, m.sport);
             if (st && Object.keys(st).length) _searchStats[m.player] = st;
@@ -5851,18 +5855,22 @@ async function renderPlayers() {
                                      sport: m.sport }]);
         }));
         if (state.search.trim().toLowerCase() !== q) return;
-        const drawn = full.filter((m) => playerStats(m.player));
+        const drawn = full.filter((m) =>
+          m.sport === "ufc" ? m.fighter : playerStats(m.player));
         const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
         const leagues = [...new Set(hits.map((m) => m.sport).filter(Boolean))];
         host.innerHTML = `
-          <div class="section-title minor">From the game logs
-            <span class="sub">— every league we store, not just
-            ${escapeHtml(String(state.sport || "").toUpperCase())}${
-              leagues.length > 1
-                ? `. “${escapeHtml(state.search)}” matches in
-                   ${leagues.map((l) => escapeHtml(LEAGUE_LABEL[l] || l.toUpperCase())).join(", ")}`
+          <div class="section-title minor">Found across every league
+            <span class="sub">— nothing priced on tonight’s
+            ${escapeHtml(String(state.sport || "").toUpperCase())} board for
+            “${escapeHtml(state.search)}”, so this is what we store on
+            ${drawn.length + rest.length > 1 ? "them" : "him"}${
+              leagues.length
+                ? `. Matches in ${leagues.map((l) =>
+                    escapeHtml(LEAGUE_LABEL[l] || l.toUpperCase())).join(", ")}`
                 : ""}</span></div>
-          <div class="player-grid">${drawn.map((m) => profileHTML(m.player)).join("")}</div>
+          <div class="player-grid">${drawn.map((m) => m.sport === "ufc"
+            ? ufcProfileHTML(m) : profileHTML(m.player)).join("")}</div>
           ${rest.length ? `<div class="section-title minor">Also matching</div>` : ""}
           ${rest.map((m) => `
             <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
@@ -5870,9 +5878,8 @@ async function renderPlayers() {
               <div style="flex:1;min-width:0">
                 <strong>${escapeHtml(m.player)}</strong>${leagueBadge(m.sport)}${injTag(m.sport || state.sport || "nfl", m.player)}
                 <div style="font-size:.85em;color:var(--text-mute)">
-                  ${teamMarkIn(m.sport, m.team, 14)} ${escapeHtml(teamNameIn(m.sport, m.team))}
-                  · ${escapeHtml(m.position || "—")}
-                  · ${m.games} game(s) logged</div>
+                  ${m.team ? `${teamMarkIn(m.sport, m.team, 14)} ${escapeHtml(teamNameIn(m.sport, m.team))} · ` : ""}${escapeHtml(m.position || "—")}
+                  · ${m.games} ${m.sport === "ufc" ? "tracked fight(s)" : "game(s) logged"}</div>
               </div>
               <button class="btn" data-lookup="${escapeAttr(m.player)}">Profile</button>
             </div>`).join("")}`;
@@ -5970,6 +5977,34 @@ document.addEventListener("click", (e) => {
   if (typeof mountEChartsPanels === "function")
     mountEChartsPanels(fresh.parentElement || fresh);
 });
+
+/* A FIGHTER'S CARD, and the one thing it deliberately does not have.
+
+   Every other search result draws a bar chart of the last ten games,
+   because a per-game value exists to chart. A fight has no such series
+   here: the promotion's numbers are career RATES — strikes landed per
+   minute, takedown defence — and that is what our dossiers hold. So this
+   card shows the rates and SAYS they are career numbers. Drawing a chart
+   out of a rate would be inventing a series, which is worse than the
+   blank space it would fill. */
+function ufcProfileHTML(m) {
+  const f = Object.assign({ name: m.player }, m.fighter || {});
+  const div = String(f.division || "").replace(/_/g, " ");
+  const known = f.slpm != null || f.sapm != null || f.tdd != null;
+  return `
+    <article class="profile" style="--profile-grad:linear-gradient(135deg, var(--plum), transparent)">
+      <div class="profile-head">
+        ${playerAvatar(m.player, "", { size: 60 })}
+        <div class="meta"><div class="nm">${escapeHtml(m.player)}${leagueBadge("ufc")}</div>
+          <div class="sub">${escapeHtml(div || "division n/a")}</div></div>
+      </div>
+      ${fighterColHTML(f)}
+      <div class="profile-pick"><div class="lbl">Career rates
+        <small>${known
+          ? "a fight has no per-game log to chart — these are per-minute and per-15 rates over his tracked fights"
+          : "no tracked fight stats for him yet, so there is nothing to rate"}</small></div></div>
+    </article>`;
+}
 
 //: Logs fetched for a SEARCHED player, held outside the board payload.
 //:
@@ -20334,6 +20369,39 @@ async function renderLiveFights(host) {
   return true;
 }
 
+/* One corner of a fight, as a block.
+
+   HOISTED OUT OF renderUFC, 2026-08-23. It was a closure in there, which
+   was fine while the UFC page was the only place a fighter was drawn —
+   and then player search learned to find fighters and needed the same
+   block. A second implementation of it would be a second thing to keep in
+   step with the first, and the numbers are exactly what would drift.
+
+   Reads both shapes on purpose. The card payload's brief calls the
+   counts `covered`/`career`; the search hit's calls them `ufc_fights`/
+   `career_fights`, because that is what the dossier itself calls them.
+   Renaming either would mean rewriting a payload to suit a renderer. */
+function fighterColHTML(f) {
+  const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
+  const covered = f.covered != null ? f.covered : f.ufc_fights;
+  const career = f.career != null ? f.career : f.career_fights;
+  const flags = (f.red_flags || []).map((x) =>
+    `<span class="chip" style="color:var(--bad);border-color:currentColor"
+       title="${escapeHtml(x)}">${iconMark("warn", 11)}${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
+  const stats = covered
+    ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
+       · TD ${fmt(f.td_per15)}/15`
+    : `<span style="color:var(--warn)">no tracked fight stats</span>`;
+  return `<div class="ufc-corner">
+    <div class="fc-name">${escapeHtml(f.name)}</div>
+    <div class="fc-meta">${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
+      ${f.archetype ? ` · ${escapeHtml(f.archetype.replace(/_/g, " "))}` : ""}</div>
+    <div class="fc-stats">${stats}</div>
+    <div class="fc-cover">stats for ${covered || 0}${career ? ` of ${career}` : ""} fights</div>
+    ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
+  </div>`;
+}
+
 async function renderUFC() {
   const host = document.getElementById("ufc-body");
   if (!host) return;
@@ -20470,23 +20538,7 @@ async function renderUFC() {
   // point of the page, and an unbet fight you can read is far more useful
   // than a one-line "no bet".
   const fmt = (v, suffix = "") => v == null ? "—" : `${v}${suffix}`;
-  const fighterCol = (f) => {
-    const flags = (f.red_flags || []).map((x) =>
-      `<span class="chip" style="color:var(--bad);border-color:currentColor"
-         title="${escapeHtml(x)}">${iconMark("warn", 11)}${escapeHtml(x.split("—")[0].trim())}</span>`).join("");
-    const stats = f.covered
-      ? `${fmt(f.slpm)}/${fmt(f.sapm)} strikes · TDD ${f.tdd == null ? "—" : (f.tdd * 100).toFixed(0) + "%"}
-         · TD ${fmt(f.td_per15)}/15`
-      : `<span style="color:var(--warn)">no tracked fight stats</span>`;
-    return `<div class="ufc-corner">
-      <div class="fc-name">${escapeHtml(f.name)}</div>
-      <div class="fc-meta">${f.record ? escapeHtml(f.record) : "—"}${f.age ? ` · ${f.age}y` : ""}
-        ${f.archetype ? ` · ${escapeHtml(f.archetype.replace(/_/g, " "))}` : ""}</div>
-      <div class="fc-stats">${stats}</div>
-      <div class="fc-cover">stats for ${f.covered || 0}${f.career ? ` of ${f.career}` : ""} fights</div>
-      ${flags ? `<div style="margin-top:5px">${flags}</div>` : ""}
-    </div>`;
-  };
+  const fighterCol = fighterColHTML;
 
   const REASON_STYLE = {
     no_data: ["var(--warn)", "No data"],

@@ -158,7 +158,13 @@ def test_the_endpoint_searches_every_league_by_default():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     i = src.index("def _players_search(")
     body = src[i:src.index("\n    def ", i + 10)]
-    assert "search_all" in body
+    # THE UNSCOPED CALL, NOT ONE FUNCTION'S NAME. This pinned
+    # "search_all" and went red when fighters joined the box — they are
+    # not in the history DB, so the merged reader that finds them lives
+    # in engine/playersearch.py and the endpoint calls that instead. The
+    # contract is that the default search names no single league.
+    assert "prefer=sport" in body, "the default search is scoped again"
+    assert "statlogs.search_all(" in body or "playersearch.search(" in body
     # And it is still not behind the paywall: game logs are facts.
     assert "_entitled" not in body
 

@@ -206,9 +206,36 @@ def _leads_with(name: str, q: str) -> bool:
         w.startswith(ql) for w in re.split(r"[^a-z0-9]+", n) if w)
 
 
+def search_by_sport(q: str, limit: int = 12, sports=None,
+                    db_path=None) -> dict:
+    """{sport: ranked hits} for every log-backed league, ONE connection.
+
+    The per-source lists rather than a merged one, because the merge is
+    not this module's job: fighters come from a different store entirely
+    (engine/ufc/fighters.py) and the two are interleaved in
+    engine/playersearch.py, which is the only place that knows about both.
+
+    One connection because the page re-runs this on every keystroke, and
+    a connection per league on a one-core droplet is four times the cost
+    for the same answer.
+    """
+    q = (q or "").strip()
+    want = [s for s in (sports or SPORT_MARKETS) if s in SPORT_MARKETS]
+    if not q or not want:
+        return {}
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return {}
+    conn = _db.connect(path)
+    try:
+        return {s: _search_conn(conn, s, q, limit) for s in want}
+    finally:
+        conn.close()
+
+
 def search_all(q: str, limit: int = 12, prefer: str = "",
                db_path=None) -> list[dict]:
-    """Every player in EVERY league whose name contains ``q``.
+    """Every player in every LOG-BACKED league whose name contains ``q``.
 
     Ethan, 2026-08-23: "searching for a player should search through ALL
     players for ALL sports. so even if im selected on nfl, i shoudl still
@@ -217,55 +244,17 @@ def search_all(q: str, limit: int = 12, prefer: str = "",
     search box you cannot trust — you type a name, get nothing, and have
     no way to tell "he isn't in our data" from "you're on the wrong tab".
 
-    ROUND-ROBIN, NOT ONE BIG SORT. The per-league ranking key is
-    ``season || '-' || period``, and period means different things in
-    different leagues — a zero-padded NFL week ('005') against an ISO
-    baseball date ('2026-08-14'). Those sort against each other as
-    nonsense, so one merged ORDER BY would hand the list to whichever
-    league's format sorts highest and call it relevance. Taking one hit
-    from each league in turn needs no cross-league comparison at all, and
-    guarantees every league a place in a short list.
-
-    Names that START with the query go round first, so an exact lookup
-    still leads even when another league has a longer substring match.
-    ``prefer`` (the league the visitor is on) only chooses who goes first
-    within a tier — it never excludes anyone, which is the whole point.
+    THE LEAGUES IN THIS DATABASE ONLY. Fighters are not here and never
+    were: nothing writes a UFC row to ``player_game_logs``. The box the
+    visitor actually types into is served by engine/playersearch.py,
+    which adds them. This is the history-DB half of that answer.
     """
+    from .playersearch import merge, source_order
     q = (q or "").strip()
     if not q:
         return []
-    path = str(db_path or _db.DEFAULT_DB)
-    if not os.path.exists(path):
-        return []
-    order = ([prefer] if prefer in SPORT_MARKETS else []) + \
-        [s for s in SPORT_MARKETS if s != prefer]
-    conn = _db.connect(path)
-    try:
-        # Each league fetches a full page: four empty leagues must not
-        # cost the fifth its results.
-        per = {s: _search_conn(conn, s, q, limit) for s in order}
-    finally:
-        conn.close()
-    strong = {s: [h for h in per[s] if _leads_with(h["player"], q)]
-              for s in order}
-    weak = {s: [h for h in per[s] if not _leads_with(h["player"], q)]
-            for s in order}
-    out: list[dict] = []
-    for tier in (strong, weak):
-        depth = 0
-        while len(out) < limit:
-            took = False
-            for s in order:
-                lst = tier[s]
-                if depth < len(lst):
-                    out.append(lst[depth])
-                    took = True
-                    if len(out) >= limit:
-                        break
-            if not took:
-                break
-            depth += 1
-    return out[:limit]
+    order = [s for s in source_order(prefer) if s in SPORT_MARKETS]
+    return merge(search_by_sport(q, limit, order, db_path), q, limit, order)
 
 
 def for_player(sport: str, player: str, db_path=None) -> dict:

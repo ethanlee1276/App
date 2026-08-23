@@ -1454,9 +1454,9 @@ class Handler(BaseHTTPRequestHandler):
         (engine/statlogs.py's header carries the argument) — the paid
         thing is picks, and none ride here.
 
-        EVERY LEAGUE BY DEFAULT. Ethan, 2026-08-23: "even if im selected
-        on nfl, i shoudl still be able to look up mlb or ufc or wnba
-        players." It shipped filtered to whichever tab the visitor was
+        EVERY LEAGUE BY DEFAULT, AND FIGHTERS TOO. Ethan, 2026-08-23:
+        "even if im selected on nfl, i shoudl still be able to look up
+        mlb or ufc or wnba players." It shipped filtered to whichever tab the visitor was
         on, which made an empty result ambiguous in the worst way — "we
         have nothing on him" and "you are on the wrong tab" looked
         identical, and the second one is not the visitor's mistake to
@@ -1464,7 +1464,7 @@ class Handler(BaseHTTPRequestHandler):
         ``scope=sport`` still pins the search to one league for a caller
         that means it.
         """
-        from engine import statlogs
+        from engine import playersearch, statlogs
         sport = (q.get("sport") or [""])[0].lower()
         term = (q.get("q") or [""])[0][:40]
         if (q.get("scope") or [""])[0].lower() == "sport":
@@ -1473,7 +1473,12 @@ class Handler(BaseHTTPRequestHandler):
                                        b'for this sport"}', ".json")
             hits = statlogs.search(sport, term)
         else:
-            hits = statlogs.search_all(term, prefer=sport)
+            # playersearch, not statlogs: fighters are not in the history
+            # DB and never were, so the league-wide log search could not
+            # find one however many leagues it covered. Ethan, an hour
+            # after the all-league change: "im not able to search ufc
+            # players." Two stores, one answer.
+            hits = playersearch.search(term, prefer=sport)
         return self._send(200, json.dumps({"players": hits}).encode(),
                           ".json")
 
