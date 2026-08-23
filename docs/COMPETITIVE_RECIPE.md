@@ -506,10 +506,11 @@ never drift from evidence. Re-mined on every settle pass; rendered on the
 Record page under "Learning from losses" with the empty state stating the
 discipline out loud.
 
-Enforcement wiring today: the MLB prop engine (where every other fitted
-gate already lives). Extending the veto to the other engines, and mining
-the quarter-million-prop backtest DB rather than just the live journal,
-are the two named next steps.
+Enforcement wiring today: every sport's engine (`engine/betting.py`,
+`engine/mlb/betting.py`, `engine/cfb/pipeline.py`, `engine/nba/pipeline.py`
+all call `lp_veto` — see "the ladder extended to every sport" below).
+Mining the quarter-million-prop backtest DB rather than just the live
+journal is the one remaining named next step.
 
 ### BUILT 2026-08-03 — the recency dial (`engine/formfit.py`)
 

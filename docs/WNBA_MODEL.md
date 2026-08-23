@@ -213,7 +213,7 @@ listed honestly rather than faked).
 | §4 First-mover attribution | 🟡 | **The "not stored" claim was wrong** — `apply_odds_to_slate` has recorded every paid WNBA pull into the snapshot history all along; nothing ever READ it for this league. As of 2026-08-10 `nba_build` runs `linemoves.analyze` and stamps picks with `annotate_recommendations(price=False)`: `line_move`, first mover, sharp-led flag, and the with/against reason or warning, journaled as `move_first_sharp` so the miner can test it. **Evidence only, deliberately** — the default annotator calls `quality.apply_movement`, which re-grades and can reject, and movement rejecting Scalpy picks is a pricing change nobody approved (on MLB it is already vetoing on an unmeasured signal, #80). What remains is accumulation across slates |
 | §5 Minutes → possessions → usage → efficiency | 🟡 | Minutes and per-minute rates are real; explicit possession and usage-rate layers 📋 (needs per-100 data we don't ingest) |
 | §5 Blowout risk compresses star minutes | ✅ | `minutes.blowout_mult` / `blowout_prob`, asymmetric by favourite/dog |
-| §5 Recency 40/30/20/10 | ✅ | `LeagueTuning.recency_weights`, applied as **nested** windows — see the note below |
+| §5 Recency 40/30/20/10 | 🟡 | `LeagueTuning.recency_weights` implements 3 of the 4 buckets as **nested** windows (last-5/games-6-10/games-11-20); the fourth bucket (10%, prior season/career) has no counterpart — see the note below |
 | §5 Reset rule | 📋 | Needs role-change/trade detection |
 | §5 Usage Stability Score | ✅ | `engine/nba/quality.py` `usage_stability` — measured week-to-week CV of minutes; above 35% the play is refused outright, and a reliable 12-minutes-a-night role is refused too |
 | §6 Injury ripple | 🟡 | Minutes redistribution is modelled. **On/off inheritance MEASURED 2026-08-10** (`engine/nba/onoff.py`, `launch.py --onoff wnba LVA \"A'ja Wilson\"`): teammates' share of the team's pts/min/reb/ast/fg3m in the games she sat vs played, from box scores already ingested. Share not volume so pace cancels; absence read from the box score, not the injury report; presence judged by MINUTES so a scoreless night is still a played game; below 3 missed games the report says the shape is not evidence. Evidence only — the minutes model owns redistribution until the edge test moves |
@@ -281,12 +281,19 @@ Loosening the clamp toward an unvalidated projection is precisely the
 The clamp stays where it is until the probation bucket has a graded record;
 then it is a measured decision instead of a hopeful one.
 
-**§5's recency weights are read as nested windows, not overlapping ones.**
-"Last 5 at 40% and last 10 at 30%" describes two windows that share five
-games. Implemented literally, the five most recent games carry 70% of the
-projection and the model is far twitchier than the spec intends. The
-engine weights last-5 / games-6-10 / the rest, which is what the schedule
-means.
+**§5's recency weights are read as nested windows, not overlapping ones,
+and the spec's four buckets collapse to three.** "Last 5 at 40% and last
+10 at 30%" describes two windows that share five games. Implemented
+literally, the five most recent games carry 70% of the projection and the
+model is far twitchier than the spec intends. The engine weights last-5 /
+games-6-10 / games-11-20 (`WNBA.recency_weights` in `engine/hoops.py`,
+`(0.40, 0.30, 0.20)`), which is what the schedule means for the first
+three numbers — but it stops there. `base_minutes()` in
+`engine/nba/minutes.py` truncates to the 20 most recent games; there is
+no separate "season" aggregate and no "prior season/career" bucket, so
+the spec's fourth number (10%, career/prior-season) has no counterpart in
+the implementation. Games older than the most recent 20 simply carry no
+weight.
 
 ## The one gap worth money
 
