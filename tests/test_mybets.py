@@ -203,13 +203,96 @@ def test_bulk_import_previews_and_dedupes_before_committing():
     assert "window.mbBulkCommit" in APP
     show = _slice("function mbBulkShow(", "\nfunction renderMyBets(")
     assert "mbSig" in show, "preview does not dedupe"
-    assert "duplicate" in show
+    # THE BEHAVIOUR, not the word. This asserted the string "duplicate"
+    # appeared in the summary, and went red when the copy changed from
+    # "5 duplicate(s) skipped (already logged)" to "5 already logged" —
+    # which is the same fact in fewer words. What has to hold is that
+    # recognised rows are counted and kept out of the commit.
+    assert "dupes.push" in show, "recognised rows are not held back"
+    assert "dupes.length" in show, "the preview never mentions them"
     assert "skipped" in show.lower()
     assert "mbBulkCommit()" in show, "no commit step — imports would be blind"
     # The page carries the importer and says re-importing is safe.
     body = _slice("function renderMyBets(", "\n/* ================")
     assert "mb-bulk-text" in body and "mbBulkFile" in body
     assert "skipped, not doubled" in body
+
+
+def test_the_same_bet_typed_and_imported_is_not_two_bets():
+    """THE QUIET ONE, live in shipped code until 2026-08-23.
+
+    `mbSig` keys on the description, which is right for re-importing the
+    same export twice and wrong for what actually happens: you log a bet
+    on your phone during the game, then import the book's CSV at the
+    weekend.
+
+        typed by you     "Judge o1.5 TB"
+        from the book    "Aaron Judge Over 1.5 Total Bases"
+
+    Different signature, so the import added a second copy — and the
+    damage does not announce itself. Two rows for one wager doubles the
+    staked total and halves the ROI on the page whose only job is
+    telling you how you are doing.
+
+    Runs the SHIPPED functions rather than reading them, because the two
+    keys agreeing or disagreeing is the entire fix."""
+    node = shutil.which("node")
+    if not node:
+        return
+    check = _slice("function mbSig(", "\nfunction mbRowsFromText(") + """
+const F = (m) => { console.error(m); process.exit(1); };
+const typed = {date:"2026-08-20", book:"FanDuel",
+               desc:"Judge o1.5 TB", stake:25, odds:-110};
+const book  = {date:"2026-08-20", book:"FanDuel",
+               desc:"Aaron Judge Over 1.5 Total Bases", stake:25, odds:-110};
+if (mbSig(typed) === mbSig(book)) F("mbSig should NOT match — it keys on desc");
+if (mbAcctKey(typed) !== mbAcctKey(book)) F("the same bet read as two");
+// A book quotes cents and whole numbers; float noise is not a new bet.
+if (mbAcctKey(typed) !== mbAcctKey({...book, stake:25.004, odds:-110.4}))
+  F("rounding split one bet in two");
+// Different day, different price, different book: all different bets.
+if (mbAcctKey(typed) === mbAcctKey({...book, date:"2026-08-21"})) F("day");
+if (mbAcctKey(typed) === mbAcctKey({...book, odds:-115})) F("price");
+if (mbAcctKey(typed) === mbAcctKey({...book, book:"DraftKings"})) F("book");
+// Case and padding on the book name are typing, not identity.
+if (mbAcctKey(typed) !== mbAcctKey({...book, book:" fanduel "})) F("case");
+console.log("ok");
+"""
+    out = subprocess.run([node, "-e", check], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr.strip() or out.stdout.strip()
+
+
+def test_a_claimed_row_cannot_swallow_a_second_wager():
+    """Two different bets can share a date, book, stake and price — a
+    parlay and a straight at −110 for $25 on the same night. The preview
+    claims each existing row at most once, or the second import row
+    would vanish into the first."""
+    show = _slice("function mbBulkShow(", "\nfunction renderMyBets(")
+    assert "unclaimed" in show, "existing rows are not claimed one at a time"
+    assert "pool.shift()" in show, (
+        "a matched row is not consumed, so it can absorb every incoming "
+        "bet with the same accounting key")
+
+
+def test_an_import_settles_a_pending_bet_it_recognises():
+    """The export is the authority on results, so a CSV full of graded
+    bets should grade the pending copies already in the book. Without
+    this the preview says "nothing to add" after a file that had every
+    answer in it."""
+    show = _slice("function mbBulkShow(", "\nfunction renderMyBets(")
+    assert "_mbGraded" in show and "mine.result = b.result" in show
+    assert "pending" in show
+    # …and it must not un-settle anything: only a pending row is touched.
+    i = show.index("mine.result = b.result")
+    assert 'String(mine.result || "pending") === "pending"' in show[:i], (
+        "a settled row can be rewritten by an import")
+
+
+def test_the_preview_says_what_it_did_to_bets_it_recognised():
+    """A preview reading "0 to add" after a file full of results reads
+    as the import having done nothing."""
+    show = _slice("function mbBulkShow(", "\nfunction renderMyBets(")
+    assert "settled from this file" in show
 
 
 def test_the_page_is_wired_like_every_other_standalone():

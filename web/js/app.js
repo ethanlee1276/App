@@ -10622,6 +10622,32 @@ function mbSig(b) {
           Number(b.stake), Number(b.odds)].join("|");
 }
 
+/* THE SAME BET, WRITTEN BY SOMEBODY ELSE.
+   mbSig includes the description, which is right for re-importing the
+   same export twice and wrong for the case that actually happens: you
+   log a bet on your phone during the game, then import the book's CSV
+   at the weekend.
+
+       typed by you     "Judge o1.5 TB"
+       from the book    "Aaron Judge Over 1.5 Total Bases"
+
+   Different signature, so the import added a SECOND copy — and the
+   damage is quiet rather than loud. Two rows for one wager doubles the
+   staked total and halves the ROI on a page whose whole job is telling
+   you how you are doing.
+
+   Date, book, stake and price are what both sides agree on; the words
+   are the one field they never write the same way. Same rule as
+   engine/booksync.py, which needed it first for the sportsbook sync.
+
+   Stake and price are rounded to what a book actually quotes — a cent
+   and a whole number — so 25 and 25.001 are one bet rather than two. */
+function mbAcctKey(b) {
+  return [b.date, String(b.book || "").toLowerCase().trim(),
+          Number(b.stake).toFixed(2),
+          Math.round(Number(b.odds))].join("|");
+}
+
 function mbRowsFromText(text, fallbackBook) {
   const rows = mbParseCSV(text);
   if (rows.length < 2) {
@@ -10666,6 +10692,11 @@ function mbRowsFromText(text, fallbackBook) {
 
 /* Parsed-but-not-committed rows between Preview and Add. */
 let _mbPending = null;
+/* How many bets already in the book this import GRADED — matched under
+   different wording and settled from the export. Reported, because a
+   preview saying "0 to add" after a file full of results would read as
+   the import having done nothing at all. */
+let _mbGraded = 0;
 
 window.mbBulkFile = function (input) {
   const file = input.files && input.files[0];
@@ -10691,15 +10722,44 @@ function mbBulkShow(text) {
   if (!box) return;
   const fallbackBook = (document.getElementById("mb-book") || {}).value || "Other";
   const parsed = mbRowsFromText(text, fallbackBook);
-  const have = new Set(mbLoad().map(mbSig));
+  const book = mbLoad();
+  const have = new Set(book.map(mbSig));
+  /* Existing rows by accounting key, each claimable ONCE. Two different
+     wagers can share a date, book, stake and price — a parlay and a
+     straight at −110 for $25 on the same night — so a claimed row must
+     not swallow the second one as well. */
+  const unclaimed = new Map();
+  book.forEach((b) => {
+    const k = mbAcctKey(b);
+    if (!unclaimed.has(k)) unclaimed.set(k, []);
+    unclaimed.get(k).push(b);
+  });
   const seen = new Set();
-  const fresh = [], dupes = [];
+  const fresh = [], dupes = [], already = [];
   for (const b of parsed.bets) {
     const sig = mbSig(b);
-    if (have.has(sig) || seen.has(sig)) dupes.push(b);
-    else { seen.add(sig); fresh.push(b); }
+    if (have.has(sig) || seen.has(sig)) { dupes.push(b); continue; }
+    const pool = unclaimed.get(mbAcctKey(b));
+    if (pool && pool.length) {
+      // A bet already in the book under different words. Claim it, and
+      // let the export settle it if the row is still pending — the book
+      // is the authority on the result, you are the authority on the
+      // wording, which is why the row keeps its own desc.
+      const mine = pool.shift();
+      if (String(mine.result || "pending") === "pending"
+          && String(b.result || "pending") !== "pending") {
+        mine.result = b.result;
+        already.push(b);
+      }
+      dupes.push(b);
+      continue;
+    }
+    seen.add(sig);
+    fresh.push(b);
   }
+  if (already.length) mbSave(book);
   _mbPending = fresh;
+  _mbGraded = already.length;
   const mapped = Object.keys(parsed.mapping || {})
     .filter((k) => parsed.mapping[k] != null);
   const sample = fresh.slice(0, 8).map((b) => `<tr>
@@ -10713,7 +10773,8 @@ function mbBulkShow(text) {
   box.innerHTML = `
     <div class="mb-bulk-summary">
       ${fresh.length} bet(s) ready to add
-      ${dupes.length ? ` · ${dupes.length} duplicate(s) skipped (already logged)` : ""}
+      ${dupes.length ? ` · ${dupes.length} already logged` : ""}
+      ${_mbGraded ? ` · ${_mbGraded} of those settled from this file` : ""}
       ${parsed.skipped.length ? ` · ${parsed.skipped.length} row(s) unreadable` : ""}
       ${mapped.length ? `<span class="mb-bulk-cols">columns matched: ${mapped.join(", ")}</span>` : ""}
     </div>
@@ -10727,7 +10788,10 @@ function mbBulkShow(text) {
       ${fresh.length > 8 ? `<div class="mb-import-note">…and ${fresh.length - 8} more</div>` : ""}
       <button class="btn mb-add" type="button" onclick="mbBulkCommit()">
         Add ${fresh.length} bet(s)</button>`
-    : `<div class="mb-import-note">Nothing new to add from that file.</div>`}`;
+    : `<div class="mb-import-note">${_mbGraded
+        ? `Nothing new to add — but ${_mbGraded} bet(s) you had already
+           logged were settled from this file.`
+        : "Nothing new to add from that file."}</div>`}`;
 }
 
 function renderMyBets() {
