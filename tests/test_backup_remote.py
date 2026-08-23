@@ -24,9 +24,10 @@ leaves a successful-looking run.
     python3 tests/test_backup_remote.py
 """
 
+import gzip
 import os
-import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -42,8 +43,9 @@ def _src():
 
 
 class Stub:
-    """A PATH with a fake `rsync` in it, so the script's own logic is
-    what gets exercised rather than the network."""
+    """A tree of its own with a fake `rsync` on PATH, so the script's own
+    logic is what gets exercised rather than the network — or whatever
+    databases happen to be sitting on the machine running the test."""
 
     def __enter__(self):
         self.dir = tempfile.mkdtemp(prefix="qb-bk-")
@@ -71,6 +73,39 @@ class Stub:
         self.backups = os.path.join(self.dir, "backups")
         self.remote = os.path.join(self.dir, "remote")
         os.makedirs(self.remote)
+
+        # A TREE OF ITS OWN. `backup.sh` backs up `<its own parent>/data`
+        # and there is no variable pointing that anywhere else, so running
+        # the real script where it lives backed up whatever databases were
+        # on the machine. `assert made` — "a .db.gz was written" — was
+        # therefore asserting that the developer's own data/ledger.db
+        # existed, which is a fact about the box, not about the script.
+        #
+        # It showed up as a test that failed once and then passed with
+        # nothing changed: on a fresh clone there are no databases, another
+        # test file creates data/ledger.db a few seconds into the run, and
+        # with eight files going at once whether that landed before this
+        # file ran was a coin toss. Red on the first run, green on the
+        # second, and nothing to look at in between.
+        #
+        # So the script runs from a copy inside a tree we built. Its own
+        # `cd "$(dirname "$0")/.."` makes that tree the ROOT it backs up,
+        # and the fixture below is the only database it can reach.
+        # accounts.db is deliberately ABSENT: one database present and one
+        # missing is exactly the pipefail case this file exists for, and
+        # here it is arranged rather than hoped for.
+        self.tree = os.path.join(self.dir, "tree")
+        os.makedirs(os.path.join(self.tree, "deploy"))
+        os.makedirs(os.path.join(self.tree, "data"))
+        self.script = os.path.join(self.tree, "deploy", "backup.sh")
+        shutil.copy2(SCRIPT, self.script)     # copy2 keeps the mode bits
+        # Named so that a restored backup proves which tree it came from —
+        # see test_the_backup_is_taken_from_the_fixture_tree below.
+        db = sqlite3.connect(os.path.join(self.tree, "data", "ledger.db"))
+        db.execute("CREATE TABLE fixture_bets (id INTEGER PRIMARY KEY)")
+        db.execute("INSERT INTO fixture_bets (id) VALUES (1)")
+        db.commit()
+        db.close()
         return self
 
     def __exit__(self, *a):
@@ -84,8 +119,9 @@ class Stub:
             env.pop("QB_BACKUP_REMOTE", None)
         if with_rsync:
             env["PATH"] = self.bin + os.pathsep + env["PATH"]
-        return subprocess.run(["bash", SCRIPT, *args], capture_output=True,
-                              text=True, cwd=ROOT, env=env, timeout=180)
+        return subprocess.run(["bash", self.script, *args],
+                              capture_output=True, text=True,
+                              cwd=self.tree, env=env, timeout=180)
 
 
 def test_the_offsite_push_is_reached_even_when_a_database_is_missing():
@@ -189,6 +225,44 @@ def test_test_remote_does_a_round_trip_rather_than_just_writing():
         # …and it cleaned up after itself.
         assert not [f for f in os.listdir(s.remote) if "probe" in f], \
             "the probe file was left at the destination"
+
+
+def test_the_backup_is_taken_from_the_fixture_tree():
+    """The proof that this file no longer reads the machine under it.
+
+    `backup.sh` snapshots `<its own parent>/data/*.db`, so running the
+    real script where it lives made every "a backup was written"
+    assertion here really an assertion that this box happened to have a
+    data/ledger.db. On a clone that has none — CI, a fresh checkout, the
+    nightly — the file went red on the first run and green on the
+    second, because another test file creates that database a few
+    seconds in and the suite runs eight files at a time.
+
+    Restoring the newest backup and finding the fixture's own table is
+    what pins the tree under test to the one Stub built. If someone
+    points the script back at the repo, this is the test that says so.
+    """
+    with Stub() as s:
+        s.run(remote=s.remote)
+        made = sorted(f for f in os.listdir(s.backups)
+                      if f.startswith("ledger-") and f.endswith(".db.gz"))
+        assert made, "no backup was written at all"
+        restored = os.path.join(s.dir, "restored.db")
+        with gzip.open(os.path.join(s.backups, made[-1]), "rb") as fh, \
+                open(restored, "wb") as out:
+            shutil.copyfileobj(fh, out)
+        con = sqlite3.connect(restored)
+        tables = {r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        con.close()
+        assert "fixture_bets" in tables, (
+            "the backup did not come from the fixture tree — tables: "
+            f"{sorted(tables)}")
+        # …and the database this file deliberately leaves out stayed out,
+        # so the missing-database case is arranged rather than hoped for.
+        assert not [f for f in os.listdir(s.backups)
+                    if f.startswith("accounts-")], \
+            "accounts.db is meant to be absent from the fixture tree"
 
 
 def test_the_todo_reports_whether_backups_are_still_HAPPENING():
