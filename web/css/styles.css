@@ -6424,6 +6424,19 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .acct-strip .btn { margin-left: auto; }
 .acct-strip-out { border-color: var(--border); }
 
+/* THE FANTASY LINKS, WHERE THEY NOW LIVE.
+   Ethan asked for every fantasy sync to sit on the Account page, so the
+   forms are there once and the Fantasy page wears `.ff-link-strip` — the
+   same strip shape as the sign-in one directly above, because it is the
+   same idea: this page tells you the state and points at the page that
+   changes it. */
+.ffl { margin-top: 26px; }
+.ffl .card:last-child { margin-bottom: 0; }
+/* The linked names carry the weight, not a second colour: the strip is
+   already a quiet surface and a coloured name inside it reads as a link
+   somebody can tap. */
+.ff-link-strip b { color: var(--text); font-weight: 600; }
+
 /* The topbar chip when signed OUT: a labelled pill rather than a lone
    glyph. The glyph alone reads as "settings", and what sits behind it is
    the only way anyone can pay for anything. */

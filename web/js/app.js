@@ -12076,15 +12076,18 @@ async function renderFantasy() {
   if (!d || !d.season) {
     /* YOUR LEAGUE IS NOT DOWNSTREAM OF OUR USAGE FEED.
        This used to return here, which took the Around-the-league tab
-       with it — and that tab is where all three connect cards live. So
-       an empty or failed usage build meant nobody could link a league
-       AT ALL, including in the offseason, which is exactly when people
-       are drafting and most want to.
+       with it — and that tab was, at the time, the only place a league
+       could be linked. So an empty or failed usage build meant nobody
+       could link a league AT ALL, including in the offseason, which is
+       exactly when people are drafting and most want to.
 
-       Sleeper and ESPN read the user's own league directly; whether we
-       have ingested last season's target shares has nothing to do with
-       it. The empty state stays — it is true, and it says what to run —
-       and the sync zones render underneath it. */
+       The forms have since moved to the Account page, which settles that
+       for good: linking no longer depends on this page rendering at all.
+       What stays here is the strip that says what is linked, and the
+       panels for whatever IS — Sleeper and ESPN read the user's own
+       league directly, and last season's target shares have nothing to
+       do with it. The empty state stays too: it is true, and it says
+       what to run. */
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("trophy", 30)}</div>
       <div class="es-title">No NFL usage data yet</div>
       <div class="es-sub">${escapeHtml((d && d.note) || "Run `python3 ingest.py nfl` once — usage rows (targets, carries, air yards, PPR points) ride along with the normal player-log ingest, then this page fills automatically.")}</div></div>
@@ -12093,8 +12096,9 @@ async function renderFantasy() {
           <span class="sub">— these read your own league and do not wait on the
           usage feed above</span></div>
         ${acctStripHTML()}
+        ${ffLinkStripHTML()}
         <div id="sleeper-zone"></div><div id="league-desk"></div>
-        <div id="espn-zone"></div><div id="espn-desk"></div>
+        <div id="espn-desk"></div>
       </div>`;
     renderSleeperZone(d || {});
     renderEspnZone();
@@ -12296,10 +12300,10 @@ async function renderFantasy() {
      `<div id="mock-room">${mockDraftHTML()}</div>`],
     ["league", "Around the league",
      "camp, the waiver wire, the offseason and the draft kit",
-     acctStripHTML() + `<div id="sleeper-zone"></div>`
+     acctStripHTML() + ffLinkStripHTML()
+     + `<div id="sleeper-zone"></div>`
      + `<div id="league-desk"></div>`
-     + `<div id="espn-zone"></div><div id="espn-desk"></div>`
-     + `<div id="yahoo-zone"></div><div id="yahoo-desk"></div>`
+     + `<div id="espn-desk"></div>`
      + campHTML(d.camp)
      + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
@@ -12318,7 +12322,6 @@ async function renderFantasy() {
   initRankBoard();
   renderSleeperZone(d);
   renderEspnZone();
-  renderYahooZone();
 }
 
 /* The Fantasy page is ALWAYS football, whatever sport tab the user
@@ -14750,6 +14753,7 @@ function acctScreenHTML() {
         </div>
       </div>
       ${acctSignedInHTML(u)}
+      ${ffLinksHTML()}
     </div>`;
   }
   // Signed out. A legacy PIN profile, if this device still has one, goes
@@ -14778,6 +14782,7 @@ function acctScreenHTML() {
       <li>Card details go to Stripe, never to this server.</li>
       <li>Delete the account whenever you like, from this page.</li>
     </ul>
+    ${ffLinksHTML()}
     ${legacy}
   </div>`;
 }
@@ -14789,6 +14794,162 @@ function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;
   body.innerHTML = acctScreenHTML() + menuDiagHTML();
+  renderFantasyLinks();
+}
+
+/* ---- WHERE A LEAGUE GETS LINKED ----------------------------------------
+   Ethan, 2026-08-23: "add all the account syncs and logins for fanstasy
+   on the actual account page so its all together and that would make the
+   most sense on where that would be."
+
+   It is the rule `acctStripHTML` already follows for sign-in, applied to
+   leagues: a page that USES a link has to say whether it is linked, but
+   it does not need to be a second place to make one. Two forms for one
+   thing is how a username gets typed into the copy nobody is looking at,
+   and how a Disconnect on one page leaves the other still showing a
+   league.
+
+   So the FORMS live here, once. The Fantasy page keeps what it is for —
+   the roster, the waiver watch, the league desk — and wears a strip that
+   names what is linked and sends you here to change it.
+
+   These render SIGNED OUT as well as in, and that is deliberate: the
+   links live in this browser and work without an account (signing in
+   only carries them to your other devices). Following "link it on the
+   Account page" and landing on a sign-in wall with no way to link would
+   be worse than the duplicate forms this replaces.
+
+   Nothing here asks for a platform password. Sleeper needs a username;
+   ESPN needs the league id out of your own URL, with the league set
+   public. A card that collected a password is a card this site does not
+   ship — see espnConnectHTML for why the cookie route is refused. */
+function ffLinksHTML() {
+  return `<section class="ffl">
+    <div class="section-title minor">Fantasy leagues
+      <span class="sub">— link once here and every fantasy surface on the
+      site reads your own league. Read-only, and none of them asks for a
+      platform password.</span></div>
+    <div id="ffl-sleeper"></div>
+    <div id="ffl-espn"></div>
+    <div id="yahoo-zone"></div><div id="yahoo-desk"></div>
+  </section>`;
+}
+
+function renderFantasyLinks() {
+  if (!document.getElementById("ffl-sleeper")) return;
+  renderFflSleeper();
+  renderFflEspn();
+  // Yahoo came here as-is. Its logic is deliberately untouched — Ethan
+  // asked for Yahoo to be left alone for now — but it is a LOGIN, and a
+  // login left on the Fantasy page would be the one card contradicting
+  // the strip that sends people here. Its desk moved with it because
+  // renderYahooZone fills both; when Yahoo is picked back up, that split
+  // is the thing to fix.
+  renderYahooZone();
+}
+
+/* A linked platform, drawn the same for both: what it is, what it is
+   linked to, and the one button that undoes it. A connect with no
+   disconnect is a setting somebody has to clear site data to change. */
+function fflLinkedHTML(title, detail, offId) {
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="card-head">
+      <div><div class="player">${title}</div>
+        <div class="subtitle">${detail}</div></div>
+      <button class="btn ghost" id="${offId}">Disconnect</button>
+    </div></div>`;
+}
+
+function renderFflSleeper(errMsg) {
+  const zone = document.getElementById("ffl-sleeper");
+  if (!zone) return;
+  const user = localStorage.getItem("ff_user");
+  if (!user) {
+    zone.innerHTML = sleeperConnectHTML(errMsg);
+    const btn = document.getElementById("sleeper-connect");
+    if (btn) btn.addEventListener("click", () => {
+      const v = (document.getElementById("sleeper-username").value || "").trim();
+      if (!v) return renderFflSleeper("Your Sleeper username — the one you "
+                                      + "sign in to Sleeper with.");
+      localStorage.setItem("ff_user", v);
+      acctTouch("fantasy");
+      renderFflSleeper();
+    });
+    return;
+  }
+  zone.innerHTML = fflLinkedHTML(
+    `Sleeper — ${escapeHtml(user)}`,
+    "read-only · no password held · your leagues load on the Fantasy page",
+    "ffl-sleeper-off");
+  const off = document.getElementById("ffl-sleeper-off");
+  if (off) off.addEventListener("click", () => {
+    // ff_league goes with it. Leaving the chosen league behind means the
+    // next account linked here opens on a league it does not own.
+    localStorage.removeItem("ff_user");
+    localStorage.removeItem("ff_league");
+    acctTouch("fantasy");
+    renderFflSleeper();
+  });
+}
+
+function renderFflEspn(errMsg) {
+  const zone = document.getElementById("ffl-espn");
+  if (!zone) return;
+  const league = localStorage.getItem(ESPN_LEAGUE_KEY);
+  if (!league) {
+    zone.innerHTML = espnConnectHTML(errMsg);
+    const btn = document.getElementById("espn-connect");
+    if (btn) btn.addEventListener("click", () => {
+      const id = (document.getElementById("espn-league-id").value || "").trim();
+      // The server refuses anything that is not digits; saying so here
+      // costs a keystroke instead of a round trip and an error card that
+      // reads like the league is missing.
+      if (!/^\d{1,25}$/.test(id))
+        return renderFflEspn("A league id is the number after leagueId= in "
+                             + "your ESPN league URL — digits only.");
+      const team = (document.getElementById("espn-team-id").value || "").trim();
+      localStorage.setItem(ESPN_LEAGUE_KEY, id);
+      if (team) localStorage.setItem(ESPN_TEAM_KEY, team);
+      else localStorage.removeItem(ESPN_TEAM_KEY);
+      // Into the synced section, so linking on the phone is linking
+      // everywhere — the whole point of "connect it once".
+      acctTouch("fantasy");
+      renderFflEspn();
+    });
+    return;
+  }
+  const team = localStorage.getItem(ESPN_TEAM_KEY) || "";
+  zone.innerHTML = fflLinkedHTML(
+    `ESPN — league ${escapeHtml(league)}`,
+    `${team ? `your team id ${escapeHtml(team)} · ` : ""}public read, no `
+    + `credential stored`,
+    "ffl-espn-off");
+  const off = document.getElementById("ffl-espn-off");
+  if (off) off.addEventListener("click", () => {
+    localStorage.removeItem(ESPN_LEAGUE_KEY);
+    localStorage.removeItem(ESPN_TEAM_KEY);
+    acctTouch("fantasy");
+    renderFflEspn();
+  });
+}
+
+/* What the Fantasy page wears instead of the forms: what is linked, and
+   the way to the page that changes it. */
+function ffLinkStripHTML() {
+  const bits = [];
+  const sl = localStorage.getItem("ff_user");
+  const es = localStorage.getItem(ESPN_LEAGUE_KEY);
+  if (sl) bits.push(`Sleeper as <b>${escapeHtml(sl)}</b>`);
+  if (es) bits.push(`ESPN league <b>${escapeHtml(es)}</b>`);
+  return `<div class="acct-strip ff-link-strip${bits.length ? "" : " acct-strip-out"}">
+    <span>${bits.length
+      ? `Linked: ${bits.join(" · ")}.`
+      : "No fantasy league linked yet — Sleeper takes a username, ESPN a "
+        + "league id off your own URL. Neither asks for a password."}</span>
+    <button class="btn${bits.length ? " ghost" : ""}"
+      onclick="switchView('account', true)">${
+      bits.length ? "Manage leagues" : "Link a league"}</button>
+  </div>`;
 }
 
 /* ---- THE DIAGNOSTIC, WHERE IT CAN BE READ -------------------------------
@@ -19372,50 +19533,20 @@ function espnConnectHTML(msg) {
   </div>`;
 }
 
-function renderEspnZone(errMsg) {
-  const zone = document.getElementById("espn-zone");
-  if (!zone) return;
+/* ON THE FANTASY PAGE, ESPN IS DESK ONLY.
+   This used to be a second copy of the connect form, complete with its
+   own Disconnect — so the league could be linked in one place and
+   unlinked in another, with neither redrawing the other. The form and
+   the Disconnect now live once, on the Account page (renderFflEspn).
+   What is left here is the only question this page actually asks: is
+   there a league to draw. */
+function renderEspnZone() {
+  const desk = document.getElementById("espn-desk");
+  if (!desk) return;
   const league = localStorage.getItem(ESPN_LEAGUE_KEY);
-  if (!league) {
-    zone.innerHTML = espnConnectHTML(errMsg);
-    const btn = document.getElementById("espn-connect");
-    if (btn) btn.addEventListener("click", () => {
-      const id = (document.getElementById("espn-league-id").value || "").trim();
-      // The server refuses anything that is not digits; saying so here
-      // costs a keystroke instead of a round trip and an error card.
-      if (!/^\d{1,25}$/.test(id)) {
-        renderEspnZone("A league id is the number in your ESPN league URL — "
-                       + "digits only.");
-        return;
-      }
-      const team = (document.getElementById("espn-team-id").value || "").trim();
-      localStorage.setItem(ESPN_LEAGUE_KEY, id);
-      if (team) localStorage.setItem(ESPN_TEAM_KEY, team);
-      else localStorage.removeItem(ESPN_TEAM_KEY);
-      // Into the synced section, so linking on the phone is linking
-      // everywhere — the same contract Sleeper has had since accounts
-      // shipped, and the whole point of "connect it once".
-      acctTouch("fantasy");
-      renderEspnZone();
-    });
-    return;
-  }
-  const team = localStorage.getItem(ESPN_TEAM_KEY) || "";
-  zone.innerHTML = `<div class="card" style="margin-bottom:16px">
-    <div class="card-head"><div><div class="player">ESPN league ${escapeHtml(league)}</div>
-      <div class="subtitle">${team ? `your team id ${escapeHtml(team)} · ` : ""}public
-        read, no credential stored</div></div>
-      <button class="btn ghost" id="espn-forget">Disconnect</button></div></div>`;
-  const off = document.getElementById("espn-forget");
-  if (off) off.addEventListener("click", () => {
-    localStorage.removeItem(ESPN_LEAGUE_KEY);
-    localStorage.removeItem(ESPN_TEAM_KEY);
-    acctTouch("fantasy");
-    const desk = document.getElementById("espn-desk");
-    if (desk) desk.innerHTML = "";
-    renderEspnZone();
-  });
-  renderLeagueDesk(league, team, "espn", "espn-desk");
+  if (!league) { desk.innerHTML = ""; return; }
+  renderLeagueDesk(league, localStorage.getItem(ESPN_TEAM_KEY) || "",
+                   "espn", "espn-desk");
 }
 
 async function renderSleeperZone(d, errMsg) {
@@ -19423,15 +19554,16 @@ async function renderSleeperZone(d, errMsg) {
   if (!zone) return;
   const username = localStorage.getItem("ff_user");
   if (!username) {
-    zone.innerHTML = sleeperConnectHTML(errMsg);
-    const btn = document.getElementById("sleeper-connect");
-    if (btn) btn.addEventListener("click", () => {
-      const v = (document.getElementById("sleeper-username").value || "").trim();
-      if (!v) return;
-      localStorage.setItem("ff_user", v);
-      acctTouch("fantasy");
-      renderSleeperZone(d);
-    });
+    /* The form moved to the Account page. What still belongs here is the
+       error the sync raised, because it is about a username this page
+       just cleared — going silent would look like nothing happened. */
+    zone.innerHTML = errMsg ? `<div class="card" style="margin-bottom:16px">
+      <div class="card-head"><div><div class="player">Sleeper sync stopped</div>
+        <div class="subtitle">The link was cleared. Reconnect on the Account
+          page.</div></div>
+        <button class="btn" onclick="switchView('account', true)">Account</button></div>
+      <div class="warning" style="margin-top:10px">${icon('warn')} ${escapeHtml(errMsg)}</div>
+    </div>` : "";
     return;
   }
   zone.innerHTML = `<p class="loading">Syncing ${escapeHtml(username)}'s Sleeper leagues…</p>`;
@@ -19526,7 +19658,6 @@ function renderSleeperPanel(d, ctx) {
       <div style="display:flex;gap:8px;align-items:center">
         <select id="sleeper-league" style="background:var(--panel-2);color:inherit;
           border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-family:inherit">${leagueOpts}</select>
-        <button class="btn ghost" id="sleeper-disconnect">Disconnect</button>
       </div>
     </div>
     <div class="section-title">My roster
@@ -19559,13 +19690,10 @@ function renderSleeperPanel(d, ctx) {
     acctTouch("fantasy");
     renderSleeperZone(d);
   });
-  const dis = document.getElementById("sleeper-disconnect");
-  if (dis) dis.addEventListener("click", () => {
-    localStorage.removeItem("ff_user");
-    localStorage.removeItem("ff_league");
-    acctTouch("fantasy");
-    renderSleeperZone(d);
-  });
+  /* No Disconnect here on purpose — it is on the Account page with the
+     form that made the link. WHICH of your leagues you are looking at is
+     a viewing choice and stays: the list only exists once Sleeper has
+     answered, which is here. */
 }
 
 /* ============================================================

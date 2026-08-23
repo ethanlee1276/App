@@ -305,7 +305,7 @@ def test_the_page_can_reach_the_platform_this_module_implements():
     was written — and nothing on the page ever passed "espn". A finished
     platform behind a door with no handle."""
     app = _app()
-    assert 'id="espn-zone"' in app, "no host for the connect card"
+    assert 'id="espn-desk"' in app, "no host for the league desk"
     assert "function renderEspnZone(" in app
     assert 'renderEspnZone();' in app, "defined but never called"
     assert '"espn", "espn-desk"' in app, (
@@ -341,7 +341,7 @@ def test_the_card_refuses_a_league_id_the_server_would_refuse():
     """server.py answers 400 for anything that is not digits. Saying so
     in the box costs a keystroke; letting it through costs a round trip
     and an error card that reads like the league is missing."""
-    zone = _fn(_app(), "renderEspnZone")
+    zone = _fn(_app(), "renderFflEspn")
     assert "\\d{1,25}" in zone, "any string is accepted and sent"
 
 
@@ -368,8 +368,8 @@ def test_the_card_names_the_setting_rather_than_asking_for_a_cookie():
 def test_the_link_can_be_undone():
     """A connect with no disconnect is a setting somebody has to clear
     site data to change."""
-    zone = _fn(_app(), "renderEspnZone")
-    assert "espn-forget" in zone
+    zone = _fn(_app(), "renderFflEspn")
+    assert "ffl-espn-off" in zone
     assert "removeItem(ESPN_LEAGUE_KEY)" in zone
     assert "removeItem(ESPN_TEAM_KEY)" in zone
 
@@ -390,10 +390,12 @@ def test_a_league_can_be_linked_when_the_usage_feed_is_empty():
     head = body[:body.index("setStandaloneSource")]
     assert "No NFL usage data yet" in head, (
         "this test no longer covers the early-return branch")
-    assert 'id="espn-zone"' in head and 'id="sleeper-zone"' in head, (
-        "the empty state still hides the connect cards")
+    assert 'id="espn-desk"' in head and 'id="sleeper-zone"' in head, (
+        "the empty state still hides the league panels")
     assert "renderEspnZone()" in head and "renderSleeperZone(" in head, (
-        "the cards are drawn but never wired up")
+        "the panels are drawn but never wired up")
+    assert "ffLinkStripHTML()" in head, (
+        "no way from the empty state to the page that links a league")
 
 
 def test_the_empty_state_still_says_what_is_missing():
