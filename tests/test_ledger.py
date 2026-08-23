@@ -270,7 +270,11 @@ def test_export_json_writes_the_site_record():
     from pathlib import Path
     conn = _conn()
     ledger.configure_bankroll(conn, starting=1000, unit_pct=1.0)
-    ledger.log_recommendations(conn, _result())
+    # A 2026 week rather than the fixture's 2024 one: the export's
+    # headline is scoped to ledger.RECORD_EPOCH now, and a 2024 bet is
+    # correctly outside it. This test is about the export's SHAPE, so it
+    # keeps its fixture inside the window the shape describes.
+    ledger.log_recommendations(conn, _result(date="2026-W05"))
     ledger.settle(conn, {("A", "rush_yds"): 85.0})
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "web" / "data" / "record.json"
@@ -305,13 +309,22 @@ def test_pnl_curve_runs_cumulative_by_date():
     # Running total nets the loss against day 1's win.
     assert curve[1]["day_u"] == -1.0 and curve[1]["cum_u"] == 0.0
 
-    # The curve rides along in the site export.
+    # The curve rides along in the site export — SCOPED to
+    # ledger.RECORD_EPOCH, like every other headline number, so that the
+    # running total under the record cannot disagree with the record.
+    # This book is entirely before the epoch, so the published curve is
+    # empty and `all_time` says where the real one starts. Both halves
+    # matter: the first is the scoping working, the second is the promise
+    # that nothing was deleted.
     import json, tempfile
     from pathlib import Path
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "record.json"
         ledger.export_json(conn, p)
-        assert json.loads(p.read_text())["curve"][-1]["cum_u"] == 0.0
+        d = json.loads(p.read_text())
+        assert d["curve"] == []
+        assert d["all_time"]["curve_from"] == "2026-07-24"
+        assert d["all_time"]["hidden_settled"] == 2
 
 
 def test_settle_falls_back_to_snapshot_closes_for_clv():
@@ -908,8 +921,11 @@ def test_export_json_carries_calibration_and_health():
     import json, tempfile
     from pathlib import Path
     conn = _conn()
+    # Dated ON the epoch rather than at the fixture's default July day:
+    # the export's headline starts there, and pinning the date to the
+    # constant means this cannot drift again when the epoch moves.
     _insert_settled(conn, "A", status="won", hit_prob=0.6, edge=0.05,
-                    closing=52.0)
+                    closing=52.0, date=ledger.RECORD_EPOCH)
     with tempfile.TemporaryDirectory() as td:
         p = Path(td) / "record.json"
         ledger.export_json(conn, p)

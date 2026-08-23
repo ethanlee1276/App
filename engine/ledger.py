@@ -2760,10 +2760,20 @@ def performance(conn, sport: str | None = None,
     args: list = list(cats)
     if sport:
         q += " AND sport=?"; args.append(sport)
-    # `date >= ?` is safe here in a way it is not everywhere: NFL week
-    # labels ("2026-W1") string-compare ABOVE any ISO date, so a week bet
-    # is never filtered out by an epoch — it sorts into the future, which
-    # for a display window is the right side to fail on.
+    # `date >= ?` across mixed date formats, which needs stating exactly
+    # because the obvious summary of it is wrong. NFL journals week
+    # labels ("2026-W1") and everything else journals ISO days, and a
+    # string comparison sorts them by their YEAR prefix first — so
+    # "2024-W05" lands correctly BELOW a 2026 epoch, while "2026-W1" lands
+    # above every day in its own year because "W" sorts above any digit.
+    #
+    # That is the right answer at the year level and the safe direction
+    # inside the epoch's own year: a week from the current season is
+    # included rather than silently dropped. (The remaining edge is a
+    # January week of a season that started the previous autumn, which is
+    # counted in with its season. For a display window that is the side to
+    # err on.) An earlier draft of this comment claimed week labels always
+    # sort above any ISO date; they do not, and a 2024 test caught it.
     if since:
         q += " AND date >= ?"; args.append(since)
     bets = conn.execute(q, args).fetchall()

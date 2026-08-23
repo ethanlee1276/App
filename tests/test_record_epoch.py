@@ -95,11 +95,17 @@ def test_the_curve_starts_where_the_headline_starts():
     assert dates and min(dates) >= EPOCH
 
 
-def test_a_football_week_label_is_not_swallowed_by_the_date_filter():
-    """NFL journals "2026-W1", which string-compares ABOVE any ISO date.
-    That is the right side to fail on for a display window — a week bet
-    sorts into the future rather than being silently dropped — but it has
-    to be true, not assumed."""
+def test_a_football_week_label_sorts_by_its_season_not_by_luck():
+    """NFL journals week labels and everything else journals ISO days, so
+    the epoch filter compares two formats against each other.
+
+    THE OBVIOUS SUMMARY OF THIS IS WRONG and a 2024 fixture in
+    test_ledger caught it: week labels do NOT always sort above an ISO
+    date. They sort by their YEAR prefix first, which is the behaviour
+    that is actually wanted — a 2024 week is correctly outside a 2026
+    epoch — and only inside the epoch's own year does "W" outrank every
+    digit and pull the label in. That is the safe direction there: a week
+    of the current season is included rather than silently dropped."""
     conn = _journal()
     conn.execute(
         "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
@@ -109,7 +115,10 @@ def test_a_football_week_label_is_not_swallowed_by_the_date_filter():
     conn.commit()
     got = [b["player"] for b in conn.execute(
         "SELECT player FROM bets WHERE date >= ?", (EPOCH,))]
-    assert "QB" in got
+    assert "QB" in got, "the current season's weeks were dropped"
+    # And a week from an EARLIER season is correctly outside the window.
+    assert "2024-W05" < EPOCH
+    assert "2026-W1" > EPOCH
 
 
 # --- nothing is deleted, and learning still sees everything ---------------
