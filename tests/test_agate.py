@@ -141,6 +141,31 @@ def test_the_grouped_tables_name_what_they_group_by():
     assert 'mbBand(b.odds)), "Price"' in fn
 
 
+def test_nowrap_is_for_figures_and_not_for_every_cell():
+    """THE REGRESSION THIS RULE SHIPPED WITH, caught the same day by a
+    sweep over every view at four widths.
+
+    Five of the six `.agate` tables are money: short cells, and keeping
+    them on one line is the point. The sixth is the Lab's "Not replayed
+    yet" table, whose cells hold a SENTENCE explaining what each sport is
+    waiting for — and a blanket `white-space: nowrap` made it 1649px wide
+    inside a 366px phone.
+
+    So nowrap rides `.num`, the same class the alignment rides, plus the
+    name column, which needs one line for its ellipsis to have something
+    to trim and never holds prose."""
+    i = CSS.index(".agate {")
+    block = CSS[i:CSS.index("\n.rank-scroll", i)]
+    generic = block[block.index(".agate th, .agate td {"):]
+    generic = generic[:generic.index("}")]
+    assert "white-space" not in generic, (
+        "every cell is being told not to wrap, which breaks any table "
+        "with a sentence in it")
+    assert ".agate th.num, .agate td.num { white-space: nowrap; }" in block
+    assert "white-space: nowrap; max-width: 42vw" in block, (
+        "the name column wraps, so its ellipsis has nothing to trim")
+
+
 # --- the row that disagreed with itself ---------------------------------------
 def test_the_bets_column_counts_what_the_money_columns_count():
     """One open $25 bet at Caesars rendered as "1 · $0.00 · $0.00 · —":

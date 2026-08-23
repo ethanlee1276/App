@@ -944,7 +944,14 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .trank { width: 22px; text-align: center; font-weight: 800; color: var(--text-mute); font-size: var(--fs-md); }
 .trow .who { flex: 1; min-width: 0; }
 .trow .who .nm { font-weight: 700; font-size: var(--fs-lg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.trow .who .mk { color: var(--text-mute); font-size: var(--fs-xs); }
+/* `overflow-wrap: anywhere` because the row's other three columns are
+   fixed (rank 22px, sparkline 78px, value 62px) and `.who` gets what is
+   left — 48px on a 320px phone. A market label with no break opportunity
+   ("Total Bases" is fine; a long team-plus-market string is not) then
+   spilled 12px across the sparkline beside it. The name above it already
+   truncates; this is the line that could not. */
+.trow .who .mk { color: var(--text-mute); font-size: var(--fs-xs);
+  overflow-wrap: anywhere; }
 .trow .mini { width: 78px; flex-shrink: 0; }
 .trow .val { font-weight: 800; font-size: var(--fs-lg); min-width: 62px; text-align: right; }
 .val.pos { color: var(--good); } .val.neg { color: var(--bad); } .val.cyan { color: var(--cyan); }
@@ -3765,9 +3772,16 @@ body.pk-open { overflow: hidden; }
 .mc-honesty summary { cursor: pointer; display: flex; flex-wrap: wrap;
   align-items: baseline; gap: 6px 14px; list-style: none; }
 .mc-honesty summary::-webkit-details-marker { display: none; }
+/* NOT nowrap. "How to read this page — and the base rates", uppercase at
+   .08em tracking, measures 278px — so on a 320px phone it ran 14px past
+   a card with `overflow: hidden` and the reader lost the end of the
+   heading. The flex row already wraps the head and the stats line onto
+   separate lines when it has to; the head itself must be allowed to
+   break too. It only wraps under pressure, so nothing changes at any
+   width where it fits. */
 .mc-honesty-head {
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--warn); white-space: nowrap;
+  text-transform: uppercase; color: var(--warn);
 }
 .mc-honesty-line { color: var(--text-dim); font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums; }
@@ -5582,8 +5596,20 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .pa-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .pa-legend i.ok { background: var(--good); }
 .pa-legend i.no { background: var(--bad); margin-left: 8px; }
-.pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+/* minmax(0, 1fr), not 1fr. A `1fr` track is `minmax(auto, 1fr)`, so its
+   floor is its own content and it refuses to shrink below it — four of
+   them plus gaps measured 250px inside a 243px card on a 320px phone,
+   and the last tile lost its right edge. `min-width: 0` on `.pa-tile`
+   fixes the ITEM and does nothing for the TRACK, which is the half that
+   was missing. Same fault the metric rows already carry a test for. */
+.pa-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
             border-top: var(--hairline) solid var(--border-soft); padding-top: 8px; margin-top: 4px; }
+/* Below 360px four tiles of ~55px are legible only in the sense that
+   they fit. Two up is the same information with room to read it. */
+@media (max-width: 359px) {
+  .pa-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .pa-tile { text-align: center; min-width: 0; }
 .pa-v { font-weight: 800; font-size: var(--fs-lg); font-variant-numeric: tabular-nums; }
 .pa-v.pos { color: var(--good); } .pa-v.neg { color: var(--bad); }
@@ -6098,8 +6124,16 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 .agate { width: 100%; border-collapse: collapse;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .agate th, .agate td { padding: 9px 12px; text-align: left;
-  border-bottom: var(--hairline) solid var(--border-soft);
-  white-space: nowrap; }
+  border-bottom: var(--hairline) solid var(--border-soft); }
+/* NOWRAP IS FOR FIGURES, NOT FOR EVERY CELL. The first version of this
+   rule put `white-space: nowrap` on all of them, which is right for the
+   five money tables it was written for and wrong for the sixth: the
+   Lab's "Not replayed yet" table holds a SENTENCE in each cell, and
+   refusing to wrap it made that table 1649px wide inside a 366px phone.
+   Caught by a sweep over every view at four widths, which is the only
+   reason a regression on a page nobody was looking at surfaced the same
+   day it shipped. */
+.agate th.num, .agate td.num { white-space: nowrap; }
 .agate th { color: var(--text-mute); font-size: var(--fs-2xs);
   font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
   border-bottom-color: var(--border); }
@@ -6107,8 +6141,11 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* The name column carries the weight and is the one allowed to give: a
    long book or player name truncates rather than pushing the numbers
    off the right edge, which is what happened here. */
+/* The name column stays on one line so the ellipsis has something to
+   trim; it holds a book or a player, never a sentence. */
 .agate td:first-child { color: var(--text); font-weight: 600;
-  max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+  white-space: nowrap; max-width: 42vw;
+  overflow: hidden; text-overflow: ellipsis; }
 /* A second line under a name — "1 open" beside a book whose bets have
    not settled. Its own line rather than a sixth column: it applies to
    almost no rows almost all of the time, and a column that is empty for

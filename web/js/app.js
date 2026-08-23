@@ -22750,7 +22750,16 @@ function syncStripArrows() {
   const prev = document.getElementById("games-prev");
   const next = document.getElementById("games-next");
   if (!el || !prev || !next) return;
+  /* `el.children.length` first — a guard, not a fix for anything that
+     was observed misbehaving. scrollWidth vs clientWidth is a LAYOUT
+     question and this function runs once per render; if it ever ran
+     against an unsettled layout on a strip that stays empty, its verdict
+     would stick, because nothing recomputes it afterwards. An empty
+     strip cannot be scrollable whatever the box model says at any given
+     millisecond, so the cheap deterministic question is asked first and
+     asked of the DOM rather than of the layout. */
   const scrollable = !el.classList.contains("games-grid")
+    && el.children.length > 0
     && el.scrollWidth > el.clientWidth + 8;
   prev.style.display = next.style.display = scrollable ? "" : "none";
   if (!scrollable) return;
