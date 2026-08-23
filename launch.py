@@ -6594,6 +6594,9 @@ def main() -> None:
     if "--board-size" in argv:
         _board_size_cli()
         return
+    if "--parlay-report" in argv or "--parlays" in argv:
+        _parlay_report_cli()
+        return
     if "--promo-new" in argv:
         _promo_new_cli(argv)
         return
@@ -7347,6 +7350,123 @@ def _paywall_audit_cli() -> None:
         print("  leak by breaking the page for the people who pay for it.")
     else:
         print("  No board is publishing a paid row.")
+
+
+def _parlay_report_cli() -> None:
+    """What the parlay record actually says, and what it means to do.
+
+    Ethan, 2026-08-23: *"we suck at parlays and they are loosing us alot
+    of money so we need a way to fix that and work on the model or
+    something bc its not working"*.
+
+    Everything below is already computed by engine/parlayledger.report()
+    and has never been printed anywhere. That is the gap this closes: you
+    cannot fix a model you cannot see, and "we suck at parlays" is a
+    feeling until it is a number with a cause attached.
+
+    THE FIRST THING IT HAS TO SAY, because it changes what "fix the
+    model" means: this site has never staked a parlay. `stake_units` is
+    0.0 on every ticket ever published, §13 keeps them on probation until
+    100 graded tickets clear ROI, CLV and z, and every card says so in
+    those words. So money lost on parlays is money staked by hand against
+    a card that reads "worth nothing". That is not a modelling failure,
+    and no amount of model work fixes it.
+
+    WHAT WOULD BE a modelling failure is in the numbers below: the
+    singles comparison (would flat singles on the same legs have done
+    better?) and the loss codes (§11.1 — was it one leg, was it the
+    correlation, was it the tax?). Those are the three answers, and they
+    point at three different repairs.
+    """
+    # parlayledger has no connect() of its own on purpose — it reads the
+    # ledger's tables and reuses its CLV, so it is a leaf that takes a
+    # connection rather than owning one.
+    from engine import ledger as _lg
+    from engine import parlayledger as _pl
+
+    conn = _lg.connect()
+    try:
+        r = _pl.report(conn)
+    finally:
+        conn.close()
+
+    print("\nParlay record — graded, never staked\n" + "=" * 62)
+    n = r["graded"]
+    if not n:
+        print("\n  Nothing graded yet.\n")
+        print("  Worth knowing WHY before reading that as 'no parlays were")
+        print("  published': journal_built_boards read each board off the")
+        print("  public path, and `parlays` is a paid key — so from the day")
+        print("  QB_PAYWALL went on until 2026-08-23 it saw an empty zone on")
+        print("  every board and recorded nothing. Tickets published in that")
+        print("  window are not in here and cannot be recovered from the")
+        print("  ledger. From now on they are.")
+        print("\n  Open tickets waiting on results: %d" % r["open"])
+        return
+
+    roi = r["roi"] * 100
+    print(f"\n  {n} graded · {r['wins']}W-{r['losses']}L · "
+          f"{r['net_units']:+.2f}u · flat-stake ROI {roi:+.1f}%")
+    z = r["z"]
+    print(f"  z {z:+.2f}" if z is not None else "  z —",
+          " (a t-statistic on per-ticket P&L; §13 wants 2 or more)")
+    clv = r["avg_leg_clv"]
+    print(f"  leg CLV {clv:+.3f} over {r['leg_clv_n']} leg(s)"
+          if clv is not None else "  leg CLV — (no closing lines captured)")
+
+    # THE QUESTION THAT DECIDES EVERYTHING ELSE.
+    sc = r["singles_comparison"]
+    print("\n  Same legs, bet as singles" + "\n  " + "-" * 40)
+    if sc["n"]:
+        print(f"    parlays {sc['parlay_units']:+.2f}u   "
+              f"singles {sc['singles_units']:+.2f}u")
+        if sc["singles_better"]:
+            print("    SINGLES WON. On this record the structure is what "
+                  "costs the money —")
+            print("    the legs were fine and wrapping them was the mistake. "
+                  "The repair")
+            print("    is to bet fewer parlays, not to build a better one.")
+        else:
+            print("    The tickets beat the same legs bet flat, so the "
+                  "structure is")
+            print("    earning its tax on this sample.")
+
+    if r["loss_codes"]:
+        print("\n  Why the losses lost (§11.1)" + "\n  " + "-" * 40)
+        WHAT = {
+            "LEG_ONE_KILLED_IT": "one leg away — variance, not a broken model",
+            "CORRELATION_ERROR": "legs priced as moving together did not",
+            "TAX_TOO_HIGH": "singles on the same legs would have paid more",
+        }
+        for row in r["loss_codes"]:
+            print(f"    {row['code']:<20} {row['n']:>4}   "
+                  f"{WHAT.get(row['code'], '')}")
+        print("\n    CORRELATION_ERROR is the only one of the three that is")
+        print("    a model fault. The other two are the structure and the")
+        print("    price, and they are fixed by betting differently.")
+
+    for label, key in (("By sport", "by_sport"), ("By type", "by_type"),
+                       ("By grade", "by_grade")):
+        rows = r[key]
+        if not rows:
+            continue
+        print(f"\n  {label}" + "\n  " + "-" * 40)
+        for row in rows:
+            print(f"    {str(row['key']):<12} {row['graded']:>4} graded  "
+                  f"{row['wins']:>3}W  {row['net_units']:+7.2f}u  "
+                  f"{row['roi'] * 100:+6.1f}%")
+
+    pr = r["promotion"]
+    print("\n  Promotion (§13) — every one of these must hold\n  " + "-" * 40)
+    for ok, text in (
+            (pr["tickets_have"] >= pr["tickets_required"],
+             f"{pr['tickets_have']}/{pr['tickets_required']} graded tickets"),
+            (pr["roi_positive"], "positive flat-stake ROI"),
+            (pr["clv_non_negative"], "aggregate leg CLV at or above zero"),
+            (pr["z_clears"], f"z of at least {pr['z_required']}")):
+        print(f"    {'PASS' if ok else 'no  '}  {text}")
+    print("\n  Until all four hold, every ticket is staked at 0.0 units by")
+    print("  the model. Anything risked on one is risked by hand.")
 
 
 def _board_size_cli() -> None:

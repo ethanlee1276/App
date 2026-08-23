@@ -713,6 +713,99 @@ def test_the_autosettle_grades_tickets_not_just_singles():
     assert "resettle" in block
 
 
+# --- the report nobody could read -------------------------------------------
+
+def test_the_parlay_record_has_a_way_to_be_read():
+    """Ethan, 2026-08-23: "we suck at parlays and they are loosing us alot
+    of money so we need a way to fix that and work on the model or
+    something bc its not working".
+
+    Every number needed to answer that was already computed by report()
+    and printed nowhere — no CLI, and the Record page shows the bucket
+    without the loss codes or the singles comparison. You cannot fix a
+    model you cannot see."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "def _parlay_report_cli(" in src
+    assert '"--parlay-report" in argv' in src, "defined but not reachable"
+
+
+def test_the_report_says_the_three_things_that_decide_what_to_fix():
+    """The singles comparison, the loss codes and the promotion state
+    point at three DIFFERENT repairs, and a report that shows only ROI
+    lets somebody conclude "the model is bad" when the record says the
+    legs were fine and wrapping them was the mistake."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _parlay_report_cli("):]
+    body = body[:body.index("\ndef ")]
+    for key in ("singles_comparison", "loss_codes", "promotion"):
+        assert key in body, "the report never reads %s" % key
+    assert "CORRELATION_ERROR" in body, (
+        "nothing distinguishes the one loss code that IS a model fault")
+    assert "never staked" in body or "0.0 units" in body, (
+        "the report does not say that the model stakes nothing, which is "
+        "the fact that decides whether 'fix the model' is even the job")
+
+
+def _seed(conn, rows):
+    import json as _j
+    parlayledger.ensure_schema(conn)
+    for d, sp, ty, gr, st, pnl, sing, codes in rows:
+        conn.execute(
+            "INSERT INTO parlays (date, sport, parlay_type, grade, status, "
+            "pnl_units, notional_units, singles_pnl_units, loss_codes, "
+            "was_play) VALUES (?,?,?,?,?,?,?,?,?,1)",
+            (d, sp, ty, gr, st, pnl, 1.0, sing, _j.dumps(codes)))
+    conn.commit()
+
+
+def test_the_report_prints_on_an_empty_ledger_and_on_a_full_one():
+    """Both paths, because the empty one is the one it will meet first
+    and a crash there reads as "the parlay system is broken"."""
+    import contextlib
+    import io
+    from pathlib import Path
+
+    import launch
+    from engine import ledger as _lg
+
+    for rows in ([], [("2026-08-10", "nfl", "A", "marginal", "lost",
+                       -1.0, 0.4, ["TAX_TOO_HIGH"]),
+                      ("2026-08-11", "mlb", "A", "strong", "won",
+                       2.6, 0.9, [])]):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "l.db"
+            conn = _lg.connect(path)
+            _seed(conn, rows)
+            conn.close()
+            real = _lg.connect
+            _lg.connect = lambda *a, **k: real(path)
+            buf = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buf):
+                    launch._parlay_report_cli()
+            finally:
+                _lg.connect = real
+            out = buf.getvalue()
+            assert "Parlay record" in out
+            if rows:
+                assert "2 graded" in out and "singles" in out.lower()
+            else:
+                assert "Nothing graded yet" in out
+
+
+def test_an_empty_report_explains_the_blind_window_rather_than_reading_as_zero():
+    """`journal_built_boards` read the public board, where `parlays` is
+    stripped, so it recorded nothing from the day the paywall went on
+    until 2026-08-23. An empty record that does not say so reads as
+    "we never published any", which is the opposite of true."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    body = src[src.index("def _parlay_report_cli("):]
+    body = body[:body.index("\ndef ")]
+    i = body.index("Nothing graded yet")
+    assert "paid key" in body[i:], (
+        "an empty ledger is reported without saying why it might be empty")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
