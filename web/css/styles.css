@@ -6070,6 +6070,61 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* A PANE, NOT A PAGE. Two hundred rows below a disagreement strip pushes
    everything else off the bottom; the board is for scrolling THROUGH at a
    draft table, so it scrolls inside itself and the header stays put. */
+/* ---------------- .agate --------------------------------------------
+   THE RULE SIX TABLES HAVE BEEN REFERRING TO AND NONE OF THEM HAD.
+
+   Ethan, 2026-08-23, circling the By-book row on My Bets: "just that
+   whole line just looks very cluttered and not good."
+
+   It was not a styling choice that had gone stale — there was NO
+   `.agate` selector anywhere in this sheet. Three comments in it name
+   `.agate` as part of the shared kit and the class is on six tables, so
+   it read as covered in every review; measured in the browser, those
+   tables were rendering at the browser's own defaults —
+   `border-collapse: separate`, `padding: 1px`, centred headers, no
+   rules, `width: auto`. That is the whole "cluttered": a 1990s table
+   squeezed into a phone, overflowing far enough to cut "ROI" down to
+   "RO".
+
+   Written to the same idiom as `.rank-table` above rather than as a new
+   look, because these tables sit beside those on the same pages and two
+   table styles on one site is the thing that actually reads as amateur.
+
+   NAMES LEFT, NUMBERS RIGHT, and the alignment rides the `.num` class
+   rather than the column index. `td:not(:first-child)` was the tempting
+   shortcut and it is wrong here: the My Bets ledger's second and third
+   columns are Book and Bet, both text, and right-aligning them would
+   trade one mess for another. */
+.agate { width: 100%; border-collapse: collapse;
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.agate th, .agate td { padding: 9px 12px; text-align: left;
+  border-bottom: var(--hairline) solid var(--border-soft);
+  white-space: nowrap; }
+.agate th { color: var(--text-mute); font-size: var(--fs-2xs);
+  font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  border-bottom-color: var(--border); }
+.agate th.num, .agate td.num { text-align: right; }
+/* The name column carries the weight and is the one allowed to give: a
+   long book or player name truncates rather than pushing the numbers
+   off the right edge, which is what happened here. */
+.agate td:first-child { color: var(--text); font-weight: 600;
+  max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+/* A second line under a name — "1 open" beside a book whose bets have
+   not settled. Its own line rather than a sixth column: it applies to
+   almost no rows almost all of the time, and a column that is empty for
+   everybody is a column that makes the table wider for nothing. */
+.agate-sub { display: block; font-weight: 400; font-size: var(--fs-2xs);
+  color: var(--text-mute); margin-top: 1px; }
+.agate tbody tr:last-child td { border-bottom: 0; }
+.agate tbody tr:hover td { background: var(--fill-subtle); }
+@media (max-width: 480px) {
+  /* Five columns of money on a 390px phone is where this broke. The
+     padding goes first because it costs nothing to read; the figures
+     keep their size. */
+  .agate th, .agate td { padding: 8px 8px; }
+  .agate th { letter-spacing: .04em; }
+}
+
 .rank-scroll { overflow: auto; margin-top: 10px; max-height: 62vh; }
 .rank-table { width: 100%; border-collapse: collapse;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }

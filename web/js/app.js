@@ -10948,8 +10948,9 @@ function mbBulkShow(text) {
       `<div class="mb-warn">row ${s.line}: ${escapeHtml(s.reason)}</div>`).join("")}
     ${fresh.length ? `
       <div class="card" style="padding:0;overflow-x:auto;margin:10px 0">
-        <table class="agate"><thead><tr><th>Date</th><th>Book</th><th>Bet</th>
-          <th>Odds</th><th>Stake</th><th>Result</th></tr></thead>
+        <table class="agate"><thead><tr><th class="num">Date</th><th>Book</th>
+          <th>Bet</th><th class="num">Odds</th><th class="num">Stake</th>
+          <th class="num">Result</th></tr></thead>
         <tbody>${sample}</tbody></table></div>
       ${fresh.length > 8 ? `<div class="mb-import-note">…and ${fresh.length - 8} more</div>` : ""}
       <button class="btn mb-add" type="button" onclick="mbBulkCommit()">
@@ -11001,14 +11002,34 @@ function renderMyBets() {
       <div id="mb-form-warn" class="mb-warn"></div>
     </div>`;
 
+  /* THE ROW HAD TO AGREE WITH ITSELF. Ethan, 2026-08-23: "just that
+     whole line just looks very cluttered and not good."
+
+     Half of that was the missing `.agate` stylesheet rule. The other
+     half was arithmetic: `Bets` counted every bet at the book INCLUDING
+     the pending ones, while `Staked`, `Profit` and `ROI` are realized
+     figures that skip them. So one open $25 bet at Caesars rendered as
+     "1 · $0.00 · $0.00 · —" — a row that looks broken because it is
+     quietly describing two different populations at once.
+
+     `Bets` is the settled count now, which is what the other three
+     columns are about, and anything still running is named under the
+     book rather than folded into a number it does not belong to. A book
+     with nothing settled shows dashes instead of $0.00: zero staked
+     reads as "bet nothing there", and the truth is "nothing has
+     finished". */
   const bookRows = Object.keys(books).sort((a, b) =>
     books[b].profit - books[a].profit).map((k) => {
     const s = books[k];
+    const settled = s.n - s.pending;
     return `<tr>
-      <td>${escapeHtml(k)}</td>
-      <td class="num">${s.n}</td>
-      <td class="num">${mbMoney(s.staked)}</td>
-      <td class="num" style="color:${pcolor(s.profit)};font-weight:700">${mbMoney(s.profit, true)}</td>
+      <td>${escapeHtml(k)}${s.pending
+        ? `<span class="agate-sub">${s.pending} open</span>` : ""}</td>
+      <td class="num">${settled || "—"}</td>
+      <td class="num">${settled ? mbMoney(s.staked) : "—"}</td>
+      <td class="num"${settled
+        ? ` style="color:${pcolor(s.profit)};font-weight:700"` : ""}>${
+        settled ? mbMoney(s.profit, true) : "—"}</td>
       <td class="num">${s.staked > 0 ? (100 * s.profit / s.staked).toFixed(1) + "%" : "—"}</td>
     </tr>`;
   }).join("");
@@ -11151,13 +11172,19 @@ function renderMyBets() {
       if (st.settled < 3) return "";
       const takes = mbTakeaways(bets);
       const curve = mbCurve(bets);
-      const groupTable = (g, order) => {
+      /* `label` is not decoration. Both of these shipped with an empty
+         first <th>, so the column telling you WHAT is being grouped —
+         a sport, or a price band — was the one column with no heading.
+         Two identical-looking tables stacked with nothing naming either
+         is most of why this page read as unfinished. */
+      const groupTable = (g, label, order) => {
         const keys = (order || Object.keys(g).sort((a, b) =>
           g[b].profit - g[a].profit)).filter((k) => g[k] && g[k].n);
         if (keys.length < 2) return "";
         return `<div class="card" style="padding:0;overflow-x:auto;margin-bottom:14px">
-          <table class="agate"><thead><tr><th></th><th>Bets</th><th>Record</th>
-            <th>Staked</th><th>Profit</th><th>ROI</th></tr></thead><tbody>
+          <table class="agate"><thead><tr><th>${escapeHtml(label)}</th><th class="num">Bets</th>
+            <th class="num">Record</th><th class="num">Staked</th>
+            <th class="num">Profit</th><th class="num">ROI</th></tr></thead><tbody>
           ${keys.map((k) => { const s = g[k]; return `<tr>
             <td>${escapeHtml(k)}</td><td class="num">${s.n}</td>
             <td class="num">${s.wins}–${s.losses}</td>
@@ -11185,15 +11212,19 @@ function renderMyBets() {
         ${takes.length ? `<div class="card mb-takes"><ul>
           ${takes.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>` : ""}
         ${spark}
-        ${groupTable(mbGroup(bets, (b) => b.sport || null))}
-        ${groupTable(mbGroup(bets, (b) => mbBand(b.odds)), MB_BAND_ORDER)}`;
+        ${groupTable(mbGroup(bets, (b) => b.sport || null), "Sport")}
+        ${groupTable(mbGroup(bets, (b) => mbBand(b.odds)), "Price", MB_BAND_ORDER)}`;
     })()}
     ${bets.length ? `
     <div class="section-title">By book
-      <span class="sub">— your realized P&L at each sportsbook, best first.</span></div>
+      <span class="sub">— your realized P&L at each sportsbook, best first.
+      Counts settled bets only; anything still running is listed under the
+      book’s name.</span></div>
     <div class="card" style="padding:0;overflow-x:auto">
-      <table class="agate"><thead><tr><th>Book</th><th>Bets</th><th>Staked</th>
-        <th>Profit</th><th>ROI</th></tr></thead><tbody>${bookRows}</tbody></table></div>
+      <table class="agate"><thead><tr><th>Book</th><th class="num">Bets</th>
+        <th class="num">Staked</th><th class="num">Profit</th>
+        <th class="num">ROI</th></tr></thead>
+        <tbody>${bookRows}</tbody></table></div>
     <div class="section-title">Every bet
       <span class="sub">— newest first. Tap Win/Loss/Push when a bet settles; the totals
       update as you go.</span>
