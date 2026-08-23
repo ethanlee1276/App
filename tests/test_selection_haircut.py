@@ -206,8 +206,82 @@ def test_a_correction_that_fails_out_of_sample_is_refused():
     assert e["holdout"]["ran"]
     assert e["holdout"]["improved"] is False
     assert e["applied"] is False
-    assert "held-out" in e["reason"]
+    # The SEMANTICS, not the sentence. This read `"held-out" in reason`
+    # and broke when the gate became a walk-forward on 2026-08-23 — the
+    # refusal was unchanged, only the words for it. A test pinned to the
+    # phrasing of a message is a test that fails when the message gets
+    # more accurate.
+    assert "refused" in e["reason"], e["reason"]
     assert len(rows) == 220                  # the early era really is there
+
+
+def test_the_gate_asks_from_more_than_one_starting_point():
+    """WHY THIS EXISTS. The gate turned on a SINGLE 70/30 split, and
+    `shapecheck.py --sport mlb` ran the same question from three origins
+    over 606 settled bets and got the opposite answer every time: the
+    live cut closed the gap in 0 of 3 blocks and improved Brier in 0 of
+    3, on 364 held-out bets. One split had put it live; three said it
+    should never have been.
+
+    A verdict that turns on where one boundary happens to fall is a coin
+    toss with arithmetic around it."""
+    e = sf._entry(_stable(0.60, 0.48, 600))
+    h = e["holdout"]
+    assert h["origins"] >= sf.MIN_ORIGINS
+    assert len(h["blocks"]) == h["origins"]
+    assert e["applied"] is True, (
+        "a real, stable over-claim must still be adopted — a gate that "
+        "refuses everything is not a stricter gate, it is a broken one")
+    assert h["gap_improved_in"] >= 2 and h["brier_improved_in"] >= 2
+
+
+def test_the_blocks_are_adjacent_rather_than_overlapping():
+    """The first cut scored every block on ALL the remaining rows, so the
+    earliest block contained the other two and three verdicts were mostly
+    one verdict counted three times. Equal windows give each block its
+    own period, which is what made shapecheck's three answers mean
+    something."""
+    e = sf._entry(_stable(0.60, 0.48, 600))
+    blocks = e["holdout"]["blocks"]
+    widths = [b["test_n"] for b in blocks]
+    assert max(widths) - min(widths) <= 2, f"uneven windows: {widths}"
+    trains = [b["train_n"] for b in blocks]
+    assert trains == sorted(trains) and len(set(trains)) == len(trains), trains
+    # Each block's train picks up where the previous block's test began.
+    for prev, nxt in zip(blocks, blocks[1:]):
+        assert nxt["train_n"] == prev["train_n"] + prev["test_n"], blocks
+
+
+def test_a_journal_too_short_to_check_twice_is_not_adopted():
+    """The effective floor is not MIN_SETTLED, it is "enough bets to be
+    checked from more than one starting point". Below that the board
+    prices on its own numbers, which is where it started."""
+    e = sf._entry(_stable(0.60, 0.40, 110))
+    h = e["holdout"]
+    if h.get("ran") and (h.get("origins") or 0) < sf.MIN_ORIGINS:
+        assert e["applied"] is False
+        assert "origin" in e["reason"], e["reason"]
+
+
+def _stable(claimed, landed, n):
+    """A journal with the same claim and the same rate THROUGHOUT — an
+    over-claim with no time structure, which is the case a correction
+    should be adopted for.
+
+    DEALT, NOT SAMPLED. The first cut of this drew outcomes from an RNG,
+    and on one seed the three 120-bet windows came out at gaps of 13.3,
+    5.8 and 1.7 points against a true 12 — because a 120-row window has
+    about 4.5 points of standard error on its own landed rate, and three
+    of them can drift far enough to refuse a correction that is real.
+    The test would then have been measuring the seed. Wins are spread
+    evenly instead, so every window carries the same rate by
+    construction and what is being tested is the gate."""
+    out, wins = [], 0
+    for i in range(n):
+        target = int(round((i + 1) * landed))
+        out.append((claimed, 1 if target > wins else 0))
+        wins = max(wins, target)
+    return out
 
 
 def test_the_gate_has_power_and_does_not_fire_on_nothing():

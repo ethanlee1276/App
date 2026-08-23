@@ -276,6 +276,28 @@ def _pairs(rows, prior_shift: float, stamp: str) -> list:
 #: journal by date. Fit on the earlier part only. Measure the gap on the
 #: LATER part, with and without. Ship only if the held-out gap closes."
 HOLDOUT_FRACTION = 0.30
+
+#: HOW MANY ORIGINS THE CORRECTION HAS TO SURVIVE, and why one was not
+#: enough. Until 2026-08-23 adoption turned on a SINGLE 70/30 split, and
+#: `shapecheck.py --sport mlb` ran the same question from three origins
+#: on 606 settled bets and got the opposite answer every time: the live
+#: cut closed the gap in 0 of 3 blocks and improved Brier in 0 of 3, on
+#: 364 held-out bets it had never seen. One split had put it live and
+#: three said it should never have been.
+#:
+#: A verdict that depends on where a single boundary happens to fall is
+#: not a verdict, it is a coin toss with arithmetic around it. The gate
+#: now runs the same walk-forward the audit does, and a majority of
+#: origins must improve BOTH the gap and Brier, and so must the final
+#: 70/30 block. Fewer usable origins than this means no adoption — the
+#: floor does not bend for a young journal, and the cost of refusing is
+#: that the board prices on its own numbers, which is where it started.
+WALK_ORIGINS = 3
+MIN_ORIGINS = 2
+#: How much of the journal the blocks are cut from. 0.60 puts the three
+#: trains at roughly 40/60/80% of the record, which is the shape
+#: shapecheck's walk-forward used on the run that found this.
+WALK_TAIL = 0.60
 #: Below this the held-out half cannot say anything, and a correction that
 #: cannot be validated is not applied — the doc's bar, not a softer one.
 MIN_HOLDOUT = 30
@@ -301,23 +323,94 @@ def _holdout(pairs: list) -> dict:
         return {"ran": False,
                 "reason": f"held-out check needs {MIN_HOLDOUT} later bets, "
                           f"has {len(test)}"}
-    train = pairs[:cut]
+
+    blocks = [b for b in (_score_block(pairs, a, b) for a, b in _origins(n))
+              if b]
+    final = _score_block(pairs, cut)
+
+    gap_ok = sum(1 for b in blocks if b["gap_after"] < b["gap_before"])
+    brier_ok = sum(1 for b in blocks if b["brier_after"] < b["brier_before"])
+    enough = len(blocks) >= MIN_ORIGINS
+    passed = (enough
+              and gap_ok >= _majority(len(blocks))
+              and brier_ok >= _majority(len(blocks))
+              and final["gap_after"] < final["gap_before"]
+              and final["brier_after"] < final["brier_before"])
+
+    out = dict(final)
+    out.update({
+        "ran": True,
+        "origins": len(blocks),
+        "gap_improved_in": gap_ok,
+        "brier_improved_in": brier_ok,
+        "blocks": [{"train_n": b["train_n"], "test_n": b["test_n"],
+                    "shift": b["train_shift"],
+                    "gap_before": b["gap_before"], "gap_after": b["gap_after"],
+                    "brier_before": b["brier_before"],
+                    "brier_after": b["brier_after"]} for b in blocks],
+        "improved": bool(passed),
+    })
+    if not enough:
+        out["walk_forward_note"] = (
+            f"only {len(blocks)} usable origin(s); a correction has to hold "
+            f"from at least {MIN_ORIGINS}")
+    return out
+
+
+def _origins(n: int) -> list:
+    """`(train_end, test_end)` for each block: ADJACENT windows over the
+    tail, every one fitted on all the history before it.
+
+    Adjacent rather than expanding-to-the-end, which the first cut of
+    this got wrong. Scoring every block on all the remaining rows makes
+    the blocks overlap almost entirely — the earliest one contains the
+    other two — so three "independent" verdicts are mostly one verdict
+    counted three times. Equal windows give each block its own period,
+    which is what `shapecheck.py`'s walk-forward does and the reason its
+    three answers meant something.
+
+    The tail is the last :data:`WALK_TAIL` of the journal. Fewer windows
+    are used when the journal cannot fill three of at least
+    :data:`MIN_HOLDOUT` bets, and below :data:`MIN_ORIGINS` windows the
+    caller refuses to adopt at all — so the effective floor is not
+    MIN_SETTLED but "enough bets to be checked from more than one
+    starting point", which is the honest floor for this question.
+    """
+    tail = int(n * WALK_TAIL)
+    for k in range(WALK_ORIGINS, MIN_ORIGINS - 1, -1):
+        width = tail // k
+        if width >= MIN_HOLDOUT:
+            first = n - tail
+            return [(first + i * width,
+                     first + (i + 1) * width if i + 1 < k else n)
+                    for i in range(k)]
+    return []
+
+
+def _majority(k: int) -> int:
+    return k // 2 + 1
+
+
+def _score_block(pairs: list, cut: int, upto: int | None = None) -> dict | None:
+    """Fit on pairs[:cut], score on pairs[cut:upto]. None if either is thin."""
+    train, test = pairs[:cut], pairs[cut:upto]
+    if len(train) < MIN_HOLDOUT or len(test) < MIN_HOLDOUT:
+        return None
     t_claimed = sum(p for p, _ in train) / len(train)
     t_landed = sum(o for _, o in train) / len(train)
     t_se = math.sqrt(max(t_landed * (1.0 - t_landed), 1e-9) / len(train))
     shift = max(-SHIFT_CAP, min(SHIFT_CAP, fit_shift(train)
                 * _keep_fraction(t_landed - t_claimed, t_se)))
-
     landed = sum(o for _, o in test) / len(test)
     gap_before = abs((sum(p for p, _ in test) / len(test)) - landed)
     gap_after = abs((sum(shift_prob(p, shift) for p, _ in test) / len(test))
                     - landed)
-    b_before, b_after = _brier(test, 0.0), _brier(test, shift)
-    return {"ran": True, "train_n": len(train), "test_n": len(test),
+    return {"train_n": len(train), "test_n": len(test),
             "train_shift": round(shift, 3),
-            "gap_before": round(gap_before, 4), "gap_after": round(gap_after, 4),
-            "brier_before": round(b_before, 5), "brier_after": round(b_after, 5),
-            "improved": bool(b_after < b_before and gap_after < gap_before)}
+            "gap_before": round(gap_before, 4),
+            "gap_after": round(gap_after, 4),
+            "brier_before": round(_brier(test, 0.0), 5),
+            "brier_after": round(_brier(test, shift), 5)}
 
 
 def _entry(pairs: list, min_settled: int = MIN_SETTLED) -> dict:
@@ -373,12 +466,20 @@ def _entry(pairs: list, min_settled: int = MIN_SETTLED) -> dict:
         # explained away: a correction that only improves the data it was
         # fitted on has demonstrated nothing.
         h = out["holdout"]
+        k = h.get("origins") or 0
         out["applied"] = False
-        out["reason"] = (f"fitted, then refused by its own held-out test — on "
-                         f"the last {h['test_n']} bets the gap went "
-                         f"{h['gap_before'] * 100:.1f} → {h['gap_after'] * 100:.1f}"
-                         f" pts and Brier {h['brier_before']:.4f} → "
-                         f"{h['brier_after']:.4f}")
+        if h.get("walk_forward_note"):
+            out["reason"] = ("fitted but not validated — "
+                             + h["walk_forward_note"])
+        else:
+            out["reason"] = (
+                f"fitted, then refused by its own walk-forward — it closed "
+                f"the gap in {h.get('gap_improved_in', 0)} of {k} block(s) "
+                f"and improved Brier in {h.get('brier_improved_in', 0)} of "
+                f"{k}; on the last {h['test_n']} bets the gap went "
+                f"{h['gap_before'] * 100:.1f} → {h['gap_after'] * 100:.1f} "
+                f"pts and Brier {h['brier_before']:.4f} → "
+                f"{h['brier_after']:.4f}")
     else:
         out["applied"] = True
         # Says what the row's own numbers do NOT: how much of the measured
