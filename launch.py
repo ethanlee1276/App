@@ -3697,9 +3697,17 @@ def _settleable_days(open_days) -> list[str]:
     NFL journals under week labels ("2026-W1") rather than ISO days, and
     grades off weekly stats — feeding one to the MLB per-date results
     ingest looks like a night whose results never arrived. Oldest first,
-    so each pass builds on the history the previous one stored."""
+    so each pass builds on the history the previous one stored.
+
+    Prediction-market contracts are excluded the same way and for a
+    stronger reason: they grade against the exchange's settlements, so a
+    date's results ingest can never close one. A day holding nothing but
+    Kalshi contracts came back in this list every night and reported
+    `0 game(s)` every night — the exact loop --stuck was written to
+    break, being caused by the tool meant to end it."""
     return sorted(d["date"] for d in open_days
-                  if d.get("date") and "-W" not in d["date"])
+                  if d.get("date") and "-W" not in d["date"]
+                  and d.get("gradeable_by_date", True))
 
 
 def show_venues() -> None:
@@ -5923,8 +5931,12 @@ def show_stuck() -> None:
         group = by_reason[reason]
         print(f"  {len(group):>4}  {reason}")
         for r in sorted(group, key=lambda x: x["date"])[:6]:
+            # A Kalshi row's own date is the day the desk recommended it;
+            # showing the ticker's event date beside it is the whole
+            # difference between "overdue" and "a month out".
             near = (f"  → logged on {r['logged_on']}" if r.get("logged_on")
                     else f"  ~ feed has {r['closest']!r}" if r.get("closest")
+                    else f"  → event {r['event_date']}" if r.get("event_date")
                     else "")
             print(f"          {r['date']}  {r['sport']:<5} "
                   f"{(r['player'] or '')[:26]:<26} {r['market']} "
@@ -5952,6 +5964,19 @@ def show_stuck() -> None:
         "no results ingested":
             "the games were never stored. Ingest that date's results "
             "(python3 ingest.py <sport> …) and they grade on the next pass.",
+        "waiting on the exchange":
+            "a Kalshi contract whose event is over and which the exchange "
+            "has not settled yet, or has settled since the last desk build. "
+            "These NEVER grade from ingested results — `resolve_predmarket` "
+            "reads the exchange's own settlements — so run `python3 "
+            "pm_build.py` (the desk build) and they close. The date beside "
+            "each one is the day the desk recommended it, not the day the "
+            "event happens; the event date is in the ticker.",
+        "contract has no dated ticker":
+            "a prediction-market row whose ticker carries no readable event "
+            "date, so there is no way to tell whether it is early or "
+            "stranded. Judged on its journal date instead, which is why it "
+            "is listed. Worth a look at the ticker itself.",
         "gradeable now":
             "results ARE there and these match — run `python3 launch.py "
             "--settle all`; if they survive it, tell me.",
@@ -6018,7 +6043,7 @@ def why_open() -> None:
         return
     c = rep["counts"]
     print(f"{rep['total']} open bet(s). Why each has not graded:\n")
-    order = ["ready", "waiting", "no_results", "no_statline",
+    order = ["ready", "waiting", "exchange", "no_results", "no_statline",
              "no_grade_source"]
     for key in order:
         items = rep["buckets"][key]
@@ -6041,6 +6066,11 @@ def why_open() -> None:
     if c["no_results"]:
         print(f"  → {c['no_results']} bet(s) are missing results. Check the "
               f"feeds:  python3 launch.py --check")
+    if c.get("exchange"):
+        print(f"  → {c['exchange']} prediction-market contract(s) grade off "
+              f"the exchange's settlements, not off ingested results.\n"
+              f"    A desk build closes whatever has settled:  python3 "
+              f"pm_build.py")
     if c["no_statline"] or c["no_grade_source"]:
         print(f"  → {c['no_statline'] + c['no_grade_source']} bet(s) cannot "
               f"grade from available data (DNP, name mismatch, or preseason "

@@ -520,6 +520,53 @@ def test_a_settled_game_bet_with_no_final_score_fails_grade_evidence():
     assert "no final score" in row["detail"]
 
 
+def test_grade_evidence_says_which_of_the_two_causes_it_found():
+    """Ethan's droplet, 2026-08-23: "11 settled game bet(s) have no final
+    score behind them" and nothing else. Eleven is not a diagnosis — the
+    two causes need opposite fixes (refetch the day vs fix a team name),
+    and the check knows which it is looking at."""
+    import tempfile
+    from engine import db, ledger
+
+    tmp = tempfile.mkdtemp()
+    lpath, hpath = os.path.join(tmp, "l.db"), os.path.join(tmp, "h.db")
+    lc = ledger.connect(lpath)
+    for date, team in (("2026-01-15", "LAL"), ("2026-01-16", "Lakers")):
+        lc.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,stake_units,stake_dollars,status,category,actual) VALUES "
+            "('x','nba',?,?,'moneyline','OVER',0.5,'DK',-110,1.0,10.0,"
+            "'lost','main',0.0)", (date, team))
+    lc.commit()
+    hc = db.connect(hpath)
+    # 01-16 IS ingested, under the feed's spelling — so that bet's problem
+    # is the NAME. 01-15 has nothing at all — that one's problem is the DAY.
+    db.upsert_games(hc, [{"sport": "nba", "season": 2026,
+                          "period": "2026-01-16", "game_id": "BOS@LAL",
+                          "home": "LAL", "away": "BOS",
+                          "home_score": 110, "away_score": 99}])
+
+    orig_lc, orig_hc = ledger.connect, db.connect
+    orig_hj, orig_hh = doctor.has_journal, doctor.has_history
+    ledger.connect = lambda path=None: orig_lc(lpath)
+    db.connect = lambda path=None: orig_hc(hpath)
+    doctor.has_journal = doctor.has_history = lambda: True
+    try:
+        rep = doctor.Report()
+        doctor.check_premature_evidence(rep)
+    finally:
+        ledger.connect, db.connect = orig_lc, orig_hc
+        doctor.has_journal, doctor.has_history = orig_hj, orig_hh
+    row = next(r for r in rep.checks if r["check"] == "grade evidence")
+    assert row["status"] == doctor.FAIL
+    d = row["detail"]
+    assert "2 settled game bet(s)" in d
+    assert "1 on dates with no finals stored at all" in d
+    assert "1 whose date IS stored but not that team" in d
+    # And it names them, so the next run is actionable without a query.
+    assert "2026-01-15" in d and "Lakers" in d
+
+
 def test_a_ticket_disagreeing_with_its_legs_fails_parlay_agreement():
     import tempfile
     from engine import ledger, parlayledger

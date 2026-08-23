@@ -178,10 +178,38 @@ def test_settle_all_with_nothing_by_date_still_runs_the_repair_audit():
 
 def test_reasons_table_covers_every_bucket():
     """Every key explain_open can return must have human copy, or the CLI
-    prints a bare slug."""
-    rep_keys = set(ledger.OPEN_REASONS)
-    assert rep_keys == {"ready", "waiting", "no_results", "no_statline",
-                        "no_grade_source"}
+    prints a bare slug.
+
+    Written as a frozen list of the five buckets that existed the day it
+    was written, which asks the opposite question: it passed for a
+    missing explanation and failed for a NEW bucket that had one. Adding
+    the prediction-market bucket — with its copy, and listed in the CLI's
+    print order — turned the suite red. The question is coverage; ask
+    coverage.
+    """
+    import inspect
+    import re
+
+    src = inspect.getsource(ledger.explain_open)
+    used = set(re.findall(r'buckets\[\s*"([a-z_]+)"', src))
+    used |= set(re.findall(r'return\s+"([a-z_]+)"', src))
+    missing = used - set(ledger.OPEN_REASONS)
+    assert not missing, f"buckets with no human copy: {sorted(missing)}"
+    for key, copy in ledger.OPEN_REASONS.items():
+        assert copy and copy.strip() != key, key
+
+
+def test_the_cli_prints_every_bucket_the_table_defines():
+    """Copy nobody prints is copy nobody reads: a bucket left out of the
+    CLI's print order is silently omitted bets, which is worse than the
+    bare slug the table exists to prevent."""
+    import inspect
+
+    import launch
+    order = inspect.getsource(launch.why_open).split(
+        "order = [", 1)[1].split("]", 1)[0]
+    for key in ledger.OPEN_REASONS:
+        assert f'"{key}"' in order, f"{key} is never printed"
 
 
 if __name__ == "__main__":

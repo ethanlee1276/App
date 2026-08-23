@@ -759,10 +759,75 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
     return n
 
 
-def open_predmarket_tickers(conn) -> list[str]:
-    return [r["player"] for r in conn.execute(
-        "SELECT DISTINCT player FROM bets WHERE category='predmarket' "
-        "AND status='open'")]
+#: The event date Kalshi encodes in a game ticker: KXNFLGAME-26SEP13DALNYG-DA
+#: is the Dallas/NY game on 2026-09-13. Two-digit year, three-letter month,
+#: two-digit day, always preceded by a dash.
+_PM_TICKER_DATE = re.compile(r"-(\d{2})([A-Z]{3})(\d{2})")
+_PM_MONTHS = {m: i + 1 for i, m in enumerate(
+    ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+     "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"))}
+
+
+def predmarket_event_date(ticker: str | None) -> str | None:
+    """The ISO date a Kalshi ticker's contract is ABOUT, or None.
+
+    THE HOLE THIS CLOSES. `log_predmarket` stores the day the desk made
+    the recommendation, because the bets table has one date column and
+    every other bucket journals on its slate date. For a prediction
+    market those are not the same day and can be a month apart: on
+    2026-08-11 the desk journaled 130 NFL game contracts for September.
+
+    Everything downstream that asks "should this have graded by now?"
+    was reading the journal date, so all 130 looked two weeks overdue
+    the moment they were written — the doctor called them stuck, and
+    `--settle all` swept twelve dead days finding `0 game(s)` on each,
+    forever. The date is right there in the ticker; nothing had read it.
+
+    Returns None for anything unparseable, and callers must treat that
+    as "unknown", never as "fine" — an undated contract that really is
+    stranded still needs to be visible.
+    """
+    m = _PM_TICKER_DATE.search(str(ticker or "").upper())
+    if not m:
+        return None
+    mon = _PM_MONTHS.get(m.group(2))
+    if not mon:
+        return None
+    try:
+        return datetime.date(2000 + int(m.group(1)), mon,
+                             int(m.group(3))).isoformat()
+    except ValueError:
+        return None                      # 26FEB30 and friends
+
+
+def open_predmarket_tickers(conn, today: str | None = None) -> list[str]:
+    """Open contracts worth asking the exchange to settle.
+
+    A market cannot settle before its own event, so a September contract
+    journaled in August is a request that can only ever come back
+    unsettled. During a football season the open book is mostly those,
+    and asking about all of them is a settlement pull that grows with the
+    schedule instead of with the work.
+
+    The cutoff is TOMORROW, not today, and anything whose ticker carries
+    no readable date is always included: a day of slack costs one batch,
+    and a contract we stop asking about is a contract that never grades —
+    which is the failure this whole change exists to remove.
+    """
+    today = today or datetime.date.today().isoformat()
+    try:
+        cutoff = (datetime.date.fromisoformat(today)
+                  + datetime.timedelta(days=1)).isoformat()
+    except ValueError:
+        cutoff = None
+    out = []
+    for r in conn.execute(
+            "SELECT DISTINCT player FROM bets WHERE category='predmarket' "
+            "AND status='open'"):
+        ev = predmarket_event_date(r["player"]) if cutoff else None
+        if ev is None or ev <= cutoff:
+            out.append(r["player"])
+    return out
 
 
 def resolve_predmarket(conn, results: dict) -> int:
@@ -1557,6 +1622,48 @@ def relabel_cross_league(conn, hist_conn) -> int:
     return moved
 
 
+def _why_open_predmarket(b, date: str, today_d,
+                         older_than: int) -> dict | None:
+    """A prediction-market contract's own stuck test, or None if it isn't.
+
+    A Kalshi row cannot be judged the way every other bucket is, on two
+    counts, and judging it that way is what put 130 healthy contracts in
+    the doctor's stuck list:
+
+      * its journal date is the day the DESK recommended it, not the day
+        the event happens — read the event date off the ticker instead;
+      * it grades against the exchange's own settlements
+        (`resolve_predmarket`), never against ingested game results, so
+        `_hist_where` can only ever come back empty and "no results
+        ingested" is a diagnosis pointing at a fix that cannot work.
+
+    A contract whose event has not happened is not stuck at all. One whose
+    event is done and which is still open is waiting on the exchange, and
+    the fix is a desk build, not an ingest.
+    """
+    ev = predmarket_event_date(b["player"])
+    ref, reason = (ev, "waiting on the exchange") if ev \
+        else (date, "contract has no dated ticker")
+    # fromisoformat does not fail on a week label — on Python ≥3.11
+    # "2026-W1" quietly becomes a date in the previous December, which is
+    # how football got aged 215 days into the past once already. A
+    # contract journaled under one has no readable age at all.
+    if _NFL_WEEK_DATE.match(ref or ""):
+        return {"id": b["id"], "sport": b["sport"], "date": date,
+                "player": b["player"], "market": b["market"],
+                "age_days": older_than, "reason": reason, "event_date": ev}
+    try:
+        age = (today_d - datetime.date.fromisoformat(ref)).days
+    except ValueError:
+        return None
+    if age < older_than:
+        return None                       # the event has not happened yet
+    return {"id": b["id"], "sport": b["sport"], "date": date,
+            "player": b["player"], "market": b["market"],
+            "age_days": age, "reason": reason,
+            "event_date": ev}
+
+
 def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
              ) -> list[dict]:
     """Every still-open bet whose day is done, and WHY it has not graded.
@@ -1600,6 +1707,14 @@ def why_open(conn, hist_conn, today: str, older_than: int = STUCK_AFTER_DAYS
 
     for b in rows:
         date = b["date"] or ""
+        if (b["category"] if "category" in b.keys() else "") == "predmarket":
+            # Judged on its own terms — event date off the ticker, graded
+            # by the exchange. None of the history lookups below can say
+            # anything true about a Kalshi contract.
+            pm = _why_open_predmarket(b, date, today_d, older_than)
+            if pm:
+                out.append(pm)
+            continue
         # An NFL week label is NOT an ISO week date, and on Python ≥3.11
         # fromisoformat("2026-W01") happily returns 2025-12-29 — which
         # aged September's football 215 days into the PAST and put seven
@@ -3782,17 +3897,40 @@ def open_by_day(conn, today: str) -> list[dict]:
     supposed to be open, picks from a finished day are a symptom, and the
     two are indistinguishable in a total. Each entry carries ``stale``
     (the day is over, so these should already have graded) so a caller can
-    say which kind it is looking at.
+    say which kind it is looking at, and ``gradeable_by_date`` — whether a
+    per-date results pass could close anything here at all, which is what
+    keeps `--settle all` out of days holding nothing but exchange
+    contracts.
     """
-    rows = conn.execute(
-        "SELECT date, category, COUNT(*) FROM bets WHERE status='open' "
-        "GROUP BY date, category ORDER BY date DESC").fetchall()
+    # Per ROW, not a GROUP BY: a prediction-market contract's slate date
+    # is the day the desk recommended it, and the day its event actually
+    # happens is encoded in the ticker. Deciding "this day is over" off
+    # the journal date alone marked twelve future NFL days stale in
+    # August and sent `--settle all` back through every one of them,
+    # nightly, finding `0 game(s)` each time.
     by_day: dict = {}
-    for r in rows:
-        d, cat, n = r[0], r[1], r[2]
-        by_day.setdefault(d or "", {})[cat or "main"] = n
+    ripe: dict = {}          # something here really should have graded
+    gradeable: dict = {}     # a per-DATE results pass could grade something
+    for r in conn.execute(
+            "SELECT date, category, player FROM bets WHERE status='open'"):
+        d = r["date"] or ""
+        cat = r["category"] or "main"
+        counts = by_day.setdefault(d, {})
+        counts[cat] = counts.get(cat, 0) + 1
+        if cat == "predmarket":
+            # Graded by resolve_predmarket against exchange settlements —
+            # a date ingest has nothing to offer it, ever. An undated
+            # ticker still counts as ripe so it cannot hide.
+            ev = predmarket_event_date(r["player"])
+            if ev is None or ev < today:
+                ripe[d] = True
+        else:
+            gradeable[d] = True
+            if bool(d) and d < today:
+                ripe[d] = True
     return [{"date": d, "counts": by_day[d], "total": sum(by_day[d].values()),
-             "stale": bool(d) and d < today}
+             "stale": bool(d) and d < today and ripe.get(d, False),
+             "gradeable_by_date": gradeable.get(d, False)}
             for d in sorted(by_day, reverse=True)]
 
 
@@ -3802,6 +3940,9 @@ def open_by_day(conn, today: str) -> list[dict]:
 OPEN_REASONS = {
     "ready": "ready to grade — results are in; a settle pass will close it",
     "waiting": "waiting — the game is not confirmed final yet",
+    "exchange": "a prediction-market contract — it grades when the "
+                "exchange settles it and the next desk build reads that "
+                "settlement. There is nothing to ingest",
     "no_results": "no results for this date in the history DB yet — "
                   "ingest has not reached it",
     "no_statline": "game is in, but this player has no stat line "
@@ -3892,12 +4033,24 @@ def explain_open(conn, hist_conn, today: str | None = None) -> dict:
 
     buckets: dict = {k: [] for k in OPEN_REASONS}
     for b in conn.execute("SELECT * FROM bets WHERE status='open'").fetchall():
+        # A Kalshi contract is in its own bucket for the same reason it is
+        # in why_open's: `_reason` below runs the history lookups a settle
+        # pass runs, and none of them can say anything true about a market
+        # the EXCHANGE grades. Sent through them, 130 healthy contracts
+        # came out as NO_RESULTS — with "check the feeds" as the advice.
+        pm = (b["category"] if "category" in b.keys() else "") == "predmarket"
+        ev = predmarket_event_date(b["player"]) if pm else None
         item = {"id": b["id"], "sport": b["sport"], "date": b["date"],
                 "market": b["market"], "player": b["player"],
                 "side": b["side"] if "side" in b.keys() else None,
                 "line": b["line"] if "line" in b.keys() else None,
-                "stale": bool(b["date"]) and (b["date"] or "") < today}
-        buckets[_reason(b)].append(item)
+                # For a contract, "the day is over" means the EVENT is
+                # over — its date column is the day the desk picked it.
+                "stale": (bool(ev) and ev < today) if pm
+                else bool(b["date"]) and (b["date"] or "") < today}
+        if pm:
+            item["event_date"] = ev
+        buckets["exchange" if pm else _reason(b)].append(item)
     return {
         "total": sum(len(v) for v in buckets.values()),
         "buckets": {k: v for k, v in buckets.items()},

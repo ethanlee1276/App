@@ -191,10 +191,13 @@ def check_stuck_bets(rep):
             by[r["reason"]] = by.get(r["reason"], 0) + 1
         why = " · ".join(f"{n} {k}" for k, n in
                          sorted(by.items(), key=lambda x: -x[1]))
-        # "no results ingested" is fixable by a command; the rest usually
-        # mean a scratch or a name mismatch and need eyes.
-        only_ingest = set(by) == {"no results ingested"}
-        rep.add("stuck bets", WARN if only_ingest else FAIL,
+        # Some causes are fixable by a command; the rest usually mean a
+        # scratch or a name mismatch and need eyes. A Kalshi contract past
+        # its event date is the first kind — the exchange settles it and
+        # the next desk build reads that settlement.
+        by_command = {"no results ingested", "waiting on the exchange"}
+        routine = bool(by) and set(by) <= by_command
+        rep.add("stuck bets", WARN if routine else FAIL,
                 f"{len(rows)} open pick(s) whose day is done — {why}",
                 "python3 launch.py --stuck")
 
@@ -437,18 +440,43 @@ def check_premature_evidence(rep):
         h = db.connect()
         marks = ", ".join("?" for _ in ledger.GAME_MARKETS)
         bad = 0
+        # A bare count is not a diagnosis, and this one has two causes
+        # needing opposite fixes: the DAY is gone from the games table (a
+        # lost or overwritten ingest — refetch it), or the day is there
+        # and this TEAM is not (the journal spells the club differently
+        # from the feed — a name-map fix). One extra query separates them,
+        # and without it "11" is a number nobody can act on.
+        no_day, no_team = [], []
         for b in c.execute(
                 f"SELECT * FROM bets WHERE status IN ('won','lost','push') "
                 f"AND market IN ({marks})", ledger.GAME_MARKETS).fetchall():
             where, wargs = ledger._hist_where(b)
             rows, actual_fn = ledger._game_bet_evidence(h, b, where, wargs)
             finals = [g for g in rows if g["home_score"] is not None]
-            if not finals:
-                bad += 1
+            if finals:
+                continue
+            bad += 1
+            try:
+                day_finals = h.execute(
+                    f"SELECT COUNT(*) FROM games WHERE {where} "
+                    f"AND home_score IS NOT NULL", wargs).fetchone()[0]
+            except Exception:                               # noqa: BLE001
+                day_finals = 0
+            (no_team if day_finals else no_day).append(
+                f"{b['sport']} {b['date']} {(b['player'] or '')[:20]}")
         if bad:
+            where_txt = []
+            if no_day:
+                where_txt.append(f"{len(no_day)} on dates with no finals "
+                                 f"stored at all ({', '.join(no_day[:3])})")
+            if no_team:
+                where_txt.append(f"{len(no_team)} whose date IS stored but "
+                                 f"not that team — a name mismatch "
+                                 f"({', '.join(no_team[:3])})")
             rep.add("grade evidence", FAIL,
                     f"{bad} settled game bet(s) have no final score behind "
-                    f"them — graded off a partial or vanished games row",
+                    f"them — graded off a partial or vanished games row · "
+                    + " · ".join(where_txt),
                     "python3 launch.py --settle all   (the repair pass "
                     "re-audits team markets)")
         else:

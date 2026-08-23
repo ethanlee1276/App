@@ -403,10 +403,40 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
     }
 
 
+#: Tickers per settlement request. The exchange caps the query string;
+#: 40 is the batch, not the limit on how many contracts we may settle.
+SETTLE_BATCH = 40
+
+
 def fetch_markets_by_tickers(tickers: list[str], ttl: int = 120) -> list[dict]:
-    """The settlement pull: specific markets by ticker, results included."""
+    """The settlement pull: specific markets by ticker, results included.
+
+    Every ticker, in batches — not the first forty and silently nothing
+    else. The desk journals a whole slate of game contracts at once, so
+    the open book passes 40 within a week of going live; from then on the
+    41st contract onward could never settle, and the rows piled up open
+    looking exactly like a grading bug. Each batch caches under its own
+    name, or the second one would read the first one's answer back.
+    """
     if not tickers:
         return []
-    url = f"{KALSHI}/markets?tickers={','.join(tickers[:40])}"
-    raw = json.loads(fetch_text(url, "kalshi_settle.json", ttl=ttl))
-    return raw.get("markets", []) or []
+    out: list[dict] = []
+    # One flaky batch must not cost the other three their settlements —
+    # but a dead feed must still be a raised error and not "0 settled",
+    # so the failure only passes quietly while something else succeeded.
+    failed: Exception | None = None
+    ok = 0
+    for i in range(0, len(tickers), SETTLE_BATCH):
+        batch = tickers[i:i + SETTLE_BATCH]
+        url = f"{KALSHI}/markets?tickers={','.join(batch)}"
+        try:
+            raw = json.loads(fetch_text(
+                url, f"kalshi_settle_{i // SETTLE_BATCH}.json", ttl=ttl))
+        except Exception as exc:                        # noqa: BLE001
+            failed = exc
+            continue
+        ok += 1
+        out.extend(raw.get("markets", []) or [])
+    if failed is not None and not ok:
+        raise failed
+    return out
