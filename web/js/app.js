@@ -86,8 +86,25 @@ function loadBankroll() {
 function unitDollars() {
   return (state.bankroll && state.bankroll > 0) ? state.bankroll * (state.unitPct / 100) : 0;
 }
+/* "$NaN" IS REACHABLE AND "—" IS THE HOUSE WORD FOR NO NUMBER.
+   `stakeDollars(r.stake_units)` is the common caller and it multiplies:
+   a row whose `stake_units` never got filled makes NaN, and this printed
+   it. null and undefined were worse — `.toLocaleString` on them THROWS,
+   and a throw inside a render loses the whole block silently, which is
+   how this repo once lost the team-form panel for thirteen days.
+
+   Number.isFinite rather than a truthiness check, so a legitimate 0
+   still prints "$0.00". */
 function money(x) {
-  return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // null and "" BEFORE the finite check, because `Number(null)` is 0 and
+  // `Number("")` is 0 — both finite, both would print "$0.00" for a field
+  // that was never filled. A stake of zero is a real thing this site
+  // prints (parlays are graded at one); a MISSING stake is not zero, and
+  // saying so with a dash is the difference between the two.
+  if (x == null || x === "") return "—";
+  if (!Number.isFinite(Number(x))) return "—";
+  return "$" + Number(x).toLocaleString(undefined,
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function stakeDollars(units) { return units * unitDollars(); }
 function updateUnitNote() {
@@ -636,7 +653,18 @@ function iconMark(name, size = 14) {
   return `<span class="ico-mark">${icon(name, size)}</span>`;
 }
 
+/* NOTHING MISSING PRINTS THE WORD FOR IT. `String(undefined)` is
+   "undefined" and `String(null)` is "null", and this function is the last
+   step before hundreds of optional payload fields reach the page — a
+   board row without an `opponent`, a bet without a `book`, any key a
+   build did not fill. Every one of them rendered the JavaScript word, in
+   the sentence, on a live page.
+
+   Only null and undefined. 0, false and "" are values a caller meant to
+   print and are left exactly alone — swallowing those would turn "0"
+   into a blank, which is a different lie. */
 function escapeHtml(s) {
+  if (s == null) return "";
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
@@ -10666,7 +10694,10 @@ window.mbImport = function (input) {
 };
 
 function mbMoney(v, sign) {
-  const n = Number(v) || 0;
+  // `Number(v) || 0` already caught NaN and null; Infinity is the one it
+  // let through, and it printed "$Infinity".
+  const raw = Number(v);
+  const n = Number.isFinite(raw) ? raw : 0;
   const s = "$" + Math.abs(n).toFixed(2);
   if (!sign) return s;
   return n > 0 ? "+" + s : n < 0 ? "−" + s : s;
