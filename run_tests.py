@@ -101,6 +101,30 @@ def main() -> int:
     # and sweep it once at the end, whatever the verdict.
     sandbox = tempfile.mkdtemp(prefix="qellys-tests-")
     env = dict(os.environ, TMPDIR=sandbox, TEMP=sandbox, TMP=sandbox)
+
+    # THE SUITE MUST NOT READ THE BOX IT IS RUNNING ON.
+    #
+    # Two failures on the droplet, 2026-08-23, that pass everywhere else:
+    #
+    #   test_stripe_plans  pops STRIPE_PRICE_YEARLY and asks billing to
+    #                      refuse. billing._env() calls load_local_secrets,
+    #                      which reads /etc/qellys/env and puts it straight
+    #                      back — so the pop was undone by the very call
+    #                      under test.
+    #   test_backup_remote runs `backup.sh --check` with no remote set and
+    #                      expects it to fail. The script reads the same
+    #                      file and found the real rclone destination.
+    #
+    # Both were the gate judging the BOX rather than the code, and the
+    # direction is dangerous rather than merely annoying: a suite that
+    # inherits a live STRIPE_SECRET_KEY is a suite one careless test away
+    # from touching a real account. A test run gets a clean environment,
+    # the same one the dev container has, so green here means green there.
+    for name in list(env):
+        if name.startswith(("STRIPE_", "ODDS_API_KEY", "QB_")):
+            env.pop(name)
+    # Set after the sweep, not before it, so the sweep cannot eat it.
+    env["QB_ENV_FILE"] = os.path.join(sandbox, "no-such-env")
     try:
         return _run(env, sys.argv[1:])
     finally:

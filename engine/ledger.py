@@ -111,6 +111,10 @@ def _migrate(conn) -> None:
 
 
 def connect(path: str | Path | None = None) -> sqlite3.Connection:
+    # WAL + a busy timeout, from the one place that explains why — see
+    # engine/db.tune(). The refresher journals this file while the
+    # settler grades and the server answers /api/record off it.
+    from .db import tune as _db_tune
     # DEFAULT_DB is resolved at call time, not bound at import — a test (or
     # anything else) that repoints the module's DEFAULT_DB must actually win.
     path = Path(path if path is not None else DEFAULT_DB)
@@ -118,6 +122,7 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    _db_tune(conn)
     _migrate(conn)
     conn.executescript(SCHEMA)
     # Doubleheader leg (1/2) — lets the settler grade a DH bet against the

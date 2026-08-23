@@ -176,6 +176,68 @@ def test_the_summary_line_still_carries_the_count_and_the_skips():
     assert "len(files) - len(skipped)" in RUNNER
 
 
+def test_the_run_gets_a_clean_environment_not_the_boxs():
+    """REPRODUCED FROM THE DROPLET, 2026-08-23. Two files failed there
+    and nowhere else, and both for the same reason: the code under test
+    reads /etc/qellys/env, so the production config was in scope.
+
+      test_stripe_plans  pops STRIPE_PRICE_YEARLY and asks billing to
+                         refuse. billing._env() -> load_local_secrets()
+                         read the file and put it straight back, so the
+                         pop was undone by the call under test.
+      test_backup_remote runs `backup.sh --check` with no remote and
+                         expects failure; the script read the same file
+                         and found the real rclone destination.
+
+    The dangerous direction is not the false failure. It is that a suite
+    inheriting a live STRIPE_SECRET_KEY is one careless test away from
+    touching a real account.
+    """
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    body = src[src.index("def main("):]
+    body = body[:body.index("\ndef ")]
+    assert 'startswith(("STRIPE_", "ODDS_API_KEY", "QB_"))' in body, (
+        "the run inherits the box's secrets")
+    assert 'env["QB_ENV_FILE"]' in body, (
+        "nothing points the secrets loader away from /etc/qellys/env")
+    # Order matters and is easy to get backwards: the sweep drops every
+    # QB_* name, so setting QB_ENV_FILE before it would be pointless.
+    assert body.index("env.pop(name)") < body.index('env["QB_ENV_FILE"]'), (
+        "QB_ENV_FILE is set before the sweep that removes it")
+
+
+def test_the_two_files_that_failed_pass_under_that_environment():
+    """The end-to-end version: hand them the box's config and they fail,
+    hand them the runner's and they pass. Written this way because the
+    check above only reads run_tests.py, and this bug was invisible in
+    every file's own source."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        boxenv = os.path.join(td, "env")
+        with open(boxenv, "w", encoding="utf-8") as fh:
+            fh.write("STRIPE_PRICE_YEARLY=price_pretend\n"
+                     "QB_BACKUP_REMOTE=pretend:remote\n")
+        dirty = dict(os.environ, QB_ENV_FILE=boxenv)
+        clean = dict(os.environ, TMPDIR=td, TEMP=td, TMP=td)
+        for name in list(clean):
+            if name.startswith(("STRIPE_", "ODDS_API_KEY", "QB_")):
+                clean.pop(name)
+        clean["QB_ENV_FILE"] = os.path.join(td, "no-such-env")
+        for name in ("test_stripe_plans.py", "test_backup_remote.py"):
+            f = os.path.join(ROOT, "tests", name)
+            bad = subprocess.run([sys.executable, f], capture_output=True,
+                                 text=True, env=dirty, timeout=300)
+            assert bad.returncode != 0, (
+                f"{name} passed with the box's config in scope, so this "
+                f"test no longer reproduces the thing it is guarding")
+            ok = subprocess.run([sys.executable, f], capture_output=True,
+                                text=True, env=clean, timeout=300)
+            assert ok.returncode == 0, (
+                f"{name} still fails under the runner's environment:\n"
+                + ok.stdout[-600:] + ok.stderr[-600:])
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

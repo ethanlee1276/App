@@ -116,6 +116,11 @@ def connect(path=None) -> sqlite3.Connection:
     if str(path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
+    # The busiest writer on the box: memes_build rewrites this every 20
+    # seconds while the Record page reads it. WAL + a busy timeout, from
+    # engine/db.tune() — see the note there.
+    from .db import tune as _db_tune
+    _db_tune(conn)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     return conn

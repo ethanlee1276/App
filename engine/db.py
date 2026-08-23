@@ -199,12 +199,46 @@ ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
                   "market", "book", "line", "over_odds", "under_odds"]
 
 
+#: Concurrency, and why this is not only a test concern.
+#:
+#: `database is locked` broke two files on the droplet mid-deploy
+#: (test_gamebets, test_hr_engine) and almost certainly starved two more
+#: into their 900s timeout (test_isotonic, test_ledger). The immediate
+#: cause is that a test run on the live box shares these files with the
+#: RUNNING SITE — the refresher journals while the suite reads.
+#:
+#: But the suite only made it visible. The same shape is live traffic:
+#: the refresher writes the ledger while the settler grades and the
+#: server answers /api/record off it. On the default journal mode a
+#: reader and a writer cannot coexist at all, and the default timeout is
+#: zero — so the loser raises instead of waiting.
+#:
+#: WAL lets readers carry on through a write, and a busy timeout makes
+#: two writers queue rather than one of them failing. Thirty seconds is
+#: chosen to ride out a build's write burst while still surfacing a real
+#: deadlock as a failure rather than a hang.
+#:
+#: Both are per-connection PRAGMAs, except journal_mode, which is a
+#: property of the FILE and persists once set — so the first connection
+#: after this ships converts the database and every later one inherits
+#: it. Wrapped because a read-only directory (or :memory:) refuses the
+#: conversion, and that must not take down a caller that only wanted to
+#: read.
+def tune(conn) -> None:
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.DatabaseError:
+        pass
+    conn.execute("PRAGMA busy_timeout=30000")
+
+
 def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     if str(path) != ":memory:":
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    tune(conn)
     conn.executescript(SCHEMA)
     # Migrations for columns added after a table shipped (CREATE IF NOT
     # EXISTS won't touch an existing table).
