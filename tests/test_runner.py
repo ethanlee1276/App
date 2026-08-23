@@ -311,6 +311,58 @@ def test_a_file_that_hangs_before_its_first_test_says_so_too():
     assert "an import, or module-level work" in body
 
 
+def test_the_run_yields_the_cpu_to_the_live_site():
+    """The suite runs ON the droplet, DURING a deploy, while the site is
+    serving — and the droplet has one core. For ten minutes ~340 test
+    processes competed on equal terms with the refresher and with Caddy
+    answering subscribers.
+
+    That is backwards twice: somebody is READING the site, and a heavy
+    test file killed for losing the race reports a failure that is really
+    a queue. test_ledger has failed three deploys running that way while
+    passing in nine seconds anywhere else."""
+    import run_tests
+    cmd = run_tests._child("tests/test_db.py")
+    assert "-u" in cmd, "the child still buffers its output"
+    if run_tests._NICE:
+        assert cmd[0] == run_tests._NICE and "10" in cmd, cmd
+    else:
+        assert cmd[0] == sys.executable, "no nice, so run it plainly"
+
+
+def test_the_per_file_ceiling_follows_how_busy_the_box_is():
+    """A fixed 900s was chosen when this ran serially on an idle machine.
+    Measured contention, not a guessed constant: load over CPU count IS
+    the queue. Floored so an idle box keeps the old number, capped so a
+    genuinely hung file still dies inside the hour."""
+    import run_tests
+    real_load, real_cpu = os.getloadavg, os.cpu_count
+    try:
+        os.getloadavg = lambda: (0.2, 0.2, 0.2)
+        os.cpu_count = lambda: 8
+        assert run_tests._timeout() == run_tests.FILE_TIMEOUT, (
+            "an idle box should keep the plain ceiling")
+        os.getloadavg = lambda: (3.0, 3.0, 3.0)
+        os.cpu_count = lambda: 1
+        busy = run_tests._timeout()
+        assert busy > run_tests.FILE_TIMEOUT, "a loaded box gets no more time"
+        os.getloadavg = lambda: (200.0, 200.0, 200.0)
+        assert run_tests._timeout() <= run_tests.FILE_TIMEOUT * 4, (
+            "a hung file could outlive the deploy")
+    finally:
+        os.getloadavg, os.cpu_count = real_load, real_cpu
+
+
+def test_a_timeout_reports_the_load_it_was_fighting():
+    """"Timed out at 900s" and "timed out at 900s with a load of 14 on
+    one cpu" are different findings, and only the second one points at
+    the box instead of at the code."""
+    src = open(os.path.join(ROOT, "run_tests.py"), encoding="utf-8").read()
+    body = src[src.index("def _run_one("):]
+    body = body[:body.index("\ndef ")]
+    assert "getloadavg" in body and "cpu(s)" in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

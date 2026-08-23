@@ -78,8 +78,54 @@ def _workers(argv) -> int:
     return min(8, max(2, (os.cpu_count() or 1) * 3))
 
 
-def _run_one(path, env):
+#: The suite runs ON the droplet, DURING a deploy, while the site is
+#: serving — and the droplet has one core. A full run is ~340 processes,
+#: several of which do real arithmetic (test_isotonic fits calibration
+#: grids; test_ledger bootstraps four AUCs at 2000 reps), and for ten
+#: minutes they were competing on equal terms with the refresher and with
+#: Caddy answering subscribers.
+#:
+#: That is backwards twice over. The site must win, because somebody is
+#: reading it; and a heavy test file killed for LOSING that race is a red
+#: gate that says nothing about the code — which is how test_ledger has
+#: failed three deploys running while passing in nine seconds anywhere
+#: else.
+#:
+#: `nice` fixes the first half at no cost: the kernel hands the core to
+#: the service and the tests fill the gaps. The second half is below.
+_NICE = shutil.which("nice")
+
+
+def _child(path):
+    """The command for one test file. -u so a killed process has already
+    flushed what it printed; nice so the live site outranks the run."""
+    cmd = [sys.executable, "-u", path]
+    return [_NICE, "-n", "10"] + cmd if _NICE else cmd
+
+
+def _timeout() -> int:
+    """The per-file ceiling, scaled to how contended the box is.
+
+    A fixed 900s was chosen when this ran serially on an idle machine. On
+    a loaded single-core box the same file legitimately takes many times
+    longer, and killing it reports a failure that is really a queue.
+
+    Load average over CPU count IS the contention, measured rather than
+    assumed, and it is read once at the start so every file in a run gets
+    the same ceiling. Floored at 1 so an idle box keeps the old number,
+    and capped so a genuinely hung file still dies inside an hour.
+    """
+    try:
+        load = os.getloadavg()[0]
+    except (OSError, AttributeError):
+        return FILE_TIMEOUT
+    pressure = max(1.0, load / max(1, os.cpu_count() or 1))
+    return int(min(FILE_TIMEOUT * pressure, FILE_TIMEOUT * 4))
+
+
+def _run_one(path, env, ceiling=None):
     name = os.path.basename(path)
+    ceiling = ceiling or FILE_TIMEOUT
     t0 = time.monotonic()
     try:
         # -u: UNBUFFERED, and it is the whole reason a timeout can say
@@ -90,8 +136,8 @@ def _run_one(path, env):
         # of guessing at which test was stuck. Unbuffered, the partial
         # output survives the kill and the last line names the test that
         # finished before the one that hung.
-        r = subprocess.run([sys.executable, "-u", path], capture_output=True,
-                           text=True, cwd=ROOT, env=env, timeout=FILE_TIMEOUT)
+        r = subprocess.run(_child(path), capture_output=True,
+                           text=True, cwd=ROOT, env=env, timeout=ceiling)
         out, code = r.stdout, r.returncode
         err = r.stderr
     except subprocess.TimeoutExpired as exc:
@@ -107,7 +153,12 @@ def _run_one(path, env):
                  if done else
                  "\n  it printed nothing at all, so it hung before the "
                  "first test — an import, or module-level work")
-        err = _text(exc.stderr) + f"TIMED OUT after {FILE_TIMEOUT}s{where}"
+        try:
+            load = f" · load {os.getloadavg()[0]:.1f} on " \
+                   f"{os.cpu_count()} cpu(s)"
+        except (OSError, AttributeError):
+            load = ""
+        err = _text(exc.stderr) + f"TIMED OUT after {ceiling}s{load}{where}"
         code = 1
     return name, code, out, err, time.monotonic() - t0
 
@@ -164,7 +215,10 @@ def _run(env, argv) -> int:
     # and they exist because a silent gate reads as a hung one.
     got, done, failed_now, last = {}, 0, 0, time.monotonic()
     with ThreadPoolExecutor(max_workers=jobs) as pool:
-        futs = {pool.submit(_run_one, f, env): f for f in files}
+        ceiling = _timeout()
+        if ceiling > FILE_TIMEOUT:
+            print(f"  busy box — per-file ceiling raised to {ceiling}s\n")
+        futs = {pool.submit(_run_one, f, env, ceiling): f for f in files}
         for fut in as_completed(futs):
             res = fut.result()
             got[futs[fut]] = res
