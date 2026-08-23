@@ -923,6 +923,101 @@ def test_the_singles_comparison_weighs_the_two_costs_rather_than_ranking():
     assert abs(sc["legs_cost"] - 15.32) < 0.01, sc
 
 
+# --- the record read as a record of the right thing ---------------------------
+def test_promotion_counts_only_the_tickets_the_screen_recommended():
+    """§13's bar is about tickets this module would STAKE, and it was
+    measured over every graded row — which includes rank 1 off every
+    slate the screen refused. That let refusals count toward the hundred
+    and set the ROI condition, so the module could be held back by the
+    losses of bets it declined to make, or promoted on the strength of
+    grading its own rejects."""
+    conn = _conn()
+    # Eighteen refusals, all losers; two recommendations, both winners.
+    _graded(conn, [(False, 0.3, 0.25, [0.5, 0.5], 1, 0) for _ in range(18)]
+                  + [(True, 0.3, 0.25, [0.5, 0.5], 2, 1) for _ in range(2)])
+    r = parlayledger.report(conn)
+    pr = r["promotion"]
+    assert pr["tickets_have"] == 2, "refusals still count toward the hundred"
+    assert pr["tickets_graded_all"] == 20, "the blended count is not reported"
+    assert pr["roi_positive"] is True, (
+        "the ROI condition is being set by tickets the screen declined")
+    # And the blended numbers are still there — hiding them would be the
+    # opposite mistake.
+    assert r["graded"] == 20 and r["roi"] < 0
+
+
+def test_the_recommended_bucket_is_summed_where_the_notional_is():
+    """ROIs do not add. `recommended` is computed in SQL over both yes
+    buckets rather than by averaging two percentages on the page, which
+    is how a weighted average becomes a mean."""
+    conn = _conn()
+    _graded(conn, [(True, 0.3, 0.25, [0.5, 0.5], 2, 1) for _ in range(3)]
+                  + [(False, 0.3, 0.25, [0.5, 0.5], 1, 0)])
+    q = parlayledger.report(conn)["by_qualified"]
+    rec, play, alsoq = q["recommended"], q["play"], q["qualified"]
+    assert rec["graded"] == play["graded"] + alsoq["graded"] == 3
+    assert rec["staked_units"] == 3.0, "no notional to re-divide by"
+    assert abs(rec["net_units"] - (play["net_units"] + alsoq["net_units"])) < 1e-9
+    assert rec["losses"] == rec["graded"] - rec["wins"]
+
+
+def test_the_singles_verdict_is_asked_of_the_screens_own_tickets():
+    """"Singles were better, the structure is costing money" is a verdict
+    on the SCREEN. Answering it over rows the screen declined convicts it
+    of somebody else's tickets."""
+    conn = _conn()
+    _graded(conn, [(False, 0.3, 0.25, [0.5, 0.5], 1, 0) for _ in range(4)]
+                  + [(True, 0.3, 0.25, [0.5, 0.5], 2, 1)])
+    r = parlayledger.report(conn)
+    assert r["singles_comparison"]["n"] == 5
+    assert r["singles_comparison_recommended"]["n"] == 1, (
+        "the recommendation is being judged on the refusals' results")
+
+
+def test_the_page_headline_reads_the_recommended_bucket_not_the_blend():
+    """Ethan, 2026-08-23: "we suck at parlays and they are loosing us alot
+    of money". The number he was reading was -84.1% over 19 tickets, and
+    EIGHTEEN of the nineteen were tickets the screen refused."""
+    src = _app_js()
+    i = src.index("function recParlaySection")
+    block = src[i:src.index("function recLongshotSection")]
+    lead = block[block.index("rec-kpis"):block.index("pl-conds")]
+    assert "pz.roi" not in lead, "the blended ROI is back in the KPI row"
+    assert "rec.roi" in lead and "rec.net_units" in lead
+    # and the blend is still reported, below, rather than hidden
+    assert "Everything graded, blended" in block
+
+
+def test_no_rate_is_printed_on_a_sample_that_cannot_carry_one():
+    """THE FIRST CUT OF THE FIX SHIPPED A WORSE LIE. Splitting the record
+    made the headline "+160.0% ROI" in green off ONE winning ticket. A
+    rate quoted on a sample that cannot carry one is the same fault as
+    the blend, pointing the other way."""
+    src = _app_js()
+    assert "const PARLAY_RATE_FLOOR = 10;" in src, "the floor was removed"
+    i = src.index("function recParlaySection")
+    block = src[i:src.index("function recLongshotSection")]
+    assert "readable" in block, "the floor is defined and never consulted"
+    # the split rows honour it too — a row reading +160% beside a note
+    # saying one ticket is not a record is the page arguing with itself
+    split = src[src.index("function parlaySplitHTML"):
+                src.index("function recLongshotSection")]
+    assert "b.graded >= PARLAY_RATE_FLOOR" in split
+    # …and the verdict line does not conclude from it either
+    assert "a difference, not a finding" in block
+
+
+def test_the_refusals_are_labelled_as_the_gates_working():
+    """A heavy loss on the refused bucket is the screen being RIGHT.
+    Printing it without that sentence is how the split becomes a second
+    way to read the same wrong conclusion."""
+    src = _app_js()
+    split = src[src.index("function parlaySplitHTML"):
+                src.index("function recLongshotSection")]
+    assert "the gates working" in split
+    assert "never recommended" in split
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -98,32 +98,37 @@ function updateUnitNote() {
 }
 
 const SPORT_META = {
-  // The NFL and MLB taglines carry the model names — they moved here
-  // from the sidebar's Models group when it dissolved (2026-08-17): its
-  // three rows were the league chips wearing the model names, and this
-  // line is where the identity actually belongs.
-  nfl: { logo: "🏈", tagline: "The NFL Book — the pro-bettor prop model",
+  // THE TAGLINES ARE GONE, and with them the last reader of this key.
+  // They carried the model names into the header after the sidebar's
+  // Models group dissolved (2026-08-17), and the header stopped printing
+  // them on 2026-08-23 — Ethan: "we dont need to siplay the model
+  // underneath it, it looks more clean without it". Keeping the strings
+  // here for nobody to read is how a file fills up with data that looks
+  // load-bearing and is not, so they went with the line. The names still
+  // travel: every league chip carries one as its tooltip, and the About
+  // page gives each model a card of its own.
+  nfl: { logo: "🏈",
          gamesTitle: "This week’s stadiums",
          gamesSub: "real stadium shapes, roof state, live wind and the passing "
                    + "conditions each one is playing to right now",
          api: "/api/recommendations", fallback: "data/recommendations.json" },
-  mlb: { logo: "⚾", tagline: "Scalpy 2.0 — the MLB prop model",
+  mlb: { logo: "⚾",
          gamesTitle: "Tonight’s ballparks",
          gamesSub: "real park shapes, roof state, live wind and the home-run "
                    + "factor each one is playing to right now",
          api: "/api/mlb/recommendations", fallback: "data/mlb_recommendations.json" },
-  wnba: { logo: "🏀", tagline: "Scalpy — WNBA probability engine (on probation)",
+  wnba: { logo: "🏀",
           gamesTitle: "Tonight’s slate",
           gamesSub: "same minutes-first model as the NBA board, tuned to a "
                     + "40-minute game — and journaled on probation until it "
                     + "has graded enough WNBA results to earn a stake",
           api: "/api/wnba/recommendations", fallback: "data/wnba.json" },
-  nba: { logo: "🏀", tagline: "Scalpy — NBA probability engine",
+  nba: { logo: "🏀",
          gamesTitle: "Tonight’s slate",
          gamesSub: "minutes first, distributions not point estimates, every "
                    + "number clamped toward the de-vigged market",
          api: "/api/nba/recommendations", fallback: "data/nba.json" },
-  cfb: { logo: "🏈", tagline: "College football — attention is the axis",
+  cfb: { logo: "🏈",
          gamesTitle: "Saturday’s board",
          gamesSub: "134 teams, 60+ games, and no book prices a Wednesday MAC "
                    + "game the way it prices Ohio State – Michigan — so the "
@@ -239,7 +244,6 @@ function applySport() {
   const hidden = HIDDEN_VIEWS[state.sport] || [];
   markOffRows(hidden);
   if (hidden.includes(state.view)) switchView("recommended");
-  document.getElementById("tagline").textContent = meta.tagline;
   const gt = document.getElementById("games-title");
   // innerHTML, not textContent: this is the page's hero and it carries a
   // subtitle. Assigning textContent silently deleted the .sub span.
@@ -6529,10 +6533,60 @@ function recEraSection(er) {
    never blended, so it gets its own section, its own notional and its own
    ROI — and it leads with the one sentence that matters while the module is
    on probation: whether the same legs bet singly would have done better. */
+/* WHAT THIS RECORD IS A RECORD OF.
+   Ethan, 2026-08-23: "we suck at parlays and they are loosing us alot of
+   money so we need a way to fix that and work on the model or something
+   bc its not working."
+
+   The number he was reading was -84.1% ROI over 19 tickets. EIGHTEEN OF
+   THE NINETEEN WERE TICKETS THE SCREEN REFUSED. log_board journals rank 1
+   off every slate whether or not it qualified — deliberately, because a
+   screen that only grades its yeses never tests its noes — and this
+   section then blended the two into one headline. So the site's own
+   verdict on its parlay model was mostly a scoreboard of the bets it had
+   declined to make, and it read as the model failing when it was the
+   model working.
+
+   The fix is not to hide the rejects. It is to stop averaging a
+   recommendation with a refusal:
+
+     * the KPIs report the RECOMMENDED bucket — every ticket the screen
+       put its name to;
+     * the refusals get their own line, with the reading spelled out: a
+       bad ROI there is the gates being right;
+     * the blended total is still printed, below both, labelled as the
+       sum of two different questions.
+
+   None of that makes the record good. On the numbers that prompted it the
+   recommended bucket is a single ticket, which is no evidence at all, and
+   the section says so rather than printing an ROI on n=1. */
+/* HOW MANY TICKETS BEFORE A PERCENTAGE MEANS ANYTHING.
+
+   Not a taste. The first cut of this section fixed the blended headline
+   and immediately printed "+160.0% ROI" in green off ONE winning ticket,
+   which is a worse lie than the -84% it replaced and the same kind: a
+   rate quoted on a sample that cannot carry one. Below this floor the
+   tiles show the RECORD and the UNITS — both facts about what happened —
+   and no rate, no colour, and no verdict.
+
+   Ten is where a single ticket stops being able to swing the number by
+   more than about ten points at a one-unit notional. It is not the
+   promotion bar; §13 wants a hundred, and the probation tile still says
+   so. It is only the point below which a percentage is decoration. */
+const PARLAY_RATE_FLOOR = 10;
+
 function recParlaySection(pz) {
   if (!pz || (!pz.graded && !pz.open)) return "";
   const pr = pz.promotion || {};
-  const sc = pz.singles_comparison || {};
+  const q = pz.by_qualified || {};
+  const rec = q.recommended || {};
+  const no = q.not_qualified || {};
+  const play = q.play || {};
+  // The verdict on the SCREEN is asked of the screen's own tickets. The
+  // all-rows answer is still carried, and printed in the split below.
+  const readable = (rec.graded || 0) >= PARLAY_RATE_FLOOR;
+  const sc = (rec.graded ? pz.singles_comparison_recommended : null)
+    || pz.singles_comparison || {};
   const cond = (ok, label) =>
     `<span class="pl-cond${ok ? " met" : ""}">${ok ? icon("check") : icon("dash")}
       ${escapeHtml(label)}</span>`;
@@ -6541,13 +6595,15 @@ function recParlaySection(pz) {
   const verdict = sc.n
     ? `<div class="pl-verdict" style="color:var(--${
         sc.singles_better ? "warn" : "good"})">
-       Across ${sc.n} graded ticket(s): parlays
+       Across ${sc.n} ${rec.graded ? "recommended" : "graded"} ticket(s): parlays
        <strong>${sc.parlay_units >= 0 ? "+" : ""}${sc.parlay_units.toFixed(2)}u</strong>,
        the same legs bet singly
        <strong>${sc.singles_units >= 0 ? "+" : ""}${sc.singles_units.toFixed(2)}u</strong>.
-       ${sc.singles_better
-         ? "Singles were better — the structure is costing money."
-         : "The structure has paid for itself so far."}</div>`
+       ${sc.n < PARLAY_RATE_FLOOR
+         ? `That is ${sc.n} ticket(s) — a difference, not a finding.`
+         : sc.singles_better
+           ? "Singles were better — the structure is costing money."
+           : "The structure has paid for itself so far."}</div>`
     : "";
   const codes = (pz.loss_codes || []).length
     ? `<div class="pl-codes">${pz.loss_codes.map((c) =>
@@ -6592,12 +6648,30 @@ function recParlaySection(pz) {
       feed we ingest carries same-game-parlay prices, so each ticket is graded
       at the modelled likely-case price and labelled as such.`)}
     <div class="stats rec-kpis">
-      ${recTile("Flat-stake ROI",
-                (pz.roi >= 0 ? "+" : "") + ((pz.roi || 0) * 100).toFixed(1) + "%",
-                `${pz.net_units >= 0 ? "+" : ""}${(pz.net_units || 0).toFixed(2)}u notional`,
-                { lead: true, tone: toneOf(pz.roi) })}
-      ${recTile("Ticket record", `${pz.wins || 0}-${pz.losses || 0}`,
-                `${pz.open || 0} open · ${pz.voided || 0} void`)}
+      ${readable
+        ? recTile("Flat-stake ROI",
+                  (rec.roi >= 0 ? "+" : "") + ((rec.roi || 0) * 100).toFixed(1) + "%",
+                  `${rec.net_units >= 0 ? "+" : ""}${
+                    (rec.net_units || 0).toFixed(2)}u across ${
+                    rec.graded} recommended`,
+                  { lead: true, tone: toneOf(rec.roi) })
+        : recTile("Recommended tickets",
+                  rec.graded ? `${rec.wins || 0}-${rec.losses || 0}` : "none yet",
+                  rec.graded
+                    ? `${rec.net_units >= 0 ? "+" : ""}${
+                        (rec.net_units || 0).toFixed(2)}u — too few for a rate`
+                    : "no ticket the screen recommended has settled",
+                  { lead: true })}
+      ${/* NOT a second copy of the record. Below the floor the lead tile
+            already shows the recommended W-L, and two tiles reading
+            "1-0" is a KPI row arguing about which one to believe. This
+            one carries the OTHER bucket, which is the whole point of the
+            section — and the open/void counts, which have to live
+            somewhere. */""}
+      ${recTile("Also graded, not recommended",
+                no.graded ? `${no.wins || 0}-${no.losses || 0}` : "—",
+                `${no.graded || 0} refused · ${pz.open || 0} open · ${
+                  pz.voided || 0} void`)}
       ${recTile("Probation", `${pr.tickets_have || 0}/${pr.tickets_required || 100}`,
                 "graded tickets before anything is staked")}
       ${recTile("Leg CLV", pz.avg_leg_clv == null ? "—"
@@ -6605,6 +6679,7 @@ function recParlaySection(pz) {
                 pz.leg_clv_n ? `across ${pz.leg_clv_n} legs` : "accrues as legs settle",
                 { tone: toneOf(pz.avg_leg_clv) })}
     </div>
+    ${parlaySplitHTML(pz, q)}
     <div class="pl-conds">
       ${cond(pr.tickets_have >= pr.tickets_required,
              `${pr.tickets_required || 100} graded tickets`)}
@@ -6615,6 +6690,53 @@ function recParlaySection(pz) {
     </div>
     <div class="card" style="padding:0;margin-top:12px">${verdict}${rows ||
       `<p class="loading" style="padding:12px">No ticket has settled yet — accrues from tonight’s board.</p>`}${codes}</div>`;
+}
+
+/* WHAT THE HEADLINE IS NOT COUNTING, said out loud.
+
+   The tiles above report the tickets the screen recommended. Everything
+   else it graded is here, and the framing matters as much as the number:
+   a heavy loss on the refused bucket is the gates being RIGHT, and
+   reading it as the model failing is the mistake this whole block exists
+   to stop. The blended total sits at the bottom, labelled, so nothing is
+   hidden and nobody has to take the split on trust. */
+function parlaySplitHTML(pz, q) {
+  const line = (label, b, note) => {
+    if (!b || !b.graded) return "";
+    const u = b.net_units || 0;
+    // Same floor as the tiles. A row reading "+160.0%" beside a note
+    // saying one ticket is not a record is the page arguing with itself,
+    // and the percentage is the half that wins on a glance.
+    const rate = b.graded >= PARLAY_RATE_FLOOR
+      ? `${(b.roi >= 0 ? "+" : "") + ((b.roi || 0) * 100).toFixed(1)}%` : "";
+    return `<div class="pl-split-row">
+      <span class="pl-split-label">${escapeHtml(label)}</span>
+      <span class="pl-split-n">${b.graded} graded · ${b.wins}W-${b.losses}L</span>
+      <span class="pl-split-u ${b.graded >= PARLAY_RATE_FLOOR ? toneOf(u) : ""}">${
+        u >= 0 ? "+" : ""}${u.toFixed(2)}u
+        ${rate ? `<span class="pl-split-roi">${rate}</span>` : ""}</span>
+      ${note ? `<span class="pl-split-note">${note}</span>` : ""}</div>`;
+  };
+  const rec = q.recommended || {}, no = q.not_qualified || {};
+  const body = line("Recommended — the screen said yes", rec,
+                    rec.graded < PARLAY_RATE_FLOOR
+                      ? `${rec.graded} ticket(s) is not a record yet; the bar
+                         is ${pz.promotion ? pz.promotion.tickets_required : 100}`
+                      : "")
+    + line("Refused — shown, never recommended", no,
+           `a loss here is the gates working`)
+    + line("Everything graded, blended", {
+        graded: pz.graded, wins: pz.wins, losses: pz.losses,
+        net_units: pz.net_units, roi: pz.roi },
+        "two different questions added together — read the rows above first");
+  if (!body) return "";
+  return `<div class="pl-split">
+    <div class="pl-split-head">What this is a record of
+      <span class="sub">— the Zone ranks the night’s best constructions even
+      when none of them clears, and journals rank 1 either way. Grading a
+      refusal beside a recommendation measures the wrong thing, so they are
+      counted apart.</span></div>
+    ${body}</div>`;
 }
 
 function recLongshotSection(ls) {
@@ -9379,19 +9501,10 @@ function pmAgo(ts) {
 const STANDALONE_MODES = ["intel", "fantasy", "memes", "ufc", "why", "about",
                           "record", "lab", "mybets"];
 
-// Header identity per standalone page — the tagline follows the ACTIVE
-// page. Before this, opening Polymarket from the MLB tab left a baseball
-// description in the corner of a page that has nothing to do with baseball.
-const STANDALONE_BRAND = {
-  intel: { tagline: "Prediction Market — venue prices and informed flow" },
-  fantasy: { tagline: "Fantasy football — usage, scripts, draft kit" },
-  memes: { tagline: "Rocket Radar — meme-coin flow, danger drawn loudest" },
-  ufc: { tagline: "Scalpy MMA — dossier-gated fight model" },
-  why: { tagline: "See the math. Know if it’s working." },
-  record: { tagline: "The Book — every pick journaled, graded, learned from" },
-  lab: { tagline: "The Lab — the model replayed against stored history" },
-  mybets: { tagline: "My Bets — your own sportsbook P&L, kept on this device" },
-};
+/* STANDALONE_BRAND lived here and is gone with the header tagline it
+   fed. It existed to fix a real bug — opening Polymarket from the MLB tab
+   left a baseball description in the corner of a page with nothing to do
+   with baseball — and removing the line removes the bug outright. */
 
 function enterStandaloneMode(name) {
   document.querySelectorAll(".sport-btn").forEach((x) =>
@@ -9413,10 +9526,6 @@ function enterStandaloneMode(name) {
   const phead = document.querySelector('.menu-head[data-head="page"]');
   if (phead) phead.style.display = "none";
   markMoreMenu();          // the tool button just became active
-  const brand = STANDALONE_BRAND[name];
-  if (brand) {
-    document.getElementById("tagline").textContent = brand.tagline;
-  }
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
   if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
   // The Book's front door opens on the WHOLE record — the cross-sport
@@ -9438,12 +9547,6 @@ function exitStandaloneMode() {
   document.querySelectorAll(".sport-btn").forEach((x) =>
     setSelected(x, !!x.dataset.sport && x.dataset.sport === state.sport));
   markMoreMenu();
-  // Restore the sport's own tagline along with its nav. (The Q tile is
-  // constant now, so only the words change.)
-  const meta = SPORT_META[state.sport];
-  if (meta) {
-    document.getElementById("tagline").textContent = meta.tagline;
-  }
   window.ACTIVE_SPORT = state.sport;
   if (STANDALONE_MODES.includes(state.view)) {
     switchView("recommended");

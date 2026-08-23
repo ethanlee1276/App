@@ -118,10 +118,19 @@ def test_the_drawer_has_one_door_per_page():
     # The Models group's three rows were the MLB/NFL/UFC chips wearing
     # the model names…
     assert "sb-model" not in sb, "the Models group is back"
-    # …and the names must survive its dissolution: they live in the
-    # league taglines now (and the chips' title tooltips).
-    assert "Scalpy 2.0" in APP, "the MLB model's name vanished with its menu row"
-    assert "The NFL Book" in APP, "the NFL model's name vanished with its menu row"
+    # …and the names must survive its dissolution. They lived in the
+    # header taglines until 2026-08-23, when Ethan asked the header to
+    # say "Qellys Book" and nothing else. So this now checks the two
+    # places they actually live — the league chip that opens each model,
+    # and the About page card that explains it — rather than a string
+    # being present SOMEWHERE in app.js, which the taglines satisfied
+    # for a year without anybody having to see them.
+    html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    for name in ("Scalpy 2.0", "The NFL Book", "Scalpy MMA"):
+        assert f'title="' in html and name in html, \
+            f"{name} is no longer on any league chip"
+    for card in ("MLB — Scalpy 2.0", "NFL — The NFL Book", "UFC — Scalpy MMA"):
+        assert card in APP, f"the About page stopped naming {card}"
 
 
 def test_the_library_folds_and_remembers():

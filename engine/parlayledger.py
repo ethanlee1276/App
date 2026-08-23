@@ -579,6 +579,21 @@ def report(conn) -> dict:
     net = sum(pnl)
     roi = (net / staked) if staked else 0.0
     clv = _leg_clv(conn)
+    # §13'S BAR IS ABOUT TICKETS THIS MODULE WOULD STAKE, and until now it
+    # was measured over every graded row — which includes rank 1 off every
+    # slate the screen REFUSED. That let refusals count toward the hundred
+    # and let their P&L set the ROI condition, so the module could have
+    # been held back by the losses of bets it declined to make, or, worse,
+    # promoted on the strength of grading its own rejects. Promotion is
+    # judged on the recommended rows only; the blended numbers stay in the
+    # report beside them, because hiding them would be the opposite
+    # mistake.
+    rec_rows = [r for r in graded if r["qualified"]]
+    rec_pnl = [float(r["pnl_units"] or 0.0) for r in rec_rows]
+    rec_staked = sum(float(r["notional_units"] or NOTIONAL_UNITS)
+                     for r in rec_rows)
+    rec_roi = (sum(rec_pnl) / rec_staked) if rec_staked else 0.0
+    rec_z = _z(rec_pnl)
     out = {
         "graded": len(graded),
         "open": conn.execute("SELECT COUNT(*) FROM parlays WHERE "
@@ -596,17 +611,25 @@ def report(conn) -> dict:
         "probation": True,
         "promotion": {
             "tickets_required": PROBATION_TICKETS,
-            "tickets_have": len(graded),
-            "roi_positive": roi > 0,
+            # Recommended tickets only — see the note where rec_rows is
+            # built. `tickets_graded_all` is the blended count, kept so a
+            # reader can see the difference rather than infer it.
+            "tickets_have": len(rec_rows),
+            "tickets_graded_all": len(graded),
+            "roi_positive": rec_roi > 0,
+            "roi": round(rec_roi, 4),
+            "z": rec_z,
             "clv_non_negative": (clv["avg"] is not None and clv["avg"] >= 0),
-            "z_clears": (_z(pnl) or 0.0) >= PROMOTION_Z,
+            "z_clears": (rec_z or 0.0) >= PROMOTION_Z,
             "z_required": PROMOTION_Z,
             "note": ("Parlays are graded, never staked, until 100 graded "
                      "tickets clear positive flat-stake ROI, aggregate "
                      "leg-level CLV at or above zero, and z of at least 2 — "
-                     "and the singles board clears its own bar first. "
-                     "Everything here is a tracked observation worth "
-                     "nothing."),
+                     "and the singles board clears its own bar first. Only "
+                     "tickets the screen recommended count toward that; the "
+                     "constructions it refused are graded too, to test the "
+                     "no, and are reported apart. Everything here is a "
+                     "tracked observation worth nothing."),
         },
         "calibration": calibration(conn),
         # THE SPLIT THAT WAS MISSING. log_board journals rank 1 from every
@@ -621,6 +644,12 @@ def report(conn) -> dict:
         "loss_codes": _loss_code_tally(conn),
         "tax_by_book": _tax_by_book(conn),
         "singles_comparison": _singles_comparison(graded),
+        # THE SAME QUESTION, ASKED OF THE RECOMMENDATIONS ONLY. "Singles
+        # were better, the structure is costing money" is a verdict on
+        # the SCREEN, and answering it over rows the screen declined
+        # convicts it of somebody else's tickets.
+        "singles_comparison_recommended": _singles_comparison(
+            [r for r in graded if r["qualified"]]),
         "recent": _recent(conn),
     }
     return out
@@ -634,10 +663,18 @@ def _by_qualified(conn) -> dict:
     neither is a construction the page showed to say what tonight
     offered — the Zone ranks even when nothing clears — and grading it
     beside a recommendation measures the wrong thing.
+
+    `recommended` is the two yes-buckets added up, and it is the one a
+    reader actually wants: it is every ticket the screen put its name to.
+    It is computed HERE rather than by adding two ROIs on the page,
+    because ROIs do not add — they have to be re-divided by the notional
+    the two buckets staked between them, and the page not having that
+    number is how a weighted average becomes a mean of two percentages.
     """
     out = {}
     for label, where in (("play", "was_play=1"),
                          ("qualified", "qualified=1 AND was_play=0"),
+                         ("recommended", "qualified=1"),
                          ("not_qualified", "qualified=0")):
         r = conn.execute(
             "SELECT COUNT(*) n, COALESCE(SUM(status='won'),0) w, "
@@ -645,7 +682,9 @@ def _by_qualified(conn) -> dict:
             f"FROM parlays WHERE status IN ('won','lost') AND {where}"
         ).fetchone()
         out[label] = {"graded": r["n"], "wins": r["w"],
+                      "losses": r["n"] - r["w"],
                       "net_units": round(r["u"], 2),
+                      "staked_units": round(r["s"], 2),
                       "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
     return out
 

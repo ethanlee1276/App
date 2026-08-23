@@ -7404,18 +7404,38 @@ def _parlay_report_cli() -> None:
         print("\n  Open tickets waiting on results: %d" % r["open"])
         return
 
+    # THE RECOMMENDED LINE FIRST. The blended total led this report until
+    # 2026-08-23 and it read "19 graded · 1W-18L · -84.1% ROI" — of which
+    # EIGHTEEN were constructions the screen refused. log_board journals
+    # rank 1 off every slate whether or not it qualified, deliberately, so
+    # that the gates' no gets tested too; leading with the blend turned
+    # that into a headline saying the model was failing when it was the
+    # model working. The blend is still printed, below, labelled.
+    q = r.get("by_qualified") or {}
+    rec = q.get("recommended") or {}
+    if rec.get("graded"):
+        print(f"\n  RECOMMENDED — the screen said yes")
+        print(f"    {rec['graded']} graded · {rec['wins']}W-{rec['losses']}L · "
+              f"{rec['net_units']:+.2f}u · flat-stake ROI "
+              f"{rec['roi'] * 100:+.1f}%")
+        if rec["graded"] < 10:
+            print(f"    {rec['graded']} ticket(s) is not a record. The bar is "
+                  f"{r['promotion']['tickets_required']}.")
+    else:
+        print("\n  RECOMMENDED — the screen said yes")
+        print("    Nothing. No ticket the screen put its name to has "
+              "settled yet.")
+
     roi = r["roi"] * 100
-    print(f"\n  {n} graded · {r['wins']}W-{r['losses']}L · "
+    print(f"\n  Everything graded, blended: {n} · "
+          f"{r['wins']}W-{r['losses']}L · "
           f"{r['net_units']:+.2f}u · flat-stake ROI {roi:+.1f}%")
     z = r["z"]
     print(f"  z {z:+.2f}" if z is not None else "  z —",
           " (a t-statistic on per-ticket P&L; §13 wants 2 or more)")
 
-    # WHAT THIS RECORD IS A RECORD OF, first, because it is usually not
-    # what it looks like. log_board journals RANK 1 from every slate,
-    # qualified or not — the Zone ranks even when nothing clears — so a
-    # total read whole is mostly constructions the screen declined.
-    q = r.get("by_qualified") or {}
+    # WHAT THIS RECORD IS A RECORD OF, because the blend above is usually
+    # not what it looks like.
     shown = [(lbl, q.get(key) or {}) for lbl, key in (
         ("the slate play (§10.2)", "play"),
         ("qualified, not the play", "qualified"),
@@ -7471,8 +7491,12 @@ def _parlay_report_cli() -> None:
                   "so far this")
             print("    is variance, not a broken model.")
     if pos.get("n"):
-        print(f"\n    Of those, {pos['n']} priced the legs as MOVING "
-              f"TOGETHER:")
+        # NAMED, not "of those". This is every graded ticket with a
+        # positive priced rho — not the refusals the paragraph above
+        # counted, and not the calibration subset either. "Of those" let
+        # a reader attach it to whichever number printed last.
+        print(f"\n    Of all graded tickets, {pos['n']} priced the legs as "
+              f"MOVING TOGETHER:")
         print(f"      won {pos['won']}   our joint said {pos['expected']:.2f}"
               f"   as-if-unrelated {pos['expected_independent']:.2f}")
         zi = pos.get("z_independent")
@@ -7486,7 +7510,14 @@ def _parlay_report_cli() -> None:
     # THE STRUCTURE VS THE LEGS, weighed rather than ranked.
     sc = r["singles_comparison"]
     if sc["n"]:
-        print("\n  Same legs, bet as singles\n  " + "-" * 46)
+        # ACROSS EVERYTHING GRADED, and it says so. With a record that is
+        # mostly refusals, "the legs are where the money went" is a true
+        # sentence about legs the screen declined to wrap — worth knowing,
+        # and not the same claim as one about its recommendations.
+        rn = (r.get("singles_comparison_recommended") or {}).get("n") or 0
+        print(f"\n  Same legs, bet as singles — all {sc['n']} graded"
+              + (f" ({rn} recommended)" if rn and rn < sc["n"] else "")
+              + "\n  " + "-" * 46)
         print(f"    parlays {sc['parlay_units']:+.2f}u   "
               f"singles {sc['singles_units']:+.2f}u")
         cost = sc.get("structure_cost")
