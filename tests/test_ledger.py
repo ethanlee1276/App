@@ -1091,6 +1091,73 @@ def test_era_report_splits_the_record_at_the_retune():
     assert "nfl" in v1["by_sport"] or "mlb" in v1["by_sport"]
 
 
+def test_each_era_reports_whether_its_claims_came_true():
+    """The question the section is titled after — "did the re-tune
+    work?" — and until 2026-08-23 the row could only answer in W-L, ROI
+    and CLV, all of which need a season. A 50-bet era swings ten points
+    of ROI on variance alone; every settled bet contributes a
+    measurement to this one.
+
+    It is also the only number that says whether the board was HONEST as
+    opposed to lucky. A board claiming 60% on picks that land 45% is
+    wrong about itself by fifteen points, and every edge, EV figure and
+    Kelly stake is wrong with it, whatever the ROI is doing."""
+    conn = _conn()
+
+    def add(date, p, won, k):
+        for i in range(k):
+            conn.execute(
+                "INSERT INTO bets (sport, date, player, market, side, line, "
+                "odds, stake_units, stake_dollars, status, category, "
+                "pnl_units, hit_prob) VALUES ('mlb',?,?,'total_bases','OVER',"
+                "1.5,-110,0.5,5,?,'main',?,?)",
+                (date, f"{date}-{i}", "won" if won else "lost",
+                 0.9 if won else -1.0, p))
+
+    add("2026-08-01", 0.60, True, 45)      # v2: says 60, lands 45
+    add("2026-08-02", 0.60, False, 55)
+    add("2026-08-15", 0.55, True, 53)      # v3: says 55, lands 53
+    add("2026-08-16", 0.55, False, 47)
+    conn.commit()
+    eras = {e["key"]: e for e in ledger.era_report(conn)["eras"]}
+
+    old, new = eras["v2"]["claim"], eras["v3"]["claim"]
+    assert (old["n"], new["n"]) == (100, 100)
+    assert abs(old["gap"] + 0.15) < 1e-6, old
+    assert abs(new["gap"] + 0.02) < 1e-6, new
+    assert old["gap"] / old["se"] < -2, "a 15-point miss must read as real"
+    assert -2 < new["gap"] / new["se"] < 2, "a 2-point miss is a sample"
+    assert eras["v1"]["claim"]["n"] == 0, "an empty era must not invent one"
+
+
+def test_a_push_is_not_a_claim_that_came_true_or_failed():
+    """It is a bet that never resolved. Counting it either way moves the
+    landed rate for a game that did not happen."""
+    conn = _conn()
+    for i, st in enumerate(("won", "lost", "push")):
+        conn.execute(
+            "INSERT INTO bets (sport, date, player, market, side, line, odds,"
+            " stake_units, stake_dollars, status, category, pnl_units, "
+            "hit_prob) VALUES ('mlb','2026-08-15',?,'total_bases','OVER',1.5,"
+            "-110,0.5,5,?,'main',0,0.5)", (f"P{i}", st))
+    conn.commit()
+    eras = {e["key"]: e for e in ledger.era_report(conn)["eras"]}
+    assert eras["v3"]["claim"]["n"] == 2, "the push was counted"
+    assert eras["v3"]["claim"]["landed"] == 0.5
+
+
+def test_a_bet_with_no_stated_probability_is_left_out_rather_than_guessed():
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO bets (sport, date, player, market, side, line, odds,"
+        " stake_units, stake_dollars, status, category, pnl_units) VALUES "
+        "('mlb','2026-08-15','No Claim','total_bases','OVER',1.5,-110,0.5,5,"
+        "'won','main',0.9)")
+    conn.commit()
+    eras = {e["key"]: e for e in ledger.era_report(conn)["eras"]}
+    assert eras["v3"]["claim"]["n"] == 0
+
+
 def test_the_eras_are_ordered_and_each_one_names_a_real_change():
     """An era list out of date order splits the record at the wrong
     boundaries silently — every bet after the misplaced start lands in

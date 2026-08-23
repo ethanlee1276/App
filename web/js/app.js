@@ -6437,6 +6437,27 @@ function recEraSection(er) {
     const clv = e.avg_clv != null
       ? ` · CLV ${e.avg_clv >= 0 ? "+" : ""}${e.avg_clv.toFixed(2)} pts (${e.clv_n})`
       : "";
+    /* DID THE BOARD TELL THE TRUTH ABOUT ITSELF — the question this
+       section is named after, and the only one on the row that converges
+       fast enough to answer it. W-L, ROI and CLV all need a season: a
+       50-bet era swings ten points of ROI on variance alone. Every
+       settled bet contributes a measurement to this one.
+
+       Shown as "said 58%, landed 49%" rather than as a signed gap,
+       because those are the two numbers a reader can check against the
+       list below and a gap is a number they have to take on trust.
+       Toned only when the miss clears two standard errors — under that
+       it is a sample, not a verdict, and colouring it would be the site
+       claiming a finding it does not have. */
+    const cl = e.claim || {};
+    const claim = cl.n
+      ? (() => {
+          const off = cl.gap / (cl.se || 1);
+          const tone = off <= -2 ? "bad" : off >= 2 ? "good" : "";
+          return `<span class="${tone}"> · said ${(cl.claimed * 100).toFixed(0)}%,
+             landed ${(cl.landed * 100).toFixed(0)}% (${cl.n})</span>`;
+        })()
+      : "";
     const sports = Object.entries(e.by_sport || {}).map(([s, d]) =>
       `${s.toUpperCase()} ${d.w}-${d.l} (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)`)
       .join(" · ");
@@ -6447,7 +6468,7 @@ function recEraSection(er) {
           <strong>${escapeHtml(e.label)}</strong>
           ${isCurrent ? `<span class="chip" style="margin-left:6px">running now</span>` : ""}
           <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
-            ${escapeHtml(range)}${sports ? ` · ${sports}` : ""}${clv}</span>
+            ${escapeHtml(range)}${sports ? ` · ${sports}` : ""}${clv}${claim}</span>
         </span>
         <span style="text-align:right;white-space:nowrap">
           <strong>${e.wins}-${e.losses}</strong>
@@ -6464,9 +6485,12 @@ function recEraSection(er) {
     <div class="card" style="padding:0">
       ${eras.map((e) => row(e, e.key === er.current)).join("")}
       <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
-        CLV (closing-line value) is the fast signal — beating the close consistently
-        shows up weeks before the W-L means anything. Judge the new era on CLV first,
-        ROI once it has 50+ graded bets.</p>
+        "Said X, landed Y" is whether the board was honest about its own
+        confidence — the fastest signal here, because every settled bet
+        measures it while W-L and ROI are mostly variance until a season is in.
+        CLV (closing-line value) is next: beating the close consistently shows
+        up weeks before the W-L means anything. ROI last, and only past 50+
+        graded bets.</p>
     </div>`;
 }
 

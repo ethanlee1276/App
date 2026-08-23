@@ -19,6 +19,7 @@ is idempotent per (sport, date, player, market).
 from __future__ import annotations
 
 import datetime
+import math
 import re
 import sqlite3
 from pathlib import Path
@@ -2327,6 +2328,43 @@ def settle(conn, actuals: dict[tuple[str, str], float], sport: str | None = None
 
 
 # --- reporting --------------------------------------------------------------
+def _claim_gap(bets) -> dict:
+    """Did the board's stated confidence come true, over these bets?
+
+    THE NUMBER THE ERA SECTION IS TITLED AFTER. "Model eras — did the
+    re-tune work?" has been answerable only in W-L, ROI and CLV, and all
+    three need a season to say anything: a 50-bet era swings ±10 points
+    of ROI on variance alone. The claim gap converges far faster, because
+    every settled bet contributes a measurement rather than a coin flip
+    on the P&L — which is the same asymmetry calibhistory's docstring
+    makes about sweeps against the forward record.
+
+    It is also the only number that says whether the model is HONEST as
+    opposed to lucky. A board claiming 60% on picks that land 48% is
+    wrong about itself by twelve points, and every edge, EV figure and
+    Kelly stake is wrong with it, whatever the ROI happens to be doing.
+
+    THE SHIPPED CLAIM, NOT THE RAW ONE. `hit_prob` is what the board
+    actually showed after every correction, and what the board showed is
+    what the era IS. shapecheck reads raw on purpose — it is fitting a
+    correction and must not measure one already applied — but that is a
+    different question from "was the page telling the truth".
+
+    Pushes are excluded: a push is not a claim that came true or failed.
+    """
+    rows = [b for b in bets
+            if b["status"] in ("won", "lost") and b["hit_prob"] is not None]
+    n = len(rows)
+    if not n:
+        return {"n": 0, "claimed": None, "landed": None, "gap": None,
+                "se": None}
+    claimed = sum(float(b["hit_prob"]) for b in rows) / n
+    landed = sum(1 for b in rows if b["status"] == "won") / n
+    se = math.sqrt(max(landed * (1.0 - landed), 1e-9) / n)
+    return {"n": n, "claimed": round(claimed, 4), "landed": round(landed, 4),
+            "gap": round(landed - claimed, 4), "se": round(se, 4)}
+
+
 def _bet_clv(b) -> float | None:
     """Side-aware closing-line value for one settled bet, in line points.
 
@@ -2827,6 +2865,7 @@ def era_report(conn) -> dict:
             "roi": round(net / staked, 4) if staked else 0.0,
             "avg_clv": round(sum(clvs) / len(clvs), 3) if clvs else None,
             "clv_n": len(clvs),
+            "claim": _claim_gap(bets),
             "open": conn.execute(
                 f"SELECT COUNT(*) FROM bets WHERE {where} AND status='open'",
                 args).fetchone()[0],

@@ -204,6 +204,26 @@ def test_ufc_gets_a_scope_like_every_other_board():
     assert 'scope !== "ufc"' in js, "the UFC bucket ignores the scope"
 
 
+def test_the_era_row_shows_whether_the_claims_came_true():
+    """The section is called "did the re-tune work?" and could only
+    answer in W-L, ROI and CLV — all of which need a season. The claim
+    gap converges on every settled bet, so it is the one number that can
+    answer the question the heading asks."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    app = open(os.path.join(root, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = app.index("function recEraSection(")
+    body = app[i:app.index("\nfunction ", i + 10)]
+    assert "e.claim" in body, "the row never reads the claim gap"
+    assert "landed" in body and "said" in body, (
+        "the row does not show both numbers a reader could check")
+    # Toned only when it clears two standard errors — under that it is a
+    # sample, and colouring it would be the site claiming a finding it
+    # does not have.
+    assert "cl.se" in body and "<= -2" in body, (
+        "a claim gap inside the noise is being coloured as a verdict")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
