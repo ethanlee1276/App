@@ -16525,7 +16525,9 @@ function rankBoardHTML(ranks) {
   return `
     <div class="section-title">Rankings, side by side
       <span class="sub">— every source we can read without a password, and
-        where they argue</span></div>
+        where they argue. Ordered by <b>consensus</b>: the median rank
+        across every source that lists him, so a player two sources love
+        outranks one that only ours does.</span></div>
     <div class="card" id="rank-card">
       <p class="pre-note" id="rank-coverage"></p>
       <div id="rank-fight"></div>
@@ -16597,14 +16599,44 @@ function renderRankBoard() {
   }
   const cell = (v) => v == null ? `<td class="rank-none">—</td>`
     : `<td>${v}</td>`;
+  /* WHY THE ORDER WAS A MYSTERY. Ethan, 2026-08-23: "I'm kinda confused
+     on the order of all these players ... if they're lined up a certain
+     way, we should display that."
+
+     They were lined up a certain way — `ffRankMerge` sorts on
+     `r.consensus`, the median rank across every source — and the board
+     showed him no way to know it. Consensus was the SIXTH column on a
+     seven-column table inside a horizontal scroller, so on a phone the
+     four he could see were Player, Our board, Sleeper and Your draft:
+     two columns that are not sorted, one that is empty, and no sign of
+     the number doing the sorting.
+
+     Three changes, in order of how much they help:
+
+       * the position leads the row, so a sorted list looks sorted. It is
+         the ordinal, not the consensus — consensus is a median and ties
+         (four players at 4.0 in the screenshot), and a column of
+         1,2,3,4 is what tells a reader at a glance that this IS an
+         order;
+       * a source nobody is ranked by is not a column. "Your draft" fills
+         in when a draft starts and "Imported" when a list is pasted;
+         before that they were two of the four columns a phone could
+         show, both entirely dashes. The coverage chips above already
+         report them as empty, which is where that belongs;
+       * the name column is pinned, so it stays put while the numbers
+         scroll instead of the reader losing track of whose row they are
+         on. */
+  const live = FF_RANK_SOURCES.filter(([k]) => counts[k] > 0);
+  const shown = live.length ? live : FF_RANK_SOURCES.slice(0, 1);
   host.innerHTML = `<table class="rank-table"><thead><tr>
-      <th>Player</th>${FF_RANK_SOURCES.map(([, l]) =>
+      <th class="rank-name">#  Player</th>${shown.map(([, l]) =>
         `<th>${escapeHtml(l)}</th>`).join("")}
       <th>Consensus</th><th>Spread</th></tr></thead><tbody>
-      ${rows.slice(0, 200).map((r) => `<tr>
-        <td class="rank-name" data-dossier="${escapeAttr(r.player)}">${playerAvatar(r.player, r.team || "", { size: 20, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}</td>
-        ${FF_RANK_SOURCES.map(([k]) => cell(r.ranks[k])).join("")}
-        <td>${r.consensus == null ? "—" : r.consensus}</td>
+      ${rows.slice(0, 200).map((r, i) => `<tr>
+        <td class="rank-name" data-dossier="${escapeAttr(r.player)}"><span
+          class="rank-ord">${i + 1}</span>${playerAvatar(r.player, r.team || "", { size: 20, map: nflMap(), headshot: r.headshot })}${escapeHtml(r.player)}</td>
+        ${shown.map(([k]) => cell(r.ranks[k])).join("")}
+        <td class="rank-cons">${r.consensus == null ? "—" : r.consensus}</td>
         ${cell(r.spread)}</tr>`).join("")}
     </tbody></table>`;
 }

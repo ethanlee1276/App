@@ -406,6 +406,73 @@ def test_the_build_ships_the_two_server_side_columns():
     assert '"ranks":' in src
 
 
+# --- the order, made visible -------------------------------------------------
+def test_the_board_says_what_it_is_ordered_by():
+    """Ethan, 2026-08-23: "I'm kinda confused on the order of all these
+    players ... if they're lined up a certain way, we should display
+    that."
+
+    They WERE lined up a certain way — `ffRankMerge` sorts on
+    `consensus`, the median across every source — and nothing on the
+    page said so. Two of the columns he could see are sources, neither of
+    which is sorted, so the list looked arbitrary."""
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    head = app[app.index("function rankBoardHTML("):]
+    head = head[:head.index("\n}")]
+    assert "Ordered by <b>consensus</b>" in head, (
+        "the subtitle never names the sort")
+    assert "median rank" in head, "and never says what consensus means"
+    # The sort itself has not moved.
+    merge = _js("ffRankMerge")
+    assert "out.sort((a, b) => (a.consensus - b.consensus)" in merge
+
+
+def test_the_position_leads_the_row():
+    """A column of 1, 2, 3 is what tells a reader at a glance that this
+    is an order. It is the ORDINAL rather than the consensus, because
+    consensus is a median and ties — four players sat at 4.0 on the
+    board Ethan sent, which as a leading column reads as broken."""
+    render = _js("renderRankBoard")
+    assert '<span\n          class="rank-ord">${i + 1}</span>' in render \
+        or 'class="rank-ord">${i + 1}</span>' in render, (
+        "the row does not carry its position")
+    assert "rows.slice(0, 200).map((r, i)" in render, (
+        "the map has no index, so there is no position to print")
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    assert ".rank-ord {" in css, "the ordinal is unstyled"
+
+
+def test_a_source_nobody_is_ranked_by_is_not_a_column():
+    """"Your draft" fills in when a draft starts and "Imported" when a
+    list is pasted. Before that they were two of the four columns a
+    phone could show, both entirely dashes — and they pushed the column
+    the order comes from off the right edge."""
+    render = _js("renderRankBoard")
+    assert "FF_RANK_SOURCES.filter(([k]) => counts[k] > 0)" in render, (
+        "empty source columns are still drawn")
+    assert "shown.map(" in render, "the header still walks every source"
+    # …but never down to no columns at all.
+    assert "live.length ? live : FF_RANK_SOURCES.slice(0, 1)" in render, (
+        "an empty board would render a table with no source columns")
+
+
+def test_the_name_column_is_pinned_and_matches_its_own_row():
+    """Sticky needs an opaque background, and a background that does not
+    match what it sits beside turns the table into two panels with a
+    seam down the middle — which is what `--panel` against the card's
+    `--grad-card` wash actually looked like."""
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"),
+               encoding="utf-8").read()
+    i = css.index(".rank-table tbody td { background:")
+    block = css[i:i + 400]
+    assert "position: sticky; left: 0" in block
+    assert "background: var(--panel-2)" in block, (
+        "the body cells and the pinned cell must take the same flat "
+        "colour or the seam comes back")
+    assert "th.rank-name { background: var(--panel)" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -6140,6 +6140,36 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    rides the class. Qualified with the table, or `.rank-table td` wins on
    specificity and every name stays right-aligned. */
 .rank-table .rank-name { text-align: left; }
+/* THE NAME COLUMN IS PINNED. This table lives in a horizontal scroller,
+   so on a phone the numbers scroll away from the player they belong to
+   and the reader loses their row.
+
+   A sticky cell needs an OPAQUE background or the scrolling cells show
+   through it — and the background has to match what it sits beside, or
+   the table reads as two panels with a seam down the middle. The card
+   behind it carries `--grad-card`, a wash a flat colour cannot follow,
+   so the fix is to stop trying: every body cell takes the same flat
+   `--panel-2` and every heading the same flat `--panel`, which makes the
+   table one surface and the pinned column indistinguishable from the
+   rest of its own row. A data table reading as a flat field inside a
+   card is the normal thing anyway; the wash was never doing work here.
+
+   z-index above the body cells, below the sticky <th> — the header has
+   to win where the two pinned cells cross. */
+.rank-table tbody td { background: var(--panel-2); }
+.rank-table td.rank-name, .rank-table th.rank-name {
+  position: sticky; left: 0; z-index: 1; }
+.rank-table th.rank-name { background: var(--panel); z-index: 2; }
+/* The position in the list, which is the thing that says "this is an
+   order". Tabular so 1 and 10 line up, and quiet — it is a signpost, not
+   a stat, and the same weight as the name would read as a second rank
+   competing with the source columns. */
+.rank-ord { display: inline-block; min-width: 1.6em; margin-right: 6px;
+  text-align: right; color: var(--text-mute); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
+/* Consensus is the column the order comes from, so it is the one number
+   in the row that is not a source's opinion. */
+.rank-table td.rank-cons { color: var(--text); font-weight: 700; }
 .rank-none { color: var(--text-mute); }
 .rank-fight-head { margin-top: 12px; font-size: var(--fs-xs);
   text-transform: uppercase; letter-spacing: .06em; color: var(--text-mute); }
