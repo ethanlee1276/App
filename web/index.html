@@ -53,10 +53,19 @@
 
   <!-- What a shared link looks like before anyone arrives.
        ================================================================
-       og-card.png is rendered from og-card.html by the real stylesheet,
-       the real fonts and the real Overhead, so the preview cannot drift
-       from the site. It carries no live numbers on purpose — see the note
-       in that file.
+       The card is rendered from og-card.html by the real stylesheet, the
+       real fonts and the real Overhead, so the preview cannot drift from
+       the site. It carries no live numbers on purpose — see the note in
+       that file. Regenerate with tools/ogcard.py.
+
+       THE FILENAME IS VERSIONED, and that is the whole reason it has a
+       suffix. Scrapers cache a preview image by URL and hold it for a
+       long time — iMessage and Discord especially — so writing a redesign
+       back to og-card.png keeps showing the OLD card to everybody who has
+       already shared the link. v2 is the gold card with the QB mark; v1
+       was the amber ellipse this site stopped using. Bump the suffix in
+       tools/ogcard.py and in both tags below whenever the artwork
+       changes.
 
        The image URL stays RELATIVE and the canonical/og:url are
        ABSOLUTE, which is not an inconsistency. A relative og:image is
@@ -79,14 +88,14 @@
   <meta property="og:site_name" content="Qellys Book" />
   <meta property="og:title" content="Qellys Book — a betting model that shows its work" />
   <meta property="og:description" content="Every pick journaled at its real book price and graded in public, including the losing ones. MLB, NFL, CFB, NBA, WNBA, UFC and prediction markets." />
-  <meta property="og:image" content="og-card.png" />
+  <meta property="og:image" content="og-card-v2.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Qellys Book — an engraved overhead plan of Coors Field showing its altitude and home-run factor" />
+  <meta property="og:image:alt" content="Qellys Book — the QB crown mark beside an overhead plan of Coors Field showing its altitude and home-run factor" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Qellys Book — a betting model that shows its work" />
   <meta name="twitter:description" content="Every pick journaled at its real book price and graded in public, including the losing ones." />
-  <meta name="twitter:image" content="og-card.png" />
+  <meta name="twitter:image" content="og-card-v2.png" />
 
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Decided BEFORE first paint, or the full masthead renders and then

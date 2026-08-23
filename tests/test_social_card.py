@@ -73,15 +73,26 @@ def test_the_card_image_is_the_size_every_scraper_expects():
     """1200x630. Read out of the PNG header rather than trusted from the
     markup, because the tag and the file are two different things and it is
     the file that gets cropped."""
-    path = _root("web", "og-card.png")
-    assert os.path.exists(path), "og-card.png is missing; regenerate it from og-card.html"
+    # THE NAME IS READ OUT OF THE MARKUP, not hard-coded here. The card
+    # is versioned — scrapers cache a preview by URL and hold it for a
+    # long time, so a redesign written back to the same filename keeps
+    # showing the old card — and a test naming one version pins the site
+    # to it. It checks the file the page actually points at.
+    head = _head(_read("web", "index.html"))
+    name = _meta(head, "property", "og:image")
+    assert name and name.endswith(".png"), f"og:image is {name!r}"
+    path = _root("web", name)
+    assert os.path.exists(path), (
+        f"{name} is missing; regenerate it with tools/ogcard.py")
+    assert _meta(head, "name", "twitter:image") == name, (
+        "og:image and twitter:image point at different files, so half the "
+        "clients show the old card")
     with open(path, "rb") as fh:
         data = fh.read(24)
-    assert data[:8] == b"\x89PNG\r\n\x1a\n", "og-card.png is not a PNG"
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", f"{name} is not a PNG"
     w, h = struct.unpack(">II", data[16:24])
     assert (w, h) == (1200, 630), f"card is {w}x{h}; scrapers crop 1.91:1 from 1200x630"
 
-    head = _head(_read("web", "index.html"))
     assert _meta(head, "property", "og:image:width") == str(w)
     assert _meta(head, "property", "og:image:height") == str(h), (
         "the declared dimensions must match the actual file, or clients "
@@ -148,6 +159,61 @@ def test_the_theme_colour_matches_the_page():
     assert (_meta(head, "name", "theme-color") or "").lower() == bg.lower(), (
         f"theme-color should be {bg}, the page's own background"
     )
+
+
+def test_the_card_wears_the_mark_the_site_wears():
+    """Ethan found this in a group text, next to a promo code he had just
+    sent his friends: the preview was still the amber ellipse and the
+    pre-gold palette, two days after the site started wearing the QB
+    crown. A preview is the brand for everyone who has not arrived yet,
+    and it had quietly become a picture of a site that no longer exists."""
+    src = _read("web", "og-card.html")
+    body = src[src.index("<body"):]
+    assert 'src="logo-qb.png"' in body, "the card is not wearing the QB mark"
+    assert "<ellipse" not in body, "the retired ellipse mark is back"
+    # And it is set the way the header sets it, rather than as a second
+    # version of the wordmark.
+    assert "text-transform: uppercase" in src and "letter-spacing: .19em" in src
+
+
+def test_the_card_filename_is_versioned():
+    """Scrapers cache a preview image by URL and hold it — iMessage and
+    Discord especially. A redesign written back to the same filename keeps
+    showing the OLD card to everybody who has already shared the link,
+    which is the one audience a redesign is for."""
+    head = _head(_read("web", "index.html"))
+    name = _meta(head, "property", "og:image") or ""
+    assert re.search(r"-v\d+\.png$", name), (
+        f"{name!r} is unversioned, so the redesign will not reach anyone "
+        "whose client already cached the old one")
+    tool = _read("tools", "ogcard.py")
+    assert name in tool, (
+        "the renderer writes a different filename than the page serves")
+
+
+def test_the_card_can_be_regenerated_by_one_command():
+    """It used to be a four-step recipe in an HTML comment — start a
+    server on some port, write a Node one-liner, screenshot, remember the
+    viewport. Steps run twice a year are steps that get run wrong, and
+    the only place the mistake shows up is inside somebody else's text
+    message."""
+    tool = _read("tools", "ogcard.py")
+    assert "def render(" in tool
+    # It has to REFUSE a bad render rather than write one. A fixed-size
+    # card crops in silence, so overflow is not a warning.
+    assert "overflows the card" in tool
+    assert "raise SystemExit" in tool
+    assert "pageerror" in tool, (
+        "the Overhead is drawn by a script; a throw there leaves an empty "
+        "panel that looks like a design choice")
+
+
+def test_the_frame_is_checked_against_the_file_not_the_intention():
+    """`screenshot` honours the viewport, and the viewport is set in the
+    same file that asserts the size, so checking the constant against
+    itself would prove nothing. It reads the PNG header back."""
+    tool = _read("tools", "ogcard.py")
+    assert "struct.unpack" in tool and "b\"\\x89PNG" in tool
 
 
 if __name__ == "__main__":
