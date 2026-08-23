@@ -2747,7 +2747,8 @@ BOOK = ("main", "paper")
 
 
 def performance(conn, sport: str | None = None,
-                category: str | tuple[str, ...] = BOOK) -> dict:
+                category: str | tuple[str, ...] = BOOK,
+                since: str | None = None) -> dict:
     # ``stake_units > 0`` everywhere below: rows staked at zero were never
     # bets (an old grading bug shipped picks the vig had already eaten).
     # Counting them would inflate the W-L column with wagers nobody could
@@ -2759,6 +2760,12 @@ def performance(conn, sport: str | None = None,
     args: list = list(cats)
     if sport:
         q += " AND sport=?"; args.append(sport)
+    # `date >= ?` is safe here in a way it is not everywhere: NFL week
+    # labels ("2026-W1") string-compare ABOVE any ISO date, so a week bet
+    # is never filtered out by an epoch — it sorts into the future, which
+    # for a display window is the right side to fail on.
+    if since:
+        q += " AND date >= ?"; args.append(since)
     bets = conn.execute(q, args).fetchall()
 
     uq = (f"SELECT COUNT(*) FROM bets WHERE status IN ('won','lost','push') "
@@ -2767,6 +2774,8 @@ def performance(conn, sport: str | None = None,
     uargs: list = list(cats)
     if sport:
         uq += " AND sport=?"; uargs.append(sport)
+    if since:
+        uq += " AND date >= ?"; uargs.append(since)
     unstaked = conn.execute(uq, uargs).fetchone()[0]
 
     wins = sum(1 for b in bets if b["status"] == "won")
@@ -2957,6 +2966,36 @@ MODEL_ERAS = [
 ]
 
 
+#: The date the PUBLIC record starts counting from. Journaling is
+#: unaffected — every row ever written is still in the database, still
+#: graded, still training the model.
+#:
+#: Ethan, 2026-08-23: "i just dont want our data to be in the red since
+#: when we first started in july the model wasnt tuned yet and its not
+#: whats pulling bets now so we are displayong something thats hurting
+#: us." That is a fair reading of what the number MEANS — a −22% ROI
+#: earned by gates that no longer exist says nothing about the model
+#: running tonight, which is the argument era_report below was written
+#: to make — and it is only fair while the page SAYS SO. A record scoped
+#: to a start date without a line admitting it is a curated record, and
+#: this site's whole claim is that it grades in public. So:
+#:
+#:   * nothing is deleted. `all_time` in the export carries the full
+#:     unscoped numbers, and the page links to them.
+#:   * the page states the start date and how many settled picks sit
+#:     before it, permanently, next to the headline.
+#:   * every surface that quotes the record uses this one constant —
+#:     including the paywall's proof block, which reads the same file.
+#:
+#: WORTH KNOWING: this is not an era boundary. MODEL_ERAS puts the big
+#: re-tunes at 2026-07-29 and 2026-08-13, and the 13th is where the
+#: claims were cut to what our picks actually land — "the biggest change
+#: this model has ever had to its own numbers". 08-06 sits between them,
+#: so it is a date, not a change. If the argument is ever challenged,
+#: 2026-08-13 is the one that defends itself.
+RECORD_EPOCH = "2026-08-06"
+
+
 def era_report(conn) -> dict:
     """The headline record split at every model re-tune.
 
@@ -3012,7 +3051,8 @@ def era_report(conn) -> dict:
     return {"eras": eras, "current": MODEL_ERAS[-1]["key"]}
 
 
-def pnl_curve(conn, sport: str | None = None) -> list[dict]:
+def pnl_curve(conn, sport: str | None = None,
+              since: str | None = None) -> list[dict]:
     """Cumulative settled P&L by slate date — the Record page's equity curve.
 
     One point per date with anything settled: that day's net units, the
@@ -3055,6 +3095,13 @@ def pnl_curve(conn, sport: str | None = None) -> list[dict]:
     if sport:
         q += " AND sport=?"
         args.append(sport)
+    # The curve has to start where the headline starts, or the page shows
+    # a running total that disagrees with the number above it — and the
+    # curve is the more convincing of the two, so the disagreement would
+    # read as the headline lying.
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
     q += " GROUP BY date ORDER BY date"
     out, cum = [], 0.0
     for r in conn.execute(q, args):
@@ -3092,7 +3139,8 @@ def drawdown_factor(conn, sport: str | None = None,
 
 
 def recent_settled(conn, limit: int = 30, category: str = "main",
-                   sport: str | None = None) -> list[dict]:
+                   sport: str | None = None,
+                   since: str | None = None) -> list[dict]:
     """The last settled picks, newest first — the site's receipts.
 
     Each row carries its side-aware CLV and process grade so the page can
@@ -3103,6 +3151,9 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
          "WHERE status IN ('won','lost','push') AND category=? "
          "AND stake_units > 0")
     args: list = [category]
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
     if sport:
         q += " AND sport=?"
         args.append(sport)
@@ -4326,13 +4377,31 @@ def export_json(conn, path) -> None:
     import datetime as _dt
     import json as _json
     from pathlib import Path as _Path
+    # THE PUBLIC RECORD STARTS AT RECORD_EPOCH; the journal does not.
+    # Everything before it is still in the database, still graded, still
+    # training the model — see the constant for the whole argument and
+    # the conditions it is fair under. `all_time` below is the unscoped
+    # answer, exported beside the scoped one so the page can show what it
+    # is leaving out rather than quietly leaving it out.
+    since = RECORD_EPOCH
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
-        "overall": performance(conn),
-        "mlb": performance(conn, "mlb"),
-        "nfl": performance(conn, "nfl"),
-        "curve": pnl_curve(conn),
-        "recent": recent_settled(conn),
+        "record_epoch": since,
+        "all_time": {
+            "overall": performance(conn),
+            "curve_from": (pnl_curve(conn) or [{}])[0].get("date"),
+            # The count that makes the disclosure concrete: "N settled
+            # picks before this date are journaled and still train the
+            # model" is a fact a reader can weigh. "Some" is not.
+            "hidden_settled": max(
+                0, performance(conn)["settled"]
+                - performance(conn, since=since)["settled"]),
+        },
+        "overall": performance(conn, since=since),
+        "mlb": performance(conn, "mlb", since=since),
+        "nfl": performance(conn, "nfl", since=since),
+        "curve": pnl_curve(conn, since=since),
+        "recent": recent_settled(conn, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn),
         "stale_flags": stale_report(conn),
@@ -4369,6 +4438,10 @@ def export_json(conn, path) -> None:
         # curve those receipts sit under already counts them.
         # Per-sport, so each model can be tuned on its own evidence rather
         # than on the average of six.
+        # NOT scoped. `sport_report` is the tuning view — "is THIS model
+        # any good", the question the next change to it depends on — and
+        # it answers better with every row it has. The epoch is about
+        # what the site CLAIMS, not about what we let ourselves see.
         "by_sport": {sp: sport_report(conn, sp) for sp in TRACKED_SPORTS},
         "tracked_sports": list(TRACKED_SPORTS),
         "calibration": calibration(conn),

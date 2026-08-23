@@ -2014,9 +2014,56 @@ select.calc-in { width: auto; font-weight: 600; }
    and its unit. A floor on the size keeps the long form inside its tile. */
 .rec-kpis .tile.lead .v {
   font-size: clamp(var(--fs-2xl), 3.2vw, var(--fs-4xl)); }
+
+/* AND THE SAME NINE CHARACTERS BROKE THE PLAIN TILES TOO. Ethan,
+   2026-08-23, with the RECORD and WIN RATE tiles circled: "this text cant
+   fit and is over lapping."
+
+   The fix above went on `.tile.lead` only, and RECORD is not a lead tile.
+   Worse, the other half of that fix — non-breaking hyphens in the score,
+   so "300-320-0" cannot wrap — GUARANTEES this: the string can no longer
+   break, so at the track's floor width it fills the tile edge to edge and
+   reads as one number with its neighbour across the 1px divider.
+
+   MEASURED AT 900px, the width it shows at: the value box was 133px in a
+   134px content box. One pixel of slack. Nothing overflowed, which is why
+   an overflow check found nothing and a person found it immediately.
+
+   Two changes, because either alone leaves it tight. The floor goes up so
+   six tiles wrap to two rows before they reach the width where a full
+   season's record stops fitting, and the value scales with the viewport
+   the way the lead tiles already do. */
+.rec-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(min(196px, 100%), 1fr));
+  column-gap: 4px;
+}
+.rec-kpis .tile .v { font-size: clamp(var(--fs-xl), 2.3vw, var(--fs-3xl)); }
 @supports not (background: color-mix(in srgb, red 10%, transparent)) {
   .rec-kpis .tile.lead { border-color: rgba(90, 140, 255, .35); }
 }
+
+/* The record's start date, under the numbers it qualifies.
+
+   NOT styled to disappear. It is quiet — this is not a warning — but it
+   is a full-width row in body colour rather than agate in the mute grey
+   the footnotes use, because a reader who never notices it has been told
+   nothing. The summary carries the whole claim on its own, so it works
+   for someone who never opens it. */
+.rec-epoch {
+  margin: 2px 0 10px; border-left: 2px solid var(--border);
+  padding: 2px 0 2px 12px;
+}
+.rec-epoch > summary {
+  cursor: pointer; color: var(--text-dim); font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.rec-epoch > summary:hover { color: var(--text-body); }
+.rec-epoch > div {
+  color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure-wide);
+  margin-top: 7px;
+}
+.rec-epoch strong { color: var(--text); }
 
 /* Progressive disclosure for the page's explanatory prose: right to have,
    wrong to lead with. */
@@ -5412,8 +5459,14 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 }
 .ufc-rb-body { display: flex; gap: 16px; align-items: center; }
 .ufc-rb-body .donut { flex: none; }
-.donut-n { fill: var(--text); font-size: 26px; font-weight: 800; }
-.donut-k { fill: var(--text-mute); font-size: 9px; font-weight: 600;
+/* THROUGH THE RAMP, even inside an SVG. These are user units rather than
+   CSS pixels — the donut is drawn on a viewBox — and the ramp is not
+   about the unit, it is about not inventing a 24th size. The ring is
+   rendered at its own viewBox size, so a token reads at the value it
+   names. 26 and 9 were the hand-picked numbers here and the test that
+   caught them was right: the ramp already had both steps. */
+.donut-n { fill: var(--text); font-size: var(--fs-2xl); font-weight: 800; }
+.donut-k { fill: var(--text-mute); font-size: var(--fs-2xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: .6px; }
 .ufc-rb-legend { flex: 1; min-width: 0; }
 .rb-row {

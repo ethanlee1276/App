@@ -6421,6 +6421,50 @@ function countUp(el) {
    now speaks the same component vocabulary as everything else: `.tile`, with
    a `lead` variant for the two numbers that actually decide whether the
    process is working (ROI and CLV). */
+/* WHAT THIS RECORD LEAVES OUT, said next to it.
+
+   Ethan, 2026-08-23: "i just dont want our data to be in the red since
+   when we first started in july the model wasnt tuned yet and its not
+   whats pulling bets now so we are displayong something thats hurting
+   us." That is a fair reading of what the number MEANS — a −22% ROI
+   earned by gates that no longer exist says nothing about the model
+   running tonight, which is the argument the era split already makes.
+
+   IT IS ONLY FAIR WHILE THE PAGE SAYS SO. A record scoped to a start
+   date with no line admitting it is a curated record, and this site's
+   whole claim is that it grades in public. So the note is not optional,
+   not a tooltip, and not behind the "why?" collapse — it sits under the
+   numbers it qualifies, it names the count it is leaving out, and the
+   all-time figures are one click away inside it. If the disclosure ever
+   feels like too much to show, that is the signal that the scoping has
+   gone too far, not that the disclosure should go.
+
+   Nothing to disclose draws nothing: a book with no picks before the
+   epoch is not hiding anything, and a permanent notice about zero bets
+   would be noise pretending to be candour. */
+function recEpochHTML(d) {
+  const ep = (d || {}).record_epoch;
+  const at = (d || {}).all_time || {};
+  const o = at.overall || {};
+  const hidden = at.hidden_settled || 0;
+  if (!ep || !hidden || !o.settled) return "";
+  const roi = `${(o.roi || 0) >= 0 ? "+" : ""}${((o.roi || 0) * 100).toFixed(1)}%`;
+  return `<details class="rec-epoch">
+    <summary>Record shown from ${escapeHtml(formatGameDate(ep) || ep)} —
+      ${hidden} earlier settled pick${hidden === 1 ? "" : "s"} ${
+      hidden === 1 ? "is" : "are"} not in these numbers</summary>
+    <div>Those picks are still journaled, still graded and still train the
+      model — nothing was deleted, and the samplers and calibration on this
+      page still read every one of them. What changed on that date is the
+      model, not the bookkeeping: the boards before it ran on gates that no
+      longer exist, so their record is a fact about a system that is not
+      picking tonight.
+      <br><br>All-time, including everything before that date, the book is
+      <strong>${o.wins}\u2011${o.losses}\u2011${o.pushes || 0}</strong> at
+      <strong>${roi}</strong> ROI on ${o.settled} settled picks.</div>
+  </details>`;
+}
+
 function recTile(label, value, sub, opts) {
   const o = opts || {};
   // opts.help is a hover explanation for the desktop; a phone can't show a
@@ -9067,6 +9111,7 @@ async function renderRecord() {
                         + "beat the close was still a good bet. Only counts "
                         + "picks where we captured the closing line." })}
     </div>
+    ${recEpochHTML(d)}
     ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> bet — the same count the "Recommended bets"
       tile shows on each sport’s board: player props plus game bets (moneyline,
