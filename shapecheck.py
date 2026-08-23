@@ -99,6 +99,56 @@ ADOPT = {
     "min_logit_iqr": 0.60,
 }
 
+#: EVERY CONDITION FOR ADOPTING THE STEP, fixed before its first run,
+#: same as the slope's above.
+#:
+#: WHY A THIRD MODEL AT ALL. This file's own header names three shapes
+#: the claim gap could have — a bias, a slope, and "a step: one market or
+#: price band carries it and the rest is fine, and the pool hides it" —
+#: and until 2026-08-23 it fitted the first two. The MLB run that morning
+#: is what the third one is for. Split at 55%:
+#:
+#:     below 55%       371 bets   claimed 47.0%  landed 45.8%   -1.2p  z -0.47
+#:     55% and above   235 bets   claimed 62.4%  landed 52.8%   -9.6p  z -2.95
+#:
+#: Those are not one population with a gradient across it. The low half
+#: is calibrated and the high half is not, and a pooled shift applied to
+#: both takes points off claims that were already right — which is what
+#: the walk-forward was reporting when the CORRECTED gap came out further
+#: from zero than the raw one.
+#:
+#: The slope was refused on this data for a reason that does not apply to
+#: a step: `min_logit_iqr`. A slope needs the claims to SPREAD, because
+#: it describes how the error grows with confidence, and this board
+#: barely varies its confidence. A step needs something else entirely —
+#: enough bets on each side of one boundary — and this board has 371 and
+#: 235. Different shape, different way of being unidentifiable, so the
+#: guard has to be different too rather than inherited.
+#:
+#: THE STEP SPENDS THREE PARAMETERS where the slope spends two, so it
+#: must beat model B as well as model A out of sample. A model that only
+#: beats the one everybody already rejected has demonstrated nothing.
+ADOPT_STEP = {
+    "out_of_sample_brier": True,
+    "out_of_sample_logloss": True,
+    # Both sides must actually differ, or this is model A wearing three
+    # parameters. 0.15 logits is roughly 3-4 points at the centre.
+    "min_bias_distance": 0.15,
+    "bootstrap_share": 0.95,
+    # The step's own identifiability guard, in place of min_logit_iqr:
+    # a threshold fitted with a handful of rows on one side of it is a
+    # threshold fitted to those rows.
+    "min_side_rows": 60,
+    # And it must be a better answer than the simpler shape, not just a
+    # better answer than nothing.
+    "beats_slope": True,
+}
+
+#: Where the step is allowed to sit. Deliberately narrow: a threshold
+#: free to wander to the edge of the sample would find one, and it would
+#: be the row that happened to lose.
+_CUTS = [round(0.50 + 0.02 * i, 2) for i in range(10)]          # 0.50…0.68
+
 #: Walk-forward: the sample is cut into this many chronological blocks,
 #: and every block after the first two is predicted from everything
 #: before it. Five gives three scored blocks at ~450 rows — enough that
@@ -159,6 +209,64 @@ def _rows(db, sport=None, since=None):
 def _apply(p, a, b):
     """logit(p') = a·logit(p) + b — model B, and model A when a = 1."""
     return sf._sigmoid(a * sf._logit(p) + b)
+
+
+def _apply_step(p, cut, lo, hi):
+    """logit(p') = logit(p) + (p < cut ? lo : hi) — model C.
+
+    The claim decides which side it is on, not the corrected value. A
+    correction that could move a bet across its own threshold would not
+    have a fixed point, and two runs of it would disagree.
+    """
+    return sf._sigmoid(sf._logit(p) + (lo if p < cut else hi))
+
+
+def _fit_step(pairs):
+    """Model C: a threshold and one bias per side.
+
+    Each side is fitted independently on its own rows, which is what
+    makes this cheap — the sides do not interact, so it is two
+    one-parameter searches per candidate cut rather than a 3-D grid.
+    Returns ``(cut, lo, hi)``.
+    """
+    best, arg = None, (_CUTS[0], 0.0, 0.0)
+    for cut in _CUTS:
+        lo_rows = [(p, o) for p, o in pairs if p < cut]
+        hi_rows = [(p, o) for p, o in pairs if p >= cut]
+        if len(lo_rows) < 10 or len(hi_rows) < 10:
+            continue
+        lo_xo, hi_xo = _xo(lo_rows), _xo(hi_rows)
+        lo = min(_BIASES, key=lambda b: _brier_xo(lo_xo, 1.0, b))
+        hi = min(_BIASES, key=lambda b: _brier_xo(hi_xo, 1.0, b))
+        score = ((_brier_xo(lo_xo, 1.0, lo) * len(lo_rows)
+                  + _brier_xo(hi_xo, 1.0, hi) * len(hi_rows)) / len(pairs))
+        if best is None or score < best:
+            best, arg = score, (cut, lo, hi)
+    return arg
+
+
+def _brier_step(pairs, cut, lo, hi):
+    if not pairs:
+        return 0.0
+    return sum((_apply_step(p, cut, lo, hi) - o) ** 2
+               for p, o in pairs) / len(pairs)
+
+
+def _logloss_step(pairs, cut, lo, hi):
+    if not pairs:
+        return 0.0
+    t = 0.0
+    for p, o in pairs:
+        q = min(max(_apply_step(p, cut, lo, hi), 1e-6), 1.0 - 1e-6)
+        t += -(math.log(q) if o else math.log(1.0 - q))
+    return t / len(pairs)
+
+
+def _gap_step(pairs, cut, lo, hi):
+    if not pairs:
+        return 0.0
+    claimed = sum(_apply_step(p, cut, lo, hi) for p, _ in pairs) / len(pairs)
+    return sum(o for _, o in pairs) / len(pairs) - claimed
 
 
 def _xo(pairs):
@@ -284,6 +392,7 @@ def _walk_forward(pairs, blocks=BLOCKS):
             continue
         _, b = _fit_bias(train)
         a2, b2 = _fit_slope(train)
+        cut, lo, hi = _fit_step(train)
         out.append({
             "train_n": len(train), "test_n": len(test),
             "bias": b, "slope": a2, "slope_bias": b2,
@@ -299,8 +408,14 @@ def _walk_forward(pairs, blocks=BLOCKS):
             "logloss_none": _logloss(test, 1.0, 0.0),
             "logloss_a": _logloss(test, 1.0, b),
             "logloss_b": _logloss(test, a2, b2),
+            "step": (cut, lo, hi),
+            "gap_c": _gap_step(test, cut, lo, hi),
+            "brier_c": _brier_step(test, cut, lo, hi),
+            "logloss_c": _logloss_step(test, cut, lo, hi),
+            "side_lo": sum(1 for p, _ in test if p < cut),
+            "side_hi": sum(1 for p, _ in test if p >= cut),
             "rows": test,
-            "fit_a": (1.0, b), "fit_b": (a2, b2),
+            "fit_a": (1.0, b), "fit_b": (a2, b2), "fit_c": (cut, lo, hi),
         })
     return out
 
@@ -402,7 +517,8 @@ def report(pairs, name):
 
     tot = sum(s["test_n"] for s in steps)
     agg = {k: sum(s[k] * s["test_n"] for s in steps) / tot
-           for k in ("brier_none", "brier_a", "brier_b",
+           for k in ("brier_c", "logloss_c", "gap_c",
+                     "brier_none", "brier_a", "brier_b",
                      "logloss_none", "logloss_a", "logloss_b",
                      "gap_none", "gap_a", "gap_b")}
     a_beats_none = sum(1 for s in steps if s["brier_a"] < s["brier_none"])
@@ -410,9 +526,10 @@ def report(pairs, name):
                        if abs(s["gap_a"]) < abs(s["gap_none"]))
     print(f"\n    over all {tot} held-out bets   "
           f"Brier {agg['brier_none']:.4f} → A {agg['brier_a']:.4f} "
-          f"→ B {agg['brier_b']:.4f}")
+          f"→ B {agg['brier_b']:.4f} → C {agg['brier_c']:.4f}")
     print(f"    {'':<21}log loss {agg['logloss_none']:.4f} → A "
-          f"{agg['logloss_a']:.4f} → B {agg['logloss_b']:.4f}")
+          f"{agg['logloss_a']:.4f} → B {agg['logloss_b']:.4f} "
+          f"→ C {agg['logloss_c']:.4f}")
 
     # --- the first parameter, which is the one that is live -----------
     #
@@ -502,6 +619,96 @@ def report(pairs, name):
             else:
                 print(f"\n    And the sample does not lean toward the slope: "
                       f"more data would not\n    make this one true.")
+
+    _step_verdict(steps, agg, tot)
+
+
+def _step_verdict(steps, agg, tot):
+    """Model C, judged by ADOPT_STEP — written before its first run.
+
+    Printed after the slope's verdict rather than instead of it: the
+    reader needs to see that the simpler shape was asked first and what
+    it answered, or "adopt the step" reads as a search for a model that
+    passes rather than a question that got an answer.
+    """
+    cut = sum(s["step"][0] * s["test_n"] for s in steps) / tot
+    lo = sum(s["step"][1] * s["test_n"] for s in steps) / tot
+    hi = sum(s["step"][2] * s["test_n"] for s in steps) / tot
+    thin = min(min(s["side_lo"], s["side_hi"]) for s in steps)
+
+    diffs = [((_apply(p, *s["fit_a"]) - o) ** 2
+              - (_apply_step(p, *s["fit_c"]) - o) ** 2)
+             for s in steps for (p, o) in s["rows"]]
+    n = len(diffs)
+    share, needed, z = 0.0, None, 0.0
+    if n >= 2:
+        rnd = random.Random(11)
+        share = sum(1 for _ in range(BOOTSTRAP)
+                    if sum(diffs[rnd.randrange(n)] for _ in range(n)) > 0
+                    ) / BOOTSTRAP
+        m = sum(diffs) / n
+        var = sum((d - m) ** 2 for d in diffs) / (n - 1)
+        se = (var / n) ** 0.5
+        z = (m / se) if se > 0 else 0.0
+        needed = int(n * (1.645 / z) ** 2) if z > 0.05 else None
+
+    print(f"\n  DOES A STEP EARN ITS PLACE?")
+    print(f"    fitted cut {cut:.2f}   ·   below it {lo:+.3f} logits, "
+          f"above it {hi:+.3f}")
+    print(f"    thinnest side in any scored block: {thin} bet(s)   ·   "
+          f"bootstrap favours C in {share * 100:.0f}%")
+    checks = [
+        (agg["brier_c"] < agg["brier_a"], "out-of-sample Brier beats A"),
+        (agg["logloss_c"] < agg["logloss_a"], "out-of-sample log loss beats A"),
+        (abs(hi - lo) >= ADOPT_STEP["min_bias_distance"],
+         f"the two sides differ by at least "
+         f"{ADOPT_STEP['min_bias_distance']} logits"),
+        (share >= ADOPT_STEP["bootstrap_share"],
+         f"bootstrap ≥ {ADOPT_STEP['bootstrap_share'] * 100:.0f}%"),
+        (thin >= ADOPT_STEP["min_side_rows"],
+         f"at least {ADOPT_STEP['min_side_rows']} bets on each side of "
+         f"the cut, in every block"),
+        (agg["brier_c"] < agg["brier_b"] and agg["logloss_c"] < agg["logloss_b"],
+         "beats the SLOPE too — a third parameter has to earn more than "
+         "the second"),
+    ]
+    for ok, label in checks:
+        print(f"      {'PASS' if ok else 'fail'}  {label}")
+    if all(ok for ok, _ in checks):
+        print(f"\n    ADOPT THE STEP. The board is two populations: below "
+              f"{cut:.2f} the claims\n    are honest and above it they are "
+              f"not, and one pooled number cannot say\n    that. Adoption "
+              f"is still a decision — this file writes nothing.")
+    else:
+        bad = sum(1 for ok, _ in checks if not ok)
+        print(f"\n    NOT THE STEP EITHER. It fails {bad} of its "
+              f"{len(checks)} conditions.\n    Three parameters that cannot "
+              f"clear a bar written before the run are\n    three ways to "
+              f"lose money more precisely, not one way to lose less.")
+        if thin < ADOPT_STEP["min_side_rows"]:
+            print(f"\n    The binding one is the sample: {thin} bet(s) on the "
+                  f"thin side of the\n    cut in some block. A threshold "
+                  f"fitted with that little either side of\n    it is a "
+                  f"threshold fitted to those rows.")
+        elif share < ADOPT_STEP["bootstrap_share"]:
+            # THE SAME DISTINCTION THE SLOPE'S BLOCK MAKES, and it is the
+            # one that matters most here. "The step is not there" and
+            # "the journal cannot yet tell" are different sentences, and
+            # a band table showing a ten-point hole above 55% while the
+            # verdict says no is exactly where somebody would read the
+            # second as the first.
+            if needed:
+                print(f"\n    NOT 'THERE IS NO STEP' — the sides came out "
+                      f"{abs(hi - lo):.2f} logits apart, which\n    is the "
+                      f"shape the band table shows. What it cannot do is "
+                      f"prove the\n    correction PAYS: {z:.1f} standard "
+                      f"errors on {n:,} held-out bets. About\n    "
+                      f"{needed:,} would settle it — roughly "
+                      f"{int(needed / max(1, n))}× the held-out sample.")
+            else:
+                print(f"\n    And the held-out rows do not lean toward the "
+                      f"step: more of them would\n    not make this one "
+                      f"true.")
 
 
 def main(argv=None):

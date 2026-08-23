@@ -276,6 +276,109 @@ def test_it_reads_the_same_books_the_record_does():
     assert sc.BOOKS == sf.LEARNING_CATEGORIES
 
 
+# --- model C: the step ------------------------------------------------------
+
+def _deal(claimed, landed, n):
+    """Outcomes spread evenly rather than sampled, so the shape under
+    test is the shape that was dealt and not the seed."""
+    out, w = [], 0
+    for i in range(n):
+        t = int(round((i + 1) * landed))
+        out.append((claimed, 1 if t > w else 0))
+        w = max(w, t)
+    return out
+
+
+def test_the_step_recovers_a_cut_that_is_really_there():
+    """THE SHAPE THIS FILE'S OWN HEADER NAMES AND DID NOT FIT — "a step:
+    one market or price band carries it and the rest is fine, and the
+    pool hides it".
+
+    Dealt honest below 0.55 and ten points high above it, which is the
+    live MLB band table's shape. The fitter has to find the boundary and
+    give the two sides different corrections."""
+    rows = (_deal(0.45, 0.45, 400) + _deal(0.52, 0.52, 300)
+            + _deal(0.62, 0.52, 300) + _deal(0.70, 0.58, 200))
+    cut, lo, hi = sc._fit_step(rows)
+    assert 0.54 <= cut <= 0.62, cut
+    assert abs(lo) < 0.10, f"the honest side was corrected anyway: {lo}"
+    assert hi < -0.25, f"the broken side was not corrected: {hi}"
+
+
+def test_the_step_leaves_a_uniformly_honest_board_alone():
+    rows = _deal(0.45, 0.45, 400) + _deal(0.65, 0.65, 400)
+    _, lo, hi = sc._fit_step(rows)
+    assert abs(lo) < 0.10 and abs(hi) < 0.10, (lo, hi)
+
+
+def test_the_side_is_chosen_by_the_claim_not_by_the_corrected_value():
+    """A correction able to move a bet across its own threshold would
+    have no fixed point, and running it twice would disagree with
+    running it once."""
+    from engine import selectionfit as _sf
+    # 0.56 sits just ABOVE a 0.55 cut, so it must take the high side's
+    # correction — even though that correction lands it below the cut.
+    got = sc._apply_step(0.56, 0.55, 0.0, -0.60)
+    assert got == _sf._sigmoid(_sf._logit(0.56) - 0.60), (
+        "the high side's bias was not the one applied")
+    assert got < 0.55, (
+        "this case no longer crosses the threshold, so it stops testing "
+        "the rule it was written for")
+    # And the low side is untouched by the high side's number.
+    assert sc._apply_step(0.54, 0.55, 0.0, -0.60) == _sf._sigmoid(
+        _sf._logit(0.54) + 0.0)
+
+
+def test_the_cut_cannot_wander_to_the_edge_of_the_sample():
+    """A threshold free to sit anywhere finds one, and it is the row
+    that happened to lose."""
+    assert min(sc._CUTS) >= 0.50 and max(sc._CUTS) <= 0.70
+
+
+def test_a_thin_side_is_never_fitted():
+    """Ten rows either side is the floor inside the fitter; the adoption
+    bar asks for sixty in every scored block."""
+    rows = _deal(0.45, 0.45, 400) + _deal(0.69, 0.40, 4)
+    cut, lo, hi = sc._fit_step(rows)
+    assert hi == 0.0 or abs(hi) < 0.9, (
+        "four rows on one side produced a full-sized correction")
+
+
+def test_the_step_is_declared_before_it_is_run():
+    """Same discipline as the slope: every condition fixed in advance,
+    so the verdict cannot be chosen after seeing the number."""
+    for key in ("out_of_sample_brier", "out_of_sample_logloss",
+                "min_bias_distance", "bootstrap_share", "min_side_rows",
+                "beats_slope"):
+        assert key in sc.ADOPT_STEP, key
+    src = open(os.path.join(ROOT, "shapecheck.py"), encoding="utf-8").read()
+    body = src[src.index("def _step_verdict("):]
+    body = body[:body.index("\ndef ")]
+    assert 'agg["brier_c"] < agg["brier_b"]' in body, (
+        "a third parameter is being adopted without beating the second")
+    assert "min_side_rows" in body and "min_bias_distance" in body
+
+
+def test_a_refused_step_says_whether_it_is_the_shape_or_the_sample():
+    """The distinction that matters most here. A band table showing a
+    ten-point hole above 55% beside a verdict of "no" is exactly where
+    somebody reads "the journal cannot tell yet" as "there is nothing
+    there"."""
+    src = open(os.path.join(ROOT, "shapecheck.py"), encoding="utf-8").read()
+    body = src[src.index("def _step_verdict("):]
+    body = body[:body.index("\ndef ")]
+    assert "NOT 'THERE IS NO STEP'" in body
+    assert "needed" in body, "no estimate of how much data would settle it"
+
+
+def test_this_file_still_writes_nothing():
+    """It reports; it does not change what the board prices with. Three
+    parameters make that more important, not less."""
+    src = open(os.path.join(ROOT, "shapecheck.py"), encoding="utf-8").read()
+    for bad in ("sf.save", "json.dump", "write_text", "refresh("):
+        assert bad not in src, bad
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
