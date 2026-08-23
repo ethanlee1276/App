@@ -4307,7 +4307,12 @@ html, body { overflow-x: clip; }
   text-decoration: none; flex: 0 0 auto; }
 .logo { width: 38px; height: 38px; display: grid; place-items: center;
   background: none; border: 0; }
-.qmark { width: 100%; height: 100%; stroke: var(--gold); stroke-width: 3.4; }
+/* THE MARK IS ARTWORK NOW, not a stroked ellipse — Ethan's own QB icon,
+   cropped above the wordmark. `object-fit: contain` rather than a bare
+   width so the tile never distorts if the slot changes, and the radius
+   matches the crop's own so a subpixel edge cannot show. */
+.qmark { width: 100%; height: 100%; object-fit: contain;
+  border-radius: 22%; display: block; }
 .brand-words h1 { font-family: var(--font-display); font-size: var(--fs-xl);
   font-weight: 700; letter-spacing: .34em; line-height: 1; white-space: nowrap;
   text-transform: uppercase; }

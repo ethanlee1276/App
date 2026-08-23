@@ -766,8 +766,17 @@ def test_the_icon_reads_the_palette_instead_of_copying_it():
     import make_icon
     src = inspect.getsource(make_icon)
     assert "TOP = BOT = token(" in src and "INK = token(" in src
+    # THE SVG HALF RETIRED 2026-08-23. The tab icon is Ethan's artwork
+    # now — gold leaf on a stadium ground, a texture no token describes —
+    # so there is no palette hex to find in it, and finding one would
+    # mean the drawing had come back. What this test is really about is
+    # the GENERATOR still reading tokens instead of copying hexes, and
+    # that half is checked above and still matters: make_icon is what
+    # tests/test_contrast.py and tests/test_chroma.py resolve the whole
+    # palette through.
     svg = open(os.path.join(ROOT, "web", "favicon.svg"), encoding="utf-8").read()
-    assert ("#%02X%02X%02X" % make_icon.token("panel-2")).lower() in svg.lower()
+    assert "data:image/png;base64," in svg, (
+        "the tab icon is a drawing again rather than the artwork")
 
 
 def test_the_token_resolver_reads_both_notations():

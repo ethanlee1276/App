@@ -14763,9 +14763,8 @@ function acctScreenHTML() {
   return `<div class="acct-screen">
     <div class="acct-hero">
       <span class="acct-hero-mark" aria-hidden="true">
-        <svg class="qmark" viewBox="0 0 48 48" fill="none" focusable="false">
-          <ellipse cx="24" cy="24" rx="17" ry="11.5" />
-        </svg>
+<img class="qmark" src="logo-qb.png" width="152" height="152"
+             alt="" decoding="async" />
       </span>
       <span class="acct-hero-words">Qellys <span>Book</span></span>
       <span class="acct-hero-tag">Priced by a model. Graded in public.</span>

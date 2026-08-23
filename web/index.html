@@ -18,6 +18,9 @@
        three are needed; any one alone leaves a way in. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Qellys Book · multi-sport betting model</title>
+  <!-- The same crop of Ethan's artwork the header wears, so the tab and
+       the page draw one mark. Still .svg because sw.js precaches that
+       path; the artwork is embedded inside it. -->
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -116,10 +119,16 @@
     </button>
     <a class="brand-home" id="brand-home" href="#recommended"
        title="Home — tonight’s picks for this sport (also refreshes)">
+      <!-- Ethan's own artwork, 2026-08-23: "i really like the QB logo it
+           has so we should use that for the site logo but take away where
+           it says qellys book below it". Cropped from brand/appicon-1254
+           at the gap under the mark (rows 804-846 are empty), so the crown
+           and the QB come through and the wordmark does not — the words
+           are already beside it in .brand-words and printing them twice
+           is what the crop removes. -->
       <span class="logo" id="brand-logo" aria-hidden="true">
-        <svg class="qmark" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
-          <ellipse cx="24" cy="24" rx="17" ry="11.5" />
-        </svg>
+        <img class="qmark" src="logo-qb.png" width="152" height="152"
+             alt="" decoding="async" />
       </span>
       <div class="brand-words">
         <h1>Qellys <span>Book</span></h1>

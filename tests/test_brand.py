@@ -45,48 +45,120 @@ def _mark_geometry(svg_text):
 
 
 def test_favicon_and_header_draw_the_same_mark():
-    assert _mark_geometry(_read("web", "favicon.svg")) \
-        == _mark_geometry(_read("web", "index.html")), \
-        "bowl geometry drifted apart between the tab and the page"
+    """THE INVARIANT SURVIVES THE ARTWORK, 2026-08-23.
+
+    This compared ellipse geometry between favicon.svg and index.html,
+    because the mark WAS an ellipse somebody drew. Ethan: "i really like
+    the QB logo it has so we should use that for the site logo but take
+    away where it says qellys book below it" — so it is a crop of his own
+    icon now, photographic gold leaf with no vector of it.
+
+    What was worth protecting is unchanged and is the reason this test
+    exists: the tab and the page must not drift into two different
+    marks. Same source file, checked by name."""
+    head = _read("web", "index.html")
+    m = re.search(r'<link rel="icon" href="([^"]+)"', head)
+    assert m, "no tab icon at all"
+    tab = m.group(1)
+    assert '<img class="qmark" src="logo-qb.png"' in head, \
+        "the header no longer wears the artwork"
+    for f in (tab, "logo-qb.png"):
+        assert os.path.isfile(os.path.join(ROOT, "web", f)), f"missing {f}"
+    # Same picture in both, not just two files with the right names.
+    assert "data:image/png;base64," in _read("web", tab), \
+        "the tab icon is not the embedded artwork"
 
 
-def test_raster_icon_matches_the_svg():
-    cx, cy, rx, ry = _mark_geometry(_read("web", "favicon.svg"))
-    assert (cx, cy) == (make_icon.CX, make_icon.CY)
-    assert (rx, ry) == (make_icon.RX, make_icon.RY)
-    assert make_icon.NUDGE == (0.0, 0.0), \
-        "an ellipse centred in its own box needs no optical nudge"
-
-
-def test_stroke_width_matches_the_rasteriser():
+def test_the_tab_and_the_header_are_cut_from_one_source():
+    """Same crop, two sizes. Compared as PIXELS rather than as file
+    names, because two files can carry the right names and different
+    artwork — which is exactly the drift the old geometry check caught
+    when the mark was a shape."""
+    import base64 as _b64
+    import io as _io
+    try:
+        from PIL import Image
+    except ImportError:                       # stdlib-only machines
+        return
     svg = _read("web", "favicon.svg")
-    width = float(re.search(r'stroke-width="([\d.]+)"', svg).group(1))
+    raw = _b64.b64decode(re.search(r"base64,([A-Za-z0-9+/=]+)", svg).group(1))
+    a = Image.open(_io.BytesIO(raw)).convert("RGB")
+    b = Image.open(os.path.join(ROOT, "web", "logo-qb.png")).convert("RGB")
+    a = a.resize((32, 32)); b = b.resize((32, 32))
+    diff = sum(abs(x - y) for pa, pb in zip(a.getdata(), b.getdata())
+               for x, y in zip(pa, pb)) / (32 * 32 * 3)
+    assert diff < 12, (
+        f"the tab icon and the header logo are different pictures "
+        f"(mean channel difference {diff:.1f})")
+
+
+def test_the_drawn_mark_is_no_longer_what_ships():
+    """make_icon.py DRAWS a flat ellipse and is kept for its token
+    reader, which two other test files import. Ethan, 2026-08-22: "Use
+    the actual image, don't make your own." Nothing it draws may reach
+    web/ again."""
+    svg = _read("web", "favicon.svg")
+    assert "<ellipse" not in svg, "the drawn ellipse is back in the tab icon"
+    assert "data:image/png;base64," in svg
+
+
+def test_the_crop_lands_in_the_empty_band_under_the_mark():
+    """THE ASK, CHECKED AGAINST THE SOURCE. Ethan: "use that for the site
+    logo but take away where it says qellys book below it" — the words
+    already sit beside the logo in .brand-words, so an icon carrying them
+    prints the name twice at two sizes.
+
+    The cut is a constant (tools/appicons.sh owns it) and this is what
+    makes that safe: rows 804-846 of the artwork carry no ink at all, so
+    the crop's bottom edge has to fall inside that band. A box in a build
+    script is a claim; this measures it.
+
+    My first version of this measured the bottom of the SHIPPED mark and
+    failed at peak 231 — which was the Q and the B, not the wordmark. It
+    was checking the wrong picture."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    sh = open(os.path.join(ROOT, "tools", "appicons.sh"),
+              encoding="utf-8").read()
+    m = re.search(r'QB_CROP="(\d+),(\d+),(\d+),(\d+)"', sh)
+    assert m, "the crop is not recorded where the build script can use it"
+    _, _, _, bottom = (int(g) for g in m.groups())
+    im = Image.open(os.path.join(ROOT, "brand", "appicon-1254.png")).convert("L")
+    w, h = im.size
+    px = list(im.tobytes())
+    band = range(int(w * .18), int(w * .82))
+    row = lambda y: max(px[y * w + x] for x in band)
+    assert row(bottom) < 40, (
+        f"the crop's bottom edge (y={bottom}) cuts through ink (peak "
+        f"{row(bottom)}) — it should land in the empty band under the QB")
+    # …and it must not be so high that it clips the mark itself.
+    assert row(bottom - 60) > 60, (
+        "the crop stops well above the mark, so it is losing the QB")
+
+
+def test_the_mark_is_the_artwork_and_not_a_drawing():
+    """THREE TESTS RETIRED HERE 2026-08-23, together and on purpose:
+    stroke width matching the rasteriser, "one unfilled stroke", and "the
+    tile is square". Every one of them was a specification for the drawn
+    ellipse — its outline, its lack of fill, its zero corner radius — and
+    the mark is photographic gold leaf now with none of those properties.
+
+    Keeping them by loosening each would have left three assertions that
+    no longer describe anything. What replaces them is the property that
+    matters at 16px: it is Ethan's file, embedded, and the ellipse the
+    repo used to draw is gone from the shipped tree."""
+    svg = _read("web", "favicon.svg")
+    assert "data:image/png;base64," in svg
+    assert "<ellipse" not in svg and "<circle" not in svg
+    assert "stroke" not in svg, "a drawn stroke is back on the mark"
+    # The tile IS rounded now, which the retired test forbade: it reads as
+    # an app icon rather than a photo pasted into the bar, and the radius
+    # is baked into the alpha rather than asserted in CSS.
     css = _read("web", "css", "styles.css")
-    css_width = float(re.search(r"\.qmark\s*\{[^}]*stroke-width:\s*([\d.]+)",
-                                css, re.S).group(1))
-    assert width == css_width == make_icon.HALF * 2
-
-
-def test_the_mark_is_one_unfilled_stroke():
-    """The bowl is an outline. A fill turns it into a lozenge, and a second
-    shape turns the logo into an illustration — the whole point of §6.1 is
-    that the mark IS the venue system at its smallest scale, and at 16px
-    only the silhouette survives anyway."""
-    svg = _read("web", "favicon.svg")
-    assert svg.count("<ellipse") == 1, "the mark grew a second shape"
-    assert 'fill="none"' in svg
-    assert "<path" not in svg and "<circle" not in svg, "the Q's tail is back"
-
-
-def test_the_tile_is_square():
-    """Radius 0 everywhere, spec §3.3 — including the icon, which is the
-    one surface a rounded corner survives on by being baked into a PNG."""
-    # Scoped to the RECT. `rx=` also appears on the ellipse itself, where it
-    # is a radius and not a corner — the first version of this assertion
-    # failed on the mark it was meant to protect.
-    rect = re.search(r"<rect[^>]*/>", _read("web", "favicon.svg")).group(0)
-    assert "rx=" not in rect, "the tile is rounded again"
-    assert make_icon.CORNER == 0.0
+    rule = css[css.index(".qmark {"):]
+    assert "border-radius" in rule[:rule.index("}")]
 
 
 def test_the_page_links_both_icons():
@@ -245,22 +317,22 @@ def test_the_mark_matches_the_design_system():
     # else. A gradient-filled tile reads as a sticker on a flat interface.
     svg = _read("web", "favicon.svg")
     assert "linearGradient" not in svg
-    # Resolve the TOKEN rather than regexing a hex out of the sheet. The
-    # old lookup matched the first `--panel-2: #......` anywhere in the
-    # file, so the moment the dark ramp moved to oklch() it silently
-    # started reading the LIGHT theme's value and comparing the icon
-    # against the wrong ground. make_icon.token reads the first :root
-    # block and understands both notations.
-    panel_2 = "#%02X%02X%02X" % make_icon.token("panel-2")
-    # NEW LOOK (2026-08-11): the UI accent went violet, and the MARK went
-    # gold — the render's one gold element is the Qellys ellipse, so the
-    # tab, the home-screen tile and the header agree on --gold while the
-    # violet stays interface-only. Same one-token discipline, new token.
-    gold = "#%02X%02X%02X" % make_icon.token("gold")
-    assert panel_2.lower() in svg.lower(), "tile drifted off --panel-2"
-    assert gold.lower() in svg.lower(), "stroke drifted off --gold"
-    assert make_icon.INK == tuple(int(gold[i:i + 2], 16) for i in (1, 3, 5))
-    assert make_icon.TOP == make_icon.BOT, "the tile must stay flat"
+    # RETIRED 2026-08-23 WITH THE DRAWN MARK. This resolved --panel-2 and
+    # --gold through make_icon.token and asserted both hexes appeared in
+    # the SVG, which is how you check a mark the repo draws from the
+    # site's own tokens. The mark is Ethan's artwork now — gold leaf,
+    # stadium light, a texture no token describes — so there is no hex to
+    # match and matching one would mean the drawing had come back.
+    #
+    # The token discipline it protected has not gone anywhere; it moved
+    # to the surfaces that are still drawn. tests/test_contrast.py and
+    # tests/test_chroma.py both import make_icon.token and hold the whole
+    # palette to it, which is why that reader is kept.
+    svg = _read("web", "favicon.svg")
+    assert "data:image/png;base64," in svg, (
+        "the tab icon is a drawing again rather than the artwork")
+    assert "#" not in svg.split("base64,")[0], (
+        "a hardcoded colour crept back into the mark")
 
 
 def test_brand_is_constant_across_sports():

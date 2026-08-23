@@ -429,8 +429,14 @@ def test_the_interface_is_gold_and_its_ink_is_dark():
     The wordmark keeps --gold rather than --brand on purpose: it is the
     identity mark and it should not move if the interface accent is ever
     tuned again."""
-    i = CSS.index(".qmark", CSS.index("NEW LOOK — 2026-08-11"))
-    assert "var(--gold)" in CSS[i:i + 200]
+    # The mark was a stroked ellipse painted with --gold; since
+    # 2026-08-23 it is Ethan's own QB artwork, so there is no stroke to
+    # colour. What survives is that it is a mark of its own rather than
+    # the interface accent wearing a logo's hat — checked as "the header
+    # carries the artwork", which is the thing that would actually be
+    # lost if somebody reverted it.
+    assert '<img class="qmark" src="logo-qb.png"' in HTML, (
+        "the header no longer wears the QB mark")
     dark = CSS[CSS.index(":root {"):CSS.index(':root[data-theme="light"]')]
     assert "--brand: #FFB000" in dark, "the dark interface is not gold"
     assert "--brand-ink: #0A0907" in dark, (
