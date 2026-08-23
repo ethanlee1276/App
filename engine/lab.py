@@ -300,8 +300,15 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
     except Exception as exc:                       # noqa: BLE001
         log(f"  lab: skipped — {exc}")
         return "failed"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(out, indent=1))
+    # THROUGH THE GATE. backtest.json is in gate.PAID_FILES — sealed in
+    # its entirety on the public path — and this wrote the whole thing
+    # there directly, so every weekly Lab run put the backtests back on
+    # the open web until the next `--seal`. It also never wrote the
+    # private copy, so `/api/board/backtest.json` had nothing to serve a
+    # subscriber: the Lab page only worked at all because the file was
+    # leaking. Third builder found doing this, after memes and fantasy.
+    from . import gate
+    gate.publish(out, p, p.name)
     ran = sum(1 for s in out["sports"].values()
               if (s["props"].get("markets")
                   or s["game_lines"].get("markets")))

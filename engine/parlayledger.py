@@ -685,10 +685,20 @@ def journal_built_boards(conn, root) -> dict:
     sport writing to the journal at a different point in the refresh with no
     way to tell a full night from a half-built one.
     """
+    from . import gate
+
     root = Path(root)
     wrote, skipped = 0, []
     for sport, rel in BOARD_FILES.items():
-        path = root / rel
+        # THE PRIVATE COPY. `parlays` is a paid key, so with QB_PAYWALL=1
+        # the board on the public path carries an empty parlay zone —
+        # `{}`, which is still a dict, so this walked straight past the
+        # isinstance guard and journaled nothing. Every ticket this site
+        # published since the paywall went on went ungraded, silently,
+        # in the ledger the whole product is sold on. Found by sweeping
+        # every reader of web/data/ after the same bug turned up in
+        # arbitrate_slate and parlaycheck.
+        path = gate.board_source(root / rel)
         if not path.exists():
             continue
         try:

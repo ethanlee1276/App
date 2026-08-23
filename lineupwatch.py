@@ -72,8 +72,15 @@ def posted_in_build(path: Path = BOARD) -> tuple[int, int, str]:
     Prefers the parlay screen's own census and falls back to counting the
     games array, so a board written before that field existed still reads.
     """
+    # The private copy where there is one: the census this prefers lives
+    # inside `parlays`, a paid key, so on a box with the paywall on the
+    # public board has none of it. The `games` fallback below does still
+    # work — `lineups_confirmed` is a free field — so this was degraded
+    # rather than broken, which is exactly why it would never have been
+    # noticed.
+    from engine import gate
     try:
-        d = json.loads(path.read_text(encoding="utf-8"))
+        d = json.loads(gate.board_source(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return (0, 0, "")
     games = d.get("games") or []

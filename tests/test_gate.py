@@ -892,6 +892,94 @@ def test_the_slate_cap_covers_every_sport_that_can_publish_a_parlay():
     assert not missing, f"sports that publish a parlay nothing arbitrates: {missing}"
 
 
+#: Files that name a gated board and write JSON, but are not publishing a
+#: board. Each entry is a reason, not a pass — an allow-list with no
+#: sentence beside it is how the last three bypasses stayed invisible.
+NOT_A_BOARD_WRITER = {
+    "engine/gate.py": "it IS the gate",
+    "engine/ledger.py": "names predmarkets.json in a comment about why "
+                        "prediction-market flags are NOT in this P&L",
+    "live_build.py": "names the model board in the comment explaining why "
+                     "it stopped reading scores out of it",
+    "server.py": "its only write is a user profile",
+    "standings_build.py": "reads cfb.json for conferences; writes only the "
+                          "free standings boards",
+    "launch.py": "passes board paths to subprocesses; the builders publish",
+}
+
+
+def test_no_file_writes_a_gated_board_around_the_gate():
+    """DERIVED, because the hand-kept list did not hold.
+
+    `GATED_BUILDS` above is a tuple somebody has to remember to add to,
+    and twice in one day somebody did not: memes_build.py and
+    fantasy_build.py both wrote their whole board straight to web/data/
+    while that list said the gate was covered. engine/lab.py made three —
+    it is not a root-level build script at all, so no list shaped like
+    GATED_BUILDS would ever have looked at it.
+
+    So this asks the source instead: a file that names a gated board AND
+    writes JSON either calls gate.publish or is on NOT_A_BOARD_WRITER
+    with a reason. The two checks cover different halves — the builders
+    take their path from --out and never name a board, which is why
+    GATED_BUILDS still exists.
+    """
+    import re as _re
+    from engine import gate
+    boards = set(gate.PAID_FILES) | set(gate.MIXED_FILES)
+    offenders = []
+    for path in sorted(Path(ROOT).rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if rel.parts[0] in ("tests", "__pycache__") or "__pycache__" in rel.parts:
+            continue
+        src = path.read_text(encoding="utf-8")
+        if not any(b in src for b in boards):
+            continue
+        if not _re.search(r"\.write_text\(|json\.dump\(|os\.replace\(", src):
+            continue
+        if "gate.publish(" in src or str(rel) in NOT_A_BOARD_WRITER:
+            continue
+        offenders.append(str(rel))
+    assert not offenders, (
+        "writes a gated board without going through the gate — the paid "
+        "product returns to the public path on the next build, and no "
+        "private copy is written for the people paying for it: "
+        + ", ".join(offenders))
+
+
+def test_the_allow_list_has_not_gone_stale():
+    """An entry for a file that no longer exists, or that now publishes
+    properly, is an exemption nobody is watching."""
+    from engine import gate
+    boards = set(gate.PAID_FILES) | set(gate.MIXED_FILES)
+    stale = []
+    for rel, _why in NOT_A_BOARD_WRITER.items():
+        path = Path(ROOT) / rel
+        if not path.is_file():
+            stale.append(f"{rel} (gone)")
+            continue
+        src = path.read_text(encoding="utf-8")
+        if not any(b in src for b in boards):
+            stale.append(f"{rel} (no longer names a board)")
+    assert not stale, "exemptions that are no longer doing anything: " + \
+        ", ".join(stale)
+
+
+def test_the_parlay_journal_reads_the_board_that_still_has_its_tickets():
+    """`parlays` is a paid key and redact() leaves `{}` behind — still a
+    dict, so the isinstance guard in journal_built_boards let it through
+    and it journaled nothing. Every ticket published since the paywall
+    went on went ungraded, in the ledger the product is sold on."""
+    src = (Path(ROOT) / "engine" / "parlayledger.py").read_text(encoding="utf-8")
+    body = src[src.index("def journal_built_boards("):]
+    # It is the last function in the file, so there is no next `def` to
+    # stop at — a slice that assumed one raised rather than failing.
+    nxt = body.find("\ndef ")
+    body = body if nxt < 0 else body[:nxt]
+    assert "gate.board_source(" in body, (
+        "the journal reads the public board, where the tickets are gone")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
