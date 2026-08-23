@@ -765,6 +765,49 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
   margin-top: 7px; max-width: var(--measure); margin-inline: 0; line-height: var(--lh-body); }
 .empty-slate code { background: var(--fill-subtle); padding: 2px 6px;
   border-radius: var(--radius-sm); }
+/* NOTHING HERE YET, INSIDE A PANEL — the third size.
+
+   Ethan asked for the empty states to be made consistent (2026-08-23).
+   The audit found two treatments for one situation: 27 places used the
+   slate above, and 29 used `.loading` — a class meant for text that is
+   about to be replaced, which reserves 60px of centred padding for a
+   permanent one-liner.
+
+   Swapping all 29 to the slate would have been the wrong fix for half of
+   them. A 22px mark, a title and a sub is right when a whole VIEW is
+   empty; the Record page's sampler panels are one line each inside a
+   page that already carries twelve sections, and giving every one of
+   them that furniture makes the page worse, not more consistent.
+
+   So: three treatments for three sizes. `.loading` for text that really
+   is transient, `.empty-slate` when a view has nothing, and this when a
+   panel inside a populated page has nothing YET — the mark on the
+   baseline, the sentence beside it, no reserved acreage. */
+.panel-empty {
+  display: flex; gap: 9px; align-items: flex-start;
+  color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); padding: 12px 0 4px;
+}
+.panel-empty .pe-ico { color: var(--text-faint); flex: none; margin-top: 1px; }
+.panel-empty p { margin: 0; max-width: var(--measure); }
+
+/* THE FOURTH THING `.loading` WAS DOING, and the last of it.
+
+   Five of its uses were a caveat under content that IS there — "10 more
+   props not shown", "214 older picks are held out of this record" — and
+   three were prompts inside the Why-page calculators. Neither is an
+   empty state and neither is transient, but both were inheriting the
+   loading treatment's 60px of centred padding.
+
+   With these moved, `.loading` finally means one thing: text that is
+   about to be replaced. */
+.list-note {
+  color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); padding: 10px 0 2px;
+  max-width: var(--measure); text-align: left;
+}
+.list-note b, .list-note strong { color: var(--text-dim); }
+
 /* A drawn mark on a text baseline. */
 .ico-mark { display: inline-flex; vertical-align: -2px; margin-right: 6px;
   color: currentColor; }

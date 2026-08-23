@@ -691,6 +691,34 @@ function iconMark(name, size = 14) {
   return `<span class="ico-mark">${icon(name, size)}</span>`;
 }
 
+/* THE THREE WAYS A PAGE SAYS "NOTHING HERE YET", as two helpers so the
+   twenty-odd places that say it cannot drift apart again.
+
+   Ethan, 2026-08-23, on the public-eye pass. The audit found 27 places
+   using the full slate and 29 using `.loading` — a class for text that
+   is about to be REPLACED, which reserves 60px of centred padding for a
+   line that is never going anywhere. Two visual languages for one
+   situation, and the weaker one was on more pages.
+
+   `emptySlate` is for a whole view: a mark, a title, a sentence.
+   `panelEmpty` is for a panel inside a populated page: a mark on the
+   baseline and the sentence beside it. Giving a one-line sampler note
+   the full slate would have been consistency that made the page worse.
+
+   Both take PLAIN TEXT and escape it here. Every call site was already
+   writing a sentence into a template; centralising the escaping is the
+   part that stops one of them growing an injection later. */
+function emptySlate(mark, title, sub) {
+  return `<div class="empty-slate"><div class="es-icon">${icon(mark, 22)}</div>
+    <div class="es-title">${escapeHtml(title)}</div>
+    ${sub ? `<div class="es-sub">${escapeHtml(sub)}</div>` : ""}</div>`;
+}
+
+function panelEmpty(text, mark) {
+  return `<div class="panel-empty"><span class="pe-ico">${
+    icon(mark || "dash", 14)}</span><p>${escapeHtml(text)}</p></div>`;
+}
+
 /* NOTHING MISSING PRINTS THE WORD FOR IT. `String(undefined)` is
    "undefined" and `String(null)` is "null", and this function is the last
    step before hundreds of optional payload fields reach the page — a
@@ -2154,9 +2182,7 @@ function renderLivePicks() {
     host.innerHTML = `
       <div class="section-title">${iconMark("target")} Open bets
         <span class="sub">— every journaled bet on today’s card, tracked while its game runs</span></div>
-      <div class="card"><p class="loading">No open bets on today’s card. A pick journals the
-        moment it’s recommended and lives here until it settles — live progress bars, at-bat
-        situation, and provisional grades as the games run.</p></div>`;
+      <div class="card">${emptySlate("inbox", "No open bets on today’s card", "A pick journals the moment it’s recommended and lives here until it settles — live progress bars, at-bat situation, and provisional grades as the games run.")}</div>`;
     return;
   }
 
@@ -3775,7 +3801,7 @@ function renderRecommended() {
     const real = recs.filter((r) => r.has_market !== false);
     const started = real.filter((r) => r.live
       || (r.warnings || []).some((w) => /already started/i.test(w)));
-    let msg;
+    let msg, msgTitle;
     if (recs.length && !real.length) {
       msg = noMarketExplainer();
     } else if (real.length && started.length === real.length) {
@@ -3792,7 +3818,8 @@ function renderRecommended() {
          priced by a book. Name the biggest actual cause instead. */
       const [why, n] = biggestCensusBucket();
       const built = ((state.data || {}).counts || {}).props_built;
-      msg = `No props reached the board. The largest reason is
+      msgTitle = "No props reached the board";
+      msg = `The largest reason is
         <b>${escapeHtml(why)}</b> (${n})${built ? ` out of ${built} built from
         player history` : ""}. Sliders filter what arrives, so they cannot
         help here — the full breakdown is below.`;
@@ -3810,18 +3837,28 @@ function renderRecommended() {
          old first sentence — "Nothing is priced yet" — was written when
          nothing was, and reading it above a board of priced spreads and
          totals would be worse than saying nothing. */
-      msg = `No player props yet. The games, lines and game bets above are
-        real, but this season has no weekly player stats until its first
+      msgTitle = "No player props yet";
+      msg = `The games, lines and game bets above are real, but this season has no weekly player stats until its first
         games have been played — so no prop has been built, and the sliders
         have nothing to filter. Props appear on their own once the season
         starts.`;
     } else {
-      msg = `No props clear the current thresholds. Loosen the sliders or
-        enable “show non-recommended”.`;
+      msgTitle = "No props clear your filters";
+      msg = `Loosen the sliders, or enable “show non-recommended”.`;
     }
     // The funnel goes under EVERY empty message, not just the ones that
     // mention it. "Why is this blank" is the same question in all cases.
-    host.innerHTML = `<p class="loading">${msg}</p>${censusFunnelHTML()}`;
+    /* A WHOLE VIEW WITH NOTHING IN IT EARNS THE SLATE, not the
+       loading treatment it wore — this message is the first thing a
+       visitor sees on an empty board, and it was a centred grey line.
+       Built inline rather than through `emptySlate` because these
+       sentences carry markup (the census branch bolds its reason), and
+       the helper escapes what it is given, correctly. */
+    host.innerHTML = `<div class="empty-slate">
+        <div class="es-icon">${icon("inbox", 22)}</div>
+        <div class="es-title">${escapeHtml(msgTitle)}</div>
+        <div class="es-sub">${msg}</div>
+      </div>${censusFunnelHTML()}`;
     return;
   }
   // Group by market so all Total Bases props sit together, all Hits
@@ -3854,7 +3891,7 @@ function renderRecommended() {
   // small, or no real price) and non-featured home runs live on Long Shots.
   const hidden = recs.length - visible.length;
   if (hidden > 0) {
-    host.innerHTML += `<p class="loading" style="grid-column:1/-1;margin-top:14px">
+    host.innerHTML += `<p class="list-note" style="grid-column:1/-1;margin-top:14px">
       ${hidden} more analyzed prop(s) not shown — ${state.showAll
         ? "non-featured home runs live on the Long Shots page"
         : "held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything"}.</p>`;
@@ -5029,8 +5066,7 @@ function renderGameBetPage(b) {
       </div>
       ${asProp ? propAnalysis(asProp, { head: s.head, what: s.what,
         legend: s.legend, sideLabel: s.sideLabel, labels: s.labels }) : `
-      <p class="loading">No recent results for this team yet — the chart
-      needs at least three games we have ingested.</p>`}
+      ${panelEmpty("No recent results for this team yet — the chart needs at least three games we have ingested.")}`}
     </article>
 
     ${logRows ? `<div class="section-title">Last ${rows.length} game${
@@ -5731,7 +5767,7 @@ function renderGamePage() {
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
       <div class="cards gp-cards">${shots.map(longShotCard).join("")}</div>` : ""}
 
-    ${props.length > shown.length ? `<p class="loading" style="margin-top:14px">
+    ${props.length > shown.length ? `<p class="list-note" style="margin-top:14px">
       ${plural(props.length - shown.length, "more analyzed prop", "more analyzed props")}
       in this game ${props.length - shown.length === 1 ? "is" : "are"} held
       (edge below the bar, no real price, or lineup unconfirmed).</p>` : ""}`;
@@ -6687,7 +6723,7 @@ function recRecentSection(recent) {
     <div class="section-title">Recent settled picks
       <span class="sub">— newest first, at the price we actually got</span></div>
     <div class="card rec-list">
-      ${shown.map(recSettledRow).join("") || `<p class="loading" style="padding:12px">Nothing settled yet.</p>`}
+      ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
       ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
         Show all ${recent.length} settled picks</button>` : ""}
     </div>`;
@@ -6995,7 +7031,7 @@ function recParlaySection(pz) {
         pz.z == null ? "" : ` (now ${pz.z.toFixed(2)})`}`)}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${verdict}${rows ||
-      `<p class="loading" style="padding:12px">No ticket has settled yet — accrues from tonight’s board.</p>`}${codes}</div>`;
+      `${panelEmpty("No ticket has settled yet — accrues from tonight’s board.")}`}${codes}</div>`;
 }
 
 /* WHAT THE HEADLINE IS NOT COUNTING, said out loud.
@@ -7117,7 +7153,7 @@ function recLongshotSection(ls) {
         `<span class="chip">${escapeHtml(s.toUpperCase())} ${d.w}/${d.n}
            (${d.net_u >= 0 ? "+" : ""}${d.net_u.toFixed(2)}u)</span>`).join(" ")}</div>` : ""}
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight’s board.</p>`}${watch}</div>`;
+      `${panelEmpty("Nothing settled yet — accrues from tonight’s board.")}`}${watch}</div>`;
 }
 
 /* Calibration: when the model said X%, how often did it actually happen.
@@ -7409,7 +7445,7 @@ function recRestatedSection(rs, sport) {
         <div class="v" style="color:${tone(roi)}">${roi >= 0 ? "+" : ""}${roi.toFixed(1)}%</div>
         <div class="tile-sub">weighted by conviction, not by ticket count</div></div>
     </div>
-    ${r.excluded ? `<p class="loading" style="margin-top:8px">${r.excluded.toLocaleString()}
+    ${r.excluded ? `<p class="list-note" style="margin-top:8px">${r.excluded.toLocaleString()}
       old pick(s) are excluded — at their journaled probability and price,
       today’s Kelly would not have made those bets at all.</p>` : ""}`;
 }
@@ -8065,7 +8101,7 @@ function recUfcSection(u) {
                 "cards are small samples — judge after 50+")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Grades after each card’s fights are official.</p>`}</div>`;
+      `${panelEmpty("Grades after each card’s fights are official.")}`}</div>`;
 }
 
 /* Polymarket flag record — the Intel page's graded flags, quarantined in
@@ -8109,7 +8145,7 @@ function recLooseSection(lo) {
                 graded >= 100 ? "sample reached — read the ROI" : "graded picks needed")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — accrues from tonight’s near-misses.</p>`}</div>`;
+      `${panelEmpty("Nothing settled yet — accrues from tonight’s near-misses.")}`}</div>`;
 }
 
 function recPolymarketSection(v) {
@@ -8146,7 +8182,7 @@ function recPolymarketSection(v) {
                 { tone: v.z >= 2 ? "pos" : "" })}
     </div>
     <div class="card pm-rows" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Flags settle as their markets resolve.</p>`}</div>`;
+      `${panelEmpty("Flags settle as their markets resolve.")}`}</div>`;
 }
 
 /* Which record you are looking at. The combined page answers "is the
@@ -9084,12 +9120,12 @@ async function renderRecord() {
     return;
   }
   const unstaked = o.unstaked
-    ? `<p class="loading" style="margin-top:10px">${iconMark("dash")}${o.unstaked} older settled pick(s)
+    ? `<p class="list-note" style="margin-top:10px">${iconMark("dash")}${o.unstaked} older settled pick(s)
        are held out of this record: a grading bug sized them at 0.00 units, so they
        were never really bets. They stay out rather than being quietly restaked at a
        size nobody chose.</p>` : "";
   const small = o.settled < 100
-    ? `<p class="loading" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
+    ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
        scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
@@ -9367,7 +9403,7 @@ function recFormSection(fm) {
                 "hot-vs-cold score spread sampled")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${rows ||
-      `<p class="loading" style="padding:12px">Fills as hot-vs-cold matchups settle.</p>`}</div>`;
+      `${panelEmpty("Fills as hot-vs-cold matchups settle.")}`}</div>`;
 }
 
 function recStaleSection(st) {
@@ -9420,8 +9456,7 @@ function recStaleSection(st) {
                 "flagged price vs field consensus")}
     </div>
     <div class="card" style="padding:0;margin-top:12px">${calib}${rows ||
-      `<p class="loading" style="padding:12px">Nothing settled yet — flags journal on every
-       paid pull and grade as results ingest.</p>`}</div>`;
+      `${panelEmpty("Nothing settled yet — flags journal on every paid pull and grade as results ingest.")}`}</div>`;
 }
 
 /* Long explanatory prose is the right thing to have and the wrong thing to
@@ -9663,7 +9698,7 @@ function scanSection(title, sub, rows, rowFn, emptyText) {
       <span class="sub">— ${sub}</span></div>
     <div class="card" style="padding:0">
       ${rows.length ? rows.map(rowFn).join("")
-        : `<p class="loading" style="padding:12px">${emptyText}</p>`}
+        : panelEmpty(emptyText)}
     </div>`;
 }
 
@@ -9804,10 +9839,7 @@ function renderScanner() {
             <span style="min-width:120px;text-align:right;opacity:.8">${Math.abs(m.delta || 0) > 1e-9 ? `${m.open} → ${m.current}` : `${m.open_odds != null ? american(m.open_odds) : "?"} → ${m.current_odds != null ? american(m.current_odds) : "?"}`}</span>
           </div>`;
         }).join("")}
-        ${!anchors.length && !steam.length ? `<p class="loading" style="padding:12px">
-          Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book’s
-          price beats the sharp book’s fair value; steam appears when several books
-          re-price together inside an hour.</p>` : ""}
+        ${!anchors.length && !steam.length ? `${panelEmpty("Nothing sharp-flagged right now. Sharp-anchor picks appear when a soft book’s price beats the sharp book’s fair value; steam appears when several books re-price together inside an hour.")}` : ""}
       </div>
       <p style="opacity:.55;font-size:.85em;margin-top:12px">Positive-EV bets live on the
       <b>Recommended</b> and <b>Edge Board</b> pages — that’s the model’s job. This page
@@ -10106,10 +10138,7 @@ function deskSectionHTML(k) {
       ${paperLine}. Promotion to real stakes takes 100+ graded rows in profit — the same
       bar every other bucket on this site has to clear.</span></div>
     ${rows ? `<div class="card kx-table" style="padding:0">${rows}</div>`
-           : `<p class="loading" style="padding:12px">No market clears the gate right now.
-      The desk needs: the Kalshi feed reachable at build time, a game our model prices
-      (or a city the forecast covers), and a disagreement bigger than the bar. Each build
-      prints which of those was missing — nothing here is ever forced.</p>`}`;
+           : `${panelEmpty("No market clears the gate right now. The desk needs: the Kalshi feed reachable at build time, a game our model prices (or a city the forecast covers), and a disagreement bigger than the bar. Each build prints which of those was missing — nothing here is ever forced.")}`}`;
 }
 
 /* ONE board out of two venues.
@@ -10563,8 +10592,8 @@ function predBoardHTML(kx, d) {
     <div class="pm-layout">
       <div class="card kx-table pm-table" style="padding:0">${
         shown.map(pmBoardRowHTML).join("") || `
-        <p class="loading" style="padding:12px">${escapeHtml(k.note
-          || "No open markets on the last pull — the board fills as the venues list events.")}</p>`}
+        ${panelEmpty(k.note
+          || "No open markets on the last pull — the board fills as the venues list events.")}`}
       </div>
       <aside class="card pm-detail">${pmDetailHTML(sel)}</aside>
     </div>
@@ -10710,7 +10739,7 @@ async function renderIntel() {
       <div class="section-title">Top traders
         <span class="sub">— ${escapeHtml(d.traders_note || "by realized profit")}</span></div>
       <div class="cards wide">${traderCards ||
-        `<p class="loading" style="grid-column:1/-1">No trader data yet — fills on the next refresh.</p>`}</div>
+        `${panelEmpty("No trader data yet — fills on the next refresh.")}`}</div>
       <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Wallet-age signal
         matures as the tape accrues (it cannot be backfilled). Kalshi carries no public
         trader identity, which is why it appears on the board as a PRICE and never here.
@@ -12104,8 +12133,7 @@ function memeRecordRow(r) {
 function memeChannelHTML(name, label, ch, horizons) {
   if (!ch || !ch.calls) {
     return `<div class="card"><div class="section-title">${escapeHtml(label)}</div>
-      <p class="loading">No calls filed yet. The record starts the first
-      time this channel puts a coin on the board.</p></div>`;
+      ${panelEmpty("No calls filed yet. The record starts the first time this channel puts a coin on the board.")}</div>`;
   }
   const p = ch.path || {};
   const rows = horizons.map((h) => {
@@ -12266,7 +12294,7 @@ function memeRecordHTML(rec) {
         <span>When</span><span>Coin</span><span>1h</span><span>24h</span>
         <span>Peak</span><span>Now</span><span></span></div>
       ${recent.map(memeRecordRow).join("")
-        || `<p class="loading">No calls yet.</p>`}
+        || `${panelEmpty("No calls yet.")}`}
     </div>
     <p class="mr-note">This is a record of what the radar said, not advice
     and not a return you could have earned: it assumes nothing about entry,
@@ -12508,7 +12536,7 @@ async function renderMemes() {
       <span class="sub">— exit signals in the spec’s priority order, IGNORING the gate: a
       dangerous coin crashing is exactly what this channel is for.</span></div>
     <div class="cards wide">${exitCards ||
-      `<p class="loading" style="grid-column:1/-1">No exit signals on the current board.</p>`}</div>`;
+      `${panelEmpty("No exit signals on the current board.")}`}</div>`;
 
   const boardRoom = `
     <div class="stats">
@@ -12792,24 +12820,23 @@ async function renderFantasy() {
         <span class="ff-n">Season</span><span class="ff-n">4-week</span><span class="ff-n">Last</span>
         <span class="ff-n trend">Trend</span><span class="ff-n rz">RZ/g</span><span class="ff-n">PPR</span>
       </div>
-      ${usageRows || `<p class="loading" style="padding:12px">No usage rows for this season yet.</p>`}
+      ${usageRows || `${panelEmpty("No usage rows for this season yet.")}`}
     </div>
 `;
   const _ffTrade = `    <div class="section-title">Buy low
       <span class="sub">— volume-expected points say the production is coming</span></div>
     <div class="cards wide">${(bs.buy_low || []).map((r) => tradeCard(r, "buy")).join("") ||
-      `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
+      `${panelEmpty("Nobody outside the sustainable band right now.")}`}</div>
     <div class="section-title">Sell high
       <span class="sub">— outrunning their opportunity; regression risk</span></div>
     <div class="cards wide">${(bs.sell_high || []).map((r) => tradeCard(r, "sell")).join("") ||
-      `<p class="loading" style="grid-column:1/-1">Nobody outside the sustainable band right now.</p>`}</div>
+      `${panelEmpty("Nobody outside the sustainable band right now.")}`}</div>
 `;
   const _ffScripts = `    <div class="section-title">Game scripts
       <span class="sub">— Vegas is the input: implied totals, archetypes, and confidence that
       scales with the spread</span></div>
     <div class="cards wide">${scriptCards ||
-      `<p class="loading" style="grid-column:1/-1">No upcoming NFL games with posted spreads and
-       totals in the DB yet — fills when next season’s lines are ingested.</p>`}</div>
+      `${panelEmpty("No upcoming NFL games with posted spreads and totals in the DB yet — fills when next season’s lines are ingested.")}`}</div>
 `;
   const _ffFoot = `    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Expected points are
       fit from this season’s own data (league value per target and per carry by position) —
@@ -12883,17 +12910,18 @@ function campHTML(camp) {
     <article class="card os-card">
       <div class="card-head"><div><div class="player">${title}</div>
         <div class="subtitle">${sub}</div></div></div>
-      <div class="os-body">${rows || `<p class="loading" style="padding:8px 0">${empty}</p>`}</div>
+      <div class="os-body">${rows || panelEmpty(empty)}</div>
     </article>`;
   if ((camp.days || 0) < 2) {
     return `
       <div class="section-title">Camp watch
         <span class="sub">— depth charts snapshotted daily; movers appear as camp
         shakes them out</span></div>
-      <div class="card"><p class="loading">Tracking started ${escapeHtml(camp.tracking_since || "today")} —
-        the first movers show after a few days of snapshots. The depth chart is the coaching
-        staff’s own verdict; the change over camp is the honest preseason signal, not
-        August box scores.</p></div>`;
+      <div class="card">${panelEmpty(
+        `Tracking started ${camp.tracking_since || "today"} — the first movers `
+        + `show after a few days of snapshots. The depth chart is the `
+        + `coaching staff\u2019s own verdict; the change over camp is the `
+        + `honest preseason signal, not August box scores.`)}</div>`;
   }
   const accruing = `No chart movement in the window yet.`;
   return `
@@ -15829,7 +15857,7 @@ function offseasonHTML(off) {
     <article class="card os-card">
       <div class="card-head"><div><div class="player">${title}</div>
         <div class="subtitle">${sub}</div></div></div>
-      <div class="os-body">${rows || `<p class="loading" style="padding:8px 0">${empty}</p>`}</div>
+      <div class="os-body">${rows || panelEmpty(empty)}</div>
     </article>`;
   const syncAge = (() => {
     if (!off.rosters_synced_at) return null;
@@ -16492,7 +16520,7 @@ async function renderRosters() {
         byAppearance && d.season ? ` · ${d.season} season appearances` : ""}</span></div>
     ${shown.length ? `<div class="ros-teams">
         ${shown.map((a) => rosterTeamHTML(a, teams[a], a === open, byAppearance)).join("")}
-      </div>` : `<p class="loading">No team or player matches "${escapeHtml(q)}".</p>`}`;
+      </div>` : panelEmpty(`No team or player matches "${q}".`, "search")}`;
   host.querySelectorAll(".ros-team").forEach((b) => b.addEventListener("click", () => {
     _rosterOpen = _rosterOpen === b.dataset.team ? null : b.dataset.team;
     renderRosters();
@@ -20085,9 +20113,7 @@ function intelReportCard(v) {
       <span class="sub">— do our flags actually win? Every flag is stored and graded when
       its market resolves. Published, not promised.</span></div>`;
   if (!v || !v.graded) {
-    return `${head}<div class="card"><p class="loading" style="margin:0">No graded flags yet —
-      flags settle when their markets resolve, so this fills as resolutions land.
-      The recording started the moment the flow feed first ran.</p></div>`;
+    return `${head}<div class="card">${panelEmpty("No graded flags yet — flags settle when their markets resolve, so this fills as resolutions land. The recording started the moment the flow feed first ran.")}</div>`;
   }
   const pctv = (x) => `${(x * 100).toFixed(1)}%`;
   const zColor = v.z >= 1 ? "var(--good)" : v.z <= -1 ? "var(--bad)" : "var(--text)";
@@ -20334,12 +20360,12 @@ function renderSleeperPanel(d, ctx) {
         — details on the Injuries page.</p>` : "";
     })()}
     <div style="margin:0 -18px">${myRows.map(rowHTML).join("") ||
-      `<p class="loading" style="padding:12px 16px">Couldn’t match a roster you own in this league.</p>`}</div>
+      `${panelEmpty("Couldn’t match a roster you own in this league.")}`}</div>
     <div class="section-title">Waiver watch
       <span class="sub">— usage RISERS nobody in this league rosters</span></div>
     <div style="margin:0 -18px">${waivers.map((u) => rowHTML({
         name: u.player, pos: u.position, team: u.team, u, flag: flagByName[ffNorm(u.player)] })).join("") ||
-      `<p class="loading" style="padding:12px 16px">Every notable riser is already rostered here.</p>`}</div>
+      `${panelEmpty("Every notable riser is already rostered here.")}`}</div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 2px 8px">Boards use PPR scoring;
       custom-scoring recompute lands with the in-season update.</p>
   </div>`;
@@ -20936,7 +20962,7 @@ async function renderUFC() {
         html += `<div class="section-title">Other passes</div>
           <div class="cards wide">${rest.map(passCard).join("")}</div>`;
       return html || `<div class="section-title">Pass list</div>
-        <p class="loading" style="padding:12px">Nothing to pass on.</p>`;
+        ${panelEmpty("Nothing to pass on.")}`;
     })()}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">Every fight is priced
       off a dossier of measured records, and each one is reviewed before a card — a red flag on
@@ -21000,7 +21026,7 @@ function whyCalcDevig() {
   const out = document.getElementById("dv-out");
   if (!out) return;
   if (!isFinite(a) || !isFinite(b) || Math.abs(a) < 100 || Math.abs(b) < 100) {
-    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter both sides as American odds (±100 or longer).</p>`;
+    out.innerHTML = `<p class="list-note">Enter both sides as American odds (±100 or longer).</p>`;
     return;
   }
   const ps = [amToProb(a), amToProb(b)];
@@ -21042,7 +21068,7 @@ function whyCalcKelly() {
   const out = document.getElementById("ky-out");
   if (!out) return;
   if (!isFinite(p) || p <= 0 || p >= 1 || !isFinite(odds) || Math.abs(odds) < 100) {
-    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter a win probability (1–99%) and American odds.</p>`;
+    out.innerHTML = `<p class="list-note">Enter a win probability (1–99%) and American odds.</p>`;
     return;
   }
   const full = kellyFraction(p, odds);
@@ -21087,7 +21113,7 @@ function whyCalcParlay() {
                    ? pv / 100 : amToProb(o) / TYPICAL_OVERROUND });
   }
   if (legs.length < 2) {
-    out.innerHTML = `<p class="loading" style="padding:8px 0">Enter odds for at least two legs (win % optional — blank assumes the book’s implied).</p>`;
+    out.innerHTML = `<p class="list-note">Enter odds for at least two legs (win % optional — blank assumes the book’s implied).</p>`;
     return;
   }
   const dec = legs.reduce((a, l) => a * amToDec(l.odds), 1);
