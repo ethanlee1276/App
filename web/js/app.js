@@ -8779,7 +8779,7 @@ const EDGE_VERDICTS = {
   },
 };
 
-function recEdgePanel(e, trend) {
+function recEdgePanel(e, trend, overall) {
   const v = EDGE_VERDICTS[e.verdict] || EDGE_VERDICTS.edge_is_noise;
   const ci = (lo, hi) => (lo == null || hi == null) ? ""
     : `[${lo.toFixed(3)}, ${hi.toFixed(3)}]`;
@@ -8787,37 +8787,95 @@ function recEdgePanel(e, trend) {
     <tr${lead ? ' class="lead-row"' : ""}><td>${escapeHtml(name)}</td>
     <td class="num">${val == null ? "—" : val.toFixed(3)}</td>
     <td class="num mini">${ci(lo, hi)}</td></tr>`;
+
   /* The series, only once it can show a change. One point is not a trend
-     and drawing it as one invites reading noise as movement. */
+     and drawing it as one invites reading noise as movement.
+
+     COLOURED BY WHICH SIDE OF A COIN FLIP EACH RUN LANDED ON, per Ethan's
+     render — 0.500 is the line the whole panel is about, so a wall of
+     identical grey numbers was hiding the one thing the list says. */
   const runs = (trend || []).filter((r) => r.auc_edge != null);
   const spark = runs.length < 3 ? "" : `
-    <p class="mini" style="margin-top:8px">Claimed-edge AUC over the last
-    ${runs.length} runs: ${runs.map((r) => r.auc_edge.toFixed(3)).join(" \u2192 ")}
-    ${runs.length > 1 && Math.abs(runs[runs.length - 1].auc_edge - runs[0].auc_edge) < 0.02
-      ? " — flat." : ""}</p>`;
+    <p class="mini"><strong>Claimed-edge AUC</strong> over the last
+    ${runs.length} runs:<br>${runs.map((r) => {
+      const a = r.auc_edge;
+      return `<span class="ev-run ${a >= 0.5 ? "pos" : "neg"}">${a.toFixed(3)}</span>`;
+    }).join(" \u2192 ")}${
+      runs.length > 1
+      && Math.abs(runs[runs.length - 1].auc_edge - runs[0].auc_edge) < 0.02
+      ? " — flat." : "."}</p>`;
+
+  /* THE FOUR TILES, and every one of them is derived rather than typed.
+     Ethan's render asks for a summary strip; a strip of hand-written
+     reassurance is exactly what this panel exists to refuse, so each
+     tile reads a number that is already on the page or already in the
+     payload. "Data quality" is the one worth spelling out: it compares
+     the rows the test could USE against the rows the record counts, so
+     a book with picks missing a stored probability says so instead of
+     claiming a clean sample it does not have. */
+  const settled = (overall || {}).settled;
+  const missing = (settled != null && e.n != null) ? settled - e.n : null;
+  const trust = { edge_is_noise: ["No", "Edge not better than market"],
+                  edge_inverted: ["No", "Edge sorts winners below losers"],
+                  edge_predicts: ["Yes", "Edge beats the market’s ranking"],
+                }[e.verdict] || ["No", "Edge not better than market"];
+  let stamp = "—", stampSub = "Refreshes with new data";
+  if (e.ts) {
+    const t = new Date(e.ts.endsWith("Z") ? e.ts : e.ts + "Z");
+    if (!isNaN(t)) stamp = t.toLocaleTimeString(undefined,
+      { hour: "numeric", minute: "2-digit" });
+  }
+  const tiles = `
+    <div class="stat-cards ev-tiles">
+      ${statCardHTML("target", "Trust the model?", escapeHtml(trust[0]),
+                     escapeHtml(trust[1]),
+                     e.verdict === "edge_predicts" ? "pos" : "neg")}
+      ${statCardHTML("shield", "Data quality",
+                     missing ? "Partial" : "High",
+                     missing
+                       ? `${missing} settled pick(s) have no stored probability`
+                       : "No missing model features",
+                     missing ? "" : "pos")}
+      ${statCardHTML("chart", "Sample size", e.n == null ? "—" : e.n,
+                     "Settled bets analysed")}
+      ${statCardHTML("calendar", "Last measured", escapeHtml(stamp), stampSub)}
+    </div>`;
+
   return `
   <div class="rec-edge tone-${v.tone}">
+    <span class="ev-mark" aria-hidden="true">${icon("scale", 96)}</span>
     <div class="section-title">Is there an edge at all?
       <span class="sub">— ${e.n} settled bets</span></div>
     <div class="rec-edge-verdict"><strong>${escapeHtml(v.label)}.</strong>
       ${escapeHtml(v.say)}</div>
-    <table class="agate rec-edge-tbl"><thead><tr>
+    <div class="ev-scroll"><table class="agate rec-edge-tbl"><thead><tr>
       <th>ranked by</th><th class="num">AUC</th><th class="num">95% CI</th>
     </tr></thead><tbody>
       ${row("the model’s own number", e.auc_model, e.auc_model_lo, e.auc_model_hi)}
       ${row("the market’s price", e.auc_market, e.auc_market_lo, e.auc_market_hi)}
       ${row("our claimed edge", e.auc_edge, e.auc_edge_lo, e.auc_edge_hi, true)}
       ${row("model minus market", e.diff, e.diff_lo, e.diff_hi)}
-    </tbody></table>
-    <p class="mini">0.500 is a coin flip — the chance a random winner is
-      ranked above a random loser. Rank-based, so the vig cannot distort it.
-      ${escapeHtml(v.then)}</p>
-    ${e.clv_n ? `<p class="mini">Closing-line value over ${e.clv_n} bets with a
-      close: ${(e.clv_mean * 100).toFixed(2)}% ± ${((e.clv_se || 0) * 100).toFixed(2)}
-      — a second, independent instrument.</p>` : ""}
-    ${spark}
+    </tbody></table></div>
+    ${/* Each paragraph gets the mark of what it is about — the render's
+         three gold discs. They are labels, not decoration: this panel is
+         three separate instruments stacked, and unbroken prose made them
+         read as one long caveat. */""}
+    <div class="ev-notes">
+      <div class="ev-note"><span class="ev-ico">${icon("target", 15)}</span>
+        <p><strong>0.500 is a coin flip</strong> — the chance a random
+        winner is ranked above a random loser. Rank-based, so the vig
+        cannot distort it. ${escapeHtml(v.then)}</p></div>
+      ${e.clv_n ? `<div class="ev-note"><span class="ev-ico">${icon("chart", 15)}</span>
+        <p><strong>Closing-line value</strong> over ${e.clv_n} bets with a
+        close: ${(e.clv_mean * 100).toFixed(2)}% ± ${((e.clv_se || 0) * 100).toFixed(2)}
+        — a second, independent instrument.</p></div>` : ""}
+      ${spark ? `<div class="ev-note"><span class="ev-ico">${icon("rising", 15)}</span>
+        ${spark}</div>` : ""}
+    </div>
+    ${tiles}
   </div>`;
 }
+
 
 /* ============================================================
    THE VERDICT — "is this thing working?", in one screen
@@ -9053,7 +9111,7 @@ async function renderRecord() {
      Scoped panels get nothing: the measurement is computed over the whole
      main book, and slicing it per sport would print a number that was
      never calculated. See docs/THE_INFORMATION_TEST.md. */
-  const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend);
+  const edgePanel = (scoped || !d.edge_now) ? "" : recEdgePanel(d.edge_now, d.edge_trend, d.overall);
   /* THE VERDICT LEADS. Everything below it is the working; this is the
      answer, and a first-time reader should not have to assemble it from
      six panels. Scoped correctly by construction — `src` is already the

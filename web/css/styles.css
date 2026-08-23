@@ -4215,11 +4215,60 @@ body.pk-open { overflow: hidden; }
 .rec-edge-tbl td, .rec-edge-tbl th { padding: 4px 14px 4px 0; }
 /* The claimed edge is the row that decides things; the other three are
    context for it. */
-.rec-edge-tbl tr.lead-row td { font-weight: 700; color: var(--text); }
+/* IN THE ACCENT, per Ethan's render. Bold-and-white was the same weight
+   the other three rows already carry in a table of tabular figures, so
+   the row that decides things did not read as the row that decides
+   things. The arrow follows it into the accent for the same reason. */
+.rec-edge-tbl tr.lead-row td { font-weight: 700; color: var(--brand); }
 .rec-edge-tbl tr.lead-row td:first-child::after {
-  content: " \2190"; color: var(--text-faint); font-weight: 400;
+  content: " \2190"; color: var(--brand); font-weight: 400;
 }
 .rec-edge .mini { max-width: var(--measure); }
+
+/* ---- Ethan's edge-panel render, 2026-08-23 ----------------------------
+   "this section here still looks like the old site, make it look like the
+   new site."
+
+   It did: three paragraphs of grey prose under a bare table, in a panel
+   that is really THREE separate instruments stacked — the AUC table, the
+   closing-line check, and the run history. Unbroken prose made them read
+   as one long caveat, so each gets the mark of what it is about. */
+/* The render's corner mark. A scale, because that is what the panel does
+   — it weighs our ranking against the market's — and it is the one the
+   icon set already has. Set faint and behind everything: decoration that
+   competes with a confidence interval is decoration that has to go. */
+.rec-edge { position: relative; overflow: hidden; }
+.ev-mark {
+  position: absolute; top: 10px; right: 14px; z-index: 0;
+  color: var(--brand); opacity: .13; pointer-events: none;
+}
+.rec-edge > *:not(.ev-mark) { position: relative; z-index: 1; }
+@media (max-width: 760px) { .ev-mark { display: none; } }
+
+.ev-notes { display: grid; gap: 12px; margin: 14px 0 4px; }
+.ev-note { display: flex; gap: 11px; align-items: flex-start; }
+.ev-note p { margin: 0; color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); max-width: var(--measure); }
+.ev-note strong { color: var(--text); }
+/* The disc, sized off the type it sits beside rather than a round number
+   — it is a label for a paragraph, so it lines up with the first line. */
+.ev-ico {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand); background: var(--panel-2);
+  border: var(--hairline) solid var(--border);
+}
+/* The run list, coloured by the side of the coin flip each run landed on.
+   0.500 is the line this whole panel is about, and a wall of identical
+   grey numbers was hiding the one thing the list has to say. */
+.ev-run { font-variant-numeric: tabular-nums; font-weight: 700; }
+.ev-run.pos { color: var(--good); }
+.ev-run.neg { color: var(--bad); }
+/* A four-column table of statistics has a width below which it stops
+   being readable and starts being wrapped. It scrolls in its own box
+   rather than pushing the page sideways. */
+.ev-scroll { overflow-x: auto; }
+.rec-edge .ev-tiles { margin-top: 16px; margin-bottom: 0; }
 @media (max-width: 640px) {
   .rec-edge { padding: 12px 12px 10px; }
   .rec-edge-tbl { min-width: 0; width: 100%; font-size: var(--fs-xs); }
@@ -5385,7 +5434,12 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
 /* ---- Ethan's UFC render, 2026-08-25 ------------------------------------
 
-   SCOPED TO THIS PAGE ON PURPOSE. The render puts every number in a
+   NOT UFC-ONLY ANY MORE. Ethan asked for the same treatment on the edge
+   panel a few hours later ("make it look like the new site"), so these
+   are the house's stat-card classes rather than one page's. Still not the
+   dashboard's default — see below.
+
+   SCOPED BY USE, NOT BY PAGE. The render puts every number in a
    bordered box with an icon on it, and §6.6 says the opposite in as many
    words — "no card, no background, no border box … four equal bordered
    tiles with a big number in each is item 6 on the anti-pattern list."
