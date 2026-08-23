@@ -1076,14 +1076,48 @@ def test_era_report_splits_the_record_at_the_retune():
         "'open', 'main')")
     conn.commit()
     er = ledger.era_report(conn)
-    assert er["current"] == "v2"
-    v1, v2 = er["eras"]
+    # BY KEY, NOT BY UNPACKING. This read `v1, v2 = er["eras"]`, which
+    # made adding an era to MODEL_ERAS a failing test in a file that was
+    # not about the new era at all — and the boundary it actually checks
+    # is the one between v1 and v2, which does not move.
+    eras = {e["key"]: e for e in er["eras"]}
+    assert er["current"] == ledger.MODEL_ERAS[-1]["key"]
+    v1, v2 = eras["v1"], eras["v2"]
     assert (v1["wins"], v1["losses"]) == (1, 1)
     assert (v2["wins"], v2["losses"]) == (1, 0)
     assert v2["open"] == 1
     assert v2["net_units"] > 0
     assert v1["to"] == "2026-07-29" and v2["from"] == "2026-07-29"
     assert "nfl" in v1["by_sport"] or "mlb" in v1["by_sport"]
+
+
+def test_the_eras_are_ordered_and_each_one_names_a_real_change():
+    """An era list out of date order splits the record at the wrong
+    boundaries silently — every bet after the misplaced start lands in
+    the wrong bucket and the page still renders."""
+    starts = [e["start"] for e in ledger.MODEL_ERAS]
+    assert starts[0] is None, "the first era must be open-ended backwards"
+    dated = [s for s in starts[1:]]
+    assert all(dated), "only the first era may have no start"
+    assert dated == sorted(dated), f"eras out of order: {dated}"
+    assert len(set(dated)) == len(dated), "two eras start on the same day"
+    keys = [e["key"] for e in ledger.MODEL_ERAS]
+    assert len(set(keys)) == len(keys), "duplicate era keys"
+    for e in ledger.MODEL_ERAS:
+        assert e["label"].strip(), f"{e['key']} has no label"
+
+
+def test_the_selection_haircut_has_an_era_of_its_own():
+    """It is the largest change this model has made to its own numbers —
+    every claim down 9-10 points, so every edge, EV and stake with it.
+    Blended into the era before it, the Record page reports one number
+    across two differently-priced boards, which is the thing era_report
+    exists to stop."""
+    starts = {e["key"]: e["start"] for e in ledger.MODEL_ERAS}
+    assert "v3" in starts, (
+        "the board has been priced on corrected claims since 2026-08-13 "
+        "and the record does not split there")
+    assert starts["v3"] == "2026-08-13"
 
 
 def _dh_hist(final2=True):

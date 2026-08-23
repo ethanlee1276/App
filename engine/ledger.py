@@ -2753,6 +2753,31 @@ MODEL_ERAS = [
     {"key": "v1", "label": "Original model", "start": None},
     {"key": "v2", "label": "Re-tuned gates — Scalpy 2.0 + pro NFL model",
      "start": "2026-07-29"},
+    # THE BIGGEST CHANGE THIS MODEL HAS EVER HAD TO ITS OWN NUMBERS, and
+    # it was not in this list until 2026-08-23 — so the Record page has
+    # been blending eleven days of a differently-priced board into the
+    # era before it, which is exactly what era_report's own docstring
+    # says it exists to prevent.
+    #
+    # Four commits landed on 2026-08-12/13 and two of them move every
+    # figure on the board:
+    #
+    #   07f313e  the selection haircut. stakecheck measured the model
+    #            over-claiming by 9-10 points on the props it PICKS —
+    #            51.5% claimed against 42.5% landed, and 59.7% against
+    #            49.7% — so every edge, EV and Kelly stake was computed
+    #            from a probability that far too high. Every claim now
+    #            comes down before anything is derived from it.
+    #   44e58b6  the price sets the stake, not the grade.
+    #   5c8a839  the sloped ladder floor.
+    #   b3b10c8  a second calibration knob, gated by a held-out judge.
+    #
+    # Starting 08-13 rather than 08-12: the haircut landed at 22:40 UTC,
+    # so the boards priced on the 12th were mostly built before it. The
+    # 13th is the first full day the new numbers ran.
+    {"key": "v3",
+     "label": "Claims cut to what our picks land; the price sets the stake",
+     "start": "2026-08-13"},
 ]
 
 
