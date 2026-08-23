@@ -9163,8 +9163,21 @@ function recDisclosure(label, html) {
    everything down. On a schedule-only build the model never ran at all,
    and claiming a judgement nothing made is the kind of small lie this
    whole codebase is built to avoid. */
+/* BOTH OF THESE READ THE BOARD, AND BOTH ARE CALLED BEFORE IT ARRIVES.
+   `renderTonight` reaches them on its empty branch, and Tonight is a
+   bottom-bar tab — `switchView("tonight")` renders it directly, outside
+   `renderAll()`'s null guard. So opening the app and tapping the second
+   tab before the board answered threw here, and the throw was SILENT:
+   the render runs inside document.startViewTransition, where an
+   exception becomes a rejected promise the browser swallows. The tab
+   showed a blank page and the console said nothing.
+
+   Measured with the board unloaded: "Cannot read properties of null
+   (reading 'generated_from')", tonight-body 0 characters, no page error
+   reported. Same shape as the shared game-bet link, one commit earlier,
+   and the same cause — a render that assumes data it was not given. */
 function noMarketHeading() {
-  return String(state.data.generated_from || "") === "schedule-only"
+  return String((state.data || {}).generated_from || "") === "schedule-only"
     ? "Not priced yet" : "Nothing clears the bar right now";
 }
 
@@ -9174,13 +9187,14 @@ function noMarketExplainer() {
   // the slate when nflverse has no weekly player stats — the normal state
   // before a season's Week 1. The games and lines on this page are real;
   // nothing has been priced against them, and no odds feed is at fault.
-  if (String(state.data.generated_from || "") === "schedule-only") {
-    return escapeHtml(state.data.note
+  const d = state.data || {};
+  if (String(d.generated_from || "") === "schedule-only") {
+    return escapeHtml(d.note
       || `The games and lines below are real. Nothing is priced yet —
           weekly player stats for this season are not published until the
           first games have been played.`);
   }
-  const os = state.data.odds_status;
+  const os = d.odds_status;
   if (os && os.error)
     return `Odds feed problem on the last pull (${os.at || ""}): ${os.error} —
             the model keeps proxy lines and recommends nothing until real
