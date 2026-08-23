@@ -4146,18 +4146,18 @@ body.pk-open { overflow: hidden; }
    (your own log) and Bankroll (your unit sizing).
    ============================================================ */
 :root {
-  --bg: #07070C;
-  --bg-2: #0A0A13;
-  --panel: #10101B;
-  --panel-2: #161626;
-  --panel-3: #1D1D30;
-  --border: #272741;
-  --border-soft: #1C1C2F;
-  --text: #F1F1FA;
-  --text-dim: #BCBCD4;
-  --text-body: #D6D6E8;
-  --text-mute: #9999B3;
-  --text-faint: #7B7B91;
+  --bg: #090705;
+  --bg-2: #0D0A07;
+  --panel: #14110C;
+  --panel-2: #1C1710;
+  --panel-3: #241D16;
+  --border: #31281D;
+  --border-soft: #241D15;
+  --text: #F7F1E9;
+  --text-dim: #C9BCAC;
+  --text-body: #E1D6C9;
+  --text-mute: #A79A88;
+  --text-faint: #857C6F;
   /* GOLD, WHOLE SITE. Ethan, 2026-08-23, with renders of every page:
      "i say we switch everything to the gold color like the renders but
      for the whole site. we should match everything."
@@ -4175,6 +4175,23 @@ body.pk-open { overflow: hidden; }
   --gold: #F5B93B;
   --good: #42C268;
   --bad: #DF5953;
+  /* WARN STAYS AMBER, AND THAT IS A KNOWN COLLISION rather than an
+     oversight. With the accent gold, --warn at #F79D00 sits ~6 degrees
+     of hue from --brand and reads as the same paint, which is bad: a
+     warning the eye files as branding is not a warning.
+
+     It cannot be fixed from this end. tests/test_chroma.py requires the
+     three accents to be more than 40 degrees apart, and `bad` sits at
+     hue 26 — so warn cannot go below about 66 without colliding with
+     red instead, and 66 is already beside the brand's 76. Moving it to
+     orange (hue 49) was tried and refused by that test, correctly.
+
+     The two ways out are both design decisions, not repairs: swing the
+     BRAND yellower (~90) so warn has room, or accept the family overlap
+     and let role carry the distinction — warn is text and icons on a
+     conditions row, the brand is a fill. Left as it was, and written
+     down, so the next person meets the constraint rather than the
+     symptom. */
   --warn: #F79D00;
   --radius-sm: 8px;
   --radius: 12px;
@@ -4209,18 +4226,18 @@ body.pk-open { overflow: hidden; }
   --font-display: "Archivo Narrow", var(--font-sans);
 }
 :root[data-theme="light"] {
-  --bg: #F4F4FB;
-  --bg-2: #ECECF6;
+  --bg: #F8F4ED;
+  --bg-2: #F2ECE5;
   --panel: #FFFFFF;
-  --panel-2: #F6F5FD;
-  --panel-3: #EEECF9;
-  --border: #D9D7EC;
-  --border-soft: #E6E4F4;
-  --text: #17172A;
-  --text-dim: #43436A;
-  --text-body: #2B2B4A;
-  --text-mute: #6E6E92;
-  --text-faint: #A9A9C6;
+  --panel-2: #FCF5EE;
+  --panel-3: #F5ECE1;
+  --border: #E4D7C7;
+  --border-soft: #EFE4D7;
+  --text: #1E1811;
+  --text-dim: #524434;
+  --text-body: #362C20;
+  --text-mute: #7D6F5E;
+  --text-faint: #B9AA95;
   /* LIGHT WANTS A DEEPER GOLD. #FFB000 on white is Lc 30 — an accent
      nobody can read. The light theme drops to a bronze that carries
      against paper, and its ink goes back to white because THAT colour

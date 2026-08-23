@@ -718,13 +718,22 @@ def test_the_dark_neutrals_do_not_flip_hue_halfway_up():
     assert max(trace) - min(trace) < 40, (
         f"the neutral ramp spans {max(trace) - min(trace):.0f} degrees of hue: "
         f"{[(n, round(h)) for n, h in hues]}")
-    # RE-DECIDED 2026-08-11 (Ethan's render): the ramp's home moved from
-    # the warm trace (60-110) to the violet cast the whole look is built
-    # on. What SURVIVES the pivot is the invariant that caught the
-    # original bug — one temperature, ground and ink agreeing — so the
-    # span check above is unchanged and the band just moved.
+    # RE-DECIDED TWICE, and the invariant above has outlived both. The
+    # ramp went warm (60-110) -> violet (255-305) on 2026-08-11 with the
+    # New Look, and back to warm on 2026-08-23 when Ethan moved the whole
+    # site to gold: "make sure thats carried through the whole site so
+    # everything matches."
+    #
+    # The band is the DECISION and it moves; the span check is the BUG
+    # and it does not. What was actually broken in the first place was
+    # ground and ink disagreeing about temperature, and that is caught by
+    # the 40-degree span above whichever family the ramp calls home.
+    #
+    # It is now the accent's family too — --brand sits at hue 76 and the
+    # ramp runs 67-76 — which is what "everything matches" means when the
+    # neutrals were tuned for a colour the site no longer uses.
     for name, h in hues:
-        assert 255 <= h <= 305, f"--{name} sits at hue {h:.0f}, off the violet trace"
+        assert 60 <= h <= 110, f"--{name} sits at hue {h:.0f}, off the warm trace"
 
 
 def test_the_light_ramp_is_warm_too():
@@ -740,9 +749,13 @@ def test_the_light_ramp_is_warm_too():
     assert m, "the light theme's --bg should still be a hex"
     rgb = tuple(int(m.group(1)[i:i+2], 16) for i in (1, 3, 5))
     _, _, H = _oklch_of(rgb)
-    # Same 2026-08-11 re-decision as the dark ramp: both themes sit on
-    # the violet trace, and THIS is the check that they still agree.
-    assert 255 <= H <= 305, f"the light ground drifted to hue {H:.0f}"
+    # Same re-decisions as the dark ramp, and the same reason for this
+    # check: the ORIGINAL bug was the two themes disagreeing about
+    # temperature, so what matters is that they move together. Warm ->
+    # violet on 2026-08-11, violet -> warm on 2026-08-23 with the gold
+    # site. Both times this test moved in step with its neighbour above,
+    # which is exactly what it is here to force somebody to do.
+    assert 60 <= H <= 110, f"the light ground drifted to hue {H:.0f}"
 
 
 def test_the_icon_reads_the_palette_instead_of_copying_it():

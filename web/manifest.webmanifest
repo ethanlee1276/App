@@ -7,8 +7,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#07070C",
-  "theme_color": "#07070C",
+  "background_color": "#090705",
+  "theme_color": "#090705",
   "categories": [
     "sports",
     "finance",

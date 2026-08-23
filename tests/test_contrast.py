@@ -51,6 +51,14 @@ BASELINE = {
     ("text", "panel-2"): 98, ("text", "panel-3"): 97,
     ("brand", "bg"): 32, ("brand", "panel"): 32,
     ("brand", "panel-2"): 31, ("brand", "panel-3"): 30,
+    # RECORDED 2026-08-23 rather than excused. It used to be skipped
+    # below on the grounds that it was "the same hex as brand" — true of
+    # the amber era and false since. A pair nobody measures is a pair
+    # that can rot, and this one is now the site's only near-collision
+    # (see --warn's note in the stylesheet), which is exactly the pair
+    # worth watching.
+    ("warn", "bg"): 60, ("warn", "panel"): 60,
+    ("warn", "panel-2"): 59, ("warn", "panel-3"): 59,
     ("text-dim", "bg"): 67, ("text-dim", "panel"): 66,
     ("text-dim", "panel-2"): 66, ("text-dim", "panel-3"): 65,
     ("good", "bg"): 57, ("good", "panel"): 57,
@@ -125,8 +133,6 @@ def test_the_baseline_covers_every_pair_the_audit_reports():
     """A new ink or ground must be recorded, not silently unmeasured."""
     now = {(r["ink"], r["ground"]) for r in ct.audit()}
     missing = now - set(BASELINE)
-    # warn is the same hex as brand, so it doubles up harmlessly
-    missing = {k for k in missing if k[0] != "warn"}
     assert not missing, f"unrecorded pairs: {sorted(missing)}"
 
 
