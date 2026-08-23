@@ -6326,7 +6326,13 @@ def settle_now(day: str | None = None) -> None:
     # BANK THE INFORMATION TEST BEFORE EXPORTING, so tonight's settled
     # bets are in tonight's run rather than tomorrow's. It is the whole
     # reason the series exists: a number nobody has to remember to take.
-    _edge = ledger.record_edge_run(lconn)
+    # OVER THE WINDOW THE SITE SHOWS. Every run banked before 2026-08-23
+    # was measured over the whole journal, which is why the panel read
+    # "558 settled bets" beside a 431-pick record. The stored runs are
+    # left alone — each is what the test said on the night it ran, and
+    # rewriting them would be inventing a history — but from here the
+    # series and the record describe the same bets.
+    _edge = ledger.record_edge_run(lconn, since=ledger.RECORD_EPOCH)
     if _edge:
         print(f"  edge test: n={_edge['n']}  claimed-edge AUC "
               f"{_edge['auc_edge']:.3f} "

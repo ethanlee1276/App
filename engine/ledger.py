@@ -4366,7 +4366,8 @@ def _edge_rows(conn, category: str = "main",
     return [dict(r) for r in conn.execute(q, args)]
 
 
-def record_edge_run(conn, category: str = "main") -> dict | None:
+def record_edge_run(conn, category: str = "main",
+                    since: str | None = None) -> dict | None:
     """Measure and bank the information test. Called from the settle, so
     the series grows on its own.
 
@@ -4376,27 +4377,64 @@ def record_edge_run(conn, category: str = "main") -> dict | None:
     real change from the mood that prompted the check.
     """
     from . import edgehistory
-    rows = _edge_rows(conn, category)
-    clv = None
+    rows = _edge_rows(conn, category, since=since)
+    return edgehistory.record(conn, rows, category=category,
+                              clv=_edge_clv(conn, category, since))
+
+
+def _edge_clv(conn, category: str = "main",
+              since: str | None = None) -> dict | None:
+    """The panel's second instrument: mean price CLV and its error.
+
+    One implementation, used by the banked run AND by the live snapshot —
+    they print the same "over N bets with a close" sentence, and two
+    copies of this arithmetic is two chances for those N to differ.
+    """
     try:
-        clvs = [c for c in (_bet_price_clv(b) for b in conn.execute(
-            "SELECT side, odds, closing_odds FROM bets WHERE status IN "
-            "('won','lost') AND category=?", (category,))) if c is not None]
-        if clvs:
-            mean = sum(clvs) / len(clvs)
-            var = (sum((c - mean) ** 2 for c in clvs) / (len(clvs) - 1)
-                   if len(clvs) > 1 else 0.0)
-            clv = {"clv_mean": mean,
-                   "clv_se": (var / len(clvs)) ** 0.5,
-                   "clv_n": len(clvs)}
+        q = ("SELECT side, odds, closing_odds FROM bets WHERE status IN "
+             "('won','lost') AND category=?")
+        args: list = [category]
+        if since:
+            q += " AND date >= ?"
+            args.append(since)
+        clvs = [c for c in (_bet_price_clv(b) for b in conn.execute(q, args))
+                if c is not None]
+        if not clvs:
+            return None
+        mean = sum(clvs) / len(clvs)
+        var = (sum((c - mean) ** 2 for c in clvs) / (len(clvs) - 1)
+               if len(clvs) > 1 else 0.0)
+        return {"clv_mean": mean, "clv_se": (var / len(clvs)) ** 0.5,
+                "clv_n": len(clvs)}
     except Exception:                                       # noqa: BLE001
-        clv = None
-    return edgehistory.record(conn, rows, category=category, clv=clv)
+        return None
 
 
-def _edge_snapshot(conn, category: str = "main") -> dict | None:
+def _edge_snapshot(conn, category: str = "main",
+                   since: str | None = None) -> dict | None:
+    """The information test as it stands RIGHT NOW over the displayed window.
+
+    MEASURED FRESH RATHER THAN READ BACK. Ethan, 2026-08-23, pointing at
+    the panel's header: "fix where it says 500 bets" — it read "558
+    settled bets" beside a 431-pick record, because this returned the
+    last BANKED run and every banked run was measured over the whole
+    journal.
+
+    Banking is still right for the trend: each stored run is what the
+    test said on the night it ran, and rewriting those would be inventing
+    a history. But the headline number is a statement about the record on
+    screen, so it is computed over the same bets that record covers.
+    """
     from . import edgehistory
-    return edgehistory.latest(conn, category)
+    if not since:
+        return edgehistory.latest(conn, category)
+    m = edgehistory.measure(_edge_rows(conn, category, since=since))
+    if m is None:
+        return None            # all winners or all losers: AUC undefined
+    m["category"] = category
+    for k, v in (_edge_clv(conn, category, since) or {}).items():
+        m[k] = v
+    return m
 
 
 def _edge_series(conn, category: str = "main") -> list[dict]:
@@ -4450,7 +4488,7 @@ def export_json(conn, path) -> None:
         # IS THERE AN EDGE AT ALL — the 2026-08-09 finding, kept live
         # rather than re-derived by hand. `edge_now` is the latest run,
         # `edge_trend` the series. See docs/THE_INFORMATION_TEST.md.
-        "edge_now": _edge_snapshot(conn),
+        "edge_now": _edge_snapshot(conn, since=since),
         "edge_trend": _edge_series(conn),
         # THE PAPER BOOK as a summary. Note that it is not a book kept
         # OUTSIDE the record: `overall` above defaults to BOOK, which is

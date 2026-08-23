@@ -65,7 +65,12 @@ def _js():
 def _fn(src, decl):
     i = src.index(decl)
     j = len(src)
-    for end in ("\nfunction ", "\nasync function ", "\nconst ", "\n/* "):
+    # `\ndef ` too: this helper reads BOTH app.js and ledger.py, and
+    # without a Python boundary a slice of one function ran on to the end
+    # of the file — which is how a test asserting "_edge_series takes no
+    # window" read the word out of export_json below it.
+    for end in ("\nfunction ", "\nasync function ", "\nconst ", "\n/* ",
+                "\ndef ", "\n#: "):
         k = src.find(end, i + len(decl))
         if k != -1:
             j = min(j, k)
@@ -336,6 +341,77 @@ def test_every_surface_quoting_the_record_uses_the_same_window():
     body = _fn(js, "function pwResultsHTML(")
     assert "rec.overall" in body
     assert "all_time" not in body
+
+
+# --- the information test ------------------------------------------------
+
+def test_the_edge_panel_counts_the_same_bets_as_the_record():
+    """Ethan, pointing at the panel header: "fix where it says 500 bets."
+    It read "558 settled bets" beside a 431-pick record, because it
+    returned the last BANKED run and every banked run was measured over
+    the whole journal."""
+    # FORTY-FIVE IN THE WINDOW, because edgehistory.measure refuses a
+    # sample under 40 — a test built on six rows would have proved only
+    # that the panel draws nothing, which it already does.
+    conn = _journal()
+    for i in range(45):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,stake_units,stake_dollars,status,category,"
+            "pnl_units,closing_odds) VALUES ('t','mlb',?,?,'hits','OVER',1.5,"
+            "'DK',-110,?,1.0,10.0,?,'main',?,-105)",
+            (f"2026-08-{6 + i % 18:02d}", f"Edge{i}",
+             round(0.50 + (i % 9) * 0.02, 3),
+             "won" if i % 2 else "lost", 0.91 if i % 2 else -1.0))
+    conn.commit()
+    path = os.path.join(tempfile.mkdtemp(), "record.json")
+    ledger.export_json(conn, path)
+    d = json.load(open(path))
+    assert d["edge_now"] is not None
+    assert d["edge_now"]["n"] == d["overall"]["settled"], (
+        f"panel says {d['edge_now']['n']}, record says "
+        f"{d['overall']['settled']}")
+
+
+def test_the_snapshot_is_measured_fresh_when_a_window_is_given():
+    """Banking stays right for the TREND — each stored run is what the
+    test said on the night it ran, and rewriting those would be inventing
+    a history. The headline number is a statement about the record on
+    screen, so it is computed over the same bets."""
+    src = open(os.path.join(ROOT, "engine", "ledger.py"),
+               encoding="utf-8").read()
+    body = _fn(src, "def _edge_snapshot(")
+    assert "edgehistory.measure(" in body, "still reading the banked run"
+    assert "if not since:" in body and "edgehistory.latest(" in body, \
+        "the unwindowed caller lost its banked answer"
+
+
+def test_the_nightly_run_is_banked_over_the_same_window():
+    launch = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = launch.index("ledger.record_edge_run(")
+    assert "since=ledger.RECORD_EPOCH" in launch[i:i + 90]
+
+
+def test_the_stored_runs_are_left_alone():
+    """A trend whose old points get rewritten is not a trend."""
+    src = open(os.path.join(ROOT, "engine", "ledger.py"),
+               encoding="utf-8").read()
+    body = _fn(src, "def _edge_series(")
+    assert "since" not in body
+
+
+def test_the_edge_panel_is_the_last_thing_in_the_room():
+    """It led the page from 2026-08-09 on the argument that it is the
+    frame the ROI should be read through. Right about its importance,
+    wrong about a reader's first ten seconds — four rows of AUCs, three
+    paragraphs of statistics and a sixty-run trend, standing between a
+    visitor and the record they came for."""
+    js = _js()
+    body = _fn(js, "async function renderRecord(")
+    i = body.index("const receipts = verdict")
+    tail = body[i:]
+    assert "verdict + edgePanel" not in tail, "the panel leads again"
+    assert tail.index("recRecentSection") < tail.index("${edgePanel}")
 
 
 # --- the tiles that were overlapping -------------------------------------

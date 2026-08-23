@@ -2530,7 +2530,12 @@ def _edge_journal(conn, n=120, seed=5, signal=False):
             "INSERT INTO bets (ts,sport,date,player,market,side,line,odds,"
             "hit_prob,status,stake_units,pnl_units,category) VALUES "
             "(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("t", "mlb", "2026-08-05", f"P{i}", "hits", "OVER", 1.5, 100,
+            # ON the epoch, not the arbitrary day before it. The site's
+            # edge panel is measured over the displayed window now, and
+            # this fixture happened to sit exactly one day outside it —
+            # so the payload test saw a panel with nothing in it. Pinned
+            # to the constant so it cannot drift when the epoch moves.
+            ("t", "mlb", ledger.RECORD_EPOCH, f"P{i}", "hits", "OVER", 1.5, 100,
              0.5 + claimed, "won" if won else "lost", 0.4,
              0.4 if won else -0.4, "main"))
     conn.commit()

@@ -9037,15 +9037,18 @@ async function renderRecord() {
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
   const nProc = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
-  /* IS THERE AN EDGE AT ALL — rendered ABOVE the ROI, because it is the
-     frame the ROI should be read through rather than a footnote to it.
+  /* IS THERE AN EDGE AT ALL — the working, so it goes LAST.
 
-     On 2026-08-09 the model's ranking of its own bets was measured
-     against the market's ranking of the same bets: +0.004 AUC apart, and
-     the claimed edge indistinguishable from a coin flip. A -28% ROI next
-     to "the edge signal carries no information" is one story with a
-     cause. The same ROI on its own invites a search for the bad week
-     that explains it, and there isn't one.
+     It led the page from 2026-08-09, on the argument that it is the frame
+     the ROI should be read through rather than a footnote to it. That
+     argument was right about the panel's importance and wrong about a
+     reader's first ten seconds: it is four rows of AUCs with confidence
+     intervals, three paragraphs of statistics and a sixty-run trend, and
+     it stood between the visitor and the record they came for. Ethan,
+     2026-08-23: "can you move this to the bottom of the page." Same
+     panel, same words, at the end of the same room — the numbers it
+     explains are now above it, which is also the order the explanation
+     reads in.
 
      Scoped panels get nothing: the measurement is computed over the whole
      main book, and slicing it per sport would print a number that was
@@ -9061,7 +9064,7 @@ async function renderRecord() {
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  const receipts = verdict + edgePanel + `
+  const receipts = verdict + `
     <div class="stats rec-kpis">
       ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
                 `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
@@ -9140,6 +9143,7 @@ async function renderRecord() {
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recSplitsSection(o)}
     ${recRecentSection(src.recent || [])}
+    ${edgePanel}
   `;
   host.innerHTML = scopeBar
     + _recordRooms(d, src, pmv, scope, scoped, receipts)
