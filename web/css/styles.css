@@ -7160,6 +7160,27 @@ input:-webkit-autofill:focus {
 .pw-stat b.pos { color: var(--good); } .pw-stat b.neg { color: var(--bad); }
 .pw-stat span { display: block; color: var(--text-mute); font-size: var(--fs-2xs); }
 
+/* THE RESULTS STRIP IN THE HERO, above the price.
+   Its own block rather than `.pw-proof` reused: the proof card is a
+   panel with a heading and a paragraph, and the hero wants four numbers
+   and one line. Bordered top and bottom rather than boxed — a card here
+   would read as another feature tile in a page already full of them,
+   and these are the only figures on the page that are measurements. */
+.pw-results { margin: 22px auto 4px; max-width: 760px;
+  padding: 16px 0 14px;
+  border-top: var(--hairline); border-bottom: var(--hairline); }
+.pw-results .pw-stats { margin: 0; }
+.pw-results .pw-stat b { font-size: var(--fs-2xl); }
+.pw-results-note { margin: 12px 0 0; color: var(--text-mute);
+  font-size: var(--fs-2xs); line-height: var(--lh-body); }
+@media (max-width: 620px) {
+  /* Two up, not four: four columns on a phone sets the record as
+     "187–" on one line and "155" on the next, which reads as two
+     numbers rather than one. */
+  .pw-results .pw-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+
 .pw-faq { padding: 4px 18px; }
 .pw-q { border-bottom: var(--hairline) solid var(--border-soft); }
 .pw-q:last-child { border-bottom: 0; }
@@ -7207,7 +7228,11 @@ input:-webkit-autofill:focus {
   color: var(--text); }
 .pw-logo { display: inline-flex; align-items: center; justify-content: center;
   color: var(--brand-2); flex: none; }
-.pw-logo svg { width: 100%; height: 100%; }
+/* It carries the same <img class="qmark"> the masthead does now, not a
+   drawn ellipse. The `svg` rule stayed for one release after the mark
+   changed and styled nothing; both selectors are here so a caller that
+   still passes a glyph is not left unsized. */
+.pw-logo svg, .pw-logo .qmark { width: 100%; height: 100%; }
 .pw-brand-words { font-weight: 800; letter-spacing: .1em;
   font-size: var(--fs-md); }
 .pw-brand-words b { color: var(--brand-2); font-weight: 800; }

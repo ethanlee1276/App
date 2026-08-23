@@ -13374,6 +13374,61 @@ function faqFor(status) {
    come off the same record.json the free Record page renders. If the
    sample is one bet it says one bet. A shop that cannot overstate itself
    is the entire pitch. */
+/* THE NUMBERS, AT THE TOP, WHERE THEY DO WORK.
+   -------------------------------------------------------------------
+   Ethan, 2026-08-23, looking at the plans on his phone: "are we
+   displaying as bunch captivating and eye catching information as we
+   can?"
+
+   The page was not short of information — a hero, nine sport chips, ten
+   feature cards, three plans, an FAQ. It was short of EVIDENCE placed
+   where evidence changes a mind. The only claim this site makes that a
+   stranger can check — the graded record — sat under the pricing, in a
+   trust block, after they had already decided.
+
+   So it splits in two, and the split is the argument rather than a
+   layout preference:
+
+     * RESULTS go in the hero. What happened, in four numbers, before
+       anybody has seen a price.
+     * PROCESS stays below the plans. Closing-line value and the
+       good-price / bad-price count are the case that the results are
+       not luck, and that case is worth making to somebody still reading
+       at the bottom of the page.
+
+   Nothing here is written by hand and nothing is rounded in our favour.
+   Every figure comes off the same record.json the free Record page
+   renders, and the small-sample sentence is not optional — a strip of
+   numbers with no n beside it is the thing every pick-selling site does
+   and the reason none of them can be believed. */
+function pwResultsHTML(rec) {
+  const o = (rec && rec.overall) || null;
+  if (!o || !o.settled) return "";
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const net = o.net_units || 0;
+  const stat = (value, label, tone) =>
+    `<div class="pw-stat"><b${tone ? ` class="${tone}"` : ""}>${value}</b>
+       <span>${label}</span></div>`;
+  return `<div class="pw-results">
+    <div class="pw-stats">
+      ${stat(o.settled, `graded ${o.settled === 1 ? "pick" : "picks"}`)}
+      ${stat(`${o.wins}–${o.losses}${o.pushes ? "–" + o.pushes : ""}`, "record")}
+      ${stat(`${net >= 0 ? "+" : "−"}${Math.abs(net).toFixed(2)}u`,
+             "net, flat stakes", net >= 0 ? "pos" : "neg")}
+      ${stat(pct(o.win_rate || 0),
+             `win rate · ${pct(o.breakeven || 0)} needed at our prices`)}
+    </div>
+    <p class="pw-results-note">${o.settled < 30
+      ? `A sample of ${o.settled} proves nothing, and it is shown anyway
+         rather than waited out.`
+      : `Every one of them is on the Record page with its price, its date
+         and its result.`}
+      The <a href="#record">Record</a> is free and stays free — read it
+      before you pay.</p>
+  </div>`;
+}
+
+/* The half of the case that survives a bad month. */
 function paywallProofHTML(rec) {
   const o = (rec && rec.overall) || null;
   if (!o || !o.settled) {
@@ -13385,26 +13440,32 @@ function paywallProofHTML(rec) {
       there is nothing to show you. That is what this space will say until
       there is.</p></div>`;
   }
-  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const pr = o.process || {};
+  const priced = (pr.good || 0) + (pr.bad || 0) + (pr.flat || 0);
+  const clv = o.avg_clv;
+  // BEATING THE CLOSE IS THE ONLY LEADING INDICATOR THERE IS. A record
+  // can be luck for a long time; taking a price the market later moves
+  // past cannot be, over hundreds of bets. It is also the number a
+  // pick-seller never publishes, which is most of why it is here.
+  const process = (clv != null && o.clv_n)
+    ? `<div class="pw-stats">
+        <div class="pw-stat"><b class="${clv >= 0 ? "pos" : "neg"}">${
+          clv >= 0 ? "+" : "−"}${Math.abs(clv).toFixed(2)}</b>
+          <span>average closing-line value, ${o.clv_n} bets</span></div>
+        ${priced ? `<div class="pw-stat"><b>${pr.good || 0}–${pr.bad || 0}</b>
+          <span>bets that beat the close, against those that did not</span>
+          </div>` : ""}
+      </div>` : "";
   return `<div class="pw-proof">
     <div class="pw-proof-head">${iconMark("scale", 18)} Graded in public</div>
-    <div class="pw-stats">
-      <div class="pw-stat"><b>${o.settled}</b><span>settled ${
-        o.settled === 1 ? "pick" : "picks"}</span></div>
-      <div class="pw-stat"><b>${o.wins}–${o.losses}${
-        o.pushes ? "–" + o.pushes : ""}</b><span>record</span></div>
-      <div class="pw-stat"><b class="${(o.net_units || 0) >= 0 ? "pos" : "neg"}">${
-        (o.net_units || 0) >= 0 ? "+" : "−"}${Math.abs(o.net_units || 0).toFixed(2)}u</b>
-        <span>net</span></div>
-      <div class="pw-stat"><b>${pct(o.win_rate || 0)}</b>
-        <span>win rate · ${pct(o.breakeven || 0)} to break even</span></div>
-    </div>
-    <p>${o.settled < 30
-      ? `That is a sample of ${o.settled}, which proves nothing yet and is
-         shown anyway. Come back and watch it grow — or do not pay until it
-         has.`
-      : `Every one of those is on the <a href="#record">Record</a> page with
-         its price, its date and its result.`}
+    ${process}
+    <p>${clv != null && o.clv_n
+      ? `That is the price we took against the price the market closed at.
+         A win rate can be luck for a long time; beating the close over
+         hundreds of bets is the part that cannot be, and it is the number
+         a pick-seller never shows you.`
+      : `Every pick is written down before the game and graded afterwards,
+         win or lose, on the free Record page.`}
       No model wins every night, and be suspicious of anyone who claims
       theirs does.</p></div>`;
 }
@@ -13420,16 +13481,25 @@ function paywallProofHTML(rec) {
 const PW_CARDS = ["Visa", "Mastercard", "Amex", "Discover"];
 
 /* The brand lockup, for pages that hide the site chrome — the wall and
-   the checkout both do. Same ellipse mark as the masthead in
-   index.html, drawn here rather than cloned from the DOM: on the wall
-   the masthead is display:none, and cloning a hidden node copies the
-   hiding with it. */
+   the checkout both do.
+
+   IT WAS STILL DRAWING THE ELLIPSE. The masthead, the account hero, the
+   tab icon and the social card all moved to Ethan's QB mark on
+   2026-08-23; this did not, because it draws its own SVG rather than
+   sharing the header's markup. So the two pages a visitor sees BEFORE
+   they pay — the wall and the checkout — were the only two still wearing
+   a logo the site had retired, which is a poor first impression and the
+   exact drift the social card's own note warns about.
+
+   Same file as the header, at whatever size the caller asks for. Drawn
+   here rather than cloned from the DOM for the original reason: on the
+   wall the masthead is display:none, and cloning a hidden node copies
+   the hiding with it. */
 function brandMarkHTML(size = 28) {
   return `<span class="pw-logo" aria-hidden="true"
-    style="width:${size}px;height:${size}px">
-    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false">
-      <ellipse cx="24" cy="24" rx="17" ry="11.5" stroke="currentColor"
-        stroke-width="4"/></svg></span>`;
+    style="width:${size}px;height:${size}px"><img class="qmark"
+      src="logo-qb.png" width="${size}" height="${size}" alt=""
+      decoding="async" /></span>`;
 }
 
 /* Per-plan lists, in the render's own escalating shape.
@@ -13595,6 +13665,11 @@ function paywallHTML(rec, status) {
         bettors, fantasy players and market traders — the model’s
         estimates, the reasoning behind each one, and a public record of
         how they turned out.</p>
+      ${/* THE RECEIPTS, ABOVE THE PRICE. The hero promised "every call
+            graded in public" and then showed nothing until below the
+            plans, which is a claim asking to be taken on faith on the one
+            page where it does not have to be. */""}
+      ${pwResultsHTML(rec)}
       <div class="pw-sports">${PW_SPORTS.map(([label, mark]) =>
         // aria-hidden: the label is the next node, and a screen reader
         // announcing "American football NFL" is a stutter, not a help.
