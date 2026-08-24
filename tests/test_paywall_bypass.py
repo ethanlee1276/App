@@ -501,8 +501,15 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     assert m, "the wall no longer names its exemptions — this test is blind"
     exempt = set(re.findall(r'"([a-z]+)"', m.group(1)))
     # The wall itself, and the pages the back link reaches.
+    #
+    # "streak" added 2026-08-24: the free game is the acquisition funnel
+    # (roadmap #4 — "builds your user base before the paywall flips on"),
+    # so it stays open by design. The back link reaches it through the
+    # same `name !== "paywall" && name !== "checkout"` branch this test
+    # pins above — confirmed by rendering the page with the wall class
+    # on: #wall-back is visible there like on Record.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup"}, (
+                      "signup", "streak"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

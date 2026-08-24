@@ -2306,6 +2306,83 @@ select.calc-in { width: auto; font-weight: 600; }
 .sw-note { margin-top: 7px; color: var(--text-mute); font-size: var(--fs-2xs); }
 /* Phone: the sparkline is the first thing to give. */
 @media (max-width: 480px) { .sw-spark { display: none; } }
+
+/* ---------------- The Streak (free game) ---------------- */
+.stk-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px;
+  padding: 12px 14px; margin-bottom: 12px;
+  border: var(--hairline) solid var(--border); background: var(--panel); }
+.stk-flame { display: flex; align-items: center; gap: 8px; }
+.stk-flame b { font-size: var(--fs-xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; }
+.stk-flame span { color: var(--text-mute); font-size: var(--fs-sm); }
+.stk-best { display: flex; align-items: center; gap: 5px;
+  color: var(--text-dim); font-size: var(--fs-sm); font-weight: 700; }
+.stk-last { color: var(--text-mute); font-size: var(--fs-xs); }
+.stk-cta { margin-left: auto; padding: 8px 14px; font-weight: 700;
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle);
+  color: var(--text); cursor: pointer; }
+.stk-cta:hover { background: var(--panel); }
+.stk-card { border: var(--hairline) solid var(--border); background: var(--panel);
+  padding: 4px 14px 10px; }
+.stk-card-head { padding: 10px 0 6px; font-weight: 800; font-size: var(--fs-sm);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.stk-q { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;
+  padding: 11px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.stk-q:last-of-type { border-bottom: 0; }
+.stk-who { display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  flex: 1 1 200px; }
+.stk-who b { font-size: var(--fs-sm); }
+.stk-who span { color: var(--text-mute); font-size: var(--fs-xs); }
+.stk-sides { display: flex; gap: 8px; flex: none; }
+.stk-side { padding: 7px 12px; font-size: var(--fs-xs); font-weight: 700;
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle);
+  color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.stk-side:hover { color: var(--text); }
+/* Dark ink on the amber fill, both themes — same move as the filled
+   badges elsewhere; white on #FFB000 fails contrast. */
+.stk-side.on { background: var(--brand); color: #1c1204;
+  border-color: var(--brand); font-weight: 800; }
+.stk-side.done { cursor: default; opacity: .75; }
+.stk-side.done.hit { color: var(--good); font-weight: 800; opacity: 1; }
+.stk-side.done.mine { border-color: var(--text-dim); opacity: 1; }
+.stk-res { flex: none; display: inline-flex; align-items: center; gap: 5px;
+  color: var(--text-mute); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
+.stk-q.win .stk-res { color: var(--good); font-weight: 700; }
+.stk-q.loss .stk-res { color: var(--bad); font-weight: 700; }
+.stk-note { min-height: 1.2em; padding-top: 8px; color: var(--text-mute);
+  font-size: var(--fs-2xs); }
+.stk-sub { margin-top: 22px; }
+.stk-day { border: var(--hairline) solid var(--border); background: var(--panel);
+  padding: 0 14px; margin-bottom: 10px; }
+.stk-day-head { padding: 9px 0 3px; font-weight: 700; font-size: var(--fs-xs);
+  color: var(--text-dim); }
+.stk-board { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.stk-board th { text-align: left; color: var(--text-mute);
+  font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em;
+  padding: 6px 10px; border-bottom: var(--hairline) solid var(--border); }
+.stk-board td { padding: 8px 10px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.stk-board .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stk-empty { color: var(--text-mute); font-size: var(--fs-sm); }
+.stk-namebox { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-top: 10px; }
+.stk-namebox input { padding: 7px 10px; font-size: var(--fs-sm);
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle);
+  color: var(--text); min-width: 160px; }
+.stk-namebox button { padding: 7px 12px; font-weight: 700;
+  border: var(--hairline) solid var(--border); background: var(--fill-subtle);
+  color: var(--text); cursor: pointer; }
+.stk-namebox span { color: var(--text-mute); font-size: var(--fs-2xs); }
+.stk-rules { margin-top: 18px; color: var(--text-dim); font-size: var(--fs-sm); }
+.stk-rules summary { cursor: pointer; font-weight: 700; }
+.stk-rules ul { margin: 8px 0 0; padding-left: 20px; }
+.stk-rules li { margin: 4px 0; }
+/* Phone: sides drop under the player instead of squeezing beside. */
+@media (max-width: 480px) {
+  .stk-who { flex-basis: 100%; }
+  .stk-res { margin-left: auto; }
+}
 /* A ceiling for very wide screens. The single full-width splits table is
    comfortably under this at 1536px; without it the win-rate bar keeps
    growing with the monitor and a 2560px display turns a supporting chart

@@ -301,6 +301,40 @@ def _acct():
     return _a
 
 
+def _streak():
+    """`engine.streak`, imported on first use — same posture as _acct()."""
+    from engine import streak as _s
+    return _s
+
+
+#: The streak slate, cached on mtime. The file is rewritten by the
+#: refresh sweep a few times an hour and read on every game request;
+#: re-parsing it per request would be work the mtime already answers.
+_STREAK_SLATE = {"mtime": 0.0, "doc": None}
+_STREAK_LOCK = threading.Lock()
+
+
+def streak_slate() -> dict:
+    """The published slate — the FREE public copy, which for a free file
+    IS the full copy (see engine/gate.py FREE_FILES)."""
+    path = WEB / "data" / "streak.json"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return {}
+    with _STREAK_LOCK:
+        if _STREAK_SLATE["doc"] is None or mtime != _STREAK_SLATE["mtime"]:
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return {}
+            if not isinstance(doc, dict):
+                return {}
+            _STREAK_SLATE["doc"] = doc
+            _STREAK_SLATE["mtime"] = mtime
+        return _STREAK_SLATE["doc"] or {}
+
+
 def profile_name_ok(name) -> bool:
     return isinstance(name, str) and bool(_PROFILE_NAME.match(name))
 
@@ -716,6 +750,9 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/account/"):].strip("/"))
         if parsed.path.startswith("/api/board/"):
             return self._api_board(parsed.path[len("/api/board/"):].strip("/"))
+        if parsed.path.startswith("/api/streak/"):
+            return self._streak_get(
+                parsed.path[len("/api/streak/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"))
@@ -773,6 +810,22 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             return self._account_post(
                 parsed.path[len("/api/account/"):].strip("/"), body)
+        if parsed.path.startswith("/api/streak/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._streak_post(
+                parsed.path[len("/api/streak/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -1362,6 +1415,60 @@ class Handler(BaseHTTPRequestHandler):
                                   headers=self._session_cookie("", clear=True))
         finally:
             conn.close()
+
+    # --- the streak game -------------------------------------------------
+    # The slate itself is a free static file; these endpoints carry only
+    # what is per-account (picks, the fold, names) or cross-account (the
+    # leaderboard). Everything is validated against the published slate,
+    # never against client-supplied questions — the browser names a qid
+    # and a side, and the server decides what those mean.
+
+    def _streak_get(self, path: str):
+        S = _streak()
+        A = _acct()
+        if path == "leaders":
+            conn = A.connect()
+            try:
+                S.fold_all(conn, streak_slate())
+                board = S.leaders(conn)
+            finally:
+                conn.close()
+            return self._send(200, json.dumps({"leaders": board}).encode(),
+                              ".json")
+        if path == "me":
+            conn = A.connect()
+            try:
+                who = self._account(conn)
+                if not who:
+                    return self._send(401, b'{"error":"sign in first"}',
+                                      ".json")
+                out = S.me(conn, who["id"], streak_slate())
+            finally:
+                conn.close()
+            return self._send(200, json.dumps(out).encode(), ".json")
+        return self._send(404, b'{"error":"unknown streak endpoint"}', ".json")
+
+    def _streak_post(self, path: str, body: dict):
+        S = _streak()
+        A = _acct()
+        if path not in ("pick", "name"):
+            return self._send(404, b'{"error":"unknown streak endpoint"}',
+                              ".json")
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "pick":
+                code, out = S.record_pick(
+                    conn, who["id"], streak_slate(),
+                    str(body.get("qid") or ""), str(body.get("side") or ""))
+            else:
+                code, out = S.set_name(conn, who["id"],
+                                       str(body.get("name") or ""))
+        finally:
+            conn.close()
+        return self._send(code, json.dumps(out).encode(), ".json")
 
     def _live_subscription(self, conn, user_id: int) -> str:
         """Message to refuse deletion with, or "" to let it through.

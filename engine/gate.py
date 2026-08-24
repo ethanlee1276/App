@@ -240,6 +240,13 @@ FREE_FILES = (
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json",
+    # The streak game's slate. Free BY DESIGN, not by omission — it is
+    # the acquisition feature, the thing a stranger plays before the
+    # trial. It can be free because it contains no model output at all:
+    # engine/streak.py publishes player, market, line, lock time and the
+    # graded result, selects by price balance rather than edge, and
+    # never writes a side, a projection or an EV. A question is a fact.
+    "streak.json",
 )
 
 
@@ -265,7 +272,7 @@ KNOWN_BOARDS = (
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
-    "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
+    "streak.json", "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",

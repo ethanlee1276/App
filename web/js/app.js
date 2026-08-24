@@ -12173,6 +12173,247 @@ function renderBankrollExtras() {
 }
 
 /* ============================================================
+   THE STREAK — the free daily game (roadmap #4)
+   ============================================================
+   Pick 3 from a published slate of coin-flip props, win more than you
+   lose, keep the flame. The slate file is FREE and carries facts only —
+   player, market, line, lock time, graded result. Nothing the model
+   thinks appears on this page, which is what lets the page sit outside
+   the wall: it is the acquisition feature, not the product.
+
+   Rules live in engine/streak.py and are restated in the fold below;
+   the server is the referee (locks, the 3-pick cap, grading) and every
+   button here just asks it. */
+let _stkSlate = null, _stkSlateAt = 0;
+let _stkMe = null;
+let _stkLeaders = null, _stkLeadersAt = 0;
+
+async function stkSlate() {
+  if (_stkSlate && Date.now() - _stkSlateAt < 60000) return _stkSlate;
+  try {
+    const res = await boardFetch(`data/streak.json?t=` + Date.now());
+    if (res.ok) { _stkSlate = await res.json(); _stkSlateAt = Date.now(); }
+  } catch (e) { /* keep whatever we had */ }
+  return _stkSlate || {};
+}
+
+async function stkMe(force) {
+  if (_stkMe && !force) return _stkMe;
+  try {
+    const r = await fetch("/api/streak/me", { credentials: "same-origin" });
+    _stkMe = r.ok ? await r.json() : null;
+  } catch (e) { _stkMe = null; }
+  return _stkMe;
+}
+
+async function stkLeaders(force) {
+  if (_stkLeaders && !force && Date.now() - _stkLeadersAt < 60000)
+    return _stkLeaders;
+  try {
+    const r = await fetch("/api/streak/leaders", { credentials: "same-origin" });
+    if (r.ok) {
+      _stkLeaders = ((await r.json()) || {}).leaders || [];
+      _stkLeadersAt = Date.now();
+    }
+  } catch (e) { /* leaderboard is decoration; the game still works */ }
+  return _stkLeaders || [];
+}
+
+function stkQuestionRow(q, myPick, locked, signedIn) {
+  const line = q.line != null ? String(q.line) : "";
+  const graded = q.result === "over" || q.result === "under";
+  const verdict = graded && myPick
+    ? (myPick === q.result ? "win" : "loss")
+    : (q.result === "void" && myPick ? "void" : "");
+  const side = (s, word) => {
+    const on = myPick === s;
+    if (graded || q.result === "void") {
+      const hit = q.result === s;
+      return `<span class="stk-side done ${hit ? "hit" : ""} ${on ? "mine" : ""}">
+        ${word} ${escapeHtml(line)}${on ? " · you" : ""}</span>`;
+    }
+    if (locked) {
+      return `<span class="stk-side done ${on ? "mine" : ""}">${word} ${escapeHtml(line)}${on ? " · you" : ""}</span>`;
+    }
+    return `<button class="stk-side ${on ? "on" : ""}" data-qid="${escapeHtml(q.qid)}"
+      data-side="${s}">${word} ${escapeHtml(line)}</button>`;
+  };
+  const status = graded
+    ? `<span class="stk-res ${verdict}">${
+        verdict === "win" ? icon("check") : verdict === "loss" ? icon("cross") : ""}
+        ${escapeHtml(q.result)} — ${q.actual != null ? escapeHtml(String(q.actual)) : "final"}</span>`
+    : q.result === "void"
+      ? `<span class="stk-res">push / no result</span>`
+      : locked
+        ? `<span class="stk-res">${icon("lock")} locked</span>`
+        : `<span class="stk-res">${icon("clock")} locks ${escapeHtml(formatKickoff(q.lock) || "at start")}</span>`;
+  return `<div class="stk-q ${verdict}">
+    <div class="stk-who">
+      <b>${escapeHtml(q.player)}</b>
+      <span>${escapeHtml(q.label || q.market)} · ${escapeHtml(q.game || "")}</span>
+    </div>
+    <div class="stk-sides">${side("over", "Over")}${side("under", "Under")}</div>
+    ${status}
+  </div>`;
+}
+
+async function stkPick(qid, side) {
+  try {
+    const r = await fetch("/api/streak/pick", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qid, side }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401) { switchView("account"); return; }
+    if (!r.ok) {
+      const note = document.getElementById("stk-note");
+      if (note) note.textContent = body.error || "That pick didn’t take.";
+      return;
+    }
+    if (_stkMe && _stkSlate) {
+      _stkMe.picks = _stkMe.picks || {};
+      _stkMe.picks[_stkSlate.date] = body.picks || {};
+    }
+    renderStreak();
+  } catch (e) {
+    const note = document.getElementById("stk-note");
+    if (note) note.textContent = "Couldn’t reach the server — try again.";
+  }
+}
+
+async function stkSaveName() {
+  const inp = document.getElementById("stk-name-in");
+  if (!inp) return;
+  try {
+    const r = await fetch("/api/streak/name", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: inp.value || "" }),
+    });
+    const body = await r.json().catch(() => ({}));
+    const note = document.getElementById("stk-note");
+    if (!r.ok) {
+      if (note) note.textContent = body.error || "That name didn’t take.";
+      return;
+    }
+    if (_stkMe) _stkMe.name = body.name || "";
+    stkLeaders(true).then(() => renderStreak());
+  } catch (e) { /* the next render retries */ }
+}
+
+async function renderStreak() {
+  const host = document.getElementById("streak-body");
+  if (!host) return;
+  const [slate, who] = await Promise.all([stkSlate(), acctWho()]);
+  const signedIn = !!(who && who.signed_in);
+  const me = signedIn ? await stkMe(true) : null;
+  const leadersRows = await stkLeaders();
+  if (state.view !== "streak") return;   // navigated away mid-await
+
+  const today = slate.date || "";
+  const questions = slate.questions || [];
+  const need = slate.picks_required || 3;
+  const myToday = (me && me.picks && me.picks[today]) || {};
+  const nPicked = Object.keys(myToday).length;
+  const now = Date.now();
+
+  // The flame strip — or the invitation to light one.
+  let head;
+  if (signedIn && me) {
+    const last = me.last_result === "survived"
+      ? `Survived ${escapeHtml(me.last_day)}.`
+      : me.last_result === "lost" ? `Lost ${escapeHtml(me.last_day)} — new fire tonight.` : "";
+    head = `<div class="stk-head">
+      <div class="stk-flame">${icon("hot", 20)}<b>${me.current}</b><span>day streak</span></div>
+      <div class="stk-best">${icon("trophy")} best ${me.best}</div>
+      ${last ? `<div class="stk-last">${last}</div>` : ""}
+    </div>`;
+  } else {
+    head = `<div class="stk-head">
+      <div class="stk-flame">${icon("hot", 20)}<span>Free to play — an account is the scoreboard.</span></div>
+      <button class="stk-cta" id="stk-signin">Sign in to play</button>
+    </div>`;
+  }
+
+  // Today's slate.
+  let card;
+  if (!questions.length) {
+    card = emptySlate("calendar", "No slate yet today",
+      "Questions freeze when tonight’s board stands — check back soon.");
+  } else {
+    card = `<div class="stk-card">
+      <div class="stk-card-head">Tonight — ${signedIn
+        ? `${nPicked} of ${need} picked`
+        : `pick ${need} to play`}</div>
+      ${questions.map((q) => {
+        const locked = !q.result && q.lock && Date.parse(q.lock) <= now;
+        return stkQuestionRow(q, myToday[q.qid], locked, signedIn);
+      }).join("")}
+      <div class="stk-note" id="stk-note">${signedIn && nPicked < need && questions.length
+        ? "Tap a side to pick it; tap again to clear. Picks lock at first pitch."
+        : ""}</div>
+    </div>`;
+  }
+
+  // Recent nights — the user's own, or just the graded slates.
+  const days = slate.days || {};
+  const past = Object.keys(days).filter((d) => d !== today)
+    .sort().reverse().slice(0, 4);
+  const history = past.map((d) => {
+    const mine = (me && me.picks && me.picks[d]) || {};
+    const qs = (days[d].questions || []).filter((q) => !signedIn || mine[q.qid]);
+    if (!qs.length) return "";
+    return `<div class="stk-day">
+      <div class="stk-day-head">${escapeHtml(d)}${days[d].final ? "" : " — still grading"}</div>
+      ${qs.map((q) => stkQuestionRow(q, mine[q.qid], true, signedIn)).join("")}
+    </div>`;
+  }).filter(Boolean).join("");
+
+  // The leaderboard, and the name that puts you on it.
+  const board = leadersRows.length
+    ? `<table class="stk-board"><thead><tr><th>Player</th>
+        <th class="num">Streak</th><th class="num">Best</th></tr></thead><tbody>
+        ${leadersRows.map((r) => `<tr><td>${escapeHtml(r.name)}</td>
+          <td class="num">${r.current}</td><td class="num">${r.best}</td></tr>`).join("")}
+        </tbody></table>`
+    : `<p class="stk-empty">Nobody on the board yet — the first streak claims it.</p>`;
+  const nameBox = signedIn ? `<div class="stk-namebox">
+      <input id="stk-name-in" maxlength="20" placeholder="Display name"
+        value="${escapeHtml((me && me.name) || "")}" autocomplete="off">
+      <button id="stk-name-save">Save</button>
+      <span>Pick a name to appear on the board — skip it and you play in private.</span>
+    </div>` : "";
+
+  host.innerHTML = `${head}${card}
+    ${history ? `<div class="section-title stk-sub">Recent nights</div>${history}` : ""}
+    <div class="section-title stk-sub">Leaderboard</div>${board}${nameBox}
+    <details class="stk-rules"><summary>House rules</summary><ul>
+      <li>Pick exactly ${need} each day. Every pick locks at its own game’s start; until then you can change or clear it.</li>
+      <li>Win more picks than you lose and the streak lives. Pushes and voided questions count for neither side.</li>
+      <li>Skip a day, or pick fewer than ${need}, and the streak just waits. Only a played-and-lost day resets it.</li>
+      <li>Questions are the night’s most evenly priced props — coin flips on purpose. The model’s opinions stay on the boards.</li>
+      <li>No money, no prizes — bragging rights and the leaderboard.</li>
+    </ul></details>`;
+
+  host.querySelectorAll(".stk-side[data-qid]").forEach((b) => {
+    b.addEventListener("click", () => {
+      if (!signedIn) { switchView("account"); return; }
+      const cur = myToday[b.dataset.qid];
+      stkPick(b.dataset.qid, cur === b.dataset.side ? "clear" : b.dataset.side);
+    });
+  });
+  const cta = document.getElementById("stk-signin");
+  if (cta) cta.addEventListener("click", () => switchView("account"));
+  const save = document.getElementById("stk-name-save");
+  if (save) save.addEventListener("click", stkSaveName);
+  const nameIn = document.getElementById("stk-name-in");
+  if (nameIn) nameIn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") stkSaveName();
+  });
+}
+
+/* ============================================================
    ROCKET RADAR — Solana meme coins, the danger channel drawn loudest
    ============================================================
    The build spec's own base rates are the most important thing on the
@@ -22073,7 +22314,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -22115,8 +22356,11 @@ const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "s
 
    Record and Account stay open on purpose: Record is the evidence the
    subscription is sold on, and Account is where signing in happens. */
+// "streak" stays open on purpose: the free game is the acquisition
+// funnel — the thing a stranger plays daily until the trial makes sense.
+// Walling it would keep exactly the audience it exists to build.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
-                   "signup"];
+                   "signup", "streak"];
 
 function wallBlocked(name) {
   return document.body.classList.contains("walled")
@@ -22240,6 +22484,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "alerts") renderAlerts();
+  if (name === "streak") renderStreak();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();

@@ -793,6 +793,17 @@ def _publish_feed(quiet: bool = False) -> None:
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  moments: skipped — {type(exc).__name__}: {exc}")
+    # The streak game's slate freezes off the same sweep: first viable
+    # board of the day supplies the questions, later passes only grade.
+    # NFL is absent from this dict on purpose — its logs are filed by
+    # week, not date, and engine/streak.py says why that matters.
+    try:
+        from engine import streak as _streak
+        _streak.run({"mlb": MLB_OUT, "nba": NBA_OUT,
+                     "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  streak: skipped — {type(exc).__name__}: {exc}")
 
 
 def _seal_forecasts(quiet: bool = False) -> None:

@@ -501,6 +501,13 @@ def delete_user(conn, user_id: int) -> None:
         "SELECT name FROM sqlite_master WHERE type='table'")}
     if "subscriptions" in have:
         conn.execute("DELETE FROM subscriptions WHERE user_id=?", (int(user_id),))
+    # The streak game's tables (engine/streak.py) — same posture as
+    # `subscriptions`: created by another module, so their absence is
+    # normal, and their presence must not outlive the account.
+    for table in ("streak_picks", "streak_state"):
+        if table in have:
+            conn.execute(f"DELETE FROM {table} WHERE user_id=?",
+                         (int(user_id),))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -516,5 +523,24 @@ def export_user(conn, user_id: int) -> dict:
                        (int(user_id),)).fetchone()
     if row is None:
         return {}
-    return {"email": row["email"], "created_at": row["created_at"],
-            "sections": get_sections(conn, user_id)}
+    out = {"email": row["email"], "created_at": row["created_at"],
+           "sections": get_sections(conn, user_id)}
+    # Streak-game data rides along when its tables exist: an export that
+    # silently omitted a category we hold would be a partial answer to
+    # "everything you have about me" wearing a complete one's name.
+    have = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    if "streak_state" in have:
+        st = conn.execute("SELECT name, current, best FROM streak_state "
+                          "WHERE user_id=?", (int(user_id),)).fetchone()
+        if st:
+            out["streak"] = {"name": st["name"], "current": int(st["current"]),
+                             "best": int(st["best"])}
+    if "streak_picks" in have:
+        picks = [{"date": r["date"], "qid": r["qid"], "side": r["side"]}
+                 for r in conn.execute(
+                     "SELECT date, qid, side FROM streak_picks "
+                     "WHERE user_id=? ORDER BY date", (int(user_id),))]
+        if picks:
+            out["streak_picks"] = picks
+    return out
