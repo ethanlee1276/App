@@ -1460,7 +1460,20 @@ async function renderFutures() {
       const res = await paidFetch(`futures_${sport}.json`);
       d = res.ok ? await res.json() : null;
     } catch (e) { d = null; }
-    _futuresCache[sport] = d;
+    /* A FAILURE IS NOT AN ANSWER, and this cache was the only one on the
+       page that treated it as one. `d = null` was stored unconditionally
+       and the guard above is `=== undefined`, so a single refused fetch —
+       a cold gate, a slow box, a refresh landing mid-build — meant "No
+       season to project" for the rest of the session on a page whose data
+       was sitting right there. Nothing retried, because as far as this
+       was concerned the question had been settled.
+
+       The two sibling caches on this page already get it right:
+       loadInjuryBoard only stores a payload it actually received, and
+       renderRailDesk re-asks once its window lapses. This one is now the
+       same shape. A miss costs one small file on the next visit, and
+       visiting is a click rather than a poll. */
+    if (d) _futuresCache[sport] = d;
   }
   if (state.view !== "futures" || state.sport !== sport) return;
 
@@ -22025,6 +22038,17 @@ function _switchViewNow(name, push, dir) {
   // Found by Ethan doing exactly that on the live site.
   if (name === "paywall") renderPaywall();
   if (name === "checkout") renderCheckout();
+  // AND FUTURES WAS THE THIRD, found 2026-08-25. Every other page on
+  // this list draws itself from here; futures was drawn only by
+  // renderAll(), which runs after a data LOAD. So it appeared to work
+  // whenever a load happened to be in flight — the first navigation of a
+  // session, or a refresh landing at the right moment — and rendered a
+  // blank <section> on every navigation that arrived any other way.
+  //
+  // That intermittency is why it read as a probe artifact for most of a
+  // night: checked on its own it drew fine, checked after walking three
+  // other pages it drew nothing at all.
+  if (name === "futures") renderFutures();
   if (name === "discord") renderDiscord();
   if (name === "signup") renderSignup();
   // The escape hatch, on the two pages that stay open behind the wall.

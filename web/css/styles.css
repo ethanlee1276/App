@@ -5575,7 +5575,22 @@ body.has-rail .shell {
 @media (max-width: 1000px) {
   .mc-term { grid-template-columns: minmax(0, 1fr); }
   .mc-picker { max-height: 300px; }
-  .mc-hero-stats { grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; }
+  /* FIVE TRACKS THAT CANNOT SHRINK IS NOT FIVE TRACKS THAT FIT. `1fr`
+     is `minmax(auto, 1fr)`, and `auto` floors at the content — so with
+     `white-space: nowrap` on the labels, "flashing exit" set a minimum
+     the track could not go under and the row ran 15px out of a 390px
+     screen. Same min-width:auto trap this stylesheet has been caught by
+     before, and it only showed once the board had coins in it: with an
+     empty payload the hero draws no stats at all.
+
+     So the row wraps instead of insisting on one line, and the labels
+     are allowed to wrap with it. Three-then-two reads better at this
+     width than five columns of five-pixel type. */
+  .mc-hero-stats {
+    grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr));
+    gap: 10px 6px; width: 100%;
+  }
+  .mc-hs span { white-space: normal; }
 }
 
 /* Parlay Mode rides directly under High Confidence — the first card
