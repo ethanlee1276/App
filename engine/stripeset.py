@@ -447,6 +447,93 @@ def verify_key(secret_key: str) -> dict:
     }
 
 
+def account_status(secret_key: str) -> dict:
+    """Is the Stripe application still under review, or is it done?
+
+    Ethan, 2026-08-25: "how do we know when the review of our site is
+    over so we can start displaying everything our site offers... Pretty
+    sure my stripe account is verified."
+
+    Nothing on this site could answer that. `preflight()` checks the
+    CONFIGURATION — is a key set, does the product exist, are the three
+    prices wired — and every one of those can be perfect while the
+    account itself is still pending. So "pretty sure" was the best answer
+    available, and "pretty sure" is not what you want to be when the
+    thing you are deciding is whether to change what a reviewer sees.
+
+    Stripe answers it directly. An account that can take money and pay it
+    out, with nothing outstanding and no disabled_reason, is done:
+
+      charges_enabled     Stripe will accept a payment
+      payouts_enabled     Stripe will send you the money
+      disabled_reason     set while something is blocking the account,
+                          `requirements.pending_verification` among them
+      currently_due       what Stripe still wants from you
+      past_due            what it wanted before a deadline that passed
+
+    `reviewed` is the two booleans AND an empty due list AND no disabled
+    reason — deliberately strict. charges_enabled alone goes true while
+    payouts are still held, which looks like approval from the outside
+    and is the state where money arrives and cannot leave.
+
+    NEVER RETURNS OR LOGS THE KEY. A key in a traceback is a key in a log
+    file, and this one is meant to be run over ssh and screenshotted.
+    """
+    got = BI._get(f"{API}/account", secret_key)
+    req = got.get("requirements") or {}
+    currently_due = list(req.get("currently_due") or [])
+    past_due = list(req.get("past_due") or [])
+    pending = list(req.get("pending_verification") or [])
+    charges = bool(got.get("charges_enabled"))
+    payouts = bool(got.get("payouts_enabled"))
+    disabled = str(req.get("disabled_reason") or "") or None
+    return {
+        "account": got.get("id") or "",
+        "live": BI.live_mode(secret_key),
+        "charges_enabled": charges,
+        "payouts_enabled": payouts,
+        "disabled_reason": disabled,
+        "currently_due": currently_due,
+        "past_due": past_due,
+        "pending_verification": pending,
+        "reviewed": bool(charges and payouts and not currently_due
+                         and not past_due and not disabled),
+    }
+
+
+def review_verdict(st: dict) -> tuple:
+    """``(ok, headline, detail)`` — the status as one sentence.
+
+    Written so the detail names the NEXT ACTION in both directions. A
+    check that says "pending" and stops leaves you where you started.
+    """
+    if st.get("reviewed"):
+        return (True, "Stripe account is approved — the review is over",
+                "Charges and payouts are both enabled and Stripe wants "
+                "nothing further. EXTERNAL_MARKET_LINKS in web/js/app.js "
+                "can go true: that restores the polymarket.com citations "
+                "as links and the DexScreener price chart as an embed. "
+                "Nothing else on the site changes.")
+    bits = []
+    if not st.get("charges_enabled"):
+        bits.append("charges are not enabled")
+    if not st.get("payouts_enabled"):
+        bits.append("payouts are not enabled")
+    if st.get("disabled_reason"):
+        bits.append(f"disabled_reason is {st['disabled_reason']}")
+    for label, key in (("past due", "past_due"),
+                       ("still wanted", "currently_due"),
+                       ("being verified", "pending_verification")):
+        items = st.get(key) or []
+        if items:
+            bits.append(f"{label}: {', '.join(items[:6])}"
+                        + (f" (+{len(items) - 6} more)" if len(items) > 6 else ""))
+    return (False, "Stripe account is not clear yet",
+            "; ".join(bits) + ". Leave EXTERNAL_MARKET_LINKS false until "
+            "this reads approved — Dashboard → Settings → Account has the "
+            "same information with the forms attached.")
+
+
 def find_webhook(secret_key: str, url: str) -> dict | None:
     """Our endpoint, matched on URL. None if there is not one."""
     got = BI._get(f"{API}/webhook_endpoints?limit=100", secret_key)
@@ -540,6 +627,27 @@ def preflight() -> list:
                        "Real cards are charged." if live else
                        "Test mode: nobody is charged and no money moves. "
                        "Use 4242 4242 4242 4242 to walk the flow."))
+
+    # THE ACCOUNT ITSELF, before anything built on top of it. Every
+    # check below this one is about CONFIGURATION — a key, a product,
+    # three prices — and all of them can be perfect while Stripe is still
+    # reviewing the account, which is the state where a customer clicks
+    # buy and gets an error nothing here would have predicted. It is also
+    # the question that decides whether the payment-review flag in
+    # web/js/app.js can be turned back on.
+    if sk:
+        try:
+            st = account_status(sk)
+        except Exception:                                    # noqa: BLE001
+            # A read that fails is "we could not check", never "it is
+            # broken" — the box may simply have no outbound route right
+            # now, and reporting that as a rejected account sends
+            # somebody to the wrong dashboard page for an hour.
+            checks.append((True, "Could not reach Stripe to check the account",
+                           "The configuration below is still worth reading. "
+                           "Re-run when the box has a route out."))
+        else:
+            checks.append(review_verdict(st))
 
     # A PRODUCT ALREADY IN STRIPE KEEPS THE NAME IT WAS CREATED WITH.
     # `PRODUCT_NAME` is only read when the product is created, so editing
