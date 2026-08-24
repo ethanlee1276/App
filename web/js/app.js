@@ -854,6 +854,28 @@ function normalizeSlate(d) {
    another one's tag — which would 200 every time and quietly undo this. */
 const _boardTags = {};
 
+/* WHICH BOARD `state.data` IS, and it is not the same question as
+   "is there any data". Ethan, 2026-08-25: "the wnba picks were showing
+   up under NFL".
+
+   The conditional request was guarded on `tag && state.data` — the tag
+   for THIS sport, plus "we are holding something to fall back on if the
+   answer is 304". The second half is the bug. After switching leagues,
+   `state.data` is the board you just LEFT, so revisiting a league this
+   tab had already loaded sent its still-valid tag, took the 304, kept
+   the previous league's slate, and drew it under the new league's name.
+
+   Nothing threw and nothing looked broken: real picks, real prices, the
+   wrong sport. It needs a board loaded twice in one session, which is
+   why it shows up while tapping through leagues in the phone drawer and
+   not while clicking once in the desktop sidebar — and why it never
+   reproduces locally, where the dev server issues no ETag at all and
+   every board comes back 200.
+
+   So the guard is now "we are holding THIS board", which is what it was
+   always trying to say. */
+let _boardFor = null;
+
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
@@ -898,12 +920,20 @@ async function load(quiet = false) {
        Only sent when there is actually something to keep: a 304 with an
        empty `state.data` would render a blank board. */
     const tag = _boardTags[meta.api];
+    const holding = state.data && _boardFor === meta.api;
     const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
       cache: "no-store",
-      headers: (tag && state.data) ? { "If-None-Match": tag } : {},
+      headers: (tag && holding) ? { "If-None-Match": tag } : {},
     });
-    if (res.status === 304) {
+    if (res.status === 304 && holding) {
       stampFrom(res);                    // the build time has not moved
+    } else if (res.status === 304) {
+      // We did not ask to revalidate, so a 304 here means something
+      // between us and the server answered for it. Keeping it would
+      // leave another league's slate on screen, which is the whole bug
+      // — take the empty-handed path and ask again without a tag.
+      delete _boardTags[meta.api];
+      throw new Error("unasked 304");
     } else if (!res.ok) {
       throw new Error("api");
     } else {
@@ -911,6 +941,7 @@ async function load(quiet = false) {
       if (got) _boardTags[meta.api] = got; else delete _boardTags[meta.api];
       stampFrom(res);
       state.data = normalizeSlate(await res.json());
+      _boardFor = meta.api;
     }
   } catch (e) {
     // The fallback file can be missing too (a sport that has never been
@@ -922,9 +953,14 @@ async function load(quiet = false) {
       if (!res.ok) throw new Error("fallback");
       stampFrom(res);
       state.data = normalizeSlate(await res.json());
+      _boardFor = meta.api;
     } catch (e2) {
       state.builtAt = null;
       state.data = normalizeSlate({ date: "", status: "not built" });
+      // An empty slate still BELONGS to this sport. Leaving _boardFor
+      // pointing at the previous league would make the next visit here
+      // revalidate against a slate that is not this board's.
+      _boardFor = meta.api;
     }
   }
   renderAll();
