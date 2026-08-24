@@ -3854,7 +3854,54 @@ function renderTonight() {
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
+/* THE MORNING STRIP — last night's graded line beside tonight's count.
+   The recap number comes from the feed's settle_recap event (fired once,
+   when the LAST bet of that night graded), so this strip and the feed can
+   never disagree; tonight's count is the board already in memory. Quiet
+   when there is nothing to say: no recap event, or a night with no bets. */
+async function renderDayCard() {
+  const host = document.getElementById("daycard-zone");
+  if (!host) return;
+  if (!_feedCache || Date.now() - _feedAt > 60000) {
+    try {
+      const res = await paidFetch("feed.json");
+      if (res.ok) { _feedCache = await res.json(); _feedAt = Date.now(); }
+    } catch (e) { /* the strip just stays empty */ }
+  }
+  if (state.view !== "recommended") return;
+  const d = _feedCache || {};
+  if (d.locked) { host.innerHTML = ""; return; }
+  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const recap = (d.events || []).find((e) =>
+    e.kind === "settle_recap" && (e.date === y
+      || e.date === new Date().toISOString().slice(0, 10)));
+  // NO RECAP, NO STRIP. "Tonight: N picks" above a board that IS
+  // tonight's N picks is the same fact twice, forty pixels above the
+  // fold — and test_board_order measures that fold in pixels. The strip
+  // exists for the morning payload: last night's line, fully graded.
+  const recs = ((state.data || {}).recommendations || [])
+    .filter((r) => r.recommended).length;
+  if (!recap) { host.innerHTML = ""; return; }
+  const net = recap ? recap.net_u : null;
+  host.innerHTML = `<div class="daycard">
+    ${recap ? `<span class="dc-half">
+        <span class="dc-k">Last night</span>
+        <b class="${net >= 0 ? "pos" : "neg"}">${recap.w}-${recap.l}${
+          recap.p ? `-${recap.p}` : ""}</b>
+        <b class="${net >= 0 ? "pos" : "neg"}">${net >= 0 ? "+" : ""}${net}u</b>
+        <a class="dc-link" href="#record">graded ${icon("check", 11)}</a>
+      </span>` : ""}
+    ${recap && recs ? `<span class="dc-sep"></span>` : ""}
+    ${recs ? `<span class="dc-half">
+        <span class="dc-k">Tonight</span>
+        <b>${recs} pick${recs === 1 ? "" : "s"}</b>
+        <span class="dc-sub">on the board below</span>
+      </span>` : ""}
+  </div>`;
+}
+
 function renderRecommended() {
+  renderDayCard();
   const host = document.getElementById("cards");
   // When the whole slate is empty, the empty-slate banner already explains it.
   if (!(state.data.games || []).length && !(state.data.recommendations || []).length) {
@@ -11924,6 +11971,35 @@ async function renderFeedZone() {
         ic: "list", tone: "good",
         title: `${e.n} held prop${e.n === 1 ? "" : "s"} released — lines are up`,
         cond: escapeHtml((e.players || []).join(", ")),
+      };
+      /* The day's anchored moments (engine/moments.py) — the rhythm
+         events, in the same stream as the market's churn. */
+      case "settle_recap": return {
+        ic: "trophy", tone: (e.net_u || 0) >= 0 ? "good" : "bad",
+        title: `Last night: ${e.w}-${e.l}${e.p ? `-${e.p}` : ""} · ${
+          e.net_u >= 0 ? "+" : ""}${e.net_u}u`,
+        cond: `${e.date} fully graded — every pick is on the Results page`,
+      };
+      case "card_posted": return {
+        ic: "calendar", tone: "good",
+        title: `The card is up — ${e.n_picks} pick${e.n_picks === 1 ? "" : "s"} across ${e.n_games} game${e.n_games === 1 ? "" : "s"}`,
+        cond: e.best && e.best.player
+          ? `best board number: ${escapeHtml(e.best.player)} ${escapeHtml(e.best.side || "")} ${e.best.line ?? ""} ${escapeHtml(e.best.label || "")}${
+              e.best.ev != null ? ` · +${(e.best.ev * 100).toFixed(1)}% EV` : ""}`
+          : "tonight’s board is built",
+      };
+      case "ump_assigned": return {
+        ic: "shield", tone: e.k_tilt ? "warn" : "",
+        title: `Ump assigned: ${escapeHtml(e.ump)} behind the plate — ${escapeHtml(e.away)} @ ${escapeHtml(e.home)}`,
+        cond: e.k_tilt
+          ? `his measured zone tilts K props ${e.k_tilt} (${((e.k_factor - 1) * 100).toFixed(0)}% vs league)`
+          : "no measurable K tilt in our history — neutral zone assumed",
+      };
+      case "first_pitch": return {
+        ic: "rising", tone: "good",
+        title: "First pitch — the sweat is on",
+        cond: `${e.n_live} game${e.n_live === 1 ? "" : "s"} live${
+          e.n_open ? ` · ${e.n_open} open bet${e.n_open === 1 ? "" : "s"} tracking on the Live tab` : ""}`,
       };
       default: return null;
     }

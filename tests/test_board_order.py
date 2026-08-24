@@ -131,7 +131,19 @@ def test_nothing_new_slipped_in_above_the_picks():
                # div has no styling of its own to give an empty element
                # height. It appears in the offseason and the preseason,
                # where the picks it would push down do not exist either.
-               "slate-horizon"}
+               "slate-horizon",
+               # daycard-zone (2026-08-25, roadmap #3): last night's
+               # GRADED line — "2-1 · +0.4u · graded". Costs zero fold
+               # until the feed carries a settle_recap for yesterday
+               # (renderDayCard returns before writing otherwise, and
+               # the empty div has no styling to give it height). While
+               # it does carry one, ~40px is the day's first payload:
+               # the recap is why the morning visit happens at all. The
+               # "Tonight: N picks" half rides in the SAME row at no
+               # extra height, and only ever beside a recap — a
+               # standalone Tonight strip was deliberately not built,
+               # because that fact is the board directly below.
+               "daycard-zone"}
     above = [m.group(1) for m in re.finditer(r'id="([\w-]+)"',
                                              html[start:picks])]
     unexpected = [x for x in above if x not in allowed]

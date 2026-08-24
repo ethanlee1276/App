@@ -2254,6 +2254,23 @@ select.calc-in { width: auto; font-weight: 600; }
    one-line discipline. */
 #feed-zone .al-t b { white-space: normal; overflow: visible; }
 
+/* The morning strip: last night beside tonight, one line, above the
+   board it introduces. */
+.daycard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  background: var(--panel); padding: 10px 14px; margin-bottom: 14px; }
+.dc-half { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dc-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-mute); }
+.daycard b { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.daycard b.pos { color: var(--good); }
+.daycard b.neg { color: var(--bad); }
+.dc-sub { color: var(--text-mute); font-size: var(--fs-xs); }
+.dc-link { color: var(--text-mute); font-size: var(--fs-xs);
+  text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+.dc-link:hover { color: var(--text-dim); }
+.dc-sep { width: 1px; align-self: stretch; background: var(--border-soft); }
+
 /* ---------------- The sweat zone (Live tab) ---------------- */
 .sw-list { padding: 2px 0; }
 .sw-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px;

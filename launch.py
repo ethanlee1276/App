@@ -784,6 +784,15 @@ def _publish_feed(quiet: bool = False) -> None:
     except Exception as exc:                              # noqa: BLE001
         if not quiet:
             print(f"  feed: skipped — {type(exc).__name__}: {exc}")
+    # The day's anchored moments ride the same sweep and the same feed:
+    # the card standing, last night's grading finishing, the ump crews
+    # posting, first pitch. Each fires once — see engine/moments.py.
+    try:
+        from engine import moments as _moments
+        _moments.run(quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  moments: skipped — {type(exc).__name__}: {exc}")
 
 
 def _seal_forecasts(quiet: bool = False) -> None:

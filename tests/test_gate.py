@@ -905,6 +905,9 @@ NOT_A_BOARD_WRITER = {
     "standings_build.py": "reads cfb.json for conferences; writes only the "
                           "free standings boards",
     "launch.py": "passes board paths to subprocesses; the builders publish",
+    "engine/moments.py": "READS the board via gate.board_source; its only "
+                         "writes are its own state file — events reach the "
+                         "public path through feed.publish -> gate.publish",
 }
 
 

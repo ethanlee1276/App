@@ -508,6 +508,12 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
         # Real moneyline prices ride along (0 = not offered): the team-form
         # sampler journals the hot side at the price someone could bet.
         "home_ml": g.home_ml, "away_ml": g.away_ml,
+        # The announced plate umpire and his measured K tilt, for the
+        # daily-moments feed ("Ump assigned: Hernandez behind the plate")
+        # — announced hours before first pitch, which is exactly why the
+        # moment is worth publishing. Empty until the crew posts.
+        "plate_umpire": getattr(g, "plate_umpire", "") or "",
+        "ump_k_factor": getattr(g, "ump_k_factor", None),
         "game_number": getattr(g, "game_number", 1),
         "doubleheader": getattr(g, "doubleheader", False),
         "weather": {
