@@ -309,6 +309,23 @@ def test_a_boundary_fit_is_still_refused_even_with_a_curve():
         cal.reset_cache()
 
 
+
+def test_the_fast_brier_matches_the_slow_one_at_zero_temperature():
+    """_brier_odds's contract is bit-identical arithmetic to brier(). Its
+    t<=0 branch scored the ODDS RATIO d = p/(1-p) against the outcome
+    instead of the probability — for p=0.9, won, that is (1-9)^2 = 64
+    where brier says 0.01. Unreachable from fit_correction's grid (it
+    starts at 0.40), so it sat latent for any future caller. Found in
+    the 2026-08-24 six-day review."""
+    from engine.calibrate import _brier_odds, brier
+    pairs = [(0.9, 1), (0.3, 0), (0.62, 1), (0.15, 0), (0.5, 1)]
+    odds = [p / (1.0 - p) for p, _ in pairs]
+    outs = [o for _, o in pairs]
+    for t, b in ((0.0, 0.0), (-1.0, 0.0), (0.0, 0.4), (1.0, 0.0), (0.83, 0.1)):
+        fast, slow = _brier_odds(odds, outs, t, b), brier(pairs, t, b)
+        assert abs(fast - slow) < 1e-12, (t, b, fast, slow)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

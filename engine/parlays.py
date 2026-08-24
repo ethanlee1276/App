@@ -1729,7 +1729,13 @@ def arbitrate_slate(root, boards: dict | None = None) -> dict:
             changed = True
         if changed or (best and sport == best[1]):
             z["slate_cap_applied"] = True
-            if src is public:
+            if src == public:
+                # `==`, NOT `is`: board_source() builds a fresh Path, so
+                # identity was always False and this branch was dead —
+                # every no-private-copy board went through publish(), the
+                # exact call the comment below forbids. Path equality
+                # compares the parts, which is the question being asked.
+                # (2026-08-24 six-day review.)
                 # No private copy on this box (a board built before
                 # data/built/ existed). Write back in place — but NEVER
                 # through publish(), which would file this already-public

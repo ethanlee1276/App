@@ -63,10 +63,18 @@ def test_the_sample_tile_is_the_measured_sample():
 
 def test_data_quality_compares_two_real_counts():
     """The tile that would be easiest to fake. It reports the rows the
-    test could USE against the rows the record counts, so a book with
-    picks missing a stored probability says so rather than claiming a
-    clean sample it does not have."""
-    assert "settled - e.n" in FN
+    test could USE against the rows it was HANDED — both counted by the
+    same snapshot over the same filter.
+
+    IT USED TO SUBTRACT e.n FROM overall.settled, and this test pinned
+    that. settled counts pushes; the information test can only score
+    won/lost — so one push in the book made the tile read "Partial — 1
+    settled pick(s) have no stored probability" forever, a false
+    sentence about data integrity on the panel whose job is being
+    believed. Found in the 2026-08-24 six-day review; the denominator
+    now rides in the snapshot as `eligible`."""
+    assert "e.eligible - e.n" in FN,         "the tile stopped comparing the snapshot's own two counts"
+    assert "settled - e.n" not in FN,         "the push-counting subtraction is back — see the docstring"
     assert '"Partial"' in FN and '"High"' in FN
     # THE WHOLE TILE CALL, cut at its closing brace rather than at a
     # character count — the branch that names what is missing sits past

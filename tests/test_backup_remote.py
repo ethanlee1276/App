@@ -320,6 +320,25 @@ def test_the_todo_still_names_the_setting():
     assert hit and hit[0].state == todo.DONE
 
 
+
+def test_a_down_remote_does_not_fail_the_script():
+    """push_remote is backup.sh's LAST command, so its return code was
+    the script's exit status — and deploy.sh runs backup.sh under
+    `set -e` as step 2, BEFORE the pull. A transient rclone outage was
+    enough to kill every deploy at "backing up" having shipped nothing,
+    with only a backup-sync error to explain it. The local snapshot is
+    already written and verified by that point; the offsite leg says
+    FAILED loudly and --verify reports an empty remote, which is the
+    alarm path. Found in the 2026-08-24 six-day review."""
+    src = open(os.path.join(ROOT, "deploy", "backup.sh"),
+               encoding="utf-8").read()
+    last = [ln.strip() for ln in src.splitlines()
+            if ln.strip() and not ln.strip().startswith("#")][-1]
+    assert last == "push_remote || true", (
+        f"backup.sh ends with {last!r} — an offsite failure is the "
+        f"script's exit code again, and deploy.sh dies on it")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

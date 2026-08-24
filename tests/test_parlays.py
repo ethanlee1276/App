@@ -1251,6 +1251,47 @@ def test_the_slate_cap_leaves_one_play_standing_across_all_sports():
     assert "§10.2" in lost["verdict"] and "NFL" in lost["verdict"]
 
 
+def test_a_board_with_no_private_copy_is_never_published():
+    """The in-place branch, which was DEAD until the 2026-08-24 review.
+
+    arbitrate_slate guarded it with `src is public` — but board_source()
+    builds a fresh Path, so identity was always False and every
+    no-private-copy board went through gate.publish(), the exact call the
+    inline comment forbids for a board that IS the public copy. The
+    payloads happened to be identical with the gate off, which is why
+    nothing ever looked wrong; the invariant was simply not enforced.
+    `==` compares the parts, which is the question being asked."""
+    import json
+    import tempfile
+    root = __import__("pathlib").Path(tempfile.mkdtemp())
+    (root / "web" / "data").mkdir(parents=True)
+
+    def board(sport, edge):
+        return {"parlays": {"sport": sport, "tickets": [
+            {"rank": 1, "qualified": True, "edge_at_ceiling_points": edge,
+             "legs": [1, 2], "verdict": "Bet only at +200 or better."}]}}
+
+    (root / "web/data/recommendations.json").write_text(json.dumps(board("nfl", 5.0)))
+    (root / "web/data/mlb_recommendations.json").write_text(json.dumps(board("mlb", 3.2)))
+
+    # arbitrate_slate does `from . import gate` inside the function, so
+    # the spy goes on the gate MODULE, not on an attribute of parlays.
+    from engine import gate as G
+    calls = []
+    real_publish = G.publish
+    G.publish = lambda *a, **k: calls.append(a) or real_publish(*a, **k)
+    try:
+        r = P.arbitrate_slate(root)
+    finally:
+        G.publish = real_publish
+    assert r["demoted"] == 1
+    assert calls == [],         "a board that IS the public copy was filed through publish()"
+    # The demotion still landed — written in place, where the board lives.
+    lost = json.loads((root / "web/data/mlb_recommendations.json")
+                      .read_text())["parlays"]["tickets"][0]
+    assert lost["qualified"] is False and lost["slate_play"] is False
+
+
 def test_the_slate_cap_never_takes_a_board_down():
     """A missing or malformed board must not break the others, and a night
     with nothing qualified anywhere is a normal night, not an error."""

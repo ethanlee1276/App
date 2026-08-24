@@ -477,6 +477,92 @@ def test_a_full_season_record_does_not_fill_its_own_tile():
     assert ".rec-kpis .tile.lead .v {" in css
 
 
+
+# --- the three reports that took `since` and lost it (2026-08-24) -----------
+#
+# Found in the six-day review: longshot_report accepted `since` and used
+# it NOWHERE — performance, the calibration row, recent, avg_odds and
+# by_sport were all unwindowed — so the epoch-scoped export shipped an
+# all-time Long Shots record under the page's "record shown from <epoch>"
+# disclosure. stale_report and form_report windowed their headline and
+# not their hit-rate row or recent list, so one panel disagreed with
+# itself. These are ARITHMETIC tests, same doctrine as the reconciliation
+# above: seed both sides of the epoch, assert only one side is counted.
+
+def _sampler_journal():
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+
+    def bet(date, status, category, odds=250, pnl=None):
+        pnl = pnl if pnl is not None else (2.5 if status == "won" else -1.0)
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,edge,stake_units,stake_dollars,status,category,"
+            "pnl_units) VALUES ('x','mlb',?,?,'home_runs','OVER',0.5,'DK',?,"
+            "0.25,0.05,1.0,10.0,?,?,?)",
+            (date, f"{category}-{date}-{status}", odds, status, category, pnl))
+
+    # Two losers before the epoch, one winner after — in every bucket.
+    for cat in ("longshot", "longshot_watch", "stale", "form"):
+        bet("2026-07-20", "lost", cat)
+        bet("2026-07-21", "lost", cat)
+        bet("2026-08-10", "won", cat)
+    conn.commit()
+    return conn
+
+
+def test_the_longshot_report_windows_every_number_it_shows():
+    conn = _sampler_journal()
+    r = ledger.longshot_report(conn, since=EPOCH)
+    assert r["settled"] == 1,         f"the headline counts pre-epoch picks: {r['settled']}"
+    assert r["wins"] == 1
+    assert r["calibration_n"] == 2,         f"the calibration row is unwindowed: {r['calibration_n']}"
+    assert r["watch"]["graded"] == 1,         f"the watchlist burn rate is unwindowed: {r['watch']}"
+    assert all(row["date"] >= EPOCH for row in r["recent"]),         "pre-epoch picks are in the recent list"
+    assert r["by_sport"].get("mlb", {}).get("n") == 1,         f"the by-sport split is unwindowed: {r['by_sport']}"
+    # And unwindowed remains the default for the tuning view.
+    assert ledger.longshot_report(conn)["settled"] == 3
+
+
+def test_the_stale_and_form_reports_agree_with_themselves():
+    """The headline was windowed and the hit-rate row was not, so the
+    same panel showed a scoped W-L beside an all-time hit rate."""
+    conn = _sampler_journal()
+    for fn in (ledger.stale_report, ledger.form_report):
+        r = fn(conn, since=EPOCH)
+        assert r["settled"] == 1, (fn.__name__, r["settled"])
+        assert r["actual_hit_rate"] == 1.0,             f"{fn.__name__}'s hit rate still spans the whole journal: "             f"{r['actual_hit_rate']}"
+        assert all(row["date"] >= EPOCH for row in r["recent"]),             f"{fn.__name__} lists pre-epoch picks as recent"
+
+
+def test_a_push_is_not_a_missing_probability():
+    """The edge panel's Data quality tile. Its `missing` count is now
+    eligible − n, both from the snapshot over the same won/lost filter —
+    it used to subtract n from overall.settled, which counts pushes, so
+    one push read as "1 settled pick(s) have no stored probability"
+    forever."""
+    conn = _journal()
+    conn.execute(
+        "INSERT INTO bets (ts,sport,date,player,market,side,line,book,odds,"
+        "hit_prob,stake_units,stake_dollars,status,category,pnl_units) VALUES "
+        "('x','mlb','2026-08-12','Pushy','hits','OVER',1.5,'DK',-110,0.58,"
+        "1.0,10.0,'push','main',0.0)")
+    # Enough graded rows for measure()'s 40-row floor.
+    for i in range(50):
+        conn.execute(
+            "INSERT INTO bets (ts,sport,date,player,market,side,line,book,"
+            "odds,hit_prob,stake_units,stake_dollars,status,category,"
+            "pnl_units) VALUES ('x','mlb','2026-08-14',?,'hits','OVER',1.5,"
+            "'DK',?,?,1.0,10.0,?,'main',?)",
+            (f"Bulk{i}", -110 + (i % 7), 0.5 + (i % 9) * 0.01,
+             "won" if i % 2 else "lost", 0.9 if i % 2 else -1.0))
+    conn.commit()
+    snap = ledger._edge_snapshot(conn, "main", since=EPOCH)
+    assert snap is not None, "the snapshot refused a 55-row book"
+    assert "eligible" in snap, "the snapshot no longer carries eligible"
+    assert snap["eligible"] == snap["n"],         (f"a push or an unprobed row leaked into the denominator: "
+         f"eligible={snap['eligible']} n={snap['n']}")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

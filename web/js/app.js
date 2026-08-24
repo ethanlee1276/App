@@ -8958,8 +8958,14 @@ function recEdgePanel(e, trend, overall) {
      the rows the test could USE against the rows the record counts, so
      a book with picks missing a stored probability says so instead of
      claiming a clean sample it does not have. */
-  const settled = (overall || {}).settled;
-  const missing = (settled != null && e.n != null) ? settled - e.n : null;
+  /* eligible − n, BOTH FROM THE SNAPSHOT. This subtracted e.n from
+     overall.settled, and settled counts pushes while the test can only
+     use won/lost — so one push read as a missing probability, forever:
+     "Partial — 1 settled pick(s) have no stored probability" on a book
+     with nothing missing. A payload without `eligible` (a banked run)
+     shows the dash rather than claiming either verdict. */
+  const missing = (e.eligible != null && e.n != null)
+    ? Math.max(0, e.eligible - e.n) : null;
   const trust = { edge_is_noise: ["No", "Edge not better than market"],
                   edge_inverted: ["No", "Edge sorts winners below losers"],
                   edge_predicts: ["Yes", "Edge beats the market’s ranking"],
@@ -8976,11 +8982,13 @@ function recEdgePanel(e, trend, overall) {
                      escapeHtml(trust[1]),
                      e.verdict === "edge_predicts" ? "pos" : "neg")}
       ${statCardHTML("shield", "Data quality",
-                     missing ? "Partial" : "High",
-                     missing
+                     missing == null ? "—" : missing ? "Partial" : "High",
+                     missing == null
+                       ? "Awaiting the next measured run"
+                       : missing
                        ? `${missing} settled pick(s) have no stored probability`
                        : "No missing model features",
-                     missing ? "" : "pos")}
+                     missing ? "" : missing == null ? "" : "pos")}
       ${statCardHTML("chart", "Sample size", e.n == null ? "—" : e.n,
                      "Settled bets analysed")}
       ${statCardHTML("calendar", "Last measured", escapeHtml(stamp), stampSub)}

@@ -161,6 +161,71 @@ def test_an_unpaid_session_changes_nothing():
             "SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
 
 
+# --- trials, which never say "paid" -----------------------------------------
+#
+# A subscription Checkout that starts a trial completes with
+# payment_status "no_payment_required": Stripe captured the card and
+# deliberately charged nothing yet. Requiring "paid" turned away every
+# trial signup — and the trial plan is the DEFAULT plan, so the commonest
+# checkout on the site was the one this endpoint refused. Card captured,
+# subscription trialing at Stripe, customer on the paywall. Found in the
+# 2026-08-24 six-day review.
+
+def test_a_trial_session_entitles_the_person_who_started_it():
+    out, conn, _ = _run(
+        _session(payment_status="no_payment_required", status="complete"),
+        _sub(status="trialing"))
+    assert out["entitled"] is True,         "a completed trial checkout still cannot get in without the webhook"
+    row = conn.execute("SELECT status FROM subscriptions").fetchone()
+    assert row and row["status"] == "trialing",         "the trial was written as something other than what Stripe said"
+
+
+def test_a_trial_session_that_never_completed_changes_nothing():
+    """An abandoned Checkout also reads no_payment_required. The session
+    status is what separates "started a trial" from "closed the tab"."""
+    for st in ("open", "expired", "", None):
+        out, conn, _ = _run(
+            _session(payment_status="no_payment_required", status=st),
+            _sub(status="trialing"))
+        assert out["entitled"] is False, f"session status {st!r} was let in"
+        assert conn.execute(
+            "SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
+
+
+def test_a_trial_whose_subscription_is_not_entitled_changes_nothing():
+    """Complete session, but the subscription behind it failed — card
+    setup declined, or Stripe filed it incomplete. The subscription's own
+    status is the authority, same as on the webhook path."""
+    for st in ("incomplete", "incomplete_expired", "canceled", "unpaid", ""):
+        out, conn, _ = _run(
+            _session(payment_status="no_payment_required", status="complete"),
+            _sub(status=st))
+        assert out["entitled"] is False, f"sub status {st!r} was let in"
+        assert conn.execute(
+            "SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
+
+
+def test_a_no_charge_session_with_no_subscription_changes_nothing():
+    """A zero-total session with nothing behind it entitles nobody —
+    there is no subscription for the webhook path to have entitled
+    either."""
+    out, conn, _ = _run(
+        _session(payment_status="no_payment_required", status="complete",
+                 subscription=None),
+        {})
+    assert out["entitled"] is False
+    assert conn.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
+
+
+def test_a_strangers_trial_session_entitles_nobody():
+    """The ownership check applies to trials exactly as to payments."""
+    out, conn, _ = _run(
+        _session(payment_status="no_payment_required", status="complete"),
+        _sub(status="trialing"), user=STRANGER)
+    assert out["entitled"] is False
+    assert conn.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0] == 0
+
+
 def test_the_metadata_user_id_is_accepted_as_well_as_the_reference():
     """Both are stamped at checkout. Either identifies the payer; needing
     both would fail a session created before one of them existed."""

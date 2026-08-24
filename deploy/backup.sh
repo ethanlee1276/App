@@ -262,4 +262,12 @@ for db in "${DBS[@]}"; do
     | xargs -r rm -f || true
 done
 
-push_remote
+# `|| true` BECAUSE push_remote IS THE LAST COMMAND. Its return code was
+# becoming the script's exit status, so a down offsite remote failed the
+# whole script — and deploy.sh runs this under `set -e` as step 2, BEFORE
+# the pull. A transient rclone outage was enough to make every deploy die
+# at "backing up" having shipped nothing. The local snapshot is already
+# written and verified by this point; the offsite leg says FAILED loudly
+# above and --verify reports an empty remote, which is the alarm path.
+# (2026-08-24 six-day review.)
+push_remote || true

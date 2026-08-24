@@ -1016,7 +1016,19 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     secret = keys()[0]
     sess = _get(f"{API}/checkout/sessions/{sid}?expand[]=subscription",
                 secret)
-    if str(sess.get("payment_status") or "") != "paid":
+    # "paid" OR A TRIAL. A subscription Checkout that starts a trial
+    # completes with payment_status "no_payment_required" — Stripe took
+    # the card and deliberately charged nothing yet — so requiring "paid"
+    # here turned away every trial signup, and the trial plan is the
+    # DEFAULT plan. Card captured, subscription trialing at Stripe,
+    # customer on the paywall watching a spinner wait for a webhook that
+    # Bot Fight Mode already ate: the exact situation this endpoint was
+    # built to rescue, refused by its own first check. The webhook path
+    # has always entitled `trialing` (ENTITLED, above); the extra
+    # conditions a no-charge session must meet are below, after the
+    # ownership check.
+    pay = str(sess.get("payment_status") or "")
+    if pay not in ("paid", "no_payment_required"):
         return out
     # THE OWNERSHIP CHECK, and it is the whole security of this endpoint.
     ref = str(sess.get("client_reference_id") or "")
@@ -1027,6 +1039,17 @@ def reconcile_session(conn, user_id: int, session_id: str) -> dict:
     if isinstance(sub, str):
         sub = _get(f"{API}/subscriptions/{sub}", secret)
     sub = sub or {}
+    if pay != "paid":
+        # A NO-CHARGE SESSION GRANTS NOTHING BY ITSELF. Stripe must say
+        # the Checkout finished ("complete"), and the subscription it
+        # created must be in a state the webhook path would entitle —
+        # for a fresh trial that is `trialing`. An abandoned session, a
+        # trial whose card setup failed, or a zero-total session with no
+        # subscription behind it all stop here.
+        if str(sess.get("status") or "") != "complete":
+            return out
+        if not sub.get("id") or str(sub.get("status") or "") not in ENTITLED:
+            return out
     apply_event(conn, {
         "user_id": int(user_id),
         "customer_id": (sess.get("customer") if isinstance(sess.get("customer"), str)

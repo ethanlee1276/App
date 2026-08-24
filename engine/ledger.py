@@ -942,20 +942,25 @@ def stale_report(conn, since: str | None = None) -> dict:
     the break-even the taken prices implied, and the consensus the flags
     claimed. If hit rate can't beat the taken price's break-even, the
     measured CLV never cashes and the signal stays display-only."""
+    # The headline was windowed and the hit-rate row was not, so one
+    # panel disagreed with itself (2026-08-24 six-day review).
+    win = " AND date >= ?" if since else ""
+    wargs: tuple = (since,) if since else ()
     p = performance(conn, category="stale", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
         "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
         "AVG(hit_prob) AS consensus_p, AVG(edge) AS avg_gap, "
         "SUM(status='won') AS w, COUNT(*) AS n "
-        "FROM bets WHERE category='stale' AND status IN ('won','lost')"
-    ).fetchone()
+        "FROM bets WHERE category='stale' AND status IN ('won','lost')" + win,
+        wargs).fetchone()
     p["avg_taken_implied"] = round(row["taken_p"], 4) if row["taken_p"] is not None else None
     p["avg_consensus_implied"] = (round(row["consensus_p"], 4)
                                   if row["consensus_p"] is not None else None)
     p["avg_gap_pts"] = round(row["avg_gap"] * 100, 2) if row["avg_gap"] is not None else None
     p["actual_hit_rate"] = round(row["w"] / row["n"], 4) if row["n"] else None
-    p["recent"] = recent_settled(conn, limit=15, category="stale")
+    p["recent"] = recent_settled(conn, limit=15, category="stale",
+                                 since=since)
     return p
 
 
@@ -1005,17 +1010,20 @@ def log_form_picks(conn, result: dict, team_form: dict,
 def form_report(conn, since: str | None = None) -> dict:
     """The form sampler's scoreboard: does backing hot teams at real prices
     make money? Mirrors stale_report; graded nightly with everything else."""
+    win = " AND date >= ?" if since else ""
+    wargs: tuple = (since,) if since else ()
     p = performance(conn, category="form", since=since)
     row = conn.execute(
         "SELECT AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
         "            ELSE -odds / (100.0 - odds) END) AS taken_p, "
         "AVG(edge) AS avg_gap, SUM(status='won') AS w, COUNT(*) AS n "
-        "FROM bets WHERE category='form' AND status IN ('won','lost')"
-    ).fetchone()
+        "FROM bets WHERE category='form' AND status IN ('won','lost')" + win,
+        wargs).fetchone()
     p["avg_taken_implied"] = round(row["taken_p"], 4) if row["taken_p"] is not None else None
     p["avg_form_gap"] = round(row["avg_gap"], 3) if row["avg_gap"] is not None else None
     p["actual_hit_rate"] = round(row["w"] / row["n"], 4) if row["n"] else None
-    p["recent"] = recent_settled(conn, limit=15, category="form")
+    p["recent"] = recent_settled(conn, limit=15, category="form",
+                                 since=since)
     return p
 
 
@@ -3947,29 +3955,41 @@ def longshot_report(conn, since: str | None = None) -> dict:
     MIN_MODEL_PROB quartile analysis possible. The watchlist's own burn
     rate is reported separately so nobody mistakes it for a record.
     """
-    p = performance(conn, category="longshot")
+    # `since` REACHES EVERY QUERY, not just the signature. This accepted
+    # the parameter and used it nowhere — so the epoch-scoped export
+    # shipped an all-time Long Shots record directly under the page's
+    # "record shown from <epoch>" disclosure, the exact headline/panel
+    # disagreement the 2026-08-23 "EVERYTHING" pass was for. Found in the
+    # 2026-08-24 six-day review.
+    win = " AND date >= ?" if since else ""
+    wargs: tuple = (since,) if since else ()
+    p = performance(conn, category="longshot", since=since)
     row = conn.execute(
         "SELECT COUNT(*) AS n, AVG(hit_prob) AS model_p, "
         "AVG(100.0 / (odds + 100.0)) AS implied_p, "
         "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) AS actual_p "
         "FROM bets WHERE category IN ('longshot', 'longshot_watch') "
-        "AND status IN ('won','lost') AND odds > 0").fetchone()
+        "AND status IN ('won','lost') AND odds > 0" + win, wargs).fetchone()
     p["calibration_n"] = row["n"] or 0
     p["avg_model_prob"] = round(row["model_p"], 4) if row["model_p"] is not None else None
     p["avg_implied_prob"] = round(row["implied_p"], 4) if row["implied_p"] is not None else None
     p["actual_hit_rate"] = round(row["actual_p"], 4) if row["actual_p"] is not None else None
-    p["recent"] = recent_settled(conn, limit=15, category="longshot")
+    p["recent"] = recent_settled(conn, limit=15, category="longshot",
+                                 since=since)
     # The watchlist sample, kept visibly apart: every real-priced homer on
     # the slate, graded at a nominal flat stake purely to tune the model.
     row = conn.execute(
         "SELECT COUNT(*) AS n, COALESCE(SUM(status='won'), 0) AS w, "
         "COALESCE(SUM(pnl_units), 0) AS u, COALESCE(SUM(stake_units), 0) AS s "
         "FROM bets WHERE category='longshot_watch' "
-        "AND status IN ('won','lost')").fetchone()
+        "AND status IN ('won','lost')" + win, wargs).fetchone()
     p["watch"] = {
         "graded": row["n"] or 0, "wins": row["w"] or 0,
         "net_units": round(row["u"], 2),
         "roi": round(row["u"] / row["s"], 4) if row["s"] else 0.0,
+        # Open picks are not windowed: a pick is open NOW whatever day
+        # it was journaled, and hiding pre-epoch open bets would make the
+        # count disagree with the settle loop that still owes them.
         "open": conn.execute(
             "SELECT COUNT(*) FROM bets WHERE category='longshot_watch' "
             "AND status='open'").fetchone()[0],
@@ -3980,7 +4000,7 @@ def longshot_report(conn, since: str | None = None) -> dict:
     row = conn.execute(
         "SELECT COUNT(*) n, AVG(odds) avg_odds, MIN(odds) min_odds, "
         "MAX(odds) max_odds FROM bets WHERE category='longshot' "
-        "AND status IN ('won','lost')").fetchone()
+        "AND status IN ('won','lost')" + win, wargs).fetchone()
     p["avg_odds"] = round(row["avg_odds"]) if row["avg_odds"] is not None else None
     p["odds_range"] = ([row["min_odds"], row["max_odds"]]
                        if row["n"] else None)
@@ -3988,7 +4008,7 @@ def longshot_report(conn, since: str | None = None) -> dict:
     for r in conn.execute(
             "SELECT sport, COUNT(*) n, SUM(status='won') w, "
             "COALESCE(SUM(pnl_units),0) u FROM bets WHERE category='longshot' "
-            "AND status IN ('won','lost') GROUP BY sport"):
+            "AND status IN ('won','lost')" + win + " GROUP BY sport", wargs):
         p["by_sport"][r["sport"]] = {"n": r["n"], "w": r["w"],
                                      "net_u": round(r["u"], 2)}
     return p
@@ -4429,10 +4449,20 @@ def _edge_snapshot(conn, category: str = "main",
     from . import edgehistory
     if not since:
         return edgehistory.latest(conn, category)
-    m = edgehistory.measure(_edge_rows(conn, category, since=since))
+    rows = _edge_rows(conn, category, since=since)
+    m = edgehistory.measure(rows)
     if m is None:
         return None            # all winners or all losers: AUC undefined
     m["category"] = category
+    # The denominator the "Data quality" tile needs: won/lost staked rows
+    # in this window — the rows the test COULD use. measure() then drops
+    # any without a stored probability, so eligible - n is exactly "how
+    # many settled picks have no probability". The tile used to derive
+    # this from overall.settled instead, which counts PUSHES — so one
+    # push made the panel read "Partial — 1 settled pick(s) have no
+    # stored probability" forever, a false sentence about data integrity
+    # on the panel whose whole job is being believed (2026-08-24 review).
+    m["eligible"] = len(rows)
     for k, v in (_edge_clv(conn, category, since) or {}).items():
         m[k] = v
     return m
@@ -4458,6 +4488,13 @@ def export_json(conn, path) -> None:
     # answer, exported beside the scoped one so the page can show what it
     # is leaving out rather than quietly leaving it out.
     since = RECORD_EPOCH
+    # ONE SCAN PER WINDOW. This ran performance(conn) three times — once
+    # for all_time.overall and twice more inside hidden_settled — and
+    # performance(conn, since=...) twice, each a full pass over every
+    # settled bet, on a path the settle loop executes every five minutes
+    # on a one-core box. show_epoch() already did it the cheap way.
+    allp = performance(conn)
+    scoped = performance(conn, since=since)
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "record_epoch": since,
@@ -4469,16 +4506,14 @@ def export_json(conn, path) -> None:
         # beside "Total Bases" and "Outs Recorded". See engine/markets.
         "market_words": _markets.words(),
         "all_time": {
-            "overall": performance(conn),
+            "overall": allp,
             "curve_from": (pnl_curve(conn) or [{}])[0].get("date"),
             # The count that makes the disclosure concrete: "N settled
             # picks before this date are journaled and still train the
             # model" is a fact a reader can weigh. "Some" is not.
-            "hidden_settled": max(
-                0, performance(conn)["settled"]
-                - performance(conn, since=since)["settled"]),
+            "hidden_settled": max(0, allp["settled"] - scoped["settled"]),
         },
-        "overall": performance(conn, since=since),
+        "overall": scoped,
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),

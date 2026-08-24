@@ -153,7 +153,14 @@ def _brier_odds(odds: list, outs: list, temperature: float,
     the board's probabilities are honest.
     """
     if temperature <= 0:
-        return sum((o - p) ** 2 for p, o in zip(odds, outs)) / len(odds)
+        # `odds` holds d = p/(1-p), so score the PROBABILITY d/(1+d) —
+        # scoring d itself diverged from brier(), which returns p
+        # unchanged for t<=0, despite the bit-identical contract above.
+        # Unreachable from fit_correction's grid (it starts at 0.40);
+        # fixed before some future caller finds it the hard way.
+        # (2026-08-24 six-day review.)
+        return sum((d / (1.0 + d) - o) ** 2
+                   for d, o in zip(odds, outs)) / len(odds)
     n = len(odds)
     if temperature == 1.0 and intercept == 0.0:
         total = 0.0
