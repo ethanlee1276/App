@@ -25,7 +25,7 @@ from pathlib import Path
 
 from engine import playoffs, standings
 from engine.db import connect
-from engine.seasons import season_of
+from engine.seasons import season_of, window as window_of
 
 SPORTS = ("nfl", "mlb", "nba", "wnba", "cfb")
 OUT_DIR = Path("web/data")
@@ -85,20 +85,51 @@ def _live_table(sport: str, season: int, confs: dict | None):
 def build(sport: str, season: int | None = None,
           today: str | None = None) -> dict:
     day = today or datetime.date.today().isoformat()
-    season = season if season is not None else season_of(sport, day)
+    waiting = False
+    if season is None:
+        season = season_of(sport, day)
+        # season_of LABELS DATES, and that is a different question from
+        # "which season does the standings page show". A date in the
+        # offseason gap belongs to the season that just finished — right
+        # for keying a game row, and exactly wrong here: through August
+        # 2026 this page fetched the league's FINAL 2025 table and the
+        # completed 2025 playoff bracket and presented them as the
+        # current state of the league. Ethan, 2026-08-24, with the site
+        # live: "we are showing the 2025 rankings still but we should
+        # just show that we are still waiting on 2026 season."
+        #
+        # So once the resolved season's window has closed, the page's
+        # season is the UPCOMING one. An explicit --season still shows
+        # any year, finished or not — asking for 2025 means 2025.
+        _, prev_end = window_of(sport, season)
+        if day > prev_end:
+            season += 1
+    start, _ = window_of(sport, season)
+    waiting = day < start
     conn = connect()
     try:
         confs = cfb_conferences() if sport == "cfb" else None
-        # THE LEAGUE'S OWN TABLE FIRST. Counting our ingested games answers
-        # a different question, and on a partially-ingested season it
-        # answers it wrongly enough to reorder a division — which is what
-        # Ethan was looking at. The count stays as the fallback, and the
-        # payload says which one ran.
-        table, feed_error = _live_table(sport, season, confs)
-        if table is None:
+        if waiting:
+            # DO NOT ASK THE FEED FOR A SEASON NOBODY HAS PLAYED. Some
+            # feeds 404, some return last season relabelled, some return
+            # thirty-two 0-0 rows — and every one of those would put a
+            # table on the page where "waiting" is the honest answer.
+            # compute() over an unplayed season is empty by construction,
+            # which routes the page to its note.
             table = standings.compute(conn, sport, season=season, today=day,
                                       conferences=confs)
-            table["feed_error"] = feed_error
+            table["feed_error"] = ""
+        else:
+            # THE LEAGUE'S OWN TABLE FIRST. Counting our ingested games
+            # answers a different question, and on a partially-ingested
+            # season it answers it wrongly enough to reorder a division —
+            # which is what Ethan was looking at. The count stays as the
+            # fallback, and the payload says which one ran.
+            table, feed_error = _live_table(sport, season, confs)
+            if table is None:
+                table = standings.compute(conn, sport, season=season,
+                                          today=day, conferences=confs)
+                table["feed_error"] = feed_error
         bracket = playoffs.bracket(conn, sport, season=season, today=day)
     finally:
         conn.close()
@@ -113,6 +144,10 @@ def build(sport: str, season: int | None = None,
         else standings.conference_seeds(table))
     table["team_count"] = teams
     table["note"] = "" if teams else _empty_note(sport, season, day)
+    # Said as data, not only prose: the page labels the header off this
+    # instead of announcing "2026 regular season" over an empty table.
+    table["season_wait"] = bool(waiting and not teams)
+    table["first_games"] = start if waiting else ""
     if teams and table.get("source") == "computed":
         # Said on the page, not just in the log: these are OUR counted
         # games, which is a weaker claim than the league's own table.
@@ -140,8 +175,8 @@ def _empty_note(sport: str, season: int, day: str) -> str:
         start = ""
     if start and day < start:
         return (f"The {season} {sport.upper()} season has not started yet — "
-                f"first games {start}. Standings count our own results, so "
-                f"this table fills itself in as the season is played.")
+                f"first games {start}. Standings and the playoff picture "
+                f"fill in here as the season is played.")
     return (f"No finished {sport.upper()} games on file for {season}. "
             f"Standings are counted from our own results: "
             f"python3 ingest.py {sport} --seasons {season}")

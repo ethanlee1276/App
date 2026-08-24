@@ -16588,7 +16588,14 @@ async function renderStandings() {
        now stamps `source`, and this line reports it rather than asserting
        one of the two. */
     const live = d.source === "league";
-    sub.textContent = d.season
+    // A season nobody has played yet gets a WAITING header, not
+    // "2026 regular season · 0 games counted (feed unavailable)" — we
+    // never asked the feed, and the parenthetical would blame a working
+    // feed for a season that has not kicked off (2026-08-24).
+    sub.textContent = d.season_wait
+      ? `— waiting on the ${d.season} season${
+          d.first_games ? ` · first games ${d.first_games}` : ""}`
+      : d.season
       ? `— ${d.season} regular season · `
         + (live
           ? "the league’s own records, refreshed with the site"
@@ -16600,7 +16607,9 @@ async function renderStandings() {
   const groups = d.groups || [];
   if (!groups.length) {
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
-      <h3>No standings yet</h3><p>${escapeHtml(d.note
+      <h3>${d.season_wait
+        ? `Waiting on the ${d.season} season`
+        : "No standings yet"}</h3><p>${escapeHtml(d.note
         || "Standings for this sport have not been built yet.")}</p></div>`;
     return;
   }
