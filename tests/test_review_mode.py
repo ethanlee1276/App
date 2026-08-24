@@ -67,13 +67,24 @@ def _app():
 
 # --------------------------------------------------------------- the flag
 
-def test_the_flag_exists_and_is_off_for_the_review():
+def test_the_flag_exists_and_is_on_since_approval():
+    """APPROVAL LANDED 2026-08-24 — this test used to pin `false` and its
+    own message said to update it in the same commit as the flip. The
+    check verified against Stripe itself (launch.py --stripe, run by
+    Ethan on the droplet): charges and payouts enabled, nothing
+    outstanding, no disabled_reason.
+
+    THE FLAG AND THE GATES STAY. Every absence test below still holds —
+    citations route through extLink(), the chart src still consults the
+    flag, nothing hard-codes a venue URL — so if a processor ever
+    reviews the site again, review mode is one boolean away, exactly as
+    designed."""
     app = _app()
-    assert "const EXTERNAL_MARKET_LINKS = false;" in app, (
-        "EXTERNAL_MARKET_LINKS is not declared false. If the Stripe "
-        "application has been APPROVED, flipping it to true is the "
-        "intended change — update this test in the same commit and say "
-        "in the message that approval landed."
+    assert "const EXTERNAL_MARKET_LINKS = true;" in app, (
+        "EXTERNAL_MARKET_LINKS is neither true nor declared once. It "
+        "went true on 2026-08-24 when Stripe approved the account; if it "
+        "is deliberately false again (a new review), update this test in "
+        "the same commit and say why in the message."
     )
 
 

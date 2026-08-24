@@ -49,8 +49,16 @@ const state = {
 
    TO RESTORE AFTER APPROVAL: set this to true. That is the whole change.
    The data, the labels and the layout are unaffected either way — only
-   whether a citation is an anchor and whether the chart is an iframe. */
-const EXTERNAL_MARKET_LINKS = false;
+   whether a citation is an anchor and whether the chart is an iframe.
+
+   APPROVAL LANDED 2026-08-24. `launch.py --stripe` read the account from
+   Stripe itself: charges and payouts enabled, nothing outstanding, no
+   disabled_reason — "Stripe account is approved — the review is over."
+   Ethan ran it on the droplet and posted the output; this flip is that
+   restore, and the whole block above stays as the record of what the
+   flag was for and how to reason about it if a processor ever reviews
+   the site again. */
+const EXTERNAL_MARKET_LINKS = true;
 
 /* One helper so a citation reads identically whether or not it links.
    Returns an <a> when the flag is on and a plain <span> when it is off,
