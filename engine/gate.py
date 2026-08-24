@@ -172,6 +172,9 @@ def paid_keys_for(name: str = "") -> tuple:
 PAID_FILES = (
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json",
+    # The live feed: every entry names a pick — an edge appearing IS a
+    # recommendation — so the whole file is the model's output.
+    "feed.json",
     # predmarkets.json is the SAME BOARD as kalshi.json under pm_build's
     # default --out, and it was nearly missed. Its picks live in `rows`,
     # which no entry in PAID_KEYS matches, so a board named this way would
@@ -258,7 +261,7 @@ KNOWN_BOARDS = (
     # a board without telling the gate. Unregistered meant `is_free` said
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
-    "memerecord.json", "heartbeat.json",
+    "memerecord.json", "heartbeat.json", "feed.json",
     "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",

@@ -2241,6 +2241,18 @@ select.calc-in { width: auto; font-weight: 600; }
 /* Left, not centred: the bar column is now the widest in the table, and
    a centred heading floated in the middle of it with nothing under it. */
 .rb-barh { text-align: left; font-size: var(--fs-2xs); letter-spacing: .5px; }
+
+/* The live feed's timestamp, right-aligned agate — the row layout is
+   .al-row's, shared with the rest of the Alerts page on purpose. */
+.feed-ago { color: var(--text-mute); font-size: var(--fs-xs); flex: none;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Feed titles are SENTENCES ("Edge appeared: Juan Soto OVER 1.5 Total
+   Bases"), and .al-t b's one-line ellipsis — right for the short alert
+   labels it was written for — cut them mid-name on a phone. A feed row
+   wraps to two lines instead: the sentence is the content, not a label
+   for it. Scoped to the zone so the original alert rows keep their
+   one-line discipline. */
+#feed-zone .al-t b { white-space: normal; overflow: visible; }
 /* A ceiling for very wide screens. The single full-width splits table is
    comfortably under this at 1536px; without it the win-rate bar keeps
    growing with the monitor and a 2560px display turns a supporting chart

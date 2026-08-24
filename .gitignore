@@ -63,6 +63,8 @@ data/drivesim_log.jsonl
 # committing them would publish to GitHub what the paywall withholds from
 # the site. `*.db` and the named files above do not cover a .json here.
 data/built/
+# The feed differ's per-sport digests — working state, rolls every cycle
+data/feedstate/
 # backup.sh's default destination is ./backups — a sibling of data/, not a
 # child of it, so the line above never covered it. The files inside are
 # `.db.gz`, which `*.db` does not match either: gzipped copies of the

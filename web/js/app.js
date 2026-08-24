@@ -174,6 +174,9 @@ const SPORT_META = {
    view in a browser; nothing in the test suite noticed, because the file
    parses perfectly and the fault only exists at runtime in one order. */
 let _railDeskCache = null, _railDeskAt = 0;
+/* The live feed (engine/feed.py): the boards diffed across rebuilds.
+   Thirty-second cache — the loop writes at most once a minute. */
+let _feedCache = null, _feedAt = 0;
 
 const HIDDEN_VIEWS = {
   nba: ["longshots", "weather"],
@@ -11864,6 +11867,84 @@ function renderWeather() {
 let _alFilter = "all";
 window._alSet = (k) => { _alFilter = k; renderAlerts(); };
 
+/* THE FEED LEADS THE ALERTS PAGE. Everything below it on this page is a
+   snapshot — the current board's moves, today's designations. The feed
+   is the same signals given a MEMORY: each rebuild diffed against the
+   last, so "edge appeared twenty minutes ago" is a sentence the site
+   can finally say. Ethan, 2026-08-24: "every entry is a reason someone
+   opened the app at 2:47pm." */
+async function renderFeedZone() {
+  const host = document.getElementById("feed-zone");
+  if (!host) return;
+  if (!_feedCache || Date.now() - _feedAt > 30000) {
+    try {
+      const res = await paidFetch("feed.json");
+      if (res.ok) { _feedCache = await res.json(); _feedAt = Date.now(); }
+    } catch (e) { /* the zone just stays quiet */ }
+  }
+  const d = _feedCache || {};
+  if (state.view !== "alerts") return;
+  const evs = (d.events || []).slice(0, 40);
+  if (d.locked || !evs.length) { host.innerHTML = ""; return; }
+  const ago = (ts) => {
+    const t = Date.parse(ts && ts.endsWith("Z") ? ts : ts + "Z");
+    return isNaN(t) ? "" : ageText(Math.max(0, (Date.now() - t) / 1000)) + " ago";
+  };
+  const line = (e) => {
+    const who = `${escapeHtml(e.player || "")}`;
+    const mkt = escapeHtml(e.label || "");
+    const px = (o) => o == null ? "" : american(o);
+    switch (e.kind) {
+      case "edge_appeared": return {
+        ic: "rising", tone: "good",
+        title: `Edge appeared: ${who} ${escapeHtml(e.side || "")} ${e.line ?? ""} ${mkt}`,
+        cond: `${e.ev != null ? `+${(e.ev * 100).toFixed(1)}% EV · ` : ""}${escapeHtml(e.book || "")} ${px(e.odds)} · ${escapeHtml((e.sport || "").toUpperCase())}`,
+      };
+      case "edge_died": return {
+        ic: "falling", tone: "bad",
+        title: `Edge gone: ${who} ${mkt}`,
+        cond: { line_moved: `the line moved ${e.frm} → ${e.to}`,
+                price_moved: "the price moved against it",
+                gates: "no longer clears the gates",
+                left_board: "left the board" }[e.reason] || "off the board",
+      };
+      case "line_move": return {
+        ic: e.rec ? "flash" : "signal", tone: e.rec ? "warn" : "",
+        title: `Line move: ${who} ${mkt} ${e.frm} → ${e.to}`,
+        cond: e.model_held && e.proj != null
+          ? `model held at ${e.proj} — the gap ${((e.side || "OVER") === "OVER") === (e.to > e.frm) ? "shrank" : "grew"}`
+          : "model moved with it",
+      };
+      case "price_move": return {
+        ic: "tag", tone: "",
+        title: `Price move: ${who} ${mkt} ${px(e.frm)} → ${px(e.to)}`,
+        cond: `${Math.abs((e.imp_delta || 0) * 100).toFixed(1)} implied pts at ${escapeHtml(e.book || "")}`,
+      };
+      case "released": return {
+        ic: "list", tone: "good",
+        title: `${e.n} held prop${e.n === 1 ? "" : "s"} released — lines are up`,
+        cond: escapeHtml((e.players || []).join(", ")),
+      };
+      default: return null;
+    }
+  };
+  const rows = evs.map((e) => {
+    const r = line(e);
+    if (!r) return "";
+    return `<div class="al-row">
+      <span class="al-ic ${r.tone}">${icon(r.ic, 15)}</span>
+      <span class="al-t"><b>${r.title}</b><span class="al-c">${r.cond}</span></span>
+      <span class="feed-ago">${escapeHtml(ago(e.ts))}</span>
+    </div>`;
+  }).join("");
+  host.innerHTML = `
+    <div class="section-title">Live feed
+      <span class="sub">— every board rebuild, diffed against the one before it.
+      Edges appearing and dying, lines on the move, held props releasing —
+      as they happen, newest first.</span></div>
+    <div class="card al-list">${rows}</div>`;
+}
+
 function renderAlerts() {
   const host = document.getElementById("alerts-body");
   if (!host) return;
@@ -11929,13 +12010,15 @@ function renderAlerts() {
         `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
   }
-  host.innerHTML = (moved.length + inj.length + recs.length ? chips : "")
+  host.innerHTML = `<div id="feed-zone"></div>`
+    + (moved.length + inj.length + recs.length ? chips : "")
     + (sections.join("") || `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">Nothing moving right now</div>
-      <div class="es-sub">Alerts fill from three real feeds — line movement on tonight’s
-      picks, the injury watch, and the prediction desk. A quiet page means a quiet
-      slate, not a broken one.</div></div>`);
+      <div class="es-sub">Alerts fill from four real feeds — the live board diff,
+      line movement on tonight’s picks, the injury watch, and the prediction
+      desk. A quiet page means a quiet slate, not a broken one.</div></div>`);
+  renderFeedZone();
   renderRailDesk();
 }
 

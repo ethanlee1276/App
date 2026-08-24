@@ -769,6 +769,21 @@ def refresh_all(quiet: bool = False) -> None:
     _journal_parlays(quiet=quiet)
     _seal_forecasts(quiet=quiet)
     _run_futures(quiet=quiet)
+    _publish_feed(quiet=quiet)
+
+
+def _publish_feed(quiet: bool = False) -> None:
+    """Diff every board against its previous build; publish the changes
+    as the live feed. LAST, after every board has rewritten, and a sweep
+    for the same reason _seal_forecasts is one: a per-build hook is one
+    somebody forgets the next time a sport ships. See engine/feed.py."""
+    try:
+        from engine import feed as _feed
+        _feed.scan_all({"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+                        "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  feed: skipped — {type(exc).__name__}: {exc}")
 
 
 def _seal_forecasts(quiet: bool = False) -> None:
