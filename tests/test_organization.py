@@ -162,7 +162,10 @@ def test_the_receipts_room_opens_on_the_receipts():
 
 def test_the_fantasy_page_is_four_rooms():
     js = _js()
-    i = js.index("host.innerHTML = _ffLead + subtabbedHTML(")
+    # Anchored past the lead, not on its exact concatenation — the
+    # stale-usage banner joined the chain on 2026-08-24 and the claim
+    # here is the four rooms, not the operands to the left of them.
+    i = js.index('subtabbedHTML("fantasy"')
     body = js[i:i + 900]
     for room in ("usage", "trade", "scripts", "league"):
         assert f'"{room}"' in body, room

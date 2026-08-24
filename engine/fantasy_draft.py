@@ -125,6 +125,39 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
     """
     players = _players(conn, season)
 
+    # OUT OF THE LEAGUE MEANS OFF THE BOARD. Ethan, 2026-08-24: "the
+    # fantasy draft is using old retired players. it used tom brady and
+    # kenneth gainwell." The board is built from the newest INGESTED
+    # season, and when that lags the calendar it faithfully projects
+    # players who have since retired — and the mock simulator drafts
+    # straight from this board, so a simulated room was spending real
+    # picks on men who no longer play.
+    #
+    # The roster layer already knew: apply_current_rosters stamps
+    # `roster_flag: "inactive"` on exactly these rows. A flag is the
+    # right treatment for a free agent (an active player somebody may
+    # yet sign) and the wrong one for a retirement — nobody can draft
+    # Tom Brady, so he does not belong on a draft board at any rank.
+    # Dropped BEFORE tiers and replacement, so the baselines are
+    # computed over a pool of people who exist.
+    #
+    # Only players Sleeper POSITIVELY marks inactive go: a usage row
+    # with no Sleeper match at all is kept, because a name-join failure
+    # must never erase a real player. Active-but-teamless stays too —
+    # that is the free-agent case the flag handles.
+    dropped: list[str] = []
+    if sleeper:
+        from .offseason import _lookup, index_players
+        idx = index_players(sleeper)
+        kept = []
+        for r in players:
+            cur = _lookup(idx, r["player"], r["position"])
+            if cur is not None and not cur["active"]:
+                dropped.append(r["player"])
+            else:
+                kept.append(r)
+        players = kept
+
     # BEFORE tiers, VORP and replacement, deliberately. Placing them
     # afterwards would rank them against a replacement level computed as
     # though they did not exist — and the whole reason a missing rookie
@@ -177,6 +210,10 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
 
     return {
         "season": season, "teams": teams,
+        # Who was removed and why, so a vanished name is checkable
+        # rather than mysterious. Count plus a capped sample — a long
+        # retirement class should not bloat the payload.
+        "dropped_inactive": {"n": len(dropped), "players": dropped[:20]},
         "replacement": baselines,
         "market": market,
         "board": board[:150],

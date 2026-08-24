@@ -174,6 +174,15 @@ def from_sleeper(players: dict, positions=("QB", "RB", "WR", "TE")) -> dict:
         pos = (p.get("position") or "").upper()
         if positions and pos not in positions:
             continue
+        # A RETIRED PLAYER KEEPS HIS SEARCH RANK. Sleeper does not tidy
+        # `search_rank` when a career ends, so an inactive player can
+        # still carry a draftable-looking number — and this ordering
+        # feeds draftmarket.place_missing, which put Tom Brady BACK on
+        # the 2026 board the moment the usage side dropped him. Explicit
+        # false only: an absent flag keeps the row, the same
+        # join-failure-never-erases rule the kit drop follows.
+        if p.get("active") is False:
+            continue
         rank = p.get("search_rank")
         if not isinstance(rank, (int, float)) or rank <= 0 or rank >= 100000:
             continue

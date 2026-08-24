@@ -48,6 +48,27 @@ def latest_season(conn) -> int | None:
     return int(row[0]) if row and row[0] is not None else None
 
 
+def usage_freshness(season: int, today: str | None = None) -> dict | None:
+    """None when the ingested season is current; {have, expected} when it
+    lags. "Current" means the season season_of() puts today in — during
+    the offseason gap that is the season that just finished, which is
+    exactly the season a usage board SHOULD be built from.
+
+    Exists because latest_season() answers "what is the newest season we
+    have" and nothing asked "is that the newest season there IS". On a
+    box whose NFL ingest stopped in 2022, the draft kit kept projecting
+    Tom Brady forward each August and calling it last season's usage
+    (Ethan, 2026-08-24)."""
+    import datetime as _dt
+
+    from .seasons import season_of
+    day = today or _dt.date.today().isoformat()
+    expected = season_of("nfl", day)
+    if season is None or season >= expected:
+        return None
+    return {"have": int(season), "expected": int(expected)}
+
+
 def _weekly(conn, season: int) -> dict:
     """{player: {"team", "position", "weeks": {wk: {market: value}}}} plus
     {(team, wk): {market: team total}} in one pass."""

@@ -237,6 +237,12 @@ def main() -> None:
             # fatal: no schedule cache means no calendar, not no page.
             "schedule": _upcoming_schedule(season),
             "draft_kit": kit,
+            # Is the season we built from the season it SHOULD be? None
+            # when current; {have, expected} when the ingest lags the
+            # calendar — the state that put Tom Brady on a 2026 draft
+            # board. The page wears it as a banner; the build log prints
+            # the command that fixes it.
+            "usage_stale": fantasy.usage_freshness(season),
             "offseason": off,
             "trending": trending,
             # EVERY RANKING WE CAN LEGITIMATELY READ, side by side. Ethan,
@@ -261,6 +267,12 @@ def main() -> None:
     p = Path(args.out)
     # THROUGH THE GATE, since 2026-08-22 — `draft_kit`, `ranks`,
     # `buy_sell` and `scripts` are paid keys now, and _write_json puts
+    stale = out.get("usage_stale")
+    if stale:
+        print(f"  WARNING: NFL usage tops out at {stale['have']} — the "
+              f"board should build from {stale['expected']}. Fix: "
+              f"python3 ingest.py nfl --seasons "
+              f"{stale['have'] + 1}-{stale['expected']}")
     # whatever it is given on the public path. Same hole as memes_build:
     # the redaction was correct and the builder walked around it.
     # `_write_json` stays for rosters_nfl.json, which is free.

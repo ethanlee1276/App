@@ -12992,7 +12992,21 @@ async function renderFantasy() {
       ~${bs.band || 1.5} PPG are flagged. Updated ${escapeHtml(d.generated_at || "")}.</p>`;
   _mockKit = d.draft_kit || {};
   _ffData = d;
-  host.innerHTML = _ffLead + subtabbedHTML("fantasy", [
+  /* THE SEASON THE NUMBERS CAME FROM, when it is not the season it
+     should be. The whole page is honest about being last season run
+     forward; what it could not say was that "last season" on this box
+     was 2021 — which is how Tom Brady reached a 2026 draft board
+     (Ethan, 2026-08-24). The build stamps usage_stale when the newest
+     ingested season lags the calendar; a reader deciding whether to
+     trust a tier needs that fact above the tiers, not in a footer. */
+  const staleU = d.usage_stale;
+  const staleBanner = staleU ? `
+    <div class="card" style="border-left:3px solid var(--warn);margin-bottom:14px">
+      <p style="margin:0;font-size:var(--fs-md)">${icon('warn')} <b>These numbers are
+        built from the ${staleU.have} season</b> — the newest one ingested here.
+        The ${staleU.expected} season’s usage has not been loaded yet, so
+        treat every tier and projection as historical until it is.</p></div>` : "";
+  host.innerHTML = _ffLead + staleBanner + subtabbedHTML("fantasy", [
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
     ["trade", "Trade targets",
