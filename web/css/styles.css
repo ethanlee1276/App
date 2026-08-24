@@ -4125,8 +4125,36 @@ body.pk-open { overflow: hidden; }
 .inj-nolayer b { color: var(--text); }
 .inj-team-head { display: flex; align-items: baseline; gap: 8px;
   font-weight: 800; margin: 18px 0 8px; }
-.inj-team-n { color: var(--text-mute); font-weight: 600;
+/* The count sits at the far right, past the tier tags, with the open/shut
+   marker outside it. */
+.inj-team-n { color: var(--text-mute); font-weight: 600; margin-left: auto;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+/* EACH TEAM FOLDS. Thirty-two blocks of fifteen rows each — most of them
+   ESPN return filings reading "Active · undisclosed" — is several
+   thousand pixels of scroll to reach a designation you could not see
+   coming. Same chevron treatment as .pre-week: the UA triangle does not
+   inherit colour and sits black on black in the dark theme. */
+.inj-team { margin-top: 6px; }
+.inj-team > summary { cursor: pointer; list-style: none; }
+.inj-team > summary::-webkit-details-marker { display: none; }
+.inj-team > summary::after {
+  content: "+"; margin-left: 10px; color: var(--text-mute);
+  font-weight: 700; font-size: var(--fs-sm);
+}
+.inj-team[open] > summary::after { content: "\2212"; }
+.inj-team > summary:hover .inj-team-n { color: var(--text-dim); }
+.inj-team > summary:focus-visible { outline: 2px solid var(--brand);
+  outline-offset: 3px; border-radius: var(--radius-sm); }
+/* The tier counts, which are the whole reason a shut row is still worth
+   reading: they say whether there is anything inside worth opening. */
+.it-tier {
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+.it-tier.bad { color: var(--bad); }
+.it-tier.warn { color: var(--warn); }
+.it-tier.quiet { color: var(--text-mute); font-weight: 600; }
 .inj-list { padding: 2px 0; }
 /* The compact designation beside a name, wherever a roster surface tags
    one — agate weight so it reads as a label, not a shout. */

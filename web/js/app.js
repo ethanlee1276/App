@@ -16472,8 +16472,23 @@ async function renderInjuries() {
 
   const byTeam = {};
   for (const r of parsed) (byTeam[r.team] = byTeam[r.team] || []).push(r);
-  const teams = Object.keys(byTeam)
-    .sort((a, b) => byTeam[b].length - byTeam[a].length || a.localeCompare(b));
+  /* "MOST BANGED-UP FIRST" NOW MEANS IT. This sorted on row COUNT, and
+     ESPN's feed is mostly return filings — so the team leading the
+     section was whichever had the most players practising, and folding
+     the blocks made that impossible to miss: the top row read
+     "Philadelphia Eagles · no designations · 18". Sort on the tiers the
+     summary shows, so the teams worth opening are the ones at the top.
+     Counted once here and handed down rather than recomputed per row. */
+  const severity = {};
+  for (const t of Object.keys(byTeam)) {
+    const n = (tone) => byTeam[t].filter((r) => injTone(r.status) === tone).length;
+    severity[t] = { out: n("var(--bad)"), maybe: n("var(--warn)") };
+  }
+  const teams = Object.keys(byTeam).sort((a, b) =>
+    severity[b].out - severity[a].out
+    || severity[b].maybe - severity[a].maybe
+    || byTeam[b].length - byTeam[a].length
+    || a.localeCompare(b));
 
   const tile = (k, v, sub) => `<div class="tile"><div class="k">${k}</div>
     <div class="v">${v}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ""}</div>`;
@@ -16494,10 +16509,7 @@ async function renderInjuries() {
     <div class="section-title">By team
       <span class="sub">— most banged-up first. Every current designation the league
       lists, not just this week’s.</span></div>
-    ${teams.map((t) => `
-      <div class="inj-team-head">${escapeHtml(t)}
-        <span class="inj-team-n">${byTeam[t].length}</span></div>
-      <div class="card inj-list">${byTeam[t].map((r) => injRow(r, false)).join("")}</div>`).join("")}
+    ${teams.map((t) => injTeamBlock(t, byTeam[t], severity[t])).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
       site on a 30-minute cache, one row per player — his newest filing. The NFL’s
@@ -16506,6 +16518,45 @@ async function renderInjuries() {
       ${ageS != null
         ? `Designations collected ${escapeHtml(ageText(ageS))} ago.`
         : `Page built ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.`}</p>`;
+}
+
+/* ONE TEAM, FOLDED. Ethan, 2026-08-25: "we should make each team as a
+   click down menu thing instead of showing every single player all at
+   once bc it makes a lot of scrolling for that page."
+
+   The scroll was real and mostly noise. ESPN's NFL feed lists RETURNS
+   as well as injuries, so a typical team block is fifteen rows reading
+   "Active · undisclosed" wrapped around the two that actually say
+   something — thirty-two teams of that is several thousand pixels to
+   reach a designation you could not see coming.
+
+   THE SUMMARY HAS TO CARRY THE SIGNAL or folding just hides it. A
+   collapsed row that says only "Carolina Panthers 17" makes you open all
+   thirty-two to find the one with a player out, which is the same
+   scrolling with extra taps. So the tier counts ride on the summary
+   line: how many are out, how many are questionable, and — said plainly
+   rather than left blank — when a team has neither.
+
+   ALL CLOSED BY DEFAULT, including teams with players out. "Who just
+   went down" is already answered above by Fresh this week, which stays
+   open; this section is the league-wide reference underneath it, and a
+   reference that auto-expands its biggest entries is the scroll again.
+
+   Native <details>: keyboard and screen-reader behaviour for free, and
+   it still works with JS broken. Same chevron treatment as .pre-week,
+   because the UA triangle does not inherit colour and sits black on
+   black in the dark theme. */
+function injTeamBlock(team, rows, sev) {
+  const { out, maybe } = sev;
+  const tiers = out || maybe
+    ? `${out ? `<span class="it-tier bad">${out} out</span>` : ""}${
+        maybe ? `<span class="it-tier warn">${maybe} questionable</span>` : ""}`
+    : `<span class="it-tier quiet">no designations</span>`;
+  return `<details class="inj-team">
+    <summary class="inj-team-head">${escapeHtml(team)}
+      ${tiers}<span class="inj-team-n">${rows.length}</span></summary>
+    <div class="card inj-list">${rows.map((r) => injRow(r, false)).join("")}</div>
+  </details>`;
 }
 
 async function renderStandings() {

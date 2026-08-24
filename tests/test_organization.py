@@ -570,8 +570,17 @@ def test_injury_rows_are_lines_not_columns():
     j = js.index("async function renderInjuries(")
     body = js[j:js.index("\n}\n", j)]
     assert "<table" not in body
-    assert body.count('class="card inj-list"') == 2, \
-        "fresh-this-week and by-team should share the one row layout"
+    # BOTH SECTIONS, wherever they are written. The by-team block moved
+    # into injTeamBlock() on 2026-08-25 when each team became a
+    # <details>, so counting inside renderInjuries alone found one and
+    # called a refactor a regression. The claim is that the two sections
+    # share ONE row layout, not that both are typed in the same function.
+    team_block = js[js.index("function injTeamBlock("):]
+    team_block = team_block[:team_block.index("\n}\n")]
+    assert body.count('class="card inj-list"') == 1, \
+        "fresh-this-week lost the shared row layout"
+    assert team_block.count('class="card inj-list"') == 1, \
+        "the by-team list no longer shares the one row layout"
     # The column headers died with the columns.
     assert "INJ_HEAD" not in js
     css = _read("web", "css", "styles.css")
