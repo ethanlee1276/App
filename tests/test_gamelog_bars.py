@@ -60,9 +60,19 @@ def test_every_player_prop_chart_is_bars_now():
     # a POSITION that exists at every instant between settles, the same
     # kind of claim the win-probability track makes. The ban is about
     # per-game stats, which have no value on the days nothing happened.
-    assert APP.count("sparkline(") == 2
+    # 2026-08-24: 2 → 3, the carve-out again and this time by its own
+    # letter — the comment above has named "the win-probability track"
+    # as the archetype of a legitimate line since the ban was written,
+    # and the sweat zone's history IS that track: a probability that
+    # exists at every instant between pitches, not a per-game count.
+    assert APP.count("sparkline(") == 3
     assert APP.count("sparkline(vals") == 1     # the live line track
     assert APP.count("sparkline(curve.map(") == 1   # My Bets bankroll curve
+    # The third is the sweat history — verified by its wrapper class
+    # rather than by its exact argument spelling.
+    i = APP.index('class="sw-spark"')
+    assert "sparkline(" in APP[i:i + 160], \
+        "the sweat history stopped drawing its track"
 
 
 PA = VIS[VIS.index("function propAnalysis"):VIS.index("/* ---------------- Game-log bars")]

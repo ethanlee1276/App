@@ -11909,7 +11909,7 @@ async function renderFeedZone() {
                 left_board: "left the board" }[e.reason] || "off the board",
       };
       case "line_move": return {
-        ic: e.rec ? "flash" : "signal", tone: e.rec ? "warn" : "",
+        ic: "signal", tone: e.rec ? "warn" : "",
         title: `Line move: ${who} ${mkt} ${e.frm} → ${e.to}`,
         cond: e.model_held && e.proj != null
           ? `model held at ${e.proj} — the gap ${((e.side || "OVER") === "OVER") === (e.to > e.frm) ? "shrank" : "grew"}`
@@ -23774,9 +23774,99 @@ function miniDiamond(bases) {
     ${pt(2, 24, 8)}${pt(3, 9, 22)}${pt(1, 39, 22)}</svg>`;
 }
 
+/* THE SWEAT ZONE — Ethan's roadmap #2. Every journaled bet with a live
+   model number, on the fast clock: engine/sweat.py republishes
+   sweat.json every 12 seconds while games are on, using the SAME
+   assembly the board's tracker uses, plus a banked history so the
+   percentage is a line you can watch, not just a number that blinks.
+   The zone renders only rows carrying a live number; the tracker below
+   still lists every open bet and reconciles the counts. */
+let _sweatCache = null, _sweatAt = 0;
+
+async function renderSweatZone() {
+  const host = document.getElementById("sweat-zone");
+  if (!host) return;
+  if (!_sweatCache || Date.now() - _sweatAt > 10000) {
+    try {
+      const res = await paidFetch("sweat.json");
+      if (res.ok) { _sweatCache = await res.json(); _sweatAt = Date.now(); }
+    } catch (e) { /* the tracker below still carries the bets */ }
+  }
+  if (state.view !== "live") return;
+  const d = _sweatCache || {};
+  const fresh = d.generated_at
+    && (Date.now() - Date.parse(d.generated_at.endsWith("Z")
+        ? d.generated_at : d.generated_at + "Z")) < 180000;
+  const picks = fresh && !d.locked
+    ? (d.picks || []).filter((r) => r.live_prob != null) : [];
+  const parlays = fresh && !d.locked
+    ? (d.parlays || []).filter((t) => (t.legs || []).length) : [];
+  if (!picks.length && !parlays.length) { host.innerHTML = ""; return; }
+
+  const pct = (p) => `${Math.round(p * 100)}%`;
+  const delta = (r) => {
+    if (r.pregame_prob == null || r.live_prob == null) return "";
+    const dp = r.live_prob - r.pregame_prob;
+    if (Math.abs(dp) < 0.01) return `<span class="sw-flat">·</span>`;
+    return `<span class="sw-delta ${dp > 0 ? "up" : "down"}">${
+      dp > 0 ? "▲" : "▼"} ${Math.abs(dp * 100).toFixed(0)}</span>`;
+  };
+  const sentence = (r) => {
+    if (r.still_in === false) return "pitcher done — nothing left to add";
+    const cur = r.current != null ? `${r.current} so far` : "";
+    const left = r.opp_left != null
+      ? `~${r.opp_left} ${r.opp_unit === "BF" ? "batters" : "PA"} left` : "";
+    return [cur, left].filter(Boolean).join(" · ")
+      || "live — tracking";
+  };
+  const spark = (r) => {
+    const h = (r.history || []).map((x) => x[1]);
+    if (h.length < 3) return "";
+    // The helper takes values NEWEST-first and draws oldest → newest.
+    return `<span class="sw-spark">${sparkline(
+      [...h].reverse(), { w: 96, h: 26 })}</span>`;
+  };
+  const row = (r) => `
+    <div class="sw-row">
+      <span class="sw-who">
+        <b>${escapeHtml(r.player)} ${escapeHtml(r.side || "")} ${r.line} ${escapeHtml(r.market_label || "")}</b>
+        <span class="sw-sent">${escapeHtml(sentence(r))}</span>
+      </span>
+      ${spark(r)}
+      <span class="sw-num"><b class="sw-pct">${pct(r.live_prob)}</b>${delta(r)}</span>
+    </div>`;
+  const legRow = (l) => `
+    <div class="sw-leg${l.status !== "open" ? " " + l.status : ""}">
+      <span>${escapeHtml(l.player)} ${escapeHtml(l.side || "")} ${l.line} ${escapeHtml(marketWord(l.market))}</span>
+      <b>${l.status === "won" ? icon("check", 12)
+           : l.status === "lost" ? icon("cross", 12)
+           : l.live_prob != null ? pct(l.live_prob) : "—"}</b>
+    </div>`;
+  const ticket = (t) => `
+    <div class="sw-ticket">
+      <div class="sw-ticket-head">${t.n_legs}-leg parlay
+        ${t.book ? `<span class="sub">· ${escapeHtml(t.book)}</span>` : ""}
+        <span class="sw-num"><b class="sw-pct">${
+          t.live_joint != null ? pct(t.live_joint) : "—"}</b>${
+          t.live_joint != null && t.pregame_joint != null
+            ? delta({ live_prob: t.live_joint, pregame_prob: t.pregame_joint })
+            : ""}</span></div>
+      ${(t.legs || []).map(legRow).join("")}
+      <div class="sw-note">legs joined as a product — the live legs are
+        conditioned on their own games, not re-correlated</div>
+    </div>`;
+  host.innerHTML = `
+    <div class="section-title">The sweat
+      <span class="sub">— every journaled bet with its live win chance, from what’s
+      banked against what’s left to bank it in. Updates every few pitches.</span></div>
+    ${picks.length ? `<div class="card sw-list">${picks.map(row).join("")}</div>` : ""}
+    ${parlays.map(ticket).join("")}`;
+}
+
 async function renderLiveBoard() {
   const host = document.getElementById("live-board");
   if (!host) return;
+  renderSweatZone();
   const games = await fetchAllLive();
   const bySport = {};
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });

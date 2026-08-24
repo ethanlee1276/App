@@ -175,6 +175,9 @@ PAID_FILES = (
     # The live feed: every entry names a pick — an edge appearing IS a
     # recommendation — so the whole file is the model's output.
     "feed.json",
+    # The sweat page: every row is a journaled pick with a live model
+    # number on it.
+    "sweat.json",
     # predmarkets.json is the SAME BOARD as kalshi.json under pm_build's
     # default --out, and it was nearly missed. Its picks live in `rows`,
     # which no entry in PAID_KEYS matches, so a board named this way would
@@ -261,7 +264,7 @@ KNOWN_BOARDS = (
     # a board without telling the gate. Unregistered meant `is_free` said
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
-    "memerecord.json", "heartbeat.json", "feed.json",
+    "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
     "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",

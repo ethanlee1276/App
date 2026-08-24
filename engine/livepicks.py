@@ -22,7 +22,7 @@ TEAM_MARKETS = {"moneyline", "spread", "team_total"}
 
 
 def _live_prob(bet, market, side, line, current, game, live, progress,
-               rec_means, pitching):
+               rec_means, pitching, out=None):
     """The bet's win probability right now, or None.
 
     NONE IS A REAL ANSWER HERE and is returned far more often than a
@@ -96,6 +96,12 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
                 game.get("home") if is_home else game.get("away"))
         left = lp.bf_left(opp_outs, stat.get("bf", 0),
                           own_pen_score=own_pen) if still_in else 0.0
+        if out is not None:
+            # The sweat page's sentence: "~9 batters left" or "pitcher
+            # done". Rounded here so two surfaces cannot round apart.
+            out["opp_left"] = round(float(left), 1)
+            out["opp_unit"] = "BF"
+            out["still_in"] = bool(still_in)
         mean = (rec_means.get(name) or {}).get("strikeouts")
         bf_seen = float(stat.get("bf") or 0)
         if mean is None or bf_seen <= 0:
@@ -145,6 +151,9 @@ def _live_prob(bet, market, side, line, current, game, live, progress,
     team_outs = lp.outs_left(inning, half, sit.get("outs", 0), is_home,
                              live.get("home_score"), live.get("away_score"))
     pa_left = lp.remaining_pa(spot, at_bat_spot, team_outs)
+    if out is not None:
+        out["opp_left"] = round(float(pa_left), 1)
+        out["opp_unit"] = "PA"
     return lp.hitter_probability(rates, market, line, side,
                                  current or 0.0, pa_left)
 
@@ -423,8 +432,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
                 won = (actual > line) == (side == "OVER")
                 status = "won_pending" if won else "lost_pending"
                 current = actual
+        sweat: dict = {}
         live_prob = _live_prob(b, market, side, line, current, g,
-                               live, progress, rec_means, pitching)
+                               live, progress, rec_means, pitching,
+                               out=sweat)
         # A BET WITH NO CHANCES LEFT IS NOT STILL RUNNING. The status
         # buckets above only knew one way for a bet to die — the stat
         # passing the line the wrong way — so a starter pulled two
@@ -451,6 +462,16 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # player has banked against what he has left to bank it in.
             # None whenever any input is missing; see engine/mlb/liveprops.
             "live_prob": live_prob,
+            # The sentence ingredients the sweat page needs beside the
+            # number: how much opportunity is left ("~2 PA left"), and
+            # for a pitcher whether he is still out there at all. Empty
+            # when the probability itself was unreachable.
+            "opp_left": sweat.get("opp_left"),
+            "opp_unit": sweat.get("opp_unit"),
+            "still_in": sweat.get("still_in"),
+            # Pregame baseline, for the arrow: what the model thought at
+            # journal time. Straight off the bet row; None on old rows.
+            "pregame_prob": b.get("hit_prob"),
             # Where the market's own number sits right now, for the two
             # markets that carry a line. A fact, not a forecast — see
             # `_live_prob` on why these get no probability.

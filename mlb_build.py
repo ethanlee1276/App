@@ -499,7 +499,8 @@ def main() -> None:
         # count has to reconcile with the Record's. Bets pulled in from the
         # neighbouring days are shown only if they actually land on a game
         # in tonight's slate — otherwise a widened window becomes clutter.
-        _cols = ("player, market, side, line, odds, stake_units, date, category")
+        _cols = ("player, market, side, line, odds, stake_units, date, "
+                 "category, hit_prob")
         _where = ("status='open' AND sport='mlb' "
                   "AND category IN ('main','longshot')")
         open_today = [dict(r) for r in _lpc.execute(

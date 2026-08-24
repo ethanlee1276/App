@@ -135,6 +135,16 @@ def main() -> None:
     live = sum(1 for g in payload["games"] if g["live"]["state"] == "live")
     print(f"live scores: {len(payload['games'])} game(s), {live} in progress "
           f"→ {out}")
+    # THE SWEAT RIDES THE SAME CLOCK. The per-bet live probabilities have
+    # existed since mid-August — inside the 8-minute board build, which
+    # is the exact latency this file was created to fix for scores.
+    # Guarded so a sweat failure can never take the scoreboard with it:
+    # scores are the more important product of this process.
+    try:
+        from engine import sweat
+        sweat.build(today=args.date or None, quiet=False)
+    except Exception as exc:                              # noqa: BLE001
+        print(f"  sweat: skipped — {type(exc).__name__}: {exc}")
 
 
 if __name__ == "__main__":

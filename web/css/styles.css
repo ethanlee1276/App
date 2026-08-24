@@ -2253,6 +2253,42 @@ select.calc-in { width: auto; font-weight: 600; }
    for it. Scoped to the zone so the original alert rows keep their
    one-line discipline. */
 #feed-zone .al-t b { white-space: normal; overflow: visible; }
+
+/* ---------------- The sweat zone (Live tab) ---------------- */
+.sw-list { padding: 2px 0; }
+.sw-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.sw-row:last-child { border-bottom: 0; }
+.sw-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sw-who b { font-size: var(--fs-sm); }
+.sw-sent { color: var(--text-mute); font-size: var(--fs-xs); }
+.sw-spark { flex: none; line-height: 0; opacity: .9; }
+.sw-num { flex: none; display: flex; align-items: baseline; gap: 7px;
+  min-width: 86px; justify-content: flex-end; }
+.sw-pct { font-size: var(--fs-xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; }
+.sw-delta { font-size: var(--fs-xs); font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+.sw-delta.up { color: var(--good); }
+.sw-delta.down { color: var(--bad); }
+.sw-flat { color: var(--text-mute); }
+.sw-ticket { border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); background: var(--panel);
+  padding: 10px 14px; margin-top: 12px; }
+.sw-ticket-head { display: flex; align-items: baseline; gap: 8px;
+  font-weight: 800; font-size: var(--fs-sm); margin-bottom: 6px; }
+.sw-ticket-head .sub { color: var(--text-mute); font-weight: 600; }
+.sw-ticket-head .sw-num { margin-left: auto; }
+.sw-leg { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; padding: 4px 0; font-size: var(--fs-sm);
+  color: var(--text-body); font-variant-numeric: tabular-nums; }
+.sw-leg.won b { color: var(--good); }
+.sw-leg.lost { color: var(--text-mute); text-decoration: line-through; }
+.sw-leg.lost b { color: var(--bad); text-decoration: none; }
+/* The honesty line under a ticket — agate, not alarm. */
+.sw-note { margin-top: 7px; color: var(--text-mute); font-size: var(--fs-2xs); }
+/* Phone: the sparkline is the first thing to give. */
+@media (max-width: 480px) { .sw-spark { display: none; } }
 /* A ceiling for very wide screens. The single full-width splits table is
    comfortably under this at 1536px; without it the win-rate bar keeps
    growing with the monitor and a 2560px display turns a supporting chart
