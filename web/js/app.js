@@ -202,7 +202,11 @@ const HIDDEN_VIEWS = {
   // movers off the board's player projections, and the CFB model prices
   // games, not players — there is nothing to rank until that layer
   // exists. Each remaining reason is spelled out below.
-  cfb: ["longshots", "trending", "weather"],
+  // Weather LEFT this list 2026-08-24 too: CFBD's /venues has every
+  // college stadium's coordinates (the key the talent prior already
+  // needs), Open-Meteo answers the kickoff hour keylessly, and ESPN
+  // names each game's venue — neutral sites included.
+  cfb: ["longshots", "trending"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -326,10 +330,7 @@ const HIDDEN_WHY = {
   cfb: { longshots: "college football is full-game markets only — there is "
                     + "no CFB player projection layer yet",
          trending: "movers are ranked off the board’s player projections, "
-                   + "and the college model prices games, not players",
-         weather: "no venue coordinates for 134 college stadiums without a "
-                  + "CFBD key — the free key that also unlocks the talent "
-                  + "prior" },
+                   + "and the college model prices games, not players" },
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
@@ -3608,11 +3609,14 @@ function gameCard(g) {
   const windTxt = mlb && w.wind_dir && !w.dome
     ? `${Math.round(w.wind_mph)}mph ${w.wind_dir}`
     : `${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
-  // No weather feed runs for college football, and a card that says
-  // "NaN°F · NaNmph" is worse than one that says nothing — say what is
-  // actually known about the venue instead.
+  // College weather is PULLED now (2026-08-24: CFBD venue coordinates +
+  // Open-Meteo at the kickoff hour) — but only for games the join could
+  // answer. A stamped game reads like the NFL's; an unstamped one keeps
+  // saying so, because "NaN°F · NaNmph" is worse than an honest miss.
   const cond = nba ? "Indoor hardwood"
-    : cfb ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
+    : cfb ? (g.weather
+        ? (w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`)
+        : g.indoor ? "Indoor" : "Outdoor · weather not pulled")
     : w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
   // `sub` is now MARKUP, not text, because two of its parts are drawn icons.
   // It used to be handed to escapeHtml at the point of use, which is correct

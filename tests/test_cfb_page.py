@@ -407,10 +407,17 @@ def test_pages_with_no_cfb_engine_behind_them_hide():
 
 
 def test_the_game_card_does_not_print_nan_degrees():
-    """CFB has no weather feed; the shared card's NFL branch would render
-    'NaN°F · NaNmph' for every college game."""
+    """College weather is PULLED since 2026-08-24 (CFBD venue coordinates
+    + Open-Meteo at the kickoff hour) — but only for games the venue
+    join could answer. The claim this test has always made survives as
+    the FALLBACK: a game WITHOUT a reading says so in words, never
+    'NaN°F · NaNmph'. A game with one reads like the NFL's."""
     app = _read("web", "js", "app.js")
-    assert 'cfb ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")' in app
+    i = app.index("cfb ? (g.weather")
+    seg = app[i:i + 300]
+    assert '"Outdoor · weather not pulled"' in seg,         "the unstamped-game fallback is gone — NaN degrees are back"
+    assert "Math.round(w.temp_f)" in seg,         "a stamped college game hides its reading"
+    assert seg.index("g.weather") < seg.index("g.indoor"),         "the reading is checked after the indoor guess instead of first"
 
 
 def test_a_conditional_never_wears_a_stake_chip():

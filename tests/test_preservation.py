@@ -276,9 +276,9 @@ def test_the_per_league_nav_configuration_is_intact():
     # engine behind them (ESPN box scores → player_game_logs), not by
     # accident. This test preserves exclusions that still have reasons.
     cfb_line = block.split("cfb:")[1].split("]")[0]
-    for v in ("longshots", "trending", "weather"):
+    for v in ("longshots", "trending"):
         assert f'"{v}"' in cfb_line, f"CFB's {v} exclusion is gone"
-    for v in ("players", "rosters"):
+    for v in ("players", "rosters", "weather"):
         assert f'"{v}"' not in cfb_line,             f"CFB's {v} page was re-hidden — it has had an engine since 2026-08-24"
 
 

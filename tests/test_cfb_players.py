@@ -221,7 +221,10 @@ def test_the_sidebar_hides_only_what_still_has_a_reason():
     # model prices games, not players; there are no player projections
     # to rank movers from), not the stale no-feed one.
     assert '"trending"' in line
-    assert '"longshots"' in line and '"weather"' in line
+    assert '"longshots"' in line
+    # weather LEFT the list within the same day: CFBD venue coordinates
+    # + Open-Meteo at the kickoff hour — see tests/test_cfb_weather.py.
+    assert '"weather"' not in line
     k = APP.index("const HIDDEN_WHY")
     why = APP[k:APP.index("};", k)]
     assert "no free player-level feed" not in why, \

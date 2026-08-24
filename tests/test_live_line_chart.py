@@ -212,7 +212,10 @@ def test_cfb_games_speak_the_live_dict_every_other_league_speaks():
     the score and the clock the whole time."""
     src = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
     i = src.index('out["games"] = [')
-    block = src[i:i + 1600]
+    # 2600, not 1600: the weather fields (2026-08-24) sit between the
+    # opening bracket and the live dict, and the claim here is that the
+    # live dict ships, not that it ships within N characters.
+    block = src[i:i + 2600]
     assert '"live": {"state": g.get("state", "scheduled")' in block
     for key in ('"home_score"', '"away_score"', '"period"'):
         assert key in block, f"the live dict lost {key}"

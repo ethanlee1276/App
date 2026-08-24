@@ -484,6 +484,20 @@ def main() -> None:
     store = cfbstatus.load_store()
     games = [cfbstatus.annotate_game(g, store) for g in games]
 
+    # Kickoff weather, joined on the VENUE ESPN names (so neutral sites
+    # read the right sky) with CFBD's coordinates and Open-Meteo's hourly
+    # board. Degrades to nothing without the CFBD key or with either feed
+    # down — a game that cannot be answered keeps weather_checked False
+    # and the card keeps saying "weather not pulled".
+    try:
+        from engine.cfb import wx as _wx
+        n_wx = _wx.attach(games, _wx.venue_index(_wx.fetch_venues()))
+        outdoor = sum(1 for g in games if not g.get("indoor"))
+        print(f"Weather: {n_wx} of {len(games)} game(s) stamped "
+              f"({outdoor} outdoor)")
+    except Exception as exc:                              # noqa: BLE001
+        print(f"Weather: skipped — {type(exc).__name__}: {exc}")
+
     out["games"] = [{"home": g["home"], "away": g["away"],
                      "date": g.get("date") or args.date,
                      "kickoff": g.get("kickoff", ""),
@@ -495,6 +509,11 @@ def main() -> None:
                      "attention_tier": attention_tier(g),
                      "qb_confirmed": g.get("qb_confirmed", False),
                      "venue": g.get("venue", ""), "indoor": g.get("indoor", False),
+                     # What the Weather page and the game card read; the
+                     # park_name key is the shape every other league uses.
+                     "weather": g.get("weather"),
+                     "weather_checked": g.get("weather_checked", False),
+                     "park_name": g.get("venue", ""),
                      "state": g.get("state", "scheduled"),
                      # The shape every other league's payload speaks. The
                      # Live tab keeps a game with live.state == "live" and
