@@ -2108,6 +2108,52 @@ select.calc-in { width: auto; font-weight: 600; }
 }
 .rec-epoch strong { color: var(--text); }
 
+/* A MARK ON A SECTION TITLE, from the same render. Used sparingly and
+   only where the render asks for it — a page whose every heading wears a
+   badge has told you nothing about which heading matters. Sized off the
+   type it sits in, so it moves with the ramp rather than beside it. */
+.section-title .st-ico {
+  color: var(--brand); display: inline-flex; vertical-align: -2px;
+  margin-right: 8px;
+}
+
+/* THE PROCESS ROW — Ethan's Results Tracker render, 2026-08-24.
+
+   Process was the sixth tile in the KPI strip and it is not the same
+   KIND of number as the other five: those are the record, this grades
+   the DECISIONS behind it, and it needs three lines to say so where they
+   need one. On its own row it carries the count and both causes as
+   bullets, and the two things a reader reaches for next — what the
+   record leaves out, and what counts as a tracked bet — sit beside it
+   instead of below the fold. */
+.rec-process-row {
+  display: grid; gap: 12px; margin-bottom: 20px; align-items: start;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+}
+.rec-process .v i {
+  font-style: normal; font-size: var(--fs-sm); font-weight: 700;
+  color: var(--text-mute); margin: 0 6px 0 1px; vertical-align: 3px;
+}
+.rp-bullets { list-style: none; margin: 9px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px; }
+.rp-bullets li { position: relative; padding-left: 14px;
+  color: var(--text-dim); font-size: var(--fs-sm); }
+.rp-bullets li::before {
+  content: ""; position: absolute; left: 0; top: .5em;
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+.rp-bullets li.good { color: var(--good); }
+.rp-bullets li.bad { color: var(--bad); }
+.rec-process-side { min-width: 0; display: flex; flex-direction: column;
+  gap: 4px; justify-content: center; }
+.rec-process-side .rec-epoch { margin-top: 0; }
+.rec-process-side .rec-disclose { margin: 4px 0 0; }
+/* Under this the two stack: a 260px card beside a paragraph is a card
+   beside a column of single words. */
+@media (max-width: 760px) {
+  .rec-process-row { grid-template-columns: 1fr; }
+}
+
 /* Progressive disclosure for the page's explanatory prose: right to have,
    wrong to lead with. */
 .rec-disclose { margin: 12px 0 4px; }
@@ -5594,14 +5640,24 @@ body.has-rail .shell {
 .donut-k { fill: var(--text-mute); font-size: var(--fs-2xs); font-weight: 600;
   text-transform: uppercase; letter-spacing: .6px; }
 .ufc-rb-legend { flex: 1; min-width: 0; }
-.rb-row {
+/* `urb-`, NOT `rb-`. THE COLLISION THIS CAUSED, found 2026-08-24 while
+   checking the Results Tracker render: the Record page's splits table has
+   owned `.rb-row` since long before this panel existed, as a GRID whose
+   fixed number columns are the whole reason its figures line up. These
+   rules are later in the file at equal specificity, so `display: flex`
+   won — and every splits table on the site silently lost its columns and
+   packed its numbers against the left edge.
+
+   Nothing threw, nothing overflowed, and the page sweep saw a table with
+   text in it. A person looking at a screenshot saw it in a second. */
+.urb-row {
   display: flex; align-items: center; gap: 9px; padding: 5px 0;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
 }
-.rb-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.rb-k { flex: 1; min-width: 0; color: var(--text-body); }
-.rb-n { font-weight: 800; }
-.rb-p { color: var(--text-mute); min-width: 48px; text-align: right; }
+.urb-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.urb-k { flex: 1; min-width: 0; color: var(--text-body); }
+.urb-n { font-weight: 800; }
+.urb-p { color: var(--text-mute); min-width: 48px; text-align: right; }
 .ufc-rb details { margin-top: 10px; }
 .ufc-rb summary {
   cursor: pointer; color: var(--text-mute); font-size: var(--fs-sm);

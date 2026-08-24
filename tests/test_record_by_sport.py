@@ -253,6 +253,11 @@ def test_the_running_pnl_marks_where_the_model_changed():
     check = body + """
 const escapeHtml = (s) => String(s);
 const escapeAttr = escapeHtml;
+// The chart's heading grew a section mark on 2026-08-23. This harness
+// runs one function in a bare context, so every collaborator it reaches
+// for has to be stubbed — the era rules are what is under test, not the
+// glyph beside the title.
+const icon = () => "";
 const toneOf = (v) => (v > 0 ? "good" : v < 0 ? "bad" : "");
 const F = (m) => { console.error(m); process.exit(1); };
 const curve = []; let cum = 0;

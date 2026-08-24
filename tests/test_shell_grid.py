@@ -43,12 +43,35 @@ def _rule(sel):
     return m.group(1)
 
 
+def _resolved(decl):
+    """`decl` with every var(--token) replaced by the width :root gives it.
+
+    The shell's track widths became tokens on 2026-08-23 so one place
+    sets them. These tests are about the SHAPE of the grid — how many
+    tracks, which are fixed — and reading the literal px turned a
+    deliberate re-width into a red file. Resolving first keeps the shape
+    check intact and adds one the literals never made: a token that is
+    referenced but never defined is now a failure rather than a silent
+    zero-width column.
+    """
+    body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    for tok in set(re.findall(r"var\((--[\w-]+)\)", decl)):
+        val = re.search(rf"{tok}:\s*([^;]+);", body)
+        assert val, f"{tok} is used by the shell but never defined"
+        decl = decl.replace(f"var({tok})", val.group(1).strip())
+    return decl
+
+
 def test_the_shell_is_still_a_two_track_grid():
     """If this ever stops being true the finding below changes shape and
     the fix wants re-reading rather than trusting."""
     r = _rule(".shell")
     assert "display: grid" in r
-    assert "grid-template-columns: 240px" in r
+    tracks = _resolved(r)
+    assert re.search(r"grid-template-columns:\s*\d+px", tracks), \
+        f"the sidebar column is no longer a fixed width: {tracks}"
+    assert tracks.count("minmax(0, 1fr)") == 1, \
+        f"the shell is no longer one fixed track plus one flexible: {tracks}"
 
 
 def test_every_direct_child_of_the_shell_is_placed_or_hidden():
@@ -98,7 +121,15 @@ def test_the_rail_variant_is_covered_too():
     body = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
     m = re.search(r"body\.has-rail \.shell\s*\{([^}]*)\}", body)
     assert m, "the has-rail shell variant is gone"
-    assert m.group(1).count("px") >= 2, m.group(1)
+    # THE CLAIM IS THREE TRACKS WITH FIXED SIDES, not the literal "px".
+    # Counting px went red on 2026-08-23 when the two side widths became
+    # --sidebar-w / --rail-w so one place sets them. Resolve the tokens
+    # and make the same check — which is stronger, since it also catches
+    # a token that is referenced but never given a width.
+    decl = _resolved(m.group(1))
+    assert decl.count("px") >= 2, decl
+    assert decl.count("minmax(0, 1fr)") == 1, \
+        f"the rail shell no longer has exactly one flexible track: {decl}"
     assert "grid-column: 1 / -1" in _rule("#stalebar")
 
 

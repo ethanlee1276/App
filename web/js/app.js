@@ -6627,7 +6627,7 @@ function recCurveChart(curve, opts = {}) {
   const gid = `pnlfill${Math.random().toString(36).slice(2, 8)}`;
   const net = last.cum_u;
   const head = `
-    <div class="section-title">Running P&amp;L
+    <div class="section-title"><span class="st-ico">${icon("rising", 15)}</span>Running P&amp;L
       <span class="sub">— every settled pick, by slate date</span></div>`;
   return `
     ${opts.head === false ? "" : head}
@@ -6724,7 +6724,7 @@ function recRecentSection(recent) {
   const shown = _recAllPicks ? recent : recent.slice(0, 12);
   const more = recent.length - shown.length;
   return `
-    <div class="section-title">Recent settled picks
+    <div class="section-title"><span class="st-ico">${icon("list", 15)}</span>Recent settled picks
       <span class="sub">— newest first, at the price we actually got</span></div>
     <div class="card rec-list">
       ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
@@ -6747,7 +6747,7 @@ function recAnalytics(curve, o, eras) {
   const rows = !isFinite(days) ? curve : curve.filter((p) =>
     p.date >= new Date(Date.now() - days * 864e5).toISOString().slice(0, 10));
   if (!rows.length) {
-    return `<div class="section-title">Running P&amp;L
+    return `<div class="section-title"><span class="st-ico">${icon("rising", 15)}</span>Running P&amp;L
         <span class="sub">— every settled pick, by slate date</span>
         ${raChips(avail, rk)}</div>
       <p class="rail-quiet" style="margin:0 0 18px">Nothing settled in this
@@ -6787,7 +6787,7 @@ function recAnalytics(curve, o, eras) {
     o.best_streak != null && `best win streak <b>${o.best_streak}</b>`,
   ]);
   return `
-    <div class="section-title">Running P&amp;L
+    <div class="section-title"><span class="st-ico">${icon("rising", 15)}</span>Running P&amp;L
       <span class="sub">— every settled pick, by slate date</span>
       ${raChips(avail, rk)}</div>
     <div class="ra-main">
@@ -9163,14 +9163,16 @@ async function renderRecord() {
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
   const receipts = verdict + `
-    <div class="stats rec-kpis">
-      ${recTile("ROI", (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
-                `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
-                { lead: true, tone: toneOf(o.roi) })}
-      ${recTile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
-                o.avg_clv == null ? "accrues as daily closes are captured"
-                  : `line movement on ${o.clv_n ?? 0} bet${o.clv_n === 1 ? "" : "s"} — 0.00 where the line cannot move`,
-                { lead: true, tone: o.avg_clv == null ? "" : toneOf(o.avg_clv) })}
+    <div class="stat-cards rec-kpis">
+      ${statCardHTML("rising", "ROI",
+          (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
+          `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
+          toneOf(o.roi))}
+      ${statCardHTML("signal", "Avg CLV",
+          o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
+          o.avg_clv == null ? "accrues as daily closes are captured"
+            : `line movement on ${o.clv_n ?? 0} bet${o.clv_n === 1 ? "" : "s"} — 0.00 where the line cannot move`,
+          o.avg_clv == null ? "" : toneOf(o.avg_clv))}
       ${/* The price tile, which is the ONLY CLV a fixed-line market has.
             A home-run prop is quoted OVER 0.5 and closes at 0.5, so the
             line tile beside this one reads 0.00 for two thirds of the
@@ -9178,12 +9180,13 @@ async function renderRecord() {
             Kept as its own tile rather than folded in: line points and
             probability points are different units, and averaging them
             together would be arithmetic on two different things. */ ""}
-      ${o.avg_price_clv == null ? "" : recTile(
-          "Price CLV",
+      ${o.avg_price_clv == null ? "" : statCardHTML("chart", "Price CLV",
           (o.avg_price_clv >= 0 ? "+" : "") + (o.avg_price_clv * 100).toFixed(2) + ' <span class="unit">pts</span>',
           `how the PRICE moved on ${o.price_clv_n ?? 0} over${o.price_clv_n === 1 ? "" : "s"} — the only CLV a 0.5 line has`,
-          { lead: true, tone: toneOf(o.avg_price_clv) })}
-      ${recTile("Record", `${o.wins}\u2011${o.losses}\u2011${o.pushes}`, `${o.open} open · ${o.settled} settled`)}
+          toneOf(o.avg_price_clv))}
+      ${statCardHTML("trophy", "Record",
+          `${o.wins}\u2011${o.losses}\u2011${o.pushes}`,
+          `${o.open} open · ${o.settled} settled`)}
       ${/* The break-even is read off the prices this book ACTUALLY took,
             not assumed to be -110. A book that buys short prices needs far
             more than 52.4%: on the MLB journal the real bar is near 58%,
@@ -9191,29 +9194,38 @@ async function renderRecord() {
             The flat number flattered the record on the one figure a
             bettor checks first. Falls back to the -110 wording only when
             no odds are available to average. */ ""}
-      ${recTile("Win rate", (o.win_rate * 100).toFixed(1) + "%",
-                o.breakeven == null
-                  ? "break-even ≈ 52.4% at −110"
-                  : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
-                { tone: o.breakeven != null && o.win_rate < o.breakeven ? "bad" : "" })}
-      ${recTile("Process", nProc ? `${pr.good || 0}${icon('check')} ${pr.bad || 0}${icon('cross')}` : "—",
-                // The count is the point. This grades a bet against the
-                // CLOSING line, so it can only speak for the picks where a
-                // close was captured — which is a small slice. Without the
-                // denominator the tile looks frozen ("still 4?") when it is
-                // just quiet, and worse, looks like a verdict on the whole
-                // record when it is a verdict on four bets.
-                nProc ? `${nProc} of ${o.settled} priced at close · `
-                        + `${pr.lucky_wins || 0} lucky win(s), `
-                        + `${pr.unlucky_losses || 0} good-bet loss(es)`
-                      : "needs closing lines — none captured yet",
-                { help: "Grades the DECISION, not the result: a win that "
-                        + "closed worse than we bet it got lucky; a loss that "
-                        + "beat the close was still a good bet. Only counts "
-                        + "picks where we captured the closing line." })}
+      ${statCardHTML("target", "Win rate", (o.win_rate * 100).toFixed(1) + "%",
+          o.breakeven == null
+            ? "break-even ≈ 52.4% at −110"
+            : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
+          o.breakeven != null && o.win_rate < o.breakeven ? "neg" : "")}
     </div>
-    ${recEpochHTML(d)}
-    ${recDisclosure("What counts as a tracked bet", `Journals every
+    ${/* PROCESS ON ITS OWN ROW, per Ethan's render (2026-08-24). It was
+         the sixth tile in the strip and it is not the same KIND of
+         number as the other five: those are the record, this grades the
+         DECISIONS behind it, and it needs three lines to say so where
+         they need one. On its own row it can carry the count and both
+         causes as bullets, and the two things a reader reaches for next
+         — what the record leaves out, and what counts as a tracked bet —
+         sit beside it instead of below the fold. */""}
+    <div class="rec-process-row">
+      ${statCardHTML("scale", "Process",
+          nProc ? `${pr.good || 0}<i>W</i> ${pr.bad || 0}<i>L</i>` : "—",
+          nProc ? `${nProc} of ${o.settled} priced at close`
+                : "needs closing lines — none captured yet",
+          "",
+          { cardCls: "rec-process",
+            help: "Grades the DECISION, not the result: a win that closed "
+                + "worse than we bet it got lucky; a loss that beat the "
+                + "close was still a good bet. Only counts picks where we "
+                + "captured the closing line.",
+            extra: nProc ? `<ul class="rp-bullets">
+              <li class="good">${pr.lucky_wins || 0} lucky win(s)</li>
+              <li class="bad">${pr.unlucky_losses || 0} good-bet loss(es)</li>
+            </ul>` : "" })}
+      <div class="rec-process-side">
+        ${recEpochHTML(d)}
+        ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> bet — the same count the "Recommended bets"
       tile shows on each sport’s board: player props plus game bets (moneyline,
       spread &amp; totals, sharp-anchor and model alike) — at the real book price
@@ -9236,6 +9248,8 @@ async function renderRecord() {
         every figure above. Unit ROI pools honestly because the stakes were
         kept as sized; dollars stay real-money-only, and no paper row has
         ever moved the bankroll.`}`)}
+      </div>
+    </div>
     ${unstaked}
     ${small}
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
@@ -20563,12 +20577,23 @@ async function renderLiveFights(host) {
    caption under each is the part that carries the meaning ("books post
    MMA lines late" is the whole reason a zero there is not alarming) and
    five hand-written blocks are five chances for one of them to lose it. */
-function statCardHTML(mark, label, value, sub, cls = "") {
-  return `<div class="stat-card">
+function statCardHTML(mark, label, value, sub, cls = "", opts = {}) {
+  // `opts.help` is a hover explanation for a desktop pointer. A phone
+  // cannot show a title attribute, which is why anything load-bearing
+  // belongs in `sub` instead — the same rule recTile carries.
+  //
+  // `opts.extra` exists so the ONE card that needs more than a number
+  // and a caption — Process, which carries its two causes as bullets —
+  // does not become a second hand-written copy of this markup. A second
+  // copy is what test_ufc_render counts, and it is right to: the day one
+  // of them gains a class the other lacks, they stop being the same card.
+  const o = opts || {};
+  return `<div class="stat-card${o.cardCls ? " " + o.cardCls : ""}"${
+      o.help ? ` title="${escapeAttr(o.help)}"` : ""}>
     <div class="sc-head"><span class="sc-ico">${icon(mark, 15)}</span>
       <span>${escapeHtml(label)}</span></div>
     <div class="v ${cls}">${value}</div>
-    ${sub ? `<div class="sc-sub">${sub}</div>` : ""}
+    ${sub ? `<div class="sc-sub">${sub}</div>` : ""}${o.extra || ""}
   </div>`;
 }
 
@@ -20887,11 +20912,11 @@ async function renderUFC() {
                           { caption: "Total fights",
                             alt: `${graded} graded: ${wins} won, ${losses} lost, ${pushes} pushed` })}
               <div class="ufc-rb-legend">
-                ${legend.map(([k, n, col]) => `<div class="rb-row">
-                  <span class="rb-dot" style="background:${col}"></span>
-                  <span class="rb-k">${k}</span>
-                  <span class="rb-n">${n}</span>
-                  <span class="rb-p">${pct(n)}</span></div>`).join("")}
+                ${legend.map(([k, n, col]) => `<div class="urb-row">
+                  <span class="urb-dot" style="background:${col}"></span>
+                  <span class="urb-k">${k}</span>
+                  <span class="urb-n">${n}</span>
+                  <span class="urb-p">${pct(n)}</span></div>`).join("")}
               </div>
             </div>
             <details><summary>Every pick. Every fight. No excuses.</summary>

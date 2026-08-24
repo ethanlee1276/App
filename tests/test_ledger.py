@@ -1955,7 +1955,11 @@ def test_the_page_prints_the_measured_breakeven_not_a_constant():
     app = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "web", "js", "app.js"),
         encoding="utf-8").read()
-    i = app.index('recTile("Win rate"')
+    # ANCHORED ON THE CLAIM, NOT THE HELPER. This read `recTile("Win rate"`
+    # and went red on 2026-08-23 when the Record KPI strip moved from
+    # rule-divided tiles to stat cards — a change that did not touch the
+    # break-even at all. The tile's identity is its label; find that.
+    i = app.index('"Win rate"')
     tile = app[i:i + 500]
     assert "o.breakeven" in tile, "the tile still hardcodes a break-even"
     assert "at the prices taken" in tile

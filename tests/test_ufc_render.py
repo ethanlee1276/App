@@ -73,7 +73,17 @@ def test_every_stat_card_is_built_by_one_helper():
     """Five hand-written blocks are five chances for one to lose its
     caption, and the caption is the part that carries the meaning."""
     assert APP.count("function statCardHTML(") == 1
-    assert APP.count('<div class="stat-card">') == 1
+    # The MARKUP once, wherever the class list is assembled. The literal
+    # `<div class="stat-card">` stopped appearing when the helper learned
+    # to take an optional extra class — the point was never that exact
+    # string, it is that a second hand-written copy of this card cannot
+    # exist. Process needed bullets and took an `extra` slot rather than
+    # becoming that second copy.
+    # `stat-card` and `stat-cardS` are different things — the card and
+    # the grid that holds them — and a prefix match counts four
+    # containers as cards. Anchor on the card's own class expression.
+    assert APP.count('class="stat-card${') == 1, \
+        "a second hand-written stat card exists"
 
 
 def test_each_number_keeps_the_caption_that_explains_it():
