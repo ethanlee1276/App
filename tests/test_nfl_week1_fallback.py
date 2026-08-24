@@ -297,14 +297,29 @@ def test_the_board_does_not_claim_a_verdict_it_never_reached():
         "an odds-feed excuse must not pre-empt the real reason"
 
     # And the slider prompt is not offered when there is nothing to filter.
-    k = app.index("No props clear the current thresholds")
-    seg = app[max(0, k - 1200):k]
-    # The condition wraps across lines in the source, so match on the
-    # parts rather than one brittle contiguous string.
-    assert "generated_from" in seg and '"schedule-only"' in seg, \
+    # The default branch's copy, matched on the part that carries the
+    # meaning. It read "No props clear the current thresholds. Loosen the
+    # sliders…" as one sentence; the empty-state pass split the first
+    # half into the slate's TITLE and left the advice as the body, which
+    # changed the words without changing which branch says them.
+    # ORDER, NOT A LOOKBACK WINDOW. This searched the 1200 characters
+    # before "No props clear the current thresholds" for the
+    # schedule-only guard, and broke when the empty-state pass split that
+    # sentence into a slate title and a body — the branch order never
+    # changed. What matters is that schedule-only is TESTED before the
+    # default branch runs, so a board with nothing built is never told to
+    # loosen sliders that have nothing to filter.
+    # Inside renderRecommended's empty branch only. "Loosen the sliders"
+    # also appears twice in the COMMENTS above it explaining why it is
+    # bad advice here, and the first of those sits before the guard — so
+    # a file-wide index() found the comment and called the code wrong.
+    i = app.index("function renderRecommended(")
+    body = app[i:app.index("\n  // Group by market", i)]
+    guard = body.index('=== "schedule-only"')
+    cause = body.index("no prop has been built")
+    advice = body.index("msg = `Loosen the sliders")
+    assert guard < cause < advice, \
         "schedule-only still falls through to \"loosen the sliders\""
-    assert "no prop has been built" in seg, \
-        "the copy must name the real cause"
 
 
 

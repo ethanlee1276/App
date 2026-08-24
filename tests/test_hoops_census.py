@@ -125,8 +125,15 @@ def test_the_empty_message_names_the_biggest_actual_cause():
 def test_the_funnel_is_shown_under_every_empty_message():
     """"Why is this blank" is the same question whichever branch answers
     it, so the breakdown should not be conditional on the wording."""
-    i = JS.index('host.innerHTML = `<p class="loading">${msg}</p>')
-    assert "censusFunnelHTML()" in JS[i:i + 120]
+    # THE FUNNEL'S POSITION, not the markup it sits under. This pinned
+    # `<p class="loading">${msg}</p>` — the empty board wore the loading
+    # treatment until the empty-state pass on 2026-08-23 gave it the
+    # slate. The contract is that the breakdown follows the empty
+    # message, whichever branch wrote it and whatever it is set in.
+    i = JS.index("${censusFunnelHTML()}`;")
+    block = JS[i - 800:i]
+    assert "msgTitle" in block, "the funnel drifted off the empty branch"
+    assert 'class="empty-slate"' in block
 
 
 def test_a_total_is_never_reported_as_a_reason():

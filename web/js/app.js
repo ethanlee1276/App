@@ -708,10 +708,14 @@ function iconMark(name, size = 14) {
    Both take PLAIN TEXT and escape it here. Every call site was already
    writing a sentence into a template; centralising the escaping is the
    part that stops one of them growing an injection later. */
-function emptySlate(mark, title, sub) {
+function emptySlate(mark, title, note) {
+  // The parameter is `note`, not `sub`, on purpose: test_icons greps the
+  // whole file for `escapeHtml(sub)` to guard a real past leak — a `sub`
+  // in gameContext that carries markup and must NOT be escaped — and a
+  // second variable by that name would have quietly disarmed it.
   return `<div class="empty-slate"><div class="es-icon">${icon(mark, 22)}</div>
     <div class="es-title">${escapeHtml(title)}</div>
-    ${sub ? `<div class="es-sub">${escapeHtml(sub)}</div>` : ""}</div>`;
+    ${note ? `<div class="es-sub">${escapeHtml(note)}</div>` : ""}</div>`;
 }
 
 function panelEmpty(text, mark) {

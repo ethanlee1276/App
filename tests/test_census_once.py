@@ -64,8 +64,16 @@ def test_the_best_bets_empty_card_no_longer_repeats_it():
 def test_the_board_keeps_it():
     """It is the answer to "why is this list blank" and the list is
     here."""
-    i = APP.index("host.innerHTML = `<p class=\"loading\">${msg}</p>")
-    assert "${censusFunnelHTML()}" in APP[i:i + 160]
+    # THE FUNNEL'S POSITION, not the markup around it. This pinned
+    # `<p class="loading">${msg}</p>` — the empty board wore the
+    # loading treatment until the empty-state pass on 2026-08-23 gave
+    # it the slate it deserved. What this test is about is that the
+    # funnel follows the empty message, whatever that message is set
+    # in.
+    i = APP.index("${censusFunnelHTML()}`;")
+    block = APP[i - 800:i]
+    assert 'class="empty-slate"' in block, "the empty board lost its slate"
+    assert "msgTitle" in block, "the funnel drifted off the empty branch"
 
 
 def test_the_survivor_is_chosen_statically_not_by_a_flag():
