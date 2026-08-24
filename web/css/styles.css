@@ -2199,19 +2199,48 @@ select.calc-in { width: auto; font-weight: 600; }
   font-size: var(--fs-xs); font-weight: 700; letter-spacing: .7px; text-transform: uppercase;
   color: var(--text-mute); padding: 11px 14px 8px;
 }
-/* The label column is the one that gives; every number column is fixed so
-   the columns line up down the table and nothing runs off the edge. */
+/* Every number column is fixed so the columns line up down the table and
+   nothing runs off the edge.
+
+   THE BAR IS THE COLUMN THAT GIVES, not the label. When the splits table
+   went full width the label column was `1fr`, so on a 1536px screen it
+   grew to 968px and the row became a word, half a metre of nothing, and
+   then the numbers (Ethan, 2026-08-24: "still looks like shit"). The
+   name is capped instead, and the free space goes to the win-rate bar —
+   which turns the dead gap into the only chart this table has.
+
+   THE CAP IS IN PX AND NOT IN CH, which was the first attempt and broke
+   the alignment immediately. `ch` resolves against the font-size of the
+   element the track is declared on, and `.rb-labels` sets a smaller one
+   for the header row — so the header computed a narrower name column
+   than the rows beneath it and the whole table stepped out of line. The
+   same shape as the bug this table already survived once: a row that
+   sizes its own columns is a row that will not match its neighbours. */
 .rb-row {
   display: grid; align-items: center; gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 60px 58px 70px;
+  grid-template-columns: minmax(0, 260px) minmax(60px, 1fr) 58px 70px;
   padding: 7px 14px; border-top: var(--hairline) solid var(--border-soft);
 }
-.rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 60px 58px 50px 70px; }
+.rb-rows.has-clv .rb-row {
+  grid-template-columns: minmax(0, 260px) minmax(60px, 1fr) 58px 50px 70px; }
 .rb-labels {
   border-top: none; color: var(--text-mute); font-size: var(--fs-2xs);
   text-transform: uppercase; letter-spacing: .5px; padding-bottom: 4px;
 }
-.rb-labels .rb-net, .rb-labels .rb-wl, .rb-labels .rb-clv { color: var(--text-mute); font-weight: 600; }
+.rb-labels .rb-net, .rb-labels .rb-wl, .rb-labels .rb-clv,
+.rb-labels .rb-barh { color: var(--text-mute); font-weight: 600; }
+/* The bar column's heading. It used to be an empty `.rb-bar`, which
+   still painted its own grey track — a blank slot in a header row that
+   read as a rendering fault rather than a column. */
+/* Left, not centred: the bar column is now the widest in the table, and
+   a centred heading floated in the middle of it with nothing under it. */
+.rb-barh { text-align: left; font-size: var(--fs-2xs); letter-spacing: .5px; }
+/* A ceiling for very wide screens. The single full-width splits table is
+   comfortably under this at 1536px; without it the win-rate bar keeps
+   growing with the monitor and a 2560px display turns a supporting chart
+   into the loudest thing on the page — and the section's own subtitle
+   says the number that matters is net. */
+.rec-buckets-one .rec-bucket { max-width: 1120px; }
 .rb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
 .rb-bar { display: block; height: 6px; border-radius: 0; background: var(--fill-subtle);
   overflow: hidden; border: var(--hairline) solid var(--border-soft); }
@@ -3009,6 +3038,10 @@ body.pk-open { overflow: hidden; }
   .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
   .rl-date::after { content: " ·"; opacity: .4; }
   .rl-odds::before { content: "· "; opacity: .4; }
+  /* Both variants, not just has-clv: the base rule's 22ch name cap and
+     flexible bar are a desktop shape, and a table with no CLV column
+     would otherwise inherit a 260px name column onto a 390px screen. */
+  .rb-row { grid-template-columns: minmax(0, 1fr) 46px 54px 66px; }
   .rb-rows.has-clv .rb-row { grid-template-columns: minmax(0, 1fr) 46px 54px 66px; }
   .rb-clv { display: none; }
   .rec-chart .rc-net { font-size: var(--fs-2xl); }

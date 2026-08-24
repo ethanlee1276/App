@@ -146,6 +146,18 @@ def test_the_splits_row_is_still_a_grid_with_columns():
     assert tracks, "the splits row is a grid with no track list"
     assert tracks.group(1).count("px") >= 3, \
         f"the number columns lost their fixed widths: {tracks.group(1)}"
+    # FONT-RELATIVE UNITS ARE BANNED IN THIS TRACK LIST, and this is not
+    # theoretical: capping the name column at `22ch` on 2026-08-24 broke
+    # the alignment on the spot. `ch` and `em` resolve against the
+    # font-size of the element the track is declared on, and `.rb-labels`
+    # sets a smaller one for the header row — so the header computed a
+    # narrower name column than the rows under it and the table stepped
+    # out of line. Same shape as the collision above: a row that sizes
+    # its own columns from its own type will not match its neighbours.
+    for unit in ("ch", "em", "ex"):
+        assert not re.search(rf"\d{unit}\b", tracks.group(1)), (
+            f"the splits row sizes a column in {unit}, which resolves "
+            f"against each row's own font-size: {tracks.group(1)}")
 
 
 def test_the_ufc_legend_kept_its_own_names():

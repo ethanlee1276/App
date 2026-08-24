@@ -263,7 +263,12 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     ra = APP[APP.index("function recAnalytics("):]
     ra = ra[:ra.index("\nfunction recEraSection")]
     assert "ra-tiles" not in ra, "the tile stacks that repeated the scoreboard are back"
-    assert "_recSetSplit" in APP and "MARKET_WORDS" in APP
+    # "with words" is the claim; MARKET_WORDS was only the thing that
+    # happened to hold them. That hand-typed map was deleted on
+    # 2026-08-24 because it had drifted from the engine's vocabulary and
+    # was rendering `reb`/`ast`/`fg3m`/`pts` raw — the words now ride in
+    # the payload. Anchor on the translation, not on its old storage.
+    assert "_recSetSplit" in APP and "marketWord(" in APP
     assert '["market", "Market", o.by_market]' in APP
     rr = APP[APP.index("function recRecentSection("):]
     rr = rr[:rr.index("\n}")]

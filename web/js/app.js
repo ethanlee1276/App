@@ -6537,9 +6537,11 @@ function recBucketTable(title, bucket) {
         ? `<span class="rb-clv" title="Average closing-line value — beating the close is the earliest sign a module earns">${
             d.avg_clv == null ? "—"
               : `${d.avg_clv >= 0 ? "+" : ""}${d.avg_clv.toFixed(2)}`}</span>` : "";
+      const pct = `${(rate * 100).toFixed(0)}% win rate`;
       return `<div class="rb-row">
         <span class="rb-name" title="${escapeHtml(k)}">${escapeHtml(k)}</span>
-        <span class="rb-bar" aria-hidden="true"><i style="width:${(rate * 100).toFixed(1)}%"></i></span>
+        <span class="rb-bar" role="img" aria-label="${escapeHtml(`${k}: ${pct}`)}"
+          title="${escapeHtml(pct)}"><i style="width:${(rate * 100).toFixed(1)}%"></i></span>
         <span class="rb-wl">${d.w}-${d.l}</span>${clv}
         <span class="rb-net ${toneOf(net)}">${net >= 0 ? "+" : ""}${net.toFixed(2)}u</span></div>`;
     }).join("");
@@ -6547,7 +6549,12 @@ function recBucketTable(title, bucket) {
     <div class="rb-head">${escapeHtml(title)}</div>
     <div class="rb-rows${anyClv ? " has-clv" : ""}">
       <div class="rb-row rb-labels">
-        <span class="rb-name">&nbsp;</span><span class="rb-bar"></span>
+        ${/* The bar column carried an empty `.rb-bar` here, which drew
+             its own grey track: a header row with a blank slot in it
+             that looked like a rendering fault. It is a label row, so it
+             gets a label. "Win" also gives the orange stub underneath a
+             meaning — unlabelled, it read as a stray dash. */""}
+        <span class="rb-name">&nbsp;</span><span class="rb-barh">Win</span>
         <span class="rb-wl">W-L</span>${anyClv ? `<span class="rb-clv">CLV</span>` : ""}
         <span class="rb-net">Net</span></div>
       ${rows}</div></div>`;
@@ -6678,17 +6685,35 @@ window._recSetRange = (k) => { _recRange = k; renderRecord(); };
 let _recSplit = "market";
 window._recSetSplit = (k) => { _recSplit = k; renderRecord(); };
 
-//: Raw market ids are engine vocabulary; the reader gets words. Only
-//: known ids transform — grades, sides and book names pass through.
-const MARKET_WORDS = {
-  total_bases: "Total Bases", hits: "Hits", home_runs: "Home Runs",
-  strikeouts: "Strikeouts", outs: "Outs Recorded",
-  pass_yds: "Passing Yards", rush_yds: "Rushing Yards",
-  rec_yds: "Receiving Yards", receptions: "Receptions",
-  anytime_td: "Anytime TD", moneyline: "Moneyline", spread: "Spread",
-  total: "Game Total", team_total: "Team Total", points: "Points",
-  rebounds: "Rebounds", assists: "Assists", pra: "Pts+Reb+Ast",
-};
+/* Raw market ids are engine vocabulary; the reader gets words. Only
+   market ids transform — grades, sides and book names pass through.
+
+   THE MAP THAT USED TO LIVE HERE WAS A SIXTH COPY of a vocabulary four
+   engine modules already own, and it had drifted. It spelled the
+   basketball markets `points`/`rebounds`/`assists` — what a person
+   would guess — while the journal stores `pts`/`reb`/`ast`, which is
+   what the feed sends. Anything it missed fell through to the raw key,
+   so Ethan's Record page showed `reb`, `ast`, `fg3m` and `pts` sitting
+   beside "Total Bases" and "Outs Recorded" (2026-08-24).
+
+   The words now ride in the payload from engine/markets.py, the same
+   rule the break-even threshold follows: a value retyped in the front
+   end is a value that drifts. `marketWord` still prettifies an unknown
+   id so a market added to a feed tomorrow reads as "First 3 Innings"
+   rather than `first_3_innings` — but that is the safety net, not the
+   plan, and the engine names every market the journal actually holds. */
+let _marketWords = {};
+
+function marketWord(k) {
+  const key = String(k == null ? "" : k);
+  const known = _marketWords[key];
+  if (known) return known;
+  const s = key.replace(/[_-]+/g, " ").trim();
+  if (!s) return "—";
+  return s.split(/\s+/).map((w) =>
+    w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1)
+  ).join(" ");
+}
 
 function recSplitsSection(o) {
   const SPLITS = [["market", "Market", o.by_market],
@@ -6700,7 +6725,7 @@ function recSplitsSection(o) {
   const cur = avail.find(([k]) => k === _recSplit) || avail[0];
   const pretty = cur[0] === "market"
     ? Object.fromEntries(Object.entries(cur[2]).map(([k, v]) =>
-        [MARKET_WORDS[k] || k, v]))
+        [marketWord(k), v]))
     : cur[2];
   const chips = avail.length > 1 ? `<span class="ra-ranges">${avail.map(([k, label]) =>
     `<button class="ra-range ${k === cur[0] ? "active" : ""}"
@@ -9076,6 +9101,10 @@ async function renderRecord() {
       scoreboard for everything the model recommends.</div></div>`;
     return;
   }
+  // The engine's own word for each market id, for the splits table. Set
+  // before anything renders so a payload without the key falls back to
+  // prettifying rather than to a stale map from a previous render.
+  _marketWords = d.market_words || {};
   // Default to the sport whose board you came from; "all" is a click away.
   const tracked = d.tracked_sports || [];
   let scope = _recordScope

@@ -24,6 +24,7 @@ import re
 import sqlite3
 from pathlib import Path
 
+from . import markets as _markets
 from .odds import american_to_decimal
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "ledger.db"
@@ -4460,6 +4461,13 @@ def export_json(conn, path) -> None:
     out = {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "record_epoch": since,
+        # The reader's word for every market id, shipped rather than
+        # retyped in the front end. The Record page's splits table had a
+        # hand-kept copy of this and it had drifted: it spelled the
+        # basketball markets `points`/`rebounds`/`assists` while the
+        # journal stores `pts`/`reb`/`ast`, so those rows rendered raw
+        # beside "Total Bases" and "Outs Recorded". See engine/markets.
+        "market_words": _markets.words(),
         "all_time": {
             "overall": performance(conn),
             "curve_from": (pnl_curve(conn) or [{}])[0].get("date"),
