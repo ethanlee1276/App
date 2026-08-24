@@ -33,7 +33,7 @@ import unicodedata
 
 #: Every source this box covers, in the order a tie is broken. The log
 #: leagues come from statlogs; ufc is its own reader.
-SOURCES = ("nfl", "mlb", "nba", "wnba", "ufc")
+SOURCES = ("nfl", "mlb", "nba", "wnba", "cfb", "ufc")
 
 
 def norm(s: str) -> str:

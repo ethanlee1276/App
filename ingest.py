@@ -358,6 +358,24 @@ def main() -> None:
             got = db.upsert_games(conn, rows) if rows else 0
             n += got
             print(f"    games: {got:,} finished")
+            # THE PLAYER LAYER, same span. Box scores come from the same
+            # keyless ESPN family, one request per completed game, and
+            # they are what the Players, Trending and Rosters pages read.
+            # --scores-only skips them, and a refused summary endpoint
+            # (ESPN blocks it from some cloud IPs while serving the
+            # scoreboard fine) degrades to a note — run the backfill from
+            # a laptop in that case, exactly like nflpre.
+            if not args.scores_only:
+                res = cfbdata.ingest_player_logs(conn, lo, hi)
+                print(f"    player-log rows: {res['player_logs']:,} "
+                      f"across {res['games']:,} box score(s)"
+                      + (f" · {len(res['skipped'])} refused"
+                         if res["skipped"] else ""))
+                if res["skipped"] and not res["player_logs"]:
+                    print("    Every summary was refused — ESPN blocks this "
+                          "endpoint from some cloud IPs.\n    Run this "
+                          "command from a laptop; the scoreboard ingest "
+                          "above still worked.")
         print(f"  games: {n:,} finished")
         if not n:
             print("  Nothing stored. FBS plays late August to mid-January — "

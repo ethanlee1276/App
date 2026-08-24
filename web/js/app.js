@@ -194,9 +194,15 @@ const HIDDEN_VIEWS = {
   ufc: ["parlays", "futures", "injuries", "weather"],
   polymarket: ["parlays", "futures", "weather"],
   fantasy: ["parlays", "futures", "weather"],
-  // CFB has 134 programs and no free player-level feed. A roster tab that
-  // can only ever say "no data" is worse than no tab.
-  cfb: ["longshots", "trending", "players", "rosters", "weather"],
+  // Players and Rosters OPENED 2026-08-24: the "no free player-level
+  // feed" claim was stale — ESPN's keyless box scores (the same API
+  // family the CFB scoreboard reads) now feed player_game_logs, so both
+  // pages work exactly as they do for the NFL. Trending stays hidden
+  // for a DIFFERENT reason than the one it used to wear: it ranks
+  // movers off the board's player projections, and the CFB model prices
+  // games, not players — there is nothing to rank until that layer
+  // exists. Each remaining reason is spelled out below.
+  cfb: ["longshots", "trending", "weather"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -318,11 +324,12 @@ const HIDDEN_WHY = {
   fantasy: { parlays: "not a betting market", futures: "not a betting market",
              weather: "no single venue to report" },
   cfb: { longshots: "college football is full-game markets only — there is "
-                    + "no CFB player projection layer",
-         trending: "no free player-level feed covers 134 programs",
-         players: "no free player-level feed covers 134 programs",
-         rosters: "no free player-level feed covers 134 programs",
-         weather: "no weather feed covers college venues" },
+                    + "no CFB player projection layer yet",
+         trending: "movers are ranked off the board’s player projections, "
+                   + "and the college model prices games, not players",
+         weather: "no venue coordinates for 134 college stadiums without a "
+                  + "CFBD key — the free key that also unlocks the talent "
+                  + "prior" },
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
@@ -16107,6 +16114,7 @@ const ROSTER_PLACEHOLDER = {
   mlb: "Search a team or a player… (e.g. Yankees, NYY, Judge)",
   nba: "Search a team or a player… (e.g. Celtics, BOS, Tatum)",
   wnba: "Search a team or a player… (e.g. Liberty, NYL, Stewart)",
+  cfb: "Search a program or a player… (e.g. Georgia, UGA)",
 };
 
 const ROSTER_COPY = {
@@ -16122,6 +16130,9 @@ const ROSTER_COPY = {
   wnba: "— built from who has actually appeared for each club this season, most "
       + "games first. Measured playing time is the depth chart here, rather than "
       + "somebody’s published guess at one.",
+  cfb: "— built from who has actually appeared for each program this season, most "
+     + "games first. College rosters churn hardest of any league, so this list is "
+     + "thin in week one and fills as the season is played.",
 };
 
 /* One player line. The depth slot is the staff's opinion and is shown as

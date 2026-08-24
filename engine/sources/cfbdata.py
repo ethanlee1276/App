@@ -639,3 +639,156 @@ def load_range(start: str, end: str, ttl: int = 24 * 3600,
 def load_results(start: str, end: str, ttl: int = 24 * 3600) -> list[dict]:
     """Completed games across a date range, for the ratings history."""
     return [g for g in load_range(start, end, ttl=ttl) if g["completed"]]
+
+
+# ---------------------------------------------------------------------------
+# Player box scores — the layer the sidebar said could not exist.
+#
+# HIDDEN_WHY carried "no free player-level feed covers 134 programs" for
+# the Players, Trending and Rosters tabs, and the claim was stale the day
+# it was written: the SAME keyless API this module already reads has a
+# summary endpoint with the full box score, one request per game, exactly
+# the shape espnhoops has ingested for the NBA and WNBA since August.
+# (Ethan, 2026-08-24: "can we now work on CFB not having any of this
+# info.")
+#
+# Football's box differs from basketball's in two ways this parser has to
+# respect. Groups are POSITIONAL (passing / rushing / receiving), so the
+# same column name means different markets in different groups — "YDS" is
+# pass_yds in one block and rush_yds in the next — which is why the map
+# below is keyed (group, column) and never column alone. And one player
+# spans groups (a quarterback who scrambles appears in passing AND
+# rushing), so rows merge by player before they are emitted.
+
+SUMMARY = BASE + "/summary"
+
+#: (group name, column label) → our market id. Labels are matched by
+#: NAME within their group; reading by position would silently mis-assign
+#: every stat the day ESPN moves a column. Vocabulary matches the NFL's
+#: (engine/models.py MARKET_LABELS) so one player search speaks one
+#: language across both footballs.
+BOX_MARKETS = {
+    ("passing", "YDS"): "pass_yds",
+    ("rushing", "CAR"): "carries",
+    ("rushing", "YDS"): "rush_yds",
+    ("receiving", "REC"): "receptions",
+    ("receiving", "YDS"): "rec_yds",
+    ("receiving", "TGTS"): "targets",     # present on some college feeds
+}
+
+#: When the athlete record carries no position of its own, the group he
+#: appeared in first is the honest guess: group order is passing,
+#: rushing, receiving, so quarterbacks resolve QB and backs RB. A tight
+#: end falls to WR — a known, bounded mislabel, corrected automatically
+#: whenever the feed does carry the real position.
+GROUP_POS = {"passing": "QB", "rushing": "RB", "receiving": "WR"}
+
+
+def parse_summary(payload: dict) -> list[dict]:
+    """A game summary → per-player rows: {player, team, position, stats,
+    espn_id, headshot}. Same contract as espnhoops.parse_summary."""
+    merged: dict[tuple, dict] = {}
+    box = payload.get("boxscore") or {}
+    for team_block in box.get("players", []) or []:
+        team = ((team_block.get("team") or {}).get("abbreviation") or "").strip()
+        for group in team_block.get("statistics", []) or []:
+            gname = str(group.get("name") or "").strip().lower()
+            labels = [str(x).upper() for x in
+                      (group.get("labels") or group.get("names") or [])]
+            if not labels:
+                continue
+            for ath in group.get("athletes", []) or []:
+                info = ath.get("athlete") or {}
+                player = (info.get("displayName") or "").strip()
+                if not player:
+                    continue
+                stats = ath.get("stats") or []
+                vals: dict = {}
+                for i, col in enumerate(labels):
+                    mk = BOX_MARKETS.get((gname, col))
+                    if mk is None or i >= len(stats):
+                        continue
+                    v = _score(stats[i])
+                    if v is not None:
+                        vals[mk] = v
+                if not vals:
+                    continue
+                pos = ((info.get("position") or {}).get("abbreviation")
+                       if isinstance(info.get("position"), dict) else "") or ""
+                shot = info.get("headshot") or {}
+                row = merged.setdefault((team, player), {
+                    "player": player, "team": team,
+                    "position": pos.upper() or GROUP_POS.get(gname, ""),
+                    "stats": {},
+                    "espn_id": str(info.get("id") or ""),
+                    "headshot": (shot.get("href") if isinstance(shot, dict)
+                                 else str(shot or "")) or "",
+                })
+                if pos:
+                    row["position"] = pos.upper()
+                row["stats"].update(vals)
+    return list(merged.values())
+
+
+def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600) -> dict:
+    """One game's box score. A month's cache: a final box never changes."""
+    return fetch_json(f"{SUMMARY}?event={game_id}",
+                      f"cfb_summary_{game_id}.json", ttl=ttl,
+                      user_agent=DEFAULT_AGENT)
+
+
+def ingest_player_logs(conn, start: str, end: str,
+                       quiet: bool = False) -> dict:
+    """Box scores for every completed CFB game already in the games table.
+
+    WALKS OUR OWN ROWS, NOT THE SCOREBOARD AGAIN: `ingest.py cfb` has
+    already stored each game with ESPN's own event id as game_id, so the
+    summaries are one request per game with no second discovery pass.
+
+    Failure shape mirrors espnhoops.ingest_day — a refused summary is a
+    skipped game and a note, never a dead run, because ESPN is known to
+    refuse this endpoint from some cloud IPs while serving the scoreboard
+    happily to the same box.
+    """
+    from .. import db
+    from ..seasons import season_of
+
+    result: dict = {"games": 0, "player_logs": 0, "skipped": []}
+    rows = conn.execute(
+        "SELECT game_id, period, home, away FROM games "
+        "WHERE sport='cfb' AND period >= ? AND period <= ? "
+        "AND home_score IS NOT NULL AND away_score IS NOT NULL "
+        "ORDER BY period",
+        (start, end)).fetchall()
+    prows, arows = [], []
+    for g in rows:
+        try:
+            summary = fetch_summary(str(g["game_id"]))
+        except DataUnavailable as exc:
+            result["skipped"].append(f"cfb box {g['game_id']}: {exc}")
+            continue
+        result["games"] += 1
+        opp = {g["home"]: g["away"], g["away"]: g["home"]}
+        for row in parse_summary(summary):
+            if row.get("espn_id") or row.get("headshot"):
+                arows.append({"sport": "cfb", "player": row["player"],
+                              "espn_id": row.get("espn_id", ""),
+                              "headshot": row.get("headshot", ""),
+                              "seen": g["period"]})
+            for market, value in row["stats"].items():
+                prows.append({
+                    "sport": "cfb", "season": season_of("cfb", g["period"]),
+                    "period": g["period"], "game_id": str(g["game_id"]),
+                    "player": row["player"], "team": row["team"],
+                    "opponent": opp.get(row["team"], ""),
+                    "position": row["position"],
+                    "home": 1 if row["team"] == g["home"] else 0,
+                    "market": market, "value": value,
+                })
+    result["player_logs"] = db.upsert_player_logs(conn, prows) if prows else 0
+    if arows:
+        db.upsert_player_assets(conn, arows)
+    if not quiet and result["skipped"]:
+        for note in result["skipped"][:3]:
+            print(f"    skipped: {note}")
+    return result

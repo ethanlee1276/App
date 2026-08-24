@@ -200,7 +200,14 @@ STALE_DAYS = {"mlb": 14, "nba": 21, "wnba": 21}
 # The market we count appearances from, per sport. One row per game
 # played, so counting these counts games — using every market would count
 # a hitter once per stat line.
-APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min"}
+# One market whose presence means "he was in the game" — except college
+# football, where no single market covers everyone: a quarterback appears
+# through pass_yds, a back through carries, a receiver through
+# receptions. A tuple means ANY of these counts, and the games column
+# counts DISTINCT game_ids so a player with three markets in one box
+# score is one appearance, not three.
+APPEARANCE_MARKET = {"mlb": "pa", "nba": "min", "wnba": "min",
+                     "cfb": ("pass_yds", "carries", "receptions")}
 
 #: MLB positions in page order. Pitchers first — they are half the roster
 #: and the half the appearance-built page silently lost: an "appearance"
@@ -484,10 +491,12 @@ def from_game_logs(conn, sport: str, seasons: list[int] | None = None,
     market = APPEARANCE_MARKET.get(sport)
     if not market:
         return {"teams": {}, "team_count": 0, "player_count": 0}
+    markets = market if isinstance(market, tuple) else (market,)
     q = ("SELECT player, team, position, MAX(period) AS last_seen, "
-         "COUNT(*) AS games FROM player_game_logs "
-         "WHERE sport=? AND market=? AND team IS NOT NULL AND team != ''")
-    args: list = [sport, market]
+         "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
+         "WHERE sport=? AND market IN (%s) "
+         "AND team IS NOT NULL AND team != ''" % ",".join("?" * len(markets)))
+    args: list = [sport, *markets]
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)

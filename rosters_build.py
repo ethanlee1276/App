@@ -17,8 +17,10 @@ Where each sport's answer comes from:
   roster page: a record of who played, which is closer to the question a
   bettor is asking, and it refreshes with the same nightly ingest that
   feeds the models.
-* **CFB** — nothing. 134 programs and no player-level feed, so the page
-  says so instead of rendering an empty grid that looks like a bug.
+* **CFB** — appearances, like the three above, since 2026-08-24: ESPN's
+  keyless box scores feed the logs. Before that this line said "no
+  player-level feed" — the feed existed all along, in the same API family
+  the scoreboard already reads.
 
 Usage:
     python3 rosters_build.py                 # every sport we can build
@@ -38,12 +40,13 @@ from engine.seasons import season_of
 
 # Sports built from our own game logs, and what to say when a sport has
 # no roster source at all.
-FROM_LOGS = ("mlb", "nba", "wnba")
+# CFB joined 2026-08-24: ESPN's own box scores now feed player_game_logs
+# for college football (engine/sources/cfbdata.ingest_player_logs), so
+# the appearance-built page works exactly as it does for the other three
+# — with the note that college rosters churn hardest, so early-season
+# appearance lists thin out until the year's games accumulate.
+FROM_LOGS = ("mlb", "nba", "wnba", "cfb")
 NO_SOURCE = {
-    "cfb": "College football has no free player-level roster feed, and 134 "
-           "programs of guessed depth charts would be worse than none. The "
-           "CFB model is a team model — it never needs a roster to price a "
-           "game.",
     "ufc": "MMA has fighters, not rosters. Each fighter's measured record "
            "lives in his dossier on the UFC card itself.",
 }

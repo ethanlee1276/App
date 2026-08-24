@@ -388,12 +388,22 @@ def test_the_page_is_wired_end_to_end():
 
 
 def test_pages_with_no_cfb_engine_behind_them_hide():
+    """"players" LEFT THIS LIST on 2026-08-24: ESPN's keyless box scores
+    now feed CFB player_game_logs, so the Players page has an engine
+    behind it. Long shots and trending still do not — both rank player
+    PROJECTIONS, and the college model prices games, not players — so
+    they stay, checked on CFB's own line rather than anywhere in the
+    block, which is what let this pass on other sports' entries."""
     app = _read("web", "js", "app.js")
     assert "HIDDEN_VIEWS" in app
     block = app[app.index("const HIDDEN_VIEWS"):]
     block = block[:block.index("};")]
-    for view in ("longshots", "trending", "players"):
-        assert view in block, f"{view} would render empty for CFB"
+    cfb = block[block.index("cfb:"):]
+    cfb = cfb[:cfb.index("]")]
+    for view in ("longshots", "trending"):
+        assert f'"{view}"' in cfb, f"{view} would render empty for CFB"
+    for view in ("players", "rosters"):
+        assert f'"{view}"' not in cfb,             f"{view} is hidden again — its CFB engine shipped 2026-08-24"
 
 
 def test_the_game_card_does_not_print_nan_degrees():

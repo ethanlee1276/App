@@ -58,6 +58,13 @@ SPORT_MARKETS = {
             ("fg3m", "3-Pointers Made")),
     "wnba": (("pts", "Points"), ("reb", "Rebounds"), ("ast", "Assists"),
              ("fg3m", "3-Pointers Made")),
+    # College football joined 2026-08-24, off ESPN's own box scores —
+    # the "no free player-level feed covers 134 programs" line in the
+    # front end was stale, and this is the layer that retires it. Same
+    # labels as the NFL's for the same dedupe-by-label reason above.
+    "cfb": (("pass_yds", "Passing Yards"), ("rush_yds", "Rushing Yards"),
+            ("rec_yds", "Receiving Yards"), ("receptions", "Receptions"),
+            ("carries", "Carries"), ("targets", "Targets")),
 }
 
 N_GAMES = 10       # what a profile chart can legibly hold

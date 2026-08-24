@@ -124,11 +124,21 @@ def test_switching_leagues_redraws_the_roster_tab():
     assert 'state.view === "rosters"' in fn
 
 
-def test_a_sport_with_no_roster_source_hides_the_tab():
+def test_every_roster_sport_describes_its_source():
+    """This asserted CFB must HIDE the tab ("no player feed"). The feed
+    existed all along — ESPN box scores, the same API family the CFB
+    scoreboard reads — and appearance-built rosters shipped 2026-08-24.
+    The claim that survives: every sport with a rosters tab says which
+    KIND of roster it shows, and CFB is now one of them."""
     js = _read("web", "js", "app.js")
     hidden = js[js.index("const HIDDEN_VIEWS"):]
     hidden = hidden[:hidden.index("};")]
-    assert '"rosters"' in hidden, "CFB has no player feed and must hide it"
+    cfb_line = hidden.split("cfb:")[1].split("]")[0]
+    assert '"rosters"' not in cfb_line,         "CFB rosters were re-hidden — they build from appearances now"
+    copy = js[js.index("const ROSTER_COPY"):js.index("function rosterPlayerHTML")]
+    assert "cfb:" in copy, "CFB's roster page has no source description"
+    import rosters_build as RB
+    assert "cfb" in RB.FROM_LOGS
 
 
 def test_the_page_says_which_kind_of_roster_it_is_showing():
@@ -158,9 +168,14 @@ def test_the_builder_covers_every_sport_the_site_shows():
     src = _read("rosters_build.py")
     for sport in ("mlb", "nba", "wnba"):
         assert f'"{sport}"' in src
-    # And the ones with no source must be explained, not left blank.
-    assert "cfb" in src and "ufc" in src
-    assert "no free player-level roster feed" in src
+    # And the one with no source must be explained, not left blank.
+    # CFB left that club 2026-08-24: it builds from appearances now, so
+    # the "no free player-level roster feed" sentence — which was never
+    # true — is required to be GONE rather than present.
+    assert '"cfb"' in src and "ufc" in src
+    assert "no free player-level roster feed" not in src, \
+        "the stale no-feed claim is back in rosters_build"
+    assert "MMA has fighters, not rosters" in src
 
 
 def test_the_launcher_builds_them():
