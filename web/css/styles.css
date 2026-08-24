@@ -4492,6 +4492,13 @@ html, body { overflow-x: clip; }
    this feature exists for. One token, so they cannot drift again. */
 :root {
   --topbar-h: calc(64px + env(safe-area-inset-top));
+  /* The shell's two side columns. Both are written in three places —
+     the two-column shell, the three-column shell, and the breakpoint
+     where the rail drops below the content — and a shell whose columns
+     disagree is what once put main in the sidebar's track. See the
+     measurements beside `.shell`. */
+  --sidebar-w: 208px;
+  --rail-w: 280px;
 }
 
 /* ---------------- The bar ---------------- */
@@ -4576,10 +4583,30 @@ html, body { overflow-x: clip; }
 .meta-ico svg { width: 17px; height: 17px; }
 .nav-hint { display: none; }
 
-/* ---------------- The shell: sidebar · content · rail ---------------- */
-.shell { display: grid; grid-template-columns: 240px minmax(0, 1fr);
+/* ---------------- The shell: sidebar · content · rail ----------------
+
+   BOTH WIDTHS ARE TOKENS, because they are one decision made in three
+   places — the two-column shell, the three-column shell, and the
+   breakpoint where the rail drops below. Ethan, 2026-08-24: "are we able
+   to make these two side just a little bit smaller too give the main
+   page more room."
+
+   MEASURED BEFORE MOVING THEM. At 1440 the sidebar was 240 and the rail
+   304, leaving main 896px. Walked down in 8px steps in Chromium with the
+   nav labels' heights watched for a wrap: nothing wrapped or clipped
+   even at 180, so the limit is not the type — it is how cramped the
+   league pills look three across, and 208 is the last width where they
+   still breathe. The rail keeps more, at 280, because its content is
+   prose rather than labels and it is the one that gets ugly first.
+
+   Main gains 56px, which is 6% more room for the thing people came for.
+   The two tokens are declared with --topbar-h above, where the layout
+   tokens live — one per line, which is also what the token census reads.
+   Declared here in a :root of their own, they were invisible to it. */
+.shell { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   max-width: 1760px; margin: 0 auto; align-items: start; }
-body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
+body.has-rail .shell {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w); }
 .shell main { max-width: none; margin: 0; min-width: 0; }
 
 .sidebar { position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
@@ -4961,7 +4988,8 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 
 /* ---------------- Responsive: rail folds, sidebar becomes drawer ------- */
 @media (max-width: 1279px) {
-  body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr); }
+  body.has-rail .shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
   .rail { position: static; max-height: none; grid-column: 2;
     display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     align-items: start; padding: 0 26px 26px; }
@@ -6565,7 +6593,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
    140-character line is where people lose their place. */
 /* The legal pages are STANDALONE DOCUMENTS, not app views. They carry no
    sidebar, so they must not sit inside `.shell` — that is a grid whose
-   first column is 240px wide and reserved for one. With no sidebar to
+   first column is --sidebar-w wide and reserved for one. With no sidebar to
    fill it, <main> became the first grid item and the entire Terms of
    Service rendered in a strip down the left of the screen. It was live
    like that. */
@@ -6602,7 +6630,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* Stub pages — 404 and maintenance (renders 23/24). One centred card on
    the house ground: wordmark, the mark, one sentence that tells the
    truth about what happened, and doors to pages that exist. */
-/* These pages carry no sidebar, so they skip .shell — its 240px rail
+/* These pages carry no sidebar, so they skip .shell — its --sidebar-w rail
    column would push the card off-centre with nothing in it. */
 .stub-main { display: block; max-width: none; }
 .stub { max-width: 560px; margin: 0 auto; padding: 12vh 20px 64px;
@@ -7278,7 +7306,7 @@ body.has-rail .shell { grid-template-columns: 240px minmax(0, 1fr) 304px; }
 /* IT SPANS THE GRID. The stale bar is a direct child of `.shell`, which
    is a two-column grid (three with the rail), and a grid item with no
    placement takes a cell — column one, the sidebar's — shoving the
-   sidebar into main's track and main down to a 240px stub on the next
+   sidebar into main's track and main down to a sidebar-width stub on the next
    row. Measured at 1280: sidebar 1039px, main 240px.
    
    The failure only appeared when the bar was SHOWING, which is to say
@@ -7397,9 +7425,10 @@ body.walled .nav-btn { display: none !important; }
    bell or a sport switcher, and every one of those was still sitting
    above the headline. */
 body.walled .topbar, body.walled .footer { display: none !important; }
-/* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is `240px minmax(0,1fr)`;
+/* THE GRID COLUMN OUTLIVES THE ELEMENT. `.shell` is
+   `var(--sidebar-w) minmax(0,1fr)`;
    display:none takes the sidebar out of the flow but leaves the track, so
-   main landed in the 240px column and the whole shop rendered as a
+   main landed in the sidebar's column and the whole shop rendered as a
    narrow strip down the left. Measured at 1400px before the fix. */
 body.walled .shell { grid-template-columns: minmax(0, 1fr); }
 /* THE SAFE AREA CAME OFF WITH THE TOPBAR. `.topbar` carries
