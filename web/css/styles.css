@@ -715,6 +715,12 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .subtitle { color: var(--text-dim); font-size: var(--fs-sm); margin-top: 2px; }
 .pick { font-size: var(--fs-lg); font-weight: 700; color: var(--text); margin-top: 7px; }
 .pick .book { color: var(--text-mute); font-weight: 500; }
+/* The last-ten form, directly under the pick it describes. Its own line
+   rather than beside the pick: the grade badge already owns the right
+   edge of the card head, and at 390px a chart squeezed between them gets
+   about forty pixels. */
+.pick-spark { display: block; margin-top: 6px; line-height: 0; }
+.pick-spark svg { max-width: 100%; height: auto; }
 
 /* Moneyline (game bet) cards */
 .card.gamebet .player .ml-odds {

@@ -177,9 +177,21 @@ def test_the_note_is_a_note_and_never_a_gate():
     """A card must not quietly become a different card because a fetch was
     slow. The feed can be cold, late or missing; none of that may change
     which picks exist or what they are staked at."""
+    # BRACE-MATCHED, NOT "UP TO THE NEXT function". Slicing to the next
+    # declaration also swallows the comment block that belongs to it, so
+    # on 2026-08-25 this went red because a NEW function further down the
+    # file had "recommended" in its header comment. The word was never in
+    # pickInjuryNote at all. Read the function's own body.
     i = APP.index("function pickInjuryNote(")
-    j = APP.index("\nfunction ", i + 1)
-    body = APP[i:j]
+    k, depth = APP.index(") {", i) + 2, 0
+    for end in range(k, len(APP)):
+        if APP[end] == "{":
+            depth += 1
+        elif APP[end] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+    body = APP[i:end + 1]
     for banned in ("recommended", "stake", "_ok", "r ="):
         assert banned not in body, \
             f"pickInjuryNote touches {banned!r} — it decides display, nothing else"

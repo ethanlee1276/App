@@ -4147,6 +4147,36 @@ function pickInjuryNote(r) {
        + ` The projection is built on games he played healthy.</div>`;
 }
 
+/* THE FORM, NEXT TO THE BET.
+   Ethan, 2026-08-25: "Our props displayed in the recommended section
+   should have this same little chart like this next too the bet. The
+   chart should Correlate to the prop being displayed obviously."
+
+   The card already carried the full `propAnalysis` chart — axis labels,
+   per-game values, opponents, a legend — but it sits below the
+   projection bar, the three metrics and the confidence meter, which on a
+   phone is most of a screen away from the pick it describes. The
+   question "has he been doing this lately" is asked while reading the
+   bet, so it gets answered there.
+
+   Same bars, same line, one-fifth the height, and SIDE-AWARE: an UNDER
+   is won by coming in below the line, so the bars are green on the games
+   the bet would have cashed and the caption names the direction. See
+   gamelogBars in visuals.js for the reading this replaced. */
+function propSpark(r, opts = {}) {
+  const src = (r.recent_values || []).length
+    ? r.recent_values : (r.logs || []).map((l) => l.value);
+  const vals = src.map(Number).filter(Number.isFinite).slice(0, 10);
+  const line = Number(r.line);
+  // Three games is the same floor propAnalysis uses: below it the chart
+  // is an anecdote with a rule drawn through it.
+  if (vals.length < 3 || !Number.isFinite(line)) return "";
+  const side = String(r.side || "OVER").toUpperCase();
+  return `<span class="pick-spark" title="Last ${vals.length} games against ${
+    line} — green is a game this ${side.toLowerCase()} would have won">${
+    gamelogBars(vals, { line, side, w: opts.w || 150, h: opts.h || 42 })}</span>`;
+}
+
 function cardHTML(r) {
   const reasons = (r.reasons || []).map(
     (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
@@ -4169,6 +4199,7 @@ function cardHTML(r) {
             <div class="subtitle">${escapeHtml(r.team)} vs ${escapeHtml(r.opponent)}${r.position ? ` · ${escapeHtml(r.position)}` : ""}</div>
             <div class="pick">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
               <span class="book">· ${escapeHtml(r.book)} ${american(r.odds)}</span></div>
+            ${propSpark(r)}
           </div>
         </div>
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>
@@ -9602,7 +9633,10 @@ function edgeBoardRows() {
       // along with the player props." The history was already on every
       // row — it just never got drawn here.
       vals: (r.logs || []).map((l) => l.value),
-      line: r.line, team: r.team,
+      // The SIDE, so the bars can be coloured for the bet rather than
+      // for the stat. Without it an UNDER row painted its nine winning
+      // games red and its one loser green — see gamelogBars.
+      line: r.line, team: r.team, side: r.side,
     }));
   const games = (state.data.game_bets || [])
     .filter((b) => b.grade !== "Pass" && (b.ev_per_unit || 0) > 0.005)
@@ -9629,8 +9663,10 @@ function edgeRowHTML(r, i) {
   // along with the player props." Same bars the prop page draws large,
   // against the same line, from the row's own log.
   const spark = (r.vals || []).length >= 3
-    ? `<span class="edge-spark" title="Last ${Math.min(r.vals.length, 10)} games against the line">${
-        gamelogBars(r.vals, { line: r.line, w: 92, h: 34,
+    ? `<span class="edge-spark" title="Last ${Math.min(r.vals.length, 10)} games${
+        r.side ? ` — green is a game this ${String(r.side).toLowerCase()} would have won`
+               : " against the line"}">${
+        gamelogBars(r.vals, { line: r.line, side: r.side, w: 92, h: 34,
                               stroke: teamPrimary(r.team) })}</span>`
     : `<span class="edge-spark"></span>`;
   return `<div class="ls-row drow ${r.open ? "openable" : ""}"${r.open || ""}

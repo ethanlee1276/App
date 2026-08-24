@@ -1436,8 +1436,27 @@ function gamelogBars(values, opts = {}) {
   const bx = (i) => padX + i * slot + (slot - bw) / 2;
   const by = (v) => base - (v / hi) * (base - padTop);
 
-  const cleared = line == null ? null
-    : data.filter((v) => v > line).length;
+  /* WHOSE SIDE THE CHART IS ON.
+     Ethan, 2026-08-25, pointing at an UNDER 1.5 Hits row reading
+     "1/10 cleared 1.5": "The chart should Correlate to the prop being
+     displayed obviously."
+
+     It did not. `v > line` is "did the stat go over", which is the
+     bet only when the bet is an OVER. On his row the single green bar
+     was the one game the UNDER LOST and the nine red ones were the
+     nine it won — the chart telling the reader the exact opposite of
+     what it looked like it was saying, in the site's status colours.
+
+     `propAnalysis` has always got this right; this compact version
+     never took the side at all. With `opts.side` the bars mean "the
+     bet cashed" and the caption states which direction it needed, so
+     the number is unambiguous without the colours. Without it, the
+     old over-the-line reading is kept for callers that genuinely have
+     no side — a form sparkline on a player page is not a bet. */
+  const side = String(opts.side || "").toUpperCase();
+  const under = side === "UNDER";
+  const won = (v) => (under ? v < line : v > line);
+  const cleared = line == null ? null : data.filter(won).length;
   const bars = data.map((v, i) => {
     const top = by(v);
     // A ZERO IS DATA. At `Math.max(1, ...)` a 0-hit game rendered as a
@@ -1448,7 +1467,7 @@ function gamelogBars(values, opts = {}) {
     // blank game a visible, clearly-missed bar sitting on the baseline.
     const hgt = Math.max(3, base - top);
     const c = line == null ? (opts.stroke || "var(--brand)")
-      : (v > line ? "var(--good)" : "var(--bad)");
+      : (won(v) ? "var(--good)" : "var(--bad)");
     const tip = (labs && labs[i] ? labs[i] + " — " : "") + v;
     // rx rounds the data-end; the bar is anchored to the baseline.
     return `<rect x="${bx(i).toFixed(1)}" y="${(base - hgt).toFixed(1)}"
@@ -1463,14 +1482,22 @@ function gamelogBars(values, opts = {}) {
   // The label Ethan asked for. Text in a text token, never the series
   // colour, and it states the fact the colours encode so the chart does
   // not depend on telling green from red.
+  // "cleared 1.5" reads as "went over 1.5" whatever the bet was, so a
+  // side-aware chart names the direction instead of reusing the word.
+  const capt = side
+    ? `${cleared}/${n} ${under ? "under" : "over"} ${line}`
+    : `${cleared}/${n} cleared ${line}`;
   const label = cleared == null ? "" : `
     <text x="0" y="${h - 1}" fill="var(--text-mute)" font-size="9"
-      font-variant-numeric="tabular-nums">${cleared}/${n} cleared ${line}</text>`;
+      font-variant-numeric="tabular-nums">${capt}</text>`;
   return `
   <svg class="glbars" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
        role="img" aria-label="${escapeAttr(
          cleared == null ? `last ${n} games`
-           : `${cleared} of the last ${n} games cleared ${line}`)}">
+           : side
+             ? `${cleared} of the last ${n} games came in ${under
+                 ? "under" : "over"} ${line} — the side of this bet`
+             : `${cleared} of the last ${n} games cleared ${line}`)}">
     ${rule}${bars}${label}
   </svg>`;
 }

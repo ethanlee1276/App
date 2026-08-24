@@ -233,7 +233,11 @@ def test_the_edge_board_carries_a_mark_per_row():
     leads with the player; this one was a wall of text, which makes the
     list with the most rows the slowest on the site to scan."""
     i = APP.index("function edgeRowHTML(")
-    assert 'class="pick-id"' in APP[i:i + 900]
+    # Widened again 2026-08-25: the spark's tooltip now names which side
+    # the bet is on, which pushed the row markup further down the
+    # function. The claim is that the row leads with a face, not that the
+    # face appears within N characters of the declaration.
+    assert 'class="pick-id"' in APP[i:i + 1400]
     # Window widened 2026-08-17: the chart pass added per-row values
     # (and their comment) to both maps, pushing the games map deeper in.
     j = APP.index("function edgeBoardRows(")
