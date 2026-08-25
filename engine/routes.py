@@ -113,6 +113,12 @@ SECTIONS = {
     "intel":     ("view", "intel", "Intel", "Prediction markets, book divergence and where the venues disagree."),
     "fantasy":   ("view", "fantasy", "Fantasy", "Draft kit, lineups, waivers and trades, built on the same usage data as the board."),
     "about":     ("view", "about", "About", "What this is, who builds it, and what it refuses to do."),
+    "methodology": ("view", "methodology", "Methodology", "How every number on the board is made: the five steps, what is fitted against results, what is still an assumption, and what we deliberately do not model."),
+    "status":    ("view", "status", "Status", "When each board last rebuilt, what the odds and lineup feeds are doing, and how long a full cycle takes."),
+    # /changelog lands on the Methodology page, which carries it as a
+    # section with that id. A log of what changed IS the methodology's
+    # history, and a page of its own would be a page with one list on it.
+    "changelog": ("view", "methodology", "Changelog", "What shipped, what was fixed, what was measured and refused — and the dates the model's own numbers changed."),
     "why":       ("view", "why", "Why us", "The argument for this model, with its own record as the evidence."),
 }
 

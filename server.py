@@ -13,7 +13,9 @@ file. Uses only the Python standard library.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import os
 import re
@@ -526,6 +528,10 @@ CONTENT_TYPES = {
     ".png": "image/png",
     ".ico": "image/x-icon",
     ".webmanifest": "application/manifest+json",
+    # The receipts download. `text/csv` rather than a generic stream so a
+    # phone offers "open in Numbers" instead of asking what to do with it.
+    ".csv": "text/csv; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
 }
 
 
@@ -769,6 +775,8 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/billing/"):].strip("/"))
         if parsed.path.startswith("/api/sleeper/"):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
+        if parsed.path in ("/api/record/receipts.csv",):
+            return self._receipts_csv()
         if parsed.path.startswith("/api/profile/"):
             code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
                                      self.headers.get("X-Profile-Pin") or "")
@@ -2449,6 +2457,90 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
         self._send(200, json.dumps(gate.redact(payload, name)).encode(), ".json")
         return True
+
+    def _receipts_csv(self):
+        """Every settled pick, as a file somebody can open in a spreadsheet.
+
+        Ethan, 2026-08-25: *"Track record page with receipts … no
+        cherry-picking. This is your whole sales pitch."*
+
+        NOT GATED, and that is the same decision record.json already
+        carries: the record is the evidence the subscription is sold on,
+        and a proof nobody can read persuades nobody. Every row here is
+        SETTLED — a pick whose game has finished and whose result is
+        public. It contains no open position, no line we are currently
+        recommending and no unsettled edge, so it gives away nothing
+        that is still worth money.
+
+        Built in memory rather than streamed: the journal is thousands
+        of rows, not millions, and a half-written download that fails
+        mid-stream is worse than a slow one.
+        """
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b"receipts unavailable", ".txt")
+        try:
+            rows = L.receipts(conn)
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b"receipts unavailable", ".txt")
+        finally:
+            conn.close()
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=list(L.RECEIPT_COLUMNS),
+                           extrasaction="ignore", lineterminator="\n")
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+        body = buf.getvalue().encode("utf-8")
+        # A filename with the date in it, because a person downloading
+        # this twice a month should not end up with receipts(3).csv and
+        # no idea which is which.
+        stamp = time.strftime("%Y-%m-%d")
+        self._send(200, body, ".csv", headers=[
+            ("Content-Disposition",
+             f'attachment; filename="qellys-receipts-{stamp}.csv"')])
+
+    def do_HEAD(self):
+        """Headers only, for anything the static handler would serve.
+
+        THE STATUS PAGE IS THE CALLER. It asks each published board when
+        it was last written, and `Last-Modified` is that answer without
+        downloading a 2MB board to read one field out of it.
+
+        In production Caddy answers /data/*.json off disk and never
+        reaches this code — it speaks HEAD natively. This exists so the
+        page behaves the same under `python3 server.py`, where the
+        default handler answers HEAD with 501 and the status page would
+        be blank on the one machine where it is being developed.
+
+        Static paths only. An API HEAD gets the same 501 it always did,
+        because those handlers write bodies and a half-suppressed
+        response is a framing bug waiting to happen.
+        """
+        path = urlparse(self.path).path
+        if path.startswith("/api/"):
+            self.send_error(501, "Unsupported method ('HEAD')")
+            return
+        if path in ("/", ""):
+            path = "/index.html"
+        target = (WEB / path.lstrip("/")).resolve()
+        if not target.is_relative_to(WEB.resolve()) or not target.is_file():
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        st = target.stat()
+        self.send_response(200)
+        self.send_header("Content-Type",
+                         CONTENT_TYPES.get(target.suffix, "application/octet-stream"))
+        self.send_header("Content-Length", str(st.st_size))
+        self.send_header("Last-Modified", formatdate(st.st_mtime, usegmt=True))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        self.end_headers()
 
     def _entity_page(self, path: str) -> bool:
         """A real address — /mlb, /player/juan-soto, /game/ne-sea-0909.

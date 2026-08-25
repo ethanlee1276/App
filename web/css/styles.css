@@ -2347,6 +2347,62 @@ select.calc-in { width: auto; font-weight: 600; }
   max-width: var(--measure-wide); margin-inline: auto;
 }
 .cn-what { opacity: .6; }
+
+/* ======================================================================
+   Methodology and Status — the two trust pages.
+   ====================================================================== */
+.mth-step { display: grid; grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px; padding: 16px 18px; margin-bottom: 10px; }
+.mth-n { display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: 50%; background: var(--panel-2); color: var(--brand);
+  border: var(--hairline) solid var(--border-soft);
+  font-weight: 800; font-variant-numeric: tabular-nums; }
+.mth-fit { padding: 16px 18px; margin-bottom: 10px; }
+.mth-fit p { max-width: var(--measure); line-height: var(--lh-body);
+  color: var(--text-body); }
+.mth-fit ul { margin: 0; padding-left: 18px; line-height: var(--lh-body);
+  color: var(--text-body); max-width: var(--measure); }
+.mth-fit h3 { margin: 0 0 4px; }
+.mth-fit a { color: var(--brand); }
+.mth-eras { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.mth-era { display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px; align-items: baseline; padding: 8px 0;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.mth-era:last-child { border-bottom: 0; }
+
+.cl-row { display: grid; grid-template-columns: 190px minmax(0, 1fr);
+  gap: 14px; padding: 12px 0;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.cl-row:last-child { border-bottom: 0; }
+.cl-when { color: var(--text-mute); font-size: var(--fs-sm);
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.cl-kind { padding: 1px 8px; border-radius: 999px; font-size: var(--fs-2xs);
+  font-weight: 700; letter-spacing: .02em;
+  border: var(--hairline) solid var(--border-soft); }
+.cl-model { color: var(--brand); border-color: var(--brand); }
+.cl-fix { color: var(--good); }
+.cl-refuse { color: var(--text-mute); }
+.cl-what p { margin: 3px 0 0; color: var(--text-body);
+  line-height: var(--lh-body); max-width: var(--measure); }
+
+.st-card { padding: 6px 18px; margin-bottom: 12px; }
+.st-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 90px;
+  gap: 12px; align-items: baseline; padding: 10px 0;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.st-row:last-child { border-bottom: 0; }
+.st-k { color: var(--text-body); }
+.st-v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.st-good { color: var(--good); }
+.st-bad { color: var(--bad); }
+.st-off { color: var(--text-mute); }
+.st-sub { color: var(--text-mute); font-size: var(--fs-sm); text-align: right; }
+@media (max-width: 640px) {
+  .cl-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .cl-when { flex-direction: row; align-items: baseline; gap: 8px; }
+  .st-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .st-sub { display: none; }
+  .mth-step { grid-template-columns: minmax(0, 1fr); }
+}
 .fresh-banner a { color: var(--brand); text-decoration: none; }
 .fresh-banner a:hover { text-decoration: underline; }
 .fb-x { margin-left: auto; display: inline-flex; padding: 4px;

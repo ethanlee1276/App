@@ -1,0 +1,59 @@
+{
+  "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
+  "entries": [
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Real addresses",
+      "body": "Every player, game and pick now has a URL you can send somebody — /player/juan-soto, /game/ne-sea-0909, /pick/juan-soto-home-runs — and links unfurl as that player or that game rather than as the site. A preview never carries the pick itself: the player, the market and the matchup, and never the side, the line or the price."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Settings that stick",
+      "body": "Prices in American or decimal, stakes in units or dollars, one time zone for every clock on the site, favourite teams, and which leagues show in the nav. They follow your account to every device. Favourites reorder the schedule and never the board — the picks stay ordered by edge, because that order is the product."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "A pick link kept its own address",
+      "body": "Opening a pick wrote its permalink and then overwrote it with a bare #prop a few statements later, so every pick link flattened itself before anybody could copy it — and refreshing one said \"that pick is not on tonight's board\" for a pick that was."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "An unposted total no longer blanks the MLB board",
+      "body": "A morning slate has games before it has totals, and one missing number threw inside the game-card renderer — which runs from the main render, so Top Picks, the board, the rail and the long shots never drew at all. One unguarded number, the whole page."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The streak game, tail-or-fade, and the feed's last three events",
+      "body": "A free daily streak game with no stake on it; a tail-or-fade call on every pick, scored against the journal at the end of the month; and velocity flags, stale-line snipes and the nightly autopsy in the feed."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "refuse",
+      "title": "Web push, measured and refused",
+      "body": "The one delivery mechanic that did not ship. Web Push needs P-256 key agreement and AES-128-GCM payload encryption; the Python standard library has neither, and hand-rolling elliptic-curve cryptography on a site that holds accounts is the wrong risk to take for a notification. The feed and the return banner cover most of the distance. Written down in docs/IDEAS.md so it is not re-attempted by somebody who has not seen the reasoning."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The preseason board retired",
+      "body": "Nothing builds it any more and the stale copy is swept off the public path. The regular season is what the NFL model is now pointed at."
+    },
+    {
+      "date": "2026-08-13",
+      "kind": "model",
+      "title": "Claims cut to what our picks actually land",
+      "body": "The biggest change this model has had to its own numbers. Measured against the journal, the model was over-claiming by nine to ten points on the props it PICKS — 51.5% claimed against 42.5% landed. Every claim now comes down before an edge, an EV or a stake is derived from it, so every one of those figures moved. The price sets the stake rather than the grade. Picks journaled from this date are a different animal from the ones before it, which is why the Record page keeps the eras apart."
+    },
+    {
+      "date": "2026-07-29",
+      "kind": "model",
+      "title": "Re-tuned gates",
+      "body": "Scalpy 2.0 and the pro NFL model. Approval gates and pick caps re-cut around them."
+    }
+  ]
+}

@@ -2050,6 +2050,14 @@ SWEEP_VIEWS = [
     ("Rosters", "?sport=mlb#rosters", "#rosters-body"),
     ("Live", "?sport=mlb#live", "#view-live"),
     ("About", "?sport=mlb#about", "#about-body"),
+    # The two trust pages, added with them (2026-08-25). Both draw from
+    # data rather than from markup — Methodology reads record.json for
+    # the calibration and the model eras, Status asks every published
+    # board for its Last-Modified — so both can fail on a machine where
+    # those answers are missing, which is exactly the failure this sweep
+    # is for.
+    ("Methodology", "?sport=mlb#methodology", "#methodology-body"),
+    ("Status", "?sport=mlb#status", "#status-body"),
     ("Futures", "?sport=mlb#futures", "#futures-body"),
     ("The Lab", "?sport=mlb#lab", "#lab-body"),
     ("Terms", "terms.html", ".legal"),

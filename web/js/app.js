@@ -1283,7 +1283,11 @@ const STALE_LOUD_MS = 12 * 60 * 60 * 1000;
 /* Pages with no data feed behind them. The freshness chip ages the SLATE,
    and on a pure reference page that is a lie of scope — "Stale — built
    10h ago" over a page of prose that has no build at all. */
-const REFERENCE_VIEWS = ["why", "about"];
+/* Pages with no data feed behind them, where the freshness chip has
+   nothing to describe. STATUS IS NOT ONE OF THEM, deliberately: it is
+   the page about freshness, and hiding the chip there would be the one
+   place the answer is genuinely wanted. */
+const REFERENCE_VIEWS = ["why", "about", "methodology"];
 
 /* THE LOUD ONE. The chip is for "how fresh is this"; this is for "the
    pipeline is dead and every number below is a fossil". It exists
@@ -10782,6 +10786,7 @@ function pmAgo(ts) {
    tools menu and made it mean the NFL and only the NFL. It is a tab
    inside each sport now. */
 const STANDALONE_MODES = ["intel", "fantasy", "memes", "ufc", "why", "about",
+                          "methodology", "status",
                           "record", "lab", "mybets"];
 
 /* STANDALONE_BRAND lived here and is gone with the header tagline it
@@ -22636,6 +22641,322 @@ function whyCalcParlay() {
 }
 
 /* ============================================================
+   Methodology — how the numbers are made
+   ============================================================
+   Ethan, 2026-08-25: "Methodology page — 'how the model works', in the
+   same honest voice as your commit messages."
+
+   THE RULE THIS PAGE IS WRITTEN UNDER: it may describe mechanisms and
+   it may print numbers that are PUBLISHED, and it may not print a
+   number that lives as a constant in the Python. A methodology page
+   that types "we shrink 50% toward the market" is a page that will
+   still say 50% the day somebody changes it to 0.4, and a stale claim
+   about how the model works is worse than no claim — it is the one
+   page a sceptical reader checks the others against.
+
+   So the live figures here come off record.json, which the pipeline
+   writes: the calibration table, the selection haircut, the model eras.
+   Everything else names the shape of the thing and leaves the value
+   where it is measured.
+   ============================================================ */
+async function renderMethodology() {
+  const host = document.getElementById("methodology-body");
+  if (!host) return;
+  const src = document.getElementById("data-source");
+  if (src) {
+    src.className = "data-source";
+    src.textContent = "Reference";
+    src.title = "How the model works — no live board involved";
+  }
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Methodology · what’s new";
+  const rec = await loadRecordOnce();
+  const cal = rec.calibration || {};
+  const hair = rec.selection_haircut || {};
+  const step = (n, title, body) => `
+    <article class="card mth-step">
+      <div class="mth-n">${n}</div>
+      <div>
+        <div class="player">${title}</div>
+        <div class="about-body">${body}</div>
+      </div>
+    </article>`;
+  host.innerHTML = `
+    <div class="about-lede">
+      <p><strong>A pick here is a disagreement with a price.</strong> Not a
+      prediction of what will happen — a claim that the market’s number for
+      something is further from the truth than our own margin for error. If
+      the two agree, there is no pick, and most of the time they agree.</p>
+    </div>
+
+    <div class="section-title">The five steps, in order</div>
+    ${step(1, "Ingest what happened",
+      `Game logs, play-by-play, snap counts, pitch-level events, depth charts,
+       injury designations, venues and weather. All of it is stored locally
+       before anything is modelled — the model never reads a live feed at
+       pricing time, so a slow API cannot change tonight’s numbers.`)}
+    ${step(2, "Project the player, not the market",
+      `Each sport has its own model and they do not share a shape: baseball
+       prices contact quality and the park, football prices opportunity —
+       carries, targets, snap share — and basketball starts from minutes and
+       works outward. The projection is a DISTRIBUTION, not a point: the
+       floor and ceiling on every card are that distribution, and the hit
+       probability is the share of it on the right side of the line.`)}
+    ${step(3, "Read the price honestly",
+      `The book’s number is de-vigged before it is compared to anything — a
+       −110/−110 market is 52.4% + 52.4% = 104.8%, and the 4.8% is the
+       house’s, not information. Prices come from up to ten books; the one
+       shown is the one that would actually be bet.`)}
+    ${step(4, "Take the haircuts",
+      `Three of them, and they all cut in the same direction — against us.
+       The model is shrunk toward the de-vigged market, because the market is
+       usually right and a model that ignores that is a model that has not
+       met one. An edge above a ceiling is treated as a mistake rather than a
+       jackpot, because in a liquid market it almost always is. And the
+       claims are cut by what our own picks have historically LANDED versus
+       what they claimed${hair.settled ? ` — measured over
+       ${escapeHtml(String(hair.settled))} settled picks` : ""}. Whatever is
+       left after all three is the edge you see.`)}
+    ${step(5, "Size it, or pass",
+      `A fraction of Kelly on what survives, capped, with per-slate limits on
+       how many picks can exist at all. "No qualifying plays tonight" is a
+       correct output, and a service that must sell picks every night can
+       never produce it.`)}
+
+    <div class="section-title">What is fitted, and what is still an assumption
+      <span class="sub">— the difference matters, and most sites will not tell
+      you which is which.</span></div>
+    <div class="card mth-fit">
+      <p><b>Fitted against results:</b> the probability calibration (does
+      "60%" mean 60%?), the recency blend, per-player corrections, and the
+      loss-pattern miner. Each one is refit nightly from settled picks, and
+      each one refuses to apply itself until it has enough of them —
+      an unfitted correction is 1.0, which is the same as not being there.</p>
+      <p><b>Still an assumption:</b> the structural priors each sport model
+      starts from — league-average rates, positional shares, the shape of a
+      game script. They are chosen from published research and this
+      database’s own history, not fitted to our picks, and they are the part
+      most likely to be wrong in a way nothing here would catch.</p>
+      ${cal && cal.buckets && cal.buckets.length ? `<p><b>Right now:</b>
+        the calibration curve is built from
+        ${escapeHtml(String(cal.n || 0))} settled pick(s). The Record page
+        draws it — claimed against landed, bucket by bucket. If those two
+        columns diverge, the model is over-claiming and that is visible
+        there before it is visible anywhere else.</p>` : ""}
+    </div>
+
+    <div class="section-title">What we do not model
+      <span class="sub">— named, so the gaps are known rather than
+      discovered.</span></div>
+    <div class="card mth-fit">
+      <ul>
+        <li>Anything that needs a beat writer’s judgement. There is no
+          sentiment layer; a rumour with a number printed on it is still a
+          rumour.</li>
+        <li>In-game state. Live win probability needs play-by-play at a
+          latency we do not have, so nothing here re-prices mid-game.</li>
+        <li>Contest ownership for DFS, which is paid and licence-restricted
+          data we do not buy.</li>
+        <li>Your book’s specific rules — voids, pushes on exact numbers,
+          same-game restrictions. Grade against your own slip, not ours.</li>
+      </ul>
+    </div>
+
+    <div class="section-title">How a pick is graded
+      <span class="sub">— the part that decides whether any of the above is
+      working.</span></div>
+    <div class="card mth-fit">
+      <p>Every recommended pick is journaled at the price it appeared at, in
+      the moment it appeared, before anything is known. It settles against
+      the real result and is graded twice: on the RESULT, and on the
+      PROCESS — against the closing line. A win at a price that closed worse
+      than we bet is flagged as lucky; a loss that beat the close was a good
+      bet that lost. Both are on the Record page, and the second one is the
+      honest measure of whether the model sees anything.</p>
+      <p><a href="/api/record/receipts.csv" download>Download every settled
+      pick as a spreadsheet →</a> Each row carries the date, the price, the
+      stake, the result and the closing line, in every bucket — long shots
+      and prediction markets included, with the category on the row rather
+      than quietly left out.</p>
+    </div>
+
+    <div class="section-title" id="changelog">What’s new
+      <span class="sub">— shipped changes above, and below them the dates the
+      model’s own numbers changed. A pick from before one of those lines is
+      a different animal from a pick after it.</span></div>
+    <div id="mth-changelog" class="card mth-fit"><p class="es-sub">Loading…</p></div>
+    ${(rec.model_eras && rec.model_eras.eras || []).length
+      ? `<div class="card mth-fit"><h3>Model eras</h3>
+          <p>The Record page keeps these apart rather than blending them, so
+          a re-tune cannot be judged by results it never produced.</p>
+          <div class="mth-eras">${rec.model_eras.eras.map((e) => `
+            <div class="mth-era">
+              <b>${escapeHtml(e.label || e.key)}</b>
+              <span class="set-note">${escapeHtml(e.from || "the beginning")}
+                → ${escapeHtml(e.to || "now")}</span>
+              <span>${e.settled || 0} settled${e.settled
+                ? ` · ${e.net_units >= 0 ? "+" : ""}${
+                    Number(e.net_units || 0).toFixed(2)}u` : ""}</span>
+            </div>`).join("")}</div></div>`
+      : ""}`;
+  renderChangelog();
+}
+
+/* The written half of the what's-new feed. A static file in web/ rather
+   than web/data/ — that directory is generated and gitignored, and this
+   is a record somebody wrote, not an output something produced. */
+async function renderChangelog() {
+  const host = document.getElementById("mth-changelog");
+  if (!host) return;
+  let doc = null;
+  try {
+    const res = await fetch("changelog.json", { cache: "no-cache" });
+    doc = res.ok ? await res.json() : null;
+  } catch (e) { doc = null; }
+  const entries = (doc && doc.entries) || [];
+  if (!entries.length) {
+    host.innerHTML = `<p class="es-sub">The change log could not be
+      loaded — which is itself a bug, and not a claim that nothing has
+      changed.</p>`;
+    return;
+  }
+  const LABEL = { ship: "Shipped", model: "The numbers moved",
+                  fix: "Fixed", refuse: "Measured and refused" };
+  host.innerHTML = entries.slice(0, 40).map((e) => `
+    <div class="cl-row">
+      <div class="cl-when">${escapeHtml(formatGameDate(e.date) || e.date || "")}
+        <span class="cl-kind cl-${escapeAttr(e.kind || "ship")}">${
+          escapeHtml(LABEL[e.kind] || "Shipped")}</span></div>
+      <div class="cl-what"><b>${escapeHtml(e.title || "")}</b>
+        <p>${escapeHtml(e.body || "")}</p></div>
+    </div>`).join("");
+}
+
+/* ============================================================
+   Status — is it live right now
+   ============================================================
+   Ethan, 2026-08-25: "A status/freshness page — 'MLB board: rebuilt 41s
+   ago. Odds: live. Lineups: 11/15 posted.'"
+
+   Every board is asked with a HEAD request, so the page costs a few
+   hundred bytes rather than the eight megabytes those files add up to.
+   `Last-Modified` on a published board IS its build time — the file is
+   written by the pipeline and nothing else touches it — which makes
+   this the one freshness answer that cannot be flattered by a cache or
+   by the page's own fetch clock.
+   ============================================================ */
+const STATUS_BOARDS = [
+  ["recommendations.json", "NFL board"],
+  ["mlb_recommendations.json", "MLB board"],
+  ["nba.json", "NBA board"],
+  ["wnba.json", "WNBA board"],
+  ["cfb.json", "College football board"],
+  ["ufc.json", "UFC card"],
+  ["record.json", "The record"],
+  ["feed.json", "The feed"],
+  ["injuries.json", "Injury board"],
+  ["streak.json", "Streak slate"],
+  ["live_mlb.json", "Live scoreboard"],
+];
+
+async function boardStamp(file) {
+  try {
+    // Through the wrapper like every other board read, so a refused
+    // request lands in the offline banner's count instead of only in
+    // this page's own row. A 404 is an ANSWER — a board this machine
+    // has never built is a fact, not a broken wire.
+    const res = await boardFetch(`data/${file}`,
+                                 { method: "HEAD", cache: "no-store" });
+    if (!res.ok) return { file, missing: true };
+    const lm = res.headers.get("Last-Modified");
+    const at = lm ? Date.parse(lm) : NaN;
+    return { file, at: Number.isFinite(at) ? at : null,
+             bytes: Number(res.headers.get("Content-Length")) || null };
+  } catch (e) {
+    return { file, unreachable: true };
+  }
+}
+
+async function renderStatus() {
+  const host = document.getElementById("status-body");
+  if (!host) return;
+  const dt = document.getElementById("slate-date");
+  if (dt) dt.textContent = "Status · freshness";
+  host.innerHTML = `<p class="es-sub">Asking every board when it last
+    rebuilt…</p>`;
+  const stamps = await Promise.all(STATUS_BOARDS.map(([f]) => boardStamp(f)));
+  let hb = null;
+  try {
+    const res = await boardFetch("data/heartbeat.json", { cache: "no-store" });
+    hb = res.ok ? await res.json() : null;
+  } catch (e) { hb = null; }
+  const d = state.data || {};
+  const os = d.odds_status || {};
+  const inj = d.injury_status || {};
+  const row = ([file, label], s) => {
+    const age = s.at ? Date.now() - s.at : null;
+    // The floor is this machine's own cycle time where we know it, so
+    // "stale" means late for THIS box rather than late for a constant
+    // that was true of somebody's laptop.
+    const bad = age != null && age > staleAfterMs();
+    const state_ = s.missing ? ["never built", "off"]
+      : s.unreachable ? ["unreachable", "bad"]
+      : age == null ? ["built, time unknown", "off"]
+      : bad ? [`${ageText(age / 1000)} ago`, "bad"]
+      : [`${ageText(age / 1000)} ago`, "good"];
+    return `<div class="st-row">
+      <span class="st-k">${escapeHtml(label)}</span>
+      <span class="st-v st-${state_[1]}">${escapeHtml(state_[0])}</span>
+      <span class="st-sub">${s.bytes
+        ? (s.bytes < 1024 ? "&lt;1 KB" : `${(s.bytes / 1024).toFixed(0)} KB`)
+        : ""}</span>
+    </div>`;
+  };
+  const cycle = hb && hb.cycle_p50_s
+    ? `A full rebuild of every board takes about
+       <b>${Math.round(hb.cycle_p50_s / 60)} min</b> on this machine, measured
+       over ${escapeHtml(String(hb.cycles_timed || 0))} cycle(s).`
+    : `This machine has not timed a full cycle yet, so "stale" falls back to
+       the page’s own floor rather than to a measured one.`;
+  const beat = hb && hb.at_epoch
+    ? `The refresher last finished a cycle
+       <b>${escapeHtml(ageText(Date.now() / 1000 - hb.at_epoch))} ago</b>,
+       on a ${Math.round((hb.interval_s || 0) / 60)}-minute timer.`
+    : `No heartbeat has been written — either the refresher is not running or
+       it has not completed a cycle since it started.`;
+  host.innerHTML = `
+    <div class="about-lede"><p>${beat} ${cycle}</p></div>
+    <div class="section-title">Every published board</div>
+    <div class="card st-card">${STATUS_BOARDS.map((b, i) => row(b, stamps[i])).join("")}</div>
+    <div class="section-title">Tonight’s feeds
+      <span class="sub">— for the league you are looking at.</span></div>
+    <div class="card st-card">
+      <div class="st-row"><span class="st-k">Odds</span>
+        <span class="st-v ${os.priced_at ? "st-good" : "st-off"}">${
+          os.priced_at ? `pulled ${escapeHtml(
+            ageText(Date.now() / 1000 - os.priced_at))} ago` : "not pulled yet"}</span>
+        <span class="st-sub">${os.books != null
+          ? escapeHtml(`${os.books} book(s)`) : ""}</span></div>
+      <div class="st-row"><span class="st-k">Lineups</span>
+        <span class="st-v ${inj.confirmed ? "st-good" : "st-off"}">${
+          inj.confirmed != null && inj.total != null
+            ? escapeHtml(`${inj.confirmed} of ${inj.total} posted`)
+            : "nothing filed yet"}</span><span class="st-sub"></span></div>
+      <div class="st-row"><span class="st-k">This board</span>
+        <span class="st-v ${state.builtAt ? "st-good" : "st-off"}">${
+          state.builtAt
+            ? `built ${escapeHtml(ageText((Date.now() - state.builtAt) / 1000))} ago`
+            : "build time unknown"}</span>
+        <span class="st-sub">${escapeHtml(
+          (LEAGUE_LABEL[state.sport] || state.sport || "").toUpperCase())}</span></div>
+    </div>
+    <p class="es-sub">Every time on this page is read from the file the
+    server actually holds, not from when this page fetched it — a board
+    that stopped rebuilding this morning says so here even if the page
+    itself loaded a second ago.</p>`;
+}
+
+/* ============================================================
    About — what this site is, for someone who just landed on it.
 
    Written for a reader with no context: no jargon in the first screen,
@@ -23162,7 +23483,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23345,6 +23666,8 @@ function _switchViewNow(name, push, dir) {
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
   if (name === "about") renderAbout();
+  if (name === "methodology") renderMethodology();
+  if (name === "status") renderStatus();
   // THESE TWO WERE MISSING, and the symptom was a blank page. Both were
   // only ever reached by a button that rendered them first — the wall
   // going up, or "See the plans" — so nothing built them on a plain

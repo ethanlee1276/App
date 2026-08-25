@@ -228,7 +228,12 @@ def test_the_record_is_a_standalone_page_not_a_sport_tab():
     assert 'data-group="tools"' in HTML
     assert '<button class="nav-btn" data-view="record"' not in HTML, \
         "Record is back in the per-sport tab row"
-    assert '"record"' in APP.split("STANDALONE_MODES = ")[1][:120], \
+    # The slice reaches to the closing bracket rather than a fixed 120
+    # characters: the list grew a line on 2026-08-25 (Methodology and
+    # Status) and pushed "record" out of the window, which failed a test
+    # about the Record page for a reason that had nothing to do with it.
+    _sm = APP.split("STANDALONE_MODES = ")[1]
+    assert '"record"' in _sm[:_sm.index("]")], \
         "record is not a standalone mode"
     # The front door opens on the WHOLE record — the cross-sport scope
     # where the learning ladder reads unscoped.

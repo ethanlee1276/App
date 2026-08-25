@@ -3181,6 +3181,48 @@ def drawdown_factor(conn, sport: str | None = None,
     return 0.5 if (peak - cum) >= drawdown_u else 1.0
 
 
+#: The columns a receipt carries, in the order they are written. Named
+#: here rather than built from `SELECT *` so the file's shape is a
+#: decision: a column added to `bets` for some internal purpose should
+#: not silently start appearing in a public download.
+RECEIPT_COLUMNS = (
+    "date", "sport", "category", "player", "market", "side", "line",
+    "odds", "book", "stake_units", "status", "pnl_units", "hit_prob",
+    "closing_line", "grade",
+)
+
+
+def receipts(conn, since: str | None = None) -> list[dict]:
+    """EVERY settled pick, every bucket, oldest first — the download.
+
+    Ethan, 2026-08-25: *"Track record page with receipts … downloadable
+    history, no cherry-picking."*
+
+    Three decisions, and each is the whole point of the file:
+
+    * NO CATEGORY FILTER. `recent_settled` defaults to `main` because
+      that is the headline record; a receipts file that quietly dropped
+      the long shots, the loose bucket and the prediction-market picks
+      would be the cherry-picking this exists to disprove. The category
+      rides as a column instead, so the buckets stay separable by
+      whoever is checking.
+    * OLDEST FIRST, unlike every on-screen list. A spreadsheet is read
+      forwards and a running total only means something in that order.
+    * SETTLED ONLY. An open pick has no result to audit, and including
+      one would let a reader compute a record that includes bets that
+      have not happened yet.
+    """
+    q = ("SELECT date, sport, category, player, market, side, line, odds, "
+         "book, stake_units, status, pnl_units, hit_prob, closing_line, grade "
+         "FROM bets WHERE status IN ('won','lost','push') AND stake_units > 0")
+    args: list = []
+    if since:
+        q += " AND date >= ?"
+        args.append(since)
+    rows = conn.execute(q + " ORDER BY date ASC, id ASC", args).fetchall()
+    return [dict(r) for r in rows]
+
+
 def recent_settled(conn, limit: int = 30, category: str = "main",
                    sport: str | None = None,
                    since: str | None = None) -> list[dict]:
