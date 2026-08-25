@@ -16,19 +16,12 @@ September, while the football actually being played sat several screens
 below under a heading nobody had reason to scroll to. A static per-sport
 string cannot say when, so a note says it instead.
 
-TWO THINGS THIS DELIBERATELY DOES NOT DO.
-
-It does not price the preseason. Ethan, asked directly: "keep it schedule
-only". A projection is volume times efficiency over prior games, and in
-August a starter plays a series and a half behind a line that will not
-start together again.
-
-And it does not MOVE the preseason block above the strip, which was the
-obvious fix and does not survive contact: `groupRecommended` re-parents
-this whole view into subgroups after every renderer has run, so a DOM
-move made in `renderPreseason` is undone moments later. That was measured
-— the two elements came back in different subgroups — not guessed. The
-note links instead.
+THE PRESEASON POINTER IS GONE, 2026-08-25. The note used to end with
+"Preseason is what is being played now →" while the preseason block was
+on the page; the block retired at Ethan's request ("get rid of the pre
+season section for nfl") and the pointer went with it. The note's own
+job — say WHEN the board is, when that is not now — is unchanged and is
+what this file pins.
 """
 
 import os
@@ -85,38 +78,17 @@ def test_the_distance_is_measured_at_midday():
     assert 'T12:00:00' in _fn()
 
 
-def test_it_points_at_the_preseason_only_for_football():
-    """The other four sports have no preseason block to point at."""
-    assert 'state.sport === "nfl" ? state.preseason : null' in _fn()
-
-
-def test_it_points_only_while_there_are_games_left_to_play():
-    """A finished preseason is not what is being played now."""
+def test_the_preseason_pointer_stayed_retired():
+    """The strip used to point at the preseason block ("Preseason is what
+    is being played now →"). Both retired 2026-08-25 — a link to an
+    anchor that no longer exists moves the address bar and nothing else,
+    which is the exact bug the pointer's own machinery was built to
+    stop."""
     b = _fn()
-    assert re.search(r'\(g\.date \|\| ""\) >= today', b)
-
-
-def test_it_links_rather_than_reordering_the_page():
-    """THE ONE THAT COST A REWRITE. Moving `#preseason-board` above the
-    strip is the obvious fix and it does not survive `groupRecommended`,
-    which re-parents the view into subgroups after every renderer has run
-    — the two elements came back in different subgroups. The note links
-    instead, and the comment in the code records why so the hoist is not
-    re-attempted."""
-    assert 'href="#preseason-board"' in _fn()
-    pre = APP[APP.index("async function renderPreseason()"):]
-    pre = pre[:pre.index("\nfunction ")]
-    assert "dataset.homeIndex" not in pre, "the preseason hoist is back"
-    assert "groupRecommended" in _fn(), "nothing records why it is a link"
-
-
-def test_the_preseason_fetch_re_runs_the_note():
-    """`state.preseason` is filled by an async fetch that lands after the
-    note has already drawn once. Without the re-run the pointer is
-    missing on the pass that matters — the first one."""
-    pre = APP[APP.index("async function renderPreseason()"):]
-    pre = pre[:pre.index("\nfunction ")]
-    assert "renderSlateHorizon" in pre
+    assert "state.preseason" not in b
+    assert "#preseason-board" not in b
+    assert "renderPreseason" not in APP, \
+        "renderPreseason is back — is the section returning on purpose?"
 
 
 def test_a_board_with_no_dates_says_nothing_rather_than_guessing():
@@ -144,9 +116,10 @@ def test_the_note_is_styled_in_both_pieces():
         assert sel in CSS, sel
 
 
-def test_nothing_here_prices_the_preseason():
-    """Ethan, asked directly: "keep it schedule only". The note is a
-    pointer to a schedule and must not grow into a board.
+def test_nothing_here_prices_anything():
+    """The note says when the board is; it must not grow into a board.
+    (Written in the preseason era — "keep it schedule only" — and the
+    claim outlives the section that prompted it.)
 
     Checked against the EMITTED template rather than the whole function —
     the first version read the comments too and tripped on the word

@@ -378,50 +378,11 @@ def test_the_probe_says_what_to_run_when_nothing_is_ingested():
     assert "ingest.py nflpre" in body
 
 
-def test_the_payload_carries_the_scan():
-    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
-    assert 'payload["starter_scan"]' in src
-
-
-def test_the_counts_are_credited_to_the_club_not_to_the_named_man():
-    """Each past August is measured against ITS OWN starter, so "2 of 5"
-    is Cleveland's record across five staffs. Printed straight after
-    "Shedeur Sanders" it credited a 2025 rookie with five past outings —
-    a sentence that is simply false about a real person, on a live page.
-
-    The club owns the history; the quarterback named is who we expect to
-    see this year, and the two are now visibly different claims."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
-    i = app.index("function starterScanHTML(")
-    body = app[i:app.index("\n}", i)]
-    assert "starter played ${of[0]} of ${of[1]}" in body
-    assert "pre-scan-qb" in body, "the man is no longer named separately"
-
-    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
-    j = src.index("def show_prescan(")
-    probe = src[j:src.index("\ndef ", j + 1)]
-    assert "starter played {played} of {seen}" in probe
-
-
-def test_the_card_calls_a_habit_a_habit():
-    """A fixture that has not been played has no team sheet. Printing a
-    tendency as though it were one is exactly how this feature would
-    start lying."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
-    i = app.index("function starterScanHTML(")
-    body = app[i:app.index("\n}", i)]
-    assert "habit, not a team sheet" in body
-
-
-def test_an_unknown_side_renders_nothing():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
-    i = app.index("function starterScanHTML(")
-    body = app[i:app.index("\n}", i)]
-    assert 's.verdict === "unknown"' in body
-
+# The render tests that sat here pinned this feature's page half.
+# The SURFACE retired 2026-08-25 (Ethan: "get rid of the pre season
+# section for nfl") and the functions they read no longer exist; see
+# tests/test_preseason_retired.py. The engine tests above keep running —
+# the module is dormant, not deleted.
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

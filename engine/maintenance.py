@@ -267,6 +267,42 @@ KEEP_CACHE_PREFIXES = {
 CACHE_KEEP_DAYS = 30
 
 
+#: Boards whose surface has been retired: nothing builds them any more,
+#: and a stale copy sitting on the public path is a page the site still
+#: serves while no code refreshes it — frozen scores wearing a live
+#: site's masthead. The daily chores delete these from web/data and
+#: data/built wherever they linger (the dev tree, the droplet after a
+#: deploy). Named files only, same posture as every other allowlist here.
+#:
+#:   nfl_preseason.json — the preseason section, retired 2026-08-25
+#:   (Ethan: "get rid of the pre season section for nfl"). The engine
+#:   stays dormant for a future August; the FILE must not.
+RETIRED_BOARDS = ("nfl_preseason.json",)
+
+
+def remove_retired_boards(log=None, root: Path | None = None) -> int:
+    """Delete retired boards from the public path and the private copy.
+
+    Returns how many files went. Safe to run any time, safe twice —
+    everything it may touch is named in RETIRED_BOARDS and nothing
+    rebuilds those, so a second pass finds nothing.
+    """
+    base = root or (Path(__file__).resolve().parents[1])
+    n = 0
+    for rel in ("web/data", "data/built"):
+        for name in RETIRED_BOARDS:
+            p = base / rel / name
+            try:
+                if p.is_file():
+                    p.unlink()
+                    n += 1
+                    if log:
+                        log(f"  retired board removed: {rel}/{name}")
+            except OSError:
+                continue
+    return n
+
+
 def prune_cache(max_age_days: int = CACHE_KEEP_DAYS, log=None,
                 cache_dir: Path | None = None) -> tuple[int, int]:
     """Delete stale per-game/per-date fetch caches. Returns (files, bytes).
@@ -748,6 +784,13 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         prune_cache(log=log)
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  cache prune skipped: {exc}")
+
+    # Boards whose surface is retired leave the public path too — a file
+    # nothing rebuilds is a page frozen at its last build, still served.
+    try:
+        remove_retired_boards(log=log)
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  retired-board sweep skipped: {exc}")
 
     if harvest:
         _maybe_harvest(yesterday, log)

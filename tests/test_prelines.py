@@ -231,89 +231,11 @@ def test_a_refused_pull_still_shows_the_last_number_seen():
 
 
 # --- the card ---------------------------------------------------------------
-def _fn(name):
-    i = APP.index(f"function {name}(")
-    return APP[i:APP.index("\n}", i)]
-
-
-def test_the_card_prints_the_posted_numbers():
-    b = _fn("preseasonLineHTML")
-    assert "m.spread" in b and "m.total" in b
-    assert "m.home_odds" in b and "m.away_odds" in b
-
-
-def test_the_card_carries_no_edge_no_stake_and_no_percentage():
-    """A model number beside a market number is a recommendation whether
-    or not it is labelled one. `p_home` is deliberately NOT drawn — a
-    de-vigged probability on a card reads as a forecast, and this page
-    does not have one."""
-    b = _fn("preseasonLineHTML").lower()
-    for word in ("edge", "stake", "units", "recommend", "p_home",
-                 "ev_per_unit", "%"):
-        assert word not in b, f"the preseason card emits {word!r}"
-
-
-def test_a_fixture_with_no_price_renders_nothing():
-    b = _fn("preseasonLineHTML")
-    assert "if (!m) return \"\";" in b
-    assert "if (!bits.length) return \"\";" in b
-
-
-def test_the_spread_is_labelled_with_the_team_it_belongs_to():
-    """A bare "-3" beside two team names is ambiguous, and the ambiguity
-    resolves the wrong way half the time."""
-    b = _fn("preseasonLineHTML")
-    assert "escapeHtml(g.home)" in b and "m.spread" in b
-
-
-def test_the_card_is_wired_into_the_fixture_row():
-    assert "preseasonLineHTML(g)" in _fn("preseasonGameHTML")
-
-
-def test_the_line_is_styled_as_agate_not_as_a_pick():
-    for sel in (".pre-line", ".pre-line-lab", ".pre-line-n"):
-        assert sel in CSS, sel
-    i = CSS.index(".pre-line {")
-    block = CSS[i:CSS.index("}", i)]
-    assert "tabular-nums" in block
-
-
-# --- why there is a line and no pick ----------------------------------------
-def test_the_note_distinguishes_never_measured_from_measured_and_null():
-    """A block that just stays quiet makes "we checked and there is
-    nothing" look identical to "we never checked"."""
-    b = _fn("preseasonFitHTML")
-    # It used to check for the string "--prefit", because the copy named
-    # the command that runs the measurement. That instruction came off the
-    # public site on 2026-08-23 (see tests/test_no_operator_copy.py), and
-    # it was never the property this test was about: what matters is that
-    # the three states stay distinguishable — never measured, measured and
-    # insufficient, measured and negative.
-    assert "has not been measured" in b, "never-measured lost its own wording"
-    assert '"insufficient"' in b and '"no"' in b
-    assert "python3" not in b, "the command is back on the page"
-
-
-def test_the_page_says_the_number_is_the_book_s():
-    i = APP.index("async function renderPreseason()")
-    body = APP[i:APP.index("\nfunction ", i + 1)]
-    assert "nothing here is ours" in body.lower()
-    assert "preseasonFitHTML(data)" in body
-
-
-def test_the_launcher_attaches_both_the_line_and_the_verdict():
-    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
-    i = src.index("def refresh_preseason(")
-    body = src[i:src.index("\ndef ", i + 1)]
-    assert "prelines" in body and 'payload["fit"]' in body
-
-
-def test_the_gate_stays_shut_while_the_line_is_shown():
-    """The one thing that must not drift: showing a market number is not a
-    step towards pricing one, and nothing in this file opens that door."""
-    from engine.nfl import prefit
-    assert prefit.prices_allowed() is False
-
+# The render tests that sat here pinned this feature's page half.
+# The SURFACE retired 2026-08-25 (Ethan: "get rid of the pre season
+# section for nfl") and the functions they read no longer exist; see
+# tests/test_preseason_retired.py. The engine tests above keep running —
+# the module is dormant, not deleted.
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

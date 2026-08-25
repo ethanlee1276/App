@@ -220,12 +220,12 @@ FREE_FILES = (
     # page that tells a reader whether the numbers are current.
     "heartbeat.json",
     "ufc_live.json",
-    # Schedule and scores for the five weeks of preseason. Free
-    # because it is structurally priceless — board_payload()
-    # refuses to put a number on a starter who plays a series and
-    # a half, and keeping the fixture list free is what stops that
-    # refusal reading as a paywall.
-    "nfl_preseason.json",
+    # nfl_preseason.json LEFT this list 2026-08-25 with the rest of the
+    # preseason surface (Ethan: "get rid of the pre season section for
+    # nfl"). Nothing builds it now; maintenance's RETIRED_BOARDS removes
+    # the stale copy from web/data. Deregistered rather than kept "just
+    # in case": an unknown board is treated as gated, which is the safe
+    # direction if a stray copy ever reappears.
     # The fast MLB scoreboard (live_build.py). Free for the same reason it
     # is fast: it is scores and game state only, no prices — a public fact
     # the gate has no reason to redact, and the one file that must NEVER
@@ -272,7 +272,7 @@ KNOWN_BOARDS = (
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
-    "streak.json", "ufc_live.json", "nfl_preseason.json", "live_mlb.json",
+    "streak.json", "ufc_live.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",

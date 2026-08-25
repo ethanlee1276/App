@@ -1416,7 +1416,6 @@ function renderAll() {
   renderIncentives();
   renderRestWatch();
   renderInjuryWatch();
-  renderPreseason();
   renderRecommended();
   // AFTER the renderers, always. Which rooms exist is decided by what
   // they just wrote — grouping first would judge every block empty and
@@ -1657,39 +1656,10 @@ function renderEmptySlate() {
   const live = String(state.data.generated_from || "").startsWith("live");
   el.style.display = "";
 
-  /* PRESEASON IS NOT "NOTHING SCHEDULED". Ethan, 2026-08-14: "preseason
-     started every other team for NFL yesterday and we didn't recommend
-     props or anything like that."
-
-     Not pricing preseason is deliberate and the Preseason block below
-     says so in as many words. The failure was that the block below is
-     BELOW: at the top of the same page, where he actually looked, this
-     panel was saying "No games on the board right now — nothing is
-     scheduled or in progress", with sixteen exhibition games listed
-     further down the same screen. One page, two answers, and the one
-     that reads first was the wrong one.
-
-     The reason has to travel to where the question gets asked. */
-  const pre = state.preseason;
-  const preLeft = pre && pre.total ? (pre.total - (pre.complete || 0)) : 0;
-  const preOn = !!pre && (state.sport || "nfl") === "nfl" && !!pre.total
-    && (!pre.show_until || new Date().toISOString().slice(0, 10) <= pre.show_until);
-  if (preOn) {
-    el.innerHTML = `<div class="es-icon">${icon("calendar", 30)}</div>
-      <div class="es-title">Preseason is on — and nothing in it is priced</div>
-      <div class="es-sub">${pre.complete || 0} of ${pre.total} exhibition
-      game(s) played${preLeft ? `, ${preLeft} still to come` : ""}. The
-      schedule and scores are below.<br><br>
-      This board stays empty on purpose. Every prop here is volume ×
-      efficiency over prior games, and in August a starter plays a series
-      and a half behind a line that will not start together again — a
-      number built on last season’s snaps is not a worse answer, it is an
-      answer about a different event. We have also never ingested a
-      preseason snap, so there is nothing to fit a preseason model on.
-      The regular-season board opens in Week 1.</div>`;
-    document.getElementById("games-title").style.display = "none";
-    return;
-  }
+  /* The "Preseason is on — and nothing in it is priced" branch lived
+     here Aug 2026 and retired with the preseason block (2026-08-25).
+     Its lesson stays taught elsewhere: a reason has to travel to where
+     the question gets asked. */
   el.innerHTML = state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">Every sport rebuilds on a refresh cycle — give it a minute
@@ -2671,286 +2641,14 @@ function renderIncentives() {
     <div class="card" style="padding:0">${body}</div>`;
 }
 
-/* ============================================================
-   NFL preseason — the fixture list, and nothing priced
-   ============================================================
-   Live for about five weeks a year, which is why it is a block on the
-   board rather than a tab in the nav: a permanent destination that says
-   nothing for eleven months is worse than no destination. It retires
-   itself by comparing today against the last fixture's date, so nobody
-   has to remember to take it down in September.
-
-   IT CARRIES NO PROJECTION, NO PRICE AND NO PICK, on purpose. Preseason
-   is the one part of the calendar where this engine's premise fails — a
-   projection is volume times efficiency measured over prior games, and in
-   August a starter plays a series and a half behind a line that will not
-   start together again. A prop priced off last season's usage is not a
-   slightly worse number, it is a number about a different event.
-   ============================================================ */
-let _preseasonCache;
-
-async function loadPreseason() {
-  if (_preseasonCache !== undefined) return _preseasonCache;
-  try {
-    const res = await boardFetch("data/nfl_preseason.json?t=" + (Date.now() / 60000 | 0));
-    _preseasonCache = res.ok ? await res.json() : null;
-  } catch (e) { _preseasonCache = null; }
-  return _preseasonCache;
-}
-
-function preseasonScoreHTML(g) {
-  // Label from `state`, never from the presence of a number: ESPN sends
-  // score "0" for a game nobody has played, so "has a score" and "has been
-  // played" are different questions. Asking the wrong one tagged 48
-  // scheduled fixtures as in progress on the first real run.
-  if (g.state === "post") {
-    const aw = g.away_score, hm = g.home_score;
-    const awWon = aw > hm, hmWon = hm > aw;
-    return `<span class="pre-score">
-      <b class="${awWon ? "won" : ""}">${aw}</b>–<b class="${hmWon ? "won" : ""}">${hm}</b>
-    </span><span class="pre-state">Final</span>`;
-  }
-  if (g.state === "in") {
-    return `<span class="pre-score">${g.away_score}–${g.home_score}</span>` +
-           `<span class="pre-state live">Live</span>`;
-  }
-  // Local time, not the feed's UTC. ESPN sends Z-stamped kickoffs, and
-  // printing them raw put "23:00 UTC" beside every fixture — a number no
-  // one reading this is in, for a schedule whose entire job is telling you
-  // when to watch.
-  let t = "";
-  if (g.kickoff) {
-    const d = new Date(g.kickoff);
-    if (!isNaN(d)) t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-  return `<span class="pre-state">${escapeHtml(t || "—")}</span>`;
-}
-
-function preseasonGameHTML(g) {
-  const teams = (typeof teamsForSport === "function")
-    ? teamsForSport("nfl") : {};
-  const mark = (ab) => {
-    const m = teams[ab] || {};
-    return `<span class="pre-team" style="border-color:${
-      escapeHtml(m.primary || "#39405166")}">${escapeHtml(ab)}</span>`;
-  };
-  return `<div class="pre-game${g.state === "in" ? " is-live" : ""}">
-    <span class="pre-date">${escapeHtml((g.date || "").slice(5))}</span>
-    ${mark(g.away)}<span class="pre-at">@</span>${mark(g.home)}
-    ${preseasonScoreHTML(g)}
-    ${g.indoor ? '<span class="pre-roof">indoor</span>' : ""}
-    ${starterScanHTML(g)}
-    ${preseasonLineHTML(g)}
-  </div>`;
-}
-
-/* WHO IS LIKELY TO PLAY, per side.
-
-   Ethan, 2026-08-14: "make sure to implement scanning to see which teams
-   will be playing starters and which ones wont."
-
-   The measurement is the starting quarterback's preseason attempt count,
-   because he is on the field exactly as long as the staff wants the first
-   team out there and he is the one man guaranteed to leave a mark in a
-   box score when he is. Bands come from the league's own distribution
-   (`prestarters.bands`), not from a number somebody picked.
-
-   A FIXTURE THAT HAS NOT BEEN PLAYED HAS NO TEAM SHEET, and no free feed
-   announces who is sitting. What this shows is a HABIT — what the same
-   staff has done before — and it says so, because a habit printed as a
-   fact is the exact way this feature would start lying. */
-function starterScanHTML(g) {
-  const scan = ((state.preseason || {}).starter_scan || {});
-  const row = (scan.games || []).find(
-    (x) => x.home === g.home && x.away === g.away && x.date === g.date);
-  if (!row) return "";
-  const tone = { rests: "down", mixed: "warn", plays: "up" };
-  const cells = ["away", "home"].map((side) => {
-    const s = row.sides[side];
-    if (!s || s.verdict === "unknown") return "";
-    // THE COUNTS, NOT THE MEAN. A staff that sat its man three Augusts and
-    // threw twelve in the fourth has a mean of three, which describes none
-    // of the four outings. "played 1 of 4" does.
-    // AND THE COUNTS ARE THE CLUB'S, NOT THIS MAN'S. Each past August is
-    // measured against its own starter, so "2 of 5" is Cleveland across
-    // five staffs — printed straight after "Shedeur Sanders" it credited a
-    // 2025 rookie with five past outings. The team owns the history; the
-    // quarterback named is who we expect to see this year.
-    const of = s.played_of || [];
-    const shape = of.length === 2 && of[1]
-      ? `starter played ${of[0]} of ${of[1]}${
-          s.att_when_played ? `, ${Number(s.att_when_played).toFixed(0)} att when he did` : ""}`
-      : "";
-    return `<span class="pre-scan-side">
-      <b>${escapeHtml(s.team)}</b>
-      <span class="chip ${tone[s.verdict] || ""}">${escapeHtml(s.verdict)}</span>
-      ${shape ? `<span class="pre-scan-n">${escapeHtml(shape)}</span>` : ""}
-      ${s.qb ? `<span class="pre-scan-qb">${escapeHtml(s.qb)}</span>` : ""}</span>`;
-  }).filter(Boolean).join("");
-  if (!cells) return "";
-  return `<div class="pre-scan">${cells}
-    <span class="pre-scan-note">habit, not a team sheet</span></div>`;
-}
-
-/* WHAT THE BOOK THINKS, beside what the coaches have done.
-
-   Ethan, 2026-08-14: "i wanna show props for the pre season. i wanna show
-   either money lines or over unders or whatever i dont car."
-
-   This is the MARKET's number and only the market's number. There is no
-   model price beside it, no edge and no pick, because the fit that would
-   justify one has not convicted — `engine/nfl/prefit` measures whether
-   starter usage moves an August result and `prices_allowed()` is hard
-   False until the residual has been checked against posted lines we only
-   started recording on 2026-08-14.
-
-   So: posted numbers, and the reader draws their own line between "SF has
-   played its starters 22 attempts a game in past Augusts" and "the market
-   has them -3". Deliberately RAW prices rather than an implied
-   percentage — a de-vigged probability on a card looks like a forecast,
-   and this page does not have one. */
-function preseasonLineHTML(g) {
-  const m = g.market;
-  if (!m) return "";
-  const px = (v) => `${v > 0 ? "+" : ""}${v}`;
-  const bits = [];
-  if (m.spread != null) {
-    // Stored from the HOME team's side — see parse_event_spreads.
-    bits.push(`${escapeHtml(g.home)} ${px(Number(m.spread))}`);
-  }
-  if (m.total != null) bits.push(`o/u ${Number(m.total)}`);
-  if (m.away_odds != null && m.home_odds != null) {
-    bits.push(`${escapeHtml(g.away)} ${px(m.away_odds)}`
-      + ` / ${escapeHtml(g.home)} ${px(m.home_odds)}`);
-  }
-  if (!bits.length) return "";
-  return `<div class="pre-line">
-    <span class="pre-line-lab">market</span>
-    ${bits.map(b => `<span class="pre-line-n">${b}</span>`).join("")}
-    ${m.books ? `<span class="pre-line-books">${m.books} book${
-      m.books === 1 ? "" : "s"}</span>` : ""}
-  </div>`;
-}
-
-/* WHY THERE IS A LINE AND NO PICK — said once, at the top, in the state
-   the measurement is actually in.
-
-   Three answers, and "never measured" is a different sentence from "we
-   measured and there is nothing there". A block that just stays quiet
-   makes those two look identical, which is how a page ends up implying it
-   checked something it never ran. */
-function preseasonFitHTML(data) {
-  const f = (data || {}).fit;
-  if (!f || !f.verdict) {
-    return `Whether any of it is <i>predictable</i> has not been measured
-      yet, so nothing is claimed either way.`;
-  }
-  const span = (f.seasons || []).length
-    ? ` across ${f.seasons.length} August${f.seasons.length === 1 ? "" : "s"}`
-    : "";
-  if (f.verdict === "unmeasurable") {
-    // A predictor that never took a second value. NOT a negative result —
-    // the two look identical in a report and must not look identical here.
-    return `The measurement could not run — a predictor it needs is empty
-      in our data, so nothing has been concluded either way.`;
-  }
-  if (f.verdict === "insufficient") {
-    return `Measured on ${f.n} game(s)${span} — not enough to conclude
-      anything either way.`;
-  }
-  if (f.verdict === "no") {
-    // TWO DIFFERENT NEGATIVES. A pair that failed on effect size has been
-    // measured and is too small to matter. A pair that cleared the effect
-    // and missed only significance has NOT been shown to be absent — it is
-    // unresolvable at this sample — and printing the first sentence for
-    // the second case claims more than the arithmetic did.
-    if (f.noisy) {
-      return `Measured on ${f.n} game(s)${span}: an effect may be there but
-        ${f.n_scored || "this"} game(s) cannot resolve it${
-        f.n_for_p ? ` — that would take roughly ${f.n_for_p.toLocaleString()},
-        and an August supplies about 49` : ""}. Nothing is priced on a
-        maybe.`;
-    }
-    return `Measured on ${f.n} game(s)${span}: starter usage does not
-      predict an August result by enough to bet, so nothing is.`;
-  }
-  return `Measured on ${f.n} game(s)${span}: the effect is real. It is
-    still not priced — that needs the posted numbers checked against it,
-    and those only started being recorded this August.`;
-}
-
-async function renderPreseason() {
-  const host = document.getElementById("preseason-board");
-  if (!host) return;
-  host.innerHTML = "";
-  if ((state.sport || "nfl") !== "nfl") return;
-  const data = await loadPreseason();
-  if (!data || !data.total || !data.weeks) return;
-  // The empty-slate panel needs this too, and it runs SYNCHRONOUSLY well
-  // before the fetch lands. Stashing it here and re-running that panel is
-  // what lets the top of the page stop contradicting the bottom of it —
-  // see the note in renderEmptySlate.
-  state.preseason = data;
-  if (typeof renderEmptySlate === "function") setTimeout(renderEmptySlate, 0);
-  // The horizon note reads `state.preseason`, and on the first pass this
-  // fetch lands after it has already drawn. Re-run it now that the answer
-  // exists — the same reason renderEmptySlate is poked above.
-  if (typeof renderSlateHorizon === "function") setTimeout(renderSlateHorizon, 0);
-
-  // Self-retiring. `show_until` is the last fixture's date; once it is
-  // past, this block stops existing without anyone editing anything.
-  const today = new Date().toISOString().slice(0, 10);
-  if (data.show_until && today > data.show_until) return;
-
-  // Only ONE week is expanded: the first that still has a game to play.
-  // All four open is 49 rows and 2,168px of board — more than a screen,
-  // below the picks, for a list whose useful part is "what is on next".
-  // The rest are one click away and say enough collapsed to know whether
-  // to bother (16 games · all final).
-  const openWeek = data.weeks.find(w => w.games.some(g => (g.date || "") >= today))
-                   || data.weeks[data.weeks.length - 1];
-
-  const left = data.days_until;
-  const when = left === null || left === undefined ? ""
-    : left > 0 ? `starts in ${left} day${left === 1 ? "" : "s"}`
-    : left === 0 ? "starts today"
-    : `${data.complete} of ${data.total} played`;
-
-  host.innerHTML = `
-    <div class="section-title">Preseason
-      <span class="sub">— ${escapeHtml(String(data.season))} exhibition schedule and scores${
-        when ? ", " + escapeHtml(when) : ""}</span>
-    </div>
-    <div class="card pre-card">
-      <p class="pre-note">Schedule, results and the <b>book’s</b> posted
-        number — <b>nothing here is ours</b>. Preseason usage is not the
-        season’s: starters play a series behind a line that will not start
-        together again, so a projection built on last year’s snaps is a
-        number about a different event. ${preseasonFitHTML(data)}</p>
-      ${data.weeks.map(w => preseasonWeekHTML(w, w === openWeek)).join("")}
-    </div>`;
-}
-
-function preseasonWeekHTML(w, isOpen) {
-  const played = w.games.filter(g => g.state === "post").length;
-  const live = w.games.some(g => g.state === "in");
-  const dates = w.games.map(g => g.date).filter(Boolean).sort();
-  const span = dates.length
-    ? (dates[0] === dates[dates.length - 1] ? dates[0].slice(5)
-       : `${dates[0].slice(5)}–${dates[dates.length - 1].slice(5)}`)
-    : "";
-  const note = live ? "live now"
-    : played === w.games.length ? "all final"
-    : played ? `${played} of ${w.games.length} played`
-    : span;
-  return `<details class="pre-week"${isOpen ? " open" : ""}>
-    <summary class="pre-week-head">Week ${w.week === null ? "?" : w.week}
-      <span class="pre-week-n">${w.games.length} game${
-        w.games.length === 1 ? "" : "s"}${note ? " · " + escapeHtml(note) : ""}</span>
-    </summary>
-    ${w.games.map(preseasonGameHTML).join("")}
-  </details>`;
-}
+/* The NFL preseason module (fixture list, scores, book lines — never a
+   price) lived here from 2026-08-08 to 2026-08-25 and was RETIRED at
+   Ethan's request: "get rid of the pre season section for nfl. No need
+   too have it anymore, I'd rather just be prepared for the regular
+   season to start." The engine that fed it (nflpre.py,
+   engine/sources/nflpreseason.py, engine/nfl/pre*) stays dormant for a
+   future August; nfl_preseason.json is no longer built, registered or
+   fetched. */
 
 function renderRestWatch() {
   // NFL only: who is safe, who is dead, who might sit. Computed from our
@@ -3383,45 +3081,13 @@ function renderSlateHorizon() {
     (new Date(first + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
   if (days <= 1) return;                 // today or tomorrow — say nothing
 
-  // Preseason is the only thing that can be on INSTEAD, and only for NFL.
-  // `state.preseason` is stashed by renderPreseason; it may not have
-  // landed yet on the first pass, and its absence simply means no pointer.
-  const pre = state.sport === "nfl" ? state.preseason : null;
-  const soon = pre && (pre.weeks || []).some(
-    (w) => (w.games || []).some((g) => (g.date || "") >= today));
-  /* A LINK, NOT A HOIST. The obvious fix was to move the preseason block
-     above the strip while preseason is on. It does not survive:
-     `groupRecommended` re-parents this whole view into subgroups AFTER
-     every renderer has run, so a DOM move made here is undone moments
-     later — measured, not guessed, when the two elements came back in
-     different subgroups. Re-architecting the grouping to carry an
-     ordering exception is a much larger change than the problem needs,
-     so the note points at the block instead and gets you there in one
-     click. */
-  const pointer = soon
-    ? ` <a href="#preseason-board" class="slate-jump">Preseason is what is
-        being played now →</a>`
-    : "";
+  // The pointer that used to sit here ("Preseason is what is being
+  // played now →") retired with the preseason block, 2026-08-25. The
+  // strip's own sentence is complete without something else to point at.
   host.innerHTML = `
     <p class="slate-horizon">${icon("clock", 14)}
       This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${days}
-      days out. Nothing on it is tonight.${pointer}</p>`;
-
-  /* The pointer is a link to a block that lives in ANOTHER SUB-TAB, so the
-     browser's own jump is not enough — see `revealAnchor`. Open the room
-     first, then scroll. Bound here rather than delegated because this
-     host's innerHTML is rewritten on every render, which drops listeners;
-     the anchor itself survives `groupRecommended` either way, since that
-     moves nodes with appendChild rather than rebuilding them. */
-  host.querySelectorAll("a.slate-jump").forEach((a) =>
-    a.addEventListener("click", (e) => {
-      const id = (a.getAttribute("href") || "").slice(1);
-      const el = revealAnchor(id);
-      if (!el) return;              // nothing to show: let the browser try
-      e.preventDefault();
-      history.replaceState(history.state, "", `#${id}`);
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }));
+      days out. Nothing on it is tonight.</p>`;
 }
 
 function renderGames() {
@@ -8481,7 +8147,7 @@ function subtabbedHTML(view, groups) {
 
    WHY EMPTINESS IS RE-JUDGED ON EVERY CALL. The Record page knows what
    it has before it renders; this page does not. `#gamebets` is empty
-   until the slate arrives, `#preseason-board` fills only in August, and
+   until the slate arrives, `#rest-watch` fills only late in a season, and
    switching leagues empties half the page and fills the other half. A
    room decided once at startup would offer a Game bets tab on a night
    with no game bets, which is rule 1 of the sub-tab contract broken by
@@ -8667,7 +8333,7 @@ const REC_ROOMS = [
    ["gamebets-title", "gamebets"]],
   ["watch", "Watchlists",
    "context that shades a pick without being one: rest, incentives, form, injuries",
-   ["preseason-board", "team-form", "incentive-watch", "rest-watch",
+   ["team-form", "incentive-watch", "rest-watch",
     "injury-watch"]],
 ];
 
@@ -23030,7 +22696,7 @@ function bind() {
       if (typeof syncParlayMode === "function") syncParlayMode();
       return;
     }
-    // An IN-PAGE ANCHOR, not a view: `#preseason-board` and anything like
+    // An IN-PAGE ANCHOR, not a view: `#team-form` and anything like
     // it. The target may sit inside a sub-tab panel that is display:none,
     // where the browser's own jump lands nowhere — so open the room, then
     // scroll. Without this the address bar moved and the page did not,

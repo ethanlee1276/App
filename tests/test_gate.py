@@ -211,14 +211,18 @@ def test_a_board_this_machine_has_built_is_one_the_registry_knows():
     assert not unknown, f"built but unregistered: {unknown}"
 
 
-def test_the_preseason_fixture_list_is_free():
-    """board_payload() calls itself "Facts only — no price", and refuses to
-    put a number on a starter who plays a series and a half. Charging for
-    a board that is structurally priceless would make that refusal read as
-    a paywall."""
-    assert gate.is_free("nfl_preseason.json")
-    board = {"weeks": [{"week": 1, "games": [{"home": "DET"}]}], "total": 49}
-    assert gate.redact(board, "nfl_preseason.json") == board
+def test_the_preseason_board_is_deregistered_and_swept():
+    """It was FREE while it lived ("facts only — no price"); it RETIRED
+    2026-08-25 with the rest of the preseason surface. Deregistered
+    rather than left in FREE_FILES because an unknown board is treated
+    as gated — the safe direction if a stray copy ever reappears — and
+    on the retirement list so maintenance deletes the stale copy from
+    the public path instead of serving frozen scores forever."""
+    from engine.maintenance import RETIRED_BOARDS
+    assert "nfl_preseason.json" not in gate.KNOWN_BOARDS
+    assert "nfl_preseason.json" not in gate.FREE_FILES
+    assert not gate.is_free("nfl_preseason.json")
+    assert "nfl_preseason.json" in RETIRED_BOARDS
 
 
 # --- the switch, and why it is off ------------------------------------------
@@ -818,11 +822,18 @@ def test_every_board_path_written_in_the_code_is_a_board_the_gate_knows():
     board will not open. Neither was leaking anything. Both were
     silently checking nothing.
     """
+    from engine.maintenance import RETIRED_BOARDS
     pat = re.compile(r"web/data/([A-Za-z0-9_]+\.json)")
     unknown = {}
     for rel, src in _py_sources():
         for name in set(pat.findall(src)):
-            if name not in gate.KNOWN_BOARDS:
+            # A RETIRED board's name may survive in its dormant tooling
+            # (nflpre.py, --prescan) — those readers print "nothing
+            # builds this" and stop, which is not a board the gate needs
+            # to know. The coupling is deliberate: the only way to be
+            # exempt here is to be on the list maintenance actively
+            # deletes from the public path.
+            if name not in gate.KNOWN_BOARDS and name not in RETIRED_BOARDS:
                 unknown.setdefault(name, []).append(str(rel))
     assert not unknown, (
         "board names the gate has never heard of — either a pipeline grew "

@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Pull and show the NFL preseason schedule. Writes nothing but a cache.
 
+RETIRED FROM THE SITE 2026-08-25. Ethan: "get rid of the pre season
+section for nfl. No need too have it anymore, I'd rather just be
+prepared for the regular season to start." The launcher no longer calls
+this, the page block is gone, and nfl_preseason.json is deregistered
+from the gate (maintenance removes stale copies). This CLI and the
+modules it drives (engine/sources/nflpreseason, engine/nfl/prestarters,
+prelines, prefit) stay in the tree, dormant, because next July somebody
+will want them again and they were measured, not guessed, the first
+time they were built.
+
     python3 nflpre.py                 # this year's preseason
     python3 nflpre.py --season 2026
     python3 nflpre.py --raw           # also print where the payloads landed

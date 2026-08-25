@@ -364,28 +364,12 @@ def test_the_verdict_reaches_disk_on_every_branch_that_reached_one():
     assert body.index("os.replace(_ptmp, out)") < body.index('rep.get("dead")')
 
 
-def test_the_card_separates_the_two_negatives_too():
-    """The same distinction the explanation makes has to survive the trip
-    to the page, or the terminal and the board disagree about what was
-    found."""
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
-    i = app.index("function preseasonFitHTML(")
-    body = app[i:app.index("\n}", i)]
-    assert "f.noisy" in body and "cannot resolve it" in body
-    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
-    j = src.index("def refresh_preseason(")
-    ref = src[j:src.index("\ndef ", j + 1)]
-    assert 'limited_by") == ["significance"]' in ref
-
-
-def test_the_card_says_it_could_not_run_rather_than_going_quiet():
-    app = open(os.path.join(ROOT, "web", "js", "app.js"),
-               encoding="utf-8").read()
-    i = app.index("function preseasonFitHTML(")
-    body = app[i:app.index("\n}", i)]
-    assert '"unmeasurable"' in body
-    assert "could not run" in body
+# The render tests that sat here pinned the page half of this feature
+# (preseasonFitHTML / preseasonLineHTML / starterScanHTML and friends).
+# The SURFACE retired 2026-08-25 — Ethan: "get rid of the pre season
+# section for nfl" — and those functions no longer exist to pin; see
+# tests/test_preseason_retired.py for what replaced them. The engine
+# tests in this file keep running: the module is dormant, not deleted.
 
 
 # --- one line, one sample ---------------------------------------------------

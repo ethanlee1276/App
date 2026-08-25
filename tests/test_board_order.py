@@ -81,12 +81,12 @@ def test_the_summary_tiles_still_lead():
     assert html.index('id="home-perf"') < html.index('id="best-bets"')
 
 
-def test_the_preseason_stays_under_the_picks():
-    """It is a schedule, not a priced board, and it must never outrank
-    one."""
-    html = _html()
-    a, b = _order(html, "best-bets", "preseason-board")
-    assert a < b
+def test_the_preseason_block_stayed_retired():
+    """It lived under the picks Aug 2026 and was removed 2026-08-25
+    (Ethan: "get rid of the pre season section for nfl"). A revival is a
+    decision someone makes in this file with the fold numbers in front
+    of them, not a div that quietly reappears."""
+    assert 'id="preseason-board"' not in _html()
 
 
 def test_nothing_new_slipped_in_above_the_picks():

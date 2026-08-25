@@ -342,96 +342,13 @@ def _current_nfl_week():
     return None
 
 
-def refresh_preseason(quiet: bool = False) -> bool:
-    """The NFL preseason fixture list, for the board's August block.
-
-    Runs on every launch rather than by hand, because a schedule that only
-    updates when someone remembers is a schedule that is wrong on the night
-    it matters. It is cheap: ESPN's scoreboard is free and the fetcher
-    caches it for six hours, so out of season this is four cached reads and
-    no network at all.
-
-    OUT OF SEASON IT IS NOT AN ERROR. `preseason_games` raises when the
-    schedule is not published — which is the correct answer for most of the
-    year — and the launcher must not print a warning every day from
-    September to July for a feed doing exactly what it should.
-    """
-    from engine.sources.fetch import DataUnavailable
-    import datetime as _dt
-    import json
-    season = _dt.date.today().year
-    try:
-        from engine.sources import nflpreseason as _pre
-        games = _pre.preseason_games(season)
-        payload = _pre.board_payload(games, season)
-    except DataUnavailable:
-        return False                      # not published / not reachable
-    except Exception as exc:                                  # noqa: BLE001
-        if not quiet:
-            print(f"  preseason: {type(exc).__name__}: {str(exc)[:70]}")
-        return False
-    # WHO IS LIKELY TO PLAY. Ethan, 2026-08-14: "make sure to implement
-    # scanning to see which teams will be playing starters and which ones
-    # wont." Free — it reads the logs we already store — and it degrades
-    # to "unknown" per side rather than guessing when the preseason
-    # ingest has not run.
-    try:
-        from engine import db as _psdb
-        from engine.nfl import prestarters as _ps
-        for w in payload.get("weeks", []):
-            for g in w.get("games", []):
-                g.setdefault("week", w.get("week"))
-        _upcoming = [g for w in payload.get("weeks", [])
-                     for g in w.get("games", [])]
-        _conn = _psdb.connect()
-        payload["starter_scan"] = _ps.scan(_conn, _upcoming, season)
-        _conn.close()
-    except Exception as _exc:                                 # noqa: BLE001
-        if not quiet:
-            print(f"  preseason scan unavailable: {type(_exc).__name__}")
-    # WHAT THE BOOK THINKS, beside what the coaches have done. Ethan asked
-    # for "either money lines or over unders or whatever" on the preseason
-    # board; this is that, and it is the MARKET's number rather than ours,
-    # because `engine/nfl/prefit` has not established that starter usage
-    # predicts an August result by enough to bet. Three credits for the
-    # whole board, six-hour cache, and only while a fixture is unplayed.
-    try:
-        from engine.nfl import prelines as _pl
-        _n, _note = _pl.refresh(payload)
-        if not quiet:
-            print(f"  preseason lines: {_note}")
-    except Exception as _exc:                                 # noqa: BLE001
-        if not quiet:
-            print(f"  preseason lines unavailable: {type(_exc).__name__}")
-    # THE FIT'S VERDICT RIDES ALONG so the page can say why it is showing a
-    # line and no pick. Absent file = never measured, which the board
-    # renders as exactly that rather than as a quiet nothing.
-    try:
-        _fit = ROOT / "web" / "data" / "nfl_prefit.json"
-        if _fit.exists():
-            _r = json.loads(_fit.read_text(encoding="utf-8"))
-            payload["fit"] = {"verdict": _r.get("verdict"), "n": _r.get("n"),
-                              "seasons": _r.get("seasons"),
-                              "prices_allowed": bool(_r.get("prices_allowed"))}
-            # WHICH KIND OF "no". A pair that cleared the effect bar and
-            # missed only significance has not been shown to be absent,
-            # and the card must not say it was.
-            for _pair in (_r.get("forecast", {}).get("pairs", {}) or {}).values():
-                if _pair.get("limited_by") == ["significance"]:
-                    payload["fit"].update(
-                        noisy=True, n_scored=_pair.get("n"),
-                        n_for_p=_pair.get("n_for_p"))
-                    break
-    except Exception:                                         # noqa: BLE001
-        pass
-    path = ROOT / "web" / "data" / "nfl_preseason.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
-    if not quiet:
-        print(f"  preseason: {payload['total']} game(s) "
-              f"{payload['first']} → {payload['last']}, "
-              f"{payload['complete']} final")
-    return True
+# `refresh_preseason` lived here 2026-08-08 → 2026-08-25 and was RETIRED
+# at Ethan's request: "get rid of the pre season section for nfl. No need
+# too have it anymore, I'd rather just be prepared for the regular season
+# to start." The engine it drove (nflpre.py, engine/sources/nflpreseason,
+# engine/nfl/prestarters + prelines + prefit) stays in the tree, dormant,
+# for a future August; nothing builds or serves nfl_preseason.json now,
+# and maintenance removes the stale copy from web/data (RETIRED_BOARDS).
 
 
 def refresh_nfl(quiet: bool = False) -> bool:
@@ -768,7 +685,6 @@ def refresh_all(quiet: bool = False) -> None:
     refresh_ufc(quiet=quiet)
     refresh_sport_rosters(quiet=quiet)
     refresh_injuries(quiet=quiet)
-    refresh_preseason(quiet=quiet)
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
     _journal_parlays(quiet=quiet)
@@ -3479,33 +3395,18 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     recs = blob.get("recommendations", [])
     if not recs:
         print(f"{rel} has no analyzed props at all.")
-        # AND SAY WHY, WHEN THE REASON IS THE CALENDAR. Ethan, 2026-08-14:
-        # "preseason started every other team for NFL yesterday and we
-        # didn't recommend props." An empty NFL board in August is not a
-        # gate filtering anything — there is no regular-season slate to
-        # filter. A probe whose whole job is explaining an empty board and
-        # that cannot explain the most predictable empty board of the year
-        # is not finished.
+        # A preseason explainer sat here Aug 2026 ("It is PRESEASON: N of
+        # M exhibition games played...") and retired with the preseason
+        # surface, 2026-08-25 — nothing writes the board it read. The
+        # lesson it taught stands: when the reason an empty board is
+        # empty is the calendar, this probe should say the calendar.
         if sport == "nfl":
-            _pre = ROOT / "web" / "data" / "nfl_preseason.json"
-            try:
-                pd = _json.loads(_pre.read_text())
-            except Exception:                                 # noqa: BLE001
-                pd = None
             import datetime as _dt
-            today = _dt.date.today().isoformat()
-            if pd and pd.get("total") and today <= (pd.get("show_until") or ""):
-                print(f"\n  It is PRESEASON: {pd.get('complete', 0)} of "
-                      f"{pd['total']} exhibition game(s) played, through "
-                      f"{pd.get('last')}.")
-                print("  Nothing in it is priced, on purpose. The projection "
-                      "is volume x efficiency\n  over prior games, and in "
-                      "August a starter plays a series behind a line that\n"
-                      "  will not start together again. We have also never "
-                      "ingested a preseason\n  snap (engine/sources/nflverse "
-                      "keeps season_type REG), so there is no\n  history to "
-                      "fit a preseason model on even if we wanted one.")
-                print("  The regular-season board opens in Week 1.")
+            today = _dt.date.today()
+            if today.month in (7, 8):
+                print("\n  It is the NFL offseason — no regular-season "
+                      "slate exists to price.\n  The board opens with "
+                      "Week 1.")
         return
 
     real = [r for r in recs if r.get("has_market") is not False]
@@ -3875,7 +3776,10 @@ def show_prescan(season: int | None = None) -> None:
     try:
         board = _json.loads(path.read_text(encoding="utf-8"))
     except OSError:
-        print("No preseason board yet — run a refresh first.")
+        print("No preseason board on disk. The preseason surface was "
+              "retired 2026-08-25 —\nnothing builds nfl_preseason.json "
+              "any more. This scan remains for a future\nAugust; it "
+              "needs a board file to read.")
         return
     today = _dt.date.today().isoformat()
     # The week lives on the GROUP, not the game, so stamp it down before
