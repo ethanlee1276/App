@@ -1368,7 +1368,18 @@ svg[data-scrub] { touch-action: pan-y; }
   animation: shimmer 1.3s ease-in-out infinite;
 }
 @keyframes shimmer { from { background-position: 140% 0; } to { background-position: -40% 0; } }
-@media (prefers-reduced-motion: reduce) { .skeleton-card { animation: none; } }
+/* The strip's placeholder, shaped like the card that replaces it — same
+   272px flex basis, same radius, roughly the same height — so the real
+   cards arriving move nothing. */
+.skeleton-game {
+  flex: 0 0 272px; height: 246px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft);
+  background: var(--skeleton); background-size: 220% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-card, .skeleton-game { animation: none; }
+}
 
 /* ============================================================
    Motion — scroll reveal, tilt, projection-bar & sparkline pings.
@@ -2322,6 +2333,20 @@ select.calc-in { width: auto; font-weight: 600; }
    two stacked banners read as two different kinds of news rather than as
    one paragraph that wrapped. Left border only — the hairline rule. */
 .wb-banner { border-left: 2px solid var(--brand); }
+/* The apology, when a render throws. Fixed to the bottom so it cannot
+   push the page around under somebody's thumb mid-scroll, and above the
+   tab bar so it does not cover the navigation. */
+.crash-note {
+  position: fixed; left: 12px; right: 12px; z-index: 60;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px;
+  border: var(--hairline) solid var(--border);
+  border-left: 2px solid var(--bad);
+  background: var(--panel); color: var(--text-dim);
+  font-size: var(--fs-sm); line-height: var(--lh-snug);
+  max-width: var(--measure-wide); margin-inline: auto;
+}
+.cn-what { opacity: .6; }
 .fresh-banner a { color: var(--brand); text-decoration: none; }
 .fresh-banner a:hover { text-decoration: underline; }
 .fb-x { margin-left: auto; display: inline-flex; padding: 4px;
@@ -5647,6 +5672,9 @@ body.has-rail .shell {
      the phone never carries two of the same control — and the icon row
      gets one fewer thing to fit, which is what clipped it on 08-22. */
   #nav-search { display: none; }
+  /* Above the tab bar, which is fixed to the same edge — an apology
+     sitting under the navigation is one nobody reads. */
+  .crash-note { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
   .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
     padding: 6px 4px calc(8px + env(safe-area-inset-bottom));

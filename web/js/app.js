@@ -1006,9 +1006,24 @@ function toggleTheme() {
 }
 
 /* ---------------- data ---------------- */
+/* WHAT THE PAGE LOOKS LIKE WHILE IT IS THINKING.
+   Ethan, 2026-08-25: "Skeleton loaders instead of blank-then-pop. Your
+   data is small JSON, so loads are fast — skeletons make them feel
+   instant."
+
+   The picks host has had one since the beginning; the STRIP had not, and
+   the strip is the hero — the tallest thing above the fold and therefore
+   the blank that reads as a broken page. Shaped like what is coming (272
+   wide, art over two text lines) so nothing jumps when the real cards
+   land: a placeholder of the wrong size is a layout shift with extra
+   steps. */
 function showSkeleton() {
   const host = document.getElementById("cards");
   if (host) host.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card"></div>`).join("");
+  const strip = document.getElementById("games");
+  if (strip && !strip.children.length)
+    strip.innerHTML = Array.from({ length: 5 }, () =>
+      `<div class="skeleton-game" aria-hidden="true"></div>`).join("");
 }
 
 /* Whatever a feed forgot to send must not crash the renderers — a slate
@@ -1362,10 +1377,99 @@ let _staleArgs = [null, ""];
 
 function refreshStaleBar() { renderStaleBar(_staleArgs[0], _staleArgs[1]); }
 
+/* ============================================================
+   When something breaks, say so
+   ============================================================
+   Ethan, 2026-08-25: "Error states that apologize instead of
+   white-screening."
+
+   This site's characteristic failure is not a white screen — it is a
+   SILENT one. A throw inside a render leaves the previous content on
+   screen and the console empty of anything a reader would look at: the
+   team-form panel was gone for thirteen days that way, renderAll has
+   aborted mid-list twice this month, and both times the page looked
+   merely quiet. A reader has no way to tell "nothing qualifies tonight"
+   from "the code that draws this threw".
+
+   So: one line, once per load, saying which it is. It does not catch the
+   error — nothing here is a try/catch and nothing is swallowed, the
+   console still gets everything — it only reports that one happened.
+
+   ONCE. A render loop that throws every frame would otherwise paper the
+   screen with apologies, which is its own kind of broken. */
+let _crashSaid = false;
+
+function crashNote(what) {
+  if (_crashSaid || !document.body) return;
+  _crashSaid = true;
+  const el = document.createElement("div");
+  el.className = "crash-note";
+  el.setAttribute("role", "alert");
+  el.innerHTML = `${icon("warn", 15)}
+    <span><b>Sorry — part of this page failed to draw.</b>
+    Anything that looks empty below may not be empty; it may be this.
+    Reloading usually fixes it, and the fault is ours either way.
+    <span class="cn-what"></span></span>
+    <button class="fb-x" aria-label="Dismiss">${icon("cross", 12)}</button>`;
+  // textContent for the message: it is a string from an exception, and
+  // an exception can carry anything, including markup from a payload.
+  const slot = el.querySelector(".cn-what");
+  if (slot && what) slot.textContent = `(${String(what).slice(0, 120)})`;
+  el.querySelector(".fb-x").addEventListener("click", () => el.remove());
+  document.body.appendChild(el);
+}
+
+addEventListener("error", (e) => {
+  // Ours, not an image that 404'd or a frame we embed: `e.message` is
+  // only populated for script errors, and a resource error has a target
+  // with a tag name instead.
+  if (e && e.message && !(e.target && e.target.tagName)) crashNote(e.message);
+});
+addEventListener("unhandledrejection", (e) => {
+  const r = e && e.reason;
+  crashNote(r && r.message ? r.message : r);
+});
+// The bar is the one place that says "you're offline", and losing a
+// connection fires no render of its own — without these it would only
+// appear on whatever happened to redraw next, which on a parked tab is
+// nothing at all.
+addEventListener("offline", refreshStaleBar);
+addEventListener("online", refreshStaleBar);
+
 function renderStaleBar(ageMs, ago) {
   _staleArgs = [ageMs, ago];
   const host = document.getElementById("stalebar");
   if (!host) return;
+  /* OFFLINE OUTRANKS EVERYTHING, because it is the only one of the three
+     that names a cause the reader can do something about — and because
+     it changes what the other two MEAN. Ethan, 2026-08-25: "Offline
+     state that says 'showing the 7:42 board — you're offline' instead of
+     breaking."
+
+     The service worker is what makes this state possible at all: it
+     answers a failed navigation from the cached shell, so an installed
+     app opens on a plane instead of showing the browser's dinosaur. What
+     it cannot do is fetch a board — /data/*.json is never cached, on
+     purpose (a stale line is a bet at a price that no longer exists). So
+     the app comes up around numbers from whenever it last had a
+     connection, and this line says which moment those are from rather
+     than letting them pass as now.
+
+     `navigator.onLine` is famously weak — true means "has a network
+     interface", not "can reach the internet" — but its FALSE is
+     reliable, and false is the only direction this reads. */
+  if (navigator.onLine === false) {
+    host.hidden = false;
+    const when = state.builtAt ? tzTime(state.builtAt)
+               : state.lastLoad ? tzTime(state.lastLoad) : null;
+    host.innerHTML = `${icon("warn", 15)}
+      <span><b>You’re offline.</b> ${when
+        ? `This is the ${escapeHtml(when)} board — the last one that reached
+           this device. Prices have moved since; nothing below is live.`
+        : `Nothing below has loaded yet, and it cannot until you are back
+           on a network.`}</span>`;
+    return;
+  }
   // UNREACHABLE OUTRANKS STALE. Old numbers are a fact about the build;
   // a refused fetch means the empty states below are not verdicts at
   // all, and that is the more urgent sentence. Checked first for that
@@ -3352,6 +3456,63 @@ function renderStats() {
    It draws NOTHING when the slate is today or tomorrow, which is every
    day of a real season — this is a note about an unusual state, and a
    note that appears constantly stops being read. */
+/* The instant a game actually starts, or null when the board gives us a
+   clock reading we cannot place on the map.
+
+   MLB ships an ISO first pitch, which is an instant and needs no help.
+   The NFL ships "20:20" — a wall-clock reading in Eastern with no date
+   and no offset — so the instant has to be reconstructed, and the offset
+   has to come from the calendar rather than a constant, because "ET" is
+   two different offsets depending on the month.
+
+   The trick is the standard one: read the same instant back in the
+   target zone, and the difference between the two renderings IS the
+   offset at that moment. It leans on `new Date(localeString)` parsing,
+   which is engine-dependent — so it is wrapped, and a failure returns
+   null. A missing countdown is a smaller lie than a wrong one. */
+function zonedInstant(dateStr, hhmm, tz) {
+  try {
+    const naive = new Date(`${dateStr}T${hhmm}:00Z`);
+    if (isNaN(naive)) return null;
+    const inZone = new Date(naive.toLocaleString("en-US", { timeZone: tz }));
+    const inUTC = new Date(naive.toLocaleString("en-US", { timeZone: "UTC" }));
+    if (isNaN(inZone) || isNaN(inUTC)) return null;
+    return naive.getTime() + (inUTC - inZone);
+  } catch (e) { return null; }
+}
+
+function gameStartMs(g) {
+  if (!g) return null;
+  const kick = String(g.kickoff || "");
+  if (kick.includes("T")) {
+    const t = Date.parse(kick);
+    return Number.isFinite(t) ? t : null;
+  }
+  const date = String(g.date || "").slice(0, 10);
+  const m = /^(\d{1,2}):(\d{2})/.exec(kick);
+  if (!date || !m) return null;
+  return zonedInstant(date, `${m[1].padStart(2, "0")}:${m[2]}`,
+                      "America/New_York");
+}
+
+/* "3 days, 4 hours". Two units, never three: the third is noise at this
+   distance, and a countdown that reads "3 days, 4 hours, 12 minutes"
+   invites somebody to watch the minutes. Under a day it drops to hours
+   and minutes, which is when the minutes start to matter. */
+function countdownText(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  const mins = Math.floor(ms / 60000);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  const unit = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (d) return `${unit(d, "day")}, ${unit(h, "hour")}`;
+  if (h) return `${unit(h, "hour")}, ${unit(m, "minute")}`;
+  return unit(Math.max(1, m), "minute");
+}
+
+let _horizonTimer = null;
+
 function renderSlateHorizon() {
   const host = document.getElementById("slate-horizon");
   if (!host) return;
@@ -3369,13 +3530,30 @@ function renderSlateHorizon() {
     (new Date(first + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
   if (days <= 1) return;                 // today or tomorrow — say nothing
 
+  /* THE COUNTDOWN. Ethan, 2026-08-25: "Empty states with personality
+     ('No NFL until Thursday — 3 days, 4 hours' countdown beats a blank
+     div)." It rides here rather than in `renderEmptySlate`, and that is
+     the honest placement: this is the state where we KNOW when the next
+     game is, because the board is carrying it. A board with no games at
+     all cannot count down to one — we would be inventing the date — and
+     that empty state keeps saying so in words instead.
+
+     Re-rendered on a minute, so a tab left open does not sit there
+     claiming a distance it passed an hour ago. */
+  const starts = games.map(gameStartMs).filter((t) => Number.isFinite(t))
+                      .sort((a, b) => a - b);
+  const left = starts.length ? starts[0] - Date.now() : 0;
+  const cd = countdownText(left);
   // The pointer that used to sit here ("Preseason is what is being
   // played now →") retired with the preseason block, 2026-08-25. The
   // strip's own sentence is complete without something else to point at.
   host.innerHTML = `
     <p class="slate-horizon">${icon("clock", 14)}
-      This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${days}
-      days out. Nothing on it is tonight.</p>`;
+      This board is <b>${escapeHtml(formatGameDate(first))}</b> — ${
+        cd ? `first one starts in <b>${escapeHtml(cd)}</b>`
+           : `${days} days out`}. Nothing on it is tonight.</p>`;
+  clearTimeout(_horizonTimer);
+  if (cd) _horizonTimer = setTimeout(renderSlateHorizon, 60000);
 }
 
 function renderGames() {
@@ -3994,6 +4172,76 @@ function welcomeBackScan() {
 }
 
 window._welcomeDismiss = () => { _welcomeDismissed = true; renderDayCard(); };
+
+/* ============================================================
+   The favicon, badged with what is still open
+   ============================================================
+   Ethan, 2026-08-25: "Favicon states (you have the icon — badge it with
+   a count of unsettled bets)."
+
+   A tab among twenty is a 16-pixel square, and this is the one thing
+   that square can usefully say: you have three bets running. It reads
+   the same journal My Bets does, so it cannot disagree with the page.
+
+   DRAWN FROM icon-192.png, not favicon.svg. Both are same-origin so
+   neither taints the canvas, but Chrome and Safari disagree about
+   drawing an SVG with no intrinsic width — and an export that throws
+   inside a try/catch is a badge that silently never appears on one
+   browser. A PNG has a size by definition.
+
+   Zero open bets puts the original icon back rather than drawing a "0":
+   a badge saying nothing is worse than no badge, and this has to be
+   reversible or a settled book keeps its old count forever. */
+let _faviconOrig = null;
+
+function faviconBadge() {
+  const link = document.querySelector('link[rel="icon"]');
+  if (!link) return;
+  if (_faviconOrig === null)
+    _faviconOrig = { href: link.getAttribute("href"), type: link.getAttribute("type") };
+  let open = 0;
+  try {
+    open = mbLoad().filter((b) => String(b.result || "pending") === "pending").length;
+  } catch (e) { open = 0; }
+  if (!open) {
+    link.setAttribute("href", _faviconOrig.href);
+    if (_faviconOrig.type) link.setAttribute("type", _faviconOrig.type);
+    else link.removeAttribute("type");
+    return;
+  }
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const S = 64;
+      const c = document.createElement("canvas");
+      c.width = c.height = S;
+      const x = c.getContext("2d");
+      if (!x) return;
+      x.drawImage(img, 0, 0, S, S);
+      // Bottom-right, over a cut-out ring so the count reads against a
+      // busy mark — the same shape every phone badge uses, because at 16
+      // pixels there is nothing else that survives.
+      const r = 21;
+      x.beginPath();
+      x.arc(S - r + 2, S - r + 2, r + 4, 0, Math.PI * 2);
+      x.fillStyle = "#0b0906";
+      x.fill();
+      x.beginPath();
+      x.arc(S - r + 2, S - r + 2, r, 0, Math.PI * 2);
+      x.fillStyle = "#e8b64c";
+      x.fill();
+      x.fillStyle = "#1c1204";
+      x.font = "bold 28px system-ui, -apple-system, sans-serif";
+      x.textAlign = "center";
+      x.textBaseline = "middle";
+      // Past nine it is "lots", and two digits at this size are a smudge.
+      x.fillText(open > 9 ? "9+" : String(open), S - r + 2, S - r + 3);
+      link.setAttribute("type", "image/png");
+      link.setAttribute("href", c.toDataURL("image/png"));
+    } catch (e) { /* the plain icon stays, which is the honest fallback */ }
+  };
+  img.src = "icon-192.png";
+}
 
 function welcomeBackHTML() {
   if (_welcomeDismissed) return "";
@@ -11444,6 +11692,9 @@ function mbLoad() {
 function mbSave(bets) {
   try { localStorage.setItem(MYBETS_KEY, JSON.stringify(bets)); } catch (e) {}
   acctTouch("mybets");   // signed in → the account copy follows this one
+  // The tab badge counts what is still running, so it moves whenever the
+  // book does — logging a bet, grading one, deleting one.
+  faviconBadge();
 }
 
 /* American odds → decimal multiplier on the stake. +150 → 2.5, −120 →
@@ -11620,6 +11871,17 @@ window.mbAdd = function () {
   });
   mbSave(bets);
   renderMyBets();
+  /* THE MOMENT TO ASK. Ethan, 2026-08-25: "Install prompt at the right
+     moment (after a user journals their first bet, not on first visit)."
+     Somebody who has logged a bet has a reason to come back tomorrow and
+     look at it; somebody who has just arrived has none, and an install
+     sheet in front of a stranger is the ask that gets dismissed forever
+     — A2HS_KEY goes to "off" on a dismissal and never re-arms.
+     FIRST bet only: every later one would be nagging. */
+  if (bets.length === 1) {
+    if (typeof a2hsArm === "function") a2hsArm();
+    if (typeof a2hsTick === "function") setTimeout(a2hsTick, 1200);
+  }
 };
 window.mbResult = function (id, result) {
   const bets = mbLoad();
@@ -14063,6 +14325,9 @@ function acctApplySection(name, sec) {
     if (name === "mybets") {
       localStorage.setItem(MYBETS_KEY, JSON.stringify(d.rows || []));
       localStorage.setItem(ACCT_DEL_KEY, JSON.stringify(d.deleted || []));
+      // Adopted, not saved — mbSave would re-stamp and push back — so the
+      // badge has to be told here too.
+      faviconBadge();
     } else if (name === "fantasy") {
       const put = (k, v) => v ? localStorage.setItem(k, v)
                               : localStorage.removeItem(k);
@@ -24020,6 +24285,7 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 initTheme();
 loadBankroll();
 bind();
+faviconBadge();
 // BEFORE applySport, and that ordering is the point: /mlb has to have
 // switched the league before the chrome is drawn for one, or the page
 // comes up wearing the NFL's tabs over baseball's board.
