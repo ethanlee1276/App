@@ -283,6 +283,79 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     }
 
 
+#: The watchlist's own price sanity: shorter than -400 the book is
+#: calling it near-certain and there is nothing left to say about it;
+#: past +1500 the quote is stale or mis-lined (nobody is 15/1 to score
+#: whom a book bothered to price). Deliberately WIDER than NFL_TD_ODDS
+#: on the juiced side — that is the whole point of the list.
+TD_WATCH_ODDS = (-400, 1500)
+
+#: How many most-likely scorers ride below the value picks.
+TD_WATCH_LIMIT = 5
+
+
+def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
+                 ) -> list[dict]:
+    """The week's most likely scorers, ranked by model probability —
+    REGARDLESS of the value window.
+
+    Ethan, 2026-08-26: "there is players more guaranteed to get
+    touchdowns with lines at -200 and shit but if those players are
+    gonna get a touchdown in that specific game no matter what their
+    line is, we should be showing it" — his example a bell-cow back at
+    -260 whose game script screams goal-line volume. He is right, and
+    the fix is NOT loosening the value bar: a -260 the model has at 74%
+    is a fair price, not an edge, and journaling it as a pick would be
+    betting juice for the thrill. It is the same split the MLB board
+    already carries (hr_watchlist): the VALUE list answers "what is
+    mispriced", this list answers "who is most likely", and each says
+    which it is. Price and EV are shown honestly, so a likely scorer at
+    a fair or losing price reads as exactly that — insight, never a
+    journaled bet.
+    """
+    from .odds import american_to_decimal
+    from .longshots import calibrated_prob
+    rows: list[dict] = []
+    for c in candidates:
+        odds = c.get("odds")
+        try:
+            odds = int(odds)
+        except (TypeError, ValueError):
+            continue
+        if not odds or not in_odds_window(odds, TD_WATCH_ODDS):
+            continue
+        if (c.get("book") or "").lower() == "proxy":
+            continue
+        prop, game, opp = c["prop"], c["game"], c["opponent"]
+        raw_prob, info = td_probability(prop, game, opp,
+                                        c.get("opportunity_share", 0.15),
+                                        c.get("red_zone"))
+        # The SAME tempering + market shrink the value picks get — the
+        # MLB watchlist once used raw probabilities and inflated EV past
+        # the broken-price guard, silently emptying itself.
+        prob, implied = calibrated_prob("nfl", ANYTIME_TD, raw_prob, odds,
+                                        c.get("under_odds"))
+        if prob * american_to_decimal(odds) - 1.0 > 0.60:
+            continue                   # a broken price, not an edge
+        rows.append({
+            "player": prop.player, "team": prop.team,
+            "opponent": prop.opponent, "book": c.get("book", ""),
+            "odds": odds,
+            "model_prob": round(prob, 4),
+            "implied_prob": round(implied, 4),
+            "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
+            "primary_reason": info["primary_reason"],
+            # TDs per game, most recent first — the spark at line 0.5.
+            "recent_values": [g.value for g in prop.logs][:12],
+            "caveats": info["caveats"][:1],
+            "game_date": getattr(game, "date", ""),
+            "kickoff": getattr(game, "kickoff", ""),
+            "headshot": getattr(prop, "headshot", "") or "",
+        })
+    rows.sort(key=lambda r: -r["model_prob"])
+    return rows[:limit] if limit else rows
+
+
 def build_td_longshots(candidates: list[dict], limit: int = 6,
                        per_game: int = 2) -> list[LongShot]:
     """Rank anytime-touchdown picks.

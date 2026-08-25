@@ -241,6 +241,7 @@ def main() -> None:
                 "generated_from": "schedule-only",
                 "games": [_game_to_dict(g) for g in games],
                 "recommendations": [], "long_shots": [],
+                "longshot_watch": [],
                 "market_scan": [], "parlays": [],
                 "game_bets": bets,
                 # Two notes, because two things can be true and the page

@@ -204,19 +204,35 @@ def weather_multiplier(weather: dict | None, pos: str
     return mult, reasons
 
 
+#: Watch-list price sanity — same reasoning as the NFL's TD_WATCH_ODDS:
+#: wider than the value window on the juiced side by design.
+CFB_WATCH_ODDS = (-400, 1500)
+CFB_WATCH_LIMIT = 5
+
+
 def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                            season: int, limit: int = 6,
-                           per_game: int = 2) -> tuple[list[dict], dict]:
-    """The board rows plus a census of what was skipped and why.
+                           per_game: int = 2
+                           ) -> tuple[list[dict], dict, list[dict]]:
+    """``(picks, census, watch)`` — the board rows, what was skipped and
+    why, and the most-likely-scorers list.
+
+    The WATCH carries every modelled player at a sane real price ranked
+    by probability, window be damned — the -260 bell cow whose script
+    says goal-line volume belongs on the page even when his price holds
+    no value (see touchdowns.td_watchlist for the ask, verbatim). Price
+    and EV ride along honestly; nothing in it is journaled.
 
     ``games`` are the payload's game dicts (spread/total/kickoff/weather
     already stamped); ``quotes_by_game`` maps the game's index in that
     list to ``{norm_name: [quote dicts]}`` from parse_event_scorers.
     """
+    from ..odds import american_to_decimal
     usage_season, usage = usage_table(conn, season)
     census = {"quoted_players": 0, "no_usage": 0, "outside_window": 0,
               "priced": 0, "usage_season": usage_season}
     picks = []
+    watch_rows = []
     for gi, player_quotes in (quotes_by_game or {}).items():
         try:
             g = games[int(gi)]
@@ -233,15 +249,14 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 continue
             u = usage[side][norm]
             best = best_scorer_price(quotes)
-            if best is None or not in_odds_window(int(best["yes_odds"]),
-                                                  CFB_TD_ODDS):
-                census["outside_window"] += 1
+            if best is None:
                 continue
+            odds = int(best["yes_odds"])
             is_home = side == home
             opp = away if is_home else home
             implied = implied_total_for(spread_home, total, is_home)
             if implied is None:
-                continue               # no game price = no script, no pick
+                continue               # no game price = no script, no read
             team_tds = max(0.0, implied) * (CFB_AVG_TEAM_OFF_TDS
                                             / CFB_AVG_TEAM_POINTS)
             pos = role_of(u)
@@ -298,10 +313,37 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                     f"evidence, a transfer is invisible to it")
             if u["games"] < 4:
                 caveats.append(f"Thin sample ({u['games']} game(s) logged)")
+
+            # The most-likely list first, because it takes everyone at a
+            # sane real price — the value window below decides only what
+            # may become a PICK. Same tempering the picks get, so the
+            # two lists cannot disagree about the same player.
+            if in_odds_window(odds, CFB_WATCH_ODDS):
+                from ..longshots import calibrated_prob
+                wp, wimp = calibrated_prob("cfb", "anytime_td", prob, odds,
+                                           best.get("no_odds"))
+                wev = wp * american_to_decimal(odds) - 1.0
+                if wev <= 0.60:        # a broken price is not a likelihood
+                    watch_rows.append({
+                        "player": u["player"], "team": side,
+                        "opponent": opp, "book": best.get("book", ""),
+                        "odds": odds,
+                        "model_prob": round(wp, 4),
+                        "implied_prob": round(wimp, 4),
+                        "ev_per_unit": round(wev, 4),
+                        "primary_reason": reasons[1],
+                        "caveats": caveats[:1],
+                        "game_date": g.get("date", ""),
+                        "kickoff": g.get("kickoff", ""),
+                    })
+
+            if not in_odds_window(odds, CFB_TD_ODDS):
+                census["outside_window"] += 1
+                continue
             pick = build_pick(
                 player=u["player"], team=side, opponent=opp,
                 market="anytime_td", label="Anytime TD",
-                book=best.get("book", ""), odds=int(best["yes_odds"]),
+                book=best.get("book", ""), odds=odds,
                 model_prob=prob, under_odds=best.get("no_odds"),
                 opportunities=u["carries"] + u["receptions"],
                 opp_target=OPP_TARGET.get(pos, 12.0),
@@ -316,4 +358,8 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     chosen = select(picks, per_key_cap=per_game,
                     key=lambda p: tuple(sorted((p.team, p.opponent))),
                     limit=limit)
-    return [p.to_dict() for p in chosen], census
+    rows = [p.to_dict() for p in chosen]
+    have = {r.get("player") for r in rows}
+    watch_rows.sort(key=lambda r: -r["model_prob"])
+    watch = [w for w in watch_rows if w["player"] not in have][:CFB_WATCH_LIMIT]
+    return rows, census, watch

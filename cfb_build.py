@@ -710,14 +710,16 @@ def main() -> None:
             from engine.cfb import tds as _tds
             quotes, td_note = attach_td_quotes(
                 games, priced, cache_only=args.cached_odds and not args.odds)
-            rows, census = _tds.build_cfb_td_longshots(
+            rows, census, watch = _tds.build_cfb_td_longshots(
                 conn, out["games"], quotes, day.year)
             out["long_shots"] = rows
+            # The most-likely-scorers list — shown, never journaled.
+            out["longshot_watch"] = watch
             print(f"  {td_note}")
             if census["quoted_players"]:
-                print(f"  TD board: {len(rows)} pick(s) from "
-                      f"{census['quoted_players']} quoted player(s) "
-                      f"({census['no_usage']} without usage logs, "
+                print(f"  TD board: {len(rows)} pick(s) + {len(watch)} "
+                      f"most-likely from {census['quoted_players']} quoted "
+                      f"player(s) ({census['no_usage']} without usage logs, "
                       f"{census['outside_window']} outside the odds window; "
                       f"roles from {census['usage_season']})")
         except Exception as _exc:                             # noqa: BLE001

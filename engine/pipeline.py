@@ -221,15 +221,21 @@ def _opportunity_shares(slate) -> dict:
             for key, v in volume.items()}
 
 
-def _long_shots(slate, usage: dict | None = None) -> list[dict]:
-    """Anytime-touchdown picks — the NFL long-shot board (see engine.touchdowns).
+def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """Anytime-touchdown board: ``(value picks, most-likely watchlist)``.
+
+    The picks apply the odds window and the edge bar; the watchlist ranks
+    every quoted scorer by model probability with NO window — the -260
+    bell cow the script loves shows up there with his price and EV shown
+    honestly, never journaled (see touchdowns.td_watchlist for Ethan's
+    ask and why the value bar itself did not move).
 
     ``usage`` optionally carries MEASURED roles from ingested logs
     (engine.nflusage): per-player red-zone usage — the model's own docs
     call it the single best TD predictor it couldn't see — and snap
     shares. Without it the model infers from volume, exactly as before."""
     from .models import ANYTIME_TD
-    from .touchdowns import build_td_longshots
+    from .touchdowns import build_td_longshots, td_watchlist
     from .fantasy import _short_key
 
     usage = usage or {}
@@ -251,7 +257,16 @@ def _long_shots(slate, usage: dict | None = None) -> list[dict]:
             "red_zone": rz_map.get(key),
             "snap_share": snap_map.get(key),
         })
-    return [p.to_dict() for p in build_td_longshots(candidates)]
+    picks = [p.to_dict() for p in build_td_longshots(candidates)]
+    # The most-likely list dedupes against the picks but is NOT a
+    # top-up: MLB trims its watch to fill a three-row board, and that
+    # exact semantics would hide the near-lock precisely on the weeks
+    # the value board is full — the shape of the complaint that built
+    # this. Football always shows its most likely scorers.
+    have = {p.get("player") for p in picks}
+    watch = [w for w in td_watchlist(candidates)
+             if w.get("player") not in have]
+    return picks, watch
 
 
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
@@ -510,7 +525,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     corr["cap_notes"] = apply_exposure_caps(results, game_bets)
 
     recommended = [r for r in results if r["recommended"]]
-    ls = _long_shots(slate, nfl_usage)
+    ls, ls_watch = _long_shots(slate, nfl_usage)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -531,6 +546,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "player_stats": statlogs.for_board(results, "nfl"),
         "game_bets": game_bets,
         "long_shots": ls,
+        "longshot_watch": ls_watch,
         "market_scan": _market_scan(results, ls),
         "correlation": corr,
     }

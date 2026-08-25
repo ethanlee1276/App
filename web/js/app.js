@@ -4038,11 +4038,21 @@ function renderLongShots() {
       <div class="es-sub">${escapeHtml(longshotEmptyReason(mlb))}</div></div>`;
     return;
   }
+  // Two different watch semantics, on purpose. MLB TOPS UP a three-row
+  // board; football ALWAYS shows its most-likely list below the picks —
+  // Ethan, 2026-08-26: a -260 bell cow the script loves "we should be
+  // showing it" even when his price holds no value, and top-up
+  // semantics would hide him exactly on the weeks the value board is
+  // full.
   note.innerHTML = `<div class="ls-note">Top ${picks.length} pick(s), ranked by
     <b>edge</b>, never by payout — the same ${picks.length === 1 ? "one" : picks.length}
-    featured on the Recommended page.${watch.length ? ` Topped up to three with the
-    model’s most likely ${mlb ? "home run" : "scorer"}${watch.length > 1 ? "s" : ""},
-    shown for context and not journaled as bets.` : ""}</div>`;
+    featured on the Recommended page.${!watch.length ? "" : mlb
+    ? ` Topped up to three with the
+    model’s most likely home run${watch.length > 1 ? "s" : ""},
+    shown for context and not journaled as bets.`
+    : ` The most likely scorers ride below whatever their price —
+    a near-lock at heavy juice is worth knowing about and rarely worth
+    betting, and the EV column says which is which. Not journaled as bets.`}</div>`;
   host.innerHTML = picks.map(longShotCard).join("") + watchlistHTML(watch, mlb);
   fillMeters(host);
   revealChildren(host);
@@ -4375,7 +4385,7 @@ function watchlistHTML(watch, mlb) {
         <strong>${escapeHtml(r.player)}</strong>
         <span style="opacity:.55;font-size:.85em"> ${teamName(r.team)} vs ${teamName(r.opponent)}
           · ${escapeHtml(r.primary_reason || "")}</span></span>
-      <span class="mini" style="flex:0 0 auto" title="Home runs, last ${(r.recent_values || []).length} games">${spark}</span>
+      <span class="mini" style="flex:0 0 auto" title="${mlb ? "Home runs" : "Touchdowns"}, last ${(r.recent_values || []).length} games">${spark}</span>
       <span style="min-width:96px;text-align:right;opacity:.85;font-size:.9em">
         ${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span>
       <span style="min-width:56px;text-align:right">${american(r.odds)}</span>

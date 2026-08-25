@@ -352,7 +352,7 @@ def test_cfb_board_prices_quoted_players_with_usage_and_says_the_rest():
         oa.normalize_name("Bit Player"): [
             {"book": "DraftKings", "yes_odds": 900, "no_odds": None}],
     }}
-    rows, census = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
+    rows, census, watch = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
     assert census["quoted_players"] == 5
     assert census["no_usage"] == 1
     assert census["outside_window"] == 1
@@ -381,14 +381,14 @@ def test_cfb_model_distrusts_its_own_outsized_disagreements():
     conn = _cfb_hist()
     quotes = {0: {oa.normalize_name("Zachariah Branch"): [
         {"book": "FanDuel", "yes_odds": 320, "no_odds": None}]}}
-    rows, census = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
+    rows, census, watch = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
     assert census["priced"] == 1 and rows == [], \
         "a 30-point disagreement with the market graded as a play"
 
 
 def test_cfb_no_quotes_no_usage_no_picks():
     conn = DB.connect(os.path.join(tempfile.mkdtemp(), "h.db"))
-    rows, census = T.build_cfb_td_longshots(conn, _cfb_games(), {}, 2026)
+    rows, census, watch = T.build_cfb_td_longshots(conn, _cfb_games(), {}, 2026)
     assert rows == [] and census["quoted_players"] == 0
 
 
@@ -433,6 +433,91 @@ def test_attach_td_quotes_filters_caps_and_survives_cache_misses():
     # and `pulled` counts what actually answered.
     assert len(out) == B.TD_EVENT_CAP - 1, sorted(out)
     assert f"{B.TD_EVENT_CAP - 1} of 13 eligible" in note, note
+
+
+# --- the most-likely-scorers watch ------------------------------------------
+
+def test_td_watchlist_shows_the_juiced_bell_cow():
+    """THE GIBBS CASE (Ethan, 2026-08-26): "jahmeer gibbs is -260 to get
+    a touchdown and our fantasy game script say the favorite is gonna be
+    running alot... if the line for our list is only down to -150, we
+    wouldn't display that prop." The VALUE window did not move — a fair
+    -260 is not an edge — but the watch ranks by likelihood with no
+    window, so he leads the list with his price and EV shown honestly."""
+    from engine.touchdowns import td_watchlist
+    opp = Team("X", "X", DefenseProfile("X"))
+    g = Game(home="DET", away="NO", weather=Weather(dome=True),
+             spread=-8.5, total=47.5)
+    bell = Prop(player="Jahmyr Gibbs", team="DET", opponent="NO",
+                position="RB", market=ANYTIME_TD,
+                logs=[GameLog(week=w, opponent="X", value=1.0)
+                      for w in range(1, 9)],
+                career_avg=0, vs_opponent_avg=None, lines=[])
+    wr = Prop(player="Depth Wideout", team="NO", opponent="DET",
+              position="WR", market=ANYTIME_TD, logs=[], career_avg=0,
+              vs_opponent_avg=None, lines=[])
+    cands = [
+        {"prop": bell, "game": g, "opponent": opp,
+         "opportunity_share": 0.5, "odds": -260, "book": "DraftKings",
+         "under_odds": 200},
+        {"prop": wr, "game": g, "opponent": opp, "opportunity_share": 0.08,
+         "odds": 480, "book": "FanDuel", "under_odds": None},
+        # A proxy price never reaches the page…
+        {"prop": wr, "game": g, "opponent": opp, "opportunity_share": 0.08,
+         "odds": -120, "book": "proxy", "under_odds": None},
+        # …and a 20/1 "scorer" is a stale quote, not a likelihood.
+        {"prop": wr, "game": g, "opponent": opp, "opportunity_share": 0.08,
+         "odds": 2000, "book": "DraftKings", "under_odds": None},
+    ]
+    rows = td_watchlist(cands)
+    assert rows and rows[0]["player"] == "Jahmyr Gibbs"
+    assert rows[0]["odds"] == -260, \
+        "the whole point is a price the value window refuses"
+    assert [r["player"] for r in rows].count("Depth Wideout") == 1
+    for field in ("model_prob", "implied_prob", "ev_per_unit",
+                  "primary_reason"):
+        assert field in rows[0], f"watch row lost {field}"
+    # Ranked by likelihood, never by payout.
+    assert rows[0]["model_prob"] >= rows[-1]["model_prob"]
+
+
+def test_the_nfl_board_ships_the_watch_and_dedupes_it():
+    from engine.pipeline import _long_shots
+    slate = _slate_with_td_props()
+    cook = next(p for p in slate.props if p.player == "James Cook")
+    # Heavy juice: refused as a PICK by the -150 floor, shown on the watch.
+    cook.lines = [SportsbookLine(book="DraftKings", line=0.5,
+                                 over_odds=-260, under_odds=200)]
+    picks, watch = _long_shots(slate)
+    assert all(p.get("player") != "James Cook" for p in picks)
+    assert "James Cook" in [w["player"] for w in watch]
+    # And the payload carries it under the key the page already reads
+    # (PAID key — the gate strips it for free visitors like the picks).
+    from engine import gate
+    assert "longshot_watch" in gate.PAID_KEYS
+
+
+def test_cfb_watch_takes_the_window_refused_favourite():
+    conn = _cfb_hist()
+    quotes = {0: {oa.normalize_name("Nate Frazier"): [
+        {"book": "DraftKings", "yes_odds": -260, "no_odds": 200}]}}
+    rows, census, watch = T.build_cfb_td_longshots(
+        conn, _cfb_games(), quotes, 2026)
+    assert rows == [] and census["outside_window"] == 1
+    assert [w["player"] for w in watch] == ["Nate Frazier"]
+    assert watch[0]["odds"] == -260
+    assert 0 < watch[0]["model_prob"] < 1
+
+
+def test_the_page_copy_knows_the_two_watch_semantics():
+    """MLB tops up a three-row board; football always shows its
+    most-likely list — top-up semantics would hide the near-lock exactly
+    on the weeks the value board is full, which is the shape of the
+    complaint that built this."""
+    app = _read("web", "js", "app.js")
+    assert "The most likely scorers ride below whatever their price" in app
+    assert "Topped up to three" in app          # MLB keeps its own words
+    assert 'Most likely ${mlb ? "to homer" : "to score"}' in app
 
 
 # --- the journal and the settle path ----------------------------------------
