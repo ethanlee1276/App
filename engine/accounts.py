@@ -513,7 +513,11 @@ def delete_user(conn, user_id: int) -> None:
     # (engine/tailfade.py) — same posture as `subscriptions`: created by
     # another module, so their absence is normal, and their presence
     # must not outlive the account.
-    for table in ("streak_picks", "streak_state", "tf_calls"):
+    # digest_optin joins them 2026-08-25: it holds an address's mailing
+    # preferences and an unsubscribe token, and a mailing list that
+    # outlives the account it belonged to is the exact thing the privacy
+    # page promises does not happen.
+    for table in ("streak_picks", "streak_state", "tf_calls", "digest_optin"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?",
                          (int(user_id),))
@@ -562,4 +566,14 @@ def export_user(conn, user_id: int) -> dict:
                      "ORDER BY created_at", (int(user_id),))]
         if calls:
             out["tail_fade_calls"] = calls
+    if "digest_optin" in have:
+        # WITHOUT THE TOKEN. An export is a file people mail around, and
+        # the unsubscribe token is a bearer credential — the same reason
+        # this function has always refused to carry the session token or
+        # the password verifier.
+        d = conn.execute("SELECT morning, nightly FROM digest_optin "
+                         "WHERE user_id=?", (int(user_id),)).fetchone()
+        if d:
+            out["email_digests"] = {"morning": bool(d["morning"]),
+                                    "nightly": bool(d["nightly"])}
     return out

@@ -89,6 +89,18 @@ qellysbook.com {
 	# to keep reaching the static handler and the real 404, and a proxy
 	# that swallowed everything would turn every typo into a soft
 	# landing on the board.
+	# The unsubscribe link, which arrives from an email client with no
+	# cookie and sometimes as a POST (RFC 8058 one-click). It MUST reach
+	# the app: served off disk it would be the SPA, which cannot read the
+	# token, and the reader would press Unsubscribe and stay subscribed.
+	handle /unsubscribe* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
 	handle /player/* /game/* /pick/* {
 		reverse_proxy 127.0.0.1:8000 {
 			header_up X-Forwarded-Proto {scheme}

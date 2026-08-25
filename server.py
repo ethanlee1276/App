@@ -777,6 +777,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path in ("/api/record/receipts.csv",):
             return self._receipts_csv()
+        if parsed.path in ("/unsubscribe", "/unsubscribe/"):
+            return self._unsubscribe(parse_qs(parsed.query))
         if parsed.path.startswith("/api/profile/"):
             code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
                                      self.headers.get("X-Profile-Pin") or "")
@@ -790,6 +792,18 @@ class Handler(BaseHTTPRequestHandler):
         # The Paddle webhook is EXEMPT: it is already authenticated by
         # signature, and a retry burst during an incident is exactly when
         # we least want to start dropping payment events on the floor.
+        # One-click unsubscribe (RFC 8058). Before the rate limiter and
+        # before every auth path: a mail client POSTs here on the
+        # reader's behalf with no cookie, and the header on every digest
+        # promises it answers.
+        if parsed.path in ("/unsubscribe", "/unsubscribe/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if 0 < length <= MAX_PROFILE_BYTES:
+                self.rfile.read(length)          # read and discard the body
+            return self.do_POST_unsubscribe(parse_qs(parsed.query))
         if not parsed.path.startswith("/api/billing/webhook"):
             auth = parsed.path.startswith("/api/account/")
             if self._rate_limited(
@@ -1276,6 +1290,20 @@ class Handler(BaseHTTPRequestHandler):
                 # people's data we have to be able to hand it back.
                 return self._send(200, json.dumps(
                     A.export_user(conn, who["id"]), indent=1).encode(), ".json")
+            if path == "digest":
+                from engine import digest as DG, mailer
+                out = DG.optin_get(conn, who["id"])
+                # The TOKEN never leaves the server. It is a bearer
+                # credential for one action, and a page that holds it
+                # can leak it into a referrer, a screenshot or a
+                # support ticket. The unsubscribe link is minted into
+                # the email itself, which is the only place it belongs.
+                out.pop("token", None)
+                # …and the page is told whether mail can go out at all,
+                # so it can say "not switched on yet" instead of
+                # offering a subscription to nothing.
+                out["available"] = mailer.configured()
+                return self._send(200, json.dumps(out).encode(), ".json")
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         finally:
@@ -1366,7 +1394,7 @@ class Handler(BaseHTTPRequestHandler):
     def _account_post(self, path: str, body: dict):
         A = _acct()
         if path not in ("signup", "login", "logout", "data", "password",
-                        "delete", "signout-all"):
+                        "delete", "signout-all", "digest"):
             return self._send(404, b'{"error":"unknown account endpoint"}',
                               ".json")
         if path in self.PASSWORD_PATHS and not self._password_transport_ok():
@@ -1419,6 +1447,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(
                     {"email": who["email"], "sections": merged}).encode(),
                     ".json")
+            if path == "digest":
+                # Two booleans and nothing else. The token is minted
+                # server-side and never accepted from a client — a
+                # caller that could choose its own unsubscribe token
+                # could choose somebody else's.
+                from engine import digest as DG
+                out = DG.optin_set(conn, who["id"],
+                                   bool(body.get("morning")),
+                                   bool(body.get("nightly")))
+                out.pop("token", None)
+                A.touch_session(conn, token)
+                return self._send(200, json.dumps(out).encode(), ".json")
             if path == "password":
                 code, out = A.change_password(conn, who["id"],
                                               body.get("old"), body.get("new"))
@@ -2457,6 +2497,63 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
         self._send(200, json.dumps(gate.redact(payload, name)).encode(), ".json")
         return True
+
+    #: The unsubscribe page. Plain HTML, no app, no script — it has to
+    #: work in whatever browser an email link opens, including the
+    #: stripped-down one inside a mail client, and it has to work when
+    #: the person following it has forgotten they ever had an account.
+    _UNSUB_PAGE = """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>%s — Qellys Book</title>
+<style>body{background:#0b0906;color:#f5efe6;font:16px/1.5 system-ui,
+-apple-system,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh}
+main{max-width:32rem;padding:2rem}h1{font-size:1.4rem;margin:0 0 .6rem}
+p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
+<h1>%s</h1><p>%s</p><p><a href="/">Qellys Book</a></p></main></body></html>"""
+
+    def _unsubscribe(self, query: dict):
+        """One click, no sign-in, both digests off.
+
+        AN UNSUBSCRIBE THAT ASKS FOR A PASSWORD IS A SPAM REPORT. The
+        token is unguessable, does exactly one thing, and belongs to one
+        account — so there is nothing here worth protecting with a login
+        and a great deal riding on the click working first time.
+
+        Answers 200 either way, including for a token nobody recognises.
+        A page that said "no such subscription" would let anybody probe
+        which tokens are live, and it would read as a failure to somebody
+        who had simply clicked twice.
+        """
+        token = (query.get("t") or [""])[0]
+        done = False
+        try:
+            from engine import accounts as A, digest as DG
+            conn = A.connect()
+            try:
+                done = DG.unsubscribe(conn, token)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            done = False
+        title = "Unsubscribed"
+        body = ("You will not get the morning card or the nightly recap any "
+                "more. Nothing else about your account has changed, and you "
+                "can turn them back on any time from the Account page.")
+        page = (self._UNSUB_PAGE % (title, title, body)).encode("utf-8")
+        # No-store, and noindex in the markup: this URL carries a bearer
+        # token and has no business in a cache or a search index.
+        self._send(200, page, ".html")
+        return done
+
+    def do_POST_unsubscribe(self, query: dict):
+        """RFC 8058 one-click, which Gmail and Apple Mail POST to.
+
+        The header on every digest promises this endpoint answers a
+        POST. A List-Unsubscribe-Post that 405s is worse than no header
+        at all: the client shows the control, the reader presses it, and
+        nothing happens.
+        """
+        return self._unsubscribe(query)
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.

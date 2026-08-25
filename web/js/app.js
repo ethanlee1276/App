@@ -16830,6 +16830,10 @@ function settingsHTML() {
         <span class="set-note wide">All of them, unless you narrow it. The
         league you are looking at always shows.</span></div>
     </div>
+    <div class="set-row" id="set-mail">
+      <div class="set-k">Email</div>
+      <div class="set-v"><span class="set-empty">Checking…</span></div>
+    </div>
     <div class="set-row">
       <div class="set-k">Your teams</div>
       <div class="set-v">${favs}
@@ -16841,9 +16845,64 @@ function settingsHTML() {
   </section>`;
 }
 
+/* THE EMAIL ROW IS THE ONE SETTING THAT IS NOT LOCAL.
+   Everything else here lives in this browser and syncs as a preferences
+   blob; a mailing list has to live on the server, because the thing
+   that reads it is a cron job at 9am and not a page. So it is fetched
+   and written on its own endpoint, and it says which of three states it
+   is in rather than pretending: signed out (there is nobody to mail),
+   not configured (the site cannot send mail at all yet — see
+   docs/EMAIL.md), or a pair of switches. */
+async function renderMailRow() {
+  const row = document.querySelector("#set-mail .set-v");
+  if (!row) return;
+  if (!(_acctUser && _acctUser.signed_in)) {
+    row.innerHTML = `<span class="set-empty">Sign in to get the morning
+      card or the nightly recap by email.</span>`;
+    return;
+  }
+  let st = null;
+  try {
+    const res = await fetch("/api/account/digest", { cache: "no-store" });
+    st = res.ok ? await res.json() : null;
+  } catch (e) { st = null; }
+  if (!st) {
+    row.innerHTML = `<span class="set-empty">Could not read your email
+      settings.</span>`;
+    return;
+  }
+  if (!st.available) {
+    row.innerHTML = `<span class="set-empty">Email is not switched on yet —
+      the digests are built and nothing can send them until a delivery
+      provider is configured. Nothing here is subscribed to in the
+      meantime.</span>`;
+    return;
+  }
+  const opt = (key, label, note) => `<button type="button"
+    class="set-opt${st[key] ? " on" : ""}" data-mail="${escapeAttr(key)}"
+    >${escapeHtml(label)}<span class="set-note">${escapeHtml(note)}</span></button>`;
+  row.innerHTML = opt("morning", "Morning card", "the day’s picks")
+    + opt("nightly", "Nightly recap", "how last night graded")
+    + `<span class="set-note wide">Every message carries a one-click
+       unsubscribe, and turning both off here does the same thing.</span>`;
+  row.querySelectorAll("[data-mail]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const next = { morning: !!st.morning, nightly: !!st.nightly };
+      next[b.dataset.mail] = !next[b.dataset.mail];
+      try {
+        await fetch("/api/account/digest", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(next),
+        });
+      } catch (e) { /* the next tap retries */ }
+      renderMailRow();
+    }));
+}
+
 function bindSettings() {
   const host = document.querySelector(".qb-settings");
   if (!host) return;
+  renderMailRow();
   const redraw = () => {
     // Prices, stakes and times are read by every renderer on the site,
     // so the whole board redraws rather than the panel patching the two
