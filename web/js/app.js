@@ -5368,10 +5368,135 @@ function renderPropPage() {
           built before they existed renders exactly as it did. */
       chainHTML(r)}
     ${checksHTML(r)}
-    ${compsHTML(r)}`;
+    ${compsHTML(r)}
+    ${simLabHTML(r)}`;
   const b = document.getElementById("pp-back");
   if (b) b.addEventListener("click", () => switchView("recommended"));
   if (typeof fillMeters === "function") fillMeters(host);
+  bindSimLab(r);
+}
+
+/* ============================================================
+   The sim as a toy (roadmap #7) — watch the distribution draw itself
+   ============================================================
+   "Run tonight 2,000 times and watch the distribution draw itself.
+   Interactive, educational, screenshot-able." The draws come from the
+   MODEL'S OWN distribution for this prop — the same normal the hit
+   probability was computed from, recovered from the published
+   projection, line and probability — so the toy can teach and cannot
+   invent. The running over% converging on the card's number IS the
+   lesson: a 61% pick loses 4 times in 10, and watching that happen in
+   two seconds says it better than any disclaimer.
+
+   Standard-normal inverse via Acklam's approximation; sampling via
+   Box–Muller. Count markets (receptions) are labelled as the normal
+   approximation they are. */
+function invNorm(p) {
+  const a = [-39.6968302866538, 220.946098424521, -275.928510446969,
+             138.357751867269, -30.6647980661472, 2.50662827745924];
+  const b = [-54.4760987982241, 161.585836858041, -155.698979859887,
+             66.8013118877197, -13.2806815528857];
+  const c = [-0.00778489400243029, -0.322396458041136, -2.40075827716184,
+             -2.54973253934373, 4.37466414146497, 2.93816398269878];
+  const d = [0.00778469570904146, 0.32246712907004, 2.445134137143,
+             3.75440866190742];
+  const pl = 0.02425;
+  if (p < pl) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (p <= 1 - pl) {
+    const q = p - 0.5, r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+      / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - p));
+  return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+    / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+}
+
+/* The model's sd, recovered from what the card already shows:
+   P(X > line) = p_over with X ~ N(proj, sd). Null when the prop is too
+   degenerate to recover (p at 50%, missing pieces) — the lab then
+   simply doesn't render, honesty by absence. */
+function simParams(r) {
+  const proj = Number(r.projection), line = Number(r.line);
+  let p = Number(r.hit_prob);
+  if (!Number.isFinite(proj) || !Number.isFinite(line) || !Number.isFinite(p))
+    return null;
+  if (String(r.side || "OVER").toUpperCase() !== "OVER") p = 1 - p;
+  p = Math.min(0.985, Math.max(0.015, p));
+  const z = invNorm(1 - p);
+  if (Math.abs(z) < 0.03 || Math.abs(proj - line) < 1e-9) return null;
+  const sd = (line - proj) / z;
+  if (!Number.isFinite(sd) || sd <= 0) return null;
+  return { proj, line, sd, pOver: p };
+}
+
+function simLabHTML(r) {
+  if (!simParams(r)) return "";
+  return `
+    <div class="section-title minor">Sim lab
+      <span class="sub">— run tonight 2,000 times and watch the distribution draw
+      itself. Every draw comes from the model’s own curve for this prop — the same
+      one the hit probability was computed from — so this is the pick’s uncertainty
+      made visible, not new information.</span></div>
+    <div class="card sim-lab">
+      <button class="btn ghost" id="sim-run">Run tonight ×2,000</button>
+      <span class="sim-read" id="sim-read"></span>
+      <div class="sim-bars" id="sim-bars" aria-hidden="true"></div>
+      <p class="sim-note">${escapeHtml(`Normal approximation around the projection —
+        counts like receptions are continuous here on purpose, and no simulated
+        night changes the pick. A ${Math.round((simParams(r) || {}).pOver * 100)}% over
+        still loses ${10 - Math.round((simParams(r) || {}).pOver * 10)} nights in 10.`)}</p>
+    </div>`;
+}
+
+function bindSimLab(r) {
+  const btn = document.getElementById("sim-run");
+  if (!btn) return;
+  const P = simParams(r);
+  if (!P) return;
+  let running = false;
+  btn.addEventListener("click", () => {
+    if (running) return;
+    running = true;
+    const bars = document.getElementById("sim-bars");
+    const read = document.getElementById("sim-read");
+    const BINS = 34, TOTAL = 2000, FRAMES = 26;
+    const lo = P.proj - 3.4 * P.sd, hi = P.proj + 3.4 * P.sd;
+    const counts = new Array(BINS).fill(0);
+    const lineBin = Math.max(0, Math.min(BINS - 1,
+      Math.floor((P.line - lo) / (hi - lo) * BINS)));
+    bars.innerHTML = new Array(BINS).fill(0).map((_, i) =>
+      `<i class="${i > lineBin ? "ov" : ""}"></i>`).join("");
+    const els = [...bars.children];
+    let drawn = 0, overs = 0;
+    const frame = () => {
+      const batch = Math.min(Math.ceil(TOTAL / FRAMES), TOTAL - drawn);
+      for (let i = 0; i < batch; i++) {
+        const u1 = Math.random() || 1e-9, u2 = Math.random();
+        const x = P.proj + P.sd
+          * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        if (x > P.line) overs++;
+        const bin = Math.max(0, Math.min(BINS - 1,
+          Math.floor((x - lo) / (hi - lo) * BINS)));
+        counts[bin]++;
+      }
+      drawn += batch;
+      const peak = Math.max(...counts, 1);
+      els.forEach((el, i) => {
+        el.style.transform = `scaleY(${Math.max(0.02, counts[i] / peak).toFixed(3)})`;
+      });
+      read.textContent = `${drawn.toLocaleString()} nights · over ${P.line} in ${
+        (100 * overs / drawn).toFixed(1)}% (the model says ${
+        (100 * P.pOver).toFixed(0)}%)`;
+      if (drawn < TOTAL) requestAnimationFrame(frame);
+      else running = false;
+    };
+    requestAnimationFrame(frame);
+  });
 }
 
 function openGame(gid) {
@@ -9875,6 +10000,60 @@ function renderScanner() {
     state.scanStake = Math.max(10, parseFloat(inp.value) || 100);
     renderScanner();
   });
+  renderBookReport();
+}
+
+/* The book report card (roadmap #7) — which book prices sharpest,
+   measured off our own line-history snapshots by the daily chores
+   (engine/booksharp.payload). Facts about BOOKS, free file, and it
+   belongs on this page because this page is where the books already
+   argue with each other. Appends to the scanner host, never replacing
+   what renderScanner just drew. */
+let _brCache = null, _brAt = 0;
+
+async function renderBookReport() {
+  const host = document.getElementById("scanner-body");
+  if (!host || document.getElementById("bookreport-card")) return;
+  if (!_brCache || Date.now() - _brAt > 300000) {
+    try {
+      const res = await boardFetch(`data/bookreport.json?t=` + (Date.now() / 60000 | 0));
+      _brCache = res.ok ? await res.json() : null;
+      _brAt = Date.now();
+    } catch (e) { _brCache = null; }
+  }
+  // NO state.view gate, deliberately: renderScanner is an UNCONDITIONAL
+  // renderer — its host prefills on every load whatever page is showing
+  // — so a view gate here would leave the card missing whenever the
+  // last load landed elsewhere, which is most navigations (the futures
+  // lesson, from the other side). The host is hidden with its view.
+  const d = _brCache;
+  const ranked = ((d || {}).books || []).filter((b) => b.ranked);
+  if (!ranked.length || document.getElementById("bookreport-card")) return;
+  const worst = Math.max(...ranked.map((b) => b.mae_pts || 0), 0.1);
+  host.insertAdjacentHTML("beforeend", `
+    <div id="bookreport-card">
+      <div class="section-title br-head">Book report card
+        <span class="sub">— which book prices sharpest, measured from our own line
+        history: each book’s early prices against that market’s closing consensus.
+        Lower error = sharper. A high “moved first” rate with a high error is a book
+        that moves first and wrong.</span></div>
+      <div class="card" style="padding:0">
+        ${ranked.map((b, i) => `
+          <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 14px;
+              border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+            <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
+            <span style="min-width:120px;font-weight:700">${escapeHtml(b.book)}</span>
+            <span class="rb-bar" style="flex:1;min-width:120px"><i style="width:${
+              Math.min(100, 100 * (b.mae_pts || 0) / worst).toFixed(0)}%"></i></span>
+            <span style="min-width:104px;text-align:right;font-variant-numeric:tabular-nums">${
+              (b.mae_pts || 0).toFixed(2)} pts off close</span>
+            <span style="min-width:110px;text-align:right;opacity:.75;font-variant-numeric:tabular-nums">moved first ${
+              Math.round(100 * (b.lead_rate || 0))}% · n=${b.n}</span>
+          </div>`).join("")}
+      </div>
+      <p style="opacity:.55;font-size:.85em;margin-top:8px">Cut ${escapeHtml(String(d.generated_at || "").slice(0, 10))}
+        from ${d.min_series}+ tracked series per book. Books below the sample bar are unranked, not absent.</p>
+    </div>`);
 }
 
 /* ============================================================
@@ -10596,8 +10775,32 @@ function predBoardHTML(kx, d) {
   // Written as a JS comment rather than the HTML one it started as: an
   // HTML comment inside this template ships to every reader as a DOM
   // node, and test_typography caught its straight apostrophes doing it.
+  // Kalshi vs the BOOKS — venue against venue, no model in the row.
+  // Roadmap #7: "two markets pricing the same event differently is a
+  // feed all by itself." Both columns are facts (the exchange's price,
+  // the books' de-vigged moneyline); the reader decides who is wrong.
+  const div = ((k.rows) || []).filter((r) => r.divergence)
+    .sort((a, b) => Math.abs(b.book_gap_pts) - Math.abs(a.book_gap_pts))
+    .slice(0, 6);
+  const divergenceHTML = div.length ? `
+    <div class="section-title">Kalshi vs the books
+      <span class="sub">— the exchange and the sportsbooks pricing the same winner
+      differently, in probability points. Two live markets can’t both be right;
+      no opinion of ours is in this table.</span></div>
+    <div class="card kx-table" style="padding:0">
+      ${div.map((r) => `<div class="drow" style="display:flex;gap:12px;align-items:baseline;
+          padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
+        <span style="flex:1;min-width:150px"><b>${escapeHtml(r.title || r.matchup || "")}</b>
+          <span style="opacity:.55;font-size:.85em"> ${escapeHtml((r.sport || "").toUpperCase())}</span></span>
+        <span style="min-width:110px;text-align:right">Kalshi ${(100 * (r.prob || 0)).toFixed(0)}%</span>
+        <span style="min-width:100px;text-align:right">books ${(100 * (r.book_p || 0)).toFixed(0)}%</span>
+        <span style="min-width:78px;text-align:right;font-weight:700;color:${Math.abs(r.book_gap_pts) >= 7 ? "var(--warn)" : "var(--text-dim)"}">
+          ${r.book_gap_pts > 0 ? "+" : ""}${r.book_gap_pts} pts</span>
+      </div>`).join("")}
+    </div>` : "";
   return `
     ${deskSectionHTML(kx)}
+    ${divergenceHTML}
     <div class="section-title">The board
       <span class="sub">— every live market from both venues. Kalshi runs a
       two-sided book we can price against, so those rows carry our number and

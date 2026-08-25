@@ -339,6 +339,13 @@ def yes_team(row: dict, g: dict) -> str | None:
 #:            old; recommending against it claims an edge over a price
 #:            that no longer exists.
 KALSHI_MIN_EDGE_PTS = 6.0
+
+#: Kalshi and the SPORTSBOOKS disagreeing about the same game is a story
+#: on its own — two live markets, two prices, one event (roadmap #7:
+#: "two markets pricing the same event differently is a feed all by
+#: itself"). Below this many probability points the venues are inside
+#: each other's vig and there is nothing to say.
+KALSHI_BOOK_DIVERGENCE_PTS = 4.0
 KALSHI_MIN_VOLUME = 250.0
 KALSHI_MAX_SPREAD_CENTS = 6.0
 
@@ -373,6 +380,19 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
             row["matchup"] = key
             p_home = (model_probs or {}).get((sport, key))
             side = yes_team(m, g)
+            # VENUE VS VENUE, no model in it: the books' de-vigged
+            # moneyline against the exchange's own price for the same
+            # winner. Both numbers are facts about markets; the gap is
+            # the divergence read — signed so + means Kalshi is dearer.
+            hm, am = g.get("home_ml"), g.get("away_ml")
+            if hm and am and side is not None:
+                from ..odds import devig_two_way
+                ph, _pa = devig_two_way(int(hm), int(am))
+                book_yes = float(ph) if side == "home" else 1 - float(ph)
+                row["book_p"] = round(book_yes, 4)
+                row["book_gap_pts"] = round((m["prob"] - book_yes) * 100, 1)
+                row["divergence"] = (abs(row["book_gap_pts"])
+                                     >= KALSHI_BOOK_DIVERGENCE_PTS)
             if p_home is not None and side is not None:
                 p_yes = float(p_home) if side == "home" else 1 - float(p_home)
                 row["yes_side"] = side
@@ -399,6 +419,7 @@ def board(markets: list[dict], games_by_sport: dict | None = None,
         "n_markets": len(rows),
         "n_matched": sum(1 for r in rows if r["matchup"]),
         "n_modeled": sum(1 for r in rows if r["model_p"] is not None),
+        "n_divergent": sum(1 for r in rows if r.get("divergence")),
         "n_rec": sum(1 for r in rows if r["rec"]),
     }
 

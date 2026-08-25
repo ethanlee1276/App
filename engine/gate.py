@@ -240,6 +240,12 @@ FREE_FILES = (
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
     "standings_nfl.json", "standings_wnba.json",
+    # The book report card (engine/booksharp.payload, written by the
+    # daily chores). Facts about BOOKS — early-price error vs the close,
+    # who moves first — with no pick, no line and no model probability
+    # in it. Shareable content is the point (roadmap #7), and a report
+    # nobody can read shares nothing.
+    "bookreport.json",
     # The streak game's slate. Free BY DESIGN, not by omission — it is
     # the acquisition feature, the thing a stranger plays before the
     # trial. It can be free because it contains no model output at all:
@@ -272,7 +278,7 @@ KNOWN_BOARDS = (
     # no, so it went down the MIXED path, matched none of PAID_KEYS and
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
-    "streak.json", "ufc_live.json", "live_mlb.json",
+    "streak.json", "bookreport.json", "ufc_live.json", "live_mlb.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",

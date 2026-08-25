@@ -792,6 +792,22 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  retired-board sweep skipped: {exc}")
 
+    # The book report card (roadmap #7) — which book prices sharpest,
+    # measured off our own snapshots. Daily because the chores are; the
+    # numbers move on a weekly rhythm and the page says when they were
+    # cut. Facts about BOOKS only, which is why the gate publishes it
+    # free (see FREE_FILES).
+    try:
+        from . import booksharp, gate
+        doc = booksharp.payload()
+        if doc.get("books"):
+            gate.publish(doc, Path("web/data/bookreport.json"),
+                         "bookreport.json")
+            log(f"  book report: {sum(1 for b in doc['books'] if b['ranked'])}"
+                f" book(s) ranked")
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  book report skipped: {exc}")
+
     if harvest:
         _maybe_harvest(yesterday, log)
 

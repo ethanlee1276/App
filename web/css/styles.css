@@ -2307,6 +2307,24 @@ select.calc-in { width: auto; font-weight: 600; }
 /* Phone: the sparkline is the first thing to give. */
 @media (max-width: 480px) { .sw-spark { display: none; } }
 
+/* ---------------- The book report card (Scanner) ---------------- */
+.br-head { margin-top: 22px; }
+
+/* ---------------- The sim lab (prop page toy) ---------------- */
+.sim-lab { padding: 12px 14px; }
+.sim-read { margin-left: 12px; color: var(--text-dim); font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; }
+/* Bars grow by TRANSFORM, not height — the motion audit bans animating
+   layout properties, and scaleY from a bottom origin is the same visual
+   for free on the compositor. */
+.sim-bars { display: flex; align-items: flex-end; gap: 2px; height: 96px;
+  margin-top: 12px; }
+.sim-bars i { flex: 1; height: 100%; background: var(--fill-subtle);
+  transform: scaleY(0.02); transform-origin: bottom;
+  transition: transform var(--dur-fast) var(--ease-out); }
+.sim-bars i.ov { background: color-mix(in oklab, var(--good) 34%, transparent); }
+.sim-note { margin: 10px 0 0; color: var(--text-mute); font-size: var(--fs-2xs); }
+
 /* ---------------- Tail or fade (you vs the model) ---------------- */
 .tf-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin: 10px 0 2px; }

@@ -219,6 +219,41 @@ def compare_to_the_list(measured: dict) -> dict:
     }
 
 
+def payload(rows=None) -> dict:
+    """The public report card (roadmap #7: "which book is slowest to
+    react per market. Weekly rankings are shareable content").
+
+    Facts about BOOKS, not about games: per book, how far its early
+    prices sat from the closing consensus and how often it moved a
+    number first, measured on our own snapshot history. No pick, no
+    line, no model probability is in it — which is why it publishes
+    free. A book below MIN_SERIES is listed unranked rather than
+    dropped, so a thin sample reads as thin instead of as absent.
+    """
+    import datetime as _dt
+    if rows is None:
+        from .linemoves import load_history
+        rows = load_history()
+    measured = measure(rows)
+    ranked = sorted(
+        ({"book": b, "n": v["n"], "mae_pts": v["mae_pts"],
+          "lead_rate": v["lead_rate"], "ranked": v.get("weight") is not None}
+         for b, v in measured.items()),
+        key=lambda r: (not r["ranked"],
+                       r["mae_pts"] if r["mae_pts"] is not None else 99))
+    return {
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "books": ranked,
+        "min_series": MIN_SERIES,
+        "vs_list": compare_to_the_list(measured),
+        "note": ("Measured from our own line-history snapshots: each "
+                 "book's early prices against that market's closing "
+                 "consensus. Lower error = sharper; a high lead rate "
+                 "with a high error is a book that moves first and "
+                 "wrong."),
+    }
+
+
 def report(rows) -> str:
     m = measure(rows)
     c = compare_to_the_list(m)

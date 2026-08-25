@@ -696,6 +696,10 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
         "total": g.total,
         "roof": g.roof,
         "surface": g.surface,
+        # Real book moneylines when an odds pull attached them (0 = not
+        # offered) — the MLB payload has always shipped these, and the
+        # Kalshi divergence read joins on them venue-vs-venue.
+        "home_ml": g.home_ml, "away_ml": g.away_ml,
         # Venue reference for the game page. Unlike MLB parks this is
         # context, not an input — see engine/stadiums.py for why.
         "stadium": stadium_to_dict(g.home),
