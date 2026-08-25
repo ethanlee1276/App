@@ -101,14 +101,23 @@ qellysbook.com {
 		}
 	}
 
-	handle /player/* /game/* /pick/* {
+	# NAMED MATCHERS, NOT PATH LISTS, and the distinction cost a deploy:
+	# `handle` accepts at most ONE matcher token, so `handle /a /b` is a
+	# parse error — caddy validate refused the whole file (2026-08-25,
+	# "wrong argument count or unexpected line ending after '/game/*'"),
+	# deploy.sh's guard kept the OLD config serving, and every clean URL
+	# quietly stayed dead in production while the repo said otherwise.
+	# `path` matchers take the list; `handle` takes the matcher's name.
+	@entity path /player/* /game/* /pick/*
+	handle @entity {
 		reverse_proxy 127.0.0.1:8000 {
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
 		}
 	}
-	handle /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog {
+	@sections path /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog
+	handle @sections {
 		reverse_proxy 127.0.0.1:8000 {
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}

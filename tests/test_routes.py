@@ -213,12 +213,41 @@ def test_the_proxy_and_the_table_name_the_same_sections():
     """Caddy has to hand these paths to the app or the preview tags
     never get written — the page would still work, off disk, unfurling
     as the generic site card in every text message."""
-    block = CADDY[CADDY.index("handle /mlb /nfl"):]
-    block = block[:block.index("{")]
-    listed = set(re.findall(r"/([a-z]+)", block))
+    line = CADDY[CADDY.index("@sections path "):]
+    line = line[:line.index("\n")]
+    listed = set(re.findall(r"/([a-z]+)", line))
     assert listed == set(routes.SECTIONS), \
         f"the Caddyfile and SECTIONS disagree: {listed ^ set(routes.SECTIONS)}"
-    assert "handle /player/* /game/* /pick/*" in CADDY
+    assert "@entity path /player/* /game/* /pick/*" in CADDY
+    assert "handle @entity {" in CADDY and "handle @sections {" in CADDY
+
+
+def test_no_handle_directive_carries_a_path_list():
+    """`handle` accepts at most ONE matcher token, and `handle /a /b` is
+    a PARSE error, not a misroute: caddy validate refused the whole file
+    (2026-08-25, "wrong argument count or unexpected line ending after
+    '/game/*'"), deploy.sh's guard kept the old config serving, and
+    every clean URL quietly stayed dead in production while the repo
+    said otherwise. A path LIST belongs on a named `path` matcher.
+
+    Neither this sandbox nor CI has a caddy binary, so this shape check
+    is the substitute for `caddy validate` — it pins exactly the arity
+    rule that failed, and the named matchers it forces are valid by
+    construction.
+    """
+    matchers = set()
+    for raw in CADDY.splitlines():
+        ln = raw.strip()
+        if ln.startswith("@") and " path " in ln:
+            matchers.add(ln.split()[0])
+        if ln.startswith("#") or not ln.startswith("handle"):
+            continue
+        args = ln.split("{")[0].split()[1:]
+        assert len(args) <= 1, \
+            f"handle takes one matcher, this line hands it {len(args)}: {ln!r}"
+        if args and args[0].startswith("@"):
+            assert args[0] in matchers, \
+                f"{args[0]} is referenced before any `@name path …` defines it"
 
 
 def test_a_real_file_beats_a_route():
