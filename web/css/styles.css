@@ -2504,6 +2504,9 @@ select.calc-in { width: auto; font-weight: 600; }
 .stk-q.loss .stk-res { color: var(--bad); font-weight: 700; }
 .stk-note { min-height: 1.2em; padding-top: 8px; color: var(--text-mute);
   font-size: var(--fs-2xs); }
+.stk-note.in { color: var(--good); font-size: var(--fs-xs); }
+.stk-tonight { margin-top: 8px; color: var(--text-dim); font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; }
 .stk-sub { margin-top: 22px; }
 .stk-day { border: var(--hairline) solid var(--border); background: var(--panel);
   padding: 0 14px; margin-bottom: 10px; }

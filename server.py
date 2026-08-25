@@ -1650,14 +1650,19 @@ class Handler(BaseHTTPRequestHandler):
         S = _streak()
         A = _acct()
         if path == "leaders":
+            slate = streak_slate()
             conn = A.connect()
             try:
-                S.fold_all(conn, streak_slate())
+                S.fold_all(conn, slate)
                 board = S.leaders(conn)
+                # A COUNT, not a roster — see playing_today's docstring
+                # for why the board is empty on day one and why this is
+                # the honest thing to show instead.
+                tonight = S.playing_today(conn, str(slate.get("date") or ""))
             finally:
                 conn.close()
-            return self._send(200, json.dumps({"leaders": board}).encode(),
-                              ".json")
+            return self._send(200, json.dumps(
+                {"leaders": board, "in_tonight": tonight}).encode(), ".json")
         if path == "me":
             conn = A.connect()
             try:

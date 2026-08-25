@@ -598,6 +598,25 @@ def fold_all(conn, slate: dict) -> None:
         fold_user(conn, uid, slate)
 
 
+def playing_today(conn, date: str) -> int:
+    """How many accounts have a full slate of picks in for `date`.
+
+    The leaderboard's day-one problem: nobody appears on it until a
+    night has GRADED, so the first players all stared at "Nobody on the
+    board yet" right after picking — which reads as the game being
+    broken, not young (Ethan hit exactly this on launch day). A count
+    of tonight's players is the honest thing that exists immediately.
+    Names stay out of it: playing is not the same consent as being
+    ranked in public."""
+    ensure_tables(conn)
+    if not date:
+        return 0
+    return int(conn.execute(
+        "SELECT COUNT(*) FROM (SELECT user_id FROM streak_picks "
+        "WHERE date=? GROUP BY user_id HAVING COUNT(*) >= ?)",
+        (str(date), PICKS_REQUIRED)).fetchone()[0])
+
+
 def leaders(conn, limit: int = 20) -> list[dict]:
     """Top streaks, named accounts only. An account with no display name
     plays in private — that is the deal the name box states."""

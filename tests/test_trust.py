@@ -151,6 +151,23 @@ def test_the_page_is_registered_everywhere_a_page_has_to_be():
     assert '"about", "methodology", "status"' in APP, "missing from VIEW_ORDER"
     assert '"methodology", "status",' in APP, "missing from STANDALONE_MODES"
     assert 'data-sport="methodology"' in HTML and 'data-sport="status"' in HTML
+
+
+def test_the_proof_pages_are_rows_in_one_group_not_footer_chips():
+    """The menu reorganisation (Ethan, 2026-08-25: "make sure the whole
+    menu is organized professionally"). Everything that argues the
+    site's case — record, backtests, methodology, status, why, about —
+    lives under one Proof heading as full named rows; the old
+    six-character footer chips are gone. The standing record link stays
+    in the footer because it is the number the site is sold on."""
+    i = HTML.index('data-group="proof"')
+    grp = HTML[i:HTML.index("</div>", HTML.index('data-sport="about"', i))]
+    for page in ("record", "lab", "methodology", "status", "why", "about"):
+        assert f'data-sport="{page}"' in grp, f"{page} left the Proof group"
+    assert 'data-fold="proof"' in HTML, "the group lost its fold heading"
+    foot = HTML[HTML.index('class="sb-foot"'):HTML.index("</aside>")]
+    assert "sb-foot-links" not in foot, "the footer chips came back"
+    assert 'id="standing-record"' in foot
     launch = _read("launch.py")
     assert '("Methodology", "?sport=mlb#methodology"' in launch
     assert '("Status", "?sport=mlb#status"' in launch

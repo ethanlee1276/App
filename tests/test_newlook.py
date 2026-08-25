@@ -146,12 +146,17 @@ def test_the_library_folds_and_remembers():
         [hidden] rule and the fold only pretends;
       * the person's choice outlives the default via localStorage."""
     sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
-    assert sb.count('class="sb-label sb-fold"') == 3, \
-        "the foldable heads changed — Betting, Library, My Book"
-    lib = sb[sb.index('data-fold="library"'):]
-    assert 'aria-expanded="false"' in lib[:220], "Library no longer ships shut"
-    assert '<div class="sb-group" data-group="library" hidden>' in sb, \
-        "Library's group lost its markup-default [hidden]"
+    # Four since the 2026-08-25 menu reorganisation added Proof — the
+    # trust pages as rows instead of footer chips (test_trust pins it).
+    assert sb.count('class="sb-label sb-fold"') == 4, \
+        "the foldable heads changed — Betting, Library, My Book, Proof"
+    for fold in ('data-fold="library"', 'data-fold="proof"'):
+        seg = sb[sb.index(fold):]
+        assert 'aria-expanded="false"' in seg[:220], \
+            f"{fold} no longer ships shut — it is a reference shelf"
+    for grp in ("library", "proof"):
+        assert f'<div class="sb-group" data-group="{grp}" hidden>' in sb, \
+            f"{grp}'s group lost its markup-default [hidden]"
     for fold in ('data-fold="research"', 'data-fold="tools"'):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="true"' in seg[:220], \

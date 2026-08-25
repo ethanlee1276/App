@@ -395,6 +395,44 @@ def test_leaderboard_lists_named_players_only():
         "an unnamed account appeared on the public board"
 
 
+def test_tonight_is_a_count_never_a_roster():
+    """Day one: the board is rightly empty (nothing has graded), but
+    "Nobody on the board yet" right after making picks read as the game
+    being broken — Ethan's launch-day report. playing_today is the life
+    sign: full slates in for the date, counted. A COUNT only — playing
+    is not the same consent as being ranked in public by name."""
+    conn, uid = _accounts_db()
+    _, other = A.create_user(conn, "second@example.com", GOOD, confirmed=True)
+    for i, q in enumerate(("q1", "q2", "q3")):
+        conn.execute("INSERT INTO streak_picks (user_id, date, qid, side, "
+                     "created_at) VALUES (?,?,?,?,0)", (uid, TODAY, q, "over"))
+    # two picks is not a played night, so the neighbour does not count
+    for q in ("q1", "q2"):
+        conn.execute("INSERT INTO streak_picks (user_id, date, qid, side, "
+                     "created_at) VALUES (?,?,?,?,0)",
+                     (other["id"], TODAY, q, "over"))
+    conn.commit()
+    assert S.playing_today(conn, TODAY) == 1
+    assert S.playing_today(conn, "") == 0
+    import inspect
+    src = inspect.getsource(S.playing_today)
+    assert "name" not in src.replace("Names stay out", ""), \
+        "the count is reading names — it must never become a roster"
+
+
+def test_the_page_says_the_picks_landed():
+    """The note under the card must switch to a confirmation once all
+    picks are in — an empty string there is the silence that was
+    reported as 'I made my picks and nothing happened'."""
+    app = _read("web", "js", "app.js")
+    i = app.index("async function renderStreak()")
+    body = app[i:i + 6000]
+    assert "You’re in for tonight" in body
+    assert "nPicked >= need" in body
+    assert "in_tonight" in app, "the tonight count never reaches the page"
+    assert "player${_stkTonight === 1" in app
+
+
 # --- the account promises hold here too -------------------------------------
 
 def test_delete_user_takes_streak_data_with_it():

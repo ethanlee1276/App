@@ -3,6 +3,18 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "fix",
+      "title": "The Streak says your picks landed",
+      "body": "Making your three picks was met with silence — the count ticked up, nothing else moved, and it read as a failed save. The page now says plainly that you're in for tonight and when results grade. The leaderboard had the same day-one problem: it only lists survived nights, so the first players saw \"Nobody on the board yet\" right after playing. It now shows how many players are in tonight — a count, never names, because playing is not the same consent as being ranked in public."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "A menu organized like it means it",
+      "body": "Everything that argues this site's case — the public record, the backtests, how every number is made, whether the feeds are up, and what this site is and isn't — now lives under one Proof heading in the menu, as full named rows. Four of those pages had been six-character chips at the bottom of the drawer, which is where a page goes to be technically present. My Book now means your book: your bets, your alerts, your streak, your bankroll."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "ship",
       "title": "Friends, and picks sent between them",
       "body": "You can now send a pick to a friend. Friends are made with an invite link from your Account page — there is no search, so nobody can look your account up and nobody you didn't invite can message you. What travels is the pick's identity, never its contents: your friend opens it on the board under their own account, so what is behind the paywall stays there. Sent picks arrive at the top of Alerts, with your note on them."

@@ -12946,7 +12946,7 @@ function renderBankrollExtras() {
    button here just asks it. */
 let _stkSlate = null, _stkSlateAt = 0;
 let _stkMe = null;
-let _stkLeaders = null, _stkLeadersAt = 0;
+let _stkLeaders = null, _stkLeadersAt = 0, _stkTonight = 0;
 
 async function stkSlate() {
   if (_stkSlate && Date.now() - _stkSlateAt < 60000) return _stkSlate;
@@ -12972,7 +12972,9 @@ async function stkLeaders(force) {
   try {
     const r = await fetch("/api/streak/leaders", { credentials: "same-origin" });
     if (r.ok) {
-      _stkLeaders = ((await r.json()) || {}).leaders || [];
+      const body = (await r.json()) || {};
+      _stkLeaders = body.leaders || [];
+      _stkTonight = body.in_tonight || 0;
       _stkLeadersAt = Date.now();
     }
   } catch (e) { /* leaderboard is decoration; the game still works */ }
@@ -13110,9 +13112,15 @@ async function renderStreak() {
         const locked = !q.result && q.lock && Date.parse(q.lock) <= now;
         return stkQuestionRow(q, myToday[q.qid], locked, signedIn);
       }).join("")}
-      <div class="stk-note" id="stk-note">${signedIn && nPicked < need && questions.length
-        ? "Tap a side to pick it; tap again to clear. Picks lock at first pitch."
-        : ""}</div>
+      <div class="stk-note${signedIn && nPicked >= need ? " in" : ""}" id="stk-note">${
+        signedIn && nPicked >= need
+          // "I made my picks and nothing happened" — the launch-day
+          // complaint. Something HAS to say the picks landed, or the
+          // silence reads as a failed save.
+          ? `You’re in for tonight — all ${need} picks are down. You can change any of them until its game starts; results grade overnight, and the flame moves in the morning.`
+          : signedIn && questions.length
+            ? "Tap a side to pick it; tap again to clear. Picks lock at first pitch."
+            : ""}</div>
     </div>`;
   }
 
@@ -13131,13 +13139,20 @@ async function renderStreak() {
   }).filter(Boolean).join("");
 
   // The leaderboard, and the name that puts you on it.
-  const board = leadersRows.length
+  // The board fills only with survived nights, which leaves day one
+  // reading as broken; the count of tonight's players is the life sign
+  // that exists immediately.
+  const tonightLine = _stkTonight
+    ? `<p class="stk-tonight">${_stkTonight} player${_stkTonight === 1 ? "" : "s"} in tonight</p>`
+    : "";
+  const board = (leadersRows.length
     ? `<table class="stk-board"><thead><tr><th>Player</th>
         <th class="num">Streak</th><th class="num">Best</th></tr></thead><tbody>
         ${leadersRows.map((r) => `<tr><td>${escapeHtml(r.name)}</td>
           <td class="num">${r.current}</td><td class="num">${r.best}</td></tr>`).join("")}
         </tbody></table>`
-    : `<p class="stk-empty">Nobody on the board yet — the first streak claims it.</p>`;
+    : `<p class="stk-empty">Nobody has survived a night yet — the board lists
+        streaks, and the first one claims it.</p>`) + tonightLine;
   const nameBox = signedIn ? `<div class="stk-namebox">
       <input id="stk-name-in" maxlength="20" placeholder="Display name"
         value="${escapeHtml((me && me.name) || "")}" autocomplete="off">
