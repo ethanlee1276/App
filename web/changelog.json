@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "model",
+      "title": "NFL probabilities calibrated against 80,000 settled games",
+      "body": "The deep NFL fit ran for the first time, and it found the projection honest about passing yards and optimistic about everything a broken tackle can inflate: rushing yards claimed 50% where 27% landed, receiving yards 50% where 36% landed, receptions 50% where 43%. The cause is the distribution's shape — a season's rushing mean is dragged up by a few long runs, so most games land under it, and the model priced around the mean. Every rushing and receiving probability on the board comes down accordingly, which will read as far fewer overs and more unders on those markets. That is the correction working, not the model losing its nerve."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "ship",
       "title": "Real addresses",
       "body": "Every player, game and pick now has a URL you can send somebody — /player/juan-soto, /game/ne-sea-0909, /pick/juan-soto-home-runs — and links unfurl as that player or that game rather than as the site. A preview never carries the pick itself: the player, the market and the matchup, and never the side, the line or the price."

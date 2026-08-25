@@ -151,6 +151,39 @@ pages, and the difference is the whole trust question.
 
 ---
 
+## Skew-aware yardage distributions — the measured upstream fix, 2026-08-25
+
+The first deep NFL calibration (81,000 settled games walked forward)
+measured a bias ladder that is really a skewness ladder: passing yards
+unbiased, receptions −0.28, receiving yards −0.56, rushing yards −0.98 —
+a stated 50% landing at 27%. The cause is structural: `prob_over` prices
+every market with a symmetric normal centred on the projection's MEAN,
+and yardage-per-game is right-skewed — one 45-yard breakaway drags a
+season mean above the median game, so most games land under it. The more
+boom-driven the stat, the bigger the bias, which is exactly the ladder
+the fit found. The same wound showed from a second angle the same day:
+formfit's rushing dial pinned to its grid edge wanting maximum recent
+lean, with its own warning that wanting more than the family allows
+means a problem upstream.
+
+**What holds the line today:** the calibration layer, which is the
+designed absorber for exactly this and now carries the correction per
+market, refit nightly. It is honest but blunt — one intercept per
+market cannot vary with where the line sits relative to the mean, and
+the symmetric tails still feed `proj_low`/`proj_high` and the sim lab's
+redraw.
+
+**The real fix:** price yardage markets on a right-skewed family
+(lognormal, or an empirical quantile map fitted from the same logs the
+calibration used — the data is already in history.db). **Built from:**
+`engine/statmath.prob_over` grows a per-market family switch;
+`logwalk`'s walk-forward is the free judge of whether it beats
+normal+intercept out of sample. **Cost:** medium, and it is a
+MODEL_ERAS entry when it ships — every claim on three markets moves.
+Not a pre-Week-1 change; the calibration is the right risk this week.
+
+---
+
 ## Web push — measured and refused, 2026-08-26
 
 Roadmap #8 asked for it ("an edge alert that hits a lock screen") and it
