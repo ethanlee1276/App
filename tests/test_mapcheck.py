@@ -128,7 +128,15 @@ def test_quiet_mode_says_nothing_and_returns_the_verdict():
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         code = mapcheck.main(["--quiet"])
-    assert code == 0
+    # THE VERDICT, AND WHAT IT WAS ABOUT. A bare `assert code == 0` fired
+    # twice on GitHub Actions on 2026-08-25 — same commit, one run red
+    # and the next green — and reported nothing but "AssertionError",
+    # which says the map is dirty without saying which row. Quiet mode
+    # prints nothing by design, so the message has to re-run the audit to
+    # have anything to say. A check that can fail without explaining
+    # itself costs an afternoon every time it does.
+    assert code == 0, ("mapcheck --quiet reported drift: "
+                       f"{mapcheck.audit()}")
     assert buf.getvalue() == ""
 
 
