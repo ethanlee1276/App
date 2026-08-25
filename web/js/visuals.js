@@ -1305,12 +1305,20 @@ function propAnalysis(r, opts = {}) {
     // label follows it, or it would sit inside the bar it describes.
     const yt = y(v), y0 = y(0), down = v < 0;
     const h = Math.max(3, Math.abs(y0 - yt));
+    // …but never into the opponent row. A −28 on Ethan's spread chart
+    // pushed its label straight through the staggered axis names
+    // (2026-08-25 screenshot). When the under-bar spot would cross into
+    // the bottom label band the number moves ONTO the bar's end — the
+    // panel-coloured stroke it already wears keeps it readable there.
+    const downLabY = y0 + h + FS;
+    const labY = down
+      ? (downLabY > H - B + FS * 0.4 ? yt - 5 : downLabY)
+      : yt - 5;
     return `<rect x="${bx(i).toFixed(1)}" y="${(down ? y0 : y0 - h).toFixed(1)}"
         width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${c}"
         data-tip="${escapeAttr(labels ? `${labels[i]} — ${v}`
           : `Game ${i + 1} — ${v}`)}" style="pointer-events:all;cursor:pointer"/>
-      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${
-        (down ? y0 + h + FS : yt - 5).toFixed(1)}"
+      <text x="${(bx(i) + bw / 2).toFixed(1)}" y="${labY.toFixed(1)}"
         text-anchor="middle" font-size="${FS}" fill="${c}"
         paint-order="stroke" stroke="var(--panel)" stroke-width="3"
         font-variant-numeric="tabular-nums">${v}</text>
@@ -1319,13 +1327,18 @@ function propAnalysis(r, opts = {}) {
         escapeHtml(axisText(i))}</text>`;
   }).join("");
   const ly = y(line);
+  // A caller can rename the rule: the spread chart plots distance FROM
+  // the handicap, so its baseline pill says "+10.5 COVERS" rather than
+  // the literal 0 the geometry uses.
+  const pillV = opts.pill ? opts.pill.v : String(line);
+  const pillK = opts.pill ? opts.pill.k : "LINE";
   const pill = `<g>
       <rect x="${W - R + 6}" y="${ly - FS}" width="${R - 12}" height="${FS * 2}" rx="3"
         fill="var(--panel-3)" stroke="var(--border)"/>
       <text x="${W - R + (R - 12) / 2 + 6}" y="${ly + FS * .35}" text-anchor="middle" font-size="${FS}"
-        fill="var(--text)" font-variant-numeric="tabular-nums">${line}</text>
+        fill="var(--text)" font-variant-numeric="tabular-nums">${escapeHtml(pillV)}</text>
       <text x="${W - R + (R - 12) / 2 + 6}" y="${ly + FS * 1.9}" text-anchor="middle" font-size="${FS * .8}"
-        fill="var(--text-faint)">LINE</text></g>`;
+        fill="var(--text-faint)">${escapeHtml(pillK)}</text></g>`;
 
   const tile = (v, k, tone) => `<div class="pa-tile">
       <div class="pa-v ${tone || ""}">${v}</div><div class="pa-k">${k}</div></div>`;
@@ -1357,7 +1370,7 @@ function propAnalysis(r, opts = {}) {
       <span class="pa-cell"><span class="pa-k">${escapeHtml(opts.what || "PROP")}</span>
         <span class="pa-m">${escapeHtml(r.market_label || r.market || "")}</span></span>
       <span class="pa-cell"><span class="pa-k">LINE</span>
-        <span class="pa-big">${escapeHtml(String(line))}</span></span>
+        <span class="pa-big">${escapeHtml(opts.lineText || String(line))}</span></span>
       <span class="pa-cell"><span class="pa-k">ODDS (${escapeHtml(
         opts.sideLabel || (over ? "OVER" : "UNDER"))})</span>
         <span class="pa-big ${tone === "good" ? "pos" : "neg"}">${

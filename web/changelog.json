@@ -4,6 +4,18 @@
     {
       "date": "2026-08-25",
       "kind": "ship",
+      "title": "Build a parlay, send it to a friend",
+      "body": "Tap + Parlay on any priced prop and it collects in a slip docked at the bottom of the screen, the way a sportsbook does it. The slip multiplies the prices into a combined number and says plainly that it assumes the legs are independent — same-game correlation stays the business of the engine's own screened tickets. Send the ticket to a friend and what travels is the legs' names only: they open it on the board under their own account, priced by their own subscription. A messages envelope now sits in the top bar with an honest unread count, and everything friends send — picks and parlays — lands on one Messages page."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
+      "title": "The spread chart earns its baseline",
+      "body": "The last-10 chart under a spread bet plotted raw margins with the handicap floating as a dashed line near the bottom — half the plot was empty air and the labels piled into each other. It now plots each game's distance from the number itself: covered by how much above the dashes, missed by how much below, with the handicap named on the baseline. Standings also show real team crests now instead of coloured abbreviations."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
       "title": "The share card, dressed properly",
       "body": "The pick card and the parlay ticket were redrawn from scratch: the masthead's own serif for the name, a warm lamp behind the face instead of a flat wash, a double frame with corner ticks, the price in a chip, the model's numbers in ruled columns with the edge colored by its sign, and numbered legs on the ticket. Both cards now share one frame and one footer by construction, so they cannot drift into looking like different products. Same facts as before — nothing was added to the card, everything on it just learned to stand up straight."
     },

@@ -831,6 +831,8 @@ const ICON_PATHS = {
           + '<path d="M4.6 3.2H2.4v1a2.4 2.4 0 002.4 2.4M11.4 3.2h2.2v1a2.4 2.4 0 01-2.4 2.4"/>'
           + '<path d="M8 9.2v2.4M5.4 13.8h5.2"/>',
   target: '<circle cx="8" cy="8" r="5.8"/><circle cx="8" cy="8" r="2.4"/>',
+  ticket: '<path d="M1.8 5.4h12.4v1.8a1.4 1.4 0 000 2.8v1.8H1.8V9.8a1.4 1.4 0 000-2.8z"/>'
+          + '<path d="M9.6 5.4v6.4" stroke-dasharray="1.6 1.6"/>',
   list: '<path d="M5.4 4.4h7.8M5.4 8h7.8M5.4 11.6h7.8"/>'
         + '<path d="M2.8 4.4v.01M2.8 8v.01M2.8 11.6v.01"/>',
   chart: '<path d="M2.2 13.4V2.4"/><path d="M2.2 13.4h11.6"/>'
@@ -4743,7 +4745,7 @@ function cardHTML(r) {
       </div>
       ${confMeter(r)}
       ${propAnalysis(r)}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
@@ -5395,12 +5397,24 @@ function gameBetSeries(b) {
     // A +1.5 handicap covers whenever the margin beats −1.5, so the
     // threshold is the handicap with its sign flipped. Getting this
     // backwards would colour every cover as a miss.
-    return { values: rows.map((g) => g.margin), line: -Number(b.line),
-             over: true, what: "SPREAD", labels,
-             head: `LAST ${rows.length} ${nm(team)} MARGINS`,
+    //
+    // CHARTED RELATIVE TO THE NUMBER, not as raw margins (2026-08-25,
+    // Ethan's screenshot: bars hanging from a zero axis with the −10.5
+    // rule floating near the bottom, labels piling into each other).
+    // The bet's question is "did the margin beat the handicap", so the
+    // bar IS the answer: distance covered by (up) or missed by (down),
+    // with the dashed rule as the baseline. Same shape the moneyline
+    // chart has always had at zero — the spread one just earns its
+    // baseline from the handicap instead.
+    const thr = -Number(b.line);
+    return { values: rows.map((g) => +(g.margin - thr).toFixed(1)),
+             line: 0, over: true, what: "SPREAD", labels,
+             head: `LAST ${rows.length} ${nm(team)} vs THE NUMBER`,
              legend: ["COVERED", "MISSED"], sideLabel: "COVER",
-             note: `each game’s margin against the ${
-               b.line > 0 ? "+" : ""}${b.line} it has to beat` };
+             lineText: `${b.line > 0 ? "+" : ""}${b.line}`,
+             pill: { v: `${b.line > 0 ? "+" : ""}${b.line}`, k: "COVERS" },
+             note: `how far each game beat or missed the ${
+               b.line > 0 ? "+" : ""}${b.line} — above the dashes covered it` };
   }
   if (kind === "team_total") {
     return { values: rows.map((g) => g.scored), line: Number(b.line),
@@ -5430,10 +5444,14 @@ function gameBetChart(b) {
   const team = b.team || (b.side === "home" ? b.home : b.away);
   return propAnalysis({
     recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
-    odds: b.odds, market: b.market, market_label: b.market_label || b.market,
+    odds: b.odds, market: b.market,
+    // The MATCHUP, not the market label: the strip's first cell already
+    // says what the market is (opts.what), and echoing the label made
+    // the header read "SPREAD Spread" (2026-08-25 screenshot).
+    market_label: `${b.away || ""} @ ${b.home || ""}`,
     ev_per_unit: b.ev_per_unit, confidence: b.confidence, team: team,
   }, { head: s.head, what: s.what, legend: s.legend, sideLabel: s.sideLabel,
-       labels: s.labels });
+       labels: s.labels, lineText: s.lineText, pill: s.pill });
 }
 
 /* A GAME BET IS ALWAYS A DOOR, and that is a deliberate departure from
@@ -5962,6 +5980,9 @@ function renderPropPage() {
         >Player page →</button>` : ""}
       ${r.player ? `<button class="btn ghost" data-send-pick
         >Send to a friend</button>` : ""}
+      ${r.player && r.odds != null ? `<button class="btn ghost"
+        data-slip="${escapeAttr(propId(r))}">${slipHas(r)
+          ? "On slip" : "+ Parlay"}</button>` : ""}
     </div>
     <div id="fr-send-slot"></div>
     <article class="card pp-card">
@@ -17651,7 +17672,7 @@ function standingsRowHTML(t, label) {
   const strk = t.streak > 0 ? "good" : t.streak < 0 ? "bad" : "";
   return `<div class="std-row">
     <span class="std-rank">${t.rank}</span>
-    <span class="std-mark" style="background:${escapeHtml(meta.primary || "#39405166")}">${escapeHtml(t.team)}</span>
+    <span class="std-mark">${teamMarkIn(state.sport, t.team, 24)}</span>
     <span class="std-name">${escapeHtml(meta.name || meta.nick || t.team)}</span>
     <span class="std-n std-rec">${escapeHtml(t.record)}</span>
     <span class="std-n">${t.pct.toFixed(3).replace(/^0/, "")}</span>
@@ -23623,7 +23644,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -23802,6 +23823,7 @@ function _switchViewNow(name, push, dir) {
   if (name === "bankroll") renderBankrollExtras();
   if (name === "weather") renderWeather();
   if (name === "alerts") renderAlerts();
+  if (name === "messages") renderMessages();
   if (name === "streak") renderStreak();
   if (name === "ufc") renderUFC();
   if (name === "why") renderWhy();
@@ -24683,27 +24705,14 @@ function friendInboxHTML() {
   const soc = _socCache;
   const shares = (soc && soc.inbox && soc.inbox.shares) || [];
   if (!shares.length) return "";
+  // shareRowHTML is the one renderer for a share row — the Messages
+  // page and this strip must not disagree about what a share looks
+  // like, and it already knows both kinds (pick and parlay).
   return `<div class="section-title minor">From your friends
       <span class="sub">— picks sent to you. Opening one shows it under
-      YOUR account, so what is behind the paywall stays there.</span></div>
-    <div class="card fr-inbox">${shares.slice(0, 12).map((sh) => {
-      const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
-      const row = sh.sport === state.sport ? findProp(slug) : null;
-      const live = !!row;
-      // The pointer stores the market KEY (it is half the slug); the
-      // reader gets the board's label when the row is live, and the key
-      // with its underscores unbent when it is not.
-      const mkt = (row && row.market_label) || sh.market.replace(/_/g, " ");
-      return `<div class="al-row${sh.seen ? "" : " fr-new"}">
-        <span class="al-ic ok">${icon("signal", 15)}</span>
-        <span class="al-t"><b>${escapeHtml(sh.from)} sent
-          ${escapeHtml(sh.player)} — ${escapeHtml(mkt)}</b>
-          <span class="al-c">${sh.note ? `“${escapeHtml(sh.note)}” · ` : ""}${
-            escapeHtml(tzTime(sh.created_at * 1000))}</span></span>
-        ${live ? `<button class="btn ghost" data-open-share="${escapeAttr(slug)}"
-          >Open</button>` : `<span class="set-note">off tonight’s board</span>`}
-      </div>`;
-    }).join("")}</div>`;
+      YOUR account, so what is behind the paywall stays there.
+      <a href="#messages">All messages &#8594;</a></span></div>
+    <div class="card fr-inbox">${shares.slice(0, 6).map(shareRowHTML).join("")}</div>`;
 }
 
 document.addEventListener("click", (e) => {
@@ -24877,6 +24886,320 @@ function initialView() {
   // besides, so the special case went with the table that replaced it.
   if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
+}
+
+/* ============================================================
+   THE PARLAY SLIP — build a ticket the way a sportsbook does
+   ============================================================
+   Ethan, 2026-08-25: "there also should be a way for players to select
+   props and put them in a parlay so they can parlay props together so
+   they can send it to there friends. we will calculate odds for the
+   parlays as well … they should show up how it works on sports books
+   … and they show up on the bottom."
+
+   The slip is LOCAL — the reader's own scratchpad, in localStorage,
+   holding the full leg (side, line, price) because it was read off a
+   board their own entitlement served. What LEAVES the device when a
+   ticket is sent to a friend is the pointer rule again: player and
+   market per leg, nothing priced — the recipient's slip re-prices the
+   legs off THEIR board. The combined price multiplies decimal odds,
+   which is exactly what a book does to an uncorrelated parlay; the
+   engine's correlation-priced SGP tickets are a different product and
+   keep their own page. */
+const SLIP_KEY = "qb_slip_v1";
+const SLIP_MAX = 8;
+let _slip = null;
+let _slipOpen = false;
+
+function slipState() {
+  if (_slip) return _slip;
+  try { _slip = JSON.parse(localStorage.getItem(SLIP_KEY)); } catch (e) { _slip = null; }
+  if (!_slip || !Array.isArray(_slip.legs)) _slip = { sport: "", date: "", legs: [] };
+  return _slip;
+}
+
+function slipSave() {
+  try { localStorage.setItem(SLIP_KEY, JSON.stringify(_slip)); } catch (e) {}
+}
+
+const slipLegKey = (l) => `${slugify(l.player)}|${slugify(l.market)}`;
+
+function slipHas(r) {
+  return slipState().legs.some((l) => slipLegKey(l) === slipLegKey(r));
+}
+
+function slipToggle(r) {
+  const s = slipState();
+  const key = slipLegKey(r);
+  const i = s.legs.findIndex((l) => slipLegKey(l) === key);
+  if (i >= 0) {
+    s.legs.splice(i, 1);
+  } else {
+    if (s.legs.length && s.sport && s.sport !== state.sport) {
+      tfToast("The slip holds one board at a time — clear it to start another.");
+      return false;
+    }
+    if (s.legs.length >= SLIP_MAX) {
+      tfToast(`${SLIP_MAX} legs is the ceiling — a longer ticket is a lottery slip.`);
+      return false;
+    }
+    s.legs.push({ player: r.player, market: r.market,
+                  market_label: r.market_label || r.market,
+                  side: r.side || "", line: r.line != null ? r.line : null,
+                  odds: r.odds != null ? r.odds : null, team: r.team || "" });
+    if (!s.legs.length || s.legs.length === 1) _slipOpen = false;
+  }
+  s.sport = s.legs.length ? state.sport : "";
+  s.date = s.legs.length
+    ? (r.game_date || (state.data || {}).date || s.date || "") : "";
+  slipSave();
+  slipRender();
+  return true;
+}
+
+/* The book's arithmetic: decimal odds multiply, independence assumed —
+   which is what every book does to a cross-game ticket, and the slip
+   says so on its face rather than borrowing the SGP engine's authority. */
+function slipAmerican() {
+  const legs = slipState().legs.filter((l) => l.odds != null);
+  if (legs.length < 2) return null;
+  let dec = 1;
+  for (const l of legs) {
+    const d = mbDecimal(l.odds);
+    if (d == null) return null;
+    dec *= d;
+  }
+  return dec >= 2 ? Math.round((dec - 1) * 100)
+                  : -Math.round(100 / (dec - 1));
+}
+
+function slipImplied() {
+  const legs = slipState().legs.filter((l) => l.odds != null);
+  if (legs.length < 2) return null;
+  let dec = 1;
+  for (const l of legs) { dec *= mbDecimal(l.odds) || 1; }
+  return 1 / dec;
+}
+
+function slipChip(r) {
+  // The per-card control. A chip, not a bare +: the guard that keeps
+  // inner controls from opening the card already knows .chip.
+  if (!r || !r.player || r.odds == null) return "";
+  const on = slipHas(r);
+  return `<button class="chip slip-chip${on ? " on" : ""}"
+    data-slip="${escapeAttr(propId(r))}" type="button"
+    title="${on ? "Remove from your parlay slip" : "Add to your parlay slip"}"
+    >${on ? "On slip" : "+ Parlay"}</button>`;
+}
+
+function slipRender() {
+  const host = document.getElementById("qb-slip");
+  if (!host) return;
+  const s = slipState();
+  if (!s.legs.length) { host.hidden = true; host.innerHTML = ""; return; }
+  host.hidden = false;
+  const combined = slipAmerican();
+  const imp = slipImplied();
+  const priceTxt = combined == null ? "add priced legs" : oddsTxt(combined);
+  if (!_slipOpen) {
+    host.innerHTML = `<button class="slip-bar" id="slip-expand" type="button"
+        aria-expanded="false">
+      <span class="slip-n">${s.legs.length}</span>
+      <b>Parlay slip</b>
+      <span class="slip-price">${escapeHtml(trueMinus(String(priceTxt)))}</span>
+      <span class="slip-open-hint">${icon("rising", 14)}</span>
+    </button>`;
+    return;
+  }
+  const legs = s.legs.map((l, i) => `<div class="slip-leg">
+      <span class="slip-leg-mark">${betMark(l, 24)}</span>
+      <span class="slip-leg-who"><b>${escapeHtml(l.player)}</b>
+        <span>${escapeHtml(String(l.side || "").toUpperCase())} ${l.line != null ? l.line : ""}
+          ${escapeHtml(l.market_label || l.market)}</span></span>
+      <span class="slip-leg-odds">${escapeHtml(trueMinus(oddsTxt(l.odds)))}</span>
+      <button class="slip-x" data-slip-rm="${i}" aria-label="Remove leg"
+        title="Remove">${icon("cross", 12)}</button>
+    </div>`).join("");
+  host.innerHTML = `<div class="slip-panel">
+    <div class="slip-head">
+      <b>Your parlay · ${s.legs.length} leg${s.legs.length === 1 ? "" : "s"}</b>
+      <button class="btn ghost slip-min" id="slip-collapse" type="button">Minimize</button>
+      <button class="btn ghost slip-min" id="slip-clear" type="button">Clear</button>
+    </div>
+    ${legs}
+    <div class="slip-total">
+      <span>Combined <b>${escapeHtml(trueMinus(String(priceTxt)))}</b>${
+        imp != null ? ` · ${(imp * 100).toFixed(1)}% if the legs were independent` : ""}</span>
+      <span class="set-note">prices multiply as a book would — same-game
+        correlation is not priced here</span>
+    </div>
+    <div class="slip-send">
+      <button class="btn" id="slip-send" type="button">Send to a friend</button>
+      <div id="slip-send-slot"></div>
+    </div>
+  </div>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const add = e.target.closest && e.target.closest("[data-slip]");
+  if (add) {
+    e.preventDefault();
+    const r = findProp(add.dataset.slip);
+    if (r) slipToggle(r);
+    // The board rerenders on its own clock; this button answers now.
+    if (r) {
+      const on = slipHas(r);
+      add.classList.toggle("on", on);
+      add.textContent = on ? "On slip" : "+ Parlay";
+    }
+    return;
+  }
+  if (e.target.closest && e.target.closest("#slip-expand")) {
+    _slipOpen = true; slipRender(); return;
+  }
+  if (e.target.closest && e.target.closest("#slip-collapse")) {
+    _slipOpen = false; slipRender(); return;
+  }
+  if (e.target.closest && e.target.closest("#slip-clear")) {
+    _slip = { sport: "", date: "", legs: [] };
+    _slipOpen = false;
+    slipSave(); slipRender(); renderAll();
+    return;
+  }
+  const rm = e.target.closest && e.target.closest("[data-slip-rm]");
+  if (rm) {
+    e.preventDefault();
+    slipState().legs.splice(Number(rm.dataset.slipRm), 1);
+    if (!slipState().legs.length) { _slip.sport = ""; _slipOpen = false; }
+    slipSave(); slipRender();
+    return;
+  }
+  if (e.target.closest && e.target.closest("#slip-send")) {
+    const u = await acctWho();
+    if (!(u && u.signed_in)) { tfToast("Sign in to send parlays to friends."); return; }
+    const soc = await socFetch();
+    const slot = document.getElementById("slip-send-slot");
+    if (!slot) return;
+    const friends = (soc && soc.friends) || [];
+    slot.innerHTML = friends.length
+      ? `<input class="fr-note" maxlength="280" placeholder="Say why (optional)"
+           aria-label="Note to your friend">
+         <div class="fr-send-row">${friends.map((f) => `
+           <button class="btn ghost" data-parlay-to="${escapeAttr(String(f.id))}"
+             >${escapeHtml(f.name)}</button>`).join("")}</div>`
+      : `<p class="set-empty">No friends to send to yet — your invite link is
+         on the <a href="#account">Account page</a>.</p>`;
+    return;
+  }
+  const to = e.target.closest && e.target.closest("[data-parlay-to]");
+  if (to) {
+    e.preventDefault();
+    const s = slipState();
+    const note = (document.querySelector("#slip-send-slot .fr-note") || {}).value || "";
+    const was = to.textContent;
+    to.textContent = "Sending…";
+    try {
+      const res = await fetch("/api/social/send-parlay", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        // Identity only leaves the device — see engine/social.share_parlay.
+        body: JSON.stringify({ to: Number(to.dataset.parlayTo),
+          sport: s.sport, date: s.date, note,
+          legs: s.legs.map((l) => ({ player: l.player, market: l.market })) }),
+      });
+      const out = await res.json().catch(() => ({}));
+      to.textContent = res.ok ? (out.already ? "Already sent" : "Sent") : was;
+      if (!res.ok) tfToast(out.error || "That didn’t send.");
+    } catch (err) {
+      to.textContent = was;
+      tfToast("Could not reach the server.");
+    }
+  }
+});
+
+/* ============================================================
+   MESSAGES — the friends inbox, behind the topbar envelope
+   ============================================================ */
+function msgBadge() {
+  const b = document.getElementById("nav-msg-badge");
+  if (!b) return;
+  const n = (_socCache && _socCache.inbox && _socCache.inbox.unseen) || 0;
+  b.hidden = !n;
+  b.textContent = n > 9 ? "9+" : String(n);
+}
+
+function shareRowHTML(sh) {
+  // One share as one row — the pick kind and the parlay kind, each a
+  // door only where tonight's board can actually answer it.
+  const when = escapeHtml(tzTime(sh.created_at * 1000));
+  const note = sh.note ? `“${escapeHtml(sh.note)}” · ` : "";
+  if (sh.kind === "parlay") {
+    const legs = (sh.legs || []).map((l) => {
+      const slug = `${slugify(l.player)}-${slugify(l.market)}`;
+      const row = sh.sport === state.sport ? findProp(slug) : null;
+      return row
+        ? `<button class="chip slip-chip" data-open-share="${escapeAttr(slug)}"
+             >${escapeHtml(l.player)}</button>`
+        : `<span class="chip">${escapeHtml(l.player)}</span>`;
+    }).join("");
+    return `<div class="al-row${sh.seen ? "" : " fr-new"}">
+      <span class="al-ic ok">${icon("ticket", 15)}</span>
+      <span class="al-t"><b>${escapeHtml(sh.from)} sent a
+        ${(sh.legs || []).length}-leg parlay</b>
+        <span class="al-c">${note}${when}</span>
+        <span class="fr-legs">${legs}</span></span>
+    </div>`;
+  }
+  const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
+  const row = sh.sport === state.sport ? findProp(slug) : null;
+  const mkt = (row && row.market_label) || sh.market.replace(/_/g, " ");
+  return `<div class="al-row${sh.seen ? "" : " fr-new"}">
+    <span class="al-ic ok">${icon("signal", 15)}</span>
+    <span class="al-t"><b>${escapeHtml(sh.from)} sent
+      ${escapeHtml(sh.player)} — ${escapeHtml(mkt)}</b>
+      <span class="al-c">${note}${when}</span></span>
+    ${row ? `<button class="btn ghost" data-open-share="${escapeAttr(slug)}"
+      >Open</button>` : `<span class="set-note">off tonight’s board</span>`}
+  </div>`;
+}
+
+async function renderMessages() {
+  const host = document.getElementById("messages-body");
+  if (!host) return;
+  const u = await acctWho();
+  if (state.view !== "messages") return;
+  if (!(u && u.signed_in)) {
+    host.innerHTML = `<div class="empty-slate">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">Sign in to see your messages</div>
+      <div class="es-sub">Picks and parlays your friends send land here.
+        Friends are made with your invite link — nobody you didn’t invite
+        can message you.</div></div>`;
+    return;
+  }
+  const soc = await socFetch(true);
+  if (state.view !== "messages") return;
+  const shares = (soc && soc.inbox && soc.inbox.shares) || [];
+  host.innerHTML = (shares.length
+    ? `<div class="card fr-inbox">${shares.map(shareRowHTML).join("")}</div>`
+    : `<div class="empty-slate">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">Nothing yet</div>
+      <div class="es-sub">When a friend sends you a pick or a parlay it
+        lands here. Your invite link is on the
+        <a href="#account">Account page</a>.</div></div>`)
+    + `<p class="set-note" style="margin-top:10px">Everything here is from
+      people you added by invite link. Remove a friend on the Account page
+      and the channel closes both ways.</p>`;
+  if (soc && soc.inbox && soc.inbox.unseen) {
+    // Seen AFTER the rows have been on screen a beat, same as Alerts.
+    setTimeout(() => {
+      fetch("/api/social/seen", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(() => { if (_socCache) { _socCache.inbox.unseen = 0; } msgBadge(); })
+        .catch(() => {});
+    }, 1200);
+  }
+  msgBadge();
 }
 
 function moveIndicator() {
@@ -25709,6 +26032,10 @@ function renderTopPicks() {
         <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade || "")}</span></div>
       <div class="tp-foot"><b class="tp-odds">${odds(r.odds)}</b>
         <span class="tp-book">${escapeHtml(r.book || "")}</span>
+        ${r.odds != null ? `<button class="tp-add" type="button"
+                data-slip="${escapeAttr(propId(r))}"
+                title="Add to your parlay slip — it docks at the bottom">${
+                slipHas(r) ? "On slip" : "+ Parlay"}</button>` : ""}
         <button class="tp-add" type="button" onclick="tpTrack(${i})"
                 title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
     </div>`;
@@ -26576,6 +26903,24 @@ async function renderLiveBoard() {
     if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
     switchView("injuries", true);
   });
+  // The envelope: the friends inbox, with the unseen count on it. The
+  // badge fills from the same /api/social/me every other surface reads,
+  // refreshed on a slow clock — a message inbox, not a ticker.
+  const msgBtn = document.getElementById("nav-msg");
+  if (msgBtn) msgBtn.addEventListener("click", () => {
+    if (STANDALONE_MODES.includes(state.view)) exitStandaloneMode();
+    switchView("messages", true);
+  });
+  (async () => {
+    const u = await acctWho();
+    if (u && u.signed_in) { await socFetch(); msgBadge(); }
+  })();
+  setInterval(() => {
+    if (document.hidden) return;
+    if (!(_acctUser && _acctUser.signed_in)) return;
+    socFetch(true).then(msgBadge);
+  }, 120000);
+  slipRender();
   // The avatar chip: initials for a signed-in account, never a fake name.
   const acctBtn = document.getElementById("nav-acct");
   if (acctBtn) {

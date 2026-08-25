@@ -2821,7 +2821,8 @@ select.calc-in { width: auto; font-weight: 600; }
 .fr-send { margin: 10px 0 14px; padding: 12px;
   background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius); }
-.fr-send .fr-note { width: 100%; margin-bottom: 10px; padding: 8px 10px;
+.fr-send .fr-note,
+#slip-send-slot .fr-note { width: 100%; margin-bottom: 10px; padding: 8px 10px;
   background: var(--panel); color: var(--text);
   border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius); font: inherit; font-size: var(--fs-sm); }
@@ -2829,6 +2830,62 @@ select.calc-in { width: auto; font-weight: 600; }
 .fr-inbox { padding: 6px 14px; margin-bottom: 14px; }
 /* Unread wears the accent the hairline way: left edge only. */
 .fr-inbox .fr-new { border-left: 2px solid var(--brand); padding-left: 10px; }
+.fr-legs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+/* The topbar envelope's unread count. Hidden at zero from the markup
+   ([hidden]) — a badge with nothing behind it is a lie you can see
+   from across the room. */
+.msg-badge { position: absolute; top: 2px; right: 2px; min-width: 15px;
+  height: 15px; padding: 0 4px; border-radius: 999px; background: var(--brand);
+  color: #14120E; font-size: var(--fs-2xs); font-weight: 800; line-height: 15px;
+  text-align: center; pointer-events: none; }
+#nav-msg { position: relative; }
+
+/* --- the parlay slip: the sportsbook dock ------------------------- */
+#qb-slip { position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
+  display: flex; justify-content: center; padding: 0 10px
+  env(safe-area-inset-bottom); pointer-events: none; }
+#qb-slip > * { pointer-events: auto; }
+.slip-bar { display: inline-flex; align-items: center; gap: 10px;
+  margin-bottom: 10px; padding: 10px 18px; border-radius: 999px;
+  border: var(--hairline) solid var(--brand); background: var(--panel);
+  color: var(--text); font: inherit; font-size: var(--fs-sm);
+  font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+.slip-n { display: grid; place-items: center; min-width: 22px; height: 22px;
+  border-radius: 999px; background: var(--brand); color: #14120E;
+  font-size: var(--fs-xs); font-weight: 800; }
+.slip-price { color: var(--brand); font-variant-numeric: tabular-nums; }
+.slip-open-hint { color: var(--text-mute); display: grid; }
+.slip-panel { width: min(560px, 100%); margin-bottom: 10px;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg);
+  background: var(--panel); box-shadow: 0 10px 34px rgba(0, 0, 0, .5);
+  padding: 12px 14px; max-height: 70vh; overflow-y: auto; }
+.slip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.slip-head b { flex: 1; font-size: var(--fs-sm); }
+.slip-min { padding: 4px 10px; font-size: var(--fs-2xs); }
+.slip-leg { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-top: var(--hairline) solid var(--border-soft); }
+.slip-leg-mark { flex-shrink: 0; display: grid; }
+.slip-leg-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.slip-leg-who b { font-size: var(--fs-sm); }
+.slip-leg-who span { color: var(--text-dim); font-size: var(--fs-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slip-leg-odds { font-weight: 700; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm); }
+.slip-x { display: grid; place-items: center; width: 26px; height: 26px;
+  border: 0; border-radius: 999px; background: none; color: var(--text-mute);
+  cursor: pointer; }
+.slip-x:hover { color: var(--bad); background: var(--panel-3); }
+.slip-total { display: flex; flex-direction: column; gap: 2px; padding: 10px 0 8px;
+  border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
+.slip-total b { color: var(--brand); font-variant-numeric: tabular-nums; }
+.slip-send { display: flex; flex-direction: column; gap: 8px; }
+.slip-chip.on { border-color: var(--brand); color: var(--brand); }
+@media (max-width: 720px) {
+  /* Above the tab bar, not under it — the dock is the point. */
+  #qb-slip { bottom: calc(58px + env(safe-area-inset-bottom)); }
+}
 .gp-hero {
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;
@@ -3778,10 +3835,12 @@ body.pk-open { overflow: hidden; }
 .std-row:last-child { border-bottom: none; }
 .std-rank { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums; text-align: right; }
+/* Since 2026-08-25 the cell holds teamMark — the real crest with the
+   coloured-chip monogram underneath as its fallback — instead of a bare
+   coloured abbreviation ("we are not showing team logos on this page"). */
 .std-mark {
-  width: 26px; height: 26px; border-radius: var(--radius-sm);
-  display: grid; place-items: center; font-size: var(--fs-2xs); font-weight: 800;
-  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
 }
 .std-name { min-width: 0; font-size: var(--fs-md); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

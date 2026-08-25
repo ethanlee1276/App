@@ -1602,7 +1602,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _social_post(self, path: str, body: dict):
         from engine import social as SOC
-        if path not in ("accept", "send", "remove", "seen", "revoke-invite"):
+        if path not in ("accept", "send", "send-parlay", "remove", "seen",
+                        "revoke-invite"):
             return self._send(404, b'{"error":"unknown social endpoint"}',
                               ".json")
         A = _acct()
@@ -1626,6 +1627,20 @@ class Handler(BaseHTTPRequestHandler):
                     str(body.get("player") or ""),
                     str(body.get("market") or ""),
                     str(body.get("note") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "send-parlay":
+                # Legs are rebuilt here key by key — player and market,
+                # the identity pair, and nothing else survives the body.
+                # A side, a line or a price in a crafted leg lands
+                # nowhere; share_parlay's signature is the second lock.
+                legs = [{"player": str(l.get("player") or ""),
+                         "market": str(l.get("market") or "")}
+                        for l in (body.get("legs") or [])
+                        if isinstance(l, dict)]
+                code, out = SOC.share_parlay(
+                    conn, who["id"], int(body.get("to") or 0),
+                    str(body.get("sport") or ""), str(body.get("date") or ""),
+                    legs, str(body.get("note") or ""))
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "remove":
                 SOC.friend_remove(conn, who["id"], int(body.get("friend") or 0))

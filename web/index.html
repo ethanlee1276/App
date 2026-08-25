@@ -209,6 +209,14 @@
       <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
       </button>
+      <!-- The friends inbox. The badge is filled by app.js from the
+           server's unseen count and stays hidden at zero — a red dot
+           with nothing behind it is a lie you can see from across the
+           room. -->
+      <button class="meta-ico" id="nav-msg" title="Messages from friends" aria-label="Messages from friends">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v12H8l-4 4z"/><path d="M8 9.5h8M8 13h5"/></svg>
+        <span class="msg-badge" id="nav-msg-badge" hidden></span>
+      </button>
       <!-- The render's avatar chip, minus the balance chip beside it (the
            site never holds money). Initials when signed in; when signed
            OUT it says "Sign in" in words.
@@ -880,6 +888,19 @@
       <div id="alerts-body"></div>
     </section>
 
+    <!-- Messages — the friends inbox behind the topbar envelope
+         (Ethan, 2026-08-25: "there should be a message button at the
+         top with an inbox with the messages from friends"). Everything
+         here is from people YOU added by invite link; there is no way
+         for a stranger's words to reach this page. -->
+    <section class="view" id="view-messages">
+      <div class="section-title">Messages
+        <span class="sub">— picks and parlays your friends sent you. Opening one shows it
+        under your own account, so what is behind the paywall stays there.</span>
+      </div>
+      <div id="messages-body"></div>
+    </section>
+
     <!-- The Streak — the free daily game. No money on it anywhere: picks
          are bragging rights, the slate is published facts (player, line,
          start time), and the engine's own opinions never appear here. -->
@@ -1105,6 +1126,11 @@
        the same drawer, so every other destination stays two taps away.
        The render's center slot was the bet slip; ours is My Bets, the
        honest version of that job. Phones only (CSS). -->
+  <!-- The parlay slip's dock — the sportsbook pattern: picks collect in
+       a bar pinned to the bottom of the screen and expand into the
+       ticket. Filled and shown by app.js; empty slip, no bar. -->
+  <div id="qb-slip" hidden></div>
+
   <nav class="tabbar" id="tabbar" aria-label="Quick navigation">
     <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>

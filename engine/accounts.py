@@ -532,9 +532,10 @@ def delete_user(conn, user_id: int) -> None:
     if "friendships" in have:
         conn.execute("DELETE FROM friendships WHERE user_id=? OR friend_id=?",
                      (int(user_id), int(user_id)))
-    if "pick_shares" in have:
-        conn.execute("DELETE FROM pick_shares WHERE from_id=? OR to_id=?",
-                     (int(user_id), int(user_id)))
+    for shares in ("pick_shares", "parlay_shares"):
+        if shares in have:
+            conn.execute(f"DELETE FROM {shares} WHERE from_id=? OR to_id=?",
+                         (int(user_id), int(user_id)))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -595,6 +596,21 @@ def export_user(conn, user_id: int) -> dict:
                     "WHERE from_id=? ORDER BY created_at", (int(user_id),))]
         if sent:
             out["picks_sent_to_friends"] = sent
+    if "parlay_shares" in have:
+        # Same pointer rule: leg identities and the note, nothing priced.
+        import json as _json
+        sent = []
+        for r in conn.execute(
+                "SELECT date, sport, legs, note FROM parlay_shares "
+                "WHERE from_id=? ORDER BY created_at", (int(user_id),)):
+            try:
+                legs = _json.loads(r["legs"])
+            except ValueError:
+                legs = []
+            sent.append({"date": r["date"], "sport": r["sport"],
+                         "legs": legs, "note": r["note"]})
+        if sent:
+            out["parlays_sent_to_friends"] = sent
     if "digest_optin" in have:
         # WITHOUT THE TOKEN. An export is a file people mail around, and
         # the unsubscribe token is a bearer credential — the same reason

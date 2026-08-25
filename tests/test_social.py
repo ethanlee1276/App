@@ -160,6 +160,90 @@ def test_reading_the_inbox_does_not_mark_seen():
     assert SOC.inbox(conn, b)["unseen"] == 0
 
 
+# --- parlays travel the same way --------------------------------------------
+
+def test_a_parlay_share_carries_leg_identities_only():
+    """The pointer rule, leg by leg: share_parlay reads exactly player
+    and market out of each leg dict — a side, a line or a price in a
+    crafted leg lands nowhere, and the stored JSON proves it."""
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    legs = [{"player": "Chris Olave", "market": "rec_yds",
+             "side": "over", "line": 64.5, "odds": -115, "edge": 0.04},
+            {"player": "Jahmyr Gibbs", "market": "rush_yds"}]
+    code, out = SOC.share_parlay(conn, a, b, "nfl", "2026-09-13", legs, "lock")
+    assert code == 200 and out["sent"], out
+    blob = conn.execute("SELECT legs FROM parlay_shares").fetchone()["legs"]
+    for word in ("side", "line", "odds", "edge", "64.5", "-115"):
+        assert word not in blob, f"{word!r} leaked into a stored parlay"
+    assert "Chris Olave" in blob and "rush_yds" in blob
+
+
+def test_a_parlay_needs_two_to_eight_named_legs():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    one = [{"player": "X", "market": "m"}]
+    assert SOC.share_parlay(conn, a, b, "nfl", "d", one)[0] == 400
+    nine = [{"player": f"P{i}", "market": "m"} for i in range(9)]
+    assert SOC.share_parlay(conn, a, b, "nfl", "d", nine)[0] == 400
+    assert SOC.share_parlay(conn, a, b, "nfl", "d", one * 0 + [
+        {"player": "A", "market": "m"}, {"player": "B", "market": "m"}])[0] == 200
+
+
+def test_parlays_obey_friendship_and_dedupe():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    legs = [{"player": "A", "market": "m"}, {"player": "B", "market": "m"}]
+    assert SOC.share_parlay(conn, a, c, "nfl", "d", legs)[0] == 403
+    assert SOC.share_parlay(conn, a, b, "nfl", "d", legs)[0] == 200
+    code, out = SOC.share_parlay(conn, a, b, "nfl", "d", legs, "again")
+    assert code == 200 and out["already"]
+    n = conn.execute("SELECT COUNT(*) FROM parlay_shares").fetchone()[0]
+    assert n == 1
+
+
+def test_the_inbox_merges_both_kinds_and_seen_covers_both():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.share_pick(conn, a, b, "nfl", "d", "Chris Olave", "rec_yds")
+    SOC.share_parlay(conn, a, b, "nfl", "d",
+                     [{"player": "A", "market": "m"},
+                      {"player": "B", "market": "m"}])
+    ib = SOC.inbox(conn, b)
+    kinds = sorted(s["kind"] for s in ib["shares"])
+    assert kinds == ["parlay", "pick"], kinds
+    assert ib["unseen"] == 2
+    SOC.mark_seen(conn, b)
+    assert SOC.inbox(conn, b)["unseen"] == 0
+
+
+def test_the_server_rebuilds_parlay_legs_key_by_key():
+    """The wiring half: the handler constructs each leg from exactly
+    player and market — never a spread of the client's dict."""
+    srv = _read("server.py")
+    i = srv.index('if path == "send-parlay":')
+    body = srv[i:i + 900]
+    assert 'str(l.get("player") or "")' in body
+    assert 'str(l.get("market") or "")' in body
+    assert "**" not in body, "a dict-spread would carry whatever a client sent"
+    assert "share_parlay" in body
+
+
+def test_deleting_and_exporting_cover_parlay_shares():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.share_parlay(conn, a, b, "nfl", "2026-09-13",
+                     [{"player": "A", "market": "m"},
+                      {"player": "B", "market": "m"}], "note")
+    out = A.export_user(conn, a)
+    sent = out.get("parlays_sent_to_friends")
+    assert sent and sent[0]["legs"][0]["player"] == "A"
+    assert "odds" not in repr(sent)
+    A.delete_user(conn, a)
+    n = conn.execute("SELECT COUNT(*) FROM parlay_shares").fetchone()[0]
+    assert n == 0, "a parlay share outlived the account that sent it"
+
+
 # --- the invite rule ---------------------------------------------------------
 
 def test_one_live_invite_reused_not_reminted():
@@ -241,7 +325,8 @@ def test_no_lookup_endpoint_exists():
     srv = _read("server.py")
     i = srv.index("def _social_post")
     body = srv[i:i + 400]
-    assert '"accept", "send", "remove", "seen", "revoke-invite"' in body
+    assert ('"accept", "send", "send-parlay", "remove", "seen",\n'
+            '                        "revoke-invite"') in body
     src = _read("engine", "social.py")
     assert "LIKE" not in src and "search" not in src.lower().replace(
         "search-by-email", "")
@@ -336,11 +421,21 @@ def test_the_send_panel_carries_identity_only():
 
 def test_the_inbox_row_is_a_door_only_onto_tonight_s_board():
     """A share from a past slate stays readable but inert — the board it
-    pointed at is gone, and a door onto nothing is worse than no door."""
-    i = APPJS.index("function friendInboxHTML()")
+    pointed at is gone, and a door onto nothing is worse than no door.
+    The logic lives in shareRowHTML since the Messages page landed —
+    ONE renderer for a share row, used by Alerts and Messages both, so
+    the two surfaces cannot disagree about what a share looks like."""
+    i = APPJS.index("function shareRowHTML(sh)")
     body = APPJS[i:APPJS.index("\n}", i)]
-    assert "sh.sport === state.sport ? findProp(slug) : null" in body
+    assert APPJS.count("sh.sport === state.sport ? findProp(slug) : null") >= 2, \
+        "the door rule left the pick or the parlay branch"
     assert "off tonight’s board" in body
+    j = APPJS.index("function friendInboxHTML()")
+    fib = APPJS[j:APPJS.index("\n}", j)]
+    assert "shareRowHTML" in fib, "Alerts grew its own share renderer"
+    k = APPJS.index("async function renderMessages()")
+    assert "shareRowHTML" in APPJS[k:k + 2500], \
+        "Messages grew its own share renderer"
 
 
 def test_seen_is_marked_after_display_not_on_fetch():

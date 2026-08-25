@@ -110,12 +110,19 @@ def _series_block():
     return APP[APP.index("function gameBetSeries("):APP.index("function gameBetChart(")]
 
 
-def test_a_spread_flips_the_sign_of_its_handicap():
-    """+1.5 covers whenever the margin beats −1.5. Charting the margin
-    against +1.5 would paint every cover as a miss — a chart that is
-    confidently backwards, which is worse than no chart."""
+def test_a_spread_charts_distance_from_its_handicap():
+    """+1.5 covers whenever the margin beats −1.5, so the threshold is
+    the handicap sign-flipped — and since 2026-08-25 the chart plots the
+    DISTANCE from that number against a zero baseline (Ethan's
+    screenshot: raw margins left the −10.5 rule floating near the
+    bottom of the plot with the labels piling up under it). The bar IS
+    the answer now: covered by how much, missed by how much."""
     b = _series_block()
-    assert "line: -Number(b.line)" in b, "the handicap's sign is not flipped"
+    assert "const thr = -Number(b.line);" in b, \
+        "the handicap's sign is not flipped"
+    assert "g.margin - thr" in b, "the bars are raw margins again"
+    assert "line: 0, over: true" in b, "the baseline left the number"
+    assert '"COVERS"' in b, "the pill no longer names the handicap"
 
 
 def test_each_market_reads_its_own_quantity():

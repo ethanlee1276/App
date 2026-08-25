@@ -38,6 +38,7 @@ in the export.
 
 from __future__ import annotations
 
+import json
 import secrets
 import time
 
@@ -55,6 +56,11 @@ MAX_FRIENDS = 100
 #: only free text in the whole feature and it is only ever shown to a
 #: friend the recipient chose to add.
 MAX_NOTE = 280
+
+#: Legs a shared parlay may carry. Two is the smallest parlay there is;
+#: eight is where every book stops taking props seriously anyway.
+MIN_PARLAY_LEGS = 2
+MAX_PARLAY_LEGS = 8
 
 #: Inbox rows kept per user. Shares are pointers at a board that rebuilds
 #: nightly, so an old one is a dead link — pruning is honesty, not tidiness.
@@ -91,6 +97,19 @@ def ensure_tables(conn) -> None:
       );
       CREATE INDEX IF NOT EXISTS pick_shares_inbox
         ON pick_shares(to_id, created_at);
+      CREATE TABLE IF NOT EXISTS parlay_shares (
+        id         INTEGER PRIMARY KEY,
+        from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sport      TEXT NOT NULL,
+        date       TEXT NOT NULL,
+        legs       TEXT NOT NULL,
+        note       TEXT NOT NULL DEFAULT '',
+        created_at REAL NOT NULL,
+        seen       INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS parlay_shares_inbox
+        ON parlay_shares(to_id, created_at);
     """)
     conn.commit()
 
@@ -256,35 +275,105 @@ def share_pick(conn, from_id: int, to_id: int, sport: str, date: str,
     return 200, {"sent": True, "already": False}
 
 
+def share_parlay(conn, from_id: int, to_id: int, sport: str, date: str,
+                 legs: list, note: str = "") -> tuple[int, dict]:
+    """Send a built parlay to one friend — the POINTER rule, leg by leg.
+
+    A leg is a {player, market} identity and NOTHING else, enforced the
+    same way share_pick enforces it: this function reads exactly those
+    two keys out of each leg dict, so a side, a line or a price sent by
+    a crafted client lands nowhere. The recipient's slip re-prices the
+    legs off THEIR board, under THEIR entitlement — a parlay that
+    carried its own numbers would be the paywall bypass with a bow on.
+    """
+    ensure_tables(conn)
+    ok = conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
+                      (int(from_id), int(to_id))).fetchone()
+    if not ok:
+        return 403, {"error": "You can only send picks to your friends."}
+    sport = str(sport or "").strip().lower()[:8]
+    date = str(date or "").strip()[:10]
+    clean = []
+    for l in legs if isinstance(legs, list) else []:
+        if not isinstance(l, dict):
+            continue
+        player = str(l.get("player") or "").strip()[:60]
+        market = str(l.get("market") or "").strip()[:40]
+        if player and market:
+            clean.append({"player": player, "market": market})
+    if not sport or not (MIN_PARLAY_LEGS <= len(clean) <= MAX_PARLAY_LEGS):
+        return 400, {"error": f"A parlay is {MIN_PARLAY_LEGS}–"
+                              f"{MAX_PARLAY_LEGS} named legs."}
+    note = str(note or "").strip()[:MAX_NOTE]
+    blob = json.dumps(clean, sort_keys=True)
+    dup = conn.execute(
+        "SELECT 1 FROM parlay_shares WHERE from_id=? AND to_id=? AND sport=? "
+        "AND date=? AND legs=?",
+        (int(from_id), int(to_id), sport, date, blob)).fetchone()
+    if dup:
+        return 200, {"sent": True, "already": True}
+    conn.execute(
+        "INSERT INTO parlay_shares (from_id, to_id, sport, date, legs, note,"
+        " created_at) VALUES (?,?,?,?,?,?,?)",
+        (int(from_id), int(to_id), sport, date, blob, note, time.time()))
+    conn.execute(
+        "DELETE FROM parlay_shares WHERE to_id=? AND id NOT IN "
+        "(SELECT id FROM parlay_shares WHERE to_id=? ORDER BY created_at DESC "
+        "LIMIT ?)", (int(to_id), int(to_id), INBOX_KEEP))
+    conn.commit()
+    return 200, {"sent": True, "already": False}
+
+
 def inbox(conn, user_id: int, limit: int = 50) -> dict:
     """What friends sent, newest first, with the unseen count for the
     badge. Reading does NOT mark seen — the page says when it has
     actually shown them (`mark_seen`), so a background poll cannot eat
     the badge."""
     ensure_tables(conn)
-    rows = conn.execute(
-        "SELECT id, from_id, sport, date, player, market, note, created_at, "
-        "seen FROM pick_shares WHERE to_id=? ORDER BY created_at DESC LIMIT ?",
-        (int(user_id), int(limit))).fetchall()
     names = {}
-    out = []
-    for r in rows:
-        fid = int(r["from_id"])
+
+    def _name(fid):
+        fid = int(fid)
         if fid not in names:
             names[fid] = display_name(conn, fid)
-        out.append({"id": int(r["id"]), "from": names[fid],
+        return names[fid]
+
+    out = []
+    for r in conn.execute(
+            "SELECT id, from_id, sport, date, player, market, note, "
+            "created_at, seen FROM pick_shares WHERE to_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        out.append({"kind": "pick", "id": int(r["id"]), "from": _name(r["from_id"]),
                     "sport": r["sport"], "date": r["date"],
                     "player": r["player"], "market": r["market"],
                     "note": r["note"], "created_at": r["created_at"],
                     "seen": bool(r["seen"])})
-    unseen = conn.execute(
-        "SELECT COUNT(*) FROM pick_shares WHERE to_id=? AND seen=0",
-        (int(user_id),)).fetchone()[0]
+    for r in conn.execute(
+            "SELECT id, from_id, sport, date, legs, note, created_at, seen "
+            "FROM parlay_shares WHERE to_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        try:
+            legs = json.loads(r["legs"])
+        except ValueError:
+            legs = []
+        out.append({"kind": "parlay", "id": int(r["id"]),
+                    "from": _name(r["from_id"]),
+                    "sport": r["sport"], "date": r["date"], "legs": legs,
+                    "note": r["note"], "created_at": r["created_at"],
+                    "seen": bool(r["seen"])})
+    out.sort(key=lambda s: s["created_at"], reverse=True)
+    out = out[:int(limit)]
+    unseen = sum(int(conn.execute(
+        f"SELECT COUNT(*) FROM {t} WHERE to_id=? AND seen=0",
+        (int(user_id),)).fetchone()[0])
+        for t in ("pick_shares", "parlay_shares"))
     return {"shares": out, "unseen": int(unseen)}
 
 
 def mark_seen(conn, user_id: int) -> None:
     ensure_tables(conn)
     conn.execute("UPDATE pick_shares SET seen=1 WHERE to_id=?",
+                 (int(user_id),))
+    conn.execute("UPDATE parlay_shares SET seen=1 WHERE to_id=?",
                  (int(user_id),))
     conn.commit()
