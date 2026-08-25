@@ -401,11 +401,19 @@ def _stub_slate(current_rows, week=1, season=2026):
 
 
 def test_week_one_builds_a_board_where_it_used_to_build_nothing():
-    """The measurement this whole module exists for."""
+    """The measurement this whole module exists for.
+
+    Counted over the YARDAGE props since 2026-08-25: build_slate now also
+    emits an anytime-TD prop per skill player (the long-shot board's
+    layer), and those are never carried — they have no proxy line to
+    carry a baseline into, and the TD model does its own sample blending.
+    """
+    from engine.models import ANYTIME_TD
     slate, report = _stub_slate([])
-    assert slate.props, "week 1 still builds nothing"
-    assert report["carried_n"] == len(slate.props)
-    assert all(g.prior for p in slate.props for g in p.logs)
+    yardage = [p for p in slate.props if p.market != ANYTIME_TD]
+    assert yardage, "week 1 still builds nothing"
+    assert report["carried_n"] == len(yardage)
+    assert all(g.prior for p in yardage for g in p.logs)
 
 
 def test_the_carry_stands_down_once_the_season_has_enough_games():

@@ -36,12 +36,23 @@ def test_prob_at_least_one_is_a_poisson_tail():
 
 
 def test_odds_windows_match_the_strategy():
+    # NFL widened to -150..+450 on 2026-08-25 (Ethan: "fix the odds range
+    # for long shot picks") — the old +200 ceiling cut the board off at
+    # exactly the mid-priced darts a Long Shots page exists for. The
+    # floor is unchanged: heavy juice on a scorer market never pays.
     assert in_odds_window(-140, NFL_TD_ODDS) and in_odds_window(190, NFL_TD_ODDS)
+    assert in_odds_window(420, NFL_TD_ODDS)          # the dart the page is for
     assert not in_odds_window(-260, NFL_TD_ODDS)     # too much juice
-    assert not in_odds_window(420, NFL_TD_ODDS)      # lottery ticket
+    assert not in_odds_window(700, NFL_TD_ODDS)      # lottery ticket
     assert in_odds_window(300, MLB_HR_ODDS) and in_odds_window(640, MLB_HR_ODDS)
     assert not in_odds_window(180, MLB_HR_ODDS)      # too short for a HR
     assert not in_odds_window(900, MLB_HR_ODDS)
+    # CFB has its own window — Saturday spreads run to -40, so both ends
+    # sit wider than the NFL's.
+    from engine.longshots import CFB_TD_ODDS
+    assert in_odds_window(-180, CFB_TD_ODDS) and in_odds_window(550, CFB_TD_ODDS)
+    assert not in_odds_window(-260, CFB_TD_ODDS)
+    assert not in_odds_window(800, CFB_TD_ODDS)
 
 
 def test_implausible_edge_is_refused():

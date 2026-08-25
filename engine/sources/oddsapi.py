@@ -160,8 +160,14 @@ WNBA_TEAM_ABBR = {
 }
 
 SPORT_CONFIG = {
+    # "scorers" are the Yes/No markets (anytime TD) requested alongside the
+    # over/under props. BILLING: each entry is one more market on every
+    # event call — the API bills per market per region — so adding one
+    # raises an NFL event pull from 7 to 8 credits. Priced in on purpose:
+    # the TD board cannot exist without the quote (see _long_shots).
     "nfl": {"sport_key": "americanfootball_nfl",
-            "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR},
+            "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR,
+            "scorers": SCORER_ODDS_TO_MARKET},
     "mlb": {"sport_key": "baseball_mlb",
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
     "nba": {"sport_key": "basketball_nba",
@@ -915,6 +921,13 @@ def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
 class OddsAttachResult:
     matched: int = 0
     unmatched: list[str] = field(default_factory=list)
+    # Scorer (Yes/No) props that got a real book quote — anytime TD.
+    # Counted apart from `matched`, and their misses stay OUT of
+    # `unmatched`: books quote touchdowns for a dozen skill players a
+    # game, not a roster, so an unquoted TD prop is the ordinary case
+    # and listing hundreds of them would bury the yardage diagnostics
+    # this list exists for.
+    scorers_matched: int = 0
     quota: Quota = field(default_factory=Quota)
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
@@ -1102,10 +1115,15 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             pair_games = {k: v for k, v in pair_games.items() if k in active}
             slate_pairs = slate_pairs & active
     # Player-prop markets plus the three game markets in one request per event.
-    markets = list(cfg["markets"]) + ["h2h", "totals", "spreads"]
+    scorer_map = cfg.get("scorers") or {}
+    markets = list(cfg["markets"]) + list(scorer_map) + ["h2h", "totals", "spreads"]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     menu: dict[tuple[str, str], dict] = {}
+    # Yes/No scorer quotes, indexed the same way — parsed by their own
+    # parser because the over/under one requires a point and these have
+    # none (see SCORER_ODDS_TO_MARKET).
+    scorer_index: dict[tuple[str, str], list[dict]] = {}
     # THE SLATE'S OWN NAMES BEAT THE STATIC TABLE.
     #
     # SPORT_CONFIG carries a hand-written {full name: abbreviation} map per
@@ -1222,6 +1240,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 index.setdefault(k, []).extend(lines)
             for k, disp in parse_event_players(payload, cfg["markets"]).items():
                 menu.setdefault(k, {"player": disp, "home": home, "away": away})
+            if scorer_map:
+                for k, quotes in parse_event_scorers(payload, scorer_map).items():
+                    scorer_index.setdefault(k, []).extend(quotes)
         # Attach real game-market prices to the matching game (each leg gets
         # its own moneyline/total/spread).
         if game is not None:
@@ -1269,7 +1290,25 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         k = f"{_name_key_loose(info['player'])}|{market}"
         loose.setdefault(k, []).append((nkey, market))
 
+    scorer_markets = set(scorer_map.values())
     for prop in slate.props:
+        if prop.market in scorer_markets:
+            # Yes/No quotes become lines at 0.5 — "over half a touchdown"
+            # IS "scores at least one", and downstream (the long-shot
+            # candidate builder, the line index, the journal) all speak
+            # SportsbookLine. A prop no book quoted keeps its empty list
+            # and is NOT reported unmatched — books price a dozen skill
+            # players a game, not a roster, and absence is the norm here.
+            quotes = scorer_index.get((normalize_name(prop.player),
+                                       prop.market)) or []
+            if quotes:
+                prop.lines = [SportsbookLine(
+                    book=q["book"], line=0.5, over_odds=int(q["yes_odds"]),
+                    under_odds=(int(q["no_odds"])
+                                if q.get("no_odds") is not None else None))
+                    for q in quotes]
+                result.scorers_matched += 1
+            continue
         lines = index.get((normalize_name(prop.player), prop.market))
         if not lines:
             cands = loose.get(f"{_name_key_loose(prop.player)}|{prop.market}")

@@ -389,6 +389,9 @@ def main() -> None:
                                source="cache" if res.from_cache else "fresh")
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
+            if res.scorers_matched:
+                print(f"  Anytime-TD quotes attached to {res.scorers_matched} "
+                      f"player(s) — the long-shot board prices these.")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
             if res.unmatched:
@@ -682,6 +685,16 @@ def main() -> None:
             from engine.db import connect as hist_connect
             lconn = ledger.connect()
             logged = ledger.log_recommendations(lconn, result)
+            # The TD long-shot board journals to its own bucket, same as
+            # MLB's home runs: measured in public, never in the headline
+            # record. `sport` is stamped explicitly — log_longshots
+            # defaults to "mlb", and run_slate's payload carries no
+            # sport key to correct it.
+            ls_logged = ledger.log_longshots(
+                lconn, {"sport": "nfl", "date": result.get("date", ""),
+                        "long_shots": result.get("long_shots") or []})
+            if ls_logged:
+                print(f"Long shots: {ls_logged} TD pick(s) journaled.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             st_logged = ledger.log_stale_flags(lconn, result)

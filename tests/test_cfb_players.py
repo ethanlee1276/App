@@ -77,19 +77,31 @@ def _summary():
 # --- the parse -------------------------------------------------------------
 
 def test_a_player_in_two_groups_is_one_row():
+    # TD columns joined the parse 2026-08-25 (the anytime-TD long-shot
+    # board settles against them). The QB's PASSING touchdowns stay out
+    # on purpose — an anytime-scorer bet pays the player who scores, not
+    # the one who throws — so his anytime_td counts the rushing score
+    # alone.
     rows = C.parse_summary(_summary())
     qbs = [r for r in rows if r["player"] == "Gunner Stockton"]
     assert len(qbs) == 1, "the scrambling QB landed in the logs twice"
     assert qbs[0]["stats"] == {"pass_yds": 264.0, "carries": 6.0,
-                               "rush_yds": 41.0}
+                               "rush_yds": 41.0, "rush_td": 1.0,
+                               "anytime_td": 1.0}
 
 
 def test_yds_means_a_different_market_in_each_group():
     rows = {r["player"]: r for r in C.parse_summary(_summary())}
     assert rows["Nate Frazier"]["stats"] == {"carries": 19.0,
-                                             "rush_yds": 112.0}
+                                             "rush_yds": 112.0,
+                                             "rush_td": 1.0,
+                                             "anytime_td": 1.0}
+    # A zero is a RESULT — "played and did not score" is what most
+    # anytime-TD bets settle against — so the scoreless receiver still
+    # carries the row.
     assert rows["Zachariah Branch"]["stats"] == {
-        "receptions": 7.0, "rec_yds": 93.0, "targets": 9.0}
+        "receptions": 7.0, "rec_yds": 93.0, "targets": 9.0,
+        "rec_td": 0.0, "anytime_td": 0.0}
 
 
 def test_position_is_taken_when_given_and_guessed_when_not():
@@ -128,9 +140,11 @@ def test_the_ingest_walks_our_own_games_and_stores_the_logs():
     finally:
         C.fetch_summary = real
     assert res["games"] == 1 and res["skipped"] == []
-    # One row per (player, market): Stockton 3, Frazier 2, Branch 3,
-    # the opposing back 2.
-    assert res["player_logs"] == 10, res
+    # One row per (player, market). TD columns joined 2026-08-25 (the
+    # long-shot board settles on them), so each player adds his TD
+    # market(s) plus the derived anytime_td: Stockton 3+2, Frazier 2+2,
+    # Branch 3+2, the opposing back 2+2.
+    assert res["player_logs"] == 18, res
     row = conn.execute(
         "SELECT * FROM player_game_logs WHERE sport='cfb' AND "
         "player='Gunner Stockton' AND market='pass_yds'").fetchone()
@@ -221,7 +235,9 @@ def test_the_sidebar_hides_only_what_still_has_a_reason():
     # model prices games, not players; there are no player projections
     # to rank movers from), not the stale no-feed one.
     assert '"trending"' in line
-    assert '"longshots"' in line
+    # longshots LEFT 2026-08-25: engine/cfb/tds prices anytime-TD quotes
+    # off these very logs, so the page has an engine behind it now.
+    assert '"longshots"' not in line
     # weather LEFT the list within the same day: CFBD venue coordinates
     # + Open-Meteo at the kickoff hour — see tests/test_cfb_weather.py.
     assert '"weather"' not in line

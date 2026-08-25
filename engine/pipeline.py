@@ -10,7 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from .data_loader import load_slate, Slate
-from .models import MARKET_LABELS, live_to_dict, PASS_YDS, REC_YDS, RECEPTIONS
+from .models import (MARKET_LABELS, live_to_dict, PASS_YDS, REC_YDS,
+                     RECEPTIONS, ANYTIME_TD)
 from . import statlogs
 from .projection import build_projection
 from .betting import evaluate_prop
@@ -431,6 +432,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     results = []
     for prop in slate.props:
+        # Scorer props belong to the long-shot pipeline below. The yardage
+        # path would run a normal distribution over touchdown counts and
+        # publish the nonsense as a recommendation — Poisson-shaped
+        # markets get the Poisson model (engine/touchdowns.py) or nothing.
+        if prop.market == ANYTIME_TD:
+            continue
         game = slate.game_for(prop)
         opponent = slate.team(prop.opponent)
         u = None

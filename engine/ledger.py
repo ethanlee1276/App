@@ -557,9 +557,18 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
             odds = int(r.get("odds") or 0)
         except (TypeError, ValueError):
             continue
-        # Plus-money and real: the boards already filter, but the journal is
+        # Real prices only: the boards already filter, but the journal is
         # the last line of defense against a proxy or mis-lined price.
-        if not r.get("player") or odds <= 100 or (r.get("book") or "").lower() == "proxy":
+        # Plus-money is required of HOME RUNS alone (their window starts
+        # at +250, so a minus price there IS a data error); the TD
+        # windows deliberately reach to -150/-200 (engine/longshots.py),
+        # and refusing those here would journal only the long half of a
+        # board the record claims to grade whole. |odds| < 100 is no
+        # American price at all — -105 exists, -95 does not.
+        if not r.get("player") or abs(odds) < 100 \
+                or (r.get("book") or "").lower() == "proxy":
+            continue
+        if market == "home_runs" and odds <= 100:
             continue
         # A projected-lineup hitter is a guess about who plays, not a bet.
         # The board still shows him (caveated); the journal waits for the
@@ -583,7 +592,15 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
         # under — and a bet dated one day off its own result cannot settle.
         # Measured on a real journal: thirty home-run bets dated 07-27 whose
         # players were every one of them logged on 07-26.
-        row_date = str(r.get("game_date") or "").strip() or date
+        #
+        # EXCEPT THE NFL, whose settle key is the WEEK. Its results are
+        # filed under season + period "005" and _hist_where resolves that
+        # from the "2026-W05" slate label — a TD bet dated with the
+        # game's ISO Sunday would query a period nothing is filed under
+        # and sit open forever. The drift this fallback repairs cannot
+        # happen weekly anyway: a week label has no UTC midnight to cross.
+        row_date = date if sport == "nfl" \
+            else str(r.get("game_date") or "").strip() or date
         from .losspatterns import minutes_until
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, "

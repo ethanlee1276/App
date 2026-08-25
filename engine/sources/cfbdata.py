@@ -674,6 +674,11 @@ BOX_MARKETS = {
     ("receiving", "REC"): "receptions",
     ("receiving", "YDS"): "rec_yds",
     ("receiving", "TGTS"): "targets",     # present on some college feeds
+    # Touchdown columns (2026-08-25): the anytime-TD long-shot board
+    # journals its picks, and a journaled bet needs a result row to
+    # settle against — these two sum into `anytime_td` in parse_summary.
+    ("rushing", "TD"): "rush_td",
+    ("receiving", "TD"): "rec_td",
 }
 
 #: When the athlete record carries no position of its own, the group he
@@ -727,7 +732,20 @@ def parse_summary(payload: dict) -> list[dict]:
                 if pos:
                     row["position"] = pos.upper()
                 row["stats"].update(vals)
-    return list(merged.values())
+    # `anytime_td` is DERIVED here, where both halves of a player's day
+    # are finally in one row — a back who ran one in and caught another
+    # appears in two groups, and summing at column-parse time would see
+    # only one of them. The ledger settles the long-shot board against
+    # this market by name (SETTLEABLE_LONGSHOTS), so a player with either
+    # TD column present gets the row, zeros included: "played and did not
+    # score" is the result most anytime-TD bets settle against.
+    out = list(merged.values())
+    for row in out:
+        s = row["stats"]
+        if "rush_td" in s or "rec_td" in s:
+            s["anytime_td"] = float(s.get("rush_td") or 0) \
+                + float(s.get("rec_td") or 0)
+    return out
 
 
 def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600) -> dict:

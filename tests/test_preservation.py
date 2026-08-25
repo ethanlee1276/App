@@ -272,14 +272,17 @@ def test_the_per_league_nav_configuration_is_intact():
         line = [l for l in block.splitlines() if l.strip().startswith(f"{sport}:")]
         assert line and '"parlays"' in line[0], (
             f"{sport}'s Parlay Zone exclusion is gone")
-    # "players" and "rosters" LEFT on 2026-08-24 — deliberately, with an
-    # engine behind them (ESPN box scores → player_game_logs), not by
-    # accident. This test preserves exclusions that still have reasons.
+    # "players" and "rosters" LEFT on 2026-08-24, "longshots" on
+    # 2026-08-25 — each deliberately, with an engine behind it (box
+    # scores → player_game_logs; engine/cfb/tds pricing anytime-TD
+    # quotes off those logs). This test preserves exclusions that still
+    # have reasons, and only trending's reason still stands: it ranks
+    # per-player projections, which CFB does not build.
     cfb_line = block.split("cfb:")[1].split("]")[0]
-    for v in ("longshots", "trending"):
-        assert f'"{v}"' in cfb_line, f"CFB's {v} exclusion is gone"
-    for v in ("players", "rosters", "weather"):
-        assert f'"{v}"' not in cfb_line,             f"CFB's {v} page was re-hidden — it has had an engine since 2026-08-24"
+    assert '"trending"' in cfb_line, "CFB's trending exclusion is gone"
+    for v in ("players", "rosters", "weather", "longshots"):
+        assert f'"{v}"' not in cfb_line, \
+            f"CFB's {v} page was re-hidden — it has an engine behind it"
 
 
 def test_long_shots_survives_where_it_is_supposed_to():

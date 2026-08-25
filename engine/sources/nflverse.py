@@ -23,7 +23,7 @@ from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
 from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
-    PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS,
+    PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
 )
 from ..data_loader import Slate
 
@@ -271,6 +271,35 @@ def player_game_logs(rows: list[dict], player: str, market: str,
             week=wk,
             opponent=_s(r, "opponent_team", "opponent"),
             value=_f(r, *cols),
+            home=True,
+        ))
+    out.sort(key=lambda g: g.week, reverse=True)
+    return out
+
+
+def td_game_logs(rows: list[dict], player: str, upto_week: int) -> list[GameLog]:
+    """Most-recent-first touchdowns-per-game logs (rushing + receiving).
+
+    Its own helper rather than a MARKET_COLUMNS entry because the value is
+    a SUM of two columns — ``_f`` reads the first present key, so listing
+    both there would silently return rushing TDs alone. The touchdown
+    model blends these against the position baseline by sample size
+    (engine/touchdowns.historical_td_rate), so short early-season logs
+    are handled there, not here.
+    """
+    out = []
+    for r in rows:
+        name = _s(r, "player_display_name", "player_name", "full_name")
+        if name != player:
+            continue
+        wk = int(_f(r, "week", default=0))
+        if wk <= 0 or wk >= upto_week:
+            continue
+        out.append(GameLog(
+            week=wk,
+            opponent=_s(r, "opponent_team", "opponent"),
+            value=_f(r, "rushing_tds", default=0.0)
+            + _f(r, "receiving_tds", default=0.0),
             home=True,
         ))
     out.sort(key=lambda g: g.week, reverse=True)
@@ -611,6 +640,45 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
             usage_role=spec.usage_role,
             headshot=headshots.get(spec.player, ""),
         ))
+
+    # ANYTIME-TOUCHDOWN PROPS, one per skill player already on the board.
+    #
+    # These existed only in the preseason seeder until 2026-08-25; the
+    # regular-season slate built yardage props alone, so the long-shot
+    # pipeline (engine/pipeline._long_shots) iterated a list that could
+    # not contain its own market and the NFL board was empty by
+    # construction — the odds feed and the odds window never even got a
+    # say. Ethan: "Touchdown props for nfl are live now we should see
+    # them showing up in the longshot spot."
+    #
+    # NO PROXY LINE, deliberately. A yardage prop's proxy line lets the
+    # model show its lean before books post; a scorer market priced
+    # against a made-up -110 would put fake edges on a longshot board.
+    # `lines` stays empty until apply_odds_to_slate attaches a real
+    # scorer quote, and _long_shots skips unpriced props — no odds pull,
+    # no TD picks, honestly.
+    seen_td: set[tuple[str, str]] = set()
+    td_props: list[Prop] = []
+    for p in props:
+        if p.market == PASS_YDS:
+            continue                 # QB passing TDs are a different market
+        key = (p.team, p.player)
+        if key in seen_td:
+            continue
+        seen_td.add(key)
+        # The roster's position beats the market-derived guess: a
+        # pass-catching back holds a REC_YDS prop and is still an RB at
+        # the goal line, which is where this market is decided.
+        pos = ((roster.get(p.player) or {}).get("position") or "").upper() \
+            or p.position
+        td_props.append(Prop(
+            player=p.player, team=p.team, opponent=p.opponent,
+            position=pos, market=ANYTIME_TD,
+            logs=td_game_logs(stats, p.player, upto_week),
+            career_avg=0.0, vs_opponent_avg=None, lines=[],
+            usage_role=p.usage_role, headshot=p.headshot,
+        ))
+    props.extend(td_props)
 
     # Teams dict for every participating side, using computed or neutral defense.
     teams: dict[str, Team] = {}

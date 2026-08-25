@@ -34,10 +34,26 @@ from .statmath import clamp
 from .calibrate import apply_temperature, correction_for
 from .betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
 
-# Odds windows from the strategy specs — outside these the payout doesn't
-# justify the variance (or the price implies a probability we can't beat).
-NFL_TD_ODDS = (-150, 200)
+# Odds windows — outside these the payout doesn't justify the variance
+# (or the price implies a probability we can't beat).
+#
+# NFL WIDENED 2026-08-25 (Ethan: "fix the odds range for long shot picks
+# for nfl and CFB"). The original -150..+200 was the strategy spec's
+# conservative window and it cut the board off at exactly the prices a
+# LONG SHOTS page exists for: the committee back at +270, the red-zone
+# TE at +320. The floor stays — below -150 the payout never justifies a
+# scorer market's variance — and the ceiling moves to +450, past which
+# a price implies a sub-18% event our proxy-fed model cannot separate
+# from noise (the MLB HR book learned the same lesson at +650). The EV
+# gate, the market shrink and the credibility guard still do the
+# filtering; the window only says which prices are worth filtering.
+NFL_TD_ODDS = (-150, 450)
 MLB_HR_ODDS = (250, 650)
+# CFB gets its own window, not NFL's: spreads run to -40, so books hang
+# shorter juice on bell cows (-200 is an ordinary Saturday price for a
+# stud back) and longer prices on everyone else. Same ceiling logic as
+# the NFL note above, one notch out for the wilder distribution.
+CFB_TD_ODDS = (-200, 600)
 
 # League baselines used to convert a team's implied total into expected TDs.
 NFL_AVG_TEAM_POINTS = 22.6

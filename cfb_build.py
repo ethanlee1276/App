@@ -104,6 +104,9 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
             entry["total"] = tot
         if entry:
             entry["books"] = _books_for(ev, entry, home, away, team_map)
+            # The event's own id rides along so the TD-quote pull below
+            # can ask for player markets without a second events call.
+            entry["event_id"] = ev.get("id", "")
             priced[game["game_id"]] = entry
 
     note = f"{len(priced)} of {len(games)} games priced from 1 request"
@@ -112,6 +115,73 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     if cache_only:
         note += " (cached)"
     return priced, note
+
+
+#: How many games a TD-quote pull may touch. Player markets are
+#: event-scoped — one credit per game per pull — where the whole game
+#: board above is three credits flat, so an uncapped Saturday would cost
+#: sixty credits a cycle. Capped to the games most worth a longshot
+#: card, chosen by attention tier then kickoff.
+TD_EVENT_CAP = 12
+
+#: Only games kicking off inside this window get a TD pull. A quote for
+#: Thursday bought on Monday is four days of line movement we would be
+#: pricing against.
+TD_WINDOW_HOURS = 36
+
+
+def attach_td_quotes(games: list[dict], priced: dict, cache_only: bool,
+                     api_key: str | None = None,
+                     now=None) -> tuple[dict, str]:
+    """Anytime-TD quotes for the board's best games.
+
+    Returns ``({game_index: {norm_name: [quotes]}}, note)`` keyed by each
+    game's INDEX in ``games`` — the payload's own order — plus a spend
+    note. Games qualify with a real spread AND total (the TD model needs
+    both for the implied total and the script) and a kickoff inside the
+    window; the cap keeps a fresh Saturday pull at TD_EVENT_CAP credits.
+    """
+    import datetime as _dt
+
+    from engine.sources import oddsapi
+
+    t = now or _dt.datetime.now(tz=_dt.timezone.utc)
+    cands = []
+    for i, g in enumerate(games):
+        entry = priced.get(g["game_id"]) or {}
+        if not entry.get("event_id") or "spread" not in entry \
+                or "total" not in entry:
+            continue
+        kick = str(g.get("kickoff") or "").replace("Z", "+00:00")
+        try:
+            ko = _dt.datetime.fromisoformat(kick)
+        except ValueError:
+            continue
+        if ko.tzinfo is None or ko <= t \
+                or ko > t + _dt.timedelta(hours=TD_WINDOW_HOURS):
+            continue
+        cands.append((attention_tier(g), ko, i, entry["event_id"]))
+    cands.sort(key=lambda c: (c[0], c[1]))
+    out: dict = {}
+    pulled = 0
+    for _tier, _ko, i, event_id in cands[:TD_EVENT_CAP]:
+        try:
+            payload, _quota = oddsapi.fetch_event_odds(
+                event_id, api_key, markets=["player_anytime_td"],
+                sport="cfb", ttl=1800, cache_only=cache_only)
+        except oddsapi.OddsAPIError:
+            if cache_only:
+                continue               # never paid for — nothing on disk
+            break                      # a live failure ends the spend, not the build
+        pulled += 1
+        quotes: dict = {}
+        for (norm, _mkt), qs in oddsapi.parse_event_scorers(payload).items():
+            quotes.setdefault(norm, []).extend(qs)
+        if quotes:
+            out[i] = quotes
+    note = (f"TD quotes: {pulled} of {len(cands)} eligible game(s) pulled"
+            + (" (cached)" if cache_only else ""))
+    return out, note
 
 
 def _books_for(ev: dict, entry: dict, home: str, away: str,
@@ -628,6 +698,30 @@ def main() -> None:
                      "recommended": len(bets),
                      "conditional": len(conditionals),
                      **result["counts"]}
+
+    # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
+    # long shot picks for nfl and CFB"). Anytime-TD quotes for the best
+    # games on the card, priced by engine/cfb/tds — implied totals, each
+    # player's share of team volume, the script, the opponent's scoring
+    # generosity and our own kickoff forecast. Only with odds in play:
+    # a scorer market has no proxy price worth modelling against.
+    if args.odds or args.cached_odds:
+        try:
+            from engine.cfb import tds as _tds
+            quotes, td_note = attach_td_quotes(
+                games, priced, cache_only=args.cached_odds and not args.odds)
+            rows, census = _tds.build_cfb_td_longshots(
+                conn, out["games"], quotes, day.year)
+            out["long_shots"] = rows
+            print(f"  {td_note}")
+            if census["quoted_players"]:
+                print(f"  TD board: {len(rows)} pick(s) from "
+                      f"{census['quoted_players']} quoted player(s) "
+                      f"({census['no_usage']} without usage logs, "
+                      f"{census['outside_window']} outside the odds window; "
+                      f"roles from {census['usage_season']})")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  TD long shots unavailable: {_exc}")
     out["status"] = "slate"
     out["no_qualifying"] = result["no_qualifying"]
 
@@ -638,10 +732,18 @@ def main() -> None:
                                                "date": args.date,
                                                "recommendations": [],
                                                "game_bets": bets})
+        # TD long shots journal to their own measured bucket, exactly as
+        # MLB's home runs do — the board is only honest if the record
+        # grades it. They settle against the `anytime_td` rows the box
+        # ingest now derives (engine/sources/cfbdata.parse_summary).
+        ls_n = ledger.log_longshots(
+            lconn, {"sport": "cfb", "date": args.date,
+                    "long_shots": out.get("long_shots") or []})
         settled = ledger.settle_from_history(lconn, conn, sport="cfb")
-        if n or settled:
+        if n or ls_n or settled:
             ledger.export_json(lconn, "web/data/record.json")
-            print(f"Journal: {n} CFB bet(s) logged, {settled} settled.")
+            print(f"Journal: {n} CFB bet(s) + {ls_n} long shot(s) logged, "
+                  f"{settled} settled.")
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 

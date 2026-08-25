@@ -141,6 +141,49 @@ def weather_td_multiplier(game: Game, position: str) -> tuple[float, list[str]]:
     return mult, reasons
 
 
+def script_td_multiplier(game: Game, team: str,
+                         position: str) -> tuple[float, list[str]]:
+    """Game script as arithmetic, not adjective.
+
+    The model always SAID "Favoured — positive game script" on favourites'
+    cards, but the sentence carried no number — the reason list mentioned
+    a factor the rate never contained (Ethan, 2026-08-25: "we should be
+    using the game script... to determine who will score a touchdown").
+
+    The mechanism, per position:
+
+      * RBs ride the script hardest. A team expected to lead runs at the
+        goal line and runs out the clock — about +1% TD equity per point
+        of spread, capped near a two-score game because a 20-point
+        favourite doesn't run twice as hot as a 10-point one.
+      * Pass catchers move gently the OTHER way. Trailing teams throw
+        more, but between the 20s and against soft shells — volume up,
+        red-zone quality down — so the drag on a heavy favourite's WRs
+        is real and small.
+      * QBs sit out: rushing QB touchdowns follow designed red-zone
+        packages, which the role share already carries.
+
+    The implied-total factor upstream already prices HOW MUCH a team
+    scores; this prices HOW — which is why the caps are tight. Doubling
+    up on the total would count the same points twice.
+    """
+    lead = -game.spread if team == game.home else game.spread
+    pos = (position or "").upper()
+    reasons: list[str] = []
+    if pos == "RB":
+        mult = clamp(1.0 + 0.010 * lead, 0.88, 1.12)
+    elif pos in ("WR", "TE"):
+        mult = clamp(1.0 - 0.004 * lead, 0.95, 1.05)
+    else:
+        return 1.0, reasons
+    if abs(lead) >= 3.0 and abs(mult - 1.0) >= 0.02:
+        side = "favoured" if lead > 0 else "underdog"
+        reasons.append(
+            f"Game script: {side} by {abs(lead):.0f} — "
+            f"{(mult - 1) * 100:+.0f}% TD equity for a {pos}")
+    return mult, reasons
+
+
 def defense_td_multiplier(opponent: Team, position: str) -> tuple[float, list[str]]:
     """How generous the defence is to this position, from its profile."""
     d = opponent.defense
@@ -203,14 +246,14 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
 
     def_mult, def_reasons = defense_td_multiplier(opponent, pos)
     wx_mult, wx_reasons = weather_td_multiplier(game, pos)
+    script_mult, script_reasons = script_td_multiplier(game, team, pos)
 
     # Ceiling reflects reality: even a bell-cow goal-line back on a big favourite
     # tops out near a 2-in-3 chance to find the end zone.
-    rate = team_tds * base_share * rz_mult * def_mult * wx_mult
+    rate = team_tds * base_share * rz_mult * def_mult * wx_mult * script_mult
     rate = clamp(rate, 0.005, 1.15)
     prob = prob_at_least_one(rate)
 
-    favored = (game.spread < 0 and team == game.home) or (game.spread > 0 and team == game.away)
     reasons = [
         f"Team implied total {implied:.1f} → {team_tds:.2f} expected offensive TDs",
         f"Share of team TDs from {share_src}",
@@ -218,9 +261,11 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     if rz.rz_touch_share:
         reasons.append(f"Red-zone touch share ~{rz.rz_touch_share:.0%} "
                        f"({rz.opportunities:.1f} expected chances)")
-    reasons += def_reasons + wx_reasons
-    if favored:
-        reasons.append("Favoured — positive game script for goal-line volume")
+    # Script replaces the old adjective ("Favoured — positive game
+    # script"): that sentence appeared on every favourite's card while
+    # the rate contained no such factor — a reason describing math that
+    # was not being done.
+    reasons += def_reasons + wx_reasons + script_reasons
 
     caveats = []
     if not rz.measured:

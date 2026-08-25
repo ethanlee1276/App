@@ -209,7 +209,7 @@ const HIDDEN_VIEWS = {
   // college stadium's coordinates (the key the talent prior already
   // needs), Open-Meteo answers the kickoff hour keylessly, and ESPN
   // names each game's venue — neutral sites included.
-  cfb: ["longshots", "trending"],
+  cfb: ["trending"],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -330,9 +330,11 @@ const HIDDEN_WHY = {
                 weather: "not a sporting venue" },
   fantasy: { parlays: "not a betting market", futures: "not a betting market",
              weather: "no single venue to report" },
-  cfb: { longshots: "college football is full-game markets only — there is "
-                    + "no CFB player projection layer yet",
-         trending: "movers are ranked off the board’s player projections, "
+  // Long Shots LEFT this list 2026-08-25: "full-game markets only" went
+  // stale when engine/cfb/tds.py shipped — anytime-TD quotes are pulled
+  // for the board's best games and priced off usage shares, the script,
+  // the opponent's scoring and our own kickoff forecasts.
+  cfb: { trending: "movers are ranked off the board’s player projections, "
                    + "and the college model prices games, not players" },
 };
 
@@ -4683,9 +4685,13 @@ function longshotEmptyReason(mlb) {
            "a sanity guard (edge cap or odds window). If this persists on a " +
            "pre-game board, something is wrong — worth reporting.";
   }
+  // The ranges here mirror engine/longshots.py's windows — if one moves,
+  // this sentence moves with it or the page documents a rule it no
+  // longer enforces.
+  const range = mlb ? "+250 to +650"
+    : state.sport === "cfb" ? "-200 to +600" : "-150 to +450";
   return "The model only surfaces " + (mlb ? "home-run" : "touchdown") +
-         " picks that beat the book’s price inside a sane odds range" +
-         (mlb ? " (+250 to +650)." : " (-150 to +200).");
+         ` picks that beat the book’s price inside a sane odds range (${range}).`;
 }
 
 function watchlistHTML(watch, mlb) {
@@ -4728,7 +4734,11 @@ function longShotCard(r) {
     .slice(0, 6).map(reasonLI).join("");
   const caveats = (r.caveats || [])
     .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
-  const oppLabel = state.sport === "mlb" ? "Expected PAs" : "RZ chances";
+  // CFB's number is measured TOUCHES per game (carries + catches) —
+  // college feeds carry no red-zone splits, and a label claiming they
+  // do would dress the proxy up as the measurement.
+  const oppLabel = state.sport === "mlb" ? "Expected PAs"
+    : state.sport === "cfb" ? "Touches/gm" : "RZ chances";
   return `
     <article class="card longshot ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}
       style="--grade-color:${gradeColor(r.grade)}">

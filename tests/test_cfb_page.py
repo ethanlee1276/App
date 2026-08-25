@@ -358,15 +358,24 @@ def test_the_odds_adapter_knows_the_league():
 
 
 def test_the_whole_board_is_priced_in_one_request():
-    """Per-event pricing would cost ~60 credits a Saturday, which the
-    budget pacer would never authorise — so the board would simply never
-    have prices."""
+    """Per-event pricing of the GAME markets would cost ~60 credits a
+    Saturday, which the budget pacer would never authorise — so the game
+    board stays one bulk call. The TD long-shot pull (2026-08-25) is the
+    priced-in exception: player markets are only served per event, so it
+    pays a credit a game and is CAPPED at TD_EVENT_CAP of the best
+    games. The authorization estimate covers both — the bulk call plus
+    the worst-case cap — so light days cost less than authorized, never
+    more."""
     src = _read("engine", "sources", "oddsapi.py")
     assert "def fetch_sport_odds(" in src
     assert 'f"{ODDS_BASE}/sports/{cfg[\'sport_key\']}/odds"' in src
     launch = _read("launch.py")
-    assert "CFB_ODDS_COST = 3" in launch
+    assert "CFB_ODDS_COST = 15" in launch
     assert "cost=CFB_ODDS_COST" in launch
+    build = _read("cfb_build.py")
+    assert "TD_EVENT_CAP = 12" in build
+    assert "cands[:TD_EVENT_CAP]" in build, \
+        "the TD pull lost its cap — an uncapped Saturday is 60 credits"
 
 
 def test_the_server_serves_the_league():
@@ -388,22 +397,25 @@ def test_the_page_is_wired_end_to_end():
 
 
 def test_pages_with_no_cfb_engine_behind_them_hide():
-    """"players" LEFT THIS LIST on 2026-08-24: ESPN's keyless box scores
-    now feed CFB player_game_logs, so the Players page has an engine
-    behind it. Long shots and trending still do not — both rank player
-    PROJECTIONS, and the college model prices games, not players — so
-    they stay, checked on CFB's own line rather than anywhere in the
-    block, which is what let this pass on other sports' entries."""
+    """"players" LEFT THIS LIST on 2026-08-24 (ESPN box scores feed CFB
+    player_game_logs), and "longshots" left on 2026-08-25: engine/cfb/tds
+    prices anytime-TD quotes off usage shares, the script, the opponent's
+    scoring and kickoff weather, and cfb_build journals the board — the
+    old reason ("the college model prices games, not players") is no
+    longer true of this page. Trending alone stays: it ranks the board's
+    per-player PROJECTIONS, and CFB still builds none. Checked on CFB's
+    own line rather than anywhere in the block, which is what let this
+    pass on other sports' entries."""
     app = _read("web", "js", "app.js")
     assert "HIDDEN_VIEWS" in app
     block = app[app.index("const HIDDEN_VIEWS"):]
     block = block[:block.index("};")]
     cfb = block[block.index("cfb:"):]
     cfb = cfb[:cfb.index("]")]
-    for view in ("longshots", "trending"):
-        assert f'"{view}"' in cfb, f"{view} would render empty for CFB"
-    for view in ("players", "rosters"):
-        assert f'"{view}"' not in cfb,             f"{view} is hidden again — its CFB engine shipped 2026-08-24"
+    assert '"trending"' in cfb, "trending would render empty for CFB"
+    for view in ("players", "rosters", "longshots"):
+        assert f'"{view}"' not in cfb, \
+            f"{view} is hidden again — its CFB engine shipped"
 
 
 def test_the_game_card_does_not_print_nan_degrees():

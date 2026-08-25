@@ -89,7 +89,12 @@ UFC_OUT = "web/data/ufc.json"
 CFB_OUT = "web/data/cfb.json"
 # One bulk request covers h2h + spreads + totals for the whole
 # board, so the cost is per-market, not per-game.
-CFB_ODDS_COST = 3
+# The CFB board itself is one bulk call (3 credits, whole slate); the
+# anytime-TD long-shot pull adds up to TD_EVENT_CAP event-scoped calls
+# at a credit each (cfb_build.attach_td_quotes) — so the authorization
+# estimate covers the worst Saturday, and light days cost less than
+# authorized rather than more.
+CFB_ODDS_COST = 15
 
 
 def _slate_games(path: str) -> int:

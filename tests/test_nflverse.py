@@ -109,15 +109,30 @@ def test_build_slate_end_to_end(monkeypatch):
     assert slate.games and slate.props
     # Weather propagated from the schedule (windy outdoor game).
     assert slate.games[0].weather.wind_mph == 24
-    # Every prop carries real logs and a proxy line.
-    for p in slate.props:
+    # Every YARDAGE prop carries real logs and a proxy line. Anytime-TD
+    # props (2026-08-25) are the deliberate exception: a Yes/No scorer
+    # market priced against a made-up -110 would fabricate edges on the
+    # long-shot board, so their lines stay EMPTY until a real book quote
+    # attaches (see build_slate's own comment).
+    from engine.models import ANYTIME_TD
+    td_props = [p for p in slate.props if p.market == ANYTIME_TD]
+    yardage = [p for p in slate.props if p.market != ANYTIME_TD]
+    for p in yardage:
         assert len(p.logs) >= 3
         assert p.lines and p.lines[0].book == "proxy"
+    # One TD prop per non-QB skill player on the board, unpriced.
+    assert td_props, "the TD layer vanished from the slate"
+    assert all(p.lines == [] for p in td_props)
+    assert all(p.market == ANYTIME_TD for p in td_props)
+    assert not any(p.position == "QB" and p.player.startswith("QB")
+                   for p in td_props), "passing-yards QBs got TD props"
 
-    # And the full model pipeline runs on the real-shaped slate.
+    # And the full model pipeline runs on the real-shaped slate — the
+    # yardage loop skips scorer props, so the analyzed count is the
+    # yardage count, not the prop-list length.
     from engine.pipeline import run_slate
     result = run_slate(slate)
-    assert result["counts"]["props_analyzed"] == len(slate.props)
+    assert result["counts"]["props_analyzed"] == len(yardage)
 
 
 if __name__ == "__main__":
