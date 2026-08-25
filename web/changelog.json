@@ -10,6 +10,24 @@
     {
       "date": "2026-08-25",
       "kind": "ship",
+      "title": "This page, and the receipts behind it",
+      "body": "A methodology page saying how every number on the board is made — the five steps, what is fitted against results, what is still an assumption, and what we deliberately do not model. A status page that asks every published board when it last rebuilt. And every settled pick ever, downloadable as a spreadsheet: long shots and prediction markets included, with the bucket on the row rather than quietly left out."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Share cards, and email digests that are ready but not switched on",
+      "body": "Every pick can be drawn as a card to post — player, the pick, the price and the model's own numbers, with the domain on it. The morning card and the nightly recap are built and can be previewed from the command line; sending them needs a delivery provider and DNS records that do not exist yet, so the site says so instead of offering a subscription to nothing."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
+      "title": "It behaves like an app",
+      "body": "Skeletons instead of blank-then-pop, a board that is days out counting down to first kickoff, a tab icon badged with how many of your bets are still running, and an offline state that names which board you are looking at rather than breaking. When a render throws, the page now says so — this site's characteristic failure is a silent one, where the page merely looks quiet."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "ship",
       "title": "Settings that stick",
       "body": "Prices in American or decimal, stakes in units or dollars, one time zone for every clock on the site, favourite teams, and which leagues show in the nav. They follow your account to every device. Favourites reorder the schedule and never the board — the picks stay ordered by edge, because that order is the product."
     },
