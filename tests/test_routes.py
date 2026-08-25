@@ -368,6 +368,16 @@ def test_the_share_control_emits_the_clean_url_not_the_address_bar():
         assert surface in APP, f"no share control on {surface}"
 
 
+def test_every_prop_reaches_the_player_page():
+    """The entity-pages list: "Every prop card links to one." A prop card
+    opens the prop page, and the prop page's nav row carries the door —
+    so every priced row is two taps from the full player page, logs and
+    form windows and all."""
+    assert 'data-player-page="${escapeAttr(slugify(r.player))}"' in APP
+    i = APP.index('e.target.closest("[data-player-page]")')
+    assert "openPlayerRoute(b.dataset.playerPage)" in APP[i:i + 300]
+
+
 def test_a_player_page_is_the_players_view_with_his_name_in_it():
     """Not a new page: the profile card already draws the headshot, the
     game logs and the form windows. What it never had was an address."""

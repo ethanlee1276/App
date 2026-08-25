@@ -4904,6 +4904,8 @@ function parlayTicket(t, live) {
           : t.grade === "marginal" ? "clears at a good price · check yours"
           : "does not clear"}</span>
         <span class="chip stake">graded · 0.00u</span>
+        <button class="btn ghost qb-share" data-parlay-card="${escapeAttr(String(t.rank))}"
+          >Share card</button>
       </div>
     </div>
 
@@ -5956,6 +5958,8 @@ function renderPropPage() {
       ${shareBtn("pick", pickSlug(r))}
       <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
         >Share card</button>
+      ${r.player ? `<button class="btn ghost" data-player-page="${escapeAttr(slugify(r.player))}"
+        >Player page →</button>` : ""}
     </div>
     <article class="card pp-card">
       <div class="card-head">
@@ -23311,6 +23315,21 @@ function renderAbout() {
         "var(--good)")}
     </div>
 
+    <div class="section-title">Contact
+      <span class="sub">— a real address, answered by the person who builds
+      this. It was only in the terms before, which is where nobody looks.</span></div>
+    <article class="card about-card">
+      <div class="about-body">
+        <p>Something broken, something wrong on a page, a question about your
+        account or your subscription:
+        <a href="mailto:support@qellysbook.com">support@qellysbook.com</a>.
+        The Discord is where the picks get argued about —
+        <a href="#discord">the invite lives here</a> — and the
+        <a href="#methodology">methodology page</a> answers most questions
+        about how a number was made before an email has to.</p>
+      </div>
+    </article>
+
     <div class="ls-note" style="margin-top:18px">
       In one sentence: <strong>we gather every number in one place and tell you
       when a price looks wrong — you decide what, if anything, to do about
@@ -24106,19 +24125,10 @@ async function shareCardCanvas(d) {
   return c;
 }
 
-async function shareCard(r, btn) {
-  const d = shareCardData(r);
-  if (!d) return;
-  const was = btn ? btn.textContent : "";
-  if (btn) btn.textContent = "Drawing…";
-  let canvas = null;
-  try { canvas = await shareCardCanvas(d); } catch (e) { canvas = null; }
-  if (!canvas) {
-    if (btn) btn.textContent = was;
-    return tfToast("That card could not be drawn.");
-  }
-  const done = () => { if (btn) btn.textContent = was; };
-  const name = `${slugify(d.title) || "pick"}-qellysbook.png`;
+/* One export path for every card kind — the pick card and the parlay
+   ticket must not drift apart on the share-sheet/download/revoke rules,
+   because those rules are where the browser-specific bugs live. */
+function exportCard(canvas, name, done) {
   canvas.toBlob(async (blob) => {
     if (!blob) { done(); return tfToast("That card could not be drawn."); }
     const file = new File([blob], name, { type: "image/png" });
@@ -24142,6 +24152,140 @@ async function shareCard(r, btn) {
     done();
   }, "image/png");
 }
+
+async function shareCard(r, btn) {
+  const d = shareCardData(r);
+  if (!d) return;
+  const was = btn ? btn.textContent : "";
+  if (btn) btn.textContent = "Drawing…";
+  let canvas = null;
+  try { canvas = await shareCardCanvas(d); } catch (e) { canvas = null; }
+  if (!canvas) {
+    if (btn) btn.textContent = was;
+    return tfToast("That card could not be drawn.");
+  }
+  exportCard(canvas, `${slugify(d.title) || "pick"}-qellysbook.png`,
+             () => { if (btn) btn.textContent = was; });
+}
+
+/* THE PARLAY TICKET AS A PICTURE — the "per pick/parlay" half of the
+   share-card ask. A different drawing from the pick card because a
+   ticket IS a list: the legs stacked with their sides and prices, the
+   joint probability the chain actually models, and the price a book has
+   to beat — which is the ticket's whole argument, and the number that
+   makes the screenshot worth arguing with. No faces: two headshots at
+   this size are two thumbnails fighting, and the legs are the point. */
+async function shareParlayCanvas(t) {
+  const c = document.createElement("canvas");
+  c.width = CARD_W; c.height = CARD_H;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; }
+  catch (e) { /* the fallback stack still draws */ }
+  x.fillStyle = "#0b0906";
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  const g = x.createLinearGradient(0, 0, CARD_W, CARD_H);
+  g.addColorStop(0, "rgba(232,182,76,.14)");
+  g.addColorStop(0.55, "rgba(232,182,76,0)");
+  x.fillStyle = g;
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  x.strokeStyle = "rgba(232,182,76,.5)";
+  x.lineWidth = 3;
+  x.strokeRect(1.5, 1.5, CARD_W - 3, CARD_H - 3);
+  const logo = await _cardImage("logo-qb.png", false);
+  if (logo) x.drawImage(logo, CARD_W - 128, 44, 84, 84);
+
+  const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
+  const L = 70;
+  x.textAlign = "left";
+  x.fillStyle = "#f5efe6";
+  x.font = cardFont(54, 700);
+  x.fillText(`${t.legs.length}-leg same-game parlay`, L, 118);
+  x.fillStyle = "rgba(245,239,230,.62)";
+  x.font = cardFont(26, 400);
+  x.fillText("Correlation-priced — never the product of the legs", L, 158);
+
+  // The legs. Four fit with air; a longer ticket lists four and says so.
+  const shown = t.legs.slice(0, 4);
+  shown.forEach((l, i) => {
+    const y = 232 + i * 62;
+    x.fillStyle = "#e8b64c";
+    x.font = cardFont(30, 700);
+    x.fillText(String(l.player || "").slice(0, 22), L, y);
+    x.fillStyle = "#f5efe6";
+    x.font = cardFont(28, 400);
+    const pick = `${String(l.side || "").toUpperCase()} ${l.line ?? ""} ${
+      l.market_label || l.market || ""}`.trim();
+    x.fillText(pick.slice(0, 34), L + 360, y);
+    x.font = cardFont(28, 700);
+    x.fillText(oddsTxt(l.odds), CARD_W - 210, y);
+  });
+  if (t.legs.length > shown.length) {
+    x.fillStyle = "rgba(245,239,230,.5)";
+    x.font = cardFont(24, 400);
+    x.fillText(`…and ${t.legs.length - shown.length} more`, L, 232 + 4 * 62);
+  }
+
+  const facts = [
+    ["Joint prob", `${(t.modeled_joint * 100).toFixed(1)}%`],
+    ["Needs at least", sign(t.required_american)],
+  ];
+  // 458/504, not lower: the first draw put the joint prob at 546 and
+  // the footer claim at 566, and the two collided into one smudged line.
+  facts.forEach(([k, v], i) => {
+    const fx = L + i * 290;
+    x.fillStyle = "rgba(245,239,230,.5)";
+    x.font = cardFont(22, 400);
+    x.fillText(k.toUpperCase(), fx, 458);
+    x.fillStyle = "#f5efe6";
+    x.font = cardFont(42, 700);
+    x.fillText(v, fx, 504);
+  });
+
+  x.fillStyle = "rgba(245,239,230,.55)";
+  x.font = cardFont(24, 400);
+  x.textAlign = "right";
+  x.fillText("qellysbook.com", CARD_W - 44, 566);
+  x.textAlign = "left";
+  x.fillStyle = "rgba(245,239,230,.42)";
+  x.font = cardFont(22, 400);
+  x.fillText("Journaled at this price · graded in public", L, 566);
+  return c;
+}
+
+async function shareParlay(t, btn) {
+  if (!t || !(t.legs || []).length) return;
+  const was = btn ? btn.textContent : "";
+  if (btn) btn.textContent = "Drawing…";
+  let canvas = null;
+  try { canvas = await shareParlayCanvas(t); } catch (e) { canvas = null; }
+  if (!canvas) {
+    if (btn) btn.textContent = was;
+    return tfToast("That card could not be drawn.");
+  }
+  exportCard(canvas, `parlay-qellysbook.png`,
+             () => { if (btn) btn.textContent = was; });
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-parlay-card]");
+  if (!b) return;
+  e.preventDefault();
+  const z = (state.data || {}).parlays || {};
+  const t = (z.tickets || []).find((x) => String(x.rank) === b.dataset.parlayCard);
+  if (t) shareParlay(t, b);
+});
+
+/* The door from a pick to the man. Ethan's entity-pages list: "Every
+   prop card links to one" — a prop card opens the prop page, and from
+   there this reaches the full player page (logs, form windows, every
+   priced market), address and all. */
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-player-page]");
+  if (!b) return;
+  e.preventDefault();
+  openPlayerRoute(b.dataset.playerPage);
+});
 
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-card]");

@@ -167,6 +167,19 @@ def test_status_keeps_the_freshness_chip_it_is_about():
     assert '"methodology"' in line and '"status"' not in line
 
 
+def test_the_contact_address_is_on_the_about_page():
+    """"About, contact, changelog" — the address existed only at the
+    bottom of the terms, which is where nobody looks. It has to be ONE
+    address in both places: two support inboxes is one that goes
+    unread."""
+    i = APP.index("function renderAbout()")
+    body = APP[i:APP.index("async function renderWhy", i)]
+    assert "mailto:support@qellysbook.com" in body
+    terms = _read("web", "terms.html")
+    assert "support@qellysbook.com" in terms, \
+        "the About page and the terms name different addresses"
+
+
 # --- the changelog -----------------------------------------------------------
 
 def test_the_changelog_is_written_not_generated():

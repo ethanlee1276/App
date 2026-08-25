@@ -91,9 +91,10 @@ def test_it_is_the_same_shape_for_both_kinds_of_pick():
 
 def test_the_share_sheet_is_tried_before_a_download():
     """It is what actually gets a picture into a group chat, and a
-    cancel is not a failure."""
-    i = APP.index("async function shareCard(r, btn)")
-    body = APP[i:APP.index('\ndocument.addEventListener("click", (e) => {\n  const b = e.target.closest && e.target.closest("[data-card]")', i)]
+    cancel is not a failure. Anchored on exportCard since the parlay
+    card moved these rules there — one copy, shared by both drawings."""
+    i = APP.index("function exportCard(canvas, name, done)")
+    body = APP[i:APP.index("\n}", i)]
     assert "navigator.canShare({ files: [file] })" in body
     assert "a.download = name" in body, "no fallback on a desktop browser"
     assert "revokeObjectURL" in body, "the blob url leaks"
@@ -108,6 +109,39 @@ def test_both_detail_pages_carry_the_button():
 
 def test_the_card_is_the_size_every_client_crops_to():
     assert "const CARD_W = 1200, CARD_H = 630;" in APP
+
+
+def test_the_parlay_ticket_draws_too():
+    """"Per pick/parlay" was the ask, and the first pass shipped only the
+    pick half. A ticket is a LIST, so it is its own drawing: the legs
+    stacked with sides and prices, the joint probability the chain
+    models, and the price a book has to beat — the ticket's whole
+    argument, and the number that makes the screenshot worth arguing
+    with."""
+    i = APP.index("async function shareParlayCanvas(t)")
+    body = APP[i:APP.index("\nasync function shareParlay(", i)]
+    assert "t.modeled_joint" in body and "t.required_american" in body
+    assert "t.legs.slice(0, 4)" in body, "a 6-leg ticket would run off the card"
+    assert "…and" in body, "the overflow legs vanish silently"
+    assert "_cardImage" in body and "logo-qb.png" in body
+    assert "qellysbook.com" in body
+    # No faces by design: two headshots at this size are two thumbnails
+    # fighting, and the legs are the point.
+    assert "headshot" not in body
+    assert 'data-parlay-card="${escapeAttr(String(t.rank))}"' in APP, \
+        "no button on the ticket"
+
+
+def test_both_cards_leave_through_one_export_path():
+    """The share-sheet/download/revoke rules are where the
+    browser-specific bugs live, and two copies of them drift."""
+    assert "function exportCard(canvas, name, done)" in APP
+    i = APP.index("async function shareCard(r, btn)")
+    assert "exportCard(" in APP[i:APP.index("\n}", i) + 800]
+    j = APP.index("async function shareParlay(t, btn)")
+    assert "exportCard(" in APP[j:APP.index("\n}", j) + 800]
+    # …and the rules live only in the one function now.
+    assert APP.count("navigator.canShare && navigator.canShare({ files: [file] })") == 1
 
 
 def test_the_font_stack_has_a_real_fallback():
