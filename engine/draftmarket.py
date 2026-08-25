@@ -186,6 +186,17 @@ def place_missing(board: list[dict], players: dict | None,
         key = normalize(name)
         if not key or key in have:
             continue
+        # NO TEAM, NO PLACEMENT — the second time this door has needed a
+        # lock. from_sleeper already skips explicit inactives because
+        # Sleeper keeps search_rank on the retired, and the same is true
+        # of unsigned veterans: the kit now drops them from the usage
+        # side (2026-08-25, Kenny Gainwell in the live mock pool), and a
+        # lingering rank here would put a man with no roster spot
+        # straight back on the board through the market door. A missing
+        # rookie class — the reason this function exists — is unaffected:
+        # every drafted rookie has a team.
+        if not p.get("team"):
+            continue
         rank = ranks.get(key)
         if rank is None or rank > depth:
             continue

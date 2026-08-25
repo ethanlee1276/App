@@ -234,6 +234,15 @@ def index_players(blob: dict) -> dict:
     return idx
 
 
+def index_size(idx: dict) -> int:
+    """How many player records the index holds — the kit's health bar.
+
+    Counted off the full-name tier, where every record appears exactly
+    once; the short tier holds the same records again under fallback
+    keys and counting it would double."""
+    return sum(len(v) for v in (idx or {}).get("full", {}).values())
+
+
 def _pick_candidate(cands: list, position: str | None) -> dict | None:
     if position:
         pos_match = [c for c in cands if c["position"] == position.upper()]

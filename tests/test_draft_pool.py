@@ -17,10 +17,19 @@ THE TWO FIXES, EACH TESTED HERE:
 
   * A player Sleeper positively marks inactive is DROPPED from the kit
     before tiers and replacement are computed — nobody can draft him, so
-    he belongs at no rank. A free agent (active, teamless) keeps his
-    flag and his slot: somebody may yet sign him. A usage row with no
-    Sleeper match at all is kept, because a name-join failure must never
-    erase a real player.
+    he belongs at no rank.
+
+TIGHTENED 2026-08-25, because the first cut leaked and Ethan caught it
+on the live site the next day (screenshot: Brady and Gainwell still in
+the mock pool, both wearing the no-headshot initials chip — the
+signature of a roster-join miss). The first cut kept a total join miss
+and the active-but-teamless free agent; each keep is right for a facts
+surface and wrong for a draft board, whose projection is conditional on
+a JOB. With a HEALTHY blob (>= HEALTHY_BLOB_MIN indexed), a row must now
+be positively draftable: matched, active, and on a team. A missing or
+tiny blob keeps everything — a broken feed degrades to the old board,
+never to an empty one — and `roster_layer` in the payload says which
+branch ran.
   * usage_freshness() compares the built season against the season the
     calendar says it should be, and the page wears the answer as a
     banner instead of letting a four-year-old board pass as current.
@@ -119,26 +128,105 @@ def test_the_drop_happens_before_ranks_and_replacement():
     assert wr and wr[0]["player"] == "WR Two" and wr[0]["pos_rank"] == 1
 
 
-def test_an_active_free_agent_keeps_his_slot():
-    """Teamless but active is the free-agent case: somebody may sign
-    him, so he is draftable and stays — the roster_flag layer annotates
-    him downstream."""
+def test_an_unsigned_player_is_off_a_healthy_board():
+    """OVERTURNED 2026-08-25 — this test used to pin the opposite
+    ("an active free agent keeps his slot"), and Ethan's screenshot the
+    next day was that keep on the live site: Kenny Gainwell, teamless,
+    ranked in the mock pool off last season's volume. The projection is
+    conditional on a job; an unsigned player does not have one. The drop
+    self-heals — the daily Sleeper refresh restores him the day a team
+    signs him."""
+    fd = sys.modules["engine.fantasy_draft"]
+    saved = fd.HEALTHY_BLOB_MIN
+    fd.HEALTHY_BLOB_MIN = 5           # the fixture blob holds ten
+    try:
+        kit = _kit(_sleeper(**{"RB One": {"team": None}}))
+        assert "RB One" not in _names(kit["board"])
+        assert kit["dropped_unsigned"] == {"n": 1, "players": ["RB One"]}
+        assert kit["roster_layer"]["healthy"] is True
+    finally:
+        fd.HEALTHY_BLOB_MIN = saved
+
+
+def test_an_unhealthy_blob_may_not_veto_the_unsigned():
+    """Ten fixture players sit under the real bar, so the same row is
+    KEPT — a truncated download must degrade to the old board, never
+    empty half of it."""
     kit = _kit(_sleeper(**{"RB One": {"team": None}}))
     assert "RB One" in _names(kit["board"])
-    assert kit["dropped_inactive"]["n"] == 0
+    assert kit["dropped_unsigned"]["n"] == 0
+    assert kit["roster_layer"] == {"present": True, "indexed": 10,
+                                   "healthy": False}
 
 
-def test_a_player_sleeper_has_never_heard_of_is_kept():
-    """TE Guy is in our usage and absent from the blob. A name-join
-    failure must never erase a real player."""
+def test_a_join_miss_is_kept_only_while_the_blob_is_too_small_to_trust():
+    """TE Guy is in our usage and absent from the blob. Under the health
+    bar the never-erase rule still holds — this fixture's ten players
+    could be a truncated download."""
     kit = _kit(_sleeper(**{"WR One": {"active": False, "team": None}}))
     assert "TE Guy" in _names(kit["board"])
+    assert kit["dropped_unmatched"]["n"] == 0
 
 
-def test_no_blob_means_no_drops():
+def test_a_join_miss_on_a_healthy_blob_is_the_brady_case():
+    """RE-ANCHORED 2026-08-25. The never-erase rule was written against
+    a fuzzy join; the index falls back to (initial, surname) and the
+    dump carries free agents and the recently retired, so a CURRENT
+    player missing entirely is not a thing that happens. What a total
+    miss on a healthy blob actually means is a man pruned from the
+    league's own roster universe — which is how Tom Brady survived the
+    first cut of this drop and appeared in Ethan's screenshot."""
+    fd = sys.modules["engine.fantasy_draft"]
+    saved = fd.HEALTHY_BLOB_MIN
+    fd.HEALTHY_BLOB_MIN = 5
+    try:
+        kit = _kit(_sleeper())          # TE Guy absent from the blob
+        assert "TE Guy" not in _names(kit["board"])
+        assert kit["dropped_unmatched"] == {"n": 1, "players": ["TE Guy"]}
+    finally:
+        fd.HEALTHY_BLOB_MIN = saved
+
+
+def test_the_market_door_is_locked_for_the_unsigned_too():
+    """The first fix was undone through this exact door: search_rank
+    survives retirement, and it survives being unsigned the same way. A
+    market placement requires a team, or the usage-side drop puts a man
+    off the board and the market rank puts him straight back."""
+    from engine.draftmarket import place_missing
+    # Four board WRs, because _interpolate refuses under MIN_ANCHORS —
+    # a two-man curve placed nobody and this test's first run failed on
+    # its own fixture rather than on the lock it was testing.
+    board = [{"player": f"WR {w}", "position": "WR",
+              "proj": 16.0 - i * 2, "rec_pg": 4.0 - i * 0.5}
+             for i, w in enumerate(("One", "Two", "Three", "Four"))]
+    def _rec(i, name, team, **extra):
+        first, last = name.rsplit(" ", 1)
+        return {str(i): {"first_name": first, "last_name": last,
+                         "full_name": name, "position": "WR", "team": team,
+                         "active": True, "search_rank": i, **extra}}
+    blob = {}
+    blob.update(_rec(1, "Ghost Unsigned", None))
+    blob.update(_rec(2, "WR One", "KC"))
+    blob.update(_rec(3, "Signed Rookie", "KC", years_exp=0))
+    blob.update(_rec(4, "WR Two", "KC"))
+    blob.update(_rec(5, "WR Three", "KC"))
+    blob.update(_rec(6, "WR Four", "KC"))
+    placed = place_missing(board, blob)
+    names = [r["player"] for r in placed]
+    assert "Ghost Unsigned" not in names,         "an unsigned veteran came back through the market door"
+    assert "Signed Rookie" in names,         "the lock caught the rookie class the door exists for"
+
+
+def test_no_blob_means_no_drops_and_says_so():
+    """The first cut wrote identical payloads for "Sleeper never
+    arrived" and "nothing to drop" — which is why a live screenshot of
+    Brady could not be diagnosed from the payload. roster_layer now
+    separates them."""
     kit = _kit(None)
     assert "WR One" in _names(kit["board"])
     assert kit["dropped_inactive"] == {"n": 0, "players": []}
+    assert kit["roster_layer"] == {"present": False, "indexed": 0,
+                                   "healthy": False}
 
 
 # --- the freshness check ---------------------------------------------------

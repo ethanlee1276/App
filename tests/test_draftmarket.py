@@ -218,7 +218,12 @@ def test_placements_happen_before_replacement_level_is_computed():
     existing players' VORP."""
     src = _read("engine", "fantasy_draft.py")
     i = src.index("def build_draft_kit(")
-    body = src[i:i + 3000]
+    # To the file's end, not a fixed 3,000 characters: the drop block
+    # above the placement grew a documented rule on 2026-08-25 and
+    # pushed both anchors out of the old window — this failed on comment
+    # length while the ordering it pins was untouched. build_draft_kit
+    # is the file's last function, so EOF is its end.
+    body = src[i:]
     # The ASSIGNMENT, not the word: build_draft_kit's own docstring says
     # "replacement baselines" above any code, so a bare search for the
     # word finds the prose and passes whatever the code does.

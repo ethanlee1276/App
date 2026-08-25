@@ -33,6 +33,14 @@ from .fantasy import _weekly, _pbp_weekly, _short_key, league_rates, USAGE_MIN_W
 # 12-team, 1QB / 2RB / 2WR / 1TE / 1FLEX. The flex is mostly RB/WR in
 # practice, so replacement rank = starters*teams plus a flex share.
 DEFAULT_TEAMS = 12
+
+#: The roster layer has to look like the real league before it may veto
+#: players. Sleeper's dump indexes thousands of active QB/RB/WR/TE; a
+#: test fixture holds ten, and a truncated download could hold anything.
+#: Below this bar the kit keeps every usage row, exactly as it did
+#: before drops existed — a broken feed must degrade to the old board,
+#: never to an empty one.
+HEALTHY_BLOB_MIN = 500
 REPLACEMENT_RANK = {"QB": 12, "RB": 26, "WR": 26, "TE": 12}
 # A new tier starts when the projected-PPG gap to the player above is at
 # least this. Within a position, ~1.2 PPG over a season is a real cliff.
@@ -133,27 +141,60 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
     # straight from this board, so a simulated room was spending real
     # picks on men who no longer play.
     #
-    # The roster layer already knew: apply_current_rosters stamps
-    # `roster_flag: "inactive"` on exactly these rows. A flag is the
-    # right treatment for a free agent (an active player somebody may
-    # yet sign) and the wrong one for a retirement — nobody can draft
-    # Tom Brady, so he does not belong on a draft board at any rank.
     # Dropped BEFORE tiers and replacement, so the baselines are
     # computed over a pool of people who exist.
     #
-    # Only players Sleeper POSITIVELY marks inactive go: a usage row
-    # with no Sleeper match at all is kept, because a name-join failure
-    # must never erase a real player. Active-but-teamless stays too —
-    # that is the free-agent case the flag handles.
+    # THE FIRST CUT OF THIS DROP LEAKED, AND ETHAN CAUGHT IT ON THE LIVE
+    # SITE THE NEXT DAY (2026-08-25, screenshot: Tom Brady and Kenny
+    # Gainwell in the mock pool, both wearing the no-headshot initials
+    # chip — the signature of a row the roster join never matched). It
+    # dropped only players Sleeper POSITIVELY marked inactive, and kept
+    # both a total join miss ("a name-join failure must never erase a
+    # real player") and the active-but-teamless free agent. Each keep is
+    # right for a FACTS surface and wrong for this one: a draft-board
+    # projection is conditional on a JOB — last season's volume run
+    # forward — and a man Sleeper has never heard of or shows unsigned
+    # does not have one. So, when the roster layer is present and
+    # healthy, a row must be POSITIVELY DRAFTABLE to stay:
+    #
+    #   matched + active + team      kept
+    #   matched + inactive           dropped (any blob — an explicit
+    #                                flag on a matched record is
+    #                                trustworthy at any size)
+    #   matched + active + teamless  dropped as "unsigned". Self-healing:
+    #                                the daily Sleeper refresh restores
+    #                                him the day a team signs him.
+    #   no match at all              dropped as "unmatched" — Sleeper's
+    #                                full dump carries free agents and
+    #                                the recently retired, and the index
+    #                                falls back to (initial, surname), so
+    #                                a CURRENT player missing entirely is
+    #                                not a thing that happens.
+    #
+    # The health bar is what keeps the old caution honest: a missing or
+    # tiny blob keeps everything, exactly as before, and `roster_layer`
+    # in the payload says which branch ran — the first cut was also
+    # undiagnosable, because a build with no blob and a build with
+    # nothing to drop wrote identical payloads.
     dropped: list[str] = []
+    dropped_unsigned: list[str] = []
+    dropped_unmatched: list[str] = []
+    idx = None
     if sleeper:
-        from .offseason import _lookup, index_players
+        from .offseason import _lookup, index_players, index_size
         idx = index_players(sleeper)
+    indexed = index_size(idx) if idx is not None else 0
+    healthy = indexed >= HEALTHY_BLOB_MIN
+    if idx is not None:
         kept = []
         for r in players:
             cur = _lookup(idx, r["player"], r["position"])
             if cur is not None and not cur["active"]:
                 dropped.append(r["player"])
+            elif cur is not None and healthy and not cur["team"]:
+                dropped_unsigned.append(r["player"])
+            elif cur is None and healthy:
+                dropped_unmatched.append(r["player"])
             else:
                 kept.append(r)
         players = kept
@@ -214,6 +255,16 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
         # rather than mysterious. Count plus a capped sample — a long
         # retirement class should not bloat the payload.
         "dropped_inactive": {"n": len(dropped), "players": dropped[:20]},
+        "dropped_unsigned": {"n": len(dropped_unsigned),
+                             "players": dropped_unsigned[:20]},
+        "dropped_unmatched": {"n": len(dropped_unmatched),
+                              "players": dropped_unmatched[:20]},
+        # Which branch ran, so the NEXT screenshot of a ghost on the
+        # board is diagnosable from the payload alone: present=False
+        # means Sleeper never arrived and nothing could be vetoed;
+        # healthy=False means it arrived too small to trust.
+        "roster_layer": {"present": idx is not None, "indexed": indexed,
+                         "healthy": healthy},
         "replacement": baselines,
         "market": market,
         "board": board[:150],

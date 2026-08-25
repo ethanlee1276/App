@@ -9,6 +9,12 @@
     },
     {
       "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Retired and unsigned players off the draft board, second pass",
+      "body": "The first pass dropped only players the roster feed positively marked inactive, and kept anyone the name-join missed or who was active without a team — which is how Tom Brady and Kenny Gainwell survived it and turned up in a mock pool the next day. A draft projection is conditional on a job: when the roster feed is present and healthy, a player now has to be matched, active and on a team to hold a rank. A signing restores him the next day automatically, and a missing or broken feed keeps the old board whole rather than emptying it."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "ship",
       "title": "Real addresses",
       "body": "Every player, game and pick now has a URL you can send somebody — /player/juan-soto, /game/ne-sea-0909, /pick/juan-soto-home-runs — and links unfurl as that player or that game rather than as the site. A preview never carries the pick itself: the player, the market and the matchup, and never the side, the line or the price."
