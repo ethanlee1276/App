@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "ship",
+      "title": "The share card, dressed properly",
+      "body": "The pick card and the parlay ticket were redrawn from scratch: the masthead's own serif for the name, a warm lamp behind the face instead of a flat wash, a double frame with corner ticks, the price in a chip, the model's numbers in ruled columns with the edge colored by its sign, and numbered legs on the ticket. Both cards now share one frame and one footer by construction, so they cannot drift into looking like different products. Same facts as before — nothing was added to the card, everything on it just learned to stand up straight."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "fix",
       "title": "The Streak says your picks landed",
       "body": "Making your three picks was met with silence — the count ticked up, nothing else moved, and it read as a failed save. The page now says plainly that you're in for tonight and when results grade. The leaderboard had the same day-one problem: it only lists survived nights, so the first players saw \"Nobody on the board yet\" right after playing. It now shows how many players are in tonight — a count, never names, because playing is not the same consent as being ranked in public."

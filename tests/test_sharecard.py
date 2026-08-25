@@ -50,12 +50,18 @@ def test_a_missing_face_still_draws_a_card():
 
 def test_the_logo_is_local_and_the_domain_is_on_every_card():
     """The card is the advertisement. A card that does not say where it
-    came from is a screenshot of nothing."""
+    came from is a screenshot of nothing. The domain lives in
+    cardFooter — ONE drawing shared by both cards (2026-08-25 restyle),
+    because two hand-kept copies of the frame is how the pick card and
+    the ticket drift into looking like different products."""
     i = APP.index("async function shareCardCanvas(d)")
     body = APP[i:APP.index("\nasync function shareCard(", i)]
     assert '_cardImage("logo-qb.png", false)' in body, \
         "the logo must not be loaded cross-origin — it is ours"
-    assert "qellysbook.com" in body
+    assert "cardFooter(x)" in body
+    j = APP.index("function cardFooter(x)")
+    foot = APP[j:APP.index("\n}", j)]
+    assert "qellysbook.com" in foot
 
 
 def test_the_card_carries_the_reasoning_not_just_the_price():
@@ -63,7 +69,10 @@ def test_the_card_carries_the_reasoning_not_just_the_price():
     i = APP.index("async function shareCardCanvas(d)")
     body = APP[i:APP.index("\nasync function shareCard(", i)]
     assert '[["Model", d.proj], ["Hit", d.hit], ["Edge", d.edge]]' in body
-    assert "Journaled at this price · graded in public" in body
+    j = APP.index("function cardFooter(x)")
+    foot = APP[j:APP.index("\n}", j)]
+    assert "Journaled at this price · graded in public" in foot, \
+        "the site's claim left the shared footer"
 
 
 def test_an_edge_that_rounds_to_zero_is_left_off():
@@ -124,7 +133,8 @@ def test_the_parlay_ticket_draws_too():
     assert "t.legs.slice(0, 4)" in body, "a 6-leg ticket would run off the card"
     assert "…and" in body, "the overflow legs vanish silently"
     assert "_cardImage" in body and "logo-qb.png" in body
-    assert "qellysbook.com" in body
+    assert "cardStage(x)" in body and "cardFooter(x)" in body, \
+        "the ticket left the shared chrome — the two cards will drift"
     # No faces by design: two headshots at this size are two thumbnails
     # fighting, and the legs are the point.
     assert "headshot" not in body

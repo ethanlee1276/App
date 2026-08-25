@@ -24033,6 +24033,91 @@ function cardFont(px, weight) {
        + `system-ui, -apple-system, sans-serif`;
 }
 
+function cardSerif(px, weight) {
+  // The masthead's own Didone for the name — the card should look like
+  // the site, not like a template that once saw it. Same fallback rule
+  // as cardFont: serif families that actually exist on phones.
+  return `${weight || 700} ${px}px "Bodoni Moda", "Iowan Old Style", `
+       + `"Palatino Linotype", Georgia, serif`;
+}
+
+/* The palette the CARDS use is the site's own dark theme, hex-frozen:
+   canvas cannot read CSS custom properties, and a card must not change
+   with the viewer's theme — it is a photograph of the brand. */
+const CARD_INK = "#E8E4D9", CARD_BRAND = "#FFB000";
+const CARD_GOOD = "#29C878", CARD_BAD = "#DC5455";
+
+function _cardRR(x, X, Y, w, h, r) {
+  // roundRect with the one fallback that matters (older Safari).
+  x.beginPath();
+  if (x.roundRect) { x.roundRect(X, Y, w, h, r); return; }
+  x.moveTo(X + r, Y);
+  x.arcTo(X + w, Y, X + w, Y + h, r);
+  x.arcTo(X + w, Y + h, X, Y + h, r);
+  x.arcTo(X, Y + h, X, Y, r);
+  x.arcTo(X, Y, X + w, Y, r);
+  x.closePath();
+}
+
+/* The stage and the footer are ONE drawing shared by the pick card and
+   the parlay ticket — two hand-kept copies of the frame is how the two
+   cards drift into looking like different products. */
+function cardStage(x) {
+  x.fillStyle = "#0A0805";
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  // A lamp, not a wash: one warm radial where the face sits, falling to
+  // black — the flat diagonal gradient read as a template default.
+  const glow = x.createRadialGradient(230, 190, 40, 230, 190, 940);
+  glow.addColorStop(0, "rgba(255,176,0,.13)");
+  glow.addColorStop(1, "rgba(255,176,0,0)");
+  x.fillStyle = glow;
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  const vin = x.createLinearGradient(0, CARD_H - 250, 0, CARD_H);
+  vin.addColorStop(0, "rgba(0,0,0,0)");
+  vin.addColorStop(1, "rgba(0,0,0,.42)");
+  x.fillStyle = vin;
+  x.fillRect(0, CARD_H - 250, CARD_W, 250);
+  // Double frame — the plate. Outer hairline at the cut edge, a firmer
+  // rule inset from it, and quiet corner ticks on the inner frame.
+  x.strokeStyle = "rgba(255,176,0,.22)";
+  x.lineWidth = 2;
+  x.strokeRect(1, 1, CARD_W - 2, CARD_H - 2);
+  x.strokeStyle = "rgba(255,176,0,.5)";
+  x.lineWidth = 1.5;
+  x.strokeRect(16.5, 16.5, CARD_W - 33, CARD_H - 33);
+  x.strokeStyle = "rgba(255,176,0,.8)";
+  x.lineWidth = 2;
+  [[16.5, 16.5, 1, 1], [CARD_W - 16.5, 16.5, -1, 1],
+   [16.5, CARD_H - 16.5, 1, -1], [CARD_W - 16.5, CARD_H - 16.5, -1, -1]]
+    .forEach(([cx, cy, dx, dy]) => {
+      x.beginPath();
+      x.moveTo(cx + 16 * dx, cy);
+      x.lineTo(cx, cy);
+      x.lineTo(cx, cy + 16 * dy);
+      x.stroke();
+    });
+}
+
+function cardFooter(x) {
+  x.strokeStyle = "rgba(232,228,217,.12)";
+  x.lineWidth = 1;
+  x.beginPath();
+  x.moveTo(48, 542.5);
+  x.lineTo(CARD_W - 48, 542.5);
+  x.stroke();
+  x.textAlign = "left";
+  x.textBaseline = "alphabetic";
+  x.fillStyle = "rgba(232,228,217,.45)";
+  x.font = cardFont(22, 400);
+  // The site's whole claim, on every card that leaves it.
+  x.fillText("Journaled at this price · graded in public", 48, 580);
+  x.textAlign = "right";
+  x.fillStyle = "rgba(255,176,0,.8)";
+  x.font = cardFont(24, 600);
+  x.fillText("qellysbook.com", CARD_W - 48, 580);
+  x.textAlign = "left";
+}
+
 /* One shape for both kinds of pick, so the drawing does not need to know
    which page it came from. Returns null for a row with nothing to say. */
 function shareCardData(r) {
@@ -24086,101 +24171,123 @@ async function shareCardCanvas(d) {
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; }
   catch (e) { /* the fallback stack still draws */ }
 
-  x.fillStyle = "#0b0906";
-  x.fillRect(0, 0, CARD_W, CARD_H);
-  const g = x.createLinearGradient(0, 0, CARD_W, CARD_H);
-  g.addColorStop(0, "rgba(232,182,76,.14)");
-  g.addColorStop(0.55, "rgba(232,182,76,0)");
-  x.fillStyle = g;
-  x.fillRect(0, 0, CARD_W, CARD_H);
-  x.strokeStyle = "rgba(232,182,76,.5)";
-  x.lineWidth = 3;
-  x.strokeRect(1.5, 1.5, CARD_W - 3, CARD_H - 3);
+  cardStage(x);
 
   const [face, logo] = await Promise.all([
     _cardImage(d.headshot, true), _cardImage("logo-qb.png", false),
   ]);
 
-  // The face, or the initials chip the board falls back to.
-  const CX = 172, CY = 250, R = 96;
+  // The face under its own lamp, double-ringed — or the initials chip
+  // the board falls back to.
+  const CX = 178, CY = 268, R = 102;
+  const halo = x.createRadialGradient(CX, CY, R * 0.6, CX, CY, R + 92);
+  halo.addColorStop(0, "rgba(255,176,0,.18)");
+  halo.addColorStop(1, "rgba(255,176,0,0)");
+  x.fillStyle = halo;
+  x.fillRect(CX - R - 92, CY - R - 92, (R + 92) * 2, (R + 92) * 2);
   x.save();
   x.beginPath();
   x.arc(CX, CY, R, 0, Math.PI * 2);
   x.closePath();
   x.clip();
-  x.fillStyle = "#171310";
+  x.fillStyle = "#1A150E";
   x.fillRect(CX - R, CY - R, R * 2, R * 2);
   if (face) {
     x.drawImage(face, CX - R, CY - R, R * 2, R * 2);
   } else {
-    x.fillStyle = "#e8b64c";
-    x.font = cardFont(74, 700);
+    x.fillStyle = CARD_BRAND;
+    x.font = cardSerif(78, 700);
     x.textAlign = "center";
     x.textBaseline = "middle";
     const initials = d.title.split(/\s+/).slice(0, 2)
       .map((w) => w[0] || "").join("").toUpperCase();
-    x.fillText(initials || "QB", CX, CY + 4);
+    x.fillText(initials || "QB", CX, CY + 6);
   }
   x.restore();
-  x.strokeStyle = "rgba(232,182,76,.55)";
-  x.lineWidth = 3;
+  x.strokeStyle = "rgba(255,176,0,.2)";
+  x.lineWidth = 9;
   x.beginPath();
-  x.arc(CX, CY, R, 0, Math.PI * 2);
+  x.arc(CX, CY, R + 9, 0, Math.PI * 2);
+  x.stroke();
+  x.strokeStyle = "rgba(255,176,0,.85)";
+  x.lineWidth = 2.5;
+  x.beginPath();
+  x.arc(CX, CY, R + 1, 0, Math.PI * 2);
   x.stroke();
 
-  const L = 306;
+  // The right column: eyebrow over name over pick — small facts above
+  // the big one, the way a masthead reads, not caption-under-headline.
+  const L = 342;
   x.textAlign = "left";
   x.textBaseline = "alphabetic";
-  x.fillStyle = "#f5efe6";
-  x.font = cardFont(64, 700);
+  x.letterSpacing = "3px";
+  x.fillStyle = "rgba(232,228,217,.55)";
+  x.font = cardFont(23, 600);
+  x.fillText(d.sub.slice(0, 58).toUpperCase(), L, 142);
+  x.letterSpacing = "0px";
+
+  x.fillStyle = "#F4F0E6";
+  let size = 76;
+  x.font = cardSerif(size, 700);
   // Long names shrink rather than run off the card.
-  let size = 64;
-  while (size > 34 && x.measureText(d.title).width > CARD_W - L - 70) {
+  while (size > 40 && x.measureText(d.title).width > CARD_W - L - 170) {
     size -= 2;
-    x.font = cardFont(size, 700);
+    x.font = cardSerif(size, 700);
   }
-  x.fillText(d.title, L, 200);
+  x.fillText(d.title, L, 222);
+  x.fillStyle = CARD_BRAND;
+  x.fillRect(L + 2, 246, 76, 3);
 
-  x.fillStyle = "rgba(245,239,230,.62)";
-  x.font = cardFont(28, 400);
-  x.fillText(d.sub.slice(0, 64), L, 244);
-
-  x.fillStyle = "#e8b64c";
-  x.font = cardFont(46, 700);
-  let ps = 46;
-  while (ps > 26 && x.measureText(d.pick).width > CARD_W - L - 190) {
+  x.fillStyle = CARD_BRAND;
+  let ps = 50;
+  x.font = cardFont(ps, 700);
+  while (ps > 28 && x.measureText(d.pick).width > CARD_W - L - 90) {
     ps -= 2;
     x.font = cardFont(ps, 700);
   }
-  x.fillText(d.pick, L, 322);
-  x.fillStyle = "#f5efe6";
-  x.font = cardFont(46, 700);
-  x.fillText(d.odds, L, 386);
+  x.fillText(d.pick, L, 330);
 
-  // The model's own numbers, labelled. A card with a price and no
-  // reasoning is a tout's graphic.
+  // The price wears a chip, so it reads as the book's number and not as
+  // one more line of copy.
+  x.font = cardFont(34, 700);
+  const ow = x.measureText(d.odds).width;
+  _cardRR(x, L, 362, ow + 52, 58, 29);
+  x.fillStyle = "rgba(255,176,0,.1)";
+  x.fill();
+  x.strokeStyle = "rgba(255,176,0,.45)";
+  x.lineWidth = 1.5;
+  x.stroke();
+  x.fillStyle = CARD_INK;
+  x.fillText(d.odds, L + 26, 402);
+
+  // The model's own numbers across the card's full width, columns cut
+  // by hairlines — a card with a price and no reasoning is a tout's
+  // graphic, and this row is where the argument lives.
   const facts = [["Model", d.proj], ["Hit", d.hit], ["Edge", d.edge]]
     .filter(([, v]) => v);
   facts.forEach(([k, v], i) => {
-    const fx = L + i * 190;
-    x.fillStyle = "rgba(245,239,230,.5)";
-    x.font = cardFont(22, 400);
-    x.fillText(k.toUpperCase(), fx, 464);
-    x.fillStyle = "#f5efe6";
-    x.font = cardFont(40, 700);
-    x.fillText(v, fx, 508);
+    const fx = 64 + i * 250;
+    if (i) {
+      x.strokeStyle = "rgba(232,228,217,.12)";
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(fx - 42.5, 452);
+      x.lineTo(fx - 42.5, 522);
+      x.stroke();
+    }
+    x.letterSpacing = "2.5px";
+    x.fillStyle = "rgba(232,228,217,.42)";
+    x.font = cardFont(20, 600);
+    x.fillText(k.toUpperCase(), fx, 474);
+    x.letterSpacing = "0px";
+    x.fillStyle = k === "Edge"
+      ? (v.startsWith("+") ? CARD_GOOD : CARD_BAD) : CARD_INK;
+    x.font = cardFont(42, 700);
+    x.fillText(v, fx, 520);
   });
 
-  if (logo) x.drawImage(logo, CARD_W - 128, 44, 84, 84);
-  x.fillStyle = "rgba(245,239,230,.55)";
-  x.font = cardFont(24, 400);
-  x.textAlign = "right";
-  x.fillText("qellysbook.com", CARD_W - 44, 566);
-  x.textAlign = "left";
-  x.fillStyle = "rgba(245,239,230,.42)";
-  x.font = cardFont(22, 400);
-  // The site's whole claim, on every card that leaves it.
-  x.fillText("Journaled at this price · graded in public", L, 566);
+  if (logo) x.drawImage(logo, CARD_W - 142, 42, 96, 96);
+  cardFooter(x);
   return c;
 }
 
@@ -24241,48 +24348,66 @@ async function shareParlayCanvas(t) {
   if (!x) return null;
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; }
   catch (e) { /* the fallback stack still draws */ }
-  x.fillStyle = "#0b0906";
-  x.fillRect(0, 0, CARD_W, CARD_H);
-  const g = x.createLinearGradient(0, 0, CARD_W, CARD_H);
-  g.addColorStop(0, "rgba(232,182,76,.14)");
-  g.addColorStop(0.55, "rgba(232,182,76,0)");
-  x.fillStyle = g;
-  x.fillRect(0, 0, CARD_W, CARD_H);
-  x.strokeStyle = "rgba(232,182,76,.5)";
-  x.lineWidth = 3;
-  x.strokeRect(1.5, 1.5, CARD_W - 3, CARD_H - 3);
+  cardStage(x);
   const logo = await _cardImage("logo-qb.png", false);
-  if (logo) x.drawImage(logo, CARD_W - 128, 44, 84, 84);
+  if (logo) x.drawImage(logo, CARD_W - 142, 42, 96, 96);
 
   const sign = (n) => (n > 0 ? `+${n}` : `${n}`);
-  const L = 70;
+  const L = 64;
   x.textAlign = "left";
-  x.fillStyle = "#f5efe6";
-  x.font = cardFont(54, 700);
-  x.fillText(`${t.legs.length}-leg same-game parlay`, L, 118);
-  x.fillStyle = "rgba(245,239,230,.62)";
-  x.font = cardFont(26, 400);
-  x.fillText("Correlation-priced — never the product of the legs", L, 158);
+  x.textBaseline = "alphabetic";
+  x.letterSpacing = "3px";
+  x.fillStyle = "rgba(232,228,217,.55)";
+  x.font = cardFont(22, 600);
+  x.fillText("CORRELATION-PRICED — NEVER THE PRODUCT OF THE LEGS", L, 96);
+  x.letterSpacing = "0px";
+  x.fillStyle = "#F4F0E6";
+  x.font = cardSerif(58, 700);
+  x.fillText(`${t.legs.length}-leg same-game parlay`, L, 162);
+  x.fillStyle = CARD_BRAND;
+  x.fillRect(L + 2, 184, 76, 3);
 
   // The legs. Four fit with air; a longer ticket lists four and says so.
+  // Each row is numbered and cut from the next by a hairline — a ticket
+  // is a LIST, and a list without rules is a paragraph.
   const shown = t.legs.slice(0, 4);
   shown.forEach((l, i) => {
-    const y = 232 + i * 62;
-    x.fillStyle = "#e8b64c";
-    x.font = cardFont(30, 700);
-    x.fillText(String(l.player || "").slice(0, 22), L, y);
-    x.fillStyle = "#f5efe6";
-    x.font = cardFont(28, 400);
+    const y = 244 + i * 56;
+    x.strokeStyle = "rgba(255,176,0,.5)";
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.arc(L + 14, y - 10, 15, 0, Math.PI * 2);
+    x.stroke();
+    x.fillStyle = "rgba(255,176,0,.85)";
+    x.font = cardFont(20, 700);
+    x.textAlign = "center";
+    x.fillText(String(i + 1), L + 14, y - 3);
+    x.textAlign = "left";
+    x.fillStyle = CARD_BRAND;
+    x.font = cardFont(29, 700);
+    x.fillText(String(l.player || "").slice(0, 22), L + 46, y);
+    x.fillStyle = CARD_INK;
+    x.font = cardFont(27, 400);
     const pick = `${String(l.side || "").toUpperCase()} ${l.line ?? ""} ${
       l.market_label || l.market || ""}`.trim();
-    x.fillText(pick.slice(0, 34), L + 360, y);
-    x.font = cardFont(28, 700);
-    x.fillText(oddsTxt(l.odds), CARD_W - 210, y);
+    x.fillText(pick.slice(0, 32), L + 420, y);
+    x.textAlign = "right";
+    x.font = cardFont(27, 700);
+    x.fillText(oddsTxt(l.odds), CARD_W - 64, y);
+    x.textAlign = "left";
+    if (i < shown.length - 1) {
+      x.strokeStyle = "rgba(232,228,217,.08)";
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(L, y + 18.5);
+      x.lineTo(CARD_W - 64, y + 18.5);
+      x.stroke();
+    }
   });
   if (t.legs.length > shown.length) {
-    x.fillStyle = "rgba(245,239,230,.5)";
-    x.font = cardFont(24, 400);
-    x.fillText(`…and ${t.legs.length - shown.length} more`, L, 232 + 4 * 62);
+    x.fillStyle = "rgba(232,228,217,.5)";
+    x.font = cardFont(22, 400);
+    x.fillText(`…and ${t.legs.length - shown.length} more`, L + 46, 244 + 4 * 56 - 14);
   }
 
   const facts = [
@@ -24292,23 +24417,28 @@ async function shareParlayCanvas(t) {
   // 458/504, not lower: the first draw put the joint prob at 546 and
   // the footer claim at 566, and the two collided into one smudged line.
   facts.forEach(([k, v], i) => {
-    const fx = L + i * 290;
-    x.fillStyle = "rgba(245,239,230,.5)";
-    x.font = cardFont(22, 400);
+    const fx = L + i * 320;
+    if (i) {
+      x.strokeStyle = "rgba(232,228,217,.12)";
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(fx - 52.5, 440);
+      x.lineTo(fx - 52.5, 510);
+      x.stroke();
+    }
+    x.letterSpacing = "2.5px";
+    x.fillStyle = "rgba(232,228,217,.42)";
+    x.font = cardFont(20, 600);
     x.fillText(k.toUpperCase(), fx, 458);
-    x.fillStyle = "#f5efe6";
+    x.letterSpacing = "0px";
+    // The price a book has to beat is the ticket's argument — it wears
+    // the brand color; the probability stays ink.
+    x.fillStyle = i ? CARD_BRAND : CARD_INK;
     x.font = cardFont(42, 700);
     x.fillText(v, fx, 504);
   });
 
-  x.fillStyle = "rgba(245,239,230,.55)";
-  x.font = cardFont(24, 400);
-  x.textAlign = "right";
-  x.fillText("qellysbook.com", CARD_W - 44, 566);
-  x.textAlign = "left";
-  x.fillStyle = "rgba(245,239,230,.42)";
-  x.font = cardFont(22, 400);
-  x.fillText("Journaled at this price · graded in public", L, 566);
+  cardFooter(x);
   return c;
 }
 
