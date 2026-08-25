@@ -106,6 +106,36 @@ def test_prose_in_backticks_is_not_mistaken_for_code():
         "`Record` tab |\n")) == []
 
 
+def test_build_output_is_not_treated_as_evidence():
+    """A row citing `web/data/backtest.json` is describing a data flow,
+    not claiming a committed file — that directory is gitignored, so
+    whether it is on disk depends on whether a build has run.
+
+    THE FLAKE THIS PINS. test_mapcheck went red on Actions and green on
+    the very next run of the SAME commit: several test files write real
+    boards into the working tree, the suite runs eight files at a time,
+    and so whether that path existed when the audit read the disk was a
+    race between two test files. The release gate was a coin flip.
+    """
+    assert _audit_with(_doc(
+        "| §11 Review cycle | ✅ | `engine/lab.py` → `web/data/backtest.json` "
+        "→ the Lab page |\n")) == []
+    # …and the skip is scoped to build output. A missing path anywhere
+    # else in the SAME row is still drift, or this would be a hole rather
+    # than a rule.
+    out = _audit_with(_doc(
+        "| §11 Review cycle | ✅ | `engine/definitely_gone.py` → "
+        "`web/data/backtest.json` |\n"))
+    assert any(f["kind"] == "path" and "definitely_gone" in f["what"]
+               for f in out), out
+
+
+def test_the_generated_list_is_short_and_named():
+    """A skip list is a place drift hides. Two directories, both of them
+    build output, both gitignored."""
+    assert mapcheck.GENERATED == ("web/data/", "data/")
+
+
 # --- the live map ----------------------------------------------------------
 def test_the_real_implementation_map_is_clean():
     """The whole point of committing this: the shipped docs pass it. If

@@ -61,8 +61,32 @@ def _rows(path: Path):
             yield n, m.group("rule").strip(), m.group("why").strip()
 
 
+#: Directories that hold BUILD OUTPUT rather than code.
+#:
+#: A ✅ row citing `web/data/backtest.json` is describing a data flow —
+#: engine/lab.py writes it, the Lab page reads it — not claiming that a
+#: file is committed. Both directories are gitignored, so whether the
+#: file is on disk depends entirely on whether a build has run, which
+#: makes it un-auditable by construction.
+#:
+#: THE FLAKE THIS FIXES, found 2026-08-25 after `test_mapcheck` went red
+#: on GitHub Actions and green on the very next run of the SAME commit.
+#: On a fresh clone `web/data/` is empty, so that row was drift — but
+#: several test files write real boards into the working tree as they
+#: run, and the suite runs eight files at a time. So whether the file
+#: existed when this audit read the disk was a race between two test
+#: files, and the release gate Ethan deploys against was a coin flip.
+#: Reproduced by running the whole suite in a pristine `git worktree`
+#: and watching web/data/backtest.json appear underneath it.
+#:
+#: (The tests writing into the working tree are a separate problem and
+#: still true; this only stops the MAP being judged on their timing.)
+GENERATED = ("web/data/", "data/")
+
+
 def _paths_in(text: str) -> list[str]:
-    return [t for t in TICKED.findall(text) if PATHISH.match(t)]
+    return [t for t in TICKED.findall(text)
+            if PATHISH.match(t) and not t.startswith(GENERATED)]
 
 
 def _symbols_in(text: str) -> list[str]:
