@@ -2641,6 +2641,134 @@ function renderIncentives() {
     <div class="card" style="padding:0">${body}</div>`;
 }
 
+/* ============================================================
+   TAIL OR FADE — you vs the model (roadmap #5)
+   ============================================================
+   Two buttons on every recommended card. A tail says the model is
+   right, a fade says it isn't, and both go on YOUR record, settled by
+   the same journal row the Results page grades the pick with — so the
+   argument is scored by an arithmetic neither side controls. No money
+   moves. The server validates every call against the served board
+   (client-named sides would let someone invent a pick to beat). */
+let _tfMe = null, _tfAt = 0;
+
+async function tfFetch(force) {
+  if (_tfMe && !force && Date.now() - _tfAt < 60000) return _tfMe;
+  try {
+    const r = await fetch("/api/tailfade/me", { credentials: "same-origin" });
+    _tfMe = r.ok ? await r.json() : null;
+    _tfAt = Date.now();
+  } catch (e) { _tfMe = null; }
+  return _tfMe;
+}
+
+/* {`${sport}|${date}|${player}|${market}` → stance} for OPEN calls. */
+function tfOpenMap() {
+  const out = {};
+  ((_tfMe || {}).calls || []).forEach((c) => {
+    if (c.status === "open")
+      out[`${c.sport}|${c.date}|${c.player}|${c.market}`] = c.stance;
+  });
+  return out;
+}
+
+function tfRow(r) {
+  if (!r.recommended || r.live) return "";
+  const key = `${state.sport}|${(state.data || {}).date || ""}|${r.player}|${r.market}`;
+  const mine = tfOpenMap()[key] || "";
+  const btn = (s, word) =>
+    `<button class="tf-btn ${mine === s ? "on" : ""}" data-tf-player="${escapeHtml(r.player)}"
+       data-tf-market="${escapeHtml(r.market)}" data-tf-stance="${s}"
+       title="${s === "tail" ? "Ride with the model on this pick" : "Bet against the model on this pick"}">${word}</button>`;
+  return `<div class="tf-row">
+    <span class="tf-q">Your call:</span>${btn("tail", "Tail")}${btn("fade", "Fade")}
+    ${mine ? `<span class="tf-note">you ${mine === "tail" ? "tailed" : "faded"} this — tap again to clear</span>`
+           : `<span class="tf-note">settles with the pick, on your record</span>`}
+  </div>`;
+}
+
+async function tfCall(player, market, stance) {
+  try {
+    const r = await fetch("/api/tailfade/call", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport: state.sport, player, market, stance }),
+    });
+    if (r.status === 401) { switchView("account"); return; }
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { tfToast(body.error || "That call didn’t take."); return; }
+    await tfFetch(true);
+    renderAll();
+    renderTailFade();
+  } catch (e) { /* the next tap retries */ }
+}
+
+/* The refusal, said where the tap happened — same visual as the
+   discord page's copy toast, which is the house's one transient note. */
+function tfToast(msg) {
+  const el = document.createElement("div");
+  el.className = "tf-toast";
+  el.setAttribute("role", "status");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest(".tf-btn");
+  if (!b) return;
+  const mine = b.classList.contains("on");
+  tfCall(b.dataset.tfPlayer, b.dataset.tfMarket,
+         mine ? "clear" : b.dataset.tfStance);
+});
+
+// Warm the call map once at boot, so a signed-in reader's active
+// buttons draw on the first natural render instead of the second.
+setTimeout(() => { tfFetch(); }, 1200);
+
+async function renderTailFade() {
+  const host = document.getElementById("tailfade-strip");
+  if (!host) return;
+  const me = await tfFetch();
+  if (!me) { host.innerHTML = ""; return; }
+  const rec = (o) => `${o.w}-${o.l}`;
+  const m = me.month || {}, mm = me.model_month || {};
+  const played = (m.tail && (m.tail.w + m.tail.l)) || 0;
+  const faded = (m.fade && (m.fade.w + m.fade.l)) || 0;
+  const settledRows = (me.calls || []).filter((c) => c.status === "settled")
+    .slice(0, 6).map((c) => `
+      <div class="tf-call ${c.result}">
+        <span>${escapeHtml(c.stance === "tail" ? "Tailed" : "Faded")}
+          <b>${escapeHtml(c.player)}</b> ${escapeHtml(c.side)} ${c.line ?? ""}
+          · ${escapeHtml((c.sport || "").toUpperCase())}</span>
+        <span class="tf-res">${c.result === "won" ? icon("check") : c.result === "lost" ? icon("cross") : ""} ${escapeHtml(c.result)}</span>
+      </div>`).join("");
+  host.innerHTML = `
+    <div class="section-title">You vs the model
+      <span class="sub">— every tail and fade you call, settled by the same journal
+      row the Results page grades the pick with. No money moves; the score is the point.</span>
+    </div>
+    <div class="card tf-card">
+      <div class="tf-stats">
+        <div class="tf-stat"><div class="k">Tailing · this month</div>
+          <div class="v">${played ? rec(m.tail) : "—"}</div></div>
+        <div class="tf-stat"><div class="k">Fading · this month</div>
+          <div class="v">${faded ? rec(m.fade) : "—"}</div></div>
+        <div class="tf-stat"><div class="k">The model · this month</div>
+          <div class="v">${(mm.w || mm.l) ? rec(mm) : "—"}</div></div>
+        <div class="tf-stat"><div class="k">All time</div>
+          <div class="v">${rec({ w: (me.all.tail.w + me.all.fade.w), l: (me.all.tail.l + me.all.fade.l) })}</div></div>
+      </div>
+      ${faded && m.fade.l > m.fade.w
+        ? `<p class="tf-moral">Fading is ${rec(m.fade)} this month — the model’s whole
+           pitch is that tailing it beats fighting it. The buttons are on every pick.</p>`
+        : ""}
+      ${settledRows ? `<div class="tf-calls">${settledRows}</div>`
+        : `<p class="tf-moral">No settled calls yet — tail or fade any pick on the board,
+           and your record starts with tonight’s grading.</p>`}
+    </div>`;
+}
+
 /* The NFL preseason module (fixture list, scores, book lines — never a
    price) lived here from 2026-08-08 to 2026-08-25 and was RETIRED at
    Ethan's request: "get rid of the pre season section for nfl. No need
@@ -3999,7 +4127,7 @@ function cardHTML(r) {
       ${confMeter(r)}
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}</div>
-      ${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+      ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
             it afterwards, and that is the order the argument runs in.
@@ -11258,6 +11386,7 @@ function mbBulkShow(text) {
 function renderMyBets() {
   const host = document.getElementById("mybets-body");
   if (!host) return;
+  renderTailFade();
   const acct = acctState();
   setStandaloneSource(acct ? `Account “${acct.name}” — synced through your own server`
                            : "Your device only — nothing is uploaded",

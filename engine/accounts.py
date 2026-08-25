@@ -501,10 +501,11 @@ def delete_user(conn, user_id: int) -> None:
         "SELECT name FROM sqlite_master WHERE type='table'")}
     if "subscriptions" in have:
         conn.execute("DELETE FROM subscriptions WHERE user_id=?", (int(user_id),))
-    # The streak game's tables (engine/streak.py) — same posture as
-    # `subscriptions`: created by another module, so their absence is
-    # normal, and their presence must not outlive the account.
-    for table in ("streak_picks", "streak_state"):
+    # The streak game's tables (engine/streak.py) and tail-or-fade's
+    # (engine/tailfade.py) — same posture as `subscriptions`: created by
+    # another module, so their absence is normal, and their presence
+    # must not outlive the account.
+    for table in ("streak_picks", "streak_state", "tf_calls"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?",
                          (int(user_id),))
@@ -543,4 +544,14 @@ def export_user(conn, user_id: int) -> dict:
                      "WHERE user_id=? ORDER BY date", (int(user_id),))]
         if picks:
             out["streak_picks"] = picks
+    if "tf_calls" in have:
+        calls = [{"sport": r["sport"], "date": r["date"],
+                  "player": r["player"], "market": r["market"],
+                  "side": r["side"], "stance": r["stance"],
+                  "status": r["status"], "result": r["result"]}
+                 for r in conn.execute(
+                     "SELECT * FROM tf_calls WHERE user_id=? "
+                     "ORDER BY created_at", (int(user_id),))]
+        if calls:
+            out["tail_fade_calls"] = calls
     return out

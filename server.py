@@ -753,6 +753,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/streak/"):
             return self._streak_get(
                 parsed.path[len("/api/streak/"):].strip("/"))
+        if parsed.path.startswith("/api/tailfade/"):
+            return self._tailfade_get(
+                parsed.path[len("/api/tailfade/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"))
@@ -826,6 +829,22 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             return self._streak_post(
                 parsed.path[len("/api/streak/"):].strip("/"), body)
+        if parsed.path.startswith("/api/tailfade/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._tailfade_post(
+                parsed.path[len("/api/tailfade/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -1415,6 +1434,67 @@ class Handler(BaseHTTPRequestHandler):
                                   headers=self._session_cookie("", clear=True))
         finally:
             conn.close()
+
+    # --- tail or fade ----------------------------------------------------
+    # Calls are validated against the SERVED board (the full copy, via
+    # board_source) — the browser names a player and a market, the board
+    # decides everything else. Entitlement-gated with the paywall on:
+    # the validation's own 404-vs-409 answers would otherwise let a
+    # signed-out prober map the board one name at a time.
+
+    def _tailfade_get(self, path: str):
+        if path != "me":
+            return self._send(404, b'{"error":"unknown tailfade endpoint"}',
+                              ".json")
+        from engine import tailfade as TF
+        from engine import ledger as _led
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            lconn = _led.connect()
+            try:
+                out = TF.me(conn, who["id"], lconn)
+            finally:
+                lconn.close()
+        finally:
+            conn.close()
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _tailfade_post(self, path: str, body: dict):
+        if path != "call":
+            return self._send(404, b'{"error":"unknown tailfade endpoint"}',
+                              ".json")
+        from engine import gate
+        from engine import tailfade as TF
+        A = _acct()
+        sport = str(body.get("sport") or "")
+        if sport not in LIVE_FILES:
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if gate.enabled() and not self._entitled(conn, who):
+                return self._send(402, json.dumps(
+                    {"error": "Tail/fade rides on the picks — an active "
+                              "subscription is what makes the argument "
+                              "fair."}).encode(), ".json")
+            try:
+                board = json.loads(Path(gate.board_source(
+                    LIVE_FILES[sport])).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                board = {}
+            code, out = TF.record_call(
+                conn, who["id"], board, sport,
+                str(body.get("player") or ""), str(body.get("market") or ""),
+                str(body.get("stance") or ""))
+        finally:
+            conn.close()
+        return self._send(code, json.dumps(out).encode(), ".json")
 
     # --- the streak game -------------------------------------------------
     # The slate itself is a free static file; these endpoints carry only
