@@ -182,6 +182,36 @@ def test_the_morning_strip_leads_the_home_board():
         "nothing fills the strip on the page it lives on"
 
 
+def test_the_autopsy_announces_once_and_moves_forward_only():
+    """#6's celebration and the day's late-night anchor: the nightly
+    postmortem landing is a moment. Same monotonic discipline as the
+    recap — one announcement per date, older entries never re-fire."""
+    autopsy = {"date": "2026-08-23",
+               "headline": "The unders died in one inning"}
+    evs, st = moments.derive({}, [], None, {}, TODAY, NOW, autopsy=autopsy)
+    kinds = [e["kind"] for e in evs]
+    assert kinds == ["autopsy_posted"]
+    assert evs[0]["headline"].startswith("The unders died")
+    # Again with the same entry: silence.
+    evs2, st = moments.derive({}, [], None, st, TODAY, NOW, autopsy=autopsy)
+    assert evs2 == []
+    # An OLDER entry handed in later must not re-announce.
+    older = {"date": "2026-08-20", "headline": "old news"}
+    evs3, _ = moments.derive({}, [], None, st, TODAY, NOW, autopsy=older)
+    assert evs3 == []
+
+
+def test_the_autopsy_marker_survives_the_new_day():
+    _, st = moments.derive({}, [], None, {}, TODAY, NOW,
+                           autopsy={"date": "2026-08-23", "headline": "x"})
+    assert st["autopsied"] == "2026-08-23"
+    _, st2 = moments.derive({}, [], None, st, "2026-08-25",
+                            "2026-08-25T09:00:00",
+                            autopsy={"date": "2026-08-23", "headline": "x"})
+    assert st2["autopsied"] == "2026-08-23", \
+        "day two re-announced night one's autopsy"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

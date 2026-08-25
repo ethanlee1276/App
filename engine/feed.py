@@ -62,6 +62,18 @@ PRICE_MOVE_PTS = 0.02
 #: a release is only news as a WAVE (the lineup-drop moment).
 RELEASE_MIN = 1
 
+#: A starter down this much on the four-seam is the red flag the MLB
+#: model doc calls out ("a drop of 1+ mph"). The event fires when a row
+#: FIRST crosses it — velocity is measured once per start, so there is
+#: no churn to debounce, only the moment the number lands.
+VELO_FLAG = -1.0
+
+#: Stale-line events per build. The scanner can hold a dozen stale
+#: quotes at once; the feed announces the widest few and the Scanner
+#: page holds the full table — a wall of near-identical alerts is how a
+#: feed stops being read.
+STALE_MAX_PER_BUILD = 3
+
 
 def _key(r: dict) -> str:
     return f"{r.get('player', '')}|{r.get('market', '')}"
@@ -87,6 +99,8 @@ def digest(board: dict) -> dict:
             "edge": r.get("edge"),
             "rec": bool(r.get("recommended")),
             "priced": r.get("has_market") is not False,
+            # §5's velocity tell (MLB pitcher props) — None elsewhere.
+            "velo": r.get("velo_delta"),
         }
     return out
 
@@ -169,6 +183,24 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
                                    imp_delta=round(ci - pi, 3),
                                    rec=c["rec"]))
 
+    # The velocity red flag — the last of the roadmap's five promised
+    # event kinds ("starter down 1.4mph on the four-seam"). Fires on the
+    # build where the number FIRST crosses the flag line: warm-up
+    # readings land once per start, so prev-missing → cur-flagged is the
+    # moment the engine learned it. Old state files predate the `velo`
+    # key, so `.get` — their first pass may announce a currently-flagged
+    # starter once, which is true today rather than stale.
+    for key, c in cur.items():
+        cv = c.get("velo")
+        if cv is None or float(cv) > VELO_FLAG:
+            continue
+        p = prev.get(key)
+        pv = p.get("velo") if p else None
+        if pv is not None and float(pv) <= VELO_FLAG:
+            continue                    # already announced when it landed
+        events.append(base("velocity_flag", c, key,
+                           delta=round(float(cv), 1), rec=c["rec"]))
+
     for key, p in prev.items():
         if key not in cur and p["rec"]:
             events.append(base("edge_died", p, key, reason="left_board"))
@@ -182,6 +214,43 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
             "players": [f"{r['player']} ({r['label']})" for r in top[:4]],
         })
     return events
+
+
+def _stale_key(row: dict) -> str:
+    return "|".join(str(row.get(k, "")) for k in
+                    ("player", "market", "book", "side", "line"))
+
+
+def stale_diff(prev_keys: set, stale_rows: list, sport: str,
+               ts: str) -> tuple[list[dict], list[str]]:
+    """(events for NEWLY stale quotes, all current keys) — pure.
+
+    The roadmap's sniper ("this book hasn't moved yet"): the Scanner page
+    has always held the full stale table, but a table is where you look
+    when you already suspect something — the feed is where the MOMENT a
+    book falls behind the field becomes a sentence with a timestamp.
+    Only quotes that were NOT stale last build fire; a book that stays
+    behind for an hour is one event, not sixty. Pre-game only — an
+    in-play "stale" quote is just a book pausing its live trading.
+    """
+    rows = [r for r in stale_rows or []
+            if not r.get("live") and not r.get("started")]
+    cur_keys = [_stale_key(r) for r in rows]
+    fresh = [r for r, k in zip(rows, cur_keys) if k not in prev_keys]
+    fresh.sort(key=lambda r: -(float(r.get("edge") or 0)))
+    events = []
+    for r in fresh[:STALE_MAX_PER_BUILD]:
+        events.append({
+            "id": _eid("stale_line", _stale_key(r), ts,
+                       str(r.get("odds", ""))),
+            "ts": ts, "sport": sport, "kind": "stale_line",
+            "player": r.get("player", ""), "bet": r.get("bet", ""),
+            "book": r.get("book", ""), "side": r.get("side", ""),
+            "line": r.get("line"), "odds": r.get("odds"),
+            "gap": round(float(r.get("edge") or 0), 3),
+            "consensus": r.get("consensus"),
+        })
+    return events, cur_keys
 
 
 # --- the state and the public file -----------------------------------------
@@ -213,15 +282,19 @@ def scan(sport: str, board_path, now: str | None = None) -> list[dict]:
         # but only when the board itself says so. A missing file above
         # returned [] without touching state.
         pass
+    stale_rows = (board.get("market_scan") or {}).get("stale") or []
     sp = _state_path(sport)
     prev_doc = _load_json(sp)
+    prev_stale = set((prev_doc or {}).get("stale") or [])
+    stale_events, stale_keys = stale_diff(prev_stale, stale_rows, sport, ts)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = sp.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"ts": ts, "digest": cur}), encoding="utf-8")
+    tmp.write_text(json.dumps({"ts": ts, "digest": cur,
+                               "stale": stale_keys}), encoding="utf-8")
     tmp.replace(sp)
     if prev_doc is None:
         return []                       # cold start is silent
-    return diff(prev_doc.get("digest") or {}, cur, sport, ts)
+    return diff(prev_doc.get("digest") or {}, cur, sport, ts) + stale_events
 
 
 def prune(events: list[dict], now: str | None = None) -> list[dict]:

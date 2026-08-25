@@ -11658,6 +11658,18 @@ async function renderFeedZone() {
         title: `${e.n} held prop${e.n === 1 ? "" : "s"} released — lines are up`,
         cond: escapeHtml((e.players || []).join(", ")),
       };
+      case "velocity_flag": return {
+        ic: "falling", tone: "warn",
+        title: `Velocity red flag: ${who} down ${Math.abs(e.delta || 0).toFixed(1)} mph on the four-seam`,
+        cond: e.rec
+          ? "he is on tonight’s board — the model already prices the drop; treat his props with care"
+          : "warm-up reading vs his season norm — a tired arm underperforms its projection",
+      };
+      case "stale_line": return {
+        ic: "clock", tone: "warn",
+        title: `Stale line: ${escapeHtml(e.book || "")} hasn’t moved ${escapeHtml(e.bet || "")}`,
+        cond: `${px(e.odds)} vs a field at ${((e.consensus || 0) * 100).toFixed(0)}% — ${((e.gap || 0) * 100).toFixed(1)} pts behind · full table on the Scanner page`,
+      };
       /* The day's anchored moments (engine/moments.py) — the rhythm
          events, in the same stream as the market's churn. */
       case "settle_recap": return {
@@ -11686,6 +11698,13 @@ async function renderFeedZone() {
         title: "First pitch — the sweat is on",
         cond: `${e.n_live} game${e.n_live === 1 ? "" : "s"} live${
           e.n_open ? ` · ${e.n_open} open bet${e.n_open === 1 ? "" : "s"} tracking on the Live tab` : ""}`,
+      };
+      case "autopsy_posted": return {
+        ic: "book", tone: "",
+        title: `The autopsy is up — what ${escapeHtml(e.date || "last night")} actually was`,
+        cond: e.headline
+          ? `“${escapeHtml(e.headline)}” — the full postmortem is on the Results page`
+          : "what we got wrong and why, graded in public on the Results page",
       };
       default: return null;
     }

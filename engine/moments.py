@@ -62,19 +62,23 @@ def _eid(kind: str, key: str) -> str:
 
 
 def derive(board: dict, live_games: list, recap: dict | None,
-           state: dict, today: str, now: str) -> tuple[list, dict]:
+           state: dict, today: str, now: str,
+           autopsy: dict | None = None) -> tuple[list, dict]:
     """Events due right now, plus the state that remembers them — pure.
 
     ``recap`` is last night's ledger summary ({date, w, l, p, net_u,
     open}) or None; ``live_games`` the fast scoreboard's rows; ``board``
-    the served slate. The caller owns all I/O.
+    the served slate; ``autopsy`` the newest nightly postmortem entry
+    ({date, headline}) or None. The caller owns all I/O.
     """
     state = dict(state or {})
     if state.get("date") != today:
-        # A new day forgets yesterday's announcements — except the recap
-        # marker, which is keyed by the night it recaps.
+        # A new day forgets yesterday's announcements — except the
+        # markers keyed by the night they describe: the recap and the
+        # autopsy both only ever move forward.
         state = {"date": today, "umps": {},
-                 "recapped": state.get("recapped", "")}
+                 "recapped": state.get("recapped", ""),
+                 "autopsied": state.get("autopsied", "")}
     events: list = []
 
     def emit(kind, key, **fields):
@@ -95,6 +99,18 @@ def derive(board: dict, live_games: list, recap: dict | None,
              w=recap.get("w", 0), l=recap.get("l", 0), p=recap.get("p", 0),
              net_u=round(float(recap.get("net_u", 0.0)), 2))
         state["recapped"] = recap["date"]
+
+    # -- the autopsy -------------------------------------------------
+    # The roadmap's late-night anchor and #6's celebration in one: when
+    # the nightly postmortem lands (engine/prose.py — the honest "what
+    # we got wrong and why" the Results page publishes), the feed says
+    # so, headline attached. Same monotonic marker discipline as the
+    # recap: a date only announces once and only ever moves forward.
+    if (autopsy and autopsy.get("date")
+            and autopsy["date"] > str(state.get("autopsied") or "")):
+        emit("autopsy_posted", autopsy["date"], date=autopsy["date"],
+             headline=str(autopsy.get("headline") or "")[:120])
+        state["autopsied"] = autopsy["date"]
 
     # -- the card ----------------------------------------------------
     recs = [r for r in (board or {}).get("recommendations") or []
@@ -180,8 +196,21 @@ def run(quiet: bool = True, today: str | None = None,
         recap = last_night(conn, today)
     finally:
         conn.close()
+    # The newest nightly postmortem, straight from the prose store —
+    # reading the store beats re-parsing record.json for one field.
+    autopsy = None
+    try:
+        from .prose import POSTMORTEM_PATH
+        entries = json.loads(Path(POSTMORTEM_PATH).read_text(
+            encoding="utf-8"))
+        if isinstance(entries, list) and entries:
+            autopsy = max((e for e in entries if isinstance(e, dict)
+                           and e.get("date")),
+                          key=lambda e: e["date"], default=None)
+    except (OSError, ValueError):
+        autopsy = None
     events, state = derive(board, live_games, recap, _load_state(),
-                           today, now)
+                           today, now, autopsy=autopsy)
     _save_state(state)
     if events:
         feed.publish(events, now=now)

@@ -39,6 +39,7 @@ from engine import feed, gate                                # noqa: E402
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 TS = "2026-08-24T14:41:00"
+TS2 = "2026-08-24T14:42:00"
 
 
 def _row(p="Juan Soto", mkt="total_bases", label="Total Bases", side="OVER",
@@ -171,6 +172,60 @@ def test_event_ids_are_stable_so_merges_cannot_duplicate():
 
 
 # --- the wire --------------------------------------------------------------
+
+def test_a_velocity_red_flag_fires_once_when_the_number_lands():
+    """The roadmap's fifth promised event kind ("starter down 1.4mph on
+    the four-seam"), the last to ship. Warm-up readings land once per
+    start: the event fires on the build where the flag first crosses
+    -1.0, and never again while it stays crossed."""
+    before = _dig([dict(_row(p="Gerrit Cole", mkt="strikeouts"))])
+    flagged_row = dict(_row(p="Gerrit Cole", mkt="strikeouts"))
+    flagged_row["velo_delta"] = -1.4
+    after = _dig([flagged_row])
+    evs = feed.diff(before, after, "mlb", TS)
+    flags = [e for e in evs if e["kind"] == "velocity_flag"]
+    assert len(flags) == 1 and flags[0]["delta"] == -1.4
+    # Still flagged next build: silence.
+    assert not [e for e in feed.diff(after, after, "mlb", TS2)
+                if e["kind"] == "velocity_flag"]
+    # A mild dip is not a red flag.
+    mild = dict(_row(p="Gerrit Cole", mkt="strikeouts"))
+    mild["velo_delta"] = -0.6
+    assert not [e for e in feed.diff(before, _dig([mild]), "mlb", TS)
+                if e["kind"] == "velocity_flag"]
+
+
+def test_stale_lines_fire_on_arrival_and_never_repeat():
+    """The sniper: the Scanner has always held the stale TABLE; the feed
+    marks the MOMENT a book falls behind the field. One event per quote,
+    however long it stays behind, and in-play quotes never fire — a live
+    "stale" price is a book pausing its trading, not lagging it."""
+    row = {"player": "Juan Soto", "bet": "Juan Soto OVER 1.5 Total Bases",
+           "book": "FanDuel", "side": "OVER", "line": 1.5, "odds": -105,
+           "edge": 0.035, "consensus": 0.58, "live": False,
+           "started": False}
+    evs, keys = feed.stale_diff(set(), [row], "mlb", TS)
+    assert len(evs) == 1 and evs[0]["kind"] == "stale_line"
+    assert evs[0]["book"] == "FanDuel" and evs[0]["gap"] == 0.035
+    # The same quote next build: remembered, silent.
+    evs2, _ = feed.stale_diff(set(keys), [row], "mlb", TS2)
+    assert evs2 == []
+    # A live row never fires.
+    assert feed.stale_diff(set(), [dict(row, live=True)], "mlb", TS)[0] == []
+    # A wall of new stales is capped to the widest few.
+    many = [dict(row, player=f"P{i}", bet=f"P{i} OVER", edge=0.02 + i / 100)
+            for i in range(8)]
+    evs3, _ = feed.stale_diff(set(), many, "mlb", TS)
+    assert len(evs3) == feed.STALE_MAX_PER_BUILD
+    assert evs3[0]["gap"] >= evs3[-1]["gap"], "not ranked by the gap"
+
+
+def test_the_page_renders_the_new_kinds():
+    app = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    for kind in ("velocity_flag", "stale_line", "autopsy_posted"):
+        assert f'case "{kind}"' in app, f"{kind} events render as nothing"
+
 
 def test_the_feed_is_a_paid_board():
     assert "feed.json" in gate.PAID_FILES, \
