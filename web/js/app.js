@@ -17143,9 +17143,9 @@ async function renderInjuries() {
    reference that auto-expands its biggest entries is the scroll again.
 
    Native <details>: keyboard and screen-reader behaviour for free, and
-   it still works with JS broken. Same chevron treatment as .pre-week,
-   because the UA triangle does not inherit colour and sits black on
-   black in the dark theme. */
+   it still works with JS broken. The chevron is the site's own rather
+   than the UA triangle, because that one does not inherit colour and
+   sits black on black in the dark theme. */
 function injTeamBlock(team, rows, sev) {
   const { out, maybe } = sev;
   const tiers = out || maybe

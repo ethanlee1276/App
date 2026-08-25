@@ -102,7 +102,7 @@ def test_nothing_is_open_by_default():
 
 def test_the_marker_is_the_sites_own_not_the_browsers():
     """The UA triangle does not inherit colour and sits black on black in
-    the dark theme — the same reason .pre-week draws its own."""
+    the dark theme, so this section draws its own."""
     assert ".inj-team > summary { cursor: pointer; list-style: none; }" in CSS
     i = CSS.index(".inj-team > summary::after")
     seg = CSS[i:i + 260]

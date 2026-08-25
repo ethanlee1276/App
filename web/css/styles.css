@@ -4342,8 +4342,9 @@ body.pk-open { overflow: hidden; }
 /* EACH TEAM FOLDS. Thirty-two blocks of fifteen rows each — most of them
    ESPN return filings reading "Active · undisclosed" — is several
    thousand pixels of scroll to reach a designation you could not see
-   coming. Same chevron treatment as .pre-week: the UA triangle does not
-   inherit colour and sits black on black in the dark theme. */
+   coming. The chevron is the site's own rather than the UA triangle,
+   because that one does not inherit colour and sits black on black in
+   the dark theme. */
 .inj-team { margin-top: 6px; }
 .inj-team > summary { cursor: pointer; list-style: none; }
 .inj-team > summary::-webkit-details-marker { display: none; }
@@ -4434,87 +4435,15 @@ body.pk-open { overflow: hidden; }
   :root { --hairline: 0.5px; }
 }
 
-/* ============================================================
-   NFL preseason — the August block
-   ============================================================
-   A fixture list and its scores, on the board for about five weeks a
-   year. It is a block rather than a nav tab because a permanent
-   destination that says nothing for eleven months costs more than it
-   gives, and it retires itself off the last fixture's date so nobody has
-   to remember to remove it.
-
-   Deliberately quieter than a pick. Nothing here is priced — that is the
-   whole boundary the module and the renderer both hold — so it must not
-   wear the visual weight the picks do, or the page implies a claim it is
-   not making. Agate rows, muted text, no grade badges and no accent
-   except the live dot. */
-.pre-card { padding: 14px 16px; }
+/* [NFL preseason block — removed 2026-08-25 alongside the surface itself.
+   The page block, its build and its gate registration all went in the
+   retirement; every rule here but one could no longer match an element.
+   `.pre-note` stays: the rankings coverage line still carries it, and it
+   stays HERE rather than moving next to the rankings so the cascade order
+   it has always had is the cascade order it keeps.] */
 .pre-note { margin: 0 0 12px; font-size: var(--fs-sm); color: var(--text-mute);
   line-height: var(--lh-body); max-width: var(--measure); }
 .pre-note b { color: var(--text-dim); font-weight: 700; }
-
-.pre-week { margin-top: 12px; }
-.pre-week:first-of-type { margin-top: 0; }
-/* A <details>, so three of the four weeks fold away. The marker is the
-   site's own chevron rather than the UA triangle, which does not inherit
-   colour and sat black-on-black in the dark theme. */
-.pre-week > summary { cursor: pointer; list-style: none; }
-.pre-week > summary::-webkit-details-marker { display: none; }
-.pre-week > summary::after {
-  content: "+"; margin-left: auto; color: var(--text-mute);
-  font-weight: 700; font-size: var(--fs-sm);
-  transition: transform var(--dur-fast) var(--ease-out);
-}
-.pre-week[open] > summary::after { content: "−"; }
-.pre-week > summary:hover { color: var(--text-dim); }
-.pre-week > summary:focus-visible { outline: 2px solid var(--brand);
-  outline-offset: 3px; }
-.pre-week-head {
-  display: flex; align-items: baseline; gap: 10px;
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--text-mute);
-  padding-bottom: 6px; border-bottom: var(--hairline) solid var(--border-soft);
-}
-.pre-week-n { color: var(--text-mute); letter-spacing: .06em; font-weight: 600; }
-
-/* One row per fixture. A grid, not a flex row: the date, the two marks
-   and the score have to line up down the column or 16 games a week read
-   as a heap. */
-.pre-game {
-  display: grid; align-items: center; gap: 0 10px;
-  grid-template-columns: 46px 46px 14px 46px minmax(0, 1fr) auto;
-  padding: 7px 0; border-bottom: var(--hairline) solid var(--border-soft);
-  font-size: var(--fs-sm);
-}
-.pre-game:last-child { border-bottom: 0; }
-.pre-date { color: var(--text-mute); font-variant-numeric: tabular-nums;
-  font-size: var(--fs-xs); }
-.pre-team {
-  display: grid; place-items: center; padding: 3px 0;
-  border: var(--hairline) solid; border-radius: var(--radius);
-  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .06em;
-  color: var(--text-dim);
-}
-.pre-at { color: var(--text-mute); font-size: var(--fs-2xs); text-align: center; }
-.pre-score { font-variant-numeric: tabular-nums; color: var(--text-dim);
-  letter-spacing: .04em; }
-/* The winner reads louder than the loser; neither is good/bad coloured,
-   because we did not bet it. */
-.pre-score b { font-weight: 500; color: var(--text-mute); }
-.pre-score b.won { font-weight: 700; color: var(--text); }
-.pre-state { color: var(--text-mute); font-size: var(--fs-xs);
-  text-align: right; letter-spacing: .08em; text-transform: uppercase; }
-.pre-state.live { color: var(--warn); font-weight: 700; }
-.pre-roof { color: var(--text-mute); font-size: var(--fs-2xs); }
-
-@media (max-width: 560px) {
-  /* The date leads its own line and the fixture sits under it; six
-     columns in 320px is four characters a cell. */
-  .pre-game { grid-template-columns: 44px 14px 44px minmax(0, 1fr) auto;
-    row-gap: 2px; }
-  .pre-date { grid-column: 1 / -1; }
-  .pre-roof { display: none; }
-}
 
 /* ============================================================
    Real team logos
@@ -6742,21 +6671,6 @@ body.has-rail .shell {
   white-space: nowrap; }
 .slate-jump:hover { text-decoration: underline; }
 
-/* Preseason starter scan — what each side has historically done. */
-/* OWN ROW, for the same reason `.pre-line` takes one: `.pre-game` is a
-   six-column grid and this landed in the 1fr cell, which was fine while
-   the text read "21 att" and overlapped the kickoff time once it read
-   "played 4 of 4, 21 att when he did". */
-.pre-scan { grid-column: 1 / -1;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  margin-top: 6px; padding-top: 6px;
-  border-top: var(--hairline) solid var(--border); }
-.pre-scan-side { display: inline-flex; align-items: center; gap: 6px;
-  font-size: var(--fs-sm); }
-.pre-scan-n { color: var(--text-mute); font-size: var(--fs-xs); }
-/* Who we expect to see, set apart from the club's record beside it. */
-.pre-scan-qb { color: var(--text-dim); font-size: var(--fs-xs); }
-
 /* --- Rankings, side by side ---------------------------------------------
    The table is agate: many columns of small numbers, so tabular figures
    and a horizontal scroll of its own rather than a page that scrolls
@@ -7170,23 +7084,6 @@ body.has-rail .shell {
   margin-top: 8px; font-size: var(--fs-sm); }
 .dk-advice-note { margin-top: 8px; color: var(--text-mute);
   font-size: var(--fs-xs); }
-.pre-scan-note { margin-left: auto; color: var(--text-mute);
-  font-size: var(--fs-xs); font-style: italic; }
-/* The MARKET's number, and styled to read as one: tabular figures, muted,
-   no accent colour anywhere. A posted price given the same emphasis as a
-   recommendation is how a page starts making claims it has not earned. */
-/* SPANS THE WHOLE ROW. `.pre-game` is a six-column grid; without this the
-   line lands in whichever cell is left over — the wide 1fr when there is
-   no starter scan, and the narrow trailing `auto` when there is, where it
-   stacked one number per line and looked like a different component. */
-.pre-line { grid-column: 1 / -1;
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
-  margin-top: 4px; font-size: var(--fs-xs); color: var(--text-mute);
-  font-variant-numeric: tabular-nums; }
-.pre-line-lab { text-transform: uppercase; letter-spacing: .06em;
-  font-size: var(--fs-xs); opacity: .8; }
-.pre-line-n { color: var(--text); }
-.pre-line-books { margin-left: auto; }
 
 /* ---------------- The account screen -------------------------------------
    Ethan, 2026-08-16: "it needs to look professional."
