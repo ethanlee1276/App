@@ -5643,7 +5643,11 @@ function renderGameBetPage(b) {
   const warn = (b.warnings || []).slice(0, 4)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   host.innerHTML = `
-    <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+    <div class="pp-nav">
+      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+      <button class="btn ghost qb-share" data-card="${escapeAttr(gameBetId(b))}"
+        >Share card</button>
+    </div>
     <article class="card pp-card">
       <div class="card-head">
         <div class="card-id">${mark}
@@ -5950,6 +5954,8 @@ function renderPropPage() {
     <div class="pp-nav">
       <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
       ${shareBtn("pick", pickSlug(r))}
+      <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
+        >Share card</button>
     </div>
     <article class="card pp-card">
       <div class="card-head">
@@ -23854,6 +23860,237 @@ document.addEventListener("click", (e) => {
   if (!b) return;
   e.preventDefault();
   copyLink(b.dataset.shareKind, b.dataset.shareSlug, b);
+});
+
+/* ============================================================
+   SHARE CARDS — a pick as a picture
+   ============================================================
+   Ethan, 2026-08-25: "Betting Twitter/Discord runs on screenshots.
+   Generate a clean share-card image per pick (player face, line, model
+   edge, your logo) … Every share is an ad with your domain on it."
+
+   DRAWN IN THE BROWSER, not on the server, and that is the cheap half
+   of the decision: the row is already on screen, so the card costs one
+   canvas and no request. The server would have to re-resolve the pick,
+   re-check entitlement and rasterise text with no font stack — three
+   problems this does not have.
+
+   THE HEADSHOT IS ATTEMPTED AND NOT REQUIRED. Faces come from ESPN and
+   MLB CDNs, and drawing a cross-origin image onto a canvas TAINTS it —
+   after which `toBlob` throws a SecurityError and there is no card at
+   all. So it is loaded with crossOrigin="anonymous", which means the
+   browser refuses it outright unless the CDN sends the header that
+   makes it safe; `onerror` then falls back to the same drawn chip the
+   board uses when a face is missing. A card with initials on it beats a
+   button that does nothing.
+
+   1200x630 because that is what every scraper and every chat client
+   crops to, and it is the size the site card already uses. */
+const CARD_W = 1200, CARD_H = 630;
+
+function cardFont(px, weight) {
+  // The site's own faces, with a real fallback: canvas silently
+  // substitutes when a family is missing, so the card would come out in
+  // Times without anybody being told.
+  return `${weight || 400} ${px}px "Archivo Narrow", "IBM Plex Mono", `
+       + `system-ui, -apple-system, sans-serif`;
+}
+
+/* One shape for both kinds of pick, so the drawing does not need to know
+   which page it came from. Returns null for a row with nothing to say. */
+function shareCardData(r) {
+  if (!r) return null;
+  const isGameBet = !r.player && (r.pick_label || r.headline);
+  const title = isGameBet ? String(r.pick_label || r.headline || "")
+                          : String(r.player || "");
+  if (!title) return null;
+  const sub = isGameBet
+    ? String(r.matchup || `${r.away || ""} @ ${r.home || ""}`).trim()
+    : [r.position, typeof teamName === "function" ? teamName(r.team) : r.team,
+       r.opponent ? `vs ${typeof teamName === "function"
+         ? teamName(r.opponent) : r.opponent}` : ""].filter(Boolean).join(" · ");
+  const pick = isGameBet
+    ? String(r.market_label || r.market || "")
+    : `${String(r.side || "").toUpperCase()} ${r.line != null ? r.line : ""} `
+      + `${r.market_label || r.market || ""}`.trim();
+  return {
+    title, sub, pick,
+    odds: oddsTxt(r.odds),
+    // An edge that rounds to zero is not a fact worth a tile: it reads
+    // as a pick with no argument behind it, which is the opposite of
+    // what the row means (the price moved after we took it).
+    edge: r.edge != null && Math.abs(r.edge * 100) >= 0.05
+      ? `${r.edge > 0 ? "+" : ""}${(r.edge * 100).toFixed(1)}%` : "",
+    proj: r.projection != null ? Number(r.projection).toFixed(1) : "",
+    hit: r.hit_prob != null ? `${Math.round(r.hit_prob * 100)}%` : "",
+    headshot: r.headshot || "",
+    team: r.team || "",
+  };
+}
+
+function _cardImage(src, cors) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    if (cors) img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+async function shareCardCanvas(d) {
+  const c = document.createElement("canvas");
+  c.width = CARD_W; c.height = CARD_H;
+  const x = c.getContext("2d");
+  if (!x) return null;
+  // Wait for the real faces, or the first card drawn on a cold page
+  // comes out in the fallback while every later one is correct.
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; }
+  catch (e) { /* the fallback stack still draws */ }
+
+  x.fillStyle = "#0b0906";
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  const g = x.createLinearGradient(0, 0, CARD_W, CARD_H);
+  g.addColorStop(0, "rgba(232,182,76,.14)");
+  g.addColorStop(0.55, "rgba(232,182,76,0)");
+  x.fillStyle = g;
+  x.fillRect(0, 0, CARD_W, CARD_H);
+  x.strokeStyle = "rgba(232,182,76,.5)";
+  x.lineWidth = 3;
+  x.strokeRect(1.5, 1.5, CARD_W - 3, CARD_H - 3);
+
+  const [face, logo] = await Promise.all([
+    _cardImage(d.headshot, true), _cardImage("logo-qb.png", false),
+  ]);
+
+  // The face, or the initials chip the board falls back to.
+  const CX = 172, CY = 250, R = 96;
+  x.save();
+  x.beginPath();
+  x.arc(CX, CY, R, 0, Math.PI * 2);
+  x.closePath();
+  x.clip();
+  x.fillStyle = "#171310";
+  x.fillRect(CX - R, CY - R, R * 2, R * 2);
+  if (face) {
+    x.drawImage(face, CX - R, CY - R, R * 2, R * 2);
+  } else {
+    x.fillStyle = "#e8b64c";
+    x.font = cardFont(74, 700);
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    const initials = d.title.split(/\s+/).slice(0, 2)
+      .map((w) => w[0] || "").join("").toUpperCase();
+    x.fillText(initials || "QB", CX, CY + 4);
+  }
+  x.restore();
+  x.strokeStyle = "rgba(232,182,76,.55)";
+  x.lineWidth = 3;
+  x.beginPath();
+  x.arc(CX, CY, R, 0, Math.PI * 2);
+  x.stroke();
+
+  const L = 306;
+  x.textAlign = "left";
+  x.textBaseline = "alphabetic";
+  x.fillStyle = "#f5efe6";
+  x.font = cardFont(64, 700);
+  // Long names shrink rather than run off the card.
+  let size = 64;
+  while (size > 34 && x.measureText(d.title).width > CARD_W - L - 70) {
+    size -= 2;
+    x.font = cardFont(size, 700);
+  }
+  x.fillText(d.title, L, 200);
+
+  x.fillStyle = "rgba(245,239,230,.62)";
+  x.font = cardFont(28, 400);
+  x.fillText(d.sub.slice(0, 64), L, 244);
+
+  x.fillStyle = "#e8b64c";
+  x.font = cardFont(46, 700);
+  let ps = 46;
+  while (ps > 26 && x.measureText(d.pick).width > CARD_W - L - 190) {
+    ps -= 2;
+    x.font = cardFont(ps, 700);
+  }
+  x.fillText(d.pick, L, 322);
+  x.fillStyle = "#f5efe6";
+  x.font = cardFont(46, 700);
+  x.fillText(d.odds, L, 386);
+
+  // The model's own numbers, labelled. A card with a price and no
+  // reasoning is a tout's graphic.
+  const facts = [["Model", d.proj], ["Hit", d.hit], ["Edge", d.edge]]
+    .filter(([, v]) => v);
+  facts.forEach(([k, v], i) => {
+    const fx = L + i * 190;
+    x.fillStyle = "rgba(245,239,230,.5)";
+    x.font = cardFont(22, 400);
+    x.fillText(k.toUpperCase(), fx, 464);
+    x.fillStyle = "#f5efe6";
+    x.font = cardFont(40, 700);
+    x.fillText(v, fx, 508);
+  });
+
+  if (logo) x.drawImage(logo, CARD_W - 128, 44, 84, 84);
+  x.fillStyle = "rgba(245,239,230,.55)";
+  x.font = cardFont(24, 400);
+  x.textAlign = "right";
+  x.fillText("qellysbook.com", CARD_W - 44, 566);
+  x.textAlign = "left";
+  x.fillStyle = "rgba(245,239,230,.42)";
+  x.font = cardFont(22, 400);
+  // The site's whole claim, on every card that leaves it.
+  x.fillText("Journaled at this price · graded in public", L, 566);
+  return c;
+}
+
+async function shareCard(r, btn) {
+  const d = shareCardData(r);
+  if (!d) return;
+  const was = btn ? btn.textContent : "";
+  if (btn) btn.textContent = "Drawing…";
+  let canvas = null;
+  try { canvas = await shareCardCanvas(d); } catch (e) { canvas = null; }
+  if (!canvas) {
+    if (btn) btn.textContent = was;
+    return tfToast("That card could not be drawn.");
+  }
+  const done = () => { if (btn) btn.textContent = was; };
+  const name = `${slugify(d.title) || "pick"}-qellysbook.png`;
+  canvas.toBlob(async (blob) => {
+    if (!blob) { done(); return tfToast("That card could not be drawn."); }
+    const file = new File([blob], name, { type: "image/png" });
+    // The share sheet is what actually gets a picture into a group chat.
+    // A cancel rejects, and a cancel is not a failure.
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); } catch (e) {}
+      done();
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked on the next tick rather than immediately: Safari has not
+    // finished reading the blob when click() returns.
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    done();
+  }, "image/png");
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-card]");
+  if (!b) return;
+  e.preventDefault();
+  const r = findProp(b.dataset.card)
+    || ((state.data || {}).game_bets || []).find((g) => gameBetId(g) === b.dataset.card);
+  if (r) shareCard(r, b);
 });
 
 document.addEventListener("click", (e) => {
