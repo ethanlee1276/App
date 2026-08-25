@@ -104,12 +104,27 @@ run "college football, 2025 season" \
 # The three NFL fits. Each refuses to apply itself until it has enough
 # settled history, so a "not enough data" answer is the system working
 # rather than failing — it will say so and move on.
-run "NFL probability calibration" \
-    python3 calibrate.py --from-db data/history.db --sport nfl
+#
+# THE ORDER IS LOAD-BEARING AND THE FIRST CUT HAD IT WRONG (2026-08-25).
+# Calibration ran SECOND here, and formfit — which ran last — ended its
+# own output by saying why that is backwards:
+#
+#     Adopted weights change the model — refit its temperature next,
+#     on the new model:  python3 calibrate.py --from-db …
+#
+# A temperature is fitted against a specific model's claims. Player
+# memory changes per-player projections and the recency dial changes how
+# the form window is weighted, so both move the claims that calibration
+# was just fitted to — leaving the correction describing a model that no
+# longer exists. Calibration goes LAST, on the model the other two have
+# finished making. The tool said so on the box; nothing was broken by
+# it, the temperature was simply a run behind.
 run "NFL player memory" \
     python3 playerfit.py --sport nfl
 run "NFL recency dial" \
     python3 formfit.py --sport nfl
+run "NFL probability calibration" \
+    python3 calibrate.py --from-db data/history.db --sport nfl
 
 if (( RESTART )); then
   # See the header: without this the service keeps the corrections it
