@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Friends, and picks sent between them",
+      "body": "You can now send a pick to a friend. Friends are made with an invite link from your Account page — there is no search, so nobody can look your account up and nobody you didn't invite can message you. What travels is the pick's identity, never its contents: your friend opens it on the board under their own account, so what is behind the paywall stays there. Sent picks arrive at the top of Alerts, with your note on them."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "model",
       "title": "NFL probabilities calibrated against 80,000 settled games",
       "body": "The deep NFL fit ran for the first time, and it found the projection honest about passing yards and optimistic about everything a broken tackle can inflate: rushing yards claimed 50% where 27% landed, receiving yards 50% where 36% landed, receptions 50% where 43%. The cause is the distribution's shape — a season's rushing mean is dragged up by a few long runs, so most games land under it, and the model priced around the mean. Every rushing and receiving probability on the board comes down accordingly, which will read as far fewer overs and more unders on those markets. That is the correction working, not the model losing its nerve."

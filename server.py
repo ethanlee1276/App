@@ -770,6 +770,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/tailfade/"):
             return self._tailfade_get(
                 parsed.path[len("/api/tailfade/"):].strip("/"))
+        if parsed.path.startswith("/api/social/"):
+            return self._social_get(
+                parsed.path[len("/api/social/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"))
@@ -877,6 +880,22 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             return self._tailfade_post(
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
+        if parsed.path.startswith("/api/social/"):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
+            if length > MAX_PROFILE_BYTES:
+                self.close_connection = True
+                return self._send(413, b'{"error":"body too large"}', ".json")
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                assert isinstance(body, dict)
+            except Exception:                            # noqa: BLE001
+                return self._send(400, b'{"error":"body must be a JSON object"}',
+                                  ".json")
+            return self._social_post(
+                parsed.path[len("/api/social/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
             return self._send(404, b'{"error":"unknown endpoint"}', ".json")
         try:
@@ -1553,6 +1572,72 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
         return self._send(code, json.dumps(out).encode(), ".json")
+
+    # --- friends: picks sent between accounts -----------------------------
+    # engine/social.py holds the two rules (a share is a POINTER carrying
+    # only the pick's identity, and friendships form through invite links
+    # rather than lookup); these handlers hold the third: every endpoint
+    # requires a session, because there is nothing anonymous here to
+    # serve. NOT entitlement-gated — no paid content travels (that is the
+    # pointer rule doing its work), so a free account can receive a
+    # friend's pointer and see the locked state behind it, which is
+    # exactly what the same pick's permalink would show them.
+    def _social_get(self, path: str):
+        from engine import social as SOC
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "me":
+                out = {"friends": SOC.friends_list(conn, who["id"]),
+                       "inbox": SOC.inbox(conn, who["id"]),
+                       "invite": SOC.invite_get_or_create(conn, who["id"])}
+                return self._send(200, json.dumps(out).encode(), ".json")
+            return self._send(404, b'{"error":"unknown social endpoint"}',
+                              ".json")
+        finally:
+            conn.close()
+
+    def _social_post(self, path: str, body: dict):
+        from engine import social as SOC
+        if path not in ("accept", "send", "remove", "seen", "revoke-invite"):
+            return self._send(404, b'{"error":"unknown social endpoint"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "accept":
+                code, out = SOC.invite_accept(conn, who["id"],
+                                              str(body.get("token") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "send":
+                # The identity fields and the note are the ONLY things
+                # read out of the body — a side, line or price sent by a
+                # crafted client lands nowhere, because share_pick has no
+                # parameter to receive it.
+                code, out = SOC.share_pick(
+                    conn, who["id"], int(body.get("to") or 0),
+                    str(body.get("sport") or ""), str(body.get("date") or ""),
+                    str(body.get("player") or ""),
+                    str(body.get("market") or ""),
+                    str(body.get("note") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "remove":
+                SOC.friend_remove(conn, who["id"], int(body.get("friend") or 0))
+                return self._send(200, b'{"removed":true}', ".json")
+            if path == "revoke-invite":
+                SOC.invite_revoke(conn, who["id"])
+                out = SOC.invite_get_or_create(conn, who["id"])
+                return self._send(200, json.dumps(out).encode(), ".json")
+            SOC.mark_seen(conn, who["id"])
+            return self._send(200, b'{"seen":true}', ".json")
+        finally:
+            conn.close()
 
     # --- the streak game -------------------------------------------------
     # The slate itself is a free static file; these endpoints carry only

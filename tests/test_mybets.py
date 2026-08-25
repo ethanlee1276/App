@@ -97,7 +97,11 @@ def test_entries_live_only_in_the_browser():
     tests/test_accounts.py for that contract. The mechanism pinned here
     is the separation: this block still contains no fetch; it only
     raises its hand via acctTouch and the account layer decides."""
-    body = _slice("const MYBETS_KEY", "\n/* ================")
+    # Sliced to where the Alerts renderer begins, not to the section
+    # divider: renderAlerts shares this stretch of the file, and since
+    # 2026-08-25 it legitimately fetches the friends inbox — network
+    # code, but not the storage layer's.
+    body = _slice("const MYBETS_KEY", "\nfunction renderAlerts(")
     assert 'MYBETS_KEY = "qb_mybets_v1"' in APP
     assert "localStorage.getItem(MYBETS_KEY)" in body
     assert "localStorage.setItem(MYBETS_KEY" in body

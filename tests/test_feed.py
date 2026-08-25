@@ -249,8 +249,13 @@ def test_the_loop_publishes_it_as_a_sweep():
 def test_the_page_leads_with_the_feed():
     i = APP.index("function renderAlerts(")
     body = APP[i:APP.index("\nfunction ", i + 10)]
-    assert 'host.innerHTML = `<div id="feed-zone"></div>`' in body, \
-        "the feed zone no longer leads the Alerts page"
+    # The one thing allowed above the feed is the friends inbox
+    # (2026-08-25): a friend sending you a pick is exactly the kind of
+    # news this page exists for, and it is personal where the feed is
+    # ambient. Everything else still trails the zone.
+    assert ('host.innerHTML = friendInboxHTML()\n'
+            '    + `<div id="feed-zone"></div>`') in body, \
+        "the feed zone no longer sits at the head of the Alerts page"
     assert "renderFeedZone()" in body, \
         "the zone div renders but nothing ever fills it"
     fn = APP[APP.index("async function renderFeedZone("):]

@@ -390,7 +390,13 @@ def test_the_share_control_emits_the_clean_url_not_the_address_bar():
     fn = APP[APP.index("function copyLink(kind, slug, btn)"):]
     fn = fn[:fn.index("\n}")]
     assert "cleanURL(kind, slug)" in fn
-    assert "navigator.share" in fn and "navigator.clipboard" in fn
+    # The share-sheet/clipboard mechanics moved to copyRawURL when the
+    # friend-invite button needed them for a URL that is NOT an entity
+    # page (2026-08-25) — one copy, both callers.
+    assert "copyRawURL(" in fn
+    raw = APP[APP.index("function copyRawURL(url, btn)"):]
+    raw = raw[:raw.index("\n}")]
+    assert "navigator.share" in raw and "navigator.clipboard" in raw
     for surface in ('shareBtn("pick", pickSlug(r))',
                     'shareBtn("game", gameSlug(g))',
                     'shareBtn("player", slugify(r.player))'):

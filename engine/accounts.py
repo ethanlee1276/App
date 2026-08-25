@@ -517,10 +517,24 @@ def delete_user(conn, user_id: int) -> None:
     # preferences and an unsubscribe token, and a mailing list that
     # outlives the account it belonged to is the exact thing the privacy
     # page promises does not happen.
-    for table in ("streak_picks", "streak_state", "tf_calls", "digest_optin"):
+    # friendships/friend_invites/pick_shares (engine/social.py, 2026-08-25):
+    # a friendship is a channel INTO other people's inboxes, an invite is
+    # a live credential, and both must die with the account that held
+    # them. pick_shares carries only pick identities, but they are still
+    # this account's activity and go too — from both sides, which the
+    # per-table DELETE below handles for the rows this user owns and the
+    # mirror rows (friend_id / to_id) need their own statements.
+    for table in ("streak_picks", "streak_state", "tf_calls", "digest_optin",
+                  "friend_invites"):
         if table in have:
             conn.execute(f"DELETE FROM {table} WHERE user_id=?",
                          (int(user_id),))
+    if "friendships" in have:
+        conn.execute("DELETE FROM friendships WHERE user_id=? OR friend_id=?",
+                     (int(user_id), int(user_id)))
+    if "pick_shares" in have:
+        conn.execute("DELETE FROM pick_shares WHERE from_id=? OR to_id=?",
+                     (int(user_id), int(user_id)))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -566,6 +580,21 @@ def export_user(conn, user_id: int) -> dict:
                      "ORDER BY created_at", (int(user_id),))]
         if calls:
             out["tail_fade_calls"] = calls
+    if "friendships" in have:
+        n = conn.execute("SELECT COUNT(*) FROM friendships WHERE user_id=?",
+                         (int(user_id),)).fetchone()[0]
+        if n:
+            out["friends"] = {"count": int(n)}
+    if "pick_shares" in have:
+        # Identities only — the rows never held anything else, which is
+        # the pointer rule visible in the export too.
+        sent = [{"date": r["date"], "sport": r["sport"], "player": r["player"],
+                 "market": r["market"], "note": r["note"]}
+                for r in conn.execute(
+                    "SELECT date, sport, player, market, note FROM pick_shares "
+                    "WHERE from_id=? ORDER BY created_at", (int(user_id),))]
+        if sent:
+            out["picks_sent_to_friends"] = sent
     if "digest_optin" in have:
         # WITHOUT THE TOKEN. An export is a file people mail around, and
         # the unsubscribe token is a bearer credential — the same reason

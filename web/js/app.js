@@ -5960,7 +5960,10 @@ function renderPropPage() {
         >Share card</button>
       ${r.player ? `<button class="btn ghost" data-player-page="${escapeAttr(slugify(r.player))}"
         >Player page →</button>` : ""}
+      ${r.player ? `<button class="btn ghost" data-send-pick
+        >Send to a friend</button>` : ""}
     </div>
+    <div id="fr-send-slot"></div>
     <article class="card pp-card">
       <div class="card-head">
         <div class="card-id">${betMark(r, 56)}
@@ -12755,6 +12758,32 @@ function renderAlerts() {
   const host = document.getElementById("alerts-body");
   if (!host) return;
   const d = state.data || {};
+  // Friends first: fetch once if signed in and redraw when it lands.
+  // Seen is marked AFTER the rows have actually been shown — a
+  // background poll must not eat the unread state.
+  //
+  // `_acctUser` is null until boot's acctWho() answers, and a cold load
+  // of #alerts renders before that. Null means UNKNOWN, not signed out:
+  // ask, then redraw if the answer is yes — otherwise a signed-in
+  // reader who lands here directly never sees the inbox at all.
+  if (!_acctUser) {
+    acctWho().then((u) => {
+      if (u && u.signed_in && state.view === "alerts") renderAlerts();
+    });
+  } else if (_acctUser.signed_in && !_socCache) {
+    socFetch().then((got) => {
+      if (got && state.view === "alerts") renderAlerts();
+    });
+  }
+  const _frUnseen = !!(_socCache && _socCache.inbox && _socCache.inbox.unseen);
+  if (_frUnseen && state.view === "alerts") {
+    setTimeout(() => {
+      fetch("/api/social/seen", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(() => { if (_socCache) _socCache.inbox.unseen = 0; })
+        .catch(() => {});
+    }, 1200);
+  }
   // Render 14's list: an icon chip, the alert on one line, the CONDITION
   // that fired it underneath. What never crosses is the render's per-row
   // toggle and "Create New Alert" — this page is a digest of feeds we
@@ -12816,7 +12845,8 @@ function renderAlerts() {
         `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
   }
-  host.innerHTML = `<div id="feed-zone"></div>`
+  host.innerHTML = friendInboxHTML()
+    + `<div id="feed-zone"></div>`
     + (moved.length + inj.length + recs.length ? chips : "")
     + (sections.join("") || `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
@@ -14841,6 +14871,10 @@ window.acctAuth = async function (btn, mode) {
     // and they never sign up again. `a2hsTick` decides whether it is
     // wanted — phone, not installed, not previously dismissed.
     a2hsArm();
+    // A friend's invite that hit the sign-in wall fires now — the link
+    // is why this person just signed in, and forgetting it would be a
+    // funnel with a hole in the bottom.
+    acceptPendingInvite();
     await acctSync();
     if (typeof renderGreeting === "function") renderGreeting();
     if (state.view === "mybets") renderMyBets();
@@ -16759,9 +16793,16 @@ function acctScreenHTML() {
 function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;
-  body.innerHTML = acctScreenHTML() + settingsHTML() + menuDiagHTML();
+  body.innerHTML = acctScreenHTML() + friendsCardHTML() + settingsHTML()
+    + menuDiagHTML();
   renderFantasyLinks();
   bindSettings();
+  // Fetched after first paint, then redrawn once — the card renders
+  // from cache and must not hold the whole account screen hostage to a
+  // fetch. Guarded so the redraw happens only when something arrived.
+  if (_acctUser && _acctUser.signed_in && !_socCache) {
+    socFetch().then((got) => { if (got) renderAccount(); });
+  }
 }
 
 /* ============================================================
@@ -23909,7 +23950,10 @@ function shareBtn(kind, slug, label) {
 }
 
 function copyLink(kind, slug, btn) {
-  const url = cleanURL(kind, slug);
+  copyRawURL(cleanURL(kind, slug), btn);
+}
+
+function copyRawURL(url, btn) {
   const said = (msg) => {
     if (!btn) return tfToast(msg);
     const was = btn.textContent;
@@ -24280,6 +24324,250 @@ document.addEventListener("click", (e) => {
    prop card links to one" — a prop card opens the prop page, and from
    there this reaches the full player page (logs, form windows, every
    priced market), address and all. */
+/* ============================================================
+   FRIENDS — picks sent between accounts
+   ============================================================
+   Ethan, 2026-08-25: "lets add a social network on the app where users
+   can send picks back and forth between there friends."
+
+   The engine holds the two structural rules (a share is a POINTER
+   carrying only the pick's identity; friendships form through invite
+   links, never lookup — engine/social.py says why at length). This half
+   is three surfaces: a Friends card on the Account page, a Send-to-a-
+   friend picker on the prop page, and a From-your-friends section at
+   the top of the Alerts feed — which is already the page for "what
+   happened while you were gone", and a friend sending you a pick is
+   exactly that kind of news. */
+let _socCache = null, _socAt = 0;
+
+async function socFetch(force = false) {
+  if (!force && _socCache && Date.now() - _socAt < 30000) return _socCache;
+  if (!(_acctUser && _acctUser.signed_in)) { _socCache = null; return null; }
+  try {
+    const r = await fetch("/api/social/me", { cache: "no-store" });
+    _socCache = r.ok ? await r.json() : null;
+    _socAt = Date.now();
+  } catch (e) { /* the cached copy, or null, stands */ }
+  return _socCache;
+}
+
+function inviteURL(token) {
+  // A HASH route on purpose, where the entity pages got clean paths: an
+  // invite is opened signed-in inside the app, never unfurled — a link
+  // preview that said whose invite it was would leak exactly the thing
+  // an unguessable token exists to protect.
+  return `${location.origin}/#friend/${encodeURIComponent(token)}`;
+}
+
+const PENDING_INVITE_KEY = "qb_pending_invite";
+
+/* Opening a friend's link. Signed in: accept on the spot. Signed out:
+   the token waits in localStorage and the sign-in screen opens — and
+   the accept fires the moment the session exists, because a link that
+   answers "sign in first" and then forgets why you came is a funnel
+   with a hole in the bottom. */
+async function friendRoute(token) {
+  switchView("account");
+  // A null _acctUser is UNKNOWN, not signed out: a cold load routes
+  // here before boot's acctWho() has answered, and the commonest opener
+  // of an invite link is somebody already signed in on their own phone.
+  // Stashing them as signed-out would park the invite in localStorage
+  // behind a second sign-in they will never perform.
+  const u = await acctWho();
+  if (!(u && u.signed_in)) {
+    try { localStorage.setItem(PENDING_INVITE_KEY, token); } catch (e) {}
+    tfToast("Sign in and this invite accepts itself.");
+    return;
+  }
+  try {
+    const r = await fetch("/api/social/accept", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const out = await r.json().catch(() => ({}));
+    tfToast(r.ok
+      ? (out.already ? `You and ${out.friend} are already friends.`
+                     : `You and ${out.friend} are friends now.`)
+      : (out.error || "That invite is not live."));
+    if (r.ok) { await socFetch(true); renderAccount(); }
+  } catch (e) { tfToast("Could not reach the server — try the link again."); }
+}
+
+async function acceptPendingInvite() {
+  let tok = "";
+  try {
+    tok = localStorage.getItem(PENDING_INVITE_KEY) || "";
+    localStorage.removeItem(PENDING_INVITE_KEY);
+  } catch (e) { return; }
+  if (tok) await friendRoute(tok);
+}
+
+/* The Friends card on the Account page. Signed-out it renders nothing —
+   unlike settings, there is no meaningful device-local half of a
+   friendship. */
+function friendsCardHTML() {
+  if (!(_acctUser && _acctUser.signed_in)) return "";
+  const soc = _socCache;
+  const friends = (soc && soc.friends) || [];
+  const inv = (soc && soc.invite) || null;
+  const days = inv ? Math.max(1, Math.round(inv.expires_in_s / 86400)) : 0;
+  return `<section class="card qb-friends">
+    <div class="section-title minor">Friends
+      <span class="sub">— send picks back and forth. Friends are made with
+      your link, not by search: nobody can look your account up, and
+      nobody you didn’t invite can message you.</span></div>
+    ${inv ? `<div class="fr-invite">
+      <button class="btn" data-copy-invite="${escapeAttr(inv.token)}">Copy my
+        invite link</button>
+      <span class="set-note">good for ${days} day${days === 1 ? "" : "s"} —
+        anyone who opens it signed in becomes your friend</span>
+      <button class="btn ghost" data-revoke-invite>New link</button>
+    </div>` : ""}
+    ${friends.length ? `<div class="fr-list">${friends.map((f) => `
+      <span class="fr-chip">${escapeHtml(f.name)}
+        <button class="fr-x" data-unfriend="${escapeAttr(String(f.id))}"
+          title="Remove — closes the channel both ways"
+          aria-label="Remove ${escapeAttr(f.name)}">${icon("cross", 11)}</button>
+      </span>`).join("")}</div>`
+    : `<p class="set-empty">No friends yet. Text somebody the link.</p>`}
+  </section>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const cp = e.target.closest && e.target.closest("[data-copy-invite]");
+  if (cp) {
+    e.preventDefault();
+    // copyRawURL, NOT copyLink: the first cut called copyLink("",""),
+    // whose empty-slug fallback is location.href — so the button
+    // faithfully copied the Account page's own address and the invite
+    // token never left the phone.
+    copyRawURL(inviteURL(cp.dataset.copyInvite), cp);
+    return;
+  }
+  const rv = e.target.closest && e.target.closest("[data-revoke-invite]");
+  if (rv) {
+    e.preventDefault();
+    try {
+      await fetch("/api/social/revoke-invite", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" });
+    } catch (err) { /* the next tap retries */ }
+    await socFetch(true);
+    renderAccount();
+    tfToast("Old link dead. New one is on the button.");
+    return;
+  }
+  const un = e.target.closest && e.target.closest("[data-unfriend]");
+  if (un) {
+    e.preventDefault();
+    try {
+      await fetch("/api/social/remove", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend: Number(un.dataset.unfriend) }) });
+    } catch (err) { /* the next tap retries */ }
+    await socFetch(true);
+    renderAccount();
+  }
+});
+
+/* The send picker, on the prop page. One inline panel, not a modal:
+   friend buttons and a note box, each tap sends to that friend. */
+function sendPanelHTML(r) {
+  const soc = _socCache;
+  const friends = (soc && soc.friends) || [];
+  if (!friends.length) {
+    return `<div class="fr-send"><p class="set-empty">No friends to send to
+      yet — your invite link is on the <a href="#account">Account page</a>.</p></div>`;
+  }
+  return `<div class="fr-send">
+    <input class="fr-note" maxlength="280"
+      placeholder="Say why (optional)" aria-label="Note to your friend">
+    <div class="fr-send-row">${friends.map((f) => `
+      <button class="btn ghost" data-send-to="${escapeAttr(String(f.id))}"
+        data-send-player="${escapeAttr(r.player || "")}"
+        data-send-market="${escapeAttr(r.market || "")}"
+        data-send-date="${escapeAttr(r.game_date || (state.data || {}).date || "")}"
+        >${escapeHtml(f.name)}</button>`).join("")}</div>
+  </div>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const open = e.target.closest && e.target.closest("[data-send-pick]");
+  if (open) {
+    e.preventDefault();
+    const host = document.getElementById("fr-send-slot");
+    if (!host) return;
+    if (host.innerHTML) { host.innerHTML = ""; return; }   // toggle shut
+    const u = await acctWho();       // null is unknown, not signed out
+    if (!(u && u.signed_in)) {
+      tfToast("Sign in to send picks to friends.");
+      return;
+    }
+    await socFetch();
+    const r = findProp(state.propId);
+    host.innerHTML = r ? sendPanelHTML(r) : "";
+    return;
+  }
+  const b = e.target.closest && e.target.closest("[data-send-to]");
+  if (!b) return;
+  e.preventDefault();
+  const note = (document.querySelector(".fr-note") || {}).value || "";
+  const was = b.textContent;
+  b.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/social/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: Number(b.dataset.sendTo),
+        sport: state.sport, date: b.dataset.sendDate,
+        player: b.dataset.sendPlayer, market: b.dataset.sendMarket,
+        note }),
+    });
+    const out = await res.json().catch(() => ({}));
+    b.textContent = res.ok ? (out.already ? "Already sent" : "Sent") : was;
+    if (!res.ok) tfToast(out.error || "That didn’t send.");
+  } catch (err) {
+    b.textContent = was;
+    tfToast("Could not reach the server.");
+  }
+});
+
+/* The inbox, at the top of Alerts. A row is a DOOR when the pick is on
+   tonight's board (same identity the permalink uses); a pick from a
+   past slate stays readable but inert — the board it pointed at is
+   gone, and a door onto nothing is worse than no door. */
+function friendInboxHTML() {
+  const soc = _socCache;
+  const shares = (soc && soc.inbox && soc.inbox.shares) || [];
+  if (!shares.length) return "";
+  return `<div class="section-title minor">From your friends
+      <span class="sub">— picks sent to you. Opening one shows it under
+      YOUR account, so what is behind the paywall stays there.</span></div>
+    <div class="card fr-inbox">${shares.slice(0, 12).map((sh) => {
+      const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
+      const row = sh.sport === state.sport ? findProp(slug) : null;
+      const live = !!row;
+      // The pointer stores the market KEY (it is half the slug); the
+      // reader gets the board's label when the row is live, and the key
+      // with its underscores unbent when it is not.
+      const mkt = (row && row.market_label) || sh.market.replace(/_/g, " ");
+      return `<div class="al-row${sh.seen ? "" : " fr-new"}">
+        <span class="al-ic ok">${icon("signal", 15)}</span>
+        <span class="al-t"><b>${escapeHtml(sh.from)} sent
+          ${escapeHtml(sh.player)} — ${escapeHtml(mkt)}</b>
+          <span class="al-c">${sh.note ? `“${escapeHtml(sh.note)}” · ` : ""}${
+            escapeHtml(tzTime(sh.created_at * 1000))}</span></span>
+        ${live ? `<button class="btn ghost" data-open-share="${escapeAttr(slug)}"
+          >Open</button>` : `<span class="set-note">off tonight’s board</span>`}
+      </div>`;
+    }).join("")}</div>`;
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-open-share]");
+  if (!b) return;
+  e.preventDefault();
+  openProp(b.dataset.openShare);
+});
+
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-player-page]");
   if (!b) return;
@@ -24362,6 +24650,11 @@ function entityRoute(h) {
   const p = String(h || "").split("/").filter(Boolean).map(decodeURIComponent);
   if (p.length < 2) return false;
   const kind = p[0];
+  // A friend's invite link (#friend/<token>) rides the same dispatcher
+  // so both cold loads and in-page opens land here. Deliberately a hash
+  // route where the entities got clean paths: an invite must never
+  // unfurl, and a hash never reaches a scraper.
+  if (kind === "friend") { friendRoute(p[1]); return true; }
   if (!["player", "pick", "game"].includes(kind)) return false;
   let sport = "", slug = p[1];
   if (p.length >= 3 && SPORT_CODES.includes(p[1])) { sport = p[1]; slug = p[2]; }

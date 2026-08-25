@@ -2800,6 +2800,32 @@ select.calc-in { width: auto; font-weight: 600; }
   background: rgba(0, 0, 0, .55); color: var(--brand);
 }
 .fav-btn.on { color: var(--brand); border-color: var(--brand); }
+
+/* ======================================================================
+   Friends — the invite card, the send picker, the inbox rows.
+   ====================================================================== */
+.qb-friends { padding: 18px; }
+.fr-invite { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: var(--hairline) solid var(--border-soft); }
+.fr-list { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
+.fr-chip { display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 8px 6px 12px; border-radius: 999px;
+  background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-sm); }
+.fr-x { display: inline-flex; padding: 2px; border: 0; background: none;
+  color: var(--text-mute); cursor: pointer; }
+.fr-x:hover { color: var(--bad); }
+.fr-send { margin: 10px 0 14px; padding: 12px;
+  background: var(--panel-2); border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); }
+.fr-send .fr-note { width: 100%; margin-bottom: 10px; padding: 8px 10px;
+  background: var(--panel); color: var(--text);
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius); font: inherit; font-size: var(--fs-sm); }
+.fr-send-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.fr-inbox { padding: 6px 14px; margin-bottom: 14px; }
+/* Unread wears the accent the hairline way: left edge only. */
+.fr-inbox .fr-new { border-left: 2px solid var(--brand); padding-left: 10px; }
 .gp-hero {
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;
