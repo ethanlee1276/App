@@ -2663,6 +2663,16 @@ select.calc-in { width: auto; font-weight: 600; }
 .game-card[data-gid]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .gp-back { margin-bottom: 14px; }
+/* Back on the left, Copy link beside it. The row exists so the share
+   control has somewhere to sit that is not an inline margin bolted to a
+   button — the detail pages are the two surfaces people actually send to
+   somebody, so the control belongs where the eye already is. */
+.pp-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pp-nav .gp-back { margin-bottom: 0; }
+.pp-nav + .card, .pp-nav + .gp-hero { margin-top: 14px; }
+/* On a player card it rides in the head beside the grade, where there is
+   no room for a full-size control. */
+.profile-head .qb-share { align-self: flex-start; font-size: var(--fs-sm); }
 .gp-hero {
   display: grid; grid-template-columns: minmax(220px, 380px) minmax(0, 1fr);
   gap: 22px; align-items: center; margin-bottom: 20px;

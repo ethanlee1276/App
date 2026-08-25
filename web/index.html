@@ -17,7 +17,21 @@
        `touch-action: manipulation` in styles.css handles double-tap. All
        three are needed; any one alone leaves a way in. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Qellys Book · multi-sport betting model</title>
+  <!-- EVERY RELATIVE URL RESOLVES FROM THE ROOT, and this one line is what
+       makes real addresses possible (2026-08-25). This document is now
+       served at /player/juan-soto and /game/ne-sea-0909 as well as at /,
+       and every asset below is written relative — `css/styles.css`. At a
+       two-segment path those resolve to /player/css/styles.css, which is
+       a 404, and the page arrives unstyled with no script. The site is
+       only ever served from the root of its own origin, so declaring that
+       root costs nothing at / and is the whole fix everywhere else.
+
+       It also settles what `history.replaceState(…, "#prop/x")` means on
+       a deep path — relative URLs there resolve against the document
+       BASE, not the current address — which is how the app normalises a
+       clean URL to its own hash route without stitching paths together
+       by hand. -->
+  <base href="/" />
   <!-- The same crop of Ethan's artwork the header wears, so the tab and
        the page draw one mark. Still .svg because sw.js precaches that
        path; the artwork is embedded inside it. -->
@@ -80,7 +94,21 @@
        guessed, and `www` is redirected to the bare name in
        deploy/Caddyfile so only one of the two ever serves content —
        two hostnames would split session cookies and duplicate every
-       page for search engines. -->
+       page for search engines.
+
+       THE SENTINELS ARE LOAD-BEARING. Everything between QB:META and
+       /QB:META is what engine/routes.py swaps out when this same
+       document is served at /player/juan-soto or /game/ne-sea-0909, so
+       a shared entity link unfurls as that entity rather than as the
+       site. Marked with comments rather than matched by pattern: a
+       regex over `<meta property=…>` would silently start catching a
+       tag somebody adds later, and the first sign of that is a preview
+       card with the wrong title on it. Keep the title inside; keep the
+       icon, manifest and theme-color tags outside — those are the same
+       on every page and re-emitting them per entity is one more thing
+       to drift. -->
+  <!-- QB:META -->
+  <title>Qellys Book · multi-sport betting model</title>
   <link rel="canonical" href="https://qellysbook.com/" />
   <meta property="og:url" content="https://qellysbook.com/" />
   <meta name="description" content="A multi-sport betting model that shows its work. Every pick is journaled at the real book price it was found at and graded in public — including the losing ones. MLB, NFL, college football, NBA, WNBA, UFC and prediction markets." />
@@ -96,6 +124,7 @@
   <meta name="twitter:title" content="Qellys Book — a betting model that shows its work" />
   <meta name="twitter:description" content="Every pick journaled at its real book price and graded in public, including the losing ones." />
   <meta name="twitter:image" content="og-card-v2.png" />
+  <!-- /QB:META -->
 
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Decided BEFORE first paint, or the full masthead renders and then

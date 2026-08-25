@@ -443,13 +443,21 @@ def test_a_shared_game_bet_link_opened_cold_is_not_a_blank_page():
     bug.
 
     This is the link Ethan actually shares."""
+    # The anchor moved from `const r = allProps()` to `findProp` on
+    # 2026-08-25, when the page learned to resolve the `juan-soto-home-runs`
+    # slug a real /pick/ URL carries as well as the long propId. The
+    # guard being tested is the same one: the GAME-BET branch above it.
     i = APP.index("function renderPropPage(")
-    head = APP[i:APP.index("const r = allProps()", i)]
+    head = APP[i:APP.index("const r = findProp(", i)]
     assert "(state.data || {}).game_bets" in head, (
         "a cold deep link to a game bet dereferences null and renders "
         "nothing at all")
     # The player-prop path was already safe because allProps() guards;
-    # that is what made the two links behave differently.
+    # that is what made the two links behave differently. findProp is a
+    # wrapper around it and inherits the guard — checked here so the
+    # wrapper cannot quietly stop using it.
+    k = APP.index("function findProp(")
+    assert "allProps()" in APP[k:APP.index("\n}", k)]
     j = APP.index("function allProps(")
     assert "state.data || {}" in APP[j:APP.index("\n}", j)]
 

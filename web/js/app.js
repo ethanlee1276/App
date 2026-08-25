@@ -3277,7 +3277,14 @@ function renderGames() {
 /* A stable handle for one game, safe in a URL hash. Two teams and a date
    identify a slate game uniquely — there is no id in the feed. */
 const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}${(g.game_number || 1) > 1 ? `_G${g.game_number}` : ""}`;
-const findGame = (gid) => (((state.data || {}).games) || []).find((g) => gameId(g) === gid);
+/* EITHER SPELLING. `gameId` is the internal identity and what every
+   card carries; `gameSlug` is the shareable one that goes in a real
+   address (/game/ne-sea-0909). Accepting both here is what lets the
+   clean URL open a game without a second lookup path, and what keeps
+   every #game/2026-09-09_NE@SEA link already in somebody's messages
+   working. */
+const findGame = (gid) => (((state.data || {}).games) || [])
+  .find((g) => gameId(g) === gid || (gid && gameSlug(g) === gid));
 
 /* Venue render art. Ethan supplied one night render per lighting colour
    for each building family (2026-08-11: "can you just plug them in?"),
@@ -3442,10 +3449,17 @@ function gameCard(g) {
   } else if (mlb) {
     // The park name moved up to the card's venue line (fidelity pass) —
     // repeating it here printed "Coors Field" twice on one card.
-    const bits = [`O/U ${g.total.toFixed(1)}`];
+    /* GUARDED LIKE ITS THREE NEIGHBOURS, which it was not. A morning
+       slate has games before it has totals, and `g.total.toFixed(1)` on
+       one of them threw inside `renderGames` — which runs from
+       `renderAll`, so everything after it (Top Picks, the recommended
+       board, the rail, the long shots) never rendered at all. One
+       unposted number blanked the page. Found 2026-08-25 by opening
+       /mlb in Chromium and reading the console. */
+    const bits = g.total != null ? [`O/U ${Number(g.total).toFixed(1)}`] : [];
     if (g.doubleheader) bits.unshift(`${iconMark("calendar", 12)}DH Game ${esc(g.game_number || 1)}`);
     if (g.lineups_confirmed === false) bits.push(`${icon('warn')} lineups pending`);
-    sub = bits.join(" · ");
+    sub = bits.join(" · ") || "line not posted yet";
   } else {
     const favTxt = (g.favorite && g.spread != null)
       ? `${esc(teamName(g.favorite))} −${Math.abs(g.spread).toFixed(1)}` : "";
@@ -5018,8 +5032,27 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+/* Either spelling, same as findGame: the long identity every card
+   carries, or the `juan-soto-home-runs` slug a real address uses. The
+   slug lookup is skipped for anything with a pipe in it — that is a
+   propId or a game bet, and asking pickSlug about it would be asking
+   the wrong question of the right string. */
+function findProp(id) {
+  if (!id) return null;
+  const all = allProps();
+  const exact = all.find((x) => propId(x) === id);
+  if (exact) return exact;
+  if (String(id).includes("|")) return null;
+  return all.find((x) => pickSlug(x) === id) || null;
+}
+
 function openProp(id) {
-  state.propId = id;
+  // Normalised to the shareable slug when the row is on the board, so
+  // the address bar, Copy link and a pasted /pick/… URL are all one
+  // string. A row that is not there keeps the id it was given — the
+  // page's own empty state needs what it failed to find.
+  const r = findProp(id);
+  state.propId = (r && pickSlug(r)) || id;
   switchView("prop");
 }
 
@@ -5392,7 +5425,7 @@ function renderPropPage() {
       .find((x) => gameBetId(x) === state.propId);
     if (b) return renderGameBetPage(b);
   }
-  const r = allProps().find((x) => propId(x) === state.propId);
+  const r = findProp(state.propId);
   if (!r) {
     // A bookmarked or stale link. Say so — a blank page reads as broken.
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("search", 30)}</div>
@@ -5417,7 +5450,10 @@ function renderPropPage() {
   const reasons = (r.reasons || []).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   host.innerHTML = `
-    <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+    <div class="pp-nav">
+      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
+      ${shareBtn("pick", pickSlug(r))}
+    </div>
     <article class="card pp-card">
       <div class="card-head">
         <div class="card-id">${betMark(r, 56)}
@@ -5605,7 +5641,15 @@ function bindSimLab(r) {
 }
 
 function openGame(gid) {
-  state.gameId = gid;
+  /* NORMALISED HERE, once. Cards hand over the internal id; a clean URL
+     hands over the slug. Storing the slug when the game is on the board
+     means the address bar ends up at #game/ne-sea-0909 whichever door
+     was used, so Copy link and the URL somebody reads off the screen are
+     the same string. A game not on the board keeps whatever it was
+     given — the page's own "not on tonight's board" state needs the id
+     it failed to find, not a blank. */
+  const g = findGame(gid);
+  state.gameId = (g && gameSlug(g)) || gid;
   switchView("game");
 }
 
@@ -5902,7 +5946,10 @@ function renderGamePage() {
     </div>`;
   })() : "";
   host.innerHTML = `
-    <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
+    <div class="pp-nav">
+      <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
+      ${shareBtn("game", gameSlug(g))}
+    </div>
     <div class="gp-hero">
       <div class="gp-art">${art}${gpPhoto}
         ${mlb && isLive ? runnerOverlay(g) : ""}
@@ -6030,11 +6077,26 @@ function trendRow(r, i, col) {
 /* ============================================================
    Players view — search + profile
    ============================================================ */
+/* WHICH RENDER IS STILL THE CURRENT ONE.
+   The stale-keystroke guards below compare the SEARCH, which catches
+   somebody typing another letter and misses the other way this function
+   goes stale: the board arriving. A deep link to /player/chris-olave
+   calls this before `load()` has answered, so it takes the league-search
+   path, waits on two requests — and by the time they land, `renderAll`
+   has already drawn his real profile card from the board. The late
+   write then replaced it with "No players match “chris olave”", which
+   is what the page showed, for a player who was on it. Measured in
+   Chromium, 2026-08-25, on the route that made player pages linkable.
+   A token, taken at entry and re-checked after every await. */
+let _playersSeq = 0;
+
 async function renderPlayers() {
+  const seq = ++_playersSeq;
   const q = state.search.trim().toLowerCase();
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
   await loadInjuryBoard();
+  if (seq !== _playersSeq) return;
   /* THE BOARD MAY NOT BE HERE YET, and this function is the reason that
      went unnoticed. It AWAITS the injury board first, so a throw on the
      next line is a rejected promise the browser swallows — the cold-open
@@ -6073,6 +6135,7 @@ async function renderPlayers() {
        as the offline fallback: a static host has no /api. */
     if (q) {
       const hits = await leagueSearch(q);
+      if (seq !== _playersSeq) return;                     // the board landed
       if (state.search.trim().toLowerCase() !== q) return;  // stale keystroke
       if (hits.length) {
         const full = hits.slice(0, 4);
@@ -6095,6 +6158,7 @@ async function renderPlayers() {
                                      headshot: m.headshot,
                                      sport: m.sport }]);
         }));
+        if (seq !== _playersSeq) return;
         if (state.search.trim().toLowerCase() !== q) return;
         const drawn = full.filter((m) =>
           m.sport === "ufc" ? m.fighter : playerStats(m.player));
@@ -6154,6 +6218,7 @@ async function renderPlayers() {
     /* The roster directory — the offline fallback, and the only answer
        for a player who has never appeared in a logged game. */
     const misses = q ? await rosterMatches(q) : [];
+    if (seq !== _playersSeq) return;
     if (misses.length) {
       host.innerHTML = `
         <div class="empty" style="margin-bottom:12px">No prop on tonight’s board for
@@ -6441,6 +6506,7 @@ function _profileHead(r, right) {
           <div class="sub">${teamMarkIn(lg, r.team, 16)} ${[teamNameIn(lg, r.team), r.position, "vs " + teamNameIn(lg, r.opponent)]
             .filter((x) => x && x !== "vs ").map(escapeHtml).join(" · ")}</div></div>
         ${right}
+        ${shareBtn("player", slugify(r.player))}
       </div>`;
 }
 
@@ -22599,8 +22665,17 @@ function _switchViewNow(name, push, dir) {
   syncNavHint(lit);
   if (name === "prop") {
     renderPropPage();
-    if (state.propId)
-      history.replaceState(null, "", `#prop/${encodeURIComponent(state.propId)}`);
+    /* `#pick/…` when the row has a shareable slug, `#prop/…` when it
+       does not — a game bet (`game|…`) has no player and no market to
+       spell. Both are accepted on the way in, so every link already
+       sent stays good; this decides which one the address bar shows,
+       and it shows the one that matches /pick/juan-soto-home-runs. */
+    if (state.propId) {
+      const shareable = !String(state.propId).includes("|");
+      history.replaceState(null, "", shareable
+        ? `#pick/${encodeURIComponent(state.propId)}`
+        : `#prop/${encodeURIComponent(state.propId)}`);
+    }
   }
   if (name === "game") {
     renderGamePage();
@@ -22661,7 +22736,26 @@ function _switchViewNow(name, push, dir) {
                     && name !== "paywall" && name !== "checkout");
   }
   updateAgo();          // reference pages hide the freshness chip
-  if (location.hash !== `#${name}`) {
+  /* THE PROP PAGE'S OWN ADDRESS SURVIVES THIS LINE, and until
+     2026-08-25 it did not. The branch above writes `#pick/juan-soto-…`
+     and then fell through to here, where `location.hash !== "#prop"`
+     was true — of course it was, it had just been given a sub-route —
+     and the id was replaced with a bare `#prop` a few statements after
+     being set. So every pick link flattened itself before anybody could
+     copy it, and refreshing one landed on the prop view with no prop:
+     "That pick is not on tonight's board", for a pick that was.
+
+     The game page never had it because its branch returns early. The
+     fix is the guard rather than a second early return: returning would
+     also skip `syncMenuLabel`, and a detail page with the mobile menu
+     still naming the page you left is the bug that line exists to
+     prevent. */
+  if (name === "players" && state.playerSlug)
+    history.replaceState(null, "", `#player/${encodeURIComponent(state.playerSlug)}`);
+  const subRouted = (name === "prop" && state.propId)
+                 || (name === "game" && state.gameId)
+                 || (name === "players" && state.playerSlug);
+  if (!subRouted && location.hash !== `#${name}`) {
     // A tab TAP is a navigation and earns a history entry, so the phone's
     // back-swipe returns to the tab you came from instead of leaving the
     // site. Programmatic switches (first load, a sport change, bouncing
@@ -22685,8 +22779,223 @@ function _switchViewNow(name, push, dir) {
   _landScroll(name, leaving);
 }
 
+/* ============================================================
+   REAL ADDRESSES — /player/juan-soto, /game/ne-sea-0909, /pick/…
+   ============================================================
+   Ethan, 2026-08-25: "Give the site places — entity pages and real URLs.
+   … links unfurl correctly in texts."
+
+   The app still routes with the hash, and that is deliberate: one
+   router, one place a view is chosen. What the clean paths add is the
+   part a fragment cannot do — a scraper fetching a preview never sees
+   a hash, so an entity link pasted into a text message unfurls as the
+   site rather than as the player. engine/routes.py answers those paths
+   with this same document and its preview block swapped, plus a
+   `__QB_ROUTE__` hint naming the hash to open. Everything below is the
+   app's half: adopt the hint at boot, and mirror the slug spellings so
+   Copy link emits an address the server can resolve back.
+
+   The mirroring is the risk here, and it is bounded on purpose: three
+   short functions (`slugify`, `gameSlug`, `pickSlug`), each with a twin
+   in engine/routes.py, checked against each other by
+   tests/test_routes.py on real board rows rather than by eye. */
+const SPORT_CODES = ["mlb", "nfl", "nba", "wnba", "cfb"];
+
+/* Accents FOLDED, not dropped: José Ramírez has to reach `jose-ramirez`,
+   because that is what anybody typing his name produces, and a slug
+   nobody can type is a slug nobody shares. The combining-mark range is
+   spelled out rather than using \p{Diacritic}, which older WebKit on a
+   phone still does not parse — and an unparseable regex is a syntax
+   error that takes the whole file down, not a feature that degrades. */
+function slugify(text) {
+  return String(text == null ? "" : text)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+}
+
+function deslug(slug) {
+  return String(slug || "").replace(/-+/g, " ").trim();
+}
+
+/* `ne-sea-0909`. Month and day because the same two teams meet again in
+   a season and a link to the wrong meeting is the wrong lineups, the
+   wrong weather and the wrong prices. */
+function gameSlug(g) {
+  if (!g || !g.away || !g.home) return "";
+  const d = String(g.date || "");
+  const md = d.length >= 10 ? d.slice(5, 7) + d.slice(8, 10) : "";
+  const n = Number(g.game_number || 1);
+  const base = md ? `${slugify(g.away)}-${slugify(g.home)}-${md}`
+                  : `${slugify(g.away)}-${slugify(g.home)}`;
+  return n > 1 ? `${base}-g${n}` : base;
+}
+
+/* `juan-soto-home-runs` — player and market, and NOT the side or the
+   line. Those are the pick: putting them in the address publishes the
+   board in the share text itself, in every group chat the link is
+   forwarded to, before anybody has clicked anything. */
+function pickSlug(r) {
+  if (!r || !r.player) return "";
+  const m = slugify(r.market || r.market_label);
+  return m ? `${slugify(r.player)}-${m}` : "";
+}
+
+function cleanURL(kind, slug) {
+  return slug ? `${location.origin}/${kind}/${slug}` : location.href;
+}
+
+/* The control that turns a page into something you can send somebody.
+   It emits the CLEAN url rather than whatever is in the address bar,
+   which is the whole reason the clean urls exist: that string is the
+   one a scraper can unfurl, and the address bar is showing the app's
+   internal hash spelling of the same place.
+
+   Share sheet on a phone, clipboard on a desktop. The sheet is what
+   people actually use to get a link into a group chat, and it is the
+   only route that reaches an app the browser cannot write to. A cancel
+   rejects with AbortError, which is not a failure and must not be
+   reported as one. */
+function shareBtn(kind, slug, label) {
+  if (!slug) return "";
+  return `<button class="btn ghost qb-share" data-share-kind="${escapeAttr(kind)}"
+    data-share-slug="${escapeAttr(slug)}">${escapeHtml(label || "Copy link")}</button>`;
+}
+
+function copyLink(kind, slug, btn) {
+  const url = cleanURL(kind, slug);
+  const said = (msg) => {
+    if (!btn) return tfToast(msg);
+    const was = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = was; }, 1600);
+  };
+  const coarse = window.matchMedia
+    && window.matchMedia("(pointer: coarse)").matches;
+  if (navigator.share && coarse) {
+    navigator.share({ url }).catch(() => {});
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => said("Copied"),
+                                            () => tfToast(url));
+    return;
+  }
+  // No clipboard (an insecure context, an installed app without the
+  // permission): show the address so it can still be selected by hand,
+  // which is what somebody would do anyway.
+  tfToast(url);
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-share-kind]");
+  if (!b) return;
+  e.preventDefault();
+  copyLink(b.dataset.shareKind, b.dataset.shareSlug, b);
+});
+
+/* The static fallback. In production Caddy hands these paths to the app
+   and `__QB_ROUTE__` is already in the document — but the service worker
+   answers an offline launch with the cached /index.html whatever the
+   address was, and a bare file server has no routes at all. Parsing the
+   path here means the right view still opens in both cases; only the
+   preview text is lost, and nobody offline is unfurling a link. */
+function routeFromPath(path) {
+  const segs = String(path || "").split("/").filter(Boolean);
+  if (segs.length === 1) {
+    const n = segs[0].toLowerCase();
+    if (SPORT_CODES.includes(n)) return { hash: n, sport: n };
+    if (n === "feed") return { hash: "alerts", sport: "" };
+    if (VIEW_ORDER.includes(n)) return { hash: n, sport: "" };
+    return null;
+  }
+  if (segs.length === 2 && ["player", "game", "pick"].includes(segs[0].toLowerCase()))
+    return { hash: `${segs[0].toLowerCase()}/${segs[1]}`, sport: "" };
+  return null;
+}
+
+/* Adopt a clean URL, once, before anything reads state.sport.
+
+   It runs BEFORE applySport() in the boot sequence, and that ordering is
+   the whole reason it is a separate function: /mlb has to have switched
+   the league before the chrome is drawn for one, or the page comes up
+   wearing the NFL's tabs over baseball's board.
+
+   AN EXPLICIT HASH WINS. `/player/juan-soto#record` is somebody who
+   edited the address on purpose, and the fragment is the more specific
+   half of what they typed. */
+function adoptCleanURL() {
+  let hint = null;
+  try { hint = window.__QB_ROUTE__ || null; } catch (e) { hint = null; }
+  if (!hint) hint = routeFromPath(location.pathname);
+  if (!hint || !hint.hash || location.hash) return;
+  if (hint.sport && SPORT_CODES.includes(hint.sport)) state.sport = hint.sport;
+  // replaceState, not assignment: this is the same destination written
+  // the way the app's own router spells it, and pushing it would make
+  // Back walk through an address the reader never chose.
+  try {
+    history.replaceState(null, "", `#${hint.hash}`);
+  } catch (e) {
+    location.hash = `#${hint.hash}`;
+  }
+}
+
+/* The three-segment entity routes — `#player/nfl/chris-olave`. The sport
+   is in the middle because a two-segment address does not carry one and
+   the server, which has every board open, is the only party that can
+   say which league a name belongs to. Returns true when it has taken
+   the navigation. */
+function entityRoute(h) {
+  const p = String(h || "").split("/").filter(Boolean).map(decodeURIComponent);
+  if (p.length < 2) return false;
+  const kind = p[0];
+  if (!["player", "pick", "game"].includes(kind)) return false;
+  let sport = "", slug = p[1];
+  if (p.length >= 3 && SPORT_CODES.includes(p[1])) { sport = p[1]; slug = p[2]; }
+  if (kind === "game" && !sport) return false;   // the 2-segment form is openGame's
+  if (kind === "pick" && !sport && !slug) return false;
+  if (sport && sport !== state.sport) {
+    state.sport = sport;
+    applySport();
+    load();
+  }
+  if (kind === "player") return openPlayerRoute(slug);
+  if (kind === "game") { openGame(slug); return true; }
+  openProp(slug);
+  return true;
+}
+
+/* A player page is the Players view with his name in the box — which is
+   the page that already exists, headshot, game logs, form windows and
+   tonight's markets included. It was never addressable, and that was the
+   entire gap: `renderPlayers` searches the board first and the league
+   history second, so a de-slugged name reaches a bench bat nobody priced
+   as readily as it reaches a star. */
+function openPlayerRoute(slug) {
+  const name = deslug(slug);
+  if (!name) return false;
+  // Remembered so the address stays HIS rather than collapsing to
+  // #players the moment the view switches — the same flattening the
+  // prop page had. Cleared by typing in the search box, which is a
+  // search and not a player page.
+  state.playerSlug = slugify(slug);
+  state.search = name;
+  const inp = document.getElementById("player-search");
+  if (inp) inp.value = name;
+  switchView("players");
+  renderPlayers();
+  return true;
+}
+
 function initialView() {
   const h = (location.hash || "").replace("#", "");
+  if (entityRoute(h)) return;
+  // A league as a destination: /mlb, /cfb. This replaced the #nba
+  // special case further down, which was the same idea from before
+  // there was a table for it.
+  if (SPORT_CODES.includes(h) && h !== state.sport) {
+    state.sport = h; applySport(); load(); switchView("recommended"); return;
+  }
+  if (SPORT_CODES.includes(h)) { switchView("recommended"); return; }
   // The Parlay Zone page became Parlay Mode (2026-08-11), and the
   // hashchange handler migrates old #parlays bookmarks — but a COLD
   // load never fires hashchange, so the same branch has to live here
@@ -22711,9 +23020,9 @@ function initialView() {
   }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
-  if (h === "nba") {           // legacy hash from when NBA was standalone
-    state.sport = "nba"; applySport(); load(); switchView("recommended"); return;
-  }
+  // #nba used to be handled here on its own, from when NBA was a
+  // standalone page. The league branch above covers it and four more
+  // besides, so the special case went with the table that replaced it.
   if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
   if (VIEW_ORDER.includes(h)) switchView(h);
 }
@@ -23140,6 +23449,13 @@ function bind() {
      looking at. */
   window.addEventListener("hashchange", () => {
     const h = (location.hash || "").replace("#", "");
+    if (entityRoute(h)) return;
+    if (SPORT_CODES.includes(h)) {
+      if (h !== state.sport) { state.sport = h; applySport(); load(); }
+      exitStandaloneMode();
+      switchView("recommended");
+      return;
+    }
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
     // An EMPTY hash is a destination, not a no-op: it is the entry the
@@ -23198,6 +23514,7 @@ function bind() {
       if (state.sport === b.dataset.sport) return;
       state.sport = b.dataset.sport;
       state.search = "";
+      state.playerSlug = "";
       const search = document.getElementById("player-search");
       if (search) search.value = "";
       // The roster tab is per-sport now: a team abbreviation and a player
@@ -23243,6 +23560,11 @@ function bind() {
   });
   let _searchT;
   document.getElementById("player-search").addEventListener("input", (e) => {
+    // Typing is a search, not a player page: the address goes back to
+    // #players so it cannot claim to be a link to whoever was open.
+    state.playerSlug = "";
+    if ((location.hash || "").startsWith("#player/"))
+      history.replaceState(null, "", "#players");
     state.search = e.target.value; renderPlayers();
     // Recorded on a PAUSE, not per keystroke — otherwise "mahomes" logs
     // seven rows, six of which are prefixes nobody searched for.
@@ -23312,6 +23634,10 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 initTheme();
 loadBankroll();
 bind();
+// BEFORE applySport, and that ordering is the point: /mlb has to have
+// switched the league before the chrome is drawn for one, or the page
+// comes up wearing the NFL's tabs over baseball's board.
+adoptCleanURL();
 applySport();
 updateUnitNote();
 initialView();

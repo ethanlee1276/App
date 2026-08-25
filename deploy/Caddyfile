@@ -73,6 +73,37 @@ qellysbook.com {
 		}
 	}
 
+	# --- real addresses: THROUGH THE APP, for the preview tags -------
+	# /player/juan-soto, /game/ne-sea-0909, /pick/…, /mlb, /record.
+	#
+	# `try_files … /index.html` in the block below would already serve
+	# the app at these paths and the page would work — the routes are
+	# parsed client-side too. What it CANNOT do is put this player's
+	# name in the <title> and og: tags, and that is the entire reason
+	# these paths exist: a scraper fetching a preview for a text message
+	# runs no JavaScript and sees whatever the server sent. Off disk,
+	# every entity link in every group chat unfurls as the same generic
+	# site card.
+	#
+	# Named one by one rather than as a catch-all: an unknown path has
+	# to keep reaching the static handler and the real 404, and a proxy
+	# that swallowed everything would turn every typo into a soft
+	# landing on the board.
+	handle /player/* /game/* /pick/* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	handle /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
 	# --- everything else: files straight off disk --------------------
 	# Python is not in the path for static files at all. The app is a
 	# stdlib http.server; Caddy serves assets far better and it keeps the

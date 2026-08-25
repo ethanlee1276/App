@@ -28,6 +28,7 @@ from urllib.parse import urlparse, parse_qs
 from engine.pipeline import run_slate
 from engine.mlb.pipeline import run_mlb_slate
 from engine.rules import RuleConfig
+from engine import routes
 
 ROOT = Path(__file__).parent
 #: The served tree. QB_WEB_DIR overrides it, for the same reason
@@ -765,6 +766,8 @@ class Handler(BaseHTTPRequestHandler):
             code, body = profile_get(parsed.path[len("/api/profile/"):].strip("/"),
                                      self.headers.get("X-Profile-Pin") or "")
             return self._send(code, json.dumps(body).encode(), ".json")
+        if self._entity_page(parsed.path):
+            return
         return self._static(parsed.path)
 
     def do_POST(self):
@@ -2438,6 +2441,48 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
         self._send(200, json.dumps(gate.redact(payload, name)).encode(), ".json")
+        return True
+
+    def _entity_page(self, path: str) -> bool:
+        """A real address — /mlb, /player/juan-soto, /game/ne-sea-0909.
+
+        Answers with the ORDINARY app document, its preview block swapped
+        for this entity's and a `__QB_ROUTE__` hint naming the hash route
+        to open. See engine/routes.py for why this is one document rather
+        than a landing page that redirects.
+
+        Returns False for anything that is not one of our routes, so the
+        static handler still serves the real files and the real 404 —
+        swallowing unknown paths here would turn every typo into a soft
+        landing on the board, which is the thing a 404 page is for.
+
+        A REAL FILE ALWAYS WINS. `/players` is a route and `/privacy.html`
+        is a file; if a page were ever added at a name this table also
+        claims, the file is what should be served, because that is what
+        every link to it already expects.
+        """
+        if "." in path.rsplit("/", 1)[-1]:
+            return False                       # an asset, not a place
+        try:
+            route = routes.resolve(path, WEB)
+        except Exception:                                    # noqa: BLE001
+            # A malformed board must not take the front page down with
+            # it: fall through to the static handler, which serves the
+            # app at / and the 404 page everywhere else.
+            return False
+        if route is None:
+            return False
+        target = (WEB / path.strip("/")).resolve()
+        if target.is_relative_to(WEB.resolve()) and target.is_file():
+            return False
+        index = WEB / "index.html"
+        if not index.is_file():
+            return False
+        try:
+            body = routes.document(route, index.read_text(encoding="utf-8"))
+        except OSError:
+            return False
+        self._send(200, body.encode("utf-8"), ".html")
         return True
 
     def _static(self, path: str):
