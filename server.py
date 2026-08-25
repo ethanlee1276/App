@@ -100,7 +100,14 @@ PROFILE_DIR = ROOT / "data" / "profiles"
 #: `search` joins the list with real accounts, 2026-08-15 — Ethan asked
 #: for search history stored alongside bets and fantasy. The merge rule
 #: for it is the same last-writer-wins every non-bets section uses.
-PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search")
+#:
+#: `settings` joins it 2026-08-25 (odds format, stake display, time zone,
+#: favourite teams, which leagues show in the nav) under the same rule.
+#: MUST STAY IN STEP WITH engine/accounts.SECTIONS: this tuple is the
+#: merge contract and that one is what the database will store, so a
+#: section named in only one of them syncs in one direction and looks
+#: like a device that will not remember you.
+PROFILE_SECTIONS = ("mybets", "fantasy", "bankroll", "search", "settings")
 #: The signed-in session cookie. HttpOnly so page scripts cannot read it
 #: — an XSS bug should not also be a session theft — and SameSite=Lax so
 #: another site cannot ride it.

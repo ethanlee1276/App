@@ -115,6 +115,140 @@ function money(x) {
     { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function stakeDollars(units) { return units * unitDollars(); }
+
+/* ============================================================
+   SETTINGS THAT STICK
+   ============================================================
+   Ethan, 2026-08-25: "Settings that stick: odds format (−110 vs 1.91),
+   units vs dollars, timezone, favorite teams first, which sports show in
+   nav."
+
+   Kept in localStorage and synced through the account like every other
+   section (engine/accounts.py SECTIONS), so they follow you to the phone
+   rather than being a thing you set twice. Read through `settings()`
+   rather than from storage directly: it fills in the defaults, and a
+   missing key has to mean "the house default" and never "undefined"
+   somewhere downstream.
+
+   DEFAULTS ARE TODAY'S BEHAVIOUR, exactly. A settings pass that changes
+   what everybody sees the moment it ships is a redesign wearing a
+   preferences panel — so `both` is the stake default (a stake has read
+   "$28.00 · 1.40u" since bankrolls existed), `american` the price
+   default, and an empty league list means every league, not none. */
+const SETTINGS_KEY = "qb_settings_v1";
+const SETTINGS_DEFAULTS = {
+  odds: "american",     // american | decimal
+  stake: "both",        // both | units | dollars
+  tz: "",               // "" = this device's own zone
+  teams: [],            // "nfl:DET" — sport-tagged, because CIN is two teams
+  leagues: [],          // [] = every league in the nav
+};
+let _settings = null;
+
+function settings() {
+  if (_settings) return _settings;
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
+  catch (e) { stored = {}; }
+  _settings = Object.assign({}, SETTINGS_DEFAULTS, stored);
+  // Arrays survive a bad write: a string here would make `.includes`
+  // match substrings and quietly hide the wrong leagues.
+  if (!Array.isArray(_settings.teams)) _settings.teams = [];
+  if (!Array.isArray(_settings.leagues)) _settings.leagues = [];
+  return _settings;
+}
+
+function setSetting(key, value) {
+  const s = settings();
+  s[key] = value;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) {}
+  // Stamped and pushed like any other synced section.
+  if (typeof acctTouch === "function") acctTouch("settings");
+}
+
+/* Adopted from the server without re-stamping — the echo-loop rule the
+   other sections already follow (see acctApplySection). */
+function settingsAdopt(data) {
+  if (!data || typeof data !== "object") return;
+  _settings = Object.assign({}, SETTINGS_DEFAULTS, data);
+  if (!Array.isArray(_settings.teams)) _settings.teams = [];
+  if (!Array.isArray(_settings.leagues)) _settings.leagues = [];
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings)); }
+  catch (e) {}
+}
+
+/* ONE PLACE THAT PRINTS A PRICE. −110 or 1.91, and the conversion is the
+   standard one: a plus price is 1 + p/100, a minus price is 1 + 100/|p|.
+   Everything that showed `${r.odds > 0 ? "+" : ""}${r.odds}` inline now
+   comes through here, because a format setting that only reached some of
+   the board would be worse than not having one. */
+function oddsTxt(v) {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  if (settings().odds !== "decimal") return (n > 0 ? "+" : "") + n;
+  return (n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n)).toFixed(2);
+}
+
+/* …and one that prints a stake. Dollars need a bankroll to exist, so
+   "dollars" with none set falls back to units rather than to "$NaN" —
+   the setting says what you want to read, not what we are able to
+   compute. */
+function stakeText(units) {
+  const n = Number(units);
+  if (!Number.isFinite(n)) return "—";
+  const u = `${n.toFixed(2)}u`;
+  const ud = unitDollars();
+  if (ud <= 0) return u;
+  const cash = money(stakeDollars(n));
+  const how = settings().stake;
+  if (how === "units") return u;
+  if (how === "dollars") return cash;
+  return `${cash} · ${u}`;
+}
+
+/* Every clock on the site reads in ONE zone: the reader's, or the one
+   they chose. A site about first pitch and kickoff that prints some
+   times in the venue's zone and some in the browser's is a site that
+   makes people do arithmetic to know whether they have missed a game. */
+function tzOpts(o) {
+  const tz = settings().tz;
+  return tz ? Object.assign({ timeZone: tz }, o) : o;
+}
+
+function tzTime(d, o) {
+  return new Date(d).toLocaleTimeString(undefined,
+    tzOpts(o || { hour: "numeric", minute: "2-digit" }));
+}
+
+/* Is this team one of the reader's? Sport-tagged, because CIN is the
+   Bengals and the Reds and a favourites list that mixed them would star
+   the wrong games all baseball season. */
+function isFavTeam(abbr, sport) {
+  if (!abbr) return false;
+  return settings().teams.includes(`${sport || state.sport}:${abbr}`);
+}
+
+/* WHERE A TEAM GETS FOLLOWED: the game page, not the strip card. The
+   whole card is a door into the game, and a control inside a door has to
+   fight the click that opens it — which is the bug this avoids rather
+   than the one it would introduce. */
+function favBtn(abbr) {
+  if (!abbr) return "";
+  const on = isFavTeam(abbr);
+  return `<button class="btn ghost fav-btn${on ? " on" : ""}"
+    data-fav="${escapeAttr(abbr)}" aria-pressed="${on}"
+    title="${on ? "Stop following" : "Follow"} ${escapeAttr(teamName(abbr))}"
+    >${on ? "★" : "☆"} ${escapeHtml(teamName(abbr))}</button>`;
+}
+
+function favToggle(abbr, sport) {
+  const key = `${sport || state.sport}:${abbr}`;
+  const teams = settings().teams.slice();
+  const i = teams.indexOf(key);
+  if (i >= 0) teams.splice(i, 1); else teams.push(key);
+  setSetting("teams", teams);
+}
 function updateUnitNote() {
   const el = document.getElementById("unit-note");
   if (!el) return;
@@ -289,7 +423,27 @@ function applySport() {
     + (meta.gamesSub ? ` <span class="sub">— ${escapeHtml(meta.gamesSub)}</span>` : "");
   document.querySelectorAll(".sport-btn").forEach((b) =>
     setSelected(b, !!b.dataset.sport && b.dataset.sport === state.sport));
+  applyNavLeagues();
   markMoreMenu();
+}
+
+/* WHICH LEAGUES SHOW IN THE NAV. Ethan asked for it as a setting, and an
+   empty list means EVERY league — the site is multi-sport by default and
+   a reader who has never opened settings must not find leagues missing.
+
+   THE ACTIVE LEAGUE IS NEVER HIDDEN, whatever the list says. Landing on
+   /cfb from a shared link with college football unticked would otherwise
+   show a college board with no college chip lit anywhere in the nav —
+   the page and its own navigation disagreeing about where you are, which
+   is the exact failure HIDDEN_VIEWS' `off` rows exist to avoid. */
+function applyNavLeagues() {
+  const want = settings().leagues;
+  document.querySelectorAll(".sport-btn").forEach((b) => {
+    const code = b.dataset.sport;
+    if (!code || !SPORT_CODES.includes(code)) return;   // tools, not leagues
+    const show = !want.length || want.includes(code) || code === state.sport;
+    b.hidden = !show;
+  });
 }
 
 
@@ -771,7 +925,11 @@ function formatKickoff(kick) {
   if (!kick) return "";
   if (kick.includes("T")) {                       // ISO datetime (MLB first pitch)
     const d = new Date(kick);
-    return isNaN(d) ? "" : d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    // tzTime, so a chosen zone reaches first pitch too. The bare
+    // "HH:MM ET" branch below cannot be converted — it is a clock
+    // reading with no date attached, so there is no instant to move —
+    // and it says ET on the face for exactly that reason.
+    return isNaN(d) ? "" : tzTime(d);
   }
   const m = /^(\d{1,2}):(\d{2})/.exec(kick);       // "HH:MM" 24h ET (NFL)
   if (m) { let h = +m[1]; const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12; return `${h}:${m[2]} ${ap} ET`; }
@@ -1767,7 +1925,6 @@ async function renderBestBets() {
   if (!host) return;
   const rec = await loadRecordOnce();
   const sig = tonightSignals();
-  const ud = unitDollars();
 
   // ============ SPACE 1: TONIGHT'S PICKS — the actual bets ============
   // Exactly the bets the "Recommended bets" tile counts — the actionable
@@ -1909,7 +2066,7 @@ async function renderBestBets() {
         <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${escapeHtml(p.why)}</span></span>
       <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${escapeHtml(p.metric)}</span>
         ${p.stake > 0 ? `<span style="display:block;color:var(--good);font-size:var(--fs-sm);font-weight:700">${
-          ud > 0 ? money(stakeDollars(p.stake)) + " · " : ""}${p.stake.toFixed(2)}u</span>` : ""}</span>
+          stakeText(p.stake)}</span>` : ""}</span>
     </div>`;
 
   const asOf = ((state.data || {}).odds_status || {}).at;
@@ -2075,8 +2232,7 @@ function prePriceHeadline() {
   const os = (state.data || {}).odds_status || {};
   const opens = os.window_opens_at ? os.window_opens_at * 1000 : 0;
   if (!opens || Date.now() >= opens) return "";
-  const t = new Date(opens).toLocaleTimeString([],
-    { hour: "numeric", minute: "2-digit" });
+  const t = tzTime(opens);
   return `Today’s book prices haven’t been pulled yet — the window opens ${t}.`;
 }
 
@@ -2089,12 +2245,12 @@ function oddsClockHTML() {
   const midnight = (ms) => new Date(ms).setHours(0, 0, 0, 0);
   const clock = (ts) => {
     const d = new Date(ts * 1000);
-    const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const t = tzTime(d);
     const days = Math.round((midnight(Date.now()) - midnight(ts * 1000)) / 864e5);
     if (days <= 0) return t;
     if (days === 1) return `${t} <span style="opacity:.8">yesterday</span>`;
-    return `${t} <span style="opacity:.8">on ${d.toLocaleDateString([],
-      { month: "short", day: "numeric" })}</span>`;
+    return `${t} <span style="opacity:.8">on ${d.toLocaleDateString(undefined,
+      tzOpts({ month: "short", day: "numeric" }))}</span>`;
   };
   const opens = os.window_opens_at ? os.window_opens_at * 1000 : 0;
   const waiting = opens && Date.now() < opens;
@@ -2992,10 +3148,9 @@ function renderGameBets() {
 }
 
 function gameBetCard(r) {
-  const ud = unitDollars();
-  const stakeTxt = ud > 0
-    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
-    : `Stake ${r.stake_units.toFixed(2)}u`;
+  // stakeText answers the no-bankroll case itself (units, because
+  // dollars need one), so the branch that used to live here went with it.
+  const stakeTxt = `Stake ${stakeText(r.stake_units)}`;
   const stakeChip = r._ok && r.stake_units > 0
     ? `<span class="chip stake">${stakeTxt}</span>` : "";
   // College football's conditionals: a real number waiting on real news.
@@ -3158,7 +3313,10 @@ function renderStats() {
     { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
       sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
-    ud > 0
+    // A reader who set stakes to units asked not to be shown money, and
+    // the tile that leads with a dollar figure is the one that would say
+    // it loudest.
+    ud > 0 && settings().stake !== "units"
       ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$",
           sub: `${exposure.toFixed(2)}u across ${staked.length} new bet(s)`
             + (riding.length ? ` · riding money is already staked` : "") }
@@ -3247,7 +3405,17 @@ function renderGames() {
   let sortMode = "start";
   try { sortMode = localStorage.getItem("qb_games_sort") || "start"; } catch (e) {}
   const startKey = (g) => `${g.date || ""}T${g.kickoff || ""}`;
+  /* FAVOURITE TEAMS FIRST — in the strip, and ONLY in the strip.
+     Ethan asked for "favorite teams first". The games strip is a
+     schedule, so putting your teams at the front of it reorders nothing
+     that carries a claim. The PICKS are ordered by edge, and that order
+     IS the product: floating your teams up a ranked board would say the
+     model likes them more than it does, which is the one thing this site
+     must never do to make somebody comfortable. They get a star instead,
+     and they keep their real place. */
+  const fav = (g) => (isFavTeam(g.home) || isFavTeam(g.away)) ? 0 : 1;
   games.sort((a, b) => rank(a) - rank(b)
+    || fav(a) - fav(b)
     || (sortMode === "picks" ? gameBetCount(b) - gameBetCount(a) : 0)
     || startKey(a).localeCompare(startKey(b)));
   const sportSel = document.getElementById("games-sport");
@@ -3564,6 +3732,11 @@ function gameCard(g) {
         mlb && isLive ? runnerOverlay(g) : ""}${badge}${
         window._topGameId === gameId(g) && !isLive && !isFinal
           ? `<span class="top-game-tag">Top game</span>` : ""}${
+        // Your team, marked. It rides the art rather than the numbers
+        // row on purpose: this is a fact about YOU, not about the game,
+        // and it must not read as something the model is claiming.
+        isFavTeam(g.home) || isFavTeam(g.away)
+          ? `<span class="fav-tag" title="One of your teams">★</span>` : ""}${
         !isLive && !isFinal && whenLabel(g.date, g.kickoff)
           ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}${
         // Temp + wind on the art itself (Ethan's stadium render rows,
@@ -3769,6 +3942,78 @@ function freshBannerHTML(feed) {
   </div>`;
 }
 
+/* ============================================================
+   "Welcome back — 3 of your bets settled since last night: +1.8u."
+   ============================================================
+   Ethan, 2026-08-25: "That one banner makes it feel like the site knows
+   you, which is the core difference between an app and a page."
+
+   A SNAPSHOT DIFF, not a settled-at stamp on each bet. A stamp only
+   works if every writer remembers to set it, and there are several: the
+   result buttons in My Bets, a CSV import, and the account sync adopting
+   a grading done on another device — that last one is the whole point of
+   accounts and the one most likely to be missed. Comparing the results
+   map from the previous visit to this one catches every path, including
+   the ones written later.
+
+   The map is written when the banner is COMPUTED, not when it is shown,
+   so a settle is only ever announced once. */
+const BETS_SEEN_KEY = "qb_bets_seen_v1";
+let _welcomeBack = null, _welcomeDismissed = false;
+
+function _betsResultMap(bets) {
+  const out = {};
+  (bets || []).forEach((b) => {
+    if (b && b.id != null) out[String(b.id)] = String(b.result || "pending");
+  });
+  return out;
+}
+
+/* Computed ONCE per load, before anything can re-render past it. */
+function welcomeBackScan() {
+  if (_welcomeBack !== null) return _welcomeBack;
+  _welcomeBack = { n: 0, units: 0 };
+  const bets = mbLoad();
+  const now = _betsResultMap(bets);
+  let prev = null;
+  try { prev = JSON.parse(localStorage.getItem(BETS_SEEN_KEY)); } catch (e) {}
+  try { localStorage.setItem(BETS_SEEN_KEY, JSON.stringify(now)); } catch (e) {}
+  // FIRST RUN IS SILENT. With no previous map every settled bet in the
+  // book looks new, and "47 of your bets settled since last night" on
+  // somebody's first visit after a deploy is a lie with a number on it.
+  if (!prev || typeof prev !== "object") return _welcomeBack;
+  const final = (r) => r === "win" || r === "loss" || r === "push";
+  bets.forEach((b) => {
+    const id = String(b.id);
+    if (!(id in prev)) return;             // logged since the last visit
+    if (final(prev[id]) || !final(now[id])) return;
+    _welcomeBack.n += 1;
+    _welcomeBack.units += mbProfit(b) || 0;
+  });
+  return _welcomeBack;
+}
+
+window._welcomeDismiss = () => { _welcomeDismissed = true; renderDayCard(); };
+
+function welcomeBackHTML() {
+  if (_welcomeDismissed) return "";
+  const w = welcomeBackScan();
+  if (!w.n) return "";
+  // A tab flip is not a return — the same 30-minute rule the board's own
+  // "since you last looked" line keeps, so the two cannot disagree about
+  // what counts as having been away.
+  if (_prevSeenMs == null || Date.now() - _prevSeenMs < 30 * 60000) return "";
+  const u = w.units;
+  const cls = u > 0 ? "pos" : u < 0 ? "neg" : "";
+  return `<div class="fresh-banner wb-banner">${icon("check", 14)}
+    <span>Welcome back — ${w.n} of your bet${w.n === 1 ? "" : "s"} settled
+      since you were last here:
+      <b class="${cls}">${u >= 0 ? "+" : ""}${u.toFixed(2)}u</b>.
+      <a href="#mybets">Your book →</a></span>
+    <button class="fb-x" onclick="window._welcomeDismiss()" aria-label="Dismiss">${icon("cross", 12)}</button>
+  </div>`;
+}
+
 async function renderDayCard() {
   const host = document.getElementById("daycard-zone");
   if (!host) return;
@@ -3795,7 +4040,9 @@ async function renderDayCard() {
   // a visitor who was genuinely away (30+ min, 3+ events), dismissible,
   // and empty for everyone else — the zero-fold default still holds on
   // the pass test_board_order measures.
-  const banner = freshBannerHTML(d);
+  // The reader's own book leads the board's news: what happened to YOUR
+  // money is the more specific answer to "what did I miss".
+  const banner = welcomeBackHTML() + freshBannerHTML(d);
   if (!recap) { host.innerHTML = banner; return; }
   const net = recap ? recap.net_u : null;
   host.innerHTML = banner + `<div class="daycard">
@@ -4216,10 +4463,9 @@ function cardHTML(r) {
   const corr = (r.correlations || []).map((c) =>
     `<div class="warning" style="border-color:var(--cyan)">${iconMark("tag")}${escapeHtml(c)}</div>`).join("");
   const warnings = (r.warnings || []).map((w) => `<div class="warning">${icon('warn')} ${escapeHtml(w)}</div>`).join("");
-  const ud = unitDollars();
-  const stakeTxt = ud > 0
-    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
-    : `Stake ${r.stake_units.toFixed(2)}u`;
+  // stakeText answers the no-bankroll case itself (units, because
+  // dollars need one), so the branch that used to live here went with it.
+  const stakeTxt = `Stake ${stakeText(r.stake_units)}`;
   const stakeChip = r._ok ? `<span class="chip stake">${stakeTxt}</span>` : "";
   return `
     <article class="card ${propOpenable(r) ? "openable" : ""} ${r._ok ? "" : "faded"}"${propAttrs(r)}
@@ -4647,10 +4893,9 @@ function watchlistHTML(watch, mlb) {
 }
 
 function longShotCard(r) {
-  const ud = unitDollars();
-  const stakeTxt = ud > 0
-    ? `Stake ${money(stakeDollars(r.stake_units))} · ${r.stake_units.toFixed(2)}u`
-    : `Stake ${r.stake_units.toFixed(2)}u`;
+  // stakeText answers the no-bankroll case itself (units, because
+  // dollars need one), so the branch that used to live here went with it.
+  const stakeTxt = `Stake ${stakeText(r.stake_units)}`;
   // The primary reason already headlines the card in its own box —
   // repeating it as the first bullet read as a copy-paste mistake.
   const reasons = (r.reasons || []).filter((x) => x !== r.primary_reason)
@@ -5152,7 +5397,7 @@ function renderGameBetPage(b) {
         <div class="card-id">${mark}
           <div>
             <div class="player">${escapeHtml(b.pick_label || b.headline || "")}
-              <span class="ml-odds">${b.odds > 0 ? "+" : ""}${b.odds}</span></div>
+              <span class="ml-odds">${oddsTxt(b.odds)}</span></div>
             <div class="subtitle">${escapeHtml(b.matchup
               || `${b.away} @ ${b.home}`)}</div>
             <div class="pick">${escapeHtml(b.market_label || b.market || "")}</div>
@@ -5459,7 +5704,7 @@ function renderPropPage() {
         <div class="card-id">${betMark(r, 56)}
           <div>
             <div class="player">${escapeHtml(r.player || "")}
-              <span class="ml-odds">${r.odds > 0 ? "+" : ""}${r.odds}</span></div>
+              <span class="ml-odds">${oddsTxt(r.odds)}</span></div>
             <div class="subtitle">${escapeHtml([r.position,
               typeof teamName === "function" ? teamName(r.team) : r.team,
               r.opponent ? `vs ${typeof teamName === "function"
@@ -5838,7 +6083,7 @@ function renderGamePage() {
   const gpFav = g.favorite || g.home;
   const gpSp = (side) => g.spread == null ? "—"
     : `${side === gpFav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
-  const gpMl = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v}`;
+  const gpMl = (v) => v == null ? "—" : oddsTxt(v);
   const linesCard = (g.spread != null || g.total != null
                      || g.away_ml != null || g.home_ml != null) ? `
     <div class="card gp-lines"><div class="gp-panel-title">Game lines</div>
@@ -5949,6 +6194,7 @@ function renderGamePage() {
     <div class="pp-nav">
       <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
       ${shareBtn("game", gameSlug(g))}
+      ${favBtn(g.away)}${favBtn(g.home)}
     </div>
     <div class="gp-hero">
       <div class="gp-art">${art}${gpPhoto}
@@ -7067,7 +7313,7 @@ function recAnalytics(curve, o, eras) {
   const alltime = o.avg_price == null && o.best_streak == null ? "" : line([
     `<b>${(o.units_staked || 0).toFixed(1)}u</b> staked all-time`,
     `<b>${(o.returned_units || 0).toFixed(1)}u</b> returned (stake back + winnings)`,
-    o.avg_price != null && `avg price <b>${(o.avg_price > 0 ? "+" : "") + o.avg_price}</b>`,
+    o.avg_price != null && `avg price <b>${oddsTxt(o.avg_price)}</b>`,
     o.best_streak != null && `best win streak <b>${o.best_streak}</b>`,
   ]);
   return `
@@ -9152,8 +9398,7 @@ function recEdgePanel(e, trend, overall) {
   let stamp = "—", stampSub = "Refreshes with new data";
   if (e.ts) {
     const t = new Date(e.ts.endsWith("Z") ? e.ts : e.ts + "Z");
-    if (!isNaN(t)) stamp = t.toLocaleTimeString(undefined,
-      { hour: "numeric", minute: "2-digit" });
+    if (!isNaN(t)) stamp = tzTime(t);
   }
   const tiles = `
     <div class="stat-cards ev-tiles">
@@ -9913,7 +10158,7 @@ function edgeRowHTML(r, i) {
     <span style="flex:1"><strong>${escapeHtml(r.label)}</strong>
       <span style="display:block;opacity:.6;font-size:.85em">${escapeHtml(r.sub)}</span></span>
     ${spark}
-    <span style="min-width:64px;text-align:right">${r.odds > 0 ? "+" : ""}${r.odds}</span>
+    <span style="min-width:64px;text-align:right">${oddsTxt(r.odds)}</span>
     <span style="min-width:120px;text-align:right;opacity:.8">
       ${(r.model * 100).toFixed(0)}% vs ${(r.implied * 100).toFixed(0)}%</span>
     <span style="min-width:70px;text-align:right;color:var(--good)">
@@ -11728,7 +11973,7 @@ function mbBulkShow(text) {
       <td class="num">${escapeHtml(b.date)}</td>
       <td>${escapeHtml(b.book)}</td>
       <td>${escapeHtml(b.desc)}</td>
-      <td class="num">${b.odds > 0 ? "+" : ""}${b.odds}</td>
+      <td class="num">${oddsTxt(b.odds)}</td>
       <td class="num">${mbMoney(b.stake)}</td>
       <td class="num">${escapeHtml(b.result)}</td>
     </tr>`).join("");
@@ -11881,7 +12126,7 @@ function renderMyBets() {
         data-mbid="${escapeAttr(b.id || "")}">
       <div class="mbc-head">
         <span class="mbc-title">${legs ? `${legs.length}-leg parlay` : escapeHtml(b.desc || "")}</span>
-        <b class="mbc-odds">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds ?? ""))}</b>
+        <b class="mbc-odds">${escapeHtml(oddsTxt(b.odds))}</b>
         <b class="mbc-tag" style="color:${color}">${label}</b></div>
       ${legs ? `<ul class="mbc-legs">${legs.map((l) =>
         `<li>${escapeHtml(l)}</li>`).join("")}</ul>` : ""}
@@ -11906,7 +12151,7 @@ function renderMyBets() {
       <td class="mbt-pick">${escapeHtml(b.desc || "")}
         <span class="mbt-book">${escapeHtml(b.book || "")}</span></td>
       <td>${escapeHtml(type)}</td>
-      <td class="num">${b.odds > 0 ? "+" : ""}${escapeHtml(String(b.odds ?? ""))}</td>
+      <td class="num">${escapeHtml(oddsTxt(b.odds))}</td>
       <td class="num">${mbMoney(b.stake)}</td>
       <td class="num" style="color:${b.result === "pending" ? "var(--text-mute)" : pcolor(mbProfit(b))}">
         ${b.result === "pending" ? mbMoney(mbToWin(b)) + " to win" : mbMoney(mbProfit(b), true)}</td>
@@ -12691,7 +12936,7 @@ function mcSpark(series, w = 300, h = 44) {
     : v >= 0.01 ? v.toFixed(4) : Number(v).toPrecision(3));
   const scrub = escapeAttr(JSON.stringify({
     x: pts.map((p) => x1 === x0 ? 0 : (p[0] - x0) / (x1 - x0)),
-    l: pts.map((p) => new Date(p[0]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+    l: pts.map((p) => tzTime(p[0], { hour: "2-digit", minute: "2-digit" })),
     v: pts.map((p) => fmtP(p[1])),
   }));
   return `<svg class="mc-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
@@ -13802,6 +14047,10 @@ function acctGather() {
   catch (e) { searches = []; }
   if (searches.length || ts.search)
     sections.search = { ts: ts.search || 0, data: searches };
+  // Preferences, sent only once they have been touched: an untouched
+  // account must not push a blob of defaults over a copy the phone set.
+  if (ts.settings)
+    sections.settings = { ts: ts.settings, data: settings() };
   return sections;
 }
 
@@ -13826,6 +14075,13 @@ function acctApplySection(name, sec) {
       // nothing to say about ESPN", not "ESPN was disconnected".
       if ("espn" in d) put(ESPN_LEAGUE_KEY, d.espn);
       if ("espnTeam" in d) put(ESPN_TEAM_KEY, d.espnTeam);
+    } else if (name === "settings") {
+      settingsAdopt(d);
+      // The whole page reads these, so the whole page redraws — an
+      // adopted odds format that only reached the next render would sit
+      // half-applied until something else moved.
+      if (state.data) renderAll();
+      applySport();
     } else if (name === "search") {
       if (Array.isArray(d))
         localStorage.setItem(ACCT_SEARCH_KEY, JSON.stringify(d));
@@ -13875,8 +14131,7 @@ async function acctSync() {
         if (k === "mybets") betsChanged = true;
       }
     });
-    _acctNote = "synced " + new Date().toLocaleTimeString([],
-                { hour: "numeric", minute: "2-digit" });
+    _acctNote = "synced " + tzTime(Date.now());
     if (betsChanged && state.view === "mybets") renderMyBets();
     else acctPaintNote();
   } catch (e) {
@@ -13976,8 +14231,7 @@ async function acctSyncAccount() {
         if (k === "mybets") betsChanged = true;
       }
     });
-    _acctNote = "synced " + new Date().toLocaleTimeString([],
-                { hour: "numeric", minute: "2-digit" });
+    _acctNote = "synced " + tzTime(Date.now());
     if (betsChanged && state.view === "mybets") renderMyBets();
     else acctPaintNote();
   } catch (e) {
@@ -16225,8 +16479,129 @@ function acctScreenHTML() {
 function renderAccount() {
   const body = document.getElementById("account-body");
   if (!body) return;
-  body.innerHTML = acctScreenHTML() + menuDiagHTML();
+  body.innerHTML = acctScreenHTML() + settingsHTML() + menuDiagHTML();
   renderFantasyLinks();
+  bindSettings();
+}
+
+/* ============================================================
+   The settings panel
+   ============================================================
+   Ethan, 2026-08-25: "Settings that stick: odds format (−110 vs 1.91),
+   units vs dollars, timezone, favorite teams first, which sports show in
+   nav."
+
+   RENDERED SIGNED OUT AS WELL AS IN, and deliberately — the same rule
+   ffLinksHTML already follows. These live in this browser and work with
+   no account at all; signing in only carries them to your other
+   devices. A preferences panel behind a sign-in wall would be a page
+   that refuses to remember you until you prove who you are, which is
+   the opposite of the point.
+
+   Every control writes through `setSetting`, which stamps the section
+   and schedules the same debounced push every other synced section
+   uses. Nothing here needs its own endpoint. */
+const TZ_CHOICES = [
+  ["", "This device"],
+  ["America/New_York", "Eastern"],
+  ["America/Chicago", "Central"],
+  ["America/Denver", "Mountain"],
+  ["America/Phoenix", "Arizona"],
+  ["America/Los_Angeles", "Pacific"],
+  ["UTC", "UTC"],
+];
+
+function settingsHTML() {
+  const s = settings();
+  // The KEY is passed, never derived from the label: a settings panel
+  // that decides which preference it is writing by matching the words on
+  // screen is one rename away from writing the wrong one.
+  const pick = (key, name, value, opts) => `<div class="set-row">
+      <div class="set-k">${escapeHtml(name)}</div>
+      <div class="set-v">${opts.map(([v, label, note]) => `
+        <button type="button" class="set-opt${v === value ? " on" : ""}"
+          data-set-key="${escapeAttr(key)}"
+          data-set-val="${escapeAttr(v)}">${escapeHtml(label)}${
+          note ? `<span class="set-note">${escapeHtml(note)}</span>` : ""}</button>`)
+        .join("")}</div>
+    </div>`;
+  const leagues = SPORT_CODES.map((c) => `
+    <button type="button" class="set-opt${
+      !s.leagues.length || s.leagues.includes(c) ? " on" : ""}"
+      data-set-league="${escapeAttr(c)}">${escapeHtml(
+        (LEAGUE_LABEL && LEAGUE_LABEL[c]) || c.toUpperCase())}</button>`).join("");
+  const favs = s.teams.length
+    ? s.teams.map((t) => {
+        const [sport, abbr] = t.split(":");
+        return `<button type="button" class="set-opt on" data-set-unfav="${escapeAttr(t)}"
+          title="Remove">★ ${escapeHtml(teamNameIn(sport, abbr) || abbr)}
+          <span class="set-note">${escapeHtml((sport || "").toUpperCase())}</span></button>`;
+      }).join("")
+    : `<span class="set-empty">None yet — open a game and tap the ☆ beside a team.</span>`;
+  return `<section class="card qb-settings">
+    <div class="section-title minor">Settings
+      <span class="sub">— they follow your account to every device you
+      sign in on. Signed out they still stick, on this one.</span></div>
+    ${pick("odds", "Prices", s.odds, [["american", "American", "−110"],
+                                     ["decimal", "Decimal", "1.91"]])}
+    ${pick("stake", "Stakes", s.stake, [["both", "Both", "$28 · 1.4u"],
+                                       ["units", "Units", "1.4u"],
+                                       ["dollars", "Dollars", "$28"]])}
+    ${pick("tz", "Times", s.tz, TZ_CHOICES.map(([v, l]) => [v, l]))}
+    <div class="set-row">
+      <div class="set-k">Leagues in the nav</div>
+      <div class="set-v">${leagues}
+        <span class="set-note wide">All of them, unless you narrow it. The
+        league you are looking at always shows.</span></div>
+    </div>
+    <div class="set-row">
+      <div class="set-k">Your teams</div>
+      <div class="set-v">${favs}
+        <span class="set-note wide">Their games ride at the front of the
+        strip and wear a star. Follow one from any game page. Picks stay ordered by edge — floating your
+        teams up a ranked board would say the model likes them more than
+        it does.</span></div>
+    </div>
+  </section>`;
+}
+
+function bindSettings() {
+  const host = document.querySelector(".qb-settings");
+  if (!host) return;
+  const redraw = () => {
+    // Prices, stakes and times are read by every renderer on the site,
+    // so the whole board redraws rather than the panel patching the two
+    // places somebody remembered.
+    if (state.data) renderAll();
+    applySport();
+    renderAccount();
+  };
+  host.querySelectorAll("[data-set-key]").forEach((b) =>
+    b.addEventListener("click", () => {
+      setSetting(b.dataset.setKey, b.dataset.setVal);
+      redraw();
+    }));
+  host.querySelectorAll("[data-set-league]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const code = b.dataset.setLeague;
+      // An empty list means EVERY league, so the first tap has to
+      // materialise the full list before removing one — otherwise
+      // un-ticking a league would read as ticking only that one.
+      const cur = settings().leagues.length
+        ? settings().leagues.slice() : SPORT_CODES.slice();
+      const i = cur.indexOf(code);
+      if (i >= 0) cur.splice(i, 1); else cur.push(code);
+      // Emptied back out means all of them again, which is also the only
+      // state that cannot leave somebody with no leagues at all.
+      setSetting("leagues", cur.length ? cur : []);
+      redraw();
+    }));
+  host.querySelectorAll("[data-set-unfav]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [sport, abbr] = String(b.dataset.setUnfav).split(":");
+      favToggle(abbr, sport);
+      redraw();
+    }));
 }
 
 /* ---- WHERE A LEAGUE GETS LINKED ----------------------------------------
@@ -22893,6 +23268,17 @@ document.addEventListener("click", (e) => {
   copyLink(b.dataset.shareKind, b.dataset.shareSlug, b);
 });
 
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-fav]");
+  if (!b) return;
+  e.preventDefault();
+  favToggle(b.dataset.fav);
+  // The strip's order and its stars both read this, so the board redraws
+  // — and so does this page, which is wearing the button that changed.
+  if (state.data) renderAll();
+  if (state.view === "game") renderGamePage();
+});
+
 /* The static fallback. In production Caddy hands these paths to the app
    and `__QB_ROUTE__` is already in the document — but the service worker
    answers an offline launch with the cached /index.html whatever the
@@ -24248,8 +24634,8 @@ function renderRail() {
               <em>${situation}</em></div>
           </div>
           ${g.spread != null ? `<div class="rlv-lines">
-            <span>${escapeHtml(sp(g.away))}${g.away_ml != null ? ` · ${g.away_ml > 0 ? "+" : ""}${g.away_ml}` : ""}</span>
-            <span>${escapeHtml(sp(g.home))}${g.home_ml != null ? ` · ${g.home_ml > 0 ? "+" : ""}${g.home_ml}` : ""}</span>
+            <span>${escapeHtml(sp(g.away))}${g.away_ml != null ? ` · ${oddsTxt(g.away_ml)}` : ""}</span>
+            <span>${escapeHtml(sp(g.home))}${g.home_ml != null ? ` · ${oddsTxt(g.home_ml)}` : ""}</span>
           </div>` : ""}
         </div>`;
       }).join("")}`;
@@ -24473,7 +24859,7 @@ function liveCardHTML({ sport, g, bets }) {
   const fav = g.favorite || g.home;
   const sp = (side) => g.spread == null ? "—"
     : `${side === fav ? "−" : "+"}${Math.abs(g.spread).toFixed(1)}`;
-  const mlOdds = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v}`;
+  const mlOdds = (v) => v == null ? "—" : oddsTxt(v);
   const linesGrid = (g.spread != null || g.total != null
                      || g.away_ml != null || g.home_ml != null) ? `
     <div class="lb-table">

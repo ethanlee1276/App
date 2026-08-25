@@ -109,7 +109,15 @@ LOCKOUT_S = 900
 
 #: Sections an account can hold. `search` is new with this feature —
 #: Ethan asked for search history alongside bets and fantasy.
-SECTIONS = ("mybets", "fantasy", "bankroll", "search")
+#:
+#: `settings` (2026-08-25) is odds format, stake display, time zone,
+#: favourite teams and which leagues show in the nav — Ethan: "Settings
+#: that stick". It is a preferences blob and rides the same
+#: last-writer-wins rule as fantasy and bankroll, which is right for it:
+#: two devices disagreeing about a display preference should settle on
+#: whichever was set most recently, and there is nothing here that can
+#: be lost the way a journaled bet can.
+SECTIONS = ("mybets", "fantasy", "bankroll", "search", "settings")
 MAX_SECTION_BYTES = 1_000_000
 
 _EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s.]+(\.[^@\s.]+)+$")
