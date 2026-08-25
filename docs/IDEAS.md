@@ -151,6 +151,26 @@ pages, and the difference is the whole trust question.
 
 ---
 
+## Web push — measured and refused, 2026-08-26
+
+Roadmap #8 asked for it ("an edge alert that hits a lock screen") and it
+is the one delivery mechanic that did NOT ship with the others, on
+purpose rather than by omission. The Web Push protocol (RFC 8291/8292)
+requires P-256 ECDH key agreement and AES-128-GCM payload encryption
+plus ES256-signed VAPID tokens. **The Python standard library has none
+of those primitives**, and this repo is stdlib-only by doctrine — the
+alternatives are adding a crypto dependency (a decision bigger than one
+feature) or hand-rolling elliptic-curve cryptography, which is the
+single worst category of code to write yourself on a site that holds
+accounts. What shipped instead covers most of the distance: the feed is
+the alert stream, the return banner says what happened while you were
+gone, and the PWA install keeps the site one tap away. If push is ever
+worth a dependency, `pywebpush` + a `push_subs` table beside the
+accounts is a two-day build on top of the feed that already exists —
+the events are the hard part, and they are done.
+
+---
+
 ## Ideas that need data we do not have
 
 Kept so they are not re-proposed every month.

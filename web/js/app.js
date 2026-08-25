@@ -940,6 +940,7 @@ async function load(quiet = false) {
 
        Only sent when there is actually something to keep: a 304 with an
        empty `state.data` would render a blank board. */
+    captureFreshBaseline(meta.api);
     const tag = _boardTags[meta.api];
     const holding = state.data && _boardFor === meta.api;
     const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
@@ -985,6 +986,7 @@ async function load(quiet = false) {
     }
   }
   renderAll();
+  applyFreshPulses();
   state.lastLoad = Date.now();
   state.quiet = false;
   if (refreshBtn && !quiet) refreshBtn.classList.remove("loading");
@@ -3655,6 +3657,104 @@ function renderTonight() {
    when the LAST bet of that night graded), so this strip and the feed can
    never disagree; tonight's count is the board already in memory. Quiet
    when there is nothing to say: no recap event, or a night with no bets. */
+/* ============================================================
+   Delivery mechanics (roadmap #8) — pulses and the return banner
+   ============================================================
+   Two client-side answers to "did anything change?": cards whose NUMBER
+   moved in the last rebuild pulse once (the same flash the live ticks
+   use), and a returning visitor gets one line saying what happened
+   while they were gone, counted off the feed they can open for the
+   play-by-play. Web push is the deliberate absence: RFC 8291 needs
+   P-256 ECDH and AES-128-GCM, the stdlib has neither, and hand-rolled
+   curve crypto is the wrong risk for a betting site — the decision is
+   written in docs/IDEAS.md rather than half-shipped. */
+let _freshPrev = null, _freshBoard = "";
+
+/* KEYED BY PLAYER|MARKET, deliberately not by propId: propId bakes the
+   side and the LINE into the identity, so the exact event this exists
+   to flash — the line moving — would change the key and read as a
+   brand-new row instead of a changed one. Same lesson the feed's
+   digest key already carries. The side and line live in the VALUE,
+   where changing them is what a change is. */
+function _freshFp(r) {
+  return `${r.side}|${r.line}|${r.odds}|${r.projection}`;
+}
+
+function captureFreshBaseline(api) {
+  if (!(state.data && _boardFor === api)) {
+    _freshPrev = null;
+    _freshBoard = api;
+    return;
+  }
+  const fp = {};
+  (state.data.recommendations || []).forEach((r) => {
+    fp[`${r.player}|${r.market}`] = _freshFp(r);
+  });
+  _freshPrev = fp;
+  _freshBoard = api;
+}
+
+function applyFreshPulses() {
+  if (!_freshPrev || _freshBoard !== _boardFor) return;
+  const changed = new Set();
+  ((state.data || {}).recommendations || []).forEach((r) => {
+    const prev = _freshPrev[`${r.player}|${r.market}`];
+    if (prev !== undefined && prev !== _freshFp(r)) changed.add(propId(r));
+  });
+  if (!changed.size) return;
+  document.querySelectorAll("[data-prop]").forEach((el) => {
+    if (!changed.has(el.getAttribute("data-prop"))) return;
+    el.classList.add("fresh-pulse");
+    setTimeout(() => el.classList.remove("fresh-pulse"), 1800);
+  });
+}
+
+/* "Since you last looked" — the previous visit's clock, captured before
+   this visit starts writing its own. */
+const SEEN_KEY = "qb_seen_ms";
+let _prevSeenMs = null, _freshDismissed = false;
+(() => {
+  try {
+    const v = localStorage.getItem(SEEN_KEY);
+    _prevSeenMs = v ? Number(v) : null;
+  } catch (e) { _prevSeenMs = null; }
+})();
+function markSeen() {
+  try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch (e) {}
+}
+markSeen();
+setInterval(markSeen, 60000);
+window._freshDismiss = () => { _freshDismissed = true; renderDayCard(); };
+
+function freshBannerHTML(feed) {
+  if (_freshDismissed || _prevSeenMs == null || !Number.isFinite(_prevSeenMs))
+    return "";
+  const gap = Date.now() - _prevSeenMs;
+  if (gap < 30 * 60000) return "";       // a tab flip is not a return
+  const evs = ((feed || {}).events || []).filter((e) => {
+    const t = Date.parse(String(e.ts || "") + "Z");
+    return Number.isFinite(t) && t > _prevSeenMs;
+  });
+  if (evs.length < 3) return "";         // a quiet gap earns no banner
+  const n = (k) => evs.filter((e) => e.kind === k).length;
+  const bits = [];
+  const app = n("edge_appeared");
+  if (app) bits.push(`${app} edge${app > 1 ? "s" : ""} appeared`);
+  const died = n("edge_died");
+  if (died) bits.push(`${died} died`);
+  const lm = n("line_move") + n("price_move");
+  if (lm) bits.push(`${lm} price${lm > 1 ? "s" : ""} moved`);
+  if (n("card_posted")) bits.push("the card posted");
+  if (n("settle_recap")) bits.push("last night graded");
+  if (!bits.length) bits.push(`${evs.length} board changes`);
+  return `<div class="fresh-banner">${icon("signal", 14)}
+    <span>Since you last looked (${escapeHtml(ageText(gap / 1000))} ago):
+      ${escapeHtml(bits.join(", "))}.
+      <a href="#alerts">The feed has the play-by-play →</a></span>
+    <button class="fb-x" onclick="window._freshDismiss()" aria-label="Dismiss">${icon("cross", 12)}</button>
+  </div>`;
+}
+
 async function renderDayCard() {
   const host = document.getElementById("daycard-zone");
   if (!host) return;
@@ -3677,9 +3777,14 @@ async function renderDayCard() {
   // exists for the morning payload: last night's line, fully graded.
   const recs = ((state.data || {}).recommendations || [])
     .filter((r) => r.recommended).length;
-  if (!recap) { host.innerHTML = ""; return; }
+  // The return banner rides in this same allowlisted zone: one line for
+  // a visitor who was genuinely away (30+ min, 3+ events), dismissible,
+  // and empty for everyone else — the zero-fold default still holds on
+  // the pass test_board_order measures.
+  const banner = freshBannerHTML(d);
+  if (!recap) { host.innerHTML = banner; return; }
   const net = recap ? recap.net_u : null;
-  host.innerHTML = `<div class="daycard">
+  host.innerHTML = banner + `<div class="daycard">
     ${recap ? `<span class="dc-half">
         <span class="dc-k">Last night</span>
         <b class="${net >= 0 ? "pos" : "neg"}">${recap.w}-${recap.l}${

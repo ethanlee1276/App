@@ -2310,6 +2310,20 @@ select.calc-in { width: auto; font-weight: 600; }
 /* ---------------- The book report card (Scanner) ---------------- */
 .br-head { margin-top: 22px; }
 
+/* ---------------- Delivery mechanics (roadmap #8) ---------------- */
+/* The same one-shot flash the live ticks use — a card whose number
+   moved in the last rebuild says so once, then goes quiet. */
+.fresh-pulse { animation: tickMove 1.4s var(--ease-out) 1; }
+.fresh-banner { display: flex; align-items: center; gap: 9px;
+  padding: 9px 13px; margin-bottom: 10px;
+  border: var(--hairline) solid var(--border); background: var(--panel);
+  color: var(--text-dim); font-size: var(--fs-sm); }
+.fresh-banner a { color: var(--brand); text-decoration: none; }
+.fresh-banner a:hover { text-decoration: underline; }
+.fb-x { margin-left: auto; display: inline-flex; padding: 4px;
+  border: 0; background: none; color: var(--text-mute); cursor: pointer; }
+.fb-x:hover { color: var(--text); }
+
 /* ---------------- The sim lab (prop page toy) ---------------- */
 .sim-lab { padding: 12px 14px; }
 .sim-read { margin-left: 12px; color: var(--text-dim); font-size: var(--fs-sm);
