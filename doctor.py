@@ -726,6 +726,12 @@ def check_correlation_priors(rep):
         _ = rho_meta
 
 
+#: How far back "is this pipeline journaling its dimension" looks. Old
+#: rows cannot be repaired, so an all-time read reports a fixed pipeline
+#: as broken forever — see the note inside the check.
+LEARN_RECENT = 400
+
+
 def check_learning(rep):
     """Is the learning ladder actually recording, and has it learned anything?
 
@@ -760,13 +766,29 @@ def check_learning(rep):
         if not total:
             rep.add("learning ladder", OK, "journal is empty — nothing to learn from yet")
             return
+        # RECENT, NOT ALL-TIME, and this is the same lesson as SPORT_BOUND
+        # below wearing a clock instead of a league. `lead_min` was NULL
+        # on every football pick ever journaled (the board's kickoff was
+        # a bare clock with no date, so the capture-lag layer refused it,
+        # correctly). It was fixed on 2026-08-26 — and read over the WHOLE
+        # journal this check would go on reporting it dead for as long as
+        # those rows exist, which is forever. A pipeline that started
+        # working is not a broken pipeline, and a warning that cannot go
+        # green is a warning you learn to skip.
+        #
+        # So the window is the newest picks. A dimension is live if
+        # anything in that window carries it, and dead means the pipeline
+        # is not filling it NOW — which is also what catches one that
+        # stops, where an all-time count would hide it behind history.
         filled, missing_col = {}, []
         for d in dims:
             if d not in have:
                 missing_col.append(d)
                 continue
             n = conn.execute(
-                f"SELECT COUNT(*) FROM bets WHERE {d} IS NOT NULL").fetchone()[0]
+                f"SELECT COUNT(*) FROM (SELECT {d} AS v FROM bets "
+                "ORDER BY ts DESC LIMIT ?) WHERE v IS NOT NULL",
+                (LEARN_RECENT,)).fetchone()[0]
             filled[d] = n
         live = [d for d, n in filled.items() if n]
         dead = [d for d, n in filled.items() if not n]
@@ -841,8 +863,10 @@ def check_learning(rep):
                 found.append(f"hypothesis lab: {n_live} live, "
                              f"{n_watch} watched")
 
+        window = min(total, LEARN_RECENT)
         detail = (f"{total:,} journaled picks · {len(live)}/{len(dims)} "
-                  f"mineable dimensions carrying data")
+                  f"mineable dimensions carrying data in the last "
+                  f"{window:,}")
         if found:
             detail += " · " + "; ".join(found)
         else:

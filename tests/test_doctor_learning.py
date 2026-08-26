@@ -143,6 +143,65 @@ def test_a_fully_journaled_pick_is_green():
     assert "9/9 mineable dimensions" in row["detail"], row["detail"]
 
 
+def _journal_rows(rows, sport="mlb"):
+    """A journal of several picks, newest last, each with its own stamp.
+
+    `_journal` above writes one row and is enough for every all-time
+    claim. The recency window needs an order, so this one exists — same
+    shape, a `ts` per row."""
+    path = os.path.join(tempfile.mkdtemp(), "l.db")
+    orig = ledger.connect
+    conn = orig(path)
+    for i, cols in enumerate(rows):
+        keys = ", ".join(cols)
+        marks = ", ".join("?" for _ in cols)
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            f" odds, hit_prob, stake_units, status, category"
+            f"{', ' + keys if cols else ''}) VALUES (?,?,'2026-08-01',?,"
+            "'outs','OVER',16.5,-110,0.56,1.0,'lost','main'"
+            f"{', ' + marks if cols else ''})",
+            # A player each: bets is UNIQUE on
+            # (sport, date, player, market, category).
+            (f"t{i:04d}", sport, f"X{i}", *cols.values()))
+    conn.commit()
+    return path, orig
+
+
+#: Every dimension filled, so a test can turn exactly one of them off.
+_ALL = {"pen_own": 12.0, "pen_opp": 9.0, "park_hr": 1.1, "wind_out": 4.0,
+        "lineup_slot": 3, "lead_min": 95.0, "loss_cause": "blowout"}
+
+
+def test_a_fixed_pipeline_stops_being_reported_as_broken():
+    """The window is RECENT, not all-time, and that is the difference
+    between a warning that can go green and one you learn to skip.
+
+    `lead_min` was NULL on every football pick ever journaled — the
+    board's kickoff was a bare clock with no date, so the capture-lag
+    layer refused it, correctly (see tests/test_capture_lag.py). Fixed
+    2026-08-26. Old rows cannot be repaired, so an all-time read would go
+    on calling that pipeline dead for as long as those rows exist, which
+    is forever."""
+    dead = dict(_ALL, lead_min=None)
+    row = _run(*_journal_rows([dead, dead, dead]))
+    assert "lead_min" in (row.get("fix") or ""), \
+        "a genuinely dead column stopped being reported"
+    # One recent pick carrying it is a pipeline that works now.
+    row = _run(*_journal_rows([dead, dead, dict(_ALL)]))
+    assert "lead_min" not in (row.get("fix") or ""), \
+        "a pipeline that started working is still called broken"
+
+
+def test_the_window_looks_at_the_newest_picks_and_says_so():
+    """Reported, because a reader who does not know the window cannot
+    tell "not journaling it" from "not journaling it lately"."""
+    row = _run(*_journal_rows([dict(_ALL)]))
+    assert "in the last" in (row.get("detail") or ""), row
+    assert doctor.LEARN_RECENT >= 100, \
+        "too short a window and one quiet night reads as a broken pipeline"
+
+
 def test_it_separates_recording_from_having_learned():
     """Both halves get said out loud. A ladder that is recording but has
     convicted nothing is early, not broken — and reporting only the second
