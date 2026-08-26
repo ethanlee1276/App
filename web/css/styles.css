@@ -260,7 +260,7 @@
   --fill-subtle: rgba(232,228,217,.022);
   --fill-hover: rgba(232,228,217,.05);
   --text-body: #A8A090;
-  --topbar-bg: rgba(10,9,7,.92);
+  --topbar-bg: rgba(10,9,7,.97);
   --skeleton: linear-gradient(100deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
@@ -1340,7 +1340,7 @@ svg[data-scrub] { touch-action: pan-y; }
   --fill-subtle: rgba(20,18,14,.035);
   --fill-hover: rgba(20,18,14,.07);
   --text-body: #3E3A31;
-  --topbar-bg: rgba(242,239,230,.93);
+  --topbar-bg: rgba(242,239,230,.97);
   --skeleton: linear-gradient(100deg, #f4f4f6 30%, #ebebee 50%, #f4f4f6 70%);
   --shadow: none;
   --shadow-lg: none;
@@ -4953,7 +4953,7 @@ body.pk-open { overflow: hidden; }
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 14px;
-  --topbar-bg: rgba(7, 7, 12, .82);
+  --topbar-bg: rgba(7, 7, 12, .96);
   /* Light lives in tokens so every glow on the site is the SAME glow. */
   --glow: 0 0 0 1px rgba(255, 176, 0, .28), 0 6px 28px rgba(255, 176, 0, .16);
   --glow-soft: 0 10px 30px rgba(0, 0, 0, .45);
@@ -5012,7 +5012,7 @@ body.pk-open { overflow: hidden; }
      or TOP GAME and the active league chip go amber in light. */
   --grad-brand: linear-gradient(135deg, #9A6A00, #7A5300);
   --brand-solid: #7A5300;
-  --topbar-bg: rgba(244, 244, 251, .88);
+  --topbar-bg: rgba(244, 244, 251, .96);
   --glow: 0 0 0 1px rgba(154, 106, 0, .22), 0 6px 24px rgba(154, 106, 0, .12);
   --glow-soft: 0 10px 26px rgba(23, 23, 42, .10);
   --grad-card: radial-gradient(130% 100% at 50% 0%, rgba(154, 106, 0, .10), rgba(244, 244, 251, 0) 62%);
@@ -5063,7 +5063,18 @@ html, body { overflow-x: clip; }
   height: var(--topbar-h);
   padding: env(safe-area-inset-top) 20px 0;
   background: var(--topbar-bg);
-  backdrop-filter: blur(16px);
+  /* NO backdrop-filter — FOURTH TIME this property has hurt someone,
+     and this one was the worst: Ethan, 2026-08-25, on his iPhone —
+     "anytime I try to click any menu … my whole phone will black
+     screen … a little gear spinning … then it'll send me to my lock
+     screen." That is an iOS RESPRING: WebKit's GPU process dying, and
+     the trigger profile is exactly this bar — a full-width blur(16px)
+     layer that body.menu-open flips to position:fixed, re-composited
+     over a transformed drawer and a page of stadium photography. The
+     three notes below (scrim, phone topbar, menu toggle) retired their
+     blurs for milder versions of the same failure; the sticky bar kept
+     its own and kept the crash. The near-opaque --topbar-bg tokens
+     carry the look; nothing a blur did here was worth a phone reboot. */
   border-bottom: var(--hairline) solid var(--border-soft);
 }
 .menu-toggle { display: none; }

@@ -2,6 +2,12 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The menu no longer reboots iPhones",
+      "body": "Opening a menu on some iPhones could black-screen the whole phone — the spinning-gear-then-lock-screen crash. That is iOS's graphics process dying, and the trigger was ours: the top bar kept a heavy glass-blur effect that, the moment a menu opened, was re-composited as a pinned layer over the sliding drawer and the stadium photography beneath it. Three smaller versions of this same failure had already retired the blur on the scrim, the phone bars and the menu button; the top bar's was the last one standing and the most expensive. The blur is gone everywhere now — the bar wears a near-solid wash that reads the same — and a test forbids the property from ever coming back."
+    },
+    {
       "date": "2026-08-25",
       "kind": "fix",
       "title": "Game bets parlay too, and the card buttons calmed down",

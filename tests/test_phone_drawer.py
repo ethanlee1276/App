@@ -461,6 +461,26 @@ def test_the_drawer_actually_paints_where_it_says_it_is():
     assert not out["errs"], f"page errors: {out['errs']}"
 
 
+def test_no_element_anywhere_carries_backdrop_filter():
+    """THE FOURTH TIME WAS A PHONE REBOOT. The scrim, the phone topbar
+    and the menu toggle each lost their blur to milder versions of this
+    failure — and the sticky topbar kept a blur(16px) that
+    body.menu-open flips to position:fixed. Ethan, 2026-08-25, iPhone:
+    "anytime I try to click any menu … my whole phone will black screen
+    … a little gear spinning … then it'll send me to my lock screen."
+    That is an iOS respring: WebKit's GPU process dying under a
+    full-width blurred fixed layer re-composited over a transformed
+    drawer and stadium photography.
+
+    So the rule stops being per-element: NO live backdrop-filter
+    declaration anywhere in the stylesheet. Comments may say the word;
+    a declaration may not. The near-opaque --topbar-bg tokens carry the
+    frosted look for free."""
+    decl = re.compile(r"^[^/*\n]*backdrop-filter\s*:", re.M)
+    hits = [m.group(0).strip() for m in decl.finditer(CSS)]
+    assert not hits, f"live backdrop-filter declarations: {hits}"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
