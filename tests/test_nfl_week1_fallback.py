@@ -51,9 +51,23 @@ BUILD = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
 LAUNCH = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
 
 
-def test_games_only_writes_a_payload_when_given_an_out():
+def _games_only_block():
+    """The whole --games-only branch, sliced to its END rather than to a
+    fixed character count.
+
+    Every test below used to take BUILD[i:i + 5200]. The branch grew by a
+    dozen lines on 2026-08-26 (it started shipping `team_recent`) and the
+    window silently stopped covering `gate.publish` — a test that fails
+    because the code it reads moved, not because the code is wrong, is a
+    test that will be deleted the third time it cries wolf. The branch
+    ends where the function returns."""
     i = BUILD.index("if args.games_only:")
-    block = BUILD[i:i + 5200]
+    j = BUILD.index("\n        return\n", i)
+    return BUILD[i:j]
+
+
+def test_games_only_writes_a_payload_when_given_an_out():
+    block = _games_only_block()
     assert "if args.out:" in block, "--games-only still only prints"
     assert "gate.publish(payload, args.out)" in block, \
         "the fallback must publish through the gate, like every other build"
@@ -69,8 +83,7 @@ def test_the_fallback_prices_the_game_markets_and_only_those():
     turned out to be answered already (see the next test), so the game
     markets price here. The PLAYER layer still does not, because it does
     not exist — that is the whole reason this path runs."""
-    i = BUILD.index("if args.games_only:")
-    block = BUILD[i:i + 5200]
+    block = _games_only_block()
     assert "price_games_only(games, args.season, args.week, config" in block, \
         "the fallback publishes a schedule with no prices again"
     assert '"game_bets": bets' in block, "the priced bets never reach the payload"
@@ -111,8 +124,7 @@ def test_the_priced_fallback_cannot_double_journal_the_slate():
         "an insert that is not OR IGNORE would raise instead of dedupe"
     # Same date key on both sides — a bare INSERT OR IGNORE dedupes
     # nothing if the two builds file the slate under different dates.
-    i = BUILD.index("if args.games_only:")
-    assert '"date": f"{args.season}-W{args.week:02d}"' in BUILD[i:i + 5200]
+    assert '"date": f"{args.season}-W{args.week:02d}"' in _games_only_block()
     nflverse = open(os.path.join(ROOT, "engine", "sources", "nflverse.py"),
                     encoding="utf-8").read()
     assert 'Slate(date=f"{season}-W{week:02d}"' in nflverse, \
@@ -321,6 +333,81 @@ def test_the_board_does_not_claim_a_verdict_it_never_reached():
     assert guard < cause < advice, \
         "schedule-only still falls through to \"loosen the sliders\""
 
+
+
+# --- what the board's own cards open onto -----------------------------------
+#
+# Ethan, 2026-08-26: "on nfl im not ablt to click on the game props and it
+# show me the bar graph and information and shit." He was reading THIS
+# payload — it is what the site publishes every day between the schedule
+# appearing and Week 1 being played — and every one of its sixty-four game
+# bets opened a page saying "No recent results for this team yet", because
+# the fallback shipped without `team_recent`. The full build has attached
+# it since the chart existed. Reproduced in a browser against the real
+# fallback payload, fixed, and pinned here.
+
+APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+
+
+def test_the_fallback_ships_the_history_its_game_bets_open_onto():
+    block = _games_only_block()
+    assert "recent_games" in block,         "the schedule-only payload has no team history, so every game bet " \
+        "on it opens onto an empty chart"
+    assert '"team_recent": _team_recent' in block,         "team history is fetched and then not published"
+    # The same guard the full build uses: a missing team log costs the
+    # chart, never the board.
+    assert "team logs skipped" in block
+
+
+def test_a_real_board_is_never_labelled_sample_data():
+    """Sixteen real games, real kickoffs, and lines priced off real team
+    ratings — thirteen of which are JOURNALED to the public record. The
+    badge read the string, saw it did not start with "live", and told
+    every reader "these are not real games or real prices", while three
+    other places in the same file said the opposite in words."""
+    i = APP.index("function boardIsReal(")
+    fn = APP[i:APP.index("\n}", i)]
+    assert "startsWith(\"live\")" in fn and "REAL_BOARDS" in fn
+    assert '"schedule-only"' in APP[APP.index("const REAL_BOARDS"):
+                                   APP.index("const REAL_BOARDS") + 120]
+    j = APP.index("function renderDataSource(")
+    body = APP[j:APP.index("\n}", j)]
+    assert "boardIsReal(src)" in body,         "the badge is back to reading the raw string"
+
+
+def test_both_game_bet_surfaces_draw_the_same_chart():
+    """The board card and the full page charted the same series through
+    two different call sites, and they drifted: the card was fixed to
+    stop the strip reading "SPREAD Spread" and to name the handicap, and
+    the page never got either fix."""
+    i = APP.index("function renderGameBetPage(")
+    body = APP[i:APP.index("\nfunction ", i + 10)]
+    assert "gameBetChart(b)" in body,         "the full page builds its own chart row again"
+    assert "asProp" not in body, "the second, drifting call site came back"
+
+
+def test_the_spread_chart_names_the_number_it_is_drawn_against():
+    """A spread's bars are distance from the handicap, so the geometry's
+    baseline is 0 — but the READER's baseline is -3.5, and `propAnalysis`
+    takes `lineText` and `pill` for exactly that. Dropping them charted
+    every spread on the site as "LINE 0"."""
+    i = APP.index("function gameBetChart(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "lineText: s.lineText" in body and "pill: s.pill" in body
+    # And the series still offers them, or there is nothing to forward.
+    j = APP.index("function gameBetSeries(")
+    series = APP[j:APP.index("\n}\n\n/* The chart itself", j)]
+    assert "lineText:" in series and "pill:" in series
+
+
+def test_a_game_total_is_labelled_with_the_team_whose_games_it_charts():
+    """The chart head said CHIEFS and the corner said BRONCOS, on the
+    same card: the series draws a total off the HOME team's last games
+    and the identity fell through `b.team` — which a total does not
+    carry — to the away side."""
+    i = APP.index("function gameBetChart(")
+    body = APP[i:APP.index("\n}", i)]
+    assert '=== "total"' in body and "b.home" in body,         "a game total is labelled with a team whose games it did not draw"
 
 
 if __name__ == "__main__":

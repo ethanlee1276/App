@@ -732,6 +732,35 @@ def main() -> None:
     # Conditionals ride on the same board, flagged and unstaked, because a
     # separate page for them is a page nobody opens.
     out["game_bets"] = bets + conditionals
+    # THE CHART EVERY ONE OF THOSE BETS OPENS ONTO. Same gap the NFL's
+    # games-only fallback had (fixed 2026-08-26, Ethan: "on nfl im not
+    # able to click on the game props and it show me the bar graph"):
+    # a game bet's history is its team's last results, and without
+    # `team_recent` in the payload every CFB spread and total opened a
+    # page whose centrepiece said "No recent results for this team yet".
+    #
+    # TWO SEASONS, deliberately. `recent_games` defaults to the season
+    # the date falls in, which is right in November and wrong on the
+    # opening Saturday — week one would chart nothing at all. The NFL's
+    # board effectively spans seasons already (its periods are week
+    # numbers, so the date filter never bites), and a reader looking at
+    # the same kind of card in two leagues should not get last season's
+    # form in one and an empty panel in the other. Empty until the
+    # results are ingested either way: `cfb_build.py --backfill` is what
+    # fills the prior season.
+    try:
+        from engine.db import connect as _tl_connect
+        from engine.seasons import season_of as _season_of
+        from engine.teamlogs import recent_games as _recent_games
+        _season = _season_of("cfb", args.date)
+        _tlc = _tl_connect()
+        out["team_recent"] = _recent_games(
+            _tlc, "cfb",
+            {t for g in out["games"] for t in (g.get("home"), g.get("away")) if t},
+            before=args.date, seasons=[_season - 1, _season])
+        _tlc.close()
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  team logs skipped: {exc}")
     # The pass list on a 60-game Saturday is ~180 markets; shipping all of
     # it would make the payload the slowest thing on a phone. The near
     # misses are the part that says something.

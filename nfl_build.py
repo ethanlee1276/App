@@ -235,10 +235,35 @@ def main() -> None:
                 else:
                     print("  No moneylines — that market needs a book price "
                           "and no cached pull has one.")
+            # THE CHART THE GAME BETS OPEN ONTO. Ethan, 2026-08-26:
+            # "on nfl im not able to click on the game props and it show
+            # me the bar graph and information and shit." He was reading
+            # THIS payload — the fallback is what the site publishes
+            # every day between the schedule appearing and Week 1 being
+            # played — and it shipped without `team_recent`, so all
+            # sixty-four game bets opened onto "No recent results for
+            # this team yet". The full build has attached it since the
+            # chart existed; the fallback was written as a stopgap and
+            # never caught up. The data was already ingested and one
+            # call away: the same call, with the same guard, so the two
+            # paths cannot drift again.
+            try:
+                from engine.db import connect as _tl_connect
+                from engine.teamlogs import recent_games as _recent_games
+                _tlc = _tl_connect()
+                _team_recent = _recent_games(
+                    _tlc, "nfl",
+                    {t for g in games for t in (g.home, g.away) if t},
+                    before=f"{args.season}-W{args.week:02d}")
+                _tlc.close()
+            except Exception as exc:                          # noqa: BLE001
+                print(f"  ⚠️  team logs skipped: {exc}")
+                _team_recent = {}
             payload = {
                 "date": f"{args.season}-W{args.week:02d}",
                 "built_at": _dt.datetime.now().isoformat(timespec="seconds"),
                 "generated_from": "schedule-only",
+                "team_recent": _team_recent,
                 "games": [_game_to_dict(g) for g in games],
                 "recommendations": [], "long_shots": [],
                 "longshot_watch": [],

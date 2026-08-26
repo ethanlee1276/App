@@ -1578,11 +1578,30 @@ function slateDateLabel(d) {
   return `${formatGameDate(dates[0])} – ${formatGameDate(dates[dates.length - 1])}`;
 }
 
+/* REAL OR ILLUSTRATIVE — and the badge got that wrong for a whole
+   preseason. A schedule-only NFL payload (nfl_build.py --games-only) is
+   what the site publishes every day between the schedule appearing and
+   Week 1 being played: sixteen real games, real kickoff times, and game
+   lines priced off real team ratings, thirteen of which are JOURNALED
+   to the public record. The badge read the string, saw it did not start
+   with "live", and told every reader "Illustrative sample data — these
+   are not real games or real prices". Three other places in this file
+   already say the opposite in words ("The games and lines below are
+   real"), so the page was arguing with itself in the corner of the
+   screen. The name stays — four branches switch on it — and the
+   question it answers is asked properly here instead. */
+const REAL_BOARDS = ["schedule-only"];
+
+function boardIsReal(src) {
+  const s = String(src || "");
+  return s.startsWith("live") || REAL_BOARDS.includes(s);
+}
+
 function renderDataSource(d) {
   const el = document.getElementById("data-source");
   if (!el) return;
   const src = String(d.generated_from || "");
-  const live = src.startsWith("live");
+  const live = boardIsReal(src);
   el.className = `data-source ${live ? "live" : "sample"}`;
   el.innerHTML = `<span class="src-dot"></span>${live ? "Live data" : "Sample data"}`;
   el.title = live
@@ -1929,7 +1948,7 @@ function renderEmptySlate() {
     document.getElementById("games-title").style.display = "";
     return;
   }
-  const live = String(state.data.generated_from || "").startsWith("live");
+  const live = boardIsReal((state.data || {}).generated_from);
   el.style.display = "";
 
   /* The "Preseason is on — and nothing in it is priced" branch lived
@@ -5547,7 +5566,15 @@ function gameBetSeries(b) {
 function gameBetChart(b) {
   const s = gameBetSeries(b);
   if (!s) return "";
-  const team = b.team || (b.side === "home" ? b.home : b.away);
+  /* WHOSE GAMES THESE ARE. A game total is charted off the HOME team's
+     last games (gameBetSeries says so in its own head — "LAST 10 CHIEFS
+     GAMES — COMBINED"), but the identity in the strip's corner came off
+     `b.team`, which a total does not carry, and fell through to the
+     away side: the chart read CHIEFS and the corner read BRONCOS, on
+     the same card. The chart's team is the one whose games it drew. */
+  const team = (b.bet_type || b.market) === "total"
+    ? (b.home || b.team)
+    : (b.team || (b.side === "home" ? b.home : b.away));
   return propAnalysis({
     recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
     odds: b.odds, market: b.market,
@@ -5740,13 +5767,14 @@ function renderGameBetPage(b) {
   const kind = b.bet_type || b.market || "";
   const team = b.team || (b.side === "home" ? b.home : b.away);
   const mark = kind === "total" ? leagueMark(state.sport, 56) : teamMark(team, 56);
-  // The chart wants a prop-shaped row. Only the fields it reads are set,
-  // and the values are the team's real results — nothing is synthesised.
-  const asProp = s ? {
-    recent_values: s.values, line: s.line, side: s.over ? "OVER" : "UNDER",
-    odds: b.odds, market: b.market, market_label: b.market_label || b.market,
-    ev_per_unit: b.ev_per_unit, confidence: b.confidence, team: team,
-  } : null;
+  /* ONE CHART, ONE CALL SITE. This page used to build its own
+     prop-shaped row and pass its own options, and the two drifted: the
+     fix that stopped the strip reading "SPREAD Spread" (2026-08-25)
+     landed in `gameBetChart` and never reached here, and neither did
+     `lineText` or `pill` — so the full page charted every spread with
+     "LINE 0" and a baseline pill saying 0, while the card beside it on
+     the board said "-3.5 COVERS" off the same series. Both surfaces
+     draw through `gameBetChart` now; there is nothing left to drift. */
   const rows = (kind === "total" ? teamRecent(b.home) : teamRecent(team))
     .slice(0, 5);
   const won = (v) => (s ? (s.over ? v > s.line : v < s.line) : false);
@@ -5801,8 +5829,7 @@ function renderGameBetPage(b) {
         ${b.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
           <div class="v ${b.edge >= 0 ? "pos" : "neg"}">${signedPct(b.edge)}</div></div>` : ""}
       </div>
-      ${asProp ? propAnalysis(asProp, { head: s.head, what: s.what,
-        legend: s.legend, sideLabel: s.sideLabel, labels: s.labels }) : `
+      ${s ? gameBetChart(b) : `
       ${panelEmpty("No recent results for this team yet — the chart needs at least three games we have ingested.")}`}
     </article>
 

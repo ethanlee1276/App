@@ -122,14 +122,29 @@ def test_game_bet_charts_label_their_own_opponents():
     assert block.count("labels,") >= 4, "every market must carry them"
 
 
-def test_the_game_bet_labels_reach_both_chart_call_sites():
-    """The card and the page draw the same chart through two calls. One
-    of them missing the labels is the half-finished state that this
-    project keeps paying for."""
+def test_the_game_bet_labels_reach_the_one_chart_call_site():
+    """This asked that BOTH call sites carry the labels, because "one of
+    them missing the labels is the half-finished state that this project
+    keeps paying for". It kept paying: the card was also fixed to name
+    the handicap and to stop the strip reading "SPREAD Spread", and
+    neither fix reached the page, so a spread charted as "LINE 0" there
+    for as long as the page existed.
+
+    There is one call site now — the page draws through `gameBetChart`
+    like every card does — which is the stronger form of what this test
+    was asking for, so it asks for that instead. (Sliced to the end of
+    the function rather than a fixed number of characters: the window
+    that used to be 900 stopped covering the call the day a comment was
+    added above it.)"""
     i = APP.index("function gameBetChart(")
-    assert "labels: s.labels" in APP[i:i + 900]
+    body = APP[i:APP.index("\n}", i)]
+    assert "labels: s.labels" in body
     j = APP.index("function renderGameBetPage(")
-    assert "labels: s.labels" in APP[j:j + 4000]
+    page = APP[j:APP.index("\nfunction ", j + 10)]
+    assert "gameBetChart(b)" in page, \
+        "the page has grown a second chart call site again"
+    assert "propAnalysis(" not in page, \
+        "the page charts around gameBetChart, so it can drift from it again"
 
 
 def test_the_tooltip_names_the_game_too():
