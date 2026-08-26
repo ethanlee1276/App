@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Messages become conversations",
+      "body": "The Messages page is real threads now: one row per friend, and inside it your texts and shared picks interleaved the way they happened, with a box at the bottom to talk it over. Every shared pick is a tappable door onto its charts — a pick from another league switches the board first, and one that is off tonight's board opens the player's page, which carries his history either way. Texts go only between friends, each conversation keeps its own unread dot, and what travels in a share is still only the pick's identity — the words are yours, the numbers stay behind each reader's own subscription."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "fix",
       "title": "The stadiums come back",
       "body": "The GPU diet's first cut hid the drawn stadium scene with a property that also removed the box it was holding open — and the photos, which stack on top of that box, had nothing left to fill. Every stadium card collapsed for about an hour. The drawing now keeps its box and simply doesn't paint, which was the entire point: same crash fix, stadiums intact."

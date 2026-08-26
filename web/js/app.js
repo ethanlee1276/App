@@ -24805,11 +24805,42 @@ function friendInboxHTML() {
       .map((sh) => msgShareRow(sh, false)).join("")}</div>`;
 }
 
-document.addEventListener("click", (e) => {
+/* Every share is a door onto its own board now (Ethan, 2026-08-26:
+   "when you send picks and shit you can click on them and it will show
+   the charts"). A share from another league switches the board first —
+   the same route pattern /pick/<sport>/<slug> uses — and a pick that is
+   off tonight's board opens the PLAYER page, which carries his charts
+   whether or not anyone priced him today. The old rule (door only onto
+   tonight's board) is retired on purpose. */
+document.addEventListener("click", async (e) => {
   const b = e.target.closest && e.target.closest("[data-open-share]");
   if (!b) return;
   e.preventDefault();
-  openProp(b.dataset.openShare);
+  const sport = b.dataset.shareSport || "";
+  if (sport && SPORT_CODES.includes(sport) && sport !== state.sport) {
+    state.sport = sport;
+    applySport();
+    // Awaited, unlike the URL route: the door below chooses between the
+    // prop page and the player page by looking at the board, and an
+    // unloaded board would send every live pick to the wrong page.
+    await load(true);
+  }
+  const slug = b.dataset.openShare;
+  if (findProp(slug)) { openProp(slug); return; }
+  const player = b.dataset.sharePlayer || "";
+  const market = b.dataset.shareMarket || "";
+  if (GAME_MARKET_WORDS[market] && player.includes("@")) {
+    // A game leg's identity is its matchup; if that game is on the
+    // board tonight the bet page opens, otherwise the ticket stays a
+    // readable row rather than a door onto nothing.
+    const g = ((state.data || {}).game_bets || []).find((gb) =>
+      (gb.matchup || `${gb.away || ""} @ ${gb.home || ""}`) === player
+      && (gb.market || gb.bet_type || "") === market);
+    if (g) openProp(gameBetId(g));
+    return;
+  }
+  if (player) { openPlayerRoute(slugify(player)); return; }
+  openProp(slug);
 });
 
 document.addEventListener("click", (e) => {
@@ -25264,15 +25295,16 @@ function msgBadge() {
   b.textContent = n > 9 ? "9+" : String(n);
 }
 
-/* The Messages page, rebuilt to Ethan's render (2026-08-25): tabs over
-   the one inbox (Inbox / Sent / Parlays / Picks), an unread filter and
-   a search box, avatar rows with kind chips and time-ago, friend
-   REQUESTS answerable at the top, a "New message" button that opens the
-   friend finder, and the invite banner at the foot. What the render
-   drew that is deliberately NOT here: a Mentions tab (nothing behind
-   it), presence dots (we do not track who is online and will not), and
-   VIP badges (there is one tier of friend). */
-let _msgTab = "inbox", _msgUnreadOnly = false, _msgQuery = "";
+/* The Messages page is CONVERSATIONS now (Ethan, 2026-08-26: "I want
+   too be able too actually text people on here along with sending the
+   picks … there is no actual like message area too text back and forth
+   with someone"). The list shows one row per friend with the last thing
+   said between you; opening a row is a thread — texts and shared picks
+   interleaved the way they happened, with a composer at the bottom.
+   Friend requests still answer at the top of the list, and the finder
+   still lives behind "New message". */
+let _msgThread = 0;
+let _msgPoll = 0, _msgLastItems = "";
 
 function msgAvatar(name) {
   const initials = String(name || "?").split(/\s+/).slice(0, 2)
@@ -25287,6 +25319,17 @@ function msgAvatar(name) {
 
 const msgAgo = (ts) =>
   ageText(Math.max(0, Date.now() / 1000 - (ts || 0))) + " ago";
+
+/* The one place a share door's attributes are built — the rows, the
+   parlay-leg chips and the thread bubbles all call it, so what a tap
+   means cannot drift between surfaces. */
+function shareDoorAttrs(sport, player, market) {
+  const slug = `${slugify(player)}-${slugify(market)}`;
+  return ` data-open-share="${escapeAttr(slug)}"` +
+         ` data-share-sport="${escapeAttr(sport || "")}"` +
+         ` data-share-player="${escapeAttr(player || "")}"` +
+         ` data-share-market="${escapeAttr(market || "")}"`;
+}
 
 function msgShareRow(sh, sentSide) {
   const who = sentSide ? sh.to : sh.from;
@@ -25305,17 +25348,13 @@ function msgShareRow(sh, sentSide) {
     detail = `${sh.player} — ${(row && row.market_label)
       || sh.market.replace(/_/g, " ")}`;
   }
-  const doors = !sentSide && isParlay
-    ? (sh.legs || []).map((l) => {
-        const slug = `${slugify(l.player)}-${slugify(l.market)}`;
-        return sh.sport === state.sport && findProp(slug)
-          ? `<button class="chip slip-chip" data-open-share="${escapeAttr(slug)}"
-              >${escapeHtml(l.player)}</button>` : "";
-      }).filter(Boolean).join("")
+  // Every leg is a door — shareDoorAttrs decides at tap time whether it
+  // opens the prop page, the game-bet page or the player's charts.
+  const doors = isParlay
+    ? (sh.legs || []).map((l) =>
+        `<button class="chip slip-chip"${shareDoorAttrs(sh.sport, l.player,
+          l.market)}>${escapeHtml(l.player)}</button>`).join("")
     : "";
-  const pickSlugStr = !sentSide && !isParlay
-    ? `${slugify(sh.player)}-${slugify(sh.market)}` : "";
-  const live = pickSlugStr && sh.sport === state.sport && !!findProp(pickSlugStr);
   return `<div class="msg-row${!sentSide && !sh.seen ? " unread" : ""}">
     ${msgAvatar(who)}
     <span class="msg-body">
@@ -25328,12 +25367,13 @@ function msgShareRow(sh, sentSide) {
     </span>
     <span class="msg-side">
       <span class="msg-when">${escapeHtml(msgAgo(sh.created_at))}</span>
-      ${live ? `<button class="btn ghost" data-open-share="${escapeAttr(pickSlugStr)}"
-        >Open</button>` : ""}
+      ${!isParlay ? `<button class="btn ghost"${shareDoorAttrs(sh.sport,
+        sh.player, sh.market)}>Charts</button>` : ""}
       ${!sentSide && !sh.seen ? `<span class="msg-dot" aria-label="unread"></span>` : ""}
     </span>
   </div>`;
 }
+
 
 function msgRequestRow(rq) {
   return `<div class="msg-row unread">
@@ -25363,61 +25403,45 @@ async function renderMessages() {
     host.innerHTML = `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">Sign in to see your messages</div>
-      <div class="es-sub">Picks and parlays your friends send land here.
-        Friends are made by invite link or by name — nobody you didn’t
-        say yes to can message you.</div></div>`;
+      <div class="es-sub">Texts, picks and parlays your friends send land
+        here. Friends are made by invite link or by name — nobody you
+        didn’t say yes to can message you.</div></div>`;
     return;
   }
+  if (_msgThread) return renderThread(host, _msgThread);
   const soc = await socFetch(true);
-  if (state.view !== "messages") return;
-  const inboxAll = (soc && soc.inbox && soc.inbox.shares) || [];
-  const sentAll = (soc && soc.sent) || [];
+  if (state.view !== "messages" || _msgThread) return;
   const requests = (soc && soc.requests) || [];
-  const q = _msgQuery.trim().toLowerCase();
-  const matches = (sh) => !q
-    || JSON.stringify([sh.from, sh.to, sh.player, sh.note,
-                       (sh.legs || []).map((l) => l.player)])
-         .toLowerCase().includes(q);
-  const tabs = [
-    ["inbox", "Inbox", soc && soc.inbox ? soc.inbox.unseen + requests.length : 0],
-    ["sent", "Sent", 0],
-    ["parlays", "Parlays", inboxAll.filter((s) => s.kind === "parlay").length],
-    ["picks", "Picks", inboxAll.filter((s) => s.kind === "pick").length],
-  ];
-  const sentSide = _msgTab === "sent";
-  let rows = sentSide ? sentAll
-    : _msgTab === "parlays" ? inboxAll.filter((s) => s.kind === "parlay")
-    : _msgTab === "picks" ? inboxAll.filter((s) => s.kind === "pick")
-    : inboxAll;
-  rows = rows.filter(matches);
-  if (_msgUnreadOnly && !sentSide) rows = rows.filter((s) => !s.seen);
-
-  const tabBar = `<div class="msg-tabs">${tabs.map(([k, label, n]) => `
-    <button class="msg-tab${_msgTab === k ? " on" : ""}" data-msg-tab="${k}"
-      type="button">${label}${n ? `<span class="msg-tab-n">${n}</span>` : ""}</button>`)
-    .join("")}</div>`;
-  const filterBar = `<div class="msg-filters">
-    <button class="al-cat${!_msgUnreadOnly ? " on" : ""}" data-msg-unread="0"
-      type="button">All</button>
-    <button class="al-cat${_msgUnreadOnly ? " on" : ""}" data-msg-unread="1"
-      type="button">Unread</button>
-    <input class="msg-search" id="msg-search" type="search"
-      placeholder="Search messages…" value="${escapeAttr(_msgQuery)}"
-      aria-label="Search messages">
-  </div>`;
-  const reqBlock = _msgTab === "inbox" && requests.length
+  const threads = (soc && soc.threads) || [];
+  const reqBlock = requests.length
     ? `<div class="section-title minor">Friend requests</div>
        <div class="card fr-inbox">${requests.map(msgRequestRow).join("")}</div>`
     : "";
-  const list = rows.length
-    ? `<div class="card fr-inbox">${rows.map((s) => msgShareRow(s, sentSide)).join("")}</div>`
+  const rows = threads.map((t) => `
+    <button class="msg-row msg-thread-row${t.unseen ? " unread" : ""}"
+      data-msg-open="${t.friend_id}" type="button">
+      ${msgAvatar(t.name)}
+      <span class="msg-body">
+        <b>${escapeHtml(t.name)}</b>
+        <span class="msg-note">${t.last
+          ? `${t.last.mine ? "You: " : ""}${escapeHtml(t.last.preview)}`
+          : "No messages yet — say hello."}</span>
+      </span>
+      <span class="msg-side">
+        ${t.last ? `<span class="msg-when">${escapeHtml(msgAgo(
+          t.last.created_at))}</span>` : ""}
+        ${t.unseen ? `<span class="msg-tab-n">${t.unseen > 9 ? "9+"
+          : t.unseen}</span>` : ""}
+      </span>
+    </button>`).join("");
+  const list = threads.length
+    ? `<div class="card fr-inbox msg-threads">${rows}</div>`
     : `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
-      <div class="es-title">${q || _msgUnreadOnly ? "Nothing matches"
-        : sentSide ? "Nothing sent yet" : "Nothing yet"}</div>
-      <div class="es-sub">${sentSide
-        ? "Send a pick from any pick page, or a ticket from the parlay slip."
-        : "When a friend sends you a pick or a parlay it lands here."}</div></div>`;
+      <div class="es-title">No conversations yet</div>
+      <div class="es-sub">Add a friend by name with New message, or text
+        somebody your invite link below — every friend gets a thread
+        here.</div></div>`;
   const banner = `<div class="card msg-invite">
     <span class="msg-invite-words"><b>Invite friends. Share picks.</b>
       <span>Send invite links, share parlays, and talk it over.</span></span>
@@ -25429,32 +25453,152 @@ async function renderMessages() {
       <button class="btn" id="msg-new" type="button">New message</button>
     </div>
     <div id="msg-finder" hidden></div>
-    ${tabBar}${filterBar}${reqBlock}${list}${banner}`;
-  const search = document.getElementById("msg-search");
-  if (search) {
-    let t;
-    search.addEventListener("input", () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        _msgQuery = search.value;
-        const at = search.selectionStart;
-        renderMessages().then(() => {
-          const again = document.getElementById("msg-search");
-          if (again) { again.focus(); again.setSelectionRange(at, at); }
+    ${reqBlock}${list}${banner}`;
+  msgBadge();
+}
+
+/* One conversation. Texts are bubbles, shares are the same doors the
+   inbox rows wear (msgBubble builds them through shareDoorAttrs, the
+   single place a share door is defined), and the composer POSTs to
+   /api/social/dm — friends-only, enforced server-side. */
+async function renderThread(host, fid) {
+  let t = null;
+  try {
+    const r = await fetch("/api/social/thread", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ friend: fid }),
+    });
+    if (r.ok) t = await r.json();
+  } catch (e) { /* the empty state below is the honest answer */ }
+  if (state.view !== "messages" || _msgThread !== fid) return;
+  if (!t) {
+    _msgThread = 0;
+    host.innerHTML = `<div class="empty-slate">
+      <div class="es-icon">${icon("signal", 30)}</div>
+      <div class="es-title">That conversation isn’t yours to open</div>
+      <div class="es-sub">Threads exist between friends. If you removed
+        this friend, the thread went with them.</div></div>`;
+    return;
+  }
+  const items = t.items || [];
+  _msgLastItems = JSON.stringify(items);
+  host.innerHTML = `
+    <div class="msg-thread-head">
+      <button class="btn-quiet" data-msg-back type="button">&#8592; All messages</button>
+      <span class="msg-thread-who">${msgAvatar(t.friend)}<b>${
+        escapeHtml(t.friend)}</b></span>
+    </div>
+    <div class="card msg-bubs" id="msg-bubs">${items.map(msgBubble).join("")
+      || `<p class="set-empty">No messages yet. Say something, or send a
+          pick over from any pick page.</p>`}</div>
+    <form class="msg-composer" id="msg-composer" autocomplete="off">
+      <input class="msg-search" id="msg-composer-in" maxlength="500"
+        placeholder="Message ${escapeAttr(t.friend)}…"
+        aria-label="Message ${escapeAttr(t.friend)}">
+      <button class="btn" type="submit">Send</button>
+    </form>`;
+  const bubs = document.getElementById("msg-bubs");
+  if (bubs) bubs.scrollTop = bubs.scrollHeight;
+  const form = document.getElementById("msg-composer");
+  const inp = document.getElementById("msg-composer-in");
+  if (form && inp) {
+    inp.focus();
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const words = inp.value.trim();
+      if (!words) return;
+      inp.value = "";
+      // Optimistic: the bubble is on screen before the round trip
+      // answers, and comes back into the box if the server said no.
+      if (bubs) {
+        bubs.insertAdjacentHTML("beforeend", msgBubble({ kind: "text",
+          mine: true, body: words, created_at: Date.now() / 1000 }));
+        bubs.scrollTop = bubs.scrollHeight;
+      }
+      try {
+        const r = await fetch("/api/social/dm", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: fid, body: words }),
         });
-      }, 250);
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          tfToast(out.error || "That didn’t send.");
+          inp.value = words;
+          renderThread(host, fid);
+        }
+      } catch (err) {
+        tfToast("Could not reach the server.");
+        inp.value = words;
+      }
     });
   }
-  if (_msgTab === "inbox" && soc && soc.inbox && soc.inbox.unseen) {
-    // Seen AFTER the rows have been on screen a beat, same as Alerts.
-    setTimeout(() => {
+  // Seen AFTER the bubbles have been on screen a beat — and scoped to
+  // THIS conversation, so the other threads keep their unread dots.
+  setTimeout(() => {
+    fetch("/api/social/seen", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ friend: fid }) })
+      .then(() => socFetch(true).then(msgBadge))
+      .catch(() => {});
+  }, 800);
+  // A quiet poll while the thread is open, so a reply appears without a
+  // refresh. Only the bubble list is touched — never the composer
+  // somebody is typing into.
+  clearInterval(_msgPoll);
+  _msgPoll = setInterval(async () => {
+    if (state.view !== "messages" || _msgThread !== fid) {
+      clearInterval(_msgPoll);
+      return;
+    }
+    try {
+      const r = await fetch("/api/social/thread", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend: fid }),
+      });
+      if (!r.ok) return;
+      const t2 = await r.json();
+      const blob = JSON.stringify(t2.items || []);
+      if (blob === _msgLastItems || state.view !== "messages"
+          || _msgThread !== fid) return;
+      _msgLastItems = blob;
+      const el = document.getElementById("msg-bubs");
+      if (el) {
+        el.innerHTML = (t2.items || []).map(msgBubble).join("");
+        el.scrollTop = el.scrollHeight;
+      }
       fetch("/api/social/seen", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: "{}" })
-        .then(() => { if (_socCache) { _socCache.inbox.unseen = 0; } msgBadge(); })
-        .catch(() => {});
-    }, 1200);
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend: fid }) }).catch(() => {});
+    } catch (e) { /* the next tick tries again */ }
+  }, 15000);
+}
+
+function msgBubble(it) {
+  const side = it.mine ? "mine" : "theirs";
+  const when = `<span class="msg-bub-when">${escapeHtml(msgAgo(
+    it.created_at))}</span>`;
+  if (it.kind === "text") {
+    return `<div class="msg-bub ${side}"><span class="msg-bub-body">${
+      escapeHtml(it.body)}</span>${when}</div>`;
   }
-  msgBadge();
+  const isParlay = it.kind === "parlay";
+  const doors = isParlay
+    ? (it.legs || []).map((l) =>
+        `<button class="chip slip-chip"${shareDoorAttrs(it.sport, l.player,
+          l.market)}>${escapeHtml(l.player)}</button>`).join("")
+    : `<button class="chip slip-chip"${shareDoorAttrs(it.sport, it.player,
+        it.market)}>See the charts</button>`;
+  const words = isParlay
+    ? (it.legs || []).map((l) => l.player).join(", ")
+    : `${it.player} — ${String(it.market || "").replace(/_/g, " ")}`;
+  return `<div class="msg-bub ${side} share">
+    <span class="msg-kind chip ${isParlay ? "up" : ""}">${
+      isParlay ? "PARLAY" : "PICK"}</span>
+    <span class="msg-bub-body">${escapeHtml(words)}</span>
+    ${it.note ? `<span class="msg-note">“${escapeHtml(it.note)}”</span>` : ""}
+    <span class="fr-legs">${doors}</span>
+    ${when}
+  </div>`;
 }
 
 /* The friend finder, behind "New message". Search matches DISPLAY
@@ -25558,11 +25702,17 @@ document.addEventListener("click", async (e) => {
     if (state.view === "messages") renderMessages(); else msgBadge();
     return;
   }
-  const tab = e.target.closest && e.target.closest("[data-msg-tab]");
-  if (tab) { _msgTab = tab.dataset.msgTab; renderMessages(); return; }
-  const unread = e.target.closest && e.target.closest("[data-msg-unread]");
-  if (unread) {
-    _msgUnreadOnly = unread.dataset.msgUnread === "1";
+  const openTh = e.target.closest && e.target.closest("[data-msg-open]");
+  if (openTh) {
+    _msgThread = Number(openTh.dataset.msgOpen) || 0;
+    renderMessages();
+    return;
+  }
+  const back = e.target.closest && e.target.closest("[data-msg-back]");
+  if (back) {
+    // renderMessages force-fetches, so the list comes back with the
+    // previews and dots this conversation just changed.
+    _msgThread = 0;
     renderMessages();
   }
 });

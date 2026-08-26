@@ -378,12 +378,14 @@ def test_the_social_api_carries_the_request_paths():
     srv = _read("server.py")
     i = srv.index("def _social_post")
     body = srv[i:i + 500]
-    for path in ('"find"', '"request"', '"answer-request"'):
+    for path in ('"find"', '"request"', '"answer-request"', '"dm"',
+                 '"thread"'):
         assert path in body, f"{path} missing from the social POST paths"
     # The SOCIAL me, not the account me — server.py has both.
     j = srv.index('if path == "me":', srv.index("def _social_get"))
     me = srv[j:j + 600]
     assert "SOC.sent(" in me and "SOC.requests_in(" in me
+    assert "SOC.threads(" in me, "the conversation list left the me payload"
 
 
 def test_display_name_never_repeats_the_full_address():
@@ -420,6 +422,120 @@ def test_the_export_carries_counts_and_identities_never_tokens():
     assert "side" not in sent[0] and "line" not in sent[0]
     tok = SOC.invite_get_or_create(conn, a)["token"]
     assert tok not in repr(out), "the invite token rides in the export"
+
+
+# --- the conversations -------------------------------------------------------
+# Ethan, 2026-08-26: "I want too be able too actually text people on
+# here along with sending the picks." A text carries no pick fields at
+# all, so the pointer rule has nothing to police — what these pin is the
+# FRIENDS gate on every path in, and that seen/prune/delete all think in
+# conversations, not tables.
+
+def test_a_text_goes_only_between_friends():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    code, out = SOC.dm_send(conn, a, c, "hey stranger")
+    assert code == 403, out
+    code, out = SOC.dm_send(conn, c, a, "hey stranger")
+    assert code == 403, out
+    code, out = SOC.dm_send(conn, a, b, "   ")
+    assert code == 400, out
+    code, out = SOC.dm_send(conn, a, b, "x" * (SOC.DM_MAX + 500))
+    assert code == 200
+    _, t = SOC.thread(conn, a, b)
+    assert len(t["items"][-1]["body"]) == SOC.DM_MAX
+
+
+def test_a_strangers_thread_does_not_open():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    code, out = SOC.thread(conn, a, c)
+    assert code == 403, "a thread opened across no friendship"
+
+
+def test_the_thread_interleaves_texts_and_shares_in_order():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "you seeing this line tonight?")
+    SOC.share_pick(conn, b, a, "nfl", "2026-09-07",
+                   "Puka Nacua", "Receiving Yards")
+    SOC.dm_send(conn, a, b, "love it")
+    code, t = SOC.thread(conn, a, b)
+    assert code == 200
+    kinds = [(i["kind"], i["mine"]) for i in t["items"]]
+    assert kinds == [("text", True), ("pick", False), ("text", True)], kinds
+    stamps = [i["created_at"] for i in t["items"]]
+    assert stamps == sorted(stamps), "a chat that is not in order is noise"
+
+
+def test_seen_scopes_to_one_conversation():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    _befriend(conn, a, c)
+    SOC.dm_send(conn, b, a, "from b")
+    SOC.dm_send(conn, c, a, "from c")
+    SOC.mark_seen(conn, a, friend_id=b)
+    by = {t["friend_id"]: t["unseen"] for t in SOC.threads(conn, a)}
+    assert by[b] == 0 and by[c] == 1, \
+        "opening one thread ate another thread's dot"
+    assert SOC.inbox(conn, a)["unseen"] == 1
+
+
+def test_the_pair_prune_keeps_a_conversation_not_a_monologue():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    _befriend(conn, a, c)
+    keep, SOC.DM_KEEP_PER_PAIR = SOC.DM_KEEP_PER_PAIR, 4
+    try:
+        for i in range(4):
+            SOC.dm_send(conn, a, b, f"a says {i}")
+            SOC.dm_send(conn, b, a, f"b says {i}")
+        SOC.dm_send(conn, a, c, "different pair entirely")
+        _, t = SOC.thread(conn, a, b)
+        texts = [i for i in t["items"] if i["kind"] == "text"]
+        assert len(texts) == 4
+        # BOTH voices survive — the cap is on the pair, not per sender.
+        assert {i["mine"] for i in texts} == {True, False}, \
+            "the prune turned a conversation into a monologue"
+        _, t = SOC.thread(conn, a, c)
+        assert len(t["items"]) == 1, "one pair's prune reached another"
+    finally:
+        SOC.DM_KEEP_PER_PAIR = keep
+
+
+def test_the_conversation_list_knows_every_friend():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    _befriend(conn, a, c)
+    SOC.dm_send(conn, b, a, "spoke recently")
+    rows = SOC.threads(conn, a)
+    assert [r["friend_id"] for r in rows] == [b, c], \
+        "live conversations should sort above friends never talked to"
+    assert rows[0]["last"]["preview"] == "spoke recently"
+    assert rows[0]["unseen"] == 1
+    assert rows[1]["last"] is None, \
+        "a friend with no history still gets a row to start from"
+
+
+def test_a_deleted_account_takes_its_half_of_every_thread():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "mine")
+    SOC.dm_send(conn, b, a, "yours")
+    A.delete_user(conn, b)
+    n = conn.execute("SELECT COUNT(*) FROM dm_messages").fetchone()[0]
+    assert n == 0, "texts outlived the account on either side"
+
+
+def test_the_export_carries_your_words_and_never_your_friends():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "what I typed")
+    SOC.dm_send(conn, b, a, "what they typed")
+    out = A.export_user(conn, a)
+    sent = out.get("messages_sent_to_friends") or []
+    assert [m["body"] for m in sent] == ["what I typed"], \
+        "the export holds someone else's words"
 
 
 # --- the front end's half ----------------------------------------------------
@@ -473,25 +589,53 @@ def test_the_send_panel_carries_identity_only():
         assert word not in body
 
 
-def test_the_inbox_row_is_a_door_only_onto_tonight_s_board():
-    """A share from a past slate stays readable but inert — the board it
-    pointed at is gone, and a door onto nothing is worse than no door.
-    The logic lives in msgShareRow since the Messages rebuild — ONE
-    renderer for a share row, used by Alerts and Messages both, so the
-    two surfaces cannot disagree about what a share looks like."""
-    i = APPJS.index("function msgShareRow(sh, sentSide)")
-    body = APPJS[i:APPJS.index("\n}", APPJS.index("return `", i))]
-    assert "sh.sport === state.sport ? findProp(slug) : null" in body, \
-        "the pick door rule left the renderer"
-    assert "sh.sport === state.sport && findProp(slug)" in body, \
-        "the parlay-leg door rule left the renderer"
+def test_every_share_is_a_door_and_one_helper_builds_them_all():
+    """Ethan, 2026-08-26: "when you send picks and shit you can click on
+    them and it will show the charts." The old rule (a door only onto
+    tonight's board) is retired ON PURPOSE: a pick off tonight's board
+    opens the PLAYER page, which has his charts either way, and a share
+    from another league switches the board first. shareDoorAttrs is the
+    one place a door's attributes are built — rows, leg chips and
+    thread bubbles all call it, so a tap cannot mean different things
+    on different surfaces. And what the door carries is still only the
+    IDENTITY the share row held: sport, player, market."""
+    i = APPJS.index("function shareDoorAttrs(sport, player, market)")
+    body = APPJS[i:APPJS.index("\n}", i)]
+    for attr in ("data-open-share", "data-share-sport", "data-share-player",
+                 "data-share-market"):
+        assert attr in body, f"the door lost {attr}"
+    for word in ("side", "line", "odds"):
+        assert f"data-share-{word}" not in APPJS, \
+            f"a share door grew a {word} attribute — that is content"
+    row = APPJS[APPJS.index("function msgShareRow(sh, sentSide)"):]
+    row = row[:row.index("\n}")]
+    assert row.count("shareDoorAttrs(") >= 2, \
+        "the inbox row builds doors some other way"
+    bub = APPJS[APPJS.index("function msgBubble(it)"):]
+    bub = bub[:bub.index("\n}")]
+    assert "shareDoorAttrs(" in bub, "thread bubbles grew their own doors"
     assert "shareRowHTML" not in APPJS, "a second share renderer came back"
     j = APPJS.index("function friendInboxHTML()")
     fib = APPJS[j:APPJS.index("\n}", j)]
     assert "msgShareRow" in fib, "Alerts grew its own share renderer"
-    k = APPJS.index("async function renderMessages()")
-    assert "msgShareRow" in APPJS[k:k + 4500], \
-        "Messages grew its own share renderer"
+
+
+def test_the_door_switches_boards_and_falls_back_to_the_player_page():
+    """The tap handler: another league's share sets the sport and AWAITS
+    the load (unlike the URL route, it must look at the board to choose
+    a page), a live pick opens the prop page, and a pick that is not on
+    tonight's board opens the player's page — charts either way, never
+    a door onto nothing."""
+    i = APPJS.index('e.target.closest("[data-open-share]")')
+    body = APPJS[i:i + 2200]
+    assert "state.sport = sport;" in body and "applySport();" in body
+    assert "await load(true)" in body, \
+        "an unloaded board would send every live pick to the wrong page"
+    assert body.index("findProp(slug)") < body.index("openPlayerRoute("), \
+        "the prop page stopped being the first choice"
+    assert "GAME_MARKET_WORDS[market]" in body, \
+        "a game leg's door forgot it is a matchup, not a player"
+
 
 
 def test_seen_is_marked_after_display_not_on_fetch():

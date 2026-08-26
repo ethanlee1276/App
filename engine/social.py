@@ -82,6 +82,13 @@ FIND_LIMIT = 8
 #: nightly, so an old one is a dead link — pruning is honesty, not tidiness.
 INBOX_KEEP = 200
 
+#: A text message's ceiling, and how much of one conversation is kept.
+#: Long enough to talk a pick over, short enough that this never
+#: becomes a document store; the prune rides every send like the
+#: share prunes do.
+DM_MAX = 500
+DM_KEEP_PER_PAIR = 500
+
 
 def ensure_tables(conn) -> None:
     """Additive, safe on every call — same posture as the streak game."""
@@ -126,6 +133,16 @@ def ensure_tables(conn) -> None:
       );
       CREATE INDEX IF NOT EXISTS parlay_shares_inbox
         ON parlay_shares(to_id, created_at);
+      CREATE TABLE IF NOT EXISTS dm_messages (
+        id         INTEGER PRIMARY KEY,
+        from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body       TEXT NOT NULL,
+        created_at REAL NOT NULL,
+        seen       INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS dm_pair
+        ON dm_messages(from_id, to_id, created_at);
       CREATE TABLE IF NOT EXISTS friend_requests (
         id         INTEGER PRIMARY KEY,
         from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -509,7 +526,7 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
     unseen = sum(int(conn.execute(
         f"SELECT COUNT(*) FROM {t} WHERE to_id=? AND seen=0",
         (int(user_id),)).fetchone()[0])
-        for t in ("pick_shares", "parlay_shares"))
+        for t in ("pick_shares", "parlay_shares", "dm_messages"))
     return {"shares": out, "unseen": int(unseen)}
 
 
@@ -549,10 +566,144 @@ def sent(conn, user_id: int, limit: int = 30) -> list[dict]:
     return out[:int(limit)]
 
 
-def mark_seen(conn, user_id: int) -> None:
+def mark_seen(conn, user_id: int, friend_id=None) -> None:
+    """Everything shown is read. With `friend_id`, only that
+    conversation — the thread view calls it when it opens, so the other
+    threads keep their unread dots."""
     ensure_tables(conn)
-    conn.execute("UPDATE pick_shares SET seen=1 WHERE to_id=?",
-                 (int(user_id),))
-    conn.execute("UPDATE parlay_shares SET seen=1 WHERE to_id=?",
-                 (int(user_id),))
+    for t in ("pick_shares", "parlay_shares", "dm_messages"):
+        if friend_id is None:
+            conn.execute(f"UPDATE {t} SET seen=1 WHERE to_id=?",
+                         (int(user_id),))
+        else:
+            conn.execute(f"UPDATE {t} SET seen=1 WHERE to_id=? AND from_id=?",
+                         (int(user_id), int(friend_id)))
     conn.commit()
+
+
+# --- the conversations -------------------------------------------------------
+#
+# Ethan, 2026-08-26: "I want too be able too actually text people on
+# here along with sending the picks … there is no actual like message
+# area too text back and forth with someone."
+#
+# A text is just words between two friends. It carries no pick fields at
+# all, so the pointer rule has nothing to police here — but the FRIENDS
+# gate is the same one the shares keep: no friendship row, no message,
+# so a stranger cannot cold-DM anybody through a crafted POST.
+
+def dm_send(conn, from_id: int, to_id: int, body: str) -> tuple[int, dict]:
+    """One text to one friend. Friends-only, bounded, pruned in place —
+    the same lazy-fold shape as the share writes, so no cron is owed."""
+    ensure_tables(conn)
+    ok = conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
+                      (int(from_id), int(to_id))).fetchone()
+    if not ok:
+        return 403, {"error": "You can only message your friends."}
+    body = str(body or "").strip()[:DM_MAX]
+    if not body:
+        return 400, {"error": "Say something first."}
+    conn.execute(
+        "INSERT INTO dm_messages (from_id, to_id, body, created_at, seen) "
+        "VALUES (?,?,?,?,0)",
+        (int(from_id), int(to_id), body, time.time()))
+    # Prune the PAIR (both directions together) so an old conversation
+    # stays a conversation, not one side's monologue.
+    conn.execute(
+        "DELETE FROM dm_messages WHERE "
+        "((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) "
+        "AND id NOT IN (SELECT id FROM dm_messages WHERE "
+        "((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) "
+        "ORDER BY created_at DESC, id DESC LIMIT ?)",
+        (int(from_id), int(to_id), int(to_id), int(from_id),
+         int(from_id), int(to_id), int(to_id), int(from_id),
+         DM_KEEP_PER_PAIR))
+    conn.commit()
+    return 200, {"sent": True}
+
+
+def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
+    """One conversation, oldest first, texts and shares interleaved the
+    way they actually happened. Only a friend's thread opens — asking
+    for a stranger's id gets the same refusal a stranger's DM would."""
+    ensure_tables(conn)
+    me, friend_id = int(me), int(friend_id)
+    ok = conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
+                      (me, friend_id)).fetchone()
+    if not ok:
+        return 403, {"error": "You can only message your friends."}
+    items = []
+    for r in conn.execute(
+            "SELECT id, from_id, body, created_at FROM dm_messages WHERE "
+            "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
+            (me, friend_id, friend_id, me)):
+        items.append({"kind": "text", "id": int(r["id"]),
+                      "mine": int(r["from_id"]) == me,
+                      "body": r["body"], "created_at": r["created_at"]})
+    for r in conn.execute(
+            "SELECT id, from_id, sport, date, player, market, note, "
+            "created_at FROM pick_shares WHERE "
+            "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
+            (me, friend_id, friend_id, me)):
+        items.append({"kind": "pick", "id": int(r["id"]),
+                      "mine": int(r["from_id"]) == me,
+                      "sport": r["sport"], "date": r["date"],
+                      "player": r["player"], "market": r["market"],
+                      "note": r["note"], "created_at": r["created_at"]})
+    for r in conn.execute(
+            "SELECT id, from_id, sport, date, legs, note, created_at "
+            "FROM parlay_shares WHERE "
+            "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
+            (me, friend_id, friend_id, me)):
+        try:
+            legs = json.loads(r["legs"])
+        except ValueError:
+            legs = []
+        items.append({"kind": "parlay", "id": int(r["id"]),
+                      "mine": int(r["from_id"]) == me,
+                      "sport": r["sport"], "date": r["date"], "legs": legs,
+                      "note": r["note"], "created_at": r["created_at"]})
+    items.sort(key=lambda s: s["created_at"])
+    items = items[-int(limit):]
+    return 200, {"friend": display_name(conn, friend_id),
+                 "friend_id": friend_id, "items": items}
+
+
+def _preview(row) -> str:
+    """One line for the conversation list — an identity, never a line."""
+    if row["kind"] == "text":
+        body = row["body"]
+        return body if len(body) <= 80 else body[:79] + "\u2026"
+    if row["kind"] == "pick":
+        return f'Pick: {row["player"]} \u00b7 {row["market"]}'
+    n = len(row.get("legs") or [])
+    return f"{n}-leg parlay"
+
+
+def threads(conn, me: int) -> list[dict]:
+    """The conversation list: every friend, the last thing said between
+    you, and how much of it you have not read. Friends you have never
+    talked to are still listed — a conversation has to start somewhere —
+    sorted under the live ones."""
+    ensure_tables(conn)
+    me = int(me)
+    out = []
+    for f in friends_list(conn, me):
+        fid = int(f["id"])
+        last = None
+        code, t = thread(conn, me, fid, limit=1)
+        if code == 200 and t["items"]:
+            row = t["items"][-1]
+            last = {"kind": row["kind"], "mine": row["mine"],
+                    "preview": _preview(row),
+                    "created_at": row["created_at"]}
+        unseen = sum(int(conn.execute(
+            f"SELECT COUNT(*) FROM {tab} WHERE to_id=? AND from_id=? "
+            "AND seen=0", (me, fid)).fetchone()[0])
+            for tab in ("pick_shares", "parlay_shares", "dm_messages"))
+        out.append({"friend_id": fid, "name": f["name"], "last": last,
+                    "unseen": int(unseen)})
+    out.sort(key=lambda t: (t["last"] is None,
+                            -(t["last"] or {}).get("created_at", 0),
+                            t["name"].lower()))
+    return out

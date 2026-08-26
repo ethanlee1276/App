@@ -1595,6 +1595,7 @@ class Handler(BaseHTTPRequestHandler):
                        "inbox": SOC.inbox(conn, who["id"]),
                        "sent": SOC.sent(conn, who["id"]),
                        "requests": SOC.requests_in(conn, who["id"]),
+                       "threads": SOC.threads(conn, who["id"]),
                        "invite": SOC.invite_get_or_create(conn, who["id"])}
                 return self._send(200, json.dumps(out).encode(), ".json")
             return self._send(404, b'{"error":"unknown social endpoint"}',
@@ -1605,7 +1606,8 @@ class Handler(BaseHTTPRequestHandler):
     def _social_post(self, path: str, body: dict):
         from engine import social as SOC
         if path not in ("accept", "send", "send-parlay", "remove", "seen",
-                        "revoke-invite", "find", "request", "answer-request"):
+                        "revoke-invite", "find", "request", "answer-request",
+                        "dm", "thread"):
             return self._send(404, b'{"error":"unknown social endpoint"}',
                               ".json")
         A = _acct()
@@ -1667,7 +1669,21 @@ class Handler(BaseHTTPRequestHandler):
                 SOC.invite_revoke(conn, who["id"])
                 out = SOC.invite_get_or_create(conn, who["id"])
                 return self._send(200, json.dumps(out).encode(), ".json")
-            SOC.mark_seen(conn, who["id"])
+            if path == "dm":
+                # Body text only — dm_send has no parameter through
+                # which a pick field could ride along with the words.
+                code, out = SOC.dm_send(conn, who["id"],
+                                        int(body.get("to") or 0),
+                                        str(body.get("body") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "thread":
+                code, out = SOC.thread(conn, who["id"],
+                                       int(body.get("friend") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            # "seen", scoped to one conversation when a friend is named.
+            friend = body.get("friend")
+            SOC.mark_seen(conn, who["id"],
+                          int(friend) if friend else None)
             return self._send(200, b'{"seen":true}', ".json")
         finally:
             conn.close()

@@ -2897,18 +2897,9 @@ select.calc-in { width: auto; font-weight: 600; }
 
 /* --- the Messages page (Ethan's render, 2026-08-25) ----------------- */
 .msg-head { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.msg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.msg-tab { display: inline-flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border: var(--hairline) solid var(--border);
-  border-radius: 999px; background: var(--panel); color: var(--text-dim);
-  font: inherit; font-size: var(--fs-xs); font-weight: 800;
-  letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
-.msg-tab.on { border-color: var(--brand); color: var(--text); }
 .msg-tab-n { display: grid; place-items: center; min-width: 18px; height: 18px;
   padding: 0 5px; border-radius: 999px; background: var(--brand);
   color: #14120E; font-size: var(--fs-2xs); }
-.msg-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 14px; }
 .msg-search { flex: 1; min-width: 150px; padding: 8px 12px;
   background: var(--panel); color: var(--text);
   border: var(--hairline) solid var(--border-soft);
@@ -2943,6 +2934,35 @@ select.calc-in { width: auto; font-weight: 600; }
 .msg-invite-words span { color: var(--text-dim); font-size: var(--fs-sm); }
 .msg-finder { margin-bottom: 14px; }
 .msg-finder .msg-search { width: 100%; margin-bottom: 8px; }
+
+/* --- one conversation (2026-08-26): bubbles and a composer ---------- */
+.msg-thread-row { width: 100%; text-align: left; background: none;
+  border: none; border-bottom: var(--hairline) solid var(--border-soft);
+  color: inherit; font: inherit; cursor: pointer;
+  align-items: center; }
+.msg-thread-row:last-child { border-bottom: none; }
+.msg-thread-head { display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px; }
+.msg-thread-who { display: inline-flex; align-items: center; gap: 10px;
+  font-size: var(--fs-md); }
+.msg-thread-who .msg-ava { width: 32px; height: 32px;
+  font-size: var(--fs-xs); }
+.msg-bubs { display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; max-height: 58vh; overflow-y: auto; }
+.msg-bub { max-width: 78%; display: flex; flex-direction: column; gap: 4px;
+  padding: 9px 13px; border-radius: var(--radius-lg);
+  background: var(--panel); border: var(--hairline) solid var(--border-soft);
+  overflow-wrap: anywhere; }
+.msg-bub.theirs { align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg-bub.mine { align-self: flex-end; border-bottom-right-radius: 4px;
+  background: color-mix(in oklab, var(--brand) 14%, var(--panel));
+  border-color: color-mix(in oklab, var(--brand) 35%, var(--border-soft)); }
+.msg-bub-body { font-size: var(--fs-sm); white-space: pre-wrap; }
+.msg-bub-when { color: var(--text-mute); font-size: var(--fs-2xs); }
+.msg-bub.share .msg-kind { align-self: flex-start; margin-top: 0; }
+.msg-composer { display: flex; gap: 8px; margin-top: 12px; }
+.msg-composer .msg-search { min-width: 0; }
+.msg-composer .btn { flex-shrink: 0; }
 
 /* The topbar envelope's unread count. Hidden at zero from the markup
    ([hidden]) — a badge with nothing behind it is a lie you can see

@@ -535,7 +535,7 @@ def delete_user(conn, user_id: int) -> None:
     if "friend_requests" in have:
         conn.execute("DELETE FROM friend_requests WHERE from_id=? OR to_id=?",
                      (int(user_id), int(user_id)))
-    for shares in ("pick_shares", "parlay_shares"):
+    for shares in ("pick_shares", "parlay_shares", "dm_messages"):
         if shares in have:
             conn.execute(f"DELETE FROM {shares} WHERE from_id=? OR to_id=?",
                          (int(user_id), int(user_id)))
@@ -599,6 +599,15 @@ def export_user(conn, user_id: int) -> dict:
                     "WHERE from_id=? ORDER BY created_at", (int(user_id),))]
         if sent:
             out["picks_sent_to_friends"] = sent
+    if "dm_messages" in have:
+        # Your words, both what you typed and when — but only YOUR side:
+        # a friend's replies are the friend's data, not this export's.
+        sent = [{"body": r["body"], "created_at": r["created_at"]}
+                for r in conn.execute(
+                    "SELECT body, created_at FROM dm_messages "
+                    "WHERE from_id=? ORDER BY created_at", (int(user_id),))]
+        if sent:
+            out["messages_sent_to_friends"] = sent
     if "parlay_shares" in have:
         # Same pointer rule: leg identities and the note, nothing priced.
         import json as _json
