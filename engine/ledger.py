@@ -338,16 +338,60 @@ def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
 def _kickoff_map(result: dict) -> dict:
     """team → kickoff stamp, from the result's own games list. Every
     sport's board carries kickoffs (they come off the odds events), so
-    the capture_lag clock is derived HERE, once, for all of them."""
+    the capture_lag clock is derived HERE, once, for all of them.
+
+    AND FOOTBALL'S IS A BARE CLOCK, which is why `lead_min` was NULL on
+    every NFL and CFB pick this journal has ever held. `minutes_until`
+    refuses "20:20" and is right to — a clock with no date is no
+    instant — but the date was never missing. It sits two keys away in
+    the same game row, and the zone is the documented Eastern that
+    `engine/fatigue` already does its body-clock arithmetic in. So the
+    two are joined here, by the stdlib, with daylight saving carried
+    properly rather than by a fixed offset that is wrong for four months
+    of a season.
+
+    Capture lag is the dimension that answers "did we take this price
+    too early", and on markets that self-close that is not a footnote.
+    The blind-spot miner has never once been able to convict on it.
+    """
+    from .fatigue import kickoff_instant
     kick: dict = {}
     for g in result.get("games") or []:
         k = g.get("kickoff") or g.get("commence_time")
         if not k:
             continue
+        # A bare "HH:MM" becomes an instant when the row knows its day;
+        # anything already carrying a date or a zone is left alone.
+        if len(str(k)) <= 5:
+            k = kickoff_instant(g.get("date") or "", k) or k
         for side in ("home", "away"):
             if g.get(side):
                 kick[g[side]] = k
     return kick
+
+
+def _lead_min(r: dict, kick: dict | None = None) -> float | None:
+    """Minutes to this pick's start, for every board's shape of clock.
+
+    ONE PLACE, because there were three and they disagreed. The props
+    path read `kickoff` and fell back to the team map; the long-shot
+    path read `game_kickoff` and never saw the map at all; the game-bet
+    path did not journal the dimension. All three land here now, and a
+    bare football clock is joined to its own date on the way — see
+    `_kickoff_map` for why that was NULL for the life of the journal.
+    """
+    from .fatigue import kickoff_instant
+    from .losspatterns import minutes_until
+    kick = kick or {}
+    stamp = (r.get("kickoff") or r.get("game_kickoff")
+             or r.get("commence_time")
+             or kick.get(r.get("team") or "")
+             or kick.get(r.get("opponent") or "")
+             or kick.get(r.get("home") or "") or kick.get(r.get("away") or ""))
+    if stamp and len(str(stamp)) <= 5:
+        stamp = kickoff_instant(r.get("game_date") or r.get("date") or "",
+                                stamp) or stamp
+    return minutes_until(stamp)
 
 
 def log_recommendations(conn, result: dict, only_recommended: bool = True) -> int:
@@ -415,8 +459,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              r.get("proj_minutes"),
              # capture_lag: minutes to the game's scheduled start at log
              # time, from the rec's own clock or the board's games list.
-             minutes_until(r.get("kickoff") or kick.get(r.get("team"))
-                           or kick.get(r.get("opponent"))),
+             _lead_min(r, kick),
              # hr_env: the park's HR index and the wind toward CF at pick
              # time — measured now, mined nightly, so "wind out at
              # Wrigley" becomes a slice the tribunal can convict.
@@ -488,8 +531,8 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg, rest_days, body_clock) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?)",
+            "stake_dollars, status, leg, rest_days, body_clock, lead_min) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?)",
             (now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
@@ -501,7 +544,13 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # NFL journal was invisible to the miner even once the props
              # started reporting. Empty for a GAME total, which is about
              # both teams and belongs to neither; see pipeline._finish_bet.
-             r.get("rest_days"), r.get("body_clock")))
+             r.get("rest_days"), r.get("body_clock"),
+             # capture_lag, for the side of the board where a line moves
+             # most: a spread taken on Tuesday and the same spread taken
+             # an hour before kickoff are different bets, and the miner
+             # could not tell them apart because this column was never
+             # filled in on a game bet at all.
+             _lead_min(r, kick)))
         n += cur.rowcount
     conn.commit()
     return n
@@ -615,8 +664,7 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
              r.get("grade", "Watch"), flat_stake, 0.0, category,
              # capture_lag matters MOST here: home runs are the volume, the
              # market that self-closed, and the tail price stale lines hurt.
-             minutes_until(r.get("game_kickoff") or r.get("kickoff")
-                           or r.get("commence_time")),
+             _lead_min(r),
              # hr_env: this is the board park and wind exist to explain.
              r.get("park_hr"), r.get("wind_out"),
              1 if r.get("roofed") else 0 if r.get("roofed") is not None

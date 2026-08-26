@@ -37,6 +37,8 @@ Standard library only.
 
 from __future__ import annotations
 
+import datetime as _dt
+
 #: Hours each team's home clock sits behind Eastern. The feed's kickoff
 #: times are ET, so this is all that is needed to put a game on a team's
 #: own body clock. Arizona keeps mountain time year-round and does not
@@ -93,6 +95,54 @@ def _kickoff_hour(kickoff: str) -> float | None:
     if not (0 <= h <= 23 and 0 <= m <= 59):
         return None
     return h + m / 60.0
+
+
+def kickoff_instant(date: str, kickoff: str) -> str | None:
+    """A real instant from the schedule's own date and its Eastern clock.
+
+    `_kickoff_hour` above says why the bare "HH:MM" a football board
+    carries is fine for a body clock and emphatically not an instant:
+    "which is why the capture-lag and closing-line layers refuse the same
+    string rather than guess a date onto it." That refusal was right and
+    it had a cost nobody had measured — `lead_min` was NULL on every NFL
+    and CFB pick ever journaled, so capture lag is a dimension the
+    blind-spot miner has never once been able to convict on. On a market
+    that self-closes, when we took the price is not a footnote.
+
+    Nothing has to be guessed. The DATE was never missing — it sits in
+    the same game row, two keys away — and the ZONE is the documented
+    Eastern the hour arithmetic already assumes. So this joins them, and
+    lets the standard library carry daylight saving rather than a
+    hard-coded offset that is wrong for four months of a season.
+
+    Returns None on anything it cannot join honestly: no date, no clock,
+    a clock it cannot parse, or a machine with no timezone database. A
+    refusal costs the dimension; a guess would band bets into the wrong
+    pocket, which is worse than not banding them at all.
+    """
+    hour = _kickoff_hour(kickoff)
+    if hour is None or not date:
+        return None
+    day = str(date).strip()[:10]
+    # A CALENDAR DAY, STRICTLY. `date.fromisoformat` accepts ISO WEEK
+    # dates on 3.11+, and an NFL board's own `date` is "2026-W01" — the
+    # slate label, which sits beside the games and is the obvious wrong
+    # thing to hand this. Parsed loosely it returns the Monday of ISO
+    # week 1, so a Week 1 pick would have journaled a lead time eight
+    # months in the past. Caught here rather than in the journal.
+    if (len(day) != 10 or day[4] != "-" or day[7] != "-"
+            or not day.replace("-", "").isdigit()):
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        d = _dt.date.fromisoformat(day)
+        hh = int(hour)
+        stamp = _dt.datetime(d.year, d.month, d.day, hh,
+                             int(round((hour - hh) * 60)),
+                             tzinfo=ZoneInfo("America/New_York"))
+    except Exception:                                         # noqa: BLE001
+        return None
+    return stamp.isoformat()
 
 
 def clock_str(hour) -> str:

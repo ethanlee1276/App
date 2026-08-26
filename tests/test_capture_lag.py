@@ -262,6 +262,113 @@ def test_the_export_and_the_page_carry_the_restated_view():
     assert "recRestatedSection(d.restated, scope)" in app
 
 
+# --- and football's clock, which was never an instant ------------------------
+#
+# THIS FILE ALREADY KNEW. `test_minutes_until_reads_iso_and_refuses_bare_
+# clocks` says a bare local clock has no date and adds, in a comment,
+# "(The NFL sample slate really carries "13:00")" — and then every
+# fixture below it uses a full ISO stamp, so the case the comment names
+# was never once exercised. The consequence went unmeasured for the life
+# of the journal: `lead_min` was NULL on every NFL and CFB pick ever
+# logged, and doctor.py's learning-ladder check reported the dimension
+# as one the miner can never convict on.
+#
+# The refusal underneath is right and is untouched. What changed is that
+# nothing has to be guessed: the date sits two keys away in the same game
+# row, and the zone is the documented Eastern `engine/fatigue` already
+# does its body-clock arithmetic in. The join happens ABOVE
+# `minutes_until`, in the journal.
+
+from engine.fatigue import kickoff_instant                     # noqa: E402
+from engine.ledger import _kickoff_map, _lead_min              # noqa: E402
+
+
+def test_the_date_and_the_eastern_clock_make_an_instant():
+    assert kickoff_instant("2026-09-13", "13:00") == "2026-09-13T13:00:00-04:00"
+    # Daylight saving carried by the library rather than by a fixed
+    # offset that is wrong for four months of a season.
+    assert kickoff_instant("2026-01-11", "20:20") == "2026-01-11T20:20:00-05:00"
+
+
+def test_an_iso_week_label_is_refused_rather_than_parsed():
+    """A near-miss caught while writing this. `date.fromisoformat`
+    accepts ISO WEEK dates on 3.11+, and an NFL board's own `date` is
+    "2026-W01" — the slate label, sitting right beside the games and the
+    obvious wrong thing to hand this. Parsed loosely it returns the
+    Monday of ISO week 1, so a Week 1 pick would have journaled a lead
+    time eight months in the past."""
+    assert kickoff_instant("2026-W01", "13:00") is None
+
+
+def test_it_refuses_every_half_of_the_join_it_does_not_have():
+    assert kickoff_instant("", "20:20") is None
+    assert kickoff_instant("2026-09-13", "") is None
+    assert kickoff_instant("2026-09-13", "nonsense") is None
+    assert kickoff_instant("2026-09-13", "99:99") is None
+
+
+def test_a_football_board_now_yields_real_instants():
+    kick = _kickoff_map({"games": [
+        {"home": "SEA", "away": "NE", "date": "2026-09-09", "kickoff": "20:20"},
+        {"home": "LA", "away": "SF", "date": "2026-09-10", "kickoff": "20:35"}]})
+    assert kick["SEA"] == kick["NE"] == "2026-09-09T20:20:00-04:00"
+    assert lp.minutes_until(kick["LA"]) is not None
+
+
+def test_a_board_that_already_carries_an_instant_is_left_alone():
+    """CFB stamps a full ISO kickoff and MLB a first pitch. Neither needs
+    joining, and rewriting them would be the guess this avoids."""
+    stamp = "2026-08-30T17:45:16.253866Z"
+    kick = _kickoff_map({"games": [{"home": "UGA", "away": "CLEM",
+                                    "date": "2026-08-30", "kickoff": stamp}]})
+    assert kick["UGA"] == stamp
+
+
+def test_every_row_shape_the_journal_meets_reaches_one_answer():
+    """Three paths read three different keys and one of them read none:
+    a prop carries `kickoff`, a long shot carries `game_kickoff`, and a
+    game bet carries neither and leans on the board's map."""
+    kick = {"SEA": "2026-09-09T20:20:00-04:00"}
+    got = [_lead_min({"kickoff": "2026-09-09T20:20:00-04:00", "team": "SEA"}, kick),
+           _lead_min({"game_kickoff": "20:20", "game_date": "2026-09-09"}),
+           _lead_min({"team": "SEA", "home": "SEA", "away": "NE"}, kick)]
+    assert all(v is not None for v in got), got
+    assert max(got) - min(got) < 1.0, "the three paths disagree by minutes"
+    assert _lead_min({"team": "SEA"}, {}) is None
+    assert _lead_min({}, {}) is None
+
+
+def test_a_game_bet_journals_its_capture_lag_too():
+    """The market where a line moves MOST was the one path that did not
+    journal the dimension at all — a spread taken on Tuesday and the
+    same spread taken an hour before kickoff were the same row."""
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    ledger.log_recommendations(conn, {
+        "sport": "nfl", "date": "2026-W01",
+        "games": [{"home": "SEA", "away": "NE", "date": "2099-09-09",
+                   "kickoff": "20:20"}],
+        "game_bets": [{"bet_type": "spread", "team": "SEA", "home": "SEA",
+                       "away": "NE", "line": -3.5, "odds": -110,
+                       "win_prob": 0.56, "edge": 0.05, "confidence": 7.0,
+                       "grade": "Play", "stake_units": 1.0,
+                       "recommended": True}],
+        "recommendations": []})
+    rows = conn.execute("SELECT market, lead_min FROM bets").fetchall()
+    assert rows, "nothing journaled — the fixture stopped being a bet"
+    for r in rows:
+        assert r["lead_min"] is not None and r["lead_min"] > 0, r["market"]
+
+
+def test_all_three_journal_paths_go_through_the_one_helper():
+    src = open(os.path.join(ROOT, "engine", "ledger.py"),
+               encoding="utf-8").read()
+    assert src.count("_lead_min(") >= 4, \
+        "a journal path grew its own capture-lag arithmetic again"
+    i = src.index('"stake_dollars, status, leg, rest_days, body_clock')
+    assert "lead_min" in src[i:i + 200], \
+        "a game bet journals no capture lag again"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
