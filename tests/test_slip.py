@@ -78,8 +78,11 @@ def test_what_leaves_the_device_is_identity_only():
     enter the request body."""
     i = APP.index('fetch("/api/social/send-parlay"')
     body = APP[i - 600:i + 600]
-    assert "s.legs.map((l) => ({ player: l.player, market: l.market }))" in body
-    for word in ("l.side", "l.line", "l.odds"):
+    assert ("s.legs.map((l) => ({ player: l.player || l.matchup || \"\",\n"
+            "                                     market: l.market }))") in body
+    for word in ("l.side", "l.line", "l.odds", "l.label"):
+        # l.label carries the game leg's line ("JAX Over 24") — the
+        # matchup is the identity that travels, never the label.
         assert word not in body, f"{word} rides in the parlay share"
 
 
@@ -95,6 +98,38 @@ def test_the_dock_exists_and_sits_above_the_phone_tab_bar():
 def test_an_empty_slip_shows_no_bar():
     body = _fn("function slipRender()")
     assert "host.hidden = true" in body
+
+
+def test_game_bets_parlay_too_and_their_label_never_travels():
+    """Ethan, 2026-08-25: "we need too be able too parlays all props and
+    picks together, not just player props. It won't let me put the game
+    prop in a parlay." A game leg is keyed by gameBetId — the same
+    identity the share-card and door handlers use — and what leaves for
+    a friend is the MATCHUP, never the label, because the label carries
+    the line ("JAX Over 24") and a line is content."""
+    body = _fn("function slipToggle(r)")
+    assert "gameBetId(r)" in body, "game bets cannot enter the slip"
+    assert "gameBetSlipLabel(r)" in body
+    i = APP.index("const slipLegKey")
+    assert "l.gid ||" in APP[i:i + 200], "game legs lost their identity key"
+    assert "function findSlipRow(id)" in APP
+    chip = _fn("function slipChip(r)")
+    assert "gameBetOpenable(r)" in chip, "the chip still refuses game bets"
+    # the control reaches all three game-bet surfaces
+    assert APP.count('data-slip="${escapeAttr(gameBetId(') >= 2, \
+        "a game-bet surface lost its + Parlay control"
+
+
+def test_the_card_buttons_are_quiet_controls_not_green_blocks():
+    """Ethan, 2026-08-25, circling + Parlay and + My Bets: "The color of
+    the buttons along with the bulky of them loos bad." The pick is the
+    loud thing on a pick card; its controls wear the ghost-chip look."""
+    css = _read("web", "css", "styles.css")
+    i = css.index(".tp-add { margin-left")
+    rule = css[i:css.index("}", i)]
+    assert "background: none" in rule, "the buttons are solid blocks again"
+    assert "var(--good)" not in rule, "the green came back"
+    assert "text-transform: uppercase" in rule
 
 
 def test_the_add_control_reaches_the_places_picks_live():

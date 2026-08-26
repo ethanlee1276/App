@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Game bets parlay too, and the card buttons calmed down",
+      "body": "The parlay slip only took player props — a team total or a spread had no way in. Now anything priced can be a leg: game lines join props on the same ticket, with the combined price multiplying the same way. When a ticket with a game leg goes to a friend, what travels is the matchup and the market — never the line, same rule as everything else. The + Parlay and + My Bets buttons also stopped being green blocks: a pick card's controls are furniture, and the pick is the loud thing."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "ship",
       "title": "Find friends by name, and a Messages page that earns the word",
       "body": "You can now look a player up by their display name and send a friend request — it lands in their Messages inbox, they accept or quietly decline, and declining is never announced. Search finds the name a player chose to wear in public, never an email address, so nobody can be found who didn't name themselves; the invite link still works and remains the only way to add someone unnamed. Messages grew into a real page: Inbox, Sent, Parlays and Picks tabs, an unread filter, search, and friend requests answerable in place. Invite links also stopped dying at the paywall — a friend who opens yours now lands on the sign-in page with the invite held for them, and can read what you sent without a subscription, because shares carry names and never picks."

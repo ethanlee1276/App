@@ -5805,12 +5805,21 @@ body.has-rail .shell {
 .tp-tile { display: grid; place-items: center; width: 46px; height: 46px;
   flex: 0 0 auto; border-radius: var(--radius-sm);
   background: var(--panel-3); border: var(--hairline) solid var(--border-soft); }
-.tp-add { margin-left: auto; border: 0; cursor: pointer;
-  background: var(--good); color: #05230F;
-  font: inherit; font-size: var(--fs-xs); font-weight: 800;
-  letter-spacing: .02em; padding: 7px 11px; border-radius: var(--radius-sm);
-  transition: filter var(--dur-fast) var(--ease-out); }
-.tp-add:hover { filter: brightness(1.12); }
+/* Quiet controls, not green blocks (Ethan, 2026-08-25, circling two
+   of them: "The color of the buttons along with the bulky of them loos
+   bad"). A pick card's actions are furniture — the PICK is the loud
+   thing — so they wear the ghost-chip look every other control does:
+   hairline, small caps, brand on touch. */
+.tp-add { margin-left: 8px; cursor: pointer;
+  background: none; color: var(--text-dim);
+  border: var(--hairline) solid var(--border);
+  font: inherit; font-size: var(--fs-2xs); font-weight: 800;
+  letter-spacing: .05em; text-transform: uppercase;
+  padding: 7px 12px; border-radius: 999px;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out); }
+.tp-foot .tp-add:first-of-type { margin-left: auto; }
+.tp-add:hover { color: var(--brand); border-color: var(--brand); }
 .perf-window { border: var(--hairline) solid var(--border);
   border-radius: var(--radius-sm); padding: 4px 9px; }
 .rail-list li::before { background: var(--good); }

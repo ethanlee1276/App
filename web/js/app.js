@@ -3327,7 +3327,7 @@ function gameBetCard(r) {
       </div>
       ${confMeter(r)}
       ${gameBetChart(r)}
-      <div class="chips">${stakeChip}${condChip}${tierChip}</div>
+      <div class="chips">${stakeChip}${condChip}${tierChip}${slipChip(r)}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }
@@ -5666,6 +5666,9 @@ function renderGameBetPage(b) {
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="pp-back">← Back to the board</button>
       <span class="pp-nav-right">
+        ${b.odds != null ? `<button class="btn ghost"
+          data-slip="${escapeAttr(gameBetId(b))}">${slipHas(b)
+            ? "On slip" : "+ Parlay"}</button>` : ""}
         <button class="btn ghost qb-share" data-card="${escapeAttr(gameBetId(b))}"
           >Share card</button>
       </span>
@@ -24985,15 +24988,42 @@ function slipSave() {
   try { localStorage.setItem(SLIP_KEY, JSON.stringify(_slip)); } catch (e) {}
 }
 
-const slipLegKey = (l) => `${slugify(l.player)}|${slugify(l.market)}`;
+/* Props AND game bets parlay (Ethan, 2026-08-25: "we need too be able
+   too parlays all props and picks together, not just player props. It
+   won't let me put the game prop in a parlay"). A prop leg is keyed by
+   player+market; a game leg by gameBetId — same id the share-card and
+   door handlers already use, so one row has one identity everywhere. */
+const slipLegKey = (l) =>
+  l.gid || `${slugify(l.player)}|${slugify(l.market)}`;
+
+const slipRowId = (r) => (r.player ? propId(r) : gameBetId(r));
+
+function findSlipRow(id) {
+  return findProp(id)
+    || ((state.data || {}).game_bets || []).find((g) => gameBetId(g) === id);
+}
 
 function slipHas(r) {
-  return slipState().legs.some((l) => slipLegKey(l) === slipLegKey(r));
+  const key = r.player ? slipLegKey(r) : gameBetId(r);
+  return slipState().legs.some((l) => slipLegKey(l) === key);
 }
+
+function gameBetSlipLabel(b) {
+  if (b.pick_label || b.headline) return b.pick_label || b.headline;
+  const t = typeof teamName === "function" ? teamName(b.team) : b.team;
+  const kind = b.bet_type || b.market || "";
+  if (kind === "spread") return `${t} ${b.line > 0 ? "+" : ""}${b.line}`;
+  if (kind === "total") return `${b.side || ""} ${b.line}`.trim();
+  if (kind === "team_total") return `${t} ${b.side || ""} ${b.line}`.trim();
+  return `${t} ML`;
+}
+
+const GAME_MARKET_WORDS = { spread: "Spread", total: "Game total",
+  team_total: "Team total", moneyline: "Moneyline" };
 
 function slipToggle(r) {
   const s = slipState();
-  const key = slipLegKey(r);
+  const key = r.player ? slipLegKey(r) : gameBetId(r);
   const i = s.legs.findIndex((l) => slipLegKey(l) === key);
   if (i >= 0) {
     s.legs.splice(i, 1);
@@ -25006,15 +25036,24 @@ function slipToggle(r) {
       tfToast(`${SLIP_MAX} legs is the ceiling — a longer ticket is a lottery slip.`);
       return false;
     }
-    s.legs.push({ player: r.player, market: r.market,
-                  market_label: r.market_label || r.market,
-                  side: r.side || "", line: r.line != null ? r.line : null,
-                  odds: r.odds != null ? r.odds : null, team: r.team || "" });
+    const kind = r.bet_type || r.market || "";
+    s.legs.push(r.player
+      ? { player: r.player, market: r.market,
+          market_label: r.market_label || r.market,
+          side: r.side || "", line: r.line != null ? r.line : null,
+          odds: r.odds != null ? r.odds : null, team: r.team || "" }
+      : { gid: gameBetId(r), label: gameBetSlipLabel(r),
+          matchup: r.matchup || `${r.away || ""} @ ${r.home || ""}`,
+          market: kind,
+          market_label: GAME_MARKET_WORDS[kind] || r.market_label || kind,
+          side: r.side || "", line: r.line != null ? r.line : null,
+          odds: r.odds != null ? r.odds : null, team: r.team || "",
+          bet_type: r.bet_type || "" });
     if (!s.legs.length || s.legs.length === 1) _slipOpen = false;
   }
   s.sport = s.legs.length ? state.sport : "";
   s.date = s.legs.length
-    ? (r.game_date || (state.data || {}).date || s.date || "") : "";
+    ? (r.game_date || r.date || (state.data || {}).date || s.date || "") : "";
   slipSave();
   slipRender();
   return true;
@@ -25046,11 +25085,13 @@ function slipImplied() {
 
 function slipChip(r) {
   // The per-card control. A chip, not a bare +: the guard that keeps
-  // inner controls from opening the card already knows .chip.
-  if (!r || !r.player || r.odds == null) return "";
+  // inner controls from opening the card already knows .chip. Props and
+  // game bets alike — anything priced can be a leg.
+  if (!r || r.odds == null) return "";
+  if (!r.player && !gameBetOpenable(r)) return "";
   const on = slipHas(r);
   return `<button class="chip slip-chip${on ? " on" : ""}"
-    data-slip="${escapeAttr(propId(r))}" type="button"
+    data-slip="${escapeAttr(slipRowId(r))}" type="button"
     title="${on ? "Remove from your parlay slip" : "Add to your parlay slip"}"
     >${on ? "On slip" : "+ Parlay"}</button>`;
 }
@@ -25076,9 +25117,11 @@ function slipRender() {
   }
   const legs = s.legs.map((l, i) => `<div class="slip-leg">
       <span class="slip-leg-mark">${betMark(l, 24)}</span>
-      <span class="slip-leg-who"><b>${escapeHtml(l.player)}</b>
-        <span>${escapeHtml(String(l.side || "").toUpperCase())} ${l.line != null ? l.line : ""}
-          ${escapeHtml(l.market_label || l.market)}</span></span>
+      <span class="slip-leg-who"><b>${escapeHtml(l.player || l.label || "")}</b>
+        <span>${l.player
+          ? `${escapeHtml(String(l.side || "").toUpperCase())} ${l.line != null ? l.line : ""}
+             ${escapeHtml(l.market_label || l.market)}`
+          : `${escapeHtml(l.market_label || l.market)} · ${escapeHtml(l.matchup || "")}`}</span></span>
       <span class="slip-leg-odds">${escapeHtml(trueMinus(oddsTxt(l.odds)))}</span>
       <button class="slip-x" data-slip-rm="${i}" aria-label="Remove leg"
         title="Remove">${icon("cross", 12)}</button>
@@ -25107,7 +25150,7 @@ document.addEventListener("click", async (e) => {
   const add = e.target.closest && e.target.closest("[data-slip]");
   if (add) {
     e.preventDefault();
-    const r = findProp(add.dataset.slip);
+    const r = findSlipRow(add.dataset.slip);
     if (r) slipToggle(r);
     // The board rerenders on its own clock; this button answers now.
     if (r) {
@@ -25165,9 +25208,12 @@ document.addEventListener("click", async (e) => {
       const res = await fetch("/api/social/send-parlay", {
         method: "POST", headers: { "Content-Type": "application/json" },
         // Identity only leaves the device — see engine/social.share_parlay.
+        // A game leg's identity is its MATCHUP, never its label: the
+        // label carries the line ("JAX Over 24"), and a line is content.
         body: JSON.stringify({ to: Number(to.dataset.parlayTo),
           sport: s.sport, date: s.date, note,
-          legs: s.legs.map((l) => ({ player: l.player, market: l.market })) }),
+          legs: s.legs.map((l) => ({ player: l.player || l.matchup || "",
+                                     market: l.market })) }),
       });
       const out = await res.json().catch(() => ({}));
       to.textContent = res.ok ? (out.already ? "Already sent" : "Sent") : was;
@@ -26347,6 +26393,10 @@ function renderTopPicks() {
         <span class="grade ${gradeClass(g.grade)}">${escapeHtml(g.grade || "")}</span></div>
       <div class="tp-foot"><b class="tp-odds">${odds(g.odds)}</b>
         <span class="tp-book">${escapeHtml(g.book || "")}</span>
+        ${g.odds != null && gameBetOpenable(g) ? `<button class="tp-add" type="button"
+                data-slip="${escapeAttr(gameBetId(g))}"
+                title="Add to your parlay slip — it docks at the bottom">${
+                slipHas(g) ? "On slip" : "+ Parlay"}</button>` : ""}
         <button class="tp-add" type="button" onclick="tpTrack(${i})"
                 title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
     </div>`;
