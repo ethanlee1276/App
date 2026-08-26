@@ -2193,25 +2193,21 @@ async function renderBestBets() {
      the card posts — but it also made every hitter prop INVISIBLE until
      late afternoon, so the board read "the model has nothing on
      batters" when the truth was "the model is waiting on lineups".
-     Two blocks fix the reading without touching the money rule:
+     The on-deck block fixes the reading without touching the money
+     rule: EARLY rows are real book prices with every gate cleared,
+     waiting ONLY on the lineup card — each becomes a journaled pick on
+     the rebuild after his card posts (engine early_lean). Not a pick,
+     and the block says so plainly.
 
-       EARLY  real book price, every gate cleared, waiting ONLY on the
-              lineup card — becomes a journaled pick on the rebuild
-              after his card posts (engine early_lean).
-       PENDING before the books even post hitter lines (~2½ hours out),
-              the model's strongest reads against its own baselines —
-              marked plainly as having no bettable price yet.
-
-     Neither is a pick, and neither block says so quietly. */
+     A second strip once showed the model's own baseline lines for
+     hitters the books had not priced. Ethan killed it the same day it
+     shipped, 2026-08-26: "We should never ever display fake numbers on
+     the site. If the props price are not fully available then we don't
+     make the pick till then." No real price, no row — do not add it
+     back. */
   const allRecs = (state.data || {}).recommendations || [];
   const earlyRows = allRecs.filter((r) => r.early)
     .sort((a, b) => (b.quality || 0) - (a.quality || 0));
-  const pendingRows = state.sport === "mlb" && !earlyRows.length
-    ? allRecs.filter((r) => r.has_market === false
-        && ["hits", "total_bases"].includes(r.market)
-        && !r.live)
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, 8)
-    : [];
   const earlyRow = (r) => `
     <div class="openable"${propAttrs(r) || ""}
          style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
@@ -2227,17 +2223,6 @@ async function renderBestBets() {
       <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${signedPct(r.edge)}</span>
         <span style="display:block;color:var(--warn);font-size:var(--fs-2xs);font-weight:700">LINEUP PENDING</span></span>
     </div>`;
-  const pendingRow = (r) => `
-    <div class="openable"${propAttrs(r) || ""}
-         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
-                border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="flex:1;min-width:0"><strong>${escapeHtml(
-          `${r.player} ${r.side} ${r.line} ${r.market_label}`)}</strong>
-        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
-          model line — no book price yet · projection ${r.projection}</span></span>
-      <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
-        conf ${r.confidence}/10</span>
-    </div>`;
   const earlyBlock = earlyRows.length ? `
     <div class="section-title minor">On deck — waiting on lineups</div>
     <div class="card" style="padding:0;border-left:3px solid var(--warn)">
@@ -2249,18 +2234,6 @@ async function renderBestBets() {
         his card posts with him in it; a scratch never does. Not picks yet,
         and not journaled.</p>
       ${earlyRows.map(earlyRow).join("")}
-    </div>` : "";
-  const pendingBlock = pendingRows.length ? `
-    <div class="section-title minor">On deck — before the books post</div>
-    <div class="card" style="padding:0">
-      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
-        <b style="color:var(--text)">The model’s strongest hitter reads for
-        tonight.</b> Books post hitter lines about 2½ hours before first
-        pitch and the odds pull prices these then — until that happens there
-        is no real number to beat, so nothing here is a pick or an edge.
-        This is “who the model likes”, visible all day instead of appearing
-        at dinner time.</p>
-      ${pendingRows.map(pendingRow).join("")}
     </div>` : "";
 
   const asOf = ((state.data || {}).odds_status || {}).at;
@@ -2391,14 +2364,13 @@ async function renderBestBets() {
      box beside the picks, marked in warn colour. One night, one list. */
 
   if (!picks.length && !signals.length && !ridden.length
-      && !earlyRows.length && !pendingRows.length) { host.innerHTML = ""; return; }
+      && !earlyRows.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
     <div class="section-title">Tonight’s picks
       <span class="sub">— the one designated space for what we’d actually bet. If it isn’t
       in this box, it isn’t a pick.</span></div>
     ${picksBlock}
     ${earlyBlock}
-    ${pendingBlock}
     ${signalsBlock}`;
 }
 
@@ -2470,12 +2442,17 @@ function oddsClockHTML() {
      the schedule. Say that as the first clause rather than leaving it to be
      inferred from two timestamps, because the reader arriving at this box
      has already decided something is wrong. */
+  // Corrected 2026-08-26 — Ethan: "I can say for a fact that when I
+  // look at FanDuel at 6am, there is batter props already posted." The
+  // old sentence blamed the books for a thin morning; the truth is OUR
+  // paid pulls are metered, and mornings get them as the day's budget
+  // allows while the pacer concentrates spend where prices move most.
   const why = waiting
-    ? `Nothing is broken: the pre-game window opens 2½ hours before first
-       pitch, which is both when the books post hitter lines and when our own
-       pacer spends credits. Pulling at breakfast buys proxy lines and an
-       empty board. Until then this page stays thin by design`
-    : `Most of these fill in as the books post hitter lines near first pitch`;
+    ? `Nothing is broken: books post hitter lines through the morning, and
+       our paid odds pulls are budgeted — the next one prices everything
+       posted, and spend concentrates toward first pitch where the numbers
+       are sharpest`
+    : `Most of these fill in with the next budgeted odds pull`;
   return `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
     Book prices: ${bits.join(" · ")}. ${why} — the rest of the board (scores,
     lineups, live tracking) refreshes every minute regardless.</div>`;

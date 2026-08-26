@@ -3,9 +3,15 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "refuse",
+      "title": "No fake numbers — the model-line strip lived three hours",
+      "body": "The first cut of the on-deck board included a second strip: for hitters the books had not priced yet, it showed the model's own baseline lines, labelled as such. Ethan killed it the day it shipped: 'We should never ever display fake numbers on the site. If the props price are not fully available then we don't make the pick till then.' He is right — a labelled proxy is still a number on a betting site, and someone will bet it. The rule is now pinned by a test: no real book price, no row, anywhere. The morning board fills from real prices instead — books post batter props from early morning, and the odds pulls price everything posted on the day's budgeted cadence."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "ship",
       "title": "Hitter props all day: the on-deck board",
-      "body": "The MLB board was structurally pitcher-only until late afternoon: hitter props are held until the official lineup card posts (correct — a bet on a hitter who might not play is a bet on a guess), but the hold also made them invisible, so mornings read as 'the model has nothing on batters' when the truth was 'the model is waiting'. Two on-deck sections fix the reading without touching the money rule. Once books post prices: every hitter lean that cleared every gate but the card shows with its grade, edge and projected batting spot, marked LINEUP PENDING — it becomes an official, journaled pick on the refresh after his card posts, and a scratch never does. Before books even post (~2½ hours out): the model's strongest hitter reads show against its own baseline lines, marked plainly as having no bettable price yet. Nothing on-deck is journaled, counted, or called a pick — the record stays exactly as honest as it was."
+      "body": "The MLB board was structurally pitcher-only until late afternoon: hitter props are held until the official lineup card posts (correct — a bet on a hitter who might not play is a bet on a guess), but the hold also made them invisible, so mornings read as 'the model has nothing on batters' when the truth was 'the model is waiting'. The on-deck section fixes the reading without touching the money rule: every hitter lean at a real book price that cleared every gate but the card shows with its grade, edge and projected batting spot, marked LINEUP PENDING — it becomes an official, journaled pick on the refresh after his card posts, and a scratch never does. Nothing on-deck is journaled, counted, or called a pick — the record stays exactly as honest as it was."
     },
     {
       "date": "2026-08-26",

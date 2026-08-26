@@ -697,7 +697,13 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         if state.remaining - RESERVE >= per_refresh and waited >= SPARSE_INTERVAL:
             if window is False:
                 # The day's one affordable pull is too precious to fire at
-                # noon: real prices post near first pitch, so wait for them.
+                # noon. NOT because prices don't exist yet — Ethan,
+                # 2026-08-26: "when I look at FanDuel at 6am, there is
+                # batter props already posted" — but because on a day that
+                # can afford exactly one pull, the near-pitch numbers are
+                # the ones picks are journaled and settled against, and a
+                # 6am pull leaves the whole evening stale. Funded days
+                # pull through the morning on the ordinary cadence.
                 # Same numeric filter as prime_window: a stray non-numeric
                 # kickoff must not crash the refresh cycle's thread.
                 opens = min(k for k in kickoffs

@@ -6,8 +6,10 @@ day." The lineup hold is correct and untouched — a bet on a hitter who
 might not play is a bet on a guess, and nothing journals before the
 card posts. What changed is VISIBILITY: a prop that cleared every other
 gate now says "waiting on the lineup card" on the board instead of
-disappearing into held_by_rules, and before the books even post hitter
-lines the model's reads are shown with "no book price yet" said plainly.
+disappearing into held_by_rules. Real book prices ONLY: a strip of
+model-baseline lines shipped beside it and Ethan killed it the same
+day — "We should never ever display fake numbers on the site" — so a
+test below pins the refusal, not just the feature.
 
 What this file pins:
 
@@ -118,31 +120,32 @@ def test_nothing_early_can_reach_the_journal():
 APP = _read("web", "js", "app.js")
 
 
-def test_the_board_shows_both_on_deck_blocks_with_honest_words():
+def test_the_on_deck_block_wears_honest_words():
     assert "LINEUP PENDING" in APP
     assert "waiting only\n        on the lineup card" in APP
     assert "Not picks yet,\n        and not journaled." in APP
-    assert "model line — no book price yet" in APP
-    assert "nothing here is a pick or an edge" in APP
+
+
+def test_no_fake_numbers_the_model_line_strip_stays_dead():
+    """Ethan, 2026-08-26: "We should never ever display fake numbers on
+    the site. If the props price are not fully available then we don't
+    make the pick till then." The strip that showed model-baseline lines
+    for unpriced hitters lived a few hours; this is its headstone."""
+    assert "model line — no book price yet" not in APP
+    assert "pendingRows" not in APP, "the unpriced-hitter strip came back"
+    assert "No real price, no row" in APP, \
+        "the refusal note left the code — the next reader will re-add it"
 
 
 def test_the_empty_guard_counts_the_on_deck_rows():
     i = APP.index("if (!picks.length && !signals.length && !ridden.length")
     guard = APP[i:i + 200]
-    assert "!earlyRows.length" in guard and "!pendingRows.length" in guard, \
-        "a morning with only on-deck rows renders an empty board"
+    assert "!earlyRows.length" in guard, \
+        "a day with only on-deck rows renders an empty board"
 
 
 def test_the_census_panel_names_the_new_bucket():
     assert 'awaiting_lineup: "cleared every gate' in APP
-
-
-def test_the_pending_strip_is_mlb_hitters_off_the_longshot_board():
-    i = APP.index("const pendingRows")
-    body = APP[i:i + 400]
-    assert '["hits", "total_bases"]' in body, \
-        "home runs belong to Long Shots; pitchers have no card to wait on"
-    assert 'state.sport === "mlb"' in body
 
 
 if __name__ == "__main__":
