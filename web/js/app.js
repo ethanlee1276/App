@@ -14331,6 +14331,9 @@ async function renderFantasy() {
   host.innerHTML = _ffLead + staleBanner + subtabbedHTML("fantasy", [
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
+    ["waivers", "Waivers",
+     "whose job just changed — the question a manager asks every Tuesday",
+     waiverBoardHTML(d.waivers) + waiverPulseHTML(d.trending)],
     ["trade", "Trade targets",
      "buy low and sell high — where production and opportunity disagree",
      _ffTrade],
@@ -14352,7 +14355,9 @@ async function renderFantasy() {
      + `<div id="league-desk"></div>`
      + `<div id="espn-desk"></div>`
      + campHTML(d.camp)
-     + waiverPulseHTML(d.trending) + offseasonHTML(off) + draftKit],
+     // The Sleeper pulse moved to the Waivers tab, beside our own signal
+     // — the two are the same question asked of two different sources.
+     + offseasonHTML(off) + draftKit],
   ]) + _ffFoot;
   bindSubtabs(host);
   _mockBind(host);
@@ -17496,6 +17501,57 @@ setInterval(() => { if (!document.hidden) acctSync(); }, 60000);
    dumping RIGHT NOW. Market attention, not our model: the two disagreeing
    is the interesting case, so it sits beside the usage boards. Always
    NFL-labeled via nflMap, whatever sport tab the visitor came from. */
+/* THE WAIVER BOARD — our own signal, not a popularity count.
+
+   `waiverPulseHTML` below shows what every Sleeper league grabbed in the
+   last 24 hours, which is market attention and worth seeing. This is the
+   other thing: who actually gained opportunity, measured off our usage
+   rows. The two belong side by side precisely because they disagree —
+   the name everybody added and the name whose share moved are often not
+   the same name, and that gap is the edge.
+
+   It never says "free agent". The site cannot see your league, so a
+   claim about availability would be a guess with a number next to it.
+   Role change is what we can measure, and it is the half a claim buys. */
+function waiverRowHTML(r) {
+  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const up = (r.delta || 0) > 0;
+  return `<div class="dl-row">
+    <span class="dl-main" data-dossier="${escapeAttr(r.player || "")}">
+      ${playerAvatar(r.player, r.team, { size: 26, map: nflMap(),
+                                         headshot: r.headshot })}
+      <span><strong>${escapeHtml(r.player || "")}</strong>
+        <span class="dl-sub">${escapeHtml(r.position || "")} ·
+          ${escapeHtml(nflName(r.team))} — ${escapeHtml(r.why || "")}</span></span></span>
+    <span class="dl-num strong" style="color:${up ? "var(--good)" : "var(--text)"}"
+          title="share of his team\u2019s work at that position">${pct(r.share)}</span>
+  </div>`;
+}
+
+function waiverBoardHTML(w) {
+  if (!w) return "";
+  const sec = (title, sub, rows, empty) => `
+    <div class="section-title minor">${title}
+      <span class="sub">— ${sub}</span></div>
+    <div class="card" style="padding:14px 16px">${
+      (rows || []).length ? rows.map(waiverRowHTML).join("")
+                          : panelEmpty(empty)}</div>`;
+  return sec("Jobs just vacated",
+             "somebody is Out, Doubtful or on IR, and his work has to go "
+             + "somewhere. Ranked by the share the beneficiary ALREADY holds "
+             + "— the man second in line inherits the job, not the biggest name",
+             w.vacancies,
+             "Nobody at a skill position is ruled out right now.")
+    + sec("Roles on the rise",
+          "last week\u2019s target or carry share against his prior four "
+          + "weeks. Volume is far stickier week to week than the yards it "
+          + "produces, which is why this reads share and not fantasy points",
+          w.rising,
+          "No share moved far enough this week to call it a role change.")
+    + `<p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">${
+        escapeHtml(w.note || "")}</p>`;
+}
+
 function waiverPulseHTML(t) {
   if (!t || (!(t.adds || []).length && !(t.drops || []).length)) return "";
   const fmt = (n) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);

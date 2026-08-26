@@ -43,7 +43,7 @@ cannot serve at all, and nothing has to be invented.
 
 ---
 
-## 2. Waiver-wire and streamer board (in-season, matters from Week 1)
+## 2. Waiver-wire board — SHIPPED 2026-08-26 (streamers still open)
 
 **What:** every week, who to add and who to start from the free-agent
 pool — the question a manager asks fourteen times a season versus once at
@@ -59,9 +59,25 @@ game scripts for the matchup. All four exist.
 **Why:** the draft kit is a two-week product. This is the one that keeps
 somebody coming back every Tuesday from September to December.
 
+**SHIPPED**, as `engine/waivers` and the Fantasy page's Waivers tab: the
+two role-change lists (jobs vacated by an Out/Doubtful/IR skill player,
+ranked by the share the beneficiary already holds; and the biggest
+share JUMPS against a four-week baseline). The Sleeper add/drop pulse
+moved in beside them — market attention and our own signal, same
+question of two sources, and they frequently disagree.
+
+DELIBERATELY NOT CLAIMED: availability. Without league sync (idea #7)
+"free agent" is a guess with a number beside it, so the board measures
+role change and says plainly that it cannot see your league. A test
+pins the refusal.
+
+STILL OPEN — the STREAMER half: "who to start this week" needs the
+matchup layer joined per position (game scripts exist, the join does
+not), and it is a genuinely different question from "who to add".
+
 ---
 
-## 3. "What changed since you last looked"
+## 3. "What changed since you last looked" — ALREADY BUILT (noted 2026-08-26)
 
 **What:** a single strip at the top of the board naming what moved since
 the reader's last visit — lines that moved past a threshold, picks that
@@ -75,6 +91,16 @@ reader's last-visit timestamp is a `localStorage` value.
 **Why:** the site currently answers "what is true now" and never "what is
 different". Returning readers re-read the whole board to find the two rows
 that changed.
+
+**THIS SHIPPED and the entry went stale.** It is `freshBannerHTML` in
+web/js/app.js — the last-visit clock in `localStorage` (`qb_seen_ms`),
+the feed's events filtered to that gap, and a strip reading "Since you
+last looked (2h ago): 3 edges appeared, 2 prices moved." It has company:
+`applyFreshPulses` flashes the individual rows whose side, line, odds or
+projection moved since the last poll, and the welcome-back banner names
+bets that settled while you were away. Left on the list, it was two
+hours from being built a second time — which is the cost of a roadmap
+that does not get read back against the code.
 
 ---
 

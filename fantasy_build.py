@@ -121,6 +121,29 @@ def _upcoming_schedule(season: int) -> list[dict]:
         return []
 
 
+def _waiver_board(usage: list[dict]) -> dict:
+    """The waiver sections, or an empty board with the reason.
+
+    The injury feed is read off the file the injuries build already
+    writes rather than re-fetched: a fantasy build that went to the wire
+    for data another build owns would be two sources of truth for one
+    fact. Missing file → the rising half still works, which is the half
+    that needs no injuries at all.
+    """
+    from engine import waivers
+    rows: list[dict] = []
+    try:
+        with open("web/data/injuries.json", encoding="utf-8") as fh:
+            rows = (json.load(fh).get("sports") or {}).get("nfl") or []
+    except (OSError, ValueError):
+        rows = []
+    board = waivers.board(usage, rows)
+    if not rows:
+        board["note"] += (" The injury board was unreadable this build, so "
+                          "only the rising-role half is shown.")
+    return board
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="web/data/fantasy.json")
@@ -230,6 +253,13 @@ def main() -> None:
             "usage": usage,
             "rates": fantasy.league_rates(conn, season),
             "buy_sell": buy_sell,
+            # The waiver board (engine/waivers): who just lost a job and
+            # who just gained share. The draft kit is a two-week product;
+            # this is the one a manager opens every Tuesday. Built from
+            # the usage rows already computed above plus the injury board
+            # already on disk, so it costs nothing and cannot be staler
+            # than the page around it.
+            "waivers": _waiver_board(usage),
             "scripts": fantasy.game_scripts(conn),
             # Calendar dates for every unplayed game — the scripts carry
             # the market's read per matchup, the schedule says WHEN, and

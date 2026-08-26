@@ -165,8 +165,12 @@ def test_the_fantasy_page_is_four_rooms():
     # Anchored past the lead, not on its exact concatenation — the
     # stale-usage banner joined the chain on 2026-08-24 and the claim
     # here is the four rooms, not the operands to the left of them.
+    # Sliced to the END of the call, not a fixed window: the Waivers
+    # room joined on 2026-08-26 and pushed "league" past 900 characters,
+    # which is the same slice bug this suite keeps relearning. The claim
+    # is that the four rooms exist, not that they fit in a byte count.
     i = js.index('subtabbedHTML("fantasy"')
-    body = js[i:i + 900]
+    body = js[i:js.index("]) + _ffFoot", i)]
     for room in ("usage", "trade", "scripts", "league"):
         assert f'"{room}"' in body, room
 

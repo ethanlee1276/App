@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "The waiver board: whose job just changed",
+      "body": "The draft kit is a two-week product. This is the one a fantasy manager opens every Tuesday from September to December, and the question is always the same — whose job just changed? Two lists answer it, both measured from our own usage data. Jobs just vacated: somebody is Out, Doubtful or on IR, so his team's work at that position has to go somewhere, and the beneficiaries are ranked by the share they ALREADY hold, because the man second in line inherits the job rather than the biggest name on the depth chart. Roles on the rise: last week's target or carry share against the prior four weeks, since volume is far stickier week to week than the yards it produces. What the board never says is that anyone is a free agent — the site cannot see your league, so it measures role change and leaves availability to the person who can actually check. The Sleeper add/drop pulse sits beside it, because the name everybody grabbed and the name whose share moved are often not the same name."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "Football boards say where the picks went",
       "body": "A board reading 'no qualifying plays' asks you to take its word for it. Baseball and basketball have long answered the follow-up — a funnel counting exactly where each pick died, gate by gate — but football never did, which with the season opening is the worst place for it to be missing. NFL and college football now publish the same breakdown under the count: how many had no book price yet (and in which markets), how many the model graded a Pass, how many missed the edge bar, how many were too juiced to be worth laying. The football funnel reads the actual rule decisions rather than recomputing the thresholds beside them, so it can never disagree with the ruling it is explaining, and a gate added later shows up in it the day it is added."
     },
