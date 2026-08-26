@@ -2948,14 +2948,13 @@ body.msg-thread-open .footer { display: none; }
   align-items: center; }
 .msg-thread-row:last-child { border-bottom: none; }
 .msg-thread { display: flex; flex-direction: column;
-  /* 150px = the view heading + section paddings above this column; the
-     goal is a page that does NOT scroll — only the bubble list does */
-  height: calc(100dvh - var(--topbar-h) - 150px); min-height: 380px; }
-@media (max-width: 900px) {
-  /* the phone tab bar the composer must clear */
-  .msg-thread { height: calc(100dvh - var(--topbar-h) - 150px
-    - 58px - env(safe-area-inset-bottom)); }
-}
+  /* A rough first paint only — msgThreadSize() replaces this with the
+     MEASURED space between the column's own top and the tab bar the
+     moment the thread renders. The constants guessed here double-counted
+     the phone tab bar against main's own padding and left a dead band
+     under the composer (Ethan circled it, 2026-08-26); the measurement
+     cannot, because it reads where things actually are. */
+  height: calc(100dvh - var(--topbar-h) - 150px); min-height: 320px; }
 .msg-thread-head { display: flex; align-items: center; gap: 12px;
   margin-bottom: 10px; flex-shrink: 0; }
 .msg-thread-who { display: inline-flex; align-items: center; gap: 10px;

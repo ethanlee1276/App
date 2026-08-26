@@ -25531,6 +25531,7 @@ async function renderThread(host, fid) {
     </div>`;
   // The PAGE stays put at the top — only the bubble list scrolls.
   window.scrollTo(0, 0);
+  msgThreadSize();
   const bubs = document.getElementById("msg-bubs");
   if (bubs) bubs.scrollTop = bubs.scrollHeight;
   const form = document.getElementById("msg-composer");
@@ -25606,6 +25607,29 @@ async function renderThread(host, fid) {
     } catch (e) { /* the next tick tries again */ }
   }, 15000);
 }
+
+/* The thread column's height, MEASURED: from wherever the column
+   actually starts down to the tab bar (or the viewport edge where there
+   is none), so the composer sits right above the navigation with no
+   dead band under it. A CSS calc lived here first and guessed its
+   constants — it double-counted the phone tab bar against main's own
+   bottom padding, and Ethan circled the wasted inches. Re-measured on
+   resize and rotation while a thread is open. */
+function msgThreadSize() {
+  const el = document.querySelector(".msg-thread");
+  if (!el) return;
+  const top = el.getBoundingClientRect().top;
+  const tab = document.querySelector(".tabbar");
+  const tabH = tab && getComputedStyle(tab).display !== "none"
+    ? tab.getBoundingClientRect().height : 0;
+  const vh = (window.visualViewport && window.visualViewport.height)
+    || window.innerHeight;
+  el.style.height = `${Math.max(320, Math.floor(vh - top - tabH - 8))}px`;
+}
+
+window.addEventListener("resize", () => {
+  if (state.view === "messages" && _msgThread) msgThreadSize();
+});
 
 /* Bubbles under date separators, filtered by the kind tabs. The filter
    hides texts around the shares on Parlays/Picks, which is exactly what
