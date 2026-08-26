@@ -618,6 +618,34 @@ def near_misses(recommendations: list[dict], limit: int = 10) -> list[dict]:
     return out[:limit]
 
 
+def early_lean(row: dict) -> bool:
+    """True when the ONLY thing between this prop and recommended is the
+    lineup card. Ethan, 2026-08-26: "We should be showing player props
+    all day every day." The morning board was structurally pitcher-only
+    because the lineup hold (correct — a bet on a hitter who might not
+    play is a bet on a guess) also made the hitter props INVISIBLE, and
+    a reader can't tell "the model has nothing" from "the model is
+    waiting". An early lean is a real-priced prop that cleared every
+    other gate — grade, Kelly, juice, confidence, edge, pre-game — so it
+    can be SHOWN all day as what it is, and it graduates to a journaled
+    pick on the rebuild after his card posts. Proxy-priced rows can
+    never qualify: no real price fails the grade gate first, by
+    construction (engine/mlb/betting.gate_ok)."""
+    if row.get("recommended"):
+        return False
+    if row.get("market") == "home_runs":
+        # The Long Shots board owns home runs outright — an HR row that
+        # clears its checks is still that board's row, and showing it
+        # here as "waiting on the card" would put the quarantined market
+        # back on the main board through a side door.
+        return False
+    checks = row.get("checks") or []
+    return (any(c.get("key") == "lineup" and not c.get("passed")
+                for c in checks)
+            and all(c.get("passed") for c in checks
+                    if c.get("key") != "lineup"))
+
+
 def gate_census(recommendations: list[dict]) -> dict:
     """Where did the slate's props die? One count per first-failing gate, so
     "878 analyzed → 1 recommended" is a funnel you can read instead of a
@@ -628,7 +656,8 @@ def gate_census(recommendations: list[dict]) -> dict:
     from .quality import TIER_SHRINK, MLB_TIER_MIN_EDGE, MLB_QUALITY_FLOOR
     census = {"recommended": 0, "no_real_price": 0, "longshot_board": 0,
               "credibility": 0, "calibration": 0, "tier_edge_bar": 0,
-              "price_net": 0, "quality_under_70": 0, "held_by_rules": 0}
+              "price_net": 0, "quality_under_70": 0, "awaiting_lineup": 0,
+              "held_by_rules": 0}
     closed_markets: set = set()
     for r in recommendations:
         if r.get("recommended"):
@@ -673,7 +702,10 @@ def gate_census(recommendations: list[dict]) -> dict:
         if (r.get("quality") or 0) < MLB_QUALITY_FLOOR:
             census["quality_under_70"] += 1
             continue
-        census["held_by_rules"] += 1     # lineups, IL, live game, juice, sliders
+        if r.get("early"):
+            census["awaiting_lineup"] += 1   # cleared everything but the card
+            continue
+        census["held_by_rules"] += 1     # IL, live game, juice, sliders
     if closed_markets:
         # NAME the closed markets — 197 props dying to "calibration" is a
         # mystery; "Total Bases closed until the fit comes off its boundary"
@@ -767,6 +799,11 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             d["warnings"] = list(d.get("warnings") or []) + [
                 f"Activated from the IL on {il.get('date', '?')} — recent "
                 f"form predates the injury; treat the sample with care"]
+        # The early flag reads the finished row, AFTER the IL wire: an
+        # IL'd hitter also fails only the lineup check, and calling him
+        # "waiting on the card" would be waiting for a card that is not
+        # coming.
+        d["early"] = False if (il and il.get("on_il")) else early_lean(d)
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff

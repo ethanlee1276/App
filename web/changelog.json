@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "Hitter props all day: the on-deck board",
+      "body": "The MLB board was structurally pitcher-only until late afternoon: hitter props are held until the official lineup card posts (correct — a bet on a hitter who might not play is a bet on a guess), but the hold also made them invisible, so mornings read as 'the model has nothing on batters' when the truth was 'the model is waiting'. Two on-deck sections fix the reading without touching the money rule. Once books post prices: every hitter lean that cleared every gate but the card shows with its grade, edge and projected batting spot, marked LINEUP PENDING — it becomes an official, journaled pick on the refresh after his card posts, and a scratch never does. Before books even post (~2½ hours out): the model's strongest hitter reads show against its own baseline lines, marked plainly as having no bettable price yet. Nothing on-deck is journaled, counted, or called a pick — the record stays exactly as honest as it was."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "Nicknames for friends",
       "body": "Tap Nickname in any conversation and your friend shows up as whatever you call them — in the chat, the conversation list, the inbox, everywhere you read their name. The label is yours alone: it is stored against your account, the friend never sees it or learns it exists, and their real username stays visible next to the nickname in the thread header so you always know who you are talking to. An empty nickname brings the real name back, and labels are cleaned up with the friendship if you part ways."
     },

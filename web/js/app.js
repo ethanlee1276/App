@@ -2185,6 +2185,84 @@ async function renderBestBets() {
           stakeText(p.stake)}</span>` : ""}</span>
     </div>`;
 
+  /* ============================================================
+     The on-deck hitters — player props ALL DAY, honestly labelled
+     ============================================================ */
+  /* Ethan, 2026-08-26: "We should be showing player props all day every
+     day." The lineup hold is right and stays — no bet journals before
+     the card posts — but it also made every hitter prop INVISIBLE until
+     late afternoon, so the board read "the model has nothing on
+     batters" when the truth was "the model is waiting on lineups".
+     Two blocks fix the reading without touching the money rule:
+
+       EARLY  real book price, every gate cleared, waiting ONLY on the
+              lineup card — becomes a journaled pick on the rebuild
+              after his card posts (engine early_lean).
+       PENDING before the books even post hitter lines (~2½ hours out),
+              the model's strongest reads against its own baselines —
+              marked plainly as having no bettable price yet.
+
+     Neither is a pick, and neither block says so quietly. */
+  const allRecs = (state.data || {}).recommendations || [];
+  const earlyRows = allRecs.filter((r) => r.early)
+    .sort((a, b) => (b.quality || 0) - (a.quality || 0));
+  const pendingRows = state.sport === "mlb" && !earlyRows.length
+    ? allRecs.filter((r) => r.has_market === false
+        && ["hits", "total_bases"].includes(r.market)
+        && !r.live)
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, 8)
+    : [];
+  const earlyRow = (r) => `
+    <div class="openable"${propAttrs(r) || ""}
+         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+                border-bottom:1px solid rgba(255,255,255,.05)">
+      <span class="grade ${gradeClass(r.grade)}" style="flex-shrink:0">${escapeHtml(r.grade || "")}</span>
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(
+          `${r.player} ${r.side} ${r.line} ${r.market_label}`)} ${american(r.odds)}
+          (${escapeHtml(r.book || "")})</strong>
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
+          quality ${r.quality}/100${r.lineup_slot
+            ? ` · projected batting ${r.lineup_slot}` : ""} · every gate cleared
+          but the card</span></span>
+      <span style="text-align:right;white-space:nowrap"><span style="font-weight:800">${signedPct(r.edge)}</span>
+        <span style="display:block;color:var(--warn);font-size:var(--fs-2xs);font-weight:700">LINEUP PENDING</span></span>
+    </div>`;
+  const pendingRow = (r) => `
+    <div class="openable"${propAttrs(r) || ""}
+         style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+                border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(
+          `${r.player} ${r.side} ${r.line} ${r.market_label}`)}</strong>
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">
+          model line — no book price yet · projection ${r.projection}</span></span>
+      <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
+        conf ${r.confidence}/10</span>
+    </div>`;
+  const earlyBlock = earlyRows.length ? `
+    <div class="section-title minor">On deck — waiting on lineups</div>
+    <div class="card" style="padding:0;border-left:3px solid var(--warn)">
+      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
+        <b style="color:var(--text)">${earlyRows.length} hitter lean${
+          earlyRows.length === 1 ? "" : "s"} at real book prices, waiting only
+        on the lineup card</b> — it posts 2–4 hours before first pitch. Each
+        becomes an official pick (and enters the record) on the refresh after
+        his card posts with him in it; a scratch never does. Not picks yet,
+        and not journaled.</p>
+      ${earlyRows.map(earlyRow).join("")}
+    </div>` : "";
+  const pendingBlock = pendingRows.length ? `
+    <div class="section-title minor">On deck — before the books post</div>
+    <div class="card" style="padding:0">
+      <p style="padding:10px 14px 6px;margin:0;font-size:var(--fs-sm);color:var(--text-mute)">
+        <b style="color:var(--text)">The model’s strongest hitter reads for
+        tonight.</b> Books post hitter lines about 2½ hours before first
+        pitch and the odds pull prices these then — until that happens there
+        is no real number to beat, so nothing here is a pick or an edge.
+        This is “who the model likes”, visible all day instead of appearing
+        at dinner time.</p>
+      ${pendingRows.map(pendingRow).join("")}
+    </div>` : "";
+
   const asOf = ((state.data || {}).odds_status || {}).at;
   const prePrice = prePriceHeadline();
   const picksBlock = picks.length ? `
@@ -2312,12 +2390,15 @@ async function renderBestBets() {
      2026-08-20 at Ethan's request — its rows now sit in the recommended
      box beside the picks, marked in warn colour. One night, one list. */
 
-  if (!picks.length && !signals.length && !ridden.length) { host.innerHTML = ""; return; }
+  if (!picks.length && !signals.length && !ridden.length
+      && !earlyRows.length && !pendingRows.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
     <div class="section-title">Tonight’s picks
       <span class="sub">— the one designated space for what we’d actually bet. If it isn’t
       in this box, it isn’t a pick.</span></div>
     ${picksBlock}
+    ${earlyBlock}
+    ${pendingBlock}
     ${signalsBlock}`;
 }
 
@@ -2431,7 +2512,8 @@ function censusFunnelHTML() {
     tier_edge_bar: "edge under the tier’s minimum",
     price_net: "price doesn’t clear break-even",
     quality_under_70: "quality grade under 70",
-    held_by_rules: "held by rules (lineups pending, IL, live game, juice)",
+    awaiting_lineup: "cleared every gate — waiting on the lineup card (shown as On deck)",
+    held_by_rules: "held by rules (IL, live game, juice)",
     // Hoops: the two the build drops before the model ever sees them.
     no_history: "no stored game log for this player yet",
     props_built: "props built from history" };
