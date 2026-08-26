@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "Copy a pick as text, for your own book",
+      "body": "The gap between reading a pick here and placing it at your sportsbook was re-typing it off the screen. Tonight's picks and your parlay slip now both carry a Copy as text button: the player, the side, the line, the price we saw and the book we saw it at, plus the time those prices were read, in plain text you can paste anywhere. This site takes no wagers and the export is built so it cannot pretend otherwise — no stake enters it, so no payout can come out of it, and the text says so itself in case it travels somewhere we do not control. One refusal worth naming: a leg with only our own placeholder line copies as 'no book price yet' rather than a number, and a parlay containing one shows no combined price at all — a price nobody offered is not something to hand somebody on their way to a betting slip."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "Start/sit: whose spot is best this week",
       "body": "The waiver board answers who to add; this answers who to start, which is a different question — the same player is a different play against a shootout than against a team that will run the clock out on him. Each position now ranks by opportunity times environment: a player's share of his team's work multiplied by the points the market expects that offense to score, tilted by how much it throws relative to its situation (a run-lean offense helps its back and costs its receivers). Both numbers show on every row so the ranking can be argued with. It is explicitly NOT a fantasy-points projection — there is no per-week points model here and printing one would be invented precision. Quarterbacks are absent and the panel says why: every share in this data is targets or carries, which a quarterback has neither of."
     },

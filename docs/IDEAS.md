@@ -114,7 +114,7 @@ that does not get read back against the code.
 
 ---
 
-## 4. Bet-slip export — for the sportsbook, never here
+## 4. Bet-slip export — SHIPPED 2026-08-26
 
 **What:** a copyable summary of the picks a reader wants to place, so
 they can key them into their own book without re-reading the board.
@@ -128,6 +128,17 @@ they are. If that line feels thin, do not build it.
 
 **Cost:** small. **Value:** removes the most obvious friction between
 reading a pick and acting on it.
+
+**SHIPPED**, on both surfaces: the picks card and the parlay slip each
+carry "Copy as text". The line held — no stake enters either export, so
+no payout can be derived from one, which is a stronger promise than
+forbidding the words; a test asserts the absence structurally.
+
+ONE REFUSAL THE PLAN DID NOT ANTICIPATE: a leg priced off our own proxy
+baseline copies as "no book price yet", and a parlay containing one
+shows NO combined price. Text that leaves the site and lands next to a
+real betting slip is the last place a placeholder should wear the shape
+of a real number.
 
 ---
 

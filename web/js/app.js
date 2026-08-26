@@ -2036,6 +2036,8 @@ function haircutLine(sh) {
     <b style="color:var(--text)">Record</b> page.</p>`;
 }
 
+let _picksForCopy = [];
+
 async function renderBestBets() {
   const host = document.getElementById("best-bets");
   if (!host) return;
@@ -2236,6 +2238,10 @@ async function renderBestBets() {
       ${earlyRows.map(earlyRow).join("")}
     </div>` : "";
 
+  // Held for the copy button below, which must export EXACTLY the rows
+  // this render drew — rebuilding the list from state at click time
+  // would let the two drift apart on a refresh.
+  _picksForCopy = picks;
   const asOf = ((state.data || {}).odds_status || {}).at;
   const prePrice = prePriceHeadline();
   const picksBlock = picks.length ? `
@@ -2251,6 +2257,11 @@ async function renderBestBets() {
       ${haircutNote}
       ${picks.map(pickRow).join("")}
       ${ridden.map(ridingRow).join("")}
+      <div style="padding:8px 14px 12px">
+        <button class="btn-quiet" id="picks-copy" type="button"
+          title="Copy tonight\u2019s picks as text, to key into your own book"
+          >${icon("list", 12)} Copy tonight&#8217;s picks as text</button>
+      </div>
       <details class="rec-disclose" style="margin:2px 14px 10px">
         <summary>Why only ${picks.length}? — where the other props died</summary>
         ${censusFunnelHTML()}
@@ -24243,6 +24254,32 @@ function copyLink(kind, slug, btn) {
   copyRawURL(cleanURL(kind, slug), btn);
 }
 
+/* Multi-line TEXT, not an address. copyRawURL hands a coarse pointer to
+   navigator.share({url}) — right for a link, wrong here: a share sheet
+   given a parlay as a "url" mangles it or refuses it outright. Same
+   clipboard fallbacks, the share payload is {text}. */
+function copyPlainText(text, btn) {
+  if (!text) return;
+  const said = (msg) => {
+    if (!btn) return tfToast(msg);
+    const was = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(() => { btn.textContent = was; }, 1600);
+  };
+  const coarse = window.matchMedia
+    && window.matchMedia("(pointer: coarse)").matches;
+  if (navigator.share && coarse) {
+    navigator.share({ text }).catch(() => {});
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => said("Copied"),
+                                             () => tfToast(text));
+    return;
+  }
+  tfToast(text);
+}
+
 function copyRawURL(url, btn) {
   const said = (msg) => {
     if (!btn) return tfToast(msg);
@@ -25269,18 +25306,22 @@ function slipToggle(r) {
       return false;
     }
     const kind = r.bet_type || r.market || "";
+    // `book` rides along for the text export: a price is only useful to
+    // key in if you know WHICH book was showing it. It is stored, never
+    // drawn on the panel — the slip is already dense enough.
     s.legs.push(r.player
       ? { player: r.player, market: r.market,
           market_label: r.market_label || r.market,
           side: r.side || "", line: r.line != null ? r.line : null,
-          odds: r.odds != null ? r.odds : null, team: r.team || "" }
+          odds: r.odds != null ? r.odds : null, team: r.team || "",
+          book: r.book || "" }
       : { gid: gameBetId(r), label: gameBetSlipLabel(r),
           matchup: r.matchup || `${r.away || ""} @ ${r.home || ""}`,
           market: kind,
           market_label: GAME_MARKET_WORDS[kind] || r.market_label || kind,
           side: r.side || "", line: r.line != null ? r.line : null,
           odds: r.odds != null ? r.odds : null, team: r.team || "",
-          bet_type: r.bet_type || "" });
+          book: r.book || "", bet_type: r.bet_type || "" });
     if (!s.legs.length || s.legs.length === 1) _slipOpen = false;
   }
   s.sport = s.legs.length ? state.sport : "";
@@ -25328,6 +25369,74 @@ function slipChip(r) {
     >${on ? "On slip" : "+ Parlay"}</button>`;
 }
 
+/* TEXT TO KEY INTO YOUR OWN BOOK — and nothing more than that.
+
+   Ethan's constraint on this feature is absolute and it is the reason
+   the function is shaped this way: THIS SITE TAKES NO WAGERS. Not a
+   slip, not a "Place Bet", not a balance, no "To Win" figure. What
+   comes out of here is the identity of each pick, the number we saw and
+   the book we saw it at — the things a person would otherwise be
+   copying by hand off the board — plus the time the prices were read,
+   because a price without a timestamp invites somebody to key in a
+   stale one.
+
+   NOTHING IS CALCULATED HERE that is not already on the panel. The
+   combined price is the slip's own arithmetic, shown above the button
+   before it is copied; no stake enters, so no payout can be derived,
+   which is exactly the line the tests forbid crossing. */
+/* The same idea for the board's own list: the picks as text, so nobody
+   re-reads a screen to key six numbers into their book. Identity, the
+   price we saw, the book we saw it at, and WHEN — never a stake, never
+   a payout, because this site takes no wagers and the tests that forbid
+   a betting interface are not being bent for a convenience. */
+function picksExportText(picks) {
+  if (!(picks || []).length) return "";
+  const when = tzTime(Date.now());
+  const lines = picks.map((p, i) => `${i + 1}. ${String(p.label || "")
+    .replace(/\s+/g, " ").trim()}`);
+  return [`Qellys Book \u2014 ${picks.length} pick`
+          + `${picks.length === 1 ? "" : "s"} tonight`,
+          ...lines,
+          `Prices read at ${when} \u2014 confirm at your book before you `
+          + `place anything. qellysbook.com does not take bets.`].join("\n");
+}
+
+function slipExportText() {
+  const s = slipState();
+  if (!s.legs.length) return "";
+  const when = tzTime(Date.now());
+  const lines = s.legs.map((l) => {
+    const who = l.player || l.label || "";
+    const what = l.player
+      ? `${String(l.side || "").toUpperCase()} ${l.line != null ? l.line : ""} `
+        + `${l.market_label || l.market}`
+      : `${l.market_label || l.market} \u00b7 ${l.matchup || ""}`;
+    // A PROXY LINE NEVER LEAVES AS A PRICE. It is our own recent-form
+    // baseline standing in until a book posts, and copied into a text
+    // somebody keys into their sportsbook it becomes exactly the fake
+    // number this site refuses to print (Ethan, 2026-08-26). The leg
+    // still travels — it is on the reader's slip — labelled for what it
+    // is instead of wearing a number nobody offered.
+    const proxy = String(l.book || "").toLowerCase() === "proxy";
+    const price = (l.odds == null || proxy)
+      ? "no book price yet"
+      : `${trueMinus(oddsTxt(l.odds))}${l.book ? ` (${l.book})` : ""}`;
+    return `\u2022 ${who} \u2014 ${what.replace(/\s+/g, " ").trim()}  `
+      + price;
+  });
+  // The combined price is only honest when every leg carries a real
+  // one — a product that includes a proxy is a made-up number wearing
+  // the authority of arithmetic.
+  const anyProxy = s.legs.some(
+    (l) => String(l.book || "").toLowerCase() === "proxy" || l.odds == null);
+  const combined = anyProxy ? null : slipAmerican();
+  const head = `${s.legs.length}-leg parlay`
+    + (combined == null ? "" : `, combined ${trueMinus(oddsTxt(combined))}`);
+  return [head, ...lines,
+          `Prices read at ${when} \u2014 confirm at your book before you `
+          + `place anything. qellysbook.com does not take bets.`].join("\n");
+}
+
 function slipRender() {
   const host = document.getElementById("qb-slip");
   if (!host) return;
@@ -25373,6 +25482,8 @@ function slipRender() {
     </div>
     <div class="slip-send">
       <button class="btn" id="slip-send" type="button">Send to a friend</button>
+      <button class="btn ghost" id="slip-copy" type="button"
+        title="Copy the legs as text, to key into your own book">Copy as text</button>
       <div id="slip-send-slot"></div>
     </div>
   </div>`;
@@ -25397,6 +25508,18 @@ document.addEventListener("click", async (e) => {
   }
   if (e.target.closest && e.target.closest("#slip-collapse")) {
     _slipOpen = false; slipRender(); return;
+  }
+  const pc = e.target.closest && e.target.closest("#picks-copy");
+  if (pc) {
+    e.preventDefault();
+    copyPlainText(picksExportText(_picksForCopy), pc);
+    return;
+  }
+  const cp = e.target.closest && e.target.closest("#slip-copy");
+  if (cp) {
+    e.preventDefault();
+    copyPlainText(slipExportText(), cp);
+    return;
   }
   if (e.target.closest && e.target.closest("#slip-clear")) {
     _slip = { sport: "", date: "", legs: [] };
