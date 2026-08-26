@@ -505,9 +505,16 @@ def test_the_stadium_cards_stay_off_the_compositor_on_phones():
     assert ".tilt.tilting { transition: none; will-change: transform; }" in CSS
     assert '!window.matchMedia("(pointer: fine)").matches) return;' in APP, \
         "enableTilt binds on touch screens again"
-    assert ".stadium-wrap:has(.venue-photo) .stadium" in CSS, \
-        "the blurred SVG scene paints under every photo again"
-    assert ".gp-art:has(.venue-photo) .stadium" in CSS
+    m2 = re.search(r"\.stadium-wrap:has\(\.venue-photo\) \.stadium,\s*"
+                   r"\.gp-art:has\(\.venue-photo\) \.stadium "
+                   r"\{ visibility: hidden; \}", CSS)
+    assert m2, "the blurred SVG scene paints under every photo again"
+    # visibility, NOT display: the drawing is the card art's SIZING
+    # element (the photo is absolute over its box), so display:none
+    # collapsed every card and the stadiums vanished (2026-08-26, the
+    # day the first cut of this fix shipped).
+    assert ":has(.venue-photo) .stadium { display: none" not in CSS, (
+        "display:none is back - the photos have no box to fill")
 
 
 def test_no_view_transitions_on_touch_screens():

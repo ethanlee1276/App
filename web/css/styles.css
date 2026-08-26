@@ -651,8 +651,15 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    matching, and the drawing returns with no JavaScript involved. An
    engine without :has keeps the old paint-both behaviour, which is
    only ever cosmetic. */
+/* visibility, NOT display. The drawing is also the card art's SIZING
+   element — the photo is position:absolute over the SVG's box — so
+   display:none collapsed every card to zero height and the photos had
+   nothing to fill (Ethan, 2026-08-26: "now all the stadiums are
+   gone"). visibility:hidden keeps the box and skips the painting,
+   which is the half we wanted gone — a hidden element rasterizes
+   nothing, filters included. */
 .stadium-wrap:has(.venue-photo) .stadium,
-.gp-art:has(.venue-photo) .stadium { display: none; }
+.gp-art:has(.venue-photo) .stadium { visibility: hidden; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
 .game-info { padding: 11px 15px 3px; }
 .matchup { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: var(--fs-lg); }

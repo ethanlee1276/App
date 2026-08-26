@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "fix",
+      "title": "The stadiums come back",
+      "body": "The GPU diet's first cut hid the drawn stadium scene with a property that also removed the box it was holding open — and the photos, which stack on top of that box, had nothing left to fill. Every stadium card collapsed for about an hour. The drawing now keeps its box and simply doesn't paint, which was the entire point: same crash fix, stadiums intact."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
       "title": "The iPhone crash, found: page transitions were the trigger",
       "body": "Third and final part of the phone-reboot hunt, and the one that matches the symptom. Every navigation tap ran a page-transition effect that photographs the ENTIRE page — every card, every chart, tens of thousands of pixels — into graphics memory twice, at full device resolution, before playing a quarter-second fade. That allocation on every single tap is why the crash struck 'any menu, anything': it was the only cost that scaled with every navigation no matter the destination. Phones now switch pages instantly — which is what every native app does anyway — and desktops keep the fade. The blur and graphics-layer removals that preceded this were real weight off the same phones, but this was the trigger."
     },
