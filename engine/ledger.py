@@ -2691,6 +2691,16 @@ def process_grade(b) -> str | None:
 CLV_MIN_N = 40
 
 
+def _clv_board(conn, since: str | None):
+    """The scoreboard, or an empty one. Never raises into the export: a
+    presentation layer must not be able to stop the record publishing."""
+    try:
+        from .clvboard import scoreboard
+        return scoreboard(conn, since=since)
+    except Exception:                                        # noqa: BLE001
+        return {"rows": [], "totals": {}, "min_n": CLV_MIN_N}
+
+
 def clv_coverage(conn, category: str = "main",
                  since: str | None = None) -> dict:
     """How much of the record actually has a closing line — per sport.
@@ -4679,6 +4689,11 @@ def export_json(conn, path) -> None:
         # How much of the record has a real closing line behind it — the
         # honest prerequisite for anything that wants to reason from CLV.
         "clv_coverage": clv_coverage(conn, since=since),
+        # The model-versus-market scoreboard, cut by sport AND market
+        # (engine/clvboard). clv_coverage answers "can we grade this
+        # sport at all"; this answers "does it beat the close", one
+        # market at a time, with the sample size beside every number.
+        "clv_board": _clv_board(conn, since),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.

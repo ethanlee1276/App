@@ -2590,6 +2590,26 @@ select.calc-in { width: auto; font-weight: 600; }
    into the loudest thing on the page — and the section's own subtitle
    says the number that matters is net. */
 .rec-buckets-one .rec-bucket { max-width: 1120px; }
+/* --- model vs market (2026-08-26) -----------------------------------
+   Its OWN three-column grid rather than the record board's `.rb-row`,
+   which is built for five (name, bar, net, W-L, CLV) and hides its CLV
+   column on phones — borrowing it put this panel's verdict in the wrong
+   slot and then made it invisible where it matters most. */
+.mvm-rows { display: flex; flex-direction: column; }
+.mvm-row { display: grid; align-items: baseline; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 9px 0; border-top: var(--hairline) solid var(--border-soft); }
+.mvm-row:first-child { border-top: none; }
+.mvm-head { color: var(--text-mute); font-size: var(--fs-2xs);
+  text-transform: uppercase; letter-spacing: .5px; padding-bottom: 2px; }
+.mvm-name { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: var(--fs-sm); }
+.mvm-n { text-align: right; white-space: nowrap; color: var(--text-dim);
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.mvm-clv { text-align: right; white-space: nowrap; min-width: 74px;
+  font-size: var(--fs-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+
 .rb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-md); }
 .rb-bar { display: block; height: 6px; border-radius: 0; background: var(--fill-subtle);
   overflow: hidden; border: var(--hairline) solid var(--border-soft); }

@@ -10278,11 +10278,87 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + recLossPatternsSection(d.loss_patterns, scoped ? scope : null)
      + recPrereg(d.prereg)
      + recHypothesisLab(d.hypothesis_lab, scoped ? scope : null)],
+    ["market", "Model vs market",
+     "does the line move our way after we bet it — by sport and market",
+     recClvBoard(d.clv_board)],
     ["health", "Health",
      "whether this account survives being right",
      (scoped ? "" : recHealthSection(d.account_health))],
   ]);
   if (typeof mountEChartsAnalytics === "function") mountEChartsAnalytics(host);
+}
+
+/* MODEL VERSUS MARKET — does this thing beat the closing line?
+
+   The most persuasive thing this site can show, and persuasive exactly
+   because it can come out badly. A win-loss record over a few hundred
+   bets is mostly variance wearing a percentage sign. Closing-line value
+   grades the DECISION at kickoff, accrues on every settled pick rather
+   than only the winners, and cannot be dressed up: either the market
+   moved our way or it did not.
+
+   THREE RULES THIS PANEL KEEPS, all of them about not flattering:
+
+     * the SAMPLE SIZE sits beside every number, because +0.4 over nine
+       bets and +0.4 over four hundred are different facts;
+     * the VERDICT is gated below the ledger's own bar while the NUMBER
+       is still shown — hiding a figure until it looks good is the
+       failure this panel exists to refuse;
+     * a market with settled picks and NO stored closes gets a row
+       saying it cannot be graded, rather than quietly not appearing.
+       That absence is exactly how the touchdown board hid a broken
+       harvest for its entire existence (fixed 2026-08-26). */
+function recClvBoard(cb) {
+  const rows = (cb && cb.rows) || [];
+  if (!rows.length) return "";
+  const t = cb.totals || {};
+  const pct = (v) => v == null ? "—" : `${(v * 100).toFixed(0)}%`;
+  const clv = (v) => v == null ? "—"
+    : `${v >= 0 ? "+" : trueMinus("-")}${Math.abs(v).toFixed(2)}`;
+  const verdict = (r) => r.with_close === 0
+    ? `<span class="mvm-clv" style="color:var(--text-mute);font-weight:400"
+        >no closes yet</span>`
+    : r.ready
+      ? `<span class="mvm-clv" style="color:${(r.avg_clv || 0) > 0
+          ? "var(--good)" : "var(--bad)"}">${clv(r.avg_clv)}</span>`
+      : `<span class="mvm-clv" style="color:var(--text-mute)"
+           title="Shown, not called — under ${cb.min_n} graded closes this
+                  average is not yet evidence">${clv(r.avg_clv)} thin</span>`;
+  const line = (r) => `<div class="mvm-row">
+      <span class="mvm-name">${escapeHtml(String(r.sport || "").toUpperCase())}
+        · ${escapeHtml(r.market_label || r.market || "")}</span>
+      <span class="mvm-n">${r.with_close}/${r.settled}${
+        r.with_close ? ` · ${pct(r.beat_rate)} beat` : ""}</span>
+      ${verdict(r)}
+    </div>`;
+  return `<div class="section-title">Model versus market
+      <span class="sub">— does the line move our way after we bet it? The
+      earliest honest evidence there is, and the one number that can come
+      out badly in public.</span></div>
+    <div class="card">
+      <p style="margin:0 0 10px;color:var(--text-dim);font-size:var(--fs-sm)">
+        <b style="color:var(--text)">${t.with_close || 0} of ${
+        t.settled || 0} settled picks</b> have a real closing line stored
+        beside them${t.avg_clv == null ? "" : `, averaging
+        <b style="color:${t.avg_clv > 0 ? "var(--good)" : "var(--bad)"}">${
+        clv(t.avg_clv)}</b> points our way`}${t.ready
+        ? "" : ` — under ${cb.min_n} graded closes, which is why nothing
+          below is called a result yet`}.</p>
+      <div class="mvm-rows">
+        <div class="mvm-row mvm-head">
+          <span class="mvm-name">Sport · market</span>
+          <span class="mvm-n">closes/settled</span>
+          <span class="mvm-clv">CLV</span>
+        </div>
+        ${rows.map(line).join("")}
+      </div>
+      <p style="margin:10px 0 0;color:var(--text-mute);font-size:var(--fs-sm)">
+        CLV is measured in line points and is side-aware: an over wants the
+        number to rise after we take it, an under wants it to fall, so
+        positive always means the market came to us. A row reading
+        &ldquo;no closes yet&rdquo; is a market we cannot grade — not a
+        market that did badly.</p>
+    </div>`;
 }
 
 /* One settled row, shared by every list that posts settled bets rather

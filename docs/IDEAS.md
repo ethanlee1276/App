@@ -142,7 +142,7 @@ of a real number.
 
 ---
 
-## 5. A public model-versus-market scoreboard
+## 5. A public model-versus-market scoreboard — SHIPPED 2026-08-26
 
 **What:** one page answering "does this thing beat the closing line",
 cut by sport and market, with the sample size beside every number.
@@ -153,6 +153,24 @@ cut by sport and market, with the sample size beside every number.
 
 **Why:** it is the single most persuasive thing a paid product can show,
 and it is persuasive precisely because it can come out badly.
+
+**SHIPPED** as `engine/clvboard` + the Record page's "Model vs market"
+room. Three rules make it worth trusting, and all three are about
+declining to flatter:
+
+* the SAMPLE SIZE rides beside every number (closes/settled per row);
+* below `ledger.CLV_MIN_N` the row still SHOWS its average and refuses
+  to CALL it — hiding a number until it looks good is the failure this
+  page exists to refuse, so `ready` is a separate field from the value;
+* a market with settled picks and NO stored closes gets a row saying it
+  cannot be graded. That silent absence is precisely how the touchdown
+  board hid a broken harvest for its whole life (found and fixed the
+  same day, and it now shows here as 0-of-N until closes accrue).
+
+It has its own three-column grid rather than the record board's
+`.rb-row`, which is built for five and hides its CLV column on phones —
+borrowing it put the verdict in the wrong slot and then made it
+invisible exactly where it matters most.
 
 ---
 
