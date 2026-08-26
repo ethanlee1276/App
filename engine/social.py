@@ -22,14 +22,20 @@ THE TWO RULES EVERYTHING BELOW IS BUILT AROUND
   free friends, one share at a time. This is the pick-permalink rule
   (engine/routes.pick_slug), applied to messages.
 
-* **Friends form through INVITE LINKS, never lookup.** Search-by-email
-  is an oracle for which addresses hold accounts, and open friend
-  requests are a spam channel to anyone whose address leaks. An invite
-  is an unguessable token (the unsubscribe pattern) that its owner
-  hands to a friend over a channel they already share; opening it
-  signed-in forms the friendship instantly, both ways. No pending
-  state, no inbound requests from strangers, no enumeration — by
-  construction rather than by moderation.
+* **Friends form through INVITE LINKS or NAMED REQUESTS — never email.**
+  The first cut allowed links only; Ethan asked for lookup (2026-08-25:
+  "add in where you can look up someone's user name on the site and add
+  them as a friend, then the friend request will go through the message
+  inbox"), and the way it is built keeps every protection the refusal
+  existed for. Search matches the DISPLAY NAME only — the streak name,
+  the one name this site has, chosen to appear in public — so an
+  account is findable exactly when its owner named it, and an email
+  address remains an oracle nobody can query. A hit does not open a
+  channel: it creates a REQUEST the recipient answers from their inbox,
+  capped per sender (:data:`MAX_PENDING_REQUESTS`), deduped per pair,
+  and carrying nothing but the asker's name. Invite links keep working
+  unchanged and stay the only path to someone who never named
+  themselves.
 
 Tables live in accounts.db beside the accounts they belong to, created
 here (the streak/tailfade posture), deleted with the account, included
@@ -61,6 +67,16 @@ MAX_NOTE = 280
 #: eight is where every book stops taking props seriously anyway.
 MIN_PARLAY_LEGS = 2
 MAX_PARLAY_LEGS = 8
+
+#: Friend requests one account may have outstanding. The cap is what
+#: keeps name-search from becoming the spam channel the module header
+#: refuses: twenty unanswered askings is a person being ignored, not a
+#: person still making friends.
+MAX_PENDING_REQUESTS = 20
+
+#: Search results returned per query — enough to find a name, few
+#: enough that the endpoint is useless as an enumeration pump.
+FIND_LIMIT = 8
 
 #: Inbox rows kept per user. Shares are pointers at a board that rebuilds
 #: nightly, so an old one is a dead link — pruning is honesty, not tidiness.
@@ -110,6 +126,13 @@ def ensure_tables(conn) -> None:
       );
       CREATE INDEX IF NOT EXISTS parlay_shares_inbox
         ON parlay_shares(to_id, created_at);
+      CREATE TABLE IF NOT EXISTS friend_requests (
+        id         INTEGER PRIMARY KEY,
+        from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at REAL NOT NULL,
+        UNIQUE (from_id, to_id)
+      );
     """)
     conn.commit()
 
@@ -229,6 +252,126 @@ def friend_remove(conn, user_id: int, friend_id: int) -> None:
     conn.execute("DELETE FROM friendships WHERE user_id=? AND friend_id=?",
                  (int(friend_id), int(user_id)))
     conn.commit()
+
+
+# --- name search and requests ------------------------------------------------
+
+def find_users(conn, me: int, q: str) -> list[dict]:
+    """Accounts whose DISPLAY NAME contains ``q`` — and nothing else.
+
+    The display name is the streak name: chosen, public by intent, and
+    absent by default — so an account is findable exactly when its
+    owner named it. Emails never match here, which keeps the address
+    oracle closed however this endpoint is hammered. Each hit says how
+    it already stands with the asker (friend / asked / asked_me) so the
+    page can draw the right button instead of a second guess."""
+    ensure_tables(conn)
+    q = " ".join(str(q or "").split()).lower()
+    if len(q) < 2:
+        return []
+    has = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' "
+        "AND name='streak_state'").fetchone()
+    if has is None:
+        return []
+    me = int(me)
+    friends = {int(r["friend_id"]) for r in conn.execute(
+        "SELECT friend_id FROM friendships WHERE user_id=?", (me,))}
+    asked = {int(r["to_id"]) for r in conn.execute(
+        "SELECT to_id FROM friend_requests WHERE from_id=?", (me,))}
+    asked_me = {int(r["from_id"]) for r in conn.execute(
+        "SELECT from_id FROM friend_requests WHERE to_id=?", (me,))}
+    out = []
+    for r in conn.execute(
+            "SELECT user_id, name FROM streak_state WHERE name != '' "
+            "ORDER BY name"):
+        uid = int(r["user_id"])
+        if uid == me or q not in r["name"].lower():
+            continue
+        out.append({"id": uid, "name": r["name"],
+                    "standing": ("friend" if uid in friends
+                                 else "asked" if uid in asked
+                                 else "asked_me" if uid in asked_me
+                                 else "")})
+        if len(out) >= FIND_LIMIT:
+            break
+    return out
+
+
+def request_send(conn, from_id: int, to_id: int) -> tuple[int, dict]:
+    """Ask to be friends. The answer happens in the recipient's inbox.
+
+    Asking someone who already asked YOU is both of you saying yes, so
+    it accepts their request instead of stacking a second one."""
+    ensure_tables(conn)
+    me, them = int(from_id), int(to_id)
+    if me == them:
+        return 400, {"error": "That would be you."}
+    if not conn.execute("SELECT 1 FROM users WHERE id=?", (them,)).fetchone():
+        return 400, {"error": "That account is not here."}
+    if conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
+                    (me, them)).fetchone():
+        return 200, {"already_friends": True}
+    reverse = conn.execute(
+        "SELECT id FROM friend_requests WHERE from_id=? AND to_id=?",
+        (them, me)).fetchone()
+    if reverse:
+        return request_answer(conn, me, int(reverse["id"]), True)
+    if conn.execute("SELECT 1 FROM friend_requests WHERE from_id=? AND to_id=?",
+                    (me, them)).fetchone():
+        return 200, {"requested": True, "already": True}
+    pending = conn.execute(
+        "SELECT COUNT(*) FROM friend_requests WHERE from_id=?",
+        (me,)).fetchone()[0]
+    if pending >= MAX_PENDING_REQUESTS:
+        return 400, {"error": f"{MAX_PENDING_REQUESTS} unanswered requests "
+                              "is the ceiling — wait for some answers."}
+    if _n_friends(conn, me) >= MAX_FRIENDS:
+        return 400, {"error": "Your friends list is full."}
+    conn.execute("INSERT INTO friend_requests (from_id, to_id, created_at) "
+                 "VALUES (?,?,?)", (me, them, time.time()))
+    conn.commit()
+    return 200, {"requested": True, "already": False}
+
+
+def request_answer(conn, me: int, req_id: int,
+                   accept: bool) -> tuple[int, dict]:
+    """Answer one request FROM the recipient's side. Declining deletes
+    it quietly — the asker is never told, because "declined" delivered
+    as a notification is a small cruelty with no product in it."""
+    ensure_tables(conn)
+    row = conn.execute(
+        "SELECT id, from_id FROM friend_requests WHERE id=? AND to_id=?",
+        (int(req_id), int(me))).fetchone()
+    if row is None:
+        return 404, {"error": "That request is not here any more."}
+    asker = int(row["from_id"])
+    conn.execute("DELETE FROM friend_requests WHERE id=?", (int(row["id"]),))
+    if not accept:
+        conn.commit()
+        return 200, {"declined": True}
+    if _n_friends(conn, me) >= MAX_FRIENDS or _n_friends(conn, asker) >= MAX_FRIENDS:
+        conn.commit()
+        return 400, {"error": "One of you has a full friends list."}
+    now = time.time()
+    for a, b in ((int(me), asker), (asker, int(me))):
+        conn.execute("INSERT OR IGNORE INTO friendships "
+                     "(user_id, friend_id, created_at) VALUES (?,?,?)",
+                     (a, b, now))
+    # A stray mirror request between the same pair is settled too.
+    conn.execute("DELETE FROM friend_requests WHERE from_id=? AND to_id=?",
+                 (int(me), asker))
+    conn.commit()
+    return 200, {"friend": display_name(conn, asker), "accepted": True}
+
+
+def requests_in(conn, me: int) -> list[dict]:
+    ensure_tables(conn)
+    return [{"id": int(r["id"]), "from": display_name(conn, r["from_id"]),
+             "created_at": r["created_at"]}
+            for r in conn.execute(
+                "SELECT id, from_id, created_at FROM friend_requests "
+                "WHERE to_id=? ORDER BY created_at DESC", (int(me),))]
 
 
 # --- the shares --------------------------------------------------------------
@@ -368,6 +511,42 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
         (int(user_id),)).fetchone()[0])
         for t in ("pick_shares", "parlay_shares"))
     return {"shares": out, "unseen": int(unseen)}
+
+
+def sent(conn, user_id: int, limit: int = 30) -> list[dict]:
+    """What YOU sent, newest first — the Messages page's Sent tab.
+    Same pointer-shaped rows the inbox gets, with the recipient named."""
+    ensure_tables(conn)
+    names = {}
+
+    def _name(uid):
+        uid = int(uid)
+        if uid not in names:
+            names[uid] = display_name(conn, uid)
+        return names[uid]
+
+    out = []
+    for r in conn.execute(
+            "SELECT id, to_id, sport, date, player, market, note, created_at "
+            "FROM pick_shares WHERE from_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        out.append({"kind": "pick", "id": int(r["id"]), "to": _name(r["to_id"]),
+                    "sport": r["sport"], "date": r["date"],
+                    "player": r["player"], "market": r["market"],
+                    "note": r["note"], "created_at": r["created_at"]})
+    for r in conn.execute(
+            "SELECT id, to_id, sport, date, legs, note, created_at "
+            "FROM parlay_shares WHERE from_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        try:
+            legs = json.loads(r["legs"])
+        except ValueError:
+            legs = []
+        out.append({"kind": "parlay", "id": int(r["id"]), "to": _name(r["to_id"]),
+                    "sport": r["sport"], "date": r["date"], "legs": legs,
+                    "note": r["note"], "created_at": r["created_at"]})
+    out.sort(key=lambda s: s["created_at"], reverse=True)
+    return out[:int(limit)]
 
 
 def mark_seen(conn, user_id: int) -> None:

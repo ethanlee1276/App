@@ -23732,8 +23732,14 @@ const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "s
 // "streak" stays open on purpose: the free game is the acquisition
 // funnel — the thing a stranger plays daily until the trial makes sense.
 // Walling it would keep exactly the audience it exists to build.
+// "messages" joined 2026-08-25 for the same reason: a friend who
+// accepted an invite must be able to SEE what was sent — the friends
+// layer is deliberately session-gated, never entitlement-gated (a share
+// is a pointer; the recipient's own board answers it under their own
+// entitlement), so the wall was hiding a page that leaks nothing and
+// exists to pull people in.
 const WALL_OPEN = ["paywall", "checkout", "record", "account", "discord",
-                   "signup", "streak"];
+                   "signup", "streak", "messages"];
 
 function wallBlocked(name) {
   return document.body.classList.contains("walled")
@@ -24577,6 +24583,15 @@ const PENDING_INVITE_KEY = "qb_pending_invite";
    answers "sign in first" and then forgets why you came is a funnel
    with a hole in the bottom. */
 async function friendRoute(token) {
+  // STASH FIRST, before a single await. The production failure
+  // (Ethan, 2026-08-25: "the link I Send to my friends … Doesn't
+  // work"): a signed-out friend's cold load raced the paywall boot —
+  // the wall's forced view could land before this function got past
+  // its awaits, and any error along the way lost the token entirely.
+  // In localStorage the invite survives everything: the wall, a
+  // reload, signing up ten minutes later. Removed only on a confirmed
+  // accept.
+  try { localStorage.setItem(PENDING_INVITE_KEY, token); } catch (e) {}
   switchView("account");
   // A null _acctUser is UNKNOWN, not signed out: a cold load routes
   // here before boot's acctWho() has answered, and the commonest opener
@@ -24585,7 +24600,6 @@ async function friendRoute(token) {
   // behind a second sign-in they will never perform.
   const u = await acctWho();
   if (!(u && u.signed_in)) {
-    try { localStorage.setItem(PENDING_INVITE_KEY, token); } catch (e) {}
     tfToast("Sign in and this invite accepts itself.");
     return;
   }
@@ -24599,7 +24613,11 @@ async function friendRoute(token) {
       ? (out.already ? `You and ${out.friend} are already friends.`
                      : `You and ${out.friend} are friends now.`)
       : (out.error || "That invite is not live."));
-    if (r.ok) { await socFetch(true); renderAccount(); }
+    if (r.ok) {
+      try { localStorage.removeItem(PENDING_INVITE_KEY); } catch (e) {}
+      await socFetch(true);
+      renderAccount();
+    }
   } catch (e) { tfToast("Could not reach the server — try the link again."); }
 }
 
@@ -24624,8 +24642,9 @@ function friendsCardHTML() {
   return `<section class="card qb-friends">
     <div class="section-title minor">Friends
       <span class="sub">— send picks back and forth. Friends are made with
-      your link, not by search: nobody can look your account up, and
-      nobody you didn’t invite can message you.</span></div>
+      your invite link, or by name from the
+      <a href="#messages">Messages page</a> — requests wait for a yes, and
+      nobody you didn’t say yes to can message you.</span></div>
     ${inv ? `<div class="fr-invite">
       <button class="btn" data-copy-invite="${escapeAttr(inv.token)}">Copy my
         invite link</button>
@@ -24748,14 +24767,15 @@ function friendInboxHTML() {
   const soc = _socCache;
   const shares = (soc && soc.inbox && soc.inbox.shares) || [];
   if (!shares.length) return "";
-  // shareRowHTML is the one renderer for a share row — the Messages
+  // msgShareRow is the one renderer for a share row — the Messages
   // page and this strip must not disagree about what a share looks
   // like, and it already knows both kinds (pick and parlay).
   return `<div class="section-title minor">From your friends
       <span class="sub">— picks sent to you. Opening one shows it under
       YOUR account, so what is behind the paywall stays there.
       <a href="#messages">All messages &#8594;</a></span></div>
-    <div class="card fr-inbox">${shares.slice(0, 6).map(shareRowHTML).join("")}</div>`;
+    <div class="card fr-inbox">${shares.slice(0, 6)
+      .map((sh) => msgShareRow(sh, false)).join("")}</div>`;
 }
 
 document.addEventListener("click", (e) => {
@@ -25159,49 +25179,108 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+
 /* ============================================================
    MESSAGES — the friends inbox, behind the topbar envelope
    ============================================================ */
 function msgBadge() {
   const b = document.getElementById("nav-msg-badge");
   if (!b) return;
-  const n = (_socCache && _socCache.inbox && _socCache.inbox.unseen) || 0;
+  // Unseen shares plus unanswered friend requests — both are "someone
+  // is waiting on you", which is what a badge is for.
+  const n = ((_socCache && _socCache.inbox && _socCache.inbox.unseen) || 0)
+          + ((_socCache && (_socCache.requests || []).length) || 0);
   b.hidden = !n;
   b.textContent = n > 9 ? "9+" : String(n);
 }
 
-function shareRowHTML(sh) {
-  // One share as one row — the pick kind and the parlay kind, each a
-  // door only where tonight's board can actually answer it.
-  const when = escapeHtml(tzTime(sh.created_at * 1000));
-  const note = sh.note ? `“${escapeHtml(sh.note)}” · ` : "";
-  if (sh.kind === "parlay") {
-    const legs = (sh.legs || []).map((l) => {
-      const slug = `${slugify(l.player)}-${slugify(l.market)}`;
-      const row = sh.sport === state.sport ? findProp(slug) : null;
-      return row
-        ? `<button class="chip slip-chip" data-open-share="${escapeAttr(slug)}"
-             >${escapeHtml(l.player)}</button>`
-        : `<span class="chip">${escapeHtml(l.player)}</span>`;
-    }).join("");
-    return `<div class="al-row${sh.seen ? "" : " fr-new"}">
-      <span class="al-ic ok">${icon("ticket", 15)}</span>
-      <span class="al-t"><b>${escapeHtml(sh.from)} sent a
-        ${(sh.legs || []).length}-leg parlay</b>
-        <span class="al-c">${note}${when}</span>
-        <span class="fr-legs">${legs}</span></span>
-    </div>`;
+/* The Messages page, rebuilt to Ethan's render (2026-08-25): tabs over
+   the one inbox (Inbox / Sent / Parlays / Picks), an unread filter and
+   a search box, avatar rows with kind chips and time-ago, friend
+   REQUESTS answerable at the top, a "New message" button that opens the
+   friend finder, and the invite banner at the foot. What the render
+   drew that is deliberately NOT here: a Mentions tab (nothing behind
+   it), presence dots (we do not track who is online and will not), and
+   VIP badges (there is one tier of friend). */
+let _msgTab = "inbox", _msgUnreadOnly = false, _msgQuery = "";
+
+function msgAvatar(name) {
+  const initials = String(name || "?").split(/\s+/).slice(0, 2)
+    .map((w) => w[0] || "").join("").toUpperCase();
+  // A stable hue per name, so a sender keeps their colour between
+  // visits without the site storing anything about them.
+  let h = 0;
+  for (const c of String(name || "")) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `<span class="msg-ava" style="background:oklch(0.42 0.09 ${h})"
+    aria-hidden="true">${escapeHtml(initials || "?")}</span>`;
+}
+
+const msgAgo = (ts) =>
+  ageText(Math.max(0, Date.now() / 1000 - (ts || 0))) + " ago";
+
+function msgShareRow(sh, sentSide) {
+  const who = sentSide ? sh.to : sh.from;
+  const isParlay = sh.kind === "parlay";
+  const what = sentSide
+    ? (isParlay ? `You sent a ${(sh.legs || []).length}-leg parlay`
+                : `You sent ${sh.player}`)
+    : (isParlay ? `Sent you a ${(sh.legs || []).length}-leg parlay`
+                : `Sent you a pick`);
+  let detail;
+  if (isParlay) {
+    detail = (sh.legs || []).map((l) => l.player).join(", ");
+  } else {
+    const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
+    const row = sh.sport === state.sport ? findProp(slug) : null;
+    detail = `${sh.player} — ${(row && row.market_label)
+      || sh.market.replace(/_/g, " ")}`;
   }
-  const slug = `${slugify(sh.player)}-${slugify(sh.market)}`;
-  const row = sh.sport === state.sport ? findProp(slug) : null;
-  const mkt = (row && row.market_label) || sh.market.replace(/_/g, " ");
-  return `<div class="al-row${sh.seen ? "" : " fr-new"}">
-    <span class="al-ic ok">${icon("signal", 15)}</span>
-    <span class="al-t"><b>${escapeHtml(sh.from)} sent
-      ${escapeHtml(sh.player)} — ${escapeHtml(mkt)}</b>
-      <span class="al-c">${note}${when}</span></span>
-    ${row ? `<button class="btn ghost" data-open-share="${escapeAttr(slug)}"
-      >Open</button>` : `<span class="set-note">off tonight’s board</span>`}
+  const doors = !sentSide && isParlay
+    ? (sh.legs || []).map((l) => {
+        const slug = `${slugify(l.player)}-${slugify(l.market)}`;
+        return sh.sport === state.sport && findProp(slug)
+          ? `<button class="chip slip-chip" data-open-share="${escapeAttr(slug)}"
+              >${escapeHtml(l.player)}</button>` : "";
+      }).filter(Boolean).join("")
+    : "";
+  const pickSlugStr = !sentSide && !isParlay
+    ? `${slugify(sh.player)}-${slugify(sh.market)}` : "";
+  const live = pickSlugStr && sh.sport === state.sport && !!findProp(pickSlugStr);
+  return `<div class="msg-row${!sentSide && !sh.seen ? " unread" : ""}">
+    ${msgAvatar(who)}
+    <span class="msg-body">
+      <b>${escapeHtml(who)}</b>
+      <span class="msg-what">${escapeHtml(what)}</span>
+      <span class="msg-note">${sh.note ? `“${escapeHtml(sh.note)}” · ` : ""}${
+        escapeHtml(detail)}</span>
+      ${doors ? `<span class="fr-legs">${doors}</span>` : ""}
+      <span class="msg-kind chip ${isParlay ? "up" : ""}">${isParlay ? "PARLAY" : "PICK"}</span>
+    </span>
+    <span class="msg-side">
+      <span class="msg-when">${escapeHtml(msgAgo(sh.created_at))}</span>
+      ${live ? `<button class="btn ghost" data-open-share="${escapeAttr(pickSlugStr)}"
+        >Open</button>` : ""}
+      ${!sentSide && !sh.seen ? `<span class="msg-dot" aria-label="unread"></span>` : ""}
+    </span>
+  </div>`;
+}
+
+function msgRequestRow(rq) {
+  return `<div class="msg-row unread">
+    ${msgAvatar(rq.from)}
+    <span class="msg-body">
+      <b>${escapeHtml(rq.from)}</b>
+      <span class="msg-what">wants to be friends</span>
+      <span class="msg-note">Accept and you can send picks both ways.
+        Decline and they are never told.</span>
+    </span>
+    <span class="msg-side">
+      <span class="msg-when">${escapeHtml(msgAgo(rq.created_at))}</span>
+      <span class="msg-req-btns">
+        <button class="btn" data-req-answer="${rq.id}" data-req-yes>Accept</button>
+        <button class="btn ghost" data-req-answer="${rq.id}">Decline</button>
+      </span>
+    </span>
   </div>`;
 }
 
@@ -25215,25 +25294,88 @@ async function renderMessages() {
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">Sign in to see your messages</div>
       <div class="es-sub">Picks and parlays your friends send land here.
-        Friends are made with your invite link — nobody you didn’t invite
-        can message you.</div></div>`;
+        Friends are made by invite link or by name — nobody you didn’t
+        say yes to can message you.</div></div>`;
     return;
   }
   const soc = await socFetch(true);
   if (state.view !== "messages") return;
-  const shares = (soc && soc.inbox && soc.inbox.shares) || [];
-  host.innerHTML = (shares.length
-    ? `<div class="card fr-inbox">${shares.map(shareRowHTML).join("")}</div>`
+  const inboxAll = (soc && soc.inbox && soc.inbox.shares) || [];
+  const sentAll = (soc && soc.sent) || [];
+  const requests = (soc && soc.requests) || [];
+  const q = _msgQuery.trim().toLowerCase();
+  const matches = (sh) => !q
+    || JSON.stringify([sh.from, sh.to, sh.player, sh.note,
+                       (sh.legs || []).map((l) => l.player)])
+         .toLowerCase().includes(q);
+  const tabs = [
+    ["inbox", "Inbox", soc && soc.inbox ? soc.inbox.unseen + requests.length : 0],
+    ["sent", "Sent", 0],
+    ["parlays", "Parlays", inboxAll.filter((s) => s.kind === "parlay").length],
+    ["picks", "Picks", inboxAll.filter((s) => s.kind === "pick").length],
+  ];
+  const sentSide = _msgTab === "sent";
+  let rows = sentSide ? sentAll
+    : _msgTab === "parlays" ? inboxAll.filter((s) => s.kind === "parlay")
+    : _msgTab === "picks" ? inboxAll.filter((s) => s.kind === "pick")
+    : inboxAll;
+  rows = rows.filter(matches);
+  if (_msgUnreadOnly && !sentSide) rows = rows.filter((s) => !s.seen);
+
+  const tabBar = `<div class="msg-tabs">${tabs.map(([k, label, n]) => `
+    <button class="msg-tab${_msgTab === k ? " on" : ""}" data-msg-tab="${k}"
+      type="button">${label}${n ? `<span class="msg-tab-n">${n}</span>` : ""}</button>`)
+    .join("")}</div>`;
+  const filterBar = `<div class="msg-filters">
+    <button class="al-cat${!_msgUnreadOnly ? " on" : ""}" data-msg-unread="0"
+      type="button">All</button>
+    <button class="al-cat${_msgUnreadOnly ? " on" : ""}" data-msg-unread="1"
+      type="button">Unread</button>
+    <input class="msg-search" id="msg-search" type="search"
+      placeholder="Search messages…" value="${escapeAttr(_msgQuery)}"
+      aria-label="Search messages">
+  </div>`;
+  const reqBlock = _msgTab === "inbox" && requests.length
+    ? `<div class="section-title minor">Friend requests</div>
+       <div class="card fr-inbox">${requests.map(msgRequestRow).join("")}</div>`
+    : "";
+  const list = rows.length
+    ? `<div class="card fr-inbox">${rows.map((s) => msgShareRow(s, sentSide)).join("")}</div>`
     : `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
-      <div class="es-title">Nothing yet</div>
-      <div class="es-sub">When a friend sends you a pick or a parlay it
-        lands here. Your invite link is on the
-        <a href="#account">Account page</a>.</div></div>`)
-    + `<p class="set-note" style="margin-top:10px">Everything here is from
-      people you added by invite link. Remove a friend on the Account page
-      and the channel closes both ways.</p>`;
-  if (soc && soc.inbox && soc.inbox.unseen) {
+      <div class="es-title">${q || _msgUnreadOnly ? "Nothing matches"
+        : sentSide ? "Nothing sent yet" : "Nothing yet"}</div>
+      <div class="es-sub">${sentSide
+        ? "Send a pick from any pick page, or a ticket from the parlay slip."
+        : "When a friend sends you a pick or a parlay it lands here."}</div></div>`;
+  const banner = `<div class="card msg-invite">
+    <span class="msg-invite-words"><b>Invite friends. Share picks.</b>
+      <span>Send invite links, share parlays, and talk it over.</span></span>
+    ${soc && soc.invite ? `<button class="btn"
+      data-copy-invite="${escapeAttr(soc.invite.token)}">Invite friends</button>` : ""}
+  </div>`;
+  host.innerHTML = `
+    <div class="msg-head">
+      <button class="btn" id="msg-new" type="button">New message</button>
+    </div>
+    <div id="msg-finder" hidden></div>
+    ${tabBar}${filterBar}${reqBlock}${list}${banner}`;
+  const search = document.getElementById("msg-search");
+  if (search) {
+    let t;
+    search.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        _msgQuery = search.value;
+        const at = search.selectionStart;
+        renderMessages().then(() => {
+          const again = document.getElementById("msg-search");
+          if (again) { again.focus(); again.setSelectionRange(at, at); }
+        });
+      }, 250);
+    });
+  }
+  if (_msgTab === "inbox" && soc && soc.inbox && soc.inbox.unseen) {
     // Seen AFTER the rows have been on screen a beat, same as Alerts.
     setTimeout(() => {
       fetch("/api/social/seen", { method: "POST",
@@ -25244,6 +25386,116 @@ async function renderMessages() {
   }
   msgBadge();
 }
+
+/* The friend finder, behind "New message". Search matches DISPLAY
+   NAMES only — engine/social.find_users is where that rule lives — so
+   the button each hit wears comes from the standing the server
+   reports, never a guess. */
+async function msgFinderHTML(qs) {
+  let users = [];
+  try {
+    const r = await fetch("/api/social/find", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q: qs }),
+    });
+    users = ((await r.json()) || {}).users || [];
+  } catch (e) { /* the empty state below is the honest answer */ }
+  const btn = (usr) => usr.standing === "friend"
+    ? `<span class="chip">Friends</span>`
+    : usr.standing === "asked"
+      ? `<span class="chip">Requested</span>`
+      : `<button class="btn ghost" data-req-send="${usr.id}">${
+          usr.standing === "asked_me" ? "Accept" : "Add friend"}</button>`;
+  return users.length
+    ? users.map((usr) => `<div class="msg-row">
+        ${msgAvatar(usr.name)}
+        <span class="msg-body"><b>${escapeHtml(usr.name)}</b></span>
+        <span class="msg-side">${btn(usr)}</span>
+      </div>`).join("")
+    : (String(qs || "").trim().length >= 2
+      ? `<p class="set-empty">Nobody by that name. Search finds the display
+         name a player chose — someone who never picked one can only be
+         added with your invite link below.</p>` : "");
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.closest && e.target.closest("#msg-new")) {
+    const panel = document.getElementById("msg-finder");
+    if (!panel) return;
+    if (!panel.hidden) { panel.hidden = true; panel.innerHTML = ""; return; }
+    panel.hidden = false;
+    const inviteTok = (_socCache && _socCache.invite && _socCache.invite.token) || "";
+    panel.innerHTML = `<div class="card msg-finder">
+      <input class="msg-search" id="msg-find-in" type="search"
+        placeholder="Search a username…" autocomplete="off"
+        aria-label="Search players by display name">
+      <div id="msg-find-out"></div>
+      <p class="set-note">A request goes to their inbox; you are friends
+        when they accept. ${inviteTok ? `Or skip the asking —
+        <button class="btn-quiet" data-copy-invite="${escapeAttr(inviteTok)}"
+          style="padding:0;min-height:0;text-decoration:underline"
+          >text them your invite link</button>.` : ""}</p>
+    </div>`;
+    const inp = document.getElementById("msg-find-in");
+    let t;
+    inp.focus();
+    inp.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const out = document.getElementById("msg-find-out");
+        if (out) out.innerHTML = await msgFinderHTML(inp.value);
+      }, 280);
+    });
+    return;
+  }
+  const rs = e.target.closest && e.target.closest("[data-req-send]");
+  if (rs) {
+    e.preventDefault();
+    const was = rs.textContent;
+    rs.textContent = "…";
+    try {
+      const r = await fetch("/api/social/request", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: Number(rs.dataset.reqSend) }),
+      });
+      const out = await r.json().catch(() => ({}));
+      if (r.ok && out.accepted) {
+        rs.outerHTML = `<span class="chip up">Friends</span>`;
+        socFetch(true).then(msgBadge);
+      } else if (r.ok) {
+        rs.outerHTML = `<span class="chip">Requested</span>`;
+      } else {
+        rs.textContent = was;
+        tfToast(out.error || "That didn’t send.");
+      }
+    } catch (err) { rs.textContent = was; tfToast("Could not reach the server."); }
+    return;
+  }
+  const ra = e.target.closest && e.target.closest("[data-req-answer]");
+  if (ra) {
+    e.preventDefault();
+    const accept = ra.hasAttribute("data-req-yes");
+    try {
+      const r = await fetch("/api/social/answer-request", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(ra.dataset.reqAnswer), accept }),
+      });
+      const out = await r.json().catch(() => ({}));
+      if (r.ok && out.accepted) tfToast(`You and ${out.friend} are friends now.`);
+      if (!r.ok) tfToast(out.error || "That request is gone.");
+    } catch (err) { tfToast("Could not reach the server."); }
+    await socFetch(true);
+    if (state.view === "messages") renderMessages(); else msgBadge();
+    return;
+  }
+  const tab = e.target.closest && e.target.closest("[data-msg-tab]");
+  if (tab) { _msgTab = tab.dataset.msgTab; renderMessages(); return; }
+  const unread = e.target.closest && e.target.closest("[data-msg-unread]");
+  if (unread) {
+    _msgUnreadOnly = unread.dataset.msgUnread === "1";
+    renderMessages();
+  }
+});
 
 function moveIndicator() {
   const active = document.querySelector(".nav-btn.active");
@@ -27100,7 +27352,18 @@ async function renderLiveBoard() {
     if (!walled) return;
     document.body.classList.add("walled");
     renderPaywall();
-    _switchViewNow("paywall", false, 0);
+    // A LINK TO AN OPEN PAGE LANDS ON THAT PAGE. The forced switch here
+    // used to be unconditional, which shoved every cold load onto the
+    // plans — including loads whose hash named a page WALL_OPEN grants:
+    // a texted invite link (#friend/…), the streak, the record, the
+    // sign-in page itself. That is the production shape of "the link I
+    // send to my friends doesn't work": the friend arrived, the router
+    // put them on the account page with the invite stashed, and this
+    // line put the pricing table over it. A plain visit still opens on
+    // the plans; a load that ASKED for an open page keeps it.
+    const bootTarget = (location.hash || "").replace(/^#/, "").split("/")[0];
+    if (!(WALL_OPEN.includes(bootTarget) || bootTarget === "friend"))
+      _switchViewNow("paywall", false, 0);
     // A hash that names a real page must not punch through the wall.
     // `_switchViewNow` is what refuses it — see WALL_OPEN — and this
     // listener only has to make sure the plans are DRAWN when it does.

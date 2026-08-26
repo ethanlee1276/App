@@ -1593,6 +1593,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "me":
                 out = {"friends": SOC.friends_list(conn, who["id"]),
                        "inbox": SOC.inbox(conn, who["id"]),
+                       "sent": SOC.sent(conn, who["id"]),
+                       "requests": SOC.requests_in(conn, who["id"]),
                        "invite": SOC.invite_get_or_create(conn, who["id"])}
                 return self._send(200, json.dumps(out).encode(), ".json")
             return self._send(404, b'{"error":"unknown social endpoint"}',
@@ -1603,7 +1605,7 @@ class Handler(BaseHTTPRequestHandler):
     def _social_post(self, path: str, body: dict):
         from engine import social as SOC
         if path not in ("accept", "send", "send-parlay", "remove", "seen",
-                        "revoke-invite"):
+                        "revoke-invite", "find", "request", "answer-request"):
             return self._send(404, b'{"error":"unknown social endpoint"}',
                               ".json")
         A = _acct()
@@ -1641,6 +1643,22 @@ class Handler(BaseHTTPRequestHandler):
                     conn, who["id"], int(body.get("to") or 0),
                     str(body.get("sport") or ""), str(body.get("date") or ""),
                     legs, str(body.get("note") or ""))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "find":
+                # Display names only — find_users is where the email
+                # oracle stays closed; the handler adds nothing to ask.
+                out = SOC.find_users(conn, who["id"],
+                                     str(body.get("q") or ""))
+                return self._send(200, json.dumps({"users": out}).encode(),
+                                  ".json")
+            if path == "request":
+                code, out = SOC.request_send(conn, who["id"],
+                                             int(body.get("to") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "answer-request":
+                code, out = SOC.request_answer(
+                    conn, who["id"], int(body.get("id") or 0),
+                    bool(body.get("accept")))
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "remove":
                 SOC.friend_remove(conn, who["id"], int(body.get("friend") or 0))

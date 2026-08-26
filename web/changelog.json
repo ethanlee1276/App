@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "ship",
+      "title": "Find friends by name, and a Messages page that earns the word",
+      "body": "You can now look a player up by their display name and send a friend request — it lands in their Messages inbox, they accept or quietly decline, and declining is never announced. Search finds the name a player chose to wear in public, never an email address, so nobody can be found who didn't name themselves; the invite link still works and remains the only way to add someone unnamed. Messages grew into a real page: Inbox, Sent, Parlays and Picks tabs, an unread filter, search, and friend requests answerable in place. Invite links also stopped dying at the paywall — a friend who opens yours now lands on the sign-in page with the invite held for them, and can read what you sent without a subscription, because shares carry names and never picks."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "fix",
       "title": "The pick page's buttons learned their place",
       "body": "Six pill buttons were piled above every pick, wrapping into two rows on a phone. Navigation — back to the board, the player page — is now two quiet links above the card, and the things you do WITH the pick (parlay, send, copy link, share card) are one clean strip inside it, right under the pick's name. The Instagram and Discord links also left the crowded top bar for the bottom of the menu, labeled properly. Nothing was removed anywhere — everything just moved to where you'd expect to find it."

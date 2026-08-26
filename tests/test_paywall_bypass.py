@@ -508,8 +508,14 @@ def test_the_pages_open_behind_the_wall_have_a_way_back():
     # same `name !== "paywall" && name !== "checkout"` branch this test
     # pins above — confirmed by rendering the page with the wall class
     # on: #wall-back is visible there like on Record.
+    # "messages" added 2026-08-25: the friends inbox is session-gated,
+    # never entitlement-gated — a share carries a pick's NAME and never
+    # its contents (engine/social.py's pointer rule), so the page leaks
+    # nothing, and an invited friend reading what was sent is the
+    # acquisition funnel working. Back link confirmed by the same
+    # generic `name !== "paywall" && name !== "checkout"` branch.
     assert exempt <= {"paywall", "checkout", "record", "account", "discord",
-                      "signup", "streak"}, (
+                      "signup", "streak", "messages"}, (
         f"a new page is exempt from the wall: {exempt}. Confirm the back "
         "link reaches it, then add it here.")
 

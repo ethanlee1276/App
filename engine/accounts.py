@@ -532,6 +532,9 @@ def delete_user(conn, user_id: int) -> None:
     if "friendships" in have:
         conn.execute("DELETE FROM friendships WHERE user_id=? OR friend_id=?",
                      (int(user_id), int(user_id)))
+    if "friend_requests" in have:
+        conn.execute("DELETE FROM friend_requests WHERE from_id=? OR to_id=?",
+                     (int(user_id), int(user_id)))
     for shares in ("pick_shares", "parlay_shares"):
         if shares in have:
             conn.execute(f"DELETE FROM {shares} WHERE from_id=? OR to_id=?",

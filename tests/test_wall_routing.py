@@ -114,8 +114,14 @@ def test_the_pages_that_stay_open_are_named_once():
     # walling it would defeat it. It publishes no model output (see
     # tests/test_streak.py's key census), and #wall-back verified visible
     # on it with body.walled set.
+    # Messages joined 2026-08-25: an invited friend must be able to SEE
+    # what was sent — the friends layer is session-gated on purpose,
+    # never entitlement-gated (a share is a pointer; the recipient's own
+    # board answers it under their own entitlement), so the page leaks
+    # nothing and exists to pull people in. #wall-back reaches it
+    # through the same generic branch as Record and the streak.
     assert set(open_) == {"paywall", "checkout", "record", "account",
-                          "discord", "signup", "streak"}, open_
+                          "discord", "signup", "streak", "messages"}, open_
 
 
 def test_every_open_page_is_a_real_view():

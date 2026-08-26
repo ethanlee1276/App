@@ -128,8 +128,11 @@ def test_the_topbar_carries_the_envelope_and_an_honest_badge():
 
 
 def test_seen_is_marked_after_display_on_the_messages_page_too():
+    # Sliced to the finder function that follows — the render-pack
+    # rebuild (tabs, filters, requests) grew the body past a fixed
+    # window, which is exactly the slice bug the suite keeps relearning.
     i = APP.index("async function renderMessages()")
-    body = APP[i:i + 3500]
+    body = APP[i:APP.index("async function msgFinderHTML", i)]
     assert "setTimeout" in body and "/api/social/seen" in body
     assert body.index("host.innerHTML") < body.index("/api/social/seen"), \
         "seen fires before the rows are on screen"

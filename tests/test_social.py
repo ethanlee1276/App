@@ -319,17 +319,71 @@ def test_the_friends_ceiling_holds_on_both_sides():
     assert code == 400 and "full" in out["error"]
 
 
-def test_no_lookup_endpoint_exists():
-    """Friends form through links only. A search/lookup path in the
-    social API would be the email oracle the module header refuses."""
+def test_lookup_finds_names_and_never_emails():
+    """The doctrine evolved (Ethan, 2026-08-25: "look up someone's user
+    name … then the friend request will go through the message inbox"),
+    and what it kept is the part that mattered: the EMAIL oracle stays
+    closed. find_users matches the chosen display name only, so an
+    account is findable exactly when its owner named it — and a query
+    that is an email address finds nothing."""
+    conn, (a, b, _) = _db()
+    from engine import streak as ST
+    ST.ensure_tables(conn)
+    ST.set_name(conn, b, "SamTheSharp")
+    hits = SOC.find_users(conn, a, "sharp")
+    assert [u["name"] for u in hits] == ["SamTheSharp"]
+    assert "email" not in repr(hits)
+    assert SOC.find_users(conn, a, "sam@example.com") == []
+    assert SOC.find_users(conn, a, "s") == [], "single letters enumerate"
+    # the unnamed account cannot be found at all
+    assert SOC.find_users(conn, b, "casey") == []
+    src = inspect.getsource(SOC.find_users)
+    assert "email" not in src, "find_users touches the email column"
+
+
+def test_requests_wait_for_a_yes_and_decline_is_silent():
+    conn, (a, b, c) = _db()
+    code, out = SOC.request_send(conn, a, b)
+    assert code == 200 and out["requested"] and not out["already"]
+    assert SOC.friends_list(conn, a) == [], "a request is not a friendship"
+    code, out = SOC.request_send(conn, a, b)
+    assert out["already"], "a second ask should not stack"
+    assert SOC.request_send(conn, a, a)[0] == 400
+    # mutual interest is both of you saying yes
+    code, out = SOC.request_send(conn, b, a)
+    assert code == 200 and out.get("accepted"), out
+    assert [f["id"] for f in SOC.friends_list(conn, a)] == [b]
+    assert SOC.requests_in(conn, a) == [] and SOC.requests_in(conn, b) == []
+    # decline: quiet delete, answerable only by the recipient
+    SOC.request_send(conn, c, a)
+    rid = SOC.requests_in(conn, a)[0]["id"]
+    assert SOC.request_answer(conn, c, rid, True)[0] == 404, \
+        "someone other than the recipient answered a request"
+    assert SOC.request_answer(conn, a, rid, False)[0] == 200
+    assert SOC.requests_in(conn, a) == []
+
+
+def test_the_request_ceiling_holds():
+    conn, (a, b, _) = _db()
+    old = SOC.MAX_PENDING_REQUESTS
+    SOC.MAX_PENDING_REQUESTS = 0
+    try:
+        code, out = SOC.request_send(conn, a, b)
+    finally:
+        SOC.MAX_PENDING_REQUESTS = old
+    assert code == 400 and "ceiling" in out["error"]
+
+
+def test_the_social_api_carries_the_request_paths():
     srv = _read("server.py")
     i = srv.index("def _social_post")
-    body = srv[i:i + 400]
-    assert ('"accept", "send", "send-parlay", "remove", "seen",\n'
-            '                        "revoke-invite"') in body
-    src = _read("engine", "social.py")
-    assert "LIKE" not in src and "search" not in src.lower().replace(
-        "search-by-email", "")
+    body = srv[i:i + 500]
+    for path in ('"find"', '"request"', '"answer-request"'):
+        assert path in body, f"{path} missing from the social POST paths"
+    # The SOCIAL me, not the account me — server.py has both.
+    j = srv.index('if path == "me":', srv.index("def _social_get"))
+    me = srv[j:j + 600]
+    assert "SOC.sent(" in me and "SOC.requests_in(" in me
 
 
 def test_display_name_never_repeats_the_full_address():
@@ -422,19 +476,21 @@ def test_the_send_panel_carries_identity_only():
 def test_the_inbox_row_is_a_door_only_onto_tonight_s_board():
     """A share from a past slate stays readable but inert — the board it
     pointed at is gone, and a door onto nothing is worse than no door.
-    The logic lives in shareRowHTML since the Messages page landed —
-    ONE renderer for a share row, used by Alerts and Messages both, so
-    the two surfaces cannot disagree about what a share looks like."""
-    i = APPJS.index("function shareRowHTML(sh)")
-    body = APPJS[i:APPJS.index("\n}", i)]
-    assert APPJS.count("sh.sport === state.sport ? findProp(slug) : null") >= 2, \
-        "the door rule left the pick or the parlay branch"
-    assert "off tonight’s board" in body
+    The logic lives in msgShareRow since the Messages rebuild — ONE
+    renderer for a share row, used by Alerts and Messages both, so the
+    two surfaces cannot disagree about what a share looks like."""
+    i = APPJS.index("function msgShareRow(sh, sentSide)")
+    body = APPJS[i:APPJS.index("\n}", APPJS.index("return `", i))]
+    assert "sh.sport === state.sport ? findProp(slug) : null" in body, \
+        "the pick door rule left the renderer"
+    assert "sh.sport === state.sport && findProp(slug)" in body, \
+        "the parlay-leg door rule left the renderer"
+    assert "shareRowHTML" not in APPJS, "a second share renderer came back"
     j = APPJS.index("function friendInboxHTML()")
     fib = APPJS[j:APPJS.index("\n}", j)]
-    assert "shareRowHTML" in fib, "Alerts grew its own share renderer"
+    assert "msgShareRow" in fib, "Alerts grew its own share renderer"
     k = APPJS.index("async function renderMessages()")
-    assert "shareRowHTML" in APPJS[k:k + 2500], \
+    assert "msgShareRow" in APPJS[k:k + 4500], \
         "Messages grew its own share renderer"
 
 
