@@ -463,13 +463,27 @@ def min_seconds_between(requests_per_refresh: int,
 PROBE_INTERVAL = 6 * 3600
 
 # --- Time-aware pacing -------------------------------------------------
-# A credit is not worth the same all day. Books post MLB props close to
-# first pitch, lineups confirm in the same stretch, and stale-line windows
-# open as books re-price at different speeds — so a pull at 5:45pm buys a
-# real board while a pull at noon buys proxy lines and silence. When the
-# slate's kickoff times are known, off-peak spending is stretched and the
-# low-quota sparse pull is HELD for the window instead of firing on a
-# 12-hour timer that knows nothing about baseball.
+# A credit is not worth the same all day — but NOT for the reason this
+# comment used to give. It claimed books post MLB props close to first
+# pitch and "a pull at noon buys proxy lines and silence". That is false,
+# and Ethan caught it on 2026-08-26: "when I look at FanDuel at 6am,
+# there is batter props already posted." A morning pull buys a real
+# board.
+#
+# What is actually true: a LATE credit is worth more than an early one,
+# because lineups confirm near first pitch (a hitter pick cannot be
+# journaled before that), stale-line windows open as books re-price at
+# different speeds, and picks settle against numbers close to the close.
+# So off-peak spending is stretched — stretched, not stopped — and on a
+# day too poor to afford even one ordinary refresh the single sparse
+# pull is HELD for that window rather than fired on a 12-hour timer that
+# knows nothing about baseball.
+#
+# THE COST OF THAT LAST RULE, stated plainly because it is the one place
+# the pacing can still empty a morning board: in starvation mode there is
+# no morning pull at all. On a funded day the ordinary cadence prices the
+# morning (~1.1h between pulls at a healthy balance), which is what
+# "player props all day" needs.
 PRIME_BEFORE_S = 2.5 * 3600      # window opens this long before first pitch
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
