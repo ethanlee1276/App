@@ -52,6 +52,32 @@ def test_both_icons_exist_in_the_bar():
         assert 'id="%s"' % el_id in html, "no %s in the top bar" % el_id
 
 
+def test_the_social_links_live_in_the_drawer_not_the_topbar():
+    """Ethan, 2026-08-25, circling the icon row on his phone: "clean up
+    this top row. Maybe put the discord and instagram button at the
+    bottom of the 3bar menu page." Outbound social links are
+    destinations, not tools you reach for mid-scroll — they moved to
+    the drawer's footer with LABELS, because a drawer has the room the
+    icon row never did. Same ids, so igMount's server-fed wiring holds.
+
+    The remaining row is pinned in ORDER: the things that ping you
+    (bell, messages), the status stamps, then you and your display
+    (account, theme) in the corner every app keeps identity in."""
+    html = _read(HTML)
+    foot = html[html.index('class="sb-foot"'):html.index("</aside>")]
+    assert 'id="nav-ig"' in foot and 'id="nav-dc"' in foot, \
+        "the social links left the drawer footer"
+    assert ">\n          Instagram</a>" in foot and "Discord</a>" in foot, \
+        "the drawer versions lost their labels"
+    bar = html[html.index('id="nav-search"'):html.index('id="theme-toggle"')]
+    assert "nav-ig" not in bar and "nav-dc" not in bar, \
+        "the icons are back in the top bar"
+    for a, b in [("nav-bell", "nav-msg"), ("nav-msg", "data-source"),
+                 ("slate-date", "nav-acct")]:
+        assert bar.index('id="%s"' % a) < bar.index('id="%s"' % b), \
+            f"topbar order broke between {a} and {b}"
+
+
 def test_both_are_links_and_not_buttons():
     """Middle-click, long-press and "copy link address" are what people do
     with an icon that leaves the site."""

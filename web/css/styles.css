@@ -5060,6 +5060,15 @@ html, body { overflow-x: clip; }
 .nav-ig, .nav-dc { text-decoration: none; color: inherit; }
 .nav-ig[hidden] { display: none; }
 .nav-dc[hidden] { display: none; }
+/* The drawer's social row (moved down from the topbar, 2026-08-25).
+   Labeled, because a drawer has the room the icon row never did. */
+.sb-social { display: flex; gap: 8px; margin-top: 10px; }
+.sb-social-link { display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border: var(--hairline) solid var(--border);
+  border-radius: 999px; color: var(--text-dim); font-size: var(--fs-xs);
+  font-weight: 700; }
+.sb-social-link svg { width: 15px; height: 15px; }
+.sb-social-link:hover { color: var(--text); border-color: var(--brand); }
 .meta-ico svg { width: 17px; height: 17px; }
 .nav-hint { display: none; }
 
