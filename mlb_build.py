@@ -100,6 +100,24 @@ def main() -> None:
                   f"{src_note} (quota remaining {res.quota.remaining}).")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
+            # The whole quoted home-run board, journaled so the one-sided
+            # hold can be MEASURED instead of assumed at 6% forever
+            # (engine/holdwatch — the loop NFL touchdowns proved). Books
+            # do not offer "no home run", so there is no pair to de-vig;
+            # settling every quote against who actually went deep is the
+            # only honest way to the number. Best-effort: a journal miss
+            # must never cost the build.
+            try:
+                from engine import db as _hwdb, holdwatch as _hw
+                _hqn = _hw.record_slate(_hwdb.connect(), slate, sport="mlb",
+                                        season=int(str(args.date)[:4]),
+                                        period=str(args.date),
+                                        market="home_runs")
+                if _hqn:
+                    print(f"  Quote journal: {_hqn} home-run quote(s) recorded "
+                          f"for the hold measurement.")
+            except Exception as _hexc:                       # noqa: BLE001
+                print(f"  ⚠️  quote journal skipped: {_hexc}")
             # Prices we PAID for and failed to join — the only part of the
             # "no real book price" bucket that is a bug rather than a fact
             # about what books offer.

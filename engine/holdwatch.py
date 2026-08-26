@@ -32,6 +32,13 @@ quoted player with no stat row in a played week is treated as a
 scratch — books void those tickets, so the fit must too, or every
 healthy scratch would count as juice.
 
+THREE MARKETS, ONE LOOP (2026-08-26). NFL anytime-TD proved it; MLB
+home runs and CFB anytime-TD are the same Yes-only shape and joined on
+the same day. Nothing about the arithmetic is sport-specific — each
+market fits its OWN hold off its OWN settled quotes, because a
+touchdown book and a home-run book do not price the same juice, and
+`longshots.one_sided_hold(sport, market)` already asked per market.
+
 Standard library only; rows live in the history DB beside the logs that
 settle them.
 """
@@ -43,6 +50,17 @@ import os
 import time
 
 from .odds import american_to_prob
+
+
+def _norm(name: str) -> str:
+    """The odds layer's own name normalizer, or a plain lowercase when it
+    cannot be imported. Never raises: settlement must not depend on an
+    import that a trimmed environment might not carry."""
+    try:
+        from .sources.oddsapi import normalize_name
+        return normalize_name(str(name or ""))
+    except Exception:                                        # noqa: BLE001
+        return str(name or "").strip().lower()
 
 #: Below this many settled quotes the ratio is noise wearing a decimal
 #: point — a single NFL week quotes roughly a thousand player-books, so
@@ -62,10 +80,26 @@ STATE_PATH = os.path.join("data", "feedstate", "hold.json")
 
 
 def ensure_table(conn) -> None:
+    """The journal, keyed the way ``player_game_logs`` is keyed.
+
+    ``period`` is TEXT and holds whatever that sport's stat rows hold —
+    "005" for an NFL week, "2026-08-30" for an MLB or CFB date. The
+    first cut stored an INTEGER week and formatted it to "%03d" at
+    settle time, which was the NFL's shape wearing the name of a general
+    one: no MLB or CFB quote could ever have joined. Migrated in place
+    below rather than left as a trap for the next sport.
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(quote_board)")}
+    if cols and "week" in cols:
+        # SAFE TO DROP: the week-shaped table lived one day, held only
+        # pre-season NFL quotes (the season opens in September), and
+        # nothing was ever settled or fitted from it. Recreating beats
+        # carrying a dead column that only one sport could ever use.
+        conn.execute("DROP TABLE quote_board")
     conn.execute("""CREATE TABLE IF NOT EXISTS quote_board (
         sport       TEXT NOT NULL,
         season      INTEGER NOT NULL,
-        week        INTEGER NOT NULL,
+        period      TEXT NOT NULL,
         player      TEXT NOT NULL,
         market      TEXT NOT NULL,
         book        TEXT NOT NULL,
@@ -74,12 +108,12 @@ def ensure_table(conn) -> None:
         outcome     REAL,
         settled     INTEGER NOT NULL DEFAULT 0,
         recorded_at REAL NOT NULL,
-        PRIMARY KEY (sport, season, week, player, market, book)
+        PRIMARY KEY (sport, season, period, player, market, book)
     )""")
     conn.commit()
 
 
-def record_slate(conn, slate, sport: str, season: int, week: int,
+def record_slate(conn, slate, sport: str, season: int, period,
                  market: str = "anytime_td") -> int:
     """Journal every real quote the slate carries for ``market``.
 
@@ -92,56 +126,93 @@ def record_slate(conn, slate, sport: str, season: int, week: int,
     ensure_table(conn)
     n = 0
     now = time.time()
+    period = str(period)
     for prop in getattr(slate, "props", []):
         if prop.market != market or not prop.lines:
             continue
         for ln in prop.lines:
             odds = int(ln.over_odds)
             conn.execute(
-                "INSERT OR REPLACE INTO quote_board (sport, season, week, "
+                "INSERT OR REPLACE INTO quote_board (sport, season, period, "
                 "player, market, book, odds, implied, outcome, settled, "
                 "recorded_at) VALUES (?,?,?,?,?,?,?,?,NULL,0,?)",
-                (sport, int(season), int(week), prop.player, market,
+                (sport, int(season), period, prop.player, market,
                  str(ln.book or "book"), odds, american_to_prob(odds), now))
             n += 1
     conn.commit()
     return n
 
 
-def settle(conn, sport: str = "nfl", market: str = "anytime_td") -> int:
-    """Grade unsettled quotes against the ingested weekly TD rows.
+def record_quotes(conn, quotes: dict, sport: str, season: int, period,
+                  market: str = "anytime_td") -> int:
+    """Journal a ``{player: [quote dicts]}`` board — the scorer-pull shape.
 
-    A week settles only when it has stat rows at all — before then the
+    CFB's TD board never becomes a slate of Props: the pull returns
+    quotes keyed by player, so this is the same journal reached through
+    the other door. Quote dicts are ``{"book", "yes_odds", ...}``, the
+    shape ``parse_event_scorers`` returns.
+    """
+    ensure_table(conn)
+    n = 0
+    now = time.time()
+    period = str(period)
+    for player, qs in (quotes or {}).items():
+        for q in qs or []:
+            odds = q.get("yes_odds")
+            if odds is None:
+                continue
+            conn.execute(
+                "INSERT OR REPLACE INTO quote_board (sport, season, period, "
+                "player, market, book, odds, implied, outcome, settled, "
+                "recorded_at) VALUES (?,?,?,?,?,?,?,?,NULL,0,?)",
+                (sport, int(season), period, str(player), market,
+                 str(q.get("book") or "book"), int(odds),
+                 american_to_prob(int(odds)), now))
+            n += 1
+    conn.commit()
+    return n
+
+
+def settle(conn, sport: str = "nfl", market: str = "anytime_td") -> int:
+    """Grade unsettled quotes against that sport's ingested stat rows.
+
+    A period settles only when it has stat rows at all — before then the
     games have not been played (or the file has not updated) and the
-    quotes simply wait. Within a settleable week, a quoted player with
+    quotes simply wait. Within a settleable period, a quoted player with
     no row is a scratch: ``settled=1, outcome NULL``, excluded from the
     fit exactly as a book's void excludes the ticket from its handle.
     """
     ensure_table(conn)
     n = 0
-    weeks = conn.execute(
-        "SELECT DISTINCT season, week FROM quote_board "
+    periods = conn.execute(
+        "SELECT DISTINCT season, period FROM quote_board "
         "WHERE sport=? AND market=? AND settled=0", (sport, market))
-    for sw in weeks.fetchall():
-        season, week = int(sw["season"]), int(sw["week"])
+    for sw in periods.fetchall():
+        season, period = int(sw["season"]), str(sw["period"])
         rows = conn.execute(
             "SELECT player, SUM(value) AS v FROM player_game_logs "
             "WHERE sport=? AND season=? AND period=? AND market=? "
             "GROUP BY player",
-            (sport, season, f"{week:03d}", market)).fetchall()
+            (sport, season, period, market)).fetchall()
         if not rows:
             continue
-        scored = {r["player"]: 1.0 if float(r["v"] or 0) > 0 else 0.0
+        # NORMALIZED ON BOTH SIDES. CFB's scorer pull keys players by
+        # their normalized name (the board never sees any other form),
+        # so the log side must go through the same normalizer or no CFB
+        # quote settles at all. For the NFL and MLB, whose slate names
+        # already match their stat rows, it is a no-op that keeps one
+        # settle path instead of two.
+        scored = {_norm(r["player"]): 1.0 if float(r["v"] or 0) > 0 else 0.0
                   for r in rows}
         for r in conn.execute(
                 "SELECT DISTINCT player FROM quote_board WHERE sport=? "
-                "AND market=? AND season=? AND week=? AND settled=0",
-                (sport, market, season, week)).fetchall():
-            out = scored.get(r["player"])
+                "AND market=? AND season=? AND period=? AND settled=0",
+                (sport, market, season, period)).fetchall():
+            out = scored.get(_norm(r["player"]))
             conn.execute(
                 "UPDATE quote_board SET outcome=?, settled=1 WHERE sport=? "
-                "AND market=? AND season=? AND week=? AND player=?",
-                (out, sport, market, season, week, r["player"]))
+                "AND market=? AND season=? AND period=? AND player=?",
+                (out, sport, market, season, period, r["player"]))
             n += 1
     conn.commit()
     return n

@@ -50,9 +50,9 @@ def _setup():
     return conn
 
 
-def _td_row(player, week, value):
-    return {"sport": "nfl", "season": 2026, "period": f"{week:03d}",
-            "player": player, "team": "TB", "market": "anytime_td",
+def _td_row(player, period, value, sport="nfl", market="anytime_td"):
+    return {"sport": sport, "season": 2026, "period": str(period),
+            "player": player, "team": "TB", "market": market,
             "value": value, "opponent": "NO", "home": 1}
 
 
@@ -63,7 +63,7 @@ def test_the_journal_takes_identities_and_prices_only():
         _P("Chris Godwin", "rec_yds", [_line(-110)]),
         _P("Unpriced Guy", "anytime_td", []),
     ])
-    n = holdwatch.record_slate(conn, slate, "nfl", 2026, 1)
+    n = holdwatch.record_slate(conn, slate, "nfl", 2026, "001")
     assert n == 2, "one TD player at two books is two quotes, nothing else"
     cols = [c[1] for c in conn.execute("PRAGMA table_info(quote_board)")]
     for word in ("model", "prob", "edge", "projection"):
@@ -77,8 +77,8 @@ def test_a_rebuild_overwrites_with_the_fresher_price():
                                          [_line(+120)])])
     s2 = types.SimpleNamespace(props=[_P("Bucky Irving", "anytime_td",
                                          [_line(+105)])])
-    holdwatch.record_slate(conn, s1, "nfl", 2026, 1)
-    holdwatch.record_slate(conn, s2, "nfl", 2026, 1)
+    holdwatch.record_slate(conn, s1, "nfl", 2026, "001")
+    holdwatch.record_slate(conn, s2, "nfl", 2026, "001")
     rows = conn.execute("SELECT odds FROM quote_board").fetchall()
     assert [r["odds"] for r in rows] == [105], \
         "the journal should hold the LAST quote seen, once"
@@ -91,11 +91,11 @@ def test_settlement_waits_for_the_week_and_voids_the_scratches():
         _P("Blanked", "anytime_td", [_line(+300)]),
         _P("Scratched", "anytime_td", [_line(+400)]),
     ])
-    holdwatch.record_slate(conn, slate, "nfl", 2026, 1)
+    holdwatch.record_slate(conn, slate, "nfl", 2026, "001")
     assert holdwatch.settle(conn) == 0, \
         "an unplayed week settled — those quotes have no truth to grade against"
-    db.upsert_player_logs(conn, [_td_row("Scorer", 1, 1.0),
-                                 _td_row("Blanked", 1, 0.0)])
+    db.upsert_player_logs(conn, [_td_row("Scorer", "001", 1.0),
+                                 _td_row("Blanked", "001", 0.0)])
     holdwatch.settle(conn)
     out = {r["player"]: (r["settled"], r["outcome"]) for r in conn.execute(
         "SELECT player, settled, outcome FROM quote_board")}
@@ -105,15 +105,89 @@ def test_settlement_waits_for_the_week_and_voids_the_scratches():
         "a scratch must settle as a VOID, not wait forever or count as a miss"
 
 
+def test_the_period_key_is_whatever_that_sports_logs_use():
+    """The first cut stored an INTEGER week and formatted it "%03d" at
+    settle time — the NFL's shape wearing a general name, under which no
+    MLB or CFB quote could ever have joined. `period` is TEXT and holds
+    exactly what player_game_logs holds."""
+    conn = _setup()
+    slate = types.SimpleNamespace(props=[
+        _P("Shohei Ohtani", "home_runs", [_line(+310)])])
+    holdwatch.record_slate(conn, slate, "mlb", 2026, "2026-08-30",
+                           market="home_runs")
+    # Read AFTER the lazy create — the table does not exist before it.
+    cols = {c[1] for c in conn.execute("PRAGMA table_info(quote_board)")}
+    assert "period" in cols and "week" not in cols
+    db.upsert_player_logs(conn, [_td_row("Shohei Ohtani", "2026-08-30", 1.0,
+                                         sport="mlb", market="home_runs")])
+    assert holdwatch.settle(conn, sport="mlb", market="home_runs") == 1
+    row = conn.execute("SELECT outcome FROM quote_board").fetchone()
+    assert row["outcome"] == 1.0, "an MLB date-keyed quote could not settle"
+
+
+def test_each_market_fits_its_own_hold():
+    """A touchdown book and a home-run book do not price the same juice,
+    and the pricing path asks per (sport, market) — so a fit must never
+    leak across either."""
+    conn = _setup()
+    slate = types.SimpleNamespace(props=[
+        _P(f"HR{i}", "home_runs", [_line(+300)]) for i in range(60)])
+    holdwatch.record_slate(conn, slate, "mlb", 2026, "2026-08-30",
+                           market="home_runs")
+    db.upsert_player_logs(conn, [
+        _td_row(f"HR{i}", "2026-08-30", 1.0 if i < 14 else 0.0,
+                sport="mlb", market="home_runs") for i in range(60)])
+    holdwatch.settle(conn, sport="mlb", market="home_runs")
+    keep = holdwatch.MIN_SETTLED
+    try:
+        holdwatch.MIN_SETTLED = 20
+        got = holdwatch.fit(conn, sport="mlb", market="home_runs")
+        assert got, "the MLB home-run hold never fit"
+        assert holdwatch.load_hold("mlb", "home_runs")
+        assert holdwatch.load_hold("nfl", "anytime_td") is None, \
+            "one market's hold leaked into another's"
+    finally:
+        holdwatch.MIN_SETTLED = keep
+
+
+def test_the_scorer_quote_shape_journals_too():
+    """CFB's TD board never becomes a slate of Props — the pull returns
+    quotes keyed by player, so it reaches the same journal by the other
+    door."""
+    conn = _setup()
+    n = holdwatch.record_quotes(conn, {
+        "jeremiah smith": [{"book": "dk", "yes_odds": 120, "no_odds": None},
+                           {"book": "fd", "yes_odds": 115}],
+        "no price": [{"book": "dk", "yes_odds": None}],
+    }, sport="cfb", season=2026, period="2026-08-30")
+    assert n == 2, "a quote with no Yes price was journaled"
+
+
+def test_settlement_normalizes_both_sides_of_the_name():
+    """The join CFB actually needs: its scorer pull keys players by the
+    NORMALIZED name (the board never sees another form), while the stat
+    rows carry what ESPN's box score wrote. Both sides go through the
+    same normalizer at settle time or no CFB quote settles at all."""
+    conn = _setup()
+    holdwatch.record_quotes(conn, {"jeremiah smith": [{"book": "dk",
+                                                       "yes_odds": 150}]},
+                            sport="cfb", season=2026, period="2026-08-30")
+    db.upsert_player_logs(conn, [_td_row("Jeremiah Smith", "2026-08-30", 1.0,
+                                         sport="cfb")])
+    assert holdwatch.settle(conn, sport="cfb") == 1
+    row = conn.execute("SELECT outcome FROM quote_board").fetchone()
+    assert row["outcome"] == 1.0, "the normalized join failed"
+
+
 def test_the_fit_measures_the_hold_and_keeps_its_gate_and_rails():
     conn = _setup()
     # A deterministic board: 100 players at +300 (implied 0.25), of whom
     # exactly 23 score — the market overstated by 25/23, a 8.7% hold.
     slate = types.SimpleNamespace(props=[
         _P(f"P{i}", "anytime_td", [_line(+300)]) for i in range(100)])
-    holdwatch.record_slate(conn, slate, "nfl", 2026, 1)
+    holdwatch.record_slate(conn, slate, "nfl", 2026, "001")
     db.upsert_player_logs(conn, [
-        _td_row(f"P{i}", 1, 1.0 if i < 23 else 0.0) for i in range(100)])
+        _td_row(f"P{i}", "001", 1.0 if i < 23 else 0.0) for i in range(100)])
     holdwatch.settle(conn)
     keep = holdwatch.MIN_SETTLED
     try:
@@ -164,10 +238,27 @@ def test_the_build_and_the_chores_carry_the_journal():
     build = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert "holdwatch.record_slate(" in build, \
         "the build stopped journaling the quoted board"
+    mlb = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
+    assert '_hw.record_slate(' in mlb and 'market="home_runs"' in mlb, \
+        "the home-run board stopped journaling its quotes"
+    cfb = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
+    assert "_hw.record_quotes(" in cfb, \
+        "the CFB TD board stopped journaling its quotes"
     maint = open(os.path.join(ROOT, "engine", "maintenance.py"),
                  encoding="utf-8").read()
     assert "_hw.settle(" in maint and "_hw.fit(" in maint, \
         "nothing settles or refits the journal"
+    from engine import maintenance as _mt
+    assert set(_mt.HOLD_MARKETS) == {("nfl", "anytime_td"),
+                                     ("mlb", "home_runs"),
+                                     ("cfb", "anytime_td")}
+    # OUTSIDE the NFL-season guard: baseball settles from April, and a
+    # journal that only ran Aug-Feb would bin a summer of quotes.
+    i = maint.index("for _hsport, _hmarket in HOLD_MARKETS")
+    guard = maint.index("if today.month >= 8 or today.month <= 2:")
+    assert i > guard, "the loop is in the file"
+    assert not maint[i - 400:i].rstrip().endswith(":"), \
+        "the settle loop is nested inside a seasonal guard again"
 
 
 if __name__ == "__main__":

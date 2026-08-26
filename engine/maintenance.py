@@ -162,6 +162,13 @@ _HARVEST_GAME_MARKETS = {"moneyline": "h2h", "spread": "spreads",
 #: gate exists to prevent, and an empty map is exactly that state.
 _HARVEST_SPORTS = ("mlb", "nfl", "cfb")
 
+#: The Yes-only markets whose hold is measured rather than assumed
+#: (engine/holdwatch). Each fits its OWN number: a touchdown book and a
+#: home-run book do not price the same juice, and the pricing path asks
+#: per (sport, market) already.
+HOLD_MARKETS = (("nfl", "anytime_td"), ("mlb", "home_runs"),
+                ("cfb", "anytime_td"))
+
 
 def _cfb_map_ready() -> bool:
     """Has any cfb_build written school names down yet?
@@ -834,24 +841,6 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nfl results ingest failed: {exc}")
 
-        # Settle the anytime-TD quote journal against the rows the pull
-        # above just wrote, and refit the measured one-sided hold once
-        # the sample clears its gate (engine/holdwatch — the number that
-        # retires the "vig assumed at 6%" caveat).
-        try:
-            from . import db as _qdb
-            from . import holdwatch as _hw
-            _qconn = _qdb.connect()
-            _ns = _hw.settle(_qconn)
-            if _ns:
-                log(f"  hold journal: {_ns} anytime-TD quote(s) settled")
-            _fit = _hw.fit(_qconn)
-            if _fit:
-                log(f"  hold measured: {_fit['hold'] - 1:.1%} off "
-                    f"{_fit['n']:,} settled quotes")
-        except Exception as exc:  # noqa: BLE001
-            log(f"  ⚠️  hold journal skipped: {exc}")
-
         # The season-boundary backfill (Ethan circled the card's own
         # confession, 2026-08-26: "Red-zone usage inferred … play-by-play
         # not ingested"). In August and September the CURRENT season has
@@ -899,6 +888,33 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                     log(f"  nfl pbp: {n:,} xFP/red-zone rows refreshed")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
+
+    # Settle the one-sided quote journals against whatever stat rows the
+    # ingests above just wrote, and refit each market's measured hold
+    # once its sample clears the gate (engine/holdwatch — the number
+    # that retires "vig assumed at 6%").
+    #
+    # OUTSIDE the NFL-season guard on purpose: it lived inside it at
+    # first, which was fine while touchdowns were the only market and
+    # became wrong the moment MLB home runs joined — baseball settles
+    # from April, and a journal that only settles Aug-Feb would have
+    # thrown a summer of quotes away. The pass is a handful of indexed
+    # queries and a no-op when nothing is waiting, so running it daily
+    # costs nothing.
+    for _hsport, _hmarket in HOLD_MARKETS:
+        try:
+            from . import db as _qdb
+            from . import holdwatch as _hw
+            _qconn = _qdb.connect()
+            _ns = _hw.settle(_qconn, sport=_hsport, market=_hmarket)
+            if _ns:
+                log(f"  hold journal ({_hsport} {_hmarket}): {_ns} quote(s) settled")
+            _fit = _hw.fit(_qconn, sport=_hsport, market=_hmarket)
+            if _fit:
+                log(f"  hold measured ({_hsport} {_hmarket}): "
+                    f"{_fit['hold'] - 1:.1%} off {_fit['n']:,} settled quotes")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  hold journal ({_hsport} {_hmarket}) skipped: {exc}")
 
     # Keep the fetch cache from growing without bound (a season of
     # per-game files runs to thousands). Never blocks the chores.

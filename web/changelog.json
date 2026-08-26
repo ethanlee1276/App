@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "model",
+      "title": "Home runs and college touchdowns start measuring their own vig",
+      "body": "Bookmakers never offer the 'no' side of a home-run or touchdown market, so the house's cut cannot be read off a pair of prices the way it can everywhere else — it has to be assumed. The NFL touchdown board started measuring it instead, by keeping every quote on the board and settling it against who actually scored; MLB home runs and college football touchdowns now do the same, each fitting its own number, because a home-run book and a touchdown book do not charge the same juice. Until each has enough settled quotes the conservative assumption still prices, and the card says which of the two it is wearing. What moves on the board: once measured, every edge and stake on those markets rests on the real hold instead of a placeholder."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "fix",
       "title": "College football starts earning a closing-line record",
       "body": "Every pick this site makes is graded twice: did it win, and did it beat the closing number — the second being the honest test of whether a model has an edge at all. College football was the one board with no closing line, because the harvest identifies teams through a name table and CFB's 134 schools are resolved live from the feed rather than hardcoded, so harvested prices could not be matched back to bets. The site now writes down every school name it resolves while pricing a board, accumulating through the season, and college football joins the nightly harvest. Two further gaps turned up while fixing it and are also closed: CFB game lines were never being kept from each build even though they cost nothing and needed no name table, and the harvest had been requesting touchdown prices under a name the odds provider does not use — which means the anytime-touchdown board, in the NFL as well, has been settling with no closing line since it launched. Both now work."

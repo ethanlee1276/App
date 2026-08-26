@@ -267,14 +267,30 @@ The binding constraints are the ones no branch fixes: Phase 0 in
 Those gate *charging money*, not shipping features, and they are named in
 `docs/NEXT.md` and `docs/WHEN_HOME.md`.
 
-## Hold journal for the other one-sided markets, 2026-08-26
+## Hold journal for the other one-sided markets — CLOSED 2026-08-26
 
 engine/holdwatch measures the one-sided hold for NFL anytime-TD by
 journaling the whole quoted board and settling it against the weekly TD
 rows. MLB home_runs and CFB anytime-TD are the same Yes-only shape and
 still price off the assumed 6% (`longshots.ONE_SIDED_HOLD`). Joining
-them is mechanical: record_slate at their build sites, settle against
-their own logs (home_runs rows exist; CFB TD logs land with the ESPN box
-scores), and the pricing path already asks `one_sided_hold(sport,
-market)` per market. Waited only because Ethan circled the NFL card and
-the season that proves the loop starts in September.
+them was mechanical, and DONE: mlb_build journals the home-run board,
+cfb_build journals the TD field, and `maintenance.HOLD_MARKETS` settles
+and refits all three nightly. Each market fits its OWN hold — a
+touchdown book and a home-run book do not price the same juice.
+
+TWO SHAPES THE PLAN ASSUMED AWAY, both found on the way:
+
+* **The journal was NFL-shaped.** It stored an INTEGER `week` and
+  formatted it "%03d" to join — so no MLB or CFB quote, whose stat rows
+  are keyed by DATE, could ever have settled. `period` is TEXT now and
+  holds exactly what `player_game_logs.period` holds. The old table was
+  a day old and had never settled a row, so it is dropped and recreated
+  rather than carried.
+* **CFB's board is not a slate.** Its TD pull returns quotes keyed by
+  player, never Props, so `record_quotes` reaches the same journal by
+  the other door — and those keys are NORMALIZED names, which is why
+  settle now normalizes the stat side too.
+
+The nightly settle also moved OUT of the NFL-season guard it was written
+inside: baseball settles from April, and a pass that only ran Aug–Feb
+would have binned a summer of quotes.

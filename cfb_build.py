@@ -765,6 +765,27 @@ def main() -> None:
             out["long_shots"] = rows
             # The most-likely-scorers list — shown, never journaled.
             out["longshot_watch"] = watch
+            # The WHOLE quoted TD field, journaled so this market's
+            # one-sided hold can be measured rather than assumed at 6%
+            # (engine/holdwatch). Books do not offer "no touchdown", so
+            # there is no pair to de-vig; settling every quote against
+            # who actually scored is the only honest route to the
+            # number. Names are the pull's normalized form and settle
+            # normalizes the stat rows to match.
+            try:
+                from engine import holdwatch as _hw
+                _flat: dict = {}
+                for _q in (quotes or {}).values():
+                    for _name, _qs in _q.items():
+                        _flat.setdefault(_name, []).extend(_qs)
+                _hqn = _hw.record_quotes(conn, _flat, sport="cfb",
+                                         season=day.year, period=args.date,
+                                         market="anytime_td")
+                if _hqn:
+                    print(f"  Quote journal: {_hqn} TD quote(s) recorded "
+                          f"for the hold measurement.")
+            except Exception as _hexc:                       # noqa: BLE001
+                print(f"  ⚠️  quote journal skipped: {_hexc}")
             print(f"  {td_note}")
             if census["quoted_players"]:
                 print(f"  TD board: {len(rows)} pick(s) + {len(watch)} "

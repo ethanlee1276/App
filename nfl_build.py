@@ -403,7 +403,7 @@ def main() -> None:
                     from engine import db as _hdb, holdwatch
                     _nq = holdwatch.record_slate(
                         _hdb.connect(), slate, sport="nfl",
-                        season=args.season, week=args.week)
+                        season=args.season, period=f"{int(args.week):03d}")
                     print(f"  Quote journal: {_nq} anytime-TD quotes recorded "
                           f"for the hold measurement.")
                 except Exception as _exc:  # noqa: BLE001
