@@ -2491,6 +2491,19 @@ function censusFunnelHTML() {
     quality_under_70: "quality grade under 70",
     awaiting_lineup: "cleared every gate — waiting on the lineup card (shown as On deck)",
     held_by_rules: "held by rules (IL, live game, juice)",
+    // The football boards' funnel names its gates by KEY, straight off
+    // the rule decision that made them (engine/census), rather than
+    // re-deriving thresholds the way the MLB census has to. A key with
+    // no entry here still renders — as itself — so a new gate shows up
+    // in the funnel the day it is added instead of vanishing.
+    grade: "model graded it a Pass",
+    pregame: "game already started — this model prices pre-game only",
+    confidence: "confidence under the threshold",
+    edge: "edge under the minimum",
+    juice: "priced too rich to be worth laying",
+    health: "an injury designation on him",
+    kelly: "the price already matches our number — no stake",
+    lineup: "waiting on the lineup card",
     // Hoops: the two the build drops before the model ever sees them.
     no_history: "no stored game log for this player yet",
     props_built: "props built from history" };

@@ -83,8 +83,18 @@ def test_the_survivor_is_chosen_statically_not_by_a_flag():
     fixed, and much harder to see."""
     fn = APP[APP.index("function censusFunnelHTML()"):]
     fn = fn[:fn.index("\n}\n")]
+    # CODE ONLY. The scan used to read the whole function body, which
+    # meant any DISPLAY STRING containing one of these words failed it —
+    # "game already started" is a gate's own label, not a guard. Quoted
+    # and templated text comes out first so the check still catches the
+    # thing it was written for (a module-scoped draw-once flag) and
+    # stops catching English.
+    import re
+    code = re.sub(r"`[^`]*`|\"[^\"]*\"|'[^']*'", "", fn)
+    code = re.sub(r"//[^\n]*", "", code)
     for word in ("_drawn", "once", "already"):
-        assert word not in fn, f"the funnel is self-gating on `{word}`"
+        assert not re.search(rf"\b{word}\b", code), \
+            f"the funnel is self-gating on `{word}`"
 
 
 def test_the_disclosure_is_still_collapsed():

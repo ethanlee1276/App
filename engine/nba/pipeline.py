@@ -273,20 +273,11 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
 #: games"), which makes a poor tally key. Collapse to the part before the
 #: dash, which is the category.
 def _reason_key(text: str) -> str:
-    """Strip the NUMBERS out, keep the category.
-
-    Reasons are written for a card, so they carry this prop's own figures:
-    "edge -1.7% < required 4.5% over break-even 52.4%". Tallied verbatim,
-    every prop becomes its own row and the census turns into a list — two
-    hundred rows reading 1. What a reader wants is "edge under required:
-    186", so the digits go and the sentence stays.
-    """
-    import re
-    head = str(text or "other").split("—")[0].split("(")[0]
-    head = re.sub(r"[-+]?\d[\d,.]*%?", "", head)          # drop the figures
-    head = re.sub(r"[<>=]+", "", head)
-    head = re.sub(r"\s+", " ", head).strip(" .,:;").lower()
-    return (head or "other")[:60]
+    """Shared with CFB, which needs the identical bucketing — the body
+    moved to engine/census.reason_key rather than being copied. See it
+    for why the digits come out."""
+    from ..census import reason_key
+    return reason_key(text)
 
 
 def _census(skips: list, misses: list) -> dict:

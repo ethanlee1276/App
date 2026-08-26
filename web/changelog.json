@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "ship",
+      "title": "Football boards say where the picks went",
+      "body": "A board reading 'no qualifying plays' asks you to take its word for it. Baseball and basketball have long answered the follow-up — a funnel counting exactly where each pick died, gate by gate — but football never did, which with the season opening is the worst place for it to be missing. NFL and college football now publish the same breakdown under the count: how many had no book price yet (and in which markets), how many the model graded a Pass, how many missed the edge bar, how many were too juiced to be worth laying. The football funnel reads the actual rule decisions rather than recomputing the thresholds beside them, so it can never disagree with the ruling it is explaining, and a gate added later shows up in it the day it is added."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "model",
       "title": "Home runs and college touchdowns start measuring their own vig",
       "body": "Bookmakers never offer the 'no' side of a home-run or touchdown market, so the house's cut cannot be read off a pair of prices the way it can everywhere else — it has to be assumed. The NFL touchdown board started measuring it instead, by keeping every quote on the board and settling it against who actually scored; MLB home runs and college football touchdowns now do the same, each fitting its own number, because a home-run book and a touchdown book do not charge the same juice. Until each has enough settled quotes the conservative assumption still prices, and the card says which of the two it is wearing. What moves on the board: once measured, every edge and stake on those markets rests on the real hold instead of a placeholder."

@@ -797,6 +797,19 @@ def main() -> None:
             print(f"  ⚠️  TD long shots unavailable: {_exc}")
     out["status"] = "slate"
     out["no_qualifying"] = result["no_qualifying"]
+    # The funnel under the count (engine/census). CFB's board is game
+    # bets, whose rejections carry a written `why` rather than a checks
+    # list, so it buckets those sentences — same renderer, same page.
+    # Without it a quiet Saturday said "no qualifying plays" and offered
+    # a reader nothing to check, which is the difference between an
+    # empty board and a broken one.
+    try:
+        from engine.census import census_from_reasons
+        out["gate_census"] = census_from_reasons(
+            result.get("plays") or [], result.get("pass_list") or [],
+            held=result.get("holds") or [])
+    except Exception:                                        # noqa: BLE001
+        pass
 
     try:
         from engine import ledger

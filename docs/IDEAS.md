@@ -137,7 +137,7 @@ app, and this repo does not take credentials.
 
 ---
 
-## 8. A "why is this board empty" panel, everywhere
+## 8. A "why is this board empty" panel, everywhere — DONE 2026-08-26
 
 **What:** every empty state names the reason and the fix.
 
@@ -148,6 +148,18 @@ app, and this repo does not take credentials.
 
 **Why:** an empty board and a broken board look identical today on most
 pages, and the difference is the whole trust question.
+
+**DONE.** `engine/census` gives NFL and CFB the funnel MLB and the hoops
+boards already had — the two that were missing it, with a football
+season opening. The football census counts the FIRST failing gate off
+each row's own `checks` list (engine/rules.condition) rather than
+recomputing the thresholds the way MLB's older one must, so it cannot
+drift from the decision it explains, and an unnamed new gate renders as
+itself instead of vanishing. CFB's board is game bets, whose rejections
+carry a written reason rather than a checks list, so it buckets those
+sentences through the same digit-stripping the hoops board wrote —
+which now lives in `census.reason_key` and is CALLED by hoops rather
+than copied.
 
 ---
 
