@@ -25,10 +25,10 @@ opposing-defence panel inside a draft (there is no opponent).
 
 ---
 
-## 1. Auction values — the last snake-only gap in the draft kit
+## 1. Auction values — SHIPPED 2026-08-26
 
 **What:** a dollar figure per player for auction and salary-cap leagues,
-which are a large minority of drafts and get nothing from the kit today.
+which are a large minority of drafts and got nothing from the kit.
 
 **Built from:** VORP, which we already compute. The standard construction
 is real arithmetic, not a guess: total budget across the league, minus one
@@ -40,6 +40,33 @@ board, a budget input on the page.
 
 **Why it is first:** draft season is now, it is the only format the kit
 cannot serve at all, and nothing has to be invented.
+
+**SHIPPED**, as `engine/auction.py` and the draft kit's Snake/Auction
+switch: a budget input, dollars in place of the VORP column on the
+overall board and in the tier cards, and a bar showing where the room's
+money goes by position.
+
+Two things the estimate above did not see, both found by running it:
+
+* **The baseline could not be borrowed.** Reusing the kit's VORP priced
+  the top pick at $136 of a $200 budget, because the snake board
+  measures against the best free STARTER — right for a snake, where you
+  stream the wire, and wrong for an auction, where every bench spot in
+  the room is bought. Auction values are priced against the last man
+  DRAFTED (QB18 / RB54 / WR66 / TE18 in a standard twelve-team room),
+  which is a whole module rather than the one function this entry
+  predicted. The top of the sheet now lands around 30% of a manager's
+  budget and a test refuses anything outside 15–45%.
+* **The sheet has to balance.** Rounding each row on its own drifts, and
+  values totalling more than the league can spend are wrong by however
+  much they overshoot — you find that out in the last three rounds, with
+  a roster you cannot fill. Whole dollars are handed out by largest
+  remainder, so the priced players plus a dollar for every remaining
+  roster spot come to exactly the money in the room.
+
+What it deliberately does NOT do is predict what a player will GO for.
+We have never logged an auction, so there is nothing to fit an inflation
+curve to, and the panel says so.
 
 ---
 

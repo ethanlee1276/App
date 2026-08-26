@@ -236,6 +236,15 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
     from .byes import bye_weeks, attach as _attach_byes
     _attach_byes(board, bye_weeks(conn, season))
 
+    # DOLLARS, for the rooms that do not snake. The same VORP, divided
+    # by the money in the league instead of merely ordered by it — see
+    # engine/auction.py for the arithmetic and for what it deliberately
+    # refuses to predict. Priced on `players`, which is the same row
+    # objects the overall board, the position tiers and the mock
+    # draft's pool all hold, so one pass reaches every surface.
+    from .auction import attach as _attach_auction
+    auction = _attach_auction(players, teams=teams)
+
     # Usage says buy: expected clearly above actual — the draft-day version
     # of buy-low. (Sell-highs matter less at the table: the market already
     # prices last year's points; the board's lower proj handles it.)
@@ -266,6 +275,7 @@ def build_draft_kit(conn, season: int, teams: int = DEFAULT_TEAMS,
         "roster_layer": {"present": idx is not None, "indexed": indexed,
                          "healthy": healthy},
         "replacement": baselines,
+        "auction": auction,
         "market": market,
         "board": board[:150],
         "tiers": {pos: rows[:40] for pos, rows in by_pos.items()},

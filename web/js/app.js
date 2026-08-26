@@ -14590,10 +14590,15 @@ function acctGather() {
   // The pasted ranking rides along: it is typed once and wanted on the
   // phone at the draft table, which is the whole reason accounts exist.
   const fr = localStorage.getItem(FF_IMPORT_KEY) || "";
-  if (fu || fl || fd || fr || ea || et || ts.fantasy)
+  // The auction budget rides along for the same reason the ranking
+  // does: it is set once and wanted on whichever screen is open at the
+  // table. Empty means snake, which is also what an account that has
+  // never touched it sends.
+  const fa = localStorage.getItem(DK_AUC_KEY) || "";
+  if (fu || fl || fd || fr || ea || et || fa || ts.fantasy)
     sections.fantasy = { ts: ts.fantasy || 0,
                          data: { user: fu, league: fl, draft: fd, ranks: fr,
-                                 espn: ea, espnTeam: et } };
+                                 espn: ea, espnTeam: et, auction: fa } };
   const bk = localStorage.getItem("ge-bankroll") || "";
   const up = localStorage.getItem("ge-unit-pct") || "";
   if (bk || up || ts.bankroll)
@@ -14638,6 +14643,7 @@ function acctApplySection(name, sec) {
       // nothing to say about ESPN", not "ESPN was disconnected".
       if ("espn" in d) put(ESPN_LEAGUE_KEY, d.espn);
       if ("espnTeam" in d) put(ESPN_TEAM_KEY, d.espnTeam);
+      if ("auction" in d) put(DK_AUC_KEY, d.auction);
     } else if (name === "settings") {
       settingsAdopt(d);
       // The whole page reads these, so the whole page redraws — an
@@ -19084,20 +19090,78 @@ function marketLine(kit) {
   return "";
 }
 
-function draftKitHTML(kit) {
-  if (!kit || !(kit.board || []).length) return "";
+/* ---------------- Auction mode ----------------
+   IDEAS #1: a large minority of leagues do not snake, and for those
+   rooms a tier board answers a question nobody asked. An auction asks
+   one question all night — is he worth this much of my money — and the
+   dollars that answer it come off engine/auction.py: the same
+   projections, divided by the money in the league instead of merely
+   ordered by it.
+
+   ONE KEY, BOTH FACTS. `ff_auction` holds the budget while auction
+   pricing is on and is empty when it is off, so there is no way to be
+   in auction mode with no budget, or to carry a budget nobody asked
+   for. It rides the account sync beside the draft ID for the same
+   reason that one does: it is typed at a laptop and wanted on the phone
+   at the table. */
+const DK_AUC_KEY = "ff_auction";
+const DK_AUC_MIN = 20, DK_AUC_MAX = 1000;      // engine/auction.py's rails
+/* The split bar, biggest share first, in one hue stepped by weight. A
+   per-position palette was the first draft and it drew two positions in
+   the same paint: --warn is defined AS --brand in the default theme.
+   Four categories that are shares of one quantity read better as one
+   colour anyway. */
+const DK_FADE = [1, 0.74, 0.52, 0.34];
+
+function dkAuc() {
+  const n = parseInt(localStorage.getItem(DK_AUC_KEY) || "", 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;          // 0 = snake board
+  return Math.min(DK_AUC_MAX, Math.max(DK_AUC_MIN, n));
+}
+
+/* What he is worth of THIS budget. The engine prices the sheet once, at
+   its own default; every other budget is a rescale rather than a
+   rebuild, and the rescale is exact rather than approximate, because
+   value minus the dollar minimum is
+
+       VORP x teams x (budget - slots) / (sum of VORP)
+
+   in which the reader’s budget is the only term that moved. Rounding
+   is redone from the published whole dollar, so a rescaled sheet can
+   sit a dollar off the one the engine would have printed — a
+   difference that cannot change a bid. A dollar player stays a dollar
+   player at any budget: he is priced at the minimum bid, which is one
+   dollar in every room. */
+function dkDollars(kit, r, budget) {
+  const a = (kit || {}).auction || {};
+  const base = Number(r.auction || 1);
+  if (!(base > 1) || !budget || !a.budget || a.budget <= a.slots) return base;
+  const k = (budget - a.slots) / (a.budget - a.slots);
+  return Math.max(1, Math.round(1 + (base - 1) * k));
+}
+
+const dkMoney = (n) => "$" + Number(n).toLocaleString("en-US");
+
+/* The overall board, in whichever currency the reader is drafting in.
+   In auction mode the rows are RE-SORTED by dollars: the snake order is
+   VORP against a starter-level replacement, and an auction measures
+   against the last man drafted instead, so the two genuinely disagree
+   about who is next — a board that showed auction dollars in snake
+   order would be presenting the disagreement as a typo. */
+function dkBoardHTML(kit) {
   const BOARD_SHOWN = 15;
+  const auc = dkAuc();
   /* A player with no last-season usage cannot be projected, so he is
-     placed at the market\u2019s own draft rank instead (engine/
+     placed at the market’s own draft rank instead (engine/
      draftmarket.py). "0 gm" plus a small-sample warning is technically
-     true of such a row and tells the reader nothing useful \u2014 it
+     true of such a row and tells the reader nothing useful — it
      reads as a thin measurement rather than as an absent one. This says
      which it is, and whose opinion the number is. */
   const marketNote = (r) => `<span class="dk-market" title="No ${
       kit.season || "last-season"} usage to project from, so this player sits where the
-      market drafts him \u2014 his points are read off our own board at that rank.
+      market drafts him — his points are read off our own board at that rank.
       We have no independent read on him.">${
-      r.rookie ? "ROOKIE" : "NO " + (kit.season || "") + " USAGE"} \u00b7 market #${
+      r.rookie ? "ROOKIE" : "NO " + (kit.season || "") + " USAGE"} · market #${
       r.market_rank}</span>`;
   const basisNote = (r) => r.source === "market" ? marketNote(r)
     : `${r.games} gm${r.small_sample ? ` ${icon("warn")} small sample` : ""}`;
@@ -19105,6 +19169,11 @@ function draftKitHTML(kit) {
     ? ` · <span class="dk-moved" title="Traded or signed since these stats — the volume behind this projection came in ${escapeHtml(nflName(r.moved_from))}'s offense">NEW TEAM, was ${escapeHtml(r.moved_from)}</span>`
     : r.roster_flag
       ? ` · <span class="dk-moved">${escapeHtml(r.roster_flag)}</span>` : "";
+  const valueCell = (r) => auc
+    ? `<span class="dl-num strong dk-money" title="what he is worth of a ${
+        dkMoney(auc)} budget — $1 is the minimum bid, not an opinion">${
+        dkMoney(dkDollars(kit, r, auc))}</span>`
+    : `<span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>`;
   const boardRow = (r, i) => `
     <div class="dl-row dk-row" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-rank">${i + 1}</span>
@@ -19114,15 +19183,30 @@ function draftKitHTML(kit) {
             · ${basisNote(r)}${moveNote(r)}</span></span></span>
       <span class="dk-tier" style="color:${tierColor(r.tier)}">T${r.tier}</span>
       <span class="dl-num" title="projected PPR points per game">${r.proj}</span>
-      <span class="dl-num strong pos" title="points per game over the best freely-available ${escapeHtml(r.position)}">+${r.vorp}</span>
+      ${valueCell(r)}
     </div>`;
-  const board = kit.board.slice(0, BOARD_SHOWN).map(boardRow).join("")
-    + (kit.board.length > BOARD_SHOWN
-      ? `<div id="dk-rest" class="ff-hidden">${kit.board.slice(BOARD_SHOWN)
+  const rows = auc
+    ? kit.board.slice().sort((a, b) => (dkDollars(kit, b, auc) - dkDollars(kit, a, auc))
+                                       || ((b.vorp || 0) - (a.vorp || 0)))
+    : kit.board;
+  const open = !!dkState.boardOpen;
+  const body = rows.slice(0, BOARD_SHOWN).map(boardRow).join("")
+    + (rows.length > BOARD_SHOWN
+      ? `<div id="dk-rest"${open ? "" : ` class="ff-hidden"`}>${rows.slice(BOARD_SHOWN)
            .map((r, i) => boardRow(r, i + BOARD_SHOWN)).join("")}</div>
-         <button class="ff-more" id="dk-more" aria-expanded="false" aria-controls="dk-rest">
-           Show the full board (${kit.board.length}) ▾</button>` : "");
+         <button class="ff-more" id="dk-more" aria-expanded="${open}" aria-controls="dk-rest">${
+           open ? "Show fewer ▴" : `Show the full board (${rows.length}) ▾`}</button>` : "");
+  return `<div class="section-title">Overall board
+      <span class="sub">— ${auc
+        ? `ordered by what each player is worth of a ${dkMoney(auc)} budget,
+           priced against the last man drafted at his position`
+        : `ordered by VORP, not points: value over the best player
+           still on the wire at the same position`}</span></div>
+    <div class="card" style="padding:0">${body}</div>`;
+}
 
+function dkTiersHTML(kit) {
+  const auc = dkAuc();
   const posCard = (pos) => {
     const rows = (kit.tiers[pos] || []).slice(0, 15);
     if (!rows.length) return "";
@@ -19136,17 +19220,165 @@ function draftKitHTML(kit) {
         ${playerAvatar(r.player, r.team, { size: 18, map: nflMap(), headshot: r.headshot })}
         <span class="dk-pn">${escapeHtml(r.player)}${injTag("nfl", r.player)}
           <span class="dk-pt">${nflName(r.team)}${
-            r.source === "market" ? ` \u00b7 <span class="dk-market">mkt #${r.market_rank}</span>` : ""}</span></span>
-        <span class="dk-pp">${r.proj}</span>
+            r.source === "market" ? ` · <span class="dk-market">mkt #${r.market_rank}</span>` : ""}</span></span>
+        <span class="dk-pp${auc ? " dk-money" : ""}">${
+          auc ? dkMoney(dkDollars(kit, r, auc)) : r.proj}</span>
       </div>`;
     }).join("");
+    const sub = auc
+      ? `replacement ≈ ${((kit.auction || {}).replacement || {})[pos] ?? "—"} PPG
+         at ${escapeHtml(pos)}${((kit.auction || {}).ranks || {})[pos] ?? ""}`
+      : `replacement ≈ ${kit.replacement[pos] ?? "—"} PPG`;
     return `<article class="card dk-poscard">
       <div class="card-head"><div><div class="player">${escapeHtml(pos)}</div>
-        <div class="subtitle">replacement ≈ ${kit.replacement[pos] ?? "—"} PPG</div></div></div>
+        <div class="subtitle">${sub}</div></div></div>
       <div class="dk-posbody">${body}</div>
     </article>`;
   };
+  return ["QB", "RB", "WR", "TE"].map(posCard).join("");
+}
 
+/* The auction panel: the switch, the budget, and — once it is on —
+   where the room’s money goes. The split is the number a snake
+   drafter never has to think about and an auction drafter thinks about
+   first: it is one thing to know a back is worth $61 and another to
+   know that backs take nearly half the money in the room. */
+function dkAucBodyHTML(kit) {
+  const a = (kit || {}).auction || {};
+  const auc = dkAuc();
+  if (!auc || !a.priced) return "";
+  const k = a.budget && a.budget > a.slots
+    ? (auc - a.slots) / (a.budget - a.slots) : 1;
+  const split = ["QB", "RB", "WR", "TE"]
+    .filter((p) => (a.by_position || {})[p])
+    .sort((x, y) => a.by_position[y].share - a.by_position[x].share);
+  const fade = (i) => DK_FADE[i] || DK_FADE[DK_FADE.length - 1];
+  const bar = split.map((p, i) => {
+    const s = a.by_position[p];
+    return `<span class="dk-seg" style="flex:${Math.max(s.share, 0.01)};
+      background:var(--brand);opacity:${fade(i)}" title="${
+      escapeHtml(p)}: ${Math.round(s.share * 100)}% of the room’s money across ${
+      s.n} players"></span>`;
+  }).join("");
+  const key = split.map((p, i) => `<span class="dk-key"><i
+    style="background:var(--brand);opacity:${fade(i)}"></i>${escapeHtml(p)} ${
+    Math.round(a.by_position[p].share * 100)}%</span>`).join("");
+  const ranks = ["QB", "RB", "WR", "TE"]
+    .filter((p) => (a.ranks || {})[p]).map((p) => `${p}${a.ranks[p]}`).join(" · ");
+  return `
+    <div class="dk-split">${bar}</div>
+    <div class="dk-keys">${key}</div>
+    <p class="dk-aucnote"><b>${a.priced} players priced, ${a.dollar_spots} spots
+      at $1.</b> The sheet spends ${dkMoney(Math.round(a.total * k))} exactly —
+      every dollar in a ${a.teams}-team room at ${dkMoney(auc)} a manager, because
+      values that add up to more than the league can spend are wrong by however
+      much they overshoot, and you find that out in the last three rounds.</p>
+    <p class="dk-aucnote">Priced against ${escapeHtml(ranks)} — the last man
+      drafted at each position, not the last starter. An auction buys every bench
+      spot in the room, so the alternative to paying up is the cheapest body who
+      still gets drafted, and that is a deeper baseline than the snake board’s.</p>
+    <p class="dk-aucnote"><b>This is what he is worth, not what he will go
+      for.</b> Rooms overpay at the top and leave dollars unspent at the bottom.
+      We have never logged an auction, so there is no inflation curve here to fit
+      — the gap between this sheet and the room is yours to trade against.</p>`;
+}
+
+function dkAucCardHTML(kit) {
+  const auc = dkAuc();
+  return `<article class="card dk-auccard">
+    <div class="card-head"><div><div class="player">Auction values</div>
+      <div class="subtitle">The same projections, denominated in dollars — for
+        leagues that bid instead of snake.</div></div>
+      <button class="btn ghost dk-aucbtn" id="dk-auc-toggle" aria-pressed="${!!auc}">${
+        auc ? "Auction" : "Snake"}</button></div>
+    <div class="dk-aucrow${auc ? "" : " ff-hidden"}" id="dk-auc-controls">
+      <label for="dk-auc-budget">Budget per team</label>
+      <input id="dk-auc-budget" type="number" inputmode="numeric"
+        min="${DK_AUC_MIN}" max="${DK_AUC_MAX}" step="1" value="${auc || 200}"/>
+    </div>
+    <div id="dk-auc-body">${dkAucBodyHTML(kit)}</div>
+  </article>`;
+}
+
+/* Re-render the three surfaces the currency touches, then put back the
+   two pieces of live state that live in the DOM rather than in the
+   payload: the draft-room strikeouts and the full-board disclosure. */
+function dkAucApply() {
+  const kit = (dkState || {}).kit;
+  if (!kit) return;
+  const wrap = document.getElementById("dk-boardwrap");
+  const tiers = document.getElementById("dk-tiers");
+  const body = document.getElementById("dk-auc-body");
+  if (wrap) wrap.innerHTML = dkBoardHTML(kit);
+  if (tiers) tiers.innerHTML = dkTiersHTML(kit);
+  if (body) body.innerHTML = dkAucBodyHTML(kit);
+  dkBindMore(kit);
+  dkCrossOff();
+}
+
+function dkBindMore(kit) {
+  const more = document.getElementById("dk-more");
+  if (!more) return;
+  more.addEventListener("click", () => {
+    const rest = document.getElementById("dk-rest");
+    const open = rest.classList.toggle("ff-hidden") === false;
+    dkState.boardOpen = open;
+    more.setAttribute("aria-expanded", String(open));
+    more.textContent = open ? "Show fewer ▴"
+      : `Show the full board (${(kit.board || []).length}) ▾`;
+  });
+}
+
+/* The switch and the budget. Both write the one key and then
+   re-render, so there is no in-memory mode that storage does not
+   already hold: a reload — or the phone, after a sync — comes back
+   in the same currency the laptop was reading. */
+function initAuction(kit) {
+  const btn = document.getElementById("dk-auc-toggle");
+  const box = document.getElementById("dk-auc-budget");
+  const controls = document.getElementById("dk-auc-controls");
+  if (!btn || !box) return;
+  const clamp = (n) => Math.min(DK_AUC_MAX, Math.max(DK_AUC_MIN, n));
+  const write = (v) => {
+    if (v) localStorage.setItem(DK_AUC_KEY, String(v));
+    else localStorage.removeItem(DK_AUC_KEY);
+    acctTouch("fantasy");
+  };
+  btn.addEventListener("click", () => {
+    const on = !dkAuc();
+    write(on ? clamp(parseInt(box.value, 10) || 200) : 0);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.textContent = on ? "Auction" : "Snake";
+    controls.classList.toggle("ff-hidden", !on);
+    dkAucApply();
+  });
+  /* Typing a budget re-prices the whole sheet, so it waits for the
+     reader to stop typing: the "2" on the way to "250" clamps to the
+     floor, and repricing it would yank the board out from under him
+     between two keystrokes. */
+  let t = 0;
+  box.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (!dkAuc()) return;      // off — the box is not the source of truth
+      write(clamp(parseInt(box.value, 10) || 200));
+      dkAucApply();
+    }, 500);
+  });
+}
+
+/* The live draft’s strikeouts, re-applied. The poll owns the set and
+   refreshes it every twelve seconds; a re-render inside that window
+   would otherwise put every drafted player back on the board. */
+function dkCrossOff() {
+  const taken = (dkState || {}).taken;
+  if (!taken) return;
+  document.querySelectorAll("[data-ffp]").forEach((el) =>
+    el.classList.toggle("dk-taken", taken.has(el.dataset.ffp)));
+}
+
+function draftKitHTML(kit) {
+  if (!kit || !(kit.board || []).length) return "";
   const sleepers = (kit.sleepers || []).map((r) => `
     <div class="dl-row dk-slrow" data-ffp="${escapeHtml(ffNorm(r.player))}" data-dossier="${escapeAttr(r.player)}">
       <span class="dl-main dl-id">${playerAvatar(r.player, r.team, { size: 26, map: nflMap(), headshot: r.headshot })}
@@ -19176,14 +19408,12 @@ function draftKitHTML(kit) {
       <div id="dk-advice"></div>
       <div id="dk-best" class="ff-hidden" style="margin-top:12px"></div>
     </div>
-    <div class="section-title">Overall board
-      <span class="sub">— ordered by VORP, not points: value over the best player
-      still on the wire at the same position</span></div>
-    <div class="card" style="padding:0">${board}</div>
+    ${dkAucCardHTML(kit)}
+    <div id="dk-boardwrap">${dkBoardHTML(kit)}</div>
     <div class="section-title">Position tiers
       <span class="sub">— the gaps are the information: inside a tier the differences
       are noise</span></div>
-    <div class="cards wide">${["QB", "RB", "WR", "TE"].map(posCard).join("")}</div>
+    <div class="cards wide" id="dk-tiers">${dkTiersHTML(kit)}</div>
     ${sleepers ? `<div class="section-title">Usage says buy
         <span class="sub">— expected points clearly above what they actually scored;
         the draft-day version of buy-low</span></div>
@@ -21886,13 +22116,8 @@ function initDraftKit(kit) {
   const btn = document.getElementById("dk-connect");
   if (!btn || !kit) return;
   dkState.kit = kit;
-  const more = document.getElementById("dk-more");
-  if (more) more.addEventListener("click", () => {
-    const rest = document.getElementById("dk-rest");
-    const open = rest.classList.toggle("ff-hidden") === false;
-    more.setAttribute("aria-expanded", String(open));
-    more.textContent = open ? "Show fewer ▴" : `Show the full board (${kit.board.length}) ▾`;
-  });
+  dkBindMore(kit);
+  initAuction(kit);
   const input = document.getElementById("dk-draft-id");
   const saved = localStorage.getItem("ff_draft_id");
   if (saved) input.value = saved;
@@ -21943,8 +22168,12 @@ function dkStart(draftId) {
     });
     if (typeof renderRankBoard === "function") renderRankBoard();
     st.textContent = `LIVE · ${taken.size} PICKED`; st.style.color = "var(--good)";
-    document.querySelectorAll("[data-ffp]").forEach((el) =>
-      el.classList.toggle("dk-taken", taken.has(el.dataset.ffp)));
+    // KEPT, not just applied: flipping the board into auction dollars
+    // re-renders every row, and a strikeout that only exists in the DOM
+    // would put twenty drafted players back on the board until the next
+    // twelve-second tick.
+    dkState.taken = taken;
+    dkCrossOff();
     dkBestAvailable(taken);
     dkAdvice(draftId);
   };

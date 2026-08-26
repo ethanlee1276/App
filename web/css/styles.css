@@ -3351,6 +3351,48 @@ body.msg-thread-open .footer { display: none; }
   border-left: 2px solid var(--brand); background: var(--fill-subtle); }
 .dk-marketline b { color: var(--text); }
 
+/* Auction mode. The dollars replace the VORP column rather than joining
+   it: the phone drops every .dl-num that is not .strong, so a sixth
+   column would have wrapped the board on exactly the screen it gets
+   read on — at a draft table, on a phone. One currency at a time. */
+.dk-auccard { --grade-color: var(--cyan); }
+.dk-aucbtn { align-self: flex-start; min-width: 92px; }
+/* The house on-state, borrowed from .rec-scope.active rather than
+   invented: every other "this control is on" on the site is the brand
+   gradient, and a toggle that lit up in its own colour would read as a
+   different KIND of control. */
+.dk-aucbtn[aria-pressed="true"] {
+  background: var(--grad-brand); border-color: transparent;
+  color: var(--brand-ink); box-shadow: var(--glow);
+}
+.dk-aucrow { display: flex; align-items: center; gap: 10px; margin-top: 12px;
+  flex-wrap: wrap; color: var(--text-mute); font-size: var(--fs-sm); }
+.dk-aucrow input {
+  width: 110px; background: var(--panel-2); color: inherit;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; font-family: inherit; font-variant-numeric: tabular-nums;
+}
+.dl-num.dk-money, .dk-pp.dk-money, .dk-money {
+  color: var(--brand); font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+/* Where the room's money goes, at a glance. Widths are the shares
+   themselves — a bar whose segments are drawn to anything else is a
+   picture of a number nobody computed. ONE HUE, stepped by weight
+   rather than four colours: --warn is defined as --brand in the default
+   theme, so a per-position palette drew quarterbacks and tight ends in
+   the same paint, and the bar is one quantity split four ways anyway. */
+.dk-split { display: flex; gap: 2px; height: 10px; margin-top: 14px;
+  border-radius: 999px; overflow: hidden; }
+.dk-seg { display: block; min-width: 3px; }
+.dk-keys { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;
+  color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; }
+.dk-key { display: inline-flex; align-items: center; gap: 5px; }
+.dk-key i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.dk-aucnote { color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); margin-top: 10px; }
+.dk-aucnote b { color: var(--text); }
+
 /* Mock draft. Row-list panels share the injuries board's two-line
    discipline: identity on the left (face, name, quiet meta), the one
    action right-aligned, a flexible middle so nothing crushes at 393px.
