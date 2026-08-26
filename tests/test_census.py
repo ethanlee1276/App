@@ -140,6 +140,24 @@ def test_the_page_can_name_every_gate_the_rules_can_fail():
         assert f"{key}:" in body, f"the funnel cannot name {key}"
 
 
+def test_the_unpriced_note_uses_the_right_sports_noun():
+    """It read "every hitter in the lineup" on every board — the wrong
+    sport's noun in the one panel whose whole job is explaining an empty
+    board honestly. Caught on a real NFL Week-1 rehearsal, by looking."""
+    app = _read("web", "js", "app.js")
+    i = app.index("const whoWeProject")
+    body = app[i:i + 400]
+    assert 'state.sport === "mlb"' in body
+    assert "skill player on the card" in body
+    # The TEMPLATE must interpolate, not hardcode. Counting the phrase
+    # across the file would also count the comment that explains the fix,
+    # which is prose about the bug rather than the bug.
+    j = app.index("const noPrice = npmRows")
+    tmpl = app[j:j + 700]
+    assert "${whoWeProject}" in tmpl
+    assert "every hitter in the lineup" not in tmpl
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

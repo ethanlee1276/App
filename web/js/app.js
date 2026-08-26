@@ -2554,9 +2554,18 @@ function censusFunnelHTML() {
   const npm = gc.no_price_markets || {};
   const npmRows = Object.entries(npm).sort((a, b) => b[1] - a[1])
     .map(([m, n]) => `${escapeHtml(m)} ${n}`).join(" · ");
+  // SPORT-AWARE. This sentence said "every hitter in the lineup" on
+  // every board, which on the NFL page is the wrong sport's noun in the
+  // one panel whose whole job is explaining an empty board honestly.
+  // Caught 2026-08-26 on a real Week-1 rehearsal, by looking at it.
+  const whoWeProject = state.sport === "mlb"
+    ? "every hitter in the lineup"
+    : state.sport === "nfl" || state.sport === "cfb"
+      ? "every skill player on the card"
+      : "every player expected to feature";
   const noPrice = npmRows
     ? `<div style="margin-top:6px;font-size:var(--fs-sm);color:var(--text-mute)">
-       Unpriced by market: ${npmRows}. We project every hitter in the lineup;
+       Unpriced by market: ${npmRows}. We project ${whoWeProject};
        books post lines for a subset — that gap is normal, not a broken feed.
        A price we <em>paid</em> for and failed to match is a different thing:
        the build prints those as a name-match warning.</div>${oddsClockHTML()}` : "";

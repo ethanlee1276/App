@@ -27,6 +27,33 @@ out of his own board.
 
 ---
 
+## NFL Week 1 dress rehearsal — run 2026-08-26, board healthy
+
+Ahead of the Sep 10 opener, `nfl_build.py 2026 1 --carry` was run
+end-to-end on this box against the ingested 2025 season. What came out:
+
+* 16 games, 64 game bets, 285 props analysed, 283 players with stat
+  histories attached, drive sim replayed, 32 team shapes ranked;
+* every board section present (`game_bets`, `player_stats`,
+  `team_recent`, `incentives`, `playoff_picture`, `parlays`,
+  `correlation`, `market_scan`, `injury_status`, `odds_status`);
+* the gate census — new the same day — correctly attributed all 285
+  deaths to "no real book price yet", broken out per market, because
+  the rehearsal ran WITHOUT `--odds` and therefore spent no credits;
+* long shots empty, which is correct with no odds: a scorer market has
+  no proxy price by design.
+
+So the player layer, the carry, the TD histories and the whole payload
+shape are ready. The only thing the rehearsal could not exercise is
+real book prices, which the launcher supplies.
+
+ONE DEFECT FOUND, by looking at the render rather than the JSON: the
+census's unpriced note read "we project every hitter in the lineup" on
+the NFL board — the wrong sport's noun in the one panel whose whole job
+is explaining an empty board honestly. Fixed and pinned.
+
+---
+
 ## 2. Smaller, known, not urgent
 
 * Player photos are missing for MLB / NFL / NBA — faces are captured
