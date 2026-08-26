@@ -146,6 +146,12 @@ def ensure_tables(conn) -> None:
       );
       CREATE INDEX IF NOT EXISTS dm_pair
         ON dm_messages(from_id, to_id, created_at);
+      CREATE TABLE IF NOT EXISTS message_deletes (
+        user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind     TEXT NOT NULL,
+        item_id  INTEGER NOT NULL,
+        PRIMARY KEY (user_id, kind, item_id)
+      );
       CREATE TABLE IF NOT EXISTS friend_nicknames (
         user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         friend_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -550,10 +556,13 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
         return names[fid]
 
     out = []
+    gone = {k: _hidden(conn, user_id, k) for k in DELETABLE}
     for r in conn.execute(
             "SELECT id, from_id, sport, date, player, market, note, "
             "created_at, seen FROM pick_shares WHERE to_id=? "
             "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        if int(r["id"]) in gone["pick"]:
+            continue
         out.append({"kind": "pick", "id": int(r["id"]), "from": _name(r["from_id"]),
                     "sport": r["sport"], "date": r["date"],
                     "player": r["player"], "market": r["market"],
@@ -563,6 +572,8 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
             "SELECT id, from_id, sport, date, legs, note, created_at, seen "
             "FROM parlay_shares WHERE to_id=? "
             "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        if int(r["id"]) in gone["parlay"]:
+            continue
         try:
             legs = json.loads(r["legs"])
         except ValueError:
@@ -574,10 +585,15 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
                     "seen": bool(r["seen"])})
     out.sort(key=lambda s: s["created_at"], reverse=True)
     out = out[:int(limit)]
-    unseen = sum(int(conn.execute(
-        f"SELECT COUNT(*) FROM {t} WHERE to_id=? AND seen=0",
-        (int(user_id),)).fetchone()[0])
-        for t in ("pick_shares", "parlay_shares", "dm_messages"))
+    # A deleted message cannot leave a badge behind it — that would be
+    # a dot with nothing to open.
+    unseen = 0
+    for kind, table in DELETABLE.items():
+        for r in conn.execute(
+                f"SELECT id FROM {table} WHERE to_id=? AND seen=0",
+                (int(user_id),)):
+            if int(r[0]) not in gone[kind]:
+                unseen += 1
     return {"shares": out, "unseen": int(unseen)}
 
 
@@ -594,10 +610,13 @@ def sent(conn, user_id: int, limit: int = 30) -> list[dict]:
         return names[uid]
 
     out = []
+    gone = {k: _hidden(conn, user_id, k) for k in DELETABLE}
     for r in conn.execute(
             "SELECT id, to_id, sport, date, player, market, note, created_at "
             "FROM pick_shares WHERE from_id=? "
             "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        if int(r["id"]) in gone["pick"]:
+            continue
         out.append({"kind": "pick", "id": int(r["id"]), "to": _name(r["to_id"]),
                     "sport": r["sport"], "date": r["date"],
                     "player": r["player"], "market": r["market"],
@@ -606,6 +625,8 @@ def sent(conn, user_id: int, limit: int = 30) -> list[dict]:
             "SELECT id, to_id, sport, date, legs, note, created_at "
             "FROM parlay_shares WHERE from_id=? "
             "ORDER BY created_at DESC LIMIT ?", (int(user_id), int(limit))):
+        if int(r["id"]) in gone["parlay"]:
+            continue
         try:
             legs = json.loads(r["legs"])
         except ValueError:
@@ -684,12 +705,17 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
     if not ok:
         return 403, {"error": "You can only message your friends."}
     items = []
+    # What THIS viewer has deleted never comes back to them (the other
+    # side keeps their copy — see the deleting section above).
+    gone = {k: _hidden(conn, me, k) for k in DELETABLE}
     # `seen` rides every item: on YOUR bubbles it is the read receipt
     # (did the friend see it), on theirs it drives the unread state.
     for r in conn.execute(
             "SELECT id, from_id, body, created_at, seen FROM dm_messages "
             "WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
+        if int(r["id"]) in gone["text"]:
+            continue
         items.append({"kind": "text", "id": int(r["id"]),
                       "mine": int(r["from_id"]) == me,
                       "body": r["body"], "created_at": r["created_at"],
@@ -699,6 +725,8 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
             "created_at, seen FROM pick_shares WHERE "
             "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
+        if int(r["id"]) in gone["pick"]:
+            continue
         items.append({"kind": "pick", "id": int(r["id"]),
                       "mine": int(r["from_id"]) == me,
                       "sport": r["sport"], "date": r["date"],
@@ -710,6 +738,8 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
             "FROM parlay_shares WHERE "
             "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
+        if int(r["id"]) in gone["parlay"]:
+            continue
         try:
             legs = json.loads(r["legs"])
         except ValueError:
@@ -724,6 +754,113 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
     return 200, {"friend": name_for(conn, me, friend_id),
                  "username": display_name(conn, friend_id),
                  "friend_id": friend_id, "items": items}
+
+
+# --- deleting ----------------------------------------------------------------
+#
+# Ethan, 2026-08-26: "add a feature to be able to delete messages ...
+# we should be able to delete entire conversations and specific
+# messages."
+#
+# DELETING IS FOR YOU, AND ONLY YOU. A message row is shared: one row,
+# two people, and dropping it would take the conversation out of the
+# other person's phone as well. That is not a delete, it is a reach into
+# somebody else's account — and this is the same project that keeps a
+# nickname private to the person who wrote it and refuses to tell a
+# friend they were declined. So a delete writes a TOMBSTONE against the
+# viewer's own id and every read filters on it. The other side keeps
+# their copy, and the page says so rather than letting somebody assume
+# they have unsent something.
+#
+# THE ROWS STILL GO EVENTUALLY. Once BOTH people have tombstoned an
+# item, nobody can see it again and the underlying row is deleted for
+# real, tombstones and all. A droplet with one vCPU should not carry a
+# table of messages no living account can read.
+
+#: The three things a thread can hold, and the tables they live in.
+DELETABLE = {"text": "dm_messages", "pick": "pick_shares",
+             "parlay": "parlay_shares"}
+
+
+def _mine(conn, me: int, kind: str, item_id: int):
+    """The row, when this viewer is one of its two parties — else None.
+
+    The membership check is the authorization: a crafted id for somebody
+    else's conversation finds nothing rather than tombstoning a row the
+    caller was never party to.
+    """
+    table = DELETABLE.get(kind)
+    if not table:
+        return None
+    return conn.execute(
+        f"SELECT from_id, to_id FROM {table} WHERE id=? "
+        "AND (from_id=? OR to_id=?)", (int(item_id), int(me), int(me))
+    ).fetchone()
+
+
+def _sweep(conn, kind: str, item_id: int) -> None:
+    """Drop the row for real once both parties have cleared it."""
+    row = conn.execute(
+        f"SELECT from_id, to_id FROM {DELETABLE[kind]} WHERE id=?",
+        (int(item_id),)).fetchone()
+    if not row:
+        return
+    both = {int(row["from_id"]), int(row["to_id"])}
+    seen = {int(r[0]) for r in conn.execute(
+        "SELECT user_id FROM message_deletes WHERE kind=? AND item_id=?",
+        (kind, int(item_id)))}
+    if both <= seen:
+        conn.execute(f"DELETE FROM {DELETABLE[kind]} WHERE id=?",
+                     (int(item_id),))
+        conn.execute("DELETE FROM message_deletes WHERE kind=? AND item_id=?",
+                     (kind, int(item_id)))
+
+
+def delete_item(conn, me: int, kind: str, item_id: int) -> tuple[int, dict]:
+    """Hide one message, pick or parlay from THIS viewer's threads."""
+    ensure_tables(conn)
+    if kind not in DELETABLE:
+        return 400, {"error": "That is not something you can delete."}
+    if not _mine(conn, me, kind, item_id):
+        return 404, {"error": "That message is not in your messages."}
+    conn.execute("INSERT OR IGNORE INTO message_deletes (user_id, kind, "
+                 "item_id) VALUES (?,?,?)", (int(me), kind, int(item_id)))
+    _sweep(conn, kind, item_id)
+    conn.commit()
+    return 200, {"deleted": True}
+
+
+def delete_thread(conn, me: int, friend_id: int) -> tuple[int, dict]:
+    """Clear a whole conversation from THIS viewer's messages.
+
+    Everything currently in it — texts both ways, and the picks and
+    parlays that were shared into it. Anything sent AFTER this arrives
+    as a new conversation, which is what a reader expects: clearing a
+    thread is not blocking somebody.
+    """
+    ensure_tables(conn)
+    me, friend_id = int(me), int(friend_id)
+    code, t = thread(conn, me, friend_id, limit=10 ** 9)
+    if code != 200:
+        return code, t
+    n = 0
+    for item in t["items"]:
+        kind = item["kind"]
+        if kind not in DELETABLE:
+            continue
+        conn.execute("INSERT OR IGNORE INTO message_deletes (user_id, kind, "
+                     "item_id) VALUES (?,?,?)", (me, kind, int(item["id"])))
+        _sweep(conn, kind, int(item["id"]))
+        n += 1
+    conn.commit()
+    return 200, {"deleted": n}
+
+
+def _hidden(conn, user_id: int, kind: str) -> set:
+    """The ids this viewer has cleared, for one kind."""
+    return {int(r[0]) for r in conn.execute(
+        "SELECT item_id FROM message_deletes WHERE user_id=? AND kind=?",
+        (int(user_id), kind))}
 
 
 def _preview(row) -> str:
@@ -744,6 +881,7 @@ def threads(conn, me: int) -> list[dict]:
     sorted under the live ones."""
     ensure_tables(conn)
     me = int(me)
+    gone = {k: _hidden(conn, me, k) for k in DELETABLE}
     out = []
     for f in friends_list(conn, me):
         fid = int(f["id"])
@@ -754,10 +892,15 @@ def threads(conn, me: int) -> list[dict]:
             last = {"kind": row["kind"], "mine": row["mine"],
                     "preview": _preview(row),
                     "created_at": row["created_at"]}
-        unseen = sum(int(conn.execute(
-            f"SELECT COUNT(*) FROM {tab} WHERE to_id=? AND from_id=? "
-            "AND seen=0", (me, fid)).fetchone()[0])
-            for tab in ("pick_shares", "parlay_shares", "dm_messages"))
+        # Same rule as the badge: a message this reader deleted leaves
+        # no unread dot behind it.
+        unseen = 0
+        for kind, tab in DELETABLE.items():
+            for r in conn.execute(
+                    f"SELECT id FROM {tab} WHERE to_id=? AND from_id=? "
+                    "AND seen=0", (me, fid)):
+                if int(r[0]) not in gone[kind]:
+                    unseen += 1
         out.append({"friend_id": fid, "name": f["name"],
                     "username": f["username"], "last": last,
                     "unseen": int(unseen)})

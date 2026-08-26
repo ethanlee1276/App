@@ -539,6 +539,20 @@ def delete_user(conn, user_id: int) -> None:
         if shares in have:
             conn.execute(f"DELETE FROM {shares} WHERE from_id=? OR to_id=?",
                          (int(user_id), int(user_id)))
+    if "message_deletes" in have:
+        # This account's own tombstones, and any that pointed at rows the
+        # share/message deletes above just removed. A tombstone whose row
+        # is gone is a permanent orphan — nothing ever sweeps it, because
+        # the sweep runs off the row.
+        conn.execute("DELETE FROM message_deletes WHERE user_id=?",
+                     (int(user_id),))
+        for kind, table in (("text", "dm_messages"),
+                            ("pick", "pick_shares"),
+                            ("parlay", "parlay_shares")):
+            if table in have:
+                conn.execute(
+                    f"DELETE FROM message_deletes WHERE kind=? AND item_id "
+                    f"NOT IN (SELECT id FROM {table})", (kind,))
     if "friend_nicknames" in have:
         # Both directions: the labels this account gave out AND the rows
         # where other people's labels name it — a nickname pointing at a

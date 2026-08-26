@@ -25882,6 +25882,9 @@ async function renderThread(host, fid) {
           escapeHtml(t.friend)}</b>${t.username && t.username !== t.friend
             ? `<span class="msg-who-user">@${escapeHtml(t.username)}</span>`
             : ""}</span>
+        <button class="btn-quiet msg-clear-btn" data-msg-clear="${t.friend_id}"
+          type="button" title="Clear this conversation from your messages"
+          >${icon("cross", 12)} Clear</button>
         <button class="btn-quiet msg-nick-btn" data-msg-nick="${t.friend_id}"
           data-nick-current="${escapeAttr(t.username !== t.friend ? t.friend : "")}"
           data-nick-user="${escapeAttr(t.username || "")}"
@@ -26055,10 +26058,17 @@ function msgBubble(it) {
     : msgShareCard(it);
   const note = it.kind !== "text" && it.note
     ? `<span class="msg-note">“${escapeHtml(it.note)}”</span>` : "";
+  // DELETES FROM YOUR COPY, never theirs — see engine/social's deleting
+  // section. The control says so on hover rather than letting somebody
+  // assume they have unsent something.
+  const rm = it.id ? `<button class="msg-bub-x" data-msg-del="${it.kind}"
+      data-msg-del-id="${it.id}" type="button"
+      title="Delete this from your messages — they keep their copy"
+      aria-label="Delete this message">${icon("cross", 11)}</button>` : "";
   return `<div class="msg-bub-row ${mine ? "mine" : "theirs"}">
     ${mine ? "" : msgAvatar(_msgFriendName)}
     <div class="msg-bub ${mine ? "mine" : "theirs"}${it.kind !== "text"
-      ? " share" : ""}">${head}${body}${note}${ticks}</div>
+      ? " share" : ""}">${head}${body}${note}${ticks}${rm}</div>
     ${mine ? msgMyAvatar() : ""}
   </div>`;
 }
@@ -26240,6 +26250,58 @@ document.addEventListener("click", async (e) => {
   if (kind && _msgThread) {
     _msgKind = kind.dataset.msgKind;
     renderMessages();
+    return;
+  }
+  const del = e.target.closest && e.target.closest("[data-msg-del]");
+  if (del) {
+    e.preventDefault();
+    const row = del.closest(".msg-bub-row");
+    if (row) row.style.opacity = ".4";      // answers the tap immediately
+    try {
+      const r = await fetch("/api/social/delete-message", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: del.dataset.msgDel,
+                               id: Number(del.dataset.msgDelId) }),
+      });
+      if (!r.ok) {
+        if (row) row.style.opacity = "";
+        const out = await r.json().catch(() => ({}));
+        tfToast(out.error || "That didn’t delete.");
+        return;
+      }
+    } catch (err) {
+      if (row) row.style.opacity = "";
+      tfToast("Could not reach the server.");
+      return;
+    }
+    _msgLastItems = "";                     // force the poll to redraw
+    renderMessages();
+    return;
+  }
+  const clr = e.target.closest && e.target.closest("[data-msg-clear]");
+  if (clr) {
+    e.preventDefault();
+    // A whole conversation is worth one question. Deleting a single
+    // message is not — it is one tap to undo by asking the friend, and
+    // a confirm on every bubble would make the thread unusable.
+    if (!window.confirm("Clear this conversation from your messages?\n\n"
+        + "It stays in theirs — this only clears your copy.")) return;
+    try {
+      const r = await fetch("/api/social/delete-thread", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend: Number(clr.dataset.msgClear) }),
+      });
+      if (!r.ok) {
+        const out = await r.json().catch(() => ({}));
+        tfToast(out.error || "That didn’t clear.");
+        return;
+      }
+      tfToast("Cleared from your messages.");
+    } catch (err) { tfToast("Could not reach the server."); return; }
+    _msgLastItems = "";
+    await socFetch(true);
+    renderMessages();
+    msgBadge();
     return;
   }
   const nick = e.target.closest && e.target.closest("[data-msg-nick]");

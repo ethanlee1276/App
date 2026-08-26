@@ -2982,7 +2982,7 @@ body.msg-thread-open .footer { display: none; }
 .msg-thread-who .msg-ava { width: 34px; height: 34px;
   font-size: var(--fs-xs); }
 .msg-who-user { color: var(--text-mute); font-size: var(--fs-xs); }
-.msg-nick-btn { margin-left: auto; }
+
 .msg-nick-form { display: flex; gap: 6px; flex: 1; min-width: 0; }
 .msg-nick-form .msg-search { min-width: 0; }
 .msg-tabs { display: flex; gap: 4px; padding: 5px;
@@ -3022,6 +3022,24 @@ body.msg-thread-open .footer { display: none; }
 .msg-bub-head b { font-size: var(--fs-sm); }
 .msg-bub-body { font-size: var(--fs-sm); white-space: pre-wrap; }
 .msg-bub-when { color: var(--text-mute); font-size: var(--fs-2xs); }
+/* The per-bubble delete. Present but quiet: it sits in the bubble's own
+   corner at low opacity and comes up on hover or focus, because a row of
+   loud X's turns a conversation into a management screen. On a touch
+   screen there is no hover, so it stays faintly visible rather than
+   being unreachable. */
+.msg-bub { position: relative; }
+.msg-bub-x { position: absolute; top: 4px; right: 5px;
+  display: grid; place-items: center; width: 20px; height: 20px;
+  padding: 0; border: none; border-radius: 999px; background: none;
+  color: var(--text-mute); cursor: pointer; opacity: .28;
+  transition: opacity var(--dur-fast) var(--ease-out); }
+.msg-bub:hover .msg-bub-x, .msg-bub-x:focus-visible { opacity: .9; }
+.msg-bub-x:hover { color: var(--bad); }
+@media (pointer: coarse) { .msg-bub-x { opacity: .45; } }
+/* The head row already holds a name and a clock; keep them off the X. */
+.msg-bub-head { padding-right: 20px; }
+.msg-clear-btn { margin-left: auto; }
+.msg-nick-btn { margin-left: 8px; }
 .msg-ticks { align-self: flex-end; color: var(--text-mute);
   font-size: var(--fs-2xs); letter-spacing: -.12em; }
 .msg-ticks.seen { color: var(--brand); }

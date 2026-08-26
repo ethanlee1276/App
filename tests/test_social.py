@@ -379,7 +379,8 @@ def test_the_social_api_carries_the_request_paths():
     i = srv.index("def _social_post")
     body = srv[i:i + 500]
     for path in ('"find"', '"request"', '"answer-request"', '"dm"',
-                 '"thread"', '"nickname"'):
+                 '"thread"', '"nickname"', '"delete-message"',
+                 '"delete-thread"'):
         assert path in body, f"{path} missing from the social POST paths"
     # The SOCIAL me, not the account me — server.py has both.
     j = srv.index('if path == "me":', srv.index("def _social_get"))
@@ -600,6 +601,149 @@ def test_the_export_carries_your_labels_and_never_who_labelled_you():
         "an export admits somebody labelled this account"
 
 
+# --- deleting ----------------------------------------------------------------
+# Ethan, 2026-08-26: "add a feature to be able to delete messages ... we
+# should be able to delete entire conversations and specific messages."
+#
+# The rule the whole design turns on: a message row is SHARED, one row
+# between two people. Dropping it would take the conversation out of the
+# other person's phone too — a reach into somebody else's account, in
+# the same project that keeps a nickname private and never tells anyone
+# they were declined. So a delete is a tombstone against the deleter's
+# own id, and the friend keeps their copy.
+
+def test_deleting_hides_it_from_you_and_never_from_them():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "one")
+    SOC.dm_send(conn, b, a, "two")
+    _, t = SOC.thread(conn, a, b)
+    first = t["items"][0]["id"]
+    code, out = SOC.delete_item(conn, a, "text", first)
+    assert code == 200 and out["deleted"]
+    _, ta = SOC.thread(conn, a, b)
+    _, tb = SOC.thread(conn, b, a)
+    assert [i["body"] for i in ta["items"]] == ["two"]
+    assert [i["body"] for i in tb["items"]] == ["one", "two"], \
+        "the delete reached into the friend's copy"
+
+
+def test_you_cannot_delete_a_message_you_are_not_party_to():
+    """The membership check IS the authorization — a crafted id for
+    somebody else's conversation must find nothing."""
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "private")
+    _, t = SOC.thread(conn, a, b)
+    code, _out = SOC.delete_item(conn, c, "text", t["items"][0]["id"])
+    assert code == 404
+    _, t2 = SOC.thread(conn, a, b)
+    assert len(t2["items"]) == 1, "a stranger deleted somebody's message"
+
+
+def test_an_unknown_kind_is_refused():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    code, _out = SOC.delete_item(conn, a, "roster", 1)
+    assert code == 400
+
+
+def test_shares_delete_the_same_way_as_texts():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.share_pick(conn, b, a, "nfl", "2026-09-07", "Puka Nacua",
+                   "Receiving Yards")
+    SOC.share_parlay(conn, b, a, "nfl", "2026-09-07",
+                     [{"player": "A", "market": "rec_yds"},
+                      {"player": "B", "market": "rush_yds"}])
+    _, t = SOC.thread(conn, a, b)
+    for item in list(t["items"]):
+        assert SOC.delete_item(conn, a, item["kind"], item["id"])[0] == 200
+    _, ta = SOC.thread(conn, a, b)
+    assert ta["items"] == []
+    assert SOC.inbox(conn, a)["shares"] == [], \
+        "a deleted share still sits in the Alerts strip"
+
+
+def test_a_deleted_message_leaves_no_unread_dot_behind_it():
+    """A badge with nothing to open is the exact lie the badge rules
+    forbid everywhere else on this site."""
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, b, a, "unread")
+    assert SOC.inbox(conn, a)["unseen"] == 1
+    _, t = SOC.thread(conn, a, b)
+    SOC.delete_item(conn, a, "text", t["items"][0]["id"])
+    assert SOC.inbox(conn, a)["unseen"] == 0
+    assert SOC.threads(conn, a)[0]["unseen"] == 0
+
+
+def test_clearing_a_conversation_takes_only_your_copy():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    _befriend(conn, a, c)
+    for m in ("one", "two"):
+        SOC.dm_send(conn, a, b, m)
+    SOC.dm_send(conn, a, c, "elsewhere")
+    code, out = SOC.delete_thread(conn, a, b)
+    assert code == 200 and out["deleted"] == 2
+    assert SOC.thread(conn, a, b)[1]["items"] == []
+    assert len(SOC.thread(conn, b, a)[1]["items"]) == 2, \
+        "clearing took the friend's conversation too"
+    assert len(SOC.thread(conn, a, c)[1]["items"]) == 1, \
+        "clearing one conversation reached another"
+
+
+def test_clearing_is_not_blocking():
+    """Anything sent afterwards arrives as a new conversation — a reader
+    who clears a thread has not muted the person."""
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "old")
+    SOC.delete_thread(conn, a, b)
+    SOC.dm_send(conn, b, a, "new")
+    _, t = SOC.thread(conn, a, b)
+    assert [i["body"] for i in t["items"]] == ["new"]
+
+
+def test_a_row_nobody_can_read_is_deleted_for_real():
+    """One vCPU should not carry messages no living account can see."""
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "mutual")
+    _, t = SOC.thread(conn, a, b)
+    mid = t["items"][0]["id"]
+    SOC.delete_item(conn, a, "text", mid)
+    assert conn.execute("SELECT COUNT(*) FROM dm_messages").fetchone()[0] == 1
+    SOC.delete_item(conn, b, "text", mid)
+    assert conn.execute("SELECT COUNT(*) FROM dm_messages").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM message_deletes").fetchone()[0] == 0, \
+        "the tombstones outlived the row they pointed at"
+
+
+def test_a_deleted_account_leaves_no_orphan_tombstones():
+    """A tombstone whose row is gone is a permanent orphan: nothing ever
+    sweeps it, because the sweep runs off the row."""
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "one")
+    _, t = SOC.thread(conn, a, b)
+    SOC.delete_item(conn, a, "text", t["items"][0]["id"])
+    assert conn.execute("SELECT COUNT(*) FROM message_deletes").fetchone()[0] == 1
+    A.delete_user(conn, b)
+    assert conn.execute("SELECT COUNT(*) FROM message_deletes").fetchone()[0] == 0
+
+
+def test_a_stranger_cannot_clear_a_thread_they_are_not_in():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    SOC.dm_send(conn, a, b, "theirs")
+    code, _out = SOC.delete_thread(conn, c, b)
+    assert code == 403
+    assert len(SOC.thread(conn, a, b)[1]["items"]) == 1
+
+
 # --- the front end's half ----------------------------------------------------
 
 APPJS = _read("web", "js", "app.js")
@@ -701,6 +845,27 @@ def test_the_door_switches_boards_and_falls_back_to_the_player_page():
     assert "GAME_MARKET_WORDS[market]" in body, \
         "a game leg's door forgot it is a matchup, not a player"
 
+
+
+def test_the_page_says_a_delete_is_only_your_copy():
+    """Somebody who deletes a message they regret must not walk away
+    believing they unsent it."""
+    i = APPJS.index("data-msg-del=")
+    assert "they keep their copy" in APPJS[i - 400:i + 400]
+    j = APPJS.index("data-msg-clear=")
+    assert "[data-msg-clear]" in APPJS
+    k = APPJS.index("delete-thread")
+    assert "only clears your copy" in APPJS[k - 900:k + 400], \
+        "clearing a conversation does not say whose copy goes"
+
+
+def test_clearing_a_conversation_asks_first_and_one_message_does_not():
+    """A whole conversation is worth one question; a confirm on every
+    bubble would make the thread unusable."""
+    i = APPJS.index('e.target.closest("[data-msg-clear]")')
+    assert "window.confirm(" in APPJS[i:i + 900]
+    j = APPJS.index('e.target.closest("[data-msg-del]")')
+    assert "window.confirm(" not in APPJS[j:j + 900]
 
 
 def test_seen_is_marked_after_display_not_on_fetch():

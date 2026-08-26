@@ -1607,7 +1607,8 @@ class Handler(BaseHTTPRequestHandler):
         from engine import social as SOC
         if path not in ("accept", "send", "send-parlay", "remove", "seen",
                         "revoke-invite", "find", "request", "answer-request",
-                        "dm", "thread", "nickname"):
+                        "dm", "thread", "nickname",
+                        "delete-message", "delete-thread"):
             return self._send(404, b'{"error":"unknown social endpoint"}',
                               ".json")
         A = _acct()
@@ -1679,6 +1680,18 @@ class Handler(BaseHTTPRequestHandler):
             if path == "thread":
                 code, out = SOC.thread(conn, who["id"],
                                        int(body.get("friend") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "delete-message":
+                # Hides ONE item from this viewer's threads. Never the
+                # friend's copy — engine/social's deleting section says
+                # why that would be a reach into somebody else's account.
+                code, out = SOC.delete_item(conn, who["id"],
+                                            str(body.get("kind") or ""),
+                                            int(body.get("id") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "delete-thread":
+                code, out = SOC.delete_thread(conn, who["id"],
+                                              int(body.get("friend") or 0))
                 return self._send(code, json.dumps(out).encode(), ".json")
             if path == "nickname":
                 # Your private label for a friend — empty clears it. It

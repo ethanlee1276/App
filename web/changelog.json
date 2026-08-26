@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "Delete a message, or clear a whole conversation",
+      "body": "Every message and shared pick in a thread now carries a quiet delete, and the conversation header carries Clear for the whole thing. One rule shapes all of it: deleting takes YOUR copy and never theirs. A message is a single record shared between two people, so removing it outright would reach into somebody else's account and take a conversation off their phone — the site does not do that, and both controls say so plainly rather than letting anyone believe they have unsent something. Clearing a thread is not blocking either: anything sent afterwards arrives as a new conversation. Deleted messages take their unread dots with them, so a badge can never point at something you cannot open, and once both people have cleared an item it is deleted from the database for real."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "Model versus market, in public",
       "body": "The Record page gets the number that matters earliest: does the line move our way after we bet it? A win-loss record over a few hundred picks is mostly variance wearing a percentage sign, but closing-line value grades the decision at kickoff and accrues on every settled pick rather than only the winners. The new panel cuts it by sport and market with the sample size beside every number, because a strong average over nine bets and the same average over four hundred are different facts. Two rules keep it honest: under the sample bar a row still shows its average and declines to call it — hiding a figure until it looks good is the exact failure this page exists to refuse — and a market with settled picks but no stored closing lines gets a row saying it cannot be graded, rather than quietly not appearing. That kind of silent absence is how the touchdown board hid a broken harvest for its whole existence. This panel can come out badly in public, which is the point of publishing it."
     },
