@@ -29,12 +29,33 @@ fed back in without double-shrinking it.
 What it cannot do is invent data. A pairing whose markets are not in the
 history reports "no sample" and says which market was missing, rather than
 quietly measuring a subset and calling it the answer.
+
+AND IT NOW FEEDS ITSELF BACK (2026-08-26). For its first three weeks this
+module was the only fitter on the site that a human had to remember to
+run: you typed the command, read the table, and hand-copied five numbers
+into `engine/parlays.MEASURED` — translating between two naming schemes
+and flipping one sign on the way. Every other loop here refits on the
+nightly settle. This one was frozen at the day somebody last did the
+copying, and nothing could tell you it had drifted.
+
+So `refresh()` fits and PERSISTS, the parlay pricer reads the persisted
+fit first, and the hand-taken table stays as the floor underneath it.
+The adoption rule is the conservative one: a fresh fit replaces a
+standing number only when it is measured on **at least as many games**.
+That matters because these estimators are sample-shaped — the
+possession-pie partial reads -0.560 on five NFL seasons and -0.045 on
+one, which is not noise but a different question being answered by a
+different data depth — so a thin box must never overwrite a rich fit
+with a worse one.
 """
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import sqlite3
+import time
 from dataclasses import dataclass, field
 
 
@@ -311,6 +332,133 @@ def report(fits: list[Fit]) -> None:
     if len(usable) < len(fits):
         print(f"  {len(fits) - len(usable)} could not be measured from this "
               f"database — the markets are not ingested here.")
+
+
+# --- feeding it back --------------------------------------------------------
+#: Which fitted pairing feeds which `engine.parlays.MEASURED` entry, and
+#: whether the sign flips on the way. The flip is not a detail: §5.1
+#: states the pitcher pairing as strikeouts-over against the opposing
+#: total UNDER, and this module measures strikeouts against the RUNS that
+#: lineup scores, which is the same claim with the opposite sign. It was
+#: done by hand, in a comment, once. Now it is a table a test can read.
+ADOPT: dict[str, tuple[str, int]] = {
+    "qb_pass_yds__wr_rec_yds": ("qb_passing_game", +1),
+    "wr_rec_yds__wr2_rec_yds": ("possession_pie", +1),
+    "rb_rush_yds__own_margin": ("run_game_script", +1),
+    "sp_strikeouts__opp_runs": ("pitcher_vs_lineup", -1),
+    "two_hitters_total_bases": ("lineup_stack", +1),
+}
+
+#: Below this a correlation is a rumour. The standing hand-taken numbers
+#: were fitted on 2,844 to 27,613 games; this is the floor under the
+#: floor, for a pairing that has no standing number at all.
+MIN_N = 500
+
+#: A fitted |r| this close to 1 is a broken join, not a discovery — two
+#: series that are the same column, or a partial whose covariate has
+#: collapsed onto its own inputs.
+MAX_ABS_R = 0.95
+
+#: Beside the other feed state, on the relative path every feedstate file
+#: uses (builds and the settle both run from the repo root).
+STATE_PATH = os.path.join("data", "feedstate", "corr.json")
+
+_cache: dict = {}
+
+
+def _standing_n(parlay_key: str) -> int:
+    """How well sampled the number currently in use is.
+
+    Read from `engine.parlays` rather than duplicated here, so the two
+    cannot disagree about what is standing. An import failure means no
+    floor to clear, which is the safe direction: MIN_N still applies.
+    """
+    try:
+        from .parlays import MEASURED
+        hit = MEASURED.get(parlay_key)
+        return int(hit[1]) if hit else 0
+    except Exception:                                        # noqa: BLE001
+        return 0
+
+
+def refresh(db="data/history.db", sport: str | None = None) -> dict:
+    """Fit every adoptable pairing and persist the ones that earned it.
+
+    Returns ``{"adopted": [...], "held": [...]}`` — held entries carry
+    the reason, because a fit that quietly declines to adopt is the same
+    invisibility this whole change exists to remove.
+    """
+    conn = db if hasattr(db, "execute") else sqlite3.connect(db)
+    own = conn is not db
+    try:
+        fits = [fit_one(conn, p) for p in PRIORS
+                if p.key in ADOPT and (sport is None or p.sport == sport)]
+    finally:
+        if own:
+            conn.close()
+    state = _read_state()
+    adopted, held = [], []
+    for f in fits:
+        parlay_key, sign = ADOPT[f.prior.key]
+        floor = max(MIN_N, _standing_n(parlay_key))
+        if f.missing:
+            held.append({"key": parlay_key, "why": f.missing})
+            continue
+        if f.r != f.r or abs(f.r) > MAX_ABS_R:
+            held.append({"key": parlay_key, "why": f"unusable r={f.r}"})
+            continue
+        if f.n < floor:
+            held.append({"key": parlay_key,
+                         "why": f"{f.n} games, needs {floor}"})
+            continue
+        entry = {"r": round(sign * f.r, 4), "n": int(f.n),
+                 "se": None if f.se != f.se else round(f.se, 4),
+                 "from": f.prior.key, "sport": f.prior.sport,
+                 "fit_at": time.time()}
+        state[parlay_key] = entry
+        adopted.append({"key": parlay_key, **entry})
+    if adopted:
+        _write_state(state)
+        _cache.clear()
+    return {"adopted": adopted, "held": held}
+
+
+def _read_state() -> dict:
+    try:
+        with open(STATE_PATH, encoding="utf-8") as fh:
+            return json.load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_state(state: dict) -> None:
+    os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+    tmp = STATE_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(state, fh, indent=2, sort_keys=True)
+    os.replace(tmp, STATE_PATH)
+
+
+def measured(name: str) -> dict | None:
+    """The persisted fit for one parlay pairing, or None.
+
+    Never raises: this is read on the pricing path for every same-game
+    ticket, and a half-written state file must cost the refinement, not
+    the board.
+    """
+    if name in _cache:
+        return _cache[name]
+    entry = _read_state().get(name)
+    if entry is not None:
+        try:
+            ok = (abs(float(entry["r"])) <= MAX_ABS_R
+                  and int(entry["n"]) >= MIN_N)
+        except (KeyError, TypeError, ValueError):
+            ok = False
+        if not ok:
+            entry = None
+    _cache[name] = entry
+    return entry
 
 
 if __name__ == "__main__":                       # pragma: no cover

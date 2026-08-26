@@ -193,10 +193,46 @@ MEASURED: dict[str, tuple[float, int, str]] = {
 }
 
 
+def rho_meta(name: str) -> tuple[float, int, str] | None:
+    """(rho, games, provenance) for the number actually in use, or None.
+
+    THE LIVE FIT FIRST. The table above is the last measurement a HUMAN
+    took, by running `python3 -m engine.corrfit`, reading a terminal and
+    copying five numbers across two naming schemes — one of them with
+    its sign flipped. That is the only fitter on this site that was ever
+    a manual step, and a manual step on a one-person project is a step
+    that stops happening. `corrfit.refresh()` now runs on the settle and
+    persists what it finds, and it only displaces a standing number when
+    it is measured on at least as many games, so the table below is a
+    floor rather than a ceiling.
+    """
+    try:
+        from . import corrfit
+        live = corrfit.measured(name)
+    except Exception:                                        # noqa: BLE001
+        live = None
+    if live:
+        import datetime as _dt
+        when = _dt.datetime.fromtimestamp(
+            float(live.get("fit_at") or 0)).date().isoformat()
+        return (float(live["r"]), int(live["n"]),
+                f"{when} · {live.get('sport', '')} history, refit on the settle")
+    hit = MEASURED.get(name)
+    return (hit[0], hit[1], hit[2]) if hit else None
+
+
 def rho_for(name: str, prior: float) -> tuple[float, bool]:
     """(value, measured?) — the measurement when we have one, else the prior."""
-    hit = MEASURED.get(name)
-    return (hit[0], True) if hit else (prior, False)
+    m = rho_meta(name)
+    return (m[0], True) if m else (prior, False)
+
+
+def rho_n(name: str) -> int:
+    """How many games the number in use was measured on — for the copy on
+    the card, which must never quote the frozen sample beside a live
+    number or the other way round."""
+    m = rho_meta(name)
+    return m[1] if m else 0
 
 
 @dataclass(frozen=True)
@@ -684,7 +720,7 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                "down — §5.1's cleanest MLB correlation, and "
                                "§5.2's pitcher stack" + (
                                    f", measured at {r:+.2f} on "
-                                   f"{MEASURED['pitcher_vs_lineup'][1]:,} games"
+                                   f"{rho_n('pitcher_vs_lineup'):,} games"
                                    if meas else ""), 0, "ok", measured=meas)
         if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
             return Relation(-0.20, "backing a player over while betting the "
@@ -827,7 +863,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                    "down — one mechanism, §5.1's cleanest "
                                    "MLB correlation" + (
                                        f", measured at {r:+.2f} on "
-                                       f"{MEASURED['pitcher_vs_lineup'][1]:,} "
+                                       f"{rho_n('pitcher_vs_lineup'):,} "
                                        f"of our own games" if meas else ""),
                                 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
@@ -868,7 +904,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                 measured=True)
             return Relation(r, "two bats in one lineup against one starter — "
                                "§5.1 puts this at +0.20 to +0.35" + (
-                                   f", and our own {MEASURED['lineup_stack'][1]:,} "
+                                   f", and our own {rho_n('lineup_stack'):,} "
                                    f"games put it at {r:+.2f}" if meas else ""),
                             0, "ok", measured=meas)
         r, meas = rho_for("possession_pie", -0.10)
@@ -893,7 +929,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
         r, meas = rho_for("qb_passing_game", 0.425)
         return Relation(r, "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation, and measured at "
-                           f"{r:+.2f} on {MEASURED['qb_passing_game'][1]:,} of "
+                           f"{r:+.2f} on {rho_n('qb_passing_game'):,} of "
                            f"our own games" if meas else
                            "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation", 0, "ok",

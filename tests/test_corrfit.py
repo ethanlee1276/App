@@ -145,10 +145,15 @@ def test_a_missing_market_says_so_instead_of_measuring_a_subset():
 def test_a_measured_correlation_is_preferred_to_an_estimate():
     """Every prior in parlays.py is a band midpoint under a humility clamp.
     The clamp is humility about a GUESS — a counted number has nothing to be
-    humble about, so a measured rho is used at face value."""
+    humble about, so a measured rho is used at face value.
+
+    Asserted through `rho_meta` rather than against MEASURED directly: on
+    a machine whose settle has run, the number in use is the LIVE refit
+    and the frozen table is only the floor beneath it. A test that reads
+    the floor fails on exactly the machine where the feature works."""
     r, measured = P.rho_for("qb_passing_game", 0.425)
     assert measured is True
-    assert r == P.MEASURED["qb_passing_game"][0]
+    assert r == P.rho_meta("qb_passing_game")[0]
     r2, measured2 = P.rho_for("a_pairing_nobody_has_fitted", 0.31)
     assert measured2 is False and r2 == 0.31
 
@@ -254,6 +259,157 @@ def test_the_possession_pie_stays_a_kill_and_gets_louder():
     assert rel.rho < -0.4, rel.rho
 
 
+# --- and it feeds itself back ------------------------------------------------
+#
+# For three weeks this module was the only fitter on the site that a human
+# had to remember to run: you typed the command, read the table, and copied
+# five numbers into engine/parlays.MEASURED — across two naming schemes,
+# flipping one sign on the way. Every other loop refits on the settle. A
+# manual step on a one-person project is a step that stops happening, and
+# nothing could tell you it had.
+
+import json                                                    # noqa: E402
+import time                                                    # noqa: E402
+
+
+import contextlib                                             # noqa: E402
+
+
+@contextlib.contextmanager
+def _isolated(tmpdir=None):
+    """Point the state file somewhere disposable, then PUT IT BACK.
+
+    Restoring matters more than isolating: `measured()` caches, and a
+    test that leaves a fake fit standing would silently rewrite what
+    every later test in this file believes the pricer is running on. The
+    first draft of these tests did exactly that, and the pass they got
+    was luck rather than agreement."""
+    keep, keep_cache = C.STATE_PATH, dict(C._cache)
+    C.STATE_PATH = os.path.join(tmpdir or tempfile.mkdtemp(), "corr.json")
+    C._cache.clear()
+    try:
+        yield C.STATE_PATH
+    finally:
+        C.STATE_PATH = keep
+        C._cache.clear()
+        C._cache.update(keep_cache)
+
+
+def test_the_adoption_table_names_things_that_actually_exist():
+    """A typo either side is silent: the pairing simply never adopts, and
+    the site keeps pricing the frozen number forever while the log says
+    nothing at all."""
+    keys = {p.key for p in C.PRIORS}
+    for fit_key, (parlay_key, sign) in C.ADOPT.items():
+        assert fit_key in keys, f"{fit_key} is not a fitted pairing"
+        assert parlay_key in P.MEASURED, \
+            f"{parlay_key} is not a pairing the pricer reads"
+        assert sign in (1, -1), parlay_key
+
+
+def test_the_one_sign_that_flips_is_written_down_rather_than_remembered():
+    """§5.1 states the pitcher stack as strikeouts-over against the
+    opposing total UNDER; this module measures strikeouts against the RUNS
+    that lineup scores, which is the same claim with the opposite sign.
+    It lived in a comment, applied by hand, once."""
+    assert C.ADOPT["sp_strikeouts__opp_runs"][1] == -1
+    assert all(sign == 1 for key, (_n, sign) in C.ADOPT.items()
+               if key != "sp_strikeouts__opp_runs"), \
+        "a second sign flip appeared with no test to explain it"
+
+
+def test_a_thin_fit_never_displaces_a_better_sampled_number():
+    """The estimators here are sample-shaped: the possession-pie partial
+    reads -0.560 on five NFL seasons and -0.045 on one. That is not noise,
+    it is a different data depth answering a different question — so a
+    thin box must never overwrite a rich fit."""
+    path, conn = _fixture_db()
+    with _isolated(os.path.dirname(path)):
+        out = C.refresh(path)
+    assert not out["adopted"], "a 120-game fixture displaced a 2,844-game fit"
+    assert out["held"], "a fit that declines to adopt must say why"
+    assert any("needs" in h["why"] or "no " in h["why"] for h in out["held"])
+    conn.close()
+
+
+def test_a_well_sampled_fit_is_adopted_and_read_back():
+    with _isolated():
+        C._write_state({"qb_passing_game": {
+            "r": 0.71, "n": 99999, "se": 0.01,
+            "from": "qb_pass_yds__wr_rec_yds",
+            "sport": "nfl", "fit_at": time.time()}})
+        C._cache.clear()
+        got = C.measured("qb_passing_game")
+        assert got and got["r"] == 0.71
+        # And the pricer uses it in preference to the frozen table.
+        r, measured = P.rho_for("qb_passing_game", 0.425)
+        assert measured is True and r == 0.71
+        assert P.rho_n("qb_passing_game") == 99999, \
+            "the card would quote the frozen sample beside a live number"
+
+
+def test_an_unusable_fit_is_refused_rather_than_priced():
+    """|r| at the rail is a broken join — two series that are the same
+    column, or a partial whose covariate collapsed onto its inputs — and
+    a tiny sample is a rumour. Neither may reach a ticket."""
+    with _isolated():
+        for bad in ({"r": 0.999, "n": 99999}, {"r": 0.4, "n": 3}):
+            C._write_state({"lineup_stack": dict(bad, fit_at=time.time())})
+            C._cache.clear()
+            assert C.measured("lineup_stack") is None, bad
+
+
+def test_a_corrupt_state_file_costs_the_refinement_and_not_the_board():
+    with _isolated() as path:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{not json")
+        C._cache.clear()
+        assert C.measured("qb_passing_game") is None
+        # And the pricer falls back to the frozen table rather than raising.
+        r, measured = P.rho_for("qb_passing_game", 0.425)
+        assert measured is True and r == P.MEASURED["qb_passing_game"][0]
+
+
+def test_the_state_write_is_replaced_rather_than_truncated():
+    """A settle interrupted mid-write must not leave the pricing path
+    reading half a file."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "corrfit.py"), encoding="utf-8").read()
+    i = src.index("def _write_state")
+    assert "os.replace" in src[i:i + 500]
+
+
+def test_the_settle_runs_the_refit_without_being_asked():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    m = open(os.path.join(root, "engine", "maintenance.py"),
+             encoding="utf-8").read()
+    i = m.index("def settle_open(")
+    body = m[i:m.index("\ndef ", i + 10)]
+    assert "corrfit.refresh(hconn)" in body, \
+        "the correlation priors are back to being a command somebody types"
+    assert "correlation refit skipped" in body, \
+        "a failing refit must not take the settle down with it"
+
+
+def test_the_doctor_says_what_each_correlation_is_running_on():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    d = open(os.path.join(root, "doctor.py"), encoding="utf-8").read()
+    assert "def check_correlation_priors(rep):" in d
+    assert "check_correlation_priors" in d[d.index("CHECKS = ["):
+                                           d.index("CHECKS = [") + 400]
+    assert "CORR_STALE_DAYS" in d
+
+
+def test_the_json_state_is_plain_and_sorted():
+    with _isolated() as path:
+        C._write_state({"b": {"r": 0.1, "n": 600}, "a": {"r": 0.2, "n": 600}})
+        text = open(path, encoding="utf-8").read()
+        assert text.index('"a"') < text.index('"b"'), \
+            "unsorted state churns diffs"
+        assert json.loads(text)["a"]["r"] == 0.2
+
+
 if __name__ == "__main__":
     import re as _re
     declared = _re.findall(r"^def (test_\w+)",
@@ -263,3 +419,4 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+

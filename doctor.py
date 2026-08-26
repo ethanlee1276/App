@@ -657,6 +657,75 @@ def check_market_coverage(rep):
                 "maintenance._HARVEST_SPORTS")
 
 
+#: A correlation still running on a hand-taken number this long after it
+#: was taken. Not a failure — the adoption rule is deliberately
+#: conservative — but a number nobody has re-measured in a season is one
+#: nobody is checking, which is how the hand-copied table got frozen in
+#: the first place.
+CORR_STALE_DAYS = 120
+
+
+def check_correlation_priors(rep):
+    """What is each same-game correlation actually running on?
+
+    This was the last fitter on the site that a human had to remember to
+    run. `engine/corrfit.py` measures the parlay correlation priors
+    against our own history; for three weeks the way that measurement
+    reached the pricer was somebody reading a terminal and copying five
+    numbers into `engine/parlays.MEASURED` by hand, translating between
+    two naming schemes and flipping one sign on the way.
+
+    It refits on the settle now, and only displaces a standing number
+    when it is measured on at least as many games — which is the right
+    rule and also a rule that can hold forever without saying so. So
+    this says so: what is in use, how it got there, and which pairings
+    are still waiting on a sample big enough to earn their place.
+    """
+    @_check(rep, "correlation priors")
+    def _():
+        from engine import corrfit
+        from engine.parlays import MEASURED, rho_meta
+        live = stale = raw = 0
+        oldest = None
+        for _key, (name, _sign) in sorted(corrfit.ADOPT.items()):
+            if corrfit.measured(name):
+                live += 1
+                continue
+            hit = MEASURED.get(name)
+            if not hit:
+                raw += 1
+                continue
+            when = str(hit[2]).split(" ")[0]
+            try:
+                age = (_dt.date.today() - _dt.date.fromisoformat(when)).days
+            except ValueError:
+                age = 0
+            if age >= CORR_STALE_DAYS:
+                stale += 1
+                oldest = when if oldest is None else min(oldest, when)
+        total = len(corrfit.ADOPT)
+        if raw:
+            rep.add("correlation priors", WARN,
+                    f"{raw} of {total} same-game correlation(s) are running "
+                    "on the published estimate with no measurement at all",
+                    "the pairing has no entry in engine/parlays.MEASURED and "
+                    "no fit has ever cleared corrfit.MIN_N — check that this "
+                    "sport's markets are ingested into the history DB")
+            return
+        if stale:
+            rep.add("correlation priors", WARN,
+                    f"{stale} of {total} correlation(s) still on a hand-taken "
+                    f"number, oldest {oldest}",
+                    "the nightly refit is declining to adopt because this "
+                    "box measures fewer games than the standing number did "
+                    "— run `python3 -m engine.corrfit` to see the gap")
+            return
+        rep.add("correlation priors", OK,
+                f"{live} of {total} refit from our own history, "
+                f"{total - live} on their last hand-taken measurement")
+        _ = rho_meta
+
+
 def check_learning(rep):
     """Is the learning ladder actually recording, and has it learned anything?
 
@@ -825,7 +894,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
-          check_learning, check_git]
+          check_learning, check_correlation_priors, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -836,7 +905,8 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
-               check_forecast_log, check_clv_capture, check_learning)
+               check_forecast_log, check_clv_capture, check_learning,
+               check_correlation_priors)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:

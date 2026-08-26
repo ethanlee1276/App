@@ -619,6 +619,22 @@ def settle_open(log=print, state_path: Path | None = None,
                             f"shift {e['shift']:+.3f} log-odds")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  selection haircut skipped: {exc}")
+            # The correlation priors, refit against our own history. The
+            # last fitter on this site that a human had to remember to
+            # run: you typed the command, read a table and hand-copied
+            # five numbers into engine/parlays.MEASURED. It costs about
+            # a second — eleven pairings over the logs table — and it
+            # only displaces a standing number when it is measured on at
+            # least as many games, so a thin database cannot make the
+            # parlay pricer worse.
+            try:
+                from . import corrfit
+                cf = corrfit.refresh(hconn)
+                for a in cf["adopted"]:
+                    log(f"  correlation refit: {a['key']} rho={a['r']:+.3f} "
+                        f"on {a['n']:,} games")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  correlation refit skipped: {exc}")
             # The hypothesis lab's free step: every stored hypothesis
             # re-earns its status against the grown journal. Arithmetic
             # only — the paid propose step is CLI-invoked, never here.
