@@ -77,13 +77,29 @@ and an unmeasured game now says "weather not pulled" — college's own
 sentence, promoted to the shared one. `tests/test_unmeasured_weather.py`
 holds all four surfaces.
 
-**What is left is the feed.** `engine/cfb/wx.py` is the template and
-almost all of it is league-agnostic: it takes venue coordinates and a
-kickoff hour and returns temp/wind at that hour. What the NFL needs is
-the coordinates — 32 stadiums, a fixed list, unlike college's 130-odd
-venues that genuinely need a feed — plus the same `attach` pass and the
-`measured=True` stamp on what comes back. Nothing has to be invented and
-nothing costs money.
+**What is left is the feed**, and three of its four pieces already
+exist. `engine/cfb/wx.fetch_forecast`, `pick_hour` and `compass` are
+entirely league-agnostic — they take a latitude, a longitude, a date and
+a kickoff ISO and return temp/wind/direction at the nearest hour — and
+`engine/fatigue.kickoff_instant` (2026-08-26) now turns the NFL's bare
+Eastern clock into exactly that ISO. Only the coordinates are missing:
+`engine/stadiums.py` carries roof, surface and altitude for all 32 and
+no lat/lon.
+
+**Two ways to get them, and the second is better.** A hand-written table
+of 32 pairs is the obvious one and it is the wrong one — a coordinate
+typed from memory puts a forecast in the wrong city, silently, which is
+the exact class of defect the rest of this session was spent removing.
+Open-Meteo's geocoder is keyless like its forecast board
+(`geocoding-api.open-meteo.com/v1/search?name=…`), so the stadium NAME
+this file already holds can be resolved once and cached beside the
+forecast, with a miss keeping `measured=False` like every other miss
+here.
+
+**Do it on a machine that can reach the API.** This container's proxy
+blocks both Open-Meteo hosts, so anything written here would ship
+unverified — the state `engine/paddle.py` is flagged for and the reason
+that flag exists. It is perhaps thirty minutes with a network.
 
 Worth doing before the weather starts mattering, which for the NFL is
 late October rather than September.
