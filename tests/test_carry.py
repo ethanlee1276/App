@@ -376,6 +376,11 @@ def _stub_slate(current_rows, week=1, season=2026):
     from engine.models import Game, Weather
 
     prior = [_row("Carried Guy", w, 100.0, team="MIA") for w in range(1, 18)]
+    for r in prior[-5:]:
+        # five scoring games late in the prior season — late, because the
+        # top-up carries the MOST RECENT games and a value planted in
+        # September would fall off the ten-game cap
+        r["receiving_tds"] = "1"
     games = [Game(home="MIA", away="BUF", weather=Weather(dome=True),
                   injuries=[], date="2026-09-09", kickoff="20:20",
                   spread=-3.0, total=44.5)]
@@ -405,8 +410,10 @@ def test_week_one_builds_a_board_where_it_used_to_build_nothing():
 
     Counted over the YARDAGE props since 2026-08-25: build_slate now also
     emits an anytime-TD prop per skill player (the long-shot board's
-    layer), and those are never carried — they have no proxy line to
-    carry a baseline into, and the TD model does its own sample blending.
+    layer). Their LINES are never carried — no proxy line exists to carry
+    a baseline into — but since 2026-08-26 their LOGS are (the next test),
+    because "Thin touchdown history (0 games)" on every week-1 card was
+    the model confessing it had not read a season it already held.
     """
     from engine.models import ANYTIME_TD
     slate, report = _stub_slate([])
@@ -414,6 +421,45 @@ def test_week_one_builds_a_board_where_it_used_to_build_nothing():
     assert yardage, "week 1 still builds nothing"
     assert report["carried_n"] == len(yardage)
     assert all(g.prior for p in yardage for g in p.logs)
+
+
+def test_touchdown_history_carries_and_caps_where_the_blend_saturates():
+    """Ethan circled the card, 2026-08-26: "Thin touchdown history (0
+    games) — position baseline used", on EVERY week-1 card — while last
+    season's touchdowns sat in prior_stats, already loaded for the
+    yardage carry. TD logs top up from there now, capped at
+    TD_CARRY_GAMES because the model's blend weight (samples/10, ceiling
+    0.7 — touchdowns.historical_td_rate) stops trusting anything longer,
+    and the carried values are the real ones, not padded zeros."""
+    from engine.models import ANYTIME_TD
+    from engine.sources.nflverse import TD_CARRY_GAMES
+    from engine.touchdowns import historical_td_rate
+    slate, _ = _stub_slate([])
+    td = [p for p in slate.props if p.market == ANYTIME_TD]
+    assert td, "the stub slate lost its TD layer"
+    prop = next(p for p in td if p.player == "Carried Guy")
+    assert len(prop.logs) == TD_CARRY_GAMES
+    rate, n = historical_td_rate(prop)
+    assert n == TD_CARRY_GAMES
+    # five scoring games in the carried ten — the values travelled
+    assert abs(rate - 0.5) < 1e-9, rate
+
+
+def test_the_touchdown_top_up_stands_down_with_the_thin_caveat():
+    """Four real games is where the TD model stops calling a history
+    thin (touchdowns.TD_THIN_GAMES), so four real games is where the
+    top-up stops firing — the same stand-down discipline the yardage
+    carry keeps, pinned to the model's own line so the two cannot
+    drift."""
+    from engine.models import ANYTIME_TD
+    from engine.touchdowns import TD_THIN_GAMES
+    current = [_row("Carried Guy", w, 10.0, team="MIA", season=2026)
+               for w in range(1, 5)]
+    slate, _ = _stub_slate(current, week=5)
+    prop = next(p for p in slate.props if p.market == ANYTIME_TD
+                and p.player == "Carried Guy")
+    assert len(prop.logs) == 4,         "a season that can speak for itself still got last year mixed in"
+    assert TD_THIN_GAMES == 4
 
 
 def test_the_carry_stands_down_once_the_season_has_enough_games():

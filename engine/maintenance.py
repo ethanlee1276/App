@@ -812,6 +812,55 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  nfl results ingest failed: {exc}")
 
+        # Settle the anytime-TD quote journal against the rows the pull
+        # above just wrote, and refit the measured one-sided hold once
+        # the sample clears its gate (engine/holdwatch — the number that
+        # retires the "vig assumed at 6%" caveat).
+        try:
+            from . import db as _qdb
+            from . import holdwatch as _hw
+            _qconn = _qdb.connect()
+            _ns = _hw.settle(_qconn)
+            if _ns:
+                log(f"  hold journal: {_ns} anytime-TD quote(s) settled")
+            _fit = _hw.fit(_qconn)
+            if _fit:
+                log(f"  hold measured: {_fit['hold'] - 1:.1%} off "
+                    f"{_fit['n']:,} settled quotes")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  hold journal skipped: {exc}")
+
+        # The season-boundary backfill (Ethan circled the card's own
+        # confession, 2026-08-26: "Red-zone usage inferred … play-by-play
+        # not ingested"). In August and September the CURRENT season has
+        # no stats to pull, and if LAST season was never ingested on this
+        # box, the TD model's measured red-zone roles, snap shares and
+        # carried touchdown histories all read an empty table — every
+        # card wears the inferred-usage caveat through exactly the weeks
+        # the season arrives. One guarded pull of the prior season fills
+        # all of it (weekly stats + usage + TD rows + snaps + pbp); the
+        # guard row makes it run once per box, not once per night.
+        if today.month in (8, 9):
+            try:
+                from . import db as _bdb
+                from .ingest import ingest_nfl
+                _bconn = _bdb.connect()
+                prior = today.year - 1
+                have_rz = _bconn.execute(
+                    "SELECT 1 FROM player_game_logs WHERE sport='nfl' "
+                    "AND season=? AND market='rz_tgt' LIMIT 1",
+                    (prior,)).fetchone()
+                if not have_rz:
+                    res = ingest_nfl(_bconn, [prior])
+                    log(f"  nfl backfill: season {prior} ingested — "
+                        f"{res.get('player_logs', 0):,} log rows, "
+                        f"{res.get('pbp_rows', 0):,} pbp rows (measured "
+                        f"red-zone roles now available)")
+                    for s in res.get("skipped", []):
+                        log(f"  ⚠️  {s}")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  nfl prior-season backfill failed: {exc}")
+
         # Play-by-play refresh — the measured red-zone roles. The file is
         # ~100MB, so once a week (Tuesdays, after Monday night) is the
         # right cadence, not daily.

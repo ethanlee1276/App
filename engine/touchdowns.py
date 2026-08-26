@@ -33,6 +33,12 @@ from .longshots import (
 )
 from .statmath import clamp
 
+#: Below this many TD-history games the position baseline does the
+#: talking and the card says so. The slate builder's prior-season top-up
+#: (engine/sources/nflverse.TD_CARRY_GAMES) keys off the SAME number, so
+#: "thin" and "worth carrying for" cannot drift apart.
+TD_THIN_GAMES = 4
+
 # Share of a team's offensive touchdowns a position group typically takes, used
 # only as a fallback when a player has no touchdown history of his own.
 POSITION_TD_SHARE = {
@@ -271,7 +277,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     if not rz.measured:
         caveats.append("Red-zone usage inferred from overall opportunity share "
                        "(play-by-play not ingested) — the biggest source of error here")
-    if samples < 4:
+    if samples < TD_THIN_GAMES:
         caveats.append(f"Thin touchdown history ({samples} games) — position baseline used")
 
     return prob, {

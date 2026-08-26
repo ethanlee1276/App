@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "model",
+      "title": "The TD card's three confessions get answered",
+      "body": "Every anytime-TD card carried three caveats naming its own data gaps, and each one now has a fix. Red-zone usage: the nightly chores backfill last season's play-by-play once per machine at the season boundary, so the model reads measured red-zone touch shares for six hundred players instead of inferring them from volume. Touchdown history: week-one cards no longer say '0 games' — a thin history tops up from last season's real touchdowns, capped where the model's own blend stops trusting bigger samples, and stands down once four real games exist. The assumed 6% vig: books never offer 'no touchdown', so the number could not be read off a pair — instead the full quoted board is now journaled at every build and settled against who actually scored, and once enough quotes grade, the card switches from 'assumed' to a measured hold with the sample size shown. What moved on the board: TD probabilities now rest on measured roles and real histories from the first kickoff, not baselines."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "ship",
       "title": "Messages become conversations",
       "body": "The Messages page is real threads now: one row per friend, and inside it your texts and shared picks interleaved the way they happened, with a box at the bottom to talk it over. Every shared pick is a tappable door onto its charts — a pick from another league switches the board first, and one that is off tonight's board opens the player's page, which carries his history either way. Texts go only between friends, each conversation keeps its own unread dot, and what travels in a share is still only the pick's identity — the words are yours, the numbers stay behind each reader's own subscription."

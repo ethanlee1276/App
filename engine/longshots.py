@@ -189,10 +189,27 @@ def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
 ONE_SIDED_HOLD = 1.06
 
 
-def _price(model_prob: float, over_odds: int, under_odds: int | None):
+def one_sided_hold(sport: str, market: str) -> tuple[float, int]:
+    """``(hold, settled quotes behind it)`` — the measured hold once the
+    season's quote journal has settled enough of the full board
+    (engine/holdwatch), the conservative assumption with n=0 until then.
+    Never raises: pricing must survive a broken state file."""
+    try:
+        from .holdwatch import load_hold
+        h = load_hold(sport, market)
+        if h:
+            return float(h["hold"]), int(h.get("n") or 0)
+    except Exception:  # noqa: BLE001
+        pass
+    return ONE_SIDED_HOLD, 0
+
+
+def _price(model_prob: float, over_odds: int, under_odds: int | None,
+           sport: str = "", market: str = ""):
     """De-vig the book's price. With only one side quoted (common for TD/HR
-    markets) we strip an assumed hold instead, which is less precise — the
-    caller flags that as a caveat.
+    markets) we strip the one-sided hold instead — measured off the
+    settled quote journal when the season has produced one, assumed
+    until then — and the caller says which on the card.
 
     The pair is sanity-checked first. A fabricated or stale under (the
     classic: -110 recorded against a +318 over, summing to 76% — a book
@@ -206,7 +223,8 @@ def _price(model_prob: float, over_odds: int, under_odds: int | None):
         exact = True
     else:
         raw = american_to_prob(over_odds)
-        implied = raw / ONE_SIDED_HOLD
+        hold, _n = one_sided_hold(sport, market)
+        implied = raw / hold
         exact = False
     return implied, exact
 
@@ -224,7 +242,7 @@ def calibrated_prob(sport: str, market: str, model_prob: float,
     one path now."""
     _t, _b = correction_for(sport, market)
     raw = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
-    implied, _ = _price(raw, over_odds, under_odds)
+    implied, _ = _price(raw, over_odds, under_odds, sport, market)
     return clamp(implied + MARKET_SHRINK * (raw - implied), 1e-4, 0.999), implied
 
 
@@ -237,18 +255,28 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     """Price a modelled probability against the book and grade it."""
     _t, _b = correction_for(sport, market)
     raw_prob = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
-    implied, exact = _price(raw_prob, odds, under_odds)
+    implied, exact = _price(raw_prob, odds, under_odds, sport, market)
     if not exact:
         # Say WHY there is one side. "Only one side quoted" on its own reads
         # as a feed we failed to pull; in fact books don't offer "no home
-        # run" as a bet, so the other price does not exist to be pulled. The
-        # cost is that the vig is assumed rather than measured — and the
-        # assumption is set so the error lands against the pick, not for it.
-        caveats = caveats + [
-            f"Books don't offer the NO side of this market, so the vig is "
-            f"assumed at {ONE_SIDED_HOLD - 1:.0%} rather than measured off "
-            f"both prices. Real hold here is usually wider, so treat this "
-            f"edge as the optimistic end of a range"]
+        # run" as a bet, so the other price does not exist to be pulled.
+        # The vig starts the season ASSUMED (set so the error lands
+        # against the pick, not for it) and becomes MEASURED once the
+        # quote journal has settled enough of the full board — the card
+        # says which of the two numbers it is wearing.
+        hold, hn = one_sided_hold(sport, market)
+        if hn:
+            caveats = caveats + [
+                f"Books don't offer the NO side of this market, so the vig "
+                f"can't be read off a two-way pair. It is measured instead: "
+                f"{hold - 1:.1%}, from {hn:,} settled quotes across the whole "
+                f"board this season"]
+        else:
+            caveats = caveats + [
+                f"Books don't offer the NO side of this market, so the vig is "
+                f"assumed at {hold - 1:.0%} rather than measured off "
+                f"both prices. Real hold here is usually wider, so treat this "
+                f"edge as the optimistic end of a range"]
 
     # Same discipline as the yardage-prop model: shrink toward the market while
     # the model is still uncalibrated, and treat an implausibly large

@@ -393,6 +393,21 @@ def main() -> None:
             if res.scorers_matched:
                 print(f"  Anytime-TD quotes attached to {res.scorers_matched} "
                       f"player(s) — the long-shot board prices these.")
+                # Journal the WHOLE quoted board — every player, every
+                # book, identities and prices only — so the one-sided
+                # hold can be measured off settled quotes instead of
+                # assumed at 6% forever (engine/holdwatch; Ethan circled
+                # that caveat, 2026-08-26). Best-effort: a journal miss
+                # must never cost the build.
+                try:
+                    from engine import db as _hdb, holdwatch
+                    _nq = holdwatch.record_slate(
+                        _hdb.connect(), slate, sport="nfl",
+                        season=args.season, week=args.week)
+                    print(f"  Quote journal: {_nq} anytime-TD quotes recorded "
+                          f"for the hold measurement.")
+                except Exception as _exc:  # noqa: BLE001
+                    print(f"  ⚠️  quote journal skipped: {_exc}")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
             if res.unmatched:

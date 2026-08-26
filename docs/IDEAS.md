@@ -249,3 +249,15 @@ The binding constraints are the ones no branch fixes: Phase 0 in
 `docs/LAUNCH.md`, the Paddle verification, and the Michigan question.
 Those gate *charging money*, not shipping features, and they are named in
 `docs/NEXT.md` and `docs/WHEN_HOME.md`.
+
+## Hold journal for the other one-sided markets, 2026-08-26
+
+engine/holdwatch measures the one-sided hold for NFL anytime-TD by
+journaling the whole quoted board and settling it against the weekly TD
+rows. MLB home_runs and CFB anytime-TD are the same Yes-only shape and
+still price off the assumed 6% (`longshots.ONE_SIDED_HOLD`). Joining
+them is mechanical: record_slate at their build sites, settle against
+their own logs (home_runs rows exist; CFB TD logs land with the ESPN box
+scores), and the pricing path already asks `one_sided_hold(sport,
+market)` per market. Waited only because Ethan circled the NFL card and
+the season that proves the loop starts in September.

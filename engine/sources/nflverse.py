@@ -52,6 +52,19 @@ MARKET_COLUMNS = {
     RECEPTIONS: ("receptions",),
 }
 
+#: How many games a touchdown log is topped up to from the PRIOR season
+#: when the carry is on. Ten, because that is where the TD model's blend
+#: weight saturates (w = samples/10, ceiling 0.7 — see
+#: engine/touchdowns.historical_td_rate): past ten carried games the
+#: model would not trust the sample any harder, so hauling a whole
+#: seventeen-game season across the boundary buys nothing. The top-up
+#: fires only while the CURRENT sample is thin (under the TD model's own
+#: caveat line): three real games and a topped history through week 3,
+#: then the season stands on its own — the same stand-down discipline
+#: the yardage carry keeps.
+TD_CARRY_GAMES = 10
+from ..touchdowns import TD_THIN_GAMES as _TD_THIN  # noqa: E402
+
 
 def _f(row: dict, *keys, default=0.0) -> float:
     for k in keys:
@@ -671,10 +684,23 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         # the goal line, which is where this market is decided.
         pos = ((roster.get(p.player) or {}).get("position") or "").upper() \
             or p.position
+        # Ethan circled the card's confession, 2026-08-26: "Thin
+        # touchdown history (0 games) — position baseline used", on
+        # EVERY week-1 card. These logs read the CURRENT season only,
+        # so each September the model opened blind while last season's
+        # touchdowns sat in prior_stats, already loaded for the yardage
+        # carry. Thin logs top up from there now — regular season only,
+        # the same slice the yardage carry reads — capped where the
+        # blend stops trusting bigger samples anyway.
+        td_logs = td_game_logs(stats, p.player, upto_week)
+        if carry and prior_stats and len(td_logs) < _TD_THIN:
+            prior_td = td_game_logs(_regular_season(prior_stats),
+                                    p.player, 99)
+            td_logs = td_logs + prior_td[:TD_CARRY_GAMES - len(td_logs)]
         td_props.append(Prop(
             player=p.player, team=p.team, opponent=p.opponent,
             position=pos, market=ANYTIME_TD,
-            logs=td_game_logs(stats, p.player, upto_week),
+            logs=td_logs,
             career_avg=0.0, vs_opponent_avg=None, lines=[],
             usage_role=p.usage_role, headshot=p.headshot,
         ))

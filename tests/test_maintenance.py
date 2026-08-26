@@ -492,6 +492,28 @@ def test_prune_can_never_reach_stats_journal_or_models(_mp=None):
             f"{name} would be deleted by the pruner"
 
 
+def test_the_season_boundary_backfill_is_guarded_and_september_only(_mp=None):
+    """Ethan circled the card's confession (2026-08-26): "Red-zone usage
+    inferred … play-by-play not ingested". The chores now backfill the
+    PRIOR season once per box in Aug-Sep — weekly stats, usage, TD rows,
+    snaps and pbp in one guarded pull — so measured red-zone roles and
+    carried TD histories exist on a droplet nobody ever SSH'd into to
+    run the ingest by hand. Pinned structurally: the guard queries for
+    existing rz rows (run once, not nightly), the month gate exists, and
+    a failure logs a warning instead of taking the chores down."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "engine", "maintenance.py"),
+              encoding="utf-8") as fh:
+        src = fh.read()
+    i = src.index("The season-boundary backfill")
+    block = src[i:i + 2400]
+    assert "today.month in (8, 9)" in block
+    assert "market='rz_tgt'" in block, "the run-once guard left"
+    assert "ingest_nfl(_bconn, [prior])" in block
+    assert "backfill failed" in block, "a failed backfill would crash the chores"
+    assert "prior = today.year - 1" in block
+
+
 def test_the_closes_harvest_follows_the_journal_not_a_hardcode(monkeypatch):
     """The season-readiness audit's finding (2026-08-25): the nightly
     harvest ran `harvest_odds.py mlb --markets total_bases,h2h` whatever
