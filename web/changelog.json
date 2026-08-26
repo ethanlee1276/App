@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "fix",
+      "title": "The iPhone crash, found: page transitions were the trigger",
+      "body": "Third and final part of the phone-reboot hunt, and the one that matches the symptom. Every navigation tap ran a page-transition effect that photographs the ENTIRE page — every card, every chart, tens of thousands of pixels — into graphics memory twice, at full device resolution, before playing a quarter-second fade. That allocation on every single tap is why the crash struck 'any menu, anything': it was the only cost that scaled with every navigation no matter the destination. Phones now switch pages instantly — which is what every native app does anyway — and desktops keep the fade. The blur and graphics-layer removals that preceded this were real weight off the same phones, but this was the trigger."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
       "title": "The iPhone crash, part two: the stadium strip goes on a GPU diet",
       "body": "Removing the top bar's glass blur was necessary but not sufficient — the phone was still rebooting on taps. Two more heavy costs lived on the stadium cards: every card was permanently promoted into its own graphics layer for a mouse-hover tilt effect a phone can never show, and under (or in place of) every photo a drawn stadium scene was rendering with real blur filters — sixteen of each on an NFL slate. Phones now skip the tilt machinery entirely, and the drawn scene only renders when a card genuinely has no photo, where it has always been the fallback. Nothing looks different; the phone just stops paying for invisible work."
     },

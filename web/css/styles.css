@@ -1525,6 +1525,24 @@ svg[data-scrub] { touch-action: pan-y; }
 }
 
 main { view-transition-name: page; }
+/* NO VIEW TRANSITIONS ON TOUCH SCREENS — this is the iPhone-respring
+   fix, part three, and the part that finally matches the symptom. A
+   view transition snapshots the ENTIRE named element — this <main>,
+   the whole page, every card and chart on a board that runs tens of
+   thousands of pixels tall — into a GPU texture TWICE, old state and
+   new, at 3x device resolution, on EVERY tap. That allocation is why
+   the crash was "anytime I try to click any menu or anything": it was
+   the only cost in the site that scaled with every navigation
+   regardless of destination. Ethan's phone black-screened to the
+   spinning gear three times (2026-08-25/26) before this was found;
+   the blur and layer diets that preceded it were real weight but not
+   the trigger. Desktop keeps the fade — a mouse machine has the VRAM
+   and the pages are shorter viewports of the same DOM. switchView
+   declines to start one on coarse pointers too; this rule is the belt
+   for any transition something else starts. */
+@media (pointer: coarse) {
+  main { view-transition-name: none; }
+}
 ::view-transition-old(page), ::view-transition-new(page) {
   animation-duration: var(--dur-base);
   animation-timing-function: var(--ease-out);

@@ -510,6 +510,27 @@ def test_the_stadium_cards_stay_off_the_compositor_on_phones():
     assert ".gp-art:has(.venue-photo) .stadium" in CSS
 
 
+def test_no_view_transitions_on_touch_screens():
+    """RESPRING FIX, PART THREE — the part that matches the symptom. A
+    view transition snapshots the entire <main> into GPU textures twice
+    per navigation, at device resolution, on a page tens of thousands
+    of pixels tall. It is the only cost in the site that scales with
+    EVERY tap regardless of destination, which is what "anytime I try
+    to click any menu or anything" was telling us. Ethan's iPhone
+    respring survived the blur removal and the layer diet because
+    neither touched this. Both halves are pinned: switchView must
+    decline to start one on a coarse pointer, and the stylesheet must
+    strip the transition name so a transition started by anything else
+    still has nothing to snapshot."""
+    i = APP.index("function switchView(name")
+    body = APP[i:i + 1600]
+    assert 'matchMedia("(pointer: coarse)").matches' in body, \
+        "switchView starts full-page snapshots on phones again"
+    m = re.search(r"@media \(pointer: coarse\) \{\s*"
+                  r"main \{ view-transition-name: none; \}", CSS)
+    assert m, "the coarse-pointer view-transition kill switch left the sheet"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

@@ -23819,9 +23819,16 @@ function switchView(name, push = false) {
   if (wallBlocked(name)) name = "paywall";
   const dir = VIEW_ORDER.indexOf(name) - VIEW_ORDER.indexOf(state.view);
   const go = () => _switchViewNow(name, push, dir);
+  // Never on a touch screen: the transition snapshots the entire
+  // <main> — old and new — into GPU textures on every tap, and on a
+  // board page that is the allocation that was respringing Ethan's
+  // iPhone (see the view-transition-name rule in the stylesheet for
+  // the full story). A phone gets the instant switch, which is also
+  // what every native app on it does.
   if (typeof document.startViewTransition === "function" && !state.quiet
       && !(window.matchMedia
-           && matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+           && (matchMedia("(prefers-reduced-motion: reduce)").matches
+               || matchMedia("(pointer: coarse)").matches))) {
     document.startViewTransition(go);
     return;
   }
