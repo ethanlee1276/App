@@ -5664,9 +5664,11 @@ function renderGameBetPage(b) {
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
-      <button class="btn ghost qb-share" data-card="${escapeAttr(gameBetId(b))}"
-        >Share card</button>
+      <button class="btn-quiet gp-back" id="pp-back">← Back to the board</button>
+      <span class="pp-nav-right">
+        <button class="btn ghost qb-share" data-card="${escapeAttr(gameBetId(b))}"
+          >Share card</button>
+      </span>
     </div>
     <article class="card pp-card">
       <div class="card-head">
@@ -5970,21 +5972,21 @@ function renderPropPage() {
             Number(r.proj_high).toFixed(0)})</span>` : ""}</div></div>` : "";
   const reasons = (r.reasons || []).slice(0, 8)
     .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  /* SIX PILL BUTTONS WERE PILED ABOVE THIS CARD, wrapping into two
+     rows on a phone (Ethan, 2026-08-25, circling them: "It feels cheap
+     just having all these buttons here"). The cleanup is structural,
+     not cosmetic: NAVIGATION (back, the player page) stays above the
+     card as two quiet text links, and the ACTIONS on the pick (parlay,
+     send, copy link, share card) become one hairline-divided strip
+     INSIDE the card, under the pick's identity — where an action on a
+     thing belongs. Every data-attribute survives; only the furniture
+     moved. */
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn ghost gp-back" id="pp-back">← Back to the board</button>
-      ${shareBtn("pick", pickSlug(r))}
-      <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
-        >Share card</button>
-      ${r.player ? `<button class="btn ghost" data-player-page="${escapeAttr(slugify(r.player))}"
+      <button class="btn-quiet gp-back" id="pp-back">← Back to the board</button>
+      ${r.player ? `<button class="btn-quiet" data-player-page="${escapeAttr(slugify(r.player))}"
         >Player page →</button>` : ""}
-      ${r.player ? `<button class="btn ghost" data-send-pick
-        >Send to a friend</button>` : ""}
-      ${r.player && r.odds != null ? `<button class="btn ghost"
-        data-slip="${escapeAttr(propId(r))}">${slipHas(r)
-          ? "On slip" : "+ Parlay"}</button>` : ""}
     </div>
-    <div id="fr-send-slot"></div>
     <article class="card pp-card">
       <div class="card-head">
         <div class="card-id">${betMark(r, 56)}
@@ -6004,6 +6006,17 @@ function renderPropPage() {
         ${r.grade ? `<span class="grade ${gradeClass(r.grade)}">${
           escapeHtml(r.grade)}</span>` : ""}
       </div>
+      <div class="pp-actions">
+        ${r.player && r.odds != null ? `<button class="btn ghost"
+          data-slip="${escapeAttr(propId(r))}">${slipHas(r)
+            ? "On slip" : "+ Parlay"}</button>` : ""}
+        ${r.player ? `<button class="btn ghost" data-send-pick
+          >Send</button>` : ""}
+        ${shareBtn("pick", pickSlug(r))}
+        <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
+          >Share card</button>
+      </div>
+      <div id="fr-send-slot"></div>
       <div class="metrics">
         ${proj}
         ${r.hit_prob != null ? `<div class="metric"><div class="k">Model</div>
@@ -6478,9 +6491,11 @@ function renderGamePage() {
   })() : "";
   host.innerHTML = `
     <div class="pp-nav">
-      <button class="btn ghost gp-back" id="gp-back">← Back to the board</button>
-      ${shareBtn("game", gameSlug(g))}
-      ${favBtn(g.away)}${favBtn(g.home)}
+      <button class="btn-quiet gp-back" id="gp-back">← Back to the board</button>
+      <span class="pp-nav-right">
+        ${shareBtn("game", gameSlug(g))}
+        ${favBtn(g.away)}${favBtn(g.home)}
+      </span>
     </div>
     <div class="gp-hero">
       <div class="gp-art">${art}${gpPhoto}

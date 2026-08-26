@@ -4,6 +4,12 @@
     {
       "date": "2026-08-25",
       "kind": "fix",
+      "title": "The pick page's buttons learned their place",
+      "body": "Six pill buttons were piled above every pick, wrapping into two rows on a phone. Navigation — back to the board, the player page — is now two quiet links above the card, and the things you do WITH the pick (parlay, send, copy link, share card) are one clean strip inside it, right under the pick's name. The Instagram and Discord links also left the crowded top bar for the bottom of the menu, labeled properly. Nothing was removed anywhere — everything just moved to where you'd expect to find it."
+    },
+    {
+      "date": "2026-08-25",
+      "kind": "fix",
       "title": "Football learns from its bets from week one",
       "body": "A season-readiness audit walked every self-tuning system MLB runs — loss-pattern vetoes, the hypothesis tribunal, temperature calibration, the selection haircut, line-move detection, the autopsy — and confirmed each is wired for NFL and college football too. It found one real hole: the nightly harvest of closing odds was hardcoded to baseball, so every football bet would have settled without a closing line — no CLV, no process grades, none of the learning. The harvest now follows the journal: any sport that bet that day gets its closes pulled, for exactly the markets it bet. Weather rows and standings also picked up the cleaner layouts, with division chips to cut the scrolling."
     },

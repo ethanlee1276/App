@@ -2755,9 +2755,28 @@ select.calc-in { width: auto; font-weight: 600; }
    control has somewhere to sit that is not an inline margin bolted to a
    button — the detail pages are the two surfaces people actually send to
    somebody, so the control belongs where the eye already is. */
-.pp-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* The entity-page furniture, rebuilt 2026-08-25 (Ethan, circling six
+   wrapped pills: "It feels cheap just having all these buttons here").
+   Navigation is quiet text links in the nav row; actions on the pick
+   live in a hairline-divided strip INSIDE the card (.pp-actions). */
+.pp-nav { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; }
 .pp-nav .gp-back { margin-bottom: 0; }
-.pp-nav + .card, .pp-nav + .gp-hero { margin-top: 14px; }
+.pp-nav + .card, .pp-nav + .gp-hero { margin-top: 10px; }
+.pp-nav-right { display: inline-flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; }
+.btn-quiet { background: none; border: 0; box-shadow: none; cursor: pointer;
+  padding: 8px 2px; min-height: 40px; color: var(--text-mute);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; }
+.btn-quiet:hover { color: var(--text); }
+.pp-actions { display: flex; margin-top: 12px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.pp-actions .btn { flex: 1 1 0; margin: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: var(--text-dim);
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em;
+  padding: 12px 4px 4px; min-height: 44px; white-space: nowrap; }
+.pp-actions .btn + .btn { border-left: var(--hairline) solid var(--border-soft); }
+.pp-actions .btn:hover { color: var(--brand); background: none; }
 /* On a player card it rides in the head beside the grade, where there is
    no room for a full-size control. */
 .profile-head .qb-share { align-self: flex-start; font-size: var(--fs-sm); }
