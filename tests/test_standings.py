@@ -399,6 +399,35 @@ def test_last_ten_is_the_leagues_number_or_a_dash_never_a_zero():
     assert by["NYY"]["last10_label"] == "6-4"
     assert by["BOS"]["last10_label"] == "\u2014", "no fabricated 0-0"
 
+def test_the_division_chips_filter_and_cannot_strand_the_page():
+    """Render pack 2026-08-25: six MLB divisions is six cards of
+    scrolling, so chips cut it to one tap. The guard matters as much as
+    the chips: a division name remembered from another sport must fall
+    back to All rather than filter the page to nothing."""
+    js = _read("web", "js", "app.js")
+    i = js.index("async function renderStandings()")
+    body = js[i:i + 6000]
+    assert "std-chips" in body and "_stdSet" in body
+    assert 'groups.length > 2' in body, "two conferences don't need chips"
+    assert '_stdGroup = ""' in body, "a stale selection strands the page"
+    # the crest, not a coloured abbreviation (Ethan's screenshot)
+    j = js.index("function standingsRowHTML(")
+    assert "teamMarkIn(state.sport, t.team" in js[j:j + 900]
+
+
+def test_the_weather_rows_read_as_columns():
+    """Render pack 2026-08-25: matchup · park · temp · wind, with the
+    direction word the model actually prices and Dome where numbers
+    would be — not a chip pile."""
+    js = _read("web", "js", "app.js")
+    i = js.index("function renderWeather()")
+    body = js[i:i + 3000]
+    assert '<span class="wx-temp">' in body and '<span class="wx-wind' in body
+    assert "Dome" in body
+    css = _read("web", "css", "styles.css")
+    assert ".wx-wind.windy { color: var(--warn); }" in css
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

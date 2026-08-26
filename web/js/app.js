@@ -12601,21 +12601,29 @@ function renderWeather() {
   const host = document.getElementById("weather-body");
   if (!host) return;
   const games = ((state.data || {}).games || []).filter((g) => g.weather);
+  // Ethan's render pack, 2026-08-25: four quiet columns — matchup, park,
+  // temperature, wind — instead of a chip pile. The wind column carries
+  // the direction word the model actually prices ("in"/"out"/"cross"),
+  // and a dome says "Dome" where the numbers would be, because a dome's
+  // weather reading IS that there isn't one.
   const row = (g) => {
     const w = g.weather || {};
     const windy = !w.dome && (w.wind_mph || 0) >= 12;
-    const chips = w.dome
-      ? `<span class="chip books">${icon("stadium")} Dome — weather can’t reach it</span>`
-      : [`<span class="chip">${Math.round(w.temp_f)}&deg;F</span>`,
-         `<span class="chip ${windy ? "down" : ""}">${Math.round(w.wind_mph || 0)}mph${w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}${windy ? " — moves totals" : ""}</span>`,
-         (w.precip_chance || 0) >= 0.2
-           ? `<span class="chip">${Math.round(w.precip_chance * 100)}% precip</span>` : "",
-        ].join("");
+    const precip = !w.dome && (w.precip_chance || 0) >= 0.2
+      ? ` · ${Math.round(w.precip_chance * 100)}% precip` : "";
+    const cells = w.dome
+      ? `<span class="wx-temp">&mdash;</span>
+         <span class="wx-wind">${icon("stadium")} Dome</span>`
+      : `<span class="wx-temp">${Math.round(w.temp_f)}&deg;F</span>
+         <span class="wx-wind${windy ? " windy" : ""}"
+           title="${windy ? "12mph+ moves totals" : ""}">${
+           Math.round(w.wind_mph || 0)}mph${
+           w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}${precip}</span>`;
     return `<div class="wx-row" data-gid="${escapeHtml(gameId(g))}">
-      <span class="wx-teams">${teamMark(g.away, 20)} ${escapeHtml(g.away)}
-        <em>@</em> ${teamMark(g.home, 20)} ${escapeHtml(g.home)}</span>
+      <span class="wx-teams">${teamMark(g.away, 22)} ${escapeHtml(g.away)}
+        <em>@</em> ${teamMark(g.home, 22)} ${escapeHtml(g.home)}</span>
       <span class="wx-park">${escapeHtml(g.park_name || (g.stadium || {}).name || "")}</span>
-      <span class="wx-chips chips">${chips}</span>
+      ${cells}
     </div>`;
   };
   const deskWx = ((_railDeskCache || {}).weather || []);
@@ -17653,6 +17661,11 @@ function transactionsHTML(tx) {
    bracket is postseason and is drawn only from games actually played.
    ============================================================ */
 const _standingsCache = {};
+/* The render pack's division chips (2026-08-25): six MLB divisions is
+   six cards of scrolling to reach the NL West, and the chips cut it to
+   one tap. Not persisted — a filter, not a setting. */
+let _stdGroup = "";
+window._stdSet = (label) => { _stdGroup = label; renderStandings(); };
 
 async function loadStandings(sport) {
   const key = sport || state.sport || "nfl";
@@ -18058,6 +18071,10 @@ async function renderStandings() {
     return;
   }
   const b = d.bracket || {};
+  // A division chip from another sport must not filter this one to an
+  // empty page — an unknown selection means "All".
+  if (_stdGroup && !groups.some((g) =>
+      (g.label || g.conference || "") === _stdGroup)) _stdGroup = "";
   /* A fallback table that LOOKS official is the failure this page just
      had. When the league’s feed was unavailable and these are our own
      counted games, say so above the table — not only in a note the empty
@@ -18074,8 +18091,19 @@ async function renderStandings() {
       ${bracketHTML(b)}` : ""}
     <div class="section-title"${b.started ? "" : ' style="margin-top:0"'}>Teams
       <span class="sub">— ${groups.length} group(s)</span></div>
+    ${groups.length > 2 ? `<div class="std-chips">
+      <button class="al-cat${!_stdGroup ? " on" : ""}" type="button"
+        onclick="_stdSet('')">All</button>
+      ${groups.map((g) => {
+        const label = g.label || g.conference || "";
+        return `<button class="al-cat${_stdGroup === label ? " on" : ""}"
+          type="button" onclick="_stdSet('${escapeAttr(label)}')"
+          >${escapeHtml(label)}</button>`;
+      }).join("")}</div>` : ""}
     <div class="ros-teams">
-      ${groups.map((g) => standingsGroupHTML(g, d.score_label)).join("")}
+      ${groups.filter((g) => !_stdGroup
+          || (g.label || g.conference || "") === _stdGroup)
+        .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;

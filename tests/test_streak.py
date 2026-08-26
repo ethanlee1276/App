@@ -198,24 +198,31 @@ def test_todays_question_waits_for_positive_proof_of_a_final():
     """The ledger's premature-grade lesson, inherited whole: a stat row
     on today's date with no final score in the games table is a partial
     line, and grading a streak against it would settle people's nights
-    off the fourth inning."""
+    off the fourth inning.
+
+    Dated with the REAL today, not the file's frozen TODAY: the guard's
+    strict window is "today or yesterday" off the wall clock
+    (ledger._too_early_to_grade reads datetime.date.today()), so a
+    frozen date ages out of it at midnight — this test first failed two
+    days after it was written, at 00:00 UTC, with no code change."""
+    real_today = dt.date.today().isoformat()
     hist = _hist_db()
     hist.execute(
         "INSERT INTO player_game_logs (sport, season, period, game_id, "
         "player, team, market, value) VALUES "
         "('mlb', 2026, ?, 'g1', 'Juan Soto', 'New York Yankees', "
-        "'total_bases', 1)", (TODAY,))
+        "'total_bases', 1)", (real_today,))
     hist.commit()
     q = {"qid": "x", "sport": "mlb", "player": "Juan Soto",
-         "market": "total_bases", "line": 1.5, "date": TODAY}
-    assert S.grade_question(hist, q, TODAY) == (None, None)
+         "market": "total_bases", "line": 1.5, "date": real_today}
+    assert S.grade_question(hist, q, real_today) == (None, None)
     # The team's final posts → the same question grades.
     hist.execute(
         "INSERT INTO games (sport, season, period, game_id, home, away, "
         "home_score, away_score) VALUES ('mlb', 2026, ?, 'g1', "
-        "'New York Yankees', 'Boston Red Sox', 5, 2)", (TODAY,))
+        "'New York Yankees', 'Boston Red Sox', 5, 2)", (real_today,))
     hist.commit()
-    assert S.grade_question(hist, q, TODAY)[0] == "under"
+    assert S.grade_question(hist, q, real_today)[0] == "under"
 
 
 def test_question_with_no_stat_line_voids_only_after_the_window():

@@ -492,6 +492,43 @@ def test_prune_can_never_reach_stats_journal_or_models(_mp=None):
             f"{name} would be deleted by the pruner"
 
 
+def test_the_closes_harvest_follows_the_journal_not_a_hardcode(monkeypatch):
+    """The season-readiness audit's finding (2026-08-25): the nightly
+    harvest ran `harvest_odds.py mlb --markets total_bases,h2h` whatever
+    had been bet, so every NFL bet of the coming season would have
+    settled with no closing line — no CLV, no process grade, none of the
+    learning the ladder feeds on. Targets now come from the journal:
+    each sport that bet that day, exactly the markets it bet, with the
+    game-bet vocabulary translated to the API's."""
+    import engine.ledger as ledger
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, "l.db")
+    conn = ledger.connect(path)
+    day = dt.date(2026, 9, 13)
+    rows = [("nfl", "rec_yds"), ("nfl", "moneyline"), ("nfl", "spread"),
+            ("mlb", "total_bases"),
+            ("cfb", "moneyline"),          # journals, but never harvests
+            ("nfl", "rush_yds")]
+    for sport, market in rows:
+        conn.execute(
+            "INSERT INTO bets (ts, sport, date, player, market, side, line,"
+            " book, odds, stake_units, stake_dollars, status, category)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("2026-09-13T09:00:00", sport, day.isoformat(), "X", market,
+             "OVER", 1.5, "DK", -110, 1.0, 0.0, "open", "props"))
+    conn.commit(); conn.close()
+    monkeypatch.setattr(ledger, "DEFAULT_DB", path)
+    got = dict(maintenance._harvest_targets(day))
+    assert got["mlb"] == "total_bases"
+    assert got["nfl"] == "h2h,rec_yds,rush_yds,spreads", got["nfl"]
+    # CFB stays out ON PURPOSE — the odds-history parsers have no team
+    # map for it (built at run time inside cfb_build; docs/IDEAS.md).
+    assert "cfb" not in got
+    assert "cfb" not in maintenance._HARVEST_SPORTS
+    # A day nobody bet owes no credits.
+    assert maintenance._harvest_targets(dt.date(2026, 9, 14)) == []
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []

@@ -145,6 +145,52 @@ def _maybe_backup(state: dict, today: _dt.date, log,
         f"({len(list(backup_dir.glob('backup_*.zip')))} kept)")
 
 
+#: Game-bet journal markets → the Odds API's own market keys. Props
+#: resolve through oddshistory.resolve_market_keys; these three are the
+#: journal's game-bet vocabulary, which the API spells differently.
+_HARVEST_GAME_MARKETS = {"moneyline": "h2h", "spread": "spreads",
+                         "total": "totals", "team_total": "totals"}
+
+#: Sports the auto-harvest may spend on. CFB is DELIBERATELY absent: the
+#: odds-history parsers key teams through SPORT_CONFIG's map, and CFB's
+#: is built at run time from the ESPN feed inside cfb_build — a harvest
+#: today would store school names no settle pass can join to bets. The
+#: gap and its fix are written down in docs/IDEAS.md.
+_HARVEST_SPORTS = ("mlb", "nfl")
+
+
+def _harvest_targets(day: _dt.date) -> list[tuple[str, str]]:
+    """(sport, markets-csv) for each sport that JOURNALED bets on ``day``.
+
+    Driven by the journal rather than a hardcoded sport, because the
+    hardcode was the bug: "mlb, total_bases,h2h" meant every NFL bet of
+    the season would have settled with no closing line — no CLV, no
+    process grade, none of the learning the whole ladder feeds on.
+    Harvesting exactly the markets bet keeps the credit spend at the
+    floor the CLI's own help text argues for.
+    """
+    from . import ledger as _led
+    out = []
+    try:
+        conn = _led.connect()
+    except Exception:
+        return out
+    try:
+        for sport in _HARVEST_SPORTS:
+            rows = [r[0] for r in conn.execute(
+                "SELECT DISTINCT market FROM bets WHERE sport=? AND date=?",
+                (sport, day.isoformat()))]
+            if not rows:
+                continue
+            markets = sorted({_HARVEST_GAME_MARKETS.get(m, m) for m in rows})
+            out.append((sport, ",".join(markets)))
+    except Exception:
+        return out
+    finally:
+        conn.close()
+    return out
+
+
 def _maybe_harvest(day: _dt.date, log) -> None:
     """Harvest yesterday's closing odds — only when clearly affordable."""
     if not os.environ.get("ODDS_API_KEY"):
@@ -160,19 +206,24 @@ def _maybe_harvest(day: _dt.date, log) -> None:
             return
     except Exception:
         return
-    cmd = [sys.executable, "harvest_odds.py", "mlb",
-           "--from", day.isoformat(), "--to", day.isoformat(),
-           "--markets", "total_bases,h2h",
-           "--budget", str(HARVEST_DAY_BUDGET), "--yes"]
-    try:
-        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
-                              text=True, timeout=600)
-        lines = (proc.stdout + proc.stderr).strip().splitlines()
-        harvested = next((l.strip() for l in lines if l.strip().startswith("Harvested")),
-                         lines[-1].strip() if lines else "")
-        log(f"  closes: {harvested}")
-    except Exception as exc:  # noqa: BLE001 — maintenance must never crash the site
-        log(f"  ⚠️  closes: auto-harvest failed ({exc})")
+    targets = _harvest_targets(day)
+    if not targets:
+        return                            # nothing journaled, nothing owed
+    for sport, markets in targets:
+        cmd = [sys.executable, "harvest_odds.py", sport,
+               "--from", day.isoformat(), "--to", day.isoformat(),
+               "--markets", markets,
+               "--budget", str(HARVEST_DAY_BUDGET), "--yes"]
+        try:
+            proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                  text=True, timeout=600)
+            lines = (proc.stdout + proc.stderr).strip().splitlines()
+            harvested = next(
+                (l.strip() for l in lines if l.strip().startswith("Harvested")),
+                lines[-1].strip() if lines else "")
+            log(f"  closes ({sport}): {harvested}")
+        except Exception as exc:  # noqa: BLE001 — must never crash the site
+            log(f"  ⚠️  closes ({sport}): auto-harvest failed ({exc})")
 
 
 # --- Intraday settle --------------------------------------------------------

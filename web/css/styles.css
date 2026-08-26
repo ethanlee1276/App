@@ -3835,6 +3835,10 @@ body.pk-open { overflow: hidden; }
 .std-row:last-child { border-bottom: none; }
 .std-rank { color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums; text-align: right; }
+/* The render pack's division chips (2026-08-25) — reuses the Alerts
+   category chip look so filters read the same everywhere. */
+.std-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+
 /* Since 2026-08-25 the cell holds teamMark — the real crest with the
    coloured-chip monogram underneath as its fallback — instead of a bare
    coloured abbreviation ("we are not showing team logos on this page"). */
@@ -6383,10 +6387,17 @@ body.has-rail .shell {
 .wx-teams em { color: var(--text-mute); font-style: normal; }
 .wx-park { flex: 1; min-width: 0; color: var(--text-mute); font-size: var(--fs-sm);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wx-chips { margin: 0; }
+/* The render pack's two quiet numeric columns (2026-08-25). */
+.wx-temp { width: 52px; text-align: right; font-weight: 700;
+  font-variant-numeric: tabular-nums; }
+.wx-wind { width: 120px; text-align: right; color: var(--text-dim);
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
+  display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; }
+.wx-wind.windy { color: var(--warn); }
 @media (max-width: 640px) {
   .wx-row { flex-wrap: wrap; gap: 8px; }
   .wx-park { flex-basis: 100%; }
+  .wx-temp, .wx-wind { width: auto; }
 }
 
 /* --- Prop analysis (Ethan's render, 2026-08-16) -------------------------

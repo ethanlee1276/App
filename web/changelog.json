@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-25",
+      "kind": "fix",
+      "title": "Football learns from its bets from week one",
+      "body": "A season-readiness audit walked every self-tuning system MLB runs — loss-pattern vetoes, the hypothesis tribunal, temperature calibration, the selection haircut, line-move detection, the autopsy — and confirmed each is wired for NFL and college football too. It found one real hole: the nightly harvest of closing odds was hardcoded to baseball, so every football bet would have settled without a closing line — no CLV, no process grades, none of the learning. The harvest now follows the journal: any sport that bet that day gets its closes pulled, for exactly the markets it bet. Weather rows and standings also picked up the cleaner layouts, with division chips to cut the scrolling."
+    },
+    {
+      "date": "2026-08-25",
       "kind": "ship",
       "title": "Build a parlay, send it to a friend",
       "body": "Tap + Parlay on any priced prop and it collects in a slip docked at the bottom of the screen, the way a sportsbook does it. The slip multiplies the prices into a combined number and says plainly that it assumes the legs are independent — same-game correlation stays the business of the engine's own screened tickets. Send the ticket to a friend and what travels is the legs' names only: they open it on the board under their own account, priced by their own subscription. A messages envelope now sits in the top bar with an honest unread count, and everything friends send — picks and parlays — lands on one Messages page."

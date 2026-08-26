@@ -184,6 +184,27 @@ Not a pre-Week-1 change; the calibration is the right risk this week.
 
 ---
 
+## CFB closing lines — the one CLV gap left, 2026-08-25
+
+The season-readiness audit made the nightly closing-odds harvest
+journal-driven (engine/maintenance._harvest_targets): any night MLB or
+NFL bets journal, their closes are harvested for exactly the markets
+bet, and CLV + process grades accrue. CFB is the deliberate exception,
+and the blocker is a TEAM MAP, not the API: the odds-history parsers
+key every price through `SPORT_CONFIG[sport]["teams"]`, and CFB's map is
+built at run time from the ESPN feed inside cfb_build — 134 schools is
+the kind of table that rots on paper, so it was never hardcoded. A
+harvest today would store school names no settle pass can join to bets.
+
+The fix, when it is worth a day: persist the ESPN-derived map that
+cfb_build already constructs (it exists in memory on every build) to
+`data/feedstate/cfb_teams.json`, teach oddshistory to load it, and add
+"cfb" to `_HARVEST_SPORTS` and harvest_odds' choices. Until then CFB
+bets journal and settle normally — they just carry no closing line,
+which the Record page already displays honestly as an empty CLV.
+
+---
+
 ## Web push — measured and refused, 2026-08-26
 
 Roadmap #8 asked for it ("an edge alert that hits a lock screen") and it
