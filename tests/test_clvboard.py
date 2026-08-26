@@ -180,6 +180,72 @@ def test_the_panel_does_not_borrow_the_record_boards_grid():
     assert ".mvm-row {" in css and ".mvm-clv {" in css
 
 
+# --- the doctor ---------------------------------------------------------------
+# The scoreboard's other job: making a dead market impossible to miss.
+
+class _Rep:
+    def __init__(self):
+        self.items = []
+
+    def add(self, name, level, detail, hint=""):
+        self.items.append((name, level, detail, hint))
+
+
+def _doctor_on(book):
+    import doctor
+    from engine import ledger as _led
+    saved_db, saved_has = _led.DEFAULT_DB, doctor.has_journal
+    _led.DEFAULT_DB = book.conn.execute(
+        "PRAGMA database_list").fetchone()[2]
+    doctor.has_journal = lambda: True
+    try:
+        rep = _Rep()
+        doctor.check_market_coverage(rep)
+        return rep.items[0]
+    finally:
+        _led.DEFAULT_DB, doctor.has_journal = saved_db, saved_has
+
+
+def test_the_doctor_names_a_market_going_ungraded():
+    """THE BUG THIS EXISTS FOR, found by hand on 2026-08-26 and only
+    because somebody went looking: NFL touchdown picks had never had a
+    closing line, because the harvest asked for a market key the API
+    does not have. Every other NFL market was covered, so the SPORT's
+    average stayed high and the aggregate coverage check reported OK for
+    the entire life of the touchdown board. A total is exactly where a
+    dead market hides."""
+    import doctor
+    b = _Book()
+    for _ in range(40):
+        b.bet("nfl", "rec_yds", "OVER", 50.0, 51.0)
+    for _ in range(37):
+        b.bet("nfl", "anytime_td", "OVER", 0.5, None, "lost")
+    name, level, detail, hint = _doctor_on(b)
+    assert level == "warn", (level, detail)
+    assert "anytime_td" in detail and "0/37" in detail
+    assert "broken JOIN" in hint, \
+        "the hint does not say a zero market is a bug, not a quiet week"
+    assert doctor.check_market_coverage in doctor.DATA_CHECKS, \
+        "the check never runs on the droplet's data pass"
+
+
+def test_a_thin_market_is_not_accused():
+    """"0 of 3 have a close" is a quiet week, not a broken join."""
+    b = _Book()
+    for _ in range(3):
+        b.bet("mlb", "hits", "OVER", 0.5, None)
+    _name, level, detail, _hint = _doctor_on(b)
+    assert level == "ok", (level, detail)
+
+
+def test_a_covered_board_passes():
+    b = _Book()
+    for _ in range(20):
+        b.bet("nfl", "rec_yds", "OVER", 50.0, 51.0)
+    _name, level, _detail, _hint = _doctor_on(b)
+    assert level == "ok"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "fix",
+      "title": "The health check now spots a market going ungraded",
+      "body": "Twice today a betting market turned out to have been settling with no closing line at all — college football's whole board, and NFL touchdowns since the day they launched — and both were found only because somebody went looking. The reason they hid so long: the health check read closing-line coverage as one total per sport, and a total is exactly where a dead market hides. One broken market at zero disappears behind its neighbours' 90%. The check now reads the journal one market at a time and names any market with real volume that is settling without closes, along with where to look. It is a small change that would have caught both of today's findings on the night they started."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "ship",
       "title": "Delete a message, or clear a whole conversation",
       "body": "Every message and shared pick in a thread now carries a quiet delete, and the conversation header carries Clear for the whole thing. One rule shapes all of it: deleting takes YOUR copy and never theirs. A message is a single record shared between two people, so removing it outright would reach into somebody else's account and take a conversation off their phone — the site does not do that, and both controls say so plainly rather than letting anyone believe they have unsent something. Clearing a thread is not blocking either: anything sent afterwards arrives as a new conversation. Deleted messages take their unread dots with them, so a badge can never point at something you cannot open, and once both people have cleared an item it is deleted from the database for real."

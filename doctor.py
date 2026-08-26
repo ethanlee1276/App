@@ -595,6 +595,68 @@ def check_clv_capture(rep):
             rep.add("clv capture", OK, detail)
 
 
+#: A market needs at least this many settled picks before its coverage
+#: says anything. Below it, "0 of 3 have a close" is a quiet week.
+MARKET_MIN_SETTLED = 15
+
+#: Under this share of settled picks carrying a close, a market is not
+#: being graded — whatever the sport's average looks like.
+MARKET_COVERAGE_FLOOR = 0.25
+
+
+def check_market_coverage(rep):
+    """Is any single MARKET going ungraded behind a healthy average?
+
+    THE BUG CLASS THIS EXISTS FOR, found by hand twice on 2026-08-26 and
+    both times only because somebody went looking:
+
+      * NFL anytime-TD picks had never had a closing line, because the
+        harvest asked the odds API for a market key it does not have.
+        Every other NFL market was covered, so the SPORT's coverage
+        stayed high and the aggregate check above reported OK for the
+        entire life of the touchdown board.
+      * CFB was excluded from the harvest outright, and its own game
+        lines — free, already in memory on every build — were never
+        stored either.
+
+    `check_clv_capture` reads the total, and a total is exactly where a
+    dead market hides. This reads the same journal one (sport, market)
+    at a time, so a single broken join has nowhere to hide behind its
+    neighbours' numbers.
+    """
+    @_check(rep, "market coverage")
+    def _():
+        if not has_journal():
+            rep.add("market coverage", WARN, _no_data("bet journal"))
+            return
+        from engine import ledger
+        from engine.clvboard import scoreboard
+        rows = scoreboard(ledger.connect())["rows"]
+        graded = [r for r in rows if r["settled"] >= MARKET_MIN_SETTLED]
+        if not graded:
+            rep.add("market coverage", OK,
+                    "no market has enough settled picks to judge yet")
+            return
+        dark = [r for r in graded
+                if r["coverage"] < MARKET_COVERAGE_FLOOR]
+        if not dark:
+            rep.add("market coverage", OK,
+                    f"{len(graded)} market(s) with real volume, all above "
+                    f"{MARKET_COVERAGE_FLOOR:.0%} close coverage")
+            return
+        worst = ", ".join(
+            f"{r['sport']} {r['market']} ({r['with_close']}/{r['settled']})"
+            for r in dark[:4])
+        rep.add("market coverage", WARN,
+                f"{len(dark)} market(s) settling with almost no closing "
+                f"lines: {worst}",
+                "a market at zero while its neighbours are fine is a broken "
+                "JOIN, not a quiet week — check that the harvest asks for "
+                "this market's real API key (engine/sources/oddshistory."
+                "resolve_market_keys) and that its sport is in "
+                "maintenance._HARVEST_SPORTS")
+
+
 def check_learning(rep):
     """Is the learning ladder actually recording, and has it learned anything?
 
@@ -759,6 +821,7 @@ def check_git(rep):
 
 
 CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
+          check_market_coverage,
           check_ingest_freshness, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
@@ -769,7 +832,7 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
 # correctly report "not my machine", and six such warnings every night is
 # noise that teaches you to ignore the run. --code-only drops them, so a
 # red CI run means something is actually red.
-DATA_CHECKS = (check_stuck_bets, check_slate_freshness,
+DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_ingest_freshness, check_odds_budget, check_llm_spend,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
