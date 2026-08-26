@@ -2935,32 +2935,105 @@ select.calc-in { width: auto; font-weight: 600; }
 .msg-finder { margin-bottom: 14px; }
 .msg-finder .msg-search { width: 100%; margin-bottom: 8px; }
 
-/* --- one conversation (2026-08-26): bubbles and a composer ---------- */
+/* --- one conversation (Ethan's render, 2026-08-26) ------------------
+   A FULL message page: the thread is a column pinned between the top
+   bar and the tab bar, the bubble list is the only thing that scrolls,
+   the composer sits at the foot, and the site footer leaves entirely
+   (body.msg-thread-open) — "it's just a message page so the full page
+   would be just the messages." */
+body.msg-thread-open .footer { display: none; }
 .msg-thread-row { width: 100%; text-align: left; background: none;
   border: none; border-bottom: var(--hairline) solid var(--border-soft);
   color: inherit; font: inherit; cursor: pointer;
   align-items: center; }
 .msg-thread-row:last-child { border-bottom: none; }
+.msg-thread { display: flex; flex-direction: column;
+  /* 150px = the view heading + section paddings above this column; the
+     goal is a page that does NOT scroll — only the bubble list does */
+  height: calc(100dvh - var(--topbar-h) - 150px); min-height: 380px; }
+@media (max-width: 900px) {
+  /* the phone tab bar the composer must clear */
+  .msg-thread { height: calc(100dvh - var(--topbar-h) - 150px
+    - 58px - env(safe-area-inset-bottom)); }
+}
 .msg-thread-head { display: flex; align-items: center; gap: 12px;
-  margin-bottom: 12px; }
+  margin-bottom: 10px; flex-shrink: 0; }
 .msg-thread-who { display: inline-flex; align-items: center; gap: 10px;
   font-size: var(--fs-md); }
-.msg-thread-who .msg-ava { width: 32px; height: 32px;
+.msg-thread-who .msg-ava { width: 34px; height: 34px;
   font-size: var(--fs-xs); }
-.msg-bubs { display: flex; flex-direction: column; gap: 10px;
-  padding: 14px; max-height: 58vh; overflow-y: auto; }
-.msg-bub { max-width: 78%; display: flex; flex-direction: column; gap: 4px;
-  padding: 9px 13px; border-radius: var(--radius-lg);
-  background: var(--panel); border: var(--hairline) solid var(--border-soft);
+.msg-tabs { display: flex; gap: 4px; padding: 5px;
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-lg); background: var(--panel);
+  margin-bottom: 10px; flex-shrink: 0; }
+.msg-tab { flex: 1; display: inline-flex; align-items: center;
+  justify-content: center; gap: 7px; padding: 8px 10px; border: none;
+  border-radius: calc(var(--radius-lg) - 4px); background: none;
+  color: var(--text-dim); font: inherit; font-size: var(--fs-sm);
+  font-weight: 700; cursor: pointer; }
+.msg-tab.on { background: var(--bg); color: var(--brand); }
+.msg-bubs { flex: 1; min-height: 0; display: flex; flex-direction: column;
+  gap: 12px; padding: 14px; overflow-y: auto;
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-lg); background: var(--panel); }
+.msg-day { display: flex; align-items: center; gap: 12px;
+  color: var(--text-mute); font-size: var(--fs-xs); }
+.msg-day::before, .msg-day::after { content: ""; flex: 1;
+  border-top: var(--hairline) solid var(--border-soft); }
+.msg-bub-row { display: flex; align-items: flex-end; gap: 9px; }
+.msg-bub-row.mine { justify-content: flex-end; }
+.msg-bub-row .msg-ava { width: 34px; height: 34px;
+  font-size: var(--fs-xs); flex-shrink: 0; }
+.msg-ava-me { background: var(--brand); color: #14120E;
+  text-shadow: none; font-weight: 800; }
+.msg-bub { max-width: 82%; display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 13px; border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--text) 5%, var(--panel));
+  border: var(--hairline) solid var(--border-soft);
   overflow-wrap: anywhere; }
-.msg-bub.theirs { align-self: flex-start; border-bottom-left-radius: 4px; }
-.msg-bub.mine { align-self: flex-end; border-bottom-right-radius: 4px;
-  background: color-mix(in oklab, var(--brand) 14%, var(--panel));
+.msg-bub.theirs { border-bottom-left-radius: 4px; }
+.msg-bub.mine { border-bottom-right-radius: 4px;
+  background: color-mix(in oklab, var(--brand) 13%, var(--panel));
   border-color: color-mix(in oklab, var(--brand) 35%, var(--border-soft)); }
+.msg-bub-head { display: flex; align-items: baseline; gap: 8px; }
+.msg-bub-head b { font-size: var(--fs-sm); }
 .msg-bub-body { font-size: var(--fs-sm); white-space: pre-wrap; }
 .msg-bub-when { color: var(--text-mute); font-size: var(--fs-2xs); }
-.msg-bub.share .msg-kind { align-self: flex-start; margin-top: 0; }
-.msg-composer { display: flex; gap: 8px; margin-top: 12px; }
+.msg-ticks { align-self: flex-end; color: var(--text-mute);
+  font-size: var(--fs-2xs); letter-spacing: -.12em; }
+.msg-ticks.seen { color: var(--brand); }
+/* the ticket a share draws inside a bubble */
+.msg-card { display: flex; flex-direction: column; margin-top: 2px;
+  border: var(--hairline) solid var(--border-soft);
+  border-radius: var(--radius-lg); background: var(--bg);
+  overflow: hidden; min-width: min(255px, 62vw); }
+.msg-card-head { display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding: 9px 12px;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.msg-card-kind { color: var(--good); font-size: var(--fs-2xs);
+  font-weight: 800; letter-spacing: .08em; }
+.msg-card-kind.pick { color: var(--brand); }
+.msg-card-odds { color: var(--good); font-weight: 800;
+  font-family: var(--font-mono); }
+.msg-card-leg { display: flex; align-items: center; gap: 10px;
+  justify-content: space-between; width: 100%; text-align: left;
+  padding: 9px 12px; background: none; border: none; color: inherit;
+  font: inherit; cursor: pointer;
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.msg-card-leg:last-child { border-bottom: none; }
+.msg-card-leg:hover { background: color-mix(in oklab,
+  var(--brand) 7%, transparent); }
+.msg-leg-words { display: flex; flex-direction: column; gap: 1px;
+  min-width: 0; }
+.msg-leg-words b { font-size: var(--fs-sm); }
+.msg-leg-words span { color: var(--text-dim); font-size: var(--fs-2xs);
+  text-transform: capitalize; }
+.msg-leg-odds { font-family: var(--font-mono);
+  font-size: var(--fs-sm); flex-shrink: 0; }
+.msg-leg-go { color: var(--brand); font-size: var(--fs-2xs);
+  flex-shrink: 0; }
+.msg-composer { display: flex; gap: 8px; margin-top: 10px;
+  flex-shrink: 0; }
 .msg-composer .msg-search { min-width: 0; }
 .msg-composer .btn { flex-shrink: 0; }
 

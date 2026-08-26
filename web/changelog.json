@@ -3,6 +3,12 @@
   "entries": [
     {
       "date": "2026-08-26",
+      "kind": "ship",
+      "title": "The thread becomes a full message page",
+      "body": "A conversation now takes the whole screen — the site footer steps out while a thread is open and only the messages scroll, with the composer pinned at the foot. Bubbles carry the sender's name and time, days get separators, and your own messages show a real read receipt — the second check lights when your friend's screen has actually shown it. Shared picks draw as proper tickets: legs with the odds read off YOUR board under YOUR subscription (the share itself still carries no numbers), a combined price when every parlay leg prices, and every leg still opens its charts. Filter tabs find the parlays and picks buried in the talk."
+    },
+    {
+      "date": "2026-08-26",
       "kind": "model",
       "title": "The TD card's three confessions get answered",
       "body": "Every anytime-TD card carried three caveats naming its own data gaps, and each one now has a fix. Red-zone usage: the nightly chores backfill last season's play-by-play once per machine at the season boundary, so the model reads measured red-zone touch shares for six hundred players instead of inferring them from volume. Touchdown history: week-one cards no longer say '0 games' — a thin history tops up from last season's real touchdowns, capped where the model's own blend stops trusting bigger samples, and stands down once four real games exist. The assumed 6% vig: books never offer 'no touchdown', so the number could not be read off a pair — instead the full quoted board is now journaled at every build and settled against who actually scored, and once enough quotes grade, the card switches from 'assumed' to a measured hold with the sample size shown. What moved on the board: TD probabilities now rest on measured roles and real histories from the first kickoff, not baselines."

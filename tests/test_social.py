@@ -611,9 +611,12 @@ def test_every_share_is_a_door_and_one_helper_builds_them_all():
     row = row[:row.index("\n}")]
     assert row.count("shareDoorAttrs(") >= 2, \
         "the inbox row builds doors some other way"
-    bub = APPJS[APPJS.index("function msgBubble(it)"):]
-    bub = bub[:bub.index("\n}")]
-    assert "shareDoorAttrs(" in bub, "thread bubbles grew their own doors"
+    card = APPJS[APPJS.index("function msgShareCard(it)"):]
+    card = card[:card.index("\n}")]
+    assert "shareDoorAttrs(" in card, "thread share cards grew their own doors"
+    assert 'msgShareCard(it)' in APPJS[APPJS.index("function msgBubble(it)"):
+                                       APPJS.index("function msgShareCard")], \
+        "bubbles stopped drawing shares through the one card renderer"
     assert "shareRowHTML" not in APPJS, "a second share renderer came back"
     j = APPJS.index("function friendInboxHTML()")
     fib = APPJS[j:APPJS.index("\n}", j)]

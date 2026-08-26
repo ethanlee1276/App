@@ -633,25 +633,29 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
     if not ok:
         return 403, {"error": "You can only message your friends."}
     items = []
+    # `seen` rides every item: on YOUR bubbles it is the read receipt
+    # (did the friend see it), on theirs it drives the unread state.
     for r in conn.execute(
-            "SELECT id, from_id, body, created_at FROM dm_messages WHERE "
-            "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
+            "SELECT id, from_id, body, created_at, seen FROM dm_messages "
+            "WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
         items.append({"kind": "text", "id": int(r["id"]),
                       "mine": int(r["from_id"]) == me,
-                      "body": r["body"], "created_at": r["created_at"]})
+                      "body": r["body"], "created_at": r["created_at"],
+                      "seen": bool(r["seen"])})
     for r in conn.execute(
             "SELECT id, from_id, sport, date, player, market, note, "
-            "created_at FROM pick_shares WHERE "
+            "created_at, seen FROM pick_shares WHERE "
             "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
         items.append({"kind": "pick", "id": int(r["id"]),
                       "mine": int(r["from_id"]) == me,
                       "sport": r["sport"], "date": r["date"],
                       "player": r["player"], "market": r["market"],
-                      "note": r["note"], "created_at": r["created_at"]})
+                      "note": r["note"], "created_at": r["created_at"],
+                      "seen": bool(r["seen"])})
     for r in conn.execute(
-            "SELECT id, from_id, sport, date, legs, note, created_at "
+            "SELECT id, from_id, sport, date, legs, note, created_at, seen "
             "FROM parlay_shares WHERE "
             "(from_id=? AND to_id=?) OR (from_id=? AND to_id=?)",
             (me, friend_id, friend_id, me)):
@@ -662,7 +666,8 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
         items.append({"kind": "parlay", "id": int(r["id"]),
                       "mine": int(r["from_id"]) == me,
                       "sport": r["sport"], "date": r["date"], "legs": legs,
-                      "note": r["note"], "created_at": r["created_at"]})
+                      "note": r["note"], "created_at": r["created_at"],
+                      "seen": bool(r["seen"])})
     items.sort(key=lambda s: s["created_at"])
     items = items[-int(limit):]
     return 200, {"friend": display_name(conn, friend_id),

@@ -23848,6 +23848,11 @@ function _switchViewNow(name, push, dir) {
   if (DETAIL_VIEWS.includes(name) && !DETAIL_VIEWS.includes(leaving))
     _boardReturn = { view: leaving, y: window.scrollY };
   state.view = name;
+  // A thread is a FULL message page (Ethan's render, 2026-08-26): while
+  // one is open the site footer leaves, and it must come back the
+  // moment any other view does.
+  document.body.classList.toggle("msg-thread-open",
+    name === "messages" && !!_msgThread);
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active", "from-left", "from-right"));
   const target = document.getElementById(`view-${name}`);
   // Entering view slides in from the direction of travel between tabs.
@@ -25303,8 +25308,8 @@ function msgBadge() {
    interleaved the way they happened, with a composer at the bottom.
    Friend requests still answer at the top of the list, and the finder
    still lives behind "New message". */
-let _msgThread = 0;
-let _msgPoll = 0, _msgLastItems = "";
+let _msgThread = 0, _msgKind = "all";
+let _msgPoll = 0, _msgLastItems = "", _msgFriendName = "";
 
 function msgAvatar(name) {
   const initials = String(name || "?").split(/\s+/).slice(0, 2)
@@ -25409,6 +25414,7 @@ async function renderMessages() {
     return;
   }
   if (_msgThread) return renderThread(host, _msgThread);
+  document.body.classList.remove("msg-thread-open");
   const soc = await socFetch(true);
   if (state.view !== "messages" || _msgThread) return;
   const requests = (soc && soc.requests) || [];
@@ -25457,10 +25463,17 @@ async function renderMessages() {
   msgBadge();
 }
 
-/* One conversation. Texts are bubbles, shares are the same doors the
-   inbox rows wear (msgBubble builds them through shareDoorAttrs, the
-   single place a share door is defined), and the composer POSTs to
-   /api/social/dm — friends-only, enforced server-side. */
+/* One conversation, to Ethan's render (2026-08-26): a FULL message
+   page. Back + avatar + name up top, kind filters with counts, date
+   separators, name-and-time inside every bubble, share cards drawn like
+   a book's ticket — legs with the odds read off the READER's own board,
+   under their entitlement, which is the same re-pricing rule the slip
+   has always kept — and a composer pinned at the foot. What the render
+   drew that is deliberately NOT here: the Online dot (we do not track
+   presence and will not), the star and the paperclip (nothing behind
+   either), and a Mentions tab (nothing behind it). Risk/To Win rows are
+   not drawn because the share never carries a stake — a pointer, not a
+   ticket. */
 async function renderThread(host, fid) {
   let t = null;
   try {
@@ -25473,6 +25486,7 @@ async function renderThread(host, fid) {
   if (state.view !== "messages" || _msgThread !== fid) return;
   if (!t) {
     _msgThread = 0;
+    document.body.classList.remove("msg-thread-open");
     host.innerHTML = `<div class="empty-slate">
       <div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">That conversation isn’t yours to open</div>
@@ -25480,23 +25494,37 @@ async function renderThread(host, fid) {
         this friend, the thread went with them.</div></div>`;
     return;
   }
+  document.body.classList.add("msg-thread-open");
+  _msgFriendName = t.friend;
   const items = t.items || [];
   _msgLastItems = JSON.stringify(items);
+  const nParlay = items.filter((x) => x.kind === "parlay").length;
+  const nPick = items.filter((x) => x.kind === "pick").length;
+  const tab = (k, label, n) => `<button class="msg-tab${_msgKind === k
+    ? " on" : ""}" data-msg-kind="${k}" type="button">${label}${n
+    ? `<span class="msg-tab-n">${n}</span>` : ""}</button>`;
   host.innerHTML = `
-    <div class="msg-thread-head">
-      <button class="btn-quiet" data-msg-back type="button">&#8592; All messages</button>
-      <span class="msg-thread-who">${msgAvatar(t.friend)}<b>${
-        escapeHtml(t.friend)}</b></span>
-    </div>
-    <div class="card msg-bubs" id="msg-bubs">${items.map(msgBubble).join("")
-      || `<p class="set-empty">No messages yet. Say something, or send a
-          pick over from any pick page.</p>`}</div>
-    <form class="msg-composer" id="msg-composer" autocomplete="off">
-      <input class="msg-search" id="msg-composer-in" maxlength="500"
-        placeholder="Message ${escapeAttr(t.friend)}…"
-        aria-label="Message ${escapeAttr(t.friend)}">
-      <button class="btn" type="submit">Send</button>
-    </form>`;
+    <div class="msg-thread">
+      <div class="msg-thread-head">
+        <button class="btn-quiet" data-msg-back type="button">&#8592; All messages</button>
+        <span class="msg-thread-who">${msgAvatar(t.friend)}<b>${
+          escapeHtml(t.friend)}</b></span>
+      </div>
+      <div class="msg-tabs">
+        ${tab("all", "Messages", 0)}
+        ${tab("parlay", "Parlays", nParlay)}
+        ${tab("pick", "Picks", nPick)}
+      </div>
+      <div class="msg-bubs" id="msg-bubs">${msgBubsHTML(items)}</div>
+      <form class="msg-composer" id="msg-composer" autocomplete="off">
+        <input class="msg-search" id="msg-composer-in" maxlength="500"
+          placeholder="Message ${escapeAttr(t.friend)}…"
+          aria-label="Message ${escapeAttr(t.friend)}">
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </div>`;
+  // The PAGE stays put at the top — only the bubble list scrolls.
+  window.scrollTo(0, 0);
   const bubs = document.getElementById("msg-bubs");
   if (bubs) bubs.scrollTop = bubs.scrollHeight;
   const form = document.getElementById("msg-composer");
@@ -25563,7 +25591,7 @@ async function renderThread(host, fid) {
       _msgLastItems = blob;
       const el = document.getElementById("msg-bubs");
       if (el) {
-        el.innerHTML = (t2.items || []).map(msgBubble).join("");
+        el.innerHTML = msgBubsHTML(t2.items || []);
         el.scrollTop = el.scrollHeight;
       }
       fetch("/api/social/seen", { method: "POST",
@@ -25573,33 +25601,122 @@ async function renderThread(host, fid) {
   }, 15000);
 }
 
-function msgBubble(it) {
-  const side = it.mine ? "mine" : "theirs";
-  const when = `<span class="msg-bub-when">${escapeHtml(msgAgo(
-    it.created_at))}</span>`;
-  if (it.kind === "text") {
-    return `<div class="msg-bub ${side}"><span class="msg-bub-body">${
-      escapeHtml(it.body)}</span>${when}</div>`;
+/* Bubbles under date separators, filtered by the kind tabs. The filter
+   hides texts around the shares on Parlays/Picks, which is exactly what
+   those tabs are for — finding the ticket somebody sent last Tuesday. */
+function msgBubsHTML(items) {
+  const keep = _msgKind === "all" ? items
+    : items.filter((x) => x.kind === _msgKind);
+  if (!keep.length) {
+    return `<p class="set-empty">${_msgKind === "all"
+      ? "No messages yet. Say something, or send a pick over from any pick page."
+      : "Nothing of that kind in this conversation yet."}</p>`;
   }
-  const isParlay = it.kind === "parlay";
-  const doors = isParlay
-    ? (it.legs || []).map((l) =>
-        `<button class="chip slip-chip"${shareDoorAttrs(it.sport, l.player,
-          l.market)}>${escapeHtml(l.player)}</button>`).join("")
-    : `<button class="chip slip-chip"${shareDoorAttrs(it.sport, it.player,
-        it.market)}>See the charts</button>`;
-  const words = isParlay
-    ? (it.legs || []).map((l) => l.player).join(", ")
-    : `${it.player} — ${String(it.market || "").replace(/_/g, " ")}`;
-  return `<div class="msg-bub ${side} share">
-    <span class="msg-kind chip ${isParlay ? "up" : ""}">${
-      isParlay ? "PARLAY" : "PICK"}</span>
-    <span class="msg-bub-body">${escapeHtml(words)}</span>
-    ${it.note ? `<span class="msg-note">“${escapeHtml(it.note)}”</span>` : ""}
-    <span class="fr-legs">${doors}</span>
-    ${when}
+  const out = [];
+  let lastDay = "";
+  for (const it of keep) {
+    const day = new Date((it.created_at || 0) * 1000).toLocaleDateString(
+      undefined, tzOpts({ month: "long", day: "numeric", year: "numeric" }));
+    if (day !== lastDay) {
+      out.push(`<div class="msg-day"><span>${escapeHtml(day)}</span></div>`);
+      lastDay = day;
+    }
+    out.push(msgBubble(it));
+  }
+  return out.join("");
+}
+
+/* My side of a thread wears the same chip the topbar does — initials
+   off the signed-in account, never a fake name. */
+function msgMyAvatar() {
+  const u = typeof _acctUser === "object" && _acctUser ? _acctUser : null;
+  const init = ((u && u.email) || "?").trim().slice(0, 2).toUpperCase();
+  return `<span class="msg-ava msg-ava-me" aria-hidden="true">${
+    escapeHtml(init)}</span>`;
+}
+
+// Through tzTime, like every clock on the site — one zone, no
+// arithmetic (see the rule above tzOpts).
+const msgClock = (ts) => tzTime((ts || 0) * 1000);
+
+function msgBubble(it) {
+  const mine = it.mine;
+  const head = `<span class="msg-bub-head"><b>${mine ? "You"
+    : escapeHtml(_msgFriendName || "")}</b><span class="msg-bub-when">${
+    escapeHtml(msgClock(it.created_at))}</span></span>`;
+  // The read receipt is REAL: `seen` is the recipient's copy saying it
+  // was displayed, the same flag the unread dots run on.
+  const ticks = mine ? `<span class="msg-ticks${it.seen ? " seen" : ""}"
+    aria-label="${it.seen ? "read" : "sent"}">${it.seen
+    ? "&#10003;&#10003;" : "&#10003;"}</span>` : "";
+  const body = it.kind === "text"
+    ? `<span class="msg-bub-body">${escapeHtml(it.body)}</span>`
+    : msgShareCard(it);
+  const note = it.kind !== "text" && it.note
+    ? `<span class="msg-note">“${escapeHtml(it.note)}”</span>` : "";
+  return `<div class="msg-bub-row ${mine ? "mine" : "theirs"}">
+    ${mine ? "" : msgAvatar(_msgFriendName)}
+    <div class="msg-bub ${mine ? "mine" : "theirs"}${it.kind !== "text"
+      ? " share" : ""}">${head}${body}${note}${ticks}</div>
+    ${mine ? msgMyAvatar() : ""}
   </div>`;
 }
+
+/* A leg's live price, read off the reader's OWN board — the share
+   itself carries only identities, so what shows here is whatever THIS
+   account's entitlement already serves. Off-board or other-league legs
+   simply show no price, and the card stays a door either way. */
+function shareLegLive(sport, l) {
+  if (sport !== state.sport) return null;
+  const r = findProp(`${slugify(l.player)}-${slugify(l.market)}`);
+  if (r) return { odds: r.odds, label: r.market_label || l.market };
+  if (GAME_MARKET_WORDS[l.market] && String(l.player).includes("@")) {
+    const g = ((state.data || {}).game_bets || []).find((gb) =>
+      (gb.matchup || `${gb.away || ""} @ ${gb.home || ""}`) === l.player
+      && (gb.market || gb.bet_type || "") === l.market);
+    if (g) return { odds: g.odds, label: GAME_MARKET_WORDS[l.market] };
+  }
+  return null;
+}
+
+function msgShareCard(it) {
+  const isParlay = it.kind === "parlay";
+  const legs = isParlay ? (it.legs || [])
+    : [{ player: it.player, market: it.market }];
+  let dec = 1, priced = 0;
+  const rows = legs.map((l) => {
+    const live = shareLegLive(it.sport, l);
+    if (live && live.odds != null) {
+      const d = mbDecimal(live.odds);
+      if (d != null) { dec *= d; priced++; }
+    }
+    return `<button class="msg-card-leg" type="button"${shareDoorAttrs(
+      it.sport, l.player, l.market)}>
+      <span class="msg-leg-words"><b>${escapeHtml(l.player)}</b>
+        <span>${escapeHtml((live && live.label)
+          || String(l.market || "").replace(/_/g, " "))}</span></span>
+      ${live && live.odds != null
+        ? `<span class="msg-leg-odds">${escapeHtml(american(live.odds))}</span>`
+        : `<span class="msg-leg-go">charts &#8594;</span>`}
+    </button>`;
+  }).join("");
+  // Combined price only when EVERY leg priced off this reader's board —
+  // the slip's decimal-product arithmetic, never a partial product.
+  const combined = isParlay && legs.length >= 2 && priced === legs.length
+    ? american(dec >= 2 ? Math.round((dec - 1) * 100)
+                        : -Math.round(100 / (dec - 1)))
+    : "";
+  return `<span class="msg-card">
+    <span class="msg-card-head">
+      <span class="msg-card-kind${isParlay ? "" : " pick"}">${isParlay
+        ? `${legs.length}-LEG PARLAY`
+        : `${escapeHtml((it.sport || "").toUpperCase())} PICK`}</span>
+      ${combined ? `<span class="msg-card-odds">${combined}</span>` : ""}
+    </span>
+    ${rows}
+  </span>`;
+}
+
 
 /* The friend finder, behind "New message". Search matches DISPLAY
    NAMES only — engine/social.find_users is where that rule lives — so
@@ -25713,6 +25830,14 @@ document.addEventListener("click", async (e) => {
     // renderMessages force-fetches, so the list comes back with the
     // previews and dots this conversation just changed.
     _msgThread = 0;
+    _msgKind = "all";
+    document.body.classList.remove("msg-thread-open");
+    renderMessages();
+    return;
+  }
+  const kind = e.target.closest && e.target.closest("[data-msg-kind]");
+  if (kind && _msgThread) {
+    _msgKind = kind.dataset.msgKind;
     renderMessages();
   }
 });
