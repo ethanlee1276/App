@@ -580,7 +580,10 @@ def test_the_render_sheet_pass_shipped_its_honest_subset():
     # Props: tiles counted from what is actually priced tonight.
     assert "pm-grid" in APP and "byMarket[r.market]" in APP
     # The art chip only speaks when a real reading exists, never live.
-    assert "w.temp_f != null && !w.dome" in APP
+    # It used to TEST that with `temp_f != null`, which the engine's own
+    # mild-day prior satisfies — so the chip printed "60° · 6mph" for
+    # every unplayed outdoor NFL game. `wxKnown` is the real question.
+    assert "w.temp_f != null && wxKnown && !w.dome" in APP
     # The curve rows carry the per-day fields the range math needs.
     LEDGER = open(os.path.join(ROOT, "engine/ledger.py"), encoding="utf-8").read()
     assert "SUM(status='won') AS w" in LEDGER

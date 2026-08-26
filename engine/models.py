@@ -74,7 +74,21 @@ class DefenseProfile:
 
 @dataclass
 class Weather:
-    """Game-day weather. A dome sets ``dome=True`` and other fields are ignored."""
+    """Game-day weather. A dome sets ``dome=True`` and other fields are ignored.
+
+    ``measured`` is the field that stops the defaults above from posing as
+    facts. nflverse fills a schedule row's temp and wind only AFTER the
+    game is played, so every outdoor game on a forward board arrives
+    blank and takes 60°F / 6 mph — and the card printed "60° · 6mph" for
+    it, the journal recorded 6.0 as the wind this bet was made in, and
+    the 25-mph deep-passing warning could never fire because the number
+    was a constant three times below its own threshold. None of that was
+    a measurement. The defaults stay (the pricing paths need a number to
+    arithmetic on, and a mild day is the right prior), but everything
+    that SHOWS or JOURNALS the number checks this first.
+
+    A dome is measured: climate control is a fact about the building.
+    """
 
     dome: bool = False
     temp_f: float = 65.0
@@ -83,6 +97,7 @@ class Weather:
     precip_chance: float = 0.0   # 0..1
     rain: bool = False
     snow: bool = False
+    measured: bool = False
 
 
 @dataclass

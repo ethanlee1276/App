@@ -425,8 +425,11 @@ def test_the_game_card_does_not_print_nan_degrees():
     the FALLBACK: a game WITHOUT a reading says so in words, never
     'NaN°F · NaNmph'. A game with one reads like the NFL's."""
     app = _read("web", "js", "app.js")
-    i = app.index("cfb ? (g.weather")
-    seg = app[i:i + 300]
+    # The college-only branch became the shared rule on 2026-08-26, when
+    # the NFL's weather turned out to be a prior rather than a forecast.
+    # Same three claims, read off the one guard.
+    i = app.index("const wxKnown =")
+    seg = app[i:i + 480]
     assert '"Outdoor · weather not pulled"' in seg,         "the unstamped-game fallback is gone — NaN degrees are back"
     assert "Math.round(w.temp_f)" in seg,         "a stamped college game hides its reading"
     assert seg.index("g.weather") < seg.index("g.indoor"),         "the reading is checked after the indoor guess instead of first"

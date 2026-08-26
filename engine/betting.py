@@ -412,8 +412,11 @@ def evaluate_prop(prop: Prop, proj: Projection,
     _env = {}
     _w = getattr(game, "weather", None)
     if sport in ("nfl", "cfb") and _w is not None:
+        # Unmeasured weather is NO wind dimension rather than a mild
+        # one: nflverse fills a schedule row's wind from the played
+        # game, so a forward board's 6 mph is the prior, not a forecast.
         _env = {"roofed": bool(_w.dome),
-                "wind_out": None if _w.dome
+                "wind_out": None if _w.dome or not getattr(_w, "measured", False)
                 else round(float(_w.wind_mph or 0), 1)}
     _rest_days = _body_clock = None
     if sport in ("nfl", "cfb") and game is not None:

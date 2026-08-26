@@ -54,6 +54,42 @@ is explaining an empty board honestly. Fixed and pinned.
 
 ---
 
+## The NFL has no weather feed — found 2026-08-26
+
+College football pulls a real kickoff forecast: CFBD venue coordinates
+joined to Open-Meteo's hourly board, keyless and free, with an honest
+`weather_checked` flag on every game the join could not answer
+(`engine/cfb/wx.py`, wired in `cfb_build.py`).
+
+**The NFL has no equivalent.** Its weather comes from the nflverse
+schedule's `temp` and `wind` columns, which nflverse fills from the
+game's own box score — so every outdoor game on a forward board is blank
+and takes the engine's mild-day prior of 60°F and 6 mph. For a season
+that prior was indistinguishable from a reading, and it reached
+everywhere: the card printed "60° · 6mph", the animated gauge drew it as
+a compass reading, the journal recorded 6.0 as the wind each pick was
+made in, and the 25-mph deep-passing warning could never fire because
+the number it tested was a constant three times below its own bar.
+
+**The honest half is done** (2026-08-26): `Weather.measured` is set at
+the source, every surface that shows or journals the number checks it,
+and an unmeasured game now says "weather not pulled" — college's own
+sentence, promoted to the shared one. `tests/test_unmeasured_weather.py`
+holds all four surfaces.
+
+**What is left is the feed.** `engine/cfb/wx.py` is the template and
+almost all of it is league-agnostic: it takes venue coordinates and a
+kickoff hour and returns temp/wind at that hour. What the NFL needs is
+the coordinates — 32 stadiums, a fixed list, unlike college's 130-odd
+venues that genuinely need a feed — plus the same `attach` pass and the
+`measured=True` stamp on what comes back. Nothing has to be invented and
+nothing costs money.
+
+Worth doing before the weather starts mattering, which for the NFL is
+late October rather than September.
+
+---
+
 ## 2. Smaller, known, not urgent
 
 * Player photos are missing for MLB / NFL / NBA — faces are captured

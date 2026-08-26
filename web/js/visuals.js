@@ -390,6 +390,30 @@ function windGauge(weather, opts = {}) {
       </svg>
     </div>`;
   }
+  /* A NUMBER NOBODY MEASURED IS NOT A READING. nflverse fills a
+     schedule row's wind from the PLAYED game, so every outdoor NFL game
+     on a forward board arrived blank, took the engine's mild-day prior
+     of 6 mph, and this gauge drew it as a compass reading with a green
+     arrow — all season, on the card, as though somebody had looked.
+     `measured: false` is set at the source (engine/models.Weather); a
+     payload with no such key is a league that really does pull its
+     weather, so absence reads as known and MLB is untouched. */
+  if (weather.measured === false) {
+    return `
+    <div class="wind unknown" title="No forecast pulled for this game yet">
+      <svg width="${size}" height="${size}" viewBox="0 0 92 92">
+        <circle cx="46" cy="46" r="40" fill="#0f1730" stroke="#2b365a"
+                stroke-width="2" stroke-dasharray="4 5"/>
+        <text x="46" y="15" text-anchor="middle" font-size="8" fill="#7c86a8"
+              font-family="system-ui">N</text>
+        <circle cx="46" cy="46" r="15" fill="#0c1020" opacity="0.7"/>
+        <text class="num" x="46" y="45" text-anchor="middle" font-size="13"
+              font-weight="800" fill="#7c86a8">—</text>
+        <text x="46" y="68" text-anchor="middle" font-size="7" fill="#7c86a8"
+              font-family="system-ui">NOT PULLED</text>
+      </svg>
+    </div>`;
+  }
   const mph = weather.wind_mph || 0;
   const fromDeg = COMPASS[(weather.wind_dir || "").toUpperCase()] ?? null;
   const blowDeg = fromDeg == null ? 90 : (fromDeg + 180) % 360; // direction wind travels

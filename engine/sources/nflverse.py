@@ -94,16 +94,30 @@ def weather_from_row(row: dict) -> Weather:
     """Map an nflverse game row to the engine's Weather.
 
     roof ∈ {dome, closed, outdoors, open}. dome/closed are climate-controlled;
-    outdoors/open use the reported temp and wind (often blank for fair days).
+    outdoors/open use the reported temp and wind, which nflverse fills from
+    the played game — so they are blank on every forward board and the
+    result is flagged unmeasured rather than dressed as a forecast.
     nflverse schedules carry no precipitation, so rain/snow default to False —
     wire a weather API for precip in a later phase.
     """
     roof = _s(row, "roof").lower()
     if roof in ("dome", "closed"):
-        return Weather(dome=True, temp_f=70.0, wind_mph=0.0)
+        # Climate control is a fact about the building, known in advance.
+        return Weather(dome=True, temp_f=70.0, wind_mph=0.0, measured=True)
+    # BLANK MEANS UNPLAYED, NOT FAIR. The docstring above used to read
+    # "often blank for fair days", and that is a misreading of the feed:
+    # nflverse fills these columns from the game's OWN box score, so an
+    # outdoor game that has not kicked off yet is blank every time. The
+    # defaults are kept — the pricing paths need a number and a mild day
+    # is the right prior — but they are flagged as the prior they are,
+    # so the card stops printing "60° · 6mph" as a forecast and the
+    # journal stops recording a constant as the wind a bet was made in.
+    have_temp = _s(row, "temp") != ""
+    have_wind = _s(row, "wind") != ""
     temp = _f(row, "temp", default=60.0)
     wind = _f(row, "wind", default=6.0)
-    return Weather(dome=False, temp_f=temp, wind_mph=wind)
+    return Weather(dome=False, temp_f=temp, wind_mph=wind,
+                   measured=bool(have_temp or have_wind))
 
 
 def build_games(season: int, week: int) -> list[Game]:

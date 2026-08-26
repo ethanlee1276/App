@@ -3890,11 +3890,19 @@ function gameCard(g) {
   // Open-Meteo at the kickoff hour) — but only for games the join could
   // answer. A stamped game reads like the NFL's; an unstamped one keeps
   // saying so, because "NaN°F · NaNmph" is worse than an honest miss.
+  //
+  // AND THE NFL'S WAS NOT A READING AT ALL. nflverse fills a schedule
+  // row's temp and wind from the PLAYED game, so every outdoor game on
+  // a forward board arrived blank and took the engine's mild-day prior
+  // — and this card printed "60°F · 6mph" for it, all season, as a
+  // forecast. Same rule for every league now, and college's honest
+  // sentence becomes the shared one rather than its own special case.
+  const wxKnown = !!(w.dome || w.measured || g.weather_checked);
   const cond = nba ? "Indoor hardwood"
-    : cfb ? (g.weather
-        ? (w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`)
-        : g.indoor ? "Indoor" : "Outdoor · weather not pulled")
-    : w.dome ? "Indoor" : `${Math.round(w.temp_f)}°F · ${windTxt}`;
+    : w.dome ? "Indoor"
+    : !g.weather || !wxKnown
+      ? (g.indoor ? "Indoor" : "Outdoor · weather not pulled")
+      : `${Math.round(w.temp_f)}°F · ${windTxt}`;
   // `sub` is now MARKUP, not text, because two of its parts are drawn icons.
   // It used to be handed to escapeHtml at the point of use, which is correct
   // for text and turns an <svg> into visible angle brackets — the exact
@@ -4050,7 +4058,9 @@ function gameCard(g) {
           ? `<span class="game-time-chip">${escapeHtml((whenLabel(g.date, g.kickoff).split("·").pop() || "").trim())}</span>` : ""}${
         // Temp + wind on the art itself (Ethan's stadium render rows,
         // 2026-08-11) — only outdoors, only when a real reading exists.
-        !isLive && !isFinal && w.temp_f != null && !w.dome && !nba
+        // "A real reading" was tested as `temp_f != null`, which the
+        // engine's own prior satisfies; it is tested properly now.
+        !isLive && !isFinal && w.temp_f != null && wxKnown && !w.dome && !nba
           ? `<span class="game-wx-chip">${Math.round(w.temp_f)}° · ${Math.round(w.wind_mph || 0)}mph</span>` : ""}${picksChip}</div>
       <div class="game-info">
         <div class="gc-teams">
@@ -6493,6 +6503,8 @@ function renderGamePage() {
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
   const cond = nba ? "Indoor hardwood"
     : w.dome ? "Indoor"
+    // Same rule as the strip card: an unmeasured prior is not a forecast.
+    : w.measured === false ? "Outdoor · weather not pulled"
     : `${Math.round(w.temp_f)}°F · ${Math.round(w.wind_mph)}mph${w.wind_dir ? " " + w.wind_dir : ""}`;
   const score = (side) => (live.home_score != null && (isLive || isFinal))
     ? `<b class="score">${side === "home" ? live.home_score : live.away_score}</b>` : "";
@@ -6559,9 +6571,9 @@ function renderGamePage() {
   if (g.lineups_confirmed === false) notes.push("Lineups not confirmed yet");
   if (mlb && f.hr >= 1.05) notes.push(`Park boosts home runs +${Math.round((f.hr - 1) * 100)}%`);
   if (mlb && f.hr && f.hr <= 0.95) notes.push(`Park suppresses home runs ${Math.round((f.hr - 1) * 100)}%`);
-  if (!w.dome && (w.wind_mph || 0) >= 12) notes.push(
+  if (!w.dome && w.measured !== false && (w.wind_mph || 0) >= 12) notes.push(
     `${Math.round(w.wind_mph)}mph wind${w.wind_dir ? " " + w.wind_dir : ""}`);
-  if (!w.dome && (w.precip_chance || 0) >= 0.4) notes.push(
+  if (!w.dome && w.measured !== false && (w.precip_chance || 0) >= 0.4) notes.push(
     `${Math.round(w.precip_chance * 100)}% precipitation chance`);
   if (g.doubleheader) notes.push(`Doubleheader — game ${g.game_number || 1}`);
   const notesCard = notes.length ? `
@@ -12862,6 +12874,10 @@ function renderWeather() {
     const cells = w.dome
       ? `<span class="wx-temp">&mdash;</span>
          <span class="wx-wind">${icon("stadium")} Dome</span>`
+      // A forecast nobody pulled reads as one dash, not as a mild day.
+      : w.measured === false
+      ? `<span class="wx-temp">&mdash;</span>
+         <span class="wx-wind">not pulled</span>`
       : `<span class="wx-temp">${Math.round(w.temp_f)}&deg;F</span>
          <span class="wx-wind${windy ? " windy" : ""}"
            title="${windy ? "12mph+ moves totals" : ""}">${

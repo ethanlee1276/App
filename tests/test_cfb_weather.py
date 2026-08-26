@@ -156,11 +156,21 @@ def test_the_build_stamps_and_ships_it():
 def test_the_card_uses_the_reading_and_keeps_the_honest_miss():
     """The NaN guard survives as the FALLBACK: a stamped game reads like
     the NFL's, an unstamped one still says "weather not pulled" instead
-    of NaN°F."""
+    of NaN°F.
+
+    COLLEGE'S SENTENCE IS THE SHARED ONE NOW (2026-08-26). This branch
+    used to be college-only, because college was the only league that
+    knew whether anyone had looked. Then the NFL's turned out to be a
+    prior wearing a forecast's clothes — nflverse fills temp and wind
+    from the played game, so every forward board took 60°F / 6mph — and
+    the honest line college already had is the right answer for both.
+    Same claim, one branch instead of two."""
     assert "Outdoor · weather not pulled" in APP, \
         "the honest miss line is gone — an unstamped game will print NaN"
-    i = APP.index('cfb ? (g.weather')
-    seg = APP[i:i + 260]
+    i = APP.index("const wxKnown =")
+    seg = APP[i:i + 420]
+    assert "g.weather_checked" in seg, \
+        "college's own stamp is no longer what makes its reading count"
     assert "Math.round(w.temp_f)" in seg, \
         "a stamped college game still hides its reading"
 

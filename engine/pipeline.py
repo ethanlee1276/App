@@ -480,7 +480,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # the two vocabularies from ever pooling.
         w = game.weather
         d["roofed"] = bool(w.dome)
-        d["wind_out"] = None if w.dome else round(float(w.wind_mph or 0), 1)
+        # UNMEASURED IS NULL, not a number. A prop journaled with
+        # wind_out=6.0 on a board where nobody pulled a forecast puts
+        # every outdoor game in the "calm (<8mph)" band, so the miner
+        # would convict or exonerate a slice on a constant.
+        d["wind_out"] = (None if w.dome or not getattr(w, "measured", False)
+                         else round(float(w.wind_mph or 0), 1))
         # The schedule-fatigue dimension: days of rest, and how far the
         # visitor's body clock is from kickoff.
         #
@@ -717,6 +722,10 @@ def _game_to_dict(g, results: list[dict] | None = None) -> dict:
             "wind_dir": w.wind_dir,
             "rain": w.rain,
             "snow": w.snow,
+            # Whether anyone actually measured this, or it is the mild-day
+            # prior the model needs a number for. The card and the journal
+            # both read it; see engine/models.Weather.
+            "measured": bool(getattr(w, "measured", False)),
         },
         # §5.1's encoding contract, computed rather than assumed.
         "conditions": _conditions(g, results),

@@ -34,6 +34,34 @@ def test_weather_outdoor_blank_defaults():
     assert w.dome is False and w.wind_mph == 6.0
 
 
+def test_a_blank_row_is_flagged_unmeasured_rather_than_mild():
+    """The defaults above are a PRIOR, and for a season they wore a
+    measurement's clothes.
+
+    nflverse fills a schedule row's temp and wind from the PLAYED game,
+    so every outdoor game on a forward board is blank — which meant the
+    card printed "60°F · 6mph" as a forecast all season, the journal
+    recorded 6.0 as the wind each bet was made in (putting every outdoor
+    football pick in the miner's "calm (<8mph)" band, a constant it
+    could convict or exonerate a slice on), and the 25-mph deep-passing
+    warning in engine/rules.py could never fire because the number it
+    tested was a constant three times below its own threshold.
+
+    The numbers stay — the pricing paths need one, and a mild day is the
+    right prior — and everything that SHOWS or JOURNALS them checks the
+    flag first."""
+    assert nv.weather_from_row({"roof": "open", "temp": "", "wind": ""}).measured is False
+    assert nv.weather_from_row({"roof": "outdoors"}).measured is False
+    # One half reported is a real reading of that half.
+    assert nv.weather_from_row({"roof": "outdoors", "wind": "19"}).measured is True
+    assert nv.weather_from_row({"roof": "outdoors", "temp": "41"}).measured is True
+
+
+def test_a_dome_is_measured_because_it_is_a_fact_about_a_building():
+    for roof in ("dome", "closed"):
+        assert nv.weather_from_row({"roof": roof}).measured is True
+
+
 def test_build_games_negates_spread(monkeypatch):
     # nflverse spread_line +3 means home favored -> engine spread -3.
     rows = [{

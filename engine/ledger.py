@@ -370,6 +370,49 @@ def _kickoff_map(result: dict) -> dict:
     return kick
 
 
+def _weather_map(result: dict) -> dict:
+    """team → (wind_mph, roofed) from the board's own games.
+
+    THE OTHER HALF OF THE SAME HOLE. Football props have carried
+    `wind_out` and `roofed` since the miner grew a wind band — see
+    engine/betting.py, which builds exactly this pair for every prop —
+    and football GAME BETS carried neither, because the game-bet row
+    never had the keys and nothing looked them up. So "totals in the
+    wind", the single most-cited weather effect in football, was a slice
+    the miner could not convict on, on the only market where it is
+    obviously the story.
+
+    Same convention as the prop path, deliberately, or the two would
+    pool into one slice with two meanings: indoors is NO wind dimension
+    (the roof band already says roof, and a duplicate would double-count
+    the same fact), and football's wind is unsigned magnitude because
+    football has no "out to center".
+    """
+    out: dict = {}
+    for g in result.get("games") or []:
+        w = g.get("weather") or {}
+        roofed = bool(w.get("dome"))
+        if not roofed:
+            roofed = str(g.get("roof") or "").strip().lower() in (
+                "dome", "closed", "indoor", "indoors", "retractable-closed")
+        wind = None
+        # `measured` absent means the board predates the flag; CFB says
+        # the same thing with `weather_checked`. Either way an unflagged
+        # number is not journaled as one.
+        checked = bool(w.get("measured") or g.get("weather_checked"))
+        if not roofed and checked:
+            try:
+                wind = round(float(w.get("wind_mph")), 1)
+            except (TypeError, ValueError):
+                wind = None
+        if wind is None and not roofed:
+            continue                  # nothing measured — say nothing
+        for side in ("home", "away"):
+            if g.get(side):
+                out[g[side]] = (wind, roofed)
+    return out
+
+
 def _lead_min(r: dict, kick: dict | None = None) -> float | None:
     """Minutes to this pick's start, for every board's shape of clock.
 
@@ -498,6 +541,7 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
     # forward results). Moneylines store player = the team picked, line 0.5,
     # side OVER, actual 1/0 — so the standard grader applies. Totals store
     # player = the matchup key (AWAY@HOME) with the real line and side.
+    _wx = _weather_map(result)
     for r in result.get("game_bets", []):
         if not r.get("recommended"):
             continue
@@ -531,8 +575,9 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         cur = conn.execute(
             "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
-            "stake_dollars, status, leg, rest_days, body_clock, lead_min) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?)",
+            "stake_dollars, status, leg, rest_days, body_clock, lead_min, "
+            "wind_out, roofed) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
             (now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
@@ -550,7 +595,11 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
              # an hour before kickoff are different bets, and the miner
              # could not tell them apart because this column was never
              # filled in on a game bet at all.
-             _lead_min(r, kick)))
+             _lead_min(r, kick),
+             # The weather this game was priced under. A total in a
+             # fifteen-mile wind is the most-cited effect in football
+             # betting and the miner had no column to convict it in.
+             *_wx.get(r.get("team") or r.get("home") or "", (None, None))))
         n += cur.rowcount
     conn.commit()
     return n
