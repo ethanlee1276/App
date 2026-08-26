@@ -25507,8 +25507,14 @@ async function renderThread(host, fid) {
     <div class="msg-thread">
       <div class="msg-thread-head">
         <button class="btn-quiet" data-msg-back type="button">&#8592; All messages</button>
-        <span class="msg-thread-who">${msgAvatar(t.friend)}<b>${
-          escapeHtml(t.friend)}</b></span>
+        <span class="msg-thread-who" id="msg-who">${msgAvatar(t.friend)}<b>${
+          escapeHtml(t.friend)}</b>${t.username && t.username !== t.friend
+            ? `<span class="msg-who-user">@${escapeHtml(t.username)}</span>`
+            : ""}</span>
+        <button class="btn-quiet msg-nick-btn" data-msg-nick="${t.friend_id}"
+          data-nick-current="${escapeAttr(t.username !== t.friend ? t.friend : "")}"
+          data-nick-user="${escapeAttr(t.username || "")}"
+          type="button" title="Nickname this friend">${icon("tag", 13)} Nickname</button>
       </div>
       <div class="msg-tabs">
         ${tab("all", "Messages", 0)}
@@ -25839,6 +25845,46 @@ document.addEventListener("click", async (e) => {
   if (kind && _msgThread) {
     _msgKind = kind.dataset.msgKind;
     renderMessages();
+    return;
+  }
+  const nick = e.target.closest && e.target.closest("[data-msg-nick]");
+  if (nick) {
+    // Ethan, 2026-08-26: "add a nickname to your friends so you don't
+    // have to see there username in the chat if you don't want to."
+    // The name swaps for a small form in place; empty input clears the
+    // nickname and the real name comes back. YOUR label, stored against
+    // YOUR account — the friend never sees it.
+    const who = document.getElementById("msg-who");
+    if (!who || document.getElementById("msg-nick-form")) return;
+    const fid = Number(nick.dataset.msgNick);
+    const user = nick.dataset.nickUser || "";
+    who.innerHTML = `<form id="msg-nick-form" class="msg-nick-form">
+      <input class="msg-search" id="msg-nick-in" maxlength="24"
+        value="${escapeAttr(nick.dataset.nickCurrent || "")}"
+        placeholder="Nickname for ${escapeAttr(user)}"
+        aria-label="Nickname for ${escapeAttr(user)}" autocomplete="off">
+      <button class="btn" type="submit">Save</button>
+    </form>`;
+    const form = document.getElementById("msg-nick-form");
+    const inp = document.getElementById("msg-nick-in");
+    inp.focus();
+    inp.select();
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      try {
+        const r = await fetch("/api/social/nickname", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ friend: fid, name: inp.value }),
+        });
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok) { tfToast(out.error || "That didn’t save."); return; }
+        tfToast(inp.value.trim()
+          ? `They’ll show as ${out.name} — only to you.`
+          : "Nickname cleared.");
+      } catch (err) { tfToast("Could not reach the server."); return; }
+      await socFetch(true);
+      renderMessages();
+    });
   }
 });
 

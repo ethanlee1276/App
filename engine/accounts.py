@@ -539,6 +539,12 @@ def delete_user(conn, user_id: int) -> None:
         if shares in have:
             conn.execute(f"DELETE FROM {shares} WHERE from_id=? OR to_id=?",
                          (int(user_id), int(user_id)))
+    if "friend_nicknames" in have:
+        # Both directions: the labels this account gave out AND the rows
+        # where other people's labels name it — a nickname pointing at a
+        # deleted account is a dangling reference, not a keepsake.
+        conn.execute("DELETE FROM friend_nicknames WHERE user_id=? OR friend_id=?",
+                     (int(user_id), int(user_id)))
     conn.execute("DELETE FROM users WHERE id=?", (int(user_id),))
     conn.commit()
 
@@ -608,6 +614,14 @@ def export_user(conn, user_id: int) -> dict:
                     "WHERE from_id=? ORDER BY created_at", (int(user_id),))]
         if sent:
             out["messages_sent_to_friends"] = sent
+    if "friend_nicknames" in have:
+        # Only the labels YOU wrote. What other people call you is their
+        # data, and this export never says it exists.
+        nicks = [r["nickname"] for r in conn.execute(
+            "SELECT nickname FROM friend_nicknames WHERE user_id=? "
+            "ORDER BY nickname", (int(user_id),))]
+        if nicks:
+            out["nicknames_you_gave_friends"] = nicks
     if "parlay_shares" in have:
         # Same pointer rule: leg identities and the note, nothing priced.
         import json as _json

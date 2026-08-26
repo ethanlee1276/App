@@ -1607,7 +1607,7 @@ class Handler(BaseHTTPRequestHandler):
         from engine import social as SOC
         if path not in ("accept", "send", "send-parlay", "remove", "seen",
                         "revoke-invite", "find", "request", "answer-request",
-                        "dm", "thread"):
+                        "dm", "thread", "nickname"):
             return self._send(404, b'{"error":"unknown social endpoint"}',
                               ".json")
         A = _acct()
@@ -1679,6 +1679,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "thread":
                 code, out = SOC.thread(conn, who["id"],
                                        int(body.get("friend") or 0))
+                return self._send(code, json.dumps(out).encode(), ".json")
+            if path == "nickname":
+                # Your private label for a friend — empty clears it. It
+                # is stored against YOUR id only and never shown to the
+                # friend it names.
+                code, out = SOC.nickname_set(conn, who["id"],
+                                             int(body.get("friend") or 0),
+                                             str(body.get("name") or ""))
                 return self._send(code, json.dumps(out).encode(), ".json")
             # "seen", scoped to one conversation when a friend is named.
             friend = body.get("friend")

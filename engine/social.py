@@ -89,6 +89,9 @@ INBOX_KEEP = 200
 DM_MAX = 500
 DM_KEEP_PER_PAIR = 500
 
+#: A nickname is capped like the display name it stands in for.
+NICK_MAX = 24
+
 
 def ensure_tables(conn) -> None:
     """Additive, safe on every call — same posture as the streak game."""
@@ -143,6 +146,12 @@ def ensure_tables(conn) -> None:
       );
       CREATE INDEX IF NOT EXISTS dm_pair
         ON dm_messages(from_id, to_id, created_at);
+      CREATE TABLE IF NOT EXISTS friend_nicknames (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        nickname   TEXT NOT NULL,
+        PRIMARY KEY (user_id, friend_id)
+      );
       CREATE TABLE IF NOT EXISTS friend_requests (
         id         INTEGER PRIMARY KEY,
         from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -172,6 +181,44 @@ def display_name(conn, user_id: int) -> str:
     u = conn.execute("SELECT email FROM users WHERE id=?",
                      (int(user_id),)).fetchone()
     return (u["email"].split("@", 1)[0][:24] if u else "someone")
+
+
+def name_for(conn, viewer: int, other: int) -> str:
+    """What THIS viewer calls that person: their private nickname when
+    they set one, the display name otherwise. Ethan, 2026-08-26: "add a
+    nickname to your friends so you don't have to see there username in
+    the chat if you don't want to." Private means private — the nickname
+    lives only in the viewer's rows and is never shown to, or leaked at,
+    the friend it names."""
+    ensure_tables(conn)
+    row = conn.execute(
+        "SELECT nickname FROM friend_nicknames WHERE user_id=? AND friend_id=?",
+        (int(viewer), int(other))).fetchone()
+    if row and (row["nickname"] or "").strip():
+        return row["nickname"].strip()[:NICK_MAX]
+    return display_name(conn, other)
+
+
+def nickname_set(conn, me: int, friend_id: int, nickname: str
+                 ) -> tuple[int, dict]:
+    """Set (or, with an empty string, clear) my nickname for one friend.
+    Friends-only like every channel here — you cannot label a stranger."""
+    ensure_tables(conn)
+    ok = conn.execute("SELECT 1 FROM friendships WHERE user_id=? AND friend_id=?",
+                      (int(me), int(friend_id))).fetchone()
+    if not ok:
+        return 403, {"error": "You can only nickname your friends."}
+    nickname = str(nickname or "").strip()[:NICK_MAX]
+    if nickname:
+        conn.execute(
+            "INSERT OR REPLACE INTO friend_nicknames (user_id, friend_id, "
+            "nickname) VALUES (?,?,?)", (int(me), int(friend_id), nickname))
+    else:
+        conn.execute("DELETE FROM friend_nicknames WHERE user_id=? AND "
+                     "friend_id=?", (int(me), int(friend_id)))
+    conn.commit()
+    return 200, {"name": name_for(conn, me, friend_id),
+                 "username": display_name(conn, friend_id)}
 
 
 # --- invites -----------------------------------------------------------------
@@ -257,7 +304,8 @@ def friends_list(conn, user_id: int) -> list[dict]:
         "SELECT friend_id, created_at FROM friendships WHERE user_id=? "
         "ORDER BY created_at", (int(user_id),)).fetchall()
     return [{"id": int(r["friend_id"]),
-             "name": display_name(conn, r["friend_id"])} for r in rows]
+             "name": name_for(conn, user_id, r["friend_id"]),
+             "username": display_name(conn, r["friend_id"])} for r in rows]
 
 
 def friend_remove(conn, user_id: int, friend_id: int) -> None:
@@ -268,6 +316,9 @@ def friend_remove(conn, user_id: int, friend_id: int) -> None:
                  (int(user_id), int(friend_id)))
     conn.execute("DELETE FROM friendships WHERE user_id=? AND friend_id=?",
                  (int(friend_id), int(user_id)))
+    conn.execute("DELETE FROM friend_nicknames WHERE (user_id=? AND friend_id=?)"
+                 " OR (user_id=? AND friend_id=?)",
+                 (int(user_id), int(friend_id), int(friend_id), int(user_id)))
     conn.commit()
 
 
@@ -495,7 +546,7 @@ def inbox(conn, user_id: int, limit: int = 50) -> dict:
     def _name(fid):
         fid = int(fid)
         if fid not in names:
-            names[fid] = display_name(conn, fid)
+            names[fid] = name_for(conn, user_id, fid)
         return names[fid]
 
     out = []
@@ -539,7 +590,7 @@ def sent(conn, user_id: int, limit: int = 30) -> list[dict]:
     def _name(uid):
         uid = int(uid)
         if uid not in names:
-            names[uid] = display_name(conn, uid)
+            names[uid] = name_for(conn, user_id, uid)
         return names[uid]
 
     out = []
@@ -670,7 +721,8 @@ def thread(conn, me: int, friend_id: int, limit: int = 100) -> tuple[int, dict]:
                       "seen": bool(r["seen"])})
     items.sort(key=lambda s: s["created_at"])
     items = items[-int(limit):]
-    return 200, {"friend": display_name(conn, friend_id),
+    return 200, {"friend": name_for(conn, me, friend_id),
+                 "username": display_name(conn, friend_id),
                  "friend_id": friend_id, "items": items}
 
 
@@ -706,7 +758,8 @@ def threads(conn, me: int) -> list[dict]:
             f"SELECT COUNT(*) FROM {tab} WHERE to_id=? AND from_id=? "
             "AND seen=0", (me, fid)).fetchone()[0])
             for tab in ("pick_shares", "parlay_shares", "dm_messages"))
-        out.append({"friend_id": fid, "name": f["name"], "last": last,
+        out.append({"friend_id": fid, "name": f["name"],
+                    "username": f["username"], "last": last,
                     "unseen": int(unseen)})
     out.sort(key=lambda t: (t["last"] is None,
                             -(t["last"] or {}).get("created_at", 0),

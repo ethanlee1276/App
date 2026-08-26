@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "Nicknames for friends",
+      "body": "Tap Nickname in any conversation and your friend shows up as whatever you call them — in the chat, the conversation list, the inbox, everywhere you read their name. The label is yours alone: it is stored against your account, the friend never sees it or learns it exists, and their real username stays visible next to the nickname in the thread header so you always know who you are talking to. An empty nickname brings the real name back, and labels are cleaned up with the friendship if you part ways."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "The thread becomes a full message page",
       "body": "A conversation now takes the whole screen — the site footer steps out while a thread is open and only the messages scroll, with the composer pinned at the foot. Bubbles carry the sender's name and time, days get separators, and your own messages show a real read receipt — the second check lights when your friend's screen has actually shown it. Shared picks draw as proper tickets: legs with the odds read off YOUR board under YOUR subscription (the share itself still carries no numbers), a combined price when every parlay leg prices, and every leg still opens its charts. Filter tabs find the parlays and picks buried in the talk."
     },

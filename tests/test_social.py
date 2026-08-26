@@ -379,7 +379,7 @@ def test_the_social_api_carries_the_request_paths():
     i = srv.index("def _social_post")
     body = srv[i:i + 500]
     for path in ('"find"', '"request"', '"answer-request"', '"dm"',
-                 '"thread"'):
+                 '"thread"', '"nickname"'):
         assert path in body, f"{path} missing from the social POST paths"
     # The SOCIAL me, not the account me — server.py has both.
     j = srv.index('if path == "me":', srv.index("def _social_get"))
@@ -536,6 +536,68 @@ def test_the_export_carries_your_words_and_never_your_friends():
     sent = out.get("messages_sent_to_friends") or []
     assert [m["body"] for m in sent] == ["what I typed"], \
         "the export holds someone else's words"
+
+
+# --- the nicknames -----------------------------------------------------------
+# Ethan, 2026-08-26: "add a nickname to your friends so you don't have
+# to see there username in the chat if you don't want to." The rule
+# worth pinning is PRIVACY OF DIRECTION: a nickname is the viewer's own
+# label, applied everywhere the viewer reads that friend's name, and
+# invisible from the other side.
+
+def test_a_nickname_is_yours_alone_and_reads_through_everywhere():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    code, out = SOC.nickname_set(conn, a, b, "The Sharp One")
+    assert code == 200 and out["name"] == "The Sharp One"
+    SOC.dm_send(conn, b, a, "yo")
+    SOC.share_pick(conn, b, a, "nfl", "2026-09-07", "Puka Nacua",
+                   "Receiving Yards")
+    assert SOC.friends_list(conn, a)[0]["name"] == "The Sharp One"
+    assert SOC.threads(conn, a)[0]["name"] == "The Sharp One"
+    _, t = SOC.thread(conn, a, b)
+    assert t["friend"] == "The Sharp One" and t["username"] == "sam"
+    assert SOC.inbox(conn, a)["shares"][0]["from"] == "The Sharp One"
+    # THE OTHER DIRECTION NEVER SEES IT: sam still reads ethan's real
+    # name, and nothing sam can fetch says a label exists at all.
+    assert SOC.threads(conn, b)[0]["name"] == "ethan"
+    _, tb = SOC.thread(conn, b, a)
+    assert tb["friend"] == "ethan"
+
+
+def test_a_stranger_cannot_be_labelled_and_empty_clears():
+    conn, (a, b, c) = _db()
+    _befriend(conn, a, b)
+    code, _out = SOC.nickname_set(conn, a, c, "Rando")
+    assert code == 403, "a nickname landed across no friendship"
+    SOC.nickname_set(conn, a, b, "x" * 99)
+    assert len(SOC.friends_list(conn, a)[0]["name"]) == SOC.NICK_MAX
+    code, out = SOC.nickname_set(conn, a, b, "   ")
+    assert code == 200 and out["name"] == "sam", \
+        "clearing the nickname should bring the real name back"
+
+
+def test_the_label_dies_with_the_friendship_and_the_account():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.nickname_set(conn, a, b, "Sharp")
+    SOC.friend_remove(conn, a, b)
+    n = conn.execute("SELECT COUNT(*) FROM friend_nicknames").fetchone()[0]
+    assert n == 0, "a label outlived the channel it was written on"
+    _befriend(conn, a, b)
+    SOC.nickname_set(conn, a, b, "Sharp")
+    A.delete_user(conn, b)
+    n = conn.execute("SELECT COUNT(*) FROM friend_nicknames").fetchone()[0]
+    assert n == 0, "a label points at a deleted account"
+
+
+def test_the_export_carries_your_labels_and_never_who_labelled_you():
+    conn, (a, b, _) = _db()
+    _befriend(conn, a, b)
+    SOC.nickname_set(conn, a, b, "Sharp")
+    assert A.export_user(conn, a).get("nicknames_you_gave_friends") == ["Sharp"]
+    assert "nicknames_you_gave_friends" not in A.export_user(conn, b), \
+        "an export admits somebody labelled this account"
 
 
 # --- the front end's half ----------------------------------------------------

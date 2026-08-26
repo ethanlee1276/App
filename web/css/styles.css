@@ -2962,6 +2962,10 @@ body.msg-thread-open .footer { display: none; }
   font-size: var(--fs-md); }
 .msg-thread-who .msg-ava { width: 34px; height: 34px;
   font-size: var(--fs-xs); }
+.msg-who-user { color: var(--text-mute); font-size: var(--fs-xs); }
+.msg-nick-btn { margin-left: auto; }
+.msg-nick-form { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.msg-nick-form .msg-search { min-width: 0; }
 .msg-tabs { display: flex; gap: 4px; padding: 5px;
   border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius-lg); background: var(--panel);
