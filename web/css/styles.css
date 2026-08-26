@@ -639,6 +639,20 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
 .game-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
 .stadium-wrap { line-height: 0; background: #070b16; }
+/* A card that HAS a photo element does not render the SVG scene under
+   it at all. The scene's floodlight bloom is two feGaussianBlur
+   filters per card — real GPU work — and it was rasterizing beneath
+   every photo (and, with loading="lazy", painting alone on every
+   off-screen card until its photo arrived: filter churn exactly
+   during momentum scrolling, on the phones that were respringing).
+   `:has` is what makes the fallback automatic: while the img element
+   exists — loading or loaded — the drawing stays off; when the whole
+   photo chain fails, vpFall REMOVES the img, the selector stops
+   matching, and the drawing returns with no JavaScript involved. An
+   engine without :has keeps the old paint-both behaviour, which is
+   only ever cosmetic. */
+.stadium-wrap:has(.venue-photo) .stadium,
+.gp-art:has(.venue-photo) .stadium { display: none; }
 .stadium-wrap .stadium { width: 100%; height: auto; display: block; }
 .game-info { padding: 11px 15px 3px; }
 .matchup { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: var(--fs-lg); }
@@ -1400,14 +1414,21 @@ svg[data-scrub] { touch-action: pan-y; }
 .reveal, .reveal.in { opacity: 1; transform: none; transition: none; }
 
 /* pointer tilt on stadium cards */
-.tilt { transition: transform var(--dur-slow) var(--ease-out); will-change: transform; }
+/* NO will-change here. On the base class it promoted EVERY stadium
+   card into its own compositor layer, each holding a decoded venue
+   photo — sixteen permanent GPU textures on an NFL slate, paid by
+   phones that can never hover. Promotion now rides .tilting, which
+   only a fine pointer ever applies (enableTilt refuses coarse ones),
+   so a phone composites zero of these. Part of the 2026-08-26
+   iPhone-respring diet, with the topbar blur removal. */
+.tilt { transition: transform var(--dur-slow) var(--ease-out); }
 /* `none`, said plainly. This rule exists to STOP the transform easing
    while the pointer is driving the tilt — without it every mouse move
    queues a 300ms animation and the card lags the cursor. It used to say
    that by transitioning box-shadow instead, which reads as "animate the
    shadow" and animates nothing, since no rule in this sheet sets a
    shadow value at all. */
-.tilt.tilting { transition: none; }
+.tilt.tilting { transition: none; will-change: transform; }
 
 /* projection bar draws in on each render */
 /* §3.4: entrance animations are forbidden and .7s is over the ceiling. A

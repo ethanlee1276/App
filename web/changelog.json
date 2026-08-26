@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "fix",
+      "title": "The iPhone crash, part two: the stadium strip goes on a GPU diet",
+      "body": "Removing the top bar's glass blur was necessary but not sufficient — the phone was still rebooting on taps. Two more heavy costs lived on the stadium cards: every card was permanently promoted into its own graphics layer for a mouse-hover tilt effect a phone can never show, and under (or in place of) every photo a drawn stadium scene was rendering with real blur filters — sixteen of each on an NFL slate. Phones now skip the tilt machinery entirely, and the drawn scene only renders when a card genuinely has no photo, where it has always been the fallback. Nothing looks different; the phone just stops paying for invisible work."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "fix",
       "title": "The menu no longer reboots iPhones",
       "body": "Opening a menu on some iPhones could black-screen the whole phone — the spinning-gear-then-lock-screen crash. That is iOS's graphics process dying, and the trigger was ours: the top bar kept a heavy glass-blur effect that, the moment a menu opened, was re-composited as a pinned layer over the sliding drawer and the stadium photography beneath it. Three smaller versions of this same failure had already retired the blur on the scrim, the phone bars and the menu button; the top bar's was the last one standing and the most expensive. The blur is gone everywhere now — the bar wears a near-solid wash that reads the same — and a test forbids the property from ever coming back."
     },

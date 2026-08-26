@@ -970,7 +970,13 @@ function revealChildren(container) {
 
 // Subtle pointer tilt for stadium cards.
 function enableTilt(container) {
+  // Fine pointers only: tilt is a HOVER effect, and a phone has no
+  // hover — it was paying the compositor cost (a promoted layer per
+  // card via will-change) for decoration it could never display. Part
+  // of the 2026-08-26 iPhone-respring diet, with the will-change move
+  // in the stylesheet as the other half.
   if (!container || reduceMotion) return;
+  if (window.matchMedia && !window.matchMedia("(pointer: fine)").matches) return;
   container.querySelectorAll(".tilt").forEach((card) => {
     card.addEventListener("pointermove", (ev) => {
       const r = card.getBoundingClientRect();
@@ -3907,7 +3913,15 @@ function gameCard(g) {
         // `runnerOverlay` is that, and it is why nothing is lost here.
         (() => {
           const fam = VENUE_FAMILY[state.sport];
-          return `<img class="venue-photo" alt="" loading="lazy"
+          // `onload` marks the wrap so the CSS can DROP THE DRAWING
+          // underneath (see .vp-on): the SVG scene carries Gaussian-blur
+          // filters, and sixteen of them rasterizing under photos that
+          // fully cover them is GPU load spent on invisible pixels — the
+          // load that was helping crash iPhones (2026-08-26). The
+          // drawing stays as the fallback when every photo 404s, because
+          // then onload never fires and nothing is hidden.
+          return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
+          onload="this.parentNode.classList.add('vp-on')"
           src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
           ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
           onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
@@ -6375,7 +6389,10 @@ function renderGamePage() {
   // The runner overlay carries them now, over the photo, so nothing is
   // lost by showing it.
   const gpFam = VENUE_FAMILY[state.sport];
-  const gpPhoto = `<img class="venue-photo" alt="" loading="lazy"
+  // Same onload mark as the board cards: a painted photo drops the
+  // blurred SVG scene under it (see .vp-on in the stylesheet).
+  const gpPhoto = `<img class="venue-photo" alt="" loading="lazy" decoding="async"
+      onload="this.parentNode.classList.add('vp-on')"
       src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
       ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
       onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;

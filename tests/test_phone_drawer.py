@@ -481,6 +481,35 @@ def test_no_element_anywhere_carries_backdrop_filter():
     assert not hits, f"live backdrop-filter declarations: {hits}"
 
 
+def test_the_stadium_cards_stay_off_the_compositor_on_phones():
+    """The respring's SECOND half (2026-08-26 — the blur removal alone
+    did not stop it; Ethan: "I clicked on the nfl page then click on
+    long shots, my whole iPhone went black"). Two permanent GPU costs
+    lived on the stadium strip:
+
+      * `.tilt { will-change: transform }` promoted EVERY card into its
+        own compositor layer, each holding a decoded venue photo —
+        sixteen textures on an NFL slate, paid by phones that cannot
+        hover. Promotion now rides `.tilting`, which only enableTilt
+        applies, and enableTilt refuses coarse pointers outright.
+      * The SVG stadium scene — two feGaussianBlur filters per card —
+        rasterized under every photo, and painted ALONE on every
+        off-screen card while its lazy photo had not arrived: filter
+        churn exactly during momentum scrolling. `:has(.venue-photo)`
+        turns the drawing off whenever the photo ELEMENT exists, and
+        vpFall removing the img on total failure brings it back with
+        no JavaScript involved."""
+    m = re.search(r"/\* pointer tilt on stadium cards \*/.*?\n\.tilt \{[^}]*\}", CSS, re.S)
+    assert m and "will-change" not in m.group(0).split(".tilt {")[-1], \
+        "will-change is back on the base .tilt class — a layer per card"
+    assert ".tilt.tilting { transition: none; will-change: transform; }" in CSS
+    assert '!window.matchMedia("(pointer: fine)").matches) return;' in APP, \
+        "enableTilt binds on touch screens again"
+    assert ".stadium-wrap:has(.venue-photo) .stadium" in CSS, \
+        "the blurred SVG scene paints under every photo again"
+    assert ".gp-art:has(.venue-photo) .stadium" in CSS
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
