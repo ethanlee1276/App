@@ -151,12 +151,32 @@ def _maybe_backup(state: dict, today: _dt.date, log,
 _HARVEST_GAME_MARKETS = {"moneyline": "h2h", "spread": "spreads",
                          "total": "totals", "team_total": "totals"}
 
-#: Sports the auto-harvest may spend on. CFB is DELIBERATELY absent: the
-#: odds-history parsers key teams through SPORT_CONFIG's map, and CFB's
-#: is built at run time from the ESPN feed inside cfb_build — a harvest
-#: today would store school names no settle pass can join to bets. The
-#: gap and its fix are written down in docs/IDEAS.md.
-_HARVEST_SPORTS = ("mlb", "nfl")
+#: Sports the auto-harvest may spend on. CFB joined 2026-08-26, once the
+#: blocker was removed rather than worked around: its team map is built
+#: at run time from the ESPN feed inside cfb_build, so a harvest used to
+#: store school names no settle pass could join to a bet. cfb_build now
+#: writes every name it resolves to data/feedstate/cfb_teams.json
+#: (engine/cfbteams) and the history parsers read it per call, so the
+#: names join. `_harvest_targets` still refuses CFB while that map is
+#: empty — spending credits to store unjoinable rows is the failure this
+#: gate exists to prevent, and an empty map is exactly that state.
+_HARVEST_SPORTS = ("mlb", "nfl", "cfb")
+
+
+def _cfb_map_ready() -> bool:
+    """Has any cfb_build written school names down yet?
+
+    The harvest is credit-spending, and a harvest keyed through an empty
+    map stores rows no settle pass can join — the exact waste the old
+    "CFB is deliberately absent" rule prevented. One priced board fills
+    the map for the schools it saw, so this is normally true from the
+    first Saturday of the season onward.
+    """
+    try:
+        from .cfbteams import load as _load_cfb
+        return bool(_load_cfb())
+    except Exception:                                        # noqa: BLE001
+        return False
 
 
 def _harvest_targets(day: _dt.date) -> list[tuple[str, str]]:
@@ -182,6 +202,8 @@ def _harvest_targets(day: _dt.date) -> list[tuple[str, str]]:
                 (sport, day.isoformat()))]
             if not rows:
                 continue
+            if sport == "cfb" and not _cfb_map_ready():
+                continue        # no map yet — the rows would not join
             markets = sorted({_HARVEST_GAME_MARKETS.get(m, m) for m in rows})
             out.append((sport, ",".join(markets)))
     except Exception:

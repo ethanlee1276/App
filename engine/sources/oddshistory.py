@@ -43,6 +43,27 @@ from .oddsapi import (
 FOREVER = 10 * 365 * 24 * 3600
 
 
+def teams_for(sport: str) -> dict:
+    """The book-spelling → canonical map for one sport.
+
+    Every sport but CFB carries a hardcoded table in SPORT_CONFIG. CFB's
+    is learned from our own builds and stored on disk (engine/cfbteams),
+    because 134 schools is the table that rots when hardcoded — so it is
+    read HERE, per call, rather than frozen into SPORT_CONFIG at import.
+    A long-running process (the refresh cycle, the maintenance daemon)
+    would otherwise keep the empty map it started with while every build
+    beside it learned new schools.
+    """
+    cfg = SPORT_CONFIG[sport]
+    if sport != "cfb":
+        return cfg["teams"]
+    try:
+        from ..cfbteams import load as _load_cfb
+        return _load_cfb() or cfg["teams"]
+    except Exception:                                        # noqa: BLE001
+        return cfg["teams"]
+
+
 @dataclass
 class Snapshot:
     """Odds as they stood at one moment."""
@@ -113,6 +134,14 @@ def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
     (``h2h``, ``totals``, ``spreads``) pass through untouched.
     """
     to_api = {v: k for k, v in SPORT_CONFIG[sport]["markets"].items()}
+    # SCORER markets too. They were missing, and the failure was silent
+    # and total: a journal-driven harvest asks for the markets actually
+    # bet, so every night an anytime-TD pick was journaled the harvest
+    # requested a market key named "anytime_td" — which the API does not
+    # have — and the TD board has therefore never had a closing line to
+    # be graded against. Inverted from the same map the live path parses
+    # with, so the two cannot drift.
+    to_api.update({v: k for k, v in SCORER_ODDS_TO_MARKET.items()})
     return [to_api.get(n.strip(), n.strip()) for n in names if n.strip()]
 
 
@@ -170,17 +199,18 @@ def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
     """Parse a historical event-odds snapshot with the live parsers."""
     body = snap.data if isinstance(snap.data, dict) else {}
     cfg = SPORT_CONFIG[sport]
-    home = cfg["teams"].get(body.get("home_team", ""), body.get("home_team", ""))
-    away = cfg["teams"].get(body.get("away_team", ""), body.get("away_team", ""))
+    teams = teams_for(sport)
+    home = teams.get(body.get("home_team", ""), body.get("home_team", ""))
+    away = teams.get(body.get("away_team", ""), body.get("away_team", ""))
     return HistoricalOdds(
         sport=sport, taken=snap.taken, event_id=str(body.get("id", "")),
         home=home, away=away,
         props=parse_event_lines(body, cfg["markets"]),
-        moneylines=parse_event_h2h(body, cfg["teams"]),
-        moneylines_by_book=parse_event_h2h_by_book(body, cfg["teams"]),
+        moneylines=parse_event_h2h(body, teams),
+        moneylines_by_book=parse_event_h2h_by_book(body, teams),
         scorers=parse_event_scorers(body, SCORER_ODDS_TO_MARKET),
         total=parse_event_totals(body),
-        spread=parse_event_spreads(body, cfg["teams"], home, away),
+        spread=parse_event_spreads(body, teams, home, away),
     )
 
 

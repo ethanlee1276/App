@@ -78,6 +78,10 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
 
     priced: dict[str, dict] = {}
     unmatched: list[str] = []
+    # Every name this board resolves is written down (engine/cfbteams):
+    # the harvest needs the book's spelling → our abbreviation, and this
+    # loop is the only place in the system where both halves exist.
+    learned: dict[str, str] = {}
     for ev in events:
         home_raw = ev.get("home_team", "")
         away_raw = ev.get("away_team", "")
@@ -92,6 +96,7 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         # The parsers key on the exact strings this feed uses, so build the
         # map from the event itself rather than guessing at spellings.
         team_map = {home_raw: home, away_raw: away}
+        learned.update(team_map)
         entry: dict = {}
         mls = oddsapi.parse_event_h2h(ev, team_map)
         if mls.get(home) and mls.get(away):
@@ -108,6 +113,16 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
             # can ask for player markets without a second events call.
             entry["event_id"] = ev.get("id", "")
             priced[game["game_id"]] = entry
+
+    if learned:
+        try:
+            from engine import cfbteams
+            n_new = cfbteams.remember(learned)
+            if n_new:
+                print(f"  CFB team map: learned {n_new} new school name(s) "
+                      f"— closing-line harvests can now join them to bets.")
+        except Exception:                                    # noqa: BLE001
+            pass                     # telemetry never breaks a board
 
     note = f"{len(priced)} of {len(games)} games priced from 1 request"
     if unmatched:
@@ -625,6 +640,41 @@ def main() -> None:
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
         gd["total"] = (lines.get("total") or [None])[0]
+
+    # KEEP THE LINES THIS BOARD ALREADY PAID FOR. Free — the prices are in
+    # memory — and it is the closing number the spread/total/moneyline
+    # model is graded on later. NFL and MLB have done this on every build
+    # (engine/lineledger); CFB never did, so its game bets settled with no
+    # close and no CLV. The teams here are OUR abbreviations already
+    # (resolve_team ran in attach_odds), so these rows join to the journal
+    # without the harvest's name map being involved at all.
+    if priced:
+        try:
+            from engine import lineledger, db as _lhdb
+            _rows = []
+            for g in games:
+                e = priced.get(g["game_id"]) or {}
+                if not e:
+                    continue
+                row = {"home": g["home"], "away": g["away"],
+                       "date": str(g.get("date") or args.date)[:10]}
+                if e.get("spread"):
+                    row["spread"], row["spread_home_odds"], \
+                        row["spread_away_odds"] = e["spread"]
+                if e.get("total"):
+                    row["total"], row["total_over_odds"], \
+                        row["total_under_odds"] = e["total"]
+                if e.get("moneyline"):
+                    row["home_ml"], row["away_ml"] = e["moneyline"]
+                _rows.append(row)
+            _lc = _lhdb.connect()
+            _n_lines = lineledger.record(_lc, "cfb", _rows)
+            _lc.close()
+            if _n_lines:
+                print(f"  Line ledger: {_n_lines} CFB game-line row(s) stored "
+                      f"(free — closes for CLV).")
+        except Exception as _exc:                            # noqa: BLE001
+            print(f"  ⚠️  CFB line ledger skipped: {_exc}")
 
     # Live win-probability track — the wiring every other league carries
     # ("we should be showing that for ALL live games"). CFB waited on one

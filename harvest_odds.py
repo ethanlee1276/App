@@ -53,7 +53,9 @@ DEFAULT_BUDGET = 1200
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Harvest historical odds into the DB.")
-    ap.add_argument("sport", choices=["nfl", "mlb"])
+    # CFB joined 2026-08-26 — its team map is persisted from our own
+    # builds now (engine/cfbteams), so harvested rows join to bets.
+    ap.add_argument("sport", choices=["nfl", "mlb", "cfb"])
     ap.add_argument("--from", dest="start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--to", dest="end", required=True, help="YYYY-MM-DD")
     ap.add_argument("--hour", type=int, default=23,

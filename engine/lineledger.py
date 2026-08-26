@@ -38,6 +38,20 @@ def _stamp(now: _dt.datetime | None = None) -> str:
     return n.strftime("%Y-%m-%dT%H:%M:00Z")
 
 
+def _f(g, name, default=None):
+    """One field off a game, whether it is an object or a mapping.
+
+    MLB and NFL hand over Game dataclasses; CFB's board is plain dicts
+    with its prices in a side map. Reading both here beats a per-sport
+    copy of this whole function — the ROWS are identical either way.
+    """
+    if isinstance(g, dict):
+        v = g.get(name, default)
+    else:
+        v = getattr(g, name, default)
+    return default if v is None else v
+
+
 def rows_for_games(sport: str, games, now: _dt.datetime | None = None) -> list[dict]:
     """``odds_history`` rows for every game carrying a real book number.
 
@@ -48,31 +62,31 @@ def rows_for_games(sport: str, games, now: _dt.datetime | None = None) -> list[d
     taken = _stamp(now)
     out: list[dict] = []
     for g in games:
-        home = getattr(g, "home", "") or ""
-        away = getattr(g, "away", "") or ""
+        home = _f(g, "home", "") or ""
+        away = _f(g, "away", "") or ""
         if not home or not away:
             continue
-        date = str(getattr(g, "date", "") or "")[:10]
+        date = str(_f(g, "date", "") or "")[:10]
         event_id = f"{date}-{away}@{home}"
         base = {"sport": sport, "taken_at": taken, "event_id": event_id,
                 "home": home, "away": away, "book": "best"}
 
-        total = getattr(g, "total", None)
+        total = _f(g, "total")
         if total is not None:
             out.append({**base, "player": TOTAL_KEY, "market": "total",
                         "line": float(total),
-                        "over_odds": getattr(g, "total_over_odds", None),
-                        "under_odds": getattr(g, "total_under_odds", None)})
+                        "over_odds": _f(g, "total_over_odds"),
+                        "under_odds": _f(g, "total_under_odds")})
 
-        spread = getattr(g, "spread", None)
+        spread = _f(g, "spread")
         # 0.0 is a real pick'em line, so test for None rather than falsiness.
         if spread is not None:
             out.append({**base, "player": home, "market": "spread",
                         "line": float(spread),
-                        "over_odds": getattr(g, "spread_home_odds", None),
-                        "under_odds": getattr(g, "spread_away_odds", None)})
+                        "over_odds": _f(g, "spread_home_odds"),
+                        "under_odds": _f(g, "spread_away_odds")})
 
-        home_ml, away_ml = getattr(g, "home_ml", None), getattr(g, "away_ml", None)
+        home_ml, away_ml = _f(g, "home_ml"), _f(g, "away_ml")
         if home_ml and away_ml:
             for team, price in ((home, home_ml), (away, away_ml)):
                 out.append({**base, "player": team, "market": "moneyline",

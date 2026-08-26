@@ -529,7 +529,7 @@ def test_the_closes_harvest_follows_the_journal_not_a_hardcode(monkeypatch):
     day = dt.date(2026, 9, 13)
     rows = [("nfl", "rec_yds"), ("nfl", "moneyline"), ("nfl", "spread"),
             ("mlb", "total_bases"),
-            ("cfb", "moneyline"),          # journals, but never harvests
+            ("cfb", "moneyline"),          # harvests once the map exists
             ("nfl", "rush_yds")]
     for sport, market in rows:
         conn.execute(
@@ -543,10 +543,26 @@ def test_the_closes_harvest_follows_the_journal_not_a_hardcode(monkeypatch):
     got = dict(maintenance._harvest_targets(day))
     assert got["mlb"] == "total_bases"
     assert got["nfl"] == "h2h,rec_yds,rush_yds,spreads", got["nfl"]
-    # CFB stays out ON PURPOSE — the odds-history parsers have no team
-    # map for it (built at run time inside cfb_build; docs/IDEAS.md).
-    assert "cfb" not in got
-    assert "cfb" not in maintenance._HARVEST_SPORTS
+    # CFB JOINED 2026-08-26, behind a gate rather than a hardcode: its
+    # team map is learned from our own builds (engine/cfbteams), and an
+    # EMPTY map means harvested rows would not join to bets — which is
+    # the same waste the old "cfb is absent" rule prevented. No map, no
+    # spend; a map, and the day's CFB markets are harvested like any
+    # other sport's. Both halves pinned here, since a gate that is never
+    # asked is the way this reverts silently.
+    assert "cfb" in maintenance._HARVEST_SPORTS
+    from engine import cfbteams as _ct
+    _saved = _ct.STATE_PATH
+    try:
+        _ct.STATE_PATH = os.path.join(tempfile.mkdtemp(), "cfb_teams.json")
+        assert not maintenance._cfb_map_ready()
+        assert "cfb" not in dict(maintenance._harvest_targets(day)), \
+            "an empty team map still spent credits"
+        _ct.remember({"Ohio State Buckeyes": "OSU"})
+        assert dict(maintenance._harvest_targets(day)).get("cfb") == "h2h", \
+            "with a map, CFB must harvest the markets it actually bet"
+    finally:
+        _ct.STATE_PATH = _saved
     # A day nobody bet owes no credits.
     assert maintenance._harvest_targets(dt.date(2026, 9, 14)) == []
 
