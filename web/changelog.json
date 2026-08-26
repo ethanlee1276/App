@@ -4,6 +4,12 @@
     {
       "date": "2026-08-26",
       "kind": "ship",
+      "title": "Start/sit: whose spot is best this week",
+      "body": "The waiver board answers who to add; this answers who to start, which is a different question — the same player is a different play against a shootout than against a team that will run the clock out on him. Each position now ranks by opportunity times environment: a player's share of his team's work multiplied by the points the market expects that offense to score, tilted by how much it throws relative to its situation (a run-lean offense helps its back and costs its receivers). Both numbers show on every row so the ranking can be argued with. It is explicitly NOT a fantasy-points projection — there is no per-week points model here and printing one would be invented precision. Quarterbacks are absent and the panel says why: every share in this data is targets or carries, which a quarterback has neither of."
+    },
+    {
+      "date": "2026-08-26",
+      "kind": "ship",
       "title": "The waiver board: whose job just changed",
       "body": "The draft kit is a two-week product. This is the one a fantasy manager opens every Tuesday from September to December, and the question is always the same — whose job just changed? Two lists answer it, both measured from our own usage data. Jobs just vacated: somebody is Out, Doubtful or on IR, so his team's work at that position has to go somewhere, and the beneficiaries are ranked by the share they ALREADY hold, because the man second in line inherits the job rather than the biggest name on the depth chart. Roles on the rise: last week's target or carry share against the prior four weeks, since volume is far stickier week to week than the yards it produces. What the board never says is that anyone is a free agent — the site cannot see your league, so it measures role change and leaves availability to the person who can actually check. The Sleeper add/drop pulse sits beside it, because the name everybody grabbed and the name whose share moved are often not the same name."
     },

@@ -181,11 +181,120 @@ def test_empty_inputs_are_an_empty_board_not_a_crash():
     assert board["note"]
 
 
+# --- the start/sit half ------------------------------------------------------
+# A different question from "who to add": the same player is a different
+# play against a shootout than against a team that will run the clock
+# out on him. What is pinned here is that the number stays HONEST about
+# what it is — a ranking of spots, never a projection of points.
+
+SCRIPTS = [
+    {"home": "KC", "away": "BUF", "week": "001",
+     "home_implied": 27.5, "away_implied": 24.0,
+     "home_proe": 4.0, "away_proe": -3.0},
+    {"home": "NYJ", "away": "NE", "week": "001",
+     "home_implied": 17.0, "away_implied": 19.5,
+     "home_proe": 0.0, "away_proe": 1.0},
+    # A LATER week for a team already seen — must never override week 1.
+    {"home": "KC", "away": "NE", "week": "002",
+     "home_implied": 30.0, "away_implied": 15.0,
+     "home_proe": 9.0, "away_proe": 0.0},
+]
+
+STREAM_USAGE = [
+    {"player": "KC Back", "team": "KC", "position": "RB", "last": 0.60,
+     "season": 0.55, "weeks": 6, "fp_pg": 15.0},
+    {"player": "KC WR", "team": "KC", "position": "WR", "last": 0.28,
+     "season": 0.26, "weeks": 6, "fp_pg": 13.0},
+    {"player": "BUF WR", "team": "BUF", "position": "WR", "last": 0.30,
+     "season": 0.28, "weeks": 6, "fp_pg": 14.0},
+    {"player": "Jets WR", "team": "NYJ", "position": "WR", "last": 0.32,
+     "season": 0.30, "weeks": 6, "fp_pg": 10.0},
+    {"player": "Bit Part", "team": "KC", "position": "WR", "last": 0.04,
+     "season": 0.04, "weeks": 6, "fp_pg": 2.0},
+    {"player": "Thin Guy", "team": "KC", "position": "WR", "last": 0.40,
+     "season": 0.40, "weeks": 1, "fp_pg": 9.0},
+    {"player": "No Game", "team": "ZZZ", "position": "WR", "last": 0.50,
+     "season": 0.50, "weeks": 6, "fp_pg": 9.0},
+    {"player": "A QB", "team": "KC", "position": "QB", "last": 0.0,
+     "season": 0.0, "weeks": 6, "fp_pg": 20.0},
+]
+
+
+def test_the_spot_used_is_the_next_game_not_a_later_one():
+    st = waivers.streamers(STREAM_USAGE, SCRIPTS)
+    assert st["RB"][0]["implied"] == 27.5,         "a team's week-2 total outranked the game actually being started"
+
+
+def test_quarterbacks_are_absent_rather_than_scored_at_zero():
+    """Every share here is targets or carries, which a QB has neither of
+    — so his row would score ~0 and rank last, which reads as an opinion
+    about him rather than an absent measurement."""
+    st = waivers.streamers(STREAM_USAGE, SCRIPTS)
+    assert "QB" not in st
+    assert "QB" not in waivers.STREAM_POSITIONS
+
+
+def test_a_bit_part_in_a_great_spot_is_still_a_bit_part():
+    st = waivers.streamers(STREAM_USAGE, SCRIPTS)
+    assert "Bit Part" not in [r["player"] for r in st["WR"]]
+
+
+def test_a_thin_sample_and_a_team_with_no_game_are_both_out():
+    st = waivers.streamers(STREAM_USAGE, SCRIPTS)
+    names = [r["player"] for r in st["WR"]]
+    assert "Thin Guy" not in names, "one week of share was called a role"
+    assert "No Game" not in names, "a player with no upcoming game was ranked"
+
+
+def test_the_pass_lean_tilts_backs_and_catchers_opposite_ways():
+    pass_lean = [{"home": "KC", "away": "X", "week": "001",
+                  "home_implied": 25.0, "away_implied": 20.0,
+                  "home_proe": 8.0, "away_proe": 0.0}]
+    run_lean = [{"home": "KC", "away": "X", "week": "001",
+                 "home_implied": 25.0, "away_implied": 20.0,
+                 "home_proe": -8.0, "away_proe": 0.0}]
+    rb = [{"player": "B", "team": "KC", "position": "RB", "last": 0.5,
+           "season": 0.5, "weeks": 6}]
+    wr = [{"player": "W", "team": "KC", "position": "WR", "last": 0.5,
+           "season": 0.5, "weeks": 6}]
+    rb_pass = waivers.streamers(rb, pass_lean)["RB"][0]["score"]
+    rb_run = waivers.streamers(rb, run_lean)["RB"][0]["score"]
+    wr_pass = waivers.streamers(wr, pass_lean)["WR"][0]["score"]
+    wr_run = waivers.streamers(wr, run_lean)["WR"][0]["score"]
+    assert rb_run > rb_pass, "a run-lean offense did not help its back"
+    assert wr_pass > wr_run, "a pass-lean offense did not help its receiver"
+
+
+def test_a_rounding_artefact_is_not_reported_as_a_pass_lean():
+    """PROE reads ~0 before any play-by-play is ingested. Printing
+    "-0.0 pass rate over expectation" on every row is noise wearing the
+    shape of a measurement."""
+    flat = [{"home": "KC", "away": "X", "week": "001", "home_implied": 25.0,
+             "away_implied": 20.0, "home_proe": -0.04, "away_proe": 0.0}]
+    row = waivers.streamers(
+        [{"player": "B", "team": "KC", "position": "RB", "last": 0.5,
+          "season": 0.5, "weeks": 6}], flat)["RB"][0]
+    assert row["proe"] is None
+    assert "expectation" not in row["why"]
+    assert row["score"] == round(0.5 * 25.0, 2),         "a rounding artefact moved the arithmetic"
+
+
+def test_the_panel_says_it_ranks_spots_and_not_points():
+    src = _read("web", "js", "app.js")
+    i = src.index("function streamerHTML(st)")
+    body = src[i:src.index("\nfunction ", i + 10)]
+    assert "not a projection of points" in body.lower() \
+        or "NOT a projection" in body
+    assert "Quarterbacks are absent" in body, \
+        "the QB gap is missing rather than named"
+
+
 # --- the wiring --------------------------------------------------------------
 
 def test_the_build_publishes_it_and_survives_a_missing_injury_file():
     src = _read("fantasy_build.py")
     assert '"waivers": _waiver_board(usage)' in src
+    assert '"streamers": waivers.streamers(' in src
     i = src.index("def _waiver_board")
     body = src[i:src.index("\ndef ", i + 10)]
     assert "except (OSError, ValueError)" in body, \
@@ -196,10 +305,11 @@ def test_the_build_publishes_it_and_survives_a_missing_injury_file():
 
 def test_the_page_gives_it_a_tab_of_its_own():
     src = _read("web", "js", "app.js")
-    assert '["waivers", "Waivers",' in src
+    assert '["waivers", "Waivers & starts",' in src
+    assert "streamerHTML(d.streamers)" in src
     assert "waiverBoardHTML(d.waivers)" in src
     # The Sleeper pulse moved in beside it — same question, other source.
-    i = src.index('["waivers", "Waivers",')
+    i = src.index('["waivers", "Waivers & starts",')
     assert "waiverPulseHTML(d.trending)" in src[i:i + 400]
 
 

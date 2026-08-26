@@ -43,7 +43,7 @@ cannot serve at all, and nothing has to be invented.
 
 ---
 
-## 2. Waiver-wire board — SHIPPED 2026-08-26 (streamers still open)
+## 2. Waiver-wire and streamer board — SHIPPED 2026-08-26
 
 **What:** every week, who to add and who to start from the free-agent
 pool — the question a manager asks fourteen times a season versus once at
@@ -71,9 +71,19 @@ DELIBERATELY NOT CLAIMED: availability. Without league sync (idea #7)
 role change and says plainly that it cannot see your league. A test
 pins the refusal.
 
-STILL OPEN — the STREAMER half: "who to start this week" needs the
-matchup layer joined per position (game scripts exist, the join does
-not), and it is a genuinely different question from "who to add".
+THE STREAMER HALF SHIPPED THE SAME DAY: `waivers.streamers` joins the
+usage rows to `fantasy.game_scripts` and ranks each position by share x
+the market's implied team total, tilted by pass-rate over expectation.
+It is a ranking of SPOTS and says so — there is no per-week points
+model here, and dressing the number as one would be the invented
+precision this project refuses.
+
+QUARTERBACKS ARE NAMED-ABSENT rather than quietly missing: every share
+in this data is targets or carries, which a QB has neither of, so his
+row would score ~0 and rank last — an absent measurement reading as an
+opinion. Streaming a QB is nearly pure team environment and needs a
+depth chart to say who starts; guessing that is how a board recommends
+a backup.
 
 ---
 

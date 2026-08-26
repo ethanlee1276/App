@@ -14331,9 +14331,10 @@ async function renderFantasy() {
   host.innerHTML = _ffLead + staleBanner + subtabbedHTML("fantasy", [
     ["usage", "Usage", "who is getting the ball, and whose share is moving",
      _ffUsage],
-    ["waivers", "Waivers",
-     "whose job just changed — the question a manager asks every Tuesday",
-     waiverBoardHTML(d.waivers) + waiverPulseHTML(d.trending)],
+    ["waivers", "Waivers & starts",
+     "whose job just changed, and whose spot is best this week",
+     waiverBoardHTML(d.waivers) + streamerHTML(d.streamers)
+     + waiverPulseHTML(d.trending)],
     ["trade", "Trade targets",
      "buy low and sell high — where production and opportunity disagree",
      _ffTrade],
@@ -17550,6 +17551,49 @@ function waiverBoardHTML(w) {
           "No share moved far enough this week to call it a role change.")
     + `<p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">${
         escapeHtml(w.note || "")}</p>`;
+}
+
+/* THE START/SIT HALF. A different question from "who to add": the same
+   player is a different play against a shootout than against a team
+   that will run the clock out on him.
+
+   WHAT THE NUMBER IS, said on the panel rather than implied: his share
+   of the work times the points the market expects his offense to score,
+   nudged by how much that offense throws relative to its situation. It
+   is NOT a fantasy-points projection — there is no per-week points model
+   here, and printing one would be the fake precision this site refuses.
+   Both inputs show on every row so the ranking can be argued with. */
+function streamerHTML(st) {
+  const POS = ["RB", "WR", "TE"];
+  const have = POS.filter((p) => ((st || {})[p] || []).length);
+  if (!have.length) return "";
+  const row = (r) => `<div class="dl-row">
+    <span class="dl-main" data-dossier="${escapeAttr(r.player || "")}">
+      ${playerAvatar(r.player, r.team, { size: 26, map: nflMap(),
+                                         headshot: r.headshot })}
+      <span><strong>${escapeHtml(r.player || "")}</strong>
+        <span class="dl-sub">vs ${escapeHtml(nflName(r.opponent))} —
+          ${escapeHtml(r.why || "")}</span></span></span>
+    <span class="dl-num strong"
+          title="share of his team\u2019s work times its implied total">${
+      (r.score == null ? "\u2014" : r.score.toFixed(1))}</span>
+  </div>`;
+  return `<div class="section-title minor">Best spots this week
+      <span class="sub">— opportunity times environment, by position</span></div>
+    <div class="cards wide">${have.map((p) => `
+      <div class="card" style="padding:14px 16px">
+        <div style="font-weight:800;margin-bottom:8px">${p}</div>
+        ${(st[p] || []).map(row).join("")}
+      </div>`).join("")}</div>
+    <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:8px">
+      The score is his share of the work multiplied by the points the
+      market has his offense scoring, tilted by pass rate over
+      expectation — a run-lean offense helps its back and costs its
+      receivers. It is a ranking of SPOTS, not a projection of points.
+      Quarterbacks are absent on purpose: every share here is targets or
+      carries, which a quarterback has neither of, and streaming one is
+      nearly pure team environment — a call that needs a depth chart we
+      would only be guessing at.</p>`;
 }
 
 function waiverPulseHTML(t) {

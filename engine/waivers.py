@@ -179,3 +179,116 @@ def board(usage: list[dict], injuries: list[dict] | None = None,
                  "Both lists are measured from our own usage data: who "
                  "just lost a job, and whose share just jumped."),
     }
+
+
+# --- the start/sit half ------------------------------------------------------
+# "Who to add" and "who to start" are different questions. The first is
+# about a role changing; this one is about the SPOT — the same player is
+# a different play against a shootout than against a team that will run
+# out the clock on him.
+#
+# WHAT THIS IS, precisely: opportunity times environment. A player's
+# share of his team's work, multiplied by the points his offense is
+# expected to score (the market's implied team total), nudged by how much
+# that offense throws relative to the situation it is in. It is NOT a
+# projection of fantasy points — there is no per-week points model here,
+# and dressing this number up as one would be exactly the fake precision
+# this project refuses. It answers "whose spot is best", which is the
+# question a start/sit call actually turns on.
+#
+# QUARTERBACKS ARE ABSENT, on purpose. Every usage share here is targets
+# or carries; a quarterback has neither, so his row would score ~0 and
+# rank last. Streaming a QB is nearly pure team environment, which needs
+# a depth chart to say WHO is starting — and guessing that is how a
+# board recommends a backup. Named here rather than quietly missing.
+
+#: Positions whose usage share is a real number.
+STREAM_POSITIONS = ("RB", "WR", "TE")
+
+#: How hard pass-rate-over-expectation tilts a play. PROE runs roughly
+#: ±8 points across a season, so this turns that full span into about
+#: ±12% on the score — enough to separate two similar spots, never
+#: enough to outrank a genuine difference in role or environment.
+PROE_TILT = 1.5
+
+#: Below this the share is a bit part, and a bit part in a great spot is
+#: still a bit part.
+MIN_STREAM_SHARE = 0.08
+
+
+def _next_scripts(scripts: list[dict]) -> dict:
+    """``{team abbr: script}`` for each team's NEXT unplayed game.
+
+    game_scripts already returns only unplayed games ordered by week, so
+    the first row a team appears in is the one being started for.
+    """
+    out: dict = {}
+    for g in scripts or []:
+        for side, opp in (("home", "away"), ("away", "home")):
+            team = team_key(g.get(side))
+            if not team or team in out:
+                continue
+            out[team] = {
+                "implied": g.get(f"{side}_implied"),
+                "proe": g.get(f"{side}_proe"),
+                "opponent": team_key(g.get(opp)),
+                "week": g.get("week"), "archetype": g.get("archetype"),
+            }
+    return out
+
+
+def streamers(usage: list[dict], scripts: list[dict],
+              per_position: int = 5) -> dict:
+    """``{position: [rows]}`` — the best spots this week, by position.
+
+    Ranked on share x implied team total, tilted by pass-rate over
+    expectation: a run-lean offense helps its back and costs its
+    receivers, and the reverse. Every row shows the two numbers behind
+    it so the ranking can be argued with.
+    """
+    env = _next_scripts(scripts)
+    out: dict = {}
+    for u in usage or []:
+        pos = str(u.get("position") or "").upper()
+        if pos not in STREAM_POSITIONS:
+            continue
+        share = u.get("last")
+        if share is None:
+            share = u.get("season")
+        if share is None or share < MIN_STREAM_SHARE:
+            continue
+        if int(u.get("weeks") or 0) < MIN_WEEKS:
+            continue
+        spot = env.get(team_key(u.get("team")))
+        if not spot or spot.get("implied") is None:
+            continue
+        implied = float(spot["implied"])
+        proe = spot.get("proe")
+        # A PROE of ±0.05 is a rounding artefact, not a pass lean — it is
+        # what the field holds before any play-by-play is ingested. Kept
+        # out of both the arithmetic and the sentence, because "-0.0 pass
+        # rate over expectation" on every row is noise wearing the shape
+        # of a measurement.
+        if proe is not None and abs(float(proe)) < 0.1:
+            proe = None
+        tilt = 1.0
+        if proe is not None:
+            # A back gains from a run-lean offense; a pass-catcher loses.
+            lean = float(proe) / 100.0 * PROE_TILT
+            tilt = (1.0 - lean) if pos == "RB" else (1.0 + lean)
+        score = share * implied * tilt
+        out.setdefault(pos, []).append({
+            "player": u.get("player"), "team": u.get("team"),
+            "position": pos, "opponent": spot.get("opponent"),
+            "share": round(share, 3), "implied": round(implied, 1),
+            "proe": proe, "score": round(score, 2),
+            "fp_pg": u.get("fp_pg"), "headshot": u.get("headshot", ""),
+            "why": f"{(share):.0%} of the work in an offense the market has "
+                   f"scoring {implied:.1f}"
+                   + (f" · {proe:+.1f} pass rate over expectation"
+                      if proe is not None else ""),
+        })
+    for pos in out:
+        out[pos].sort(key=lambda r: -(r.get("score") or 0))
+        out[pos] = out[pos][:per_position]
+    return out

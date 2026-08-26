@@ -29,7 +29,8 @@ def _write_json(path: Path, doc: dict, indent: int = 2) -> None:
     tmp.write_text(json.dumps(doc, indent=indent))
     os.replace(tmp, path)
 
-from engine import fantasy, fantasy_draft, fantasy_ranks, offseason, preseason
+from engine import fantasy
+from engine import waivers, fantasy_draft, fantasy_ranks, offseason, preseason
 from engine.db import connect
 from engine.sources.fetch import DataUnavailable
 
@@ -130,7 +131,6 @@ def _waiver_board(usage: list[dict]) -> dict:
     fact. Missing file → the rising half still works, which is the half
     that needs no injuries at all.
     """
-    from engine import waivers
     rows: list[dict] = []
     try:
         with open("web/data/injuries.json", encoding="utf-8") as fh:
@@ -260,6 +260,10 @@ def main() -> None:
             # already on disk, so it costs nothing and cannot be staler
             # than the page around it.
             "waivers": _waiver_board(usage),
+            # The start/sit half: share x the market's implied team
+            # total, tilted by pass-rate over expectation. A different
+            # question from "who to add", off the same two boards.
+            "streamers": waivers.streamers(usage, fantasy.game_scripts(conn)),
             "scripts": fantasy.game_scripts(conn),
             # Calendar dates for every unplayed game — the scripts carry
             # the market's read per matchup, the schedule says WHEN, and
