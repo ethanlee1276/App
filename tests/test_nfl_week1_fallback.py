@@ -88,8 +88,11 @@ def test_the_fallback_prices_the_game_markets_and_only_those():
         "the fallback publishes a schedule with no prices again"
     assert '"game_bets": bets' in block, "the priced bets never reach the payload"
     # The player layer stays empty, because nothing built it.
-    for empty in ('"recommendations": []', '"long_shots": []', '"parlays": []'):
+    for empty in ('"recommendations": []', '"long_shots": []'):
         assert empty in block, f"the fallback invented {empty}"
+    # `parlays` is ABSENT rather than empty — see the shape test below.
+    assert '"parlays"' not in block, \
+        "the fallback claims a parlay screen ran on a board with no props"
 
 
 def test_a_schedule_price_enters_the_record_labelled_as_one():
@@ -333,6 +336,42 @@ def test_the_board_does_not_claim_a_verdict_it_never_reached():
     assert guard < cause < advice, \
         "schedule-only still falls through to \"loosen the sliders\""
 
+
+
+def test_the_fallback_publishes_the_shapes_the_page_expects():
+    """An empty LIST where every other board carries an OBJECT is a lie
+    about which, and truthiness is what made it cost something.
+
+    `renderParlays` guards on `!z`. An empty array is truthy, so the
+    guard waved it through and the panel rendered itself out of nothing:
+    "Screened undefined candidate tickets built from undefined eligible
+    legs on tonight's board" — live, on the board the site publishes
+    every day between the schedule appearing and Week 1 being played.
+    Found by walking every page in every sport in a browser and looking
+    for the word "undefined".
+
+    `market_scan` is an object on every board ({stale, arbs, middles,
+    …}); it ships as one here too. `parlays` is dropped outright,
+    because the screen did not run — it needs player props — and the
+    page has an honest empty state for a board with no screen."""
+    block = _games_only_block()
+    assert '"market_scan": {}' in block, \
+        "market_scan is a list again, and the page reads it as an object"
+    assert '"market_scan": []' not in block
+    assert '"parlays": []' not in block
+
+
+def test_the_panel_does_not_trust_the_payload_shape_either():
+    """The producer was fixed, and this is the half that cannot be fixed
+    anywhere else: a renderer that trusts a payload's shape will meet a
+    payload that lies about it again."""
+    i = APP.index("function renderParlays()")
+    body = APP[i:APP.index("\n}", i)]
+    assert 'typeof z !== "object"' in body and "Array.isArray(z)" in body, \
+        "an empty array is truthy, and this guard is what catches it"
+    # And the counts themselves never print a hole.
+    assert "z.considered == null && z.eligible_legs == null" in body, \
+        "the census can print 'Screened undefined candidate tickets' again"
 
 
 # --- what the board's own cards open onto -----------------------------------

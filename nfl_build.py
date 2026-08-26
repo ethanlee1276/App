@@ -267,7 +267,19 @@ def main() -> None:
                 "games": [_game_to_dict(g) for g in games],
                 "recommendations": [], "long_shots": [],
                 "longshot_watch": [],
-                "market_scan": [], "parlays": [],
+                # SHAPES, NOT JUST EMPTINESS. These two are DICTS on every
+                # other board — `market_scan` is {stale, arbs, middles, …}
+                # and `parlays` is the screen's own report — and shipping
+                # them as empty LISTS here was a lie about which. It cost a
+                # real sentence on the live site: renderParlays guards on
+                # `!z`, an empty list is truthy, and every reader of the
+                # schedule-only NFL board was told "Screened undefined
+                # candidate tickets built from undefined eligible legs on
+                # tonight's board". `parlays` is dropped outright rather
+                # than emptied, because the screen did not run — it needs
+                # player props, which is the one layer this build does not
+                # have — and the page has an honest empty state for that.
+                "market_scan": {},
                 "game_bets": bets,
                 # Two notes, because two things can be true and the page
                 # must not claim the wrong one. With ratings in hand the

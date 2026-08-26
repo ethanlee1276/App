@@ -4954,8 +4954,20 @@ function renderParlays() {
 
   /* A slate built before this module existed, or by a builder that has no
      screen wired in, has no `parlays` key at all. Saying so beats rendering
-     an empty page that looks like a clean night. */
-  if (!z) {
+     an empty page that looks like a clean night.
+
+     THE SHAPE IS PART OF THE QUESTION, and the truthiness of an empty
+     array is what made that matter. `nfl_build.py --games-only` shipped
+     `"parlays": []` — a list where every other board carries the
+     screen's report as an object — and `[]` is truthy, so this guard
+     waved it through and the panel rendered its whole self out of
+     nothing: "Screened undefined candidate tickets built from undefined
+     eligible legs on tonight's board", live, on the board the site
+     publishes every day before Week 1. The producer was fixed too; this
+     is the half that cannot be fixed anywhere else, because a renderer
+     that trusts a payload's shape will meet a payload that lies about
+     it again. */
+  if (!z || typeof z !== "object" || Array.isArray(z)) {
     host.innerHTML = `<div class="empty-slate">
       <div class="es-icon">${icon("dash", 30)}</div>
       <div class="es-title">No parlay screen on this board</div>
@@ -5000,14 +5012,20 @@ function renderParlays() {
     ${parlayLedger(z)}
     ${(z.notes || []).filter((n) => n !== z.structural).map((n) =>
         `<div class="pz-note">${escapeHtml(n)}</div>`).join("")}
+    ${/* Belt to the guard's brace: a screen that ran but banked no
+          counts prints nothing here rather than a sentence with a hole
+          in it. The counts are the LAST thing on this panel; losing them
+          costs a footnote, and printing "undefined" costs the reader's
+          belief in every number above it. */ ""}
+    ${z.considered == null && z.eligible_legs == null ? "" : `
     <div class="pz-census">
-      Screened ${z.considered} candidate ${z.considered === 1 ? "ticket" : "tickets"}
-      built from ${z.eligible_legs} eligible ${z.eligible_legs === 1 ? "leg" : "legs"}
+      Screened ${z.considered ?? 0} candidate ${z.considered === 1 ? "ticket" : "tickets"}
+      built from ${z.eligible_legs ?? 0} eligible ${z.eligible_legs === 1 ? "leg" : "legs"}
       on tonight’s board.
       ${z.killed && z.killed.length
         ? `${z.killed.length} ${z.killed.length === 1 ? "was" : "were"} killed
            for the reasons above.` : ""}
-    </div>`;
+    </div>`}`;
   revealChildren(host);
   if (typeof syncParlayMode === "function") syncParlayMode();
 }
