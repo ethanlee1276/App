@@ -484,18 +484,104 @@ def settle_recommendations(recommendations: list[dict],
             stake_units=rec.get("stake_units", 1.0),
             side=rec.get("side", "OVER"),
             grade=rec.get("grade", ""),
+            # THE BOOK NAME DECIDES THE BASIS, rather than a flag carried
+            # alongside it. `build_slate` stamps "proxy" on the recent-form
+            # line it invents; a harvested close carries the real book's
+            # name. Reading the basis off the line the pipeline ACTUALLY
+            # priced against means the two cannot drift apart — there is
+            # no second place to forget to update.
+            basis=_basis_of(rec.get("book")),
         ))
     return out
 
 
-def backtest_from_stats(season: int, weeks, config=None, model=None, use_team_context: bool = False, team_context_mode: str = "level") -> BacktestReport:
+#: What `engine.sources.nflverse.build_slate` stamps on the recent-form
+#: line it invents when no book has posted.
+PROXY_BOOK = "proxy"
+
+
+def _basis_of(book) -> str:
+    return "naive" if (not book or str(book) == PROXY_BOOK) else "book"
+
+
+def apply_real_lines(slate, real_lines: dict) -> int:
+    """Reprice a slate's props against harvested closes. Returns the count.
+
+    THE STEP THAT WAS MISSING, and it made the purchase pointless. The
+    NFL walk-forward has always priced against `build_slate`'s proxy — a
+    recent-form baseline at a synthetic -110 — and its own docstring said
+    "swap in an odds feed to price against real books" as though somebody
+    had. Nobody had: `backtest_from_stats` had no parameter to pass one
+    through, so 11,772 purchased `receptions` closes could sit in
+    `odds_history` with nothing able to read them.
+
+    Keyed on the GAME'S DATE, taken from the week's schedule rather than
+    guessed from the week number: a week holds a Thursday, a Sunday and a
+    Monday, they are three different closes, and only the days actually
+    harvested should join.
+
+    A prop with no harvested close KEEPS ITS PROXY and stays `basis:
+    naive` — the report segments the two apart, so a partial harvest
+    produces a smaller honest book-priced sample beside the baseline
+    rather than a blend that is neither.
+    """
+    from .models import SportsbookLine
+    from .odds import pair_is_sane
+    if not real_lines:
+        return 0
+    date_of: dict[str, str] = {}
+    for g in getattr(slate, "games", ()) or ():
+        if getattr(g, "date", ""):
+            date_of[g.home] = g.date
+            date_of[g.away] = g.date
+    swapped = 0
+    for prop in getattr(slate, "props", ()) or ():
+        date = date_of.get(prop.team)
+        if not date:
+            continue
+        quote = real_lines.get((_norm(prop.player), prop.market, date))
+        if not quote:
+            continue
+        try:
+            line = float(quote["line"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        over = int(quote.get("over_odds") or 0)
+        under = int(quote.get("under_odds") or 0)
+        if not over:
+            # 0 is the parser's word for "not quoted". Inventing the
+            # missing side at -110 is what put phantom edges on markets
+            # nobody could bet — see engine.mlb.backtest.
+            continue
+        if under and not pair_is_sane(over, under):
+            under = 0
+        prop.lines = [SportsbookLine(book=str(quote.get("book") or "book"),
+                                     line=line, over_odds=over,
+                                     under_odds=under)]
+        swapped += 1
+    return swapped
+
+
+def backtest_from_stats(season: int, weeks, config=None, model=None,
+                        use_team_context: bool = False,
+                        team_context_mode: str = "level",
+                        real_lines: dict | None = None) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
-    against that week's actual box score. Requires weekly stats; lines are the
-    engine's recent-form proxy unless an odds history is wired in, so betting
-    ROI is measured against that proxy market (projection accuracy and
-    calibration are source-independent).
+    against that week's actual box score. Requires weekly stats.
+
+    ``real_lines`` maps ``(normalized player, market, YYYY-MM-DD)`` to a
+    harvested close (`engine.db.closing_odds_by_date`, one market at a
+    time). Props it covers are priced against the real book number and
+    counted `basis: book`; everything else keeps `build_slate`'s
+    recent-form proxy at a synthetic -110 and counts `basis: naive`. The
+    report segments the two, because only the first says anything about
+    beating a market and blending them would hide which is which.
+
+    Without it — which is every call this function had until 2026-08-27 —
+    the ROI is measured against that proxy. Projection accuracy and
+    calibration are source-independent and stand either way.
     """
     from .sources.nflverse import (
         build_slate, load_weekly_stats, MARKET_COLUMNS, _s, _f,
@@ -528,11 +614,18 @@ def backtest_from_stats(season: int, weeks, config=None, model=None, use_team_co
                         _hc, season, f"{int(w):03d}")
 
     all_settled: list[SettledProp] = []
+    repriced = props_seen = 0
     for w in weeks:
         try:
             slate = build_slate(season, w, upto_week=w)
         except Exception:
             continue
+        # getattr, because this is BOOKKEEPING and bookkeeping must never
+        # be the thing that kills a measurement. If a slate really lost
+        # its props the run reports n=0 and says so loudly; a crash here
+        # would only obscure that.
+        props_seen += len(getattr(slate, "props", ()) or ())
+        repriced += apply_real_lines(slate, real_lines or {})
         result = run_slate(slate, config, model=model, allow_synthetic_line=True,
                            team_context=ctx_by_week.get(w))
 
@@ -546,4 +639,6 @@ def backtest_from_stats(season: int, weeks, config=None, model=None, use_team_co
 
         all_settled.extend(settle_recommendations(result["recommendations"], actuals))
 
-    return evaluate(all_settled)
+    report = evaluate(all_settled)
+    report.used_real_lines, report.total_priced = repriced, props_seen
+    return report

@@ -128,7 +128,22 @@ def report_to_dict(report, market: str = "", label: str = "") -> dict:
         out["segments"][name] = {
             "n_bets": g.get("n_bets", 0), "wins": g.get("wins", 0),
             "win_rate": _round(g.get("win_rate"), 3),
-            "roi": _round(g.get("roi"), 4), "net": _round(g.get("net"), 2)}
+            "roi": _round(g.get("roi"), 4), "net": _round(g.get("net"), 2),
+            # THE GRADE LADDER, PER BASIS. `evaluate` has bucketed each
+            # segment by grade all along and this dropped the buckets on
+            # the way out, so the page could show that A and B+ disagree
+            # and never which pricing produced the disagreement. The
+            # whole question — does the top band earn its billing against
+            # a real book — is a per-grade record inside the "book"
+            # segment, and it was the one number not carried across.
+            "grades": {grade: {
+                "n_bets": b.get("n_bets", 0), "wins": b.get("wins", 0),
+                "win_rate": _round((b["wins"] / b["n_bets"])
+                                   if b.get("n_bets") else None, 3),
+                "roi": _round(b.get("roi"), 4),
+                "net": _round(b.get("net"), 2)}
+                for grade, b in (g.get("grades") or {}).items()},
+        }
     return out
 
 
@@ -160,17 +175,55 @@ def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
     return out
 
 
-def nfl_props(season: int | None = None, weeks=None, log=print) -> dict:
+#: The NFL prop markets a harvested close can be joined to. Same names
+#: `SPORT_CONFIG["nfl"]["markets"]` buys, which is what `harvest_odds.py`
+#: stores them under.
+NFL_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
+
+
+def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
+    """``{(normalized player, market, date): close}`` for the NFL props.
+
+    `closing_odds_by_date` answers one market at a time and drops the
+    market from its key; the backtest needs it back, because a player has
+    a receptions close and a receiving-yards close on the same day and
+    they are different bets.
+    """
+    from . import db as _db
+    out: dict = {}
+    for market in markets:
+        try:
+            for (player, date), quote in _db.closing_odds_by_date(
+                    conn, "nfl", market).items():
+                out[(player, market, date)] = quote
+        except Exception as exc:                   # noqa: BLE001
+            raise RuntimeError(f"nfl {market} closes unreadable — {exc}")
+    return out
+
+
+def nfl_props(season: int | None = None, weeks=None, log=print,
+              conn=None) -> dict:
     """Replay NFL props walk-forward. The weekly-stats feed is release-gated,
-    so "no CSV on this machine" is the normal state and reported as such."""
+    so "no CSV on this machine" is the normal state and reported as such.
+
+    Priced against harvested closes wherever one exists — `conn` is the
+    history DB, and without it every prop falls back to the recent-form
+    proxy the way this always did.
+    """
     from .backtest import backtest_from_stats
     from .pipeline import nfl_season_of
     from .sources.fetch import DataUnavailable
 
     season = season or nfl_season_of(None)
     weeks = list(weeks or range(6, 18))
+    real: dict = {}
+    if conn is not None:
+        try:
+            real = nfl_real_lines(conn)
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nfl closes unavailable — {exc}")
     try:
-        rep = backtest_from_stats(season, weeks)
+        rep = backtest_from_stats(season, weeks, real_lines=real)
     except DataUnavailable as exc:
         return {"unavailable": str(exc).split("\n")[0], "season": season}
     except Exception as exc:                       # noqa: BLE001
@@ -249,7 +302,7 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
                          {"unavailable": "no ingested game logs deep enough "
                                          "to replay yet"},
                          "game_lines": game_lines(hconn, "mlb", log=log)}
-        sports["nfl"] = {"props": nfl_props(log=log) if nfl else
+        sports["nfl"] = {"props": nfl_props(log=log, conn=hconn) if nfl else
                          {"unavailable": "skipped"},
                          "game_lines": game_lines(hconn, "nfl", log=log)}
         for sp in ("cfb", "nba", "wnba"):
