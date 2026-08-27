@@ -338,6 +338,9 @@ def main() -> None:
         print(f"  games: {res['games']:,} FBS")
         for note in res["skipped"][:5]:
             print(f"  skipped: {note}")
+        lres = ingest.ingest_cfb_lines(conn, seasons)
+        for note in lres["skipped"][:3]:
+            print(f"  skipped: {note}")
         pres = ingest.ingest_cfb_player_history(conn, seasons)
         print(f"  player-log rows: {pres['rows']:,}   "
               f"identities: {pres['assets']:,}")

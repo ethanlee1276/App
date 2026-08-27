@@ -76,6 +76,12 @@ def _save_state(path: Path, state: dict) -> None:
 #: half-finished pull, not a season.
 CFB_MIN_PLAYER_ROWS = 5_000
 
+#: Below this many college games carrying a closing spread, the market
+#: haircut cannot be measured and the backfill runs. Four ingested
+#: seasons are 3,132; `engine.gamecal.MIN_N` needs 400 graded
+#: observations before it will adopt anything at all.
+CFB_MIN_CLOSES = 1_000
+
 BACKUP_DIR = ROOT / "data" / "backups"
 BACKUP_EVERY_DAYS = 7
 BACKUP_KEEP = 6
@@ -947,6 +953,35 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                     log(f"  ⚠️  {s_}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  cfb history backfill failed: {exc}")
+
+        # THE CLOSING NUMBERS, which the results backfill deliberately
+        # left NULL. Without them `engine.gamecal` cannot measure college
+        # football's market haircut and the board prices spreads and
+        # totals against a flat guess — the standing item on this site's
+        # own doctor. Guarded on the count, then refreshed weekly in
+        # season so the current year's closes keep arriving.
+        try:
+            from . import db as _ldb
+            from .ingest import ingest_cfb_lines
+            _lconn = _ldb.connect()
+            have = _lconn.execute(
+                "SELECT COUNT(*) FROM games WHERE sport='cfb' "
+                "AND spread IS NOT NULL").fetchone()[0]
+            season = today.year if today.month >= 8 else today.year - 1
+            seasons = None
+            if have < CFB_MIN_CLOSES:
+                seasons = [today.year - n for n in (4, 3, 2, 1)]
+            elif today.weekday() == 0:
+                seasons = [season]
+            if seasons is not None:
+                res = ingest_cfb_lines(_lconn, seasons, quiet=True)
+                log(f"  cfb closes: {res['spread']:,} spread(s) and "
+                    f"{res['total']:,} total(s) attached — the college "
+                    f"board can be graded against the market now")
+                for s_ in res["skipped"]:
+                    log(f"  ⚠️  {s_}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  cfb closing lines failed: {exc}")
 
         # THE PLAYER HALF, AND THE ONE THE BOARD ACTUALLY SHOWS. Results
         # let the CFB model measure its own variance; player rows are

@@ -728,11 +728,16 @@ def cfb_games_for(conn, season: int) -> dict:
             "period": r["period"], "home": r["home"], "away": r["away"],
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
-            # The final score, which is what `cfbstats._failing_weeks`
-            # audits the feed's touchdowns against. A week that delivers
-            # a fifth of its own points as touchdowns has lost its
-            # scoring plays, and 2025 lost seven weeks of them.
+            # The final score, which is what `cfbstats.week_modes` audits
+            # the feed's touchdowns against — a week that delivers a
+            # fifth of its own points as touchdowns has lost them, and
+            # 2025 lost eight weeks that way. Per side as well as
+            # combined: a team credited with more touchdowns than ITS
+            # OWN score allows is a tighter bound than one measured
+            # against both teams' points together.
             "points": (r["home_score"] or 0) + (r["away_score"] or 0),
+            "home_points": r["home_score"] or 0,
+            "away_points": r["away_score"] or 0,
         }
     return out
 
@@ -857,3 +862,73 @@ def remap_cfb_team_keys(conn, id_to_abbr: dict | None = None) -> dict:
                     cur.rowcount or 0
     conn.commit()
     return out
+
+
+def ingest_cfb_lines(conn, seasons: list[int] | None = None,
+                     quiet: bool = False) -> dict:
+    """Closing spreads and totals for college football's ingested games.
+
+    THE COLUMN THE BACKFILL LEFT NULL ON PURPOSE, filled at last.
+    `engine.sources.cfbfastr` stores scores and no lines, and said so:
+    writing a 0.0 would have read as a pick'em on three thousand games.
+    The cost was that nothing college the site prices had ever been
+    compared with the number a bettor could have taken —
+    `engine.gamecal` held CFB's market haircut at the flat guess, and
+    `engine.cfbtdfit` had no implied total to grade the touchdown model's
+    game-script term against.
+
+    `engine.sources.cfblines` reads them off the same mirror the
+    schedules come from. Only games already in the table are touched,
+    and only their ``spread`` and ``total`` columns — a game with a
+    close for one market and not the other keeps the NULL on the other.
+    """
+    import json as _json
+    from .sources import cfblines
+    result = {"spread": 0, "total": 0, "games": 0, "skipped": []}
+    where = "WHERE sport='cfb'"
+    args: list = []
+    if seasons:
+        where += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args = [int(s) for s in seasons]
+    games = {}
+    for r in conn.execute(
+            f"SELECT game_id, season, period, extra FROM games {where}", args):
+        try:
+            extra = _json.loads(r["extra"] or "{}")
+        except (ValueError, TypeError):
+            extra = {}
+        games[str(r["game_id"])] = {
+            "home_name": extra.get("home_name", ""),
+            "away_name": extra.get("away_name", ""),
+            "season": r["season"], "period": r["period"],
+        }
+    if not games:
+        result["skipped"].append(
+            "cfb lines: no ingested games to attach closes to — run the "
+            "results backfill first")
+        return result
+    try:
+        out = cfblines.fetch_lines(games, seasons)
+    except DataUnavailable as exc:
+        result["skipped"].append(f"cfb lines: {exc}")
+        return result
+    for game_id, quote in out["lines"].items():
+        game = games.get(game_id)
+        if not game:
+            continue
+        for column in ("spread", "total"):
+            if column not in quote:
+                continue
+            conn.execute(
+                f"UPDATE games SET {column}=? WHERE sport='cfb' AND "
+                f"season=? AND period=? AND game_id=?",
+                (quote[column], game["season"], game["period"], game_id))
+            result[column] += 1
+        result["games"] += 1
+    conn.commit()
+    db.log_ingest(conn, "cfb", "closing_lines", str(seasons or "all"),
+                  result["games"])
+    if not quiet:
+        print(f"  cfb closes: {result['spread']:,} spread(s) and "
+              f"{result['total']:,} total(s) across {result['games']:,} games")
+    return result

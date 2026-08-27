@@ -213,6 +213,26 @@ def _ytg(value):
         return None
 
 
+def scored_geometrically(yards_to_goal, gain) -> bool:
+    """Did this play end in the end zone, by the field rather than the feed?
+
+    A gain of exactly the distance to the goal line IS a touchdown. It
+    needs no ``touchdown_player`` column, which matters because that
+    column is the part of this feed that has actually failed: week 9 of
+    2025 carries its scoring plays with nobody's name on them, and read
+    through the attribution alone the whole week is unusable.
+
+    Checked against the seasons where both signals work, the two agree:
+    2022-2024 credit 4,469 / 4,834 / 4,886 touchdowns by attribution and
+    4,485 / 4,824 / 4,901 by geometry, each accounting for 79-81% of all
+    the points scored. So the parser credits a score when EITHER fires —
+    a 1% overlap disagreement against a whole week of games.
+    """
+    if yards_to_goal is None or gain is None:
+        return False
+    return yards_to_goal > 0 and abs(gain - yards_to_goal) < 1e-9
+
+
 def split_pass(scores: dict, completion: str, reception: str) -> tuple:
     """``(passer, receiver)`` for one completed pass.
 
@@ -265,9 +285,10 @@ def parse_player_stats(rows, season: int, games: dict,
     somebody had already closed is how the last dead loop on this site
     stayed dead.
 
-    One streamed pass. Completions are held back rather than resolved in
-    flight, because who threw a pass in week 2 is decided by evidence
-    that may not arrive until week 11.
+    One streamed pass, then two resolutions. Completions are held back
+    because who threw a pass in week 2 is decided by evidence that may
+    not arrive until week 11; touchdowns are held back because WHICH
+    SIGNAL to believe is a per-week decision — see `week_modes`.
     """
     roster = roster or {}
     bag: dict = {}
@@ -276,6 +297,7 @@ def parse_player_stats(rows, season: int, games: dict,
     skipped: dict[str, int] = {}
     scores: dict = {}
     pending: list = []
+    rushing: list = []
     week_of: dict = {}
     week_points: dict = {}
 
@@ -316,30 +338,31 @@ def parse_player_stats(rows, season: int, games: dict,
         if rush:
             ids.setdefault((team, rush), _name(r.get("rush_player_id")))
             s = _slot(bag, base + (rush,))
+            gain = _num(r.get("rush_yds"))
             s["carries"] += 1
-            s["rush_yds"] += _num(r.get("rush_yds"))
-            # On every rushing touchdown in the file this column IS the
-            # ball carrier. Compared rather than assumed: if the feed
-            # ever changes, the touchdown lands on nobody instead of on
-            # the wrong player.
-            if td and td == rush:
-                s["rush_td"] += 1
+            s["rush_yds"] += gain
             if ytg is not None and ytg <= RED_ZONE:
                 s["rz_car"] += 1
                 if ytg <= INSIDE_5:
                     s["i5_car"] += 1
+            if td == rush or scored_geometrically(ytg, gain):
+                rushing.append((base + (rush,), bool(td) and td == rush,
+                                scored_geometrically(ytg, gain)))
 
         comp = _name(r.get("completion_player"))
         recv = _name(r.get("reception_player"))
         if comp and recv:
             ids.setdefault((team, comp), _name(r.get("completion_player_id")))
             ids.setdefault((team, recv), _name(r.get("reception_player_id")))
-            pending.append((base, comp, recv,
-                            _num(r.get("reception_yds"))
-                            or _num(r.get("completion_yds")),
-                            bool(td), ytg))
+            yards = _num(r.get("reception_yds")) \
+                or _num(r.get("completion_yds"))
+            pending.append((base, comp, recv, yards, bool(td),
+                            scored_geometrically(ytg, yards), ytg))
 
-    for base, comp, recv, yds, scored, ytg in pending:
+    modes = week_modes(rushing, pending, week_of, week_points, skipped)
+
+    passes: list = []
+    for base, comp, recv, yds, by_name, by_field, ytg in pending:
         team = base[1]
         passer, receiver = split_pass(scores.get(team, {}), comp, recv)
         s = _slot(bag, base + (receiver,))
@@ -349,17 +372,25 @@ def parse_player_stats(rows, season: int, games: dict,
             s["rz_rec"] += 1
         q = _slot(bag, base + (passer,))
         q["pass_yds"] += yds
-        if scored and passer != receiver:
-            s["rec_td"] += 1
-            q["pass_td"] += 1
+        if passer != receiver and _credited(modes, week_of, base[0],
+                                            by_name, by_field):
+            passes.append((base + (receiver,), base + (passer,)))
+
+    for key, by_name, by_field in rushing:
+        if _credited(modes, week_of, key[0], by_name, by_field):
+            _slot(bag, key)["rush_td"] += 1
+    for receiver_key, passer_key in passes:
+        _slot(bag, receiver_key)["rec_td"] += 1
+        _slot(bag, passer_key)["pass_td"] += 1
 
     for slot in bag.values():
         slot["anytime_td"] = slot["rush_td"] + slot["rec_td"]
-    dropped = _failing_weeks(bag, week_of, week_points, games, skipped)
+    dropped = {w for w, mode in modes.items() if mode == DROP}
+    dropped |= _impossible_games(bag, games, skipped)
 
     out, assets = [], {}
     for (gid, team, opponent, home, player), s in bag.items():
-        if week_of.get(gid) in dropped:
+        if week_of.get(gid) in dropped or gid in dropped:
             continue
         ident = ids.get((team, player), "")
         who = roster.get(ident) or {}
@@ -383,46 +414,118 @@ def parse_player_stats(rows, season: int, games: dict,
             "games": len(seen_games), "players": len(bag), "skipped": skipped}
 
 
-def _failing_weeks(bag: dict, week_of: dict, week_points: dict,
-                   games: dict, skipped: dict) -> set:
-    """Weeks whose touchdowns the feed did not deliver — see MIN_TD_COVERAGE.
+#: How a week's touchdowns were credited. NAMES is the feed's own
+#: ``touchdown_player`` column; FIELD is the geometry — a play that
+#: gained exactly the distance to the goal line; DROP is a week whose
+#: touchdowns neither signal could find.
+NAMES, FIELD, DROP = "names", "field", "drop"
 
-    Two audits, both against numbers we already trust. A WEEK whose
-    credited touchdowns account for less than `MIN_TD_COVERAGE` of the
-    points actually scored in it has lost its scoring plays. A GAME whose
-    credited touchdowns cannot fit inside its own final score at six
-    points each has gained some it should not have; its week goes too,
-    because whatever produced it was not one game's problem.
 
-    Counts land in ``skipped`` so the ingest reports them: a week
-    silently dropped is the same failure as a week silently kept.
+def week_modes(rushing: list, passing: list, week_of: dict,
+               week_points: dict, skipped: dict) -> dict:
+    """Which touchdown signal to believe, week by week.
+
+    THE BETTER INSTRUMENT, AND A CRUDER ONE WHEN IT BREAKS. Measured
+    against the final scores our own games table holds, the feed's
+    ``touchdown_player`` column is near-perfect where it works: across
+    2022-24 it credits a team more touchdowns than its own score can
+    hold in ONE team-game per season. The geometry — gain equals
+    distance to the goal line — misfires nine to thirteen times a
+    season, on plays a penalty or a spot correction moved. So names win
+    wherever names exist.
+
+    They do not always exist. Week 9 of 2025 carries its scoring plays
+    with nobody named on them, and weeks 10-16 are missing the plays
+    themselves. Read through the attribution alone, week 9 is a week in
+    which a hundred games produced no scorers — every player in it
+    recorded as having scored nothing, which is not missing data, it is
+    wrong data. The geometry finds that week's touchdowns exactly.
+
+    So each week is judged twice, against the points its games actually
+    produced (`MIN_TD_COVERAGE`): believe the names if they clear the
+    bar, else the field if IT clears the bar, else drop the week rather
+    than store a hundred games of false zeros.
     """
-    week_tds: dict = {}
-    game_tds: dict = {}
-    for (gid, _team, _opp, _home, _player), slot in bag.items():
-        scored = slot.get("anytime_td", 0.0)
-        if not scored:
-            continue
-        week_tds[week_of.get(gid)] = week_tds.get(week_of.get(gid), 0.0) + scored
-        game_tds[gid] = game_tds.get(gid, 0.0) + scored
+    #: (game id, named?, on the field?) for every play either signal
+    #: called a touchdown, from both shapes of play.
+    calls = [(key[0], named, field) for key, named, field in rushing]
+    calls += [(base[0], named, field)
+              for base, _c, _r, _y, named, field, _ytg in passing]
 
-    failing = set()
+    by_name: dict = {}
+    by_field: dict = {}
+    for gid, named, field in calls:
+        week = week_of.get(gid)
+        if named:
+            by_name[week] = by_name.get(week, 0) + 1
+        if field:
+            by_field[week] = by_field.get(week, 0) + 1
+
+    modes: dict = {}
     for week, points in week_points.items():
         if points <= 0:
+            # No final scores to audit against. Believe the names, which
+            # is what this parser did before the audit existed.
+            modes[week] = NAMES
             continue
-        if week_tds.get(week, 0.0) * TD_POINTS / points < MIN_TD_COVERAGE:
-            failing.add(week)
-    for gid, scored in game_tds.items():
-        points = _num((games.get(gid) or {}).get("points"))
-        if points > 0 and scored * MIN_TD_POINTS > points:
-            failing.add(week_of.get(gid))
-    for week in sorted(failing, key=lambda w: (len(str(w)), str(w))):
-        got = week_tds.get(week, 0.0) * TD_POINTS
-        points = week_points.get(week, 0.0) or 1.0
-        skipped[f"week {week}: the feed delivered {got / points:.0%} of the "
-                f"week's points as touchdowns — scoring plays are missing, "
-                f"so the week is dropped rather than stored as zeros"] = 1
-    return failing
+        named = by_name.get(week, 0) * TD_POINTS / points
+        field = by_field.get(week, 0) * TD_POINTS / points
+        if named >= MIN_TD_COVERAGE:
+            modes[week] = NAMES
+        elif field >= MIN_TD_COVERAGE:
+            modes[week] = FIELD
+            skipped[f"week {week}: the feed named nobody on "
+                    f"{1 - named / max(field, 1e-9):.0%} of the week's "
+                    f"touchdowns, so they were read off the field position "
+                    f"instead"] = 1
+        else:
+            modes[week] = DROP
+            skipped[f"week {week}: the feed delivered {named:.0%} of the "
+                    f"week's points as named touchdowns and {field:.0%} as "
+                    f"scoring plays — both are missing, so the week is "
+                    f"dropped rather than stored as zeros"] = 1
+    return modes
+
+
+def _credited(modes: dict, week_of: dict, gid: str,
+              by_name: bool, by_field: bool) -> bool:
+    mode = modes.get(week_of.get(gid), NAMES)
+    if mode == NAMES:
+        return by_name
+    if mode == FIELD:
+        return by_field
+    return False
+
+
+def _impossible_games(bag: dict, games: dict, skipped: dict) -> set:
+    """Games crediting more touchdowns than their own final score can hold.
+
+    An offensive touchdown is worth at least six points, so a team
+    credited with more than its score allows is telling us something is
+    wrong. A hard bound, not a tuned one — and it drops the GAME. An
+    earlier cut escalated it to the whole week, which meant one
+    mis-parsed play could delete a hundred good games.
+    """
+    scored: dict = {}
+    for (gid, team, _opp, home, _player), slot in bag.items():
+        value = slot.get("anytime_td", 0.0)
+        if value:
+            scored[(gid, bool(home))] = scored.get((gid, bool(home)), 0.0) \
+                + value
+    bad = set()
+    for (gid, home), value in scored.items():
+        game = games.get(gid) or {}
+        points = _num(game.get("home_points" if home else "away_points"))
+        if not points:
+            # Only the combined score is stored on most rows; fall back
+            # to it, which is a weaker bound and still catches the shape.
+            points = _num(game.get("points"))
+        if points > 0 and value * MIN_TD_POINTS > points:
+            bad.add(gid)
+    for gid in sorted(bad):
+        skipped[f"game {gid}: credited more touchdowns than its final "
+                f"score can hold, so the game is dropped"] = 1
+    return bad
 
 
 def parse_rosters(rows) -> dict:
@@ -484,4 +587,5 @@ def load_season(path, season: int, games: dict,
 
 __all__ = ["STATS_URL", "ROSTER_URL", "RED_ZONE", "INSIDE_5", "MARKETS",
            "QB_COLUMNS", "DataUnavailable", "fetch_season", "fetch_rosters",
-           "load_season", "parse_player_stats", "parse_rosters", "split_pass"]
+           "load_season", "parse_player_stats", "parse_rosters",
+           "scored_geometrically", "split_pass"]

@@ -152,8 +152,12 @@ def observations(conn, sport: str, market: str,
         except Exception:                                 # noqa: BLE001
             pass
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
+    # PRICES NOT REQUIRED. This measures how far our NUMBER sits from
+    # the market's number — a points question that never reads a price,
+    # which is what lets college football be measured at all: its
+    # closing lines arrive without the -110s beside them.
     closes = game_line_closes(conn, sport, market) or schedule_closes(
-        conn, sport, market)
+        conn, sport, market, require_prices=False)
     if not closes:
         return []
     rows = conn.execute(

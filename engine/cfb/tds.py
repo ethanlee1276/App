@@ -76,25 +76,35 @@ CFB_AVG_TEAM_OFF_TDS = 3.4
 #: player-games, 3,432 tight ends read as receivers and 3,798
 #: quarterbacks as backs or receivers.
 #:
-#: Coordinate descent on 2022-23, scored on 2024-25 (`engine.cfbtdfit`):
+#: Coordinate descent on 2022-23, scored on 2024-25 (`engine.cfbtdfit`).
+#: The first pass ran before college had any historical betting lines,
+#: so the replay held the implied team total and the game script neutral;
+#: the second ran on the real chain once `engine.sources.cfblines`
+#: attached closing numbers to all 3,132 ingested games:
 #:
-#:     inferred labels, guessed anchors     held-out Brier 0.18477
-#:     roster labels,   guessed anchors                    0.18526
-#:     roster labels,   FITTED anchors                     0.18434
+#:     inferred labels, guessed anchors      held-out Brier 0.18477
+#:     roster labels,   guessed anchors                     0.18526
+#:     roster labels,   fitted anchors                      0.18434
+#:     …the same, replayed against the real lines             0.18273
+#:     roster labels,   REFITTED on that chain               0.18193
 #:
-#: (measured before the blend was refitted, so all three carry the old
-#: games/20 cap 0.40; the comparison between them is the point)
-#:
-#: The middle row is the one worth reading. Correcting the label while
+#: The second row is the one worth reading. Correcting the label while
 #: keeping anchors that had been tuned AGAINST the wrong label made the
-#: model worse — a real tight end priced off a number built for
-#: misfiled receivers. The two changes only pay together, which is why
-#: neither shipped alone.
+#: model worse — a real tight end priced off a number built for misfiled
+#: receivers. The two changes only pay together, which is why neither
+#: shipped alone. The last row says the same thing about the chain: an
+#: anchor fitted with the game script held at 1.0 is not the anchor that
+#: belongs beside a game script.
 #:
-#: What moved: quarterbacks from 0.16 to 0.25 (college lets them run,
-#: and the guess was an NFL instinct), tight ends from 0.08 to 0.11,
-#: backs from 0.26 to 0.28. Receivers did not move at all.
-POSITION_TD_SHARE = {"RB": 0.28, "WR": 0.15, "TE": 0.11, "QB": 0.25}
+#: What moved from the original guesses: quarterbacks 0.16 → 0.29
+#: (college lets them run, and the guess was an NFL instinct), tight
+#: ends 0.08 → 0.13, backs 0.26 → 0.33, receivers 0.15 → 0.17.
+#:
+#: `cfbtdfit.fit_all` then re-fitted all of it jointly, blend and
+#: red-zone weight included, and landed on a neighbouring corner worth
+#: 0.0002 of training Brier and 0.0001 of held-out LOSS. So these stayed
+#: as they are. A fitter that only ever ratchets is not measuring.
+POSITION_TD_SHARE = {"RB": 0.33, "WR": 0.17, "TE": 0.13, "QB": 0.29}
 
 #: Volume share a typical starter at the position commands, so a role is
 #: scaled rather than floored (same reasoning as the NFL table).
@@ -115,22 +125,49 @@ MIN_DEFENSE_GAMES = 3
 #: neither had ever once run, because the database held ten CFB player
 #: rows and the blend only engages above three logged games.
 #:
-#: Fitted on 2026-08-27 by `engine.cfbtdfit` over 28,141 graded college
-#: player-games: chosen on 2022-23, scored on 2024-25. The record wants
-#: the history to come on more slowly and stop lower. Held-out Brier:
+#: Fitted on 2026-08-27 by `engine.cfbtdfit` over 28,916 graded college
+#: player-games: chosen on 2022-23, scored on 2024-25, replaying the
+#: board's real chain — the game's own closing total and spread drive
+#: the implied team total and the script, and the opponent's scoring
+#: generosity is recomputed from games already played. Held-out Brier:
 #:
-#:     role share alone, no history      0.18657
-#:     the guessed games/10 cap 0.70     0.18593
-#:     the fitted games/25 cap 0.30      0.18446
+#:     role share alone, no history      0.18310
+#:     the guessed games/10 cap 0.70     0.18371
+#:     the fitted games/20 cap 0.20      0.18192
 #:
-#: The training surface is FLAT across games/20-30 and every cap from
-#: 0.2 to 0.7 — 0.18977 to 0.18997 — so this is a plateau, not a peak,
-#: and the argmin was taken rather than argued for. What the plateau
-#: does say clearly is that the old guess sat well outside it: half a
-#: season of a player's own touchdown rate is worth about 30% of the
-#: number, not 70% after ten games.
-TD_HISTORY_GAMES = 25.0
-TD_HISTORY_MAX_WEIGHT = 0.30
+#: An interior minimum, with zero in the grid: the training surface runs
+#: 0.18640 at cap 0.0, bottoms at 0.18578, and is back to 0.18621 by
+#: cap 0.4.
+#: So the player's own scoring rate IS worth something on top of his
+#: role — about a fifth of the number at most — and the old guess of
+#: seventy percent after ten games was so far past the useful range that
+#: it scored worse than switching the history off.
+TD_HISTORY_GAMES = 20.0
+TD_HISTORY_MAX_WEIGHT = 0.20
+
+#: HOW MUCH OF THE OPPORTUNITY SHARE IS RED-ZONE TOUCHES rather than
+#: yardage. Zero until 2026-08-27, because college football had no
+#: play-by-play in our feeds and there was no red-zone anything to
+#: weigh; `engine.sources.cfbstats` now ingests carries and receptions
+#: inside the twenty on the same cuts the NFL model reads.
+#:
+#: The first measurement said no. Replayed on the ROLE chain alone —
+#: game script and implied total held neutral, because college had no
+#: historical betting lines yet, and a third of the 2025 season quietly
+#: missing its touchdowns — a red-zone term bought one ten-thousandth of
+#: held-out Brier and was left out. With the feed's broken weeks caught
+#: (`cfbstats.week_modes`) and the board's own closing numbers driving
+#: the chain (`engine.sources.cfblines`), the same grid says something
+#: different, and says it three ways: an interior minimum on the
+#: training seasons (0.18574 at zero, 0.18564 at 0.10, 0.18592 by 0.20),
+#: the same shape held out (0.18179 → 0.18150), and a free logistic that
+#: ranks yardage-plus-red-zone above yardage alone (log loss 0.55887 →
+#: 0.55603).
+#:
+#: It is still a small term and it is deliberately a SMALL WEIGHT. What
+#: it is not is zero, and the earlier zero was measured on a chain the
+#: board does not run.
+RZ_SHARE_WEIGHT = 0.10
 
 
 #: Distinct players a season must have logged before it is preferred
@@ -183,12 +220,13 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
             "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
             "WHERE sport='cfb' AND season=? "
             "AND market IN ('carries','receptions','rush_yds','rec_yds',"
-            "'anytime_td') "
+            "'anytime_td','rz_car','rz_rec') "
             "GROUP BY team, player, market", (season,)):
         t = out.setdefault(r["team"], {})
         u = t.setdefault(normalize_name(r["player"]),
                          {"player": r["player"], "carries": 0.0,
                           "receptions": 0.0, "rush_yds": 0.0, "rec_yds": 0.0,
+                          "rz_car": 0.0, "rz_rec": 0.0,
                           "games": 0, "position": ""})
         u[r["market"]] = float(r["mean"] or 0.0)
         u["games"] = max(u["games"], int(r["games"] or 0))
@@ -380,6 +418,16 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             team_vol = sum(p["rush_yds"] + p["rec_yds"]
                            for p in team_u.values()) or 1.0
             share = clamp(vol / team_vol, 0.0, 1.0)
+            # RED-ZONE TOUCHES, at a small fitted weight. A team with no
+            # red-zone rows at all — a board built from a box-score feed
+            # that cannot see field position — falls back to the yardage
+            # share, so the blend is a no-op rather than a silent
+            # haircut on everybody. See RZ_SHARE_WEIGHT.
+            team_rz = sum(p["rz_car"] + p["rz_rec"] for p in team_u.values())
+            rz_share = (clamp((u["rz_car"] + u["rz_rec"]) / team_rz, 0.0, 1.0)
+                        if team_rz > 0 else share)
+            share = (1.0 - RZ_SHARE_WEIGHT) * share \
+                + RZ_SHARE_WEIGHT * rz_share
             base = POSITION_TD_SHARE[pos] * clamp(
                 share / POSITION_TYPICAL_SHARE[pos], 0.15, 1.8)
             # Tighter caps than the NFL's, on purpose. The yardage-share

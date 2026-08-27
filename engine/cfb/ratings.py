@@ -258,6 +258,26 @@ def fit_from_history(conn, ratings: dict, seasons: list[int] | None = None,
         total_res.append((hs + as_) - (proj_home + proj_away))
         team_res += [hs - proj_home, as_ - proj_away]
 
+    # HOW WIDE SHOULD THIS BE, AND HOW WE KNOW. Fitting these residuals
+    # against ONE rating per team pooled over every ingested season gives
+    # margins 16.5 points wide; fitting each season against its own
+    # ratings gives 15.1, and the temptation is to take the tighter
+    # number — a narrower spread is a more confident model and a bigger
+    # stake.
+    #
+    # It is in-sample. A season's ratings are fitted on the same twelve
+    # games the residuals are then measured from, so of course they hug.
+    # The check that settles it arrived with `engine.sources.cfblines`:
+    # over the same 3,126 graded games the CLOSING SPREAD's own residual
+    # is 15.2 points, and the closing total's is 15.7. A model that
+    # `engine.gamecal` measures at NO edge over the college spread
+    # (slope -0.037, its side beating the close 48.4% of the time)
+    # cannot also be sharper than the number it is losing to. So 16.5 is
+    # the honest width and 15.1 was optimism — while the total's fitted
+    # 15.7 landing on the market's 15.7 is what a matched estimate looks
+    # like, and is exactly the market gamecal DOES find a sliver of edge
+    # against.
+    #
     # A None here means the residual list was too short to measure, which
     # is the ONLY case that should fall back to the prior. A measured
     # value is used as measured, however small — see `_sd`.

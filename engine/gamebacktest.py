@@ -424,7 +424,8 @@ def game_line_closes(conn, sport: str, market: str, book: str = "best") -> dict:
     return out
 
 
-def schedule_closes(conn, sport: str, market: str) -> dict:
+def schedule_closes(conn, sport: str, market: str,
+                    require_prices: bool = True) -> dict:
     """The same shape as `game_line_closes`, read off the SCHEDULE.
 
     THE GAP THIS CLOSES, measured 2026-08-27 after ingesting four NFL
@@ -442,6 +443,16 @@ def schedule_closes(conn, sport: str, market: str) -> dict:
     number nobody offered — but it is a different claim, and a backtest
     that blurred the two would be reporting an edge over the field as an
     edge over a counter.
+
+    ``require_prices`` exists for a feed that carries the LINE and not
+    the two prices beside it. College football's closes arrive that way
+    (`engine.sources.cfblines`): the mirror publishes every book's
+    number and no -110s. That is fatal for a backtest, which has to
+    price a bet — and irrelevant to `engine.gamecal`, which measures how
+    far our number sits from the market's number and never reads a
+    price. So the caller says which it is, and a priceless close comes
+    back as ``(line, None, None)`` rather than being silently dropped
+    into "0 graded games with a close".
     """
     import json as _json
     q = ("SELECT period, home, away, spread, total, extra FROM games "
@@ -456,7 +467,13 @@ def schedule_closes(conn, sport: str, market: str) -> dict:
             line, pair = r["total"], px.get("total_odds")
         else:
             line, pair = r["spread"], px.get("spread_odds")
-        if line is None or not pair or len(pair) != 2:
+        if line is None:
+            continue
+        if not pair or len(pair) != 2:
+            if require_prices:
+                continue
+            out[(str(r["period"]), r["home"], r["away"])] = (
+                float(line), None, None)
             continue
         out[(str(r["period"]), r["home"], r["away"])] = (
             float(line), int(pair[0]), int(pair[1]))

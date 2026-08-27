@@ -36,6 +36,14 @@ def _conn():
         sport TEXT, season INTEGER, period TEXT, game_id TEXT,
         player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER,
         market TEXT, value REAL)""")
+    # THE GAMES TABLE IS NOT OPTIONAL ANY MORE. The replay reads each
+    # game's closing spread and total to drive the implied team total and
+    # the game script, which is the difference between grading the role
+    # and grading the chain the board runs.
+    conn.execute("""CREATE TABLE games (
+        sport TEXT, season INTEGER, period TEXT, game_id TEXT,
+        home TEXT, away TEXT, home_score REAL, away_score REAL,
+        spread REAL, total REAL)""")
     return conn
 
 
@@ -45,8 +53,15 @@ def _log(conn, season, period, player, team, market, value, position=""):
         (season, period, f"g{period}", player, team, position, market, value))
 
 
+def _game(conn, season, period, home, away="OPP", spread=-7.0, total=52.0,
+          home_score=31.0, away_score=24.0):
+    conn.execute("INSERT INTO games VALUES ('cfb',?,?,?,?,?,?,?,?,?)",
+                 (season, period, f"g{period}", home, away, home_score,
+                  away_score, spread, total))
+
+
 def _season(conn, season, player, team, weeks, tds, position="RB",
-            carries=15.0, rush_yds=80.0):
+            carries=15.0, rush_yds=80.0, spread=-7.0, total=52.0):
     """`weeks` games for one player, the first `tds` of them with a score."""
     for i in range(weeks):
         period = f"{season}-09-{i + 1:02d}"
@@ -54,8 +69,11 @@ def _season(conn, season, player, team, weeks, tds, position="RB",
         _log(conn, season, period, player, team, "rush_yds", rush_yds, position)
         _log(conn, season, period, player, team, "receptions", 1.0, position)
         _log(conn, season, period, player, team, "rec_yds", 10.0, position)
+        _log(conn, season, period, player, team, "rz_car", 3.0, position)
+        _log(conn, season, period, player, team, "rz_rec", 0.0, position)
         _log(conn, season, period, player, team, "anytime_td",
              1.0 if i < tds else 0.0, position)
+        _game(conn, season, period, team, spread=spread, total=total)
 
 
 # --- the walk forward -------------------------------------------------
@@ -189,10 +207,102 @@ def test_the_report_grades_by_band():
     assert "CFB anytime-TD backtest" in report.summary(min_band_n=1)
 
 
-def test_red_zone_role_is_ingested_and_deliberately_not_priced():
-    assert "rz_car" not in F.MARKETS and "rz_rec" not in F.MARKETS
+def test_red_zone_role_is_priced_at_the_weight_the_fit_chose():
+    """The first measurement said no, on a chain with the game script
+    held at 1.0 and a third of 2025 missing its touchdowns. With the
+    feed's broken weeks caught and the board's real closing numbers
+    driving the replay, the same grid picks an interior 0.10."""
     from engine.sources import cfbstats
     assert "rz_car" in cfbstats.MARKETS and "rz_rec" in cfbstats.MARKETS
+    assert "rz_car" in F.MARKETS and "rz_rec" in F.MARKETS
+    assert 0.0 < T.RZ_SHARE_WEIGHT < 0.5
+    assert T.RZ_SHARE_WEIGHT in F.RZ_WEIGHTS
+
+
+def test_the_red_zone_blend_is_a_no_op_without_red_zone_rows():
+    """A board built from a feed that cannot see field position must not
+    take a silent haircut on everybody."""
+    plain = F.Sample(2024, "RB", 0.30, td_mean=0.0, games=5, scored=0)
+    assert plain.rz_share == plain.share
+    assert abs(F.role_share(plain, rz_weight=0.0)
+               - F.role_share(plain)) < 1e-12
+
+
+# --- the chain, not just the role -------------------------------------
+def test_the_replay_reads_the_games_own_closing_numbers():
+    conn = _conn()
+    _season(conn, 2024, "Back", "UGA", weeks=5, tds=2, spread=-21.0,
+            total=62.0)
+    row = F.samples(conn)[0]
+    assert row.spread == -21.0 and row.total == 62.0
+    # A 62 total with the home side laying 21 implies 41.5 for them,
+    # well above the FBS average — so the chain must claim more here
+    # than it would at a neutral total.
+    assert row.team_tds > T.CFB_AVG_TEAM_OFF_TDS
+
+
+def test_a_game_with_no_stored_line_falls_back_to_the_fbs_average():
+    plain = F.Sample(2024, "RB", 0.30, td_mean=0.0, games=5, scored=0)
+    assert plain.team_tds == T.CFB_AVG_TEAM_OFF_TDS
+    assert plain.script == 1.0
+
+
+def test_the_game_script_rides_the_spread_for_a_back():
+    favoured = F.Sample(2024, "RB", 0.30, 0.0, 5, 0, spread=-21.0, total=52.0,
+                        is_home=True)
+    dog = F.Sample(2024, "RB", 0.30, 0.0, 5, 0, spread=21.0, total=52.0,
+                   is_home=True)
+    assert favoured.script > 1.0 > dog.script
+
+
+# --- the opponent, without reading the future -------------------------
+def test_defense_is_measured_from_games_already_played():
+    """`cfb.tds.defense_multiplier` reads a team's whole season, which is
+    right on a live board and leaks in a replay of a finished one."""
+    conn = _conn()
+    for i in range(6):
+        period = f"2024-09-{i + 1:02d}"
+        _game(conn, 2024, period, "OPP", away="X", home_score=10.0,
+              away_score=45.0)
+    table = F.defense_to_date(conn)
+    early = table.get((2024, "2024-09-02", "OPP"))
+    late = table.get((2024, "2024-09-06", "OPP"))
+    assert early[1] == 1 and late[1] == 5
+    assert late[0] == 45.0
+    # The first game of a season has no prior, so it is absent entirely
+    # rather than carrying a zero.
+    assert (2024, "2024-09-01", "OPP") not in table
+
+
+def test_a_thin_defensive_sample_says_nothing():
+    assert F.defense_multiplier(45.0, 1) == 1.0
+    assert F.defense_multiplier(None, 9) == 1.0
+    assert F.defense_multiplier(45.0, 9) > 1.0
+    assert F.defense_multiplier(10.0, 9) < 1.0
+
+
+# --- the joint fit ----------------------------------------------------
+def test_the_constants_are_fitted_together_not_one_at_a_time():
+    """The blend, the anchors and the red-zone weight all move the same
+    number, so installing each one's result in turn makes the next fit
+    answer a question about a model that no longer exists."""
+    import inspect
+    source = inspect.getsource(F.fit_all)
+    assert "fit_anchors" in source and "_best_blend" in source
+    assert "TRAIN_SEASONS" in source
+
+
+def test_the_joint_fit_never_consults_the_holdout_while_choosing():
+    conn = _conn()
+    for season in F.TRAIN_SEASONS + F.TEST_SEASONS:
+        for i in range(6):
+            _season(conn, season, f"Back{i}", "UGA", weeks=7, tds=i % 4,
+                    carries=float(4 + 2 * i))
+    out = F.fit_all(F.samples(conn), rounds=1)
+    assert out["chosen"]["rz_weight"] in F.RZ_WEIGHTS
+    assert out["chosen"]["max_weight"] in F.BLEND_WEIGHTS
+    assert set(out["chosen"]["anchors"]) == set(T.POSITION_TD_SHARE)
+    assert out["train"] and out["test"]
 
 
 if __name__ == "__main__":

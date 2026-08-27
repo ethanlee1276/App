@@ -377,6 +377,59 @@ def test_the_spread_observation_uses_the_home_margin_convention():
     assert obs and all(abs(y - 3.0) < 1e-9 for _x, y in obs), obs[:3]
 
 
+# --- a close with no price beside it ----------------------------------
+def _priced_db(pair):
+    """One CFB game carrying a closing spread, with or without prices."""
+    import json as _json
+    import sqlite3
+    from engine import db as _db
+    conn = _db.connect(":memory:")
+    extra = {"home_name": "Georgia", "away_name": "Ohio State"}
+    if pair is not None:
+        extra["spread_odds"] = pair
+    conn.execute(
+        "INSERT INTO games (sport, season, period, game_id, home, away, "
+        "home_score, away_score, spread, total, extra) VALUES "
+        "('cfb', 2024, '2024-09-14', '401', 'UGA', 'OSU', 30, 24, -7.5, "
+        "55.5, ?)", (_json.dumps(extra),))
+    conn.commit()
+    assert sqlite3
+    return conn
+
+
+def test_a_close_with_no_prices_is_refused_by_default():
+    """A BACKTEST has to price a bet, so a line with no -110s beside it
+    is useless to it and must not silently arrive as one."""
+    from engine.gamebacktest import schedule_closes
+    conn = _priced_db(None)
+    assert schedule_closes(conn, "cfb", "spread") == {}
+
+
+def test_a_close_with_no_prices_is_usable_when_the_caller_says_so():
+    """`engine.gamecal` measures how far our NUMBER sits from the
+    market's number and never reads a price. College football's closes
+    arrive without them, and requiring prices reported the whole sport
+    as "0 graded games with a close"."""
+    from engine.gamebacktest import schedule_closes
+    conn = _priced_db(None)
+    out = schedule_closes(conn, "cfb", "spread", require_prices=False)
+    assert out[("2024-09-14", "UGA", "OSU")] == (-7.5, None, None)
+
+
+def test_prices_still_ride_along_when_the_feed_has_them():
+    from engine.gamebacktest import schedule_closes
+    conn = _priced_db([-110, -110])
+    out = schedule_closes(conn, "cfb", "spread", require_prices=False)
+    assert out[("2024-09-14", "UGA", "OSU")] == (-7.5, -110, -110)
+
+
+def test_the_calibration_asks_for_lines_not_prices():
+    import inspect
+    from engine import gamecal
+    source = inspect.getsource(gamecal.observations)
+    assert "require_prices=False" in source
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]

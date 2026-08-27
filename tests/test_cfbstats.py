@@ -252,24 +252,32 @@ def test_without_a_roster_the_feeds_own_spelling_stands():
 
 
 # --- the coverage audit -----------------------------------------------
-def _week(week, games, scorers):
-    """A week of `games` games, `scorers` of them producing a touchdown."""
+def _week(week, games, scorers, name_them=True):
+    """A week of `games` games, `scorers` of them producing touchdowns.
+
+    ``name_them`` decides whether the feed puts a name on the scoring
+    plays. Week 9 of 2025 is the case where it does not: the plays are
+    all there and nobody is credited with any of them.
+    """
     rows, table = [], {}
     for i in range(games):
         gid = f"{week}-{i}"
         table[gid] = {"period": f"2025-1{week}-01", "home": "H", "away": "A",
-                      "home_name": "Home", "away_name": "Away", "points": 56}
+                      "home_name": "Home", "away_name": "Away", "points": 56,
+                      "home_points": 56, "away_points": 0}
         rows.append({"game_id": gid, "season": "2025", "week": str(week),
                      "team": "Home", "opponent": "Away",
                      "yards_to_goal": "40", "rush_player": f"RB{i}",
                      "rush_yds": "9"})
         if i < scorers:
-            for n in range(8):
-                rows.append({"game_id": gid, "season": "2025",
-                             "week": str(week), "team": "Home",
-                             "opponent": "Away", "yards_to_goal": "3",
-                             "rush_player": f"RB{i}", "rush_yds": "3",
-                             "touchdown_player": f"RB{i}"})
+            for _n in range(8):
+                row = {"game_id": gid, "season": "2025", "week": str(week),
+                       "team": "Home", "opponent": "Away",
+                       "yards_to_goal": "3", "rush_player": f"RB{i}",
+                       "rush_yds": "3"}
+                if name_them:
+                    row["touchdown_player"] = f"RB{i}"
+                rows.append(row)
     return rows, table
 
 
@@ -281,38 +289,72 @@ def test_a_week_the_feed_delivered_is_kept():
 
 
 def test_a_week_missing_its_scoring_plays_is_dropped_not_stored_as_zeros():
-    """Weeks 10-16 of the 2025 file, which deliver a fifth of their own
-    points as touchdowns. Stored as written, every scorer in the back
-    half of last season becomes a player who did not score."""
+    """Weeks 10-16 of the 2025 file. Stored as written, every player who
+    scored in the back half of last season becomes one who did not."""
     rows, table = _week(12, games=10, scorers=1)
     out = C.parse_player_stats(rows, 2025, table)
     assert out["rows"] == []
-    assert any(k.startswith("week 12") for k in out["skipped"])
-
-
-def test_the_audit_reports_what_it_dropped():
-    rows, table = _week(12, games=10, scorers=1)
-    out = C.parse_player_stats(rows, 2025, table)
     note = next(k for k in out["skipped"] if k.startswith("week 12"))
-    assert "touchdowns" in note and "dropped" in note
+    assert "dropped" in note
 
 
-def test_more_touchdowns_than_the_final_score_can_hold_fails_the_audit():
-    rows = [{"game_id": "401", "season": "2024", "week": "3",
-             "team": "Georgia", "opponent": "Ohio State",
-             "yards_to_goal": "3", "rush_player": "RB", "rush_yds": "3",
-             "touchdown_player": "RB"} for _ in range(12)]
-    games = {"401": dict(GAMES["401"], points=14)}
-    out = C.parse_player_stats(rows, 2024, games)
-    assert out["rows"] == []
+def test_a_week_with_the_plays_but_no_names_is_read_off_the_field():
+    """Week 9 of 2025. The scoring plays are all present and the feed
+    names nobody on any of them; the geometry — a gain of exactly the
+    distance to the goal line — finds every one."""
+    rows, table = _week(9, games=10, scorers=10, name_them=False)
+    out = C.parse_player_stats(rows, 2025, table)
+    scored = [r for r in out["rows"]
+              if r["market"] == "anytime_td" and r["value"] > 0]
+    assert len(scored) == 10
+    note = next(k for k in out["skipped"] if k.startswith("week 9"))
+    assert "field position" in note
+
+
+def test_names_beat_the_field_where_names_exist():
+    """The attribution column is the better instrument — measured
+    against the final scores it over-credits one team-game a season
+    where the geometry over-credits nine to thirteen. So a week that
+    clears the bar on names is read on names, and a play the geometry
+    would have called is not added on top."""
+    rows, table = _week(3, games=10, scorers=10)
+    for row in rows:                       # a gain that reaches the line…
+        if row.get("touchdown_player"):
+            row["touchdown_player"] = ""   # …but nobody named on THIS one
+            break
+    out = C.parse_player_stats(rows, 2025, table)
+    total = sum(r["value"] for r in out["rows"] if r["market"] == "anytime_td")
+    assert total == 10 * 8 - 1
+
+
+def test_a_game_crediting_more_touchdowns_than_its_score_is_dropped():
+    rows, table = _week(3, games=10, scorers=10)
+    table["3-0"]["home_points"] = 14        # eight touchdowns, fourteen points
+    out = C.parse_player_stats(rows, 2025, table)
+    assert not any(r["game_id"] == "3-0" for r in out["rows"])
+    assert any(k.startswith("game 3-0") for k in out["skipped"])
+
+
+def test_one_impossible_game_does_not_delete_its_whole_week():
+    """An earlier cut escalated the per-game bound to the week, so one
+    mis-parsed play could take a hundred good games with it."""
+    rows, table = _week(3, games=10, scorers=10)
+    table["3-0"]["home_points"] = 14
+    out = C.parse_player_stats(rows, 2025, table)
+    kept = {r["game_id"] for r in out["rows"]}
+    assert len(kept) == 9 and "3-0" not in kept
 
 
 def test_a_game_with_no_final_score_is_not_judged_by_the_audit():
     rows, table = _week(3, games=10, scorers=10)
     for row in table.values():
-        row["points"] = 0
+        row["points"] = row["home_points"] = row["away_points"] = 0
     out = C.parse_player_stats(rows, 2025, table)
     assert out["rows"]
+
+
+def test_the_three_modes_are_the_only_three():
+    assert {C.NAMES, C.FIELD, C.DROP} == {"names", "field", "drop"}
 
 
 if __name__ == "__main__":
