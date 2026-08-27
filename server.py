@@ -781,6 +781,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/api/social/"):
             return self._social_get(
                 parsed.path[len("/api/social/"):].strip("/"))
+        if parsed.path.startswith("/api/alerts/"):
+            return self._alerts_get(
+                parsed.path[len("/api/alerts/"):].strip("/"))
         if parsed.path.startswith("/api/billing/"):
             return self._billing_get(
                 parsed.path[len("/api/billing/"):].strip("/"))
@@ -888,7 +891,8 @@ class Handler(BaseHTTPRequestHandler):
                                   ".json")
             return self._tailfade_post(
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
-        if parsed.path.startswith("/api/social/"):
+        if (parsed.path.startswith("/api/social/")
+                or parsed.path.startswith("/api/alerts/")):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -902,6 +906,9 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                            # noqa: BLE001
                 return self._send(400, b'{"error":"body must be a JSON object"}',
                                   ".json")
+            if parsed.path.startswith("/api/alerts/"):
+                return self._alerts_post(
+                    parsed.path[len("/api/alerts/"):].strip("/"), body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
@@ -1642,6 +1649,79 @@ class Handler(BaseHTTPRequestHandler):
     # pointer rule doing its work), so a free account can receive a
     # friend's pointer and see the locked state behind it, which is
     # exactly what the same pick's permalink would show them.
+    def _alerts_feed(self, conn, who) -> list:
+        """The feed this caller may read, and no more of it.
+
+        feed.json is a PAID file — every entry names a pick — so an
+        alert is only ever a filter over a board the reader was already
+        entitled to. Outside the wall this answers with nothing rather
+        than with the locked stub, and the page says why.
+        """
+        from engine import gate
+        path = WEB / "data" / "feed.json"
+        if gate.enabled():
+            if not self._entitled(conn, who):
+                return []
+            path = gate.board_source(path)
+        try:
+            return (json.loads(path.read_text(encoding="utf-8"))
+                    or {}).get("events") or []
+        except (OSError, ValueError):
+            return []
+
+    def _alerts_get(self, path: str):
+        from engine import alerts as AL
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path != "me":
+                return self._send(404, b'{"error":"unknown alerts endpoint"}',
+                                  ".json")
+            watches = AL.list_watches(conn, who["id"])
+            events = self._alerts_feed(conn, who)
+            since = AL.seen_ts(conn, who["id"])
+            out = {
+                "watches": watches,
+                "kinds": list(AL.KINDS),
+                "max": AL.MAX_WATCHES,
+                "edge_range": [AL.EDGE_MIN, AL.EDGE_MAX],
+                # Everything of theirs in the window, and how much of it
+                # is new — the page shows the first and badges the second.
+                "fired": AL.fired(events, watches),
+                "unseen": len(AL.fired(events, watches, since=since)),
+                "newest": AL.newest_ts(events),
+                "feed_n": len(events),
+            }
+            return self._send(200, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
+    def _alerts_post(self, path: str, body: dict):
+        from engine import alerts as AL
+        if path not in ("watch", "unwatch", "seen"):
+            return self._send(404, b'{"error":"unknown alerts endpoint"}',
+                              ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not who:
+                return self._send(401, b'{"error":"sign in first"}', ".json")
+            if path == "watch":
+                code, out = AL.add_watch(conn, who["id"], body.get("kind"),
+                                         body.get("value"))
+            elif path == "unwatch":
+                code, out = AL.remove_watch(conn, who["id"], body.get("id"))
+            else:
+                AL.mark_seen(conn, who["id"], str(body.get("ts") or ""))
+                code, out = 200, {"ok": True}
+            return self._send(code, json.dumps(out).encode(), ".json")
+        finally:
+            conn.close()
+
     def _social_get(self, path: str):
         from engine import social as SOC
         A = _acct()

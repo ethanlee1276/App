@@ -3306,6 +3306,24 @@ body.msg-thread-open .footer { display: none; }
 .gs-grid .num { text-align: right; font-variant-numeric: tabular-nums; }
 .gs-tm { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
+/* Your own alerts: the watch chips and the one-line adder. Kept to a
+   row that wraps rather than a form, because three fields in a stack
+   reads as a settings page and this is one decision. */
+.al-watches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip.al-watch { display: inline-flex; align-items: center; gap: 6px; }
+.al-unwatch {
+  background: none; border: none; color: var(--text-mute); cursor: pointer;
+  font-size: var(--fs-md); line-height: 1; padding: 0 0 0 2px;
+}
+.al-unwatch:hover { color: var(--bad); }
+.al-addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.al-addrow select, .al-addrow input {
+  background: var(--panel-2); color: inherit; font-family: inherit;
+  border: var(--hairline) solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.al-addrow input { flex: 1; min-width: 160px; }
+
 /* League desk — this week's head-to-head. The score line is the panel:
    two totals and the number between them, which is the only number the
    reader is actually holding in their head on a Sunday. */

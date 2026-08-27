@@ -201,7 +201,7 @@ invisible exactly where it matters most.
 
 ---
 
-## 6. Alerts that fire on a condition, not a schedule
+## 6. Alerts that fire on a condition — SHIPPED 2026-08-27
 
 **What:** "tell me when a line I care about moves past X", delivered to
 the phone.
@@ -211,6 +211,36 @@ wired for the nightly summary.
 
 **Cost:** medium — the condition language is the hard part; keep it to
 three shapes rather than building a query builder nobody uses.
+
+**SHIPPED**, as `engine/alerts.py` plus a Watching card at the head of
+the Alerts page and a count on the nav. Three shapes, exactly as
+insisted: a player, a team, or an edge size.
+
+**The shapes were not a language problem.** The entry expected the
+condition grammar to be the hard part and it was not, because the shapes
+are not free — each has to be answerable off a field `engine/feed.py`
+already publishes, or a watch would be re-deriving what the board
+already decided. That constraint picked the three. The team shape needed
+one new field on the event (the digest held the row's team and dropped
+it on the way out); the other two were already there.
+
+**Matching is stateless and happens on read.** A watch is a filter over
+the published feed, not a subscription that has to be delivered — so
+nothing fired is stored, a watch added at noon applies to the whole
+window immediately, one deleted stops mattering the same second, and the
+alert list can never drift from the feed it came from.
+
+**The trap was the edge shape.** An `edge_died` event is the moment an
+edge stopped existing, and firing "6% edge" on it would be a
+notification about the opposite of what was asked for. Two tests hold
+that line.
+
+**Delivery is honest rather than promised.** The push half of the
+original entry is not possible here — see the Web Push refusal below —
+and the page has always said it is not a push service. What a watch buys
+is the count on the nav before you open anything, and your three rows
+above the two hundred that are not yours. Email is the next honest step:
+the nightly digest already runs and already has a mailer.
 
 ---
 

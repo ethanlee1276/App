@@ -12921,6 +12921,171 @@ function renderWeather() {
 let _alFilter = "all";
 window._alSet = (k) => { _alFilter = k; renderAlerts(); };
 
+/* ---------------- Your own alerts (IDEAS #6) ----------------------------
+
+   This page has always been a DIGEST: everything that changed on
+   everything. That is the right default and it is not what somebody
+   means by "tell me when Chase's line moves" — they mean, out of all of
+   that, these are mine.
+
+   THREE SHAPES AND NO QUERY BUILDER, which the roadmap insisted on:
+   a player, a team, or a number. They are not chosen for tidiness — they
+   are the three `engine/feed.py`'s events can answer without
+   re-deriving anything, which is the rule the feed is built on.
+
+   STILL NOT A PUSH SERVICE, and this page has always said so. Web Push
+   needs elliptic-curve crypto the standard library does not have
+   (docs/IDEAS.md carries the measurement and the refusal). What a watch
+   buys you is the count on the nav and your own four rows above two
+   hundred — which is most of the distance, honestly labelled. */
+let _alertsCache = null;
+
+function alertBadge(n) {
+  const b = document.getElementById("sb-alert-badge");
+  if (b) { b.hidden = !n; b.textContent = n || ""; }
+}
+
+async function alertsFetch() {
+  try {
+    const r = await fetch("/api/alerts/me");
+    if (!r.ok) return null;
+    _alertsCache = await r.json();
+    alertBadge((_alertsCache || {}).unseen || 0);
+    return _alertsCache;
+  } catch (e) { return null; }
+}
+
+async function alertsPost(path, body) {
+  try {
+    const r = await fetch(`/api/alerts/${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}) });
+    const out = await r.json();
+    return r.ok ? out : { error: (out && out.error) || "that did not work" };
+  } catch (e) { return { error: String((e && e.message) || e) }; }
+}
+
+function watchChipsHTML(d) {
+  const ws = d.watches || [];
+  if (!ws.length) return `<p class="rank-help">Nothing watched yet — add a
+    player, a team, or an edge size and the ones that matter to you rise to
+    the top of this page.</p>`;
+  return `<div class="al-watches">${ws.map((w) => `
+    <span class="chip al-watch">${escapeHtml(w.label)}
+      <button type="button" class="al-unwatch" data-unwatch="${w.id}"
+        aria-label="Stop watching ${escapeAttr(w.label)}">×</button></span>`).join("")}
+  </div>`;
+}
+
+function firedHTML(d) {
+  const rows = d.fired || [];
+  if (!rows.length) {
+    return (d.watches || []).length ? `<p class="rank-help">Nothing of yours
+      has moved in the feed’s current window${d.feed_n ? ` (${d.feed_n}
+      event${d.feed_n === 1 ? "" : "s"} in it)` : ""}.</p>` : "";
+  }
+  return `<div class="card al-list">${rows.slice(0, 12).map((e) => `
+    <div class="al-row">
+      <span class="al-ic brand">${icon(feedIcon(e.kind), 15)}</span>
+      <span class="al-t"><b>${escapeHtml(e.player || e.kind || "")}${
+        e.label ? " · " + escapeHtml(e.label) : ""}</b>
+        <span class="al-c">${escapeHtml((e.why || []).join(" · "))}</span></span>
+      <span class="kx-num">${escapeHtml(feedWhen(e.ts))}</span>
+    </div>`).join("")}</div>`;
+}
+
+/* Best-effort shared vocabulary with the feed below. Both are icons for
+   the same five event kinds, and a second table would drift. */
+function feedIcon(kind) {
+  return kind === "edge_appeared" ? "gem"
+    : kind === "edge_died" ? "warn"
+    : kind === "line_move" ? "rising"
+    : kind === "price_move" ? "falling"
+    : kind === "stale_line" ? "signal" : "clock";
+}
+
+function feedWhen(ts) {
+  if (!ts) return "";
+  const t = Date.parse(String(ts).endsWith("Z") ? ts : ts + "Z");
+  if (!Number.isFinite(t)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago`
+    : mins < 1440 ? `${Math.round(mins / 60)}h ago`
+    : `${Math.round(mins / 1440)}d ago`;
+}
+
+async function renderWatchZone() {
+  const host = document.getElementById("watch-zone");
+  if (!host) return;
+  if (!_acctUser) await acctWho();
+  if (!_acctUser || !_acctUser.signed_in) {
+    host.innerHTML = `<div class="card"><p class="rank-help">Sign in to watch
+      a player, a team or an edge size — the feed below is everything, and a
+      watch is the part of it that is yours.</p></div>`;
+    alertBadge(0);
+    return;
+  }
+  const d = await alertsFetch();
+  if (!d) { host.innerHTML = ""; return; }
+  host.innerHTML = `
+    <div class="section-title">Watching
+      <span class="sub">— three shapes, no query builder: a player, a team,
+      or an edge size. Matched against the same feed below, so a watch can
+      never disagree with it.</span></div>
+    <div class="card">
+      ${watchChipsHTML(d)}
+      <div class="al-addrow">
+        <select id="al-kind" aria-label="What to watch">
+          <option value="player">Player</option>
+          <option value="team">Team</option>
+          <option value="edge">Edge at least</option>
+        </select>
+        <input id="al-val" type="text" maxlength="40"
+          placeholder="Ja’Marr Chase" aria-label="What to watch for"/>
+        <button class="btn" id="al-add">Watch</button>
+      </div>
+      <div id="al-err" class="rank-help"></div>
+      ${firedHTML(d)}
+      <p class="rank-help">This is a filter, not a push notification — the
+        site cannot reach your lock screen and says so rather than
+        pretending. What it can do is put your ${(d.watches || []).length ||
+        "own"} thing${(d.watches || []).length === 1 ? "" : "s"} above the
+        two hundred that are not.</p>
+    </div>`;
+  const kind = document.getElementById("al-kind");
+  const val = document.getElementById("al-val");
+  const err = document.getElementById("al-err");
+  if (kind) kind.addEventListener("change", () => {
+    val.placeholder = kind.value === "team" ? "CIN"
+      : kind.value === "edge" ? "6" : "Ja’Marr Chase";
+    val.value = "";
+  });
+  const add = async () => {
+    err.textContent = "";
+    const out = await alertsPost("watch", { kind: kind.value, value: val.value });
+    if (out && out.error) { err.textContent = out.error; return; }
+    val.value = "";
+    renderWatchZone();
+  };
+  const btn = document.getElementById("al-add");
+  if (btn) btn.addEventListener("click", add);
+  if (val) val.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") add();
+  });
+  host.querySelectorAll("[data-unwatch]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await alertsPost("unwatch", { id: Number(b.dataset.unwatch) });
+      renderWatchZone();
+    }));
+  // Marked read AFTER the rows are on the screen, and only up to the
+  // stamp we actually showed — the same rule the friends inbox follows.
+  if (d.unseen && d.newest) {
+    setTimeout(() => {
+      alertsPost("seen", { ts: d.newest }).then(() => alertBadge(0));
+    }, 1200);
+  }
+}
+
 /* THE FEED LEADS THE ALERTS PAGE. Everything below it on this page is a
    snapshot — the current board's moves, today's designations. The feed
    is the same signals given a MEMORY: each rebuild diffed against the
@@ -13138,7 +13303,8 @@ function renderAlerts() {
         `${r.rec_side ? `<span class="chip ${r.rec_side === "YES" ? "up" : "down"}">${escapeHtml(r.rec_side)}</span>` : ""}
          <span class="kx-num">${(r.prob * 100).toFixed(0)}&cent;</span>`)).join("")}</div>`);
   }
-  host.innerHTML = friendInboxHTML()
+  host.innerHTML = `<div id="watch-zone"></div>`
+    + friendInboxHTML()
     + `<div id="feed-zone"></div>`
     + (moved.length + inj.length + recs.length ? chips : "")
     + (sections.join("") || `<div class="empty-slate">
@@ -13147,6 +13313,7 @@ function renderAlerts() {
       <div class="es-sub">Alerts fill from four real feeds — the live board diff,
       line movement on tonight’s picks, the injury watch, and the prediction
       desk. A quiet page means a quiet slate, not a broken one.</div></div>`);
+  renderWatchZone();
   renderFeedZone();
   renderRailDesk();
 }
@@ -28463,7 +28630,13 @@ async function renderLiveBoard() {
   });
   (async () => {
     const u = await acctWho();
-    if (u && u.signed_in) { await socFetch(); msgBadge(); }
+    if (u && u.signed_in) {
+      await socFetch(); msgBadge();
+      // The alert count too, so a watch is worth having before you open
+      // the page it lives on — the whole point of a filter is that you
+      // do not have to go and look.
+      alertsFetch();
+    }
   })();
   setInterval(() => {
     if (document.hidden) return;

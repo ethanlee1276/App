@@ -249,13 +249,23 @@ def test_the_loop_publishes_it_as_a_sweep():
 def test_the_page_leads_with_the_feed():
     i = APP.index("function renderAlerts(")
     body = APP[i:APP.index("\nfunction ", i + 10)]
-    # The one thing allowed above the feed is the friends inbox
-    # (2026-08-25): a friend sending you a pick is exactly the kind of
-    # news this page exists for, and it is personal where the feed is
-    # ambient. Everything else still trails the zone.
-    assert ('host.innerHTML = friendInboxHTML()\n'
-            '    + `<div id="feed-zone"></div>`') in body, \
-        "the feed zone no longer sits at the head of the Alerts page"
+    # TWO THINGS ARE ALLOWED ABOVE THE FEED, and both are there for the
+    # same reason: they are PERSONAL where the feed is ambient.
+    #
+    #   the friends inbox (2026-08-25) — a friend sending you a pick is
+    #   exactly the kind of news this page exists for;
+    #   your own watches (2026-08-27, IDEAS #6) — three shapes filtered
+    #   over this very feed, and the whole point of a filter is that
+    #   your three things sit above the two hundred that are not yours.
+    #
+    # Everything ambient still trails the zone, and the zone still leads
+    # everything ambient — which is the claim this test has always made.
+    head = body[:body.index("+ (moved.length")]
+    assert head.index("watch-zone") < head.index("friendInboxHTML") \
+        < head.index("feed-zone"), \
+        "the Alerts page no longer runs personal-first, ambient-second"
+    assert '`<div id="feed-zone"></div>`' in head, \
+        "the feed zone no longer sits at the head of the ambient half"
     assert "renderFeedZone()" in body, \
         "the zone div renders but nothing ever fills it"
     fn = APP[APP.index("async function renderFeedZone("):]

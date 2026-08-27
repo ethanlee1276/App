@@ -88,6 +88,13 @@ def digest(board: dict) -> dict:
             continue
         out[k] = {
             "player": r.get("player", ""),
+            # WHOSE GAME IT IS. Carried so a reader can watch a team
+            # rather than a name — "anything in the Bengals game" is the
+            # second most common thing anybody wants told about, and the
+            # feed had no field that could answer it. One key, off a row
+            # that already holds it.
+            "team": (r.get("team") or "").upper(),
+            "opponent": (r.get("opponent") or "").upper(),
             "market": r.get("market", ""),
             "label": r.get("market_label", "") or r.get("market", ""),
             "side": r.get("side", ""),
@@ -126,6 +133,7 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
         e = {"id": _eid(kind, key, ts, str(extra.get("to", ""))),
              "ts": ts, "sport": sport, "kind": kind,
              "player": c["player"], "label": c["label"],
+             "team": c.get("team", ""), "opponent": c.get("opponent", ""),
              "side": c["side"], "line": c["line"],
              "book": c["book"], "odds": c["odds"]}
         e.update(extra)
@@ -173,7 +181,7 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
             events.append(base("line_move", c, key,
                                frm=p["line"], to=c["line"],
                                proj=c["proj"], model_held=held,
-                               rec=c["rec"]))
+                               edge=c["edge"], rec=c["rec"]))
         else:
             pi, ci = _imp(p["odds"]), _imp(c["odds"])
             if (pi is not None and ci is not None
@@ -181,7 +189,7 @@ def diff(prev: dict, cur: dict, sport: str, ts: str) -> list[dict]:
                 events.append(base("price_move", c, key,
                                    frm=p["odds"], to=c["odds"],
                                    imp_delta=round(ci - pi, 3),
-                                   rec=c["rec"]))
+                                   edge=c["edge"], rec=c["rec"]))
 
     # The velocity red flag — the last of the roadmap's five promised
     # event kinds ("starter down 1.4mph on the four-seam"). Fires on the
