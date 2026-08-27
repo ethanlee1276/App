@@ -225,6 +225,7 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
         per_game[gkey] = per_game.get(gkey, 0) + 1
         chosen.append(p)
 
+    _why: list[str] = []
     # §8 bankroll caps: 2% a play, 5% a game, 12% a slate. The count limits
     # above cap the NUMBER of positions; these cap the MONEY, and in a
     # low-limit league where a moved line is hard to re-bet, that is the
@@ -237,6 +238,31 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
                                         p.get("odds", -110),
                                         mult=GRADE_STAKE[p["minutes_grade"]])
         chosen = [p for p in chosen if p["stake_units"] > 0]
+
+    # PROBATION, ENFORCED — the same gap the CFB board had. The return
+    # value below has always carried `"probation": tune.probation` with
+    # the comment "An uncalibrated league grades but does not bet", and
+    # the page has always drawn the banner. Nothing read the flag: the
+    # Kelly sizes above were written whatever it said, so WNBA (which is
+    # `calibrated=False`, inheriting the NBA's fitted numbers) published
+    # staked picks underneath a banner promising it did not stake.
+    #
+    # After the caps and the zero-stake drop, so a withheld size cannot
+    # be mistaken for a cap trim and the picks keep their grades — the
+    # grades being the entire point of a probation board.
+    if tune.probation:
+        from ..probation import unstake as _unstake
+        _why = [f"this league's fitted numbers are the "
+                f"{tune.inherited_from.upper()} model's, not its own — "
+                f"borrowed numbers do not get to size a bet"
+                if tune.inherited_from else
+                "this league's numbers have not been fitted to its own "
+                "results, so any stake would be Kelly on a borrowed spread"]
+        # BOTH size fields in one pass — the bankroll fraction and the
+        # unit count. Two calls would have the second overwrite the
+        # first's record of what the size would have been.
+        chosen = _unstake(chosen, _why,
+                          stake_keys=("stake_fraction", "stake_units"))
 
     # Near-miss report: the 3 closest, with what would need to change.
     misses.sort(key=lambda m: -(m["ev"]))
@@ -251,6 +277,7 @@ def run_nba_slate(props: list[dict], meta: dict | None = None,
         # fitted somewhere else, and borrowed numbers have to earn the
         # right to stake money the same way every other sampler here does.
         "probation": tune.probation,
+        "probation_reasons": _why,
         "tuning": {"inherited_from": tune.inherited_from,
                    "calibrated": tune.calibrated, "note": tune.note},
         "picks": chosen,

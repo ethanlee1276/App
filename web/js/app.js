@@ -1623,11 +1623,42 @@ function renderProbation() {
   host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
     <div class="player">${iconMark("warn")}${escapeHtml((SPORT_META[state.sport] || {}).name || state.sport.toUpperCase())} is on probation — graded, not bet</div>
     <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
-      ${escapeHtml(t.note || "This league’s tuning has not been fitted to its own results yet.")}
+      ${escapeHtml((d.probation_reasons || [])[0] || t.note
+        || "This league’s tuning has not been fitted to its own results yet.")}
       Everything below is priced and journaled exactly as a live board would be,
       so the record it builds is real — it just doesn’t stake anything until that
       record clears the promotion bar${t.inherited_from
         ? ` (the numbers are the ${escapeHtml(t.inherited_from.toUpperCase())} model’s for now)` : ""}.
+    </div></div>`;
+}
+
+/* What the SIZE rests on, when the board is staking.
+
+   Different claim from probation and deliberately a quieter one.
+   Probation says we have not measured how far from our number games
+   land, so there is no defensible size and nothing is staked. This says
+   the sizes are real but the haircut behind them — how much of a
+   disagreement with the closing number we trust — has never been
+   measured for this sport. On the one sport where it WAS measured the
+   standing figure turned out to be far too generous, which is exactly
+   why the absence belongs on the page rather than in a comment. It
+   clears itself once this sport's own closing lines have accrued. */
+function renderAdvisories() {
+  const host = document.getElementById("advisory-note");
+  if (!host) return;
+  const d = state.data || {};
+  const lines = d.advisories || [];
+  // Silent on a probation board. This panel's whole sentence is "these
+  // plays ARE staked, and here is what the size rests on" — which is
+  // false the moment nothing is staked, and would sit directly under a
+  // banner saying so.
+  if (!lines.length || d.probation) { host.innerHTML = ""; return; }
+  host.innerHTML = `<div class="card" style="border-left:3px solid var(--text-mute);margin-bottom:12px">
+    <div class="player">${iconMark("info")}Sizes rest on an unmeasured haircut</div>
+    <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
+      ${lines.map((l) => escapeHtml(l)).join(" ")} These plays are staked; the
+      figure behind the size is the standing estimate until this sport’s own
+      closing lines have accrued.
     </div></div>`;
 }
 
@@ -1696,6 +1727,7 @@ function renderAll() {
     document.getElementById("slate-date").textContent = slateDateLabel(d);
   }
   renderProbation();
+  renderAdvisories();
   renderTalent();
   renderStats();
   renderEmptySlate();
@@ -3389,6 +3421,17 @@ function gameBetCard(r) {
       + (r.stake_if_confirmed_units > 0
         ? ` · ${r.stake_if_confirmed_units.toFixed(2)}u if confirmed` : "")
       + `</span>` : "";
+  // A board whose variance has not been fitted: same shape as the
+  // conditional above and for the same reason. The stake chip is already
+  // gone (it hides at zero), so without this the card would show a pick
+  // with no size and no explanation — and "why is there no number here"
+  // is exactly the question a footnote at the top of the page cannot
+  // answer once you have scrolled to a card.
+  const probChip = r.on_probation
+    ? `<span class="chip cond" title="${escapeHtml((r.probation_reasons || []).join(" · "))}">${icon('clock')} Not staked`
+      + (r.stake_if_measured_units > 0
+        ? ` · ${r.stake_if_measured_units.toFixed(2)}u once measured` : "")
+      + `</span>` : "";
   const tierChip = r.attention_tier
     ? `<span class="chip tier-${escapeHtml(r.attention_tier)}">${escapeHtml(r.attention_tier)} attention</span>`
     : "";
@@ -3444,7 +3487,7 @@ function gameBetCard(r) {
       </div>
       ${confMeter(r)}
       ${gameBetChart(r)}
-      <div class="chips">${stakeChip}${condChip}${tierChip}${slipChip(r)}</div>
+      <div class="chips">${stakeChip}${condChip}${probChip}${tierChip}${slipChip(r)}</div>
       ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
     </article>`;
 }

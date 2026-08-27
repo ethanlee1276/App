@@ -193,6 +193,34 @@ def run_cfb_slate(plays: list[dict], meta: dict | None = None) -> dict:
                 "why": p.get("cap_note") or "no room under the slate cap"}
                for p in dropped]
 
+    # PROBATION, ENFORCED. `engine.cfb.ratings` has always said an
+    # unfitted variance "puts the whole CFB board on probation: journaled
+    # and graded, never staked", and the page has always shown a banner
+    # saying so. Nothing read the flag: this function ran Kelly and wrote
+    # a stake regardless, so an uncalibrated board graded a play A+ and
+    # sized it at 2% of bankroll underneath a banner that said it was not
+    # being bet. A label in four files and an enforcement in none.
+    #
+    # Applied HERE, after the caps and after the zero-stake drop, on
+    # purpose. Gating earlier would make every play look cap-trimmed and
+    # sweep the board into the pass list, which loses the grades — and
+    # the grades are the entire point of a probation board. The plays
+    # stay published and ranked; only the size is withheld, and what it
+    # would have been rides alongside on `stake_if_measured`.
+    from ..probation import reasons as _prob_reasons, unstake as _unstake
+    from ..probation import advisories as _prob_advisories
+    _ratings = (meta or {}).get("ratings") or {}
+    _why = _prob_reasons(fitted=_ratings.get("fitted", True),
+                         games=_ratings.get("games", 0))
+    published = _unstake(published, _why)
+    # The conditionals too. A hold carries `stake_if_confirmed` so its
+    # chip can say "1.40u if confirmed" — and on a probation board that
+    # sentence is false twice over: confirming the starter would not
+    # produce a stake either, because the thing being waited on is a
+    # measurement, not a phone call.
+    holds = _unstake(holds, _why, stake_keys=("stake_if_confirmed",))
+    _advice = _prob_advisories("cfb")
+
     # §11 — the closest misses, so a no-play slate still says something.
     near = sorted((p for p in passes if p.get("edge", 0) > 0),
                   key=lambda p: -(p["edge"] - p.get("required_edge", 0)))[:3]
@@ -204,7 +232,12 @@ def run_cfb_slate(plays: list[dict], meta: dict | None = None) -> dict:
         "pass_list": passes,
         "near_misses": near,
         "no_qualifying": not published,
+        # Zero on a probation board, which is the honest number: nothing
+        # is at risk when nothing is staked.
         "exposure": round(sum(p["stake_fraction"] for p in published), 5),
+        "probation": bool(_why),
+        "probation_reasons": _why,
+        "advisories": _advice,
         "counts": {"priced": len(plays), "published": len(published),
                    "held": len(holds), "passed": len(passes)},
         "by_tier": {t: sum(1 for p in published if p["attention_tier"] == t)

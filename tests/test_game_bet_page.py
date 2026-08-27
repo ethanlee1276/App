@@ -64,12 +64,18 @@ def test_the_board_and_the_edge_list_open_them_too():
     """"anywhere we show a prop" was the ask the first time, and a game
     bet is shown in three places. Two of them being doors is the same
     half-finished state as before, one screen over."""
-    i = APP.index("function gameBetCard(")
-    assert "gameBetAttrs(r)" in APP[i:i + 3000]
-    # The window grew with the function: the 2026-08-17 chart pass added
-    # the per-row values (and their comment) ahead of the games map.
-    j = APP.index("function edgeBoardRows(")
-    assert "gameBetAttrs(b)" in APP[j:j + 2600]
+    # SLICED TO THE FUNCTION'S END, not to a character count. This test
+    # has been re-anchored twice by growth it was not measuring — the
+    # 2026-08-17 chart pass, then the 2026-08-27 not-staked chip — and
+    # each time the code was correct and the window was too small. A
+    # count is a guess about how long a function will stay; the closing
+    # brace is where the function actually ends.
+    def _body(name):
+        i = APP.index(f"function {name}(")
+        return APP[i:APP.index("\n}\n", i)]
+
+    assert "gameBetAttrs(r)" in _body("gameBetCard")
+    assert "gameBetAttrs(b)" in _body("edgeBoardRows")
 
 
 def test_the_game_page_defines_its_park_factors():

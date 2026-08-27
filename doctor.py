@@ -811,6 +811,22 @@ def check_game_calibration(rep):
                        f"({', '.join(quiet)}) and priced at the market")
         if unfitted:
             detail += f" · {len(unfitted)} still on the flat 0.5 guess"
+        # A SPORT THAT IS STAKING ON AN UNMEASURED HAIRCUT gets named, not
+        # counted. The flat 0.5 is defensible where nothing is at risk and
+        # is a live exposure where money is: on the one sport where that
+        # guess was ever checked it was roughly sixteen times too
+        # generous, and CFB is sizing real plays on it this weekend.
+        from engine import probation
+        exposed = [s for s in ("cfb", "nfl", "mlb") if probation.advisories(s)]
+        if exposed:
+            rep.add("game-line calibration", WARN,
+                    detail + f" · {', '.join(exposed)} "
+                             f"{'is' if len(exposed) == 1 else 'are'} staking "
+                             f"on the unmeasured guess",
+                    "harvest that sport's closing lines (they accrue nightly) "
+                    "and `python3 -m engine.gamecal` fits it — until then the "
+                    "board carries the advisory")
+            return
         rep.add("game-line calibration", OK, detail)
 
 

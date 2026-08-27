@@ -452,6 +452,12 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "stake_units": to_units(stake_fraction, card["odds"]),
         "stake_if_confirmed_units": to_units(
             card.get("stake_if_confirmed") or 0.0, card["odds"]),
+        # …and the same shape for a board held back by an unmeasured
+        # variance rather than an unconfirmed starter. The card can say
+        # what the measurement is worth without pretending it is a bet.
+        "stake_if_measured_units": to_units(
+            card.get("stake_if_measured") or 0.0, card["odds"]),
+        "on_probation": bool(card.get("on_probation")),
         "grade": "Conditional" if conditional else card["grade_label"],
         "cfb_grade": card["grade"],
         "attention_tier": card["attention_tier"],
@@ -617,6 +623,8 @@ def main() -> None:
                       "home_field": fit.home_field,
                       "scoring_baseline": fit.scoring_baseline,
                       "note": fit.note}
+    # The offseason value. Overwritten from the slate result below, once
+    # there is one — see the note there.
     out["probation"] = fit.probation
     out["tuning"] = {"calibrated": fit.fitted, "inherited_from": "",
                      "note": fit.note}
@@ -717,6 +725,14 @@ def main() -> None:
     result = run_cfb_slate(plays, meta={
         "games": len(games), "priced": len(priced), "odds": odds_note,
         "ratings": out["ratings"], "qb": out["qb"]})
+    # PROBATION IS NOW A FACT ABOUT THE STAKES, not a banner beside them.
+    # `run_cfb_slate` zeroes every size when the variance is a prior, so
+    # this key and the board finally agree with each other — it is read
+    # off the slate result rather than off `fit` precisely so the two can
+    # never drift apart again.
+    out["probation"] = bool(result.get("probation", fit.probation))
+    out["probation_reasons"] = result.get("probation_reasons") or []
+    out["advisories"] = result.get("advisories") or []
 
     # Match each verdict back to the play that produced it, so the shared
     # card keeps the pricing reasons the model actually used.

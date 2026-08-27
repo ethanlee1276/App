@@ -518,9 +518,15 @@ def test_a_measured_zero_is_reported_as_the_headline():
     gamecal.STATE_PATH = os.path.join(tempfile.mkdtemp(), "gamecal.json")
     gamecal._cache.clear()
     try:
-        gamecal._write_state({"nfl:spread": {
-            "shrink": 0.0, "slope": 0.006, "se": 0.085, "n": 899,
-            "sport": "nfl", "market": "spread", "fit_at": time.time()}})
+        # Every sport fitted, so nothing is left staking on the guess and
+        # the measured zero is the only thing left to report. The separate
+        # "staking on the unmeasured guess" warning has its own test.
+        gamecal._write_state({
+            f"{sp}:{m}": {"shrink": 0.0 if sp == "nfl" else 0.3,
+                          "slope": 0.006, "se": 0.085, "n": 899,
+                          "sport": sp, "market": m, "fit_at": time.time()}
+            for sp in ("nfl", "cfb", "mlb")
+            for m in ("spread", "total", "moneyline")})
         gamecal._cache.clear()
         rep = doctor.Report()
         doctor.check_game_calibration(rep)
@@ -593,6 +599,34 @@ def test_the_flow_weights_report_whether_they_are_measured():
         pmfit.STATE_PATH = keep
         pmfit._cache.clear()
         pmfit._cache.update(keep_cache)
+
+
+def test_a_sport_staking_on_the_unmeasured_guess_is_named():
+    """The flat 0.5 haircut is defensible where nothing is at risk and is
+    a live exposure where money is. On the one sport where that guess was
+    ever checked it was roughly sixteen times too generous."""
+    from engine import gamecal, probation
+    keep, keep_cache = gamecal.STATE_PATH, dict(gamecal._cache)
+    gamecal.STATE_PATH = os.path.join(tempfile.mkdtemp(), "gamecal.json")
+    gamecal._cache.clear()
+    try:
+        gamecal._write_state({
+            f"nfl:{m}": {"shrink": 0.0, "slope": 0.0, "se": 0.05, "n": 899,
+                         "sport": "nfl", "market": m, "fit_at": time.time()}
+            for m in ("spread", "total", "moneyline")})
+        gamecal._cache.clear()
+        assert probation.advisories("cfb")      # cfb has no fit
+        assert probation.advisories("nfl") == []
+        rep = doctor.Report()
+        doctor.check_game_calibration(rep)
+        c = [x for x in rep.checks if x["check"] == "game-line calibration"][0]
+        assert c["status"] == doctor.WARN, c
+        assert "cfb" in c["detail"] and "staking on the unmeasured guess" in c["detail"]
+        assert "nfl are" not in c["detail"] and "nfl," not in c["detail"]
+    finally:
+        gamecal.STATE_PATH = keep
+        gamecal._cache.clear()
+        gamecal._cache.update(keep_cache)
 
 
 def test_a_stale_calibration_is_warned_about():

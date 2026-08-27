@@ -110,7 +110,13 @@ def test_nothing_new_slipped_in_above_the_picks():
     # call — the render's home IS a dashboard above the full board. The
     # picks strip that moved up is itself picks, so the thing the page
     # exists for got closer, not further.
-    allowed = {"view-recommended", "probation-note", "talent-note", "stats",
+    allowed = {"view-recommended", "probation-note",
+               # The advisory sits with the probation banner and answers a
+               # neighbouring question: probation says nothing is staked,
+               # this says what the sizes rest on when they are. One line,
+               # beside the one it qualifies — separating them would put
+               # half the answer somewhere nobody reads.
+               "advisory-note", "talent-note", "stats",
                "games-title", "games", "top-picks", "home-perf",
                # The strip's own chrome (2026-08-11 fidelity pass): the
                # header wrapper with its working controls, and the
