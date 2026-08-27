@@ -308,6 +308,47 @@ def test_resolve_market_keys_translates_engine_names():
     assert resolve_market_keys("nfl", ["rec_yds"]) == ["player_reception_yds"]
 
 
+def test_every_nfl_market_the_board_can_bet_resolves_to_a_real_api_key():
+    """The class of bug, not another instance of it.
+
+    `oddshistory.resolve_market_keys` translates the journal's market
+    names to the Odds API's, and anything it does not know PASSES
+    THROUGH UNCHANGED — which is the right default and a silent failure
+    when the market is a prop. It already happened once: a journal-driven
+    harvest asked for a market key named "anytime_td", the API has no
+    such key, and the touchdown board went its entire life with no
+    closing line to be graded against.
+
+    The existing checks spot-test two markets. A market added to the
+    board later would slip through exactly the way anytime_td did, so
+    this enumerates the board's own vocabulary instead: every NFL prop
+    market MUST translate to something else, and every game market must
+    land on one of the three keys the API actually uses.
+
+    That matters more than it looks. No historical NFL prop closes exist
+    anywhere, so closing-line value collected forward is the ONLY
+    instrument that can ever say whether these props beat a real price —
+    a broken key here would cost a whole season of that, silently.
+    """
+    from engine.sources.oddshistory import resolve_market_keys
+    from engine.models import MARKET_LABELS
+    from engine.maintenance import _HARVEST_GAME_MARKETS
+
+    for market in sorted(MARKET_LABELS):
+        got = resolve_market_keys("nfl", [market])
+        assert got and got[0] != market, (
+            f"{market!r} passed through untranslated — the harvest would "
+            f"ask the API for a key it does not have, and every bet on "
+            f"this market would settle with no closing line")
+        assert got[0].startswith("player_"), got
+
+    # …and the game markets, which the journal spells differently again.
+    for journal_name, api_name in _HARVEST_GAME_MARKETS.items():
+        staged = _HARVEST_GAME_MARKETS.get(journal_name, journal_name)
+        assert resolve_market_keys("nfl", [staged]) == [api_name]
+        assert api_name in ("h2h", "spreads", "totals")
+
+
 def test_one_sided_markets_never_fabricate_the_missing_side():
     """Home-run markets are quoted Over-only. Inventing an under at -110
     manufactured +88% EV "bets" nobody can place — the missing side must be
