@@ -162,8 +162,19 @@ def _game_lines_layer(conn, sport: str) -> Layer:
     shipped with no market shrink and no credibility ceiling and nobody
     could tell.
     """
+    # BOTH PLACES A CLOSE CAN LIVE. This counted `odds_history` alone,
+    # which is where the PURCHASED closes land — and college football's
+    # come off the cfbfastR mirror into `games.spread` and `games.total`
+    # instead (engine.ingest.ingest_cfb_lines). So this reported that the
+    # CFB board "prices spreads and totals it cannot check" on the very
+    # day `engine.gamecal` finished measuring its market haircut from
+    # 2,055 of those stored closes. Same union `gamecal` reads through,
+    # for the same reason: the question is whether a number was written
+    # down, not which table it was written down in.
     n = _count(conn, "SELECT COUNT(DISTINCT event_id) FROM odds_history "
                      "WHERE sport=? AND market IN ('total','spread')", (sport,))
+    n += _count(conn, "SELECT COUNT(*) FROM games WHERE sport=? AND "
+                      "(spread IS NOT NULL OR total IS NOT NULL)", (sport,))
     fix = f"python3 game_backtest.py {sport}"
     if n >= GRADEABLE_BETS:
         return Layer("Stored game-line closes", "the spread/total model can "
@@ -194,6 +205,10 @@ def _prop_markets(sport: str) -> set:
     is invisible there, and so is a whole board in its own offseason. The
     union is what this sport is on the hook for.
 
+    The journal's contribution is filtered through the sport's own stat
+    vocabulary (`statlogs.SPORT_MARKETS`); the other two are already
+    per-sport by construction.
+
     Game markets are excluded through `ledger.GAME_MARKETS` rather than a
     second list here, for the reason that constant's own comment gives.
     `GRADED_ELSEWHERE` buckets are dropped too: a Kalshi ticker in the
@@ -202,6 +217,7 @@ def _prop_markets(sport: str) -> set:
     from .ledger import GAME_MARKETS, GRADED_ELSEWHERE
     from .maintenance import HOLD_MARKETS
     from .sources.oddsapi import SPORT_CONFIG
+    from .statlogs import SPORT_MARKETS
     out = set((SPORT_CONFIG.get(sport) or {}).get("markets", {}).values())
     # The Yes-only boards, from the registry that already knows which
     # sport quotes which — `anytime_td` for both football codes and
@@ -213,11 +229,23 @@ def _prop_markets(sport: str) -> set:
         from . import ledger
         conn = ledger.connect()
         holes = ",".join("?" * len(GRADED_ELSEWHERE))
+        # THE SPORT'S OWN VOCABULARY, and that is a filter rather than a
+        # nicety. The journal held MLB rows carrying `rec_yds`,
+        # `receptions` and `pass_yds` — football markets on a baseball
+        # sport — so this reported that MLB had no harvested price for
+        # receiving yards and then blamed MLB's buy config for it, on a
+        # sport with 77,952 stored prop prices and every one of its five
+        # real markets covered. A coverage page that invents a gap is
+        # worse than one that misses a gap: it spends the reader's
+        # attention on nothing.
+        vocab = {m for m, _label in SPORT_MARKETS.get(sport, ())}
         for row in conn.execute(
                 f"SELECT DISTINCT market FROM bets WHERE sport=? AND "
                 f"COALESCE(category,'main') NOT IN ({holes})",
                 (sport, *GRADED_ELSEWHERE)):
-            out.add(str(row[0] or ""))
+            market = str(row[0] or "")
+            if market in vocab:
+                out.add(market)
         conn.close()
     except Exception:                                      # noqa: BLE001
         pass
@@ -328,9 +356,9 @@ def _prop_closes_layer(conn, sport: str) -> Layer | None:
     if not priced:
         return Layer(
             "Stored prop closes", why, MISSING,
-            f"no harvested price for any of {_names(unpriced)} — every prop "
-            f"number this sport has ever published was graded against a "
-            f"synthetic -110{clv}", fix)
+            f"no harvested price for any of {_names(unpriced)} — the "
+            f"walk-forward replay behind these markets prices against a "
+            f"synthetic -110 at a trailing average{clv}", fix)
     if unpriced:
         rows = sum(stored.get(m, 0) for m in priced)
         return Layer(

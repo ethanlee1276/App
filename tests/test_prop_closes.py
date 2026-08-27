@@ -81,14 +81,56 @@ def test_a_yes_only_board_counts_even_with_an_empty_buy_config():
 
 
 def test_the_journal_adds_markets_the_config_never_named():
+    """`carries` is in the NFL's own stat vocabulary and in neither the
+    buy config nor `HOLD_MARKETS` — exactly the case the journal is here
+    to catch."""
     from engine import ledger as _led
     saved = _led.DEFAULT_DB
     try:
         tmp = os.path.join(tempfile.mkdtemp(), "l.db")
         conn = _ledger_at(tmp)
-        _bet(conn, "nfl", "pass_tds")
+        _bet(conn, "nfl", "carries")
         conn.close()
-        assert "pass_tds" in C._prop_markets("nfl")
+        assert "carries" in C._prop_markets("nfl")
+    finally:
+        _led.DEFAULT_DB = saved
+
+
+def test_a_sport_is_never_held_to_another_sports_markets():
+    """The journal held MLB rows carrying `rec_yds`, `receptions` and
+    `pass_yds`. Unfiltered, this reported that MLB — a sport with 77,952
+    stored prop prices covering all five of its real markets — had no
+    harvested price for receiving yards, and then blamed MLB's buy config
+    for it. A coverage page that invents a gap is worse than one that
+    misses a gap: it spends the reader's attention on nothing."""
+    from engine import ledger as _led
+    saved = _led.DEFAULT_DB
+    try:
+        tmp = os.path.join(tempfile.mkdtemp(), "l.db")
+        conn = _ledger_at(tmp)
+        for market in ("rec_yds", "receptions", "pass_yds"):
+            _bet(conn, "mlb", market)
+        _bet(conn, "mlb", "hits")
+        conn.close()
+        got = C._prop_markets("mlb")
+        assert got == {"hits", "home_runs", "outs", "strikeouts",
+                       "total_bases"}, got
+    finally:
+        _led.DEFAULT_DB = saved
+
+
+def test_the_filter_keeps_a_market_the_sport_really_does_board():
+    """The filter must not eat a genuine gap. College receiving yards is
+    in CFB's own vocabulary and cannot be bought — that is worth saying,
+    and the same rule that drops MLB's `rec_yds` has to keep this one."""
+    from engine import ledger as _led
+    saved = _led.DEFAULT_DB
+    try:
+        tmp = os.path.join(tempfile.mkdtemp(), "l.db")
+        conn = _ledger_at(tmp)
+        _bet(conn, "cfb", "rec_yds")
+        conn.close()
+        assert "rec_yds" in C._prop_markets("cfb")
     finally:
         _led.DEFAULT_DB = saved
 
@@ -151,6 +193,12 @@ def test_nothing_harvested_is_reported_as_missing_and_names_the_markets():
     assert layer.state == C.MISSING
     assert "receptions" in layer.detail
     assert "synthetic -110" in layer.detail
+    # WHAT the synthetic -110 applies to. Forward bets are journaled at
+    # the real book price they were taken at; it is the walk-forward
+    # REPLAY that has no book behind it, and saying "every prop number
+    # this sport has ever published" overclaimed that into a falsehood.
+    assert "walk-forward replay" in layer.detail
+    assert "ever published" not in layer.detail
 
 
 def test_a_partly_harvested_sport_says_which_half_is_missing():
@@ -238,6 +286,33 @@ def test_a_none_layer_is_dropped_by_the_container_not_by_each_builder():
         C.Layer("real", "why", C.OK), None, C.Layer("other", "why", C.OK)])
     assert [l.name for l in cov.layers] == ["real", "other"]
     assert cov.score == (2, 2)
+
+
+def test_a_close_stored_on_the_schedule_counts_as_a_stored_close():
+    """College football's closes come off the cfbfastR mirror into
+    `games.spread`/`games.total`, not `odds_history`. Counting only the
+    purchased table reported that the CFB board "prices spreads and
+    totals it cannot check" on the day `gamecal` finished measuring its
+    market haircut from 2,055 of exactly those closes."""
+    conn = db.connect(":memory:")
+    assert C._game_lines_layer(conn, "cfb").state == C.MISSING
+    db.upsert_games(conn, [
+        {"sport": "cfb", "season": 2025, "period": f"2025-09-{i % 28 + 1:02d}",
+         "game_id": str(i), "home": "A", "away": "B",
+         "home_score": 30.0, "away_score": 20.0,
+         "spread": -3.5, "total": 54.5} for i in range(150)])
+    layer = C._game_lines_layer(conn, "cfb")
+    assert layer.state == C.OK
+    assert "150 game(s)" in layer.detail
+
+
+def test_a_game_with_no_line_is_not_counted_as_having_one():
+    conn = db.connect(":memory:")
+    db.upsert_games(conn, [
+        {"sport": "cfb", "season": 2025, "period": "2025-09-01",
+         "game_id": str(i), "home": "A", "away": "B",
+         "home_score": 30.0, "away_score": 20.0} for i in range(150)])
+    assert C._game_lines_layer(conn, "cfb").state == C.MISSING
 
 
 def test_the_names_helper_does_not_run_off_the_line():
