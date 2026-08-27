@@ -54,55 +54,39 @@ is explaining an empty board honestly. Fixed and pinned.
 
 ---
 
-## The NFL has no weather feed — found 2026-08-26
+## The NFL weather feed — CLOSED 2026-08-27
 
-College football pulls a real kickoff forecast: CFBD venue coordinates
-joined to Open-Meteo's hourly board, keyless and free, with an honest
-`weather_checked` flag on every game the join could not answer
-(`engine/cfb/wx.py`, wired in `cfb_build.py`).
+Found 2026-08-26: the NFL's weather came from the nflverse schedule's
+`temp` and `wind`, which nflverse fills from the game's OWN box score —
+so every outdoor game on a forward board was blank and took the engine's
+mild-day prior of 60°F and 6 mph, printed as a forecast. The honest half
+shipped that day (`Weather.measured`, and every surface checking it).
 
-**The NFL has no equivalent.** Its weather comes from the nflverse
-schedule's `temp` and `wind` columns, which nflverse fills from the
-game's own box score — so every outdoor game on a forward board is blank
-and takes the engine's mild-day prior of 60°F and 6 mph. For a season
-that prior was indistinguishable from a reading, and it reached
-everywhere: the card printed "60° · 6mph", the animated gauge drew it as
-a compass reading, the journal recorded 6.0 as the wind each pick was
-made in, and the 25-mph deep-passing warning could never fire because
-the number it tested was a constant three times below its own bar.
+**The feed is in now** (`engine/nflwx.py`). It is deliberately the same
+machine college has run since 2026-08-24: `engine/cfb/wx`'s
+`fetch_forecast`, `pick_hour` and `compass` take a latitude, a
+longitude, a date and a kickoff instant, none of which is
+college-shaped. What the NFL was missing was the two things college gets
+from its own feeds — where the stadium is, and when the ball is kicked.
+`engine/fatigue.kickoff_instant` supplied the second (written for
+capture lag; this is its second reader).
 
-**The honest half is done** (2026-08-26): `Weather.measured` is set at
-the source, every surface that shows or journals the number checks it,
-and an unmeasured game now says "weather not pulled" — college's own
-sentence, promoted to the shared one. `tests/test_unmeasured_weather.py`
-holds all four surfaces.
+**The coordinates are checked rather than trusted**, which was the whole
+reason this waited a day. `engine/stadiums.STADIUM_COORDS` is pinned
+against two tables this repo already runs on: twenty-four of the thirty-
+two stadiums share a city with a major-league ballpark whose coordinates
+have been fetching weather all season, and each must sit within 65km of
+it (the shared complexes come out under two kilometres); the other eight
+are pinned against `engine/fatigue.TEAM_UTC_OFFSET_FROM_ET`, since a
+longitude and a time zone that disagree are the same typo seen from the
+other side. Arizona is the one documented exception and the test says
+why.
 
-**What is left is the feed**, and three of its four pieces already
-exist. `engine/cfb/wx.fetch_forecast`, `pick_hour` and `compass` are
-entirely league-agnostic — they take a latitude, a longitude, a date and
-a kickoff ISO and return temp/wind/direction at the nearest hour — and
-`engine/fatigue.kickoff_instant` (2026-08-26) now turns the NFL's bare
-Eastern clock into exactly that ISO. Only the coordinates are missing:
-`engine/stadiums.py` carries roof, surface and altitude for all 32 and
-no lat/lon.
-
-**Two ways to get them, and the second is better.** A hand-written table
-of 32 pairs is the obvious one and it is the wrong one — a coordinate
-typed from memory puts a forecast in the wrong city, silently, which is
-the exact class of defect the rest of this session was spent removing.
-Open-Meteo's geocoder is keyless like its forecast board
-(`geocoding-api.open-meteo.com/v1/search?name=…`), so the stadium NAME
-this file already holds can be resolved once and cached beside the
-forecast, with a miss keeping `measured=False` like every other miss
-here.
-
-**Do it on a machine that can reach the API.** This container's proxy
-blocks both Open-Meteo hosts, so anything written here would ship
-unverified — the state `engine/paddle.py` is flagged for and the reason
-that flag exists. It is perhaps thirty minutes with a network.
-
-Worth doing before the weather starts mattering, which for the NFL is
-late October rather than September.
+**This container cannot see it work and that is expected**: its egress
+policy blocks both Open-Meteo hosts, so a build here stamps the five
+domes and leaves eleven outdoor games saying "not pulled" — which is the
+correct behaviour for a machine that cannot reach the service. The
+droplet reaches it every day for college.
 
 ---
 

@@ -29,10 +29,28 @@ def show_games(season: int, week: int) -> list:
     if not games:
         print(f"No games found for {season} week {week}.")
         return []
+    # THE FORECAST, BEFORE ANYTHING READS THE WEATHER. nflverse fills a
+    # schedule row's temp and wind from the PLAYED game, so every outdoor
+    # game on a forward board arrives blank and takes the engine's
+    # mild-day prior — flagged as one since 2026-08-26, and pulled for
+    # real here (engine/nflwx.py, the same Open-Meteo join college has
+    # used since 2026-08-24). Every game this cannot answer keeps the
+    # prior and keeps `measured=False`; nothing is invented, and the
+    # whole pass costs the board nothing if the host is unreachable.
+    try:
+        from engine import nflwx
+        n_wx = nflwx.attach(games)
+        outdoor = sum(1 for g in games if not g.weather.dome)
+        print(f"\nWeather: {n_wx} of {len(games)} game(s) stamped "
+              f"({outdoor} outdoor)")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\nWeather: skipped — {type(exc).__name__}: {exc}")
     print(f"\n{len(games)} games — {season} week {week}\n")
     for g in games:
         w = g.weather
-        cond = "dome" if w.dome else f"{w.temp_f:.0f}°F, wind {w.wind_mph:.0f}mph"
+        cond = ("dome" if w.dome else
+                f"{w.temp_f:.0f}°F, wind {w.wind_mph:.0f}mph"
+                if getattr(w, "measured", False) else "not pulled")
         fav = g.home if g.spread < 0 else g.away
         print(f"  {g.away:>3} @ {g.home:<3}  spread {g.spread:+.1f} (fav {fav})  "
               f"total {g.total:.1f}  · {cond}")

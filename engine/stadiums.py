@@ -35,6 +35,48 @@ class Stadium:
     plays: str = ""
 
 
+#: Where each stadium IS, for the kickoff forecast (engine/nflwx.py).
+#:
+#: PROVENANCE, because a coordinate is exactly the kind of constant that
+#: rots quietly: this is the same shape MLB has run on all season
+#: (`engine/mlb/sources/mlbstats.PARK_COORDS`, thirty parks, hand-held
+#: and correct), and it is checked against that table rather than taken
+#: on trust. Twenty-two of these cities also host a major-league
+#: ballpark whose coordinates this repo has been fetching weather with
+#: for months, so `tests/test_nflwx.py` asserts each of those stadiums
+#: sits within 65km of the park it shares a city with — a wrong city
+#: fails by hundreds of kilometres. The remaining ten are pinned against
+#: `engine/fatigue.TEAM_UTC_OFFSET_FROM_ET`, which is an independent
+#: table in this repo: a longitude and a time zone that disagree is the
+#: same typo seen from the other side.
+#:
+#: Three-decimal precision is deliberate — about a hundred metres, which
+#: is far inside Open-Meteo's ~11km grid. More digits would imply a
+#: survey nobody did.
+#:
+#: MetLife and SoFi each appear twice on purpose: two clubs, one
+#: building, one forecast.
+STADIUM_COORDS: dict[str, tuple[float, float]] = {
+    "ARI": (33.528, -112.263), "ATL": (33.755, -84.401),
+    "BAL": (39.278, -76.623), "BUF": (42.774, -78.787),
+    "CAR": (35.226, -80.853), "CHI": (41.862, -87.617),
+    "CIN": (39.095, -84.516), "CLE": (41.506, -81.700),
+    "DAL": (32.748, -97.093), "DEN": (39.744, -105.020),
+    "DET": (42.340, -83.046), "GB": (44.501, -88.062),
+    "HOU": (29.685, -95.411), "IND": (39.760, -86.164),
+    "JAX": (30.324, -81.637), "KC": (39.049, -94.484),
+    "LA": (33.953, -118.339), "LAC": (33.953, -118.339),
+    "LAR": (33.953, -118.339), "LV": (36.091, -115.183),
+    "MIA": (25.958, -80.239), "MIN": (44.974, -93.258),
+    "NE": (42.091, -71.264), "NO": (29.951, -90.081),
+    "NYG": (40.814, -74.074), "NYJ": (40.814, -74.074),
+    "PHI": (39.901, -75.168), "PIT": (40.447, -80.016),
+    "SEA": (47.595, -122.332), "SF": (37.403, -121.970),
+    "TB": (27.976, -82.503), "TEN": (36.166, -86.771),
+    "WAS": (38.908, -76.864),
+}
+
+
 # Home team abbreviation -> stadium. Abbreviations follow nflverse.
 STADIUMS: dict[str, Stadium] = {
     "ARI": Stadium("ARI", "State Farm Stadium", "retractable", "grass", 1070, 63400, 2006,
