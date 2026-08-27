@@ -44,6 +44,41 @@ def daterange(start: str, end: str):
         day += _dt.timedelta(days=1)
 
 
+#: Monday-first, matching `date.weekday()`.
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+FULL_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday",
+                 "saturday", "sunday")
+
+
+def keep_weekdays(days: list, spec: str) -> list:
+    """Filter a day list to the named weekdays.
+
+    Sports do not play every day and a historical events call is billed
+    whether or not it finds a game. Harvesting an NFL season as one date
+    range spends a hundred of them on Tuesdays before buying a single
+    price.
+    """
+    want = set()
+    for name in str(spec).split(","):
+        name = name.strip().lower()
+        if not name:
+            continue
+        # The abbreviation or the whole word, and NOTHING in between. An
+        # earlier cut truncated to three characters, which quietly
+        # accepted "sundy" — a typo that harvests the right days is luck,
+        # and the same rule accepts "monsoon" as Monday.
+        if name in WEEKDAYS:
+            want.add(WEEKDAYS.index(name))
+        elif name in FULL_WEEKDAYS:
+            want.add(FULL_WEEKDAYS.index(name))
+        else:
+            raise ValueError(f"unknown weekday {name!r} — use "
+                             f"{', '.join(WEEKDAYS)}")
+    if not want:
+        return days
+    return [d for d in days if d.weekday() in want]
+
+
 # One plan is 20,000 credits and a full-market historical event call has
 # measured at 35-40 of them. This ceiling is roughly a two-day harvest of a
 # fifteen-game sport: enough to be useful in one sitting, small enough that a
@@ -59,7 +94,16 @@ def main() -> None:
     ap.add_argument("--from", dest="start", required=True, help="YYYY-MM-DD")
     ap.add_argument("--to", dest="end", required=True, help="YYYY-MM-DD")
     ap.add_argument("--hour", type=int, default=23,
-                    help="UTC hour to snapshot each day (default 23 ≈ evening slate)")
+                    help="UTC hour to snapshot each day (default 23 ≈ MLB "
+                         "evening slate). PICK IT FOR THE SPORT: 23:00 UTC "
+                         "is 6pm ET, which is AFTER the NFL's 1pm games have "
+                         "finished. NFL Sundays want 17 (Sep-Oct) or 18 "
+                         "(Nov-Jan, once the clocks go back).")
+    ap.add_argument("--weekdays", default="",
+                    help="Only harvest these weekdays, e.g. 'sun' or "
+                         "'thu,sun,mon'. A season is ~120 days of which 18 "
+                         "are Sundays, and every skipped day is an events "
+                         "call not paid for.")
     ap.add_argument("--max-events", type=int, default=0,
                     help="Cap events per day (0 = no cap) to control spend")
     ap.add_argument("--markets", default="",
@@ -89,6 +133,20 @@ def main() -> None:
     args = ap.parse_args()
 
     days = list(daterange(args.start, args.end))
+    # BEFORE the estimate, the confirmation and the loop, so all three
+    # agree about how much work this is. An events call costs credits on
+    # a day with no games exactly as it does on a full Sunday, and an NFL
+    # season run end-to-end is a hundred of them.
+    if args.weekdays:
+        try:
+            days = keep_weekdays(days, args.weekdays)
+        except ValueError as exc:
+            print(f"  {exc}")
+            return
+        if not days:
+            print(f"  No {args.weekdays} in {args.start}..{args.end} — "
+                  f"nothing to harvest.")
+            return
     market_keys = (oh.resolve_market_keys(args.sport, args.markets.split(","))
                    if args.markets else None)
     # DO NOT BUY WHAT CANNOT BE READ BACK. The request side layers scorer
@@ -111,8 +169,10 @@ def main() -> None:
     market_note = (f"markets: {', '.join(market_keys)}" if market_keys
                    else "markets: ALL (costly — use --markets to harvest only "
                         "what you backtest)")
+    only = f", {args.weekdays} only" if args.weekdays else ""
     print(f"Harvesting {args.sport.upper()} odds for {len(days)} day(s) "
-          f"({args.start} → {args.end}), snapshot at {args.hour:02d}:00 UTC.")
+          f"({args.start} → {args.end}{only}), snapshot at "
+          f"{args.hour:02d}:00 UTC.")
     print(f"  {market_note}\n")
 
     if args.dry_run:
