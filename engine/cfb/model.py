@@ -61,6 +61,18 @@ HAIRCUT = {MARQUEE: 0.50, STANDARD: 0.35, LOW: 0.25}
 # So the expectation to hold, and the reason the board is quiet rather
 # than broken: college GAME bets are a couple of low-attention totals a
 # season. The college volume is on the touchdown board.
+#
+# AND THE OBVIOUS FIX WAS TRIED. The reading above is only an argument
+# for a quiet board if the MODEL cannot be made better, so the standard
+# upgrade — opponent-adjusted play efficiency, the success rate and
+# drive stats §5 has always asked for — was built off the newly ingested
+# plays and graded the same way. On 1,273 held-out games its side beat
+# the close 47.5-50.1% depending on the signal, against the 52.4% a -110
+# line needs, and no better in the tail where the board selects. See the
+# note on `engine.coverage`'s play-by-play layer for the table. The
+# closing college number already contains efficiency; the bar stays
+# where it is because lowering it is the only other way to fill a board,
+# and that is not a way.
 MIN_EDGE = {MARQUEE: 0.040, STANDARD: 0.030, LOW: 0.025}
 MIN_EDGE_PROP = 0.040          # every attention tier: thin menus, heavy vig
 

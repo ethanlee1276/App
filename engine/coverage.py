@@ -402,11 +402,27 @@ def cfb(conn) -> SportCoverage:
               "confirmations recorded" if qb.exists() else
               "none recorded yet — every game publishes as a conditional",
               'python3 launch.py --confirm-qb "TEAM"'),
+        # BUILT, MEASURED, AND NOT ADOPTED — which is why this is PARKED
+        # rather than MISSING. §5 asks for success rate and drive stats,
+        # and the assumption behind the ask was that opponent-adjusted
+        # play efficiency would beat a points-for/points-against rating
+        # against the closing line. It was built off the ingested plays
+        # and graded on 1,273 held-out games (2024-25, ratings fitted on
+        # 2022-23). Its side beat the close on:
+        #
+        #     success rate            48.4%      yards per play   47.5%
+        #     both + the points model 49.8%      pace (totals)    50.1%
+        #     yards per play (totals) 50.0%      points model     49.3%
+        #
+        # Nothing reaches the 52.4% a -110 line needs, in the average or
+        # in the tail where the board actually bets. The closing college
+        # number already contains this. Parked means "asked and
+        # answered", not "not got to yet".
         Layer("Play-by-play efficiency", "§5's success rate and drive stats",
               PARKED,
-              "play-level rows ARE ingested now (engine/sources/cfbstats — "
-              "red-zone and inside-five carries reach the touchdown model); "
-              "success rate and drive stats are still not computed from them"),
+              "play-level rows are ingested (engine/sources/cfbstats) and "
+              "opponent-adjusted efficiency was measured against the close: "
+              "no edge over it, so the game model is not built on it"),
         _journal_layer("cfb"),
     ])
 

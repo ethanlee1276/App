@@ -206,6 +206,14 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     # touchdown has no line for `calibrate.fit_market` to walk.
     lines.extend(refit_touchdowns(db))
     lines.extend(refit_cfb_touchdowns(db))
+    # The conviction ladder, re-measured against the ingested seasons.
+    # Weekly and not nightly on purpose: it replays every prop week by
+    # week and a season is minutes, not seconds.
+    try:
+        from .ladder import refresh as _ladder_refresh
+        lines.extend(_ladder_refresh())
+    except Exception as exc:                              # noqa: BLE001
+        lines.append(f"⚠️  grade ladder skipped: {exc}")
     return lines
 
 

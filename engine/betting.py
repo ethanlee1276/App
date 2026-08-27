@@ -452,6 +452,15 @@ def evaluate_prop(prop: Prop, proj: Projection,
             kelly_fraction(hit, best.odds) * fraction, best.odds)
 
     reasons = list(proj.reasons)
+    # WHAT THE GRADE ABOUT TO GO ON THIS CARD HAS ACTUALLY DONE. The
+    # ladder's order is hard-coded; whether it holds up is measured
+    # (`engine.ladder`), and until now the measurement reached a terminal
+    # report and stopped there while the board went on presenting A above
+    # B+. Same shape as the market haircut's note, for the same reason.
+    from .ladder import note_for as _ladder_note
+    _ladder = _ladder_note(sport) if grade in ("A+", "A") else None
+    if _ladder:
+        reasons.insert(0, _ladder)
     if pattern_block:
         reasons.insert(0, pattern_block)
     if not calibration_ok:
