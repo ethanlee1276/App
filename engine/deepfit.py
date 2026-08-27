@@ -154,6 +154,45 @@ def refit_touchdowns(db: str = "data/history.db") -> list[str]:
             f"{fit.brier_before:.4f} → {fit.brier_after:.4f}"]
 
 
+def refit_cfb_touchdowns(db: str = "data/history.db") -> list[str]:
+    """The college touchdown market, for the same reason the NFL's is here.
+
+    `calibrate.SPORT_MARKETS` leaves CFB out entirely and `fit_market`
+    could not fit a touchdown anyway — there is no line to compare a
+    projection against. So `correction_for("cfb", "anytime_td")` returned
+    the neutral (1.0, 0.0) from the day the college longshot board
+    shipped, while `longshots.calibrated_prob` faithfully applied it.
+
+    `engine.cfbtdfit` replays the model's role chain over every ingested
+    college season and produces the (claimed, scored) pairs
+    `calibrate.fit` wants. It is a prior, not the final word — the
+    journal fitter replaces this key once 200 college touchdown picks
+    have settled — and it is a prior the measurement says the board
+    needs: conservative by five points in the band the longshots live
+    in.
+    """
+    try:
+        import sqlite3
+        from .cfbtdfit import fit_calibration, MIN_FIT_PAIRS
+        path = db if os.path.isabs(db) else os.path.join(ROOT, db)
+        if not os.path.isfile(path):
+            return []
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        try:
+            fit, report = fit_calibration(conn)
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  cfb touchdown calibration skipped: {exc}"]
+    if fit is None:
+        return [f"deep refit: cfb touchdowns — {report.n:,} graded "
+                f"player-games, needs {MIN_FIT_PAIRS:,}"]
+    return [f"deep refit: cfb touchdowns refit on {report.n:,} "
+            f"player-games — T={fit.temperature} bias={fit.intercept:+.2f}, "
+            f"Brier {fit.brier_before:.4f} → {fit.brier_after:.4f}"]
+
+
 def refit_all(db: str = "data/history.db") -> list[str]:
     """Every sport with the history for it. Returns log lines."""
     sports = sports_with_history(db)
@@ -162,9 +201,11 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     lines = []
     for sport in sports:
         lines.extend(refit_sport(sport, db))
-    # Outside the per-sport loop: the touchdown fit is NFL-only and is
-    # driven by its own replay rather than by the three CLIs above.
+    # Outside the per-sport loop: both touchdown fits are driven by their
+    # own replays rather than by the three CLIs above, because a
+    # touchdown has no line for `calibrate.fit_market` to walk.
     lines.extend(refit_touchdowns(db))
+    lines.extend(refit_cfb_touchdowns(db))
     return lines
 
 

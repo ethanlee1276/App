@@ -675,12 +675,21 @@ def ingest_cfb_history(conn, seasons: list[int], id_to_abbr: dict | None = None,
 
     ``id_to_abbr`` maps ESPN team ids to the abbreviations the board
     uses — pass `{meta["id"]: abbr}` built from `cfbdata.parse_teams`
-    when a build has the teams feed. Without it the rows are keyed
-    ``espn:<id>``, which measures every constant identically (they
-    depend on each team having ONE key, not on what it is called) while
-    staying visibly distinct from a real abbreviation.
+    when a build has the teams feed. Left as None it reads the map a
+    previous build persisted. With neither, rows are keyed ``espn:<id>``,
+    which measures every constant identically (they depend on each team
+    having ONE key, not on what it is called) while staying visibly
+    distinct from a real abbreviation — and `remap_cfb_team_keys`
+    rewrites them the first time a build does have the feed.
     """
     from .sources import cfbfastr
+    if id_to_abbr is None:
+        # A build that HAD the teams feed wrote the map down
+        # (engine.cfbteams.remember_ids). Reading it here is what keeps a
+        # later backfill from re-introducing ``espn:`` keys the board
+        # cannot join, on a box that has already learned the real ones.
+        from . import cfbteams
+        id_to_abbr = cfbteams.load_ids() or None
     result = {"games": 0, "seasons": [], "skipped": []}
     for season in seasons:
         try:
@@ -696,3 +705,155 @@ def ingest_cfb_history(conn, seasons: list[int], id_to_abbr: dict | None = None,
         if not quiet:
             print(f"  cfb {season}: {n} FBS games")
     return result
+
+
+def cfb_games_for(conn, season: int) -> dict:
+    """``{game_id: {period, home, away, home_name, away_name}}``.
+
+    The join `engine.sources.cfbstats` resolves school names through. It
+    reads the schedule rows we already ingested, so player rows can only
+    ever land on a team that was playing in that game, and only for the
+    games the schedule kept — FBS vs FBS with a final score.
+    """
+    import json as _json
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT game_id, period, home, away, home_score, away_score, extra "
+            "FROM games WHERE sport='cfb' AND season=?", (int(season),)):
+        try:
+            extra = _json.loads(r["extra"] or "{}")
+        except (ValueError, TypeError):
+            extra = {}
+        out[str(r["game_id"])] = {
+            "period": r["period"], "home": r["home"], "away": r["away"],
+            "home_name": extra.get("home_name", ""),
+            "away_name": extra.get("away_name", ""),
+            # The final score, which is what `cfbstats._failing_weeks`
+            # audits the feed's touchdowns against. A week that delivers
+            # a fifth of its own points as touchdowns has lost its
+            # scoring plays, and 2025 lost seven weeks of them.
+            "points": (r["home_score"] or 0) + (r["away_score"] or 0),
+        }
+    return out
+
+
+def ingest_cfb_player_history(conn, seasons: list[int],
+                              quiet: bool = False) -> dict:
+    """Past college PLAYER production, so the TD board has somebody to price.
+
+    The companion to `ingest_cfb_history`, and the more urgent half.
+    Results let `engine.cfb.ratings` measure a scoring baseline; player
+    rows are what `engine.cfb.tds` needs to name a scorer at all. Its
+    rule is that a quoted player with no ingested usage gets no pick, and
+    on 2026-08-27 this database held TEN CFB player rows — so the college
+    touchdown board would have shipped empty.
+
+    Rows land ONLY for games already in the schedule, keyed exactly as
+    that schedule keyed them. Backfill the results first; a player-log
+    pass on an empty schedule writes nothing and says so.
+    """
+    from .sources import cfbstats
+    result = {"rows": 0, "assets": 0, "seasons": [], "skipped": []}
+    for season in seasons:
+        games = cfb_games_for(conn, int(season))
+        if not games:
+            result["skipped"].append(
+                f"cfb players {season}: no ingested games to join to — "
+                f"run the results backfill for {season} first")
+            continue
+        try:
+            roster = cfbstats.fetch_rosters(int(season))
+        except DataUnavailable as exc:
+            # A position and a headshot are decoration; the usage rows
+            # are the point. Losing the roster costs a label, not a row.
+            roster = {}
+            result["skipped"].append(f"cfb rosters {season}: {exc}")
+        try:
+            out = cfbstats.fetch_season(int(season), games, roster=roster)
+        except DataUnavailable as exc:
+            result["skipped"].append(f"cfb players {season}: {exc}")
+            continue
+        n = db.upsert_player_logs(conn, out["rows"]) if out["rows"] else 0
+        if out["assets"]:
+            result["assets"] += db.upsert_player_assets(conn, out["assets"])
+        result["rows"] += n
+        result["seasons"].append({"season": int(season), "rows": n,
+                                  "games": out["games"],
+                                  "players": out["players"],
+                                  "skipped": out["skipped"]})
+        db.log_ingest(conn, "cfb", "player_logs", str(season), n)
+        if not quiet:
+            print(f"  cfb {season}: {n} player rows across {out['games']} "
+                  f"games ({out['players']} player-games)")
+        # A DROPPED WEEK IS A FINDING, NOT HOUSEKEEPING. The 2025 file is
+        # missing its scoring plays from week 10 on, and a coverage audit
+        # that refused them quietly would look exactly like a coverage
+        # audit that never ran.
+        for note in out["skipped"]:
+            if note.startswith("week "):
+                result["skipped"].append(f"cfb {season} {note}")
+                if not quiet:
+                    print(f"    dropped: {note}")
+    return result
+
+
+#: The prefix `engine.sources.cfbfastr` keys a team under when it had no
+#: abbreviation to use. Deliberately a form no real abbreviation can
+#: collide with — which is what makes rewriting it safe.
+ESPN_KEY_PREFIX = "espn:"
+
+
+def remap_cfb_team_keys(conn, id_to_abbr: dict | None = None) -> dict:
+    """Rewrite backfilled ``espn:<id>`` team keys to real abbreviations.
+
+    FOUR SEASONS OF HISTORY THE BOARD COULD NOT SEE. The CFB backfill
+    runs from wherever the nightly runs, and where ESPN's teams feed is
+    refused it keys every team ``espn:61`` rather than guess. The live
+    board keys the same school ``UGA``. Nothing joins: `engine.cfb.tds`
+    looks up a quoted player's usage under the board's key, finds
+    nothing, and prices nobody — with 268,240 measured player rows in
+    the table.
+
+    So the first build that DOES have the teams feed repairs it. The map
+    is ``{ESPN team id: abbreviation}``; without one this reads the map
+    `engine.cfbteams` persisted from an earlier build. Returns
+    ``{"games": n, "player_logs": n, "teams": n, "unmapped": [...]}`` —
+    the unmapped ids are the ones still keyed ``espn:``, which is a
+    finding (a school the teams feed did not carry) rather than a
+    failure.
+
+    Team is not part of either table's primary key, so this can never
+    collide two rows into one.
+    """
+    from . import cfbteams
+    mapping = {str(k): str(v) for k, v in
+               (id_to_abbr or cfbteams.load_ids() or {}).items() if k and v}
+    out = {"games": 0, "player_logs": 0, "teams": 0, "unmapped": []}
+    if not mapping:
+        return out
+    present = set()
+    for table, columns in (("games", ("home", "away")),
+                           ("player_game_logs", ("team", "opponent"))):
+        for column in columns:
+            for (value,) in conn.execute(
+                    f"SELECT DISTINCT {column} FROM {table} WHERE sport='cfb' "
+                    f"AND {column} LIKE ?", (ESPN_KEY_PREFIX + "%",)):
+                present.add(str(value))
+    if not present:
+        return out
+    for key in sorted(present):
+        abbr = mapping.get(key[len(ESPN_KEY_PREFIX):])
+        if not abbr:
+            out["unmapped"].append(key)
+            continue
+        out["teams"] += 1
+        for table, columns in (("games", ("home", "away")),
+                               ("player_game_logs", ("team", "opponent"))):
+            for column in columns:
+                cur = conn.execute(
+                    f"UPDATE {table} SET {column}=? "
+                    f"WHERE sport='cfb' AND {column}=?", (abbr, key))
+                out["games" if table == "games" else "player_logs"] += \
+                    cur.rowcount or 0
+    conn.commit()
+    return out

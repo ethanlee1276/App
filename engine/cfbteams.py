@@ -43,6 +43,18 @@ STATE_PATH = _feedstate.path("cfb_teams.json")
 #: A book's team string longer than this is not a team string.
 MAX_NAME = 80
 
+#: The OTHER college naming problem, in its own file beside this one.
+#: History comes off the sportsdataverse mirror keyed by ESPN's numeric
+#: team id; the live board keys teams by abbreviation. When the teams
+#: feed is unreachable — and a standard egress policy refuses it — the
+#: backfill lands under ``espn:61`` and cannot join the ``UGA`` the
+#: board prices, so four seasons of measured usage sit next to a board
+#: that cannot see them. A build that DOES have the teams feed knows
+#: both halves; this writes that down once so every later backfill keys
+#: correctly from the start, and `engine.ingest.remap_cfb_team_keys`
+#: rewrites what already landed.
+IDS_PATH = _feedstate.path("cfb_ids.json")
+
 
 def load(path: str | None = None) -> dict:
     """``{book's spelling: canonical abbreviation}``, or ``{}``.
@@ -86,6 +98,52 @@ def remember(pairs: dict, path: str | None = None) -> int:
         tmp = f"{path}.tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump({"teams": dict(sorted(current.items()))}, fh, indent=2)
+        os.replace(tmp, path)      # atomic: a torn map is worse than none
+        return len(fresh)
+    except OSError:
+        return 0
+
+
+def load_ids(path: str | None = None) -> dict:
+    """``{ESPN team id: canonical abbreviation}``, or ``{}``.
+
+    Never raises, for the same reason `load` does not: this sits in a
+    nightly's path and a missing file means "key history the way it was
+    keyed before", not "stop".
+    """
+    try:
+        with open(path or IDS_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in (data.get("ids") or {}).items()
+            if str(k).strip() and str(v).strip()}
+
+
+def remember_ids(pairs: dict, path: str | None = None) -> int:
+    """Merge ``{ESPN team id: abbreviation}`` into the stored map.
+
+    Accumulates like `remember` and for the same reason: one build sees
+    the teams that were playing, and a map that shrank to a Tuesday
+    slate would make a backfill's keying depend on the night it ran.
+    """
+    path = path or IDS_PATH
+    clean = {str(k).strip(): str(v).strip() for k, v in (pairs or {}).items()
+             if str(k).strip() and str(v).strip()}
+    if not clean:
+        return 0
+    try:
+        current = load_ids(path)
+        fresh = {k: v for k, v in clean.items() if current.get(k) != v}
+        if not fresh:
+            return 0
+        current.update(clean)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"ids": dict(sorted(current.items()))}, fh, indent=2)
         os.replace(tmp, path)      # atomic: a torn map is worse than none
         return len(fresh)
     except OSError:

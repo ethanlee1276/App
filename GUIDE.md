@@ -150,6 +150,7 @@ auto-settle last ran, so you can see the loop is alive.
 | NBA history | `python3 ingest.py nba --seasons 2021-2026 --scores-only` |
 | WNBA history (May–October, the live one right now) | `python3 ingest.py wnba --seasons 2021-2026` |
 | College football history | `python3 ingest.py cfb --seasons 2021-2026` |
+| College football history **from a server** (results + player usage, one request a season) | `python3 ingest.py cfbhist --seasons 2022-2025` |
 | WNBA board (May–September) | builds automatically once the history above is ingested; it is **on probation** — see below |
 
 | Confirm a college QB (turns a conditional into a bet) | `python3 launch.py --confirm-qb "TOL" --starter "Name"` |
@@ -235,6 +236,14 @@ python3 ingest.py wnba --seasons 2021-2026
 python3 ingest.py mlb  --seasons 2021-2026
 python3 ingest.py nba  --seasons 2021-2026 --scores-only
 ```
+
+`ingest.py cfb` goes to ESPN, one request per day and one per box score,
+which many cloud hosts are refused outright. `ingest.py cfbhist` reads
+whole finished seasons off the sportsdataverse mirror instead — finished
+results AND play-level player production, one request each. That second
+half is what the college touchdown board prices off: it will not quote a
+player it has no ingested usage for, so without it the board is empty.
+The nightly runs it by itself on a box that needs it.
 
 **Start with CFB and WNBA** — they're fast and they unblock the two boards
 that need it most. MLB is a few hours. **NBA is the slow one:** a season is

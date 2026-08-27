@@ -70,6 +70,12 @@ def _save_state(path: Path, state: dict) -> None:
     path.write_text(json.dumps(state))
 
 
+#: Below this many graded college player-games, the CFB touchdown board
+#: has nobody to price and the backfill runs. One FBS season is ~16,000
+#: player-games; anything under a few thousand is an empty table or a
+#: half-finished pull, not a season.
+CFB_MIN_PLAYER_ROWS = 5_000
+
 BACKUP_DIR = ROOT / "data" / "backups"
 BACKUP_EVERY_DAYS = 7
 BACKUP_KEEP = 6
@@ -941,6 +947,53 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                     log(f"  ⚠️  {s_}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  cfb history backfill failed: {exc}")
+
+        # THE PLAYER HALF, AND THE ONE THE BOARD ACTUALLY SHOWS. Results
+        # let the CFB model measure its own variance; player rows are
+        # what engine/cfb/tds.py needs to name a scorer at all — its
+        # first rule is that a quoted player with no ingested usage gets
+        # no pick. This database held TEN CFB player rows, so the college
+        # touchdown board could price nobody. Guarded on the count and
+        # refreshed weekly in season: the mirror publishes finished
+        # weeks, so Monday (after the weekend, and after any Sunday
+        # correction) is when a new week is there to read.
+        try:
+            from . import db as _pcdb
+            from .ingest import ingest_cfb_player_history
+            _pconn = _pcdb.connect()
+            have = _pconn.execute(
+                "SELECT COUNT(*) FROM player_game_logs WHERE sport='cfb' "
+                "AND market='anytime_td'").fetchone()[0]
+            season = today.year if today.month >= 8 else today.year - 1
+            seasons = []
+            if have < CFB_MIN_PLAYER_ROWS:
+                seasons = [today.year - n for n in (4, 3, 2, 1)]
+            elif today.weekday() == 0:
+                seasons = [season]
+            if seasons:
+                res = ingest_cfb_player_history(_pconn, seasons, quiet=True)
+                log(f"  cfb players: {res['rows']:,} log rows across "
+                    f"{len(res['seasons'])} season(s), "
+                    f"{res['assets']:,} identities — the touchdown board "
+                    f"now has usage to price")
+                for s_ in res["skipped"]:
+                    log(f"  ⚠️  {s_}")
+                # AND FIT IT NOW, NOT ON WEDNESDAY. The deep refit that
+                # owns `cfb:anytime_td` runs weekly; college football
+                # plays on Saturday. On a box that has just ingested its
+                # first four seasons, waiting for the next deep-refit day
+                # means the first weekend of the season is priced on the
+                # neutral correction the board has carried since it
+                # shipped — while the measurement says the model is
+                # conservative by five points in the longshot band. The
+                # guard above only lets the backfill run once, so this
+                # runs once with it.
+                if have < CFB_MIN_PLAYER_ROWS and res["rows"]:
+                    from .deepfit import refit_cfb_touchdowns
+                    for line in refit_cfb_touchdowns():
+                        log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  cfb player backfill failed: {exc}")
 
         # Play-by-play refresh — the measured red-zone roles. The file is
         # ~100MB, so once a week (Tuesdays, after Monday night) is the

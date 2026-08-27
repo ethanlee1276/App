@@ -20,16 +20,31 @@ then P(scores) = 1 − e^(−rate), priced against the book's Yes quote
 through the same tempering, market-shrink and credibility guards every
 long shot passes (engine/longshots.build_pick).
 
-WHAT THIS MODEL LEANS ON AND SAYS SO. College has no snap counts, no
-red-zone splits and no play-by-play in our feeds — the opportunity
-signal is each player's share of his team's rushing + receiving yards
-from ingested box scores (engine/sources/cfbdata). Early in a season
-those logs are LAST season's: returning production is a real predictor
-and a transfer is invisible to it, so every pick built off a prior
-season carries the caveat by name. No logs at all for a quoted player
-means no pick — a price with no opportunity evidence behind it is a
-lottery ticket, and the strategy's first rule is that we do not sell
+WHAT THIS MODEL LEANS ON AND SAYS SO. The opportunity signal is each
+player's share of his team's rushing + receiving yards, and the
+strongest single thing we know about him is his own scoring rate; the
+two are blended on a fitted weight (`TD_HISTORY_GAMES`). Early in a
+season those logs are LAST season's: returning production is a real
+predictor and a transfer is invisible to it, so every pick built off a
+prior season carries the caveat by name. No logs at all for a quoted
+player means no pick — a price with no opportunity evidence behind it is
+a lottery ticket, and the strategy's first rule is that we do not sell
 those.
+
+WHY IT IS NOT THE NFL MODEL, MEASURED RATHER THAN ASSERTED. This file
+used to say college had no play-by-play in our feeds and therefore no
+red-zone splits. It has both now: `engine.sources.cfbstats` ingests
+play-level college production off the sportsdataverse mirror, red-zone
+and inside-the-five carries included. The obvious next step was to lean
+on them the way `engine.touchdowns` leans on red-zone role. Measured
+(`engine.cfbtdfit.ROLE_FEATURES`), red-zone role does carry information
+the yardage share does not — but inside THIS model's share term, where
+a share is divided by its position's typical share and clamped, adding
+it at the weight the training grid picked moved held-out Brier by one
+ten-thousandth. So the share stays as it was, the blend and the
+position anchors are fitted instead, and the red-zone markets stay
+ingested and shown on player pages rather than priced on a gain that
+cannot be told from noise.
 """
 
 from __future__ import annotations
@@ -51,10 +66,35 @@ CFB_AVG_TEAM_OFF_TDS = 3.4
 #: room 0.24), which handed every individual starter his entire
 #: position room's touchdown equity: the model priced a 65% WR1 the
 #: books had at 43%, and the credibility guard rightly refused the
-#: whole board. A college WR1 catches ~0.5 of his team's ~3.4 TDs
-#: (0.15); a bell-cow back scores ~0.9 (0.26); QBs run more of it in
-#: college than the NFL ever lets them.
-POSITION_TD_SHARE = {"RB": 0.26, "WR": 0.15, "TE": 0.08, "QB": 0.16}
+#: whole board. The second cut was four reasoned guesses.
+#:
+#: FITTED 2026-08-27, once there was a position to fit against. These
+#: numbers only mean anything if the label is real, and until
+#: `engine.sources.cfbstats` joined the mirror's roster file there was
+#: no position in a college box score at all — `role_of` inferred RB or
+#: WR from the usage mix and was wrong for 7,835 of 28,141 graded
+#: player-games, 3,432 tight ends read as receivers and 3,798
+#: quarterbacks as backs or receivers.
+#:
+#: Coordinate descent on 2022-23, scored on 2024-25 (`engine.cfbtdfit`):
+#:
+#:     inferred labels, guessed anchors     held-out Brier 0.18477
+#:     roster labels,   guessed anchors                    0.18526
+#:     roster labels,   FITTED anchors                     0.18434
+#:
+#: (measured before the blend was refitted, so all three carry the old
+#: games/20 cap 0.40; the comparison between them is the point)
+#:
+#: The middle row is the one worth reading. Correcting the label while
+#: keeping anchors that had been tuned AGAINST the wrong label made the
+#: model worse — a real tight end priced off a number built for
+#: misfiled receivers. The two changes only pay together, which is why
+#: neither shipped alone.
+#:
+#: What moved: quarterbacks from 0.16 to 0.25 (college lets them run,
+#: and the guess was an NFL instinct), tight ends from 0.08 to 0.11,
+#: backs from 0.26 to 0.28. Receivers did not move at all.
+POSITION_TD_SHARE = {"RB": 0.28, "WR": 0.15, "TE": 0.11, "QB": 0.25}
 
 #: Volume share a typical starter at the position commands, so a role is
 #: scaled rather than floored (same reasoning as the NFL table).
@@ -69,6 +109,46 @@ OPP_TARGET = {"RB": 15.0, "WR": 6.0, "TE": 5.0, "QB": 10.0}
 #: nothing — early-season schedules are cupcakes and body bags.
 MIN_DEFENSE_GAMES = 3
 
+#: HOW FAST A PLAYER'S OWN SCORING RECORD TAKES OVER FROM HIS ROLE, and
+#: how far it may go. Both were guesses — `games / 10` capped at 0.70,
+#: carried across from the NFL model's own pre-measurement guess — and
+#: neither had ever once run, because the database held ten CFB player
+#: rows and the blend only engages above three logged games.
+#:
+#: Fitted on 2026-08-27 by `engine.cfbtdfit` over 28,141 graded college
+#: player-games: chosen on 2022-23, scored on 2024-25. The record wants
+#: the history to come on more slowly and stop lower. Held-out Brier:
+#:
+#:     role share alone, no history      0.18657
+#:     the guessed games/10 cap 0.70     0.18593
+#:     the fitted games/25 cap 0.30      0.18446
+#:
+#: The training surface is FLAT across games/20-30 and every cap from
+#: 0.2 to 0.7 — 0.18977 to 0.18997 — so this is a plateau, not a peak,
+#: and the argmin was taken rather than argued for. What the plateau
+#: does say clearly is that the old guess sat well outside it: half a
+#: season of a player's own touchdown rate is worth about 30% of the
+#: number, not 70% after ten games.
+TD_HISTORY_GAMES = 25.0
+TD_HISTORY_MAX_WEIGHT = 0.30
+
+
+#: Distinct players a season must have logged before it is preferred
+#: over the newest season that has any. A single Saturday of FBS is
+#: thousands; anything under a few hundred is a partial ingest or a
+#: fixture, and letting it win would hand the board one team's worth of
+#: usage and hide four ingested seasons behind it. Deliberately NOT a
+#: judgement about whether two weeks of this season beat all of last —
+#: that is a real modelling question and this is not an answer to it.
+MIN_SEASON_PLAYERS = 200
+
+
+def _players_logged(conn, season) -> int:
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT player) FROM player_game_logs "
+        "WHERE sport='cfb' AND season=?", (season,)).fetchone()
+    return int(row[0] or 0) if row else 0
+
 
 def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
     """``(season_used, {team: {norm_name: usage}})`` from ingested logs.
@@ -79,17 +159,27 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
     has none — the caller states the fallback on every pick it feeds.
     """
     from ..sources.oddsapi import normalize_name
-    if season is None or not conn.execute(
-            "SELECT 1 FROM player_game_logs WHERE sport='cfb' AND season=? "
-            "LIMIT 1", (season,)).fetchone():
-        row = conn.execute("SELECT MAX(season) FROM player_game_logs "
-                           "WHERE sport='cfb'").fetchone()
+    if season is None or _players_logged(conn, season) < MIN_SEASON_PLAYERS:
+        # The newest season that is actually a season. MAX(season) alone
+        # returns the thin one we just rejected, which is how four
+        # ingested seasons ended up hidden behind four fixture rows — so
+        # the last resort is the season with the MOST logged players
+        # (newest wins ties), never simply the newest.
+        row = conn.execute(
+            "SELECT season FROM player_game_logs WHERE sport='cfb' "
+            "GROUP BY season HAVING COUNT(DISTINCT player) >= ? "
+            "ORDER BY season DESC LIMIT 1", (MIN_SEASON_PLAYERS,)).fetchone()
+        if row is None:
+            row = conn.execute(
+                "SELECT season FROM player_game_logs WHERE sport='cfb' "
+                "GROUP BY season ORDER BY COUNT(DISTINCT player) DESC, "
+                "season DESC LIMIT 1").fetchone()
         season = int(row[0]) if row and row[0] is not None else 0
     if not season:
         return 0, {}
     out: dict = {}
     for r in conn.execute(
-            "SELECT team, player, market, AVG(value) AS mean, "
+            "SELECT team, player, position, market, AVG(value) AS mean, "
             "COUNT(DISTINCT game_id) AS games FROM player_game_logs "
             "WHERE sport='cfb' AND season=? "
             "AND market IN ('carries','receptions','rush_yds','rec_yds',"
@@ -99,22 +189,47 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
         u = t.setdefault(normalize_name(r["player"]),
                          {"player": r["player"], "carries": 0.0,
                           "receptions": 0.0, "rush_yds": 0.0, "rec_yds": 0.0,
-                          "games": 0})
+                          "games": 0, "position": ""})
         u[r["market"]] = float(r["mean"] or 0.0)
         u["games"] = max(u["games"], int(r["games"] or 0))
+        # A blank never overwrites a known position: the ESPN box ingest
+        # stores none, the mirror's roster join does, and the same
+        # player can arrive from both.
+        u["position"] = u["position"] or (r["position"] or "").strip().upper()
     return season, out
 
 
-def role_of(u: dict) -> str:
-    """RB / WR / QB from the usage mix — college boxes carry no position.
+#: A roster position, folded onto the four the model prices. Anything
+#: else — a punter who took a fake, a lineman on a tackle-eligible — is
+#: not in the table and falls through to the usage mix, which is the
+#: right answer for a player being priced on what he actually did.
+ROSTER_ROLES = {"QB": "QB", "RB": "RB", "FB": "RB", "WR": "WR", "TE": "TE"}
 
-    A heavy runner who also catches is a back; a pure runner with a
-    quarterback's volume signature (high carries, near-zero receptions,
-    meaningful rush yards on few carries) is indistinguishable from a QB
-    here, so the split is carries-vs-catches only and QB is never
-    guessed — mislabelling a dual-threat QB as an RB overstates his
+
+def role_of(u: dict) -> str:
+    """RB / WR / TE / QB — the roster's answer if we have one, else the mix.
+
+    College BOX SCORES carry no position, which is why this used to be
+    pure inference off carries-vs-catches. The mirror's roster file does
+    carry one (`engine.sources.cfbstats.parse_rosters`), and the
+    inference was wrong for 28% of graded player-games: 4,430 tight ends
+    read as wide receivers, 4,835 quarterbacks as backs or receivers.
+
+    It is shipped as a LABEL fix and measured as one. Held-out Brier
+    over 2024-25 moved 0.15104 → 0.15098 — which is nothing. The
+    position table's four values sit close together and the fitted
+    history blend absorbs most of what is left, so correcting the label
+    did not make the model better. It stops the board calling a tight
+    end a wide receiver on a public page, and that is the whole claim.
+
+    Without a roster position the old inference stands, unchanged: a
+    heavy runner who also catches is a back, and QB is never guessed —
+    mislabelling a dual-threat quarterback as a back overstates his
     baseline less than the reverse.
     """
+    seen = ROSTER_ROLES.get(str(u.get("position") or "").strip().upper())
+    if seen:
+        return seen
     if u["carries"] >= 2.0 and u["carries"] >= u["receptions"] * 1.5:
         return "RB"
     return "WR"
@@ -286,7 +401,8 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             td_mean = u.get("anytime_td")
             td_reason = []
             if td_mean is not None and u["games"] >= 3:
-                w = clamp(u["games"] / 10.0, 0.0, 0.7)
+                w = clamp(u["games"] / TD_HISTORY_GAMES, 0.0,
+                          TD_HISTORY_MAX_WEIGHT)
                 hist_share = clamp(td_mean / CFB_AVG_TEAM_OFF_TDS, 0.0, 0.45)
                 base = clamp(w * hist_share + (1 - w) * base, 0.01, 0.45)
                 td_reason = [f"Scores {td_mean:.2f} TD/game over "

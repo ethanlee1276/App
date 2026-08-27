@@ -510,6 +510,34 @@ def main() -> None:
     out["teams"] = teams
     lookup = cfbdata.team_lookup(teams)
 
+    # THE ID MAP, WRITTEN DOWN AND APPLIED. History comes off the
+    # sportsdataverse mirror keyed by ESPN's numeric team id; where that
+    # backfill ran without this feed it keyed every school ``espn:61``,
+    # and four seasons of measured player usage sat next to a board that
+    # keys the same school ``UGA`` and therefore could not see any of it.
+    # This build has both halves. Persist them so later backfills key
+    # correctly from the start, then repair what already landed.
+    if teams:
+        try:
+            from engine import cfbteams as _cfbteams, ingest as _cfbingest
+            from engine import db as _cfbdb
+            ids = {str(meta.get("id") or ""): abbr
+                   for abbr, meta in teams.items() if meta.get("id")}
+            _cfbteams.remember_ids(ids)
+            fixed = _cfbingest.remap_cfb_team_keys(_cfbdb.connect(), ids)
+            if fixed["teams"]:
+                print(f"  CFB history: re-keyed {fixed['teams']} school(s) "
+                      f"from ESPN ids to abbreviations — "
+                      f"{fixed['games']:,} game row(s) and "
+                      f"{fixed['player_logs']:,} player row(s) now join "
+                      f"the board.")
+            if fixed["unmapped"]:
+                print(f"  CFB history: {len(fixed['unmapped'])} team id(s) "
+                      f"not in the teams feed, still keyed by id "
+                      f"(e.g. {', '.join(fixed['unmapped'][:3])})")
+        except Exception as exc:                             # noqa: BLE001
+            print(f"  CFB history re-key skipped: {exc}")
+
     try:
         confs = cfbdata.fetch_conferences()
         games = cfbdata.parse_scoreboard(cfbdata.fetch_scoreboard(args.date),
@@ -562,7 +590,22 @@ def main() -> None:
     # projection is a property of the sport, not of one roster.
     ratings = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
                                              seasons=[day.year])
-    fit = cfbratings.fit_from_history(conn, ratings)
+    # …AND A SECOND MAP, FOR THE VARIANCE ONLY. `fit_from_history`
+    # measures residuals around whatever ratings it is handed, and can
+    # only use a game where BOTH teams are in the map — so passing the
+    # current-season map meant that in week 1, with two teams rated, the
+    # fit found no residuals at all, borrowed all three spreads from the
+    # prior, and reported fitted=False. That flag is what
+    # `engine.probation` reads: the whole college board would have sat
+    # unstaked through the opening weeks with 3,132 measured games in the
+    # table. The comment above always said the variance fit "uses every
+    # season it can get"; until this map existed it did not.
+    #
+    # The two maps are not interchangeable. The board projects with the
+    # current season because rosters turn over; the variance is a
+    # property of the sport and wants every game there is.
+    all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
     cfbratings.install(fit)
 
     # §5/§6 — the preseason prior, built from high-school recruiting. In

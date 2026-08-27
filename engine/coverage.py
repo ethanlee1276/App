@@ -354,16 +354,30 @@ def cfb(conn) -> SportCoverage:
     # label is the one number on the board nobody would think to check.
     import datetime as _dt
     season = _dt.date.today().year
-    rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
-                                           seasons=[season])
-    if not rates:                     # out of season — fit on what we have
-        rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    # EVERY SEASON, like the build's own variance fit. A current-season
+    # map is two teams in August and cannot produce a single residual, so
+    # this scan reported the sport's measured variance as MISSING while
+    # its own detail line said "Fitted on 3,133 CFB games". The `if not
+    # rates` guard below was written for an EMPTY map and a two-team map
+    # is just as useless, which is how it survived.
+    rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    if not rates:
+        rates = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
+                                               seasons=[season])
     fit = R.fit_from_history(conn, rates)
     talent_key = _has_key("CFBD_API_KEY")
     qb = ROOT / "data" / "cfb_qb_status.json"
     return SportCoverage("cfb", "College football", [
         _results_layer(conn, "cfb", R.MIN_GAMES,
-                       "python3 ingest.py cfb --seasons 2021-2026"),
+                       "python3 ingest.py cfbhist --seasons 2022-2025"),
+        # THE LAYER THAT WAS NOT ON THIS SCAN, AND THE ONE THE TOUCHDOWN
+        # BOARD IS ENTIRELY MADE OF. `engine.cfb.tds` will not quote a
+        # player it has no ingested usage for, and on 2026-08-27 this
+        # database held ten CFB player rows against 3,132 games — a board
+        # that would have published empty, with nothing on the coverage
+        # page saying why.
+        _logs_layer(conn, "cfb", 20_000,
+                    "python3 ingest.py cfbhist --seasons 2022-2025"),
         Layer("Schedule / conferences / rankings", "attention tier is the "
               "whole model, and it reads all three", OK,
               "ESPN college-football feed, keyless"),
@@ -389,7 +403,10 @@ def cfb(conn) -> SportCoverage:
               "none recorded yet — every game publishes as a conditional",
               'python3 launch.py --confirm-qb "TEAM"'),
         Layer("Play-by-play efficiency", "§5's success rate and drive stats",
-              PARKED, "no free CFB play-by-play ingest"),
+              PARKED,
+              "play-level rows ARE ingested now (engine/sources/cfbstats — "
+              "red-zone and inside-five carries reach the touchdown model); "
+              "success rate and drive stats are still not computed from them"),
         _journal_layer("cfb"),
     ])
 

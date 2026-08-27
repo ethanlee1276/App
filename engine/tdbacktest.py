@@ -83,7 +83,12 @@ def implied_total(total, spread, is_home: bool) -> float | None:
 class TDBacktest:
     """What the touchdown model claimed, and what actually happened."""
 
-    def __init__(self):
+    def __init__(self, label: str = "NFL"):
+        #: What the summary calls itself. The class is sport-agnostic —
+        #: `engine.cfbtdfit` grades college football through it — and a
+        #: report headed "NFL" over college rows is the kind of label
+        #: nobody re-reads once it has scrolled past.
+        self.label = label
         self.n = 0
         self.scored = 0
         self.claimed = 0.0
@@ -131,7 +136,7 @@ class TDBacktest:
             return ("No touchdown rows to grade. Needs ingested anytime_td "
                     "logs plus schedule spreads and totals.")
         lines = [
-            f"NFL anytime-TD backtest · {self.n:,} player-weeks",
+            f"{self.label} anytime-TD backtest · {self.n:,} player-weeks",
             f"  Claimed     {self.claimed / self.n:.1%} on average, "
             f"{self.base_rate:.1%} actually scored",
             f"  Brier       {self.brier:.4f}  (always-guess "
@@ -265,6 +270,17 @@ def run(conn, sport: str = "nfl", seasons=None,
             t = team_week.setdefault((season, wk, team), {"opp": 0.0})
             t["opp"] += marks.get("targets", 0.0) + marks.get("carries", 0.0)
 
+    # IN TIME ORDER, AND THAT IS NOT COSMETIC. `calibrate.bake_off`
+    # holds out "the later part of the sample" and judges a fitted
+    # correction on it. Built the obvious way — a loop over players, each
+    # walked forward — these pairs come out grouped by PLAYER, so the
+    # judge was scoring the correction on an arbitrary subset of the
+    # league rather than on its future, and its held-out Brier (0.125
+    # against 0.170 over the whole sample) says how unrepresentative that
+    # slice can be. Graded rows are collected and sorted before they are
+    # added, so the held-out slice is the later weeks, which is what the
+    # bake-off's own docstring promises.
+    graded: list = []
     out = TDBacktest()
     for (season, short), weeks in form.items():
         team = short[2]
@@ -315,7 +331,10 @@ def run(conn, sport: str = "nfl", seasons=None,
             prob, _why = td_probability(
                 prop, gm, _neutral_opponent(marks.get("_opp", "") or "OPP"),
                 share, red_zone=rz)
-            out.add(float(prob), 1 if marks.get("anytime_td", 0.0) > 0 else 0)
+            graded.append((season, wk, float(prob),
+                           1 if marks.get("anytime_td", 0.0) > 0 else 0))
+    for _season, _wk, prob, scored in sorted(graded, key=lambda g: g[:2]):
+        out.add(prob, scored)
     return out.finish()
 
 

@@ -289,9 +289,46 @@ def test_usage_table_falls_back_to_the_newest_logged_season():
     assert u["carries"] == 18.0 and u["games"] == 6
 
 
-def test_role_is_read_off_the_usage_mix():
+def test_a_handful_of_rows_must_not_shadow_a_whole_ingested_season():
+    """Four fixture rows for the current season used to WIN the season
+    pick — `MAX(season)` returned the same thin year the guard had just
+    rejected — and four seasons of measured usage sat behind them."""
+    conn = _cfb_hist(2025)
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, "
+                 "game_id, player, team, market, value) VALUES "
+                 "('cfb', 2026, '2026-08-30', 'x', 'One Guy', 'UGA', "
+                 "'carries', 4)")
+    conn.commit()
+    season, usage = T.usage_table(conn, 2026)
+    assert season == 2025
+    assert oa.normalize_name("Nate Frazier") in usage["UGA"]
+
+
+def test_role_prefers_the_roster_position_and_falls_back_to_the_mix():
     assert T.role_of({"carries": 18.0, "receptions": 2.0}) == "RB"
     assert T.role_of({"carries": 0.3, "receptions": 6.0}) == "WR"
+    # A real position beats the inference — the mix cannot tell a tight
+    # end from a receiver or a running quarterback from a back.
+    assert T.role_of({"carries": 0.3, "receptions": 6.0,
+                      "position": "TE"}) == "TE"
+    assert T.role_of({"carries": 9.0, "receptions": 1.0,
+                      "position": "QB"}) == "QB"
+    assert T.role_of({"carries": 12.0, "receptions": 1.0,
+                      "position": "FB"}) == "RB"
+    # A position the board does not price falls through to the mix
+    # rather than crashing the lookup.
+    assert T.role_of({"carries": 0.0, "receptions": 3.0,
+                      "position": "OL"}) == "WR"
+
+
+def test_the_position_travels_from_the_log_to_the_usage_row():
+    conn = _cfb_hist(2025)
+    conn.execute("UPDATE player_game_logs SET position='TE' "
+                 "WHERE player='CU TE'")
+    conn.commit()
+    _season, usage = T.usage_table(conn, 2025)
+    assert usage["CLEM"][oa.normalize_name("CU TE")]["position"] == "TE"
+    assert T.role_of(usage["CLEM"][oa.normalize_name("CU TE")]) == "TE"
 
 
 def test_cfb_implied_total_and_script():

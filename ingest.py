@@ -274,7 +274,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Populate the historical database.")
     ap.add_argument("sport",
                     choices=["nfl", "nflpre", "mlb", "nba", "wnba", "cfb",
-                             "ufc", "status"])
+                             "cfbhist", "ufc", "status"])
     # NO default. It used to carry the NFL's "last five seasons", which
     # meant `python3 ingest.py nba` with no arguments silently launched a
     # 1,366-day backfill instead of printing usage. A command that starts
@@ -324,6 +324,29 @@ def main() -> None:
         if not res["player_logs"]:
             print("  Nothing stored. ESPN's summary endpoint is refused by "
                   "policy in the\n  cloud container — run this on the laptop.")
+    elif args.sport == "cfbhist":
+        # THE SAME SPORT OFF A DIFFERENT FEED, AND THE ONE THAT WORKS FROM
+        # A SERVER. `cfb` above reads ESPN one day at a time, which a
+        # standard egress policy refuses; this reads whole finished
+        # seasons off raw.githubusercontent.com — schedules for the
+        # ratings fit, play-level player production for the touchdown
+        # board. Results first: player rows only land for games the
+        # schedule already holds, so an empty schedule writes nothing.
+        seasons = parse_seasons(args.seasons or default_seasons())
+        print(f"Ingesting CFB history {seasons[0]}-{seasons[-1]} → {args.db}")
+        res = ingest.ingest_cfb_history(conn, seasons)
+        print(f"  games: {res['games']:,} FBS")
+        for note in res["skipped"][:5]:
+            print(f"  skipped: {note}")
+        pres = ingest.ingest_cfb_player_history(conn, seasons)
+        print(f"  player-log rows: {pres['rows']:,}   "
+              f"identities: {pres['assets']:,}")
+        for note in pres["skipped"][:5]:
+            print(f"  skipped: {note}")
+        if not pres["rows"]:
+            print("  No player rows. Without them engine/cfb/tds.py can "
+                  "price nobody\n  and the college touchdown board ships "
+                  "empty — this is the one to fix.")
     elif args.sport == "cfb":
         # College football's results come from the same keyless ESPN feed
         # the board reads, one request per day. Everything downstream needs

@@ -266,6 +266,143 @@ def test_the_installed_constants_follow_the_prior():
     assert gamebets.MARGIN_SD["cfb"] == R.PRIOR.margin_sd
 
 
+# --- the re-key, and the four seasons the board could not see ----------
+#
+# The backfill keys a team ``espn:61`` when the teams feed is refused,
+# and the live board keys the same school ``UGA``. Nothing joins:
+# `engine.cfb.tds` looks a quoted player's usage up under the board's key
+# and finds none, so it prices nobody — with 232,913 measured player rows
+# in the table. The first build that DOES have the teams feed repairs it.
+
+def _keyed_db(tmp):
+    conn = db.connect(tmp)
+    conn.execute("INSERT INTO games (sport, season, period, game_id, home, "
+                 "away, home_score, away_score) VALUES "
+                 "('cfb', 2024, '2024-09-14', '401', 'espn:61', 'espn:194', "
+                 "30, 24)")
+    conn.execute("INSERT INTO player_game_logs (sport, season, period, "
+                 "game_id, player, team, opponent, position, home, market, "
+                 "value) VALUES ('cfb', 2024, '2024-09-14', '401', 'Back', "
+                 "'espn:61', 'espn:194', 'RB', 1, 'anytime_td', 1)")
+    conn.commit()
+    return conn
+
+
+def test_the_rekey_rewrites_both_tables_and_both_sides(tmp_path=None):
+    import tempfile
+    from engine.ingest import remap_cfb_team_keys
+    with tempfile.TemporaryDirectory() as tmp:
+        conn = _keyed_db(os.path.join(tmp, "h.db"))
+        out = remap_cfb_team_keys(conn, {"61": "UGA", "194": "OSU"})
+        assert out["teams"] == 2
+        assert out["games"] == 2 and out["player_logs"] == 2
+        game = conn.execute("SELECT home, away FROM games").fetchone()
+        assert (game["home"], game["away"]) == ("UGA", "OSU")
+        log = conn.execute("SELECT team, opponent FROM "
+                           "player_game_logs").fetchone()
+        assert (log["team"], log["opponent"]) == ("UGA", "OSU")
+
+
+def test_a_team_the_feed_does_not_carry_stays_keyed_and_is_reported():
+    import tempfile
+    from engine.ingest import remap_cfb_team_keys
+    with tempfile.TemporaryDirectory() as tmp:
+        conn = _keyed_db(os.path.join(tmp, "h.db"))
+        out = remap_cfb_team_keys(conn, {"61": "UGA"})
+        assert out["unmapped"] == ["espn:194"]
+        game = conn.execute("SELECT home, away FROM games").fetchone()
+        assert (game["home"], game["away"]) == ("UGA", "espn:194")
+
+
+def test_no_map_at_all_changes_nothing():
+    import tempfile
+    from engine.ingest import remap_cfb_team_keys
+    with tempfile.TemporaryDirectory() as tmp:
+        conn = _keyed_db(os.path.join(tmp, "h.db"))
+        out = remap_cfb_team_keys(conn, {})
+        assert out == {"games": 0, "player_logs": 0, "teams": 0,
+                       "unmapped": []}
+        assert conn.execute("SELECT home FROM games").fetchone()[0] == "espn:61"
+
+
+def test_the_id_map_accumulates_across_builds():
+    import tempfile
+    from engine import cfbteams
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "ids.json")
+        assert cfbteams.remember_ids({"61": "UGA"}, path) == 1
+        assert cfbteams.remember_ids({"194": "OSU"}, path) == 1
+        assert cfbteams.load_ids(path) == {"61": "UGA", "194": "OSU"}
+        # A build that saw only what was playing must not shrink it.
+        assert cfbteams.remember_ids({"61": "UGA"}, path) == 0
+        assert len(cfbteams.load_ids(path)) == 2
+
+
+def test_an_unreadable_id_map_reads_as_empty_never_raises():
+    import tempfile
+    from engine import cfbteams
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "ids.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{not json")
+        assert cfbteams.load_ids(path) == {}
+
+
+def test_a_backfill_with_no_explicit_map_reads_the_persisted_one():
+    """Otherwise a box that already learned the real abbreviations
+    re-introduces ``espn:`` keys the next time it backfills."""
+    import inspect
+    from engine import ingest
+    source = inspect.getsource(ingest.ingest_cfb_history)
+    assert "cfbteams.load_ids()" in source
+
+
+def test_the_variance_fit_needs_ratings_for_both_sides_of_a_game():
+    """The reason the build hands it a map of EVERY season. Residuals
+    are only computed where both teams are rated, so a current-season
+    map in week 1 produces none, borrows all three spreads from the
+    prior and reports fitted=False — which `engine.probation` reads as
+    "do not stake this sport", with 3,132 measured games in the table."""
+    import tempfile
+    from engine import teamrates as _tr
+    with tempfile.TemporaryDirectory() as tmp:
+        conn = db.connect(os.path.join(tmp, "h.db"))
+        rows = []
+        teams = [f"T{i}" for i in range(20)]
+        for season in (2023, 2024):
+            for i, home in enumerate(teams):
+                for j, away in enumerate(teams):
+                    if i >= j:
+                        continue
+                    rows.append({
+                        "sport": "cfb", "season": season,
+                        "period": f"{season}-09-{(i % 28) + 1:02d}",
+                        "game_id": f"{season}-{i}-{j}", "home": home,
+                        "away": away, "home_score": 24 + (i % 7) * 3,
+                        "away_score": 17 + (j % 5) * 3,
+                        "spread": None, "total": None, "roof": None,
+                        "surface": None, "temp": None, "wind": None,
+                        "extra": None})
+        db.upsert_games(conn, rows)
+        thin = _tr.compute_team_ratings(conn, "cfb", shrink=8.0,
+                                        seasons=[2099])
+        assert not thin
+        full = _tr.compute_team_ratings(conn, "cfb", shrink=8.0)
+        assert len(full) == len(teams)
+        assert R.fit_from_history(conn, thin, min_games=10).fitted is False
+        assert R.fit_from_history(conn, full, min_games=10).fitted is True
+
+
+def test_the_build_hands_the_variance_fit_every_season():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "cfb_build.py"), encoding="utf-8") as fh:
+        source = fh.read()
+    block = source[source.index("ratings = teamrates.compute_team_ratings"):]
+    block = block[:block.index("cfbratings.install(fit)")]
+    assert 'compute_team_ratings(conn, "cfb", shrink=8.0)' in block,         "the variance fit must get a map that is not current-season only"
+    assert "fit_from_history(conn, all_seasons or ratings)" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
