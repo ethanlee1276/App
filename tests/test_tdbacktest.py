@@ -158,6 +158,80 @@ def test_a_thin_sample_is_not_fitted():
     assert report.n < T.MIN_FIT_PAIRS
 
 
+# --- the join that decides whether red-zone data reaches the model ------------
+def test_the_replay_joins_names_the_way_the_live_path_does():
+    """The bug that made the first measurement wrong.
+
+    Red-zone rows come from play-by-play and spell a player
+    "E.Higgins"; the stat rows spell him "Elijah Higgins". Keyed on the
+    raw name they are two different people, so no row carries both a
+    touchdown outcome and a red-zone history — and the replay measured
+    the model with its single best predictor switched off, silently, and
+    a calibration was fitted on that. `_short_key` is what
+    `engine.nflusage` joins on for exactly this reason.
+    """
+    src = open(os.path.join(ROOT, "engine", "tdbacktest.py"),
+               encoding="utf-8").read()
+    assert "from .fantasy import _short_key" in src
+    assert "_short_key(r[\"player\"], r[\"team\"])" in src
+
+
+def test_red_zone_rows_reach_the_model_under_the_two_spellings():
+    """The join, exercised rather than asserted: pbp spelling on the
+    red-zone rows, full name on the stat rows, same player."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seeded(conn, weeks=8)
+    # Re-file the red-zone rows under the play-by-play spelling.
+    conn.execute("UPDATE player_game_logs SET player='A.Back' "
+                 "WHERE market IN ('rz_tgt','i5_car')")
+    conn.commit()
+    seen = {"rz": 0}
+    from engine import touchdowns as _td
+    orig = T.td_probability
+
+    def spy(prop, game, opponent, share, red_zone=None):
+        if red_zone is not None and red_zone.rz_touch_share:
+            seen["rz"] += 1
+        return orig(prop, game, opponent, share, red_zone=red_zone)
+    T.td_probability = spy
+    try:
+        T.run(conn, "nfl")
+    finally:
+        T.td_probability = orig
+    assert seen["rz"] > 0, ("red-zone history did not reach the model — the "
+                            "two name spellings are being treated as two "
+                            "players again")
+
+
+# --- the history blend, fitted rather than assumed ----------------------------
+def test_the_history_blend_leans_on_the_baseline_not_the_record():
+    """Swept 2026-08-27 on two independent halves of four seasons, which
+    agreed: games/30 beats the games/10 that shipped, and beats dropping
+    history entirely. Touchdowns are rare enough that six games of them
+    is mostly variance."""
+    from engine.touchdowns import TD_HISTORY_GAMES, TD_HISTORY_MAX_WEIGHT
+    assert TD_HISTORY_GAMES > 10.0
+    assert 0.0 < TD_HISTORY_MAX_WEIGHT <= 1.0
+
+
+def test_history_still_counts_for_something():
+    """The sweep TURNED — w = 0 was worse than every blend. A player's
+    own record carries signal; the old weight just took far too much of
+    it. Dropping the term would be over-correcting a real finding."""
+    from engine.touchdowns import TD_HISTORY_GAMES
+    assert TD_HISTORY_GAMES < float("inf")
+    src = open(os.path.join(ROOT, "engine", "touchdowns.py"),
+               encoding="utf-8").read()
+    assert "samples / TD_HISTORY_GAMES" in src
+
+
+def test_the_measurement_behind_the_blend_is_written_down():
+    src = open(os.path.join(ROOT, "engine", "touchdowns.py"),
+               encoding="utf-8").read()
+    assert "0.13902" in src and "both splits agree" in src
+
+
 # --- the odds window ----------------------------------------------------------
 def test_the_longshot_ceilings_moved_on_measured_evidence():
     """The old +450 held because "our proxy-fed model cannot separate a

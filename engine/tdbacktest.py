@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import math
 
+from .fantasy import _short_key
 from .models import Game, Prop, Team, DefenseProfile, Weather, GameLog, ANYTIME_TD
 from .touchdowns import RedZoneUsage, td_probability
 
@@ -220,14 +221,33 @@ def run(conn, sport: str = "nfl", seasons=None,
         f"market, value FROM player_game_logs {where} AND market IN "
         f"('anytime_td','targets','carries','rz_tgt','rz_car','i5_car')",
         args).fetchall()
+    # KEYED THE WAY THE LIVE PATH KEYS, and this is not a detail. The
+    # red-zone rows come from play-by-play and spell a player
+    # "E.Higgins"; the stat rows spell him "Elijah Higgins". Keyed on the
+    # raw name they are two different people, so no row ever carries both
+    # a touchdown outcome and a red-zone history — which is exactly what
+    # the first cut of this module did, silently, and it measured the
+    # model with its single best predictor switched off. `_short_key`
+    # (first initial, last name, team) is what `engine.nflusage` joins on
+    # for the same reason; using anything else here measures a model
+    # nobody runs.
     form: dict = {}
+    display: dict = {}
     for r in rows:
-        key = (r["season"], r["player"], r["team"])
+        key = (r["season"], _short_key(r["player"], r["team"]))
         wk = form.setdefault(key, {}).setdefault(r["period"], {})
         wk[r["market"]] = float(r["value"] or 0.0)
-        wk["_pos"] = r["position"] or ""
-        wk["_opp"] = r["opponent"] or ""
+        # Play-by-play rows carry no position or opponent; keep whatever
+        # the stat rows said rather than letting a pbp row blank it.
+        if r["position"]:
+            wk["_pos"] = r["position"]
+        if r["opponent"]:
+            wk["_opp"] = r["opponent"]
+        wk.setdefault("_pos", "")
+        wk.setdefault("_opp", "")
         wk["_home"] = bool(r["home"])
+        if len(str(r["player"])) > len(display.get(key, "")):
+            display[key] = str(r["player"])
 
     # The game numbers, by (season, week, team) — the real closing market.
     games: dict = {}
@@ -239,13 +259,16 @@ def run(conn, sport: str = "nfl", seasons=None,
 
     # Team totals per week, so an opportunity share has a denominator.
     team_week: dict = {}
-    for (season, _player, team), weeks in form.items():
+    for (season, short), weeks in form.items():
+        team = short[2]
         for wk, marks in weeks.items():
             t = team_week.setdefault((season, wk, team), {"opp": 0.0})
             t["opp"] += marks.get("targets", 0.0) + marks.get("carries", 0.0)
 
     out = TDBacktest()
-    for (season, player, team), weeks in form.items():
+    for (season, short), weeks in form.items():
+        team = short[2]
+        player = display.get((season, short), short[1])
         ordered = sorted(weeks)
         for idx, wk in enumerate(ordered):
             prior = ordered[max(0, idx - FORM_WEEKS):idx]

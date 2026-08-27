@@ -108,9 +108,27 @@ def test_measured_red_zone_changes_the_pick_story():
                  logs=[GameLog(week=i, opponent="X", value=i % 2)
                        for i in range(1, 7)],
                  career_avg=0.5, vs_opponent_avg=None,
-                 lines=[SportsbookLine("DK", 0.5, 200, -280)])
-        c = {"prop": p, "game": g, "opponent": opp, "opportunity_share": 0.3,
-             "odds": 200, "book": "DK", "under_odds": -280}
+                 lines=[SportsbookLine("DK", 0.5, 120, -145)])
+        # PRICED LIKE THE PLAYER IT DESCRIBES. The fixture asked for a
+        # goal-line workhorse and then quoted him at +200 — a 33% price
+        # against a model that has him at 50%, which is a 17-point
+        # disagreement the credibility guard exists to refuse. It
+        # graduated before only because the guard sat just far enough
+        # away, and the history re-weighting (2026-08-27) moved it over
+        # the line and exposed a fixture that was never coherent. A back
+        # this good is a short price, so he is quoted like one: +120 is
+        # 45%, which the model beats by a believable four points.
+        #
+        # A bell-cow's share, not a committee back's. POSITION_TYPICAL_SHARE
+        # puts a typical starting RB at 0.45, and this fixture is describing
+        # the goal-line workhorse its red-zone numbers imply. It read 0.3
+        # until 2026-08-27, and passed only because the model then took 60%
+        # of its answer from six alternating touchdown games — three TDs in
+        # six is a hot streak, not a rate, and the blend was measured and
+        # cut to 20%. The fixture now stands on the role it is meant to
+        # describe rather than on that over-weighting.
+        c = {"prop": p, "game": g, "opponent": opp, "opportunity_share": 0.45,
+             "odds": 120, "book": "DK", "under_odds": -145}
         if red_zone is not None:
             c["red_zone"] = red_zone
         if snap is not None:

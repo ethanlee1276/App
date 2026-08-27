@@ -53,6 +53,37 @@ from .longshots import (
 )
 from .statmath import clamp
 
+#: How fast a player's OWN touchdown record displaces the role baseline:
+#: the blend weight is ``games / TD_HISTORY_GAMES``, capped.
+#:
+#: This was 10 — a player was two-thirds trusted after seven games —
+#: until `engine.tdbacktest` could finally sweep it on 2026-08-27. Held
+#: out on two different halves of four seasons:
+#:
+#:     games/10 (was)   0.14108   0.14876
+#:     games/20         0.13925   0.14685
+#:     games/30         0.13902   0.14662   <- both splits agree
+#:     games/50         0.13902   0.14678
+#:     w = 0            0.13961   0.14747
+#:
+#: It turns, which is the part worth reading: a player's own record does
+#: carry signal — dropping it entirely is worse than any of the blends —
+#: but far less of it than 10 assumed. Touchdowns are rare enough that
+#: six games of them is mostly variance, while opportunity share and
+#: role are steady week to week. Worth about 0.0021 Brier, which is more
+#: than the market's own calibration correction is worth.
+#:
+#: This is what `formfit` fits for the yardage markets and has never
+#: been able to reach here: its walk needs a LINE to form a probability
+#: against and a touchdown has none. The sweep is that fit, done the one
+#: way this market allows.
+TD_HISTORY_GAMES = 30.0
+
+#: Ceiling on that weight. Measured flat between 0.70 and 0.95 (a
+#: divisor of 30 rarely reaches it), so it stays where it was rather
+#: than moving on no evidence.
+TD_HISTORY_MAX_WEIGHT = 0.7
+
 #: Below this many TD-history games the position baseline does the
 #: talking and the card says so. The slate builder's prior-season top-up
 #: (engine/sources/nflverse.TD_CARRY_GAMES) keys off the SAME number, so
@@ -255,7 +286,7 @@ def td_probability(prop: Prop, game: Game, opponent: Team,
     role_share = clamp(baseline * clamp(opportunity_share / typical, 0.15, 2.2),
                        0.01, 0.60)
     if samples:
-        w = clamp(samples / 10.0, 0.0, 0.7)
+        w = clamp(samples / TD_HISTORY_GAMES, 0.0, TD_HISTORY_MAX_WEIGHT)
         hist_share = clamp(hist_rate / max(NFL_AVG_TEAM_OFF_TDS, 0.1), 0.0, 0.60)
         base_share = clamp(w * hist_share + (1 - w) * role_share, 0.01, 0.55)
         share_src = (f"{hist_rate:.2f} TD/game over {samples} games, "
