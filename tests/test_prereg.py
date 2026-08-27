@@ -128,6 +128,48 @@ def test_the_lab_page_shows_progress_without_a_number():
     assert "roi" not in coll and "%" not in coll.replace("${pct}%", "")
 
 
+# --- the NFL A-band registration ---------------------------------------------
+def test_the_nfl_a_band_claim_is_registered():
+    """Found 2026-08-27: the elite prop band landed worse than the band
+    below it in all four ingested seasons. Registered rather than acted
+    on — see the next test for why that is not timidity."""
+    from engine import prereg
+    import tempfile
+    store = prereg.ensure_registered(
+        os.path.join(tempfile.mkdtemp(), "prereg.json"))
+    ids = {t["id"] for t in store["tests"]}
+    assert "a-band-nfl-props-2026-08" in ids
+    assert "bplus-props-2026-08" in ids, "registering one must not drop the other"
+
+
+def test_the_new_claim_did_not_get_an_easier_bar_than_the_old_one():
+    """B_MINUS was registered forward at z = 2.1 because 2.1 was not
+    enough to convict a bucket chosen after looking. The NFL finding
+    reads 1.89. Acting on the weaker one would be applying a lower
+    standard to a finding because it is mine."""
+    from engine.prereg import A_BAND_NFL, B_MINUS
+    assert A_BAND_NFL["min_n"] >= B_MINUS["min_n"]
+    assert "1.89" in A_BAND_NFL["why_now"]
+    assert "2.1" in A_BAND_NFL["why_now"]
+
+
+def test_the_claim_names_what_it_would_change():
+    """A registration that decides nothing is a note. This one moves a
+    stake cap, which is money."""
+    from engine.prereg import A_BAND_NFL
+    assert "STAKE_CAP_U" in A_BAND_NFL["decides"]
+
+
+def test_the_two_registrations_point_opposite_ways_on_purpose():
+    """B+ is the bad bucket in MLB and the good one in NFL. Two sports
+    disagreeing argues against a universal law about grade bands — and
+    for measuring each sport on its own record."""
+    from engine.prereg import A_BAND_NFL, B_MINUS
+    assert B_MINUS["population"] == ["B+"] and "B+" in A_BAND_NFL["compare_to"]
+    assert A_BAND_NFL["population"] == ["A"]
+    assert A_BAND_NFL["sport"] != B_MINUS["sport"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

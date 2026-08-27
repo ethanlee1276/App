@@ -30,6 +30,15 @@ from .odds import american_to_decimal, american_to_prob
 # cover historical journal entries from before the regrade.
 GRADE_ORDER = ("A+", "A", "B+", "Strong Play", "Strong", "Play", "Lean")
 
+#: Bets behind a grade band before its calibration is worth printing.
+#: Under this, "claimed 68% → landed 50%" is two coin flips.
+GRADE_MIN_N = 20
+
+#: How far a band may land under what it claimed before it is called
+#: overconfident. Five points is larger than ordinary sampling noise at
+#: GRADE_MIN_N and smaller than a gap that would cost real money.
+OVERCONFIDENT = 0.05
+
 
 def _norm(name: str) -> str:
     s = name.lower().replace("-", " ").replace(".", " ").replace("'", "")
@@ -123,6 +132,11 @@ class BacktestReport:
     # the extent this is high, so it's reported rather than left implicit.
     used_real_lines: int = 0
     total_priced: int = 0
+    #: Calibration per grade band — {grade: {n, claimed, landed, gap}}.
+    #: Needs no harvested line, so it is the only reading of the grade
+    #: ladder available on a database with no stored prop closes.
+    grade_calibration: dict = field(default_factory=dict)
+
     # Betting P&L split by pricing basis ("book" vs "naive"). The blended ROI
     # buries the only market-relative number inside the baseline noise; this
     # keeps the subset that actually answers "did we beat the book" visible.
@@ -177,6 +191,33 @@ class BacktestReport:
             if b.n:
                 lines.append(f"    p {b.lo:.1f}-{b.hi:.1f}: predicted {b.mean_pred:.0%} "
                              f"→ actual {b.hit_rate:.0%}  (n={b.n})")
+        # DOES CONVICTION MEAN ANYTHING — printed above the P&L, because
+        # it is the reading that survives having no harvested lines, and
+        # on a database without them it is the ONLY examination the grade
+        # ladder gets. A band that lands well under what it claimed is
+        # overconfident, and it sits at the top of the board.
+        if self.grade_calibration:
+            names = [n for n in GRADE_ORDER if n in self.grade_calibration]
+            names += sorted(set(self.grade_calibration) - set(GRADE_ORDER))
+            shown = [(n, self.grade_calibration[n]) for n in names
+                     if self.grade_calibration[n]["n"] >= GRADE_MIN_N]
+            if shown:
+                lines.append("  Conviction  claimed vs landed, by grade "
+                             "(no book line needed)")
+                for name, g in shown:
+                    flag = ("  ⚠️  overconfident"
+                            if g["gap"] <= -OVERCONFIDENT else "")
+                    lines.append(
+                        f"    {name:12} {g['n']:>4} bets   claimed "
+                        f"{g['claimed']:.1%} → landed {g['landed']:.1%}   "
+                        f"{g['gap']:+.1%}{flag}")
+                if len(shown) > 1:
+                    top, bottom = shown[0][1], shown[-1][1]
+                    if top["landed"] <= bottom["landed"]:
+                        lines.append(
+                            f"    ⚠️  the top band lands no more often than "
+                            f"the bottom one — this ladder is a ranking, "
+                            f"not a conviction")
         if self.n_bets:
             lines.append(
                 f"  Bets        {self.n_bets} placed, {self.wins} won "
@@ -258,6 +299,35 @@ def _calibration(settled: list[SettledProp], n_bins: int = 5) -> tuple[list[Cali
     return bins, brier, ece
 
 
+def _grade_calibration(bets: list) -> dict:
+    """``{grade: {n, claimed, landed, gap}}`` over settled recommendations.
+
+    ``claimed`` is the mean probability the model attached to the side it
+    backed; ``landed`` is how often that side actually won. A grade whose
+    gap is strongly negative is overconfident — it promises more than it
+    delivers, and it sits at the TOP of the board where it does the most
+    damage.
+
+    Pushes are dropped rather than counted as halves: a push is not a
+    wrong forecast and averaging it in drags every band toward 50%.
+    """
+    out: dict = {}
+    for s in bets:
+        decided = s.outcome
+        if decided is None:
+            continue
+        g = out.setdefault(s.grade or "ungraded",
+                           {"n": 0, "claimed": 0.0, "wins": 0})
+        g["n"] += 1
+        g["claimed"] += float(s.hit_prob)
+        g["wins"] += int(decided)
+    for g in out.values():
+        g["claimed"] = round(g["claimed"] / g["n"], 4) if g["n"] else 0.0
+        g["landed"] = round(g["wins"] / g["n"], 4) if g["n"] else 0.0
+        g["gap"] = round(g["landed"] - g["claimed"], 4)
+    return out
+
+
 def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
     r = BacktestReport(n=len(settled))
     if not settled:
@@ -299,6 +369,22 @@ def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
 
     r.pairs = [(_raw_over(s), s.over_hit)
                for s in settled if s.over_hit is not None]
+
+    # DOES CONVICTION MEAN ANYTHING? Calibration per grade band, and
+    # unlike the P&L split below this does NOT need a harvested book
+    # line: it asks whether a pick the board calls elite actually lands
+    # more often than one it calls ordinary, and whether it lands as
+    # often as it CLAIMED. Both are facts about outcomes, not prices.
+    #
+    # It matters most exactly where the P&L cannot reach. On a database
+    # with no harvested props every bet is priced against the naive
+    # baseline, the market-relative segment is empty, and the grade
+    # ladder goes completely unexamined — which is the state this
+    # machine was in when the question "are we ready to fire on elite
+    # picks" was asked. A ladder nobody has checked is a ranking, not a
+    # conviction.
+    r.grade_calibration = _grade_calibration(
+        [s for s in settled if s.recommended])
 
     # Betting performance on recommended bets, overall and per pricing basis.
     bets = [s for s in settled if s.recommended]

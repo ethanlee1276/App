@@ -201,9 +201,61 @@ B_MINUS = {
 }
 
 
+#: Registered 2026-08-27, and registered rather than acted on for the
+#: reason this module exists.
+#:
+#: The NFL prop backtest was given a per-grade calibration report and it
+#: came back with the elite band landing WORSE than the band below it in
+#: every one of four ingested seasons:
+#:
+#:     season   A lands   B+ lands
+#:     2022      46.4%     50.8%
+#:     2023      49.1%     55.7%
+#:     2024      57.6%     57.8%
+#:     2025      45.9%     61.1%
+#:
+#: Pooled: A 123/248 = 49.6% against a claimed 54.2%; B+ 432/765 =
+#: 56.5% against a claimed 53.8%. The difference is −6.9 points at
+#: z = −1.89.
+#:
+#: WHY THIS IS NOT ACTED ON TODAY. B_MINUS above was registered forward
+#: at z = 2.1 because 2.1 was not enough to convict a bucket chosen
+#: after looking. This reads 1.89 — weaker than the number that was
+#: already judged insufficient — and acting on it would be applying a
+#: lower bar to my own finding than the one already set. Four seasons
+#: agreeing is real information and it is not the same as earned.
+#:
+#: It matters more than the z suggests, which is why it is registered
+#: rather than shrugged off: `engine.quality.STAKE_CAP_U` caps A at 1.0u
+#: and B+ at 0.5u, so the board sizes DOUBLE into the band that has
+#: landed worse four years running. The decision this test settles is
+#: therefore about money, not about display order.
+#:
+#: NOTE THE DIRECTION IS OPPOSITE TO B_MINUS, which claims B+ is the bad
+#: bucket in MLB. Two sports pointing opposite ways is itself a finding:
+#: it argues against a universal law about grade bands and for measuring
+#: each sport on its own record.
+A_BAND_NFL = {
+    "id": "a-band-nfl-props-2026-08",
+    "claim": "A-graded NFL props land no more often than B+ ones",
+    "sport": "nfl",
+    "population": ["A"],
+    "compare_to": ["B+"],
+    "metric": "hit rate on settled recommendations",
+    "min_n": 120,
+    "decides": ("level A's stake cap down to B+'s until it out-lands it "
+                "— engine.quality.STAKE_CAP_U"),
+    "why_now": ("A landed 49.6% (123/248) against a claimed 54.2% across "
+                "2022-2025, while B+ landed 56.5% (432/765). z = -1.89 on "
+                "the difference, and B+ was registered forward at 2.1, so "
+                "this does not clear the bar this project already set."),
+}
+
+
 def ensure_registered(path=None) -> dict:
     """Idempotent: registers the standing tests if they are not there."""
-    return register(B_MINUS, path)
+    store = register(B_MINUS, path)
+    return register(A_BAND_NFL, path)
 
 
 def report(rows: list[dict], path=None) -> list[dict]:

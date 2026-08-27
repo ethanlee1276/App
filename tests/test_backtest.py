@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.backtest import (
     SettledProp, evaluate, settle_recommendations, _norm,
+    _grade_calibration, GRADE_MIN_N, OVERCONFIDENT,
 )
 
 
@@ -84,6 +85,93 @@ def test_clv_average():
     ]
     r = evaluate(settled)
     assert approx(r.avg_clv, 1.5)
+
+
+# --- does conviction mean anything ------------------------------------------
+# The reading that survives having no harvested book lines. On a database
+# without them every bet is priced against the naive baseline, the
+# market-relative segment is empty, and the grade ladder goes completely
+# unexamined — which is the state this machine was in when it was asked
+# whether it was ready to fire on elite picks. Run against four ingested
+# NFL seasons it answered: A landed 49.6% against a claimed 54.2% while
+# B+ landed 56.5%, in every season.
+
+def _graded(grade, n, wins, claimed):
+    """n settled recommendations in one band, `wins` of which landed."""
+    out = []
+    for k in range(n):
+        won = k < wins
+        out.append(SettledProp("P", "rec_yds", 50.0, -110, claimed, 55.0,
+                               60.0 if won else 40.0, recommended=True,
+                               grade=grade))
+    return out
+
+
+def test_grade_calibration_separates_claimed_from_landed():
+    rows = _graded("A", 100, 50, 0.60)
+    g = _grade_calibration(rows)["A"]
+    assert g["n"] == 100
+    assert approx(g["claimed"], 0.60, 1e-4)
+    assert approx(g["landed"], 0.50, 1e-4)
+    assert approx(g["gap"], -0.10, 1e-4)
+
+
+def test_a_push_is_not_counted_as_half_a_forecast():
+    """A push is not a wrong forecast, and averaging it in drags every
+    band toward 50%."""
+    rows = _graded("A", 10, 10, 0.60)
+    rows += [SettledProp("P", "rec_yds", 50.0, -110, 0.60, 55.0, 50.0,
+                         recommended=True, grade="A")]      # push
+    g = _grade_calibration(rows)["A"]
+    assert g["n"] == 10 and approx(g["landed"], 1.0, 1e-9)
+
+
+def test_only_recommendations_are_graded():
+    """A prop the board never recommended says nothing about the band it
+    would have been in."""
+    rows = _graded("A", 5, 5, 0.6)
+    rows.append(SettledProp("P", "rec_yds", 50.0, -110, 0.6, 55.0, 40.0,
+                            recommended=False, grade="A"))
+    assert _grade_calibration([r for r in rows if r.recommended])["A"]["n"] == 5
+
+
+def test_an_ungraded_row_lands_in_its_own_bucket():
+    rows = [SettledProp("P", "rec_yds", 50.0, -110, 0.6, 55.0, 60.0,
+                        recommended=True)]
+    assert "ungraded" in _grade_calibration(rows)
+
+
+def test_the_report_flags_an_overconfident_band():
+    r = evaluate(_graded("A", 60, 24, 0.60) + _graded("B+", 60, 36, 0.52))
+    text = r.summary()
+    assert "Conviction" in text
+    assert "overconfident" in text
+
+
+def test_the_report_flags_a_ladder_that_does_not_separate():
+    """The finding itself: a top band that lands no more often than the
+    bottom one is a ranking, not a conviction."""
+    r = evaluate(_graded("A", 60, 30, 0.55) + _graded("B+", 60, 42, 0.54))
+    assert "ranking" in r.summary()
+
+
+def test_a_ladder_that_separates_draws_no_complaint():
+    r = evaluate(_graded("A", 60, 42, 0.66) + _graded("B+", 60, 30, 0.50))
+    text = r.summary()
+    assert "ranking" not in text
+    assert "overconfident" not in text
+
+
+def test_a_thin_band_is_not_reported_at_all():
+    """Under the floor, "claimed 68% landed 50%" is two coin flips."""
+    r = evaluate(_graded("A", GRADE_MIN_N - 1, 2, 0.60))
+    assert "Conviction" not in r.summary()
+
+
+def test_the_overconfidence_bar_is_wider_than_ordinary_noise():
+    import math
+    se = math.sqrt(0.25 / GRADE_MIN_N)
+    assert OVERCONFIDENT < se, "the bar would fire on sampling noise"
 
 
 def test_settle_recommendations_matches_by_name_market():
