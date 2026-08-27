@@ -49,6 +49,8 @@ import json
 import os
 import time
 
+from . import feedstate as _feedstate
+
 from .odds import american_to_prob
 
 
@@ -76,7 +78,7 @@ HOLD_RAILS = (1.02, 1.20)
 #: state (the relative path every feedstate file uses; builds run from
 #: the repo root), read lazily by the pricing path with the assumption
 #: as its fallback.
-STATE_PATH = os.path.join("data", "feedstate", "hold.json")
+STATE_PATH = _feedstate.path("hold.json")
 
 
 def ensure_table(conn) -> None:

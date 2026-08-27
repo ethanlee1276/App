@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import db, lineledger
 from engine.gamebacktest import (backtest_game_lines, game_line_closes,
+                                schedule_closes, schedule_moneylines,
                                  _settle_total, _settle_spread)
 
 
@@ -196,6 +197,89 @@ def test_the_projection_error_leads_the_report():
     s = r.summary()
     assert s.index("off the closing number") < s.index("ROI")
     assert r.mae > 0
+
+
+# --- the schedule fallback --------------------------------------------------
+# THE GAP THIS CLOSED, measured 2026-08-27: 1,139 completed NFL games in the
+# database and the backtest reported "0 with a stored close" for every
+# market, then advised buying the numbers from a paid odds API. nflverse
+# ships the closing spread, total, both spread prices, both total prices and
+# both moneylines in the same schedule row as the score. They had been on
+# disk the whole time.
+
+def _sched(rows, sport="nfl"):
+    """A DB whose games carry schedule prices in ``extra`` and no odds_history."""
+    conn = db.connect(":memory:")
+    db.upsert_games(conn, [
+        {"sport": sport, "season": 2026, "period": d, "game_id": f"{a}@{h}",
+         "home": h, "away": a, "home_score": hs, "away_score": as_,
+         "spread": sp, "total": tot, "roof": "outdoors", "surface": "grass",
+         "temp": None, "wind": None,
+         "extra": '{"ml":[-140,120],"spread_odds":[-110,-108],'
+                  '"total_odds":[-112,-108]}'}
+        for d, h, a, hs, as_, sp, tot in rows])
+    return conn
+
+
+def test_schedule_closes_read_the_home_number_and_its_pair():
+    conn = _sched([("2026-09-13", "KC", "BUF", 27, 24, -3.0, 47.5)])
+    tot = schedule_closes(conn, "nfl", "total")
+    assert tot[("2026-09-13", "KC", "BUF")] == (47.5, -112, -108)
+    spr = schedule_closes(conn, "nfl", "spread")
+    # The stored spread IS the home team's book number, and the pair is
+    # (home, away) — reversed, every spread in the replay backs the wrong
+    # side at the wrong price.
+    assert spr[("2026-09-13", "KC", "BUF")] == (-3.0, -110, -108)
+    assert schedule_moneylines(conn, "nfl")[
+        ("2026-09-13", "KC", "BUF")] == (-140, 120)
+
+
+def test_a_game_with_no_stored_prices_is_skipped_not_defaulted():
+    conn = db.connect(":memory:")
+    db.upsert_games(conn, [
+        {"sport": "nfl", "season": 2026, "period": "2026-09-13",
+         "game_id": "BUF@KC", "home": "KC", "away": "BUF", "home_score": 27,
+         "away_score": 24, "spread": -3.0, "total": 47.5, "roof": "outdoors",
+         "surface": "grass", "temp": None, "wind": None, "extra": ""}])
+    assert schedule_closes(conn, "nfl", "total") == {}
+    assert schedule_moneylines(conn, "nfl") == {}
+
+
+def test_unscored_games_never_become_closes():
+    """A forward board carries a spread and a total too. Grading a game
+    that has not been played would settle it against a null score."""
+    conn = _sched([("2026-09-13", "KC", "BUF", 27, 24, -3.0, 47.5)])
+    conn.execute("UPDATE games SET home_score=NULL, away_score=NULL")
+    conn.commit()
+    assert schedule_closes(conn, "nfl", "total") == {}
+
+
+def test_a_harvested_close_outranks_the_schedule():
+    """A real book's quote is a counter's number; the schedule row is the
+    field's consensus. When both exist the harvest wins, and the header
+    says which was replayed."""
+    conn = _sched([(f"2026-09-{d:02d}", "KC", "BUF", 27, 24, -3.0, 47.5)
+                   for d in range(1, 29)])
+    r = backtest_game_lines(conn, "nfl", "total", min_team_games=1)
+    assert "schedule closes" in r.summary()
+    db.upsert_odds_history(conn, [
+        {"sport": "nfl", "taken_at": "2026-09-01T22:00:00Z",
+         "event_id": "x", "home": "KC", "away": "BUF", "player": "TOTAL",
+         "market": "total", "book": "best", "line": 44.0,
+         "over_odds": -110, "under_odds": -110}])
+    r2 = backtest_game_lines(conn, "nfl", "total", min_team_games=1)
+    assert "schedule closes" not in r2.summary()
+    assert "real stored closes" in r2.summary()
+
+
+def test_the_header_names_the_provenance_it_replayed():
+    """A backtest that blurred a harvested close with a closing consensus
+    would report an edge over the field as an edge over a counter."""
+    conn = _sched([(f"2026-09-{d:02d}", "KC", "BUF", 27, 24, -3.0, 47.5)
+                   for d in range(1, 29)])
+    s = backtest_game_lines(conn, "nfl", "total", min_team_games=1).summary()
+    assert "nflverse closing consensus" in s
+    assert s.startswith("NFL total backtest ·")
 
 
 def test_an_unregistered_sport_is_refused_not_replayed_through_the_nfl():

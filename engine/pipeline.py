@@ -397,7 +397,8 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
                    f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
             ml = moneyline_to_dict(price_moneyline(g.home, g.away, wp_home,
-                                                   g.home_ml, g.away_ml, ctx))
+                                                   g.home_ml, g.away_ml, ctx,
+                                                   sport="nfl"))
             out.append(_finish_bet(ml, g, config))
         if has_rating:
             pt = project_total("nfl", g.home_off, g.home_def, g.away_off, g.away_def)

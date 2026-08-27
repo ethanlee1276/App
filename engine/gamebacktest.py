@@ -62,6 +62,8 @@ class MoneylineBacktest:
     brier: float = 0.0         # of P(home win) over every quoted game
     home_rate: float = 0.0     # how often home actually won (quoted games)
     mean_home_prob: float = 0.0
+    #: Which numbers were replayed — see `GameLineBacktest.source`.
+    source: str = "real harvested closes"
     grades: dict = field(default_factory=dict)
     prices: dict = field(default_factory=dict)   # favorite vs underdog picks
 
@@ -72,7 +74,7 @@ class MoneylineBacktest:
     def summary(self) -> str:
         flavor = "pitcher-aware" if self.use_pitchers else "ratings only"
         lines = [
-            f"{self.sport.upper()} moneyline backtest · real harvested closes · {flavor}",
+            f"{self.sport.upper()} moneyline backtest · {self.source} · {flavor}",
             f"  Games       {self.games_seen} completed, "
             f"{self.games_quoted} with a book price + team history",
         ]
@@ -106,6 +108,11 @@ class MoneylineBacktest:
             lines.append("  No games had both a harvested moneyline and enough "
                          "team history — harvest h2h odds first (harvest_odds.py "
                          "--markets h2h)")
+        elif self.source.startswith("schedule"):
+            lines.append("  Priced vs the market's CLOSING CONSENSUS from the "
+                         "schedule feed — beating it is beating the field, "
+                         "which is a different (and harder) claim than "
+                         "beating one book's posted number")
         else:
             lines.append("  Priced vs REAL closing moneylines (best across "
                          "books) — a genuine market-relative result")
@@ -148,6 +155,14 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
     ratings-only floor against the pitcher-aware model on identical games.
     """
     closes = moneyline_closes(conn, sport)
+    # Harvested first, schedule second — see `schedule_closes` for why the
+    # provenance is reported rather than blurred.
+    source = "real harvested closes"
+    if not closes:
+        closes = {k: {k[1]: h, k[2]: a}
+                  for k, (h, a) in schedule_moneylines(conn, sport).items()}
+        if closes:
+            source = "schedule closes · nflverse closing consensus"
     baseline = SCORING_BASELINE.get(sport, 0.0)
     # Named, not defaulted. `else nfl_win_prob` meant any sport we had not
     # thought about — college football most obviously — would be replayed
@@ -170,7 +185,7 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY period", (sport,)).fetchall()
 
-    r = MoneylineBacktest(sport=sport, use_pitchers=use_pitchers)
+    r = MoneylineBacktest(sport=sport, use_pitchers=use_pitchers, source=source)
     agg: dict[str, tuple[float, float, int]] = {}
     p_agg: dict[str, tuple[float, int]] = {}   # pitcher -> (runs allowed, starts)
     sq_err = 0.0
@@ -207,8 +222,11 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
             home_wins += 1 if home_won else 0
             prob_sum += wp_home
 
+            # `sport` matters: it selects the MEASURED market haircut
+            # (engine.gamecal). Without it this replayed a pricer no board
+            # runs, and reported bets production would never place.
             rec = price_moneyline(home, away, wp_home,
-                                  int(home_ml), int(away_ml))
+                                  int(home_ml), int(away_ml), sport=sport)
             if rec.grade != "Pass":
                 stake = rec.stake_units if rec.stake_units > 0 else 1.0
                 won = home_won == rec.pick_is_home
@@ -406,6 +424,62 @@ def game_line_closes(conn, sport: str, market: str, book: str = "best") -> dict:
     return out
 
 
+def schedule_closes(conn, sport: str, market: str) -> dict:
+    """The same shape as `game_line_closes`, read off the SCHEDULE.
+
+    THE GAP THIS CLOSES, measured 2026-08-27 after ingesting four NFL
+    seasons: 1,139 completed games, and the backtest reported "0 with a
+    stored close" for every market — then advised harvesting the numbers
+    from a paid odds API. They were on disk the whole time. nflverse
+    ships the closing spread, total, both spread prices, both total
+    prices and both moneylines in the same schedule row as the scores,
+    and `engine/ingest.nfl_game_rows` now keeps all of them.
+
+    PROVENANCE DIFFERS FROM A HARVEST AND THE CALLER IS TOLD, because
+    these are not one book's quote: nflverse's spread_line and total_line
+    are the market's closing consensus. That is arguably a better thing
+    to grade a model against than any single book — you cannot beat a
+    number nobody offered — but it is a different claim, and a backtest
+    that blurred the two would be reporting an edge over the field as an
+    edge over a counter.
+    """
+    import json as _json
+    q = ("SELECT period, home, away, spread, total, extra FROM games "
+         "WHERE sport=? AND home_score IS NOT NULL AND extra IS NOT NULL")
+    out: dict = {}
+    for r in conn.execute(q, (sport,)):
+        try:
+            px = _json.loads(r["extra"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        if market == "total":
+            line, pair = r["total"], px.get("total_odds")
+        else:
+            line, pair = r["spread"], px.get("spread_odds")
+        if line is None or not pair or len(pair) != 2:
+            continue
+        out[(str(r["period"]), r["home"], r["away"])] = (
+            float(line), int(pair[0]), int(pair[1]))
+    return out
+
+
+def schedule_moneylines(conn, sport: str) -> dict:
+    """``{(period, home, away): (home_odds, away_odds)}`` off the schedule."""
+    import json as _json
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT period, home, away, extra FROM games WHERE sport=? "
+            "AND home_score IS NOT NULL AND extra IS NOT NULL", (sport,)):
+        try:
+            ml = (_json.loads(r["extra"] or "{}") or {}).get("ml")
+        except (TypeError, ValueError):
+            continue
+        if not ml or len(ml) != 2:
+            continue
+        out[(str(r["period"]), r["home"], r["away"])] = (int(ml[0]), int(ml[1]))
+    return out
+
+
 @dataclass
 class GameLineBacktest:
     sport: str = "mlb"
@@ -419,6 +493,11 @@ class GameLineBacktest:
     net: float = 0.0
     refused: int = 0           # priced, but over the credibility ceiling
     mae: float = 0.0           # mean |projection - closing number|, in points
+    # WHERE THE NUMBERS CAME FROM. A harvested close is one book's quote at
+    # one instant; a schedule close is the market's closing consensus. Beating
+    # the second is not the same claim as beating the first, so the header
+    # says which one was replayed rather than letting the reader assume.
+    source: str = "real stored closes"
     _abs_err: float = 0.0
     grades: dict = field(default_factory=dict)
 
@@ -428,7 +507,7 @@ class GameLineBacktest:
 
     def summary(self) -> str:
         lines = [
-            f"{self.sport.upper()} {self.market} backtest · real stored closes",
+            f"{self.sport.upper()} {self.market} backtest · {self.source}",
             f"  Games       {self.games_seen} completed, "
             f"{self.games_quoted} with a stored close + team history",
         ]
@@ -505,12 +584,20 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
 
     closes = game_line_closes(conn, sport, market)
+    # HARVESTED FIRST, SCHEDULE SECOND. A stored book close is a real
+    # counter's number and outranks a consensus; the schedule is what
+    # makes the measurement possible at all on a league nobody has
+    # harvested yet, which for the NFL was every season it has ever had.
+    source = "real stored closes"
+    if not closes:
+        closes = schedule_closes(conn, sport, market)
+        source = "schedule closes · nflverse closing consensus"
     rows = conn.execute(
         "SELECT period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY period", (sport,)).fetchall()
 
-    r = GameLineBacktest(sport=sport, market=market)
+    r = GameLineBacktest(sport=sport, market=market, source=source)
     agg: dict[str, tuple[float, float, int]] = {}
 
     for row in rows:

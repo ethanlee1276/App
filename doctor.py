@@ -742,6 +742,78 @@ def check_correlation_priors(rep):
         _ = rho_meta
 
 
+#: A calibration older than this is suspect — a season's worth of new
+#: games should have moved it, and a fit that has not been refreshed
+#: since is a sign the nightly settle stopped reaching it.
+GAMECAL_STALE_DAYS = 45
+
+
+def check_game_calibration(rep):
+    """Is the spread/total model priced on a measurement or on a guess?
+
+    For most of this site's life the answer was "a guess, and not a
+    knowable one". `engine.betting.MARKET_SHRINK = 0.5` — trust half of
+    any disagreement with the closing number — was chosen before a single
+    closing spread or total had ever been stored, so it could not be
+    checked against anything. The build asked the odds API for spreads
+    and totals, priced off them, and journaled only the moneyline.
+
+    The schedule feed had been carrying the closing numbers the whole
+    time. `engine.gamecal` regresses the market's own error on the
+    model's disagreement across every graded game, and the coefficient
+    replaces the guess. The first fit, over 899 NFL games, came back
+    within a standard error of zero on all three game markets.
+
+    So this rung watches for the two ways that stops being true: a fit
+    going stale because the nightly settle stopped reaching it, and a
+    sport pricing game bets with no fit at all — which is not a failure,
+    but it IS the flat guess, and the board should not be the only place
+    that says so.
+    """
+    @_check(rep, "game-line calibration")
+    def _():
+        from engine import gamecal
+        fitted, unfitted, oldest = [], [], None
+        for sport in ("nfl", "mlb", "cfb"):
+            for market in ("total", "spread", "moneyline"):
+                hit = gamecal.measured(sport, market)
+                if not hit:
+                    unfitted.append(f"{sport} {market}")
+                    continue
+                fitted.append((f"{sport} {market}", hit))
+                try:
+                    age = (time.time() - float(hit["fit_at"])) / 86400.0
+                except (KeyError, TypeError, ValueError):
+                    continue
+                oldest = age if oldest is None else max(oldest, age)
+        if not fitted:
+            rep.add("game-line calibration", WARN,
+                    "no game market has ever been calibrated — every spread "
+                    "and total is priced on the flat 0.5 market haircut",
+                    "the fit needs closing numbers and scores in the history "
+                    "DB; run `python3 -m engine.gamecal` to see what it can "
+                    "and cannot measure")
+            return
+        if oldest is not None and oldest >= GAMECAL_STALE_DAYS:
+            rep.add("game-line calibration", WARN,
+                    f"{len(fitted)} market(s) calibrated but the oldest fit "
+                    f"is {oldest:.0f} days old",
+                    "the nightly settle refits this — check that "
+                    "engine.maintenance is reaching gamecal.refresh")
+            return
+        # A MEASURED ZERO IS THE HEADLINE, not a footnote. It is the
+        # difference between "we have no edge here and we know it" and
+        # "we have no edge here and we are still betting".
+        quiet = [n for n, h in fitted if float(h.get("shrink") or 0) <= 0.02]
+        detail = f"{len(fitted)} game market(s) priced on a measured haircut"
+        if quiet:
+            detail += (f" · {len(quiet)} measured at no edge over the close "
+                       f"({', '.join(quiet)}) and priced at the market")
+        if unfitted:
+            detail += f" · {len(unfitted)} still on the flat 0.5 guess"
+        rep.add("game-line calibration", OK, detail)
+
+
 #: How far back "is this pipeline journaling its dimension" looks. Old
 #: rows cannot be repaired, so an all-time read reports a fixed pipeline
 #: as broken forever — see the note inside the check.
@@ -934,7 +1006,8 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_ingest_freshness, check_odds_budget, check_llm_spend,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
-          check_learning, check_correlation_priors, check_git]
+          check_learning, check_correlation_priors,
+          check_game_calibration, check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -946,7 +1019,7 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log, check_clv_capture, check_learning,
-               check_correlation_priors)
+               check_correlation_priors, check_game_calibration)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:

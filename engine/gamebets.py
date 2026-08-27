@@ -295,8 +295,14 @@ def price_moneyline_sharp(home: str, away: str,
 
 def price_moneyline(home: str, away: str, win_prob_home: float,
                     home_ml: int, away_ml: int,
-                    context: list[str] | None = None) -> MoneylineRec:
-    """Price both sides of a moneyline and back the one with the edge."""
+                    context: list[str] | None = None,
+                    sport: str = "") -> MoneylineRec:
+    """Price both sides of a moneyline and back the one with the edge.
+
+    ``sport`` is optional and only selects the measured market haircut
+    (`engine.gamecal`); without it the flat prior applies, which is what
+    every caller got before the calibration existed.
+    """
     fair_home, fair_away = devig_two_way(home_ml, away_ml)
     wp_home = clamp(win_prob_home, 0.01, 0.99)
     wp_away = 1.0 - wp_home
@@ -308,7 +314,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
         pick, is_home, raw, ml, fair = home, True, wp_home, home_ml, fair_home
     else:
         pick, is_home, raw, ml, fair = away, False, wp_away, away_ml, fair_away
-    wp, edge, credible = temper(raw, fair)
+    wp, edge, credible = temper(raw, fair, sport, "moneyline")
 
     ev = expected_value(wp, ml)
     confidence = _ml_confidence(edge, wp)
@@ -318,6 +324,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
     reasons = list(context or [])
     reasons.insert(0, f"Model win probability {wp:.0%} vs book's {fair:.0%} "
                       f"— a {edge:+.1%} edge on {pick} after the market haircut")
+    reasons.extend(_calibration_note(sport, "moneyline"))
     if not credible:
         reasons.insert(0, f"Model disagrees with the market by more than "
                           f"{MAX_CREDIBLE_EDGE:.0%} — a rating error, not an edge")
@@ -377,7 +384,8 @@ def game_margin(sport: str, home_rating: float, away_rating: float) -> float:
     return (home_rating - away_rating) + _sd(HOME_FIELD, sport, "home field")
 
 
-def temper(raw_win: float, fair: float) -> tuple[float, float, bool]:
+def temper(raw_win: float, fair: float, sport: str = "",
+           market: str = "") -> tuple[float, float, bool]:
     """The prop layer's §2.5/§3 discipline, applied to a GAME bet.
 
     It was missing here, and the asymmetry was visible on one screen: a
@@ -396,9 +404,50 @@ def temper(raw_win: float, fair: float) -> tuple[float, float, bool]:
        priced markets in American sport, and an 11.7% edge in one is a
        statement about our ratings, not about the market.
 
+    THE 0.5 IS NOW A FALLBACK, NOT THE RULE. "Shrink halfway to the
+    market" was a reasonable guess made when nobody could measure the
+    real fraction, because no closing numbers were stored. They are now,
+    and `engine.gamecal` regresses the market's own error on this
+    model's disagreement over every graded game in our history: the
+    coefficient IS the fraction of a disagreement that has held up. Where
+    a sport and market have been measured on enough games, that number is
+    used in place of the guess; where they have not, the guess stands.
+
+    The first fit, over 899 NFL games, put both the spread and the total
+    slope within a standard error of zero — so on those two markets this
+    now shrinks nearly all the way to the close, and the board goes quiet.
+    That is the intended behaviour of an honest model with no measured
+    edge, and it is why the measurement is allowed to lower the shrink
+    but never (see gamecal.MAX_ADOPTED) to raise it above the old guess.
+
     Returns ``(tempered_win, edge_vs_fair, credible)``.
     """
-    return temper_edge(raw_win, fair, book="", allow_synthetic_line=True)
+    shrink = None
+    if sport and market:
+        try:
+            from .gamecal import shrink_for
+            shrink = shrink_for(sport, market)
+        except Exception:                                 # noqa: BLE001
+            shrink = None            # never let a calibration cost a board
+    return temper_edge(raw_win, fair, book="", allow_synthetic_line=True,
+                       shrink=shrink)
+
+
+def _calibration_note(sport: str, market: str) -> list[str]:
+    """The measured-haircut line for a card, or ``[]``.
+
+    A board that quietly stopped recommending spreads would be the worst
+    version of this change: the user sees fewer plays and is told
+    nothing. The reason goes on the card, in the same reasons list as
+    every other piece of evidence.
+    """
+    if not (sport and market):
+        return []
+    try:
+        from .gamecal import note_for
+        return [n for n in (note_for(sport, market),) if n]
+    except Exception:                                     # noqa: BLE001
+        return []
 
 
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
@@ -451,11 +500,12 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
         side, raw, odds, fair = "Over", p_over, over_odds, fair_over
     else:
         side, raw, odds, fair = "Under", 1.0 - p_over, under_odds, fair_under
-    win, edge, credible = temper(raw, fair)
+    win, edge, credible = temper(raw, fair, sport, "total")
 
     reasons = list(context or [])
     reasons.insert(0, f"Model projects {proj_total:.1f} {units} vs the {market_total:g} "
                       f"total — {side} ({edge:+.1%} edge after the market haircut)")
+    reasons.extend(_calibration_note(sport, "total"))
     return _game_bet("total", "Total", home, away, win, fair, edge, odds,
                      pick_label=f"{side} {market_total:g}", side=side, line=market_total,
                      reasons=reasons, headline=f"{side} {market_total:g} {units}",
@@ -477,12 +527,13 @@ def price_team_total(sport: str, team: str, home: str, away: str,
         side, raw, odds, fair = "Over", p_over, over_odds, fair_over
     else:
         side, raw, odds, fair = "Under", 1.0 - p_over, under_odds, fair_under
-    win, edge, credible = temper(raw, fair)
+    win, edge, credible = temper(raw, fair, sport, "total")
 
     reasons = list(context or [])
     reasons.insert(0, f"Model projects {team} for {proj_points:.1f} {units} vs the "
                       f"{line:g} team total — {side} ({edge:+.1%} edge after the "
                       f"market haircut)")
+    reasons.extend(_calibration_note(sport, "total"))
     return _game_bet("team_total", "Team total", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {side} {line:g}", team=team, side=side, line=line,
                      reasons=reasons, headline=f"{team} team {side} {line:g}",
@@ -507,12 +558,13 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
         team, spread, raw, odds, fair = home, home_spread, p_home, home_odds, fair_home
     else:
         team, spread, raw, odds, fair = away, -home_spread, 1.0 - p_home, away_odds, fair_away
-    win, edge, credible = temper(raw, fair)
+    win, edge, credible = temper(raw, fair, sport, "spread")
 
     reasons = list(context or [])
     reasons.insert(0, f"Model margin {proj_margin:+.1f} vs the {home} {home_spread:+g} "
                       f"line — {team} {spread:+g} ({edge:+.1%} edge after the "
                       f"market haircut)")
+    reasons.extend(_calibration_note(sport, "spread"))
     return _game_bet("spread", "Spread", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {spread:+g}", team=team, line=spread,
                      reasons=reasons, headline=f"{team} {spread:+g}",

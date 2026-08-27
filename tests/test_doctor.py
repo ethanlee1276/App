@@ -15,6 +15,8 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -478,9 +480,82 @@ def test_the_new_invariant_checks_are_registered_in_both_lists():
     from DATA_CHECKS turns CI red on machines that have no journal. Both
     registrations, or the tripwire is decoration."""
     for fn in (doctor.check_premature_evidence, doctor.check_parlay_agreement,
-               doctor.check_forecast_log):
+               doctor.check_forecast_log, doctor.check_game_calibration):
         assert fn in doctor.CHECKS, fn.__name__
         assert fn in doctor.DATA_CHECKS, fn.__name__
+
+
+def test_an_uncalibrated_site_is_warned_about_not_reported_healthy():
+    """Every spread and total on the flat 0.5 guess is a finding.
+
+    The guess was unfalsifiable for most of this site's life because no
+    closing spread or total was stored anywhere. Now that it is
+    measurable, "nothing has ever been measured" must read as a warning
+    rather than as silence.
+    """
+    from engine import gamecal
+    keep, keep_cache = gamecal.STATE_PATH, dict(gamecal._cache)
+    gamecal.STATE_PATH = os.path.join(tempfile.mkdtemp(), "gamecal.json")
+    gamecal._cache.clear()
+    try:
+        rep = doctor.Report()
+        doctor.check_game_calibration(rep)
+        found = [c for c in rep.checks if c["check"] == "game-line calibration"]
+        assert found and found[0]["status"] == doctor.WARN, found
+        assert "flat 0.5" in found[0]["detail"]
+    finally:
+        gamecal.STATE_PATH = keep
+        gamecal._cache.clear()
+        gamecal._cache.update(keep_cache)
+
+
+def test_a_measured_zero_is_reported_as_the_headline():
+    """"No edge and we know it" and "no edge and we are still betting"
+    are different states, and the rung has to distinguish them."""
+    from engine import gamecal
+    keep, keep_cache = gamecal.STATE_PATH, dict(gamecal._cache)
+    gamecal.STATE_PATH = os.path.join(tempfile.mkdtemp(), "gamecal.json")
+    gamecal._cache.clear()
+    try:
+        gamecal._write_state({"nfl:spread": {
+            "shrink": 0.0, "slope": 0.006, "se": 0.085, "n": 899,
+            "sport": "nfl", "market": "spread", "fit_at": time.time()}})
+        gamecal._cache.clear()
+        rep = doctor.Report()
+        doctor.check_game_calibration(rep)
+        c = [x for x in rep.checks if x["check"] == "game-line calibration"][0]
+        assert c["status"] == doctor.OK, c
+        assert "no edge over the close" in c["detail"]
+        assert "nfl spread" in c["detail"]
+    finally:
+        gamecal.STATE_PATH = keep
+        gamecal._cache.clear()
+        gamecal._cache.update(keep_cache)
+
+
+def test_a_stale_calibration_is_warned_about():
+    """A fit nobody has refreshed in a season means the nightly settle
+    stopped reaching it — which is exactly how the last dead feedback
+    loop on this site stayed dead."""
+    from engine import gamecal
+    keep, keep_cache = gamecal.STATE_PATH, dict(gamecal._cache)
+    gamecal.STATE_PATH = os.path.join(tempfile.mkdtemp(), "gamecal.json")
+    gamecal._cache.clear()
+    try:
+        old_ts = time.time() - (doctor.GAMECAL_STALE_DAYS + 5) * 86400
+        gamecal._write_state({"nfl:total": {
+            "shrink": 0.03, "slope": 0.03, "se": 0.11, "n": 899,
+            "sport": "nfl", "market": "total", "fit_at": old_ts}})
+        gamecal._cache.clear()
+        rep = doctor.Report()
+        doctor.check_game_calibration(rep)
+        c = [x for x in rep.checks if x["check"] == "game-line calibration"][0]
+        assert c["status"] == doctor.WARN, c
+        assert "days old" in c["detail"]
+    finally:
+        gamecal.STATE_PATH = keep
+        gamecal._cache.clear()
+        gamecal._cache.update(keep_cache)
 
 
 def test_a_settled_game_bet_with_no_final_score_fails_grade_evidence():

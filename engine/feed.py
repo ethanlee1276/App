@@ -50,9 +50,11 @@ import hashlib
 import json
 from pathlib import Path
 
+from . import feedstate as _feedstate
+
 from .odds import american_to_prob
 
-STATE_DIR = Path("data/feedstate")
+STATE_DIR = Path(_feedstate.directory())
 FEED_PUBLIC = Path("web/data/feed.json")
 MAX_EVENTS = 250
 MAX_AGE_H = 48

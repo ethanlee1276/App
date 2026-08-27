@@ -58,6 +58,8 @@ import sqlite3
 import time
 from dataclasses import dataclass, field
 
+from . import feedstate as _feedstate
+
 
 # --- the claims under test ---------------------------------------------------
 @dataclass(frozen=True)
@@ -402,7 +404,7 @@ MAX_ABS_R = 0.95
 
 #: Beside the other feed state, on the relative path every feedstate file
 #: uses (builds and the settle both run from the repo root).
-STATE_PATH = os.path.join("data", "feedstate", "corr.json")
+STATE_PATH = _feedstate.path("corr.json")
 
 _cache: dict = {}
 

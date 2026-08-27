@@ -35,7 +35,9 @@ import datetime as _dt
 import json
 from pathlib import Path
 
-STATE_PATH = Path("data/feedstate/moments.json")
+from . import feedstate as _feedstate
+
+STATE_PATH = Path(_feedstate.path("moments.json"))
 
 #: The ump tilt worth a sentence, either side of neutral. Under it the
 #: profile is noise wearing a name.

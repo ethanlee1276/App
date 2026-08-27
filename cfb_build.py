@@ -394,7 +394,8 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
             home_ml, away_ml = lines["moneyline"]
             wp_home = cfbratings.win_prob(proj_margin, fit)
             rec = gamebets.price_moneyline(g["home"], g["away"], wp_home,
-                                           home_ml, away_ml, context)
+                                           home_ml, away_ml, context,
+                                           sport="cfb")
             card = gamebets.moneyline_to_dict(rec)
             plays.append({**common, "market": "moneyline",
                           "selection": card["pick_label"],

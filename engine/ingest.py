@@ -37,9 +37,49 @@ def nfl_game_rows(schedule_rows: list[dict], seasons: set[int]) -> list[dict]:
             "total": _f(r, "total_line", default=None),
             "roof": _s(r, "roof"), "surface": _s(r, "surface", default="grass"),
             "temp": _f(r, "temp", default=None), "wind": _f(r, "wind", default=None),
-            "extra": None,
+            # THE PRICES, WHICH WERE BEING THROWN AWAY. nflverse ships the
+            # closing spread odds, total odds and moneylines for every
+            # game in the same row as the numbers we already keep — free,
+            # already downloaded, and discarded here since this function
+            # was written. `game_backtest.py nfl` reported "0 games with a
+            # stored close" across four ingested seasons and told the
+            # reader to spend odds-API credits harvesting what was on
+            # disk.
+            #
+            # In `extra` rather than in new columns: the games table is
+            # shared by six sports and none of the others has these, so a
+            # column apiece would be four nulls on every MLB row forever.
+            # Read back by engine/gamebacktest.schedule_closes.
+            "extra": _prices_json(r),
         })
     return out
+
+
+def _prices_json(r: dict) -> str | None:
+    """The row's closing prices, compact, or None when it carries none.
+
+    Stored as the BOOK would print them and in the same convention
+    `odds_history` uses, so the backtest can read either source without
+    knowing which it got: the spread is the HOME team's number (already
+    how `spread` is stored above), and the pair order is (home, away)
+    for a spread and (over, under) for a total.
+    """
+    import json as _json
+    from .sources.nflverse import _f
+    out = {}
+    ml_h = _f(r, "home_moneyline", default=None)
+    ml_a = _f(r, "away_moneyline", default=None)
+    if ml_h is not None and ml_a is not None:
+        out["ml"] = [int(ml_h), int(ml_a)]
+    sp_h = _f(r, "home_spread_odds", default=None)
+    sp_a = _f(r, "away_spread_odds", default=None)
+    if sp_h is not None and sp_a is not None:
+        out["spread_odds"] = [int(sp_h), int(sp_a)]
+    ov = _f(r, "over_odds", default=None)
+    un = _f(r, "under_odds", default=None)
+    if ov is not None and un is not None:
+        out["total_odds"] = [int(ov), int(un)]
+    return _json.dumps(out, separators=(",", ":")) if out else None
 
 
 #: Season types the regular tables accept. nflverse ships REG and POST

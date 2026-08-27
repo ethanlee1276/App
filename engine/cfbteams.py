@@ -34,9 +34,11 @@ from __future__ import annotations
 import json
 import os
 
+from . import feedstate as _feedstate
+
 #: Beside the other feed state. Relative, like every feedstate path —
 #: builds run from the repo root.
-STATE_PATH = os.path.join("data", "feedstate", "cfb_teams.json")
+STATE_PATH = _feedstate.path("cfb_teams.json")
 
 #: A book's team string longer than this is not a team string.
 MAX_NAME = 80

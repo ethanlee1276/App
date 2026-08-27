@@ -211,7 +211,8 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             else:
                 ml = _finish_bet(moneyline_to_dict(
                     price_moneyline(g.home, g.away, wp_home,
-                                    g.home_ml, g.away_ml, ctx)), g, config)
+                                    g.home_ml, g.away_ml, ctx,
+                                    sport="mlb")), g, config)
                 if not MLB_ML_RECOMMENDATIONS:
                     _info_only(ml, _NO_ANCHOR)
                 out.append(ml)

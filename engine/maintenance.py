@@ -639,6 +639,27 @@ def settle_open(log=print, state_path: Path | None = None,
                            if sup else ""))
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  correlation refit skipped: {exc}")
+            # The game-line model, graded against the closing numbers.
+            # This is the fitter that had nothing to fit until this week:
+            # spreads and totals were priced, argued about and never
+            # measured, because no closing number was stored anywhere. The
+            # schedule feed was carrying them the whole time. What it
+            # measures is the fraction of a disagreement with the close
+            # that has actually held up, and that fraction replaces the
+            # flat "shrink halfway to the market" guess on the pricing
+            # path. It can only make the board quieter (gamecal
+            # .MAX_ADOPTED), so a thin or unlucky database cannot talk
+            # this model into betting more.
+            try:
+                from . import gamecal
+                gc = gamecal.refresh(hconn)
+                for a in gc["adopted"]:
+                    log(f"  game-line calibration: {a['key']} keeps "
+                        f"{a['shrink']:.0%} of a disagreement with the close "
+                        f"(slope {a['slope']:+.3f} ± {a['se']:.3f} on "
+                        f"{a['n']:,} games)")
+            except Exception as exc:  # noqa: BLE001
+                log(f"  ⚠️  game-line calibration skipped: {exc}")
             # The hypothesis lab's free step: every stored hypothesis
             # re-earns its status against the grown journal. Arithmetic
             # only — the paid propose step is CLI-invoked, never here.

@@ -194,6 +194,17 @@ def main() -> int:
             env.pop(name)
     # Set after the sweep, not before it, so the sweep cannot eat it.
     env["QB_ENV_FILE"] = os.path.join(sandbox, "no-such-env")
+    # Same doctrine, second door. Four modules persist what they have
+    # measured under data/feedstate/ — the correlation priors, the CFB
+    # team map, the hold watch and the game-line calibration — and that
+    # directory is gitignored, so it exists on the droplet and not in a
+    # fresh clone. The game-line calibration decides how much of a
+    # disagreement with the closing number a spread is allowed to keep,
+    # which decides whether it grades Play. A suite that reads it is a
+    # suite whose verdict depends on which machine ran it, in BOTH
+    # directions. Point the fitters at the sandbox: green here is then
+    # green in a clone, which is the only kind of green worth having.
+    env["QB_FEEDSTATE_DIR"] = os.path.join(sandbox, "feedstate")
     try:
         return _run(env, sys.argv[1:])
     finally:

@@ -63,7 +63,9 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-STATE_PATH = Path("data/feedstate/streak.json")
+from . import feedstate as _feedstate
+
+STATE_PATH = Path(_feedstate.path("streak.json"))
 OUT_PUBLIC = Path("web/data/streak.json")
 
 #: The contract of the game, shared by the builder, the server and the
