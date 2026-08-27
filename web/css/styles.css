@@ -7265,9 +7265,12 @@ body.has-rail .shell {
   background: var(--panel-3); border-radius: var(--radius) var(--radius) var(--radius) 0;
   color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .slate-horizon b { color: var(--text); }
-.slate-jump { color: var(--brand); font-weight: 700; text-decoration: none;
-  white-space: nowrap; }
-.slate-jump:hover { text-decoration: underline; }
+/* A `slate-jump` rule sat here and styled the "Preseason is what is being
+   played now →" pointer, which retired with the preseason block on
+   2026-08-25 (see the comment above `host.innerHTML` in
+   renderSlateHorizon). The note has been one piece ever since. Named
+   without its dot on purpose: test_slate_horizon asserts the SELECTOR is
+   gone, so the name survives a grep without the rule coming back. */
 
 /* --- Rankings, side by side ---------------------------------------------
    The table is agate: many columns of small numbers, so tabular figures

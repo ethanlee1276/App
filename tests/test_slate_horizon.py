@@ -111,9 +111,19 @@ def test_the_empty_note_costs_no_fold():
     assert "#slate-horizon" not in CSS
 
 
-def test_the_note_is_styled_in_both_pieces():
-    for sel in (".slate-horizon", ".slate-jump"):
-        assert sel in CSS, sel
+def test_the_note_is_styled_and_has_no_second_piece():
+    """It used to be two: the sentence and a `.slate-jump` pointer reading
+    "Preseason is what is being played now →". The pointer retired with
+    the preseason block on 2026-08-25 and the sentence stands alone.
+
+    The rule outlived the element by two days because this test asserted
+    it existed — a selector matching nothing is invisible to a stylesheet,
+    and the one check that could have said so was pinning it instead. So
+    assert the retirement too: if the pointer ever comes back it comes
+    back in the markup first, and this fails until it does."""
+    assert ".slate-horizon" in CSS
+    assert ".slate-jump" not in CSS and ".slate-jump" not in APP, \
+        "the second piece is retired — style it only if something emits it"
 
 
 def test_nothing_here_prices_anything():
