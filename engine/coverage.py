@@ -319,14 +319,14 @@ def wnba(conn) -> SportCoverage:
               PARTIAL if WNBA.probation else OK,
               "on probation — journaled and graded, not staked "
               "(enforced: engine/probation zeroes every size)",
-              # NOT "the bar lifts itself", which is what this said and
-              # was not true: `calibrated` is a literal False in
-              # engine/hoops.py, so the promotion is a source edit a
-              # human makes, not something the record does on its own.
-              # Saying otherwise is the same class of claim as the
-              # probation banner that was not being enforced.
-              "promotion is a source change once this league has graded "
-              "results of its own — engine/hoops.WNBA.calibrated"),
+              # This said "the bar lifts itself", which was not true —
+              # `calibrated` was a literal only a source edit could flip.
+              # It is now a recorded promotion (engine/promotion), so the
+              # bar can be reached; what it deliberately is NOT is
+              # automatic, because the worst case of a wrong promotion is
+              # money at risk that was not at risk before.
+              "the record decides when it is available; promoting is an "
+              "explicit, logged act — engine/promotion"),
         Layer("Availability / injury report", "§2.3 — the single highest-edge "
               "information category in this league, and the one that decides "
               "whether a prop is a bet or a conditional", MISSING,

@@ -89,8 +89,29 @@ class LeagueTuning:
 
     @property
     def probation(self) -> bool:
-        """True when picks must be journaled and graded but NOT bet."""
-        return not self.calibrated
+        """True when picks must be journaled and graded but NOT bet.
+
+        `calibrated` below is a literal in this file, which meant the
+        coverage page's "grades accumulate automatically; the bar lifts
+        itself" was never true — the bar was a `False` only a human
+        editing this module could flip. `engine.promotion` holds the
+        recorded promotions now, so a league that has earned its way off
+        probation can actually receive it, and a demotion takes effect
+        the moment it is written rather than at the next deploy.
+
+        The literal still stands as the FLOOR: a league marked
+        `calibrated=True` in source is off probation regardless, because
+        that is the NBA, whose numbers were fitted against its own
+        results before any of this existed.
+        """
+        if self.calibrated:
+            return False
+        try:
+            from .promotion import promoted
+            return not promoted(self.key)
+        except Exception:                                 # noqa: BLE001
+            # Unreadable state withholds risk rather than taking it.
+            return True
 
 
 NBA = LeagueTuning(

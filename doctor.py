@@ -882,6 +882,28 @@ def check_fitter_cadence(rep):
                 notes.append(f"deep fit: {len(stores)} store(s), newest "
                              f"{age:.0f}d old, covering {', '.join(stocked)}")
 
+        # A BAR THAT IS MET AND NOT ACTED ON. This is the state that must
+        # never sit quietly: the model has earned its promotion, nothing
+        # is stopping it, and the only reason it is still on probation is
+        # that no one has looked. Promotion is deliberately not automatic
+        # — the worst case is money at risk that was not at risk before —
+        # which is exactly why it needs a rung telling somebody to decide.
+        try:
+            from engine import promotion, parlayledger
+            from engine.ledger import connect as _lconn
+            rep_p = parlayledger.report(_lconn())["promotion"]
+            conds = {"tickets": rep_p["tickets_have"] >= rep_p["tickets_required"],
+                     "roi": rep_p["roi_positive"],
+                     "clv": rep_p["clv_non_negative"],
+                     "z": rep_p["z_clears"]}
+            st = promotion.status("parlays", conds)
+            if st["awaiting"]:
+                notes.append("parlays: every promotion condition holds and "
+                             "nobody has promoted it")
+                worst = max(worst, WARN, key=lambda v: _RANK[v])
+        except Exception:                                 # noqa: BLE001
+            pass          # no journal on this box is not a finding
+
         from engine import pmfit
         hit = pmfit.measured()
         if hit:
