@@ -959,6 +959,34 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl pbp refresh failed: {exc}")
 
+    # The DEEP fitters, weekly. `engine.journalfit` already refits every
+    # sport off the journal on every settle pass — that is the universal
+    # rung and it is not what this is. These three walk the HISTORY DB
+    # through the sport's own engine, which is the stronger fit and the
+    # slow one (one walk-forward per grid point, 21 per market), and
+    # they were CLI-only: `--sport` defaults to mlb, so unless somebody
+    # typed the flag only baseball had ever been deep-fitted. launch.py
+    # flagged that on 2026-08-16 and it stayed true.
+    #
+    # It is worth automating because it is not a formality. Run against
+    # the NFL's 329,434 ingested log rows for the first time on
+    # 2026-08-27, the recency dial moved three of four markets on 20,000+
+    # settled predictions each. Every fitter here has its own adoption
+    # gate (MIN_SAMPLES, a Brier margin, a plateau check), so a sport
+    # without the sample simply declines — the schedule can be generous
+    # because the fitters are not.
+    #
+    # Wednesdays, and ORDER MATTERS: dial, then memory, then temperature
+    # last, because the first two move the model the third is calibrating.
+    # `refit_order` is the same sequence launch.py's command runs.
+    if _dt.date.today().weekday() == 2:
+        try:
+            from .deepfit import refit_all
+            for line in refit_all():
+                log(f"  {line}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  deep refit skipped: {exc}")
+
     # Settle the one-sided quote journals against whatever stat rows the
     # ingests above just wrote, and refit each market's measured hold
     # once its sample clears the gate (engine/holdwatch — the number

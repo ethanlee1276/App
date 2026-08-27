@@ -814,6 +814,73 @@ def check_game_calibration(rep):
         rep.add("game-line calibration", OK, detail)
 
 
+#: A weekly fitter that has not run in this long has stopped running.
+DEEPFIT_STALE_DAYS = 21
+
+
+def check_fitter_cadence(rep):
+    """The fitters nobody would notice had stopped.
+
+    Two rungs joined the ladder on 2026-08-27 and both are scheduled
+    rather than on-demand, which is the exact shape of every dead loop
+    this site has found: the code is fine, the schedule quietly stops
+    reaching it, and silence looks like "nothing to report".
+
+      * The DEEP fitters (`engine.deepfit`) run weekly and were CLI-only
+        before that — `--sport` defaults to mlb, so unless somebody typed
+        the flag only baseball had ever been deep-fitted, for the life of
+        the site.
+      * The prediction-market weights (`engine.pmfit`) refit on every
+        pm_build. Until this week the breakdown they need was not even
+        recorded, so the 40/30/15/8 in `score_trade` could not have been
+        checked however long the tape ran.
+
+    Neither is a fault when it has nothing yet. Both are a fault when
+    they had something and stopped.
+    """
+    @_check(rep, "fitter cadence")
+    def _():
+        import time as _t
+        notes, worst = [], OK
+
+        from engine import deepfit
+        stocked = deepfit.sports_with_history()
+        stores = []
+        for name in ("formfit.json", "playerfit.json", "calibration.json"):
+            path = os.path.join("data", "models", name)
+            if os.path.isfile(path):
+                stores.append((name, os.path.getmtime(path)))
+        if not stocked:
+            notes.append("deep fit: no sport has enough ingested logs yet")
+        elif not stores:
+            notes.append(f"deep fit: {', '.join(stocked)} has the history "
+                         f"and nothing has ever been fitted")
+            worst = max(worst, WARN, key=lambda v: _RANK[v])
+        else:
+            age = (_t.time() - max(m for _n, m in stores)) / 86400.0
+            if age >= DEEPFIT_STALE_DAYS:
+                notes.append(f"deep fit: newest store is {age:.0f} days old "
+                             f"— the weekly refit is not reaching it")
+                worst = max(worst, WARN, key=lambda v: _RANK[v])
+            else:
+                notes.append(f"deep fit: {len(stores)} store(s), newest "
+                             f"{age:.0f}d old, covering {', '.join(stocked)}")
+
+        from engine import pmfit
+        hit = pmfit.measured()
+        if hit:
+            dead = sorted(k for k, v in (hit.get("points") or {}).items()
+                          if not v)
+            line = (f"flow weights: measured on {hit['n']} resolved flags")
+            if dead:
+                line += f", {len(dead)} signal(s) measured at no edge"
+            notes.append(line)
+        else:
+            notes.append("flow weights: still on the assigned numbers — "
+                         "collecting resolved flags with a recorded breakdown")
+        rep.add("fitter cadence", worst, " · ".join(notes))
+
+
 #: How far back "is this pipeline journaling its dimension" looks. Old
 #: rows cannot be repaired, so an all-time read reports a fixed pipeline
 #: as broken forever — see the note inside the check.
@@ -1007,7 +1074,8 @@ CHECKS = [check_tests, check_stuck_bets, check_slate_freshness,
           check_journal_sanity, check_record_page, check_premature_evidence,
           check_parlay_agreement, check_forecast_log, check_clv_capture,
           check_learning, check_correlation_priors,
-          check_game_calibration, check_git]
+          check_game_calibration, check_fitter_cadence,
+          check_git]
 
 # The checks that need the laptop's databases, budget state and built
 # slates. On a machine that has none of those — CI, a fresh clone — they
@@ -1019,7 +1087,8 @@ DATA_CHECKS = (check_market_coverage, check_stuck_bets, check_slate_freshness,
                check_journal_sanity, check_record_page,
                check_premature_evidence, check_parlay_agreement,
                check_forecast_log, check_clv_capture, check_learning,
-               check_correlation_priors, check_game_calibration)
+               check_correlation_priors, check_game_calibration,
+               check_fitter_cadence)
 
 
 def run(skip_tests: bool = False, code_only: bool = False) -> Report:

@@ -272,6 +272,23 @@ def main() -> None:
     except Exception:
         settled = 0
     validation = pm.flag_report(conn)
+    # THE WEIGHTS, REFIT AGAINST THE FLAGS THAT RESOLVED. Every number in
+    # `score_trade` was a professional estimate and could never be
+    # checked, because the only thing a flag recorded was its total. The
+    # breakdown is stored now; this fits it, holds until the record is
+    # thick enough, and can only rescale onto the same 0-100 the card
+    # already speaks. Runs right after the settle, so a signal crosses
+    # its floor the night it happens with no one watching.
+    try:
+        from engine import pmfit
+        fit = pmfit.refresh(conn)
+        validation["weights"] = {"points": fit["adopted"],
+                                 "n": fit["n"],
+                                 "held": fit["held"],
+                                 "note": pmfit.note()}
+    except Exception as exc:                              # noqa: BLE001
+        validation["weights"] = {"points": {}, "n": 0,
+                                 "held": [{"key": "*", "why": str(exc)}]}
     for w in validation.get("wallets", []):
         w["name"] = names.get(w["wallet"], "")
     for r in validation.get("recent", []):

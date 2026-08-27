@@ -2,6 +2,24 @@
   "_note": "The public what's-new feed, rendered at the bottom of the Methodology page. Committed rather than built: web/data/ is generated and gitignored, and this is a written record, not an output. NEWEST FIRST. `kind` is one of ship (a feature), model (the numbers changed), fix (something was wrong), or refuse (something was measured and deliberately not built) — the last one matters as much as the first three, because a decision nobody wrote down gets re-made by somebody who has not seen the reasoning. A `model` entry must name what moved on the board; see engine/ledger.MODEL_ERAS, which the same page renders beside these with the results each era actually produced.",
   "entries": [
     {
+      "date": "2026-08-27",
+      "kind": "model",
+      "title": "The NFL game model was graded against four seasons, and it lost",
+      "body": "Spreads and totals could be argued about and never measured, because no closing number was ever stored — the build asked for them, priced off them, and journaled only the moneyline. The schedule feed had been carrying the closing consensus the whole time. Replaying 899 completed games through the pricer that actually ships: on totals the model’s side beat the close 50.7% of the time, on spreads 49.6%, against the 52.4% a −110 line needs. Regress the market’s own error on our disagreement with it and the coefficient — the share of a disagreement that is real — comes back within a standard error of zero on all three game markets.\n\nWHAT MOVED ON THE BOARD: NFL spreads, totals, team totals and moneylines. The market haircut used to keep half of any disagreement, a number chosen when nothing could be checked; it is now the measured one, which on NFL game lines prices at the market and grades almost everything Pass. Over those four seasons this would have declined 458 bets that lost 22.2 units. Every affected card says on its face that the haircut was measured and on how many games. Where a model earns a measured edge the haircut widens again — a fit is allowed to withdraw trust on its own, never to add it."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "model",
+      "title": "College football is measured now, not assumed",
+      "body": "The CFB model fits its own scoring baseline, home-field edge and margin spread from finished games, and falls back to a prior when there are too few. There was one completed college game in the database, so the prior had been in force for the sport’s whole life here — which is why every college board carried the line about being graded but not staked. Four seasons and 3,132 games are ingested.\n\nMeasuring immediately found a bug in the measurement. Home field was read as the plain average home margin, which in this sport is not the home-field advantage: good teams host bad ones far more often than the reverse. That estimator said +4.73 points. Solving for home field and team strength together says +2.71, and the home-and-home games — where two teams played at both venues, so strength cancels exactly — say +2.62.\n\nWHAT MOVED ON THE BOARD: every CFB spread, total and team total. Home field goes from an assumed 2.4 to a measured 2.71, and the scoring baseline from 28.5 to 26.70 — which had been putting every college total 3.6 points high. Had the old estimator been trusted it would have pushed every projected margin two points toward the home side on every game, wearing the word “fitted”. Both readings now appear on the board so a drift between them is visible."
+    },
+    {
+      "date": "2026-08-27",
+      "kind": "ship",
+      "title": "The flow desk can finally grade its own signals",
+      "body": "Every Polymarket trade in the flow feed scores out of 100 by adding up whichever signals fired — position size, order-book impact, a thin market, a fresh wallet. Those weights were professional estimates, and the report card could grade the total and never a component, because a stored flag only recorded its total. A year of resolutions would still not have said which signal earned it.\n\nFlags now record which signals fired, and the weights are refit against the ones whose markets resolved — each measured against the price the market was already charging, so a signal only scores for what it adds on top of what the market knew. The report card shows what each is worth. A signal that measures at nothing keeps firing and keeps showing, at zero: “we looked and this one does not predict anything” is a finding, not a reason to hide a row. Nothing changes until the record is thick enough to say so."
+    },
+    {
       "date": "2026-08-26",
       "kind": "fix",
       "title": "The health check now spots a market going ungraded",

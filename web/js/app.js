@@ -22671,9 +22671,46 @@ function intelReportCard(v) {
         <div style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">above 0 = flags beat their price</div></div>
     </div>
     ${bands ? `<div class="card" style="padding:0">${bands}</div>` : ""}
+    ${intelWeights(v.weights)}
     ${wallets ? `<div class="section-title">Wallets least like luck
         <span class="sub">— graded flags only, min 3, ranked by calibration z</span></div>
       <div class="card" style="padding:0">${wallets}</div>` : ""}`;
+}
+
+/* What each signal is worth, and whether that number was MEASURED.
+   The score has always been a sum of assigned weights — 40/30/15/8 for
+   the size tiers, 20 for impact, 15 for niche, 25 for a fresh wallet.
+   The report card above could grade the total and never a component,
+   because a flag only ever recorded its total. It records the breakdown
+   now, and engine/pmfit fits each weight against the flags that
+   resolved. A signal measured at nothing keeps firing and keeps showing
+   here at zero: "we looked and this one does not predict anything" is
+   the finding, not a reason to hide the row. */
+function intelWeights(w) {
+  const head = `<div class="section-title">What each signal is worth
+      <span class="sub">— fitted against resolved flags, offset by the price the
+      market was already charging. A signal only scores for what it adds.</span></div>`;
+  if (!w) return "";
+  const pts = w.points || {};
+  const keys = Object.keys(pts);
+  if (!keys.length) {
+    const held = (w.held || []).map((h) =>
+      `${escapeHtml(h.key === "*" ? "overall" : h.key)}: ${escapeHtml(h.why || "")}`);
+    const why = held.length ? ` ${escapeHtml(held.join("; "))}` : "";
+    return `${head}<div class="card">${panelEmpty(
+      `Still on the assigned weights — ${w.n || 0} resolved flag(s) carry a `
+      + `recorded breakdown so far.${why}`)}</div>`;
+  }
+  const label = {size: "Position size", impact: "Order-book impact",
+                 niche: "Niche market", fresh_wallet: "Fresh wallet"};
+  const rows = keys.sort((a, b) => pts[b] - pts[a]).map((k) => `
+    <div class="dl-row">
+      <span class="dl-main"><strong>${escapeHtml(label[k] || k)}</strong></span>
+      <span class="dl-num">${pts[k] ? `${pts[k]} pts` : "no measured edge"}</span>
+    </div>`).join("");
+  return `${head}
+    <div class="card" style="padding:0">${rows}</div>
+    ${w.note ? `<div class="subtitle">${escapeHtml(w.note)}</div>` : ""}`;
 }
 
 /* ---------------- Sleeper league sync (free, read-only, no key) ---------- */

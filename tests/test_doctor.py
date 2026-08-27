@@ -480,7 +480,8 @@ def test_the_new_invariant_checks_are_registered_in_both_lists():
     from DATA_CHECKS turns CI red on machines that have no journal. Both
     registrations, or the tripwire is decoration."""
     for fn in (doctor.check_premature_evidence, doctor.check_parlay_agreement,
-               doctor.check_forecast_log, doctor.check_game_calibration):
+               doctor.check_forecast_log, doctor.check_game_calibration,
+               doctor.check_fitter_cadence):
         assert fn in doctor.CHECKS, fn.__name__
         assert fn in doctor.DATA_CHECKS, fn.__name__
 
@@ -531,6 +532,67 @@ def test_a_measured_zero_is_reported_as_the_headline():
         gamecal.STATE_PATH = keep
         gamecal._cache.clear()
         gamecal._cache.update(keep_cache)
+
+
+def test_a_site_with_history_and_no_deep_fit_is_warned_about():
+    """The failure this rung exists for: a sport with the logs to fit,
+    and nothing ever fitted, because the schedule stopped reaching the
+    fitter and silence looked like nothing to report."""
+    from engine import deepfit
+    keep_stocked = deepfit.sports_with_history
+    keep_isfile = doctor.os.path.isfile
+    deepfit.sports_with_history = lambda *a, **k: ["nfl"]
+    doctor.os.path.isfile = lambda p: (False if "data/models" in str(p)
+                                       else keep_isfile(p))
+    try:
+        rep = doctor.Report()
+        doctor.check_fitter_cadence(rep)
+        c = [x for x in rep.checks if x["check"] == "fitter cadence"][0]
+        assert c["status"] == doctor.WARN, c
+        assert "nothing has ever been fitted" in c["detail"]
+    finally:
+        deepfit.sports_with_history = keep_stocked
+        doctor.os.path.isfile = keep_isfile
+
+
+def test_no_ingested_history_is_reported_as_a_fact_not_a_fault():
+    """A fresh clone has fitted nothing because it has ingested nothing.
+    A warning that implies a bug where there is none is how you learn to
+    skip warnings."""
+    from engine import deepfit
+    keep = deepfit.sports_with_history
+    deepfit.sports_with_history = lambda *a, **k: []
+    try:
+        rep = doctor.Report()
+        doctor.check_fitter_cadence(rep)
+        c = [x for x in rep.checks if x["check"] == "fitter cadence"][0]
+        assert c["status"] == doctor.OK, c
+        assert "no sport has enough ingested logs" in c["detail"]
+    finally:
+        deepfit.sports_with_history = keep
+
+
+def test_the_flow_weights_report_whether_they_are_measured():
+    from engine import pmfit
+    keep, keep_cache = pmfit.STATE_PATH, dict(pmfit._cache)
+    pmfit.STATE_PATH = os.path.join(tempfile.mkdtemp(), "pmfit.json")
+    pmfit._cache.clear()
+    try:
+        rep = doctor.Report()
+        doctor.check_fitter_cadence(rep)
+        assert "still on the assigned numbers" in rep.checks[0]["detail"]
+        pmfit._write_state({"points": {"impact": 50, "niche": 0},
+                            "n": 900, "fit_at": time.time()})
+        pmfit._cache.clear()
+        rep2 = doctor.Report()
+        doctor.check_fitter_cadence(rep2)
+        d = rep2.checks[0]["detail"]
+        assert "measured on 900 resolved flags" in d
+        assert "1 signal(s) measured at no edge" in d
+    finally:
+        pmfit.STATE_PATH = keep
+        pmfit._cache.clear()
+        pmfit._cache.update(keep_cache)
 
 
 def test_a_stale_calibration_is_warned_about():

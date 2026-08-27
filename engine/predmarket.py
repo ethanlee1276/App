@@ -52,6 +52,22 @@ TIERS = ((500_000, "$500K+ position", 40),
          (100_000, "$100K+ position", 30),
          (10_000, "$10K+ position", 15),
          (5_000, "$5K+ position", 8))
+
+#: A STABLE KEY PER SIGNAL, because the label is prose and prose moves.
+#: These are what `pm_flags.signals` records and what `engine.pmfit` fits
+#: on, so renaming a card's wording must never silently split a signal's
+#: history in two. The tier keys collapse the four size bands into one
+#: name plus the band, for the same reason.
+SIG_SIZE = "size"
+SIG_IMPACT = "impact"
+SIG_NICHE = "niche"
+SIG_FRESH = "fresh_wallet"
+#: The stack bonus is a MULTIPLIER, not a signal that fires — it is
+#: recorded in its own `pm_flags.stack_mult` column and is deliberately
+#: absent from SIGNAL_KEYS, which is the list of things a flag can be
+#: said to carry and therefore the list `engine.pmfit` fits over.
+SIG_STACK = "multi_signal"
+SIGNAL_KEYS = (SIG_SIZE, SIG_IMPACT, SIG_NICHE, SIG_FRESH)
 IMPACT_MIN = 0.05             # ≥5% of the market's 24h volume
 NICHE_VOL = 100_000           # a "thin" market in 24h dollar volume
 FRESH_HOURS = 24
@@ -284,13 +300,29 @@ CREATE TABLE IF NOT EXISTS pm_flags (
     outcome TEXT, side TEXT, price REAL, usd REAL, score INTEGER,
     status TEXT DEFAULT 'open',
     won INTEGER, roi REAL, resolved_ts INTEGER,
+    -- WHICH SIGNALS FIRED, comma-separated stable keys, plus the stack
+    -- multiplier that was applied. Without these the score is a total
+    -- with no parts and no fit can ever attribute it. Added 2026-08-27;
+    -- rows written before then carry NULL and `engine.pmfit` skips them
+    -- rather than guessing a breakdown backwards from the total.
+    signals TEXT, stack_mult REAL,
     PRIMARY KEY (venue, tx, wallet, outcome, ts)
 );
 """
 
 
+#: Columns added to `pm_flags` after it shipped. SQLite has no
+#: "ADD COLUMN IF NOT EXISTS", and a live droplet's table predates them.
+_PM_FLAG_MIGRATIONS = (("signals", "TEXT"), ("stack_mult", "REAL"))
+
+
 def ensure_tables(conn) -> None:
     conn.executescript(SCHEMA)
+    have = {c[1] for c in conn.execute("PRAGMA table_info(pm_flags)")}
+    for col, decl in _PM_FLAG_MIGRATIONS:
+        if col not in have:
+            conn.execute(f"ALTER TABLE pm_flags ADD COLUMN {col} {decl}")
+    conn.commit()
 
 
 def store_trades(conn, trades: list[dict]) -> int:
@@ -390,36 +422,54 @@ def score_trade(trade: dict, market: dict | None, history: dict | None,
     if usd < FEED_FLOOR_USD:
         return None
 
+    # MEASURED POINTS WHERE THERE ARE ANY. `engine.pmfit` fits each
+    # signal's weight against the flags that actually resolved; until it
+    # has enough of them every lookup returns None and the assigned
+    # numbers below stand, which is what every score before today used.
+    def _pts(key: str, assigned: int) -> int:
+        try:
+            from .pmfit import points_for
+            fitted = points_for(key)
+        except Exception:                                 # noqa: BLE001
+            return assigned            # a fitter must never cost the feed
+        return assigned if fitted is None else fitted
+
     signals: list[dict] = []
     for floor, label, pts in TIERS:
         if usd >= floor:
-            signals.append({"name": label, "value": f"${usd:,.0f}", "pts": pts})
+            # The size tiers share one fitted weight and keep their
+            # relative shape: the fit says what "size fired" is worth,
+            # the tier table says how much of it a $10K trade earns
+            # against a $500K one.
+            top = TIERS[0][2]
+            scaled = _pts(SIG_SIZE, top) * pts / top
+            signals.append({"key": SIG_SIZE, "band": floor, "name": label,
+                            "value": f"${usd:,.0f}", "pts": round(scaled)})
             break
 
     vol24 = float((market or {}).get("vol24") or 0)
     if vol24 > 0:
         impact = usd / vol24
         if impact >= IMPACT_MIN:
-            signals.append({"name": "Order-book impact",
-                            "value": f"{impact:.0%} of 24h volume", "pts": 20})
+            signals.append({"key": SIG_IMPACT, "name": "Order-book impact",
+                            "value": f"{impact:.0%} of 24h volume",
+                            "pts": _pts(SIG_IMPACT, 20)})
         if vol24 < NICHE_VOL:
-            signals.append({"name": "Niche market",
-                            "value": f"${vol24:,.0f} 24h volume", "pts": 15})
+            signals.append({"key": SIG_NICHE, "name": "Niche market",
+                            "value": f"${vol24:,.0f} 24h volume",
+                            "pts": _pts(SIG_NICHE, 15)})
 
     h = (history or {}).get(trade["wallet"])
     if h and 0 <= trade["ts"] - h["first_ts"] <= FRESH_HOURS * 3600 and h["n"] <= 5:
-        signals.append({"name": "Fresh wallet",
+        signals.append({"key": SIG_FRESH, "name": "Fresh wallet",
                         "value": "first seen <24h before this trade "
                                  "(our tape only — matures as recording accrues)",
-                        "pts": 25})
+                        "pts": _pts(SIG_FRESH, 25)})
 
-    score = sum(s["pts"] for s in signals)
+    base = sum(s["pts"] for s in signals)
     # Independent signals stacking is worth more than any one alone.
-    if len(signals) >= 3:
-        score *= 1.3
-    elif len(signals) == 2:
-        score *= 1.2
-    score = min(100, round(score))
+    stack = 1.3 if len(signals) >= 3 else (1.2 if len(signals) == 2 else 1.0)
+    score = min(100, round(base * stack))
 
     # Actionability — the question every alert must answer.
     current = (market or {}).get("yes")
@@ -444,6 +494,23 @@ def score_trade(trade: dict, market: dict | None, history: dict | None,
         "current_price": current,
         "score": score, "signals": signals, "status": status,
         "wallet_trades": (h or {}).get("n", 0),
+        # THE BREAKDOWN, so the weights can one day be MEASURED.
+        #
+        # Every number above — 40/30/15/8 for the size tiers, 20 for
+        # impact, 15 for niche, 25 for a fresh wallet, the 1.3 for three
+        # signals stacking — is a professional estimate. `flag_report`
+        # already grades the composite honestly against the entry price,
+        # and could never grade a COMPONENT, because the only thing
+        # `pm_flags` recorded was the total. A year of resolutions would
+        # still not have said which signal earned it.
+        #
+        # This module's own first rule is that order flow cannot be
+        # backfilled. Neither can this: a flag stored today without its
+        # breakdown is a row `engine.pmfit` can never learn from, however
+        # long the tape runs. So it is recorded from now on.
+        "signal_keys": sorted({s["key"] for s in signals if s.get("key")}),
+        "stack_mult": stack,
+        "base_score": base,
     }
 
 
@@ -481,10 +548,14 @@ def store_flags(conn, feed: list[dict]) -> int:
             continue
         cur = conn.execute(
             "INSERT OR IGNORE INTO pm_flags (venue, tx, ts, wallet, slug, "
-            "market, outcome, side, price, usd, score) "
-            "VALUES ('polymarket',?,?,?,?,?,?,?,?,?,?)",
+            "market, outcome, side, price, usd, score, signals, stack_mult) "
+            "VALUES ('polymarket',?,?,?,?,?,?,?,?,?,?,?,?)",
             (f.get("tx", ""), f["ts"], f["wallet"], f["slug"], f["market"],
-             f["outcome"], f["side"], f["entry_price"], f["usd"], f["score"]))
+             f["outcome"], f["side"], f["entry_price"], f["usd"], f["score"],
+             ",".join(f.get("signal_keys")
+                      or sorted({s["key"] for s in f.get("signals") or []
+                                 if s.get("key")})) or None,
+             f.get("stack_mult")))
         n += cur.rowcount
     conn.commit()
     return n
