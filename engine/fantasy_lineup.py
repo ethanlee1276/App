@@ -91,15 +91,33 @@ MIN_GAMES = 3
 
 
 # --- what a player is worth in this league ----------------------------------
+#: Below this many games a player's own week-to-week spread is a rumour,
+#: so his POSITION's pooled spread is used instead. Measured either way —
+#: nothing here is a chosen number.
+SD_MIN_GAMES = 5
+
+
 def per_game(conn, season: int, markets=None) -> dict:
-    """``{player: {market: per-game mean, "_games": n, "position": pos}}``.
+    """``{player: {market: mean, "_games": n, "_sd": spread, "position": pos}}``.
 
     Averaged over games the player actually appeared in, which is the
     right denominator for a start/sit call — dividing a season by 17 when
     he missed six weeks answers a question nobody asked.
+
+    ``_sd`` IS THE WEEK-TO-WEEK SPREAD, and it exists because a mean on
+    its own cannot answer a head-to-head. Two flex plays projected at
+    11.0 are the same start until you know one of them has never scored
+    under 8 and the other alternates 2 and 20 — which is the whole
+    decision when you are a four-point underdog. Measured off the same
+    logs, in one pass: population SD of the player's own weekly PPR, and
+    for anyone under `SD_MIN_GAMES`, his position's pooled SD, because a
+    rookie with two identical games would otherwise report certainty.
+    ``_sd_basis`` says which, so a card can never imply a measurement it
+    did not make.
     """
     markets = tuple(markets or (["fp_ppr"] + list(SCORING_MARKET.values())))
-    q = ("SELECT player, position, market, COUNT(*) n, AVG(value) a "
+    q = ("SELECT player, position, market, COUNT(*) n, AVG(value) a, "
+         "AVG(value*value) aa "
          "FROM player_game_logs WHERE sport='nfl' AND season=? AND market IN "
          "(%s) GROUP BY player, position, market" % ",".join("?" * len(markets)))
     out: dict = {}
@@ -107,12 +125,34 @@ def per_game(conn, season: int, markets=None) -> dict:
         rows = conn.execute(q, [int(season)] + list(markets)).fetchall()
     except Exception:                                         # noqa: BLE001
         return {}
+    own: dict = {}
     for r in rows:
         who = out.setdefault(r["player"], {"position": (r["position"] or "").upper(),
                                            "_games": 0})
         who[r["market"]] = float(r["a"] or 0.0)
         if r["market"] == "fp_ppr":
             who["_games"] = int(r["n"] or 0)
+            # Population variance from the two moments SQLite can group.
+            # Clamped at zero: floating point can put a constant series a
+            # hair below it, and a negative variance has no square root.
+            var = max(0.0, float(r["aa"] or 0.0) - float(r["a"] or 0.0) ** 2)
+            own[r["player"]] = var ** 0.5
+    # The pooled spread per position, over players with enough of a
+    # sample to contribute one.
+    pooled: dict = {}
+    for name, sd in own.items():
+        if int((out.get(name) or {}).get("_games") or 0) >= SD_MIN_GAMES:
+            pooled.setdefault((out[name].get("position") or ""), []).append(sd)
+    pooled = {pos: sum(v) / len(v) for pos, v in pooled.items() if v}
+    for name, who in out.items():
+        n = int(who.get("_games") or 0)
+        if n >= SD_MIN_GAMES and name in own:
+            who["_sd"], who["_sd_basis"] = round(own[name], 2), "own"
+        elif who.get("position") in pooled:
+            who["_sd"] = round(pooled[who["position"]], 2)
+            who["_sd_basis"] = "position"
+        else:
+            who["_sd"], who["_sd_basis"] = None, "none"
     return out
 
 

@@ -214,7 +214,7 @@ three shapes rather than building a query builder nobody uses.
 
 ---
 
-## 7. Head-to-head league sync for the fantasy page
+## 7. Head-to-head league sync — SHIPPED 2026-08-27
 
 **What:** read the reader's actual league — their roster, their
 opponent's, the standings — and answer start/sit against the team they
@@ -226,6 +226,35 @@ are actually playing this week.
 
 **Note:** Sleeper only. ESPN and Yahoo need session cookies or an OAuth
 app, and this repo does not take credentials.
+
+**SHIPPED**, as `engine/fantasy_h2h.py` plus a head-to-head panel and a
+standings table on the League Desk. The desk answered every question
+against the FIELD before this; a head-to-head league is one game against
+one roster, and which start is right depends on the scoreboard as much
+as on the projection.
+
+The estimate said medium-large and the shape was the surprise. Reading
+the league was the easy half — Sleeper's own `matchups/{week}` board
+names the opponent and `settings.leg` names the week, so nothing had to
+be guessed from a calendar. The half worth building was the UNIT: the
+answer is a MARGIN with a spread around it, not two totals, and the
+spread had to be measured. `fantasy_lineup.per_game` now carries `_sd`,
+each player's own week-to-week standard deviation, with his position's
+pooled spread standing in for anyone too thin to have one — a rookie
+with two identical games would otherwise report certainty.
+
+What falls out for free is the part worth reading: ranking bench swaps
+by their effect on WIN PROBABILITY rather than on points reproduces the
+advice every fantasy column gives — favourites want floors, underdogs
+want ceilings — without anybody writing that rule down. The same roster
+gets opposite advice at +12 and −12, and nothing in the module knows the
+words favourite or underdog. Two tests run exactly that.
+
+Two things in it are approximations rather than counts, and the panel
+says both: the margin is treated as normally distributed, and the two
+lineups as independent. When your quarterback is throwing to their
+receiver they are not — and this app measures fantasy correlation
+nowhere, so it is flagged rather than fudged.
 
 ---
 

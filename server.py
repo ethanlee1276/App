@@ -60,6 +60,14 @@ _SLEEPER_OK = re.compile(
     r"^(user/[A-Za-z0-9_]{1,40}"
     r"|user/\d{1,25}/leagues/nfl/\d{4}"
     r"|league/\d{1,25}(/rosters|/users|/drafts)?"
+    # The week's board: one row per roster, sharing a matchup_id. This is
+    # the only way to know WHO you are playing, which is the whole of
+    # IDEAS #7 — the desk answered every question against the field
+    # before it, and you do not play the field.
+    r"|league/\d{1,25}/matchups/\d{1,2}"
+    # Which week it is, from the league's own scorekeeper rather than
+    # from a calendar this server would have to guess with.
+    r"|state/nfl"
     r"|draft/\d{1,25}(/picks)?"
     r"|players/nfl)$")
 
@@ -1086,11 +1094,15 @@ class Handler(BaseHTTPRequestHandler):
             owner[str(u.get("user_id"))] = (u.get("display_name")
                                             or u.get("username") or "?")
         mine, rivals = [], {}
+        my_roster_id = None
+        by_roster = {}
         for r in rosters or []:
             who = str(r.get("owner_id") or "")
             rows = rows_for(r)
+            by_roster[int(r.get("roster_id") or 0)] = rows
             if who == str(user_id):
                 mine = rows
+                my_roster_id = r.get("roster_id")
             elif rows:
                 rivals[owner.get(who, f"Team {r.get('roster_id')}")] = rows
 
@@ -1116,6 +1128,54 @@ class Handler(BaseHTTPRequestHandler):
                   if mine and rivals else [])
         out["trades"] = trades[:12]
         out["trade_summary"] = fantasy_trade.summary(trades)
+
+        # THE TEAM YOU ARE ACTUALLY PLAYING (IDEAS #7). Everything above
+        # answers against the field; a head-to-head league is one game
+        # against one roster, and which start is right depends on the
+        # scoreboard rather than on the projection alone. See
+        # engine/fantasy_h2h.py.
+        from engine import fantasy_h2h
+        out["standings"] = fantasy_h2h.standings(rosters, owner)
+        out["me_roster_id"] = (int(my_roster_id)
+                               if my_roster_id is not None else None)
+        try:
+            week = int((query.get("week") or [""])[0])
+        except (TypeError, ValueError):
+            week = 0
+        if not 1 <= week <= 18:
+            # The league's own scorekeeper first — `leg` is the week it
+            # is scoring right now — and Sleeper's NFL state as the
+            # fallback. Neither is a calendar this server has to guess
+            # with, which is the third option and the wrong one.
+            week = int(((league.get("settings") or {}).get("leg") or 0))
+        if not 1 <= week <= 18:
+            try:
+                week = int((grab("state/nfl", ttl=1800) or {}).get("week") or 0)
+            except (DataUnavailable, ValueError):
+                week = 0
+        out["week"] = week if 1 <= week <= 18 else None
+        opp_rows, opp_name = None, None
+        if out["week"] and my_roster_id is not None:
+            try:
+                board = grab(f"league/{league_id}/matchups/{out['week']}",
+                             ttl=300)
+            except (DataUnavailable, ValueError):
+                board = []
+            opp_id = fantasy_h2h.opponent_roster_id(board, my_roster_id)
+            if opp_id is not None:
+                opp_rows = by_roster.get(opp_id) or None
+                for r in rosters or []:
+                    if int(r.get("roster_id") or 0) == opp_id:
+                        opp_name = owner.get(str(r.get("owner_id") or ""),
+                                             f"Team {opp_id}")
+                        break
+        if mine:
+            h2h = fantasy_h2h.head_to_head(mine, opp_rows,
+                                           league.get("roster_positions"),
+                                           scoring, means)
+            h2h["opponent"] = opp_name
+            h2h["swings"] = fantasy_h2h.swings(h2h)
+            out["h2h"] = h2h
         self._send(200, json.dumps(out).encode(), ".json")
 
     def _league_desk_espn(self, league_id: str, member_id: str, query: dict):

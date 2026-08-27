@@ -18607,9 +18607,113 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
       right league above.</div>`;
     return;
   }
-  host.innerHTML = ffLineupHTML(d) + ffScoringGapsHTML(d) + ffTradesHTML(d);
+  host.innerHTML = ffH2HHTML(d) + ffLineupHTML(d) + ffScoringGapsHTML(d)
+    + ffTradesHTML(d) + ffStandingsHTML(d);
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
+}
+
+/* ---------------- The team you are actually playing (IDEAS #7) ----------
+
+   Everything else on this desk answers against the field. A head-to-head
+   league is one game against one roster, and the right start depends on
+   the scoreboard as much as on the projection: four points down with one
+   player left you want the boom, four points up you want the floor.
+
+   The unit is therefore the MARGIN with a spread around it, both
+   measured — see engine/fantasy_h2h.py, which also carries the two
+   assumptions this panel repeats rather than hides. */
+function ffH2HHTML(d) {
+  const h = d.h2h;
+  if (!h || !h.me) return "";
+  const wk = d.week ? `Week ${d.week}` : "This week";
+  if (!h.them) {
+    return `<div class="section-title">${escapeHtml(wk)}
+      <span class="sub">— your side of it</span></div>
+      <div class="card">
+        <div class="ld-total">${h.me.points ?? 0} projected points</div>
+        <p class="rank-help">No opponent on the league’s board for this
+        week — a bye, or a schedule that is not up yet. Half a matchup is
+        still worth seeing; the other half is not worth inventing.</p>
+      </div>`;
+  }
+  const p = h.win_prob;
+  const lead = h.margin > 0;
+  const pct = p == null ? null : Math.round(p * 100);
+  const swings = h.swings || [];
+  return `
+    <div class="section-title">${escapeHtml(wk)}: you vs ${
+      escapeHtml(h.opponent || "your opponent")}
+      <span class="sub">— the start/sit answer against the team you are
+      actually playing, not against the field</span></div>
+    <div class="card ld-h2h">
+      <div class="ld-h2h-score">
+        <span class="ld-h2h-side"><b>${h.me.points}</b><span>you</span></span>
+        <span class="ld-h2h-vs">${h.margin > 0 ? "+" : ""}${h.margin}</span>
+        <span class="ld-h2h-side"><b>${h.them.points}</b><span>${
+          escapeHtml(h.opponent || "them")}</span></span>
+      </div>
+      ${pct == null ? `<p class="rank-help">Not enough measured week-to-week
+        scoring on these rosters to put odds on it — the projected margin
+        above stands on its own.</p>`
+      : `<div class="ld-h2h-odds ${lead ? "pos" : "neg"}">${pct}% to win</div>
+         <p class="rank-help">A ${h.sd}-point swing sits around that margin,
+         measured off both sides’ own week-to-week scoring rather than
+         assumed. ${h.coinflip ? "Inside a point either way, which is a coin flip."
+           : lead ? "You are favoured, so a safer lineup is worth more than a bigger one."
+           : "You are behind, so ceiling is worth more than floor."}</p>`}
+      ${swings.length ? `<div class="ld-swaps">
+        <div class="rank-fight-head">Start these instead</div>
+        ${swings.map((w) => `<div class="rank-fight-row">
+          <b>${escapeHtml(w.slot)}</b>
+          <span class="chip down">out ${escapeHtml(w.sit)}</span>
+          <span class="chip up">in ${escapeHtml(w.start)}</span>
+          <span class="rank-spread">${w.points > 0 ? "+" : ""}${w.points} proj ·
+            ${pct}% → ${Math.round(w.win_prob * 100)}% to win</span>
+          <span class="rank-none">${escapeHtml(w.why)}</span></div>`).join("")}
+      </div>` : `<p class="rank-help">Nothing on your bench improves your
+        odds this week — the highest-scoring lineup is also the likeliest
+        to win this particular game.</p>`}
+      ${(h.unmeasured || []).length ? `<p class="rank-help">${icon("warn")}
+        No measured week-to-week swing for
+        <b>${(h.unmeasured || []).map(escapeHtml).join(", ")}</b>, so each
+        contributes points and no uncertainty. The spread above is
+        narrower than the truth by however much they move.</p>` : ""}
+      <p class="rank-help">Two things here are approximations rather than
+      counts, and they are the only two. The margin is treated as normally
+      distributed, which a sum of nine starters is close enough to.
+      And the two lineups are treated as independent — when your
+      quarterback is throwing to their receiver they are not, and this app
+      measures fantasy correlation nowhere, so it is flagged rather than
+      guessed at.</p>
+    </div>`;
+}
+
+/* The table, straight off the league. No model in it at all — which is
+   why it sits at the bottom: it is the one panel here that would be
+   identical on any site. */
+function ffStandingsHTML(d) {
+  const rows = d.standings || [];
+  if (rows.length < 2) return "";
+  // Matched on the ROSTER id, which the payload knows for certain, rather
+  // than on an owner id the client would have to have kept.
+  const mine = d.me_roster_id;
+  return `
+    <div class="section-title">Standings
+      <span class="sub">— your league’s own table, as it stands</span></div>
+    <div class="card">
+      <div class="rank-scroll"><table class="rank-table"><thead><tr>
+        <th>#</th><th class="rank-name">Team</th><th>W-L-T</th>
+        <th>PF</th><th>PA</th></tr></thead><tbody>
+        ${rows.map((t) => `<tr${mine != null && t.roster_id === mine
+            ? ' class="ld-mine"' : ""}>
+          <td>${t.rank}</td>
+          <td class="rank-name">${escapeHtml(t.team)}</td>
+          <td>${t.wins}-${t.losses}${t.ties ? "-" + t.ties : ""}</td>
+          <td>${t.points_for}</td>
+          <td class="rank-none">${t.points_against}</td></tr>`).join("")}
+      </tbody></table></div>
+    </div>`;
 }
 
 function ffLineupHTML(d) {

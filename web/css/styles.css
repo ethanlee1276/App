@@ -3306,6 +3306,30 @@ body.msg-thread-open .footer { display: none; }
 .gs-grid .num { text-align: right; font-variant-numeric: tabular-nums; }
 .gs-tm { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
+/* League desk — this week's head-to-head. The score line is the panel:
+   two totals and the number between them, which is the only number the
+   reader is actually holding in their head on a Sunday. */
+.ld-h2h-score { display: flex; align-items: center; justify-content: center;
+  gap: 18px; padding: 6px 0 2px; flex-wrap: wrap; }
+.ld-h2h-side { display: flex; flex-direction: column; align-items: center;
+  min-width: 92px; }
+.ld-h2h-side b { font-size: var(--fs-2xl); font-weight: 800;
+  font-variant-numeric: tabular-nums; line-height: var(--lh-tight); }
+.ld-h2h-side span { color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .06em; margin-top: 2px;
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.ld-h2h-vs { color: var(--text-mute); font-weight: 800;
+  font-variant-numeric: tabular-nums; font-size: var(--fs-md); }
+.ld-h2h-odds { text-align: center; font-weight: 800; font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ld-h2h-odds.pos { color: var(--good); }
+.ld-h2h-odds.neg { color: var(--bad); }
+/* Your own row in the table, marked without shouting. --fill-subtle was
+   the first try and it lands at 2% alpha, which is not a mark. */
+.ld-mine { background: var(--panel-2); }
+.ld-mine .rank-name { font-weight: 700; }
+
 /* Draft kit */
 .dk-row { grid-template-columns: 26px minmax(0, 1fr) 40px 58px 58px; }
 .dk-slrow { grid-template-columns: minmax(0, 1fr) 92px 110px; }
