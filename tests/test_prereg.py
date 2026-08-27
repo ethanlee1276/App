@@ -231,6 +231,65 @@ def test_the_receptions_remedy_names_a_lever_that_moves():
     assert "TIER_MIN_EDGE[tier]" in source
 
 
+# --- superseding, without editing -------------------------------------
+
+def _store():
+    import tempfile, os
+    return os.path.join(tempfile.mkdtemp(), "prereg.json")
+
+
+def test_a_superseded_test_says_what_replaced_it_and_stops_collecting():
+    path = _store()
+    prereg.ensure_registered(path)
+    v = next(x for x in prereg.report([], path)
+             if x["id"] == "a-band-nfl-props-2026-08")
+    assert v["status"] == "superseded"
+    assert v["superseded_by"] == "a-receptions-nfl-2026-08"
+    assert "STAKE_CAP_U" in v["reading"]
+
+
+def test_superseding_does_not_edit_the_frozen_terms():
+    """The hash is the whole protection. A supersession that voided the
+    test would destroy the record of what was originally asked, which is
+    the one thing a preregistration is for."""
+    import json
+    path = _store()
+    prereg.ensure_registered(path)
+    stored = json.load(open(path))
+    t = next(x for x in stored["tests"] if x["id"] == "a-band-nfl-props-2026-08")
+    assert t["hash"] == prereg._terms_hash(t)
+    assert t["decides"] == prereg.A_BAND_NFL["decides"]
+
+
+def test_an_edited_test_is_still_void_even_once_superseded():
+    """Void outranks superseded: terms that moved report nothing at all,
+    whatever else was recorded beside them."""
+    import json
+    path = _store()
+    prereg.ensure_registered(path)
+    stored = json.load(open(path))
+    for t in stored["tests"]:
+        if t["id"] == "a-band-nfl-props-2026-08":
+            t["min_n"] = 3
+    prereg.save(stored, path)
+    v = next(x for x in prereg.report([], path)
+             if x["id"] == "a-band-nfl-props-2026-08")
+    assert v["status"] == "void"
+
+
+def test_superseding_is_idempotent_and_refuses_an_unknown_id():
+    path = _store()
+    prereg.ensure_registered(path)
+    prereg.supersede("a-band-nfl-props-2026-08", "a-receptions-nfl-2026-08",
+                     "same reason", path)
+    raised = False
+    try:
+        prereg.supersede("no-such-test", "x", "y", path)
+    except KeyError:
+        raised = True
+    assert raised
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

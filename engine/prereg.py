@@ -66,6 +66,43 @@ def _terms_hash(t: dict) -> str:
         json.dumps(keyed, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def supersede(test_id: str, by: str, why: str, path=None) -> dict:
+    """Record that a registered test has been replaced, without editing it.
+
+    THE CASE THIS EXISTS FOR. `A_BAND_NFL` was registered on 2026-08-27
+    with the remedy "level A's stake cap down to B+'s —
+    engine.quality.STAKE_CAP_U". That constant stopped deciding a stake
+    when `engine.staking` retired Kelly-times-grade, and A and B+ already
+    take the same fraction, so the test would one day report `supported`
+    and change NOTHING. A preregistration whose remedy is inert is the
+    same failure this module exists to prevent, wearing the uniform of
+    the fix.
+
+    It cannot simply be edited. The terms are hashed precisely so that
+    nobody can move the goalposts after seeing data, and `verdict`
+    rightly reports an edited test as void. So the terms stay exactly as
+    frozen and the supersession is recorded BESIDE them: the successor's
+    id, the reason, and the date. The old test stops collecting and says
+    what replaced it; the record of what was originally asked survives,
+    which is the whole point of writing it down in the first place.
+
+    Idempotent, and refuses to supersede a test that does not exist —
+    silently marking a typo would be indistinguishable from working.
+    """
+    store = load(path)
+    for t in store["tests"]:
+        if t["id"] != test_id:
+            continue
+        if t.get("superseded_by") == by:
+            return store
+        t["superseded_by"] = by
+        t["superseded_why"] = why
+        t["superseded_on"] = _dt.date.today().isoformat()
+        save(store, path)
+        return store
+    raise KeyError(f"no registered test with id {test_id!r}")
+
+
 def load(path=None) -> dict:
     p = Path(path if path is not None else DEFAULT_PATH)
     try:
@@ -136,6 +173,18 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         out["reading"] = ("the terms changed after registration — this is "
                           "no longer a preregistered test and reports "
                           "nothing")
+        return out
+
+    if test.get("superseded_by"):
+        out["status"] = "superseded"
+        out["superseded_by"] = test["superseded_by"]
+        out["reading"] = (
+            f"replaced by {test['superseded_by']} on "
+            f"{test.get('superseded_on', '')} — "
+            f"{test.get('superseded_why', 'no reason recorded')}. The terms "
+            f"above are the ones that were frozen; they are kept rather than "
+            f"edited, because a preregistration nobody can read afterwards "
+            f"protects nothing.")
         return out
 
     reg = test["registered"]
@@ -318,7 +367,24 @@ def ensure_registered(path=None) -> dict:
     """Idempotent: registers the standing tests if they are not there."""
     store = register(B_MINUS, path)
     store = register(A_BAND_NFL, path)
-    return register(RECEPTIONS_A_NFL, path)
+    store = register(RECEPTIONS_A_NFL, path)
+    # A_BAND_NFL asked "does A beat B+". Slicing by grade AND market
+    # answered it — the deficit is one cell, A-graded receptions — and
+    # RECEPTIONS_A_NFL asks that sharper question with a remedy that
+    # moves something. The original's did not: see `supersede`.
+    try:
+        store = supersede(
+            A_BAND_NFL["id"], RECEPTIONS_A_NFL["id"],
+            "its remedy named engine.quality.STAKE_CAP_U, which stopped "
+            "deciding a stake when Kelly-times-grade was retired — A and B+ "
+            "already take the same fraction, so the test would have fired "
+            "and changed nothing. The successor tests the one market the "
+            "deficit is actually in, and names the 40-point edge component "
+            "of the quality score, which does decide the grade",
+            path)
+    except KeyError:                                          # pragma: no cover
+        pass
+    return store
 
 
 def report(rows: list[dict], path=None) -> list[dict]:

@@ -124,14 +124,52 @@ def fetch_historical_events(sport: str, when, api_key: str | None = None) -> Sna
     return _unwrap(payload, stamp)
 
 
+#: Game markets, engine name → Odds API key. THE SECOND COPY OF THIS MAP
+#: WAS THE BUG. `engine.maintenance` kept a private
+#: `_HARVEST_GAME_MARKETS` and translated before calling this function,
+#: so the nightly asked for "spreads"; the CLI called this function
+#: directly and asked for "spread", which the API does not have. One map,
+#: in the module that owns the translation, and both callers get it right.
+GAME_MARKET_KEYS = {"moneyline": "h2h", "spread": "spreads",
+                    "total": "totals", "team_total": "totals"}
+
+
+def parse_map(sport: str) -> dict:
+    """Every API key `parse_snapshot` can actually read back, → engine name.
+
+    The request side and the parse side used different maps.
+    `resolve_market_keys` layers scorer markets on top of the sport's
+    config; `parse_event_lines` reads the config alone. A key that
+    resolves for the request and is missing here is BOUGHT and then
+    silently dropped — which is what CFB's empty market map does to
+    every college prop that is not a scorer.
+    """
+    out = dict(SPORT_CONFIG[sport]["markets"])
+    out.update(SCORER_ODDS_TO_MARKET)
+    # Parsed by their own dedicated parsers, not through a market map.
+    out.update({k: k for k in ("h2h", "totals", "spreads")})
+    return out
+
+
+def unreadable_markets(sport: str, keys: list[str]) -> list[str]:
+    """Requested keys this sport's parsers will throw away.
+
+    Returned rather than raised: a harvest that refuses outright on one
+    bad market is worse than one that buys the rest and says what it
+    could not read.
+    """
+    readable = parse_map(sport)
+    return [k for k in keys if k not in readable]
+
+
 def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
     """Translate engine market names to Odds API keys.
 
     Historical credits scale with the number of markets requested, so
     harvesting only the market being backtested is the difference between an
     affordable run and one that outspends the plan. Accepts either form —
-    ``total_bases`` becomes ``batter_total_bases``; API keys and game markets
-    (``h2h``, ``totals``, ``spreads``) pass through untouched.
+    ``total_bases`` becomes ``batter_total_bases``, ``spread`` becomes
+    ``spreads``; keys that are already API keys pass through untouched.
     """
     to_api = {v: k for k, v in SPORT_CONFIG[sport]["markets"].items()}
     # SCORER markets too. They were missing, and the failure was silent
@@ -142,6 +180,12 @@ def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
     # be graded against. Inverted from the same map the live path parses
     # with, so the two cannot drift.
     to_api.update({v: k for k, v in SCORER_ODDS_TO_MARKET.items()})
+    # GAME MARKETS TOO, for the reason `GAME_MARKET_KEYS` records: the
+    # docstring above said they "pass through untouched" and expected
+    # every caller to have translated them first. One did and one did
+    # not, and the one that did not spent credits on market names the
+    # API has never had.
+    to_api.update(GAME_MARKET_KEYS)
     return [to_api.get(n.strip(), n.strip()) for n in names if n.strip()]
 
 

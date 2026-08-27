@@ -157,11 +157,15 @@ def _maybe_backup(state: dict, today: _dt.date, log,
         f"({len(list(backup_dir.glob('backup_*.zip')))} kept)")
 
 
-#: Game-bet journal markets → the Odds API's own market keys. Props
-#: resolve through oddshistory.resolve_market_keys; these three are the
-#: journal's game-bet vocabulary, which the API spells differently.
-_HARVEST_GAME_MARKETS = {"moneyline": "h2h", "spread": "spreads",
-                         "total": "totals", "team_total": "totals"}
+#: The journal's game-bet vocabulary → the Odds API's own keys, from the
+#: module that owns the translation. It used to be a private copy here,
+#: and the copy was the bug: `resolve_market_keys` did NOT translate
+#: game markets, so the nightly (which pre-translated with this map)
+#: asked for "spreads" while `harvest_odds.py --markets spread` asked
+#: for "spread", which the API has never had. One map now, and this name
+#: is kept as an alias so the nightly's own call site still reads the way
+#: it always did.
+from .sources.oddshistory import GAME_MARKET_KEYS as _HARVEST_GAME_MARKETS
 
 #: Sports the auto-harvest may spend on. CFB joined 2026-08-26, once the
 #: blocker was removed rather than worked around: its team map is built

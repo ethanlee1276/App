@@ -91,6 +91,22 @@ def main() -> None:
     days = list(daterange(args.start, args.end))
     market_keys = (oh.resolve_market_keys(args.sport, args.markets.split(","))
                    if args.markets else None)
+    # DO NOT BUY WHAT CANNOT BE READ BACK. The request side layers scorer
+    # markets on top of the sport's config; the parse side reads the
+    # config alone, so a key that resolves here and is missing there is
+    # paid for and then silently dropped. CFB's market map is empty,
+    # which makes every college prop but the scorer board exactly that.
+    if market_keys:
+        unreadable = oh.unreadable_markets(args.sport, market_keys)
+        if unreadable:
+            print(f"  ⚠️  {', '.join(unreadable)} — this sport's parsers "
+                  f"cannot read {'them' if len(unreadable) > 1 else 'it'} "
+                  f"back, so harvesting would spend credits and store "
+                  f"nothing. Dropped from the request.")
+            market_keys = [k for k in market_keys if k not in unreadable]
+            if not market_keys:
+                print("  Nothing left to harvest.")
+                return
     book_keys = [b.strip() for b in args.books.split(",") if b.strip()] or None
     market_note = (f"markets: {', '.join(market_keys)}" if market_keys
                    else "markets: ALL (costly — use --markets to harvest only "
