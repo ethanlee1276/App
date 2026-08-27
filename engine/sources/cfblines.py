@@ -84,6 +84,12 @@ MIN_TOTAL, MAX_TOTAL = 20.0, 110.0
 #: How the total's two rows identify themselves.
 OVER, UNDER = "over", "under"
 
+#: A moneyline outside this is not a price anyone offered. College has
+#: genuine 10,000-to-1 mismatches in September; beyond that the cell is
+#: a data error, and a five-figure favourite prices to a certainty the
+#: de-vig cannot do anything sensible with.
+MIN_MONEYLINE, MAX_MONEYLINE = -50_000, 50_000
+
 
 def _blank(value) -> bool:
     return str(value).strip() in BLANK
@@ -114,14 +120,20 @@ def parse_lines(rows, games: dict, seasons=None) -> dict:
     `engine.sources.cfbfastr` already stored — so the home side of a
     spread is identified per game and never through a name table.
 
-    Returns ``{"lines": {game_id: {"spread", "total", "spread_books",
-    "total_books"}}, "skipped": {reason: n}}``. A game reaches ``lines``
-    only for the markets it actually has; a spread with no usable pair
-    does not borrow the total's game.
+    Returns ``{"lines": {game_id: {"spread", "total", "ml",
+    "spread_books", "total_books", "ml_books"}}, "skipped": {reason: n}}``.
+    A game reaches ``lines`` only for the markets it actually has; a
+    spread with no usable pair does not borrow the total's game.
+
+    ``ml`` is ``[home price, away price]`` in American odds, the shape
+    `gamebacktest.schedule_moneylines` reads. Unlike the spread and the
+    total it needs BOTH sides — a moneyline is only usable de-vigged,
+    and one price alone cannot be de-vigged.
     """
     want = {int(s) for s in seasons} if seasons else None
     pairs: dict = {}          # (game, book) -> {"home": x, "away": y}
     totals: dict = {}         # game -> [values]
+    prices: dict = {}         # (game, book) -> {"home": p, "away": p}
     skipped: dict[str, int] = {}
 
     def skip(reason):
@@ -140,12 +152,26 @@ def parse_lines(rows, games: dict, seasons=None) -> dict:
         market = str(r.get("market_type") or "").strip().lower()
         side = str(r.get("abbr") or "").strip()
         value = _num(r.get("lines"))
+        book = str(r.get("book") or "").strip()
+        # A MONEYLINE LIVES IN A DIFFERENT COLUMN. Its price is in
+        # ``odds`` and its ``lines`` cell is empty, so the missing-close
+        # guard below would throw away every moneyline row in the file.
+        if market == "money_line":
+            price = _num(r.get("odds"))
+            if price is None:
+                skip("no moneyline price from this book")
+            elif side == game.get("home_name"):
+                prices.setdefault((gid, book), {})["home"] = price
+            elif side == game.get("away_name"):
+                prices.setdefault((gid, book), {})["away"] = price
+            else:
+                skip("moneyline side matched neither school")
+            continue
         if value is None:
             # No close from this book. Its opener is not a close and is
             # deliberately not substituted.
             skip("no closing number from this book")
             continue
-        book = str(r.get("book") or "").strip()
         if market == "spread":
             slot = pairs.setdefault((gid, book), {})
             if side == game.get("home_name"):
@@ -178,6 +204,28 @@ def parse_lines(rows, games: dict, seasons=None) -> dict:
             continue
         spreads.setdefault(gid, []).append(home)
 
+    #: A moneyline needs BOTH sides, so books are combined in
+    #: PROBABILITY space rather than on the American numbers: the median
+    #: of -110 and +105 is not a price, and averaging across the
+    #: ±100 discontinuity is worse. Each book's pair is de-vigged to a
+    #: fair home probability, those are combined, and the consensus is
+    #: written back out as a fair two-way pair.
+    consensus: dict = {}
+    for (gid, _book), slot in prices.items():
+        home, away = slot.get("home"), slot.get("away")
+        if home is None or away is None:
+            skip("only one side of the moneyline from this book")
+            continue
+        if not (MIN_MONEYLINE <= home <= MAX_MONEYLINE
+                and MIN_MONEYLINE <= away <= MAX_MONEYLINE):
+            skip("moneyline outside any plausible range")
+            continue
+        fair = _fair_home(home, away)
+        if fair is None:
+            skip("moneyline pair did not de-vig")
+            continue
+        consensus.setdefault(gid, []).append(fair)
+
     out: dict = {}
     for gid, values in spreads.items():
         out.setdefault(gid, {})["spread"] = round(_median(values), 2)
@@ -189,7 +237,42 @@ def parse_lines(rows, games: dict, seasons=None) -> dict:
             continue
         out.setdefault(gid, {})["total"] = round(_median(usable), 2)
         out[gid]["total_books"] = len(usable)
+    for gid, values in consensus.items():
+        fair = _median(values)
+        out.setdefault(gid, {})["ml"] = [_american(fair), _american(1.0 - fair)]
+        out[gid]["ml_books"] = len(values)
     return {"lines": out, "skipped": skipped}
+
+
+def _implied(american: float) -> float:
+    """An American price as its implied probability, vig included."""
+    return (-american) / (-american + 100.0) if american < 0 \
+        else 100.0 / (american + 100.0)
+
+
+def _fair_home(home: float, away: float):
+    """The home side's de-vigged probability, or None."""
+    total = _implied(home) + _implied(away)
+    if total <= 0:
+        return None
+    fair = _implied(home) / total
+    return fair if 0.0 < fair < 1.0 else None
+
+
+def _american(p: float) -> int:
+    """A fair probability back as an American price.
+
+    Written out as a PAIR of fair prices rather than kept as a
+    probability because that is the shape every consumer already reads —
+    `gamebacktest.schedule_moneylines` hands two American numbers to
+    `odds.devig_two_way`, which will find no vig in them and return the
+    same probability back. Storing the consensus any other way would
+    mean teaching four call sites a second format.
+    """
+    p = min(max(float(p), 1e-4), 1.0 - 1e-4)
+    if p >= 0.5:
+        return int(round(-100.0 * p / (1.0 - p)))
+    return int(round(100.0 * (1.0 - p) / p))
 
 
 def _stream(url: str, cache_name: str, ttl: int):
@@ -218,5 +301,5 @@ def load_lines(path, games: dict, seasons=None) -> dict:
 
 
 __all__ = ["LINES_URL", "PAIR_TOLERANCE", "MAX_SPREAD", "MIN_TOTAL",
-           "MAX_TOTAL", "DataUnavailable", "fetch_lines", "load_lines",
-           "parse_lines"]
+           "MAX_TOTAL", "MIN_MONEYLINE", "MAX_MONEYLINE", "DataUnavailable",
+           "fetch_lines", "load_lines", "parse_lines"]

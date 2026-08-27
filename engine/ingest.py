@@ -884,7 +884,7 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
     """
     import json as _json
     from .sources import cfblines
-    result = {"spread": 0, "total": 0, "games": 0, "skipped": []}
+    result = {"spread": 0, "total": 0, "ml": 0, "games": 0, "skipped": []}
     where = "WHERE sport='cfb'"
     args: list = []
     if seasons:
@@ -900,7 +900,7 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
         games[str(r["game_id"])] = {
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
-            "season": r["season"], "period": r["period"],
+            "season": r["season"], "period": r["period"], "extra": extra,
         }
     if not games:
         result["skipped"].append(
@@ -924,11 +924,26 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
                 f"season=? AND period=? AND game_id=?",
                 (quote[column], game["season"], game["period"], game_id))
             result[column] += 1
+        if quote.get("ml"):
+            # MERGED, NOT REPLACED. `extra` already carries the neutral
+            # -site flag `engine.cfb.ratings` holds its home-field fit
+            # out of bowl games with, and the school names the player
+            # ingest joins on. Overwriting it with a moneyline would
+            # take both out and nothing would say so.
+            merged = dict(game["extra"])
+            merged["ml"] = [int(quote["ml"][0]), int(quote["ml"][1])]
+            conn.execute(
+                "UPDATE games SET extra=? WHERE sport='cfb' AND season=? "
+                "AND period=? AND game_id=?",
+                (_json.dumps(merged, separators=(",", ":")), game["season"],
+                 game["period"], game_id))
+            result["ml"] += 1
         result["games"] += 1
     conn.commit()
     db.log_ingest(conn, "cfb", "closing_lines", str(seasons or "all"),
                   result["games"])
     if not quiet:
-        print(f"  cfb closes: {result['spread']:,} spread(s) and "
-              f"{result['total']:,} total(s) across {result['games']:,} games")
+        print(f"  cfb closes: {result['spread']:,} spread(s), "
+              f"{result['total']:,} total(s) and {result['ml']:,} "
+              f"moneyline(s) across {result['games']:,} games")
     return result

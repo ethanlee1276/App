@@ -80,6 +80,29 @@ def nfl_win_prob(home_rating: float, away_rating: float) -> float:
     return clamp(normal_cdf(margin / NFL_MARGIN_SD), 0.01, 0.99)
 
 
+def cfb_win_prob(home_rating: float, away_rating: float) -> float:
+    """P(home win) for college football, off ITS OWN registered numbers.
+
+    Deliberately not written like `nfl_win_prob`. That one closes over
+    two module constants; college football's home field and margin
+    spread are MEASURED and re-installed by `engine.cfb.ratings.install`
+    after every fit, so reading the live tables through `_sd` is what
+    keeps this curve and the board's spread pricing describing the same
+    sport. It also means the curve refuses by name rather than quietly
+    pricing college through the NFL's 13.5-point margin — the exact
+    fault `_sd` exists for, and the one `gamecal` refused to work around
+    by leaving CFB out of its curve table entirely.
+
+    The clamp is wider than the NFL's because college is: a 40-point
+    September mismatch is an ordinary Saturday, and pinning it at 99%
+    would price a certainty the sport does produce.
+    """
+    margin = ((home_rating - away_rating)
+              + _sd(HOME_FIELD, "cfb", "home-field edge"))
+    return clamp(normal_cdf(margin / _sd(MARGIN_SD, "cfb", "margin spread")),
+                 0.005, 0.995)
+
+
 def mlb_win_prob(home_rating: float, away_rating: float,
                  home_xera: float = LEAGUE_AVG_XERA,
                  away_xera: float = LEAGUE_AVG_XERA) -> float:

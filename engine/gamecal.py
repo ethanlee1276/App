@@ -134,9 +134,7 @@ def observations(conn, sport: str, market: str,
     from .gamebacktest import schedule_closes, game_line_closes, _split
     from .gamebets import project_total, game_margin, SCORING_BASELINE, _sd
 
-    if market == "moneyline":
-        return _moneyline_observations(conn, sport, min_team_games)
-    if market not in ("total", "spread"):
+    if market not in ("total", "spread", "moneyline"):
         raise ValueError(
             f"market must be 'total', 'spread' or 'moneyline', got {market!r}")
     if sport not in SCORING_BASELINE:
@@ -146,11 +144,18 @@ def observations(conn, sport: str, market: str,
         # has no variance registered, but do not invent one if it hasn't:
         # `_sd` refusing is the right outcome, and `fit_one` turns the
         # refusal into a recorded hold rather than a crash.
+        #
+        # ABOVE the moneyline dispatch, not below it. `cfb_win_prob`
+        # reads the same installed tables, so a moneyline fit that ran
+        # before anything imported the ratings module would refuse for
+        # an import-order reason rather than a measurement one.
         try:                                              # pragma: no cover
             import importlib
             importlib.import_module(f".{sport}.ratings", __package__)
         except Exception:                                 # noqa: BLE001
             pass
+    if market == "moneyline":
+        return _moneyline_observations(conn, sport, min_team_games)
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
     # PRICES NOT REQUIRED. This measures how far our NUMBER sits from
     # the market's number — a points question that never reads a price,
@@ -209,10 +214,16 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
     points and hoping the mapping holds.
     """
     from .gamebacktest import moneyline_closes, schedule_moneylines, _rating
-    from .gamebets import SCORING_BASELINE, mlb_win_prob, nfl_win_prob
+    from .gamebets import (SCORING_BASELINE, cfb_win_prob, mlb_win_prob,
+                           nfl_win_prob)
     from .odds import devig_two_way
 
-    CURVES = {"mlb": mlb_win_prob, "nfl": nfl_win_prob}
+    # College football joined this table on 2026-08-27, when
+    # `engine.sources.cfblines` finally supplied moneylines to measure
+    # against. Note what it did NOT do: reuse `nfl_win_prob`. CFB's curve
+    # reads CFB's own installed home field and margin spread, so the
+    # refusal below stays a refusal rather than becoming a shortcut.
+    CURVES = {"mlb": mlb_win_prob, "nfl": nfl_win_prob, "cfb": cfb_win_prob}
     if sport not in CURVES:
         raise ValueError(
             f"no win-probability curve registered for {sport!r} — fitting a "

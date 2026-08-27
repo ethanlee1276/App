@@ -340,9 +340,45 @@ def test_a_sport_with_no_registered_variance_is_held_not_crashed():
 
 
 def test_a_moneyline_fit_refuses_a_sport_with_no_win_curve():
+    """CFB used to be the example here. It is not any more — see below —
+    which is the point: the refusal has to be about a curve that does
+    not exist, not about a sport nobody got round to."""
     conn = _db([])
-    f = G.fit_one(conn, "cfb", "moneyline")
+    f = G.fit_one(conn, "quidditch", "moneyline")
     assert f.missing and "win-probability curve" in f.missing
+
+
+def test_college_football_has_its_own_win_curve_now():
+    from engine.gamebets import cfb_win_prob, nfl_win_prob
+    from engine.cfb import ratings as R
+    R.install(R.PRIOR)
+    even = cfb_win_prob(0.0, 0.0)
+    assert 0.5 < even < 0.62           # the home edge, and only that
+    assert cfb_win_prob(10.0, 0.0) > even > cfb_win_prob(-10.0, 0.0)
+    # And it is NOT the NFL's curve wearing a college label: college
+    # margins scatter wider, so the same rating gap is a smaller
+    # favourite here.
+    assert cfb_win_prob(10.0, 0.0) < nfl_win_prob(10.0, 0.0)
+
+
+def test_the_college_curve_refuses_rather_than_borrowing():
+    """`_sd` exists so a sport with no registered variance cannot be
+    priced through another league's. The curve has to inherit that."""
+    from engine import gamebets
+    from engine.cfb import ratings as R
+    saved = (gamebets.HOME_FIELD.pop("cfb", None),
+             gamebets.MARGIN_SD.pop("cfb", None))
+    try:
+        raised = False
+        try:
+            gamebets.cfb_win_prob(3.0, 0.0)
+        except ValueError:
+            raised = True
+        assert raised
+    finally:
+        R.install(R.PRIOR)
+        assert gamebets.HOME_FIELD["cfb"] and gamebets.MARGIN_SD["cfb"]
+        assert saved
 
 
 # --- the walk-forward promise -----------------------------------------------

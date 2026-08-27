@@ -144,11 +144,66 @@ def test_the_season_filter_is_honoured():
     assert out["skipped"]["season not requested"]
 
 
-def test_moneyline_rows_are_read_for_nothing_and_break_nothing():
-    rows = _both(-1.5, 1.5) + [_row(market_type="money_line", lines="",
-                                    odds="-115")]
+# --- the moneyline ----------------------------------------------------
+def _ml(home, away, book="DraftKings"):
+    return [_row(market_type="money_line", abbr="Penn State", lines="",
+                 odds=str(home), book=book),
+            _row(market_type="money_line", abbr="Notre Dame", lines="",
+                 odds=str(away), book=book)]
+
+
+def test_a_moneyline_lives_in_the_odds_column_not_the_lines_column():
+    """Its ``lines`` cell is empty, so the missing-close guard that
+    protects the spread would have thrown away every moneyline row."""
+    out = C.parse_lines(_ml(-150, 130), GAMES)
+    assert out["lines"]["401"]["ml"]
+
+
+def test_the_stored_pair_devigs_back_to_what_the_books_said():
+    from engine.odds import devig_two_way
+    out = C.parse_lines(_ml(-150, 130), GAMES)["lines"]["401"]
+    fair_home, fair_away = devig_two_way(*out["ml"])
+    assert 0.55 < fair_home < 0.60          # -150/+130 is about 57%
+    assert abs(fair_home + fair_away - 1.0) < 1e-9
+
+
+def test_the_home_price_comes_first():
+    out = C.parse_lines(_ml(-400, 320), GAMES)["lines"]["401"]
+    assert out["ml"][0] < 0 < out["ml"][1]
+    swapped = {"401": {"home_name": "Notre Dame", "away_name": "Penn State"}}
+    out = C.parse_lines(_ml(-400, 320), swapped)["lines"]["401"]
+    assert out["ml"][0] > 0 > out["ml"][1]
+
+
+def test_one_sided_moneylines_are_refused():
+    """A moneyline is only usable de-vigged, and one price cannot be."""
+    rows = [_row(market_type="money_line", abbr="Penn State", lines="",
+                 odds="-150")]
     out = C.parse_lines(rows, GAMES)
-    assert out["lines"]["401"]["spread"] == -1.5
+    assert "401" not in out["lines"]
+    assert out["skipped"]["only one side of the moneyline from this book"] == 1
+
+
+def test_books_are_combined_in_probability_space():
+    """The median of -110 and +105 is not a price, and averaging across
+    the +/-100 discontinuity is worse."""
+    out = C.parse_lines(_ml(-110, -110, "A") + _ml(-130, 110, "B")
+                        + _ml(-150, 130, "C"), GAMES)["lines"]["401"]
+    from engine.odds import devig_two_way
+    fair, _ = devig_two_way(*out["ml"])
+    assert 0.53 < fair < 0.58               # the middle book's read
+    assert out["ml_books"] == 3
+
+
+def test_a_five_figure_price_is_refused():
+    out = C.parse_lines(_ml(-90000, 12000), GAMES)
+    assert "401" not in out["lines"]
+
+
+def test_the_spread_and_the_moneyline_do_not_interfere():
+    out = C.parse_lines(_both(-1.5, 1.5) + _ml(-115, -105),
+                        GAMES)["lines"]["401"]
+    assert out["spread"] == -1.5 and out["ml"]
 
 
 if __name__ == "__main__":
