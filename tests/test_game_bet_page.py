@@ -34,6 +34,9 @@ import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _windows import function as _js_fn  # noqa: E402  (path set above)
 
 from engine.teamlogs import recent_games
 
@@ -70,12 +73,8 @@ def test_the_board_and_the_edge_list_open_them_too():
     # each time the code was correct and the window was too small. A
     # count is a guess about how long a function will stay; the closing
     # brace is where the function actually ends.
-    def _body(name):
-        i = APP.index(f"function {name}(")
-        return APP[i:APP.index("\n}\n", i)]
-
-    assert "gameBetAttrs(r)" in _body("gameBetCard")
-    assert "gameBetAttrs(b)" in _body("edgeBoardRows")
+    assert "gameBetAttrs(r)" in _js_fn(APP, "function gameBetCard(")
+    assert "gameBetAttrs(b)" in _js_fn(APP, "function edgeBoardRows(")
 
 
 def test_the_game_page_defines_its_park_factors():

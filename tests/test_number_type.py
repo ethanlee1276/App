@@ -26,6 +26,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _windows import lines_after as _lines_after  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
@@ -61,8 +64,10 @@ def test_both_weights_have_a_job():
     serif was deleted for."""
     for weight in ("400", "500"):
         assert f"font-weight: {weight};" in CSS
-    i = CSS.index("Both weights get a job")
-    assert "font-weight: 400" in CSS[i:i + 400]
+    # Counted in LINES, because the anchor is a comment and the scope is
+    # "the declarations it introduces" — a reader can check twelve lines
+    # against the file; 400 characters is not a unit anyone can verify.
+    assert "font-weight: 400" in _lines_after(CSS, "Both weights get a job", 12)
 
 
 # --- what is set in it ------------------------------------------------------

@@ -31,6 +31,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _windows import function as _js_fn  # noqa: E402  (path set above)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
@@ -96,8 +99,11 @@ def test_a_broken_feed_never_fails_the_build():
 
 # --- the render side --------------------------------------------------------
 def test_the_card_draws_the_track():
-    i = APP.index("function liveCardHTML(")
-    assert "${lineTrackHTML(g)}" in APP[i:i + 2600]
+    # Sliced to the function's closing brace, not to a character count.
+    # This window had 39 characters left on 2026-08-27 — one added line
+    # from failing on correct code, which is how the last three false
+    # failures started.
+    assert "${lineTrackHTML(g)}" in _js_fn(APP, "function liveCardHTML(")
 
 
 def test_a_game_with_no_history_draws_nothing():

@@ -436,6 +436,15 @@ def test_no_test_file_imports_a_third_party_module_unguarded():
     local |= {d for d in os.listdir(ROOT)
               if os.path.isdir(os.path.join(ROOT, d))
               and not d.startswith(".")}
+    # A SIBLING HELPER IN tests/ IS FIRST-PARTY, not a dependency. It is
+    # neither stdlib nor a module at the repo root, so without this it
+    # reads as third-party and the guard fires on our own code —
+    # which is what happened the day tests/_windows.py landed. The
+    # invariant this test protects is "a hand-run tool's dependency must
+    # not become the suite's"; a file in the same directory, committed
+    # beside the tests, is not that.
+    local |= {f[:-3] for f in os.listdir(os.path.join(ROOT, "tests"))
+              if f.endswith(".py") and not f.startswith("test_")}
     bad = []
     for f in sorted(os.listdir(os.path.join(ROOT, "tests"))):
         if not (f.startswith("test_") and f.endswith(".py")):
