@@ -720,6 +720,22 @@ def check_correlation_priors(rep):
                     "box measures fewer games than the standing number did "
                     "— run `python3 -m engine.corrfit` to see the gap")
             return
+        # A SUPERSEDED NUMBER IS NEWS, not a quiet upgrade. It means the
+        # code could not reproduce what was standing — which on
+        # 2026-08-27 turned out to be an ingest change the sample-count
+        # rule was structurally unable to see.
+        gone = []
+        for _key, (name, _sign) in sorted(corrfit.ADOPT.items()):
+            hit = corrfit.measured(name) or {}
+            if hit.get("superseded"):
+                gone.append(f"{name} {hit['superseded']['was']:+.3f}→"
+                            f"{hit['r']:+.3f}")
+        if gone:
+            rep.add("correlation priors", OK,
+                    f"{live} of {total} refit from our own history · "
+                    f"{len(gone)} superseded a number this code cannot "
+                    f"reproduce: {', '.join(gone)}")
+            return
         rep.add("correlation priors", OK,
                 f"{live} of {total} refit from our own history, "
                 f"{total - live} on their last hand-taken measurement")

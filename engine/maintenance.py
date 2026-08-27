@@ -631,8 +631,12 @@ def settle_open(log=print, state_path: Path | None = None,
                 from . import corrfit
                 cf = corrfit.refresh(hconn)
                 for a in cf["adopted"]:
+                    sup = a.get("superseded")
                     log(f"  correlation refit: {a['key']} rho={a['r']:+.3f} "
-                        f"on {a['n']:,} games")
+                        f"on {a['n']:,} games"
+                        + (f" — SUPERSEDES {sup['was']:+.3f}, which this "
+                           f"code cannot reproduce ({sup['sigma']} sigma out)"
+                           if sup else ""))
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  correlation refit skipped: {exc}")
             # The hypothesis lab's free step: every stored hypothesis

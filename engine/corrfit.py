@@ -354,6 +354,47 @@ ADOPT: dict[str, tuple[str, int]] = {
 #: floor, for a pairing that has no standing number at all.
 MIN_N = 500
 
+# --- when a bigger sample is not better evidence -----------------------------
+#
+# THE CASE THIS EXISTS FOR, found 2026-08-27 by ingesting four NFL
+# seasons and refitting. The standing `possession_pie` is -0.560 on
+# 2,848 games. Today's code, on 2,278 games of the same league with a
+# stable shape across all four seasons, measures -0.098 ± 0.021. That is
+# a twenty-two sigma disagreement, which no amount of extra season
+# explains — and the "never displace a better-sampled number" rule was
+# dutifully protecting the older one.
+#
+# THE DATES SAY WHY. The hand-taken table was written on 2026-08-02. The
+# ingest that widened `rec_yds` from WIDE RECEIVERS ONLY to every
+# position landed on 2026-08-15. "The team's total receiving yards" —
+# the quantity this pairing's partial correlation holds fixed — is a
+# different number before and after that, and with only wide receivers
+# in the pool the top two ARE most of the total, which forces the
+# partial hard negative. The measurement was correct on the day. What
+# changed was the data underneath it, and a sample count cannot see
+# that: it compares how MANY, never of what.
+#
+# So the rule gains a second door. A standing number the current code
+# cannot reproduce is not evidence, it is a record of an older schema,
+# and a well-sampled precise fit supersedes it however many games it
+# claims. Both halves are needed: without the sample floor one thin
+# season could overturn a real measurement, and without the sigma test a
+# stale constant outlives every ingest change forever.
+
+#: A fit may supersede a better-sampled standing number only on a sample
+#: this size. One NFL season is 570 team-games, so a single season can
+#: never do it; four can.
+REPRO_MIN_N = 1000
+
+#: ...and only when the fit is precise enough for the disagreement to
+#: mean something.
+REPRO_MAX_SE = 0.05
+
+#: Standard errors of disagreement before the standing number is treated
+#: as unreproducible. Season-to-season drift lands inside this; a schema
+#: change does not.
+REPRO_SIGMA = 4.0
+
 #: A fitted |r| this close to 1 is a broken join, not a discovery — two
 #: series that are the same column, or a partial whose covariate has
 #: collapsed onto its own inputs.
@@ -364,6 +405,16 @@ MAX_ABS_R = 0.95
 STATE_PATH = os.path.join("data", "feedstate", "corr.json")
 
 _cache: dict = {}
+
+
+def _standing_r(parlay_key: str) -> float | None:
+    """The rho currently in use from the hand-taken table, or None."""
+    try:
+        from .parlays import MEASURED
+        hit = MEASURED.get(parlay_key)
+        return float(hit[0]) if hit else None
+    except Exception:                                        # noqa: BLE001
+        return None
 
 
 def _standing_n(parlay_key: str) -> int:
@@ -407,14 +458,26 @@ def refresh(db="data/history.db", sport: str | None = None) -> dict:
         if f.r != f.r or abs(f.r) > MAX_ABS_R:
             held.append({"key": parlay_key, "why": f"unusable r={f.r}"})
             continue
-        if f.n < floor:
+        fitted = sign * f.r
+        standing = _standing_r(parlay_key)
+        sigma = None
+        if (standing is not None and f.se == f.se and f.se
+                and f.n >= REPRO_MIN_N and f.se <= REPRO_MAX_SE):
+            sigma = abs(fitted - standing) / f.se
+        unreproducible = sigma is not None and sigma >= REPRO_SIGMA
+        if f.n < floor and not unreproducible:
             held.append({"key": parlay_key,
                          "why": f"{f.n} games, needs {floor}"})
             continue
-        entry = {"r": round(sign * f.r, 4), "n": int(f.n),
+        entry = {"r": round(fitted, 4), "n": int(f.n),
                  "se": None if f.se != f.se else round(f.se, 4),
                  "from": f.prior.key, "sport": f.prior.sport,
                  "fit_at": time.time()}
+        if unreproducible:
+            # Kept in the state file, because a number that quietly
+            # replaced another one is the thing this module exists to
+            # stop happening.
+            entry["superseded"] = {"was": standing, "sigma": round(sigma, 1)}
         state[parlay_key] = entry
         adopted.append({"key": parlay_key, **entry})
     if adopted:

@@ -164,6 +164,22 @@ RHO_SHRINK = 0.45
 # rather than assumed. Provenance travels with each entry so a stale fit is
 # visible rather than inherited.
 #
+# THESE WERE TAKEN ON 2026-08-02, AND THE DATA UNDER THEM MOVED ON
+# 2026-08-15. The ingest that widened `rec_yds` from wide receivers only
+# to every position changed what "the team's total receiving yards"
+# means — which is the quantity `possession_pie` holds fixed — and with
+# only wide receivers in the pool the top two ARE most of the total, so
+# the partial was forced hard negative. Refit on four seasons of the
+# current schema it reads -0.098, not -0.560: a twenty-two sigma
+# disagreement that no extra season explains.
+#
+# The numbers stay, because a floor is still worth having on a machine
+# with no history at all. What they are NOT any more is the last word:
+# `corrfit.refresh` supersedes a standing number the current code cannot
+# reproduce, records the disagreement, and says so in the settle log.
+# See REPRO_SIGMA there for why a sample count alone could never have
+# caught this — it compares how MANY, never of what.
+#
 # Re-fit with:  python3 -m engine.corrfit --sport nfl
 MEASURED: dict[str, tuple[float, int, str]] = {
     # +0.637 against a published band of +0.35 to +0.50. The doc's headline

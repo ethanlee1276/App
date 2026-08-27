@@ -244,19 +244,41 @@ def test_a_strong_measured_correlation_is_not_mistaken_for_a_duplicate():
     assert t["qualified"] is True
 
 
-def test_the_possession_pie_stays_a_kill_and_gets_louder():
-    """The measurement moved this one hard in the doc's own direction: -0.56
-    against a published band of -0.10 to +0.10. Type 3's kill-by-default is
-    more right than the estimate knew, and the disposition must not soften
-    just because the number changed."""
+def test_the_possession_pie_stays_a_kill_whatever_the_number_says():
+    """THE DISPOSITION IS THE CLAIM, and it is the half that held up.
+
+    This asserted rho < -0.4, on the strength of a hand-taken -0.560
+    against a published band of -0.10 to +0.10 — "Type 3's
+    kill-by-default is more right than the estimate knew". Refit on four
+    seasons of the CURRENT ingest it reads -0.098, inside the doc's band
+    after all, and the -0.560 turns out to have been measured while
+    `rec_yds` was stored for wide receivers only (2026-08-02, against the
+    widening on 2026-08-15). The estimate was right; the correction was
+    an artefact of the data underneath it.
+
+    None of which softens the pairing: two teammates splitting one
+    possession pie is a Type 3 kill on the MECHANISM, not on the size of
+    the number, and that is what this asserts now. Isolated, because the
+    rho in use depends on whether this machine has refit, and a test
+    whose verdict changes with the operator's history is testing the
+    operator."""
     a = dict(player="WR1", team="GB", opponent="CHI", market="rec_yds",
              side="OVER", game_date="d")
     b = dict(player="WR2", team="GB", opponent="CHI", market="rec_yds",
              side="OVER", game_date="d")
-    rel = P.relate("nfl", a, b)
-    assert rel.verdict == "kill"
-    assert rel.clash == 3
-    assert rel.rho < -0.4, rel.rho
+    with _isolated():                      # no live fit: the floor applies
+        rel = P.relate("nfl", a, b)
+        assert rel.verdict == "kill"
+        assert rel.clash == 3
+        assert rel.rho < 0, rel.rho
+    with _isolated():                      # and with a superseded fit
+        C._write_state({"possession_pie": {
+            "r": -0.0975, "n": 2278, "se": 0.0208, "fit_at": time.time(),
+            "superseded": {"was": -0.56, "sigma": 22.3}}})
+        C._cache.clear()
+        rel = P.relate("nfl", a, b)
+        assert rel.verdict == "kill" and rel.clash == 3
+        assert rel.rho == -0.0975
 
 
 # --- and it feeds itself back ------------------------------------------------
@@ -408,6 +430,87 @@ def test_the_json_state_is_plain_and_sorted():
         assert text.index('"a"') < text.index('"b"'), \
             "unsorted state churns diffs"
         assert json.loads(text)["a"]["r"] == 0.2
+
+
+# --- when a bigger sample is not better evidence -----------------------------
+
+def test_a_standing_number_this_code_cannot_reproduce_is_superseded():
+    """Found 2026-08-27 by ingesting four NFL seasons and refitting.
+
+    The standing `possession_pie` is -0.560 on 2,848 games. Today's code,
+    on 2,278 games of the same league with a stable shape across all four
+    seasons, measures -0.098 ± 0.021 — twenty-two sigma, which no extra
+    season explains. The dates say why: the table was hand-taken on
+    2026-08-02, and the ingest that widened `rec_yds` from wide receivers
+    only to every position landed on 2026-08-15. "The team's total
+    receiving yards" is a different number before and after that, and it
+    is exactly the quantity this pairing holds fixed.
+
+    A sample count cannot see any of this. It compares how MANY, never of
+    what — so the "never displace a better-sampled number" rule was
+    dutifully protecting a measurement of a schema that no longer
+    exists."""
+    class _Fit:
+        def __init__(self, r, n, se, prior):
+            self.r, self.n, self.se, self.prior = r, n, se, prior
+            self.missing = ""
+    prior = next(p for p in C.PRIORS if p.key == "wr_rec_yds__wr2_rec_yds")
+    standing = P.MEASURED["possession_pie"][0]
+    fit = _Fit(-0.0975, 2278, 0.0208, prior)
+    sigma = abs(fit.r - standing) / fit.se
+    assert sigma > C.REPRO_SIGMA, sigma
+    assert fit.n >= C.REPRO_MIN_N and fit.se <= C.REPRO_MAX_SE
+    # And the standing sample really is the larger one, so nothing but
+    # the reproducibility test could have let this through.
+    assert fit.n < P.MEASURED["possession_pie"][1]
+
+
+def test_one_thin_season_can_never_overturn_a_measurement():
+    """Both halves of the rule are needed. Without the sample floor, a
+    single quiet season could overturn real evidence; without the sigma
+    test, a stale constant outlives every ingest change forever."""
+    assert C.REPRO_MIN_N > 570, \
+        "one NFL season is 570 team-games and must not be enough"
+
+
+def test_a_pairing_that_still_reproduces_keeps_its_richer_sample():
+    """The rule has to discriminate or it is just a blanket override.
+    `run_game_script` measures +0.347 against a standing +0.356 — well
+    inside the noise — so the better-sampled standing number stays."""
+    standing = P.MEASURED["run_game_script"][0]
+    sigma = abs(0.347 - standing) / 0.018
+    assert sigma < C.REPRO_SIGMA, sigma
+
+
+def test_a_supersede_is_recorded_rather_than_silent():
+    with _isolated():
+        C._write_state({"possession_pie": {
+            "r": -0.0975, "n": 2278, "se": 0.0208, "fit_at": time.time(),
+            "superseded": {"was": -0.56, "sigma": 22.3}}})
+        C._cache.clear()
+        got = C.measured("possession_pie")
+        assert got["superseded"]["was"] == -0.56
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "maintenance.py"), encoding="utf-8").read()
+    assert "SUPERSEDES" in src, "the settle log says nothing about it"
+    d = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "doctor.py"), encoding="utf-8").read()
+    assert "cannot \n" not in d and "superseded" in d
+
+
+def test_the_table_records_that_its_data_moved_underneath_it():
+    """The numbers stay as a floor for a machine with no history. What
+    they are not any more is the last word, and the file says so where
+    the next reader will be standing."""
+    src = open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "engine", "parlays.py"), encoding="utf-8").read()
+    i = src.index("MEASURED: dict[str, tuple[float, int, str]]")
+    head = src[max(0, i - 1400):i]
+    assert "2026-08-15" in head and "2026-08-02" in head
+    assert "wide receivers" in head
 
 
 if __name__ == "__main__":
