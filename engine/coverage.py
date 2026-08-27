@@ -51,6 +51,13 @@ class SportCoverage:
     label: str
     layers: list = field(default_factory=list)
 
+    def __post_init__(self):
+        # A layer builder may answer None for "this question does not
+        # apply to this sport" — `_prop_closes_layer` does, for a board
+        # with no props. Dropping them HERE means no per-sport builder
+        # has to remember to, and none of them can forget.
+        self.layers = [l for l in self.layers if l is not None]
+
     @property
     def score(self) -> tuple[int, int]:
         """(layers present, layers that could be present) — parked items are
@@ -175,6 +182,174 @@ def _game_lines_layer(conn, sport: str) -> Layer:
                  "past dates: python3 harvest_odds.py")
 
 
+def _prop_markets(sport: str) -> set:
+    """The player-prop markets this sport's board actually quotes.
+
+    Three sources, because no one of them is honest alone. The harvest
+    CONFIG says what can be bought — but CFB's is empty while its
+    touchdown board publishes picks every Saturday, so the config alone
+    would report that college has no props to price. `HOLD_MARKETS` names
+    the Yes-only boards each sport quotes — but only those. The JOURNAL
+    says what was actually bet — but a market added before its first pick
+    is invisible there, and so is a whole board in its own offseason. The
+    union is what this sport is on the hook for.
+
+    Game markets are excluded through `ledger.GAME_MARKETS` rather than a
+    second list here, for the reason that constant's own comment gives.
+    `GRADED_ELSEWHERE` buckets are dropped too: a Kalshi ticker in the
+    `player` column is not a prop this harvest could ever buy.
+    """
+    from .ledger import GAME_MARKETS, GRADED_ELSEWHERE
+    from .maintenance import HOLD_MARKETS
+    from .sources.oddsapi import SPORT_CONFIG
+    out = set((SPORT_CONFIG.get(sport) or {}).get("markets", {}).values())
+    # The Yes-only boards, from the registry that already knows which
+    # sport quotes which — `anytime_td` for both football codes and
+    # `home_runs` for baseball. Without this CFB reports no props at all
+    # in the week before its first pick is journaled, which is the one
+    # week the answer would have been worth acting on.
+    out.update(m for s, m in HOLD_MARKETS if s == sport)
+    try:
+        from . import ledger
+        conn = ledger.connect()
+        holes = ",".join("?" * len(GRADED_ELSEWHERE))
+        for row in conn.execute(
+                f"SELECT DISTINCT market FROM bets WHERE sport=? AND "
+                f"COALESCE(category,'main') NOT IN ({holes})",
+                (sport, *GRADED_ELSEWHERE)):
+            out.add(str(row[0] or ""))
+        conn.close()
+    except Exception:                                      # noqa: BLE001
+        pass
+    return {m for m in out if m and m not in GAME_MARKETS}
+
+
+def _stored_prop_markets(conn, sport: str) -> dict:
+    """``{market: harvested price rows}`` for this sport, game lines aside."""
+    from .ledger import GAME_MARKETS
+    out: dict = {}
+    try:
+        rows = conn.execute("SELECT market, COUNT(*) FROM odds_history "
+                            "WHERE sport=? GROUP BY market", (sport,))
+    except Exception:                                      # noqa: BLE001
+        return out
+    for row in rows:
+        market = str(row[0] or "")
+        if market and market not in GAME_MARKETS:
+            out[market] = int(row[1] or 0)
+    return out
+
+
+def _settled_props_with_close(sport: str) -> tuple[int, int]:
+    """(settled prop bets, how many carry a closing price) for this sport."""
+    try:
+        from . import ledger
+        from .ledger import GAME_MARKETS, GRADED_ELSEWHERE
+        conn = ledger.connect()
+        marks = ",".join("?" * len(GAME_MARKETS))
+        holes = ",".join("?" * len(GRADED_ELSEWHERE))
+        row = conn.execute(
+            f"SELECT COUNT(*), COUNT(closing_odds) FROM bets WHERE sport=? "
+            f"AND status IN ('won','lost','push') "
+            f"AND market NOT IN ({marks}) "
+            f"AND COALESCE(category,'main') NOT IN ({holes})",
+            (sport, *GAME_MARKETS, *GRADED_ELSEWHERE)).fetchone()
+        conn.close()
+        return int(row[0] or 0), int(row[1] or 0)
+    except Exception:                                      # noqa: BLE001
+        return 0, 0
+
+
+def _harvest_fix(sport: str, markets: list) -> str:
+    """The command that would buy these markets — or why it cannot.
+
+    Runs the request through the same `unreadable_markets` gate the
+    harvester itself uses, so this never prints a command that would spend
+    credits on a key the parser drops on the floor.
+    """
+    from .sources import oddshistory as oh
+    if not markets:
+        return ""
+    try:
+        keys = oh.resolve_market_keys(sport, list(markets))
+        blocked = set(oh.unreadable_markets(sport, keys))
+    except Exception:                                      # noqa: BLE001
+        return "python3 harvest_odds.py " + sport
+    buyable = [m for m, k in zip(markets, keys) if k not in blocked]
+    if not buyable:
+        return (f"nothing to run yet — engine.sources.oddsapi.SPORT_CONFIG"
+                f"['{sport}']['markets'] names no market the parser can read "
+                f"back, so a harvest would spend credits and store nothing")
+    return (f"python3 harvest_odds.py {sport} --from YYYY-MM-DD "
+            f"--to YYYY-MM-DD --markets {','.join(sorted(buyable))}")
+
+
+def _prop_closes_layer(conn, sport: str) -> Layer | None:
+    """Are there stored CLOSES for the PLAYER-PROP model to be graded on?
+
+    `_game_lines_layer` above asks exactly this for spreads and totals,
+    and its docstring records what the absence cost: the game model
+    "priced spreads and totals for months against numbers nobody wrote
+    down". Nobody ever asked the same question about props.
+
+    The answer, when it was finally asked on 2026-08-27: `odds_history`
+    held 157k MLB moneylines, 132k NFL moneylines, 66k NFL spreads, 66k
+    NFL totals, 48k MLB total-bases and 16k MLB hits — and not one row
+    for any NFL or college player prop. NFL has four configured prop
+    markets, an anytime-touchdown board and a grade ladder pooled over
+    four seasons, and every bet behind all of it was replayed against a
+    synthetic -110 at a trailing average.
+
+    That is not a worthless number — it grades the PROJECTION, and the
+    ladder's claimed-vs-landed reading stands on it. It is simply not the
+    number anyone thinks they are reading. "The A band lands 49.6%" is a
+    statement about the model. "The A band beats the book" has never been
+    measured, in any football market, and could not have been.
+
+    Returns None for a sport with no prop board, because a layer that
+    appears everywhere is furniture, not information.
+    """
+    boarded = _prop_markets(sport)
+    if not boarded:
+        return None
+    stored = _stored_prop_markets(conn, sport)
+    priced = sorted(m for m in boarded if stored.get(m))
+    unpriced = sorted(m for m in boarded if not stored.get(m))
+    why = ("a prop replayed against a line we never wrote down measures the "
+           "projection, not the market — it cannot say we beat a book")
+    fix = _harvest_fix(sport, unpriced) if unpriced else ""
+
+    settled, with_close = _settled_props_with_close(sport)
+    clv = ""
+    if settled:
+        clv = (f"; {with_close} of {settled} settled prop bet(s) carry a "
+               f"closing price")
+
+    if not priced:
+        return Layer(
+            "Stored prop closes", why, MISSING,
+            f"no harvested price for any of {_names(unpriced)} — every prop "
+            f"number this sport has ever published was graded against a "
+            f"synthetic -110{clv}", fix)
+    if unpriced:
+        rows = sum(stored.get(m, 0) for m in priced)
+        return Layer(
+            "Stored prop closes", why, PARTIAL,
+            f"{rows:,} price row(s) across {_names(priced)}; nothing for "
+            f"{_names(unpriced)}{clv}", fix)
+    rows = sum(stored.get(m, 0) for m in priced)
+    return Layer("Stored prop closes", why, OK,
+                 f"{rows:,} price row(s) across {_names(priced)}{clv}", fix)
+
+
+def _names(markets: list, limit: int = 4) -> str:
+    """A readable market list that does not run off the line."""
+    markets = list(markets)
+    if len(markets) <= limit:
+        return ", ".join(markets) or "none"
+    return ", ".join(markets[:limit]) + f" (+{len(markets) - limit} more)"
+
+
 def _odds_layer() -> Layer:
     if _has_key("ODDS_API_KEY"):
         return Layer("Sportsbook prices", "nothing is recommended against a "
@@ -226,6 +401,7 @@ def nfl(conn) -> SportCoverage:
         _logs_layer(conn, "nfl", 5000, "python3 ingest.py nfl"),
         _odds_layer(),
         _game_lines_layer(conn, "nfl"),
+        _prop_closes_layer(conn, "nfl"),
         Layer("EPA / PROE / pace", "§5's volume-first projection — the inputs "
               "that separate a real usage read from a box-score average",
               OK if weeks >= 200 else PARTIAL if weeks else MISSING,
@@ -257,6 +433,7 @@ def mlb(conn) -> SportCoverage:
         _logs_layer(conn, "mlb", 20000, "python3 ingest.py mlb --seasons 2021-2026"),
         _odds_layer(),
         _game_lines_layer(conn, "mlb"),
+        _prop_closes_layer(conn, "mlb"),
         Layer("Statcast", "exit velocity and barrel rate are the difference "
               "between a hitter's luck and his contact quality",
               OK if _cache_age_h("savant_*.csv") is not None else PARTIAL,
@@ -288,6 +465,7 @@ def nba(conn) -> SportCoverage:
         _logs_layer(conn, "nba", 8000,
                     "python3 ingest.py nba --seasons 2024-2026"),
         _odds_layer(),
+        _prop_closes_layer(conn, "nba"),
         Layer("Schedule feed", "the free NBA CDN answers 'is there a slate "
               "tonight' before a single credit is spent", OK,
               "cdn.nba.com, keyless"),
@@ -312,6 +490,7 @@ def wnba(conn) -> SportCoverage:
         _results_layer(conn, "wnba", 200, "python3 ingest.py wnba --seasons 2021-2026"),
         _logs_layer(conn, "wnba", 3000, "python3 ingest.py wnba --seasons 2021-2026"),
         _odds_layer(),
+        _prop_closes_layer(conn, "wnba"),
         Layer("Schedule feed", "the day's slate and its finals",
               OK, "ESPN basketball/wnba, keyless"),
         Layer("Fitted tuning", "margin SD, blowout curves and stat spreads "
@@ -383,6 +562,7 @@ def cfb(conn) -> SportCoverage:
               "ESPN college-football feed, keyless"),
         _odds_layer(),
         _game_lines_layer(conn, "cfb"),
+        _prop_closes_layer(conn, "cfb"),
         Layer("Fitted variance", "how far games land from the projection "
               "decides every probability on the board",
               OK if fit.fitted else MISSING,

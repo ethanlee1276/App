@@ -1530,6 +1530,48 @@ def _snapshot_closes() -> dict:
         return {}
 
 
+def _close_odds_from(close: dict | None, bet_line, side: str | None):
+    """The bet's side of a HARVESTED close, or None if it isn't its close.
+
+    `db.closing_odds_by_date` hands back ``line``, ``over_odds`` and
+    ``under_odds`` for the day's last snapshot. Three ways this is not
+    the price of the bet in hand, and each returns None rather than a
+    number that would be silently wrong:
+
+    * no harvested row for that player and date at all;
+    * the row closed at a DIFFERENT line — a price at another line is a
+      different bet (see `linemoves.closing_odds_by_date`, where reading
+      one as CLV inverted the measurement by 18 points on the bets whose
+      line had moved most);
+    * the side wasn't offered. 0 is the parser's word for "not quoted",
+      not a price of zero — many props are Over-only, and treating the
+      missing under as a number is how a phantom edge gets recorded on a
+      bet nobody could have placed.
+    """
+    if not close:
+        return None
+    line = close.get("line")
+    if bet_line is not None and line is not None:
+        try:
+            if round(float(line), 1) != round(float(bet_line), 1):
+                return None
+        except (TypeError, ValueError):
+            return None
+    key = "under_odds" if (side or "OVER").upper() == "UNDER" else "over_odds"
+    price = close.get(key)
+    try:
+        price = int(price) if price is not None else 0
+    except (TypeError, ValueError):
+        return None
+    if not price or abs(price) < 100:
+        # 0 is "not quoted"; anything inside +/-100 is not a legal
+        # American price at all. `repair_closing_odds` applies the same
+        # floor to the snapshot store — a rule about PRICES, so it holds
+        # wherever the price came from.
+        return None
+    return price
+
+
 def _snapshot_close_odds() -> dict:
     """``{(player, market, date): {"over": px, "under": px}}``.
 
@@ -2349,23 +2391,40 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
             close_line = closes_cache["_snapshots"].get(
                 (normalize_name(b["player"]), b["market"], b["date"]))
         # The closing PRICE, which is the only thing that moves on a
-        # fixed-line market. Captured from the same snapshots, so it costs
-        # nothing and accrues on every pull that was already paid for.
-        if "_snapshot_odds" not in closes_cache:
-            closes_cache["_snapshot_odds"] = _snapshot_close_odds()
-        # THE SIDE MATTERS. An UNDER bet scored against the OVER's closing
-        # price is measured against the opposite of what it bought — which
-        # is what made CLV's own internal check run backwards (winners beat
-        # the close 41% of the time, losers 62%).
-        # Keyed on the LINE as well: a closing price at a different line is
-        # a different bet, and reading one as CLV inverts exactly the
-        # cases where the line moved.
-        _sides = closes_cache["_snapshot_odds"].get(
-            (normalize_name(b["player"]), b["market"], b["date"],
-             round(float(b["line"]), 1) if b["line"] is not None else None)
-        ) or {}
-        close_odds = _sides.get(
-            "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
+        # fixed-line market.
+        #
+        # THE HARVESTED CLOSE FIRST, and that is a fix rather than an
+        # ordering preference. `close` above is a purchased, dated,
+        # book-attributed row that carries `over_odds` and `under_odds`
+        # — and this function read its LINE and threw its PRICE away,
+        # looking only in our own free snapshots. On 2026-08-27 the
+        # droplet held 15,990 harvested `mlb hits` prices and 48,007
+        # `total_bases`, every one of them paid for, and not one settled
+        # prop bet in the journal carried a closing price. CLV is the
+        # measurement that decides whether a model is allowed to keep
+        # betting, and for props it was running on whatever the live
+        # pulls happened to have caught.
+        #
+        # Same two rules the snapshot lookup below spells out, because
+        # they are properties of the QUESTION and not of the source:
+        # THE SIDE MATTERS (an UNDER scored against the OVER's close is
+        # measured against the opposite of what it bought), and the LINE
+        # IS PART OF THE KEY (a price at a different line is a different
+        # bet, and reading one as CLV inverts exactly the cases where the
+        # line moved — which is where the information is).
+        close_odds = _close_odds_from(close, b["line"], b["side"])
+        if close_odds is None:
+            # No harvested price for this side at this line — fall back to
+            # our own recorded snapshots, which cost nothing and accrue on
+            # every pull that was already paid for.
+            if "_snapshot_odds" not in closes_cache:
+                closes_cache["_snapshot_odds"] = _snapshot_close_odds()
+            _sides = closes_cache["_snapshot_odds"].get(
+                (normalize_name(b["player"]), b["market"], b["date"],
+                 round(float(b["line"]), 1) if b["line"] is not None else None)
+            ) or {}
+            close_odds = _sides.get(
+                "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
         # Capture the minutes actually played alongside the result, so the
         # journal can answer "did we lose because the rotation read was
         # wrong, or because she shot 3-for-12?" — the one question that
@@ -2637,9 +2696,48 @@ def _bet_clv(b) -> float | None:
     return move if (b["side"] or "OVER").upper() == "OVER" else -move
 
 
-def repair_closing_odds(conn, apply: bool = False) -> dict:
+def _harvested_closes(hist_conn) -> dict:
+    """``{(sport, market): {(norm_player, date): close}}`` from the harvest.
+
+    One pass per (sport, market) `odds_history` actually holds; the caller
+    indexes into it. Never raises — an empty or unreadable history DB
+    means no harvested closes, which is the state every fresh clone is in
+    and is not an error.
+
+    THE CONNECTION IS REQUIRED, and passing None is a supported answer
+    meaning "no harvest available" rather than "go and find one". This
+    could perfectly well open `db.DEFAULT_DB` itself, the way half a dozen
+    modules here do — and then `repair_closing_odds`, which several tests
+    call with the ledger connection alone, would read the box's 168MB of
+    ingested history. `run_tests.py` states the doctrine that forbids it
+    ("THE SUITE MUST NOT READ THE BOX IT IS RUNNING ON") and sandboxes
+    three doors for it; the history DB is a fourth, still open, and this
+    is not the change that should be walking through it. Production
+    callers pass the connection they already have.
+    """
+    from . import db as _hist_db
+    out: dict = {}
+    if hist_conn is None:
+        return out
+    try:
+        pairs = hist_conn.execute(
+            "SELECT DISTINCT sport, market FROM odds_history").fetchall()
+    except Exception:                                      # noqa: BLE001
+        return out
+    for row in pairs:
+        sport, market = str(row[0] or ""), str(row[1] or "")
+        if sport and market:
+            try:
+                out[(sport, market)] = _hist_db.closing_odds_by_date(
+                    hist_conn, sport, market)
+            except Exception:                              # noqa: BLE001
+                continue
+    return out
+
+
+def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     """Re-derive every settled bet's banked closing price, side- and
-    line-aware, from the raw snapshots.
+    line-aware, from the harvested closes and the raw snapshots.
 
     WHY IT IS NEEDED. `closing_odds` is written at settle time, and until
     2026-08-09 the code that wrote it had two faults: it read the OVER
@@ -2653,6 +2751,14 @@ def repair_closing_odds(conn, apply: bool = False) -> dict:
     every run and ignoring the banked column entirely. That was the right
     call for a report. It is not a fix for the stored data.
 
+    HARVESTED CLOSES FIRST, added 2026-08-27. This read the free
+    snapshots alone, so it could only ever recover what our own live
+    pulls happened to catch — while `odds_history` held 15,990 purchased
+    `mlb hits` closing prices and 48,007 `total_bases`, and every settled
+    prop bet in the journal carried no closing price at all. Same
+    precedence and the same side/line rules as the settle path, through
+    the one helper both call.
+
     Rows whose correct close cannot be found are set to NULL rather than
     left alone: a value known to have been written by the broken path is
     worse than no value, because nothing downstream can tell it is wrong.
@@ -2661,22 +2767,34 @@ def repair_closing_odds(conn, apply: bool = False) -> dict:
     """
     from .sources.oddsapi import normalize_name
     snaps = _snapshot_close_odds()
+    # The harvested closes as well, on the same precedence the settle path
+    # uses. Without this the repair can only ever reach what our own free
+    # pulls happened to catch, while thousands of PURCHASED closing prices
+    # sit unread in `odds_history` — which is the state this found on
+    # 2026-08-27 and the reason a settled prop record carried no CLV.
+    harvested = _harvested_closes(hist_conn)
     rows = conn.execute(
-        "SELECT id, player, market, date, side, line, odds, closing_odds "
-        "FROM bets WHERE status IN ('won','lost','push')").fetchall()
+        "SELECT id, sport, player, market, date, side, line, odds, "
+        "closing_odds FROM bets WHERE status IN ('won','lost','push')"
+    ).fetchall()
     fixed = cleared = agreed = filled = 0
     changes: list = []      # filled: had nothing, gains a close
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
     clear_sample: list = [] # cleared: had a value, loses it
     for b in rows:
-        sides = snaps.get(
-            (normalize_name(b["player"]), b["market"], b["date"],
-             round(float(b["line"]), 1) if b["line"] is not None else None)
-        ) or {}
-        want = sides.get(
-            "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
-        if want is not None and abs(float(want)) < 100:
-            want = None            # not a legal American price; see linemoves
+        want = _close_odds_from(
+            harvested.get((b["sport"], b["market"]), {}).get(
+                (normalize_name(b["player"]), b["date"])),
+            b["line"], b["side"])
+        if want is None:
+            sides = snaps.get(
+                (normalize_name(b["player"]), b["market"], b["date"],
+                 round(float(b["line"]), 1) if b["line"] is not None else None)
+            ) or {}
+            want = sides.get(
+                "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
+            if want is not None and abs(float(want)) < 100:
+                want = None        # not a legal American price; see linemoves
         had = b["closing_odds"]
         if want is None and had is None:
             continue

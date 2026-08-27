@@ -5703,8 +5703,9 @@ def nightly_run(odds_only: bool = False, sports=None) -> None:
 
 
 def repair_closes(apply: bool = False) -> None:
-    """Rewrite every settled bet's banked closing price from the raw
-    snapshots, side- and line-aware. Dry run unless --apply.
+    """Rewrite every settled bet's banked closing price from the harvested
+    closes and the raw snapshots, side- and line-aware. Dry run unless
+    --apply.
 
     The banked column was written at settle time by code that read the
     OVER price whatever side the bet took and ignored the line. Both are
@@ -5714,11 +5715,19 @@ def repair_closes(apply: bool = False) -> None:
     every run and ignores the column, which is why its number is right
     and the site's is not.
     """
+    from engine import db as hist_db
     from engine import ledger
     conn = ledger.connect()
-    r = ledger.repair_closing_odds(conn, apply=apply)
+    # The HARVESTED closes as well as the free snapshots. This ran on
+    # snapshots alone, so it could only recover what our own live pulls
+    # happened to catch — while `odds_history` held tens of thousands of
+    # purchased closing prices and every settled prop bet in the journal
+    # carried none. `repair_closing_odds` takes the connection rather than
+    # opening one, so a suite calling it cannot reach this box's history.
+    r = ledger.repair_closing_odds(conn, apply=apply,
+                                   hist_conn=hist_db.connect())
     print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
-          f"SNAPSHOTS\n{'='*70}")
+          f"HARVEST AND THE SNAPSHOTS\n{'='*70}")
     def _rows(label, sample):
         if not sample:
             return
