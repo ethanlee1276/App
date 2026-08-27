@@ -142,6 +142,13 @@ class BacktestReport:
     # keeps the subset that actually answers "did we beat the book" visible.
     segments: dict = field(default_factory=dict)
 
+    #: The anytime-touchdown board's OWN report, when the walk-forward
+    #: settled one. Deliberately not folded into the numbers above: a
+    #: +450 scorer market and a -110 yardage market do not share a
+    #: meaningful win rate, and averaging them produces a headline that
+    #: describes neither. Same reason `segments` splits by basis.
+    longshots: "BacktestReport | None" = None
+
     def skill(self) -> dict | None:
         """Brier is meaningless without the number it has to beat.
 
@@ -499,6 +506,48 @@ def settle_recommendations(recommendations: list[dict],
 #: line it invents when no book has posted.
 PROXY_BOOK = "proxy"
 
+#: An anytime-touchdown market has one line and it is not negotiable:
+#: "scored at least one".
+TD_LINE = 0.5
+
+
+def longshot_recs(picks: list) -> list[dict]:
+    """Long-shot board picks in the shape `settle_recommendations` reads.
+
+    THE BOARD THE WALK-FORWARD COULD NOT SEE. `run_slate` returns scorer
+    picks under `long_shots`, a different key from `recommendations`, and
+    says so in its own comment — "Scorer props belong to the Long Shots
+    board and never reach this loop". The backtest settled
+    `recommendations` alone, so the touchdown board had never been graded
+    for MONEY at any price. `engine.tdbacktest` grades its PROBABILITIES
+    by band, which is the other half and does not answer this one.
+
+    A pick that reached this list already cleared the odds window and the
+    edge bar, so it is a recommendation by construction. Its projection
+    IS a probability — the market is binary — which is why the actual
+    settled against it has to be binary too.
+    """
+    out = []
+    for p in picks or []:
+        prob = p.get("model_prob")
+        if prob is None or p.get("odds") is None:
+            continue
+        out.append({
+            "player": p.get("player", ""),
+            "market": p.get("market", ""),
+            "line": TD_LINE,
+            "odds": p["odds"],
+            "hit_prob": prob,
+            "raw_prob": p.get("raw_prob"),
+            "projection": prob,
+            "recommended": True,
+            "stake_units": p.get("stake_units", 1.0) or 1.0,
+            "side": "OVER",
+            "grade": p.get("grade", ""),
+            "book": p.get("book", ""),
+        })
+    return out
+
 
 def _basis_of(book) -> str:
     return "naive" if (not book or str(book) == PROXY_BOOK) else "book"
@@ -583,6 +632,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     the ROI is measured against that proxy. Projection accuracy and
     calibration are source-independent and stand either way.
     """
+    from .models import ANYTIME_TD
     from .sources.nflverse import (
         build_slate, load_weekly_stats, MARKET_COLUMNS, _s, _f,
     )
@@ -614,6 +664,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                         _hc, season, f"{int(w):03d}")
 
     all_settled: list[SettledProp] = []
+    td_settled: list[SettledProp] = []
     repriced = props_seen = 0
     for w in weeks:
         try:
@@ -636,9 +687,28 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
             name = _s(row, "player_display_name", "player_name", "full_name")
             for market, cols in MARKET_COLUMNS.items():
                 actuals[(_norm(name), market)] = _f(row, *cols)
+            # ANYTIME TOUCHDOWN, which MARKET_COLUMNS deliberately cannot
+            # express: the value is the SUM of two columns and `_f` reads
+            # the first present key, so an entry there would silently
+            # return rushing TDs alone (see nflverse.td_game_logs).
+            #
+            # BINARY, not the count. The market is "scored at least one"
+            # and the model's number is a PROBABILITY — settling a
+            # probability against a count of 2 would make MAE, Brier and
+            # every calibration bin describe nothing.
+            actuals[(_norm(name), ANYTIME_TD)] = float(
+                (_f(row, "rushing_tds", default=0.0)
+                 + _f(row, "receiving_tds", default=0.0)) > 0)
 
         all_settled.extend(settle_recommendations(result["recommendations"], actuals))
+        td_settled.extend(settle_recommendations(
+            longshot_recs(result.get("long_shots")), actuals))
 
     report = evaluate(all_settled)
     report.used_real_lines, report.total_priced = repriced, props_seen
+    if td_settled:
+        report.longshots = evaluate(td_settled)
+        report.longshots.used_real_lines = sum(
+            1 for s in td_settled if s.basis == "book")
+        report.longshots.total_priced = len(td_settled)
     return report

@@ -219,6 +219,196 @@ def test_a_slate_missing_its_props_is_counted_as_zero_not_a_crash():
     assert B.apply_real_lines(_Slate([], []), {"k": {}}) == 0
 
 
+# --- the touchdown board, which had never been graded for money -------------
+def _td_prop(player="Jaylen Waddle", team="CIN"):
+    """A scorer prop as `build_slate` makes one: NO line, on purpose."""
+    return Prop(player=player, team=team, opponent="BAL", position="WR",
+                market="anytime_td", logs=[], career_avg=0.0,
+                vs_opponent_avg=None, lines=[])
+
+
+def test_a_scorer_prop_starts_with_no_line_and_gains_the_harvested_one():
+    """`build_slate` refuses to invent a -110 for a scorer market, so the
+    touchdown board is the ONE market that cannot be replayed at all
+    without a purchased price. Every other market has a baseline to fall
+    back on; this one has silence."""
+    slate = _slate([_td_prop()])
+    assert slate.props[0].lines == []
+    n = B.apply_real_lines(
+        slate, {(B._norm("Jaylen Waddle"), "anytime_td", "2025-09-07"):
+                {"line": 0.5, "over_odds": 550, "under_odds": -800,
+                 "book": "FanDuel"}})
+    assert n == 1
+    got = slate.props[0].lines[0]
+    assert got.line == 0.5 and got.over_odds == 550 and got.under_odds == -800
+
+
+def test_a_yes_only_scorer_quote_still_prices_the_yes():
+    """Books often quote the Yes alone. Unlike a two-sided market, that is
+    normal here and must not cost the pick."""
+    slate = _slate([_td_prop()])
+    assert B.apply_real_lines(
+        slate, {(B._norm("Jaylen Waddle"), "anytime_td", "2025-09-07"):
+                {"line": 0.5, "over_odds": 700, "under_odds": None,
+                 "book": "FanDuel"}}) == 1
+    got = slate.props[0].lines[0]
+    assert got.over_odds == 700 and got.under_odds == 0
+
+
+def test_a_longshot_pick_becomes_something_the_settler_understands():
+    recs = B.longshot_recs([{"player": "Jaylen Waddle",
+                             "market": "anytime_td", "odds": 550,
+                             "model_prob": 0.18, "grade": "A",
+                             "book": "FanDuel", "stake_units": 0.5}])
+    assert len(recs) == 1
+    r = recs[0]
+    assert r["line"] == 0.5 and r["side"] == "OVER" and r["recommended"]
+    assert r["hit_prob"] == 0.18 and r["projection"] == 0.18
+    assert r["book"] == "FanDuel" and r["stake_units"] == 0.5
+
+
+def test_a_pick_with_no_price_or_no_probability_is_dropped():
+    assert B.longshot_recs([{"player": "X", "market": "anytime_td",
+                             "odds": None, "model_prob": 0.2}]) == []
+    assert B.longshot_recs([{"player": "X", "market": "anytime_td",
+                             "odds": 550, "model_prob": None}]) == []
+    assert B.longshot_recs(None) == []
+    assert B.longshot_recs([]) == []
+
+
+def test_a_scored_touchdown_wins_the_yes_and_a_blank_loses_it():
+    recs = B.longshot_recs([
+        {"player": "Scored", "market": "anytime_td", "odds": 550,
+         "model_prob": 0.18, "grade": "A", "book": "FanDuel"},
+        {"player": "Blanked", "market": "anytime_td", "odds": 400,
+         "model_prob": 0.22, "grade": "A", "book": "FanDuel"},
+    ])
+    actuals = {(B._norm("Scored"), "anytime_td"): 1.0,
+               (B._norm("Blanked"), "anytime_td"): 0.0}
+    got = {s.player: s.outcome for s in B.settle_recommendations(recs, actuals)}
+    assert got == {"Scored": 1, "Blanked": 0}
+
+
+def test_the_touchdown_actual_is_binary_and_not_a_count():
+    """The market is 'scored at least one' and the model's number is a
+    PROBABILITY. Settling a probability against a count of 2 would make
+    MAE, Brier and every calibration bin describe nothing."""
+    import inspect
+    src = inspect.getsource(B.backtest_from_stats)
+    assert 'actuals[(_norm(name), ANYTIME_TD)] = float(' in src
+    assert '"rushing_tds"' in src and '"receiving_tds"' in src
+    assert "> 0)" in src
+
+
+def test_the_scorer_board_is_reported_apart_from_the_yardage_markets():
+    """A +450 scorer market and a -110 yardage market do not share a
+    meaningful win rate. One blended row would describe neither."""
+    assert "longshots" in {f.name for f in
+                           __import__("dataclasses").fields(B.BacktestReport)}
+    import inspect
+    from engine import lab
+    src = inspect.getsource(lab.nfl_props)
+    assert "rep.longshots" in src
+    assert '"anytime_td", "Anytime touchdown"' in src
+
+
+def test_the_scorer_market_is_one_the_lab_asks_the_database_for():
+    from engine.lab import NFL_MARKETS
+    assert "anytime_td" in NFL_MARKETS
+
+
+def test_a_harvested_scorer_price_survives_the_whole_load():
+    from engine import db
+    from engine.lab import nfl_real_lines
+    conn = db.connect(":memory:")
+    db.upsert_odds_history(conn, [
+        {"sport": "nfl", "taken_at": "2025-09-07T17:00:00Z", "event_id": "e",
+         "home": "CIN", "away": "BAL", "player": "jaylen waddle",
+         "market": "anytime_td", "book": "FanDuel", "line": 0.5,
+         "over_odds": 550, "under_odds": -800}])
+    quote = nfl_real_lines(conn)[("jaylen waddle", "anytime_td", "2025-09-07")]
+    slate = _slate([_td_prop()])
+    assert B.apply_real_lines(
+        slate, {(B._norm("Jaylen Waddle"), "anytime_td", "2025-09-07"):
+                quote}) == 1
+    assert slate.props[0].lines[0].over_odds == 550
+
+
+def test_the_walk_forward_settles_the_touchdown_board_end_to_end():
+    """The whole chain in one pass: a scorer pick reaches the settler, its
+    actual comes out of the two touchdown columns, and it lands in its own
+    report rather than in the yardage numbers."""
+    import engine.sources.nflverse as nv
+    import engine.pipeline as pl
+
+    stats = [
+        {"week": "5", "player_display_name": "RB One", "rushing_yards": "80",
+         "passing_yards": "0", "receiving_yards": "0", "receptions": "0",
+         "rushing_tds": "1", "receiving_tds": "0"},
+        {"week": "5", "player_display_name": "WR Two", "rushing_yards": "0",
+         "passing_yards": "0", "receiving_yards": "40", "receptions": "3",
+         "rushing_tds": "0", "receiving_tds": "0"},
+    ]
+    saved = (nv.load_weekly_stats, nv.build_slate, pl.run_slate)
+    nv.load_weekly_stats = lambda season: stats
+    nv.build_slate = lambda season, w, upto_week=None: _slate()
+    pl.run_slate = lambda slate, config=None, **kw: {
+        "recommendations": [{
+            "player": "RB One", "market": "rush_yds", "line": 70.0,
+            "odds": -110, "hit_prob": 0.6, "projection": 82.0,
+            "recommended": True, "stake_units": 1.0, "book": "proxy"}],
+        "long_shots": [
+            {"player": "RB One", "market": "anytime_td", "odds": 250,
+             "model_prob": 0.34, "grade": "A", "book": "FanDuel"},
+            {"player": "WR Two", "market": "anytime_td", "odds": 600,
+             "model_prob": 0.15, "grade": "B+", "book": "FanDuel"}],
+    }
+    try:
+        r = B.backtest_from_stats(2024, [5])
+    finally:
+        nv.load_weekly_stats, nv.build_slate, pl.run_slate = saved
+
+    # The yardage board is untouched by any of this.
+    assert r.n == 1 and r.n_bets == 1 and r.wins == 1
+    assert r.segments["naive"]["n_bets"] == 1
+    assert "book" not in r.segments, "a proxy-priced bet is not book-priced"
+
+    # The touchdown board settled on its own, on real prices.
+    td = r.longshots
+    assert td is not None
+    assert td.n == 2 and td.n_bets == 2
+    assert td.wins == 1, "RB One scored; WR Two did not"
+    assert td.segments["book"]["n_bets"] == 2
+    assert td.used_real_lines == 2 and td.total_priced == 2
+    # And it is NOT mixed into the yardage win rate.
+    assert r.wins == 1 and r.n_bets == 1
+
+
+def test_no_scorer_picks_leaves_the_longshot_report_absent_not_empty():
+    """An absent report says "this was not measured". A zeroed one says
+    "measured, found nothing", and they are different claims."""
+    import engine.sources.nflverse as nv
+    import engine.pipeline as pl
+    stats = [{"week": "5", "player_display_name": "RB One",
+              "rushing_yards": "80", "passing_yards": "0",
+              "receiving_yards": "0", "receptions": "0",
+              "rushing_tds": "0", "receiving_tds": "0"}]
+    saved = (nv.load_weekly_stats, nv.build_slate, pl.run_slate)
+    nv.load_weekly_stats = lambda season: stats
+    nv.build_slate = lambda season, w, upto_week=None: _slate()
+    pl.run_slate = lambda slate, config=None, **kw: {
+        "recommendations": [{
+            "player": "RB One", "market": "rush_yds", "line": 70.0,
+            "odds": -110, "hit_prob": 0.6, "projection": 82.0,
+            "recommended": True, "stake_units": 1.0, "book": "proxy"}],
+        "long_shots": []}
+    try:
+        r = B.backtest_from_stats(2024, [5])
+    finally:
+        nv.load_weekly_stats, nv.build_slate, pl.run_slate = saved
+    assert r.longshots is None
+
+
 # --- the wiring --------------------------------------------------------------
 def test_the_lab_actually_passes_the_closes_it_loads():
     """`nfl_props` grew a `conn`; `build` has to hand it one, or the whole

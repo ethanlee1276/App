@@ -175,10 +175,17 @@ def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
     return out
 
 
-#: The NFL prop markets a harvested close can be joined to. Same names
-#: `SPORT_CONFIG["nfl"]["markets"]` buys, which is what `harvest_odds.py`
-#: stores them under.
-NFL_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds")
+#: The NFL prop markets a harvested close can be joined to. The four
+#: `SPORT_CONFIG["nfl"]["markets"]` buys, plus the scorer market — stored
+#: under the same names `harvest_odds.py` writes.
+#:
+#: `anytime_td` matters more than the others here. A scorer prop is built
+#: with NO proxy line on purpose (nflverse.build_slate: "a scorer market
+#: priced against a made-up -110 would put fake edges on a longshot
+#: board"), so the touchdown board is the one market that CANNOT be
+#: replayed at all without a purchased price. Every other market has a
+#: baseline to fall back on; this one has silence.
+NFL_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "anytime_td")
 
 
 def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
@@ -235,7 +242,17 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     d = report_to_dict(rep, "all", "All prop markets")
     d["season"] = season
     d["weeks"] = [weeks[0], weeks[-1]]
-    return {"markets": [d], "season": season}
+    markets = [d]
+    # THE TOUCHDOWN BOARD, REPORTED APART. A +450 scorer market and a
+    # -110 yardage market do not share a meaningful win rate, and one
+    # blended row would describe neither — so it gets its own entry the
+    # way it gets its own report.
+    if rep.longshots is not None and rep.longshots.n:
+        td = report_to_dict(rep.longshots, "anytime_td", "Anytime touchdown")
+        td["season"] = season
+        td["weeks"] = [weeks[0], weeks[-1]]
+        markets.append(td)
+    return {"markets": markets, "season": season}
 
 
 # --- game lines --------------------------------------------------------------
