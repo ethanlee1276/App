@@ -161,8 +161,22 @@ def observations(conn, sport: str, market: str,
     # the market's number — a points question that never reads a price,
     # which is what lets college football be measured at all: its
     # closing lines arrive without the -110s beside them.
-    closes = game_line_closes(conn, sport, market) or schedule_closes(
-        conn, sport, market, require_prices=False)
+    #
+    # MERGED, NOT PREFERRED, and the difference is a live bug this once
+    # was. `game_line_closes` keys a harvest by DATE; NFL games are
+    # keyed by WEEK NUMBER ("001"), so an NFL harvest can never join to
+    # an NFL schedule row. Written `harvested or schedule`, ONE harvested
+    # row made the dict truthy and hid 899 joinable schedule closes
+    # behind it — reported on the droplet as "0 graded games with a
+    # close" for all three NFL markets while this container, whose
+    # odds_history is empty, measured them fine.
+    #
+    # The failure is silent and it is one-directional: a sport falls back
+    # to the flat market-shrink guess, which is louder than the measured
+    # number, so the board bets MORE on the market it just stopped being
+    # able to measure.
+    closes = dict(schedule_closes(conn, sport, market, require_prices=False))
+    closes.update(game_line_closes(conn, sport, market))
     if not closes:
         return []
     rows = conn.execute(
@@ -231,10 +245,13 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
             f"model")
     win_prob = CURVES[sport]
     baseline = SCORING_BASELINE.get(sport, 0.0)
-    closes = moneyline_closes(conn, sport)
-    if not closes:
-        closes = {k: {k[1]: h, k[2]: a}
-                  for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    # Merged for the same reason, and against the same failure — see
+    # `observations`. A harvest keyed by date cannot join a schedule
+    # keyed by week, and letting it decide whether the schedule is read
+    # at all turns a partial harvest into a total blackout.
+    closes = {k: {k[1]: h, k[2]: a}
+              for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    closes.update(moneyline_closes(conn, sport))
     if not closes:
         return []
     rows = conn.execute(

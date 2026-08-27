@@ -466,6 +466,86 @@ def test_the_calibration_asks_for_lines_not_prices():
     assert "require_prices=False" in source
 
 
+# --- a harvest must not hide the schedule -----------------------------
+#
+# Reported from the droplet 2026-08-27: "0 graded games with a close" for
+# all three NFL markets, while this container measured 899. The only
+# difference was that the droplet had harvested odds. `game_line_closes`
+# keys a harvest by DATE and NFL games are keyed by WEEK NUMBER, so an
+# NFL harvest can never join an NFL schedule row — and written
+# `harvested or schedule`, one unjoinable row made the dict truthy and
+# hid every joinable schedule close behind it.
+
+def _nfl_db(harvest_rows=()):
+    import json as _json
+    from engine import db as _db
+    conn = _db.connect(":memory:")
+    for week in range(1, 21):
+        conn.execute(
+            "INSERT INTO games (sport, season, period, game_id, home, away, "
+            "home_score, away_score, spread, total, extra) VALUES "
+            "('nfl', 2024, ?, ?, 'KC', 'BUF', 27, 24, -3.0, 47.5, ?)",
+            (f"{week:03d}", f"g{week}",
+             _json.dumps({"total_odds": [-110, -110],
+                          "spread_odds": [-110, -110]})))
+    for taken_at, home, away in harvest_rows:
+        conn.execute(
+            "INSERT INTO odds_history (sport, market, book, taken_at, home, "
+            "away, line, over_odds, under_odds) VALUES "
+            "('nfl', 'total', 'best', ?, ?, ?, 47.5, -110, -110)",
+            (taken_at, home, away))
+    conn.commit()
+    return conn
+
+
+def test_the_schedule_is_read_when_no_harvest_exists():
+    conn = _nfl_db()
+    from engine.gamebacktest import schedule_closes
+    assert len(schedule_closes(conn, "nfl", "total")) == 20
+
+
+def test_one_unjoinable_harvest_row_does_not_hide_the_schedule():
+    """The whole bug in one assertion. The harvest row is keyed by a date
+    no NFL game carries, so it joins nothing — and it must not stop the
+    schedule from joining either."""
+    conn = _nfl_db([("2024-11-03T18:00:00", "KC", "BUF")])
+    from engine.gamebacktest import game_line_closes, schedule_closes
+    harvested = game_line_closes(conn, "nfl", "total")
+    assert harvested                      # non-empty, and therefore truthy
+    assert not (set(harvested) & set(schedule_closes(conn, "nfl", "total")))
+    merged = dict(schedule_closes(conn, "nfl", "total", require_prices=False))
+    merged.update(harvested)
+    assert len(merged) == 21
+
+
+def test_a_harvested_close_still_wins_where_it_joins():
+    """Merging must not demote the harvest. Where a harvested key matches
+    a game, that price is the one a bettor could have taken."""
+    conn = _nfl_db()
+    conn.execute(
+        "INSERT INTO odds_history (sport, market, book, taken_at, home, "
+        "away, line, over_odds, under_odds) VALUES "
+        "('nfl', 'total', 'best', '001', 'KC', 'BUF', 51.5, -105, -115)")
+    conn.commit()
+    from engine.gamebacktest import game_line_closes, schedule_closes
+    merged = dict(schedule_closes(conn, "nfl", "total", require_prices=False))
+    merged.update(game_line_closes(conn, "nfl", "total"))
+    assert merged[("001", "KC", "BUF")] == (51.5, -105, -115)
+
+
+def test_both_observation_paths_merge_rather_than_prefer():
+    import inspect
+    from engine import gamecal
+    for fn in (gamecal.observations, gamecal._moneyline_observations):
+        source = inspect.getsource(fn)
+        assert ".update(" in source, fn.__name__
+        # The two shapes that let one source silence the other. The
+        # bare `if not closes: return []` further down is a different
+        # thing — no closes at all really is nothing to measure.
+        assert " or schedule_closes(" not in source, fn.__name__
+        assert "if not closes:\n        closes =" not in source, fn.__name__
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]
