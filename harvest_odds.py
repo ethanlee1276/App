@@ -165,6 +165,14 @@ def main() -> None:
             if not market_keys:
                 print("  Nothing left to harvest.")
                 return
+    # The ENGINE names behind the requested API keys, which is what
+    # `odds_history.market` stores — so the already-harvested check below
+    # can tell "we have this day" from "we have this day's touchdowns".
+    want_markets: set = set()
+    if market_keys:
+        readable = oh.parse_map(args.sport)
+        want_markets = {readable[k] for k in market_keys if k in readable}
+
     book_keys = [b.strip() for b in args.books.split(",") if b.strip()] or None
     market_note = (f"markets: {', '.join(market_keys)}" if market_keys
                    else "markets: ALL (costly — use --markets to harvest only "
@@ -238,6 +246,22 @@ def main() -> None:
             print(f"  {day}: no events recorded at that time")
             continue
 
+        # WHAT THIS DAY ALREADY HOLDS, per market. The already-stored skip
+        # below is keyed on (sport, event, timestamp) and knows nothing
+        # about markets — so after a receptions harvest, asking the same
+        # Sunday for anytime_td skipped every event that HAD receptions
+        # and bought no touchdown price at all. The run printed "0 price
+        # rows / skipped 105 already stored" and exited looking
+        # successful, having spent 80 credits and answered nothing.
+        #
+        # A day counts as covered only when everything being asked for is
+        # already in it. Ask for a market this snapshot has never held and
+        # the skip stands down for the whole day.
+        day_covered = True
+        if want_markets:
+            day_covered = want_markets <= _db.markets_at_snapshot(
+                conn, args.sport, events_snap.taken)
+
         day_rows = 0
         for ev in events:
             eid = str(ev.get("id", ""))
@@ -245,7 +269,7 @@ def main() -> None:
                 continue
             # A custom-books harvest re-visits stored snapshots on purpose:
             # the stored rows don't have these books' prices yet.
-            if book_keys is None and _db.have_odds_snapshot(
+            if book_keys is None and day_covered and _db.have_odds_snapshot(
                     conn, args.sport, eid, events_snap.taken):
                 skipped += 1
                 continue

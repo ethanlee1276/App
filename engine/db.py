@@ -464,11 +464,32 @@ def have_odds_snapshot(conn, sport: str, event_id: str, taken_at: str) -> bool:
 
     Historical calls are billed at a premium and a past price is immutable, so
     the harvester checks here before spending a credit re-fetching one.
+
+    ANY row counts, which is why the caller must ALSO know whether the
+    markets it is asking for were part of that earlier harvest — see
+    `markets_at_snapshot`. This question is "have we been here before",
+    not "do we already have what we came for", and answering the second
+    with the first is how a whole market silently fails to be bought.
     """
     row = conn.execute(
         "SELECT 1 FROM odds_history WHERE sport=? AND event_id=? AND taken_at=? LIMIT 1",
         (sport, event_id, taken_at)).fetchone()
     return row is not None
+
+
+def markets_at_snapshot(conn, sport: str, taken_at: str) -> set:
+    """Every market stored across ALL events in one snapshot.
+
+    The day, not the event, on purpose. A book quotes receptions on most
+    games and not all of them, so an event with no receptions row may
+    simply never have been offered one — asking per event would re-buy
+    that event on every future run forever. If the DAY holds receptions
+    rows, receptions was harvested that day, and the events already
+    stored can be skipped.
+    """
+    return {str(r[0]) for r in conn.execute(
+        "SELECT DISTINCT market FROM odds_history "
+        "WHERE sport=? AND taken_at=?", (sport, taken_at)) if r[0]}
 
 
 def closing_odds_by_date(conn, sport: str, market: str) -> dict:
