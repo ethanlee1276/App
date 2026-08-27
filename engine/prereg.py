@@ -45,7 +45,9 @@ import hashlib
 import json
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/models/prereg.json")
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("prereg.json"))
 
 #: Two-sided z for a single preregistered comparison. It can be this
 #: ordinary BECAUSE the test was named in advance — the 2.6-ish bar

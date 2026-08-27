@@ -39,10 +39,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from . import modelstate as _modelstate
+
 from . import hypotheses as hyp
 
-POSTMORTEM_PATH = Path("data/models/postmortems.json")
-BRIEF_PATH = Path("data/models/briefs.json")
+POSTMORTEM_PATH = Path(_modelstate.path("postmortems.json"))
+BRIEF_PATH = Path(_modelstate.path("briefs.json"))
 KEEP_POSTMORTEMS = 30
 KEEP_BRIEFS = 12
 BRIEF_EVERY_DAYS = 7

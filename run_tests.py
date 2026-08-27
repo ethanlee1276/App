@@ -205,6 +205,19 @@ def main() -> int:
     # directions. Point the fitters at the sandbox: green here is then
     # green in a clone, which is the only kind of green worth having.
     env["QB_FEEDSTATE_DIR"] = os.path.join(sandbox, "feedstate")
+    # THE SAME DOCTRINE, THIRD DOOR — and this one was open until
+    # 2026-08-27, when GitHub Actions went red on three consecutive
+    # commits this suite had called green. `data/models/` is gitignored
+    # for the same good reason feedstate is, and ten modules keep a
+    # fitted model in it. One of them is the calibration store: a fitted
+    # temperature LIFTS a modelled probability, which pushed a fixture's
+    # quotes over the EV bar, so a test asserted picks that existed only
+    # because of a file no clone contains.
+    #
+    # The direction is the dangerous one. A local run that passes because
+    # the box is richer than a clone keeps passing right up until it is
+    # deployed somewhere that never fitted anything.
+    env["QB_MODELS_DIR"] = os.path.join(sandbox, "models")
     try:
         return _run(env, sys.argv[1:])
     finally:

@@ -41,7 +41,9 @@ import datetime as _dt
 import json
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/models/playerfit.json")
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("playerfit.json"))
 
 #: Prior strength of "this player is ordinary", in games.
 N0 = 40.0

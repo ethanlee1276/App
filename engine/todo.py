@@ -46,6 +46,8 @@ import json
 import os
 from pathlib import Path
 
+from . import modelstate as _modelstate
+
 ROOT = Path(__file__).resolve().parent.parent
 
 #: The sports with a learning ladder. CFB is here because it has a board
@@ -102,7 +104,7 @@ def learning_items(models: Path | None = None) -> list[Item]:
     exactly one run in that order, which is why `--relearn` was reordered
     and why re-running it is on the list at all.
     """
-    models = models or (ROOT / "data" / "models")
+    models = models or Path(_modelstate.path(""))
     cal = _read_json(models / "calibration.json")
     form = _read_json(models / "formfit.json")
     out = []
@@ -179,7 +181,7 @@ def haircut_item(models: Path | None = None, conn=None) -> Item:
     counted. A fit that is merely OLD is fine; a fit that is old while the
     book has moved a long way is the thing to catch.
     """
-    models = models or (ROOT / "data" / "models")
+    models = models or Path(_modelstate.path(""))
     sel = _read_json(models / "selection.json")
     if sel is None:
         return Item("book", "selection haircut", UNKNOWN,

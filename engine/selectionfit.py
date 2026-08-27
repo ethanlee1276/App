@@ -98,7 +98,9 @@ import json
 import math
 from pathlib import Path
 
-DEFAULT_PATH = Path(__file__).parent.parent / "data" / "models" / "selection.json"
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("selection.json"))
 
 #: Settled bets a sport needs before its own haircut is applied. Lower
 #: than journalfit's 200 because this fit has ONE parameter pooled over

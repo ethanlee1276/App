@@ -387,8 +387,17 @@ def test_cfb_board_prices_quoted_players_with_usage_and_says_the_rest():
             {"book": "DraftKings", "yes_odds": -130, "no_odds": 100}],
         oa.normalize_name("Zachariah Branch"): [
             {"book": "FanDuel", "yes_odds": 180, "no_odds": None}],
+        # PRICED WHERE IT CLEARS WITH NO FITTED CORRECTION, which is the
+        # only state a fresh clone is ever in. At +290 this pick
+        # graduated on the machine that had fitted `cfb:anytime_td` and
+        # nowhere else: a fitted temperature LIFTS a modelled
+        # probability, so the local suite called three commits green
+        # while GitHub Actions called them red. `run_tests.py` now points
+        # QB_MODELS_DIR at its sandbox so that cannot recur, and this
+        # price is set from the neutral board (it clears from about +500
+        # to +600, and +700 leaves the odds window entirely).
         oa.normalize_name("Slot Guy"): [
-            {"book": "DraftKings", "yes_odds": 290, "no_odds": None}],
+            {"book": "DraftKings", "yes_odds": 550, "no_odds": None}],
         # Quoted by the book, unknown to our logs: no pick, counted.
         oa.normalize_name("Transfer Portal"): [
             {"book": "DraftKings", "yes_odds": 200, "no_odds": None}],

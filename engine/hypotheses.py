@@ -51,7 +51,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/models/hypotheses.json")
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("hypotheses.json"))
 
 #: Every paid token, on the books. Lives beside the journal rather than in
 #: data/cache — the cache is prunable by design, and a spend ledger that a

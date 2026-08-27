@@ -27,7 +27,9 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_PATH = Path(__file__).parent.parent / "data" / "models" / "calibration.json"
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("calibration.json"))
 
 # Search grid: 0.4 (sharpen hard) .. 6.0 (flatten hard).
 #

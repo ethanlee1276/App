@@ -40,7 +40,9 @@ import json
 import math
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/models/losspatterns.json")
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("losspatterns.json"))
 
 #: A slice below this many settled bets is not tested at all. Small slices
 #: are where every fake trend lives, and FDR can only correct the tests

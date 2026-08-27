@@ -62,7 +62,9 @@ import datetime as _dt
 import json
 from pathlib import Path
 
-DEFAULT_PATH = Path("data/models/formfit.json")
+from . import modelstate as _modelstate
+
+DEFAULT_PATH = Path(_modelstate.path("formfit.json"))
 
 #: Settled walk-forward predictions required before a fitted dial may be
 #: applied — same floor the temperature fit uses.
