@@ -677,6 +677,16 @@ def main() -> None:
         odds_status["at"] = _dt.datetime.now().strftime("%H:%M")
         result["odds_status"] = odds_status
         result["injury_status"] = injury_status
+        # The measured market haircut, on the BOARD and not only on the
+        # cards it produced — see `engine.gamecal.board_notes`. The NFL
+        # spread and moneyline are both measured at no edge, so this is
+        # the same Sunday-morning case college football has: a priced
+        # card with nothing on it, which must not read as a late feed.
+        try:
+            from engine.gamecal import board_notes
+            result["line_calibration"] = board_notes("nfl")
+        except Exception:                                    # noqa: BLE001
+            result["line_calibration"] = {}
         result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
         # NFL_MODEL §2.3: label the knowledge tier of every reason, so a
         # post-mortem can tell a stale feed from a bad inference. Reads

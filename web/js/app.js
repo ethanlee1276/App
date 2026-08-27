@@ -10641,6 +10641,35 @@ function noMarketHeading() {
     ? "Not priced yet" : "Nothing clears the bar right now";
 }
 
+/* Did the model price this card and turn all of it down?
+
+   Returns the sentence to show, or null when that is not what happened.
+   "Priced" means cards exist in the payload at all — a game bet or a
+   prop the builder actually produced — and "turned down" means none of
+   them survives the page's own filters. Both halves matter: with no
+   cards the model never ran, and with one passing card the board is not
+   empty and this copy never renders. */
+function pricedButQuiet() {
+  const d = state.data || {};
+  // GAME BETS ONLY, deliberately. A props board with nothing on it has
+  // its own explanation — books post player props close to kickoff, and
+  // the branch below says so. Counting props here would pre-empt that
+  // with a sentence about game-line calibration, which is true of a
+  // different market.
+  const priced = (d.game_bets || []).length;
+  if (!priced) return null;
+  if ((d.game_bets || []).filter(passesGameBet).length) return null;
+  const notes = Object.values(d.line_calibration || {})
+    .filter(Boolean).map(escapeHtml);
+  const head = `The card is priced — the model read every game on it and
+    recommended none. That is a verdict, not a missing feed.`;
+  if (!notes.length) return head;
+  return `${head} What the record says about this board:
+    <ul style="margin:8px 0 0 18px;padding:0">
+      ${notes.map((n) => `<li style="margin-bottom:4px">${n}</li>`).join("")}
+    </ul>`;
+}
+
 function noMarketExplainer() {
   // FIRST, because it is the one case where every sentence below would be
   // false. A schedule-only payload (nfl_build.py --games-only) publishes
@@ -10662,6 +10691,19 @@ function noMarketExplainer() {
   if (os && os.checked === false)
     return `The last refresh skipped the odds pull (budget pacing). Real
             prices attach on an upcoming cycle — no action needed.`;
+  // THE CARD IS PRICED AND THE MODEL TURNED IT DOWN. This branch did
+  // not exist, and every sentence below it was written for a board with
+  // no prices — so a Saturday where the model priced sixty college
+  // games and recommended none of them read as "waiting on real
+  // sportsbook prices", which is false and blames the wrong thing.
+  //
+  // It is not a rare corner any more. `engine.gamecal` measured the
+  // college spread and moneyline at NO edge over the close, so their
+  // shrink is 0.0 and every disagreement collapses onto the market by
+  // construction. The board is quiet because the measurement says it
+  // should be, and the measurement is what the reader is owed.
+  const quiet = pricedButQuiet();
+  if (quiet) return quiet;
   if (os && os.checked && os.matched === 0)
     return `The odds feed answered at ${os.at || "last refresh"} but had no
             player-prop prices yet (checked ${os.events} game(s)) — books post

@@ -444,6 +444,38 @@ def shrink_for(sport: str, market: str) -> float | None:
         return None
 
 
+#: The markets a game board prices, in the order a reader meets them.
+BOARD_MARKETS = ("spread", "total", "moneyline")
+
+
+def board_notes(sport: str, markets=BOARD_MARKETS) -> dict:
+    """``{market: measured-haircut note}`` for a whole board.
+
+    THE CASE `_calibration_note` CANNOT COVER. That helper puts the
+    measurement on a CARD, and its own docstring says why: "a board that
+    quietly stopped recommending spreads would be the worst version of
+    this change — the user sees fewer plays and is told nothing." It was
+    written for FEWER plays. When the measured shrink is 0.0 there are
+    NO plays, no cards, and therefore nowhere for the note to ride, and
+    the page falls through to copy about waiting for sportsbook prices —
+    which is a lie on a Saturday when the prices are there and the model
+    simply had nothing to say about them.
+
+    So the notes go in the payload too, and the empty state reads them.
+    Never raises: telemetry that can break a betting board is worse than
+    telemetry that misses a night.
+    """
+    out: dict = {}
+    for market in markets:
+        try:
+            note = note_for(sport, market)
+        except Exception:                                 # noqa: BLE001
+            note = None
+        if note:
+            out[market] = note
+    return out
+
+
 def note_for(sport: str, market: str) -> str | None:
     """One line for the card explaining a measured haircut, or None.
 

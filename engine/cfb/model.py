@@ -37,6 +37,30 @@ MARQUEE, STANDARD, LOW = "marquee", "standard", "low"
 HAIRCUT = {MARQUEE: 0.50, STANDARD: 0.35, LOW: 0.25}
 
 # §3.6 — minimum edge AFTER the haircut.
+#
+# WHAT THESE BARS ACTUALLY PASS, measured 2026-08-27 once college
+# football had closing lines to be graded against (engine/sources/
+# cfblines) and `engine.gamecal` had replaced the flat 0.5 market shrink
+# with a measured one. Every FBS game from 2022-25 with fifteen games of
+# prior history on both sides — 2,055 of them — priced through the real
+# path:
+#
+#     spread      every edge exactly 0.00%   → 0 plays at any tier
+#     total       biggest edge +4.7%         → 73 low, 1 standard, 0 marquee
+#
+# The spread is zero BY CONSTRUCTION: its measured shrink is 0.0, so
+# every disagreement collapses onto the market. That is the honest
+# output of a model whose side beat the college close 48.4% of the time.
+#
+# The 73 that survive on totals went 41-30-2, 57.7% against the 52.4% a
+# -110 line needs, +10.2% ROI. Encouraging and NOT proven: the shrink
+# was fitted on the same games. Re-fitted on 2022-23 alone the slope is
+# +0.088 ± 0.114 — an error bar wider than the estimate — and it selects
+# five plays across 2024-25, which settles nothing either way.
+#
+# So the expectation to hold, and the reason the board is quiet rather
+# than broken: college GAME bets are a couple of low-attention totals a
+# season. The college volume is on the touchdown board.
 MIN_EDGE = {MARQUEE: 0.040, STANDARD: 0.030, LOW: 0.025}
 MIN_EDGE_PROP = 0.040          # every attention tier: thin menus, heavy vig
 

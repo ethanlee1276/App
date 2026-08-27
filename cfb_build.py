@@ -774,6 +774,17 @@ def main() -> None:
     # off the slate result rather than off `fit` precisely so the two can
     # never drift apart again.
     out["probation"] = bool(result.get("probation", fit.probation))
+    # THE MEASUREMENT, ON THE BOARD RATHER THAN ONLY ON THE CARDS. With
+    # college football's spread and moneyline shrinks measured at zero
+    # there are Saturdays with NO game bets at all, and a note that only
+    # rides on a card has nothing to ride on. Without this the page falls
+    # through to "waiting on real sportsbook prices", which is false when
+    # the prices are there and the model simply turned the card down.
+    try:
+        from engine.gamecal import board_notes
+        out["line_calibration"] = board_notes("cfb")
+    except Exception:                                        # noqa: BLE001
+        out["line_calibration"] = {}
     out["probation_reasons"] = result.get("probation_reasons") or []
     out["advisories"] = result.get("advisories") or []
 
