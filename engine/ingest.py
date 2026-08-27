@@ -654,3 +654,45 @@ def ingest_mlb_date(conn, date: str) -> dict:
     result["umpires"] = db.upsert_game_umpires(conn, mlb_umpire_rows(slate, date))
     db.log_ingest(conn, "mlb", "slate", date, result["games"] + result["player_logs"])
     return result
+
+
+def ingest_cfb_history(conn, seasons: list[int], id_to_abbr: dict | None = None,
+                       quiet: bool = False) -> dict:
+    """Past FBS results, so college football's constants can be MEASURED.
+
+    `engine.cfb.ratings` fits the scoring baseline, the home-field edge
+    and the margin/total spread from finished games and falls back to a
+    prior below `MIN_GAMES`. On 2026-08-27 this database held ONE
+    completed CFB game, so every college board on the site was running
+    on the prior — which puts the whole sport on probation: journaled
+    and graded, never staked.
+
+    The blocker was the feed, not the model. ESPN's scoreboard answers
+    "what is on today" one day at a time and is refused outright by a
+    standard egress policy; `engine.sources.cfbfastr` reads whole
+    finished seasons off the same raw.githubusercontent.com path the NFL
+    schedules already come down. Four seasons are 3,132 FBS-vs-FBS games.
+
+    ``id_to_abbr`` maps ESPN team ids to the abbreviations the board
+    uses — pass `{meta["id"]: abbr}` built from `cfbdata.parse_teams`
+    when a build has the teams feed. Without it the rows are keyed
+    ``espn:<id>``, which measures every constant identically (they
+    depend on each team having ONE key, not on what it is called) while
+    staying visibly distinct from a real abbreviation.
+    """
+    from .sources import cfbfastr
+    result = {"games": 0, "seasons": [], "skipped": []}
+    for season in seasons:
+        try:
+            out = cfbfastr.fetch_season(int(season), id_to_abbr=id_to_abbr)
+        except DataUnavailable as exc:
+            result["skipped"].append(f"cfb schedules {season}: {exc}")
+            continue
+        n = db.upsert_games(conn, out["games"])
+        result["games"] += n
+        result["seasons"].append({"season": int(season), "games": n,
+                                  "skipped": out["skipped"]})
+        db.log_ingest(conn, "cfb", "results", str(season), n)
+        if not quiet:
+            print(f"  cfb {season}: {n} FBS games")
+    return result

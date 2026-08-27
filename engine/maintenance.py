@@ -913,6 +913,35 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  nfl prior-season backfill failed: {exc}")
 
+        # The same idea for college football, and a bigger hole. The CFB
+        # model fits its own scoring baseline, home-field edge and
+        # margin/total spread from finished games — and this database
+        # held ONE, so every college board was priced from a prior and
+        # sat on probation: journaled and graded, never staked. ESPN's
+        # scoreboard cannot fix that (it answers one day at a time, and
+        # a standard egress policy refuses it); whole finished seasons
+        # come down the same raw.githubusercontent.com path the NFL
+        # schedules use. Guarded on the game count, so it runs on a box
+        # that needs it and skips silently on one that does not.
+        try:
+            from . import db as _cdb
+            from .ingest import ingest_cfb_history
+            from .cfb.ratings import MIN_GAMES as _CFB_MIN
+            _cconn = _cdb.connect()
+            have = _cconn.execute(
+                "SELECT COUNT(*) FROM games WHERE sport='cfb' "
+                "AND home_score IS NOT NULL").fetchone()[0]
+            if have < _CFB_MIN:
+                seasons = [today.year - n for n in (4, 3, 2, 1)]
+                res = ingest_cfb_history(_cconn, seasons, quiet=True)
+                log(f"  cfb backfill: {res['games']:,} FBS games ingested "
+                    f"across {len(res['seasons'])} season(s) — the model's "
+                    f"variance is now measured, not assumed")
+                for s_ in res["skipped"]:
+                    log(f"  ⚠️  {s_}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  cfb history backfill failed: {exc}")
+
         # Play-by-play refresh — the measured red-zone roles. The file is
         # ~100MB, so once a week (Tuesdays, after Monday night) is the
         # right cadence, not daily.
