@@ -118,6 +118,42 @@ def refit_sport(sport: str, db: str = "data/history.db") -> list[str]:
     return lines
 
 
+def refit_touchdowns(db: str = "data/history.db") -> list[str]:
+    """The touchdown market, which no other fitter can reach.
+
+    `calibrate.SPORT_MARKETS["nfl"]` lists the yardage and reception
+    props; `anytime_td` is absent because `fit_market` walks over/under
+    props and a touchdown has no LINE to compare a projection against.
+    So the market that drives every longshot on the board carried a
+    neutral correction from the day it shipped, while
+    `longshots.calibrated_prob` faithfully applied it to every pick.
+
+    `engine.tdbacktest` replays the model forward and produces the
+    (claimed, scored) pairs `calibrate.fit` wants, which is the front
+    door after all.
+    """
+    try:
+        import sqlite3
+        from .tdbacktest import fit_calibration, MIN_FIT_PAIRS
+        path = db if os.path.isabs(db) else os.path.join(ROOT, db)
+        if not os.path.isfile(path):
+            return []
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        try:
+            fit, report = fit_calibration(conn)
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  touchdown calibration skipped: {exc}"]
+    if fit is None:
+        return [f"deep refit: touchdowns — {report.n:,} graded player-weeks, "
+                f"needs {MIN_FIT_PAIRS:,}"]
+    return [f"deep refit: touchdowns refit on {report.n:,} player-weeks — "
+            f"T={fit.temperature} bias={fit.intercept:+.2f}, Brier "
+            f"{fit.brier_before:.4f} → {fit.brier_after:.4f}"]
+
+
 def refit_all(db: str = "data/history.db") -> list[str]:
     """Every sport with the history for it. Returns log lines."""
     sports = sports_with_history(db)
@@ -126,6 +162,9 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     lines = []
     for sport in sports:
         lines.extend(refit_sport(sport, db))
+    # Outside the per-sport loop: the touchdown fit is NFL-only and is
+    # driven by its own replay rather than by the three CLIs above.
+    lines.extend(refit_touchdowns(db))
     return lines
 
 

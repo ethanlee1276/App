@@ -5310,7 +5310,7 @@ function longshotEmptyReason(mlb) {
   // this sentence moves with it or the page documents a rule it no
   // longer enforces.
   const range = mlb ? "+250 to +650"
-    : state.sport === "cfb" ? "-200 to +600" : "-150 to +450";
+    : state.sport === "cfb" ? "-200 to +900" : "-150 to +700";
   return "The model only surfaces " + (mlb ? "home-run" : "touchdown") +
          ` picks that beat the book’s price inside a sane odds range (${range}).`;
 }

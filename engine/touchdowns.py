@@ -12,13 +12,33 @@ player is in position to score rather than from how often he recently did:
 
 then ``P(scores) = 1 − e^(−expected TDs)``.
 
-**What this model cannot see.** True red-zone usage — goal-line carries,
-carries inside the 5, end-zone targets — lives in play-by-play data this project
-doesn't ingest. Those are the single best predictors of touchdowns, and without
-them the engine leans on *opportunity share* and *team implied total* as
-proxies. Every pick says so. Wiring in play-by-play would be the highest-value
-upgrade to this model, and the interface here (``RedZoneUsage``) is shaped to
-accept it without changing the callers.
+**Red-zone usage, and the note that used to sit here.** This docstring
+said for a long time that true red-zone usage — goal-line carries,
+carries inside the 5, end-zone targets — "lives in play-by-play data
+this project doesn't ingest", called them the single best predictors of
+touchdowns, and named wiring them in as the highest-value upgrade
+available. That upgrade landed: the nightly ingest stores ``rz_car``,
+``rz_tgt`` and ``i5_car`` from play-by-play, `engine.nflusage
+.red_zone_usage` turns them into ``RedZoneUsage(measured=True)`` per
+player, and `nfl_build` hands them to this model through
+``build_usage_maps``.
+
+The note is kept rather than deleted because a stale "we cannot see X"
+is worse than no note at all — it tells a reader to go build something
+that already exists, which is a mistake this project has made. A player
+with no play-by-play rows still falls back to `infer_red_zone`, and
+``measured=False`` is what the card reads to say so.
+
+**What it still cannot see:** defensive personnel and pre-snap
+alignment, which is where the remaining goal-line signal lives.
+
+**How well it works.** Measured 2026-08-27 by `engine.tdbacktest` over
+four seasons and 17,785 player-weeks, walked forward: Brier 0.1459
+against an always-guess 0.1594. Its probabilities were too spread out —
+it claimed 4.9% in the bottom band where 9.2% actually scored, and
+65.4% at the top where 57.9% did — so the market carries a fitted
+temperature now (`fit_calibration`), which brings the worst band from
+7.5 points off to 1.4.
 """
 
 from __future__ import annotations

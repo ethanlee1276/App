@@ -42,18 +42,41 @@ from .betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
 # conservative window and it cut the board off at exactly the prices a
 # LONG SHOTS page exists for: the committee back at +270, the red-zone
 # TE at +320. The floor stays — below -150 the payout never justifies a
-# scorer market's variance — and the ceiling moves to +450, past which
-# a price implies a sub-18% event our proxy-fed model cannot separate
-# from noise (the MLB HR book learned the same lesson at +650). The EV
-# gate, the market shrink and the credibility guard still do the
-# filtering; the window only says which prices are worth filtering.
-NFL_TD_ODDS = (-150, 450)
+# scorer market's variance. The ceiling was +450 — "past which a price
+# implies a sub-18% event our proxy-fed model cannot separate from
+# noise". That was true when it was written and stopped being true
+# twice over: the model is no longer proxy-fed (measured red-zone usage
+# from play-by-play now reaches it, engine/nflusage), and on 2026-08-27
+# `engine.tdbacktest` measured what it can actually do down there over
+# 17,785 player-weeks.
+#
+# Inside the sub-18% region — 9,327 of those weeks — sorted by model
+# probability into quintiles:
+#
+#     Q1 (longest)   claimed 5.0%   scored  6.2%
+#     Q2             claimed 6.8%   scored  7.8%
+#     Q3             claimed 9.0%   scored 11.6%
+#     Q4             claimed 12.8%  scored 13.8%
+#
+# Monotone, and the top quintile out-scores the bottom by 7.4 points at
+# z = 7.6. That is separation from noise, measured, in exactly the
+# region the old ceiling said could not be separated. With the fitted
+# correction on top (engine.tdbacktest.fit_calibration) the worst band
+# sits 1.4 points off true.
+#
+# So the ceiling moves out — NOT because longshots are being chased, but
+# because the reason for holding it in has been falsified. The line
+# after this one still governs: the EV gate, the market shrink and the
+# credibility guard do the filtering; the window only says which prices
+# are worth filtering. Widening it hands the decision to those gates
+# rather than pre-empting it.
+NFL_TD_ODDS = (-150, 700)
 MLB_HR_ODDS = (250, 650)
 # CFB gets its own window, not NFL's: spreads run to -40, so books hang
 # shorter juice on bell cows (-200 is an ordinary Saturday price for a
 # stud back) and longer prices on everyone else. Same ceiling logic as
 # the NFL note above, one notch out for the wilder distribution.
-CFB_TD_ODDS = (-200, 600)
+CFB_TD_ODDS = (-200, 900)
 
 # League baselines used to convert a team's implied total into expected TDs.
 NFL_AVG_TEAM_POINTS = 22.6

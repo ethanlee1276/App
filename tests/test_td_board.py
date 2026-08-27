@@ -115,12 +115,19 @@ def test_td_probability_actually_contains_the_script():
 
 def test_the_widened_windows_and_their_page_copy_agree():
     from engine.longshots import NFL_TD_ODDS, CFB_TD_ODDS
-    assert NFL_TD_ODDS == (-150, 450)
-    assert CFB_TD_ODDS == (-200, 600)
+    # Ceilings moved out 2026-08-27 on measured evidence: inside the
+    # sub-18% region the model's top quintile out-scores its bottom by
+    # 7.4 points at z = 7.6, which is exactly the separation the old
+    # +450 said could not be found there. See engine/tdbacktest.
+    assert NFL_TD_ODDS == (-150, 700)
+    assert CFB_TD_ODDS == (-200, 900)
     app = _read("web", "js", "app.js")
     # longshotEmptyReason names the live ranges; stale copy documents a
-    # rule the engine no longer enforces.
-    assert "-150 to +450" in app and "-200 to +600" in app
+    # rule the engine no longer enforces. Asserted from the CONSTANTS so
+    # the two cannot drift again — a hardcoded pair here would need
+    # hand-editing every time the window moves, which is how it drifted.
+    assert f"-150 to +{NFL_TD_ODDS[1]}" in app
+    assert f"-200 to +{CFB_TD_ODDS[1]}" in app
     assert "-150 to +200" not in app
 
 
@@ -348,9 +355,13 @@ def test_cfb_board_prices_quoted_players_with_usage_and_says_the_rest():
         # Quoted by the book, unknown to our logs: no pick, counted.
         oa.normalize_name("Transfer Portal"): [
             {"book": "DraftKings", "yes_odds": 200, "no_odds": None}],
-        # Outside even the CFB window.
+        # Outside even the CFB window. Was +900, which became the
+        # ceiling itself when the windows widened on 2026-08-27 — the
+        # fixture moved rather than the assertion, because what is being
+        # tested is that the census COUNTS an out-of-window quote, not
+        # where the edge happens to sit this month.
         oa.normalize_name("Bit Player"): [
-            {"book": "DraftKings", "yes_odds": 900, "no_odds": None}],
+            {"book": "DraftKings", "yes_odds": 1400, "no_odds": None}],
     }}
     rows, census, watch = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
     assert census["quoted_players"] == 5

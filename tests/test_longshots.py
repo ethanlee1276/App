@@ -43,7 +43,15 @@ def test_odds_windows_match_the_strategy():
     assert in_odds_window(-140, NFL_TD_ODDS) and in_odds_window(190, NFL_TD_ODDS)
     assert in_odds_window(420, NFL_TD_ODDS)          # the dart the page is for
     assert not in_odds_window(-260, NFL_TD_ODDS)     # too much juice
-    assert not in_odds_window(700, NFL_TD_ODDS)      # lottery ticket
+    # +700 was "lottery ticket" until 2026-08-27, when the model was
+    # finally graded down there: over 9,327 sub-18% player-weeks its top
+    # quintile out-scored its bottom by 7.4 points at z = 7.6, and the
+    # fitted correction brings the worst band to 1.4 points off true.
+    # The old ceiling's own reason — a proxy-fed model that "cannot
+    # separate a sub-18% event from noise" — was falsified, so the EV
+    # gate gets to decide instead of the window pre-empting it.
+    assert in_odds_window(700, NFL_TD_ODDS)
+    assert not in_odds_window(2000, NFL_TD_ODDS)     # still stops somewhere
     assert in_odds_window(300, MLB_HR_ODDS) and in_odds_window(640, MLB_HR_ODDS)
     assert not in_odds_window(180, MLB_HR_ODDS)      # too short for a HR
     assert not in_odds_window(900, MLB_HR_ODDS)
@@ -52,7 +60,14 @@ def test_odds_windows_match_the_strategy():
     from engine.longshots import CFB_TD_ODDS
     assert in_odds_window(-180, CFB_TD_ODDS) and in_odds_window(550, CFB_TD_ODDS)
     assert not in_odds_window(-260, CFB_TD_ODDS)
-    assert not in_odds_window(800, CFB_TD_ODDS)
+    # Widened with the NFL's on the same evidence, keeping college one
+    # notch out for its wilder distribution. NOTE the measurement behind
+    # it is NFL's: college has no player game logs to replay, so its
+    # ceiling rides on the football-shaped finding rather than its own.
+    # That is a weaker claim and it is the reason CFB moved to +900
+    # rather than further.
+    assert in_odds_window(800, CFB_TD_ODDS)
+    assert not in_odds_window(2000, CFB_TD_ODDS)
 
 
 def test_implausible_edge_is_refused():
