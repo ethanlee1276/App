@@ -170,6 +170,67 @@ def test_the_two_registrations_point_opposite_ways_on_purpose():
     assert A_BAND_NFL["sport"] != B_MINUS["sport"]
 
 
+# --- a test scoped to one market --------------------------------------
+#
+# "Why does B+ beat A" turned out to be one cell: A-graded RECEPTIONS at
+# 40.7% over 86 bets, against B+ receptions at 60.3% over 199. Take that
+# cell out and the A band lands 54.7% — no finding at all. A test about
+# one market has to be able to say so.
+
+def test_a_market_scoped_test_only_counts_that_market():
+    import tempfile, os
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    prereg.register(prereg.RECEPTIONS_A_NFL, path)
+    rows = [{"date": "2099-01-01", "sport": "nfl", "grade": "A",
+             "market": m, "odds": -110, "status": "lost"}
+            for m in ("receptions",) * 3 + ("rush_yds",) * 40]
+    v = next(x for x in prereg.report(rows, path)
+             if x["id"] == "a-receptions-nfl-2026-08")
+    assert v["n"] == 3, v
+
+
+def test_the_market_filter_applies_to_the_reference_too():
+    """Comparing A-receptions against every B+ prop would dilute the
+    comparison with three markets the finding is not about."""
+    import tempfile, os
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    prereg.register(prereg.RECEPTIONS_A_NFL, path)
+    rows = [{"date": "2099-01-01", "sport": "nfl", "grade": "B+",
+             "market": m, "odds": -110, "status": "won"}
+            for m in ("receptions",) * 5 + ("rec_yds",) * 50]
+    v = next(x for x in prereg.report(rows, path)
+             if x["id"] == "a-receptions-nfl-2026-08")
+    assert v["n_reference"] == 5, v
+
+
+def test_adding_the_market_field_did_not_void_the_older_tests():
+    """`_terms_hash` keys only on the fields a test actually carries, so
+    a filter no existing test uses cannot change their fingerprints. A
+    voided preregistration reports nothing, which would have quietly
+    thrown away both standing tests."""
+    for test in (prereg.B_MINUS, prereg.A_BAND_NFL):
+        assert "markets" not in test
+    import tempfile, os
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    store = prereg.ensure_registered(path)
+    assert len(store["tests"]) == 3
+    for v in prereg.report([], path):
+        assert v["status"] != "void", v
+
+
+def test_the_receptions_remedy_names_a_lever_that_moves():
+    """A preregistration whose remedy points at a retired constant fires
+    and changes nothing. This one names the 40-point edge component of
+    the quality score, which is what decides the grade."""
+    from engine import quality
+    import inspect
+    decides = prereg.RECEPTIONS_A_NFL["decides"]
+    assert "edge_pts" in decides and "TIER_MIN_EDGE" not in decides
+    source = inspect.getsource(quality.quality_score)
+    assert "edge_pts" in source
+    assert "TIER_MIN_EDGE[tier]" in source
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

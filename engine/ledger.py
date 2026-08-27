@@ -3617,8 +3617,12 @@ def _prereg_block(conn) -> dict:
     """
     try:
         from . import prereg
+        # `market` rides along because a preregistered test may be
+        # scoped to one — see `prereg.RECEPTIONS_A_NFL`, where the
+        # finding is about a single market and pooling the rest would
+        # dilute the very thing being tested.
         rows = [dict(r) for r in conn.execute(
-            "SELECT date, sport, grade, odds, status FROM bets "
+            "SELECT date, sport, grade, market, odds, status FROM bets "
             "WHERE status IN ('won','lost') "
             "AND category IN ('main','paper') AND stake_units > 0")]
         return {"tests": prereg.report(rows)}

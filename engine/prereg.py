@@ -60,7 +60,7 @@ def _terms_hash(t: dict) -> str:
     """A fingerprint of everything that decides the answer."""
     keyed = {k: t[k] for k in sorted(
         ("claim", "sport", "population", "compare_to", "metric",
-         "min_n", "z_threshold", "registered", "decides"))
+         "markets", "min_n", "z_threshold", "registered", "decides"))
         if k in t}
     return hashlib.sha256(
         json.dumps(keyed, sort_keys=True).encode()).hexdigest()[:16]
@@ -143,6 +143,13 @@ def verdict(test: dict, rows: list[dict]) -> dict:
              if (r.get("date") or "") > reg
              and r.get("sport") == test["sport"]
              and r.get("status") in ("won", "lost")]
+    # OPTIONAL, and absent from every test registered before 2026-08-27
+    # — which is why `_terms_hash` only keys on the fields a test
+    # actually carries. Adding a filter no existing test uses must not
+    # change their fingerprints and void them.
+    markets = test.get("markets")
+    if markets:
+        fresh = [r for r in fresh if r.get("market") in markets]
     pop = [r for r in fresh if r.get("grade") in test["population"]]
     ref = [r for r in fresh if r.get("grade") in test["compare_to"]]
     out["n"] = len(pop)
@@ -254,10 +261,64 @@ A_BAND_NFL = {
 }
 
 
+#: Registered 2026-08-27, from the slice that answered "why does B+ beat
+#: A". The answer turned out to be one cell.
+#:
+#: Four ingested NFL seasons, 1,016 settled recommendations, split by
+#: grade AND market:
+#:
+#:     A   receptions    86 bets   40.7%      B+  receptions   199   60.3%
+#:     A   rec_yds       84 bets   51.2%      B+  rec_yds      288   57.3%
+#:     A   rush_yds      70 bets   58.6%      B+  rush_yds     222   52.7%
+#:                                            B+  pass_yds      56   53.6%
+#:
+#: A-graded RECEPTIONS is the whole deficit. Take that one cell out and
+#: the A band lands 54.7%, a shade under B+ and nowhere near a finding.
+#: Left in, it drags A to 49.6% against a 54.8% pool — z = -2.63.
+#:
+#: THE MECHANISM IS IN THE SCORE, WHICH IS WHY THIS IS WORTH REGISTERING
+#: RATHER THAN SHRUGGING AT. `engine.quality.quality_score` awards its
+#: 40 edge points as `edge / (1.5 × TIER_MIN_EDGE[tier])`, and receptions
+#: is the only Tier 1 market, with the lowest minimum of the three
+#: (0.025 against 0.030). So a receptions prop reaches full edge credit
+#: on 3.75% where a yardage prop needs 4.5% — it is the easiest market in
+#: the book to grade A in, and the A band is 34.7% receptions against
+#: B+'s 26.0%. The grade inherits the tier's leniency twice: once in the
+#: shrink that sets the edge, and again in the scale that scores it.
+#:
+#: AND WHY IT IS NOT ACTED ON. Seven grade-by-market cells were examined
+#: and this is the worst of them; picking the worst of seven after the
+#: fact needs more than the 2.1 this project set for a named bucket, and
+#: -2.63 clears 2.6 by three hundredths. That is not a margin to retune a
+#: live model on. The edge signal's own anti-correlation is weaker still
+#: — outcome on edge, logistic, gives z = -1.73 pooled and -2.17 inside
+#: receptions — so the honest reading is one suggestive market, not a
+#: broken ladder.
+RECEPTIONS_A_NFL = {
+    "id": "a-receptions-nfl-2026-08",
+    "claim": "A-graded NFL receptions props lose to B+ ones in the same market",
+    "sport": "nfl",
+    "population": ["A"],
+    "compare_to": ["B+"],
+    "markets": ["receptions"],
+    "metric": "ROI at a flat 1u, receptions only",
+    "min_n": 80,
+    "decides": ("the grade's edge scale stops inheriting the tier's "
+                "minimum, so an A demands the same edge in every market "
+                "— engine.quality.quality_score's edge_pts denominator"),
+    "why_now": ("A receptions read 40.7% over 86 settled bets against a "
+                "54.8% pool (z = -2.63) while B+ receptions read 60.3% "
+                "over 199. It is the worst of seven cells looked at "
+                "after the fact, and 2.63 is not enough of a margin over "
+                "2.6 to move a live model on."),
+}
+
+
 def ensure_registered(path=None) -> dict:
     """Idempotent: registers the standing tests if they are not there."""
     store = register(B_MINUS, path)
-    return register(A_BAND_NFL, path)
+    store = register(A_BAND_NFL, path)
+    return register(RECEPTIONS_A_NFL, path)
 
 
 def report(rows: list[dict], path=None) -> list[dict]:
