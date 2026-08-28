@@ -256,20 +256,39 @@ def test_unscored_games_never_become_closes():
 
 def test_a_harvested_close_outranks_the_schedule():
     """A real book's quote is a counter's number; the schedule row is the
-    field's consensus. When both exist the harvest wins, and the header
-    says which was replayed."""
+    field's consensus. Where BOTH cover the same game the harvest wins,
+    and the header says what was replayed.
+
+    THIS TEST USED TO ASSERT MORE THAN THAT, and the extra claim was the
+    bug. It required that one harvested row make "schedule closes"
+    disappear from the header entirely — which was true, because
+    `backtest_game_lines` read the harvest and fell back to the schedule
+    only when the harvest was COMPLETELY empty. One stored row for one
+    game therefore discarded the schedule's number for every other game
+    in the database. `engine.gamecal` had the identical bug and the
+    identical fix.
+
+    Precedence survives; exclusivity was never right. The two sources are
+    unioned now, so a partial harvest tops the schedule up instead of
+    replacing it, and the header names both.
+    """
     conn = _sched([(f"2026-09-{d:02d}", "KC", "BUF", 27, 24, -3.0, 47.5)
                    for d in range(1, 29)])
     r = backtest_game_lines(conn, "nfl", "total", min_team_games=1)
     assert "schedule closes" in r.summary()
+    quoted_before = r.games_quoted
     db.upsert_odds_history(conn, [
         {"sport": "nfl", "taken_at": "2026-09-01T22:00:00Z",
          "event_id": "x", "home": "KC", "away": "BUF", "player": "TOTAL",
          "market": "total", "book": "best", "line": 44.0,
          "over_odds": -110, "under_odds": -110}])
     r2 = backtest_game_lines(conn, "nfl", "total", min_team_games=1)
-    assert "schedule closes" not in r2.summary()
     assert "real stored closes" in r2.summary()
+    # The harvest leads the header, and the schedule it topped up is
+    # still named — and still replayed.
+    assert "topped up from" in r2.summary()
+    assert r2.games_quoted == quoted_before, \
+        "one harvested row must not discard the rest of the schedule"
 
 
 def test_the_header_names_the_provenance_it_replayed():

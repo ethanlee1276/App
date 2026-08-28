@@ -424,6 +424,13 @@ def game_line_closes(conn, sport: str, market: str, book: str = "best") -> dict:
     return out
 
 
+#: Whose consensus a schedule close actually is. "nflverse" was hardcoded
+#: into the header, which was right for the only sport that had schedule
+#: closes and became a false label the day college football's arrived off
+#: the cfbfastR mirror.
+SCHEDULE_FEED = {"nfl": "nflverse", "cfb": "cfbfastR mirror"}
+
+
 def schedule_closes(conn, sport: str, market: str,
                     require_prices: bool = True) -> dict:
     """The same shape as `game_line_closes`, read off the SCHEDULE.
@@ -455,14 +462,21 @@ def schedule_closes(conn, sport: str, market: str,
     into "0 graded games with a close".
     """
     import json as _json
+    # `extra` holds the two prices, so it is required only when prices
+    # are. Demanding it unconditionally means a feed that stores a LINE
+    # and nothing else has its closes dropped before the
+    # `require_prices` flag ever gets a say — the exact failure that flag
+    # exists to prevent, one query earlier.
     q = ("SELECT period, home, away, spread, total, extra FROM games "
-         "WHERE sport=? AND home_score IS NOT NULL AND extra IS NOT NULL")
+         "WHERE sport=? AND home_score IS NOT NULL")
+    if require_prices:
+        q += " AND extra IS NOT NULL"
     out: dict = {}
     for r in conn.execute(q, (sport,)):
         try:
             px = _json.loads(r["extra"] or "{}")
         except (TypeError, ValueError):
-            continue
+            px = {}
         if market == "total":
             line, pair = r["total"], px.get("total_odds")
         else:
@@ -508,7 +522,11 @@ class GameLineBacktest:
     pushes: int = 0
     staked: float = 0.0
     net: float = 0.0
-    refused: int = 0           # priced, but over the credibility ceiling
+    refused: int = 0
+    #: Games whose stored close carries a LINE but no price. They measure
+    #: the projection and can never be bet — counted apart so the gap is
+    #: visible rather than inferred from a small `n_bets`.
+    unpriced: int = 0           # priced, but over the credibility ceiling
     mae: float = 0.0           # mean |projection - closing number|, in points
     # WHERE THE NUMBERS CAME FROM. A harvested close is one book's quote at
     # one instant; a schedule close is the market's closing consensus. Beating
@@ -600,15 +618,39 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     # registered variance cannot be replayed through another league's.
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
 
-    closes = game_line_closes(conn, sport, market)
-    # HARVESTED FIRST, SCHEDULE SECOND. A stored book close is a real
-    # counter's number and outranks a consensus; the schedule is what
-    # makes the measurement possible at all on a league nobody has
-    # harvested yet, which for the NFL was every season it has ever had.
-    source = "real stored closes"
-    if not closes:
-        closes = schedule_closes(conn, sport, market)
-        source = "schedule closes · nflverse closing consensus"
+    # A UNION, NOT AN OR-ELSE. This read the harvested closes and fell
+    # back to the schedule only when the harvest was COMPLETELY empty —
+    # so one stored row for one game hid the schedule's numbers for every
+    # other game in the database. `engine.gamecal` had the identical bug
+    # and the identical fix ("Stop a harvest that cannot join from hiding
+    # a schedule that can"), where a single date-keyed harvested row
+    # shadowed 899 week-keyed schedule closes.
+    #
+    # Schedule first so a harvested row OVERWRITES it: a stored book
+    # close is a real counter's number and outranks a consensus.
+    #
+    # `require_prices=False` because a close with no price still measures
+    # the LINE, and college football's 3,132 mirror closes are all
+    # priceless — under the old default the CFB game model had thousands
+    # of stored closes and no way to be graded against any of them. What
+    # a priceless close may NOT do is produce a bet; see below.
+    schedule = schedule_closes(conn, sport, market, require_prices=False)
+    harvested = game_line_closes(conn, sport, market)
+    closes = dict(schedule)
+    closes.update(harvested)
+    # THE PROVENANCE IS NAMED, and the feed with it. A harvested close is
+    # one counter's quote; a schedule close is the field's consensus, and
+    # a report that blurred them would present an edge over the field as
+    # an edge over a book. Now that both can appear in one replay, the
+    # header has to say when they did.
+    feed = SCHEDULE_FEED.get(sport, "schedule")
+    consensus = f"schedule closes · {feed} closing consensus"
+    if harvested and len(closes) > len(harvested):
+        source = f"real stored closes, topped up from {consensus}"
+    elif harvested:
+        source = "real stored closes"
+    else:
+        source = consensus
     rows = conn.execute(
         "SELECT period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
@@ -631,18 +673,38 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
             line, odds_a, odds_b = quote
             r.games_quoted += 1
 
+            # THE PROJECTION AGAINST THE LINE, which needs no price. This
+            # is the half of the measurement a priceless close can still
+            # answer, and for college football it is the only half there
+            # is.
             if market == "total":
                 proj = project_total(sport, h_off, h_def, a_off, a_def)
-                card = price_total(sport, home, away, proj, line, odds_a, odds_b)
                 r._abs_err += abs(proj - line)
-                settle = lambda: _settle_total(line, card["side"], hs, as_)
             else:
                 h_net = h_off - h_def
                 a_net = a_off - a_def
                 proj = game_margin(sport, h_net, a_net)
-                card = price_spread(sport, home, away, proj, line, odds_a, odds_b)
                 # The stored line is the home number; the card may back away.
                 r._abs_err += abs(proj + line)
+
+            # NO PRICE, NO BET. The pricer needs two real numbers — it
+            # raises on None — and defaulting them to -110 would publish
+            # an ROI computed against a price no book ever offered, which
+            # is the one thing this replay exists to avoid. Counted, so
+            # the gap is visible rather than implied by a small n_bets.
+            if odds_a is None or odds_b is None:
+                r.unpriced += 1
+                pf, pa, n = agg.get(home, (0.0, 0.0, 0))
+                agg[home] = (pf + hs, pa + as_, n + 1)
+                pf, pa, n = agg.get(away, (0.0, 0.0, 0))
+                agg[away] = (pf + as_, pa + hs, n + 1)
+                continue
+
+            if market == "total":
+                card = price_total(sport, home, away, proj, line, odds_a, odds_b)
+                settle = lambda: _settle_total(line, card["side"], hs, as_)
+            else:
+                card = price_spread(sport, home, away, proj, line, odds_a, odds_b)
                 picked_home = card["team"] == home
                 settle = lambda: _settle_spread(line, picked_home, hs, as_)
 

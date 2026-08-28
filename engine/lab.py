@@ -315,19 +315,34 @@ def game_lines(conn, sport: str, log=print) -> dict:
         except Exception as exc:                   # noqa: BLE001
             log(f"  lab: {sport} {market} skipped — {exc}")
             continue
-        if not getattr(r, "games_priced", 0):
+        # `games_quoted`, and the field name is the whole bug. This read
+        # `games_priced`, which `GameLineBacktest` has never had, through
+        # a `getattr(..., 0)` that turned the mistake into a silent zero
+        # — so EVERY game-line market was skipped, for every sport, on
+        # every run, and the Lab reported "no harvested closing lines
+        # stored for this sport" on a database holding 17,457 MLB closes
+        # and 899 replayable NFL games. An AttributeError would have been
+        # loud on the first run; the default made it invisible for the
+        # life of the feature. Attribute access, deliberately, so the
+        # next rename fails instead of lying.
+        if not r.games_quoted:
             continue
         out.append({
             "market": market,
             "games_seen": r.games_seen,
-            "games_priced": r.games_priced,
+            "games_quoted": r.games_quoted,
+            # Games whose stored close carries a LINE but no price. They
+            # measure the projection and can never be bet, so they are
+            # counted apart rather than folded into either number.
+            "unpriced": r.unpriced,
             "n_bets": r.n_bets,
             "wins": r.wins,
             "win_rate": _round(r.wins / r.n_bets, 3) if r.n_bets else None,
             "roi": _round(r.roi, 4),
             "net": _round(r.net, 2),
-            "mae": _round(getattr(r, "mae", None), 3),
-            "refused": getattr(r, "refused", 0),
+            "mae": _round(r.mae, 3),
+            "refused": r.refused,
+            "source": r.source,
         })
     if out:
         return {"markets": out}
@@ -432,7 +447,15 @@ def _print_market(m, indent="    ") -> None:
     "book" is a claim about beating a market, "naive" is a claim about the
     projection and nothing else.
     """
+    # THE SEASON IS PART OF THE HEADLINE, because the replay silently
+    # falls back one when the current season has not produced enough
+    # games yet — so all through an offseason and the first weeks of a
+    # new one, these numbers are LAST season's, and a reader with no year
+    # in front of them has no way to know that.
+    season = m.get("season")
     head = f"{indent}{m.get('label') or m.get('market')}"
+    if season:
+        head += f" [{season}]"
     n, basis = m.get("n") or 0, m.get("basis") or "naive"
     used, total = m.get("used_real_lines") or 0, m.get("total_priced") or 0
     share = f" ({used}/{total} priced on real closes)" if total else ""
@@ -505,9 +528,16 @@ def main(argv=None) -> int:
         if gl.get("unavailable"):
             print(f"    game lines: {gl['unavailable']}")
         for m in gl.get("markets") or []:
-            print(f"    {m['market']}: {m.get('n_bets', 0)} bet(s) on "
-                  f"{m.get('games_priced', 0)} priced game(s)  "
-                  f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+            quoted, unpriced = m.get("games_quoted", 0), m.get("unpriced", 0)
+            note = f", {unpriced} with no price" if unpriced else ""
+            print(f"    {m['market']}: {quoted} game(s) quoted{note}  "
+                  f"line MAE {m.get('mae')}  ({m.get('source', '')})")
+            if m.get("n_bets"):
+                print(f"      {m['n_bets']} bet(s)  "
+                      f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+            else:
+                print(f"      no bet cleared the bar "
+                      f"({m.get('refused', 0)} refused as not credible)")
         print()
     return 0
 

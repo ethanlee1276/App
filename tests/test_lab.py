@@ -146,13 +146,24 @@ def test_the_basis_caveat_ships_with_the_data():
 
 # --- the weekly clock --------------------------------------------------------
 def test_it_runs_once_a_week_and_can_be_forced():
+    """The once-a-week gate, and nothing else.
+
+    `nfl=False` is load-bearing and used to be implicit. The NFL prop
+    replay bailed instantly while it defaulted to the CURRENT season,
+    because an unplayed season has no weekly stats — so "fast: nothing
+    replays" was true by accident. It falls back a season now, which is
+    the point of the fallback and makes four real walk-forwards out of
+    these four calls. This test is about the gate; the replay has its
+    own.
+    """
     p = os.path.join(tempfile.mkdtemp(), "backtest.json")
-    conn = _seeded(n_players=2, n_games=4)          # fast: nothing replays
-    assert lab.run_if_due(hconn=conn, log=_quiet, path=p) == "ok"
-    assert lab.run_if_due(hconn=conn, log=_quiet, path=p) == "already"
-    assert lab.run_if_due(hconn=conn, log=_quiet, path=p, force=True) == "ok"
+    conn = _seeded(n_players=2, n_games=4)
+    kw = {"hconn": conn, "log": _quiet, "path": p, "nfl": False}
+    assert lab.run_if_due(**kw) == "ok"
+    assert lab.run_if_due(**kw) == "already"
+    assert lab.run_if_due(force=True, **kw) == "ok"
     later = _dt.date.today() + _dt.timedelta(days=lab.LAB_EVERY_DAYS)
-    assert lab.run_if_due(hconn=conn, log=_quiet, path=p, today=later) == "ok"
+    assert lab.run_if_due(today=later, **kw) == "ok"
 
 
 def test_a_broken_harness_never_takes_the_settle_pass_down():
@@ -165,7 +176,13 @@ def test_a_broken_harness_never_takes_the_settle_pass_down():
             pass
 
     p = os.path.join(tempfile.mkdtemp(), "backtest.json")
-    assert lab.run_if_due(hconn=_Exploding(), log=_quiet, path=p) in ("ok", "failed")
+    # `nfl=False` for the same reason the gate test above carries it: the
+    # NFL replay used to bail instantly on an unplayed current season and
+    # now falls back a real one. What is under test is that an exploding
+    # connection cannot take the settle pass down, not how long a
+    # walk-forward takes.
+    assert lab.run_if_due(hconn=_Exploding(), log=_quiet, path=p,
+                          nfl=False) in ("ok", "failed")
 
 
 def test_the_published_path_is_absolute():
