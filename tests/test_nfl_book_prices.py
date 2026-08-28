@@ -189,6 +189,63 @@ def test_a_partial_harvest_segments_rather_than_blends():
     assert rep.segments["naive"]["wins"] == 0
 
 
+def test_the_side_split_survives_into_the_lab_json_per_basis():
+    """A blended segment number can hide a board winning on one side and
+    losing on the other. Measured on 2025 NFL props, "256 bets, 57.1%,
+    +8.7%" is 129 overs at 44.2% (-8.5%) and 127 unders at 66.1%
+    (+26.1%) — one number that describes neither half."""
+    from engine.lab import report_to_dict
+    recs = [
+        {"player": "O", "market": "rec_yds", "line": 50.5, "odds": 100,
+         "hit_prob": 0.6, "projection": 60.0, "recommended": True,
+         "book": "DraftKings", "grade": "A", "side": "OVER"},
+        {"player": "U", "market": "rec_yds", "line": 50.5, "odds": 100,
+         "hit_prob": 0.6, "projection": 40.0, "recommended": True,
+         "book": "DraftKings", "grade": "A", "side": "UNDER"},
+    ]
+    actuals = {(B._norm("O"), "rec_yds"): 20.0,      # the over lost
+               (B._norm("U"), "rec_yds"): 20.0}      # the under won
+    d = report_to_dict(B.evaluate(B.settle_recommendations(recs, actuals)))
+    sides = d["segments"]["book"]["sides"]
+    assert sides["OVER"]["wins"] == 0 and sides["OVER"]["n_bets"] == 1
+    assert sides["UNDER"]["wins"] == 1 and sides["UNDER"]["n_bets"] == 1
+
+
+def test_the_printer_shows_both_sides_when_there_are_two():
+    import io, contextlib
+    from engine import lab
+    m = {"market": "all", "label": "All", "n": 10, "basis": "naive",
+         "n_bets": 2, "win_rate": 0.5, "roi": 0.0, "segments": {"naive": {
+             "n_bets": 2, "win_rate": 0.5, "roi": 0.0, "grades": {},
+             "sides": {"OVER": {"n_bets": 1, "wins": 0, "win_rate": 0.0,
+                                "roi": -1.0},
+                       "UNDER": {"n_bets": 1, "wins": 1, "win_rate": 1.0,
+                                 "roi": 1.0}}}}}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        lab._print_market(m)
+    out = buf.getvalue()
+    assert "OVER" in out and "UNDER" in out
+
+
+def test_a_one_sided_board_does_not_get_a_pointless_split():
+    """Anytime touchdown is OVER-only. Printing "OVER 40, UNDER 0" on it
+    is furniture."""
+    import io, contextlib
+    from engine import lab
+    m = {"market": "anytime_td", "label": "Anytime touchdown", "n": 40,
+         "basis": "book", "n_bets": 40, "win_rate": 0.175, "roi": -0.489,
+         "segments": {"book": {"n_bets": 40, "win_rate": 0.175,
+                               "roi": -0.489, "grades": {},
+                               "sides": {"OVER": {"n_bets": 40, "wins": 7,
+                                                  "win_rate": 0.175,
+                                                  "roi": -0.489}}}}}
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        lab._print_market(m)
+    assert "OVER" not in buf.getvalue()
+
+
 def test_the_grade_ladder_survives_into_the_lab_json_per_basis():
     """The whole question — does the top band earn its billing against a
     REAL book — is a per-grade record inside the "book" segment, and it

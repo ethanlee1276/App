@@ -136,6 +136,19 @@ def report_to_dict(report, market: str = "", label: str = "") -> dict:
             # whole question — does the top band earn its billing against
             # a real book — is a per-grade record inside the "book"
             # segment, and it was the one number not carried across.
+            # THE SIDE SPLIT, for the same reason the grades are here.
+            # `evaluate` has bucketed it all along and this dropped it.
+            # Measured on 2025 NFL props: a naive-basis segment reading
+            # "256 bets, 57.1%, +8.7%" is 129 overs at 44.2% (-8.5%) and
+            # 127 unders at 66.1% (+26.1%). Those are not one number, and
+            # the blended one describes neither side of the board.
+            "sides": {side: {
+                "n_bets": s.get("n_bets", 0), "wins": s.get("wins", 0),
+                "win_rate": _round((s["wins"] / s["n_bets"])
+                                   if s.get("n_bets") else None, 3),
+                "roi": _round(s.get("roi"), 4),
+                "net": _round(s.get("net"), 2)}
+                for side, s in (g.get("sides") or {}).items()},
             "grades": {grade: {
                 "n_bets": b.get("n_bets", 0), "wins": b.get("wins", 0),
                 "win_rate": _round((b["wins"] / b["n_bets"])
@@ -470,6 +483,16 @@ def _print_market(m, indent="    ") -> None:
         label = "vs the book" if name == "book" else "vs a proxy"
         print(f"{indent}  {label:<10} {seg['n_bets']:>4}  "
               f"win {_pct(seg.get('win_rate'))}  roi {_pct(seg.get('roi'))}")
+        # The two sides, because a segment's blended number can hide a
+        # board that is winning on one and losing on the other.
+        sides = seg.get("sides") or {}
+        if len(sides) > 1:
+            for side in ("OVER", "UNDER"):
+                sd = sides.get(side)
+                if sd and sd.get("n_bets"):
+                    print(f"{indent}      {side:<5} {sd['n_bets']:>4}  "
+                          f"win {_pct(sd.get('win_rate'))}  "
+                          f"roi {_pct(sd.get('roi'))}")
         # The grade ladder, inside this basis. The question the harvest
         # was bought to answer lives here and nowhere else.
         for grade in ("A+", "A", "B+"):
