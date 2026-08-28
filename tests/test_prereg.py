@@ -303,9 +303,12 @@ def _td_test(tmp):
             json.loads(open(tmp).read())["tests"]}["td-edge-nfl-2026-08"]
 
 
-def _td_rows(n, wins=0, grade="Lean", market="anytime_td"):
+def _td_rows(n, wins=0, grade="Lean", market="anytime_td",
+             category="longshot"):
+    """Scorer-board rows as the journal really writes them: the long-shot
+    bucket, not the headline record."""
     return [{"date": "2026-12-01", "grade": grade, "sport": "nfl",
-             "odds": 300, "market": market,
+             "odds": 300, "market": market, "category": category,
              "status": "won" if i < wins else "lost"} for i in range(n)]
 
 
@@ -378,6 +381,76 @@ def test_zero_variance_is_not_reported_as_zero_evidence():
     v = prereg.verdict(t, _td_rows(120, 0))
     assert v["degenerate"] and v["supported"]
     assert "no spread" in v["reading"]
+
+
+def test_the_touchdown_test_reads_the_bucket_it_is_journaled_in():
+    """The scorer board journals to `category='longshot'` — a
+    measurement-only bucket, deliberately never mixed into the headline
+    record — and both prereg feeds selected main/paper only. The test
+    would have sat at "0 of 120" forever while looking perfectly
+    healthy: registered, and unable to collect."""
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    assert t["categories"] == ["longshot"]
+    rows = _td_rows(120, 6)
+    assert prereg.verdict(t, rows)["n"] == 120
+
+
+def test_a_headline_bet_does_not_count_toward_the_touchdown_test():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    rows = [dict(r, category="main") for r in _td_rows(120, 6)]
+    assert prereg.verdict(t, rows)["n"] == 0
+
+
+def test_the_older_tests_still_read_the_headline_record_only():
+    """Adding a per-test bucket must not change what an existing test
+    sees, and `_terms_hash` keys only on fields a test carries, so their
+    fingerprints are untouched."""
+    import os, tempfile, json
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    prereg.ensure_registered(tmp)
+    r = {t["id"]: t for t in
+         json.loads(open(tmp).read())["tests"]}["a-receptions-nfl-2026-08"]
+    assert "categories" not in prereg.RECEPTIONS_A_NFL
+    main = [{"date": "2026-12-01", "grade": "A", "sport": "nfl", "odds": -110,
+             "status": "lost", "market": "receptions", "category": "main"}
+            for _ in range(90)]
+    assert prereg.verdict(r, main)["n"] == 90
+    assert prereg.verdict(
+        r, [dict(x, category="longshot") for x in main])["n"] == 0
+    for v in prereg.report([], tmp):
+        assert v["status"] != "void", v
+
+
+def test_a_row_with_no_category_is_treated_as_the_headline_record():
+    """Older journal rows and hand-built fixtures carry no category."""
+    import os, tempfile, json
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    prereg.ensure_registered(tmp)
+    r = {t["id"]: t for t in
+         json.loads(open(tmp).read())["tests"]}["a-receptions-nfl-2026-08"]
+    rows = [{"date": "2026-12-01", "grade": "A", "sport": "nfl", "odds": -110,
+             "status": "lost", "market": "receptions"} for _ in range(90)]
+    assert prereg.verdict(r, rows)["n"] == 90
+
+
+def test_one_query_shape_serves_both_callers():
+    """`ledger.prereg_status` selected `market` and launch.py's report did
+    not, so on the CLI path every market-scoped test filtered its entire
+    population away and reported "0 of 80" forever."""
+    import inspect, os
+    from engine import ledger
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "launch.py"), encoding="utf-8") as fh:
+        launch_src = fh.read()
+    assert "prereg.rows_for(conn)" in launch_src
+    assert "prereg.rows_for(conn)" in inspect.getsource(ledger._prereg_block)
+    for col in ("market", "category", "grade", "odds", "status", "date"):
+        assert col in prereg.ROW_SQL, col
+    assert "longshot" in prereg.ROW_SQL,         "the scorer board's bucket must reach the tests scoped to it"
 
 
 def test_a_sample_with_spread_still_uses_the_z():

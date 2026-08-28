@@ -199,6 +199,22 @@ def verdict(test: dict, rows: list[dict]) -> dict:
     markets = test.get("markets")
     if markets:
         fresh = [r for r in fresh if r.get("market") in markets]
+    # THE BUCKET, and this one was nearly fatal to `TD_EDGE_NFL`. The
+    # journal keeps the scorer board in `category='longshot'` — a
+    # measurement-only bucket, deliberately never mixed into the headline
+    # record — and both feeds selected `category IN ('main','paper')`.
+    # A test about the long-shot board could therefore never collect a
+    # single row, and would have sat at "0 of 120" forever while looking
+    # perfectly healthy. Registered, enforced nowhere: the bug this
+    # codebase finds in itself more than any other, committed here an
+    # hour after writing that sentence.
+    #
+    # Default is the headline buckets, so every test registered before
+    # this reads exactly what it always did — and `_terms_hash` keys
+    # only on fields a test carries, so their fingerprints are untouched.
+    cats = test.get("categories") or ("main", "paper")
+    fresh = [r for r in fresh
+             if (r.get("category") or "main") in cats]
     pop = [r for r in fresh if r.get("grade") in test["population"]]
     ref = [r for r in fresh if r.get("grade") in test["compare_to"]]
     out["n"] = len(pop)
@@ -422,6 +438,8 @@ TD_EDGE_NFL = {
     # bets behind this graded "Lean"; the other two are named so the
     # test does not go blind the day one clears a higher bar.
     "population": ["Strong Play", "Play", "Lean"],
+    # The scorer board journals here, not in the headline record.
+    "categories": ["longshot"],
     # NO COMPARISON BAND, because there is no second population to
     # compare against — the claim is that these bets lose at a flat unit,
     # full stop. An empty list makes `verdict` a one-sample test against
@@ -441,6 +459,26 @@ TD_EDGE_NFL = {
                 "this is selection rather than calibration — and 51 bets "
                 "is a rejection, not a number to tune a constant to."),
 }
+
+
+#: Every column `verdict` reads off a journal row, and every bucket any
+#: registered test draws from.
+#:
+#: ONE definition because there were two callers and they had drifted:
+#: `ledger.prereg_status` selected `market` (added for
+#: `RECEPTIONS_A_NFL`) and `launch.py`'s report did not — so on the CLI
+#: path every market-scoped test filtered its entire population away and
+#: reported "0 of 80" forever. A query shape that two places have to
+#: agree on is a query shape that belongs in one.
+ROW_SQL = ("SELECT date, sport, grade, market, odds, status, category "
+           "FROM bets WHERE status IN ('won','lost') "
+           "AND category IN ('main','paper','longshot') "
+           "AND stake_units > 0")
+
+
+def rows_for(conn) -> list:
+    """Journal rows in the shape `report` expects."""
+    return [dict(r) for r in conn.execute(ROW_SQL)]
 
 
 def ensure_registered(path=None) -> dict:

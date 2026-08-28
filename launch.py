@@ -4523,10 +4523,7 @@ def show_prereg() -> None:
     """
     from engine import ledger, prereg
     with ledger.connect() as conn:
-        rows = [dict(r) for r in conn.execute(
-            "SELECT date, sport, grade, odds, status FROM bets "
-            "WHERE status IN ('won','lost') "
-            "AND category IN ('main','paper') AND stake_units > 0")]
+        rows = prereg.rows_for(conn)
     out = prereg.report(rows)
     if not out:
         print("\n  No preregistered tests.\n")
