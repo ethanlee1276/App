@@ -188,6 +188,19 @@ def mlb_props(conn, markets=MLB_MARKETS, min_history: int = MIN_HISTORY,
 NFL_MARKETS = ("receptions", "rec_yds", "rush_yds", "pass_yds", "anytime_td")
 
 
+def _seasons_to_try(season: int | None) -> list:
+    """The season asked for, or the current one and the one before it.
+
+    An explicit season is honoured exactly — a caller naming 2023 means
+    2023 and must not silently get 2022.
+    """
+    from .pipeline import nfl_season_of
+    if season:
+        return [int(season)]
+    current = nfl_season_of(None)
+    return [current, current - 1]
+
+
 def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     """``{(normalized player, market, date): close}`` for the NFL props.
 
@@ -218,10 +231,8 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     proxy the way this always did.
     """
     from .backtest import backtest_from_stats
-    from .pipeline import nfl_season_of
     from .sources.fetch import DataUnavailable
 
-    season = season or nfl_season_of(None)
     weeks = list(weeks or range(6, 18))
     real: dict = {}
     if conn is not None:
@@ -229,16 +240,39 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
             real = nfl_real_lines(conn)
         except Exception as exc:                   # noqa: BLE001
             log(f"  lab: nfl closes unavailable — {exc}")
-    try:
-        rep = backtest_from_stats(season, weeks, real_lines=real)
-    except DataUnavailable as exc:
-        return {"unavailable": str(exc).split("\n")[0], "season": season}
-    except Exception as exc:                       # noqa: BLE001
-        log(f"  lab: nfl props skipped — {exc}")
-        return {"unavailable": str(exc), "season": season}
-    if not rep.n:
-        return {"unavailable": f"no settled props in {season} weeks "
-                               f"{weeks[0]}–{weeks[-1]}", "season": season}
+
+    # THE SEASON WITH GAMES IN IT, not the one the calendar is in.
+    # `nfl_season_of` is right about what it answers — on 2026-08-27 the
+    # 2026 season IS the current one — and wrong as a backtest default,
+    # because that season has not been played. A lab run in August was
+    # therefore guaranteed to replay an empty season and report
+    # "unavailable" while four thousand credits of 2025 closing prices
+    # sat in the database unread.
+    #
+    # One step back is enough and no further: an offseason run wants last
+    # season, and a run in week 2 wants last season too (six weeks of
+    # priors do not exist yet). Both are "the current season produced
+    # nothing", so both are the same fallback.
+    tried = []
+    rep = None
+    for season in _seasons_to_try(season):
+        try:
+            candidate = backtest_from_stats(season, weeks, real_lines=real)
+        except DataUnavailable as exc:
+            tried.append(f"{season}: {str(exc).split(chr(10))[0]}")
+            continue
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nfl props {season} skipped — {exc}")
+            tried.append(f"{season}: {exc}")
+            continue
+        if candidate.n:
+            rep = candidate
+            break
+        tried.append(f"{season}: no settled props in weeks "
+                     f"{weeks[0]}–{weeks[-1]}")
+    if rep is None:
+        return {"unavailable": "; ".join(tried) or "nothing to replay",
+                "season": _seasons_to_try(None)[0]}
     d = report_to_dict(rep, "all", "All prop markets")
     d["season"] = season
     d["weeks"] = [weeks[0], weeks[-1]]
@@ -384,3 +418,100 @@ def run_if_due(hconn=None, log=print, path: Path | str | None = None,
                   or s["game_lines"].get("markets")))
     log(f"  lab: replayed {ran} sport(s) → {p}")
     return "ok"
+
+
+# --- the command line --------------------------------------------------------
+def _pct(x):
+    return "—" if x is None else f"{x:.1%}"
+
+
+def _print_market(m, indent="    ") -> None:
+    """One market's replay, with the pricing basis it was measured on.
+
+    The basis leads because it decides what every number under it means:
+    "book" is a claim about beating a market, "naive" is a claim about the
+    projection and nothing else.
+    """
+    head = f"{indent}{m.get('label') or m.get('market')}"
+    n, basis = m.get("n") or 0, m.get("basis") or "naive"
+    used, total = m.get("used_real_lines") or 0, m.get("total_priced") or 0
+    share = f" ({used}/{total} priced on real closes)" if total else ""
+    print(f"{head}: {n} settled · basis {basis}{share}")
+    if m.get("n_bets"):
+        print(f"{indent}  all bets   {m['n_bets']:>4}  "
+              f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+    for name in ("book", "naive"):
+        seg = (m.get("segments") or {}).get(name)
+        if not seg or not seg.get("n_bets"):
+            continue
+        label = "vs the book" if name == "book" else "vs a proxy"
+        print(f"{indent}  {label:<10} {seg['n_bets']:>4}  "
+              f"win {_pct(seg.get('win_rate'))}  roi {_pct(seg.get('roi'))}")
+        # The grade ladder, inside this basis. The question the harvest
+        # was bought to answer lives here and nowhere else.
+        for grade in ("A+", "A", "B+"):
+            g = (seg.get("grades") or {}).get(grade)
+            if g and g.get("n_bets"):
+                print(f"{indent}      {grade:<3} {g['n_bets']:>4}  "
+                      f"win {_pct(g.get('win_rate'))}  "
+                      f"roi {_pct(g.get('roi'))}")
+
+
+def main(argv=None) -> int:
+    """Replay every harness this machine's data supports and print it.
+
+        python3 -m engine.lab
+        python3 -m engine.lab --sport nfl
+        python3 -m engine.lab --season 2025
+
+    It existed only as a nightly side effect that wrote JSON — running the
+    module directly printed nothing at all, twice, while its numbers were
+    the whole point of a four-thousand-credit harvest.
+    """
+    import argparse
+    from . import db as _db
+    ap = argparse.ArgumentParser(description="Replay the models and report.")
+    ap.add_argument("--sport", default="", help="Only this sport")
+    ap.add_argument("--season", type=int, default=0,
+                    help="NFL season to replay (default: the newest with games)")
+    ap.add_argument("--json", action="store_true", help="Dump the raw JSON")
+    args = ap.parse_args(argv)
+
+    hconn = _db.connect()
+    if args.season:
+        # An explicit season only reaches the NFL prop harness, which is
+        # the only one that takes one.
+        out = {"sports": {"nfl": {
+            "props": nfl_props(season=args.season, conn=hconn),
+            "game_lines": game_lines(hconn, "nfl")}}}
+    else:
+        out = build(hconn=hconn)
+    if args.json:
+        import json as _json
+        print(_json.dumps(out, indent=2, sort_keys=True))
+        return 0
+
+    print("\nModel replay — every number is priced, and says what against\n")
+    for sport, blob in (out.get("sports") or {}).items():
+        if args.sport and sport != args.sport:
+            continue
+        print(f"{sport.upper()}")
+        props = blob.get("props") or {}
+        if props.get("unavailable"):
+            print(f"    props: {props['unavailable']}")
+        for m in props.get("markets") or []:
+            _print_market(m)
+        gl = blob.get("game_lines") or {}
+        if gl.get("unavailable"):
+            print(f"    game lines: {gl['unavailable']}")
+        for m in gl.get("markets") or []:
+            print(f"    {m['market']}: {m.get('n_bets', 0)} bet(s) on "
+                  f"{m.get('games_priced', 0)} priced game(s)  "
+                  f"win {_pct(m.get('win_rate'))}  roi {_pct(m.get('roi'))}")
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    _sys.exit(main())
