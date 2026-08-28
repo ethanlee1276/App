@@ -148,6 +148,27 @@ def test_it_saves_only_when_something_was_fitted():
         "an empty refit must not rewrite the store"
 
 
+# --- progress that can actually be seen --------------------------------------
+def test_the_default_progress_channel_flushes():
+    """A bare `print` is block-buffered whenever stdout is not a terminal,
+    which is every backgrounded run. A walk that ticks once a minute then
+    shows nothing until it exits, and reads as hung — Ethan sat eight
+    minutes in front of a blank file. `run_tests.py` runs its children
+    with `-u` and records the same lesson."""
+    import inspect
+    sig = inspect.signature(propcal.fit)
+    assert sig.parameters["log"].default is propcal._tick
+    assert "flush=True" in inspect.getsource(propcal._tick)
+
+
+def test_the_tick_actually_writes_what_it_is_given():
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        propcal._tick("week 6 (1/12)")
+    assert "week 6 (1/12)" in buf.getvalue()
+
+
 # --- the nightly -------------------------------------------------------------
 def test_the_nightly_runs_it_and_runs_it_last():
     """`calibrate.py` fits these same markets against a proxy line. The

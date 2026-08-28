@@ -85,9 +85,24 @@ def book_pairs(report, market: str = "") -> list:
     return out
 
 
+def _tick(msg) -> None:
+    """Progress, FLUSHED.
+
+    A bare `print` is block-buffered whenever stdout is not a terminal,
+    which is every backgrounded run — so a walk that ticks once a minute
+    shows nothing at all until the process exits, and reads as hung.
+    `run_tests.py` runs its children with `-u` and says why: "Python
+    buffers stdout when it is not a tty, so every `ok <name>` a hung file
+    had printed sat in an 8KB buffer and died with the process". Same
+    trap, one flag away, and the default has to be the safe one because
+    the caller is usually a person waiting.
+    """
+    print(msg, flush=True)
+
+
 def fit(conn, season: int | None = None, weeks=None,
         markets=MARKETS, min_pairs: int = MIN_BOOK_PAIRS,
-        path=None, log=print) -> dict:
+        path=None, log=_tick) -> dict:
     """Refit each market from book-priced history. Returns what changed.
 
     ``conn`` is the history DB — it supplies the harvested closes. The
