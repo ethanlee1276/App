@@ -515,6 +515,67 @@ def correction_for(sport: str, market: str,
 _curves: dict | None = None
 
 
+#: How many points across [0, 1] `one_sided` samples a correction at.
+SIDE_PROBE = 51
+
+
+def _apply_raw(sport: str, market: str, p: float, path=None) -> float:
+    """The correction as fitted, with no veto — what `one_sided` inspects.
+
+    Separate from `calibrated` because `calibrated` consults `one_sided`,
+    and a veto that had to call the function it vetoes would recurse.
+    """
+    global _curves
+    if _curves is None:
+        _curves = load_curves(DEFAULT_PATH if path is None else path)
+    curve = _curves.get(f"{sport}:{market}")
+    if curve:
+        return curve.apply(p)
+    temp, bias = correction_for(sport, market, path)
+    return apply_temperature(p, temp, bias)
+
+
+def one_sided(sport: str, market: str, path=None) -> bool:
+    """True when this market's correction can only ever name ONE side.
+
+    THE FAILURE THIS CATCHES, found on the droplet 2026-08-28. The fitted
+    isotonic curve for `nfl:rush_yds` saturates:
+
+        raw 0.400 -> 0.210    raw 0.669 -> 0.402
+        raw 0.500 -> 0.305    raw 0.800 -> 0.402
+        raw 0.600 -> 0.401
+
+    Every raw probability from 0.6 upward returns 0.402. An over needs
+    about 0.53 to clear the bar at -115, so for ANY player, in ANY game,
+    that market could never claim the over was more likely than not.
+    Every NFL rushing-yards pick on the board was an UNDER by
+    construction — including one on a player the model projected for 71.6
+    yards against a 58.5 line, whose own card said so.
+
+    It survived the bake-off because it scores beautifully: Brier
+    0.19204 -> 0.13244 on 26,670 pairs. A correction fitted on the
+    model's own claims, which cluster in a narrow band, is only defined
+    over that band and flat-lines past it — and the held-out slice comes
+    from the same narrow band, so nothing in the bake-off can see the
+    extrapolation that the LIVE path then walks straight into.
+
+    A correction that cannot reach both sides of 0.5 has stopped being a
+    calibration and become a constant side. `is_reliable` already refuses
+    a boundary temperature fit for the same kind of reason, with the same
+    remedy: keep it on disk so it can be reported, never apply it.
+    """
+    if not _enabled:
+        return False
+    lo = hi = None
+    for i in range(SIDE_PROBE):
+        q = _apply_raw(sport, market, i / (SIDE_PROBE - 1.0), path)
+        lo = q if lo is None else min(lo, q)
+        hi = q if hi is None else max(hi, q)
+    if lo is None:
+        return False
+    return not (hi > 0.5 > lo)
+
+
 def calibrated(sport: str, market: str, p: float,
                path: Path | str | None = None) -> float:
     """Apply whatever correction this market carries. THE entry point.
@@ -534,6 +595,12 @@ def calibrated(sport: str, market: str, p: float,
         return float(p)
     if _curves is None:
         _curves = load_curves(DEFAULT_PATH if path is None else path)
+    # A correction that can only ever name one side is not applied — see
+    # `one_sided`. The model's own number prices instead, and
+    # `is_reliable` reports the market as unpriceable so the board
+    # refuses it rather than betting that one side forever.
+    if one_sided(sport, market, path):
+        return float(p)
     temp, bias = correction_for(sport, market, path)
     if (temp, bias) == (1.0, 0.0):
         # correction_for neutralises a boundary fit; a curve fitted on the
@@ -563,9 +630,17 @@ def is_reliable(sport: str, market: str,
     still claiming ~25% on props the market prices near 12%.
 
     Betting a market whose calibration is capped is betting a number
-    nobody can vouch for, so the engines treat this as a hard pass."""
+    nobody can vouch for, so the engines treat this as a hard pass.
+
+    A ONE-SIDED CORRECTION FAILS HERE TOO, for the same reason and with
+    more force: a fit that cannot reach both sides of 0.5 has stopped
+    being a calibration and become a constant side, and a market that can
+    only ever be bet one way is not a market this model is pricing. See
+    `one_sided`, and the NFL rushing-yards curve that found it."""
     if not _enabled:
         return True
+    if one_sided(sport, market, path):
+        return False
     global _cache
     if _cache is None:
         _cache = load(DEFAULT_PATH if path is None else path)
