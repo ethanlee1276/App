@@ -136,6 +136,51 @@ def test_the_side_survives_the_veto():
         calibrate.reset_cache()
 
 
+# --- Yes-only markets are a different animal --------------------------------
+def test_a_yes_only_market_is_exempt():
+    """A home-run or anytime-touchdown prop has no UNDER to bet — books
+    quote the Yes alone — so a correction that never exceeds 0.5 is not
+    forcing a side, it is describing a market where 50% essentially never
+    happens.
+
+    The droplet's `mlb:home_runs` tops out at 0.237, an ordinary ceiling
+    for a market priced around +400. The first cut of the veto called
+    that broken and would have taken the home-run board offline."""
+    hr = [[0.0, 0.012], [0.3, 0.15], [0.6, 0.23], [1.0, 0.237]]
+    tmp = _store({"mlb:home_runs": _entry(1.04, -0.18, hr,
+                                          sport="mlb", market="home_runs")})
+    assert not calibrate.one_sided("mlb", "home_runs", tmp)
+    assert calibrate.is_reliable("mlb", "home_runs", tmp)
+
+
+def test_the_exemption_reads_the_existing_registry():
+    """`maintenance.HOLD_MARKETS` already names the Yes-only books whose
+    hold is measured rather than assumed. A second copy would drift the
+    day a market joins."""
+    import inspect
+    from engine.maintenance import HOLD_MARKETS
+    assert ("mlb", "home_runs") in HOLD_MARKETS
+    assert ("nfl", "anytime_td") in HOLD_MARKETS
+    assert "HOLD_MARKETS" in inspect.getsource(calibrate.one_sided)
+
+
+def test_a_two_sided_market_is_still_caught():
+    """The exemption must be narrow: rushing yards has an under, so a
+    ceiling below 0.5 there really does force the side."""
+    tmp = _store({"nfl:rush_yds": _entry(0.54, -0.98, SATURATING)})
+    assert calibrate.one_sided("nfl", "rush_yds", tmp)
+
+
+def test_a_yes_only_market_in_another_sport_is_not_exempt_by_name():
+    """The registry is keyed on (sport, market). A market named
+    `home_runs` in a sport that quotes both sides would still be
+    checked."""
+    hr = [[0.0, 0.012], [1.0, 0.237]]
+    tmp = _store({"zz:home_runs": _entry(1.0, 0.0, hr,
+                                         sport="zz", market="home_runs")})
+    assert calibrate.one_sided("zz", "home_runs", tmp)
+
+
 # --- the plumbing ------------------------------------------------------------
 def test_the_veto_does_not_recurse_through_the_thing_it_vetoes():
     """`calibrated` consults `one_sided`, so `one_sided` must read the

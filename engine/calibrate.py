@@ -566,6 +566,27 @@ def one_sided(sport: str, market: str, path=None) -> bool:
     """
     if not _enabled:
         return False
+    # YES-ONLY MARKETS ARE EXEMPT, and missing that made this veto wrong
+    # on its first real run. A home-run or anytime-touchdown prop has no
+    # UNDER to bet — books quote the Yes alone — so a correction that
+    # never exceeds 0.5 is not forcing a side there, it is describing a
+    # market where 50% essentially never happens. On the droplet
+    # `mlb:home_runs` tops out at 0.237, which is a perfectly ordinary
+    # ceiling for a market priced around +400, and the first cut of this
+    # function called it broken and would have taken the home-run board
+    # offline.
+    #
+    # `maintenance.HOLD_MARKETS` is already the registry of exactly these
+    # — the Yes-only books whose hold is measured rather than assumed —
+    # so it is read rather than copied. Imported inside the call because
+    # `maintenance` pulls in most of the engine and this module is
+    # imported by nearly all of it.
+    try:
+        from .maintenance import HOLD_MARKETS
+        if (sport, market) in HOLD_MARKETS:
+            return False
+    except Exception:                                      # noqa: BLE001
+        pass
     lo = hi = None
     for i in range(SIDE_PROBE):
         q = _apply_raw(sport, market, i / (SIDE_PROBE - 1.0), path)
