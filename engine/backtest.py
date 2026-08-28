@@ -730,8 +730,15 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
             longshot_recs(result.get("long_shots")), actuals))
 
     if log:
+        # Two DIFFERENT denominators, so both are named. `all_settled`
+        # counts settled RECOMMENDATIONS; `repriced` counts slate props
+        # given a harvested close, most of which the model never bets.
+        # Printed as a bare pair they read as a ratio, and "2,626 props,
+        # 3,360 on real closes" then looks like a counting bug rather
+        # than a wider harvest.
         log(f"  done in {_time.monotonic() - started:.0f}s — "
-            f"{len(all_settled):,} props, {repriced:,} on real closes")
+            f"{len(all_settled):,} settled recommendations; "
+            f"{repriced:,} of {props_seen:,} slate props had a real close")
     report = evaluate(all_settled)
     report.used_real_lines, report.total_priced = repriced, props_seen
     if td_settled:

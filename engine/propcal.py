@@ -137,31 +137,59 @@ def fit(conn, season: int | None = None, weeks=None,
     if report is None:
         return {"skipped": "no season replayed"}
 
-    out: dict = {"season": season, "fitted": {}, "refused": {}}
+    out: dict = {"season": season, "fitted": {}, "refused": {}, "dropped": []}
     fitted: dict = {}
+    stale: list = []
+    stored = cal.load(path or cal.DEFAULT_PATH)
+    raw_store = _stored_basis(path or cal.DEFAULT_PATH)
     for market in markets:
+        key = f"nfl:{market}"
         pairs = book_pairs(report, market)
         if len(pairs) < min_pairs:
-            out["refused"][market] = (
-                f"{len(pairs)} book-priced pairs, needs {min_pairs} — the "
-                f"market keeps whatever correction it has rather than "
-                f"gaining one fitted against a proxy line")
+            why = f"{len(pairs)} book-priced pairs, needs {min_pairs}"
+            if key in stored and raw_store.get(key) != cal.BASIS_BOOK:
+                stale.append(key)
+                why += (" — dropping the proxy-fitted correction it was "
+                        "carrying, so the market runs uncorrected")
+            else:
+                why += " — the market keeps no correction"
+            out["refused"][market] = why
             continue
         c = cal.fit(pairs, sport="nfl", market=market)
-        c.basis = cal.BASIS_HISTORY
+        c.basis = cal.BASIS_BOOK
         import datetime as _dt
         c.fitted_at = _dt.date.today().isoformat()
-        fitted[f"nfl:{market}"] = c
+        fitted[key] = c
+        rate = sum(o for _p, o in pairs) / float(len(pairs))
         out["fitted"][market] = {
             "n": len(pairs), "temperature": c.temperature,
             "intercept": c.intercept,
             "knots": len((c.curve or {}).get("knots") or []),
             "brier_before": c.brier_before, "brier_after": c.brier_after,
+            "base_rate": rate, "baseline": rate * (1.0 - rate),
+            "at_boundary": bool(c.at_boundary),
         }
     if fitted:
         cal.save(fitted, path or cal.DEFAULT_PATH)
+    if stale:
+        out["dropped"] = cal.drop(stale, path or cal.DEFAULT_PATH)
+    if fitted or stale:
         cal.reset_cache()
     return out
+
+
+def _stored_basis(path) -> dict:
+    """``{key: basis}`` straight off disk — `cal.load` drops the field."""
+    import json
+    from pathlib import Path
+    try:
+        raw = json.loads(Path(path).read_text())
+    except (ValueError, OSError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {k: (v.get("basis") or "") for k, v in raw.items()
+            if isinstance(v, dict)}
 
 
 def report_lines(out: dict) -> list:
@@ -174,8 +202,34 @@ def report_lines(out: dict) -> list:
                  f"T={d['temperature']} bias={d['intercept']:+.2f}")
         lines.append(f"    {market}: {d['n']:,} pairs · {shape} · Brier "
                      f"{d['brier_before']:.4f} → {d['brier_after']:.4f}")
+        # THE LINE ABOVE IS NOT A VERDICT, and read alone it flatters.
+        # A correction that erases the model entirely improves Brier
+        # towards 0.25 from anywhere worse, so "0.2949 → 0.2533" can mean
+        # "fixed" or "gave up" and the arrow looks the same either way.
+        # Always predicting the base rate scores b(1-b) while knowing
+        # NOTHING about any individual player, so that is the number a
+        # fit has to beat before the word skill applies.
+        base = d.get("baseline")
+        if base is not None:
+            if d["brier_after"] >= base:
+                lines.append(
+                    f"        ⚠️  no skill — a constant {d['base_rate']:.1%} "
+                    f"scores {base:.4f}, better than the fitted "
+                    f"{d['brier_after']:.4f}. The correction is not fixing "
+                    f"this model, it is cancelling it.")
+            else:
+                lines.append(
+                    f"        beats a constant {d['base_rate']:.1%} "
+                    f"({base:.4f}) by {base - d['brier_after']:.4f}")
+        if d.get("at_boundary"):
+            lines.append(
+                "        ⚠️  fit ran to the edge of the search grid — the "
+                "data wanted more correction than the grid allows, so "
+                "`is_reliable` fails this market and the board passes it")
     for market, why in sorted((out.get("refused") or {}).items()):
         lines.append(f"    {market}: refused — {why}")
+    for key in (out.get("dropped") or []):
+        lines.append(f"    dropped {key} — it was fitted against a proxy line")
     return lines
 
 

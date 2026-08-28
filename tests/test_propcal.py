@@ -197,6 +197,204 @@ def test_it_never_takes_the_nightly_down():
     assert "except Exception" in src and "skipped" in src
 
 
+# --- a proxy fit must not outlive the evidence against it --------------------
+def _store(tmp, entries):
+    import json
+    tmp.write_text(json.dumps(entries, indent=2))
+    return tmp
+
+
+def _cal_entry(basis, temperature=0.66):
+    return {"temperature": temperature, "intercept": 0.0, "basis": basis,
+            "curve": {}, "samples": 900}
+
+
+def test_a_proxy_fit_may_not_overwrite_a_book_fit():
+    """`deepfit.refit_all` runs the book fitter last and says it "must
+    therefore be the last word". That is an ordering, and the whole class
+    of bug this feature exists to fix is a rule stated in prose and
+    enforced nowhere. So the store enforces it."""
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rush_yds": _cal_entry(cal.BASIS_BOOK, 2.8)})
+        proxy = cal.Calibration(temperature=0.54, intercept=-0.98)
+        proxy.basis = cal.BASIS_HISTORY
+        cal.save({"nfl:rush_yds": proxy}, path)
+        got = json.loads(path.read_text())["nfl:rush_yds"]
+        assert got["temperature"] == 2.8, \
+            "the proxy fitter overwrote the book fit"
+        assert got["basis"] == cal.BASIS_BOOK
+
+
+def test_a_book_fit_may_overwrite_a_proxy_fit():
+    """The precedence runs one way only — otherwise the fix could never
+    be installed over the thing it fixes."""
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rush_yds": _cal_entry(cal.BASIS_HISTORY, 0.54)})
+        book = cal.Calibration(temperature=2.8, intercept=0.04)
+        book.basis = cal.BASIS_BOOK
+        cal.save({"nfl:rush_yds": book}, path)
+        assert json.loads(path.read_text())["nfl:rush_yds"]["temperature"] == 2.8
+
+
+def test_a_book_fit_may_be_refitted_by_a_later_book_fit():
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rush_yds": _cal_entry(cal.BASIS_BOOK, 2.8)})
+        newer = cal.Calibration(temperature=3.4, intercept=0.0)
+        newer.basis = cal.BASIS_BOOK
+        cal.save({"nfl:rush_yds": newer}, path)
+        assert json.loads(path.read_text())["nfl:rush_yds"]["temperature"] == 3.4
+
+
+def test_the_guard_does_not_touch_markets_it_was_not_asked_about():
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rush_yds": _cal_entry(cal.BASIS_BOOK, 2.8),
+                      "mlb:home_runs": _cal_entry(cal.BASIS_HISTORY, 1.4)})
+        c = cal.Calibration(temperature=1.9, intercept=0.0)
+        c.basis = cal.BASIS_HISTORY
+        cal.save({"mlb:home_runs": c}, path)
+        got = json.loads(path.read_text())
+        assert got["mlb:home_runs"]["temperature"] == 1.9
+        assert got["nfl:rush_yds"]["temperature"] == 2.8
+
+
+def test_dropping_removes_the_entry_and_names_what_went():
+    """Deleting and storing a neutral T=1.0 are different claims:
+    `is_reliable` reads a stored entry as "somebody measured this"."""
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:pass_yds": _cal_entry(cal.BASIS_HISTORY),
+                      "nfl:receptions": _cal_entry(cal.BASIS_BOOK)})
+        assert cal.drop(["nfl:pass_yds", "nfl:absent"], path) == ["nfl:pass_yds"]
+        left = json.loads(path.read_text())
+        assert "nfl:pass_yds" not in left and "nfl:receptions" in left
+
+
+def test_dropping_nothing_leaves_the_file_alone():
+    import tempfile, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:receptions": _cal_entry(cal.BASIS_BOOK)})
+        before = path.read_text()
+        assert cal.drop(["nfl:nothing_here"], path) == []
+        assert path.read_text() == before
+        assert cal.drop(["x"], _pl.Path(d) / "missing.json") == []
+
+
+def test_a_refused_market_loses_a_proxy_correction_it_was_carrying():
+    """The docstrings in propcal, deepfit and this file all said a
+    refusal means the market runs uncorrected. The code kept the proxy
+    fit in place. On the droplet that left nfl:pass_yds applying a
+    correction fitted against a trailing average, with nothing to
+    replace it and nothing saying so."""
+    import inspect
+    src = inspect.getsource(propcal.fit)
+    assert "cal.drop(" in src
+    assert "BASIS_BOOK" in src
+
+
+def test_the_refusal_text_says_the_proxy_fit_was_dropped():
+    out = {"season": 2025, "fitted": {}, "dropped": ["nfl:pass_yds"],
+           "refused": {"pass_yds": "212 book-priced pairs, needs 400 — "
+                                   "dropping the proxy-fitted correction"}}
+    text = "\n".join(propcal.report_lines(out))
+    assert "dropped nfl:pass_yds" in text and "proxy" in text
+
+
+# --- a Brier arrow is not a verdict ------------------------------------------
+def _fitted(brier_after, rate=0.5, **kw):
+    d = {"n": 643, "temperature": 6.0, "intercept": -0.1, "knots": 0,
+         "brier_before": 0.2847, "brier_after": brier_after,
+         "base_rate": rate, "baseline": rate * (1.0 - rate),
+         "at_boundary": False}
+    d.update(kw)
+    return {"season": 2025, "refused": {}, "fitted": {"rec_yds": d}}
+
+
+def test_a_fit_that_cannot_beat_a_constant_says_no_skill():
+    """The droplet's real numbers: rec_yds 0.2847 -> 0.2519 reads as a
+    win, but always guessing the base rate scores 0.2500. The correction
+    did not fix the model, it cancelled it."""
+    text = "\n".join(propcal.report_lines(_fitted(0.2519)))
+    assert "no skill" in text and "cancelling it" in text
+
+
+def test_a_fit_that_beats_a_constant_says_by_how_much():
+    """receptions, the one market with real signal: 0.2523 -> 0.2422."""
+    text = "\n".join(propcal.report_lines(_fitted(0.2422)))
+    assert "no skill" not in text
+    assert "beats a constant" in text and "0.0078" in text
+
+
+def test_the_baseline_uses_the_base_rate_not_a_flat_half():
+    """b(1-b), not 0.25 — a market that lands 60% under has a lower
+    no-skill floor and a fit has to clear the lower bar."""
+    text = "\n".join(propcal.report_lines(_fitted(0.2450, rate=0.59)))
+    assert "no skill" in text, "0.2450 loses to a constant 59% (0.2419)"
+
+
+def test_a_boundary_fit_reports_that_the_board_will_pass_it():
+    text = "\n".join(propcal.report_lines(_fitted(0.2422, at_boundary=True)))
+    assert "edge of the search grid" in text and "is_reliable" in text
+
+
+def test_a_boundary_temperature_really_does_fail_is_reliable():
+    """The claim the line above makes, checked against the function that
+    has to honour it — rec_yds and rush_yds both fitted to exactly 6.0."""
+    import tempfile, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rec_yds": _cal_entry(cal.BASIS_BOOK, cal.GRID_MAX),
+                      "nfl:receptions": _cal_entry(cal.BASIS_BOOK, 2.78)})
+        cal.reset_cache()
+        try:
+            assert not cal.is_reliable("nfl", "rec_yds", path)
+            assert cal.is_reliable("nfl", "receptions", path)
+        finally:
+            cal.reset_cache()
+
+
+def test_an_older_fit_without_a_basis_is_not_treated_as_a_book_fit():
+    """Every entry already on disk predates BASIS_BOOK, and guessing the
+    other way would freeze the proxy fits in place permanently."""
+    import tempfile, json, pathlib as _pl
+    from engine import calibrate as cal
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "calibration.json"
+        _store(path, {"nfl:rush_yds": {"temperature": 0.54, "intercept": 0.0}})
+        c = cal.Calibration(temperature=2.8, intercept=0.0)
+        c.basis = cal.BASIS_HISTORY
+        cal.save({"nfl:rush_yds": c}, path)
+        assert json.loads(path.read_text())["nfl:rush_yds"]["temperature"] == 2.8
+
+
+# --- the walk's own counters -------------------------------------------------
+def test_the_walk_names_both_denominators():
+    """"2,626 props, 3,360 on real closes" reads as a counting bug. They
+    are settled RECOMMENDATIONS and repriced SLATE props — different
+    populations, and the larger one is not a subset of the smaller."""
+    import inspect
+    from engine import backtest
+    src = inspect.getsource(backtest.backtest_from_stats)
+    assert "settled recommendations" in src
+    assert "of {props_seen:,} slate props" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

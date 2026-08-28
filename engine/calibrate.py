@@ -46,6 +46,14 @@ GRID_MIN, GRID_MAX = _GRID[0], _GRID[-1]
 #: one made it. journalfit.BASIS is the other half of the pair.
 BASIS_HISTORY = "history"
 
+#: Fitted against REAL harvested closing lines (`engine.propcal`) rather
+#: than against `logwalk`'s trailing-average proxy. A separate basis
+#: because the two are not the same measurement and the difference is
+#: what put a one-sided curve on the board: see propcal's module
+#: docstring. `save` gives this one precedence — a proxy fit may not
+#: overwrite a book fit, whatever order the nightly happens to run in.
+BASIS_BOOK = "book"
+
 
 def apply_temperature(p: float, temperature: float, intercept: float = 0.0) -> float:
     """Rescale a probability in log-odds space.
@@ -395,7 +403,16 @@ def save(calibrations: dict[str, Calibration], path: Path | str = DEFAULT_PATH) 
 
     Merge, not replace: the file is shared by every sport's fitter (the
     MLB deep fit, the NFL walk, the journal fitter's hoops/college keys),
-    and one sport's run must not erase corrections it never fitted."""
+    and one sport's run must not erase corrections it never fitted.
+
+    A `BASIS_BOOK` entry is never overwritten by a fitter with a
+    different basis. `deepfit.refit_all` already runs the book fitter
+    last and a comment there explains that it "must therefore be the last
+    word, not the first" — but that is an ordering, and an ordering is a
+    convention that the next edit to the nightly can quietly reverse.
+    This makes it a rule the store enforces, because the thing at stake
+    is a correction that could only ever name the under.
+    """
     path = Path(path)
     try:
         stored = json.loads(path.read_text()) if path.is_file() else {}
@@ -403,10 +420,42 @@ def save(calibrations: dict[str, Calibration], path: Path | str = DEFAULT_PATH) 
             stored = {}
     except (ValueError, OSError):
         stored = {}
-    stored.update({k: c.to_dict() for k, c in calibrations.items()})
+    for key, c in calibrations.items():
+        was = stored.get(key)
+        if (isinstance(was, dict) and was.get("basis") == BASIS_BOOK
+                and c.basis != BASIS_BOOK):
+            continue
+        stored[key] = c.to_dict()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(stored, indent=2))
     return path
+
+
+def drop(keys, path: Path | str = DEFAULT_PATH) -> list:
+    """Remove calibrations from the store. Returns the keys removed.
+
+    The counterpart to `save` for a fitter that concludes a market should
+    carry NO correction. Deleting and writing a neutral T=1.0 entry are
+    not the same thing: `is_reliable` and `journalfit` both read a stored
+    entry as a claim that somebody measured this market, and a neutral
+    entry makes that claim while saying nothing.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return []
+    try:
+        stored = json.loads(path.read_text())
+        if not isinstance(stored, dict):
+            return []
+    except (ValueError, OSError):
+        return []
+    gone = [k for k in keys if k in stored]
+    if not gone:
+        return []
+    for k in gone:
+        stored.pop(k, None)
+    path.write_text(json.dumps(stored, indent=2))
+    return gone
 
 
 def load(path: Path | str = DEFAULT_PATH) -> dict:
