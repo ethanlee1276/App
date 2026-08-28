@@ -5699,6 +5699,92 @@ def nightly_run(odds_only: bool = False, sports=None) -> None:
     sys.exit(rc)
 
 
+#: Boards a pick can live on, by the public path their private copy is
+#: resolved from.
+INSPECT_BOARDS = ("recommendations.json", "mlb_recommendations.json",
+                  "cfb.json", "nba.json", "wnba.json", "ufc.json")
+
+
+def inspect_pick(name: str) -> None:
+    """Everything behind one published pick, for when a card looks wrong.
+
+    WHY IT READS THROUGH `gate.board_source`. Ethan's screenshot showed a
+    card siding UNDER 58.5 while the same card's insight said the model
+    "projects 71.6038" — a projection ABOVE the line it was betting
+    below. The obvious first move is to open
+    `web/data/recommendations.json` and look at the row. That file is the
+    PUBLIC copy: `recommendations` is a paid key, so with the paywall on
+    the picks have been stripped out of it and the query returns nothing
+    at all, silently.
+
+    `gate.board_source`'s own docstring lists three tools that learned
+    this the same way — `parlays.arbitrate_slate`, `parlaycheck.py` and
+    `--odds-doctor` — each of which "read an empty list and reported
+    honestly on nothing". A one-liner typed at a prompt was the fourth,
+    which is the argument for this being a command in the repo rather
+    than a one-liner typed again next time.
+
+    THE `lines` ARRAY IS THE POINT. `betting.pick_side` shops the over
+    and the under SEPARATELY, so the side that wins can be priced at a
+    different number from the one a reader assumes. Printing every book's
+    line beside the chosen one is what separates "the model picked the
+    wrong side" from "the card is displaying a different line than the
+    one that was shopped".
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    from engine import gate
+
+    root = _Path(__file__).resolve().parent
+    needle = name.strip().lower()
+    found = 0
+    for board in INSPECT_BOARDS:
+        src = gate.board_source(root / "web" / "data" / board)
+        try:
+            doc = _json.loads(_Path(src).read_text())
+        except (OSError, ValueError):
+            continue
+        rows = []
+        for key in ("recommendations", "picks", "long_shots",
+                    "longshot_watch", "near_misses", "pass_list"):
+            for r in (doc.get(key) or []):
+                if isinstance(r, dict) and needle in str(
+                        r.get("player", "")).lower():
+                    rows.append((key, r))
+        for key, r in rows:
+            found += 1
+            print(f"\n{'='*70}\n  {r.get('player')} · {board} · {key}"
+                  f"\n{'='*70}")
+            for f in ("market", "side", "line", "odds", "book", "projection",
+                      "hit_prob", "raw_prob", "edge", "grade", "stake_units",
+                      "recommended"):
+                if f in r:
+                    print(f"  {f:<14} {r[f]}")
+            lines = r.get("lines") or []
+            if lines:
+                print(f"\n  every book quoted ({len(lines)}) — the over and "
+                      f"the under are shopped SEPARATELY:")
+                for ln in lines:
+                    print(f"    {str(ln.get('book',''))[:16]:<16} "
+                          f"line {ln.get('line')}   over {ln.get('over_odds')}"
+                          f"   under {ln.get('under_odds')}")
+                chosen, proj = r.get("line"), r.get("projection")
+                if chosen is not None and proj is not None:
+                    try:
+                        rel = ("ABOVE" if float(proj) > float(chosen)
+                               else "below")
+                        print(f"\n  the projection {proj} is {rel} the "
+                              f"{chosen} it is siding {r.get('side')} on")
+                    except (TypeError, ValueError):
+                        pass
+            for why in (r.get("reasons") or [])[:6]:
+                print(f"  · {why}")
+    if not found:
+        print(f"\n  No published pick matches {name!r}. Boards read: "
+              f"{', '.join(INSPECT_BOARDS)}\n  (private copies, via "
+              f"gate.board_source — not the stripped public ones)")
+
+
 def repair_closes(apply: bool = False) -> None:
     """Rewrite every settled bet's banked closing price from the harvested
     closes and the raw snapshots, side- and line-aware. Dry run unless
@@ -6968,6 +7054,13 @@ def main() -> None:
         return
     if "--repair-closes" in argv:
         repair_closes(apply="--apply" in argv)
+        return
+    if "--inspect-pick" in argv:
+        i = argv.index("--inspect-pick")
+        if i + 1 >= len(argv):
+            print('  usage: launch.py --inspect-pick "Player Name"')
+            return
+        inspect_pick(argv[i + 1])
         return
     if "--paper" in argv:
         i = argv.index("--paper")
