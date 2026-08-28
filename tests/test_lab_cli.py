@@ -167,6 +167,46 @@ def test_a_market_with_no_bets_still_reports_what_it_settled():
     assert "300 settled" in out
 
 
+# --- progress, on the one command with a human waiting ----------------------
+def test_the_replay_is_silent_unless_a_caller_asks():
+    """The nightly and the suite must not gain a per-week commentary."""
+    import inspect
+    from engine.backtest import backtest_from_stats
+    assert inspect.signature(backtest_from_stats).parameters["log"].default \
+        is None
+
+
+def test_the_replay_reports_each_week_when_asked():
+    """Twelve slates on a 1 vCPU box is twenty minutes or more, and every
+    line of output used to come at the end — so the command was
+    indistinguishable from a hang for its whole run, and got killed at
+    ten minutes and reported as broken."""
+    import engine.sources.nflverse as nv
+    import engine.pipeline as pl
+    from engine import backtest as B
+    saved = (nv.load_weekly_stats, nv.build_slate, pl.run_slate)
+    nv.load_weekly_stats = lambda season: []
+    nv.build_slate = lambda season, w, upto_week=None: object()
+    pl.run_slate = lambda slate, config=None, **kw: {"recommendations": [],
+                                                     "long_shots": []}
+    seen = []
+    try:
+        B.backtest_from_stats(2025, [6, 7, 8], log=seen.append)
+    finally:
+        nv.load_weekly_stats, nv.build_slate, pl.run_slate = saved
+    assert len(seen) >= 4, seen           # three weeks plus the summary
+    assert "week 6 (1/3)" in seen[0]
+    assert "elapsed" in seen[0]
+    assert "done in" in seen[-1]
+
+
+def test_the_bets_command_shows_that_progress():
+    import inspect
+    from engine import lab as _lab
+    assert "progress=lambda" in inspect.getsource(_lab.main)
+    assert "log=progress" in inspect.getsource(_lab.nfl_replay)
+
+
 # --- the command line --------------------------------------------------------
 def test_the_module_is_runnable_at_all():
     """The whole point. It had no __main__ and printed nothing, twice."""

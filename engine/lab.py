@@ -234,7 +234,8 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     return out
 
 
-def nfl_replay(season: int | None, weeks: list, real: dict, log=print):
+def nfl_replay(season: int | None, weeks: list, real: dict, log=print,
+               progress=None):
     """``(report, season, tried)`` — the newest season that produced one.
 
     ONE implementation, because the second one was wrong. The `--bets`
@@ -248,7 +249,11 @@ def nfl_replay(season: int | None, weeks: list, real: dict, log=print):
     tried: list = []
     for candidate in _seasons_to_try(season):
         try:
-            rep = backtest_from_stats(candidate, weeks, real_lines=real)
+            if progress:
+                progress(f"replaying {candidate} weeks "
+                         f"{weeks[0]}-{weeks[-1]} …")
+            rep = backtest_from_stats(candidate, weeks, real_lines=real,
+                                      log=progress)
         except DataUnavailable as exc:
             tried.append(f"{candidate}: {str(exc).split(chr(10))[0]}")
             continue
@@ -629,8 +634,10 @@ def main(argv=None) -> int:
         # the time it returns — and re-running the walk-forward a second
         # time just to recover them would double the slowest thing here.
         weeks = list(range(6, 18))
-        rep, season, tried = nfl_replay(args.season or None, weeks,
-                                        nfl_real_lines(hconn))
+        # The one caller with a human waiting on it.
+        rep, season, tried = nfl_replay(
+            args.season or None, weeks, nfl_real_lines(hconn),
+            progress=lambda m: print(m, flush=True))
         if rep is None:
             print("nothing to replay — " + ("; ".join(tried) or "no reason given"))
             return 0

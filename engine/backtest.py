@@ -625,7 +625,8 @@ def apply_real_lines(slate, real_lines: dict) -> int:
 def backtest_from_stats(season: int, weeks, config=None, model=None,
                         use_team_context: bool = False,
                         team_context_mode: str = "level",
-                        real_lines: dict | None = None) -> BacktestReport:
+                        real_lines: dict | None = None,
+                        log=None) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
     For each week, projections are built from prior weeks only, then settled
@@ -677,7 +678,20 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
     all_settled: list[SettledProp] = []
     td_settled: list[SettledProp] = []
     repriced = props_seen = 0
-    for w in weeks:
+    # A WEEK AT A TIME, OUT LOUD, when a caller asks. Each week rebuilds
+    # a slate from scratch — schedules, rosters, defence profiles — and
+    # on a 1 vCPU box twelve of them is twenty minutes or more. All the
+    # output came at the end, so the command was indistinguishable from
+    # a hang for its entire run, which is how it got killed at ten
+    # minutes and reported as broken. Silent by default: the nightly and
+    # the suite do not want this.
+    import time as _time
+    started = _time.monotonic()
+    for i, w in enumerate(weeks, 1):
+        if log:
+            log(f"  week {w} ({i}/{len(weeks)}) … "
+                f"{_time.monotonic() - started:.0f}s elapsed, "
+                f"{len(all_settled):,} props settled")
         try:
             slate = build_slate(season, w, upto_week=w)
         except Exception:
@@ -715,6 +729,9 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
         td_settled.extend(settle_recommendations(
             longshot_recs(result.get("long_shots")), actuals))
 
+    if log:
+        log(f"  done in {_time.monotonic() - started:.0f}s — "
+            f"{len(all_settled):,} props, {repriced:,} on real closes")
     report = evaluate(all_settled)
     report.used_real_lines, report.total_priced = repriced, props_seen
     if td_settled:
