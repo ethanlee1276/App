@@ -548,24 +548,37 @@ def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:
     if not bets:
         print(f"{indent}(no settled bets)")
         return
-    bands = {"-300 and shorter": 0, "-299..-150": 0, "-149..+150": 0,
-             "+151..+350": 0, "+351..+700": 0, "longer than +700": 0}
+    # BANDS THE BOARD CAN ACTUALLY REACH. The first cut used generic
+    # sportsbook bands, several of which the scorer board is forbidden to
+    # enter: `longshots.NFL_TD_ODDS` is (-150, 700) and `in_odds_window`
+    # is an inclusive `lo <= odds <= hi`, so nothing shorter than -150 or
+    # longer than +700 can ever be picked. A table of mostly-empty rows
+    # invites reading a structural zero as a finding — and it made me
+    # tell Ethan that a "-299..-150" cluster would prove the board was
+    # buying favourites, when that band cannot hold anything but -150.
+    #
+    # The last row is the one that would be a real finding: a price
+    # OUTSIDE the board's own window means the window is not being
+    # enforced where the picks are made.
+    bands = {"-150..-101 (favourite)": 0, "-100..+100 (coin flip)": 0,
+             "+101..+250": 0, "+251..+400": 0, "+401..+700": 0,
+             "OUTSIDE the odds window": 0}
     won = dict.fromkeys(bands, 0)
     staked = dict.fromkeys(bands, 0.0)
     net = dict.fromkeys(bands, 0.0)
 
     def band_of(o):
-        if o <= -300:
-            return "-300 and shorter"
-        if o <= -150:
-            return "-299..-150"
-        if o <= 150:
-            return "-149..+150"
-        if o <= 350:
-            return "+151..+350"
-        if o <= 700:
-            return "+351..+700"
-        return "longer than +700"
+        if o < -150 or o > 700:
+            return "OUTSIDE the odds window"
+        if o <= -101:
+            return "-150..-101 (favourite)"
+        if o <= 100:
+            return "-100..+100 (coin flip)"
+        if o <= 250:
+            return "+101..+250"
+        if o <= 400:
+            return "+251..+400"
+        return "+401..+700"
 
     from .odds import american_to_decimal
     for s in bets:

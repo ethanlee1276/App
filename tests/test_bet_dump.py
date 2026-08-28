@@ -65,21 +65,33 @@ def test_an_empty_report_keeps_an_empty_list_not_none():
 
 
 # --- the band table, which is the actual diagnostic --------------------------
-def test_short_prices_are_visible_as_their_own_band():
-    """The hypothesis the dump exists to test: a longshot board that is
-    really betting favourites."""
-    rep = B.evaluate(_settled([("A", -150, 0.70, 0), ("B", -200, 0.72, 0),
-                               ("C", 500, 0.20, 1)]))
+def test_the_bands_are_ones_the_board_can_actually_reach():
+    """`NFL_TD_ODDS` is (-150, 700) and `in_odds_window` is inclusive, so
+    the scorer board cannot pick anything shorter than -150 or longer
+    than +700. Generic sportsbook bands leave rows that are structurally
+    empty, and a structural zero read as a finding is worse than no
+    table."""
+    from engine.longshots import NFL_TD_ODDS, in_odds_window
+    assert not in_odds_window(-200, NFL_TD_ODDS)
+    assert in_odds_window(-150, NFL_TD_ODDS)
+    rep = B.evaluate(_settled([("A", -150, 0.70, 0), ("C", 500, 0.20, 1)]))
     out = _dump(rep)
-    assert "-299..-150" in out
-    assert "+351..+700" in out
+    assert "-150..-101 (favourite)" in out
+    assert "+401..+700" in out
+
+
+def test_a_price_the_window_forbids_is_called_out_as_such():
+    """The row that WOULD be a finding: a pick priced outside the board's
+    own window means the window is not enforced where picks are made."""
+    rep = B.evaluate(_settled([("A", -400, 0.85, 1)]))
+    assert "OUTSIDE the odds window" in _dump(rep)
 
 
 def test_a_band_with_no_bets_is_not_printed_as_a_zero_row():
     rep = B.evaluate(_settled([("A", 500, 0.20, 1)]))
     out = _dump(rep)
-    assert "+351..+700" in out
-    assert "-300 and shorter" not in out
+    assert "+401..+700" in out
+    assert "-150..-101" not in out
 
 
 def test_the_band_roi_uses_the_price_actually_taken():
@@ -135,7 +147,7 @@ def test_a_limit_caps_the_listing_but_never_the_band_table():
     rep = B.evaluate(_settled([(f"P{i}", 500, 0.2, i % 2) for i in range(30)]))
     out = _dump(rep, limit=5)
     assert out.count("WON") + out.count("lost") == 5
-    assert "+351..+700" in out and "30" in out
+    assert "+401..+700" in out and "30" in out
 
 
 def test_the_helper_survives_a_junk_price():
