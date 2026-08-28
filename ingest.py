@@ -309,6 +309,20 @@ def main() -> None:
         print(f"Ingesting NFL seasons {seasons[0]}-{seasons[-1]} → {args.db}")
         res = ingest.ingest_nfl(conn, seasons)
         print(f"  games: {res['games']:,}   player-log rows: {res['player_logs']:,}")
+        # THE PLAY-BY-PLAY ARM, WHICH THIS NEVER MENTIONED. Every other
+        # sport's arm prints its skips; this one printed games and box
+        # scores and nothing else, so a red-zone backfill that fetched
+        # nothing at all looked exactly like one that worked. Those rows
+        # are the touchdown model's best predictor and the reason anyone
+        # runs this over past seasons.
+        print(f"  play-by-play rows (red-zone, inside-5, xFP, PROE): "
+              f"{res.get('pbp_rows', 0):,}")
+        for note in res["skipped"][:6]:
+            print(f"  skipped: {note}")
+        if not res.get("pbp_rows"):
+            print("  ⚠️  no play-by-play stored — the touchdown model's "
+                  "red-zone usage\n      is the one input this pass exists "
+                  "to fetch. Check the skips above.")
     elif args.sport == "nflpre":
         # Preseason box scores, into their own table. Prices nothing — see
         # engine/ingest.ingest_nfl_preseason and the schema note in db.py.

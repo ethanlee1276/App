@@ -135,6 +135,21 @@ def test_the_source_still_reads_one_season_at_a_time():
         "the newest-season-only shortcut is back"
 
 
+def test_the_ingest_command_reports_what_the_pbp_arm_did():
+    """Every other sport's arm prints its skips. This one printed games
+    and box scores and nothing else, so a red-zone backfill that fetched
+    nothing looked exactly like one that worked — on the command run
+    specifically to fetch it."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "ingest.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    arm = src.split('if args.sport == "nfl":', 1)[1].split("elif args.sport", 1)[0]
+    assert "pbp_rows" in arm, "the pbp arm's row count is still invisible"
+    assert 'res["skipped"]' in arm, "its skips are still swallowed"
+    assert "no play-by-play stored" in arm, \
+        "a zero must say so rather than reading as success"
+
+
 def test_the_nightly_still_refreshes_only_the_current_season():
     """The weekly maintenance pass wants tonight's numbers, not a
     four-season backfill on a 1 vCPU box."""
