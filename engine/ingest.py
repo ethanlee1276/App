@@ -396,19 +396,38 @@ def ingest_nfl(conn, seasons: list[int]) -> dict:
         result["player_logs"] += n
         db.log_ingest(conn, "nfl", "player_logs", str(season), n)
 
-    # Play-by-play for the LATEST season only (the file is ~100MB): real
-    # xFP situation values, red-zone/inside-5 usage, and team PROE.
-    try:
-        from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
-                                     xfp_player_rows, team_week_rows)
-        season = max(seasons)
-        agg = aggregate_pbp(load_pbp_rows(season))
-        n_x = db.upsert_player_logs(conn, xfp_player_rows(agg, season))
-        n_t = db.upsert_team_weeks(conn, team_week_rows(agg, season))
-        result["pbp_rows"] = n_x + n_t
-        db.log_ingest(conn, "nfl", "pbp", str(season), n_x + n_t)
-    except DataUnavailable as exc:
-        result["skipped"].append(f"nfl pbp: {exc}")
+    # Play-by-play: real xFP situation values, red-zone/inside-5 usage,
+    # and team PROE.
+    #
+    # EVERY REQUESTED SEASON, not just the newest. This read
+    # `max(seasons)` — one line, with "(the file is ~100MB)" as the
+    # reason — so `ingest.py nfl --seasons 2022-2025` brought back four
+    # seasons of box scores and red-zone usage for ONE of them. On
+    # 2026-08-28 the database held 24,616 NFL touchdown rows and 10,919
+    # red-zone rows: 2024 and 2025 had them, 2022 and 2023 had zero.
+    #
+    # Red-zone usage is the touchdown model's single best predictor — its
+    # own docs say so — and `engine.tdbacktest` grades that model over
+    # every ingested season to fit the correction EVERY LIVE TD PICK is
+    # priced through. Half of that fit was measured with the best input
+    # switched off, and nothing said so; the caller asked for four
+    # seasons and was told it got them.
+    #
+    # The size concern was real and is handled by doing them one at a
+    # time and letting each stand or fall alone, rather than by silently
+    # dropping three quarters of the request.
+    result["pbp_rows"] = 0
+    for season in sorted(seasons):
+        try:
+            from .sources.nflpbp import (load_pbp_rows, aggregate_pbp,
+                                         xfp_player_rows, team_week_rows)
+            agg = aggregate_pbp(load_pbp_rows(season))
+            n_x = db.upsert_player_logs(conn, xfp_player_rows(agg, season))
+            n_t = db.upsert_team_weeks(conn, team_week_rows(agg, season))
+            result["pbp_rows"] += n_x + n_t
+            db.log_ingest(conn, "nfl", "pbp", str(season), n_x + n_t)
+        except DataUnavailable as exc:
+            result["skipped"].append(f"nfl pbp {season}: {exc}")
     return result
 
 
