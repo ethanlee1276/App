@@ -125,6 +125,55 @@ def test_it_searches_the_longshot_boards_too():
     assert "Amon-Ra St. Brown" in out and "long_shots" in out
 
 
+# --- the arithmetic check ----------------------------------------------------
+def test_a_row_that_contradicts_itself_is_called_out():
+    """`raw_prob` is the probability the CHOSEN side cashes, so an UNDER
+    row already contains P(over) as `1 - raw_prob`. `prob_over` is
+    `1 - normal_cdf(line, mu, sigma)`, which is above 0.5 whenever the
+    mean is above the line — for ANY positive sigma. A row with a
+    projection above its line and an implied P(over) below 0.5 did not
+    come from one computation."""
+    out = _capture({"line": 58.5, "projection": 71.6, "proj_high": 101.6,
+                    "raw_prob": 0.597778, "side": "UNDER"})
+    assert "MISMATCH" in out
+    assert "P(over 58.5) = 0.402" in out
+    assert "P(over 58.5) = 0.669" in out, "it must show what the projection says"
+
+
+def test_a_consistent_row_is_not_flagged():
+    out = _capture({"line": 58.5, "projection": 71.6, "proj_high": 101.6,
+                    "raw_prob": 0.669, "side": "OVER"})
+    assert "MISMATCH" not in out and "consistent" in out
+
+
+def test_an_under_below_its_line_is_consistent():
+    out = _capture({"line": 58.5, "projection": 41.0, "proj_high": 71.0,
+                    "raw_prob": 0.7, "side": "UNDER"})
+    assert "MISMATCH" not in out
+
+
+def test_a_row_missing_the_numbers_is_skipped_rather_than_guessed():
+    assert _capture({"line": 58.5, "side": "UNDER"}) == ""
+    assert _capture({"projection": 71.6, "raw_prob": 0.6}) == ""
+
+
+def test_it_works_without_a_spread_to_reconstruct_sigma_from():
+    """`proj_high` gives the sd. Without it the expected probability
+    cannot be computed, but the SIDE contradiction still can."""
+    out = _capture({"line": 58.5, "projection": 71.6,
+                    "raw_prob": 0.597778, "side": "UNDER"})
+    assert "MISMATCH" in out
+    assert "says P(over" not in out
+
+
+def _capture(row):
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        launch._print_prob_check(row)
+    return buf.getvalue()
+
+
 def test_the_flag_is_wired_and_asks_for_a_name():
     import inspect
     src = inspect.getsource(launch)

@@ -5705,6 +5705,38 @@ INSPECT_BOARDS = ("recommendations.json", "mlb_recommendations.json",
                   "cfb.json", "nba.json", "wnba.json", "ufc.json")
 
 
+def _print_prob_check(r: dict) -> None:
+    """Is this row's probability consistent with its own projection?"""
+    try:
+        line, proj = float(r["line"]), float(r["projection"])
+        raw = float(r["raw_prob"])
+    except (KeyError, TypeError, ValueError):
+        return
+    side = str(r.get("side", "OVER")).upper()
+    p_over = (1.0 - raw) if side == "UNDER" else raw
+    sd = r.get("proj_high")
+    try:
+        sigma = float(sd) - proj if sd is not None else None
+    except (TypeError, ValueError):
+        sigma = None
+    from engine.statmath import prob_over as _po
+    expect = _po(line, proj, sigma) if sigma and sigma > 0 else None
+    print(f"\n  CONSISTENCY")
+    print(f"    the row implies P(over {line:g}) = {p_over:.3f}")
+    if expect is not None:
+        print(f"    the projection {proj:g} (sd {sigma:.1f}) says "
+              f"P(over {line:g}) = {expect:.3f}")
+    if (proj > line) != (p_over > 0.5):
+        print(f"    ⚠️  MISMATCH — the projection is "
+              f"{'above' if proj > line else 'below'} the line while the "
+              f"row's own probability says the over is "
+              f"{'likely' if p_over > 0.5 else 'unlikely'}. These two "
+              f"numbers did not come from the same computation.")
+    else:
+        print("    consistent — the projection and the probability agree "
+              "on which side of the line the stat lands.")
+
+
 def inspect_pick(name: str) -> None:
     """Everything behind one published pick, for when a card looks wrong.
 
@@ -5756,10 +5788,21 @@ def inspect_pick(name: str) -> None:
             print(f"\n{'='*70}\n  {r.get('player')} · {board} · {key}"
                   f"\n{'='*70}")
             for f in ("market", "side", "line", "odds", "book", "projection",
-                      "hit_prob", "raw_prob", "edge", "grade", "stake_units",
+                      "proj_low", "proj_high", "hit_prob", "raw_prob",
+                      "fair_prob", "edge", "grade", "stake_units",
                       "recommended"):
                 if f in r:
                     print(f"  {f:<14} {r[f]}")
+            # THE ARITHMETIC CHECK THAT SETTLES IT. `raw_prob` is
+            # `pick_side`'s `hit_raw` — the probability the CHOSEN side
+            # cashes — and for an UNDER that is `1 - P(over)`. So the
+            # published row already contains P(over), and `prob_over` is
+            # `1 - normal_cdf(line, mu, sigma)`, which is ABOVE 0.5
+            # whenever the mean is above the line, for any positive
+            # sigma. A row whose projection sits above its line while
+            # its implied P(over) sits below 0.5 did not come from one
+            # computation, whatever else is true.
+            _print_prob_check(r)
             lines = r.get("lines") or []
             if lines:
                 print(f"\n  every book quoted ({len(lines)}) — the over and "
