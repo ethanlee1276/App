@@ -480,6 +480,89 @@ def _print_market(m, indent="    ") -> None:
                       f"roi {_pct(g.get('roi'))}")
 
 
+def _implied(odds) -> float | None:
+    try:
+        o = int(odds)
+    except (TypeError, ValueError):
+        return None
+    if not o:
+        return None
+    return (-o) / ((-o) + 100.0) if o < 0 else 100.0 / (o + 100.0)
+
+
+def dump_bets(report, limit: int = 0, indent: str = "  ") -> None:
+    """Every settled BET behind a report, and the price band it sat in.
+
+    THE QUESTION THE AGGREGATES CANNOT ANSWER. The touchdown board's
+    first book-priced result was 7-for-40 at -48.9% ROI. At n=40 a 17.5%
+    hit rate is statistically ordinary — the SE is 6 points — while that
+    ROI implies an average winning payout near +92, which is not a
+    longshot price at all. Those two readings point in different
+    directions and only the rows can settle it: a board quietly taking
+    -150s and calling them longshots looks exactly like a board with a
+    broken model, until you print the prices.
+    """
+    bets = [s for s in (getattr(report, "settled", None) or [])
+            if s.recommended]
+    if not bets:
+        print(f"{indent}(no settled bets)")
+        return
+    bands = {"-300 and shorter": 0, "-299..-150": 0, "-149..+150": 0,
+             "+151..+350": 0, "+351..+700": 0, "longer than +700": 0}
+    won = dict.fromkeys(bands, 0)
+    staked = dict.fromkeys(bands, 0.0)
+    net = dict.fromkeys(bands, 0.0)
+
+    def band_of(o):
+        if o <= -300:
+            return "-300 and shorter"
+        if o <= -150:
+            return "-299..-150"
+        if o <= 150:
+            return "-149..+150"
+        if o <= 350:
+            return "+151..+350"
+        if o <= 700:
+            return "+351..+700"
+        return "longer than +700"
+
+    from .odds import american_to_decimal
+    for s in bets:
+        b = band_of(int(s.odds))
+        bands[b] += 1
+        stake = s.stake_units if s.stake_units > 0 else 1.0
+        if s.outcome is None:                 # a push stakes nothing
+            continue
+        staked[b] += stake
+        if s.outcome == 1:
+            won[b] += 1
+            net[b] += (american_to_decimal(s.odds) - 1.0) * stake
+        else:
+            net[b] -= stake
+
+    print(f"{indent}by price band")
+    print(f"{indent}  {'band':<18}{'bets':>5}{'won':>5}{'win%':>8}{'roi':>9}")
+    for b, n in bands.items():
+        if not n:
+            continue
+        wr = f"{won[b] / n:.1%}" if n else "—"
+        roi = f"{net[b] / staked[b]:+.1%}" if staked[b] else "—"
+        print(f"{indent}  {b:<18}{n:>5}{won[b]:>5}{wr:>8}{roi:>9}")
+
+    rows = sorted(bets, key=lambda s: int(s.odds))
+    if limit:
+        rows = rows[:limit]
+    print(f"{indent}\n{indent}every bet, shortest price first")
+    print(f"{indent}  {'player':<24}{'price':>7}{'model':>8}"
+          f"{'implied':>9}{'grade':>7}  result")
+    for s in rows:
+        imp = _implied(s.odds)
+        print(f"{indent}  {str(s.player)[:24]:<24}{int(s.odds):>+7}"
+              f"{s.hit_prob:>8.1%}{(f'{imp:.1%}' if imp else '—'):>9}"
+              f"{(s.grade or '—'):>7}  "
+              f"{'WON' if s.outcome == 1 else 'push' if s.outcome is None else 'lost'}")
+
+
 def main(argv=None) -> int:
     """Replay every harness this machine's data supports and print it.
 
@@ -498,9 +581,32 @@ def main(argv=None) -> int:
     ap.add_argument("--season", type=int, default=0,
                     help="NFL season to replay (default: the newest with games)")
     ap.add_argument("--json", action="store_true", help="Dump the raw JSON")
+    ap.add_argument("--bets", action="store_true",
+                    help="Print every settled NFL bet with its price and "
+                         "result, plus a per-price-band summary")
     args = ap.parse_args(argv)
 
     hconn = _db.connect()
+    if args.bets:
+        # ITS OWN PATH, and NFL only. The bet rows live on the
+        # BacktestReport, which `build()` has already flattened to JSON by
+        # the time it returns — and re-running the walk-forward a second
+        # time just to recover them would double the slowest thing here.
+        from .backtest import backtest_from_stats
+        weeks = list(range(6, 18))
+        real = nfl_real_lines(hconn)
+        for season in _seasons_to_try(args.season or None):
+            rep = backtest_from_stats(season, weeks, real_lines=real)
+            if not rep.n:
+                continue
+            print(f"\nNFL {season} · all prop markets")
+            dump_bets(rep)
+            if rep.longshots is not None and rep.longshots.n:
+                print(f"\nNFL {season} · anytime touchdown")
+                dump_bets(rep.longshots)
+            return 0
+        print("nothing to replay")
+        return 0
     if args.season:
         # An explicit season only reaches the NFL prop harness, which is
         # the only one that takes one.

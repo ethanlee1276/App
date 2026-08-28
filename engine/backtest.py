@@ -142,6 +142,17 @@ class BacktestReport:
     # keeps the subset that actually answers "did we beat the book" visible.
     segments: dict = field(default_factory=dict)
 
+    #: Every settled prop behind the numbers above.
+    #:
+    #: A report that keeps only aggregates can say a board went 7-for-40
+    #: at -48.9% and cannot say WHICH forty, at what prices. That gap
+    #: turned the touchdown board's first book-priced result into a
+    #: number nobody could act on: 17.5% is statistically fine at n=40,
+    #: while the ROI implies an average winning payout near +92, and only
+    #: the rows themselves can say whether the board is quietly taking
+    #: short prices.
+    settled: list = field(default_factory=list)
+
     #: The anytime-touchdown board's OWN report, when the walk-forward
     #: settled one. Deliberately not folded into the numbers above: a
     #: +450 scorer market and a -110 yardage market do not share a
@@ -336,7 +347,7 @@ def _grade_calibration(bets: list) -> dict:
 
 
 def evaluate(settled: list[SettledProp], n_bins: int = 5) -> BacktestReport:
-    r = BacktestReport(n=len(settled))
+    r = BacktestReport(n=len(settled), settled=list(settled))
     if not settled:
         return r
 
