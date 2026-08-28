@@ -50,6 +50,8 @@ Standard library only.
 
 from __future__ import annotations
 
+import math
+
 #: Book-priced settled props a market needs before its correction is
 #: trusted. Deliberately higher than `calibrate.fit`'s own floor of 200:
 #: a correction fitted here overrides one that is already live, and the
@@ -120,6 +122,7 @@ def walk_forward_brier(pairs: list, min_train: int = 200) -> dict:
                                         f"{CV_BLOCKS} blocks out of sample"}
     size = (n - start) / float(CV_BLOCKS)
     fit_err = base_err = 0.0
+    diffs: list = []
     scored = 0
     for i in range(CV_BLOCKS):
         lo = start + int(round(i * size))
@@ -130,14 +133,70 @@ def walk_forward_brier(pairs: list, min_train: int = 200) -> dict:
         t, b = cal.fit_correction(train, min_samples=min_train)
         rate = sum(o for _p, o in train) / float(len(train))
         for raw, out in test:
-            fit_err += (cal.apply_temperature(raw, t, b) - out) ** 2
-            base_err += (rate - out) ** 2
+            f = (cal.apply_temperature(raw, t, b) - out) ** 2
+            c = (rate - out) ** 2
+            fit_err += f
+            base_err += c
+            diffs.append(c - f)          # positive = the fit did better
         scored += len(test)
     if not scored:
         return {"ran": False, "reason": "no block could be scored"}
+    mean = sum(diffs) / scored
+    # Paired, because both scores are computed on the SAME pairs and the
+    # pair-to-pair variation is shared. The unpaired spread of either
+    # score alone is an order of magnitude larger and would call
+    # everything a tie.
+    var = (sum((d - mean) ** 2 for d in diffs) / (scored - 1)
+           if scored > 1 else 0.0)
+    se = math.sqrt(var / scored) if var > 0 else 0.0
     return {"ran": True, "n": scored, "trained_from": start,
             "fitted": fit_err / scored, "constant": base_err / scored,
-            "margin": (base_err - fit_err) / scored}
+            "margin": mean, "se": se,
+            "t": (mean / se) if se else 0.0}
+
+
+def discrimination(pairs: list) -> dict:
+    """Does the model rank a hit above a miss? Calibration cannot say.
+
+    THE QUESTION THE BRIER NUMBERS CANNOT REACH. A temperature is a
+    monotone squeeze: it changes how confident a claim is, never which
+    of two players the model prefers. So a market can fail every
+    calibration test for two completely different reasons — the ordering
+    is right and the confidence is wrong (recalibrate), or the ordering
+    itself carries nothing (rebuild). rush_yds and rec_yds both fitted to
+    the top of the grid and still lost to a constant, and that result is
+    identical under both causes.
+
+    AUC answers it directly: the chance a randomly chosen hit is ranked
+    above a randomly chosen miss. 0.5 is a coin, below 0.5 means the
+    model's preference is backwards, and it is untouched by any
+    recalibration because it depends only on the order.
+
+    Computed by ranks with ties averaged, which is the Mann-Whitney
+    identity — no sampling, and it is exact rather than estimated.
+    """
+    pos = [p for p, o in pairs if o]
+    neg = [p for p, o in pairs if not o]
+    if not pos or not neg:
+        return {"ran": False, "reason": "one outcome never occurred"}
+    order = sorted(range(len(pairs)), key=lambda i: pairs[i][0])
+    ranks = [0.0] * len(pairs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and pairs[order[j + 1]][0] == pairs[order[i]][0]:
+            j += 1
+        shared = (i + j) / 2.0 + 1.0                  # 1-based, ties averaged
+        for k in range(i, j + 1):
+            ranks[order[k]] = shared
+        i = j + 1
+    rank_sum = sum(r for r, (_p, o) in zip(ranks, pairs) if o)
+    n_pos, n_neg = len(pos), len(neg)
+    auc = (rank_sum - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg)
+    # SE under the null of no discrimination (AUC = 0.5).
+    se = math.sqrt((n_pos + n_neg + 1) / (12.0 * n_pos * n_neg))
+    return {"ran": True, "auc": auc, "se": se, "z": (auc - 0.5) / se,
+            "hits": n_pos, "misses": n_neg}
 
 
 def _tick(msg) -> None:
@@ -194,6 +253,7 @@ def fit(conn, season: int | None = None, weeks=None,
 
     out: dict = {"season": season, "fitted": {}, "refused": {}, "dropped": []}
     fitted: dict = {}
+    save_pairs({m: book_pairs(report, m) for m in markets}, season)
     stale: list = []
     stored = cal.load(path or cal.DEFAULT_PATH)
     raw_store = _stored_basis(path or cal.DEFAULT_PATH)
@@ -224,6 +284,7 @@ def fit(conn, season: int | None = None, weeks=None,
             "base_rate": rate, "baseline": rate * (1.0 - rate),
             "at_boundary": bool(c.at_boundary),
             "walk_forward": walk_forward_brier(pairs),
+            "discrimination": discrimination(pairs),
         }
     if fitted:
         cal.save(fitted, path or cal.DEFAULT_PATH)
@@ -246,6 +307,53 @@ def _stored_basis(path) -> dict:
         return {}
     return {k: (v.get("basis") or "") for k, v in raw.items()
             if isinstance(v, dict)}
+
+
+#: Where the book-priced pairs are kept after a walk. Per-box and
+#: gitignored, like everything else under data/models.
+PAIRS_FILE = "propcal_pairs.json"
+
+
+def pairs_path(path=None):
+    from pathlib import Path
+    from . import modelstate
+    return Path(path) if path else Path(modelstate.path(PAIRS_FILE))
+
+
+def save_pairs(by_market: dict, season, path=None):
+    """Keep the pairs the walk produced, so the next question is free.
+
+    The replay costs eight minutes and every question asked of it so far
+    — is the margin real, is it significant, does the model even order
+    the players correctly — has needed the same 1,542 pairs and nothing
+    else. Re-deriving them per question is how an analysis loop turns
+    into a day.
+    """
+    import json
+    out = {"season": season,
+           "markets": {m: [[round(p, 6), int(o)] for p, o in v]
+                       for m, v in by_market.items()}}
+    dest = pairs_path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(out))
+    return dest
+
+
+def load_pairs(path=None) -> dict:
+    """``{"season": int, "markets": {market: [(p, outcome)]}}`` or ``{}``."""
+    import json
+    src = pairs_path(path)
+    if not src.is_file():
+        return {}
+    try:
+        raw = json.loads(src.read_text())
+    except (ValueError, OSError):
+        return {}
+    if not isinstance(raw, dict) or not isinstance(raw.get("markets"), dict):
+        return {}
+    return {"season": raw.get("season"),
+            "markets": {m: [(float(p), int(o)) for p, o in v]
+                        for m, v in raw["markets"].items()}}
 
 
 def report_lines(out: dict) -> list:
@@ -283,10 +391,28 @@ def report_lines(out: dict) -> list:
                 f"{d['base_rate']:.1%}. It is not fixing this model, it is "
                 f"cancelling it.")
         else:
+            firm = ("" if abs(wf.get("t") or 0) >= 2 else
+                    " — inside the noise, so this is not yet a measured edge")
             lines.append(
-                f"        beats a constant by {wf['margin']:.4f} out of "
-                f"sample ({wf['fitted']:.4f} vs {wf['constant']:.4f} over "
-                f"{wf['n']:,} unseen pairs)")
+                f"        beats a constant by {wf['margin']:.4f} ± "
+                f"{wf.get('se', 0):.4f} (t={wf.get('t', 0):+.1f}) out of "
+                f"sample, over {wf['n']:,} unseen pairs{firm}")
+        # ORDERING, which no temperature can change and no Brier
+        # number separates from confidence. A market that lost to a
+        # constant needs rebuilding if this is 0.5 and recalibrating if
+        # it is not, and those are months apart.
+        g = d.get("discrimination") or {}
+        if g.get("ran"):
+            if g["z"] < -2:
+                verdict = ("BACKWARDS — the model ranks misses above hits, "
+                           "and no recalibration can fix an ordering")
+            elif g["z"] < 2:
+                verdict = ("no better than a coin at ordering, so the "
+                           "problem is the model and not its confidence")
+            else:
+                verdict = "it ranks hits above misses"
+            lines.append(f"        AUC {g['auc']:.3f} (z={g['z']:+.1f}) — "
+                         f"{verdict}")
         base = d.get("baseline")
         if base is not None and d["brier_after"] < base <= d["brier_before"]:
             lines.append(
@@ -305,4 +431,6 @@ def report_lines(out: dict) -> list:
     return lines
 
 
-__all__ = ["MIN_BOOK_PAIRS", "MARKETS", "book_pairs", "fit", "report_lines"]
+__all__ = ["MIN_BOOK_PAIRS", "MARKETS", "book_pairs", "fit",
+           "report_lines", "walk_forward_brier", "discrimination",
+           "save_pairs", "load_pairs", "pairs_path"]

@@ -438,9 +438,9 @@ def test_an_out_of_sample_win_is_reported_as_one():
     out = _fitted(0.2422, rate=0.57)
     out["fitted"]["rec_yds"]["walk_forward"] = {
         "ran": True, "n": 205, "fitted": 0.2301, "constant": 0.2452,
-        "margin": 0.0151}
+        "margin": 0.0151, "se": 0.0051, "t": 2.96}
     text = "\n".join(propcal.report_lines(out))
-    assert "beats a constant by 0.0151 out of sample" in text
+    assert "beats a constant by 0.0151" in text
     assert "no skill" not in text
 
 
@@ -469,6 +469,128 @@ def test_the_bake_off_could_not_have_judged_these_markets():
         assert test_n < cal.MIN_HOLDOUT, (
             f"{n} pairs now reaches the bake-off — propcal's own "
             f"walk-forward may be redundant, check before removing it")
+
+
+# --- does the model order the players at all ---------------------------------
+def test_discrimination_separates_the_three_cases_calibration_cannot():
+    """A temperature is a monotone squeeze — it changes confidence, never
+    which of two players the model prefers. So "lost to a constant" has
+    two causes months apart: wrong confidence, or no ordering."""
+    import random
+    rng = random.Random(3)
+    noise = [(rng.uniform(.3, .8), int(rng.random() < 0.5)) for _ in range(500)]
+    sig = [(p, int(rng.random() < p))
+           for p in (rng.uniform(.15, .85) for _ in range(500))]
+    back = [(p, int(rng.random() < (1 - p)))
+            for p in (rng.uniform(.15, .85) for _ in range(500))]
+    assert abs(propcal.discrimination(noise)["z"]) < 2
+    assert propcal.discrimination(sig)["z"] > 5
+    assert propcal.discrimination(back)["z"] < -5
+
+
+def test_a_perfect_ordering_scores_one_and_a_reversed_one_scores_zero():
+    ranked = [(0.1, 0), (0.2, 0), (0.3, 1), (0.4, 1)]
+    assert propcal.discrimination(ranked)["auc"] == 1.0
+    flipped = [(p, 1 - o) for p, o in ranked]
+    assert propcal.discrimination(flipped)["auc"] == 0.0
+
+
+def test_ties_are_averaged_rather_than_ordered_by_accident():
+    """Every pair claiming the same probability discriminates nothing;
+    left to list order it would score 1.0 or 0.0 on the sort's whim."""
+    assert propcal.discrimination([(0.5, 1), (0.5, 0)] * 20)["auc"] == 0.5
+
+
+def test_one_sided_outcomes_cannot_be_scored_and_say_so():
+    got = propcal.discrimination([(0.6, 1)] * 30)
+    assert got["ran"] is False and "one outcome" in got["reason"]
+
+
+def test_the_report_calls_a_backwards_ordering_unfixable():
+    out = _fitted(0.2519, rate=0.5)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 322, "fitted": 0.2527, "constant": 0.2503,
+        "margin": -0.0024, "se": 0.004, "t": -0.6}
+    out["fitted"]["rec_yds"]["discrimination"] = {
+        "ran": True, "auc": 0.44, "se": 0.02, "z": -3.0}
+    text = "\n".join(propcal.report_lines(out))
+    assert "BACKWARDS" in text and "no recalibration can fix" in text
+
+
+def test_the_report_blames_the_model_when_the_ordering_is_a_coin():
+    out = _fitted(0.2519, rate=0.5)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 322, "fitted": 0.2527, "constant": 0.2503,
+        "margin": -0.0024, "se": 0.004, "t": -0.6}
+    out["fitted"]["rec_yds"]["discrimination"] = {
+        "ran": True, "auc": 0.508, "se": 0.02, "z": 0.4}
+    text = "\n".join(propcal.report_lines(out))
+    assert "problem is the model and not its confidence" in text
+
+
+# --- a margin is not an edge until it clears its own noise --------------------
+def test_a_margin_inside_the_noise_is_not_called_an_edge():
+    """receptions: +0.0044 on 205 pairs. At any plausible spread of the
+    paired difference that is under one standard error."""
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2435, "constant": 0.2479,
+        "margin": 0.0044, "se": 0.0084, "t": 0.52}
+    text = "\n".join(propcal.report_lines(out))
+    assert "not yet a measured edge" in text
+
+
+def test_a_margin_clear_of_the_noise_is():
+    out = _fitted(0.2301, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2301, "constant": 0.2479,
+        "margin": 0.0178, "se": 0.0060, "t": 2.97}
+    text = "\n".join(propcal.report_lines(out))
+    assert "not yet a measured edge" not in text and "t=+3.0" in text
+
+
+def test_the_error_on_the_margin_is_paired():
+    """Both scores are computed on the same pairs, so the pair-to-pair
+    variation is shared. The unpaired spread of either score alone is an
+    order of magnitude larger and would call every result a tie."""
+    import inspect
+    src = inspect.getsource(propcal.walk_forward_brier)
+    assert "diffs.append(c - f)" in src
+
+
+# --- the pairs outlive the walk that produced them ---------------------------
+def test_the_pairs_survive_a_round_trip():
+    import tempfile, pathlib as _pl
+    with tempfile.TemporaryDirectory() as d:
+        path = _pl.Path(d) / "pairs.json"
+        propcal.save_pairs({"rush_yds": [(0.61, 1), (0.4, 0)]}, 2025, path)
+        got = propcal.load_pairs(path)
+        assert got["season"] == 2025
+        assert got["markets"]["rush_yds"] == [(0.61, 1), (0.4, 0)]
+
+
+def test_a_missing_or_corrupt_pairs_file_is_empty_rather_than_fatal():
+    import tempfile, pathlib as _pl
+    with tempfile.TemporaryDirectory() as d:
+        assert propcal.load_pairs(_pl.Path(d) / "absent.json") == {}
+        bad = _pl.Path(d) / "bad.json"
+        bad.write_text("{not json")
+        assert propcal.load_pairs(bad) == {}
+        wrong = _pl.Path(d) / "wrong.json"
+        wrong.write_text('{"markets": 3}')
+        assert propcal.load_pairs(wrong) == {}
+
+
+def test_the_walk_writes_the_pairs_it_produced():
+    import inspect
+    src = inspect.getsource(propcal.fit)
+    assert "save_pairs(" in src
+
+
+def test_the_pairs_land_beside_the_other_per_box_model_state():
+    """data/models is gitignored and per-box — the suite must not read
+    the box it is running on, and these are that box's measurements."""
+    assert "models" in str(propcal.pairs_path())
 
 
 # --- the walk's own counters -------------------------------------------------
