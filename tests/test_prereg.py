@@ -213,7 +213,12 @@ def test_adding_the_market_field_did_not_void_the_older_tests():
     import tempfile, os
     path = os.path.join(tempfile.mkdtemp(), "prereg.json")
     store = prereg.ensure_registered(path)
-    assert len(store["tests"]) == 3
+    # NOT a hardcoded count. This asserted `== 3`, which is a fact about
+    # how many tests happen to be registered rather than about the thing
+    # under test, and it broke the next time one was added. What matters
+    # is that the older tests survived the new field.
+    ids = {t["id"] for t in store["tests"]}
+    assert {prereg.B_MINUS["id"], prereg.A_BAND_NFL["id"]} <= ids
     for v in prereg.report([], path):
         assert v["status"] != "void", v
 
@@ -288,6 +293,99 @@ def test_superseding_is_idempotent_and_refuses_an_unknown_id():
     except KeyError:
         raised = True
     assert raised
+
+
+# --- the touchdown board's registration (2026-08-28) ------------------------
+def _td_test(tmp):
+    import json
+    prereg.ensure_registered(tmp)
+    return {t["id"]: t for t in
+            json.loads(open(tmp).read())["tests"]}["td-edge-nfl-2026-08"]
+
+
+def _td_rows(n, wins=0, grade="Lean", market="anytime_td"):
+    return [{"date": "2026-12-01", "grade": grade, "sport": "nfl",
+             "odds": 300, "market": market,
+             "status": "won" if i < wins else "lost"} for i in range(n)]
+
+
+def test_the_touchdown_test_is_registered():
+    import os, tempfile
+    t = _td_test(os.path.join(tempfile.mkdtemp(), "p.json"))
+    assert t["min_n"] == 120
+    assert t["markets"] == ["anytime_td"]
+
+
+def test_it_populates_from_the_longshot_ladder_not_the_prop_one():
+    """`quality.letter` returns A+/A/B+ and `longshots._grade` returns
+    Strong Play/Play/Lean. A test populated with the wrong ladder
+    collects nothing forever while looking healthy."""
+    import os, tempfile
+    from engine.longshots import _grade
+    t = _td_test(os.path.join(tempfile.mkdtemp(), "p.json"))
+    assert set(t["population"]) == {"Strong Play", "Play", "Lean"}
+    emitted = {_grade(c, e) for c in (4.6, 6.1, 7.6) for e in (0.02, 0.04, 0.06)}
+    assert emitted - {"Pass"} <= set(t["population"])
+
+
+def test_a_prop_graded_A_does_not_count_toward_it():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    assert prereg.verdict(t, _td_rows(200, 20, grade="A"))["n"] == 0
+
+
+def test_another_market_does_not_count_toward_it():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    assert prereg.verdict(t, _td_rows(200, 20, market="rec_yds"))["n"] == 0
+
+
+def test_with_no_comparison_band_it_is_a_test_against_break_even():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    assert t["compare_to"] == []
+    v = prereg.verdict(t, _td_rows(120, 6))
+    assert v["status"] == "decided" and v["supported"]
+    assert "break-even" in v["reading"]
+
+
+def test_a_profitable_sample_does_not_support_the_claim():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    v = prereg.verdict(t, _td_rows(120, 40))          # 40/120 at +300 profits
+    assert v["roi"] > 0 and not v["supported"]
+
+
+def test_it_says_nothing_before_the_sample_arrives():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    assert prereg.verdict(t, _td_rows(119, 6))["status"] == "collecting"
+
+
+def test_zero_variance_is_not_reported_as_zero_evidence():
+    """`se` is 0 only when every bet returned the same thing, and
+    `z = 0.0` then reports the strongest possible result as the weakest.
+    A one-sample test reaches that the moment a whole sample loses —
+    which is the case it was registered to catch."""
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    v = prereg.verdict(t, _td_rows(120, 0))
+    assert v["degenerate"] and v["supported"]
+    assert "no spread" in v["reading"]
+
+
+def test_a_sample_with_spread_still_uses_the_z():
+    import os, tempfile
+    tmp = os.path.join(tempfile.mkdtemp(), "p.json")
+    t = _td_test(tmp)
+    v = prereg.verdict(t, _td_rows(120, 6))
+    assert not v["degenerate"] and v["z"] < -2
 
 
 if __name__ == "__main__":

@@ -219,15 +219,36 @@ def verdict(test: dict, rows: list[dict]) -> dict:
     diff = pm - rm
     se = (pse ** 2 + rse ** 2) ** 0.5
     z = (diff / se) if se else 0.0
+    # ZERO VARIANCE IS NOT ZERO EVIDENCE. `se` is 0 only when every bet
+    # in the sample returned the same thing — every one lost, or every
+    # one won at identical odds — and `z = 0.0` then reports the
+    # strongest possible result as the weakest. Two populations rarely
+    # reach it; a ONE-SAMPLE test against break-even (`compare_to: []`)
+    # reaches it the moment a whole sample loses, which is exactly the
+    # case such a test is registered to catch. With no sampling spread
+    # inside the sample there is no z to compute, so the sign decides and
+    # the reading says that is what happened.
+    degenerate = (not se) and diff != 0.0
     w, l = _wl(pop)
     out.update({"roi": pm, "roi_se": pse, "reference_roi": rm,
                 "diff": diff, "z": z, "wins": w, "losses": l,
-                "status": "decided",
-                "supported": bool(z <= -test["z_threshold"])})
+                "status": "decided", "degenerate": degenerate,
+                "supported": bool(diff < 0 if degenerate
+                                  else z <= -test["z_threshold"])})
+    # A test with no comparison band is a ONE-SAMPLE test against
+    # break-even: `ref` is empty, `_mean_se([])` is (0, 0), and the z
+    # above is therefore the population's own flat-unit ROI over its
+    # standard error. Saying "against +0.0% for " with nothing after it
+    # would read as a missing value rather than a deliberate baseline.
+    against = ("/".join(test["compare_to"]) if test.get("compare_to")
+               else "break-even")
     out["reading"] = (
         f"{w}-{l} since {reg}: {pm:+.1%} at a flat unit against "
-        f"{rm:+.1%} for {'/'.join(test['compare_to'])}, a gap of "
-        f"{diff:+.1%} at z={z:+.2f}. "
+        f"{rm:+.1%} for {against}, a gap of "
+        + (f"{diff:+.1%} — every bet in the sample returned the same "
+           f"thing, so there is no spread to compute a z from and the "
+           f"sign decides. " if degenerate else
+           f"{diff:+.1%} at z={z:+.2f}. ")
         + (f"The claim holds at the preregistered bar — {test['decides']}"
            if out["supported"] else
            "The claim does NOT clear the preregistered bar, so nothing "
@@ -363,11 +384,71 @@ RECEPTIONS_A_NFL = {
 }
 
 
+#: The touchdown board bets where it disagrees with the book, and on the
+#: 2025 season those disagreements were worthless.
+#:
+#: THE NUMBERS. 51 book-priced anytime-TD bets, 6 won (11.8%). The model
+#: claimed 30.5% across them; the raw market implied 27.5%. Rejecting the
+#: model's own claim is decisive — P(<= 6 wins | the model's per-bet
+#: probabilities) = 0.0012. De-vigged at a 15-25% one-sided hold the
+#: market expected 11-12 wins and P(<= 6) is 0.02-0.045, so the sample
+#: was also poor against the book, but not damningly so.
+#:
+#: WHY THIS IS NOT THE CALIBRATION FAILING. Across all 22,102 ingested
+#: player-weeks the same model is well calibrated: it claims 16.9% and
+#: 20.0% score, and in the 28-40% band it claims 33.1% where 36.8%
+#: score. On the 51 it CHOOSES it claims 30.5% and delivers 11.8%. Same
+#: model, same season, opposite answer — the difference is selection.
+#: Every one of the 51 has the model above the market, by 1.4 to 4.0
+#: points, and the win rate falls as the price lengthens (20.0% short,
+#: 14.3% middle, 5.6% long). That is adverse selection: betting the
+#: largest disagreements selects the largest errors.
+#:
+#: WHY IT IS REGISTERED RATHER THAN FIXED. 51 bets is enough to reject a
+#: claim and nowhere near enough to fit a new constant to. The obvious
+#: levers — a bigger `MARKET_SHRINK` for scorer markets, a higher edge
+#: bar — would be tuned to this one sample. The board already grades
+#: every one of these "Lean", so it is not claiming they are elite; the
+#: question is whether it should be betting them at all.
+TD_EDGE_NFL = {
+    "id": "td-edge-nfl-2026-08",
+    "claim": ("NFL anytime-TD picks lose at the model's own claimed rate: "
+              "the board's disagreement with the book is not edge"),
+    "sport": "nfl",
+    # THE LONG-SHOT BOARD'S OWN VOCABULARY. `quality.letter` returns
+    # A+/A/B+/Pass and `longshots._grade` returns Strong Play/Play/Lean/
+    # Pass — different ladders entirely, and a test populated with the
+    # wrong one collects nothing forever while looking healthy. All 51
+    # bets behind this graded "Lean"; the other two are named so the
+    # test does not go blind the day one clears a higher bar.
+    "population": ["Strong Play", "Play", "Lean"],
+    # NO COMPARISON BAND, because there is no second population to
+    # compare against — the claim is that these bets lose at a flat unit,
+    # full stop. An empty list makes `verdict` a one-sample test against
+    # break-even, which is exactly the question.
+    "compare_to": [],
+    "markets": ["anytime_td"],
+    "metric": ("landed rate against the mean claimed probability of the "
+               "same bets, book-priced only, flat 1u"),
+    "min_n": 120,
+    "decides": ("whether the scorer board keeps betting sub-5-point "
+                "disagreements at all — engine.longshots.MARKET_SHRINK "
+                "for scorer markets, or the edge bar in "
+                "engine.touchdowns.build_td_longshots"),
+    "why_now": ("6 of 51 landed where the model claimed 30.5%, at "
+                "p = 0.0012 against its own numbers. The same model over "
+                "22,102 player-weeks claims 16.9% and lands 20.0%, so "
+                "this is selection rather than calibration — and 51 bets "
+                "is a rejection, not a number to tune a constant to."),
+}
+
+
 def ensure_registered(path=None) -> dict:
     """Idempotent: registers the standing tests if they are not there."""
     store = register(B_MINUS, path)
     store = register(A_BAND_NFL, path)
     store = register(RECEPTIONS_A_NFL, path)
+    store = register(TD_EDGE_NFL, path)
     # A_BAND_NFL asked "does A beat B+". Slicing by grade AND market
     # answered it — the deficit is one cell, A-graded receptions — and
     # RECEPTIONS_A_NFL asks that sharper question with a remedy that
