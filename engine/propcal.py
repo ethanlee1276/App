@@ -85,6 +85,61 @@ def book_pairs(report, market: str = "") -> list:
     return out
 
 
+#: Blocks the walk-forward score is measured over. Each block is scored
+#: by a correction fitted only on the pairs BEFORE it.
+CV_BLOCKS = 4
+
+
+def walk_forward_brier(pairs: list, min_train: int = 200) -> dict:
+    """Score the correction on pairs it was not fitted on.
+
+    WHY THE STORED NUMBERS CANNOT ANSWER THIS. `calibrate.fit` reports
+    `brier_before`/`brier_after` over the WHOLE sample with the
+    temperature fitted on that same sample. Its held-out judge exists
+    only to pick the FORM (temperature vs isotonic vs nothing) and needs
+    `MIN_HOLDOUT` = 400 test rows; at 409, 490 and 643 pairs it did not
+    run on a single NFL prop market. So `brier_after` is in-sample, and
+    comparing it to a zero-parameter constant is a race the two-parameter
+    fit wins on noise alone — expected optimism is about 2k*var/n, which
+    at n=409 is 0.0024 against a measured margin of 0.0029.
+
+    Expanding window, never random: the pairs arrive in week order and a
+    random split puts the same week on both sides, which is how a fit
+    passes a test it should fail (`calibrate.HOLDOUT_FRACTION` says the
+    same thing about the same data).
+
+    The constant it is scored against is also honest — the base rate of
+    the TRAINING pairs, not of the block being scored, because a
+    baseline that peeks is not a baseline.
+    """
+    from . import calibrate as cal
+    n = len(pairs)
+    start = max(min_train, n // 2)
+    if n - start < CV_BLOCKS:
+        return {"ran": False, "reason": f"{n} pairs is too few to score "
+                                        f"{CV_BLOCKS} blocks out of sample"}
+    size = (n - start) / float(CV_BLOCKS)
+    fit_err = base_err = 0.0
+    scored = 0
+    for i in range(CV_BLOCKS):
+        lo = start + int(round(i * size))
+        hi = start + int(round((i + 1) * size))
+        if hi <= lo:
+            continue
+        train, test = pairs[:lo], pairs[lo:hi]
+        t, b = cal.fit_correction(train, min_samples=min_train)
+        rate = sum(o for _p, o in train) / float(len(train))
+        for raw, out in test:
+            fit_err += (cal.apply_temperature(raw, t, b) - out) ** 2
+            base_err += (rate - out) ** 2
+        scored += len(test)
+    if not scored:
+        return {"ran": False, "reason": "no block could be scored"}
+    return {"ran": True, "n": scored, "trained_from": start,
+            "fitted": fit_err / scored, "constant": base_err / scored,
+            "margin": (base_err - fit_err) / scored}
+
+
 def _tick(msg) -> None:
     """Progress, FLUSHED.
 
@@ -168,6 +223,7 @@ def fit(conn, season: int | None = None, weeks=None,
             "brier_before": c.brier_before, "brier_after": c.brier_after,
             "base_rate": rate, "baseline": rate * (1.0 - rate),
             "at_boundary": bool(c.at_boundary),
+            "walk_forward": walk_forward_brier(pairs),
         }
     if fitted:
         cal.save(fitted, path or cal.DEFAULT_PATH)
@@ -209,18 +265,34 @@ def report_lines(out: dict) -> list:
         # Always predicting the base rate scores b(1-b) while knowing
         # NOTHING about any individual player, so that is the number a
         # fit has to beat before the word skill applies.
+        # THE VERDICT COMES FROM THE WALK-FORWARD, NEVER FROM THE LINE
+        # ABOVE. `brier_after` is scored on the pairs the temperature was
+        # fitted to, so against a constant — which fits nothing — it wins
+        # by roughly 2k*var/n on noise alone. The first version of this
+        # block compared exactly those two numbers and called a 0.0029
+        # in-sample margin skill, at a sample size whose fitting artifact
+        # is 0.0024.
+        wf = d.get("walk_forward") or {}
+        if not wf.get("ran"):
+            lines.append(f"        no out-of-sample score — {wf.get('reason')}")
+        elif wf["margin"] <= 0:
+            lines.append(
+                f"        ⚠️  no skill out of sample — over {wf['n']:,} pairs "
+                f"it had not seen, the correction scores {wf['fitted']:.4f} "
+                f"against {wf['constant']:.4f} for a constant "
+                f"{d['base_rate']:.1%}. It is not fixing this model, it is "
+                f"cancelling it.")
+        else:
+            lines.append(
+                f"        beats a constant by {wf['margin']:.4f} out of "
+                f"sample ({wf['fitted']:.4f} vs {wf['constant']:.4f} over "
+                f"{wf['n']:,} unseen pairs)")
         base = d.get("baseline")
-        if base is not None:
-            if d["brier_after"] >= base:
-                lines.append(
-                    f"        ⚠️  no skill — a constant {d['base_rate']:.1%} "
-                    f"scores {base:.4f}, better than the fitted "
-                    f"{d['brier_after']:.4f}. The correction is not fixing "
-                    f"this model, it is cancelling it.")
-            else:
-                lines.append(
-                    f"        beats a constant {d['base_rate']:.1%} "
-                    f"({base:.4f}) by {base - d['brier_after']:.4f}")
+        if base is not None and d["brier_after"] < base <= d["brier_before"]:
+            lines.append(
+                f"        (in sample it beat a constant by "
+                f"{base - d['brier_after']:.4f}; that number is fitted to "
+                f"the pairs it is scored on and is not evidence)")
         if d.get("at_boundary"):
             lines.append(
                 "        ⚠️  fit ran to the edge of the search grid — the "

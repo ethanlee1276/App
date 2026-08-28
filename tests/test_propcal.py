@@ -325,26 +325,19 @@ def _fitted(brier_after, rate=0.5, **kw):
     return {"season": 2025, "refused": {}, "fitted": {"rec_yds": d}}
 
 
-def test_a_fit_that_cannot_beat_a_constant_says_no_skill():
-    """The droplet's real numbers: rec_yds 0.2847 -> 0.2519 reads as a
-    win, but always guessing the base rate scores 0.2500. The correction
-    did not fix the model, it cancelled it."""
-    text = "\n".join(propcal.report_lines(_fitted(0.2519)))
-    assert "no skill" in text and "cancelling it" in text
-
-
-def test_a_fit_that_beats_a_constant_says_by_how_much():
-    """receptions, the one market with real signal: 0.2523 -> 0.2422."""
-    text = "\n".join(propcal.report_lines(_fitted(0.2422)))
-    assert "no skill" not in text
-    assert "beats a constant" in text and "0.0078" in text
-
-
-def test_the_baseline_uses_the_base_rate_not_a_flat_half():
-    """b(1-b), not 0.25 — a market that lands 60% under has a lower
-    no-skill floor and a fit has to clear the lower bar."""
-    text = "\n".join(propcal.report_lines(_fitted(0.2450, rate=0.59)))
-    assert "no skill" in text, "0.2450 loses to a constant 59% (0.2419)"
+def test_the_in_sample_margin_is_labelled_as_not_being_evidence():
+    """It is still printed, because hiding it invites the next reader to
+    recompute it and believe it. b(1-b) and not a flat 0.25: a market
+    landing 57% has a no-skill floor of 0.2451, and reading that floor as
+    0.2500 overstates the margin by more than double — which is the
+    mistake this line exists to stop repeating."""
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2461,
+        "constant": 0.2452, "margin": -0.0009}
+    text = "\n".join(propcal.report_lines(out))
+    assert "0.0029" in text, "the honest in-sample margin against 0.2451"
+    assert "is not evidence" in text
 
 
 def test_a_boundary_fit_reports_that_the_board_will_pass_it():
@@ -381,6 +374,101 @@ def test_an_older_fit_without_a_basis_is_not_treated_as_a_book_fit():
         c.basis = cal.BASIS_HISTORY
         cal.save({"nfl:rush_yds": c}, path)
         assert json.loads(path.read_text())["nfl:rush_yds"]["temperature"] == 2.8
+
+
+# --- scoring on pairs the fit has not seen -----------------------------------
+def test_a_no_signal_model_does_not_earn_a_margin():
+    """The test the in-sample comparison could not pass. Raw probability
+    drawn independently of the outcome: a two-parameter fit will still
+    beat a zero-parameter constant on the pairs it was fitted to."""
+    import random
+    rng = random.Random(7)
+    pairs = [(rng.uniform(0.35, 0.75), int(rng.random() < 0.57))
+             for _ in range(409)]
+    assert propcal.walk_forward_brier(pairs)["margin"] <= 0
+
+
+def test_a_real_signal_does_earn_one():
+    """Outcomes generated FROM the claimed probability — a perfectly
+    calibrated model, which must score well out of sample or the
+    measurement is broken rather than the model."""
+    import random
+    rng = random.Random(11)
+    pairs = [(p, int(rng.random() < p))
+             for p in (rng.uniform(0.2, 0.8) for _ in range(409))]
+    got = propcal.walk_forward_brier(pairs)
+    assert got["margin"] > 0.02, got
+
+
+def test_every_scored_block_is_later_than_its_training_pairs():
+    """Expanding window, never random. The pairs arrive in week order and
+    a random split puts the same week on both sides of the judge."""
+    import inspect
+    src = inspect.getsource(propcal.walk_forward_brier)
+    assert "pairs[:lo]" in src and "pairs[lo:hi]" in src
+
+
+def test_the_constant_is_the_training_base_rate_not_the_block_s():
+    """A baseline that peeks is not a baseline: scoring against the base
+    rate of the very block being scored hands it the answer."""
+    import inspect
+    src = inspect.getsource(propcal.walk_forward_brier)
+    assert "for _p, o in train" in src, "the base rate must come from train"
+
+
+def test_a_sample_too_small_to_score_says_so_rather_than_guessing():
+    got = propcal.walk_forward_brier([(0.6, 1)] * 12)
+    assert got["ran"] is False and "too few" in got["reason"]
+
+
+def test_the_verdict_reads_the_walk_forward_and_not_the_stored_brier():
+    """receptions on the droplet: in sample it beat a constant by 0.0029,
+    at a size whose fitting artifact alone is about 0.0024."""
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2461, "constant": 0.2452,
+        "margin": -0.0009}
+    text = "\n".join(propcal.report_lines(out))
+    assert "no skill out of sample" in text
+    assert "is not evidence" in text, \
+        "the in-sample margin must be shown as the artifact it is"
+
+
+def test_an_out_of_sample_win_is_reported_as_one():
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2301, "constant": 0.2452,
+        "margin": 0.0151}
+    text = "\n".join(propcal.report_lines(out))
+    assert "beats a constant by 0.0151 out of sample" in text
+    assert "no skill" not in text
+
+
+def test_an_unscoreable_market_says_so_instead_of_claiming_a_verdict():
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {"ran": False,
+                                                "reason": "too few"}
+    text = "\n".join(propcal.report_lines(out))
+    assert "no out-of-sample score" in text
+    assert "beats a constant" not in text
+
+
+def test_the_fit_records_a_walk_forward_score_for_every_market_it_adopts():
+    import inspect
+    src = inspect.getsource(propcal.fit)
+    assert '"walk_forward": walk_forward_brier(pairs)' in src
+
+
+def test_the_bake_off_could_not_have_judged_these_markets():
+    """Why this exists at all. calibrate.bake_off needs MIN_HOLDOUT test
+    rows and takes HOLDOUT_FRACTION of the sample; at 409, 490 and 643
+    pairs it is skipped, so nothing out-of-sample ever ran."""
+    from engine import calibrate as cal
+    for n in (409, 490, 643):
+        test_n = n - int(n * (1.0 - cal.HOLDOUT_FRACTION))
+        assert test_n < cal.MIN_HOLDOUT, (
+            f"{n} pairs now reaches the bake-off — propcal's own "
+            f"walk-forward may be redundant, check before removing it")
 
 
 # --- the walk's own counters -------------------------------------------------
