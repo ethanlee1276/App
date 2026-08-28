@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 
 from .odds import american_to_prob, devig_two_way, expected_value, american_to_decimal
 from .statmath import clamp
-from .calibrate import apply_temperature, correction_for
+from .calibrate import calibrated, correction_for
 from .betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
 
 # Odds windows — outside these the payout doesn't justify the variance
@@ -263,8 +263,7 @@ def calibrated_prob(sport: str, market: str, model_prob: float,
     the broken-price guard and silently emptied the whole list while the
     shrunk picks survived. Every displayed probability goes through this
     one path now."""
-    _t, _b = correction_for(sport, market)
-    raw = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
+    raw = clamp(calibrated(sport, market, model_prob), 1e-4, 0.999)
     implied, _ = _price(raw, over_odds, under_odds, sport, market)
     return clamp(implied + MARKET_SHRINK * (raw - implied), 1e-4, 0.999), implied
 
@@ -276,8 +275,24 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                data_quality: float = 1.0,
                headshot: str = "") -> LongShot | None:
     """Price a modelled probability against the book and grade it."""
-    _t, _b = correction_for(sport, market)
-    raw_prob = clamp(apply_temperature(model_prob, _t, _b), 1e-4, 0.999)
+    # `calibrated`, not `apply_temperature`. A market whose bake-off chose
+    # the ISOTONIC form stores a curve, and `calibrated` is the only
+    # function that applies it — its own docstring calls itself "THE entry
+    # point" and says "a stored isotonic curve wins over the temperature,
+    # because the curve only exists when it beat the temperature on a
+    # held-out slice". Two callers honoured that and four did not, so
+    # every board but NFL yardage and MLB props priced through the form
+    # that LOST its own bake-off.
+    #
+    # It went live on 2026-08-28: with 2021 and 2024 play-by-play
+    # backfilled, `nfl:anytime_td` re-fitted on 22,581 pairs and isotonic
+    # won at 0.14210 against the temperature's 0.14226. The curve was
+    # written to disk and the touchdown board went on ignoring it.
+    #
+    # A market with no curve takes the identical path as before — the
+    # disable switch and the boundary veto live inside `calibrated` too —
+    # so this is a no-op everywhere the temperature really did win.
+    raw_prob = clamp(calibrated(sport, market, model_prob), 1e-4, 0.999)
     implied, exact = _price(raw_prob, odds, under_odds, sport, market)
     if not exact:
         # Say WHY there is one side. "Only one side quoted" on its own reads

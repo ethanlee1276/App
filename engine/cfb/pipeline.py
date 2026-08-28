@@ -80,9 +80,11 @@ def evaluate_play(play: dict) -> dict:
     # Temperature (engine/calibrate.py): the shared layer produced this
     # probability; the college record corrects it. Keyed "cfb" so a fit
     # for this sport's claims never leaks anywhere else.
-    from ..calibrate import apply_temperature, correction_for
-    _t, _b = correction_for("cfb", market)
-    p_model = apply_temperature(float(play["p_model"]), _t, _b)
+    # `calibrated` applies whatever form won this market's bake-off; the
+    # temperature alone silently discards a stored isotonic curve. See
+    # engine/longshots.build_pick for what that cost.
+    from ..calibrate import calibrated
+    p_model = calibrated("cfb", market, float(play["p_model"]))
 
     p_market, _ = devig(odds, opp_odds)
     raw = p_model - p_market

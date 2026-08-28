@@ -82,9 +82,11 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # — an uncalibrated probability would still decide OVER vs UNDER (see
     # engine/mlb/betting.py, the same doctrine). Keyed by tune.key, so the
     # WNBA's fit never leaks onto the NBA or the reverse.
-    from ..calibrate import apply_temperature, correction_for
-    _t, _b = correction_for(tune.key, stat)
-    p_model_over = apply_temperature(p_over(stat, proj, line, tune), _t, _b)
+    # `calibrated` applies whatever form won this market's bake-off; the
+    # temperature alone silently discards a stored isotonic curve. See
+    # engine/longshots.build_pick for what that cost.
+    from ..calibrate import calibrated
+    p_model_over = calibrated(tune.key, stat, p_over(stat, proj, line, tune))
     mkt_over, mkt_under = devig(over_odds, under_odds)
     hold = market_hold(over_odds, under_odds)
 
