@@ -23,7 +23,10 @@ deploy and on the config change that turns the flag on.
 
 So this file starts a REAL server against a REAL data directory that has
 NOT been sealed, and fetches like a stranger. Everything else is a proxy
-for this.
+for this. Real means a real server, a real directory on disk and a real
+fetch over the wire — but the boards in that directory are PLANTED, not
+the working copy's. web/data is gitignored, so reading it would make the
+answer depend on which machine asked.
 
     python3 tests/test_paywall_live.py
 """
@@ -58,6 +61,17 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def _not_the_real_boards(directory, names):
+    """copytree filter: take all of web/ except its data directory.
+
+    Only the top-level web/data is skipped — a `data` folder nested
+    deeper is a real asset and gets copied."""
+    web = os.path.abspath(os.path.join(ROOT, "web"))
+    if os.path.abspath(directory) == web:
+        return {"data"} & set(names)
+    return set()
+
+
 def _get(url, cookie=None):
     req = urllib.request.Request(url)
     if cookie:
@@ -77,8 +91,17 @@ class Site:
     def __init__(self, paywall=True):
         self.dir = tempfile.mkdtemp(prefix="qb-wall-")
         self.web = os.path.join(self.dir, "web")
-        shutil.copytree(os.path.join(ROOT, "web"), self.web)
-        self.planted = _plant_unsealed(os.path.join(self.web, "data"))
+        # web/data IS DELIBERATELY NOT COPIED. It is gitignored, so what
+        # it holds is whatever the machine happened to build: Ethan's real
+        # slate on the laptop, nothing at all in a fresh clone, and on a
+        # box that has run this suite once, the leftovers of whichever
+        # test last wrote a board into the tree. Copying it made this
+        # file's verdict a reading of the disk rather than of the gate —
+        # see FREE_PLANTED for the run where that went red on checkout.
+        # The fixtures below are the whole data directory now.
+        shutil.copytree(os.path.join(ROOT, "web"), self.web,
+                        ignore=_not_the_real_boards)
+        self.planted = _plant(os.path.join(self.web, "data"))
         self.port = _free_port()
         env = dict(os.environ)
         env.update({
@@ -147,12 +170,51 @@ PLANTED = {
 }
 
 
-def _plant_unsealed(data_dir):
-    """Write the fixture boards. Returns the names planted."""
+#: The FREE half, planted for the same reason the paid half is.
+#:
+#: `record.json` is free by design — it is the evidence the subscription
+#: is sold on — and the check below fetches it to prove the seal did not
+#: take the free half down with the paid one. It used to arrive via the
+#: copytree, out of the working copy's gitignored web/data, and that made
+#: this file answer a question about the machine instead of the code:
+#:
+#:   fresh clone      no web/data at all, so /data/record.json was a 404
+#:                    and the suite was RED on checkout
+#:   after one run    some other test had written a board into the repo's
+#:                    web/data, record.json now existed, and the identical
+#:                    commit went GREEN
+#:
+#: Same code, opposite verdicts, decided by what happened to be on disk —
+#: and the green one is the dangerous direction, because it is the one
+#: that looks like a passing gate. Planted, the check reads the gate.
+FREE_PLANTED = {
+    "record.json": {
+        "generated_at": "2026-08-21T00:00:00Z",
+        "overall": {"settled": 41, "wins": 23, "losses": 17, "pushes": 1,
+                    "win_rate": 0.575},
+        "recent": [{"player": "Test Player", "market": "receptions",
+                    "side": "over", "line": 4.5, "result": "win",
+                    "graded_at": "2026-08-20"}],
+    },
+}
+
+
+def _plant(data_dir):
+    """Write the fixture boards, paid and free. Returns the PAID names.
+
+    The return value feeds the leak checks, which are only meaningful
+    against boards that carry paid rows, so the free fixtures are written
+    but not returned."""
     os.makedirs(data_dir, exist_ok=True)
     for name, payload in PLANTED.items():
         assert not gate.is_free(name), \
             f"{name} is free by design, so planting it proves nothing"
+        with open(os.path.join(data_dir, name), "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    for name, payload in FREE_PLANTED.items():
+        assert gate.is_free(name), \
+            f"{name} is paid, so fetching it below tests the lock rather " \
+            "than the free half it is supposed to prove still works"
         with open(os.path.join(data_dir, name), "w", encoding="utf-8") as fh:
             json.dump(payload, fh)
     return sorted(PLANTED)
@@ -220,6 +282,18 @@ def main():
     test_every_entrypoint_seals(steps)
     ok("both entrypoints seal before they bind")
 
+    # The filter is the thing being trusted, so make it answer directly.
+    # The guard inside the run below catches a filter that has stopped
+    # filtering, but only once a server is up; this says it in one line,
+    # and it says it even if the fixture never boots.
+    web = os.path.join(ROOT, "web")
+    assert _not_the_real_boards(web, ["data", "js", "css"]) == {"data"}, \
+        "the copytree filter stopped skipping the working copy's boards"
+    nested = os.path.join(web, "fonts")
+    assert _not_the_real_boards(nested, ["data"]) == set(), \
+        "the filter is skipping a nested data/ that is a real asset"
+    ok("the copytree filter skips web/data and nothing else")
+
     site = Site(paywall=True)
     try:
         # The fixture has to be genuinely leaky before the server starts,
@@ -230,6 +304,23 @@ def main():
         assert all(before.values()), \
             f"the planted fixture carries no paid rows: {before}"
         ok(f"the fixture is genuinely unsealed ({sum(before.values())} paid rows)")
+
+        # THE GUARD ON EVERYTHING BELOW. Every assertion in this file
+        # reads the served tree, so the tree has to be the fixture and
+        # only the fixture. When the copytree still brought the working
+        # copy's web/data along, an untracked board left there by another
+        # test — or by a real build — silently joined the run, and the
+        # checks graded whatever it contained. If the ignore filter ever
+        # stops filtering, this is the line that says so, instead of the
+        # verdict quietly starting to depend on the box.
+        served = sorted(n for n in os.listdir(os.path.join(site.web, "data"))
+                        if n.endswith(".json"))
+        assert served == sorted(list(PLANTED) + list(FREE_PLANTED)), (
+            f"the served tree holds boards nobody planted: {served} — "
+            "web/data is gitignored, so anything extra in here is the "
+            "machine leaking into the verdict")
+        ok(f"the served tree is the fixture and nothing else "
+           f"({len(served)} boards)")
 
         # --- THE ONE THAT FAILED --------------------------------------
         leaked = _paid_boards(site.web)
