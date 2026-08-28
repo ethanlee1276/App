@@ -43,24 +43,64 @@ def test_the_default_falls_back_one_season_and_no_further():
     assert got[1] == got[0] - 1
 
 
+def test_the_two_callers_share_one_fallback():
+    """The `--bets` path reimplemented the season loop and left out the
+    `DataUnavailable` arm, so it crashed on an unplayed 2026 instead of
+    falling back to 2025 — the exact failure the fallback exists to
+    prevent, in a copy of the fallback. One implementation now."""
+    import inspect
+    assert "nfl_replay(" in inspect.getsource(lab.nfl_props)
+    assert "nfl_replay(" in inspect.getsource(lab.main)
+    body = inspect.getsource(lab.main)
+    assert "backtest_from_stats(" not in body, \
+        "main is replaying on its own again"
+
+
+def test_the_shared_fallback_survives_an_unplayed_season():
+    """The crash, reproduced: the newest season 404s and the replay has to
+    keep going rather than raise."""
+    from engine.sources.fetch import DataUnavailable
+    from engine import backtest as B
+    saved = B.backtest_from_stats
+    calls = []
+
+    def fake(season, weeks, **kw):
+        calls.append(season)
+        if season == max(lab._seasons_to_try(None)):
+            raise DataUnavailable(f"nflverse has nothing for {season}")
+        class _R:
+            n = 5
+            longshots = None
+        return _R()
+    try:
+        B.backtest_from_stats = fake
+        rep, season, tried = lab.nfl_replay(None, [6, 7], {}, log=lambda *a: None)
+    finally:
+        B.backtest_from_stats = saved
+    assert rep is not None, "the unplayed season took the whole run down"
+    assert season == max(lab._seasons_to_try(None)) - 1
+    assert any("nflverse has nothing" in t for t in tried)
+
+
 def test_the_fallback_is_driven_by_an_empty_result_not_by_the_calendar():
     """A season with a stats file but no settled props in the window has
     to fall through too — a 404 is not the only way to have nothing."""
     import inspect
-    src = inspect.getsource(lab.nfl_props)
-    assert "for season in _seasons_to_try(season)" in src
-    assert "if candidate.n:" in src, \
+    src = inspect.getsource(lab.nfl_replay)
+    assert "for candidate in _seasons_to_try(season)" in src
+    assert "if rep.n:" in src, \
         "an empty replay must fall through, not be reported as the answer"
-    assert "if rep is None:" in src
+    assert "if rep is None:" in inspect.getsource(lab.nfl_props)
 
 
 def test_every_season_tried_is_named_when_none_of_them_worked():
     """"unavailable" with no reason is how a data gap gets mistaken for a
     model that found nothing."""
     import inspect
-    src = inspect.getsource(lab.nfl_props)
-    assert 'tried.append' in src
-    assert '"; ".join(tried)' in src
+    assert 'tried.append' in inspect.getsource(lab.nfl_replay)
+    assert '"; ".join(tried)' in inspect.getsource(lab.nfl_props)
+    assert '"; ".join(tried)' in inspect.getsource(lab.main), \
+        "the --bets path must name the seasons it could not reach too"
 
 
 # --- the printer -------------------------------------------------------------

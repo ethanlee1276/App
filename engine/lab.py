@@ -234,6 +234,35 @@ def nfl_real_lines(conn, markets=NFL_MARKETS) -> dict:
     return out
 
 
+def nfl_replay(season: int | None, weeks: list, real: dict, log=print):
+    """``(report, season, tried)`` — the newest season that produced one.
+
+    ONE implementation, because the second one was wrong. The `--bets`
+    path reimplemented this loop and left out the `DataUnavailable`
+    arm, so it crashed on an unplayed 2026 instead of falling back to
+    2025 — the exact failure the fallback exists to prevent, in a copy of
+    the fallback.
+    """
+    from .backtest import backtest_from_stats
+    from .sources.fetch import DataUnavailable
+    tried: list = []
+    for candidate in _seasons_to_try(season):
+        try:
+            rep = backtest_from_stats(candidate, weeks, real_lines=real)
+        except DataUnavailable as exc:
+            tried.append(f"{candidate}: {str(exc).split(chr(10))[0]}")
+            continue
+        except Exception as exc:                   # noqa: BLE001
+            log(f"  lab: nfl props {candidate} skipped — {exc}")
+            tried.append(f"{candidate}: {exc}")
+            continue
+        if rep.n:
+            return rep, candidate, tried
+        tried.append(f"{candidate}: no settled props in weeks "
+                     f"{weeks[0]}–{weeks[-1]}")
+    return None, _seasons_to_try(season)[0], tried
+
+
 def nfl_props(season: int | None = None, weeks=None, log=print,
               conn=None) -> dict:
     """Replay NFL props walk-forward. The weekly-stats feed is release-gated,
@@ -266,26 +295,10 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     # season, and a run in week 2 wants last season too (six weeks of
     # priors do not exist yet). Both are "the current season produced
     # nothing", so both are the same fallback.
-    tried = []
-    rep = None
-    for season in _seasons_to_try(season):
-        try:
-            candidate = backtest_from_stats(season, weeks, real_lines=real)
-        except DataUnavailable as exc:
-            tried.append(f"{season}: {str(exc).split(chr(10))[0]}")
-            continue
-        except Exception as exc:                   # noqa: BLE001
-            log(f"  lab: nfl props {season} skipped — {exc}")
-            tried.append(f"{season}: {exc}")
-            continue
-        if candidate.n:
-            rep = candidate
-            break
-        tried.append(f"{season}: no settled props in weeks "
-                     f"{weeks[0]}–{weeks[-1]}")
+    rep, season, tried = nfl_replay(season, weeks, real, log=log)
     if rep is None:
         return {"unavailable": "; ".join(tried) or "nothing to replay",
-                "season": _seasons_to_try(None)[0]}
+                "season": season}
     d = report_to_dict(rep, "all", "All prop markets")
     d["season"] = season
     d["weeks"] = [weeks[0], weeks[-1]]
@@ -615,20 +628,23 @@ def main(argv=None) -> int:
         # BacktestReport, which `build()` has already flattened to JSON by
         # the time it returns — and re-running the walk-forward a second
         # time just to recover them would double the slowest thing here.
-        from .backtest import backtest_from_stats
         weeks = list(range(6, 18))
-        real = nfl_real_lines(hconn)
-        for season in _seasons_to_try(args.season or None):
-            rep = backtest_from_stats(season, weeks, real_lines=real)
-            if not rep.n:
-                continue
-            print(f"\nNFL {season} · all prop markets")
-            dump_bets(rep)
-            if rep.longshots is not None and rep.longshots.n:
-                print(f"\nNFL {season} · anytime touchdown")
-                dump_bets(rep.longshots)
+        rep, season, tried = nfl_replay(args.season or None, weeks,
+                                        nfl_real_lines(hconn))
+        if rep is None:
+            print("nothing to replay — " + ("; ".join(tried) or "no reason given"))
             return 0
-        print("nothing to replay")
+        print(f"\nNFL {season} · all prop markets")
+        dump_bets(rep)
+        print(f"\nNFL {season} · anytime touchdown")
+        if rep.longshots is not None and rep.longshots.n:
+            dump_bets(rep.longshots)
+        else:
+            # NOT the same as "measured, found nothing". A scorer prop is
+            # built with no line at all, so with no harvested touchdown
+            # closes there is nothing for the board to price.
+            print("  (no scorer prop carried a harvested price — nothing to "
+                  "settle. `harvest_odds.py nfl --markets anytime_td`)")
         return 0
     if args.season:
         # An explicit season only reaches the NFL prop harness, which is
