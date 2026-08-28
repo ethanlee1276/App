@@ -118,6 +118,36 @@ def refit_sport(sport: str, db: str = "data/history.db") -> list[str]:
     return lines
 
 
+def refit_nfl_props(db: str = "data/history.db") -> list[str]:
+    """The yardage and reception markets, against REAL book lines.
+
+    `calibrate.py` fits these through `engine.logwalk`, which prices
+    every game against a trailing-average proxy. The correction it learns
+    is about that proxy and is applied live against a book — and on
+    2026-08-28 two of the four markets had been fitted into corrections
+    that could never output more than 0.470, so rushing and receiving
+    yards could only ever be bet UNDER, for any player, in any game.
+
+    `engine.propcal` refits them on the book-priced subset of the
+    walk-forward, and refuses a market that has too little of it rather
+    than accepting one fitted against the wrong opponent.
+    """
+    try:
+        from . import db as _db
+        from . import propcal
+        path = db if os.path.isabs(db) else os.path.join(ROOT, db)
+        if not os.path.isfile(path):
+            return []
+        conn = _db.connect(path)
+        try:
+            out = propcal.fit(conn, log=lambda *a: None)
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  nfl prop calibration skipped: {exc}"]
+    return propcal.report_lines(out)
+
+
 def refit_touchdowns(db: str = "data/history.db") -> list[str]:
     """The touchdown market, which no other fitter can reach.
 
@@ -206,6 +236,12 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     # touchdown has no line for `calibrate.fit_market` to walk.
     lines.extend(refit_touchdowns(db))
     lines.extend(refit_cfb_touchdowns(db))
+    # AFTER the three CLIs above, deliberately. `calibrate.py` fits these
+    # same markets against a trailing-average proxy; this refits them
+    # against real book lines and must therefore be the last word, not
+    # the first. It refuses a market with too little book-priced history
+    # rather than leaving the proxy fit in place unremarked.
+    lines.extend(refit_nfl_props(db))
     # The conviction ladder, re-measured against the ingested seasons.
     # Weekly and not nightly on purpose: it replays every prop week by
     # week and a season is minutes, not seconds.
