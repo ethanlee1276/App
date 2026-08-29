@@ -104,6 +104,13 @@ class LongShot:
     primary_reason: str
     reasons: list[str] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
+    #: The overround this pick was actually priced against, and where
+    #: that number came from. Prose in a caveat is for the reader; a
+    #: preflight needs to count how many of a live board's games got a
+    #: MEASURED vig and how many fell back, and parsing a sentence to
+    #: find out is how a check quietly stops checking.
+    vig: float = 0.0
+    vig_source: str = ""
     game_date: str = ""
     game_kickoff: str = ""
     live: bool = False
@@ -130,6 +137,7 @@ class LongShot:
             "primary_reason": self.primary_reason,
             "reasons": self.reasons, "caveats": self.caveats,
             "matchup": f"{self.team} vs {self.opponent}",
+            "vig": round(self.vig, 4), "vig_source": self.vig_source,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,
             "live": self.live, "headshot": self.headshot,
             "headline": f"{self.player} — {self.market_label} ({self.odds:+d})",
@@ -254,6 +262,24 @@ def one_sided_hold(sport: str, market: str) -> tuple[float, int]:
     except Exception:  # noqa: BLE001
         pass
     return ONE_SIDED_HOLD, 0
+
+
+def vig_of(hold_override, sport: str, market: str,
+           under_odds: int | None = None) -> tuple[float, str]:
+    """``(overround, where it came from)`` for the price about to be used.
+
+    One function so the card, the watchlist and the preflight cannot
+    disagree about what a pick was priced against.
+    """
+    from .devig import as_devig
+    if under_odds:
+        return 0.0, "two-way"
+    measured = as_devig(hold_override)
+    if measured:
+        where = getattr(measured, "book", "") or ""
+        return measured.overround, f"measured:{where}" if where else "measured"
+    hold, n = one_sided_hold(sport, market)
+    return hold - 1.0, (f"journal:{n}" if n else "assumed")
 
 
 def _price(model_prob: float, over_odds: int, under_odds: int | None,
@@ -390,13 +416,15 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"too large to trust, treated as a pricing/data error"]
 
     confidence = _confidence(edge, opportunities, opp_target, data_quality)
+    vig, vig_source = vig_of(hold_override, sport, market,
+                             under_odds if exact else None)
     ev = expected_value(model_prob, odds)
     grade = _grade(confidence, edge, ev) if credible else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
         model_prob=model_prob, implied_prob=implied, edge=edge,
-        ev_per_unit=ev,
+        ev_per_unit=ev, vig=round(vig, 4), vig_source=vig_source,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
         grade=grade, expected_opportunities=opportunities,
         primary_reason=primary_reason, reasons=reasons, caveats=caveats,

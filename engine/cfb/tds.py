@@ -557,9 +557,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             # two lists cannot disagree about the same player.
             if in_odds_window(odds, CFB_WATCH_ODDS):
                 from ..longshots import calibrated_prob
+                from ..longshots import vig_of
                 wp, wimp = calibrated_prob("cfb", "anytime_td", prob, odds,
                                            best.get("no_odds"),
                                            hold_override=fairs.get(norm))
+                wvig, wsrc = vig_of(fairs.get(norm), "cfb", "anytime_td",
+                                    best.get("no_odds"))
                 wev = wp * american_to_decimal(odds) - 1.0
                 if wev <= 0.60:        # a broken price is not a likelihood
                     watch_rows.append({
@@ -568,6 +571,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "odds": odds,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),
+                        "vig": round(wvig, 4), "vig_source": wsrc,
                         "ev_per_unit": round(wev, 4),
                         "primary_reason": reasons[1],
                         "caveats": caveats[:1],

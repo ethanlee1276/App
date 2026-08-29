@@ -434,6 +434,9 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
         prob, implied = calibrated_prob("nfl", ANYTIME_TD, raw_prob, odds,
                                         c.get("under_odds"),
                                         hold_override=c.get("hold"))
+        from .longshots import vig_of
+        vig, vig_source = vig_of(c.get("hold"), "nfl", ANYTIME_TD,
+                                 c.get("under_odds"))
         if prob * american_to_decimal(odds) - 1.0 > 0.60:
             continue                   # a broken price, not an edge
         rows.append({
@@ -442,6 +445,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "odds": odds,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
+            "vig": round(vig, 4), "vig_source": vig_source,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
             # TDs per game, most recent first — the spark at line 0.5.
