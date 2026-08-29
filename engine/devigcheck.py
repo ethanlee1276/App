@@ -32,6 +32,14 @@ Reads a published board JSON. No database, no API key, no credits.
     python3 -m engine.devigcheck web/data/recommendations.json
     python3 -m engine.devigcheck web/data/cfb.json
 
+THE PUBLIC FILE IS THE PAYWALLED COPY. engine/gate strips every priced
+row out of what web/data/ serves and keeps the real board in data/built/,
+so pointing this at the public path reports "locked" and learns nothing —
+which is what the first two live runs did. When the file it is given is
+locked, it reads the private copy instead and says which one it used,
+because reading the unredacted board is a deliberate act and should be
+visible in the output rather than silent.
+
 Standard library only.
 """
 
@@ -76,8 +84,16 @@ def board_state(board: dict) -> tuple[str, str]:
     reader nothing and looked like an alarm.
     """
     if board.get("locked"):
-        return "LOCKED", (board.get("locked_reason")
-                          or "the board is locked, so nothing was priced")
+        # Reaching here means `load` could not follow to the private copy,
+        # so this is the paywalled payload and it carries no priced rows
+        # by design. Saying "locked: subscription" and stopping reads as
+        # a finding about the board; it is a finding about which file was
+        # opened.
+        return "PAYWALLED COPY", (
+            "engine/gate strips every priced row from what web/data/ "
+            "serves, so this file cannot show whether the de-vig ran. "
+            "The real board is data/built/<name>.json — point this there, "
+            "or run it from the repo root so it can follow on its own")
     if board.get("generated_from") == "schedule-only":
         return "NO ODDS YET", (
             "schedule-only board: no odds were pulled, so there is no "
@@ -239,6 +255,45 @@ def report_lines(board: dict) -> list:
     return lines
 
 
+def full_copy_of(path):
+    """The private board behind a paywalled public one, or None.
+
+    Resolved the same way `gate.publish` writes it — root-relative from
+    the public path — rather than by jumping to a global directory, so a
+    checkout that is not this one reads its own boards.
+    """
+    from pathlib import Path
+    public = Path(path)
+    # web/data/<name>.json -> <root>/data/built/<name>.json
+    root = public.resolve().parent.parent.parent
+    full = root / "data" / "built" / public.name
+    return full if full.is_file() else None
+
+
+def load(path) -> tuple[dict, str, str]:
+    """``(board, path actually read, note)``.
+
+    Follows a locked public board to its private copy. A board that is
+    locked with no private copy behind it is reported as such rather than
+    analysed, since the redacted payload carries no priced rows at all
+    and would otherwise read as a clean empty board.
+    """
+    with open(path) as fh:
+        board = json.load(fh)
+    if not board.get("locked"):
+        return board, str(path), ""
+    full = full_copy_of(path)
+    if not full:
+        return board, str(path), (
+            "this is the PUBLIC copy, which engine/gate strips of every "
+            "priced row — and no private copy was found beside it. Run "
+            "this against data/built/<name>.json instead")
+    with open(full) as fh:
+        board = json.load(fh)
+    return board, str(full), ("the public copy is paywalled, so this read "
+                              "the private board behind it")
+
+
 def _main(argv) -> int:                          # pragma: no cover
     if not argv:
         print("usage: python3 -m engine.devigcheck <board.json> [more.json]")
@@ -246,13 +301,16 @@ def _main(argv) -> int:                          # pragma: no cover
     worst = 0
     for path in argv:
         try:
-            with open(path) as fh:
-                board = json.load(fh)
+            board, read, note = load(path)
         except (OSError, ValueError) as exc:
             print(f"\n{path}\n  cannot read: {exc}")
             worst = max(worst, 2)
             continue
         print(f"\n{path}")
+        if note:
+            print(f"  note: {note}")
+        if read != str(path):
+            print(f"  reading: {read}")
         for line in report_lines(board):
             print(line)
         state, _ = verdict(summarise(board))

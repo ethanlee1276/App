@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.devigfit import (
     M_MIN, M_MAX, K_MIN, K_MAX, MIN_SPLIT, PIN_TOL, BANDS, TRAIN_SHARE,
     log_loss, proportional, power, split, compare, band_lines, report_lines,
-    _fit,
+    haircut_lines, _fit,
 )
 
 
@@ -210,18 +210,25 @@ def test_the_bands_cover_every_price_exactly_once():
         assert a_hi == b_lo
 
 
-def test_the_band_table_names_the_nearer_method_per_band():
+def test_the_band_table_scores_both_methods_in_every_band():
     """Where the two disagree is the point, so the ends get checked
-    separately — a method that wins overall while being wrong at the
-    short end has not earned the short end."""
+    separately — a method that wins overall while being wrong at one end
+    has not earned that end. Replaced a "nearer" column, which called a
+    rounding error a win and hid how badly the loser lost."""
     rows = _market(20000, truth=lambda r: r ** 1.30, seed=23)
     lines = band_lines(rows, 1.25, 1.30)
-    body = [ln for ln in lines[1:] if "thin" not in ln]
+    body = [ln for ln in lines[1:] if ln.strip().startswith("0.")
+            and "thin" not in ln]
     assert body
-    assert all(ln.split()[-1] in ("power", "prop", "tie") for ln in body)
-    # The planted truth IS the power transform, so it should win the
-    # bands it is measured on rather than only the summary number.
-    assert sum(1 for ln in body if ln.endswith("power")) > len(body) / 2
+    for ln in body:
+        float(ln.split()[-1])              # power z parses
+        float(ln.split()[-2])              # prop z parses
+    # The planted truth IS the power transform, so its total miss should
+    # be the smaller one rather than merely winning more bands.
+    chi = [ln for ln in lines if "chi-square" in ln][0]
+    prop_chi = float(chi.split("proportional")[1].split()[0])
+    power_chi = float(chi.split("power")[1].split()[0])
+    assert power_chi < prop_chi
 
 
 def test_a_thin_band_is_marked_rather_than_averaged():
@@ -245,6 +252,72 @@ def test_it_asks_about_the_book_not_about_us():
             if isinstance(n, ast.Constant) and isinstance(n.value, str)}
     assert "market" in keys and "scored" in keys
     assert "prob" not in keys, "the model's probability leaked into the join"
+
+
+# --- reading the bands ----------------------------------------------------
+def _at(band_rates, n=900):
+    """Rows whose realised rate is set exactly, band by band."""
+    rows = []
+    for (lo, hi), (raw, act) in zip(BANDS, band_rates):
+        hits = int(round(act * n))
+        for i in range(n):
+            # Spread across weeks so `split` has a timeline to cut on —
+            # a helper that parks every row in one week makes every
+            # caller look "too thin" for reasons of its own making.
+            rows.append({"season": 2025, "week": str(1 + i % 6),
+                         "market": raw, "scored": 1 if i < hits else 0})
+    return rows
+
+
+def test_the_bands_carry_error_bars():
+    """Without them the table misleads. The first live run showed power
+    "nearer" in two bands and proportional in three, which reads as a coin
+    flip — scored against each band's standard error, proportional matched
+    four bands almost exactly and missed one by 3.1 sigma while power was
+    mediocre in all five. Same numbers, completely different diagnosis."""
+    rows = _at([(0.058, 0.050), (0.135, 0.088), (0.226, 0.193),
+                (0.352, 0.321), (0.547, 0.465)])
+    lines = band_lines(rows, 1.1606, 1.1236)
+    assert "prop z" in lines[0] and "power z" in lines[0]
+    assert any("chi-square" in ln for ln in lines)
+
+
+def test_a_band_the_shape_misses_shows_up_as_a_big_z():
+    """The whole point: one band at 3 sigma is where the shape is wrong,
+    whatever the summary log loss says."""
+    rows = _at([(0.058, 0.050), (0.135, 0.088), (0.226, 0.193),
+                (0.352, 0.321), (0.547, 0.465)])
+    lines = band_lines(rows, 1.1606, 1.1236)
+    body = [ln for ln in lines[1:] if ln.strip().startswith("0.")]
+    zs = [float(ln.split()[-2]) for ln in body]
+    assert max(abs(z) for z in zs) > 2.5
+    # and it is the 0.10-0.18 band, not a random one
+    assert abs(zs[1]) == max(abs(z) for z in zs)
+
+
+def test_the_haircut_column_shows_the_shape_without_either_method():
+    """Both transforms are attempts to predict what the market charged.
+    Seeing that column directly says whether either shape is the right
+    family at all — and on the live data it was not: four bands near 14%
+    and one at 35% is flat-plus-a-spike, not a smooth curve."""
+    rows = _at([(0.058, 0.050), (0.135, 0.088), (0.226, 0.193),
+                (0.352, 0.321), (0.547, 0.465)])
+    lines = haircut_lines(rows)
+    cuts = [float(ln.split()[-1].rstrip("%")) for ln in lines[2:]]
+    assert len(cuts) == 5
+    flat = [cuts[0], cuts[2], cuts[3], cuts[4]]
+    assert max(flat) - min(flat) < 10        # four bands cluster
+    assert cuts[1] > max(flat) + 15          # one spikes well clear
+
+
+def test_the_report_says_what_the_data_did_and_did_not_settle():
+    """Both methods beating the raw price IS a result and must be stated;
+    the choice between them was not, and must not be dressed up as one."""
+    rows = _at([(0.058, 0.050), (0.135, 0.088), (0.226, 0.193),
+                (0.352, 0.321), (0.547, 0.465)], n=400)
+    text = "\n".join(report_lines(rows, min_split=1))
+    assert "not settled" in text
+    assert "beat the raw price" in text
 
 
 # --- both sports ----------------------------------------------------------

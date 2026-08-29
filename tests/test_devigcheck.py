@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.devigcheck import (
     SUSPICIOUS_VIG, SUSPICIOUS_DEFAULT, rows_of, summarise, verdict,
-    report_lines, board_state, _sport_of,
+    report_lines, board_state, _sport_of, load, full_copy_of,
 )
 
 
@@ -154,13 +154,72 @@ def test_a_slate_with_no_odds_yet_is_not_reported_as_a_failure():
     assert any("prop menus post" in w for w in why)
 
 
-def test_a_locked_board_says_it_is_locked():
-    b = _board()
-    b["locked"] = True
-    b["locked_reason"] = "slate closed"
-    state, why = verdict(summarise(b))
-    assert state == "LOCKED"
-    assert "slate closed" in why[0]
+# --- the paywall ----------------------------------------------------------
+def _tree():
+    """A checkout with a paywalled public board and the real one behind."""
+    import json
+    import os
+    import tempfile
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "web", "data"))
+    os.makedirs(os.path.join(root, "data", "built"))
+    pub = os.path.join(root, "web", "data", "cfb.json")
+    full = os.path.join(root, "data", "built", "cfb.json")
+    with open(pub, "w") as fh:
+        json.dump({"sport": "cfb", "date": "2026-08-29",
+                   "generated_at": "x", "locked": {"long_shots": 3},
+                   "locked_reason": "subscription"}, fh)
+    with open(full, "w") as fh:
+        json.dump(_board("cfb", picks=[_row()]), fh)
+    return root, pub, full
+
+
+def test_it_follows_a_paywalled_board_to_the_real_one():
+    """The first two live runs learned nothing because they read
+    web/data/, which engine/gate strips of every priced row. Pointing at
+    the public file is the natural thing to do, so it has to work."""
+    root, pub, full = _tree()
+    board, read, note = load(pub)
+    assert read == full
+    assert "paywalled" in note
+    assert verdict(summarise(board))[0] == "READY"
+
+
+def test_an_unlocked_board_is_read_where_it_was_given():
+    """Following to the private copy is only for a board that is
+    actually redacted — otherwise this would silently analyse a
+    different file than the one named."""
+    import json
+    import os
+    root, pub, full = _tree()
+    with open(pub, "w") as fh:
+        json.dump(_board("cfb", picks=[_row("Public", vig=0.30)]), fh)
+    board, read, note = load(pub)
+    assert read == pub and not note
+    assert board["long_shots"][0]["player"] == "Public"
+    assert os.path.isfile(full)          # the other copy exists and was ignored
+
+
+def test_a_locked_board_with_nothing_behind_it_says_which_file_to_open():
+    """Reporting "locked: subscription" reads as a finding about the
+    board. It is a finding about which file was opened."""
+    import os
+    root, pub, full = _tree()
+    os.remove(full)
+    board, read, note = load(pub)
+    assert read == pub
+    assert "data/built" in note
+    state, why = verdict(summarise(board))
+    assert state == "PAYWALLED COPY"
+    assert "data/built" in why[0]
+
+
+def test_the_private_copy_is_resolved_relative_to_its_own_checkout():
+    """`gate.publish` writes it root-relative for a reason: a run against
+    a tree that is not this one must read ITS boards, not this machine's."""
+    root, pub, full = _tree()
+    assert str(full_copy_of(pub)) == full
+    assert str(full_copy_of(pub)).startswith(root)
 
 
 def test_a_pull_that_never_happened_is_told_apart_from_one_that_found_nothing():

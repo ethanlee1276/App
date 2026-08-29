@@ -81,13 +81,47 @@ The difference is not academic: under proportional, MAX_CREDIBLE_EDGE and
 the EV floor together make NO price shorter than +364 gradeable at a 30%
 hold, which silently deletes the short half of the touchdown board.
 
-WHICH ONE IS RIGHT IS AN EMPIRICAL QUESTION AND IT IS ANSWERABLE -- the
-droplet has 33,926 harvested anytime-TD closing prices, and scoring both
-methods against realised outcomes decides it. Until that is run, POWER is
-the default: it is what the handbook prescribes above an 8% hold, it is
-the standard treatment of a bias that is well established, and the
-uniform-vig assumption behind proportional is known to be false rather
-than merely unverified.
+IT WAS RUN, AND IT DID NOT SETTLE THE WAY THE ARGUMENT SAID. Scored on
+3,890 harvested NFL closes (2,635 fitted, 1,255 held out), both methods
+beat the raw price decisively -- log loss 0.41583 raw against 0.41133
+proportional and 0.41118 power -- so the de-vig itself is doing real
+work. Between the two there is nothing: power by 0.00016, inside this
+module's own "not a result" band.
+
+The band table is the part that matters, and it undercuts the reason
+POWER is the default. What the market actually charged, raw price
+against realised rate:
+
+    raw band     n     charged    prop z   power z
+    0.00-0.10   968     13.8%      +0.00     -1.28
+    0.10-0.18   898     34.8%      +3.07     +1.90
+    0.18-0.28   838     14.6%      +0.15     -0.37
+    0.28-0.45   840      8.8%      -1.06     -0.68
+    0.45-1.01   346     15.0%      +0.22     +1.60
+
+Four bands cluster near 14% and one sits at 35%. That is FLAT PLUS A
+SPIKE, not the smooth monotone curve a power exponent draws -- so the
+favourite-longshot story used to justify power is not what this data
+shows. Proportional matches four bands almost exactly and misses the
+fifth by 3.1 sigma; power is mediocre in all five. Neither is rejected
+(chi-square 10.60 and 8.45 against a 5% critical 11.07).
+
+POWER STAYS THE DEFAULT, on a narrower reason than before. Flipping on a
+0.00016 margin would be exactly the kind of move this codebase keeps
+having to undo. The tie-breaker is direction: the two disagree most at
+the ends, and power gives a LOWER fair price out where the board actually
+bets (+300 and longer), so being wrong with it costs picks rather than
+inventing edge. That is a safety argument, not a fit argument, and it
+should be replaced by a measurement as more closes land.
+
+THE SPIKE IS THE REAL FINDING. In the 0.10-0.18 raw band -- roughly +455
+to +800, which is where the touchdown board lives -- the market charged
+35% while every other band charged 14%. Realised scoring there was 8.8%
+against a raw price of 13.5% and a de-vigged fair of 10.6-11.7%, so even
+a correct de-vig still over-states that band. It corroborates what
+engine/tdbook found from the other direction (the model reading +24% over
+reality in the band it bets). One band, one season, 898 rows: reported
+and tracked, not yet wired into the pricing.
 
 (The handbook's own worked example of this is wrong in both directions --
 it reports multiplicative at 55.9% for a -140/+110 pair, which is really

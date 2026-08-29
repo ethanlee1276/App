@@ -245,12 +245,22 @@ BANDS = ((0.00, 0.10), (0.10, 0.18), (0.18, 0.28), (0.28, 0.45), (0.45, 1.01))
 def band_lines(rows: list, m: float, k: float, min_band: int = 40) -> list:
     """Per raw-price band: what each method says, and what happened.
 
-    The summary loss is one number over a whole board; this is where the
-    two methods are supposed to differ, so it is where the claim has to
-    be checked. A method that wins overall while being wrong at the short
-    end has not earned the short end.
+    WITH ERROR BARS, because without them this table misleads. The first
+    live run showed power "nearer" in two bands and proportional in
+    three, which reads as a coin flip — but scored against each band's
+    standard error, proportional matched four bands almost exactly and
+    missed one by 3.1 sigma, while power was mediocre in all five. That
+    is a completely different diagnosis from the same numbers, and only
+    one of them tells you where to look.
+
+    The summary log loss is one number over a whole board; this is where
+    the two methods are supposed to differ, so it is where the claim has
+    to be checked. A method that wins overall while being wrong at one
+    end has not earned that end.
     """
-    lines = ["  raw band      n   raw   prop  power  actual   nearer"]
+    lines = ["  raw band      n   raw   prop  power  actual    prop z  power z"]
+    chi = {"prop": 0.0, "power": 0.0}
+    shown = 0
     for lo, hi in BANDS:
         got = [r for r in rows if lo <= r["market"] < hi]
         if len(got) < min_band:
@@ -261,11 +271,44 @@ def band_lines(rows: list, m: float, k: float, min_band: int = 40) -> list:
         pr = sum(proportional(r["market"], m) for r in got) / n
         pw = sum(power(r["market"], k) for r in got) / n
         act = sum(r["scored"] for r in got) / n
-        nearer = "power" if abs(pw - act) < abs(pr - act) else "prop"
-        if abs(abs(pw - act) - abs(pr - act)) < 0.002:
-            nearer = "tie"
+        se = math.sqrt(max(act * (1.0 - act), 1e-9) / n)
+        zp, zw = (pr - act) / se, (pw - act) / se
+        chi["prop"] += zp * zp
+        chi["power"] += zw * zw
+        shown += 1
         lines.append(f"  {lo:.2f}-{hi:.2f} {len(got):>6} {raw:5.3f} "
-                     f"{pr:6.3f} {pw:6.3f} {act:7.3f}   {nearer}")
+                     f"{pr:6.3f} {pw:6.3f} {act:7.3f} {zp:>+9.2f} {zw:>+8.2f}")
+    if shown:
+        lines += ["",
+                  f"  chi-square over {shown} band(s):  "
+                  f"proportional {chi['prop']:.2f}   power {chi['power']:.2f}",
+                  "  (a z past +/-2 in ONE band is where the shape is wrong, "
+                  "whatever the totals say)"]
+    return lines
+
+
+def haircut_lines(rows: list, min_band: int = 40) -> list:
+    """What the market ACTUALLY charged per band, ignoring both methods.
+
+    ``1 - actual / raw`` is the toll the price took, measured against the
+    outcome. Both transforms are attempts to predict this column, so
+    seeing it directly says whether either shape is even the right
+    family — and on the first live run it was not: four bands clustered
+    near 14% and one sat at 35%, which is flat-plus-a-spike rather than
+    the smooth monotone curve a power exponent draws.
+    """
+    lines = ["  what the market actually charged, by band:",
+             "  raw band      n     raw  actual   haircut"]
+    for lo, hi in BANDS:
+        got = [r for r in rows if lo <= r["market"] < hi]
+        if len(got) < min_band:
+            continue
+        n = float(len(got))
+        raw = sum(r["market"] for r in got) / n
+        act = sum(r["scored"] for r in got) / n
+        cut = 1.0 - act / raw if raw > 0 else float("nan")
+        lines.append(f"  {lo:.2f}-{hi:.2f} {len(got):>6} {raw:>7.3f} "
+                     f"{act:>7.3f} {cut:>9.1%}")
     return lines
 
 
@@ -290,9 +333,12 @@ def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
         "",
     ]
     lines += band_lines(rows, got["m"], got["k"])
+    lines += [""] + haircut_lines(rows)
     lines += ["",
               "  A margin under 0.0005 is not a result — the two methods "
-              "agree and the default stands on its reasoning."]
+              "agree and the choice between them is not settled by this "
+              "data. What IS settled: both beat the raw price, so the "
+              "de-vig itself is doing real work."]
     return lines
 
 
