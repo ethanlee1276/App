@@ -275,12 +275,31 @@ def test_the_injury_gate_already_stands():
 
 
 # --- the seams that keep the lanes honest ------------------------------------
-def test_the_backtest_stays_usage_free():
-    """Fitted temperatures were earned without the bridge; feeding it into
-    the harness would quietly refit them against a different model."""
+def test_the_backtest_only_takes_the_bridge_when_asked():
+    """THIS TEST USED TO REQUIRE THE OPPOSITE, and its reason was
+    inverted. It read: "fitted temperatures were earned without the
+    bridge; feeding it into the harness would quietly refit them against
+    a different model." True — but it kept the harness consistent with
+    the STORED TEMPERATURES rather than with the live board, and the
+    board is what takes bets. `nfl_build` passes the bridge and
+    `build_projection` blends it against form by sample size, so at
+    USAGE_PRIOR_GAMES games of log it supplies half the base. Every
+    calibration fitted through the usage-free walk was therefore earned
+    against a model nobody runs, and `propcal`'s AUC numbers described
+    that model too.
+
+    What the old test was really protecting is that nothing changes
+    silently, and that survives: the parameter defaults to None, so a
+    caller passing no connection replays exactly as before. `propcal`
+    opts in deliberately, and it refits from scratch every time — the
+    refit against a different model is the entire point of it."""
     src = open(os.path.join(ROOT, "engine", "backtest.py"),
                encoding="utf-8").read()
-    assert "nfl_usage" not in src and "team_notes" not in src
+    assert "usage = None" in src, "the bridge must be off by default"
+    assert "if usage_conn is not None:" in src
+    assert "upto_week=w" in src, \
+        "a replay reading the finished season hands week 7 its own answers"
+    assert "team_notes" not in src
 
 
 def test_the_launcher_ships_the_depth_flag():

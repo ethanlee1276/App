@@ -240,7 +240,8 @@ def fit(conn, season: int | None = None, weeks=None,
         try:
             with cal.disabled():
                 report = backtest_from_stats(candidate, weeks,
-                                             real_lines=real, log=log)
+                                             real_lines=real, log=log,
+                                             usage_conn=conn)
         except Exception as exc:                          # noqa: BLE001
             log(f"  propcal: {candidate} skipped — {exc}")
             continue

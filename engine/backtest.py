@@ -626,6 +626,7 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
                         use_team_context: bool = False,
                         team_context_mode: str = "level",
                         real_lines: dict | None = None,
+                        usage_conn=None,
                         log=None) -> BacktestReport:
     """Walk-forward backtest over real nflverse weeks.
 
@@ -702,8 +703,19 @@ def backtest_from_stats(season: int, weeks, config=None, model=None,
         # would only obscure that.
         props_seen += len(getattr(slate, "props", ()) or ())
         repriced += apply_real_lines(slate, real_lines or {})
+        # THE USAGE BRIDGE, as of this week and not the finished season.
+        # Without it the replay measures a model the live board does not
+        # run: `projection.build_projection` blends the bridge against
+        # form by sample size, so at four games of log it supplies half
+        # the base. `nfl_build` passes it live; this passed nothing,
+        # because `volume_roles` read the whole season and would have
+        # handed week 7 its own answers. It takes a cutoff now.
+        usage = None
+        if usage_conn is not None:
+            from .nflusage import build_usage_maps
+            usage = build_usage_maps(usage_conn, season, upto_week=w)
         result = run_slate(slate, config, model=model, allow_synthetic_line=True,
-                           team_context=ctx_by_week.get(w))
+                           team_context=ctx_by_week.get(w), nfl_usage=usage)
 
         actuals: dict[tuple[str, str], float] = {}
         for row in stats:

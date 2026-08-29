@@ -129,16 +129,32 @@ def snap_shares(conn, season: int | None = None) -> dict:
     return out
 
 
-def volume_roles(conn, season: int | None = None) -> dict:
+def volume_roles(conn, season: int | None = None,
+                 upto_week: int | None = None) -> dict:
     """``{(initial, lastname, team): {market: role}}`` where each role is
     ``{"opp_per_game", "eff", "opp_market", "n_weeks"}``.
 
     The usage bridge's data: per outcome market, the player's average
-    opportunities over his most recent ``VOL_WEEKS`` weeks (the role he
-    holds NOW) times his season-long per-opportunity efficiency (the
-    stable rate) is a second baseline the projection can weigh against
-    thin or stale outcome logs. Players under ``MIN_EFF_OPPS`` season
-    opportunities get no role at all — an absent bridge, not a noisy one.
+    opportunities over the most recent ``VOL_WEEKS`` weeks (the role held
+    NOW) times season-long per-opportunity efficiency (the stable rate) is
+    a second baseline the projection can weigh against thin or stale
+    outcome logs. Players under ``MIN_EFF_OPPS`` season opportunities get
+    no role at all — an absent bridge, not a noisy one.
+
+    ``upto_week`` keeps only weeks STRICTLY BEFORE it, which is what makes
+    this measurable at all.
+
+    WHY IT HAD TO EXIST. Live, this reads a database holding only games
+    that have been played, so "the whole season" and "everything so far"
+    are the same set and the distinction never came up. A backtest replays
+    week 7 with all 22 weeks on disk, so the same call would hand the
+    model its own answers. `engine/backtest.py` avoided that the only way
+    it could — by passing no usage at all — and the result was that every
+    calibration fitted through the walk, and every AUC measured from it,
+    described a model the live board does not run: at four games of log
+    the bridge supplies half the projection's base (`USAGE_PRIOR_GAMES`).
+    Fitting on one model and applying to another is the same mistake as
+    fitting against a proxy line, one level further up.
     """
     if season is None:
         found = [latest_season(conn, m) for m in sorted(set(OPP_BY_MARKET.values()))]
@@ -147,11 +163,18 @@ def volume_roles(conn, season: int | None = None) -> dict:
     if season is None:
         return {}
     markets = tuple(OPP_BY_MARKET) + tuple(sorted(set(OPP_BY_MARKET.values())))
+    sql = ("SELECT player, team, period, market, value FROM player_game_logs "
+           "WHERE sport='nfl' AND season=? AND market IN (%s)"
+           % ",".join("?" * len(markets)))
+    args: list = [season, *markets]
+    if upto_week is not None:
+        # CAST, because `period` is a zero-padded string ('001'..'022') and
+        # a string comparison puts '010' below '7'. The one place that
+        # silently returns the wrong weeks rather than none.
+        sql += " AND CAST(period AS INTEGER) < ?"
+        args.append(int(upto_week))
     per: dict = {}
-    for r in conn.execute(
-            "SELECT player, team, period, market, value FROM player_game_logs "
-            "WHERE sport='nfl' AND season=? AND market IN (%s)"
-            % ",".join("?" * len(markets)), (season, *markets)):
+    for r in conn.execute(sql, args):
         per.setdefault((r["player"], r["team"]), {}) \
            .setdefault(r["period"], {})[r["market"]] = float(r["value"] or 0)
 
@@ -178,8 +201,13 @@ def volume_roles(conn, season: int | None = None) -> dict:
     return out
 
 
-def build_usage_maps(conn) -> dict:
+def build_usage_maps(conn, season: int | None = None,
+                     upto_week: int | None = None) -> dict:
     """All three maps in one call — what nfl_build hands the pipeline. Empty
-    maps (nothing ingested yet) leave the model exactly as it was."""
+    maps (nothing ingested yet) leave the model exactly as it was.
+
+    ``season``/``upto_week`` are for the replay, which must see only what
+    had happened. Live callers pass neither and get today's database,
+    which is already only what has happened."""
     return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn),
-            "volume": volume_roles(conn)}
+            "volume": volume_roles(conn, season, upto_week)}
