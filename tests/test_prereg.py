@@ -297,10 +297,22 @@ def test_superseding_is_idempotent_and_refuses_an_unknown_id():
 
 # --- the touchdown board's registration (2026-08-28) ------------------------
 def _td_test(tmp):
+    """The LIVE touchdown test, whichever it currently is.
+
+    `td-edge-nfl-2026-08` was superseded when engine/touchdowns began
+    blending the share toward a player's xFP share of his offence — a
+    preregistration asks about one model, and that model changed. These
+    tests are about the category filter, which is a live concern for
+    whichever test is collecting, so they follow the successor rather
+    than pinning a retired id."""
     import json
     prereg.ensure_registered(tmp)
-    return {t["id"]: t for t in
-            json.loads(open(tmp).read())["tests"]}["td-edge-nfl-2026-08"]
+    by_id = {t["id"]: t for t in json.loads(open(tmp).read())["tests"]}
+    live = [t for t in by_id.values()
+            if t["id"].startswith("td-edge-nfl")
+            and not t.get("superseded_by")]
+    assert len(live) == 1, f"expected one live TD test, got {live}"
+    return live[0]
 
 
 def _td_rows(n, wins=0, grade="Lean", market="anytime_td",

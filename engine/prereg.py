@@ -461,6 +461,54 @@ TD_EDGE_NFL = {
 }
 
 
+#: SUPERSEDES `td-edge-nfl-2026-08`, which was registered against a
+#: touchdown model that no longer exists. `engine.touchdowns` now pulls
+#: its share toward the player's slice of his offence's expected fantasy
+#: points (XFP_SHARE_WEIGHT), measured worth +0.037 AUC on held-out
+#: seasons over the historical rate it leaned on before. A test asks
+#: whether a specific model's disagreement with the book is edge, so a
+#: different model needs a different registration — the alternative is a
+#: verdict about a thing that stopped being true halfway through
+#: collection.
+#:
+#: The original is not edited. Its terms stay frozen and `supersede`
+#: records the replacement beside them, which is the whole point of
+#: having written them down.
+TD_EDGE_NFL_XFP = {
+    "id": "td-edge-nfl-xfp-2026-08",
+    "claim": ("NFL anytime-TD picks lose at the model's own claimed rate: "
+              "the board's disagreement with the book is not edge"),
+    "sport": "nfl",
+    # THE LONG-SHOT BOARD'S OWN VOCABULARY. `quality.letter` returns
+    # A+/A/B+/Pass and `longshots._grade` returns Strong Play/Play/Lean/
+    # Pass — different ladders entirely, and a test populated with the
+    # wrong one collects nothing forever while looking healthy. All 51
+    # bets behind this graded "Lean"; the other two are named so the
+    # test does not go blind the day one clears a higher bar.
+    "population": ["Strong Play", "Play", "Lean"],
+    # The scorer board journals here, not in the headline record.
+    "categories": ["longshot"],
+    # NO COMPARISON BAND, because there is no second population to
+    # compare against — the claim is that these bets lose at a flat unit,
+    # full stop. An empty list makes `verdict` a one-sample test against
+    # break-even, which is exactly the question.
+    "compare_to": [],
+    "markets": ["anytime_td"],
+    "metric": ("landed rate against the mean claimed probability of the "
+               "same bets, book-priced only, flat 1u"),
+    "min_n": 120,
+    "decides": ("whether the scorer board keeps betting sub-5-point "
+                "disagreements at all — engine.longshots.MARKET_SHRINK "
+                "for scorer markets, or the edge bar in "
+                "engine.touchdowns.build_td_longshots"),
+    "why_now": ("6 of 51 landed where the model claimed 30.5%, at "
+                "p = 0.0012 against its own numbers. The same model over "
+                "22,102 player-weeks claims 16.9% and lands 20.0%, so "
+                "this is selection rather than calibration — and 51 bets "
+                "is a rejection, not a number to tune a constant to."),
+}
+
+
 #: Every column `verdict` reads off a journal row, and every bucket any
 #: registered test draws from.
 #:
@@ -487,10 +535,31 @@ def ensure_registered(path=None) -> dict:
     store = register(A_BAND_NFL, path)
     store = register(RECEPTIONS_A_NFL, path)
     store = register(TD_EDGE_NFL, path)
+    store = register(TD_EDGE_NFL_XFP, path)
     # A_BAND_NFL asked "does A beat B+". Slicing by grade AND market
     # answered it — the deficit is one cell, A-graded receptions — and
     # RECEPTIONS_A_NFL asks that sharper question with a remedy that
     # moves something. The original's did not: see `supersede`.
+    # The touchdown model changed underneath the original test.
+    # engine.touchdowns now pulls its share toward the player's slice of
+    # his offence's expected fantasy points, worth +0.037 AUC on held-out
+    # seasons over the historical rate it had been leaning on. A
+    # preregistration asks whether ONE model's disagreement with the book
+    # is edge; carrying it across a model change would deliver a verdict
+    # about something that stopped being true mid-collection. The
+    # successor registers today, so rows priced by the old model fall
+    # outside its window rather than being quietly counted.
+    try:
+        store = supersede(
+            TD_EDGE_NFL["id"], TD_EDGE_NFL_XFP["id"],
+            "the touchdown model it was registered against was replaced: "
+            "engine.touchdowns now blends the share toward the player's "
+            "xFP share of his offence (XFP_SHARE_WEIGHT), measured at "
+            "+0.037 AUC on 8,442 held-out player-weeks. The claim is "
+            "unchanged and re-asked of the model that will actually take "
+            "the bets.", path)
+    except KeyError:                                          # pragma: no cover
+        pass
     try:
         store = supersede(
             A_BAND_NFL["id"], RECEPTIONS_A_NFL["id"],

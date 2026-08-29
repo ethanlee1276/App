@@ -201,19 +201,18 @@ def test_a_thin_touchdown_sample_is_refused():
     assert "skipped" in nflfit.evaluate_td(c)
 
 
-def test_expected_fantasy_points_is_still_absent_from_the_touchdown_model():
-    """MEASURED ON HELD-OUT SEASONS: xfp orders a touchdown at AUC 0.696,
-    ahead of the player's own TD rate at 0.672 — which is what
-    engine/touchdowns actually leans on — and ahead of red-zone carries
-    at 0.576, which it treats as the signal worth a multiplier. xfp is
-    ingested for five seasons and read by engine/fantasy for the waiver
-    board. This test fails the day somebody wires it into the touchdown
-    model, and that is the point: the claim in this file's docstring
-    stops being true then and should be rewritten."""
+def test_expected_fantasy_points_now_reaches_the_touchdown_model():
+    """THIS TEST USED TO ASSERT THE OPPOSITE, and it fired the day the
+    finding was acted on, which is what it was for. xfp orders a
+    touchdown at AUC 0.696 on held-out seasons — ahead of the player's
+    own TD rate at 0.672, which the model leaned on, and well ahead of
+    red-zone carries at 0.576, which it reached for. It had been
+    ingested for five seasons and read only by the fantasy waiver
+    board."""
     import pathlib as _pl
     src = _pl.Path("engine/touchdowns.py").read_text()
-    assert "xfp" not in src, \
-        "xfp now reaches the touchdown model — update the finding above"
+    assert "xfp_share" in src
+    assert "XFP_SHARE_WEIGHT" in src
 
 
 def test_the_red_zone_nudge_is_still_capped_where_it_was():

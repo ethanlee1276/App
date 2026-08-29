@@ -231,9 +231,12 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
     ask and why the value bar itself did not move).
 
     ``usage`` optionally carries MEASURED roles from ingested logs
-    (engine.nflusage): per-player red-zone usage — the model's own docs
-    call it the single best TD predictor it couldn't see — and snap
-    shares. Without it the model infers from volume, exactly as before."""
+    (engine.nflusage): per-player red-zone usage, snap shares, and each
+    player's share of his offence's expected fantasy points. That last
+    one measured AUC 0.696 on held-out seasons against 0.576 for
+    red-zone carries, which the docs had called the best predictor the
+    model could not see; it was the second best. Without any of it the
+    model infers from volume, exactly as before."""
     from .models import ANYTIME_TD
     from .touchdowns import build_td_longshots, td_watchlist
     from .fantasy import _short_key
@@ -241,6 +244,7 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
     usage = usage or {}
     rz_map = usage.get("red_zone") or {}
     snap_map = usage.get("snap") or {}
+    xfp_map = usage.get("xfp") or {}
     shares = _opportunity_shares(slate)
     candidates = []
     for prop in slate.props:
@@ -256,6 +260,10 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
             "under_odds": best.under_odds,
             "red_zone": rz_map.get(key),
             "snap_share": snap_map.get(key),
+            # His slice of the offence's expected points — the strongest
+            # touchdown signal we record, and one engine/touchdowns could
+            # not see until now (engine.nflusage.xfp_roles).
+            "xfp": xfp_map.get(key),
         })
     picks = [p.to_dict() for p in build_td_longshots(candidates)]
     # The most-likely list dedupes against the picks but is NOT a
