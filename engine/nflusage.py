@@ -265,6 +265,65 @@ _BOX_MARKETS = ("carries", "targets", "rush_yds", "rec_yds", "receptions")
 _PBP_MARKETS = ("xfp", "rz_car", "rz_tgt", "i5_car")
 
 
+def season_teams(conn, season: int | None = None,
+                 upto_week: int | None = None) -> dict:
+    """``{folded full name: [teams]}`` for the season the maps come from.
+
+    THE OFFSEASON MOVE. Every usage map is keyed by (initial, surname,
+    team), and the team is not decoration — 2025 logged two ('d','moore')
+    and two ('m','evans'). But a card built in the next season carries the
+    player's NEW team, so DJ Moore's 2025 role sits under CHI while his
+    card says BUF and the lookup misses. Measured on the Week 1 board,
+    that was two of six touchdown cards.
+
+    Full names resolve what initials cannot: "DJ Moore" is uniquely CHI
+    in 2025, "Mike Evans" uniquely TB. So this maps the full name back to
+    the team (or teams, for a mid-season trade) the logs know him by, and
+    `usage_keys` walks them.
+    """
+    from .fantasy import _fold
+    if season is None:
+        season = latest_season(conn, "targets")
+    if season is None:
+        return {}
+    sql = ("SELECT DISTINCT player, team FROM player_game_logs "
+           "WHERE sport='nfl' AND season=? AND market IN "
+           "('targets','carries','pass_att')")
+    args: list = [season]
+    if upto_week is not None:
+        sql += " AND CAST(period AS INTEGER) < ?"
+        args.append(int(upto_week))
+    out: dict = {}
+    for r in conn.execute(sql, args):
+        if r["team"]:
+            out.setdefault(_fold(r["player"]), []).append(r["team"])
+    return out
+
+
+def usage_keys(player: str, team: str, team_of: dict | None = None) -> list:
+    """Keys to try for this player, his own card's team first.
+
+    A list rather than one key, because following a player back to last
+    season's team is a guess that must not silently outrank the direct
+    match — and because a mid-season trade leaves him on two.
+    """
+    from .fantasy import _fold, _short_key
+    keys = [_short_key(player, team)]
+    for t in (team_of or {}).get(_fold(player), ()):
+        k = _short_key(player, t)
+        if k not in keys:
+            keys.append(k)
+    return keys
+
+
+def from_maps(m: dict, keys: list):
+    """First hit across the candidate keys, or None."""
+    for k in keys:
+        if k in m:
+            return m[k]
+    return None
+
+
 def join_audit(conn, season: int | None = None, min_touches: float = 20.0) -> list:
     """Players with real production whose play-by-play rows never join.
 
@@ -315,4 +374,7 @@ def build_usage_maps(conn, season: int | None = None,
     which is already only what has happened."""
     return {"red_zone": red_zone_usage(conn), "snap": snap_shares(conn),
             "volume": volume_roles(conn, season, upto_week),
-            "xfp": xfp_roles(conn, season, upto_week)}
+            "xfp": xfp_roles(conn, season, upto_week),
+            # Not a map of roles — the index that lets a player who
+            # changed teams in the offseason still find his own.
+            "team_of": season_teams(conn, season, upto_week)}

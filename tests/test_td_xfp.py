@@ -148,7 +148,11 @@ def test_both_boards_price_with_the_same_model():
 def test_the_pipeline_actually_hands_it_over():
     import inspect
     from engine import pipeline
-    assert '"xfp": xfp_map.get(key)' in inspect.getsource(pipeline._long_shots)
+    src = inspect.getsource(pipeline._long_shots)
+    assert '"xfp": from_maps(xfp_map, keys)' in src
+    # Through the resolver, not a bare key: a player who changed teams in
+    # the offseason has his role filed under last season's club.
+    assert "usage_keys(prop.player, prop.team, team_of)" in src
 
 
 def test_the_card_says_the_share_moved_it():
@@ -345,6 +349,57 @@ def test_the_audit_is_reported_to_a_human_not_asserted_by_the_suite():
                     and node.func.value.id == "db"):
                 raise AssertionError(
                     f"{f.name} runs the audit against this box's own data")
+
+
+# --- following a player who changed teams ------------------------------------
+def test_a_moved_player_finds_the_role_filed_under_his_old_team():
+    """Two of six touchdown cards on the Week 1 board. DJ Moore's 2025
+    role sits under CHI and his card says BUF; Mike Evans is TB to SF."""
+    team_of = {"dj moore": ["CHI"], "mike evans": ["TB"]}
+    keys = nflusage.usage_keys("DJ Moore", "BUF", team_of)
+    assert [k[2] for k in keys] == ["BUF", "CHI"]
+    assert nflusage.from_maps({("d", "moore", "CHI"): {"xfp_share": 0.11}},
+                              keys) == {"xfp_share": 0.11}
+
+
+def test_the_cards_own_team_is_tried_first():
+    """Following him back is a guess and must never outrank a direct hit
+    — 2025 logged two ('d','moore') and two ('m','evans')."""
+    team_of = {"dj moore": ["CHI"]}
+    keys = nflusage.usage_keys("DJ Moore", "BUF", team_of)
+    got = nflusage.from_maps({("d", "moore", "BUF"): "current",
+                              ("d", "moore", "CHI"): "stale"}, keys)
+    assert got == "current"
+
+
+def test_a_midseason_trade_leaves_two_teams_to_try():
+    """Elijah Moore logged for BUF and DEN in 2025."""
+    keys = nflusage.usage_keys("Elijah Moore", "NYJ",
+                               {"elijah moore": ["BUF", "DEN"]})
+    assert [k[2] for k in keys] == ["NYJ", "BUF", "DEN"]
+
+
+def test_an_unknown_player_falls_back_to_his_own_team_only():
+    keys = nflusage.usage_keys("Nobody Here", "LV", {})
+    assert keys == [("n", "here", "LV")]
+    assert nflusage.from_maps({}, keys) is None
+
+
+def test_the_index_is_keyed_on_the_full_name_because_initials_collide():
+    """"DJ Moore" is uniquely CHI in 2025 while ('d','moore') is not —
+    David Moore was on CAR. Initials cannot resolve this and full names
+    can, which is the whole reason the index exists."""
+    import inspect
+    src = inspect.getsource(nflusage.season_teams)
+    assert "_fold(r[\"player\"])" in src
+
+
+def test_the_yardage_board_resolves_the_same_way():
+    """The volume role had the identical problem and would have kept it
+    if only the touchdown path were fixed."""
+    import inspect
+    from engine import pipeline
+    assert "_from_maps(vol_map" in inspect.getsource(pipeline.run_slate)
 
 
 if __name__ == "__main__":

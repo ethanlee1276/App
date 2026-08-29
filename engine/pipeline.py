@@ -241,29 +241,34 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
     from .touchdowns import build_td_longshots, td_watchlist
     from .fantasy import _short_key
 
+    from .nflusage import from_maps, usage_keys
     usage = usage or {}
     rz_map = usage.get("red_zone") or {}
     snap_map = usage.get("snap") or {}
     xfp_map = usage.get("xfp") or {}
+    # Follows a player who changed teams in the offseason back to the
+    # team the maps were built from — see nflusage.season_teams. On the
+    # Week 1 board that was two of six touchdown cards.
+    team_of = usage.get("team_of") or {}
     shares = _opportunity_shares(slate)
     candidates = []
     for prop in slate.props:
         if prop.market != ANYTIME_TD or not prop.lines:
             continue
         best = max(prop.lines, key=lambda ln: ln.over_odds)
-        key = _short_key(prop.player, prop.team)
+        keys = usage_keys(prop.player, prop.team, team_of)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),
             "opponent": slate.team(prop.opponent),
             "opportunity_share": shares.get((prop.team, prop.player), 0.15),
             "odds": best.over_odds, "book": best.book,
             "under_odds": best.under_odds,
-            "red_zone": rz_map.get(key),
-            "snap_share": snap_map.get(key),
+            "red_zone": from_maps(rz_map, keys),
+            "snap_share": from_maps(snap_map, keys),
             # His slice of the offence's expected points — the strongest
             # touchdown signal we record, and one engine/touchdowns could
             # not see until now (engine.nflusage.xfp_roles).
-            "xfp": xfp_map.get(key),
+            "xfp": from_maps(xfp_map, keys),
         })
     picks = [p.to_dict() for p in build_td_longshots(candidates)]
     # The most-likely list dedupes against the picks but is NOT a
@@ -466,8 +471,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         opponent = slate.team(prop.opponent)
         u = None
         if vol_map:
-            u = (vol_map.get(_short_key(prop.player, prop.team)) or {}) \
-                .get(prop.market)
+            from .nflusage import from_maps as _from_maps, usage_keys as _keys
+            role = _from_maps(vol_map, _keys(prop.player, prop.team,
+                                             (nfl_usage or {}).get("team_of")))
+            u = (role or {}).get(prop.market)
         proj = build_projection(prop, game, opponent, model=model,
                                 context=team_context, usage=u)
         rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line,
