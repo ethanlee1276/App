@@ -108,27 +108,30 @@ def report_lines(rows: list, min_band: int = MIN_BAND) -> list:
         return ["  anytime_td: no player-week joined a harvested close"]
     lines = [f"  anytime_td: {len(rows):,} player-weeks with a real close",
              f"      {'market band':<14}{'n':>7}{'model':>9}{'market':>9}"
-             f"{'actual':>9}   verdict"]
+             f"{'actual':>9}   how wrong we were"]
     for b in bands(rows, min_band):
         label = f"{b['lo']:.0%}-{b['hi']:.0%}"
         if b["thin"]:
             lines.append(f"      {label:<14}{b['n']:>7}      too few to read")
             continue
-        # WHICHEVER THE OUTCOME SITS NEARER IS THE ONE TO BELIEVE. Said
-        # per band because the answer is not the same at both ends —
-        # that is the whole finding.
-        dm = abs(b["actual"] - b["model"])
-        dk = abs(b["actual"] - b["market"])
-        if abs(dm - dk) < 0.005:
-            verdict = "too close to separate"
-        elif dm < dk:
-            verdict = "the MODEL was nearer"
-        else:
-            verdict = "the MARKET was nearer"
+        # MODEL AGAINST OUTCOME, and nothing else. The first version of
+        # this report also scored the MARKET against the outcome and
+        # named whichever landed nearer, which was wrong twice over.
+        # `anytime_td` is a Yes-only market (maintenance.HOLD_MARKETS):
+        # there is no under price, so the implied probability keeps its
+        # whole hold and reads high by construction. Scoring that against
+        # reality convicts the book of its own vig. And the hold cannot
+        # be removed without the other side, so the honest move is to
+        # print the market as context and grade only ourselves.
+        err = b["model"] / b["actual"] - 1.0 if b["actual"] else 0.0
+        # A hair either side of zero must not print "-0%", which reads
+        # as a direction it does not have.
+        how = ("matches reality" if abs(err) < 0.005
+               else f"model {err:+.0%} vs reality")
         lines.append(f"      {label:<14}{b['n']:>7}{b['model']:>9.3f}"
-                     f"{b['market']:>9.3f}{b['actual']:>9.3f}   {verdict}")
-    lines.append("      (market implied includes the vig, so it reads a "
-                 "little high in every band)")
+                     f"{b['market']:>9.3f}{b['actual']:>9.3f}   {how}")
+    lines.append("      (market implied is Yes-only and keeps its whole "
+                 "hold — context, not a competitor)")
     return lines
 
 

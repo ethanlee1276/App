@@ -54,30 +54,39 @@ def test_a_thin_band_says_so_instead_of_reporting_a_rate():
 
 
 # --- the verdict --------------------------------------------------------------
-def test_the_market_being_right_is_named():
-    """The longshot tail, as the record already suggests: the model says
-    30%, the book says 20%, and 20% is what happens."""
+def test_the_model_is_graded_against_reality_not_against_the_book():
+    """anytime_td is Yes-only, so the implied probability keeps its whole
+    hold and reads high by construction. The first version of this report
+    scored the market against the outcome too and named a winner, which
+    convicted the book of its own vig."""
     text = "\n".join(tdbook.report_lines(_rows(200, 0.30, 0.20, 0.20)))
-    assert "the MARKET was nearer" in text
+    assert "model +50% vs reality" in text
+    assert "was nearer" not in text
 
 
-def test_the_model_being_right_is_named():
+def test_a_model_that_matches_reality_says_so_without_a_sign():
+    """A hair either side of zero printed "-0%", which reads as a
+    direction it does not have."""
     text = "\n".join(tdbook.report_lines(_rows(200, 0.30, 0.20, 0.30)))
-    assert "the MODEL was nearer" in text
+    assert "matches reality" in text
+    assert "-0%" not in text and "+0%" not in text
 
 
-def test_a_tie_is_not_awarded_to_either():
-    text = "\n".join(tdbook.report_lines(_rows(200, 0.30, 0.20, 0.25)))
-    assert "too close to separate" in text
+def test_under_estimating_reads_negative():
+    text = "\n".join(tdbook.report_lines(_rows(200, 0.12, 0.20, 0.17)))
+    assert "model -29% vs reality" in text
 
 
-def test_each_band_gets_its_own_verdict():
-    """The finding is that the answer differs by band — the model is
-    under the market on favourites and over it on longshots — so one
-    verdict for the whole sample would average the two away."""
-    rows = _rows(200, 0.30, 0.20, 0.20) + _rows(200, 0.50, 0.62, 0.62)
+def test_each_band_is_graded_on_its_own():
+    """The finding is that the error changes sign by band: measured, the
+    model runs +24% in the 0-15% band and -29% in the two above it. One
+    number for the whole sample averages that away."""
+    rows = _rows(200, 0.063, 0.087, 0.051) + _rows(200, 0.205, 0.317, 0.290)
     text = "\n".join(tdbook.report_lines(rows))
-    assert text.count("the MARKET was nearer") == 2
+    # +26 not +24 because 200 rows cannot hold a rate of exactly 0.051;
+    # on the real 2,691 player-weeks the two bands read +24% and -29%.
+    assert "model +26% vs reality" in text
+    assert "model -29% vs reality" in text
 
 
 def test_the_vig_is_disclosed_rather_than_removed():
@@ -85,7 +94,8 @@ def test_the_vig_is_disclosed_rather_than_removed():
     market column reads high. Saying so beats a de-vig that needs the
     other side and would quietly drop every one-sided quote."""
     text = "\n".join(tdbook.report_lines(_rows(200, 0.30, 0.20, 0.20)))
-    assert "includes the vig" in text
+    assert "keeps its whole hold" in text
+    assert "context, not a competitor" in text
 
 
 def test_no_closes_is_said_plainly():
