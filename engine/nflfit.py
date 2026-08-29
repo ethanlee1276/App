@@ -305,5 +305,122 @@ def report_lines(out: dict) -> list:
     return lines
 
 
+#: What a touchdown could plausibly be predicted from. Red-zone and
+#: inside-5 work first, because that is where touchdowns are scored.
+TD_COLUMNS = ("rz_car", "rz_tgt", "i5_car", "carries", "targets",
+              "xfp", "snap_pct")
+
+
+def td_rows(conn, seasons) -> list:
+    """``[(features, scored, season, week)]`` for anytime touchdowns.
+
+    The target is BINARY — did he score at least one — because that is
+    the market. Features are the prior weeks only.
+    """
+    from .fantasy import _short_key
+    from .formbook import _feature_logs
+
+    fl = _feature_logs(conn, TD_COLUMNS, seasons)
+    sql = ("SELECT season, period, player, team, value FROM player_game_logs "
+           "WHERE sport='nfl' AND market='anytime_td' AND season IN (%s) "
+           "ORDER BY season, period, player" % ",".join("?" * len(seasons)))
+    seen: dict = {}
+    season_now = None
+    out: list = []
+    for r in conn.execute(sql, tuple(seasons)):
+        try:
+            week = int(r["period"])
+        except (TypeError, ValueError):
+            continue
+        if r["value"] is None:
+            continue
+        season, player = int(r["season"]), r["player"]
+        scored = 1 if float(r["value"]) > 0 else 0
+        if season != season_now:
+            seen, season_now = {}, season
+        hist = seen.get((player, season)) or []
+        if len(hist) >= MIN_HISTORY:
+            skey = _short_key(player, r["team"] or "")
+            feats = [sum(hist) / len(hist)]        # his own TD rate so far
+            ok = True
+            for c in TD_COLUMNS:
+                series = [fl.get((season, w, skey), {}).get(c)
+                          for w in range(week - 1, 0, -1)]
+                near = _recent(series, 4)
+                if near is None:
+                    ok = False
+                    break
+                feats.append(near)
+            if ok:
+                out.append((feats, scored, season, week))
+        seen.setdefault((player, season), []).insert(0, scored)
+    return out
+
+
+def _auc(pairs) -> float | None:
+    pos = [p for p, o in pairs if o]
+    neg = [p for p, o in pairs if not o]
+    if not pos or not neg:
+        return None
+    order = sorted(range(len(pairs)), key=lambda i: pairs[i][0])
+    ranks = [0.0] * len(pairs)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and pairs[order[j + 1]][0] == pairs[order[i]][0]:
+            j += 1
+        shared = (i + j) / 2.0 + 1.0
+        for k in range(i, j + 1):
+            ranks[order[k]] = shared
+        i = j + 1
+    rs = sum(r for r, (_p, o) in zip(ranks, pairs) if o)
+    return (rs - len(pos) * (len(pos) + 1) / 2.0) / (len(pos) * len(neg))
+
+
+def evaluate_td(conn, train=TRAIN_SEASONS, test=TEST_SEASONS) -> dict:
+    """How well can a touchdown be ordered, and by what?
+
+    `engine.touchdowns` builds its rate as team touchdowns times a share
+    times a chain of multipliers, and red-zone work enters that chain as
+    `clamp(0.90 + 0.4 * (share - 0.25), 0.85, 1.15)` — a fifteen percent
+    nudge, with a comment calling it "a gentle nudge, not a second full
+    helping of the same signal". Red-zone usage is where touchdowns are
+    scored. Whether fifteen percent is the right ceiling is a
+    measurement, and this is it: each column's AUC on its own, then a
+    fitted combination, on seasons the fit never saw.
+    """
+    tr = td_rows(conn, list(train))
+    te = td_rows(conn, list(test))
+    if len(tr) < 500 or len(te) < 200:
+        return {"skipped": f"{len(tr)} training and {len(te)} test rows"}
+    mu, sd = _standardise(tr)
+    coef = fit_least_squares([([(x - m) / s for x, m, s in zip(xs, mu, sd)], y)
+                              for xs, y, *_k in tr])
+    names = ["own_td_rate"] + list(TD_COLUMNS)
+    out = {"train_n": len(tr), "test_n": len(te), "singles": {}}
+    for i, name in enumerate(names):
+        out["singles"][name] = _auc([(xs[i], y) for xs, y, *_k in te])
+    if coef is not None:
+        out["fitted"] = _auc([(_apply(coef, xs, mu, sd), y)
+                              for xs, y, *_k in te])
+    return out
+
+
+def td_lines(out: dict) -> list:
+    if out.get("skipped"):
+        return [f"  anytime_td: skipped — {out['skipped']}"]
+    lines = [f"  anytime_td: fit on {out['train_n']:,}, scored on "
+             f"{out['test_n']:,} held-out player-weeks"]
+    for name, auc in sorted(out["singles"].items(),
+                            key=lambda kv: -(kv[1] or 0)):
+        lines.append(f"      {name:<14} AUC {auc:.3f}" if auc is not None
+                     else f"      {name:<14} n/a")
+    if out.get("fitted") is not None:
+        lines.append(f"      {'ALL, fitted':<14} AUC {out['fitted']:.3f}")
+    return lines
+
+
 __all__ = ["MARKETS", "COLUMNS", "TRAIN_SEASONS", "TEST_SEASONS",
-           "build_rows", "fit_least_squares", "evaluate", "report_lines"]
+           "TD_COLUMNS", "MIN_OPPORTUNITY", "build_rows", "td_rows",
+           "fit_least_squares", "evaluate", "evaluate_td", "report_lines",
+           "td_lines"]

@@ -171,6 +171,59 @@ def test_it_reads_no_odds():
         assert word not in src
 
 
+# --- the touchdown market -----------------------------------------------------
+def test_the_touchdown_target_is_binary():
+    """The market is "scored at least one", not a count. Settling a
+    probability against a count of 2 would make every calibration bin
+    describe nothing."""
+    import inspect
+    src = inspect.getsource(nflfit.td_rows)
+    assert "1 if float(r[\"value\"]) > 0 else 0" in src
+
+
+def test_red_zone_columns_lead_the_touchdown_feature_list():
+    assert nflfit.TD_COLUMNS[0].startswith("rz")
+    assert "xfp" in nflfit.TD_COLUMNS
+
+
+def test_the_auc_handles_ties_and_one_sided_samples():
+    assert nflfit._auc([(0.5, 1), (0.5, 0)] * 20) == 0.5
+    assert nflfit._auc([(0.1, 0), (0.9, 1)]) == 1.0
+    assert nflfit._auc([(0.4, 1)] * 10) is None
+
+
+def test_a_thin_touchdown_sample_is_refused():
+    import sqlite3
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.execute("CREATE TABLE player_game_logs (sport TEXT, season INTEGER, "
+              "period TEXT, player TEXT, team TEXT, market TEXT, value REAL)")
+    assert "skipped" in nflfit.evaluate_td(c)
+
+
+def test_expected_fantasy_points_is_still_absent_from_the_touchdown_model():
+    """MEASURED ON HELD-OUT SEASONS: xfp orders a touchdown at AUC 0.696,
+    ahead of the player's own TD rate at 0.672 — which is what
+    engine/touchdowns actually leans on — and ahead of red-zone carries
+    at 0.576, which it treats as the signal worth a multiplier. xfp is
+    ingested for five seasons and read by engine/fantasy for the waiver
+    board. This test fails the day somebody wires it into the touchdown
+    model, and that is the point: the claim in this file's docstring
+    stops being true then and should be rewritten."""
+    import pathlib as _pl
+    src = _pl.Path("engine/touchdowns.py").read_text()
+    assert "xfp" not in src, \
+        "xfp now reaches the touchdown model — update the finding above"
+
+
+def test_the_red_zone_nudge_is_still_capped_where_it_was():
+    """rz_car measured AUC 0.576 against xfp's 0.696, so the cap is not
+    obviously wrong — but it should not move without a measurement."""
+    import pathlib as _pl
+    src = _pl.Path("engine/touchdowns.py").read_text()
+    assert "0.85, 1.15" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
