@@ -146,6 +146,105 @@ def test_an_empty_market_says_so_rather_than_dividing_by_zero():
     assert out["n"] == 0 and "no game logs" in out["skipped"]
 
 
+# --- the decomposition that did not work --------------------------------------
+def test_volume_needs_a_real_denominator():
+    """An efficiency measured over three touches is one screen pass
+    wearing a trend costume."""
+    assert formcheck.volume_predictor([50.0, 40.0], [2.0, 1.0]) is None
+
+
+def test_volume_is_recent_role_times_long_run_efficiency():
+    hist = [60.0, 60.0, 60.0, 60.0, 60.0, 60.0]
+    opps = [15.0, 15.0, 15.0, 15.0, 15.0, 15.0]
+    assert abs(formcheck.volume_predictor(hist, opps) - 60.0) < 1e-9
+
+
+def test_a_role_change_moves_the_volume_estimate_but_not_the_rate():
+    """The point of splitting them: 4 carries a game at the same 4.0
+    yards is a different projection, and the rate should not move."""
+    hist = [16.0, 16.0, 16.0, 16.0, 80.0, 80.0, 80.0, 80.0]
+    opps = [4.0, 4.0, 4.0, 4.0, 20.0, 20.0, 20.0, 20.0]
+    got = formcheck.volume_predictor(hist, opps)
+    assert abs(got - 16.0) < 1e-9, got
+
+
+def test_a_missing_opportunity_log_yields_no_estimate():
+    assert formcheck.volume_predictor([50.0], []) is None
+    assert formcheck.volume_predictor([50.0, 40.0], [None, None]) is None
+
+
+# --- candidates are only comparable on rows they all priced -------------------
+def test_candidates_are_scored_on_the_same_rows():
+    """THE MEASUREMENT BUG THIS HARNESS HAD. `volume` returns None below
+    MIN_OPPORTUNITIES, so on rush_yds it priced only real ball-carriers
+    while every other candidate was also scored on thousands of receivers
+    whose rushing yards are zero — where predicting zero is free. Read
+    off their own rows, volume showed MAE 19.89 against gentle's 7.34,
+    a gap that describes which rows each was handed and nothing else."""
+    import inspect
+    src = inspect.getsource(formcheck.run)
+    assert "all(r[2].get(n) is not None for n in names)" in src
+    assert 'out["candidates"][name] = {' in src
+    i = src.index("usable = [r for r in rows_kept")
+    j = src.index('out["candidates"][name]')
+    assert i < j, "the common subset must be taken before anything is scored"
+
+
+def test_every_candidate_reports_the_same_n():
+    out = {"market": "rush_yds", "n": 22355, "compared_on": 7236,
+           "candidates": {
+               "form": {"n": 7236, "mae": 20.19, "rmse": 28.36, "rank": 0.649},
+               "gentle": {"n": 7236, "mae": 19.52, "rmse": 27.40, "rank": 0.658}}}
+    assert len({d["n"] for d in out["candidates"].values()}) == 1
+    assert "7,236 carrying every candidate" in \
+        "\n".join(formcheck.report_lines(out))
+
+
+def test_the_report_says_what_the_numbers_compare_on():
+    """22,355 player-weeks and 7,236 comparable rows are different facts
+    and a reader who conflates them draws the wrong conclusion."""
+    out = {"market": "rush_yds", "n": 22355, "compared_on": 7236,
+           "candidates": {"form": {"n": 7236, "mae": 20.0, "rmse": 28.0,
+                                   "rank": 0.649}}}
+    head = formcheck.report_lines(out)[0]
+    assert "22,355" in head and "7,236" in head
+
+
+# --- the default curve is the measured one now -------------------------------
+def test_the_shipped_default_is_the_curve_that_won():
+    """It used to be transcribed from docs/NFL_MODEL.md §5 and never
+    checked against an outcome. Held out on 2024-2025 the long-window
+    curve beat it on rush_yds (+0.663 vs +0.645) and rec_yds (+0.541 vs
+    +0.521), the two markets currently shut for AUC 0.47."""
+    from engine.form import WINDOW_WEIGHTS
+    assert WINDOW_WEIGHTS == formcheck.GENTLE
+    assert abs(sum(WINDOW_WEIGHTS.values()) - 1.0) < 1e-9
+
+
+def test_the_default_leans_long_rather_than_hot():
+    from engine.form import WINDOW_WEIGHTS as w
+    recent = w["last1"] + w["last3"] + w["last5"]
+    longrun = w["last10"] + w["season"] + w["career"] + w["vs_opp"]
+    assert longrun > recent, \
+        "the spec curve put ~75% on the recent windows; that lost"
+
+
+def test_the_baseball_curve_is_untouched():
+    """MLB passes its own weights and none of this was measured there."""
+    from engine.form import MLB_WINDOW_WEIGHTS
+    assert MLB_WINDOW_WEIGHTS != formcheck.GENTLE
+
+
+def test_a_hot_curve_must_now_beat_the_measured_baseline_to_be_adopted():
+    """formfit compares a fitted curve against the DEFAULT, so raising
+    the baseline re-examines the rush_yds curve on disk rather than
+    anyone editing a stored file by hand."""
+    import inspect
+    from engine import formfit
+    src = inspect.getsource(formfit)
+    assert "brier_default - brier_fitted >= MIN_GAIN" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

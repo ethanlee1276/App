@@ -41,6 +41,15 @@ import math
 #: are a few.
 MIN_HISTORY = 3
 
+#: Weeks of opportunity that define "the role he holds now". Short on
+#: purpose — a role change is the event worth catching.
+VOLUME_WINDOW = 4
+
+#: Season opportunities an efficiency rate needs before it means
+#: anything. Mirrors `nflusage.MIN_EFF_OPPS`, loosened because this walks
+#: from week 4 rather than pricing a live card.
+MIN_OPPORTUNITIES = 10
+
 #: The markets with a prop board behind them. `anytime_td` is binary and
 #: belongs to `engine.tdbacktest`, not here.
 MARKETS = ("rush_yds", "rec_yds", "receptions", "pass_yds")
@@ -60,16 +69,33 @@ GENTLE = {
 }
 
 
+#: The opportunity behind each outcome. Yards are not a quantity a player
+#: produces directly — they are chances times what he does with each, and
+#: the two halves behave nothing alike (see `volume_predictor`).
+OPPORTUNITY = {
+    "rush_yds": "carries",
+    "rec_yds": "targets",
+    "receptions": "targets",
+    "pass_yds": "pass_att",
+}
+
+
 def _rows(conn, market: str, seasons=None) -> list:
-    """``[(season, week, player, opponent, value)]`` in time order."""
-    sql = ("SELECT season, period, player, opponent, value "
-           "FROM player_game_logs WHERE sport='nfl' AND market=? ")
-    args: list = [market]
+    """``[(season, week, player, opponent, value, opp)]`` in time order.
+
+    ``opp`` is that game's opportunity count for the market (carries for
+    rushing, targets for receiving), or None where it was not logged.
+    """
+    opp_market = OPPORTUNITY.get(market)
+    sql = ("SELECT season, period, player, opponent, market, value "
+           "FROM player_game_logs WHERE sport='nfl' AND market IN (?, ?) ")
+    args: list = [market, opp_market or market]
     if seasons:
         sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
         args.extend(seasons)
     sql += "ORDER BY season, period, player"
-    out = []
+    merged: dict = {}
+    order: list = []
     for r in conn.execute(sql, args):
         try:
             week = int(r["period"])
@@ -77,9 +103,15 @@ def _rows(conn, market: str, seasons=None) -> list:
             continue
         if r["value"] is None:
             continue
-        out.append((int(r["season"]), week, r["player"],
-                    r["opponent"] or "", float(r["value"])))
-    return out
+        key = (int(r["season"]), week, r["player"], r["opponent"] or "")
+        if key not in merged:
+            merged[key] = [None, None]
+            order.append(key)
+        slot = 1 if (opp_market and r["market"] == opp_market
+                     and market != opp_market) else 0
+        merged[key][slot] = float(r["value"])
+    return [(k[0], k[1], k[2], k[3], merged[k][0], merged[k][1])
+            for k in order if merged[k][0] is not None]
 
 
 def _mean(vals) -> float | None:
@@ -87,8 +119,52 @@ def _mean(vals) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
+def volume_predictor(history: list, opps: list) -> float | None:
+    """Opportunities times efficiency, forecast apart.
+
+    THE DECOMPOSITION THE FORM BLEND THROWS AWAY. Rushing yards are not a
+    quantity a player emits; they are carries times what he does with
+    each. Those two halves could hardly behave less alike:
+
+      * OPPORTUNITY is role. Who gets the carries is a coaching decision
+        that persists week to week, and it is the thing that actually
+        changes when a starter goes down — which is most of what moves a
+        prop line.
+      * EFFICIENCY is close to noise. Yards per carry swings wildly on a
+        handful of touches, and last week's 6.1 says very little about
+        this week's.
+
+    Smoothing the PRODUCT applies one recency curve to both, which is
+    necessarily wrong for at least one of them: fast enough to track a
+    role change is far too fast for efficiency, and slow enough to
+    stabilise efficiency cannot see the role change at all. That is a
+    plausible reason `rush_yds` and `rec_yds` measured AUC 0.47 against
+    real closes while `receptions` — whose outcome IS nearly its own
+    opportunity, so the decomposition is already half done — measured
+    0.564 and carries the only edge on the board.
+
+    So: recent opportunities (short window, it is a role) times
+    season-long efficiency (long window, it is a rate).
+    """
+    if not opps or len(opps) < 2:
+        return None
+    recent = [o for o in opps[:VOLUME_WINDOW] if o is not None]
+    if not recent:
+        return None
+    opp_now = sum(recent) / len(recent)
+    total_opp = sum(o for o in opps if o is not None)
+    if total_opp < MIN_OPPORTUNITIES:
+        # An efficiency measured over three touches is one screen pass
+        # wearing a trend costume. No estimate beats a bad one.
+        return None
+    paired = [(v, o) for v, o in zip(history, opps) if o is not None]
+    produced = sum(v for v, _o in paired)
+    eff = produced / total_opp
+    return opp_now * eff
+
+
 def predictors(history: list, career: list, vs_opp: list,
-               weights: dict | None) -> dict:
+               weights: dict | None, opps: list | None = None) -> dict:
     """Every candidate's number for one player-week.
 
     ``history`` is this season's prior values, MOST RECENT FIRST — the
@@ -115,6 +191,15 @@ def predictors(history: list, career: list, vs_opp: list,
     gentle = compute_form(logs, _mean(career) or _mean(history),
                           _mean(vs_opp), weights=GENTLE)
     out["gentle"] = gentle.mean
+    if opps is not None:
+        vol = volume_predictor(history, opps)
+        if vol is not None:
+            out["volume"] = vol
+            # Half the decomposition, half the smoothing. The blend is
+            # what `projection.build_projection` already does live via
+            # its usage bridge, so measuring it here says whether that
+            # bridge is worth what it costs.
+            out["vol_blend"] = 0.5 * vol + 0.5 * (out["gentle"] or vol)
     return out
 
 
@@ -129,15 +214,14 @@ def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
                 "skipped": "no game logs for this market"}
 
     seen: dict = {}          # (player, season) -> [values, most recent first]
+    seen_opp: dict = {}      # the same, for the opportunity behind each
     career: dict = {}        # player -> every value from EARLIER seasons
     versus: dict = {}        # (player, opponent) -> values before this game
-    err: dict = {}           # name -> [abs errors]
-    sq: dict = {}            # name -> [squared errors]
-    by_week: dict = {}       # (season, week) -> [(preds, actual)]
+    rows_kept: list = []     # (season, week, {name: pred}, actual)
     season_now = None
     scored = 0
 
-    for season, week, player, opponent, actual in rows:
+    for season, week, player, opponent, actual, opp in rows:
         if season != season_now:
             # A new season starts every player's in-season log empty, and
             # folds the finished one into the career anchor. Doing this on
@@ -145,29 +229,53 @@ def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
             # career average from containing the game being predicted.
             for (p, _s), vals in seen.items():
                 career.setdefault(p, []).extend(vals)
-            seen, season_now = {}, season
+            seen, seen_opp, season_now = {}, {}, season
         hist = seen.get((player, season)) or []
+        opps = seen_opp.get((player, season)) or []
         if len(hist) >= min_history:
             preds = predictors(hist, career.get(player, []),
-                               versus.get((player, opponent), []), weights)
-            for name, p in preds.items():
-                if p is None:
-                    continue
-                err.setdefault(name, []).append(abs(p - actual))
-                sq.setdefault(name, []).append((p - actual) ** 2)
-            by_week.setdefault((season, week), []).append((preds, actual))
+                               versus.get((player, opponent), []), weights,
+                               opps=opps)
+            rows_kept.append((season, week, preds, actual))
             scored += 1
         seen.setdefault((player, season), []).insert(0, actual)
+        seen_opp.setdefault((player, season), []).insert(0, opp)
         versus.setdefault((player, opponent), []).append(actual)
         if log and scored and scored % 20000 == 0:
             log(f"    {market}: {scored:,} player-weeks scored")
 
-    out = {"market": market, "n": scored, "candidates": {}}
-    for name in sorted(err):
+    # THE COMMON SUBSET, and nothing else is comparable.
+    #
+    # `volume` returns None below MIN_OPPORTUNITIES, so on rush_yds it
+    # prices only the ~33% of rows belonging to actual ball-carriers,
+    # while every other candidate is also scored on ~6,000 receivers
+    # whose rushing yards are zero and for whom predicting zero is free.
+    # Scored on their own rows the two are not in the same contest:
+    # measured that way `volume` read MAE 19.89 against `gentle`'s 7.34,
+    # which says nothing at all about the model and everything about
+    # which rows each one was handed.
+    names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds})
+    usable = [r for r in rows_kept
+              if all(r[2].get(n) is not None for n in names)]
+    err: dict = {n: [] for n in names}
+    sq: dict = {n: [] for n in names}
+    by_week: dict = {}
+    for season_, week_, preds, actual in usable:
+        for name in names:
+            e = preds[name] - actual
+            err[name].append(abs(e))
+            sq[name].append(e * e)
+        by_week.setdefault((season_, week_), []).append((preds, actual))
+    out = {"market": market, "n": scored, "compared_on": len(usable),
+           "candidates": {}}
+    if not usable:
+        out["skipped"] = "no row carried every candidate"
+        return out
+    for name in names:
         out["candidates"][name] = {
-            "n": len(err[name]),
-            "mae": sum(err[name]) / len(err[name]),
-            "rmse": math.sqrt(sum(sq[name]) / len(sq[name])),
+            "n": len(usable),
+            "mae": sum(err[name]) / len(usable),
+            "rmse": math.sqrt(sum(sq[name]) / len(usable)),
             "rank": _mean_week_rank(by_week, name),
         }
     return out
@@ -226,7 +334,9 @@ def report_lines(out: dict) -> list:
     """One market's table, best rank first."""
     if out.get("skipped"):
         return [f"  {out['market']}: skipped — {out['skipped']}"]
-    lines = [f"  {out['market']}: {out['n']:,} player-weeks"]
+    lines = [f"  {out['market']}: {out['n']:,} player-weeks, "
+             f"{out.get('compared_on', out['n']):,} carrying every candidate "
+             f"— the only rows any of these numbers compare on"]
     rows = sorted(out["candidates"].items(),
                   key=lambda kv: -(kv[1]["rank"] or -1))
     best = rows[0][0] if rows else ""

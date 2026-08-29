@@ -14,20 +14,42 @@ from typing import Optional
 from .models import GameLog
 from .statmath import weighted_mean, sample_std, clamp
 
-# How much each look-back window contributes. Re-fit to the spec's recency
-# rule (docs/NFL_MODEL.md §5: last 2 ≈ 45%, last 4 ≈ 35%, season ≈ 20%):
-# season averages blend September's team with December's — recent games
-# describe the team that will actually play Sunday. Mapped onto our window
-# structure, the recent windows (1/3/5) now carry ~75% and the long anchors
-# (10/season/career/opponent) ~25%.
+# How much each look-back window contributes.
+#
+# MEASURED, where this used to be transcribed. The old curve came from
+# docs/NFL_MODEL.md §5 ("last 2 ~ 45%, last 4 ~ 35%, season ~ 20%") and
+# put ~75% on the recent windows on the argument that "season averages
+# blend September's team with December's". Reasonable, and never checked
+# against an outcome.
+#
+# Checked now — engine/formcheck, walk-forward over 22,355 NFL
+# player-weeks from 2021-2025, every candidate scored on the rows all of
+# them could price. Held out on 2024-2025 alone the long-window curve
+# below beats the spec curve on the two markets that were running it:
+#
+#     rush_yds    rank +0.663 vs +0.645   MAE 19.46 vs 20.21
+#     rec_yds     rank +0.541 vs +0.521   MAE 20.31 vs 20.89
+#
+# and ties on receptions and pass_yds, whose fitted curves were already
+# shaped like this one. Those two are also the only NFL prop markets with
+# a measured edge against a real book, while rush_yds and rec_yds are the
+# two that measured AUC 0.47 and are currently shut. The recency tilt was
+# not a small mis-set dial; it is on the list of reasons those markets
+# cannot rank a hit above a miss.
+#
+# `formfit` adopts a fitted curve only when it beats THIS by MIN_GAIN
+# Brier, so raising the baseline also raises the bar a hot curve has to
+# clear — the NFL rush_yds curve on disk (last1 .25 / last3 .35 / season
+# .05) beat the old spec curve and loses to this one, and gets
+# re-examined on the next nightly fit rather than being edited by hand.
 WINDOW_WEIGHTS = {
-    "last1": 0.22,
-    "last3": 0.33,
-    "last5": 0.20,
-    "last10": 0.10,
-    "season": 0.09,
-    "career": 0.03,
-    "vs_opp": 0.03,
+    "last1": 0.09,
+    "last3": 0.16,
+    "last5": 0.14,
+    "last10": 0.22,
+    "season": 0.25,
+    "career": 0.07,
+    "vs_opp": 0.07,
 }
 
 # MLB runs a GENTLER recency curve (docs/MLB_MODEL.md §6: last 7 ≈ 40% ·
