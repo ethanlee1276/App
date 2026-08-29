@@ -299,6 +299,7 @@ def census_lines(c: dict) -> list:
     if c.get("quoted_players"):
         parts = []
         for key, label in (("no_usage", "without usage logs"),
+                           ("transfers", "found under a former school"),
                            ("outside_window", "outside the odds window")):
             if c.get(key):
                 parts.append(f"{c[key]} {label}")

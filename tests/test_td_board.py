@@ -676,6 +676,64 @@ def test_both_builds_journal_their_boards():
     assert '"sport": "cfb"' in call, call
 
 
+
+# --- the transfer portal ---------------------------------------------------
+def test_a_transfer_is_found_under_his_former_school():
+    """A quarter of the quoted college board changes school over the
+    summer — measured 25.2% of players with 20+ touches from 2024 to
+    2025 — and `usage_table` keys a player by (team, name), so every one
+    of them reads as "no usage" while a full season of his production
+    sits in the logs under the old school.
+
+    The SIDE he plays for and the TEAM his usage is filed under are two
+    different things once that happens, and conflating them is the bug.
+    The side decides his implied total and his game script."""
+    usage = {"UGA": {"nate frazier": {"carries": 18.0}},
+             "GT": {"moved guy": {"carries": 12.0}}}
+    # Not a transfer: both answers are the same team.
+    assert T.resolve_side("nate frazier", "UGA", "CLEM", usage, {}) == \
+        ("UGA", "UGA")
+    # A transfer: plays for UGA now, usage still filed under GT.
+    assert T.resolve_side("moved guy", "UGA", "CLEM", usage,
+                          {"moved guy": {"UGA"}}) == ("UGA", "GT")
+
+
+def test_week_one_refuses_to_guess_which_side_a_transfer_is_on():
+    """Nobody has played, so the current season's logs are empty and
+    there is no honest way to say which of the two teams he joined.
+    Putting a back on the wrong side of a 30-point spread is worse than
+    leaving him off the board, so this returns nothing."""
+    usage = {"GT": {"moved guy": {"carries": 12.0}}}
+    assert T.resolve_side("moved guy", "UGA", "CLEM", usage, {}) == ("", "")
+    # And a player the current logs place at a THIRD school is not
+    # quietly assigned to whichever team is listed first.
+    assert T.resolve_side("moved guy", "UGA", "CLEM", usage,
+                          {"moved guy": {"FSU"}}) == ("", "")
+
+
+def test_the_current_season_map_is_built_from_who_has_actually_played():
+    conn = _cfb_hist()
+    got = T.teams_by_name(conn, 2025)
+    assert oa.normalize_name("Nate Frazier") in got
+    assert "UGA" in got[oa.normalize_name("Nate Frazier")]
+    assert T.teams_by_name(conn, 2099) == {}
+
+
+def test_a_transfers_share_is_read_against_his_OLD_team():
+    """His share is a statement about the season the numbers came from.
+    Dividing last year's touches by this year's roster would compare two
+    different teams and call it a role."""
+    import ast
+    import inspect
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(T)))
+              if isinstance(n, ast.FunctionDef)
+              and n.name == "build_cfb_td_longshots")
+    src = ast.unparse(fn)
+    assert "usage[usage_team][norm]" in src
+    assert "usage.get(usage_team)" in src
+    assert "usage[side]" not in src, "the player and his denominator disagree"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

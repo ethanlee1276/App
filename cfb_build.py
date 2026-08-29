@@ -900,8 +900,9 @@ def main() -> None:
                 print(f"  TD board: {len(rows)} pick(s) + {len(watch)} "
                       f"most-likely from {census['quoted_players']} quoted "
                       f"player(s) ({census['no_usage']} without usage logs, "
-                      f"{census['outside_window']} outside the odds window; "
-                      f"roles from {census['usage_season']})")
+                      f"{census.get('transfers', 0)} found under a former "
+                      f"school, {census['outside_window']} outside the odds "
+                      f"window; roles from {census['usage_season']})")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  TD long shots unavailable: {_exc}")
     out["status"] = "slate"

@@ -260,6 +260,74 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
     return season, out
 
 
+def teams_by_name(conn, season: int) -> dict:
+    """``{normalised name: {teams}}`` for one season's logged players.
+
+    THE TRANSFER PROBLEM, WHICH IS A COLLEGE PROBLEM. `usage_table` keys
+    a player by (team, name), and the board finds him by asking which of
+    the two teams in the game has him. A player who changed schools over
+    the summer is under neither, so he is dropped as "no usage" even
+    though a full season of his production is sitting in the logs under
+    his old team.
+
+    Measured over the population a book actually quotes — players with 20
+    or more touches the following season:
+
+                       found   transferred   no prior season
+        2023 -> 2024   55.1%      19.9%          25.0%
+        2024 -> 2025   52.9%      25.2%          21.9%
+
+    A quarter of the quoted board, invisible. On 2026-08-29 the college
+    build dropped 53 of 84 quoted players for want of usage, and this is
+    about half of that. The NFL hit the same thing far more mildly and
+    fixed it the same way (`engine.nflusage.season_teams`); the portal
+    makes it several times larger here.
+    """
+    from ..sources.oddsapi import normalize_name
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT DISTINCT team, player FROM player_game_logs "
+            "WHERE sport='cfb' AND season=? AND market IN "
+            "('carries','receptions','rush_yds','rec_yds')", (int(season),)):
+        out.setdefault(normalize_name(r["player"]), set()).add(r["team"])
+    return out
+
+
+def resolve_side(norm: str, home: str, away: str, usage: dict,
+                 current: dict | None = None) -> tuple[str, str]:
+    """``(side he plays for, team his usage is filed under)``, or ``("","")``.
+
+    Two different teams, and conflating them is the whole bug. The SIDE
+    decides his implied total and his game script; the USAGE TEAM is
+    wherever last season's production happens to be filed.
+
+    A player found under one of the two teams gives the same answer for
+    both, which is every non-transfer. For a transfer, the side comes
+    from the CURRENT season's logs — once he has played a game, ESPN's
+    box score files him under his new school — and the usage still comes
+    from the old one.
+
+    ``current`` is `teams_by_name` for the season being played. It is
+    empty in week one, when nobody has played yet, and this returns
+    nothing rather than guessing: putting a back on the wrong side of a
+    30-point spread is worse than leaving him off the board.
+    """
+    for t in (home, away):
+        if norm in (usage.get(t) or {}):
+            return t, t
+    now = (current or {}).get(norm)
+    if not now:
+        return "", ""
+    side = next((t for t in (home, away) if t in now), "")
+    if not side:
+        return "", ""                    # quoted here, logged elsewhere
+    # He is on this team NOW; find where his usage actually lives.
+    for team, players in usage.items():
+        if norm in players:
+            return side, team
+    return "", ""
+
+
 #: A roster position, folded onto the four the model prices. Anything
 #: else — a punter who took a fake, a lineman on a tackle-eligible — is
 #: not in the table and falls through to the usage mix, which is the
@@ -536,8 +604,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     """
     from ..odds import american_to_decimal
     usage_season, usage = usage_table(conn, season)
+    # Where each player is filed THIS season, so a transfer can be found
+    # under the school his production is filed at. Empty in week one and
+    # fills in as games are played — see `resolve_side`.
+    current = teams_by_name(conn, season) if usage_season != season else {}
     census = {"quoted_players": 0, "no_usage": 0, "outside_window": 0,
-              "priced": 0, "usage_season": usage_season}
+              "priced": 0, "transfers": 0, "usage_season": usage_season}
     picks = []
     watch_rows = []
     for gi, player_quotes in (quotes_by_game or {}).items():
@@ -554,12 +626,13 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
         fairs = game_fairs(player_quotes, spread_home, total)
         for norm, quotes in (player_quotes or {}).items():
             census["quoted_players"] += 1
-            side = next((t for t in (home, away)
-                         if norm in (usage.get(t) or {})), "")
+            side, usage_team = resolve_side(norm, home, away, usage, current)
+            if side and usage_team != side:
+                census["transfers"] += 1
             if not side:
                 census["no_usage"] += 1
                 continue
-            u = usage[side][norm]
+            u = usage[usage_team][norm]
             best = best_scorer_price(quotes)
             if best is None:
                 continue
@@ -571,7 +644,11 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 continue               # no game price = no script, no read
             team_tds = max(0.0, implied) * CFB_TD_PER_POINT
             pos = role_of(u)
-            team_u = usage.get(side) or {}
+            # HIS OLD TEAM'S volume, not his new one's. The share is a
+            # statement about the season the numbers came from — dividing
+            # last year's touches by this year's roster would compare two
+            # different teams and call it a role.
+            team_u = usage.get(usage_team) or {}
             vol = u["rush_yds"] + u["rec_yds"]
             team_vol = sum(p["rush_yds"] + p["rec_yds"]
                            for p in team_u.values()) or 1.0
