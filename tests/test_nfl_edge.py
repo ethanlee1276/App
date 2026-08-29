@@ -145,12 +145,26 @@ def test_the_spread_leans_pass_volume_up_for_underdogs():
     assert any("Game script" in r and "favorite" in r for r in fav.reasons)
 
 
-def test_the_spread_leans_run_volume_the_other_way():
+def test_the_spread_no_longer_leans_run_volume_at_all():
+    """THIS TEST USED TO ASSERT THE OPPOSITE. The idea is sound football
+    — a favourite leads late and runs the clock — and five seasons do not
+    show it. Production against the player's own prior form, bucketed by
+    his team's spread, reads 1.103, 1.219, 1.184, 1.104, 1.167, 1.340
+    from big favourite to big underdog: the ends differ by 21%, nothing
+    in between agrees, the ends are the thinnest buckets, and what
+    difference there is points the OTHER way — the big underdogs ran for
+    most. An end-to-end number on a series that doubles back is not an
+    effect size."""
     prop = _prop(market=RUSH_YDS, position="RB")
     dog = build_projection(prop, _game(spread=7.0), _opp())
     fav = build_projection(prop, _game(spread=-7.0), _opp())
-    assert fav.mean > dog.mean
-    assert any("run volume" in r for r in fav.reasons)
+    assert abs(dog.mean - fav.mean) < 1e-9, \
+        "the spread is moving a rushing projection again"
+    assert not any("run volume" in r for r in fav.reasons)
+    # The constant stays so the measurement has something to name and
+    # re-enabling is one line.
+    from engine.matchup import SCRIPT_COEF_RUSH
+    assert SCRIPT_COEF_RUSH > 0
 
 
 def test_the_tilt_is_clamped_however_lopsided_the_spread():

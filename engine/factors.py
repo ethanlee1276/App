@@ -306,7 +306,17 @@ def trend(effect: dict) -> str:
         return "(climbs every step)"
     if ups == 0:
         return "(falls every step)"
-    if ups >= len(steps) - 1 or ups <= 1:
+    # COUNTING DIRECTIONS IS NOT ENOUGH. Wind against rush_yds goes
+    # 1.186, 1.116, 1.207, 1.116 — one step up and two down, which a
+    # bare count called "mostly one direction" while the series plainly
+    # doubles back. What matters is whether the reversals are large
+    # relative to the trend, so compare the distance actually travelled
+    # against the sum of the absolute steps: a clean run scores 1.0, and
+    # a series that walks back most of its own progress scores near 0.
+    travelled = abs(sum(steps))
+    walked = sum(abs(d) for d in steps)
+    ratio = travelled / walked if walked else 0.0
+    if ratio >= 0.7:
         return "(mostly one direction)"
     return "⚠️  (wanders — the ends differ but the middle does not agree)"
 

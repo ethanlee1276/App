@@ -229,6 +229,107 @@ def test_a_two_bucket_series_gets_no_shape_claim():
                           1: {"n": 5, "ratio": 1.5}}) == ""
 
 
+# --- the changes the measurements licensed ------------------------------------
+def test_the_defensive_rating_is_shrunk_to_what_transfers():
+    """DefenseProfile stores "yards allowed vs league average" and this
+    was applied whole: a defence giving up 20% more multiplied the
+    projection by 1.20. Regressing production against a player's own
+    prior form on that defence's walk-forward rating gives the slope that
+    actually reaches him — 0.48 rushing, 0.30 receptions, 0.24 receiving
+    yards. The slope IS the least-squares coefficient, so applying the
+    raw rating used 1.0 where the data says a quarter to a half."""
+    from engine.matchup import DEFENSE_TRANSFER, DEFENSE_TRANSFER_DEFAULT
+    from engine.models import PASS_YDS, RECEPTIONS, REC_YDS, RUSH_YDS
+    assert DEFENSE_TRANSFER[RUSH_YDS] == 0.48
+    assert DEFENSE_TRANSFER[RECEPTIONS] == 0.30
+    assert DEFENSE_TRANSFER[REC_YDS] == 0.24
+    assert DEFENSE_TRANSFER[PASS_YDS] == 0.0
+    assert 0 < DEFENSE_TRANSFER_DEFAULT <= max(DEFENSE_TRANSFER.values())
+
+
+def test_a_generous_defence_now_moves_a_runner_half_as_far():
+    from engine.matchup import DEFENSE_TRANSFER
+    from engine.models import RUSH_YDS
+    raw = 1.25
+    shrunk = 1.0 + DEFENSE_TRANSFER[RUSH_YDS] * (raw - 1.0)
+    assert abs(shrunk - 1.12) < 0.005
+
+
+def test_a_passing_defence_moves_a_quarterback_not_at_all():
+    """Slope -0.06 on n=2,035, smaller than its own standard error. A
+    defence's passing rating does not predict an individual
+    quarterback's yardage — his own team's pass rate and the game script
+    drive it, and a good defence forcing an opponent to throw cuts the
+    other way."""
+    from engine.matchup import DEFENSE_TRANSFER
+    from engine.models import PASS_YDS
+    raw = 1.25
+    assert 1.0 + DEFENSE_TRANSFER[PASS_YDS] * (raw - 1.0) == 1.0
+
+
+def test_the_shrink_happens_before_the_clamp():
+    """Otherwise the clamp is still catching an over-applied factor
+    rather than bounding a reasonable one."""
+    import inspect
+    from engine import matchup
+    src = inspect.getsource(matchup.evaluate_matchup)
+    i_shrink = src.index("factor = 1.0 + transfer * (factor - 1.0)")
+    i_clamp = src.index("factor = clamp(factor, 0.80, 1.25)")
+    assert i_shrink < i_clamp
+
+
+def test_the_pace_term_points_the_way_the_data_does():
+    """The rule was "high total => more plays, more production for
+    everyone": +3% at 48 and above. No market has a positive
+    relationship with the total, and rush_yds falls at every bucket —
+    1.243 in the lowest-total games to 1.064 in the highest."""
+    from engine.matchup import TOTAL_BASELINE, TOTAL_CLAMP, TOTAL_COEF
+    from engine.models import RUSH_YDS
+    from engine.statmath import clamp
+    assert TOTAL_COEF[RUSH_YDS] < 0
+    low = clamp(1 + TOTAL_COEF[RUSH_YDS] * (38 - TOTAL_BASELINE), *TOTAL_CLAMP)
+    high = clamp(1 + TOTAL_COEF[RUSH_YDS] * (52 - TOTAL_BASELINE), *TOTAL_CLAMP)
+    assert low > 1.0 > high, (low, high)
+
+
+def test_only_a_monotone_series_earned_a_pace_term():
+    """pass_yds carries the larger t (-2.5) and its buckets wander, its
+    sample is a fifth the size, and four markets were tested. A
+    counter-intuitive sign is where a marginal number should be trusted
+    least."""
+    from engine.matchup import TOTAL_COEF
+    from engine.models import PASS_YDS, RECEPTIONS, REC_YDS, RUSH_YDS
+    assert set(TOTAL_COEF) == {RUSH_YDS}
+    for m in (PASS_YDS, REC_YDS, RECEPTIONS):
+        assert m not in TOTAL_COEF
+
+
+def test_the_shape_test_catches_a_series_that_doubles_back():
+    """Counting directions was not enough: wind against rush_yds goes
+    1.186, 1.116, 1.207, 1.116 — one step up and two down, which a bare
+    count called "mostly one direction" while the series plainly walks
+    back its own progress."""
+    real = (1.186, 1.116, 1.207, 1.116)
+    e = {i: {"n": 800, "ratio": r} for i, r in enumerate(real)}
+    assert "wanders" in factors.trend(e)
+
+
+def test_a_clean_run_still_reads_as_one_direction():
+    """The real rush_yds defence series: it climbs, dips once at the far
+    end, and travels 83% of the distance it walks. That is a trend with a
+    wobble, not a series that doubles back."""
+    real = (1.079, 1.186, 1.234, 1.277, 1.259)
+    e = {i: {"n": 800, "ratio": r} for i, r in enumerate(real)}
+    assert factors.trend(e) == "(mostly one direction)"
+
+
+def test_flat_steps_do_not_count_as_reversals():
+    """A series that falls and then holds is still falling."""
+    e = {i: {"n": 800, "ratio": r}
+         for i, r in enumerate((1.24, 1.24, 1.13, 1.13, 1.06))}
+    assert factors.trend(e) == "(falls every step)"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
