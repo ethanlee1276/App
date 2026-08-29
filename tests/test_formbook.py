@@ -243,6 +243,101 @@ def test_it_reads_no_proxy_line_anywhere():
     assert "closing_odds_by_date" in src
 
 
+# --- is there any signal at all -----------------------------------------------
+def _featured(conn, market, values_by_player, feature, feature_by_player,
+              line=50.0, team="LV"):
+    dates = _world(conn, market, values_by_player, line=line, team=team)
+    for player, series in feature_by_player.items():
+        for week, v in enumerate(series, 1):
+            conn.execute(
+                "INSERT INTO player_game_logs (sport, season, period, player,"
+                " team, opponent, market, value) VALUES "
+                "('nfl', 2025, ?, ?, ?, 'DEN', ?, ?)",
+                ("%03d" % week, player, team, feature, float(v)))
+    return dates
+
+
+def test_a_feature_the_book_ignores_is_found():
+    """The result that would matter: a column that orders the outcome
+    even though the number was hung without it."""
+    n = 60
+    outcome, carries = {}, {}
+    for i in range(n):
+        high = i % 2 == 0
+        outcome[f"P{i}"] = [80 if high else 20] * 14
+        carries[f"P{i}"] = [22 if high else 5] * 14
+    c = _conn()
+    dates = _featured(c, "rush_yds", outcome, "carries", carries, line=50.0)
+    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates)
+    assert out["signals"]["carries"]["z"] > 5, out["signals"]["carries"]
+    assert "** orders it **" in "\n".join(formbook.signal_lines(out))
+
+
+def test_a_feature_unrelated_to_the_outcome_is_not():
+    import random
+    rng = random.Random(9)
+    n = 60
+    outcome, carries = {}, {}
+    for i in range(n):
+        outcome[f"P{i}"] = [rng.uniform(0, 100) for _ in range(14)]
+        carries[f"P{i}"] = [rng.uniform(0, 25) for _ in range(14)]
+    c = _conn()
+    dates = _featured(c, "rush_yds", outcome, "carries", carries, line=50.0)
+    out = formbook.signal_scan(c, "rush_yds", min_pairs=100, dates=dates)
+    assert abs(out["signals"]["carries"]["z"]) < 2.5
+
+
+def test_the_scan_says_plainly_when_nothing_orders_it():
+    """A scan that always finds something cannot stop work, which is the
+    only reason to run it."""
+    out = {"market": "rush_yds", "n": 1001, "signals": {
+        "proj_gap": {"n": 1001, "auc": 0.517, "z": 0.9},
+        "carries": {"n": 900, "auc": 0.508, "z": 0.5}}}
+    text = "\n".join(formbook.signal_lines(out))
+    assert "nothing here orders this market" in text
+    assert "2 candidates tried" in text
+
+
+def test_the_board_s_own_signal_is_in_the_race_and_labelled():
+    """Otherwise a feature beating nothing looks like a feature beating
+    the model."""
+    out = {"market": "rush_yds", "n": 1001, "signals": {
+        "proj_gap": {"n": 1001, "auc": 0.517, "z": 0.9},
+        "carries": {"n": 900, "auc": 0.560, "z": 3.1}}}
+    text = "\n".join(formbook.signal_lines(out))
+    assert "what the board uses" in text
+    assert text.index("carries") < text.index("proj_gap"), \
+        "strongest ordering must sort first"
+
+
+def test_a_backwards_signal_is_named_as_backwards():
+    out = {"market": "rush_yds", "n": 1001, "signals": {
+        "proj_gap": {"n": 1001, "auc": 0.430, "z": -3.4}}}
+    assert "orders it BACKWARDS" in "\n".join(formbook.signal_lines(out))
+
+
+def test_volume_is_offered_as_a_change_not_only_a_level():
+    """A back who just took the job reads high on recent carries while
+    his own yardage history still reads like a backup."""
+    import inspect
+    src = inspect.getsource(formbook.signal_scan)
+    assert '_trend' in src and "older = _recent(series[4:], 12)" in src
+
+
+def test_features_are_named_per_market():
+    """Air yards mean nothing to a runner, carries nothing to a
+    receiver."""
+    assert "air_yards" in formbook.FEATURES["rec_yds"]
+    assert "air_yards" not in formbook.FEATURES["rush_yds"]
+    assert "carries" in formbook.FEATURES["rush_yds"]
+
+
+def test_a_feature_reads_only_weeks_before_the_one_being_priced():
+    import inspect
+    src = inspect.getsource(formbook.signal_scan)
+    assert "for w in range(week - 1, 0, -1)" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

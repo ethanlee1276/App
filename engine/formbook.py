@@ -97,7 +97,7 @@ def _logs(conn, market: str, seasons=None) -> list:
 
 
 def pairs_for(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
-              dates: dict | None = None) -> list:
+              dates: dict | None = None, keep_key: bool = False) -> list:
     """``[(history, career, vs_opp, line, went_over)]`` on real closes.
 
     Everything a dial needs to be scored, and nothing that depends on
@@ -139,9 +139,11 @@ def pairs_for(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
             # A push decided nothing and carries no outcome to learn from,
             # the same exclusion propcal.book_pairs makes.
             if line is not None and actual != line:
-                out.append((list(hist), list(career.get(player, [])),
-                            list(versus.get((player, opponent), [])),
-                            line, int(actual > line)))
+                row = (list(hist), list(career.get(player, [])),
+                       list(versus.get((player, opponent), [])),
+                       line, int(actual > line))
+                out.append(((season, week, player),) + row if keep_key
+                           else row)
         seen.setdefault((player, season), []).insert(0, actual)
         versus.setdefault((player, opponent), []).append(actual)
     return out
@@ -246,5 +248,140 @@ def report_lines(out: dict) -> list:
     return lines
 
 
-__all__ = ["MARKETS", "MIN_PAIRS", "MIN_HISTORY", "game_dates", "pairs_for",
-           "scan", "report_lines"]
+#: Everything the game logs carry that could plausibly order a prop,
+#: beyond the outcome's own history. Named per market because air yards
+#: mean nothing to a runner and carries nothing to a receiver.
+FEATURES = {
+    "rush_yds": ("carries", "snap_pct", "rz_car", "i5_car", "xfp"),
+    "rec_yds": ("targets", "air_yards", "snap_pct", "rz_tgt", "xfp"),
+    "receptions": ("targets", "air_yards", "snap_pct", "rz_tgt", "xfp"),
+    "pass_yds": ("pass_att",),
+}
+
+
+def _feature_logs(conn, markets, seasons=None) -> dict:
+    """``{(season, week, player): {market: value}}`` for the features."""
+    if not markets:
+        return {}
+    sql = ("SELECT season, period, player, market, value "
+           "FROM player_game_logs WHERE sport='nfl' AND market IN (%s) "
+           % ",".join("?" * len(markets)))
+    args = list(markets)
+    if seasons:
+        sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
+        args.extend(seasons)
+    out: dict = {}
+    for r in conn.execute(sql, args):
+        try:
+            week = int(r["period"])
+        except (TypeError, ValueError):
+            continue
+        if r["value"] is None:
+            continue
+        out.setdefault((int(r["season"]), week, r["player"]), {})[
+            r["market"]] = float(r["value"])
+    return out
+
+
+def _recent(vals, n=4):
+    got = [v for v in vals[:n] if v is not None]
+    return sum(got) / len(got) if got else None
+
+
+def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
+                dates: dict | None = None) -> dict:
+    """Does ANYTHING we record order this market against a book?
+
+    THE QUESTION LEFT WHEN THE DIAL ANSWERS NO. `scan` sweeps the recency
+    family and, on rush_yds and rec_yds, no setting orders the outcome to
+    significance — the best of twenty-one dials reached AUC 0.517 (z=0.9)
+    and 0.508 (z=0.6). That closes the curve as a cause but not the
+    market: a curve reweights the outcome's own history, and the book's
+    number may simply already contain everything that history holds.
+
+    So this scores the OTHER columns. Each candidate is a ranking over
+    player-weeks, scored by AUC against whether the game beat the closing
+    number. A raw feature knows nothing about the line, which is exactly
+    what makes it a fair test of the book: if the market prices volume
+    correctly then high-volume players go over half the time and the AUC
+    sits at 0.5. A feature that clears it is one the book under-weights.
+
+    Nothing here is a bet. It is the question of whether a bet is
+    possible, asked before any more model is built on top.
+    """
+    from .form import compute_form
+    from .formfit import base_for
+    from .models import GameLog
+
+    feats = FEATURES.get(market, ())
+    fl = _feature_logs(conn, feats, seasons)
+    rows = pairs_for(conn, market, seasons, dates=dates, keep_key=True)
+    if len(rows) < min_pairs:
+        return {"market": market, "n": len(rows),
+                "skipped": f"{len(rows)} book-priced pairs, needs {min_pairs}"}
+
+    base = base_for("nfl")
+    cand: dict = {}
+    for key, hist, career, vs_opp, line, over in rows:
+        season, week, player = key
+        logs = [GameLog(week=0, opponent="", value=v) for v in hist]
+        car = (sum(career) / len(career)) if career else (
+            sum(hist) / len(hist) if hist else 0.0)
+        form = compute_form(logs, car, None, weights=base)
+        vals = {
+            # The signal the board actually uses, as the thing to beat.
+            "proj_gap": form.mean - line,
+            "season_gap": (sum(hist) / len(hist)) - line,
+            "last3_gap": _recent(hist, 3) - line if hist else None,
+        }
+        for f in feats:
+            series = [fl.get((season, w, player), {}).get(f)
+                      for w in range(week - 1, 0, -1)]
+            vals[f] = _recent(series)
+            if f in ("carries", "targets", "pass_att"):
+                # Role CHANGE, not role level: recent minus the season
+                # behind it. A back who just took the job reads high here
+                # while his own yardage history still reads like a backup.
+                older = _recent(series[4:], 12)
+                vals[f + "_trend"] = (
+                    (vals[f] - older) if (vals[f] is not None
+                                          and older is not None) else None)
+        for name, v in vals.items():
+            if v is not None:
+                cand.setdefault(name, []).append((float(v), over))
+
+    out = {"market": market, "n": len(rows), "signals": {}}
+    for name, pairs in cand.items():
+        if len(pairs) < min_pairs:
+            continue
+        g = _auc(pairs)
+        if g.get("ran"):
+            out["signals"][name] = {"n": len(pairs), "auc": g["auc"],
+                                    "z": g["z"]}
+    return out
+
+
+def signal_lines(out: dict) -> list:
+    """Every candidate, strongest ordering first."""
+    if out.get("skipped"):
+        return [f"  {out['market']}: skipped — {out['skipped']}"]
+    lines = [f"  {out['market']}: {out['n']:,} book-priced pairs"]
+    rows = sorted(out["signals"].items(), key=lambda kv: -abs(kv[1]["z"]))
+    for name, d in rows:
+        mark = "  <-- what the board uses" if name == "proj_gap" else ""
+        flag = "" if abs(d["z"]) < 2 else ("  ** orders it **" if d["z"] > 0
+                                           else "  ** orders it BACKWARDS **")
+        lines.append(f"      {name:<16} n={d['n']:<5} AUC {d['auc']:.3f}  "
+                     f"z={d['z']:+.1f}{flag}{mark}")
+    if not any(abs(d["z"]) >= 2 for _n, d in rows):
+        # MANY CANDIDATES, so the bar is not one z of 2. Said plainly
+        # because the whole point of the scan is to stop work, and a
+        # scan that always finds something cannot do that.
+        lines.append(f"      nothing here orders this market — {len(rows)} "
+                     f"candidates tried, none reaching z=2, and trying "
+                     f"{len(rows)} makes even that a low bar")
+    return lines
+
+
+__all__ = ["MARKETS", "MIN_PAIRS", "MIN_HISTORY", "FEATURES", "game_dates",
+           "pairs_for", "scan", "report_lines", "signal_scan", "signal_lines"]
