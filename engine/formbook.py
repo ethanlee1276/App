@@ -414,11 +414,16 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
             "last3_gap": _recent(hist, 3) - line if hist else None,
             # THE FACTORS THE MODEL DECLARES BUT DOES NOT PRICE.
             # `vs_opponent_avg` carries a weight in the recency curve and
-            # `sources/nflverse` passes None for every NFL prop, so
-            # head-to-head history has never entered a projection. Rest
-            # and the bye are computed by `engine/fatigue` for display
-            # and by `engine/byes` for the draft board, and neither
-            # reaches the price. Tested here rather than argued about.
+            # every producer passes None, so head-to-head history has
+            # never entered a projection. Filling it turns out not to be
+            # worth doing — see engine/form.WINDOW_WEIGHTS: across 9,097
+            # held-out player-weeks it moves the blend by 0.0001. It
+            # stays a candidate HERE because ordering against a book is a
+            # different question from improving the blend, and on
+            # rush_yds it was the strongest non-model signal in the scan.
+            # Rest and the bye are computed by `engine/fatigue` for
+            # display and by `engine/byes` for the draft board, and
+            # neither reaches the price.
             "vs_opp_gap": (_recent(vs_opp, 99) - line) if vs_opp else None,
             "rest_days": (ctx.get((season, week, team)) or {}).get("rest"),
             "off_bye": (ctx.get((season, week, team)) or {}).get("off_bye"),

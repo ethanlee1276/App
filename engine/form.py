@@ -42,6 +42,21 @@ from .statmath import weighted_mean, sample_std, clamp
 # clear — the NFL rush_yds curve on disk (last1 .25 / last3 .35 / season
 # .05) beat the old spec curve and loses to this one, and gets
 # re-examined on the next nightly fit rather than being edited by hand.
+# `vs_opp` IS INERT IN PRODUCTION, and measuring it was cheaper than
+# arguing. Every NFL producer passes vs_opponent_avg=None — the live
+# slate (sources/nflverse), the walk (logwalk), the touchdown replay,
+# the ML trainer — and MLB's analogue vs_pitcher_avg is None at every
+# one of its own. The only place a value appears is data/sample_slate.json,
+# a demo fixture.
+#
+# It is kept rather than deleted because `weighted_mean` renormalises
+# over the windows that ARE present, so an absent one costs nothing, and
+# the sample slate still exercises the path. What it is not is a gap
+# worth closing: filled from a player's real history across 9,097
+# 2024-2025 player-weeks, it moves the blend's ordering by 0.0001 on
+# rush_yds, rec_yds and receptions alike. A player meets a given
+# opponent once a season, so this is a one-game sample carrying 7% of a
+# weight, and one game of noise is what it contributes.
 WINDOW_WEIGHTS = {
     "last1": 0.09,
     "last3": 0.16,

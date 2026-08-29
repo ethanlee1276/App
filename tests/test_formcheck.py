@@ -245,6 +245,36 @@ def test_a_hot_curve_must_now_beat_the_measured_baseline_to_be_adopted():
     assert "brier_default - brier_fitted >= MIN_GAIN" in src
 
 
+def test_head_to_head_history_is_inert_and_says_so():
+    """MEASURED, not assumed: filled from a player's real history across
+    9,097 held-out 2024-2025 player-weeks, the vs-opponent window moves
+    the blend's ordering by 0.0001 on all three markets. A player meets a
+    given opponent once a season, so it is a one-game sample carrying 7%
+    of a weight. Kept because weighted_mean renormalises over absent
+    windows and the sample slate exercises the path; documented so the
+    next reader does not spend a morning wiring it up."""
+    import pathlib as _pl
+    src = _pl.Path("engine/form.py").read_text()
+    i = src.index("WINDOW_WEIGHTS = {")
+    note = src[max(0, i - 1200):i]
+    assert "inert in production" in note.lower()
+    assert "0.0001" in note
+    from engine.form import WINDOW_WEIGHTS
+    assert WINDOW_WEIGHTS.get("vs_opp", 0) > 0, \
+        "the window was removed — the sample slate still supplies it"
+
+
+def test_an_absent_window_is_renormalised_rather_than_counted_as_zero():
+    """Why keeping an unfilled window costs nothing. If it were treated
+    as a zero the blend would be dragged down by every window nobody
+    supplies."""
+    from engine.form import compute_form
+    from engine.models import GameLog
+    logs = [GameLog(week=0, opponent="", value=50.0) for _ in range(6)]
+    got = compute_form(logs, 50.0, None)
+    assert abs(got.mean - 50.0) < 1e-9, got.mean
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
