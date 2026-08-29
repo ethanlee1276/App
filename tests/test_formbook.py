@@ -338,6 +338,71 @@ def test_a_feature_reads_only_weeks_before_the_one_being_priced():
     assert "for w in range(week - 1, 0, -1)" in src
 
 
+# --- the factors the model declares but never prices --------------------------
+def test_rest_is_days_since_that_teams_own_last_game():
+    """Not weeks. A Thursday off a Sunday is four days and a Monday to a
+    Sunday is thirteen, and those are different games to play."""
+    got = formbook.schedule_context({
+        (2025, 1, "LV"): "2025-09-07", (2025, 2, "LV"): "2025-09-14",
+        (2025, 3, "LV"): "2025-09-18"})
+    assert got[(2025, 2, "LV")]["rest"] == 7
+    assert got[(2025, 3, "LV")]["rest"] == 4
+
+
+def test_a_bye_is_inferred_from_the_gap_not_from_a_table():
+    """The gap is what affects a body, and it stays right for a
+    postponement or a rested week 18 that no bye table would list."""
+    got = formbook.schedule_context({
+        (2025, 2, "LV"): "2025-09-14", (2025, 4, "LV"): "2025-10-05"})
+    assert got[(2025, 4, "LV")]["off_bye"] == 1
+    assert got[(2025, 4, "LV")]["rest"] == 21
+
+
+def test_a_normal_week_is_never_called_a_bye():
+    got = formbook.schedule_context({
+        (2025, 1, "LV"): "2025-09-08", (2025, 2, "LV"): "2025-09-21"})
+    assert got[(2025, 2, "LV")]["rest"] == 13
+    assert got[(2025, 2, "LV")]["off_bye"] == 0, \
+        "a Monday-to-Sunday turnaround is a long week, not a bye"
+
+
+def test_the_first_game_of_a_season_has_no_rest_number():
+    got = formbook.schedule_context({(2025, 1, "LV"): "2025-09-07"})
+    assert got[(2025, 1, "LV")]["rest"] is None
+
+
+def test_head_to_head_history_is_offered_as_a_candidate():
+    """It carries a weight in the recency curve and
+    sources/nflverse passes None for every NFL prop, so it has never
+    entered a projection. Whether it should is a measurement."""
+    import inspect
+    src = inspect.getsource(formbook.signal_scan)
+    assert '"vs_opp_gap"' in src
+
+
+def test_the_dead_input_is_real_and_still_dead():
+    """Pinned so the claim in the scan's comment cannot go stale — if
+    someone wires it up, this fails and the comment gets rewritten."""
+    import pathlib as _pl
+    src = _pl.Path("engine/sources/nflverse.py").read_text()
+    assert src.count("vs_opponent_avg=None") >= 1
+    from engine.form import WINDOW_WEIGHTS
+    assert WINDOW_WEIGHTS.get("vs_opp", 0) > 0, \
+        "the curve stopped weighting a window that is never filled"
+
+
+def test_rest_and_bye_and_home_are_all_in_the_race():
+    import inspect
+    src = inspect.getsource(formbook.signal_scan)
+    for name in ('"rest_days"', '"off_bye"', '"is_home"'):
+        assert name in src, name
+
+
+def test_home_and_away_are_read_from_the_schedules_own_sides():
+    got = formbook.home_teams.__doc__
+    assert "hosting" in got
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

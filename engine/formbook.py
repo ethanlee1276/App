@@ -74,6 +74,29 @@ def game_dates(seasons=None) -> dict:
     return out
 
 
+def home_teams(seasons=None) -> dict:
+    """``{(season, week): home_team}`` per game, keyed for lookup by side.
+
+    Kept apart from `game_dates` because that map is keyed by team and a
+    team does not know from its own key whether it was hosting.
+    """
+    from .sources.nflverse import load_schedules, _s
+    out: dict = {}
+    for r in load_schedules():
+        try:
+            season, week = int(_s(r, "season")), int(_s(r, "week"))
+        except (TypeError, ValueError):
+            continue
+        if seasons and season not in seasons:
+            continue
+        home, away = _s(r, "home_team"), _s(r, "away_team")
+        if home:
+            out[(season, week, home)] = 1
+        if away:
+            out[(season, week, away)] = 0
+    return out
+
+
 def _logs(conn, market: str, seasons=None) -> list:
     """``[(season, week, player, team, opponent, value)]`` in time order."""
     sql = ("SELECT season, period, player, team, opponent, value "
@@ -142,8 +165,8 @@ def pairs_for(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
                 row = (list(hist), list(career.get(player, [])),
                        list(versus.get((player, opponent), [])),
                        line, int(actual > line))
-                out.append(((season, week, player),) + row if keep_key
-                           else row)
+                out.append(((season, week, player, team, opponent),) + row
+                           if keep_key else row)
         seen.setdefault((player, season), []).insert(0, actual)
         versus.setdefault((player, opponent), []).append(actual)
     return out
@@ -288,6 +311,42 @@ def _recent(vals, n=4):
     return sum(got) / len(got) if got else None
 
 
+def schedule_context(dates: dict) -> dict:
+    """``{(season, week, team): {"rest": days, "off_bye": 0/1}}``.
+
+    Rest is days since that team's previous game, so a Thursday game off
+    a Sunday reads 4 and a Monday-to-Sunday reads 13. A bye is inferred
+    from the gap rather than from a bye table, because the gap is the
+    thing that actually affects a body and it is right even when a team
+    is coming off a postponement or a week 18 rest.
+    """
+    by_team: dict = {}
+    for (season, week, team), date in dates.items():
+        by_team.setdefault((season, team), []).append((week, date))
+    out: dict = {}
+    for (season, team), games in by_team.items():
+        games.sort()
+        prev = None
+        for week, date in games:
+            rest = None
+            if prev:
+                import datetime as _dt
+                try:
+                    rest = (_dt.date.fromisoformat(date)
+                            - _dt.date.fromisoformat(prev)).days
+                except ValueError:
+                    rest = None
+            out[(season, week, team)] = {
+                "rest": rest,
+                # 13 days clears a normal Sunday-to-Sunday week (7) and a
+                # Monday-to-Sunday (13 exactly is the long end of normal),
+                # so the bar sits above it.
+                "off_bye": (1 if (rest is not None and rest > 13) else 0),
+            }
+            prev = date
+    return out
+
+
 def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
                 dates: dict | None = None) -> dict:
     """Does ANYTHING we record order this market against a book?
@@ -321,9 +380,11 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
                 "skipped": f"{len(rows)} book-priced pairs, needs {min_pairs}"}
 
     base = base_for("nfl")
+    ctx = schedule_context(dates if dates is not None else game_dates(seasons))
+    hosts = home_teams(seasons)
     cand: dict = {}
     for key, hist, career, vs_opp, line, over in rows:
-        season, week, player = key
+        season, week, player, team, opponent = key
         logs = [GameLog(week=0, opponent="", value=v) for v in hist]
         car = (sum(career) / len(career)) if career else (
             sum(hist) / len(hist) if hist else 0.0)
@@ -333,6 +394,19 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
             "proj_gap": form.mean - line,
             "season_gap": (sum(hist) / len(hist)) - line,
             "last3_gap": _recent(hist, 3) - line if hist else None,
+            # THE FACTORS THE MODEL DECLARES BUT DOES NOT PRICE.
+            # `vs_opponent_avg` carries a weight in the recency curve and
+            # `sources/nflverse` passes None for every NFL prop, so
+            # head-to-head history has never entered a projection. Rest
+            # and the bye are computed by `engine/fatigue` for display
+            # and by `engine/byes` for the draft board, and neither
+            # reaches the price. Tested here rather than argued about.
+            "vs_opp_gap": (_recent(vs_opp, 99) - line) if vs_opp else None,
+            "rest_days": (ctx.get((season, week, team)) or {}).get("rest"),
+            "off_bye": (ctx.get((season, week, team)) or {}).get("off_bye"),
+            # Home/away is read today only to pick the SIGN of the spread
+            # (`matchup.is_home`); it is not a factor on the player.
+            "is_home": hosts.get((season, week, team)),
         }
         for f in feats:
             series = [fl.get((season, w, player), {}).get(f)
@@ -384,4 +458,5 @@ def signal_lines(out: dict) -> list:
 
 
 __all__ = ["MARKETS", "MIN_PAIRS", "MIN_HISTORY", "FEATURES", "game_dates",
-           "pairs_for", "scan", "report_lines", "signal_scan", "signal_lines"]
+           "home_teams", "schedule_context", "pairs_for", "scan",
+           "report_lines", "signal_scan", "signal_lines"]
