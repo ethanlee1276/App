@@ -350,14 +350,24 @@ def test_cfb_defense_reads_points_allowed_with_a_sample_floor():
             "20, 38)", (f"2025-09-{g+1:02d}", f"d{g}"))
     conn.commit()
     assert T.defense_multiplier(conn, "CLEM", 2025) == (1.0, [])
-    # A third leaky game and the multiplier speaks, upward.
+    # A third leaky game and it SAYS so — but the number stays 1.0.
+    #
+    # The market's total already prices the defence, and multiplying our
+    # own read on top counted it twice: over 3,920 walk-forward games the
+    # implied total alone scored chi-square 3.0 against 181.8 for the
+    # total times this term, missing by 16-19% at each end. Dropping it
+    # beat keeping it in every held-out season (13.1 against 196.1), and
+    # the best partial weight was no better than zero.
     conn.execute(
         "INSERT INTO games (sport, season, period, game_id, home, away, "
         "home_score, away_score) VALUES ('cfb', 2025, '2025-09-03', 'd3', "
         "'CLEM', 'X', 21, 40)")
     conn.commit()
     mult, reasons = T.defense_multiplier(conn, "CLEM", 2025)
-    assert mult > 1.0 and reasons
+    assert mult == 1.0, "the defence term is back to double-counting the total"
+    assert reasons, "a leaky defence should still be disclosed to the reader"
+    assert "context only" in reasons[0], \
+        "the card must not imply a factor that does not move the price"
 
 
 def test_cfb_weather_uses_our_own_forecast_layer():

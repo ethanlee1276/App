@@ -338,12 +338,20 @@ def defense_to_date(conn, seasons=None) -> dict:
 
 
 def defense_multiplier(allowed, played: int) -> float:
-    """`cfb.tds.defense_multiplier`'s arithmetic, off a walk-forward mean."""
-    if allowed is None or played < MIN_DEFENSE_GAMES:
-        return 1.0
-    raw = allowed / CFB_AVG_TEAM_POINTS
-    weight = clamp(played / 8.0, 0.0, 1.0)
-    return clamp(1.0 + weight * (raw - 1.0), 0.85, 1.20)
+    """Always 1.0, mirroring `cfb.tds.defense_multiplier`.
+
+    Kept as a function rather than deleted because this module exists to
+    replay THE BOARD'S OWN CHAIN — grading a model nobody runs is the
+    mistake it was written to avoid — and because the fitted blend it
+    produces was chosen with the old multiplier in the chain, partly
+    compensating for it. Re-run the blend fit before trusting it again.
+
+    The measurement is in `cfb.tds.defense_multiplier`: over 3,920
+    walk-forward games, the implied total alone scored chi-square 3.0
+    against 181.8 for the total times this term, because the book set
+    that total knowing how good the defence was.
+    """
+    return 1.0
 
 
 def role_share(sample: Sample, anchors: dict | None = None,

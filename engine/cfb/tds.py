@@ -395,12 +395,36 @@ def script_multiplier(spread_home, is_home: bool, pos: str
 
 def defense_multiplier(conn, opponent: str, season: int
                        ) -> tuple[float, list[str]]:
-    """Opponent's scoring generosity from its own results.
+    """Always 1.0, with the opponent's scoring record as context.
 
-    Points allowed per game against the FBS average, shrunk toward 1.0
-    by sample and clamped. Not a per-position read — college gives us no
-    coverage splits — and it says nothing until MIN_DEFENSE_GAMES real
-    results exist, because two cupcakes prove only the schedule.
+    THE MARKET'S TOTAL ALREADY PRICES THE DEFENCE, and multiplying by our
+    own read of it counted the same thing twice. This used to return
+    points allowed against the FBS average, up to +/-20%, and
+    `build_cfb_td_longshots` multiplied it onto a team-touchdown estimate
+    that comes FROM the implied total — a number the book set knowing
+    exactly how good that defence is.
+
+    Measured over 3,920 walk-forward games, predicting the opponent's
+    offensive touchdowns, scored across bands of the old multiplier:
+
+        implied total alone                 chi-square    3.0
+        implied total x defence multiplier  chi-square  181.8
+
+    At the ends it was not subtle. A stingy defence (multiplier at or
+    below 0.90) drew a prediction of 2.22 touchdowns against a realised
+    2.59, and a generous one 4.13 against 3.56 — sixteen to nineteen per
+    cent out, in opposite directions, on more than half the board.
+
+    Leave-one-season-out settles the size: summed over four held-out
+    seasons, keeping it scores 196.1, dropping it 13.1, and the
+    best-fitting partial weight (0.04 to 0.14) scores 14.6 — no better
+    than zero. There is nothing left in this signal once the total is in,
+    so it is worth exactly nothing and is applied as nothing.
+
+    The RECORD is still returned as a reason, because a reader deserves
+    to know what the opponent has been conceding. It is disclosure, not a
+    factor, and the sentence says so — a number that moves the card
+    without moving the price is the bug this file keeps finding.
     """
     row = conn.execute(
         "SELECT COUNT(*) AS n, "
@@ -411,17 +435,13 @@ def defense_multiplier(conn, opponent: str, season: int
     n = int(row["n"] or 0)
     if n < MIN_DEFENSE_GAMES or row["pa"] is None:
         return 1.0, []
-    raw = float(row["pa"]) / CFB_AVG_TEAM_POINTS
-    w = clamp(n / 8.0, 0.0, 1.0)
-    mult = clamp(1.0 + w * (raw - 1.0), 0.85, 1.20)
-    reasons = []
-    if mult >= 1.06:
-        reasons.append(f"{opponent} concedes {float(row['pa']):.0f} a game "
-                       f"— {(mult - 1) * 100:+.0f}% vs FBS average")
-    elif mult <= 0.94:
-        reasons.append(f"{opponent} allows {float(row['pa']):.0f} a game "
-                       f"— {(mult - 1) * 100:+.0f}% vs FBS average")
-    return mult, reasons
+    pa = float(row["pa"])
+    if abs(pa - CFB_AVG_TEAM_POINTS) < 4.0:
+        return 1.0, []                   # nothing worth saying
+    side = "concedes" if pa > CFB_AVG_TEAM_POINTS else "allows only"
+    return 1.0, [f"{opponent} {side} {pa:.0f} a game over {n} result(s) "
+                 f"against an FBS average of {CFB_AVG_TEAM_POINTS:.0f} — "
+                 f"context only, since the game total already prices it"]
 
 
 def weather_multiplier(weather: dict | None, pos: str
@@ -617,6 +637,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 td_reason = [f"Scores {td_mean:.2f} TD/game over "
                              f"{u['games']} logged game(s) — measured, "
                              f"blended with the role share"]
+            # 1.0 by measurement, not by omission — see defense_multiplier.
             d_mult, d_reasons = defense_multiplier(conn, opp, season)
             s_mult, s_reasons = script_multiplier(spread_home, is_home, pos)
             w_mult, w_reasons = weather_multiplier(g.get("weather"), pos)

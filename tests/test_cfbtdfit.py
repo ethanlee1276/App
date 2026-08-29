@@ -274,11 +274,41 @@ def test_defense_is_measured_from_games_already_played():
     assert (2024, "2024-09-01", "OPP") not in table
 
 
-def test_a_thin_defensive_sample_says_nothing():
-    assert F.defense_multiplier(45.0, 1) == 1.0
-    assert F.defense_multiplier(None, 9) == 1.0
-    assert F.defense_multiplier(45.0, 9) > 1.0
-    assert F.defense_multiplier(10.0, 9) < 1.0
+def test_the_defence_term_is_neutral_because_the_total_prices_it():
+    """It used to return points allowed against the FBS average, up to
+    +/-20%, multiplied onto a team-touchdown estimate that comes FROM the
+    game's implied total — a number the book set knowing how good that
+    defence is.
+
+    Over 3,920 walk-forward games, predicting the opponent's offensive
+    touchdowns: implied total alone scored chi-square 3.0, implied total
+    times this term 181.8, missing by 16-19% at each end on more than
+    half the board. Leave-one-season-out, dropping it beat keeping it in
+    every season (13.1 against 196.1) and the best partial weight (0.04
+    to 0.14) was no better than zero.
+
+    This module replays the BOARD'S chain, so it has to go neutral here
+    too or it would be grading a model nobody runs."""
+    for allowed, played in ((45.0, 1), (None, 9), (45.0, 9), (10.0, 9)):
+        assert F.defense_multiplier(allowed, played) == 1.0, (allowed, played)
+
+
+def test_the_replay_chain_still_matches_the_live_one():
+    """The two have to agree or the fit measures something else. Both are
+    neutral now, and that has to stay true on both sides at once."""
+    import sqlite3
+    from engine.cfb import tds as live
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE games (sport TEXT, season INT, period TEXT, "
+                 "game_id TEXT, home TEXT, away TEXT, home_score REAL, "
+                 "away_score REAL)")
+    for i in range(6):
+        conn.execute("INSERT INTO games VALUES ('cfb', 2025, ?, ?, 'OPP', "
+                     "'X', 10, 45)", (f"2025-09-{i + 1:02d}", f"g{i}"))
+    conn.commit()
+    assert live.defense_multiplier(conn, "OPP", 2025)[0] == 1.0
+    assert F.defense_multiplier(45.0, 6) == 1.0
 
 
 # --- the joint fit ----------------------------------------------------
