@@ -98,7 +98,7 @@ def test_history_holds_only_games_already_played():
     c = _conn()
     dates = _world(c, "rush_yds", {"A.Back": list(range(1, 11))})
     pairs = formbook.pairs_for(c, "rush_yds", dates=dates)
-    for hist, _career, _vs, _line, _over in pairs:
+    for hist, _career, _vs, _line, _over, _oo, _uo in pairs:
         assert max(hist) < 10, "a later week leaked into the history"
 
 
@@ -113,11 +113,11 @@ def test_the_outcome_is_whether_it_beat_the_number():
     c = _conn()
     dates = _world(c, "rush_yds", {"A.Back": [80] * 10}, line=50.0)
     pairs = formbook.pairs_for(c, "rush_yds", dates=dates)
-    assert all(over == 1 for *_r, over in pairs)
+    assert all(r[4] == 1 for r in pairs)
     dates = _world(_conn(), "rush_yds", {"A.Back": [10] * 10}, line=50.0)
     c2 = _conn()
     dates = _world(c2, "rush_yds", {"A.Back": [10] * 10}, line=50.0)
-    assert all(over == 0 for *_r, over in formbook.pairs_for(
+    assert all(r[4] == 0 for r in formbook.pairs_for(
         c2, "rush_yds", dates=dates))
 
 
@@ -460,6 +460,93 @@ def test_the_thin_list_does_not_count_as_a_candidate_tried():
            "thin": {"rz_car": 12, "xfp": 8}}
     text = "\n".join(formbook.signal_lines(out))
     assert "1 candidates tried" in text
+
+
+# --- does it make money, not just rank -----------------------------------------
+def test_payout_is_american_odds():
+    assert abs(formbook._payout(-110) - 100 / 110) < 1e-9
+    assert formbook._payout(150) == 1.5
+    assert formbook._payout(0) == 0.0
+
+
+def test_a_rule_is_scored_on_weeks_it_was_not_chosen_on():
+    """The best of seventy rules in-sample is a number about seventy, not
+    about football."""
+    import inspect
+    src = inspect.getsource(formbook.roi_scan)
+    assert 'r["week"] <= split_week' in src and 'r["week"] > split_week' in src
+
+
+def test_the_split_is_chronological_not_random():
+    """Checked as behaviour, not as text: the docstring says "never
+    random" and a substring search would match its own explanation."""
+    rows = [{"week": w, "vals": {"x": float(w)}, "over": w % 2,
+             "over_odds": -110, "under_odds": -110} for w in range(1, 41)]
+    train = [r for r in rows if r["week"] <= 13]
+    test = [r for r in rows if r["week"] > 13]
+    assert max(r["week"] for r in train) < min(r["week"] for r in test)
+    import inspect
+    src = inspect.getsource(formbook.roi_scan)
+    assert "random." not in src and "import random" not in src
+    assert "shuffle" not in src and "sample(" not in src
+
+
+def test_a_losing_holdout_is_called_what_it_is():
+    out = {"market": "rush_yds", "n": 1001, "train_n": 600, "test_n": 401,
+           "rules": [1] * 70,
+           "chosen": {"signal": "targets", "side": "under", "slice": 0.2,
+                      "train_roi": 0.18, "train_n": 120,
+                      "test_roi": -0.04, "test_n": 80}}
+    text = "\n".join(formbook.roi_lines(out))
+    assert "did not survive the split" in text
+    assert "rule selection, not an edge" in text
+
+
+def test_a_surviving_rule_is_not_oversold():
+    out = {"market": "rush_yds", "n": 1001, "train_n": 600, "test_n": 401,
+           "rules": [1] * 70,
+           "chosen": {"signal": "targets", "side": "under", "slice": 0.2,
+                      "train_roi": 0.18, "train_n": 120,
+                      "test_roi": 0.09, "test_n": 80}}
+    text = "\n".join(formbook.roi_lines(out))
+    assert "survived" in text and "too few to bet real money on" in text
+
+
+def test_an_under_rule_takes_the_bottom_of_the_ranking():
+    """An over rule bets the highest values, an under rule the lowest —
+    otherwise a signal that points down can never be expressed."""
+    # x rises with the row; the low-x rows went under and the high-x rows
+    # went over, so the same column must win one way and lose the other.
+    rows = [{"week": i, "vals": {"x": float(i)}, "over": 1 if i > 100 else 0,
+             "over_odds": -110, "under_odds": -110} for i in range(1, 201)]
+    train, test = rows[:120], rows[120:]
+    under = formbook._rule(train, test, "x", "under", 0.5)
+    over = formbook._rule(train, test, "x", "over", 0.5)
+    # The lowest x are the weeks that went under, so the under rule wins
+    # and the over rule loses on exactly the same column.
+    assert under["train_roi"] > 0 > over["train_roi"], (under, over)
+
+
+def test_a_rule_with_too_few_bets_is_not_offered():
+    rows = [{"week": w, "vals": {"x": 1.0}, "over": 1,
+             "over_odds": -110, "under_odds": -110} for w in range(1, 12)]
+    assert formbook._rule(rows, rows, "x", "over", 0.1) is None
+
+
+def test_a_prop_with_no_price_on_the_side_bet_is_not_staked():
+    """0 is the parser's word for "not quoted"; inventing it at -110 is
+    what put phantom edges on markets nobody could bet."""
+    rows = [{"week": w, "vals": {"x": 1.0}, "over": 1,
+             "over_odds": 0, "under_odds": -110} for w in range(1, 201)]
+    assert formbook._rule(rows[:120], rows[120:], "x", "over", 1.0) is None
+
+
+def test_every_signal_side_and_slice_is_offered():
+    import inspect
+    src = inspect.getsource(formbook.roi_scan)
+    assert 'for side in ("over", "under")' in src
+    assert "for slice_ in SLICES" in src
+    assert len(formbook.SLICES) >= 3
 
 
 if __name__ == "__main__":

@@ -164,7 +164,9 @@ def pairs_for(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
             if line is not None and actual != line:
                 row = (list(hist), list(career.get(player, [])),
                        list(versus.get((player, opponent), [])),
-                       line, int(actual > line))
+                       line, int(actual > line),
+                       int(quote.get("over_odds") or 0),
+                       int(quote.get("under_odds") or 0))
                 out.append(((season, week, player, team, opponent),) + row
                            if keep_key else row)
         seen.setdefault((player, season), []).insert(0, actual)
@@ -217,7 +219,7 @@ def scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     for r in GRID:
         weights = family(base, r)
         scored = []
-        for hist, career, vs_opp, line, over in rows:
+        for hist, career, vs_opp, line, over, _oo, _uo in rows:
             p = _prob(hist, career, vs_opp, line, market, weights)
             if p is not None:
                 scored.append((p, over))
@@ -399,7 +401,7 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     ctx = schedule_context(dates if dates is not None else game_dates(seasons))
     hosts = home_teams(seasons)
     cand: dict = {}
-    for key, hist, career, vs_opp, line, over in rows:
+    for key, hist, career, vs_opp, line, over, _oo, _uo in rows:
         season, week, player, team, opponent = key
         logs = [GameLog(week=0, opponent="", value=v) for v in hist]
         car = (sum(career) / len(career)) if career else (
@@ -458,6 +460,177 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     return out
 
 
+#: Fraction of the ranked field a rule bets. A rule that fires on every
+#: pick is not a rule.
+SLICES = (0.10, 0.20, 0.33)
+
+#: Weeks 6..SPLIT_WEEK choose the rule; the rest score it. Chronological,
+#: never random — the same discipline the calibration fits use, for the
+#: same reason.
+SPLIT_WEEK = 13
+
+
+def _payout(odds: int) -> float:
+    """Profit on a 1-unit win at American odds."""
+    if not odds:
+        return 0.0
+    return odds / 100.0 if odds > 0 else 100.0 / abs(odds)
+
+
+def roi_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
+             dates: dict | None = None, split_week: int = SPLIT_WEEK) -> dict:
+    """Does any signal MAKE MONEY at the price the book actually hung?
+
+    WHY AUC IS NOT ENOUGH, and why this exists beside `signal_scan`.
+    Ordering and profit are different questions. A signal can rank the
+    field correctly and still lose, because the ranking may be strongest
+    exactly where the vig is worst, or concentrated on unders priced at
+    -140 where being right 55% of the time is a losing trade. AUC also
+    says nothing about how much you get to bet: a signal that orders
+    beautifully but only separates the extreme 3% of a slate is a
+    different business from one that prices half the board.
+
+    So each candidate becomes an actual rule — bet the top slice of the
+    ranked field, one side, at the closing price — and is scored in
+    units returned per unit staked.
+
+    THE RULE IS CHOSEN ON EARLY WEEKS AND SCORED ON LATE ONES. With a
+    dozen signals, three slice sizes and two sides there are seventy-odd
+    rules on offer, and the best of seventy in-sample is a number about
+    seventy, not about football. The split is chronological because the
+    pairs arrive in week order and a random one puts the same week on
+    both sides of the judge.
+    """
+    from .fantasy import _short_key
+    from .form import compute_form
+    from .formfit import base_for
+    from .models import GameLog
+
+    feats = FEATURES.get(market, ())
+    fl = _feature_logs(conn, feats, seasons)
+    rows = pairs_for(conn, market, seasons, dates=dates, keep_key=True)
+    if len(rows) < min_pairs:
+        return {"market": market, "n": len(rows),
+                "skipped": f"{len(rows)} book-priced pairs, needs {min_pairs}"}
+
+    base = base_for("nfl")
+    ctx = schedule_context(dates if dates is not None else game_dates(seasons))
+    hosts = home_teams(seasons)
+    recs: list = []
+    for key, hist, career, vs_opp, line, over, oo, uo in rows:
+        season, week, player, team, opponent = key
+        logs = [GameLog(week=0, opponent="", value=v) for v in hist]
+        car = (sum(career) / len(career)) if career else (
+            sum(hist) / len(hist) if hist else 0.0)
+        form = compute_form(logs, car, None, weights=base)
+        skey = _short_key(player, team)
+        vals = {
+            "proj_gap": form.mean - line,
+            "season_gap": (sum(hist) / len(hist)) - line,
+            "last3_gap": (_recent(hist, 3) - line) if hist else None,
+            "vs_opp_gap": (_recent(vs_opp, 99) - line) if vs_opp else None,
+            "rest_days": (ctx.get((season, week, team)) or {}).get("rest"),
+            "off_bye": (ctx.get((season, week, team)) or {}).get("off_bye"),
+            "is_home": hosts.get((season, week, team)),
+        }
+        for f in feats:
+            series = [fl.get((season, w, skey), {}).get(f)
+                      for w in range(week - 1, 0, -1)]
+            vals[f] = _recent(series)
+            if f in ("carries", "targets", "pass_att"):
+                older = _recent(series[4:], 12)
+                vals[f + "_trend"] = (
+                    (vals[f] - older) if (vals[f] is not None
+                                          and older is not None) else None)
+        recs.append({"week": week, "vals": vals, "over": over,
+                     "over_odds": oo, "under_odds": uo})
+
+    names = sorted({n for r in recs for n in r["vals"] if r["vals"][n] is not None})
+    train = [r for r in recs if r["week"] <= split_week]
+    test = [r for r in recs if r["week"] > split_week]
+    out = {"market": market, "n": len(recs), "train_n": len(train),
+           "test_n": len(test), "rules": []}
+    if not train or not test:
+        out["skipped"] = "no week split — need games on both sides"
+        return out
+
+    for name in names:
+        for side in ("over", "under"):
+            for slice_ in SLICES:
+                r = _rule(train, test, name, side, slice_)
+                if r:
+                    out["rules"].append(r)
+    if not out["rules"]:
+        out["skipped"] = "no rule had enough bets on both sides of the split"
+        return out
+    out["rules"].sort(key=lambda r: -r["train_roi"])
+    # The rule the training weeks would have chosen, and what it then did.
+    out["chosen"] = out["rules"][0]
+    return out
+
+
+def _rule(train, test, name, side, slice_) -> dict | None:
+    """One rule's train and test ROI. ``None`` when either side is thin."""
+    def _bets(rows):
+        have = [r for r in rows if r["vals"].get(name) is not None]
+        if not have:
+            return []
+        # Bet the END of the ranking the side implies: an over rule takes
+        # the highest values, an under rule the lowest. Whichever way the
+        # signal points, the rule is "the extreme of this column".
+        have.sort(key=lambda r: r["vals"][name], reverse=(side == "over"))
+        k = max(1, int(len(have) * slice_))
+        return have[:k]
+
+    tr, te = _bets(train), _bets(test)
+    if len(tr) < 30 or len(te) < 20:
+        return None
+
+    def _roi(bets):
+        staked = won = 0.0
+        for r in bets:
+            odds = r["over_odds"] if side == "over" else r["under_odds"]
+            if not odds:
+                continue
+            staked += 1.0
+            hit = r["over"] if side == "over" else (1 - r["over"])
+            won += _payout(odds) if hit else -1.0
+        return (won / staked, int(staked)) if staked else (0.0, 0)
+
+    train_roi, train_n = _roi(tr)
+    test_roi, test_n = _roi(te)
+    if train_n < 30 or test_n < 20:
+        return None
+    return {"signal": name, "side": side, "slice": slice_,
+            "train_roi": train_roi, "train_n": train_n,
+            "test_roi": test_roi, "test_n": test_n}
+
+
+def roi_lines(out: dict) -> list:
+    """The rule the early weeks picked, and what it did on the late ones."""
+    if out.get("skipped"):
+        return [f"  {out['market']}: skipped — {out['skipped']}"]
+    c = out["chosen"]
+    lines = [f"  {out['market']}: {out['n']:,} pairs "
+             f"({out['train_n']} choosing, {out['test_n']} scoring), "
+             f"{len(out['rules'])} rules on offer"]
+    lines.append(f"      best in training: {c['signal']} {c['side']} "
+                 f"top {c['slice']:.0%} — {c['train_roi']:+.1%} on "
+                 f"{c['train_n']} bets")
+    lines.append(f"      the SAME rule after the split: "
+                 f"{c['test_roi']:+.1%} on {c['test_n']} bets")
+    # THE ONLY LINE THAT MATTERS. The best of seventy rules in-sample is
+    # a number about seventy, not about football; the held-out weeks are
+    # the whole test.
+    if c["test_roi"] <= 0:
+        lines.append("      ⚠️  it did not survive the split — the training "
+                     "number was rule selection, not an edge")
+    else:
+        lines.append(f"      survived, on {c['test_n']} bets — too few to "
+                     f"bet real money on, enough to keep measuring")
+    return lines
+
+
 def signal_lines(out: dict) -> list:
     """Every candidate, strongest ordering first."""
     if out.get("skipped"):
@@ -485,4 +658,5 @@ def signal_lines(out: dict) -> list:
 
 __all__ = ["MARKETS", "MIN_PAIRS", "MIN_HISTORY", "FEATURES", "game_dates",
            "home_teams", "schedule_context", "pairs_for", "scan",
-           "report_lines", "signal_scan", "signal_lines"]
+           "report_lines", "signal_scan", "signal_lines",
+           "roi_scan", "roi_lines", "SLICES", "SPLIT_WEEK"]
