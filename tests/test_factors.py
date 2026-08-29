@@ -152,6 +152,83 @@ def test_it_reads_no_odds():
         assert word not in src
 
 
+# --- the game-level factors ---------------------------------------------------
+def test_every_factor_has_a_label_for_every_bucket():
+    """n edges make n+1 buckets. spread had five labels for five edges and
+    the last bucket printed as "5"."""
+    for name, spec in factors.GAME_FACTORS.items():
+        assert len(spec["labels"]) == len(spec["edges"]) + 1, name
+
+
+def test_a_game_is_found_for_every_team_that_played_in_it():
+    """Sixteen games share a period, so keying on (season, period) keeps
+    only the last and the team guard then discards everyone in the other
+    fifteen. It showed up as buckets of two hundred where the defence
+    measurement had thousands."""
+    import inspect
+    src = inspect.getsource(factors.game_effect)
+    assert 'games[(int(g["season"]), g["period"], side)] = g' in src
+    assert 'games.get((season, r["period"], team))' in src
+
+
+def test_the_spread_is_read_from_the_players_own_side():
+    """engine.matchup's convention: negative is favoured. Reading the
+    home team's number for an away player inverts every game."""
+    class _G(dict):
+        def __getitem__(self, k):
+            return dict.__getitem__(self, k)
+    g = _G(home="PHI", away="DAL", spread=-8.5, roof="outdoors")
+    spec = factors.GAME_FACTORS["spread"]
+    assert factors._factor_value("spread", spec, g, "PHI") == -8.5
+    assert factors._factor_value("spread", spec, g, "DAL") == 8.5
+
+
+def test_indoor_games_are_skipped_for_weather():
+    class _G(dict):
+        def __getitem__(self, k):
+            return dict.__getitem__(self, k)
+    dome = _G(home="LV", away="KC", roof="dome", wind=None, temp=None)
+    out = _G(home="GB", away="CHI", roof="outdoors", wind=12.0, temp=28.0)
+    assert factors._factor_value("wind", factors.GAME_FACTORS["wind"],
+                                 dome, "LV") is None
+    assert factors._factor_value("wind", factors.GAME_FACTORS["wind"],
+                                 out, "GB") == 12.0
+
+
+def test_bucketing_puts_a_value_above_every_edge_in_the_last_bucket():
+    assert factors._bucket(-20.0, (-9.5, -3.5, 0.0)) == 0
+    assert factors._bucket(0.0, (-9.5, -3.5, 0.0)) == 3
+    assert factors._bucket(99.0, (-9.5, -3.5, 0.0)) == 3
+
+
+# --- shape, not just endpoints ------------------------------------------------
+def test_a_climbing_series_is_named_as_one():
+    e = {i: {"n": 500, "ratio": 1.0 + 0.05 * i} for i in range(5)}
+    assert factors.trend(e) == "(climbs every step)"
+
+
+def test_a_falling_series_is_named_as_one():
+    e = {i: {"n": 500, "ratio": 1.3 - 0.05 * i} for i in range(5)}
+    assert factors.trend(e) == "(falls every step)"
+
+
+def test_a_wandering_series_is_flagged_however_big_its_ends():
+    """rush_yds against the spread reads +21% end to end and goes 1.103,
+    1.219, 1.184, 1.104, 1.167, 1.340 getting there — the ends differ and
+    nothing in between agrees, and the ends are the thinnest buckets.
+    Read as an effect size that licenses a large adjustment; read as a
+    shape it is noise with two loud edges."""
+    real = (1.103, 1.219, 1.184, 1.104, 1.167, 1.340)
+    e = {i: {"n": 800, "ratio": r} for i, r in enumerate(real)}
+    assert "wanders" in factors.trend(e)
+    assert e[5]["ratio"] / e[0]["ratio"] - 1 > 0.20,         "the endpoints alone would have licensed a 21% adjustment"
+
+
+def test_a_two_bucket_series_gets_no_shape_claim():
+    assert factors.trend({0: {"n": 5, "ratio": 1.0},
+                          1: {"n": 5, "ratio": 1.5}}) == ""
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

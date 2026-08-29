@@ -153,5 +153,164 @@ def report_lines(market: str, effect: dict) -> list:
     return lines
 
 
-__all__ = ["BUCKETS", "MIN_BUCKET", "LABELS", "defense_effect",
+#: Game-level factors the model prices, with the edges to split them on
+#: and what the model does with each. Edges are chosen to put real
+#: football boundaries at the splits — a touchdown of spread, a total
+#: either side of the mid-forties, the wind speed at which a kicking
+#: game changes — not at equal counts, because the question is what
+#: happens in the conditions a bettor names.
+GAME_FACTORS = {
+    # The player's OWN team's spread. Negative is favoured, matching
+    # engine.matchup's convention.
+    "spread": {
+        # n edges make n+1 buckets; five labels for five edges left the
+        # last one printing as "5".
+        "edges": (-9.5, -3.5, 0.0, 3.5, 9.5),
+        "labels": ("big favourite", "favourite", "slight fav", "slight dog",
+                   "underdog", "big underdog"),
+        "applied": "SCRIPT_CLAMP, +/-5%",
+    },
+    "total": {
+        "edges": (40.5, 44.5, 47.5, 51.5),
+        "labels": ("very low", "low", "middling", "high", "very high"),
+        "applied": "pace bump, stands down when teamcontext is measured",
+    },
+    "wind": {
+        "edges": (5.0, 10.0, 15.0),
+        "labels": ("calm", "breezy", "windy", "gale"),
+        "applied": "engine.weather multipliers",
+        "outdoor_only": True,
+    },
+    "temp": {
+        "edges": (35.0, 50.0, 70.0),
+        "labels": ("freezing", "cold", "mild", "warm"),
+        "applied": "engine.weather multipliers",
+        "outdoor_only": True,
+    },
+}
+
+
+def _bucket(value: float, edges) -> int:
+    k = 0
+    for e in edges:
+        if value >= e:
+            k += 1
+    return k
+
+
+def game_effect(conn, market: str, factor: str, seasons=None) -> dict:
+    """``{bucket: {"n", "ratio"}}`` for one game-level factor.
+
+    Same shape as `defense_effect` and the same discipline: production
+    against the player's own EARLIER form, so the comparison is within a
+    player rather than between them, and a game is scored before it
+    joins the history.
+    """
+    spec = GAME_FACTORS[factor]
+    edges = spec["edges"]
+    # KEYED BY TEAM AS WELL AS WEEK. Sixteen games share a period, so a
+    # dict keyed on (season, period) keeps only the last one and the
+    # team guard below then discards everyone in the other fifteen —
+    # which showed up as buckets of two hundred where the defence
+    # measurement had thousands.
+    games: dict = {}
+    for g in conn.execute(
+            "SELECT season, period, home, away, spread, total, roof, temp, "
+            "wind FROM games WHERE sport='nfl'"):
+        for side in (g["home"], g["away"]):
+            if side:
+                games[(int(g["season"]), g["period"], side)] = g
+
+    sql = ("SELECT season, period, player, team, value FROM player_game_logs "
+           "WHERE sport='nfl' AND market=? AND value IS NOT NULL ")
+    args: list = [market]
+    if seasons:
+        sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
+        args.extend(seasons)
+    sql += "ORDER BY season, period"
+
+    hist: dict = {}
+    out: dict = {}
+    season_now = None
+    for r in conn.execute(sql, args):
+        season, player, team = int(r["season"]), r["player"], r["team"] or ""
+        val = float(r["value"])
+        if season != season_now:
+            hist, season_now = {}, season
+        own = hist.get(player) or []
+        g = games.get((season, r["period"], team))
+        if g is not None and len(own) >= MIN_PRIOR:
+            value = _factor_value(factor, spec, g, team)
+            base = sum(own) / len(own)
+            if value is not None and base > 1.0:
+                out.setdefault(_bucket(value, edges), []).append(val / base)
+        hist.setdefault(player, []).append(val)
+    return {k: {"n": len(v), "ratio": sum(v) / len(v)}
+            for k, v in out.items() if len(v) >= MIN_BUCKET}
+
+
+def _factor_value(factor: str, spec: dict, g, team: str):
+    """This game's value for the factor, from the player's side of it."""
+    if spec.get("outdoor_only") and (g["roof"] or "") != "outdoors":
+        return None
+    if factor == "spread":
+        if g["spread"] is None:
+            return None
+        # engine.matchup's convention: negative is favoured.
+        return float(g["spread"]) if team == g["home"] else -float(g["spread"])
+    raw = g[factor]
+    return float(raw) if raw is not None else None
+
+
+def game_lines(market: str, factor: str, effect: dict) -> list:
+    spec = GAME_FACTORS[factor]
+    assert len(spec["labels"]) == len(spec["edges"]) + 1, (
+        f"{factor}: {len(spec['edges'])} edges make "
+        f"{len(spec['edges']) + 1} buckets, not {len(spec['labels'])}")
+    if not effect:
+        return [f"  {market} / {factor}: no bucket reached {MIN_BUCKET} games"]
+    lines = [f"  {market} / {factor}   (model applies: {spec['applied']})"]
+    for k in sorted(effect):
+        label = spec["labels"][k] if k < len(spec["labels"]) else str(k)
+        lines.append(f"      {label:<14} n={effect[k]['n']:>6}   "
+                     f"ratio {effect[k]['ratio']:.3f}")
+    lo, hi = min(effect), max(effect)
+    a, b = effect[lo]["ratio"], effect[hi]["ratio"]
+    if not a:
+        return lines
+    lines.append(f"      end to end: {b / a - 1:+.0%}   "
+                 f"{trend(effect)}")
+    return lines
+
+
+def trend(effect: dict) -> str:
+    """Whether the buckets actually march, or merely differ at the ends.
+
+    AN END-TO-END NUMBER ON A WANDERING SERIES IS NOT AN EFFECT. rush_yds
+    against the spread reads +21% from big favourite to big underdog and
+    goes 1.103, 1.219, 1.184, 1.104, 1.167, 1.340 getting there — the
+    ends differ and nothing in between agrees. Read as an effect size
+    that would license a large adjustment; read as a shape it is noise
+    with two loud edges, and the edges are the thinnest buckets.
+
+    Defence, by contrast, climbs every step in all three markets, which
+    is why that one is worth acting on and this one is not.
+    """
+    ks = sorted(effect)
+    if len(ks) < 3:
+        return ""
+    steps = [effect[b]["ratio"] - effect[a]["ratio"]
+             for a, b in zip(ks, ks[1:])]
+    ups = sum(1 for d in steps if d > 0)
+    if ups == len(steps):
+        return "(climbs every step)"
+    if ups == 0:
+        return "(falls every step)"
+    if ups >= len(steps) - 1 or ups <= 1:
+        return "(mostly one direction)"
+    return "⚠️  (wanders — the ends differ but the middle does not agree)"
+
+
+__all__ = ["BUCKETS", "MIN_BUCKET", "LABELS", "GAME_FACTORS", "trend",
+           "defense_effect", "game_effect", "game_lines",
            "measured_swing", "applied_swing", "report_lines"]
