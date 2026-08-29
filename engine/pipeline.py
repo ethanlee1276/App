@@ -545,7 +545,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # to the Long Shots board and never reach this loop, so nothing
         # is excluded here — every row counted is a row this board tried
         # to recommend.
-        "gate_census": _census(results),
+        "gate_census": _census(results, sport="nfl"),
         "config": {
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,

@@ -115,8 +115,14 @@ def test_the_reason_shape_counts_published_passed_and_held():
 
 def test_the_football_boards_publish_a_census():
     nfl = _read("engine", "pipeline.py")
-    assert '"gate_census": _census(results)' in nfl, \
+    assert '"gate_census": _census(results' in nfl, \
         "the NFL board went back to a bare count"
+    # And it asks for the sport, which is what turns on the calibration
+    # bucket. Without it the gate that closed rush_yds and rec_yds
+    # wholesale on 2026-08-29 was counted under "held by rules", where a
+    # closed market is indistinguishable from a quiet slate.
+    assert 'sport="nfl"' in nfl, \
+        "the funnel cannot name a market its own calibration closed"
     cfb = _read("cfb_build.py")
     assert 'out["gate_census"] = census_from_reasons(' in cfb, \
         "a quiet Saturday explains nothing again"

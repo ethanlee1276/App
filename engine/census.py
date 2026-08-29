@@ -45,19 +45,39 @@ GATE_WORDS = {
 NO_PRICE = "no_real_price"
 
 
-def census(rows: list[dict], skip=None) -> dict:
+def census(rows: list[dict], skip=None, sport: str = "") -> dict:
     """``{bucket: count}`` over a board's recommendation rows.
 
     ``skip(row)`` optionally excludes rows that belong to another board
     (the long-shot markets, say) so their working-as-intended deaths do
     not read as a broken model.
+
+    ``sport`` enables the calibration bucket. A market whose fit ran to
+    the edge of the search grid is refused wholesale by
+    `betting.evaluate_prop`, and every prop in it dies the same death —
+    so counting them under a generic gate turns the single most important
+    fact about a thin board into a shrug. On 2026-08-29 the NFL board
+    recommended 0 of 285 with rush_yds and rec_yds both closed exactly
+    this way, and the printout said only "0 recommended". MLB's own
+    census has named these since its thin nights; this is that idea, in
+    the module both boards share.
     """
     out: dict = {"recommended": 0, NO_PRICE: 0}
+    closed: set = set()
+    is_reliable = None
+    if sport:
+        from .calibrate import is_reliable as _rel
+        is_reliable = _rel
     for r in rows or []:
         if skip is not None and skip(r):
             continue
         if r.get("recommended"):
             out["recommended"] += 1
+            continue
+        if is_reliable is not None and r.get("market") \
+                and not is_reliable(sport, r["market"]):
+            out["calibration"] = out.get("calibration", 0) + 1
+            closed.add(r.get("market_label") or r.get("market"))
             continue
         if r.get("has_market") is False:
             # WHICH markets go unpriced matters: books post a line for
@@ -73,6 +93,11 @@ def census(rows: list[dict], skip=None) -> dict:
                        if not c.get("passed")), None)
         key = failed or "held_by_rules"
         out[key] = out.get(key, 0) + 1
+    if closed:
+        # NAMED, because "calibration 172" is a mystery and "rush_yds and
+        # rec_yds are closed until their fits come off the boundary" is
+        # something to act on.
+        out["calibration_markets"] = sorted(closed)
     return out
 
 

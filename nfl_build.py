@@ -632,6 +632,22 @@ def main() -> None:
 
     c = result["counts"]
     print(f"\nAnalyzed {c['props_analyzed']} props → {c['recommended']} recommended")
+    # THE FUNNEL UNDER THE COUNT. engine/census exists for this and says
+    # so in its own docstring — "NFL and CFB never emitted one, which is
+    # why this module exists ... a quiet Sunday board would have said
+    # 'nothing qualified' and offered nothing to check". The pipeline has
+    # been publishing gate_census into recommendations.json all along;
+    # nothing printed it, so the terminal showed 285 -> 0 and no reason.
+    gc = result.get("gate_census") or {}
+    if gc:
+        print("  Gate census: "
+              + " · ".join(f"{k.replace('_', ' ')} {v}" for k, v in gc.items()
+                           if v and k != "calibration_markets"))
+        if gc.get("calibration_markets"):
+            print("  ⚠️  Markets closed by calibration (fit at search boundary): "
+                  + ", ".join(gc["calibration_markets"])
+                  + " — refits nightly; comes back when the fit lands inside "
+                    "the range")
     if not real_odds:
         print("(lines are recent-form proxies — pass --odds for real book edges)\n")
     else:
