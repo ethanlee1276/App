@@ -403,6 +403,65 @@ def test_home_and_away_are_read_from_the_schedules_own_sides():
     assert "hosting" in got
 
 
+# --- two feeds, two naming conventions, one table -----------------------------
+def test_features_join_across_the_two_name_styles():
+    """`player_game_logs` holds two feeds. The weekly box score writes
+    "A.J. Brown"; the play-by-play aggregates write "A.Abdullah". Keyed
+    on the raw name they never meet — measured on the real database,
+    6,321 carry rows and 5,384 red-zone rows for 2025 gave 11,705 keys,
+    exactly the sum, so nothing overlapped. That is how rz_car, rz_tgt,
+    i5_car and xfp were silently dropped from a scan that then reported
+    "6 candidates tried"."""
+    c = _conn()
+    c.execute("INSERT INTO player_game_logs (sport, season, period, player, "
+              "team, market, value) VALUES "
+              "('nfl', 2025, '003', 'Ameer Abdullah', 'IND', 'carries', 9)")
+    c.execute("INSERT INTO player_game_logs (sport, season, period, player, "
+              "team, market, value) VALUES "
+              "('nfl', 2025, '003', 'A.Abdullah', 'IND', 'rz_car', 2)")
+    fl = formbook._feature_logs(c, ("carries", "rz_car"))
+    assert len(fl) == 1, f"the two feeds did not join: {list(fl)}"
+    (only,) = fl.values()
+    assert only == {"carries": 9.0, "rz_car": 2.0}
+
+
+def test_the_join_key_is_the_one_production_already_uses():
+    """engine/nflusage has always joined these through _short_key. A
+    second join rule here would drift from the maps the board is built
+    from."""
+    import inspect
+    assert "from .fantasy import _short_key" in \
+        inspect.getsource(formbook._feature_logs)
+
+
+def test_players_on_different_teams_do_not_collide():
+    c = _conn()
+    for team in ("IND", "LV"):
+        c.execute("INSERT INTO player_game_logs (sport, season, period, "
+                  "player, team, market, value) VALUES "
+                  "('nfl', 2025, '003', 'A.Abdullah', ?, 'rz_car', 2)",
+                  (team,))
+    assert len(formbook._feature_logs(c, ("rz_car",))) == 2
+
+
+def test_a_candidate_with_too_few_pairs_is_named_not_dropped():
+    """A vanished candidate makes the list look like the whole field, and
+    the count printed under it becomes a lie about what was tried."""
+    out = {"market": "rush_yds", "n": 1001,
+           "signals": {"proj_gap": {"n": 1001, "auc": 0.520, "z": 1.1}},
+           "thin": {"rz_car": 12}}
+    text = "\n".join(formbook.signal_lines(out))
+    assert "rz_car" in text and "not tested, not absent" in text
+
+
+def test_the_thin_list_does_not_count_as_a_candidate_tried():
+    out = {"market": "rush_yds", "n": 1001,
+           "signals": {"proj_gap": {"n": 1001, "auc": 0.520, "z": 1.1}},
+           "thin": {"rz_car": 12, "xfp": 8}}
+    text = "\n".join(formbook.signal_lines(out))
+    assert "1 candidates tried" in text
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -283,10 +283,25 @@ FEATURES = {
 
 
 def _feature_logs(conn, markets, seasons=None) -> dict:
-    """``{(season, week, player): {market: value}}`` for the features."""
+    """``{(season, week, short_key): {market: value}}`` for the features.
+
+    KEYED BY `fantasy._short_key`, NOT BY THE NAME. `player_game_logs`
+    holds two naming conventions in one table because it holds two feeds:
+    the weekly box score writes "A.J. Brown" and the play-by-play
+    aggregates write "A.Abdullah". Keyed on the raw name they never meet
+    — measured, 6,321 carry rows and 5,384 red-zone rows for 2025 produced
+    11,705 keys, which is exactly the sum, meaning zero overlap.
+
+    That is how the first signal scan silently dropped rz_car, rz_tgt,
+    i5_car and xfp — the four richest features and the ones the
+    touchdown model leans on — and still reported "6 candidates tried"
+    as though that were the whole field. `engine/nflusage` has always
+    joined these through `_short_key`; this file did not.
+    """
     if not markets:
         return {}
-    sql = ("SELECT season, period, player, market, value "
+    from .fantasy import _short_key
+    sql = ("SELECT season, period, player, team, market, value "
            "FROM player_game_logs WHERE sport='nfl' AND market IN (%s) "
            % ",".join("?" * len(markets)))
     args = list(markets)
@@ -301,8 +316,8 @@ def _feature_logs(conn, markets, seasons=None) -> dict:
             continue
         if r["value"] is None:
             continue
-        out.setdefault((int(r["season"]), week, r["player"]), {})[
-            r["market"]] = float(r["value"])
+        key = (int(r["season"]), week, _short_key(r["player"], r["team"] or ""))
+        out.setdefault(key, {})[r["market"]] = float(r["value"])
     return out
 
 
@@ -368,6 +383,7 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
     Nothing here is a bet. It is the question of whether a bet is
     possible, asked before any more model is built on top.
     """
+    from .fantasy import _short_key
     from .form import compute_form
     from .formfit import base_for
     from .models import GameLog
@@ -408,8 +424,9 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
             # (`matchup.is_home`); it is not a factor on the player.
             "is_home": hosts.get((season, week, team)),
         }
+        skey = _short_key(player, team)
         for f in feats:
-            series = [fl.get((season, w, player), {}).get(f)
+            series = [fl.get((season, w, skey), {}).get(f)
                       for w in range(week - 1, 0, -1)]
             vals[f] = _recent(series)
             if f in ("carries", "targets", "pass_att"):
@@ -424,9 +441,15 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
             if v is not None:
                 cand.setdefault(name, []).append((float(v), over))
 
-    out = {"market": market, "n": len(rows), "signals": {}}
-    for name, pairs in cand.items():
+    out = {"market": market, "n": len(rows), "signals": {}, "thin": {}}
+    for name in sorted(set(cand) | set(feats)):
+        pairs = cand.get(name) or []
         if len(pairs) < min_pairs:
+            # NAMED, not skipped. A candidate that quietly vanishes makes
+            # the list look like the whole field, and the count printed
+            # underneath it becomes a lie about how many things were
+            # tried. This is how the join bug above stayed invisible.
+            out["thin"][name] = len(pairs)
             continue
         g = _auc(pairs)
         if g.get("ran"):
@@ -447,6 +470,9 @@ def signal_lines(out: dict) -> list:
                                            else "  ** orders it BACKWARDS **")
         lines.append(f"      {name:<16} n={d['n']:<5} AUC {d['auc']:.3f}  "
                      f"z={d['z']:+.1f}{flag}{mark}")
+    for name, n in sorted((out.get("thin") or {}).items()):
+        lines.append(f"      {name:<16} n={n:<5} too few to score — not "
+                     f"tested, not absent")
     if not any(abs(d["z"]) >= 2 for _n, d in rows):
         # MANY CANDIDATES, so the bar is not one z of 2. Said plainly
         # because the whole point of the scan is to stop work, and a
