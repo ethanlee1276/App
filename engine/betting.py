@@ -330,6 +330,40 @@ def _kelly_stake(model_prob: float, odds: int, fraction: float = 0.25,
     return kelly_units(model_prob, odds, fraction)
 
 
+def under_reason(mean: float, line: float, places: int = 1) -> str:
+    """Why the model took the under, in words that survive a right skew.
+
+    THE CARD THAT CONTRADICTED ITSELF. Ethan found a pick siding UNDER
+    58.5 on a player the same card projected for 71.6, and the reason
+    string read "projects 71.6038 under the 58.5 line" — a sentence whose
+    two halves disagree, printed at full float precision beside a
+    projection field rounded to a tenth.
+
+    Both halves were honest separately. `pick_side` chooses from the
+    empirical distribution, not from the mean, and §8 is explicit that
+    averages lie on right-skewed stats: a receiver with three quiet games
+    and one 180-yard afternoon has a mean above his median, so the under
+    can be the better side while the mean sits above the line. The text
+    was the only thing claiming otherwise.
+
+    ONE COPY, because there were two and they drifted. `engine/mlb`
+    corrected its version on 2026-08-22 and this one kept the single
+    branch for six days, over a stretch where the NFL calibrations were
+    also fitting one-sided — which is what put a whole board's worth of
+    unders on screen with an impossible sentence under each one.
+
+    `places` follows the caller's stored `projection` field: MLB rounds
+    to 2, NFL to 1. Two numbers on the same card describing the same
+    quantity have to agree, which `:g` could not promise.
+    """
+    if mean <= line:
+        return (f"Model sides UNDER — projects {mean:.{places}f} under "
+                f"the {line:g} line")
+    return (f"Model sides UNDER — the mean is {mean:.{places}f} but a few "
+            f"big games inflate it; the game log clears {line:g} less "
+            f"often than the price implies")
+
+
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False,
                   game=None, sport: str = "nfl") -> Recommendation:
@@ -470,8 +504,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":
-        reasons.insert(0, f"Model sides UNDER — projects {proj.mean:g} under the {best.line:g} line")
-    if credible and has_market and 0 < edge < min_edge:
+        reasons.insert(0, under_reason(proj.mean, best.line, 1))
+    # `calibration_ok` here too: without it a pick blocked by an
+    # unreliable calibration ALSO gets told its edge missed the tier bar,
+    # which names the wrong cause and quotes an edge the same card has
+    # just said cannot be priced. engine/mlb had the guard; this did not.
+    if credible and calibration_ok and has_market and 0 < edge < min_edge:
         reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
                        f"({min_edge:.1%} post-haircut) — pass, not a lean")
     reasons.extend(quality_notes)

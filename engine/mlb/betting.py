@@ -13,7 +13,7 @@ import math
 
 from ..betting import (
     Recommendation, apply_selection, net_edge, favourite_surcharge,
-    pick_side, temper_edge,
+    pick_side, temper_edge, under_reason,
 )
 from ..calibrate import (apply_temperature, calibrated, correction_for,
                         is_reliable)
@@ -270,15 +270,11 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     if not credible:
         reasons.insert(0, "No credible market edge — line unavailable or price looks off")
     elif side == "UNDER":
-        if proj.mean <= best.line:
-            reasons.insert(0, f"Model sides UNDER — projects {proj.mean:.2f} under the {best.line:g} line")
-        else:
-            # The empirical distribution chose the under even though the MEAN
-            # sits above the line — §8: averages lie on right-skewed stats,
-            # and the old text claimed a projection that wasn't true.
-            reasons.insert(0, f"Model sides UNDER — the mean is {proj.mean:.2f} but a "
-                              f"few big games inflate it; his actual game log clears "
-                              f"{best.line:g} less often than the price implies")
+        # Shared with the NFL/CFB engine — see `betting.under_reason`.
+        # This file had the two-branch version for six days while the
+        # other kept a single branch that claimed a projection it did
+        # not have; one copy is what stops that recurring.
+        reasons.insert(0, under_reason(proj.mean, best.line, 2))
     if credible and calibration_ok and has_market and 0 < edge < min_edge:
         reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
                        f"({min_edge:.1%} post-haircut) — pass, not a lean")
