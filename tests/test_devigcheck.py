@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.devigcheck import (
     SUSPICIOUS_VIG, SUSPICIOUS_DEFAULT, rows_of, summarise, verdict,
     report_lines, board_state, _sport_of, load, full_copy_of,
+    MIN_BOARD, fallback_detail, WHY_TEXT,
 )
 
 
@@ -26,8 +27,9 @@ def _board(sport="nfl", picks=(), watch=()):
             "long_shots": list(picks), "longshot_watch": list(watch)}
 
 
-def _row(player="A", odds=300, vig=0.22, source="measured:dk"):
-    return {"player": player, "odds": odds, "vig": vig, "vig_source": source}
+def _row(player="A", odds=300, vig=0.22, source="measured:dk", listed=26):
+    return {"player": player, "odds": odds, "vig": vig, "vig_source": source,
+            "vig_listed": listed}
 
 
 # --- what it counts -------------------------------------------------------
@@ -77,42 +79,98 @@ def test_it_reports_the_spread_of_measured_vigs():
 
 
 # --- the short-board alarm ------------------------------------------------
-def test_an_implausibly_low_measured_vig_is_flagged_as_a_short_board():
-    """The failure this exists for. A feed returning half a game's
-    scorers produces a real-looking measurement that is far too low, and
-    too low is the direction that inflates edge — so a number under what
-    the market is known to charge reads as a truncated board, not a
-    generous book."""
-    got = summarise(_board("nfl", picks=[_row(vig=0.02)]))
-    assert len(got["suspicious"]) == 1
+def test_a_short_reference_board_is_flagged_by_its_SIZE():
+    """The failure this exists for, caught by the direct evidence. If the
+    feed returns a fraction of a game's scorers the sum comes in low and
+    so does the hold — and the board size is the fact, where a small vig
+    is only a hint."""
+    got = summarise(_board("cfb", picks=[_row(listed=MIN_BOARD - 1)]))
+    assert len(got["short"]) == 1
     state, why = verdict(got)
     assert state == "CHECK"
     assert any("SHORT BOARD" in w for w in why)
+    assert any("fewer than" in w for w in why)
 
 
-def test_college_carries_a_higher_alarm_than_the_nfl():
-    """College holds run wider — the handbook puts them at 28-50% against
-    the NFL's 22-35% — so a vig that is merely low for the NFL is
-    alarming for CFB."""
-    assert SUSPICIOUS_VIG["cfb"] > SUSPICIOUS_VIG["nfl"]
-    low = _row(vig=0.12)
-    assert not summarise(_board("nfl", picks=[low]))["suspicious"]
-    assert summarise(_board("cfb", picks=[low]))["suspicious"]
+def test_a_full_board_at_an_ordinary_vig_is_not_flagged():
+    """The first live college run flagged a 14.1% board as truncated
+    because the floor came from the handbook's 28-50% claim. The fitter
+    then measured the NFL market at 16.1% and the live college board at
+    14-24%, so both published ranges are high and a floor derived from
+    them cries wolf on ordinary boards."""
+    got = summarise(_board("cfb", picks=[_row(vig=0.141, listed=26)]))
+    assert not got["short"] and not got["suspicious"]
+    assert verdict(got)[0] == "READY"
 
 
-def test_the_alarms_sit_well_under_the_published_ranges():
-    """They are a truncation alarm, not a claim about what the hold
-    should be. Setting them inside the handbooks' ranges would assert
-    those ranges as fact, which this work has repeatedly found unsafe."""
-    assert SUSPICIOUS_VIG["nfl"] < 0.22        # the NFL handbook's floor
-    assert SUSPICIOUS_VIG["cfb"] < 0.28        # the CFB handbook's floor
+def test_the_vig_floor_still_catches_an_impossible_number():
+    """Lowered, not removed: a full-looking board reporting a 1% hold
+    means something upstream of the sum is wrong."""
+    got = summarise(_board("nfl", picks=[_row(vig=0.01, listed=30)]))
+    assert len(got["suspicious"]) == 1
+    assert any("upstream" in w for w in verdict(got)[1])
+
+
+def test_the_alarms_sit_below_what_the_market_was_measured_at():
+    """They are truncation alarms, not claims about what the hold should
+    be. The NFL market measured 16.1% over 3,890 settled closes and live
+    college boards ran 14-24%, so a floor anywhere near those numbers
+    flags working boards."""
+    assert max(SUSPICIOUS_VIG.values()) < 0.141    # the live college low
     assert SUSPICIOUS_DEFAULT <= min(SUSPICIOUS_VIG.values())
+    assert 6 < MIN_BOARD < 20                      # above devig.MIN_PRICED
+
+
+def test_the_report_prints_the_board_size_distribution():
+    """So the provisional MIN_BOARD can be set from what the feed really
+    returns rather than from a guess about what books do."""
+    b = _board("cfb", picks=[_row(listed=n) for n in (9, 26, 26, 31)])
+    text = "\n".join(report_lines(b))
+    assert "reference board size" in text
+    assert "9 low" in text and "31 high" in text
 
 
 def test_an_unknown_sport_still_gets_an_alarm():
-    got = summarise(_board("kabaddi", picks=[_row(vig=0.01)]))
+    got = summarise(_board("kabaddi", picks=[_row(vig=0.01, listed=30)]))
     assert got["floor"] == SUSPICIOUS_DEFAULT
     assert got["suspicious"]
+
+
+# --- why a board fell back ------------------------------------------------
+def test_falling_back_names_the_reason_per_game():
+    """"Every row fell back" is a symptom, not a diagnosis. Thin menus, a
+    missing game line and a wiring fault look identical from the
+    published rows and need three different fixes."""
+    b = _board("nfl", picks=[_row(source="assumed", vig=0.06, listed=0)])
+    b["td_census"] = {"games": 3, "measured": 0, "no_line": 1,
+                      "unmeasurable": 2,
+                      "boards": [{"game": "BUF/KC", "book": "draftkings",
+                                  "listed": 3, "sum": 0.75, "scorers": 4.6,
+                                  "why": "thin"},
+                                 {"game": "LA/SF", "book": "draftkings",
+                                  "listed": 14, "sum": 3.9, "scorers": 4.4,
+                                  "why": "no margin"}]}
+    lines = fallback_detail(b)
+    assert any("no usable spread and total" in ln for ln in lines)
+    assert any("BUF/KC" in ln and WHY_TEXT["thin"] in ln for ln in lines)
+    assert any("LA/SF" in ln and WHY_TEXT["no margin"] in ln for ln in lines)
+    assert any("BUF/KC" in w for w in verdict(summarise(b))[1])
+
+
+def test_a_board_with_no_census_reports_no_per_game_detail():
+    """Absence of a census is not evidence of anything, and inventing
+    reasons for it would be worse than staying quiet."""
+    assert fallback_detail(_board("nfl", picks=[_row()])) == []
+
+
+def test_the_per_game_detail_is_capped_and_says_it_was():
+    b = _board("nfl", picks=[_row(source="assumed", vig=0.06, listed=0)])
+    b["td_census"] = {"games": 20, "measured": 0, "no_line": 0,
+                      "boards": [{"game": f"G{i}", "book": "dk", "listed": 2,
+                                  "sum": 0.4, "scorers": 4.0, "why": "thin"}
+                                 for i in range(20)]}
+    lines = fallback_detail(b)
+    assert any("12 more game(s)" in ln for ln in lines)
 
 
 def test_a_two_way_zero_is_not_mistaken_for_a_short_board():
@@ -278,11 +336,17 @@ def test_a_mixed_board_reports_every_reason_not_just_the_first():
 
 
 # --- the report -----------------------------------------------------------
-def test_the_report_prints_the_suspects_by_name():
-    b = _board("cfb", picks=[_row("Bad Price", odds=250, vig=0.01)])
+def test_the_report_prints_the_suspects_by_name_and_by_bucket():
+    """Two different problems, listed separately: a board we only saw
+    part of, and a full board reporting an impossible number. Lumping
+    them together sends the reader to the wrong fix."""
+    b = _board("cfb", picks=[_row("Short Board", odds=250, listed=4),
+                             _row("Bad Number", odds=250, vig=0.01,
+                                  listed=30)])
     text = "\n".join(report_lines(b))
-    assert "Bad Price" in text
-    assert "SHORT-BOARD SUSPECTS" in text
+    assert "Short Board" in text and "SHORT BOARDS" in text
+    assert "Bad Number" in text and "IMPLAUSIBLE VIG" in text
+    assert "listed   4" in text
     assert "CHECK" in text
 
 

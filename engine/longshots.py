@@ -111,6 +111,10 @@ class LongShot:
     #: find out is how a check quietly stops checking.
     vig: float = 0.0
     vig_source: str = ""
+    #: Players on the board the vig was measured off. Zero when it was
+    #: not measured. A short board under-states the hold, so a vig
+    #: without its board size cannot be judged.
+    vig_listed: int = 0
     game_date: str = ""
     game_kickoff: str = ""
     live: bool = False
@@ -138,6 +142,7 @@ class LongShot:
             "reasons": self.reasons, "caveats": self.caveats,
             "matchup": f"{self.team} vs {self.opponent}",
             "vig": round(self.vig, 4), "vig_source": self.vig_source,
+            "vig_listed": self.vig_listed,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,
             "live": self.live, "headshot": self.headshot,
             "headline": f"{self.player} — {self.market_label} ({self.odds:+d})",
@@ -265,21 +270,25 @@ def one_sided_hold(sport: str, market: str) -> tuple[float, int]:
 
 
 def vig_of(hold_override, sport: str, market: str,
-           under_odds: int | None = None) -> tuple[float, str]:
-    """``(overround, where it came from)`` for the price about to be used.
+           under_odds: int | None = None) -> tuple[float, str, int]:
+    """``(overround, where it came from, players on that board)``.
 
     One function so the card, the watchlist and the preflight cannot
-    disagree about what a pick was priced against.
+    disagree about what a pick was priced against. The board size rides
+    along because a measured vig is only as trustworthy as the board it
+    was measured off, and the two belong together.
     """
     from .devig import as_devig
     if under_odds:
-        return 0.0, "two-way"
+        return 0.0, "two-way", 0
     measured = as_devig(hold_override)
     if measured:
         where = getattr(measured, "book", "") or ""
-        return measured.overround, f"measured:{where}" if where else "measured"
+        return (measured.overround,
+                f"measured:{where}" if where else "measured",
+                int(getattr(measured, "listed", 0) or 0))
     hold, n = one_sided_hold(sport, market)
-    return hold - 1.0, (f"journal:{n}" if n else "assumed")
+    return hold - 1.0, (f"journal:{n}" if n else "assumed"), 0
 
 
 def _price(model_prob: float, over_odds: int, under_odds: int | None,
@@ -416,8 +425,8 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"too large to trust, treated as a pricing/data error"]
 
     confidence = _confidence(edge, opportunities, opp_target, data_quality)
-    vig, vig_source = vig_of(hold_override, sport, market,
-                             under_odds if exact else None)
+    vig, vig_source, vig_listed = vig_of(hold_override, sport, market,
+                                         under_odds if exact else None)
     ev = expected_value(model_prob, odds)
     grade = _grade(confidence, edge, ev) if credible else "Pass"
     return LongShot(
@@ -425,6 +434,7 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
         market_label=label, book=book, odds=odds,
         model_prob=model_prob, implied_prob=implied, edge=edge,
         ev_per_unit=ev, vig=round(vig, 4), vig_source=vig_source,
+        vig_listed=vig_listed,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
         grade=grade, expected_opportunities=opportunities,
         primary_reason=primary_reason, reasons=reasons, caveats=caveats,

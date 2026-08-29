@@ -228,7 +228,7 @@ def _game_key(game):
     return tuple(sorted((getattr(game, "home", ""), getattr(game, "away", ""))))
 
 
-def _td_board_fairs(candidates: list, slate) -> dict:
+def _td_board_fairs(candidates: list, slate, census: dict | None = None) -> dict:
     """``{(game key, player): FairQuote}`` from the scorer board.
 
     Measured PER BOOK, not off each player's best price. The board takes
@@ -246,7 +246,7 @@ def _td_board_fairs(candidates: list, slate) -> dict:
     fair comes from the consensus, edge comes from one book being out of
     line with it.
     """
-    from .devig import board_fair, expected_distinct_scorers
+    from .devig import board_fair, expected_distinct_scorers, MIN_PRICED
     from .odds import american_to_prob
     from .touchdowns import expected_team_tds, team_implied_total
 
@@ -266,23 +266,55 @@ def _td_board_fairs(candidates: list, slate) -> dict:
             by_game.setdefault(k, {}).setdefault(book, {})[
                 prop.player] = american_to_prob(int(odds))
 
+    from .devig import hold_multiplier, reference_book
+
+    note = census if census is not None else {}
+    note.setdefault("games", 0)
+    note.setdefault("measured", 0)
+    note.setdefault("no_line", 0)
+    note.setdefault("unmeasurable", 0)
+    note.setdefault("boards", [])
+
     out: dict = {}
     for k, books in by_game.items():
+        note["games"] += 1
         g = games.get(k)
         if g is None or not getattr(g, "total", None):
+            note["no_line"] += 1
             continue
         try:
             a = expected_team_tds(team_implied_total(g, g.home))
             b = expected_team_tds(team_implied_total(g, g.away))
         except Exception:                                     # noqa: BLE001
+            note["no_line"] += 1
             continue
-        for player, quote in board_fair(
-                books, expected_distinct_scorers(a, b)).items():
+        scorers = expected_distinct_scorers(a, b)
+        got = board_fair(books, scorers)
+        if not got:
+            # WHY, not just that it failed. "Every row fell back" is not
+            # a diagnosis — a game with four quoted players and a game
+            # whose prices sum below its own line are different problems
+            # with different fixes, and without this the reader is left
+            # guessing which.
+            ref = reference_book(books)
+            prices = list((books.get(ref) or {}).values())
+            note["unmeasurable"] += 1
+            note["boards"].append({
+                "game": "/".join(str(x) for x in k), "book": ref,
+                "listed": len(prices), "sum": round(sum(prices), 3),
+                "scorers": round(scorers, 2),
+                "why": ("thin" if len(prices) < MIN_PRICED
+                        else "no margin" if hold_multiplier(prices, scorers)
+                        is None else "unsolved")})
+            continue
+        note["measured"] += 1
+        for player, quote in got.items():
             out[(k, player)] = quote
     return out
 
 
-def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict]]:
+def _long_shots(slate, usage: dict | None = None,
+                census: dict | None = None) -> tuple[list[dict], list[dict]]:
     """Anytime-touchdown board: ``(value picks, most-likely watchlist)``.
 
     The picks apply the odds window and the edge bar; the watchlist ranks
@@ -350,7 +382,7 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
     # it evenly over-corrects the bell-cow while flattering the dart. On
     # a 22-player board those two treatments disagree by a tenth of the
     # price at each end (engine/devig's module note has the table).
-    fairs = _td_board_fairs(candidates, slate)
+    fairs = _td_board_fairs(candidates, slate, census)
     for c in candidates:
         c["hold"] = fairs.get((_game_key(c.get("game")),
                                getattr(c.get("prop"), "player", None)))
@@ -631,7 +663,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     corr["cap_notes"] = apply_exposure_caps(results, game_bets)
 
     recommended = [r for r in results if r["recommended"]]
-    ls, ls_watch = _long_shots(slate, nfl_usage)
+    td_census: dict = {}
+    ls, ls_watch = _long_shots(slate, nfl_usage, td_census)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -658,6 +691,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "game_bets": game_bets,
         "long_shots": ls,
         "longshot_watch": ls_watch,
+        # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
+        # The first live run showed 11 touchdown rows with none measured,
+        # and nothing in the artefact said whether that was thin menus,
+        # missing game lines, or a wiring fault. cfb_build already
+        # publishes its equivalent; engine/devigcheck reads both.
+        "td_census": td_census,
         "market_scan": _market_scan(results, ls),
         "correlation": corr,
     }

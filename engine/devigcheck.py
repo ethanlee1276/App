@@ -47,15 +47,35 @@ from __future__ import annotations
 
 import json
 
-#: Below this a MEASURED overround is more likely a truncated board than
-#: a generous book, and gets flagged. Set well under the published
-#: ranges (the NFL handbook says anytime-TD runs 22-35%, the CFB one
-#: 28-40% in power conferences and 35-50% in the Group of Five) so that
-#: only an obviously short board trips it. Raising these to the middle
-#: of those ranges would be asserting the handbooks as fact, which the
-#: rest of this work has not found to be safe.
-SUSPICIOUS_VIG = {"nfl": 0.10, "cfb": 0.15}
-SUSPICIOUS_DEFAULT = 0.10
+#: Players the reference book must list before a MEASURED vig is
+#: trustworthy. THE DIRECT EVIDENCE for the failure this exists to catch:
+#: if the feed returns a fraction of a game's scorers, the sum comes in
+#: low and so does the hold, silently, in the direction that inflates
+#: edge. A real anytime-touchdown board runs 20-40 deep; six is the floor
+#: for measuring at all (devig.MIN_PRICED) and anything near it is a
+#: board we are seeing part of.
+#:
+#: Provisional. It should be set from the distribution of board sizes the
+#: live feed actually returns, which the report prints — not from a guess
+#: about what books do.
+MIN_BOARD = 12
+
+#: Below this a MEASURED overround is too small to be a real book.
+#:
+#: RECALIBRATED against live data, downward, and that correction matters.
+#: The first cut set these from the handbooks' published ranges — 22-35%
+#: for NFL anytime-TD, 28-50% for college — and picked floors "well
+#: under" them at 10% and 15%. Then the fitter measured the NFL market at
+#: 16.1% average hold over 3,890 settled closes, and the first live
+#: college board came back at 14.1-24.1%. Both published ranges are high,
+#: so a floor derived from them flagged an ordinary board as truncated on
+#: the very first run.
+#:
+#: A check that cries wolf is a check that gets ignored, so these are now
+#: set where only an implausible number trips them, and board size does
+#: the real work above.
+SUSPICIOUS_VIG = {"nfl": 0.05, "cfb": 0.05}
+SUSPICIOUS_DEFAULT = 0.05
 
 
 def rows_of(board: dict) -> list:
@@ -156,8 +176,8 @@ def summarise(board: dict) -> dict:
            "generated_at": (board.get("generated_at")
                             or board.get("built_at") or ""),
            "rows": len(rows), "measured": 0, "assumed": 0, "two_way": 0,
-           "unknown": 0, "books": {}, "suspicious": [], "vigs": [],
-           "floor": floor}
+           "unknown": 0, "books": {}, "suspicious": [], "short": [],
+           "vigs": [], "listed": [], "floor": floor}
     for r in rows:
         src = str(r.get("vig_source") or "")
         vig = r.get("vig")
@@ -165,10 +185,17 @@ def summarise(board: dict) -> dict:
             got["measured"] += 1
             book = src.partition(":")[2] or "?"
             got["books"][book] = got["books"].get(book, 0) + 1
+            listed = int(r.get("vig_listed") or 0)
+            if listed:
+                got["listed"].append(listed)
             if isinstance(vig, (int, float)):
                 got["vigs"].append(float(vig))
-                if vig < floor:
-                    got["suspicious"].append(r)
+            # Board size first: it is the fact. A small vig is only a
+            # hint, and on live data it fired on an ordinary board.
+            if listed and listed < MIN_BOARD:
+                got["short"].append(r)
+            elif isinstance(vig, (int, float)) and vig < floor:
+                got["suspicious"].append(r)
         elif src == "two-way":
             got["two_way"] += 1
         elif src in ("assumed",) or src.startswith("journal"):
@@ -180,11 +207,53 @@ def summarise(board: dict) -> dict:
             got["unknown"] += 1
     if not rows:
         got["empty"] = board_state(board)
+    got["fallback_detail"] = fallback_detail(board)
     if got["vigs"]:
         v = sorted(got["vigs"])
         got["vig_min"], got["vig_max"] = v[0], v[-1]
         got["vig_median"] = v[len(v) // 2]
+    if got["listed"]:
+        b = sorted(got["listed"])
+        got["listed_min"], got["listed_max"] = b[0], b[-1]
+        got["listed_median"] = b[len(b) // 2]
     return got
+
+
+#: What a game's own census says went wrong, in words that name the fix.
+WHY_TEXT = {
+    "thin": "the feed listed too few players to measure a hold",
+    "no margin": "the listed prices summed BELOW the scorers the game line "
+                 "supports, so no margin was visible to strip",
+    "unsolved": "the exponent could not be placed on that board",
+}
+
+
+def fallback_detail(board: dict) -> list:
+    """Per-game reasons a board fell back, from the build's own census.
+
+    "Every row fell back to the assumption" is a symptom, not a
+    diagnosis. Thin prop menus, a missing game line and a wiring fault
+    all look identical from the published rows, and they need three
+    different fixes — so the build now records which, and this reads it
+    rather than leaving the reader to guess.
+    """
+    c = board.get("td_census") or {}
+    if not c or not c.get("games"):
+        return []
+    out = []
+    if c.get("no_line"):
+        out.append(f"{c['no_line']} game(s) had no usable spread and total, "
+                   f"so there was no way to say how many scorers to expect")
+    for b in (c.get("boards") or [])[:8]:
+        why = WHY_TEXT.get(b.get("why"), b.get("why", ""))
+        out.append(
+            f"{b.get('game','?')}: {b.get('book','?')} listed "
+            f"{b.get('listed', 0)} player(s) summing {b.get('sum', 0):.2f} "
+            f"against {b.get('scorers', 0):.2f} expected scorers — {why}")
+    extra = len(c.get("boards") or []) - 8
+    if extra > 0:
+        out.append(f"...and {extra} more game(s) the same way")
+    return out
 
 
 def verdict(got: dict) -> tuple[str, list]:
@@ -204,20 +273,28 @@ def verdict(got: dict) -> tuple[str, list]:
             "this, or was built before the last deploy"]
     if got["unknown"]:
         why.append(f"{got['unknown']} row(s) carry no vig source at all")
+    if got["short"]:
+        why.append(
+            f"{len(got['short'])} row(s) were priced off a board of fewer "
+            f"than {MIN_BOARD} players — a real anytime-touchdown market "
+            f"runs 20-40 deep, so the feed is likely returning part of "
+            f"that game's scorer list. A SHORT BOARD under-states the "
+            f"hold, which inflates edge")
     if got["suspicious"]:
         why.append(
             f"{len(got['suspicious'])} row(s) measured a vig under "
-            f"{got['floor']:.0%}, which reads as a SHORT BOARD rather than "
-            f"a generous book — the feed may be truncating that game's "
-            f"scorer list, and a short board under-states the hold")
+            f"{got['floor']:.0%} off a full-looking board — too small to "
+            f"be a real book, so something upstream of the sum is wrong")
     if not got["measured"] and not got["two_way"]:
         why.append("no row got a measured vig — every one fell back to the "
                    "standing assumption")
     if got["assumed"]:
-        why.append(f"{got['assumed']} row(s) fell back to the assumption "
-                   f"(too thin to measure, or no game line)")
-    state = "READY" if not got["suspicious"] and not got["unknown"] \
-        and (got["measured"] or got["two_way"]) else "CHECK"
+        why.append(f"{got['assumed']} row(s) fell back to the assumption")
+    for line in got.get("fallback_detail") or []:
+        why.append(line)
+    state = "READY" if not got["suspicious"] and not got["short"] \
+        and not got["unknown"] and (got["measured"] or got["two_way"]) \
+        else "CHECK"
     return state, why or ["every priced row got a real de-vig"]
 
 
@@ -242,13 +319,23 @@ def report_lines(board: dict) -> list:
         lines.append(f"  measured overround: {got['vig_min']:.1%} low / "
                      f"{got['vig_median']:.1%} median / {got['vig_max']:.1%} "
                      f"high")
-    if got["suspicious"]:
-        lines += ["", "  SHORT-BOARD SUSPECTS (measured vig under "
-                      f"{got['floor']:.0%}):"]
-        for r in got["suspicious"][:10]:
+    if got.get("listed"):
+        lines.append(f"  reference board size: {got['listed_min']} low / "
+                     f"{got['listed_median']} median / {got['listed_max']} "
+                     f"high  (a real scorer market runs 20-40)")
+    for label, bucket in (("SHORT BOARDS (fewer than "
+                           f"{MIN_BOARD} players listed)", got["short"]),
+                          ("IMPLAUSIBLE VIG (under "
+                           f"{got['floor']:.0%} off a full board)",
+                           got["suspicious"])):
+        if not bucket:
+            continue
+        lines += ["", f"  {label}:"]
+        for r in bucket[:10]:
             lines.append(f"    {r.get('player','?'):<24} "
                          f"{r.get('odds', 0):>+6} "
                          f"vig {float(r.get('vig') or 0):>6.1%}  "
+                         f"listed {int(r.get('vig_listed') or 0):>3}  "
                          f"{r.get('vig_source','')}")
     lines += ["", f"  {state}"]
     lines += [f"    - {w}" for w in why]

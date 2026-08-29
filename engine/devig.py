@@ -294,13 +294,21 @@ class FairQuote:
     edge comes from one book being out of line with it.
     """
 
-    __slots__ = ("prob", "overround", "kind", "book")
+    __slots__ = ("prob", "overround", "kind", "book", "listed")
 
-    def __init__(self, prob: float, overround: float, kind: str, book: str = ""):
+    def __init__(self, prob: float, overround: float, kind: str,
+                 book: str = "", listed: int = 0):
         self.prob = float(prob)
         self.overround = float(overround)
         self.kind = kind
         self.book = book
+        #: How many players the reference book listed. THE DIRECT
+        #: EVIDENCE for the failure this whole path is exposed to: if the
+        #: feed returns a fraction of a game's scorers, the sum comes in
+        #: low and so does the measured hold, silently, in the direction
+        #: that inflates edge. Inferring truncation from a suspiciously
+        #: small vig is a guess; the board size is the fact.
+        self.listed = int(listed)
 
     def fair(self, raw_implied: float) -> float:
         """The measured fair price. ``raw_implied`` is deliberately
@@ -310,7 +318,7 @@ class FairQuote:
 
     def __repr__(self) -> str:                                # pragma: no cover
         return (f"FairQuote({self.prob:.4f}, {self.overround:+.1%}, "
-                f"{self.kind}, {self.book!r})")
+                f"{self.kind}, {self.book!r}, listed={self.listed})")
 
 
 def reference_book(by_book: dict) -> str:
@@ -345,7 +353,8 @@ def board_fair(by_book: dict, expected_scorers: float,
     dv = game_devig(list(prices.values()), expected_scorers, method)
     if not dv:
         return {}
-    return {player: FairQuote(dv.fair(raw), dv.overround, dv.kind, book)
+    return {player: FairQuote(dv.fair(raw), dv.overround, dv.kind, book,
+                              listed=len(prices))
             for player, raw in prices.items()}
 
 
