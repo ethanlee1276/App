@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from engine.devigcheck import (
     SUSPICIOUS_VIG, SUSPICIOUS_DEFAULT, rows_of, summarise, verdict,
     report_lines, board_state, _sport_of, load, full_copy_of,
-    MIN_BOARD, fallback_detail, WHY_TEXT,
+    MIN_BOARD, fallback_detail, WHY_TEXT, census_lines,
 )
 
 
@@ -398,9 +398,9 @@ def test_a_healthy_board_still_shows_how_many_games_are_behind_it():
     on a fallback hid it on exactly the run where the board looked
     healthy and the obvious next question was how wide it was."""
     b = _board("cfb", picks=[_row() for _ in range(5)])
-    b["td_census"] = {"games": 3, "measured": 3, "unmeasurable": 0,
-                      "no_line": 0, "quoted_players": 61, "no_usage": 40,
-                      "outside_window": 12}
+    b["td_census"] = {"games_quoted": 3, "quoted_players": 61,
+                      "no_usage": 40, "outside_window": 12,
+                      "usage_season": 2025}
     text = "\n".join(report_lines(b))
     assert "games with a scorer market: 3" in text
     assert "quoted players: 61" in text
@@ -408,9 +408,31 @@ def test_a_healthy_board_still_shows_how_many_games_are_behind_it():
     assert verdict(summarise(b))[0] == "READY"
 
 
+def test_it_reads_both_sports_censuses_not_just_one_shape():
+    """The two builds record different things, and that is fine — the
+    NFL pipeline counts GAMES it tried to measure because that is where
+    its de-vig fails, and the college build counts QUOTED PLAYERS and why
+    they were dropped because that is where its board thins out. Keying
+    on "games" alone meant the college board printed nothing on the run
+    where it finally passed."""
+    nfl = census_lines({"games": 4, "measured": 1, "unmeasurable": 2,
+                        "no_line": 1})
+    cfb = census_lines({"games_quoted": 3, "quoted_players": 61,
+                        "no_usage": 40, "outside_window": 12})
+    assert any("4" in ln and "measured" in ln for ln in nfl)
+    assert any("3" in ln for ln in cfb)
+    assert any("61" in ln for ln in cfb)
+    # Neither sport is made to report the other's fields.
+    assert not any("measured" in ln for ln in cfb)
+    assert not any("usage logs" in ln for ln in nfl)
+
+
 def test_the_game_count_is_absent_when_the_build_did_not_record_one():
     b = _board("cfb", picks=[_row()])
     assert "games with a scorer market" not in "\n".join(report_lines(b))
+    assert census_lines({}) == []
+    # A census with counts but no game total still reports what it has.
+    assert census_lines({"quoted_players": 12})
 
 
 # --- reading a board that was not built for this check --------------------

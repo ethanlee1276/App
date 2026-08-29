@@ -268,6 +268,47 @@ def fallback_detail(board: dict) -> list:
     return out
 
 
+def census_lines(c: dict) -> list:
+    """How wide the board was, from whichever census the build wrote.
+
+    THE TWO SPORTS RECORD DIFFERENT THINGS AND THAT IS FINE; reading only
+    one shape was not. The NFL pipeline counts GAMES it tried to measure
+    (games / measured / unmeasurable / no_line) because that is where its
+    de-vig can fail; the college build counts QUOTED PLAYERS and why they
+    were dropped (quoted_players / no_usage / outside_window) because
+    that is where its board thins out. The first cut keyed on "games"
+    alone, so the college board — the one actually live — printed
+    nothing on the run where it finally passed.
+
+    Prints whichever facts are present rather than insisting both sports
+    describe themselves the same way.
+    """
+    if not c:
+        return []
+    out = []
+    games = c.get("games") or c.get("games_quoted")
+    if games:
+        parts = []
+        for key, label in (("measured", "measured"),
+                           ("unmeasurable", "too thin"),
+                           ("no_line", "without a game line")):
+            if key in c:
+                parts.append(f"{c[key]} {label}")
+        detail = f"  ({', '.join(parts)})" if parts else ""
+        out.append(f"  games with a scorer market: {games}{detail}")
+    if c.get("quoted_players"):
+        parts = []
+        for key, label in (("no_usage", "without usage logs"),
+                           ("outside_window", "outside the odds window")):
+            if c.get(key):
+                parts.append(f"{c[key]} {label}")
+        detail = f"  ({', '.join(parts)})" if parts else ""
+        out.append(f"  quoted players: {c['quoted_players']}{detail}")
+    if c.get("usage_season"):
+        out.append(f"  roles built from {c['usage_season']} logs")
+    return ["" ] + out if out else []
+
+
 def verdict(got: dict) -> tuple[str, list]:
     """``(READY | CHECK | NOT WIRED, reasons)``.
 
@@ -332,22 +373,7 @@ def report_lines(board: dict) -> list:
         f"    fell back to the assumption       : {got['assumed']}",
         f"    no vig source at all              : {got['unknown']}",
     ]
-    c = board.get("td_census") or {}
-    if c.get("games"):
-        # HOW MANY GAMES ARE BEHIND THOSE ROWS. "5 priced rows" reads
-        # very differently over three games than over thirty, and the
-        # build already knows which — printing it only on a fallback hid
-        # it on exactly the run where the board looked healthy.
-        lines += ["",
-                  f"  games with a scorer market: {c['games']}  "
-                  f"({c.get('measured', 0)} measured, "
-                  f"{c.get('unmeasurable', 0)} too thin, "
-                  f"{c.get('no_line', 0)} without a game line)"]
-        if c.get("quoted_players"):
-            lines.append(f"  quoted players: {c['quoted_players']}  "
-                         f"({c.get('no_usage', 0)} without usage logs, "
-                         f"{c.get('outside_window', 0)} outside the odds "
-                         f"window)")
+    lines += census_lines(board.get("td_census") or {})
     if got["books"]:
         books = ", ".join(f"{b} x{n}" for b, n in sorted(
             got["books"].items(), key=lambda kv: -kv[1]))
