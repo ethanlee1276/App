@@ -335,6 +335,25 @@ def test_the_joint_fit_never_consults_the_holdout_while_choosing():
     assert out["train"] and out["test"]
 
 
+def test_the_refit_report_shows_shipped_beside_refitted():
+    """The constants at the top of this file are edited by hand on
+    purpose — a fitter that rewrites the board overnight is a fitter
+    nobody can audit — so the report has to make the comparison legible
+    rather than just announce a winner."""
+    conn = _conn()
+    lines = F.refit_lines(conn)
+    assert lines
+    text = "\n".join(lines)
+    # An empty database says so instead of pretending to a fit.
+    assert "nothing is ingested" in text or "too thin" in text or \
+        ("shipped" in text and "refitted" in text)
+
+
+def test_the_refit_report_refuses_an_empty_database():
+    conn = _conn()
+    assert any("nothing is ingested" in ln for ln in F.refit_lines(conn))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

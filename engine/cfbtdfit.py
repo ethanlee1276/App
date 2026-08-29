@@ -630,9 +630,67 @@ def fit_calibration(conn, seasons=None, path=None):
     return fit, report
 
 
-__all__ = ["MIN_PRIOR_GAMES", "MIN_FIT_PAIRS", "MARKETS", "BLEND_GAMES",
+def refit_lines(conn, seasons=None) -> list:
+    """Re-choose every fitted constant and report what moved.
+
+    THE CHAIN CHANGED, SO THE CONSTANTS ARE STALE. They were fitted with
+    the defence multiplier in the rate, which went neutral on 2026-08-29
+    once it turned out to be double-counting the implied total — so
+    whatever they absorbed of that error is now baked into numbers
+    describing a model that no longer exists. This prints the new fit
+    beside the shipped one; the constants at the top of this file are
+    edited by hand, on purpose, so a fitter cannot quietly rewrite the
+    board overnight.
+    """
+    rows = samples(conn, seasons)
+    if not rows:
+        return ["  no graded college player-games — nothing is ingested"]
+    got = fit_all(rows)
+    if not got.get("chosen"):
+        return [f"  too thin to fit: {got['train']} train / {got['test']} test"]
+    c = got["chosen"]
+    lines = [
+        f"  {len(rows):,} graded player-games "
+        f"({got['train']:,} train / {got['test']:,} held out)",
+        "",
+        f"  held-out Brier   shipped {got['held_out_shipped']:.5f}"
+        f"   refitted {got['held_out']:.5f}"
+        f"   role only {got['held_out_no_history']:.5f}",
+        "",
+        f"  {'constant':>22} {'shipped':>10} {'refitted':>10}",
+        f"  {'TD_HISTORY_GAMES':>22} {TD_HISTORY_GAMES:>10.2f} "
+        f"{c['games_scale']:>10.2f}",
+        f"  {'TD_HISTORY_MAX_WEIGHT':>22} {TD_HISTORY_MAX_WEIGHT:>10.2f} "
+        f"{c['max_weight']:>10.2f}",
+        f"  {'RZ_SHARE_WEIGHT':>22} {RZ_SHARE_WEIGHT:>10.2f} "
+        f"{c['rz_weight']:>10.2f}",
+    ]
+    for pos in sorted(c["anchors"]):
+        lines.append(f"  {pos + ' anchor':>22} "
+                     f"{POSITION_TD_SHARE.get(pos, 0.0):>10.2f} "
+                     f"{c['anchors'][pos]:>10.2f}")
+    better = got["held_out"] < got["held_out_shipped"]
+    lines += ["",
+              f"  the refit is {'BETTER' if better else 'NO BETTER'} on the "
+              f"held-out seasons by "
+              f"{abs(got['held_out'] - got['held_out_shipped']):.5f} Brier",
+              "  edit the constants at the top of engine/cfbtdfit.py and "
+              "engine/cfb/tds.py by hand if you adopt them"]
+    return lines
+
+
+__all__ = ["refit_lines", "MIN_PRIOR_GAMES", "MIN_FIT_PAIRS", "MARKETS", "BLEND_GAMES",
            "BLEND_WEIGHTS", "PREVIOUS_BLEND", "TRAIN_SEASONS", "TEST_SEASONS", "ROLE_FEATURES",
            "MIN_RATE", "MAX_RATE", "Sample", "samples", "role_share", "blended",
            "probability", "brier", "fit_blend", "run", "fit_calibration",
            "defense_to_date", "defense_multiplier", "fit_anchors", "fit_all",
            "ANCHOR_GRID", "RZ_WEIGHTS"]
+
+
+if __name__ == "__main__":                       # pragma: no cover
+    import sys
+    from . import db as _db
+    argv = [a for a in sys.argv[1:] if a.isdigit()]
+    print("re-fitting the college touchdown constants...")
+    for line in refit_lines(_db.connect(), [int(a) for a in argv] or None):
+        print(line)
