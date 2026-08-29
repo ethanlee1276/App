@@ -428,8 +428,12 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
         # The SAME tempering + market shrink the value picks get — the
         # MLB watchlist once used raw probabilities and inflated EV past
         # the broken-price guard, silently emptying itself.
+        # The same measured hold the value picks get. Pricing the two
+        # lists against different books is how they start disagreeing
+        # about the same player.
         prob, implied = calibrated_prob("nfl", ANYTIME_TD, raw_prob, odds,
-                                        c.get("under_odds"))
+                                        c.get("under_odds"),
+                                        hold_override=c.get("hold"))
         if prob * american_to_decimal(odds) - 1.0 > 0.60:
             continue                   # a broken price, not an edge
         rows.append({
@@ -481,6 +485,7 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             # built by an older path (or a test fixture) has no headshot,
             # and a long-shot board is not worth crashing over a picture.
             headshot=getattr(prop, "headshot", "") or "",
+            hold_override=c.get("hold"),
         )
         if pick:
             pick.game_date = getattr(game, "date", "")

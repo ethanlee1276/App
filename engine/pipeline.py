@@ -221,6 +221,45 @@ def _opportunity_shares(slate) -> dict:
             for key, v in volume.items()}
 
 
+def _game_key(game):
+    """One game, keyed the way both teams agree on."""
+    if game is None:
+        return None
+    return tuple(sorted((getattr(game, "home", ""), getattr(game, "away", ""))))
+
+
+def _td_board_holds(candidates: list, slate) -> dict:
+    """``{game key: Devig}`` from the scorer prices on the board."""
+    from .devig import board_devig, expected_distinct_scorers
+    from .odds import american_to_prob
+    from .touchdowns import expected_team_tds, team_implied_total
+
+    games = {}
+    for c in candidates:
+        g = c.get("game")
+        k = _game_key(g)
+        if k is not None:
+            games[k] = g
+
+    def scorers_of(key):
+        g = games.get(key)
+        if g is None or not getattr(g, "total", None):
+            return None
+        try:
+            a = expected_team_tds(team_implied_total(g, g.home))
+            b = expected_team_tds(team_implied_total(g, g.away))
+        except Exception:                                     # noqa: BLE001
+            return None
+        return expected_distinct_scorers(a, b)
+
+    return board_devig(
+        candidates,
+        game_of=lambda c: _game_key(c.get("game")),
+        implied_of=lambda c: american_to_prob(int(c.get("odds") or 0))
+        if c.get("odds") else None,
+        scorers_of=scorers_of)
+
+
 def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict]]:
     """Anytime-touchdown board: ``(value picks, most-likely watchlist)``.
 
@@ -270,6 +309,28 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
             # not see until now (engine.nflusage.xfp_roles).
             "xfp": from_maps(xfp_map, keys),
         })
+    # THE HOLD, MEASURED OFF THIS BOARD instead of assumed at 6%.
+    # longshots.ONE_SIDED_HOLD says of itself that "real hold on a
+    # longshot prop is usually wider than 6%, which means this
+    # understates the book's true margin and the edge on these picks is
+    # the optimistic bound of a range". Anytime-touchdown markets run
+    # 22-35% overround. Every input needed to measure it is already here:
+    # the board holds every quoted scorer in a game and the schedule
+    # holds that game's total and spread (engine.devig.board_hold).
+    #
+    # Correcting it is protective, not permissive. `build_pick` shrinks
+    # the model toward the market, so a wider hold pulls the model DOWN
+    # and cuts EV — on the Week 1 board a +300 pick went from +0.132 to
+    # +0.045 per unit at a 30% hold.
+    #
+    # The margin is shared out by the POWER method, not evenly: books
+    # load more vig onto longshots than onto short prices, and splitting
+    # it evenly over-corrects the bell-cow while flattering the dart. On
+    # a 22-player board those two treatments disagree by a tenth of the
+    # price at each end (engine/devig's module note has the table).
+    holds = _td_board_holds(candidates, slate)
+    for c in candidates:
+        c["hold"] = holds.get(_game_key(c.get("game")))
     picks = [p.to_dict() for p in build_td_longshots(candidates)]
     # The most-likely list dedupes against the picks but is NOT a
     # top-up: MLB trims its watch to fill a three-row board, and that

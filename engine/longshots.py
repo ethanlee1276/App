@@ -162,7 +162,36 @@ def _confidence(edge: float, opportunities: float, opp_target: float,
     return round(clamp((edge_pts + opp_pts) * clamp(data_quality, 0.7, 1.0), 0.0, 10.0), 1)
 
 
-def _grade(confidence: float, edge: float) -> str:
+def _grade(confidence: float, edge: float, ev: float | None = None) -> str:
+    """Grade the bet ON OFFER, not the disagreement behind it.
+
+    `edge` is measured against the DE-VIGGED price, so it is a statement
+    about the model versus the book's fair number — not about the ticket.
+    The two come apart by exactly the vig, and these thresholds were set
+    when that gap was the assumed 6%: EV turns negative at
+    ``edge = implied x (hold - 1)``, which at a 6% hold is 0.014 on a 24%
+    shot — just under the 0.015 Lean bar, so the two lines effectively
+    coincided and nothing showed.
+
+    Measuring the hold off the board broke that coincidence. At a real
+    30% overround the same arithmetic puts EV negative all the way out to
+    edge 0.06, and a +285 shot with a 4.5% edge graded "Play" at
+    confidence 8.8 while losing 4.5 cents on the dollar. The stake was
+    zero — Kelly prices the offered odds and refused it — but it was
+    still graded, shown, and ranked above honest picks.
+
+    So a price that does not pay cannot carry a grade, whatever the
+    model thinks of the fair number. This is not a new doctrine: the
+    game-lines grader (`betting._grade`) already grades on "net edge —
+    what's left after the vig, not before it", having found the same
+    thing there ("every Lean was -1.2 points at the price"). This board
+    was the last one still grading the disagreement instead of the bet.
+
+    `ev` omitted keeps the old behaviour for callers that have not
+    measured it.
+    """
+    if ev is not None and ev <= 0:
+        return "Pass"
     if confidence >= 7.5 and edge >= 0.05:
         return "Strong Play"
     if confidence >= 6.0 and edge >= 0.03:
@@ -228,7 +257,7 @@ def one_sided_hold(sport: str, market: str) -> tuple[float, int]:
 
 
 def _price(model_prob: float, over_odds: int, under_odds: int | None,
-           sport: str = "", market: str = ""):
+           sport: str = "", market: str = "", hold_override=None):
     """De-vig the book's price. With only one side quoted (common for TD/HR
     markets) we strip the one-sided hold instead — measured off the
     settled quote journal when the season has produced one, assumed
@@ -246,15 +275,25 @@ def _price(model_prob: float, over_odds: int, under_odds: int | None,
         exact = True
     else:
         raw = american_to_prob(over_odds)
-        hold, _n = one_sided_hold(sport, market)
-        implied = raw / hold
+        # A hold MEASURED off this game's own board beats the standing
+        # assumption — see engine.devig.board_devig. The assumption stays
+        # as the fallback for a market too thin to measure.
+        #
+        # `hold_override` is a Devig (or a bare multiplier, coerced), not
+        # a number to divide by: how a board's overround is SHARED OUT
+        # across its prices is a separate question from how big it is,
+        # and the two cannot be carried in one float without some caller
+        # eventually applying the wrong one.
+        from .devig import as_devig
+        dv = as_devig(hold_override)
+        implied = dv.fair(raw) if dv else raw / one_sided_hold(sport, market)[0]
         exact = False
     return implied, exact
 
 
 def calibrated_prob(sport: str, market: str, model_prob: float,
-                    over_odds: int, under_odds: int | None = None
-                    ) -> tuple[float, float]:
+                    over_odds: int, under_odds: int | None = None,
+                    hold_override=None) -> tuple[float, float]:
     """``(shrunk model prob, de-vigged implied)`` — the exact tempering and
     market shrink :func:`build_pick` applies, for callers that only display.
 
@@ -264,7 +303,8 @@ def calibrated_prob(sport: str, market: str, model_prob: float,
     shrunk picks survived. Every displayed probability goes through this
     one path now."""
     raw = clamp(calibrated(sport, market, model_prob), 1e-4, 0.999)
-    implied, _ = _price(raw, over_odds, under_odds, sport, market)
+    implied, _ = _price(raw, over_odds, under_odds, sport, market,
+                        hold_override=hold_override)
     return clamp(implied + MARKET_SHRINK * (raw - implied), 1e-4, 0.999), implied
 
 
@@ -273,7 +313,8 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                opportunities: float, opp_target: float, primary_reason: str,
                reasons: list[str], caveats: list[str], sport: str,
                data_quality: float = 1.0,
-               headshot: str = "") -> LongShot | None:
+               headshot: str = "",
+               hold_override=None) -> LongShot | None:
     """Price a modelled probability against the book and grade it."""
     # `calibrated`, not `apply_temperature`. A market whose bake-off chose
     # the ISOTONIC form stores a curve, and `calibrated` is the only
@@ -293,7 +334,8 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     # disable switch and the boundary veto live inside `calibrated` too —
     # so this is a no-op everywhere the temperature really did win.
     raw_prob = clamp(calibrated(sport, market, model_prob), 1e-4, 0.999)
-    implied, exact = _price(raw_prob, odds, under_odds, sport, market)
+    implied, exact = _price(raw_prob, odds, under_odds, sport, market,
+                            hold_override=hold_override)
     if not exact:
         # Say WHY there is one side. "Only one side quoted" on its own reads
         # as a feed we failed to pull; in fact books don't offer "no home
@@ -302,8 +344,29 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
         # against the pick, not for it) and becomes MEASURED once the
         # quote journal has settled enough of the full board — the card
         # says which of the two numbers it is wearing.
+        from .devig import as_devig
         hold, hn = one_sided_hold(sport, market)
-        if hn:
+        measured = as_devig(hold_override)
+        if measured:
+            # Measured off THIS game's own board (engine.devig.board_hold),
+            # which beats both the season-wide journal and the standing
+            # assumption. The card must not keep announcing a 6% vig it
+            # did not price against.
+            caveats = caveats + [
+                f"Books don't offer the NO side of this market, so the vig "
+                f"can't be read off a two-way pair. It is measured off this "
+                f"game's own scorer board instead: {measured.overround:.1%} "
+                f"across every player priced in the game, against the "
+                f"touchdowns its total and spread support. Longer prices "
+                f"carry more of that margin than short ones, so it is shared "
+                f"out accordingly rather than split evenly"
+                if measured.kind == "power" else
+                f"Books don't offer the NO side of this market, so the vig "
+                f"can't be read off a two-way pair. It is measured off this "
+                f"game's own scorer board instead: {measured.overround:.1%} "
+                f"across every player priced in the game, against the "
+                f"touchdowns its total and spread support"]
+        elif hn:
             caveats = caveats + [
                 f"Books don't offer the NO side of this market, so the vig "
                 f"can't be read off a two-way pair. It is measured instead: "
@@ -330,12 +393,13 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"too large to trust, treated as a pricing/data error"]
 
     confidence = _confidence(edge, opportunities, opp_target, data_quality)
-    grade = _grade(confidence, edge) if credible else "Pass"
+    ev = expected_value(model_prob, odds)
+    grade = _grade(confidence, edge, ev) if credible else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
         model_prob=model_prob, implied_prob=implied, edge=edge,
-        ev_per_unit=expected_value(model_prob, odds),
+        ev_per_unit=ev,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
         grade=grade, expected_opportunities=opportunities,
         primary_reason=primary_reason, reasons=reasons, caveats=caveats,
