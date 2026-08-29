@@ -598,11 +598,25 @@ def test_the_pipeline_keys_a_game_the_same_way_from_either_side():
     assert _game_key(None) is None
 
 
-def _quoted_board(game):
-    """A board shaped like a real anytime-touchdown market: a couple of
-    bell-cows, a handful of mid prices, a long tail of darts."""
-    prices = [110, 110] + [200] * 4 + [350] * 8 + [600] * 14
-    return [{"game": game, "odds": o} for o in prices]
+def _slate_candidates(game, prices_by_book):
+    """Candidates whose props carry a full multi-book line set."""
+    names = [f"P{i}" for i in range(len(next(iter(prices_by_book.values()))))]
+    out = []
+    for i, name in enumerate(names):
+        lines = [SportsbookLine(book, 0.5, prices[i], None)
+                 for book, prices in prices_by_book.items()]
+        p = Prop(player=name, team="KC", opponent="BUF", position="WR",
+                 market=ANYTIME_TD, logs=[], career_avg=1.0,
+                 vs_opponent_avg=None, lines=lines)
+        out.append({"prop": p, "game": game,
+                    "odds": max(pr[i] for pr in prices_by_book.values())})
+    return out
+
+
+DK = [-125, 110, 110, 150, 200, 200, 250, 250, 300, 350, 350, 400,
+      450, 450, 500, 550, 600, 600, 700, 750, 800, 900]
+FD = [-115, 105, 120, 160, 190, 215, 240, 265, 290, 340, 365, 390,
+      470, 440, 520, 540, 620, 590, 680, 780, 830, 880]
 
 
 def test_the_pipeline_measures_the_hold_off_the_board_it_is_pricing():
@@ -611,47 +625,102 @@ def test_the_pipeline_measures_the_hold_off_the_board_it_is_pricing():
     spread, so the hold is measurable at build time — no journal, no
     settled season, no state file.
 
-    A real 52-point board lands near a 30% overround, which is five times
-    the 6% the pricing path had been assuming."""
-    from engine.pipeline import _td_board_holds, _game_key
+    A real 52-point board lands near a 20% overround, several times the
+    6% the pricing path had been assuming."""
+    from engine.pipeline import _td_board_fairs, _game_key
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
              spread=-7.0, total=52.0)
-    d = _td_board_holds(_quoted_board(g), slate=None)[_game_key(g)]
-    assert 0.2 < d.overround < 0.5
-    assert d.overround > ONE_SIDED_HOLD - 1.0        # five times the assumption
-    # And the margin arrives as a Devig, so the method that shares it out
-    # travels with it instead of being re-decided at each call site.
-    assert d.kind == DEFAULT_METHOD
+    fairs = _td_board_fairs(_slate_candidates(g, {"dk": DK}), slate=None)
+    assert fairs
+    q = fairs[(_game_key(g), "P0")]
+    assert 0.1 < q.overround < 0.5
+    assert q.overround > ONE_SIDED_HOLD - 1.0
+    assert q.kind == DEFAULT_METHOD
+    assert q.book == "dk"
+    # A fair price, not a transform: it is the reference book's own
+    # number de-vigged, so the best-of-books price cannot be de-vigged
+    # a second time on top of the shopping.
+    assert q.fair(0.99) == q.prob
+    assert q.prob < american_to_prob(DK[0])
+
+
+def test_shopping_across_books_must_not_erase_the_margin():
+    """The bug this replaced. Both boards take each player's BEST price
+    across books, and summing those sums a line no book offers: best
+    price is the lowest implied probability, so the sum comes in low and
+    the hold with it. Two books erased 13% of the real margin here, and
+    it compounds with every book added — always in the direction that
+    makes the book look fairer and the edge look bigger."""
+    from engine.pipeline import _td_board_fairs, _game_key
+    g = Game(home="KC", away="BUF", weather=Weather(dome=True),
+             spread=-7.0, total=52.0)
+    one = _td_board_fairs(_slate_candidates(g, {"dk": DK}), slate=None)
+    two = _td_board_fairs(_slate_candidates(g, {"dk": DK, "fd": FD}), slate=None)
+    key = (_game_key(g), "P0")
+    # Adding a second book adds prices to shop, and must not move the
+    # measured margin at all — it is measured inside one book.
+    assert two[key].overround == one[key].overround
+    assert two[key].book in ("dk", "fd")
+    # What the old best-of-books sum would have produced, for contrast.
+    best = [min(american_to_prob(a), american_to_prob(b))
+            for a, b in zip(DK, FD)]
+    inside = [american_to_prob(o) for o in DK]
+    assert hold_multiplier(best, 4.6) < hold_multiplier(inside, 4.6)
+
+
+def test_the_reference_board_is_the_most_complete_one():
+    """A truncated board under-states the sum and therefore the hold, so
+    the book listing the most players sets the margin. Ties break to the
+    greediest board: assuming a book is fairer than it is invents edge,
+    assuming it is greedier only costs picks."""
+    from engine.devig import reference_book
+    full = {f"p{i}": 0.2 for i in range(20)}
+    short = {f"p{i}": 0.9 for i in range(4)}
+    assert reference_book({"thin": short, "full": full}) == "full"
+    greedy = {f"p{i}": 0.25 for i in range(20)}
+    assert reference_book({"fair": full, "greedy": greedy}) == "greedy"
+    assert reference_book({}) == ""
+
+
+def test_a_player_the_reference_book_never_listed_gets_no_fair_price():
+    """Better a standing assumption than a fair price invented off a
+    board that never quoted him."""
+    from engine.devig import board_fair
+    from engine.odds import american_to_prob as ap
+    books = {"dk": {f"P{i}": ap(o) for i, o in enumerate(DK)},
+             "fd": {"Z": ap(300)}}
+    got = board_fair(books, 4.6)
+    assert "P0" in got and "Z" not in got
 
 
 def test_a_game_with_no_total_is_left_unpriced():
     """A schedule row without a total cannot say how many scorers to
     expect, so that game keeps the standing assumption instead of being
     handed a number invented from nothing."""
-    from engine.pipeline import _td_board_holds
+    from engine.pipeline import _td_board_fairs
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
              spread=0.0, total=0.0)
-    assert _td_board_holds(_quoted_board(g), slate=None) == {}
+    assert _td_board_fairs(_slate_candidates(g, {"dk": DK}), slate=None) == {}
 
 
 def test_a_thin_game_on_a_real_board_falls_back_rather_than_guessing():
-    from engine.pipeline import _td_board_holds, _game_key
+    from engine.pipeline import _td_board_fairs, _game_key
     thick = Game(home="KC", away="BUF", weather=Weather(dome=True),
                  spread=-7.0, total=52.0)
     thin = Game(home="SF", away="LA", weather=Weather(dome=False),
                 spread=-3.0, total=44.0)
-    cands = _quoted_board(thick)
-    cands += [{"game": thin, "odds": 200} for _ in range(3)]
-    holds = _td_board_holds(cands, slate=None)
-    assert _game_key(thick) in holds
-    assert _game_key(thin) not in holds
+    cands = _slate_candidates(thick, {"dk": DK})
+    cands += _slate_candidates(thin, {"dk": [200, 200, 200]})
+    fairs = _td_board_fairs(cands, slate=None)
+    assert any(k[0] == _game_key(thick) for k in fairs)
+    assert not any(k[0] == _game_key(thin) for k in fairs)
 
 
 def test_every_candidate_gets_the_hold_before_either_list_is_built():
-    """`_long_shots` must stamp the hold onto the candidate dicts, since
-    that dict is the only thing both builders see. Checked structurally
-    rather than by matching a comment: the assignment has to precede both
-    calls in the source's execution order."""
+    """`_long_shots` must stamp the fair price onto the candidate dicts,
+    since that dict is the only thing both builders see. Checked
+    structurally rather than by matching a comment: the assignment has to
+    precede both calls in the source's execution order."""
     import ast
     import inspect
     from engine import pipeline
@@ -666,6 +735,94 @@ def test_every_candidate_gets_the_hold_before_either_list_is_built():
     assert stamp, "_long_shots never sets a hold on its candidates"
     assert builders, "_long_shots no longer builds either list by name"
     assert max(stamp) < min(builders)
+
+
+# --- college football -----------------------------------------------------
+def test_college_measures_its_hold_the_same_way():
+    """One code path, both sports. CFB prices a game at a time and NFL a
+    slate, but a second copy of the arithmetic would be a second place to
+    get the allocation wrong."""
+    from engine.cfb.tds import game_fairs
+    quotes = {f"p{i}": [{"book": "dk", "yes_odds": o}]
+              for i, o in enumerate(DK)}
+    got = game_fairs(quotes, spread_home=-14.0, total=58.5)
+    assert got
+    q = next(iter(got.values()))
+    assert q.kind == DEFAULT_METHOD and q.book == "dk"
+    assert q.overround > 0
+
+
+def test_college_refuses_a_game_with_no_line_or_a_thin_menu():
+    """Group of Five menus are routinely four players deep, and that is
+    exactly when an invented hold would do the most damage."""
+    from engine.cfb.tds import game_fairs
+    quotes = {f"p{i}": [{"book": "dk", "yes_odds": o}]
+              for i, o in enumerate(DK)}
+    assert game_fairs(quotes, spread_home=None, total=58.5) == {}
+    assert game_fairs(quotes, spread_home=-14.0, total=None) == {}
+    thin = {f"p{i}": [{"book": "dk", "yes_odds": 200}] for i in range(3)}
+    assert game_fairs(thin, spread_home=-14.0, total=58.5) == {}
+
+
+def test_college_prices_both_of_its_lists_off_the_same_measurement():
+    """The CFB board builds its watch and its picks in one loop, so the
+    measurement has to happen before the loop body — not inside either
+    branch, which is how the two lists start disagreeing about the same
+    player."""
+    import ast
+    import inspect
+    from engine.cfb import tds
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(tds)))
+              if isinstance(n, ast.FunctionDef)
+              and n.name == "build_cfb_td_longshots")
+    measured = [n.lineno for n in ast.walk(fn) if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Name) and n.func.id == "game_fairs"]
+    used = [n.lineno for n in ast.walk(fn)
+            if isinstance(n, ast.keyword) and n.arg == "hold_override"]
+    assert measured, "the CFB board never measures its own hold"
+    assert len(used) >= 2, "only one of the two CFB lists takes the hold"
+    assert max(measured) < min(used)
+
+
+def test_college_keeps_the_measured_scoring_baselines():
+    """Both FBS constants in engine/cfb/tds were 8-12% high against the
+    logs — 28.8 points and 3.4 offensive touchdowns against a measured
+    26.70 and 3.03 — and the conversion the de-vig depends on is its own
+    fitted number rather than their ratio, because it maps a MARKET total
+    and they describe realised ones."""
+    from engine.cfb import tds
+    assert abs(tds.CFB_AVG_TEAM_POINTS - 26.70) < 0.01
+    assert abs(tds.CFB_AVG_TEAM_OFF_TDS - 3.03) < 0.01
+    assert abs(tds.CFB_TD_PER_POINT - 0.1145) < 0.0001
+    # Not the ratio of the two averages: the market's mean implied total
+    # runs half a point below the realised mean, and the conversion has
+    # to absorb that or it is biased where it is used.
+    assert tds.CFB_TD_PER_POINT != tds.CFB_AVG_TEAM_OFF_TDS / tds.CFB_AVG_TEAM_POINTS
+
+
+def test_college_does_not_get_its_own_scorers_constant():
+    """Measured, not assumed. Over 2,710 CFB games the shared pair scored
+    0.650 held-out MAE against the CFB-specific fit's 0.657 — a paired
+    t of -1.46, indistinguishable — while the CFB handbook's own
+    D = 0.88/0.92 + 0.20 scored 0.838 at t = -5.62.
+
+    Its blowout rule buys nothing either: splitting the fit by spread
+    moved held-out error by 0.0008 scorers, and the raw ratio is flat
+    across spread buckets with the WIDEST spreads lowest, which is the
+    opposite of the claim it rests on."""
+    from engine import devig
+    handbook = lambda tds_, spread: tds_ * (0.92 if spread >= 21 else 0.88) + 0.20
+    for total_tds, realised in ((5.0, 3.93), (7.0, 5.22), (9.0, 6.55),
+                                (11.5, 7.67)):
+        ours = devig.expected_distinct_scorers(total_tds / 2, total_tds / 2)
+        for spread in (7, 28):
+            theirs = handbook(total_tds, spread)
+            # A margin, not a bare comparison: nearer by a rounding error
+            # would be no reason to prefer one form over the other.
+            assert abs(ours - realised) + 0.15 < abs(theirs - realised), \
+                (total_tds, spread, ours, theirs, realised)
+    # And there is no CFB-specific constant to drift from the NFL one.
+    assert not hasattr(devig, "CFB_SCORERS_SLOPE")
 
 
 if __name__ == "__main__":

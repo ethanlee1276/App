@@ -352,20 +352,17 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             # which beats both the season-wide journal and the standing
             # assumption. The card must not keep announcing a 6% vig it
             # did not price against.
+            where = (f" on {measured.book}" if getattr(measured, "book", "")
+                     else "")
+            spread = (". Longer prices carry more of that margin than short "
+                      "ones, so it is shared out accordingly rather than "
+                      "split evenly" if measured.kind == "power" else "")
             caveats = caveats + [
                 f"Books don't offer the NO side of this market, so the vig "
                 f"can't be read off a two-way pair. It is measured off this "
                 f"game's own scorer board instead: {measured.overround:.1%} "
-                f"across every player priced in the game, against the "
-                f"touchdowns its total and spread support. Longer prices "
-                f"carry more of that margin than short ones, so it is shared "
-                f"out accordingly rather than split evenly"
-                if measured.kind == "power" else
-                f"Books don't offer the NO side of this market, so the vig "
-                f"can't be read off a two-way pair. It is measured off this "
-                f"game's own scorer board instead: {measured.overround:.1%} "
-                f"across every player priced in the game, against the "
-                f"touchdowns its total and spread support"]
+                f"across every player priced in the game{where}, against the "
+                f"touchdowns its total and spread support{spread}"]
         elif hn:
             caveats = caveats + [
                 f"Books don't offer the NO side of this market, so the vig "

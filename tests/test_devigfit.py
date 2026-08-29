@@ -191,6 +191,44 @@ def test_it_asks_about_the_book_not_about_us():
     assert "prob" not in keys, "the model's probability leaked into the join"
 
 
+# --- both sports ----------------------------------------------------------
+def test_the_join_reads_outcomes_from_the_logs_not_from_a_replay():
+    """The shape question is about the BOOK's number, so the model plays
+    no part — and running a replay to learn who scored would drag a
+    model into a measurement that does not involve it. The touchdown
+    outcome is a column in the logs."""
+    import ast
+    import inspect
+    from engine import devigfit
+    fn = next(n for n in ast.walk(ast.parse(inspect.getsource(devigfit)))
+              if isinstance(n, ast.FunctionDef) and n.name == "collected")
+    names = {n.attr for n in ast.walk(fn) if isinstance(n, ast.Attribute)}
+    names |= {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+    assert "run" not in names, "collected is replaying a model again"
+    sql = " ".join(n.value for n in ast.walk(fn)
+                   if isinstance(n, ast.Constant) and isinstance(n.value, str))
+    assert "player_game_logs" in sql
+    assert "anytime_td" in sql
+
+
+def test_college_is_wired_through_the_same_fitter():
+    """One module, both sports. The only real difference is the bridge to
+    a date — an NFL log's period is a week number and the schedule
+    supplies the date, while a college log's period IS the date — and
+    that difference has to be visible in the code rather than left for
+    college to silently join nothing."""
+    import ast
+    import inspect
+    from engine import devigfit
+    src = inspect.getsource(devigfit)
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef) and n.name == "collected")
+    consts = {n.value for n in ast.walk(fn)
+              if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    assert "nfl" in consts, "collected does not branch on sport at all"
+    assert "sport" in inspect.signature(devigfit.collected).parameters
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

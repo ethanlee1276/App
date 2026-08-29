@@ -54,11 +54,34 @@ from ..longshots import (CFB_TD_ODDS, prob_at_least_one, in_odds_window,
 from ..sources.oddsapi import best_scorer_price
 from ..statmath import clamp
 
-# FBS scoring baselines. ~28.8 points and ~3.4 offensive touchdowns per
-# team-game is the modern FBS average — college scores more than the
-# NFL and kicks fewer field goals per possession.
-CFB_AVG_TEAM_POINTS = 28.8
-CFB_AVG_TEAM_OFF_TDS = 3.4
+# FBS scoring baselines, MEASURED rather than recalled. Both numbers here
+# were 8-12% high: over 6,266 scored team-games the mean is 26.70 points,
+# and over 5,420 logged team-games it is 3.03 offensive touchdowns, not
+# 28.8 and 3.4. College does score more than the NFL and kick fewer field
+# goals per possession; it scores less than these constants claimed.
+CFB_AVG_TEAM_POINTS = 26.70
+CFB_AVG_TEAM_OFF_TDS = 3.03
+
+#: Offensive touchdowns per point of a team's IMPLIED total. Its own
+#: constant rather than the ratio of the two averages above, because it
+#: converts a market number and they describe realised ones — the market's
+#: mean implied total runs 26.41 against a realised 26.88, and folding
+#: that half-point into the conversion is what makes it unbiased.
+#:
+#: Fitted over 4,594 team-games (2022-24) and checked on 826 held out
+#: (2025), where it beat the 0.1181 this file used to derive from the two
+#: averages by a paired t of -2.08. Small — 0.007 touchdowns — but it is
+#: free, and the de-vig depends on this being unbiased rather than close:
+#: an expectation's systematic error does not average away across a
+#: board, it compounds into the hold.
+#:
+#: The CFB handbook's (total - 4.5) / 7.1 is measurably steeper than the
+#: data: it runs 0.2-0.3 touchdowns high from 24 points up, which
+#: over-states distinct scorers, which under-states the hold and inflates
+#: every edge. At the level of a single game nothing separates the forms
+#: (all sit at 1.20 MAE against 1.20 of game-to-game noise); the bias only
+#: matters where it is used, which is an expectation.
+CFB_TD_PER_POINT = 0.1145
 
 #: Share of a team's offensive TDs a TYPICAL STARTER at the position
 #: takes — the anchor a player's volume scales, not a position group's
@@ -363,6 +386,52 @@ CFB_WATCH_ODDS = (-400, 1500)
 CFB_WATCH_LIMIT = 5
 
 
+def game_fairs(player_quotes: dict, spread_home, total) -> dict:
+    """``{normalised player: FairQuote}`` for one game, or ``{}``.
+
+    COLLEGE IS WHERE THIS MATTERS MOST. The handbook puts anytime-TD hold
+    at 28-40% in power conferences and 35-50% in the Group of Five,
+    against the 6% `longshots.ONE_SIDED_HOLD` assumes — so a +250 the
+    board shows is a +390 shot the book is pricing, and the gap is not a
+    correction to the edge, it IS the edge. Every input is already here:
+    the game's own quoted scorers, and its spread and total.
+
+    Measured WITHIN ONE BOOK. `best_scorer_price` takes each player's
+    best price across books, and summing those sums a line no book
+    offers — best price is the lowest implied probability, so the sum
+    comes in low and the hold with it, which inflates every edge. One
+    book's board sets the margin and supplies the price to de-vig; the
+    pick is still graded against the best price anyone offers.
+
+    Empty when the market is too thin to measure, which is common in
+    college and is exactly when a guess would be most dangerous — a
+    Group of Five game with four listed players says nothing about its
+    own hold, and the caller falls back to the standing assumption.
+    """
+    from ..devig import expected_distinct_scorers, board_fair
+    from ..odds import american_to_prob
+    if spread_home is None or not total:
+        return {}
+    by_book: dict = {}
+    for norm, quotes in (player_quotes or {}).items():
+        for q in quotes or []:
+            book = (q.get("book") or "").lower()
+            try:
+                odds = int(q.get("yes_odds"))
+            except (TypeError, ValueError):
+                continue
+            if book and odds:
+                by_book.setdefault(book, {})[norm] = american_to_prob(odds)
+    home_t = implied_total_for(spread_home, total, True)
+    away_t = implied_total_for(spread_home, total, False)
+    if home_t is None or away_t is None:
+        return {}
+    scorers = expected_distinct_scorers(
+        max(0.0, home_t) * CFB_TD_PER_POINT,
+        max(0.0, away_t) * CFB_TD_PER_POINT)
+    return board_fair(by_book, scorers)
+
+
 def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                            season: int, limit: int = 6,
                            per_game: int = 2
@@ -393,6 +462,11 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             continue
         home, away = g.get("home", ""), g.get("away", "")
         spread_home, total = g.get("spread"), g.get("total")
+        # ONCE PER GAME, BEFORE EITHER LIST. Both the watch and the picks
+        # have to price against the same book, and the only way to
+        # guarantee that is to measure the hold before either of them
+        # exists rather than inside each branch.
+        fairs = game_fairs(player_quotes, spread_home, total)
         for norm, quotes in (player_quotes or {}).items():
             census["quoted_players"] += 1
             side = next((t for t in (home, away)
@@ -410,8 +484,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             implied = implied_total_for(spread_home, total, is_home)
             if implied is None:
                 continue               # no game price = no script, no read
-            team_tds = max(0.0, implied) * (CFB_AVG_TEAM_OFF_TDS
-                                            / CFB_AVG_TEAM_POINTS)
+            team_tds = max(0.0, implied) * CFB_TD_PER_POINT
             pos = role_of(u)
             team_u = usage.get(side) or {}
             vol = u["rush_yds"] + u["rec_yds"]
@@ -485,7 +558,8 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             if in_odds_window(odds, CFB_WATCH_ODDS):
                 from ..longshots import calibrated_prob
                 wp, wimp = calibrated_prob("cfb", "anytime_td", prob, odds,
-                                           best.get("no_odds"))
+                                           best.get("no_odds"),
+                                           hold_override=fairs.get(norm))
                 wev = wp * american_to_decimal(odds) - 1.0
                 if wev <= 0.60:        # a broken price is not a likelihood
                     watch_rows.append({
@@ -513,7 +587,8 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 opp_target=OPP_TARGET.get(pos, 12.0),
                 primary_reason=reasons[0], reasons=reasons, caveats=caveats,
                 sport="cfb",
-                data_quality=0.8 if usage_season == season else 0.72)
+                data_quality=0.8 if usage_season == season else 0.72,
+                hold_override=fairs.get(norm))
             if pick:
                 pick.game_date = g.get("date", "")
                 pick.game_kickoff = g.get("kickoff", "")

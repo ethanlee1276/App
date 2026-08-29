@@ -28,6 +28,7 @@ data each can only improve on the raw price and the winner would be
 whichever had the luckier fit. The split is the whole measurement.
 
 Needs a database with `odds_history` — the box that bought the closes.
+Runs for both sports: `python3 -m engine.devigfit [nfl|cfb] [seasons...]`.
 
 Standard library only.
 """
@@ -55,37 +56,67 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
     """``[{season, week, market, scored}]`` for weeks with a real close.
 
     The raw market price and the outcome, which is all the shape question
-    needs — the model's own probability plays no part, deliberately: this
-    asks what the BOOK's number means, not whether we beat it.
+    needs. The model's own probability plays no part, deliberately: this
+    asks what the BOOK's number means, not whether we beat it — so it
+    reads the touchdown outcomes straight out of the logs rather than
+    replaying a model whose answer is not part of the question.
+
+    Both sports come through here. The only difference is the bridge to a
+    date: an NFL log's period is a week number and the schedule supplies
+    the date, while a college log's period IS the date.
     """
     from . import db as _db
     from .backtest import _norm
-    from .tdbacktest import run
-    from .tdbook import _prob
-    from .formbook import game_dates
 
     closes = _db.closing_odds_by_date(conn, sport, "anytime_td")
     if not closes:
         return []
-    dates = game_dates(seasons)
+
+    dates = {}
+    if sport == "nfl":
+        from .formbook import game_dates
+        dates = game_dates(seasons)
+
+    where = "WHERE sport=? AND market='anytime_td'"
+    args: list = [sport]
+    if seasons:
+        where += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += [int(x) for x in seasons]
 
     rows: list = []
-
-    def _collect(r):
-        date = dates.get((r["season"], int(r["week"]), r["team"]))
+    for r in conn.execute(
+            f"SELECT season, period, player, team, value "
+            f"FROM player_game_logs {where}", args):
+        period = r["period"]
+        if sport == "nfl":
+            try:
+                date = dates.get((r["season"], int(period), r["team"]))
+            except (TypeError, ValueError):
+                continue
+        else:
+            date = str(period)[:10]
         if not date:
-            return
+            continue
         quote = closes.get((_norm(r["player"]), date))
         if not quote:
-            return
+            continue
         market = _prob(quote.get("over_odds"))
         if market is None or not 0.0 < market < 1.0:
-            return
-        rows.append({"season": r["season"], "week": int(r["week"]),
-                     "market": market, "scored": int(r["scored"])})
-
-    run(conn, sport=sport, seasons=seasons, collect=_collect)
+            continue
+        rows.append({"season": r["season"], "week": str(period),
+                     "market": market,
+                     "scored": 1 if float(r["value"] or 0) > 0 else 0})
     return rows
+
+
+def _prob(odds) -> float | None:
+    """American price to implied probability, vig included."""
+    from .odds import american_to_prob
+    try:
+        odds = int(odds)
+    except (TypeError, ValueError):
+        return None
+    return american_to_prob(odds) if odds else None
 
 
 def log_loss(probs, outcomes) -> float:
@@ -237,10 +268,11 @@ if __name__ == "__main__":                       # pragma: no cover
     import sys
     from . import db as _db
     argv = sys.argv[1:]
+    sport = next((a for a in argv if a in ("nfl", "cfb")), "nfl")
     seasons = [int(a) for a in argv if a.isdigit()] or None
     conn = _db.connect()
-    print("joining harvested anytime-TD closes to replayed weeks...")
-    rows = collected(conn, seasons=seasons)
+    print(f"joining harvested {sport} anytime-TD closes to logged outcomes...")
+    rows = collected(conn, sport=sport, seasons=seasons)
     if not rows:
         print("  no joined player-weeks — this box has no odds_history, "
               "or no season is ingested")

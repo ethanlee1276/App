@@ -228,36 +228,58 @@ def _game_key(game):
     return tuple(sorted((getattr(game, "home", ""), getattr(game, "away", ""))))
 
 
-def _td_board_holds(candidates: list, slate) -> dict:
-    """``{game key: Devig}`` from the scorer prices on the board."""
-    from .devig import board_devig, expected_distinct_scorers
+def _td_board_fairs(candidates: list, slate) -> dict:
+    """``{(game key, player): FairQuote}`` from the scorer board.
+
+    Measured PER BOOK, not off each player's best price. The board takes
+    the best price across books for every player, and summing those sums
+    a line no book offers — best price is the lowest implied probability,
+    so the sum comes in low and the hold with it. On a two-book slate
+    that erased 13% of the real margin, and it compounds with every book
+    added. Under-stating the hold makes the book look fairer than it is
+    and inflates every edge, which is the exact error this whole path
+    exists to remove.
+
+    So one book's complete board sets the margin AND supplies the price
+    that gets de-vigged, while the pick is still graded against the best
+    price anyone offers. That is also what makes an outlier detectable:
+    fair comes from the consensus, edge comes from one book being out of
+    line with it.
+    """
+    from .devig import board_fair, expected_distinct_scorers
     from .odds import american_to_prob
     from .touchdowns import expected_team_tds, team_implied_total
 
-    games = {}
+    games, by_game = {}, {}
     for c in candidates:
         g = c.get("game")
         k = _game_key(g)
-        if k is not None:
-            games[k] = g
+        if k is None:
+            continue
+        games[k] = g
+        prop = c.get("prop")
+        for line in getattr(prop, "lines", None) or []:
+            odds = getattr(line, "over_odds", None)
+            book = (getattr(line, "book", "") or "").lower()
+            if not odds or not book:
+                continue
+            by_game.setdefault(k, {}).setdefault(book, {})[
+                prop.player] = american_to_prob(int(odds))
 
-    def scorers_of(key):
-        g = games.get(key)
+    out: dict = {}
+    for k, books in by_game.items():
+        g = games.get(k)
         if g is None or not getattr(g, "total", None):
-            return None
+            continue
         try:
             a = expected_team_tds(team_implied_total(g, g.home))
             b = expected_team_tds(team_implied_total(g, g.away))
         except Exception:                                     # noqa: BLE001
-            return None
-        return expected_distinct_scorers(a, b)
-
-    return board_devig(
-        candidates,
-        game_of=lambda c: _game_key(c.get("game")),
-        implied_of=lambda c: american_to_prob(int(c.get("odds") or 0))
-        if c.get("odds") else None,
-        scorers_of=scorers_of)
+            continue
+        for player, quote in board_fair(
+                books, expected_distinct_scorers(a, b)).items():
+            out[(k, player)] = quote
+    return out
 
 
 def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict]]:
@@ -328,9 +350,10 @@ def _long_shots(slate, usage: dict | None = None) -> tuple[list[dict], list[dict
     # it evenly over-corrects the bell-cow while flattering the dart. On
     # a 22-player board those two treatments disagree by a tenth of the
     # price at each end (engine/devig's module note has the table).
-    holds = _td_board_holds(candidates, slate)
+    fairs = _td_board_fairs(candidates, slate)
     for c in candidates:
-        c["hold"] = holds.get(_game_key(c.get("game")))
+        c["hold"] = fairs.get((_game_key(c.get("game")),
+                               getattr(c.get("prop"), "player", None)))
     picks = [p.to_dict() for p in build_td_longshots(candidates)]
     # The most-likely list dedupes against the picks but is NOT a
     # top-up: MLB trims its watch to fill a three-row board, and that

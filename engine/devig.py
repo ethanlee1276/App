@@ -34,6 +34,29 @@ At the top the handbook's constants over-count distinct scorers by 23%,
 which under-states the hold, which makes the book look fairer than it is
 and quietly shrinks every edge. The measured pair is used instead.
 
+THE SAME PAIR SERVES COLLEGE FOOTBALL, and that was measured rather than
+assumed. The CFB handbook gives its own form -- scorers = TDs x D + 0.20
+with D = 0.88, rising to 0.92 when the spread is 21 or more, on the
+argument that "the ratio rises in blowouts because scoring spreads across
+a deeper set of players once the benches empty". Over 2,710 CFB games
+with both teams logged, fitted on 2022-24 and scored on 2025:
+
+    form                          held-out MAE   paired t vs handbook
+    x0.666 + 0.920  (this one)        0.650            -5.62
+    CFB's own fit  x0.679 + 0.773     0.657            -5.14
+    handbook D = 0.88/0.92 + 0.20     0.838
+
+The handbook's form is decisively worse -- at 10-13 offensive TDs it says
+9.57 distinct scorers against a realised 7.67. A CFB-specific fit is NOT
+better than the shared pair (t = -1.46, indistinguishable), so college
+football does not get its own constant: one fewer number to maintain, and
+the reason is a measurement rather than a convenience.
+
+Its blowout rule buys nothing either. Splitting the fit by spread moved
+held-out error by 0.0008 scorers, and the raw ratio is flat across spread
+buckets (0.806 / 0.809 / 0.805 under 21, then 0.814 / 0.799 / 0.784) --
+with the widest spreads the LOWEST, which is the opposite of the claim.
+
 HOW THE HOLD IS SHARED OUT IS A SECOND QUESTION, and a bigger one than
 it looks. Knowing a game's board carries 19% overround does not say what
 each player's share of it is. Dividing every price by the same multiplier
@@ -219,13 +242,86 @@ class Devig:
         return f"Devig({self.kind}, {self.param:.4f}, {self.overround:+.1%})"
 
 
+class FairQuote:
+    """A player's fair probability, already measured. Prices like a Devig.
+
+    THE SUM HAS TO COME FROM ONE BOOK. Both boards pick each player's
+    BEST price across books, and summing those is summing a line no book
+    offers: best = highest payout = lowest implied probability, so the
+    sum comes in low, the multiplier comes in low, and the hold is
+    under-stated -- which makes the book look fairer than it is and
+    inflates every edge. That is the exact error this module exists to
+    remove, so measuring it that way would have been self-defeating.
+
+    So the margin is measured off ONE book's complete board, that book's
+    own price for the player is what gets de-vigged, and the result is
+    compared against the best price anyone offers. That is also what
+    makes an outlier price detectable: fair comes from the consensus,
+    edge comes from one book being out of line with it.
+    """
+
+    __slots__ = ("prob", "overround", "kind", "book")
+
+    def __init__(self, prob: float, overround: float, kind: str, book: str = ""):
+        self.prob = float(prob)
+        self.overround = float(overround)
+        self.kind = kind
+        self.book = book
+
+    def fair(self, raw_implied: float) -> float:
+        """The measured fair price. ``raw_implied`` is deliberately
+        ignored — it is the best-of-books number, and de-vigging that
+        again would double-count the shopping."""
+        return self.prob
+
+    def __repr__(self) -> str:                                # pragma: no cover
+        return (f"FairQuote({self.prob:.4f}, {self.overround:+.1%}, "
+                f"{self.kind}, {self.book!r})")
+
+
+def reference_book(by_book: dict) -> str:
+    """The book whose board the hold is measured from.
+
+    Most players listed, because a truncated board under-states the sum
+    and therefore the hold. Ties break to the LARGEST sum — the greediest
+    board of the ones that are equally complete — since assuming a book
+    is fairer than it is invents edge, and assuming it is greedier only
+    costs picks.
+    """
+    if not by_book:
+        return ""
+    return max(by_book,
+               key=lambda b: (len(by_book[b]), sum(by_book[b].values())))
+
+
+def board_fair(by_book: dict, expected_scorers: float,
+               method: str = None) -> dict:
+    """``{player: FairQuote}`` from one book's board, or ``{}``.
+
+    ``by_book`` is ``{book: {player: raw implied probability}}``. A player
+    the reference book does not quote gets no entry, and the caller falls
+    back — better a standing assumption than a fair price invented from a
+    board that never listed him.
+    """
+    method = method or DEFAULT_METHOD
+    book = reference_book(by_book)
+    if not book:
+        return {}
+    prices = by_book[book]
+    dv = game_devig(list(prices.values()), expected_scorers, method)
+    if not dv:
+        return {}
+    return {player: FairQuote(dv.fair(raw), dv.overround, dv.kind, book)
+            for player, raw in prices.items()}
+
+
 def as_devig(value) -> "Devig | None":
     """Coerce a bare multiplier to a proportional de-vig; pass one through.
 
     Callers that only ever knew about a single hold number keep working,
     and nothing has to guess what a loose float meant.
     """
-    if value is None or isinstance(value, Devig):
+    if value is None or isinstance(value, (Devig, FairQuote)):
         return value
     try:
         mult = float(value)
@@ -262,6 +358,28 @@ def game_prices(implied: list, expected_scorers: float) -> dict:
 DEFAULT_METHOD = POWER
 
 
+def game_devig(implied: list, expected_scorers: float,
+               method: str = DEFAULT_METHOD) -> "Devig | None":
+    """One game's de-vig from its own board, or None if unmeasurable.
+
+    Both sports come through here. `engine/cfb/tds` prices a game at a
+    time and NFL's pipeline prices a slate, but the arithmetic is the
+    same and a second copy of it would be a second place to get the
+    allocation wrong.
+    """
+    mult = hold_multiplier(implied, expected_scorers)
+    if not mult:
+        return None                      # thin, or no measurable margin
+    if method != POWER:
+        return Devig.proportional(mult)
+    k = power_exponent(implied, expected_scorers)
+    # No exponent means the solver could not place this board, and the
+    # overround it would have shared out is still real — fall back to
+    # spreading it evenly rather than to not de-vigging at all, which is
+    # the one option known to be wrong.
+    return Devig.power(k, mult - 1.0) if k else Devig.proportional(mult)
+
+
 def board_devig(candidates, game_of, implied_of, scorers_of,
                 method: str = DEFAULT_METHOD) -> dict:
     """``{game key: Devig}`` from the board being priced.
@@ -291,19 +409,9 @@ def board_devig(candidates, game_of, implied_of, scorers_of,
         scorers = scorers_of(key)
         if not scorers:
             continue
-        mult = hold_multiplier(probs, scorers)
-        if not mult:
-            continue                     # thin, or no measurable margin
-        if method == POWER:
-            k = power_exponent(probs, scorers)
-            # No exponent means the solver could not place this board, and
-            # the overround it would have shared out is still real — fall
-            # back to spreading it evenly rather than to not de-vigging at
-            # all, which is the one option known to be wrong.
-            out[key] = Devig.power(k, mult - 1.0) if k \
-                else Devig.proportional(mult)
-        else:
-            out[key] = Devig.proportional(mult)
+        dv = game_devig(probs, scorers, method)
+        if dv:
+            out[key] = dv
     return out
 
 
@@ -344,4 +452,5 @@ __all__ = ["SCORERS_SLOPE", "SCORERS_BASE", "TD_OFFSET", "TD_DIVISOR",
            "board_hold", "board_devig", "Devig", "as_devig", "power_exponent",
            "PROPORTIONAL", "POWER", "DEFAULT_METHOD", "K_MIN", "K_MAX",
            "MIN_PRICED", "expected_tds_affine", "expected_distinct_scorers",
-           "hold_multiplier", "fair_probability", "american", "game_prices"]
+           "hold_multiplier", "fair_probability", "american", "game_prices",
+           "game_devig", "FairQuote", "board_fair", "reference_book"]
