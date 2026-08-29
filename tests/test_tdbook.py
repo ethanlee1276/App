@@ -146,6 +146,52 @@ def test_the_join_uses_the_player_and_his_own_game_date():
     assert "_norm(r[\"player\"])" in src
 
 
+# --- fitting on the population that gets bet ---------------------------------
+def test_the_fit_needs_a_real_book_priced_population():
+    """Above calibrate.fit's own floor, for propcal's reason: a
+    correction fitted here replaces one that is already live."""
+    import inspect
+    assert tdbook.MIN_FIT >= 800
+    src = inspect.getsource(tdbook.fit)
+    assert "if len(rows) < min_fit:" in src
+    assert "joined(conn" in src, "it must fit on the joined subset"
+    assert "BASIS_BOOK" in src, "so a proxy-population fit cannot overwrite it"
+
+
+def test_a_thin_sample_is_refused_by_name():
+    assert "needs" in "\n".join(tdbook.fit_lines(None, [1] * 10))
+
+
+def test_the_report_shows_what_the_fit_does_to_every_band():
+    """Adopting on the Brier line alone is how this went wrong the first
+    time: T=1.12 bias=+0.20 improved average Brier from 0.1458 to 0.1435
+    and took the 0-15% band from +24% to +94% against reality."""
+    from engine.calibrate import Calibration
+    got = Calibration(temperature=1.12, intercept=0.20, samples=2691,
+                      brier_before=0.1458, brier_after=0.1435)
+    rows = _rows(995, 0.063, 0.087, 0.051) + _rows(659, 0.205, 0.317, 0.290)
+    text = "\n".join(tdbook.fit_lines(got, rows))
+    assert "BOOK-PRICED" in text
+    assert "0.063 → 0.099" in text, text
+    assert "+23% → +93%" in text, text
+
+
+def test_a_squared_objective_prices_the_longshot_band_at_nothing():
+    """Not a fitter defect — the reason any Brier-minimising correction
+    sells the tail to buy the top. Three points wrong at p=0.05 costs a
+    sixteenth of what twelve points wrong at p=0.6 does."""
+    cheap = (0.08 - 0.05) ** 2
+    dear = (0.60 - 0.48) ** 2
+    assert dear / cheap > 15
+
+
+def test_the_docstring_records_that_narrowing_alone_did_not_fix_it():
+    import inspect
+    src = inspect.getsource(tdbook.fit)
+    assert "IT IS NOT ENOUGH" in src
+    assert "stays with a person" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

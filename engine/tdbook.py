@@ -135,4 +135,95 @@ def report_lines(rows: list, min_band: int = MIN_BAND) -> list:
     return lines
 
 
-__all__ = ["BANDS", "MIN_BAND", "joined", "bands", "report_lines"]
+#: Book-priced player-weeks the fit needs. Well above calibrate.fit's
+#: own floor, for propcal's reason: a correction fitted here replaces one
+#: that is already live.
+MIN_FIT = 800
+
+
+def fit(conn, sport: str = "nfl", seasons=None, path=None, min_fit: int = MIN_FIT):
+    """Fit the touchdown correction on the players a book actually prices.
+
+    THE POPULATION MISMATCH THIS FIXES, and it is the fourth of its shape
+    in this codebase. `tdbacktest.fit_calibration` fits over EVERY
+    ingested player-week — 22,168 of them, overwhelmingly deep-bench
+    players with a near-zero probability and a near-zero outcome. The
+    board bets none of those. It bets players a book bothered to hang a
+    price on, and within those, the long-shot tail.
+
+    Fitted on everything, the correction that came back (T=1.12,
+    bias=+0.20) improved average Brier from 0.1458 to 0.1435 and made the
+    band the board actually bets nearly twice as wrong:
+
+        band       model   actual   raw err   after that correction
+        0-15%      0.063    0.051     +24%          +94%
+        15-25%     0.122    0.173     -29%            0%
+        25-40%     0.205    0.290     -29%           -8%
+
+    Which is precisely what `calibrate.bake_off` warns about in its own
+    docstring — a fit that improves the average while wrecking a band,
+    because most of the sample sits somewhere else.
+
+    So this fits on the joined subset instead. Same fitter, same
+    bake-off, same held-out judge; only the population changes, and it
+    changes to the one that gets bet.
+
+    IT IS NOT ENOUGH, AND THE REPORT SAYS SO. Narrowing the population
+    helps the middle bands and still leaves the tail worse than
+    uncorrected — measured on a synthetic with the real shape, +23%
+    becomes +81%. That is not a fitter defect. Brier is a squared error,
+    so being three points wrong at p=0.05 costs 0.0009 while being
+    twelve points wrong at p=0.6 costs 0.0144: any Brier-minimising fit
+    will sell the long-shot band to buy the top one, and both the
+    temperature and the isotonic curve do exactly that. A board that
+    bets only the tail cannot take its correction from an objective that
+    prices the tail at nothing.
+
+    So `fit_lines` prints what the fit does to every band, and the
+    decision of whether to keep it stays with a person. Adopting on the
+    Brier line alone is how this went wrong the first time.
+    """
+    from . import calibrate
+    rows = joined(conn, sport=sport, seasons=seasons)
+    if len(rows) < min_fit:
+        return None, rows
+    pairs = [(m, s) for m, _k, s in rows]
+    got = calibrate.fit(pairs, sport=sport, market="anytime_td")
+    got.basis = calibrate.BASIS_BOOK
+    import datetime as _dt
+    got.fitted_at = _dt.date.today().isoformat()
+    calibrate.save({f"{sport}:anytime_td": got},
+                   path or calibrate.DEFAULT_PATH)
+    calibrate.reset_cache()
+    return got, rows
+
+
+def fit_lines(got, rows) -> list:
+    """What the fit did, and what it does to each band."""
+    if got is None:
+        return [f"  anytime_td: refused — {len(rows):,} book-priced "
+                f"player-weeks, needs {MIN_FIT:,}"]
+    from .calibrate import apply_temperature
+    from . import isotonic as _iso
+    curve = _iso.Curve.from_dict(got.curve) if got.curve else None
+    shape = (f"isotonic, {len(got.curve.get('knots') or [])} knots" if curve
+             else f"T={got.temperature} bias={got.intercept:+.2f}")
+    lines = [f"  anytime_td: fitted on {len(rows):,} BOOK-PRICED "
+             f"player-weeks — {shape}",
+             f"      Brier {got.brier_before:.4f} → {got.brier_after:.4f}"]
+    for b in bands(rows):
+        if b["thin"]:
+            continue
+        corrected = (curve.apply(b["model"]) if curve
+                     else apply_temperature(b["model"], got.temperature,
+                                            got.intercept))
+        was = b["model"] / b["actual"] - 1.0
+        now = corrected / b["actual"] - 1.0
+        lines.append(f"      {b['lo']:.0%}-{b['hi']:.0%}  n={b['n']:<5} "
+                     f"{b['model']:.3f} → {corrected:.3f} against "
+                     f"{b['actual']:.3f}   ({was:+.0%} → {now:+.0%})")
+    return lines
+
+
+__all__ = ["BANDS", "MIN_BAND", "MIN_FIT", "joined", "bands", "report_lines",
+           "fit", "fit_lines"]
