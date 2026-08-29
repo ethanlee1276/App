@@ -212,8 +212,16 @@ def _prior_form(weeks: dict, upto: list, market: str) -> float:
 
 
 def run(conn, sport: str = "nfl", seasons=None,
-        min_prior: int = MIN_PRIOR_WEEKS) -> TDBacktest:
-    """Walk forward through every ingested week and grade the model."""
+        min_prior: int = MIN_PRIOR_WEEKS, collect=None) -> TDBacktest:
+    """Walk forward through every ingested week and grade the model.
+
+    ``collect(row)`` optionally receives one dict per graded player-week,
+    carrying the identity the grading itself does not need — player,
+    team, season, week — so a caller can join these probabilities to
+    something else. `engine.tdbook` joins them to the harvested closing
+    price, which is the only way to ask where the model disagrees with
+    the market rather than only where it disagrees with the outcome.
+    """
     where = "WHERE sport=?"
     args: list = [sport]
     if seasons:
@@ -224,7 +232,8 @@ def run(conn, sport: str = "nfl", seasons=None,
     rows = conn.execute(
         f"SELECT season, period, player, team, opponent, position, home, "
         f"market, value FROM player_game_logs {where} AND market IN "
-        f"('anytime_td','targets','carries','rz_tgt','rz_car','i5_car')",
+        f"('anytime_td','targets','carries','rz_tgt','rz_car','i5_car',"
+        f"'xfp')",
         args).fetchall()
     # KEYED THE WAY THE LIVE PATH KEYS, and this is not a detail. The
     # red-zone rows come from play-by-play and spell a player
@@ -267,8 +276,10 @@ def run(conn, sport: str = "nfl", seasons=None,
     for (season, short), weeks in form.items():
         team = short[2]
         for wk, marks in weeks.items():
-            t = team_week.setdefault((season, wk, team), {"opp": 0.0})
+            t = team_week.setdefault((season, wk, team),
+                                     {"opp": 0.0, "xfp": 0.0})
             t["opp"] += marks.get("targets", 0.0) + marks.get("carries", 0.0)
+            t["xfp"] += marks.get("xfp", 0.0)
 
     # IN TIME ORDER, AND THAT IS NOT COSMETIC. `calibrate.bake_off`
     # holds out "the later part of the sample" and judges a fitted
@@ -328,11 +339,27 @@ def run(conn, sport: str = "nfl", seasons=None,
                       away=marks.get("_opp", "") if is_home else team,
                       weather=Weather(dome=True, measured=True),
                       total=float(total), spread=float(spread))
+            # THE xFP SHARE, as of the weeks already played. The board
+            # blends its touchdown share toward this (touchdowns.
+            # XFP_SHARE_WEIGHT); a replay that leaves it out fits a
+            # calibration for a model nobody runs — the same fault the
+            # usage bridge had in engine/backtest, and the reason
+            # `nflusage.xfp_roles` exists.
+            own_xfp = _prior_form(weeks, prior, "xfp")
+            team_xfp = sum(team_week.get((season, w, team), {}).get("xfp", 0.0)
+                           for w in prior) / len(prior)
+            xfp = ({"xfp_share": own_xfp / team_xfp}
+                   if team_xfp > 0 and own_xfp > 0 else None)
             prob, _why = td_probability(
                 prop, gm, _neutral_opponent(marks.get("_opp", "") or "OPP"),
-                share, red_zone=rz)
-            graded.append((season, wk, float(prob),
-                           1 if marks.get("anytime_td", 0.0) > 0 else 0))
+                share, red_zone=rz, xfp=xfp)
+            scored = 1 if marks.get("anytime_td", 0.0) > 0 else 0
+            graded.append((season, wk, float(prob), scored))
+            if collect is not None:
+                collect({"season": season, "week": wk,
+                         "player": display.get((season, short), ""),
+                         "team": team, "prob": float(prob), "scored": scored,
+                         "xfp_share": (xfp or {}).get("xfp_share")})
     for _season, _wk, prob, scored in sorted(graded, key=lambda g: g[:2]):
         out.add(prob, scored)
     return out.finish()

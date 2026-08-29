@@ -190,10 +190,12 @@ def test_red_zone_rows_reach_the_model_under_the_two_spellings():
     from engine import touchdowns as _td
     orig = T.td_probability
 
-    def spy(prop, game, opponent, share, red_zone=None):
+    def spy(prop, game, opponent, share, red_zone=None, xfp=None):
         if red_zone is not None and red_zone.rz_touch_share:
             seen["rz"] += 1
-        return orig(prop, game, opponent, share, red_zone=red_zone)
+        # xfp rides through: the replay passes the player's share of his
+        # offence's expected points now, because the board does.
+        return orig(prop, game, opponent, share, red_zone=red_zone, xfp=xfp)
     T.td_probability = spy
     try:
         T.run(conn, "nfl")
