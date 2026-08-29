@@ -305,26 +305,91 @@ def implied_total_for(spread_home, total, is_home: bool) -> float | None:
         else half + float(spread_home) / 2.0
 
 
+#: Game script's effect on a player's SHARE of his team's touchdowns,
+#: fitted over 4,123 lead-back and 4,105 top-receiver games (2022-25).
+#:
+#: THE OLD FORM WAS MONOTONE AND THAT IS THE BUG. It read
+#: `1 + 0.005 x lead` for a back, so the bigger the favourite the more
+#: touchdown equity it handed him, all the way to a +12% clamp. The
+#: handbook calls the opposite "the single most common way college
+#: football prop bettors lose bets they handicapped correctly", and the
+#: logs agree: a lead back's share of his team's touchdowns RISES to
+#: about a two-touchdown favourite and falls away after, because past
+#: that margin the starters come out. Measured share, by margin:
+#:
+#:     favoured by   0-7   7-14  14-21  21-28   28+
+#:     lead back    0.250  0.234  0.236  0.251  0.201
+#:     old model    1.018  1.052  1.087  1.120  1.120
+#:
+#: The underdog end was worse and it is the end nobody was watching: a
+#: back on a 14-point-plus underdog scored 0.10-0.18 of his team's
+#: touchdowns against the old model's 0.88-0.93 multiplier, roughly
+#: twice what the data supports.
+#:
+#: Both curves are quadratics in the lead, normalised to 1.0 at a
+#: pick'em. Chosen by LEAVE-ONE-SEASON-OUT: fitted on three seasons and
+#: scored on the fourth, summed over four held-out seasons, the quadratic
+#: beat the old form in EVERY one --
+#:
+#:     lead back      fitted 36.6   old 51.0   no script term 69.9
+#:     top receiver   fitted 35.0   old 45.1   no script term 54.9
+#:
+#: (chi-square of band means against realised, so it measures the thing a
+#: multiplier is for: systematic bias in an expectation. Per-game squared
+#: error cannot see this at all -- one player's share of one game is so
+#: noisy that a 20% systematic shift sits inside it, which is why the
+#: first pass through this looked like a tie.)
+RB_SCRIPT = (0.007047, -0.0002404)
+WR_SCRIPT = (-0.007889, 0.00008716)
+
+#: Beyond this the fit is extrapolating rather than measuring, so the
+#: lead is held at the edge. College spreads reach 45 and a quadratic
+#: taken that far outside its data goes somewhere silly.
+SCRIPT_LEAD_CAP = 35.0
+
+#: Where the curves actually run inside that range. Kept as an explicit
+#: floor and ceiling so a re-fit cannot quietly widen the effect.
+RB_SCRIPT_CLAMP = (0.55, 1.10)
+WR_SCRIPT_CLAMP = (0.80, 1.35)
+
+
 def script_multiplier(spread_home, is_home: bool, pos: str
                       ) -> tuple[float, list[str]]:
-    """Game script, CFB-flavoured: same mechanism as the NFL's
-    (engine/touchdowns.script_td_multiplier), half the slope — a 20-point
-    college spread is an ordinary Saturday, not a two-touchdown NFL
-    outlier, so per-point it carries less information."""
+    """Game script's effect on a player's share of his team's TDs.
+
+    Not the team's scoring — that is already in the implied total. This
+    is only how the equity divides once the team scores, which is the one
+    thing a spread says about a player that the total does not.
+    """
     if spread_home is None:
         return 1.0, []
     lead = -float(spread_home) if is_home else float(spread_home)
+    lead = clamp(lead, -SCRIPT_LEAD_CAP, SCRIPT_LEAD_CAP)
     if pos == "RB":
-        mult = clamp(1.0 + 0.005 * lead, 0.88, 1.12)
+        b, c = RB_SCRIPT
+        mult = clamp(1.0 + b * lead + c * lead * lead, *RB_SCRIPT_CLAMP)
     elif pos in ("WR", "TE"):
-        mult = clamp(1.0 - 0.002 * lead, 0.95, 1.05)
+        b, c = WR_SCRIPT
+        mult = clamp(1.0 + b * lead + c * lead * lead, *WR_SCRIPT_CLAMP)
     else:
         return 1.0, []
     reasons = []
     if abs(lead) >= 6.0 and abs(mult - 1.0) >= 0.02:
         side = "favoured" if lead > 0 else "underdog"
+        # SAY WHICH SIDE OF THE HUMP, because "-9% for a 30-point
+        # favourite" reads as a mistake without it.
+        why = ""
+        if pos == "RB" and lead >= 21:
+            why = " — starters come out once a game is decided"
+        elif pos == "RB" and lead <= -14:
+            why = " — a buried back gets carries, not goal-line work"
+        elif pos in ("WR", "TE") and lead <= -14:
+            why = " — trailing teams throw"
+        elif pos in ("WR", "TE") and lead >= 21:
+            why = " — a team this far ahead stops throwing"
         reasons.append(f"Game script: {side} by {abs(lead):.0f} — "
-                       f"{(mult - 1) * 100:+.0f}% TD equity for a {pos}")
+                       f"{(mult - 1) * 100:+.0f}% of his team's TD equity "
+                       f"for a {pos}{why}")
     return mult, reasons
 
 

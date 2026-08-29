@@ -242,6 +242,26 @@ def script_td_multiplier(game: Game, team: str,
     The implied-total factor upstream already prices HOW MUCH a team
     scores; this prices HOW — which is why the caps are tight. Doubling
     up on the total would count the same points twice.
+
+    CHECKED AGAINST THE LOGS AND LEFT ALONE, 2026-08-29. The college
+    version of this was refitted the same day because its monotone shape
+    was badly wrong there — a lead back's share of his team's touchdowns
+    peaks near a two-touchdown favourite and falls away after, as
+    starters come out. The obvious next move is to "harmonise" the two.
+    Do not.
+
+    Leave-one-season-out over 2021-25, chi-square of band means against
+    realised share, summed across five held-out seasons:
+
+        RB1   current 7.75    no script term 8.79    fitted quadratic 8.26
+        WR1   current 21.76   no script term 24.69   fitted quadratic 24.00
+
+    The form already here wins both, and its residual bias is small in
+    absolute terms. The reason is the RANGE, not the shape: NFL spreads
+    live inside about 14 points, where a straight line and the college
+    curve are the same line. College runs to 45, and that is where the
+    curve bends. Fitting a bend on data that has no bend in it is how a
+    working model gets replaced by a worse one.
     """
     lead = -game.spread if team == game.home else game.spread
     pos = (position or "").upper()
