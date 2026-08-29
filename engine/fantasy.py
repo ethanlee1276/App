@@ -94,10 +94,30 @@ def _share(part: float, whole: float) -> float | None:
     return part / whole if whole > 0 else None
 
 
+#: Generational suffixes, which are not surnames.
+#:
+#: `engine.backtest._norm` strips exactly this set and has since it was
+#: written. `_short_key` did not, and took the LAST name-part — so
+#: "Chris Godwin Jr." keyed as ("c", "jr") and could never meet the
+#: play-by-play feed's "C.Godwin". Every usage map is keyed by this
+#: function: red-zone work, snap share, volume role, and the xFP share
+#: the touchdown model now leans on. 32 of the 1,260 NFL players logged
+#: in 2025 have one of these, and they are not marginal names — Brian
+#: Thomas Jr., Chris Godwin Jr., Marvin Harrison Jr., Deebo Samuel Sr.,
+#: Kenneth Walker III. All of them were invisible to every measurement
+#: the model makes about usage.
+NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
 def _short_key(name: str, team: str) -> tuple:
     """Join key across name styles: pbp says "P.Mahomes", weekly stats say
-    "Patrick Mahomes" — (first initial, last name, team) matches both."""
+    "Patrick Mahomes" — (first initial, last name, team) matches both.
+
+    A trailing generational suffix is dropped, because it is not the
+    surname and only one of the two feeds writes it."""
     parts = [p for p in str(name).replace(".", " ").lower().split() if p]
+    while len(parts) > 1 and parts[-1] in NAME_SUFFIXES:
+        parts.pop()
     if not parts:
         return ("", "", team)
     return (parts[0][0], parts[-1], team)

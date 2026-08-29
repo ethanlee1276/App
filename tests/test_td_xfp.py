@@ -199,6 +199,56 @@ def test_the_superseded_test_stops_collecting():
     assert got["superseded_by"] == "td-edge-nfl-xfp-2026-08"
 
 
+# --- the join key, which was quietly dropping stars --------------------------
+def test_a_generational_suffix_is_not_treated_as_a_surname():
+    """`_short_key` took the LAST name-part, so "Chris Godwin Jr." keyed
+    as ("c", "jr") and could never meet the play-by-play feed's
+    "C.Godwin". Every usage map is keyed by this function — red-zone
+    work, snap share, volume role, and the xFP share the touchdown model
+    now leans on — so those players were invisible to every measurement
+    the model makes about usage. 32 of the 1,260 NFL players logged in
+    2025 carry one, and they are not marginal names."""
+    from engine.fantasy import _short_key
+    for full, pbp in (("Chris Godwin Jr.", "C.Godwin"),
+                      ("Marvin Harrison Jr.", "M.Harrison"),
+                      ("Kenneth Walker III", "K.Walker"),
+                      ("Deebo Samuel Sr.", "D.Samuel"),
+                      ("Gardner Minshew II", "G.Minshew"),
+                      ("David Sills V", "D.Sills")):
+        assert _short_key(full, "TB") == _short_key(pbp, "TB"), full
+
+
+def test_a_name_that_is_only_a_suffix_is_not_emptied():
+    from engine.fantasy import _short_key
+    assert _short_key("Jr", "TB")[1] == "jr"
+    assert _short_key("", "TB") == ("", "", "TB")
+
+
+def test_an_ordinary_surname_is_untouched():
+    from engine.fantasy import _short_key
+    assert _short_key("Mike Evans", "TB") == ("m", "evans", "TB")
+    assert _short_key("Amon-Ra St. Brown", "DET")[1] == "brown"
+
+
+def test_the_suffix_list_matches_the_one_the_backtest_already_used():
+    """engine/backtest._norm has stripped exactly these since it was
+    written. Two functions normalising names differently is how a join
+    silently keeps half a board."""
+    import re
+    from engine.backtest import _norm
+    from engine.fantasy import NAME_SUFFIXES
+    for suf in NAME_SUFFIXES:
+        assert _norm(f"Chris Godwin {suf}") == "chris godwin", suf
+
+
+def test_the_team_stays_in_the_key():
+    """It has to: 2025 logged two different ('d','moore') and two
+    ('m','evans') on different teams. Dropping the team to rescue an
+    offseason mover would merge them."""
+    from engine.fantasy import _short_key
+    assert _short_key("DJ Moore", "CHI") != _short_key("DJ Moore", "CAR")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
