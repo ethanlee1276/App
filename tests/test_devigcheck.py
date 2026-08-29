@@ -392,6 +392,27 @@ def test_a_board_with_no_census_says_it_predates_the_field():
     assert lines and "predates" in lines[0]
 
 
+def test_a_healthy_board_still_shows_how_many_games_are_behind_it():
+    """"5 priced rows" reads very differently over three games than over
+    thirty, and the build already knows which. Printing the census only
+    on a fallback hid it on exactly the run where the board looked
+    healthy and the obvious next question was how wide it was."""
+    b = _board("cfb", picks=[_row() for _ in range(5)])
+    b["td_census"] = {"games": 3, "measured": 3, "unmeasurable": 0,
+                      "no_line": 0, "quoted_players": 61, "no_usage": 40,
+                      "outside_window": 12}
+    text = "\n".join(report_lines(b))
+    assert "games with a scorer market: 3" in text
+    assert "quoted players: 61" in text
+    assert "40 without usage logs" in text
+    assert verdict(summarise(b))[0] == "READY"
+
+
+def test_the_game_count_is_absent_when_the_build_did_not_record_one():
+    b = _board("cfb", picks=[_row()])
+    assert "games with a scorer market" not in "\n".join(report_lines(b))
+
+
 # --- reading a board that was not built for this check --------------------
 def test_it_finds_the_build_time_whatever_the_board_calls_it():
     """The NFL payload stamps `built_at` and the others `generated_at`.

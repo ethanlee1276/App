@@ -332,6 +332,22 @@ def report_lines(board: dict) -> list:
         f"    fell back to the assumption       : {got['assumed']}",
         f"    no vig source at all              : {got['unknown']}",
     ]
+    c = board.get("td_census") or {}
+    if c.get("games"):
+        # HOW MANY GAMES ARE BEHIND THOSE ROWS. "5 priced rows" reads
+        # very differently over three games than over thirty, and the
+        # build already knows which — printing it only on a fallback hid
+        # it on exactly the run where the board looked healthy.
+        lines += ["",
+                  f"  games with a scorer market: {c['games']}  "
+                  f"({c.get('measured', 0)} measured, "
+                  f"{c.get('unmeasurable', 0)} too thin, "
+                  f"{c.get('no_line', 0)} without a game line)"]
+        if c.get("quoted_players"):
+            lines.append(f"  quoted players: {c['quoted_players']}  "
+                         f"({c.get('no_usage', 0)} without usage logs, "
+                         f"{c.get('outside_window', 0)} outside the odds "
+                         f"window)")
     if got["books"]:
         books = ", ".join(f"{b} x{n}" for b, n in sorted(
             got["books"].items(), key=lambda kv: -kv[1]))
