@@ -204,6 +204,30 @@ def fit(entries: list[dict], market: str, base: dict | None = None,
     # and among equals the smaller |r| is the simpler story.
     best_r = min(scores, key=lambda r: (scores[r][0], abs(r)))
     brier_fitted = scores[best_r][0]
+    # A BOUNDARY DIAL IS REPORTED, NOT REFUSED, and the difference was
+    # worth getting wrong once. nfl:rush_yds and nfl:rec_yds both fit to
+    # r=+1.0 while nfl:receptions (-0.6) and nfl:pass_yds (-0.5) landed
+    # inside, and the first two are exactly the markets shut for AUC 0.47
+    # against a real book. That correspondence invites a guard refusing
+    # the grid edge, the way `calibrate.is_reliable` refuses a boundary
+    # temperature.
+    #
+    # It does not survive contact. Measured on the stored curves,
+    # rush_yds has the LARGEST gradient of the four — a span of 0.00589
+    # across the dial against ~0.0016 for the rest — so it is not a flat
+    # search landing at the edge by noise. It genuinely wants the hot
+    # end, and two tests here build ramps where recent form really does
+    # predict and the hot end really is the answer.
+    #
+    # The reason it wants the hot end is upstream of this file. `fit`
+    # scores through `logwalk.walk`, which prices every game against
+    # `_naive_line` — the player's own trailing average. A recency curve
+    # is then being asked which windows best predict a number computed
+    # from those same windows, and the hot end wins because it is closest
+    # to being the same object. The fix is the one `engine/propcal` made
+    # for the calibrations: score against harvested book closes instead.
+    # Until then the dial is honest about a question that is not the one
+    # the board asks, and a guard here would only hide that.
     adopted = (samples >= MIN_SAMPLES
                and brier_default - brier_fitted >= MIN_GAIN
                and best_r != 0.0)
