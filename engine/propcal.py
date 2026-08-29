@@ -401,14 +401,30 @@ def report_lines(out: dict) -> list:
         # number separates from confidence. A market that lost to a
         # constant needs rebuilding if this is 0.5 and recalibrating if
         # it is not, and those are months apart.
+        #
+        # THE DIAGNOSIS DEPENDS ON BOTH NUMBERS, not on this one alone.
+        # The first version of this block read the AUC by itself and
+        # printed "the problem is the model and not its confidence"
+        # underneath receptions — a market that had just beaten a
+        # constant out of sample at t=+2.4. A borderline AUC on a market
+        # that PASSED is weak discrimination, which is a different
+        # sentence from a broken model, and printing the second one there
+        # made the report argue with itself.
         g = d.get("discrimination") or {}
         if g.get("ran"):
+            passed = wf.get("ran") and (wf.get("t") or 0) >= 2
             if g["z"] < -2:
-                verdict = ("BACKWARDS — the model ranks misses above hits, "
-                           "and no recalibration can fix an ordering")
-            elif g["z"] < 2:
-                verdict = ("no better than a coin at ordering, so the "
-                           "problem is the model and not its confidence")
+                verdict = ("BACKWARDS — it ranks misses above hits, and no "
+                           "recalibration can fix an ordering")
+            elif g["z"] <= 2:
+                verdict = "too close to a coin to call at this sample"
+                if not passed:
+                    verdict += (", and the market failed out of sample too — "
+                                "so the ordering is the problem and "
+                                "recalibration cannot reach it")
+                else:
+                    verdict += (", so the edge above rests on the "
+                                "calibration rather than on strong ranking")
             else:
                 verdict = "it ranks hits above misses"
             lines.append(f"        AUC {g['auc']:.3f} (z={g['z']:+.1f}) — "
@@ -424,6 +440,18 @@ def report_lines(out: dict) -> list:
                 "        ⚠️  fit ran to the edge of the search grid — the "
                 "data wanted more correction than the grid allows, so "
                 "`is_reliable` fails this market and the board passes it")
+    # FOUR MARKETS WERE TESTED, so a single t of 2 is not the 1-in-20 it
+    # looks like. Said once at the bottom rather than hedged into every
+    # line, because the correction is to the reader's threshold and not
+    # to any one market's number.
+    tested = len(out.get("fitted") or {})
+    claimed = [m for m, d in (out.get("fitted") or {}).items()
+               if ((d.get("walk_forward") or {}).get("t") or 0) >= 2]
+    if claimed and tested > 1:
+        lines.append(f"    ({tested} markets were tested, so t=2 on any one "
+                     f"of them is not a 1-in-20 result — "
+                     f"{', '.join(sorted(claimed))} clears the bar but sits "
+                     f"near it, and a second season is what would settle it)")
     for market, why in sorted((out.get("refused") or {}).items()):
         lines.append(f"    {market}: refused — {why}")
     for key in (out.get("dropped") or []):

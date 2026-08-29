@@ -517,15 +517,60 @@ def test_the_report_calls_a_backwards_ordering_unfixable():
     assert "BACKWARDS" in text and "no recalibration can fix" in text
 
 
-def test_the_report_blames_the_model_when_the_ordering_is_a_coin():
+def test_the_report_blames_the_ordering_only_when_the_market_also_failed():
+    """rec_yds: AUC 0.479 and beaten by a constant out of sample. Both
+    numbers point the same way, so recalibration cannot reach it."""
     out = _fitted(0.2519, rate=0.5)
     out["fitted"]["rec_yds"]["walk_forward"] = {
         "ran": True, "n": 322, "fitted": 0.2527, "constant": 0.2503,
         "margin": -0.0024, "se": 0.004, "t": -0.6}
     out["fitted"]["rec_yds"]["discrimination"] = {
-        "ran": True, "auc": 0.508, "se": 0.02, "z": 0.4}
+        "ran": True, "auc": 0.479, "se": 0.02, "z": -0.8}
     text = "\n".join(propcal.report_lines(out))
-    assert "problem is the model and not its confidence" in text
+    assert "ordering is the problem" in text
+    assert "recalibration cannot reach it" in text
+
+
+def test_a_borderline_ordering_on_a_market_that_passed_is_not_called_broken():
+    """THE REPORT ARGUING WITH ITSELF. receptions came back AUC 0.557 at
+    z just under 2 while beating a constant out of sample at t=+2.4, and
+    the first version of this block read the AUC alone and printed "the
+    problem is the model and not its confidence" underneath it."""
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2435, "constant": 0.2479,
+        "margin": 0.0044, "se": 0.0018, "t": 2.4}
+    out["fitted"]["rec_yds"]["discrimination"] = {
+        "ran": True, "auc": 0.557, "se": 0.029, "z": 1.95}
+    text = "\n".join(propcal.report_lines(out))
+    assert "the problem" not in text, \
+        "a market that beat a constant out of sample is not broken"
+    assert "rests on the calibration" in text
+
+
+def test_a_single_market_makes_no_multiple_comparison_claim():
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2435, "constant": 0.2479,
+        "margin": 0.0044, "se": 0.0018, "t": 2.4}
+    assert "markets were tested" not in "\n".join(propcal.report_lines(out))
+
+
+def test_four_markets_tested_means_t_of_two_is_not_one_in_twenty():
+    """Said once at the bottom rather than hedged into every line."""
+    out = _fitted(0.2422, rate=0.57)
+    out["fitted"]["rec_yds"]["walk_forward"] = {
+        "ran": True, "n": 205, "fitted": 0.2435, "constant": 0.2479,
+        "margin": 0.0044, "se": 0.0018, "t": 2.4}
+    for m in ("rush_yds", "pass_yds", "receptions"):
+        out["fitted"][m] = dict(out["fitted"]["rec_yds"],
+                                walk_forward={"ran": True, "n": 200,
+                                              "fitted": 0.25, "constant": 0.25,
+                                              "margin": 0.0, "se": 0.01,
+                                              "t": 0.0})
+    text = "\n".join(propcal.report_lines(out))
+    assert "4 markets were tested" in text and "not a 1-in-20" in text
+    assert "rec_yds clears the bar" in text
 
 
 # --- a margin is not an edge until it clears its own noise --------------------
