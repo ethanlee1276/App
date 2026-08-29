@@ -138,21 +138,6 @@ def rank(name: str, q: str):
     return None
 
 
-def leads_with(name: str, q: str) -> bool:
-    """Does ``q`` start the name, or start any word in it?
-
-    "mahomes" leading Patrick Mahomes has to outrank "mahomes" merely
-    appearing inside somebody else's name, or the source that happens to
-    go first eats the whole result list.
-    """
-    n = (name or "").lower()
-    ql = (q or "").lower()
-    if not ql:
-        return False
-    return n.startswith(ql) or any(
-        w.startswith(ql) for w in re.split(r"[^a-z0-9]+", n) if w)
-
-
 def merge(per_source: dict, q: str, limit: int, order) -> list[dict]:
     """Round-robin over already-ranked lists, best matches first.
 

@@ -32,7 +32,6 @@ every other DB-backed extra (player faces, team form, venue weather).
 from __future__ import annotations
 
 import os
-import re
 
 from . import db as _db
 
@@ -273,21 +272,6 @@ def _search_conn(conn, sport: str, q: str, limit: int) -> list[dict]:
                     "position": (t["position"] if t else "") or "",
                     "headshot": face})
     return out
-
-
-def _leads_with(name: str, q: str) -> bool:
-    """Does ``q`` start the name, or start any word in it?
-
-    "mahomes" leading Patrick Mahomes has to outrank "mahomes" merely
-    appearing inside somebody else's name, or the league that happens to
-    sort first eats the whole result list.
-    """
-    n = (name or "").lower()
-    ql = (q or "").lower()
-    if not ql:
-        return False
-    return n.startswith(ql) or any(
-        w.startswith(ql) for w in re.split(r"[^a-z0-9]+", n) if w)
 
 
 def search_by_sport(q: str, limit: int = 12, sports=None,

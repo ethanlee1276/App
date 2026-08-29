@@ -2439,7 +2439,6 @@ select.calc-in { width: auto; font-weight: 600; }
 .st-k { color: var(--text-body); }
 .st-v { font-weight: 700; font-variant-numeric: tabular-nums; }
 .st-good { color: var(--good); }
-.st-bad { color: var(--bad); }
 .st-off { color: var(--text-mute); }
 .st-sub { color: var(--text-mute); font-size: var(--fs-sm); text-align: right; }
 @media (max-width: 640px) {
