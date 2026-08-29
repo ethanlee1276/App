@@ -65,13 +65,80 @@ def rows_of(board: dict) -> list:
     return out
 
 
+def board_state(board: dict) -> tuple[str, str]:
+    """``(state, why)`` for a board with no touchdown rows on it.
+
+    An empty board is not one condition, and reporting it as one is how a
+    check gets ignored. A slate whose prop menus have not posted has
+    nothing to price and nothing is wrong; a board that pulled odds and
+    still found nothing is a different question; a locked board is a
+    third. The first cut called all of them "NO BOARD", which told the
+    reader nothing and looked like an alarm.
+    """
+    if board.get("locked"):
+        return "LOCKED", (board.get("locked_reason")
+                          or "the board is locked, so nothing was priced")
+    if board.get("generated_from") == "schedule-only":
+        return "NO ODDS YET", (
+            "schedule-only board: no odds were pulled, so there is no "
+            "scorer market to de-vig. Normal before prop menus post — "
+            "they land Thursday or Friday in college and midweek in the "
+            "NFL. Nothing to check until then")
+    if not (board.get("games") or []):
+        return "NO GAMES", "no games on this slate"
+    c = board.get("td_census") or {}
+    if c:
+        # The build published its own reason, so use it instead of
+        # listing what the reason might have been.
+        if not c.get("games_quoted"):
+            return "NO SCORER PULL", (
+                f"no game's scorer market was pulled — {c.get('quotes_note') or ''}"
+                ". A game qualifies with a real spread AND total and a "
+                "kickoff inside the pull window; outside that there is "
+                "nothing to de-vig")
+        if not c.get("quoted_players"):
+            note = c.get("quotes_note") or "the feed returned an empty market"
+            return "NO SCORER PULL", (
+                f"{c['games_quoted']} game(s) pulled but no player came "
+                f"back priced — {note}")
+        parts = [f"{c['quoted_players']} player(s) quoted"]
+        if c.get("no_usage"):
+            parts.append(f"{c['no_usage']} had no usage logs")
+        if c.get("outside_window"):
+            parts.append(f"{c['outside_window']} sat outside the odds window")
+        if c.get("usage_season"):
+            parts.append(f"roles from {c['usage_season']}")
+        return "PRICED, NONE KEPT", (
+            "the scorer market was pulled and nothing survived to the "
+            "board: " + ", ".join(parts))
+    return "NO TD MARKET", (
+        "the board was priced but published no touchdown rows. Either no "
+        "game qualified for a scorer pull (a real spread AND total, and "
+        "kickoff inside the pull window), or the pull returned nothing. "
+        "Rebuild to publish the census that says which")
+
+
+def _sport_of(board: dict) -> str:
+    """The NFL payload carries no `sport` key, so infer where needed."""
+    got = (board.get("sport") or "").lower()
+    if got:
+        return got
+    date = str(board.get("date") or "")
+    # "2026-W01" is the NFL board's season-week stamp; nothing else uses it.
+    return "nfl" if "-W" in date else ""
+
+
 def summarise(board: dict) -> dict:
     """Counts by vig source, plus whatever looks wrong."""
-    sport = (board.get("sport") or "").lower()
+    sport = _sport_of(board)
     floor = SUSPICIOUS_VIG.get(sport, SUSPICIOUS_DEFAULT)
     rows = rows_of(board)
     got = {"sport": sport, "date": board.get("date", ""),
-           "generated_at": board.get("generated_at", ""),
+           # The NFL board stamps `built_at`, the others `generated_at`.
+           # Printing "?" for a board that plainly says when it was built
+           # is the check looking broken instead of the board.
+           "generated_at": (board.get("generated_at")
+                            or board.get("built_at") or ""),
            "rows": len(rows), "measured": 0, "assumed": 0, "two_way": 0,
            "unknown": 0, "books": {}, "suspicious": [], "vigs": [],
            "floor": floor}
@@ -95,6 +162,8 @@ def summarise(board: dict) -> dict:
             # never went through `build_pick` — either way it is not
             # evidence that the de-vig ran.
             got["unknown"] += 1
+    if not rows:
+        got["empty"] = board_state(board)
     if got["vigs"]:
         v = sorted(got["vigs"])
         got["vig_min"], got["vig_max"] = v[0], v[-1]
@@ -111,7 +180,8 @@ def verdict(got: dict) -> tuple[str, list]:
     """
     why = []
     if not got["rows"]:
-        return "NO BOARD", ["nothing priced — no touchdown rows published"]
+        state, reason = got.get("empty", ("NO BOARD", "nothing priced"))
+        return state, [reason]
     if got["unknown"] == got["rows"]:
         return "NOT WIRED", [
             "no row carries a vig source: the published board predates "
@@ -186,7 +256,14 @@ def _main(argv) -> int:                          # pragma: no cover
         for line in report_lines(board):
             print(line)
         state, _ = verdict(summarise(board))
-        worst = max(worst, {"READY": 0, "CHECK": 1}.get(state, 2))
+        # A slate with no odds yet is not a failure, and exiting nonzero
+        # on it would train the reader to ignore this.
+        # A slate with no odds yet is not a failure, and exiting nonzero
+        # on it would train the reader to ignore this.
+        worst = max(worst, {"READY": 0, "NO ODDS YET": 0, "LOCKED": 0,
+                            "NO GAMES": 0, "CHECK": 1,
+                            "NO SCORER PULL": 1, "PRICED, NONE KEPT": 1,
+                            }.get(state, 2))
     return worst
 
 

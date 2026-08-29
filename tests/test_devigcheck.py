@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.devigcheck import (
     SUSPICIOUS_VIG, SUSPICIOUS_DEFAULT, rows_of, summarise, verdict,
-    report_lines,
+    report_lines, board_state, _sport_of,
 )
 
 
@@ -139,10 +139,63 @@ def test_a_board_that_predates_the_field_says_so_rather_than_passing():
     assert any("predates" in w for w in why)
 
 
-def test_an_empty_board_is_not_a_pass():
-    state, why = verdict(summarise(_board()))
-    assert state == "NO BOARD"
-    assert "READY" not in state
+# --- why a board is empty -------------------------------------------------
+def test_a_slate_with_no_odds_yet_is_not_reported_as_a_failure():
+    """The first live run hit exactly this and read like an alarm. Prop
+    menus post Thursday or Friday in college and midweek in the NFL; a
+    schedule-only board before then has nothing to de-vig and nothing is
+    wrong. Calling that "NO BOARD" alongside a genuine break is how a
+    check gets ignored."""
+    b = _board()
+    b["generated_from"] = "schedule-only"
+    b["games"] = [{"home": "KC"}]
+    state, why = verdict(summarise(b))
+    assert state == "NO ODDS YET"
+    assert any("prop menus post" in w for w in why)
+
+
+def test_a_locked_board_says_it_is_locked():
+    b = _board()
+    b["locked"] = True
+    b["locked_reason"] = "slate closed"
+    state, why = verdict(summarise(b))
+    assert state == "LOCKED"
+    assert "slate closed" in why[0]
+
+
+def test_a_pull_that_never_happened_is_told_apart_from_one_that_found_nothing():
+    """Four different things produce an empty touchdown board and they
+    need four different answers — the fix is in a different place for
+    each."""
+    b = _board("cfb")
+    b["games"] = [{"home": "a"}]
+    b["td_census"] = {"games_quoted": 0, "quoted_players": 0,
+                      "quotes_note": "TD quotes: 0 of 0 eligible"}
+    assert board_state(b)[0] == "NO SCORER PULL"
+    b["td_census"] = {"games_quoted": 3, "quoted_players": 0,
+                      "quotes_note": "TD quotes: 3 of 8 eligible"}
+    assert board_state(b)[0] == "NO SCORER PULL"
+    b["td_census"] = {"games_quoted": 3, "quoted_players": 54,
+                      "no_usage": 40, "outside_window": 14,
+                      "usage_season": 2025}
+    state, why = board_state(b)
+    assert state == "PRICED, NONE KEPT"
+    assert "40 had no usage logs" in why
+    assert "14 sat outside the odds window" in why
+
+
+def test_without_a_census_it_says_to_rebuild_rather_than_guessing():
+    b = _board("cfb")
+    b["games"] = [{"home": "a"}]
+    state, why = board_state(b)
+    assert state == "NO TD MARKET"
+    assert "Rebuild" in why
+
+
+def test_an_empty_board_is_never_a_pass():
+    for b in (_board(), dict(_board(), games=[{"home": "a"}])):
+        state, _ = verdict(summarise(b))
+        assert state != "READY"
 
 
 def test_falling_back_is_reported_without_being_called_broken():
@@ -180,6 +233,29 @@ def test_the_report_survives_a_row_missing_everything():
     b = _board(picks=[{}, None, "nonsense"])
     assert report_lines(b)
     assert summarise(b)["unknown"] == 1          # the dict; the rest dropped
+
+
+# --- reading a board that was not built for this check --------------------
+def test_it_finds_the_build_time_whatever_the_board_calls_it():
+    """The NFL payload stamps `built_at` and the others `generated_at`.
+    Printing "?" for a board that plainly says when it was built is the
+    check looking broken instead of the board."""
+    b = _board(picks=[_row()])
+    b.pop("generated_at")
+    b["built_at"] = "2026-08-29T13:40:00"
+    assert summarise(b)["generated_at"] == "2026-08-29T13:40:00"
+
+
+def test_it_infers_the_sport_when_the_board_does_not_carry_one():
+    """The NFL payload has no `sport` key, and without it the alarm floor
+    would silently fall back to the default rather than the NFL's."""
+    assert _sport_of({"date": "2026-W01"}) == "nfl"
+    assert _sport_of({"sport": "cfb", "date": "2026-08-29"}) == "cfb"
+    assert _sport_of({"date": "2026-08-29"}) == ""
+    got = summarise({"date": "2026-W01", "long_shots": [_row(vig=0.12)],
+                     "longshot_watch": []})
+    assert got["sport"] == "nfl"
+    assert got["floor"] == SUSPICIOUS_VIG["nfl"]
 
 
 def test_the_report_states_the_verdict_last():

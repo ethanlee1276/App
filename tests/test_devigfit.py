@@ -18,7 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.devigfit import (
-    M_MIN, M_MAX, K_MIN, K_MAX, MIN_SPLIT, PIN_TOL, BANDS,
+    M_MIN, M_MAX, K_MIN, K_MAX, MIN_SPLIT, PIN_TOL, BANDS, TRAIN_SHARE,
     log_loss, proportional, power, split, compare, band_lines, report_lines,
     _fit,
 )
@@ -120,21 +120,77 @@ def test_a_boundary_fit_is_reported_as_a_failure_not_an_answer():
 
 
 # --- the split ------------------------------------------------------------
-def test_the_split_is_by_season_not_at_random():
+def test_the_split_keeps_whole_games_on_one_side():
     """Players in one game share a scoreboard. A random split leaves the
     same game in both halves, so the test set is partly memorised and the
     more flexible transform wins on that alone."""
     rows = _market(600, truth=lambda r: r)
     train, test = split(rows)
     assert train and test
-    train_seasons = {r["season"] for r in train}
-    test_seasons = {r["season"] for r in test}
-    assert not (train_seasons & test_seasons)
-    assert test_seasons == {max(r["season"] for r in rows)}
+    train_keys = {(r["season"], r["week"]) for r in train}
+    test_keys = {(r["season"], r["week"]) for r in test}
+    assert not (train_keys & test_keys)
+    # And the held-out side is the LATER one — training on the future to
+    # predict the past is not a held-out test of anything.
+    assert min(test_keys) > max(train_keys)
 
 
-def test_one_season_cannot_be_split_and_says_so():
-    rows = _market(600, seasons=(2025,), truth=lambda r: r)
+def test_one_season_of_harvested_closes_can_still_be_split():
+    """The bug the first live run found. The split used to cut on SEASON,
+    reasoning that a season boundary certainly separates games. It does —
+    but a purchased harvest covers a stretch of ONE season, so on 3,890
+    joined NFL player-weeks it produced 0 train and 0 test and reported
+    the data as too thin when the data was fine.
+
+    A week boundary separates games just as completely and works inside a
+    season, which is the only shape this data comes in."""
+    rows = _market(4000, seasons=(2025,), truth=lambda r: r ** 1.3)
+    train, test = split(rows)
+    assert train and test
+    assert len({r["season"] for r in rows}) == 1
+    got = compare(rows)
+    assert not got["thin"], got
+    # It fits and reports rather than refusing. NOT that power wins: at
+    # 4,000 rows the planted exponent is recovered (k near 1.3) but the
+    # two methods land 0.0002 apart, inside this module's own "not a
+    # result" band. That is the honest answer at this sample size and it
+    # is worth knowing — the live NFL harvest is 3,890 rows.
+    assert abs(got["k"] - 1.3) < 0.1, got["k"]
+    assert got["margin"] < 0.0005
+
+
+def test_the_split_orders_weeks_as_numbers_not_as_text():
+    """Week 10 comes after week 9. Sorted as text it does not, and a
+    wrong timeline leaks the future into training silently."""
+    rows = [{"season": 2025, "week": w, "market": 0.3, "scored": 0}
+            for w in ("1", "2", "3", "9", "10")]
+    train, test = split(rows)
+    assert {r["week"] for r in test} == {"10"}
+
+
+def test_a_college_period_is_a_date_and_still_orders():
+    """An NFL log's period is a week number; a college log's is a date.
+    Both have to sort, and neither may crash the other."""
+    rows = [{"season": 2026, "week": d, "market": 0.3, "scored": 0}
+            for d in ("2026-08-29", "2026-09-05", "2026-09-12", "2026-09-19")]
+    train, test = split(rows)
+    assert {r["week"] for r in test} == {"2026-09-19"}
+    mixed = rows + [{"season": 2025, "week": "17", "market": 0.3, "scored": 0}]
+    assert split(mixed)[0]                       # does not raise
+
+
+def test_most_of_the_timeline_trains():
+    assert 0.5 < TRAIN_SHARE < 0.9
+    rows = _market(1000, seasons=(2025,), truth=lambda r: r)
+    train, test = split(rows)
+    assert len(train) > len(test)
+
+
+def test_a_single_week_cannot_be_split_and_says_so():
+    """One week of closes has no later week to score on, and that has to
+    read as "not enough data" rather than as a verdict."""
+    rows = [{"season": 2025, "week": "1", "market": 0.3, "scored": 0}
+            for _ in range(600)]
     assert split(rows) == ([], [])
     got = compare(rows)
     assert got["thin"]

@@ -865,6 +865,15 @@ def main() -> None:
             out["long_shots"] = rows
             # The most-likely-scorers list — shown, never journaled.
             out["longshot_watch"] = watch
+            # WHY THE BOARD IS THE SIZE IT IS, published rather than
+            # printed. An empty touchdown board has several causes — no
+            # game qualified for a pull, the pull returned nothing, every
+            # quoted player was missing usage, everyone sat outside the
+            # odds window — and a census that only reaches stdout is a
+            # census nobody has when they need it, which is the morning
+            # the board comes up empty. engine/devigcheck reads this.
+            out["td_census"] = dict(census, quotes_note=td_note,
+                                    games_quoted=len(quotes or {}))
             # The WHOLE quoted TD field, journaled so this market's
             # one-sided hold can be measured rather than assumed at 6%
             # (engine/holdwatch). Books do not offer "no touchdown", so

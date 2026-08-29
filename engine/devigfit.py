@@ -164,20 +164,51 @@ def power(p: float, k: float) -> float:
     return p ** k
 
 
-def split(rows: list) -> tuple[list, list]:
-    """Earlier seasons train, the latest season scores.
+#: Share of the timeline that trains. The rest scores.
+TRAIN_SHARE = 0.7
 
-    Split by SEASON, not at random. A random split leaves the same game's
-    other players in both halves, and players in one game share a
-    scoreboard — so the test half would be partly memorised rather than
-    predicted, and the more flexible transform would win on that alone.
+
+def _order(period):
+    """Sort key for a period that may be a week number or a date.
+
+    An NFL log's period is a week ('1', '02', '17') and a college log's
+    is a date ('2026-08-29'). Sorting those together needs the numbers
+    compared as numbers — '10' before '9' is a silently wrong timeline,
+    and a wrong timeline means the split leaks the future into training.
     """
-    seasons = sorted({r["season"] for r in rows})
-    if len(seasons) < 2:
+    try:
+        return (0, int(period), "")
+    except (TypeError, ValueError):
+        return (1, 0, str(period))
+
+
+def split(rows: list) -> tuple[list, list]:
+    """Earlier weeks train, later weeks score.
+
+    Split by TIME, not at random. Players in one game share a scoreboard,
+    so a random split leaves the same game in both halves — the test set
+    would be partly memorised rather than predicted, and the more
+    flexible transform would win on that alone.
+
+    Split by WEEK, not by season, and that is a correction. The first cut
+    split on season, reasoning that a season boundary certainly separates
+    games. It does, but a purchased harvest covers a stretch of ONE
+    season: on 3,890 joined NFL player-weeks it produced 0 train and 0
+    test and reported the data as too thin, when the data was fine and
+    the split was wrong. A week boundary separates games just as
+    completely and works inside a season, which is the only shape this
+    data actually comes in.
+    """
+    keys = sorted({(r["season"], _order(r["week"])) for r in rows})
+    if len(keys) < 2:
         return [], []
-    last = seasons[-1]
-    return ([r for r in rows if r["season"] != last],
-            [r for r in rows if r["season"] == last])
+    cut = max(1, min(len(keys) - 1, round(len(keys) * TRAIN_SHARE)))
+    train_keys = set(keys[:cut])
+    train, test = [], []
+    for r in rows:
+        k = (r["season"], _order(r["week"]))
+        (train if k in train_keys else test).append(r)
+    return train, test
 
 
 def compare(rows: list, min_split: int = MIN_SPLIT) -> dict:
@@ -243,10 +274,11 @@ def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     if got.get("thin"):
         return [f"  too thin to split: {got['train']} train / {got['test']} test "
                 f"player-weeks, need {min_split} each",
-                "  harvest more anytime_td closes, or ingest another season"]
+                "  harvest more anytime_td closes — the split needs at least "
+                "two distinct weeks and enough joined rows on each side"]
     lines = [
         f"  fitted on {got['train']:,} player-weeks, scored on {got['test']:,} "
-        f"held out",
+        f"held out (later weeks)",
         f"  proportional m = {got['m']:.4f}  ({got['m'] - 1:+.1%} average hold)"
         + ("   AT THE BOUND — not an answer" if got["m_pinned"] else ""),
         f"  power       k = {got['k']:.4f}"
