@@ -157,10 +157,12 @@ def test_falling_back_names_the_reason_per_game():
     assert any("BUF/KC" in w for w in verdict(summarise(b))[1])
 
 
-def test_a_board_with_no_census_reports_no_per_game_detail():
-    """Absence of a census is not evidence of anything, and inventing
-    reasons for it would be worse than staying quiet."""
-    assert fallback_detail(_board("nfl", picks=[_row()])) == []
+def test_a_board_with_a_census_but_no_games_reports_no_detail():
+    """An empty census is not evidence of anything, and inventing reasons
+    for it would be worse than staying quiet."""
+    b = _board("nfl", picks=[_row()])
+    b["td_census"] = {"games": 0}
+    assert fallback_detail(b) == []
 
 
 def test_the_per_game_detail_is_capped_and_says_it_was():
@@ -356,6 +358,38 @@ def test_the_report_survives_a_row_missing_everything():
     b = _board(picks=[{}, None, "nonsense"])
     assert report_lines(b)
     assert summarise(b)["unknown"] == 1          # the dict; the rest dropped
+
+
+def test_a_measured_vig_with_no_board_size_is_not_ready():
+    """The gap this closed, found on the first run after the field
+    shipped. Every row read "measured off the game's own board" and the
+    check said READY — but the rows were built by the previous code, so
+    there was no board size behind any of them and nothing could say
+    whether the feed returned a whole scorer market or part of one.
+    Passing on evidence you do not have defeats the field's purpose."""
+    b = _board("cfb", picks=[_row(listed=0) for _ in range(5)])
+    got = summarise(b)
+    assert got["measured"] == 5
+    assert len(got["unverified"]) == 5
+    state, why = verdict(got)
+    assert state == "CHECK"
+    assert any("no board size behind it" in w for w in why)
+    assert any("Rebuild" in w for w in why)
+
+
+def test_an_unverified_row_is_not_also_called_an_impossible_vig():
+    """It has no board size, so nothing about it can be judged — least of
+    all its vig. Reporting it twice sends the reader chasing a second
+    problem that is really the first one."""
+    got = summarise(_board("nfl", picks=[_row(vig=0.001, listed=0)]))
+    assert got["unverified"] and not got["suspicious"] and not got["short"]
+
+
+def test_a_board_with_no_census_says_it_predates_the_field():
+    """Rather than printing nothing, which reads as "no problems found"
+    when it means "no information available"."""
+    lines = fallback_detail(_board("nfl", picks=[_row()]))
+    assert lines and "predates" in lines[0]
 
 
 # --- reading a board that was not built for this check --------------------

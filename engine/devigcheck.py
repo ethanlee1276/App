@@ -177,7 +177,7 @@ def summarise(board: dict) -> dict:
                             or board.get("built_at") or ""),
            "rows": len(rows), "measured": 0, "assumed": 0, "two_way": 0,
            "unknown": 0, "books": {}, "suspicious": [], "short": [],
-           "vigs": [], "listed": [], "floor": floor}
+           "unverified": [], "vigs": [], "listed": [], "floor": floor}
     for r in rows:
         src = str(r.get("vig_source") or "")
         vig = r.get("vig")
@@ -188,13 +188,21 @@ def summarise(board: dict) -> dict:
             listed = int(r.get("vig_listed") or 0)
             if listed:
                 got["listed"].append(listed)
+            else:
+                # A MEASURED VIG WITH NO BOARD SIZE CANNOT BE JUDGED, and
+                # passing it would defeat the field's whole purpose. This
+                # happened on the first run after the field shipped: the
+                # rows were built by the previous code, so every one read
+                # "measured" with nothing behind it and the check said
+                # READY on evidence it did not have.
+                got["unverified"].append(r)
             if isinstance(vig, (int, float)):
                 got["vigs"].append(float(vig))
             # Board size first: it is the fact. A small vig is only a
             # hint, and on live data it fired on an ordinary board.
             if listed and listed < MIN_BOARD:
                 got["short"].append(r)
-            elif isinstance(vig, (int, float)) and vig < floor:
+            elif listed and isinstance(vig, (int, float)) and vig < floor:
                 got["suspicious"].append(r)
         elif src == "two-way":
             got["two_way"] += 1
@@ -238,7 +246,11 @@ def fallback_detail(board: dict) -> list:
     rather than leaving the reader to guess.
     """
     c = board.get("td_census") or {}
-    if not c or not c.get("games"):
+    if not c:
+        return ["this board carries no build census, so it predates that "
+                "field — rebuild and re-run to see which games could not "
+                "be measured and why"]
+    if not c.get("games"):
         return []
     out = []
     if c.get("no_line"):
@@ -273,6 +285,12 @@ def verdict(got: dict) -> tuple[str, list]:
             "this, or was built before the last deploy"]
     if got["unknown"]:
         why.append(f"{got['unknown']} row(s) carry no vig source at all")
+    if got["unverified"]:
+        why.append(
+            f"{len(got['unverified'])} row(s) report a measured vig with no "
+            f"board size behind it — this board was built before that field "
+            f"shipped, so nothing here can say whether the feed returned a "
+            f"whole scorer market or part of one. Rebuild, then re-run")
     if got["short"]:
         why.append(
             f"{len(got['short'])} row(s) were priced off a board of fewer "
@@ -290,11 +308,14 @@ def verdict(got: dict) -> tuple[str, list]:
                    "standing assumption")
     if got["assumed"]:
         why.append(f"{got['assumed']} row(s) fell back to the assumption")
-    for line in got.get("fallback_detail") or []:
-        why.append(line)
+        # Only when something DID fall back. A fully measured board has
+        # no fallback to explain, and telling it its census is missing
+        # would be noise on the one outcome we are hoping to see.
+        for line in got.get("fallback_detail") or []:
+            why.append(line)
     state = "READY" if not got["suspicious"] and not got["short"] \
-        and not got["unknown"] and (got["measured"] or got["two_way"]) \
-        else "CHECK"
+        and not got["unverified"] and not got["unknown"] \
+        and (got["measured"] or got["two_way"]) else "CHECK"
     return state, why or ["every priced row got a real de-vig"]
 
 
