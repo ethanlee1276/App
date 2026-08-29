@@ -378,6 +378,45 @@ def _cfb_games():
              "weather": {"dome": False, "wind_mph": 5, "temp_f": 78}}]
 
 
+def test_a_goal_line_quarterback_dilutes_his_running_back():
+    """The mechanism the CFB handbook's Section 6 rule is really about.
+
+    It says to check the quarterback's share of inside-5 carries and cap
+    the back when it passes 40%. Measured over 2,203 lead-back games that
+    exact line separates almost nothing (0.250 against 0.238, z = +0.74),
+    and adding it as a separate term made the fit worse in every held-out
+    season with a coefficient of the wrong sign — because the effect is
+    already here. The red-zone denominator counts EVERY player, so a
+    quarterback taking goal-line work reduces the back's share of it
+    without anyone adding a rule.
+
+    Pinned because the obvious "fix" is to filter the denominator to
+    skill positions, which would silently delete this."""
+    conn = _cfb_hist()
+    # The back does real red-zone work, and UGA's quarterback is a
+    # goal-line runner who takes some of it.
+    for g in range(1, 7):
+        for who, pos, val in (("Nate Frazier", "RB", 5),
+                              ("Goal Line QB", "QB", 6)):
+            conn.execute(
+                "INSERT INTO player_game_logs (sport, season, period, "
+                "game_id, player, team, position, market, value) VALUES "
+                "('cfb', 2025, ?, ?, ?, 'UGA', ?, 'rz_car', ?)",
+                (f"2025-10-{g:02d}", f"g{g}", who, pos, val))
+    conn.commit()
+    _season, usage = T.usage_table(conn, 2025)
+    uga = usage["UGA"]
+    assert oa.normalize_name("Goal Line QB") in uga, \
+        "the usage table filtered the quarterback out"
+    team_rz = sum(p["rz_car"] + p["rz_rec"] for p in uga.values())
+    back = uga[oa.normalize_name("Nate Frazier")]
+    with_qb = (back["rz_car"] + back["rz_rec"]) / team_rz
+    without = (back["rz_car"] + back["rz_rec"]) / (team_rz - 6.0)
+    assert with_qb < without, "the quarterback took no share from the back"
+    assert with_qb < without * 0.85, \
+        f"a six-carry goal-line quarterback barely moved it: {with_qb:.3f}"
+
+
 def test_cfb_board_prices_quoted_players_with_usage_and_says_the_rest():
     conn = _cfb_hist()
     quotes = {0: {

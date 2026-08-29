@@ -561,6 +561,29 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             # that cannot see field position — falls back to the yardage
             # share, so the blend is a no-op rather than a silent
             # haircut on everybody. See RZ_SHARE_WEIGHT.
+            # EVERY player on the team, quarterbacks included, and that
+            # is load-bearing rather than incidental. College offences
+            # give the quarterback the majority of inside-3 carries far
+            # more often than NFL ones do, and the handbook makes it a
+            # hard rule: "before you bet any running back's touchdown
+            # prop, pull the team's quarterback share of inside-5 rush
+            # attempts. If it's above 40%, the running back's touchdown
+            # ceiling is structurally capped."
+            #
+            # THE RULE AS WRITTEN IS NOT IN THIS DATA, and the mechanism
+            # is already here. Over 2,203 lead-back games with the prior
+            # inside-5 split logged, the handbook's 40% line separates
+            # almost nothing — 0.250 of his team's touchdowns below it
+            # against 0.238 above, z = +0.74. There IS a decline from 0%
+            # to 40% (0.266 down to 0.217), and it reverses in the
+            # thinnest band above 55%.
+            #
+            # More to the point, adding quarterback inside-5 share as a
+            # SEPARATE term on top of this denominator made the fit worse
+            # in every held-out season (chi-square 24.7 to 31.1) with a
+            # coefficient of the wrong sign. A quarterback who takes
+            # goal-line carries is already in `team_rz`, so he already
+            # dilutes the back's share; a second term double-counts him.
             team_rz = sum(p["rz_car"] + p["rz_rec"] for p in team_u.values())
             rz_share = (clamp((u["rz_car"] + u["rz_rec"]) / team_rz, 0.0, 1.0)
                         if team_rz > 0 else share)

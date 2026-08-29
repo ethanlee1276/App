@@ -7,6 +7,7 @@ windows hold, concentration limits hold, and implausible edges are refused.
 Run directly: `python3 tests/test_longshots.py`
 """
 
+import math
 import os
 import sys
 
@@ -33,6 +34,29 @@ def test_prob_at_least_one_is_a_poisson_tail():
     assert prob_at_least_one(0.0) == 0.0
     assert 0.6 < prob_at_least_one(1.0) < 0.65      # 1 - e^-1
     assert prob_at_least_one(5.0) < 1.0             # never certain
+
+
+def test_the_handbooks_overdispersion_shrink_is_not_applied():
+    """Both handbooks say to shrink lambda by 0.93 above 0.80 (college
+    0.90 above 1.20) because scoring supposedly produces more zeroes than
+    Poisson. Measured over 3,688 NFL and 9,221 college player-games at a
+    season rate of 0.50 or better, touchdown counts are tighter than
+    Poisson at BOTH ends — 48.5% zeroes against 51.1% in the NFL, 2.4%
+    three-or-more against 3.6% — with the missing mass on exactly one.
+
+    So Poisson already under-states P(at least one), and the prescribed
+    shrink would push a low number lower in the exact band it was meant
+    to protect. Checked by behaviour, not by reading the docstring: an
+    applied shrink shows up as a discontinuity at the threshold."""
+    below, above = prob_at_least_one(0.79), prob_at_least_one(0.81)
+    smooth = prob_at_least_one(0.80)
+    assert below < smooth < above
+    # A 0.93 shrink starting at 0.80 would drop the curve by ~2.5 points
+    # right there; an unshrunk exponential moves by 0.004 across the same
+    # step.
+    assert above - below < 0.01
+    for lam in (0.80, 1.20):
+        assert abs(prob_at_least_one(lam) - (1.0 - math.exp(-lam))) < 1e-12
 
 
 def test_odds_windows_match_the_strategy():
