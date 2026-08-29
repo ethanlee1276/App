@@ -259,6 +259,52 @@ def xfp_roles(conn, season: int | None = None,
     return out
 
 
+#: Box-score markets that prove a player actually touched the ball, and
+#: the play-by-play aggregates that should therefore exist for him.
+_BOX_MARKETS = ("carries", "targets", "rush_yds", "rec_yds", "receptions")
+_PBP_MARKETS = ("xfp", "rz_car", "rz_tgt", "i5_car")
+
+
+def join_audit(conn, season: int | None = None, min_touches: float = 20.0) -> list:
+    """Players with real production whose play-by-play rows never join.
+
+    THE CHECK THAT SHOULD HAVE EXISTED FIRST. `player_game_logs` holds
+    two feeds under one schema — the weekly box score writing "Chris
+    Godwin Jr." and the play-by-play writing "C.Godwin" — joined only by
+    `fantasy._short_key`. When that key is wrong the rows do not
+    disappear and nothing errors; the player simply has no measured
+    usage, and every model that asks about him gets a confident answer
+    built on nothing. It took a touchdown card missing an explanation to
+    notice, and by then it had been true for 32 players a season.
+
+    So: anyone with at least `min_touches` carries plus targets whose key
+    finds no play-by-play row. Zero-production special-teamers are
+    excluded by that floor rather than by name, because they genuinely
+    have no play-by-play and reporting them would bury the real misses.
+
+    Returns ``[(player, team, touches)]``, worst first. Empty is the
+    healthy answer.
+    """
+    if season is None:
+        season = latest_season(conn, "carries")
+    if season is None:
+        return []
+    box: dict = {}
+    for r in conn.execute(
+            "SELECT player, team, SUM(value) v FROM player_game_logs "
+            "WHERE sport='nfl' AND season=? AND market IN ('carries','targets') "
+            "GROUP BY player, team", (season,)):
+        box[_short_key(r["player"], r["team"])] = (
+            r["player"], r["team"], float(r["v"] or 0.0))
+    pbp = {_short_key(r["player"], r["team"]) for r in conn.execute(
+        "SELECT DISTINCT player, team FROM player_game_logs WHERE sport='nfl' "
+        "AND season=? AND market IN (%s)" % ",".join("?" * len(_PBP_MARKETS)),
+        (season, *_PBP_MARKETS))}
+    out = [v for k, v in box.items()
+           if k not in pbp and v[2] >= min_touches]
+    return sorted(out, key=lambda r: -r[2])
+
+
 def build_usage_maps(conn, season: int | None = None,
                      upto_week: int | None = None) -> dict:
     """All three maps in one call — what nfl_build hands the pipeline. Empty

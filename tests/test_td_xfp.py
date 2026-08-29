@@ -249,6 +249,104 @@ def test_the_team_stays_in_the_key():
     assert _short_key("DJ Moore", "CHI") != _short_key("DJ Moore", "CAR")
 
 
+def test_accents_fold_because_the_feeds_disagree_on_them():
+    """The box score writes "Audric Estimé", the play-by-play writes
+    "A.Estime". One player a season, which is why it went unnoticed."""
+    from engine.fantasy import _short_key
+    assert _short_key("Audric Estimé", "DEN") == _short_key("A.Estime", "DEN")
+    assert _short_key("Amon-Ra St. Brown", "DET") == \
+        _short_key("A.St.Brown", "DET")
+
+
+def test_the_alias_table_only_holds_names_a_rule_cannot_reach():
+    """Robbie Anderson became Robbie Chosen, Deonte Harris became Deonte
+    Harty, and Zonovan Knight plays as Bam. No normalisation finds those.
+    Every entry was surfaced by join_audit rather than by reading lists —
+    each had 60-113 touches in a season with no measured usage."""
+    from engine.fantasy import NAME_ALIASES, _short_key
+    assert len(NAME_ALIASES) <= 6, \
+        "an alias table is where bad guesses hide; keep it audited"
+    assert _short_key("Bam Knight", "ARI") == _short_key("Z.Knight", "ARI")
+    assert _short_key("Robbie Chosen", "CAR") == _short_key("R.Anderson", "CAR")
+    assert _short_key("Deonte Harty", "NO") == _short_key("D.Harris", "NO")
+
+
+def test_an_alias_does_not_escape_its_team():
+    from engine.fantasy import _short_key
+    assert _short_key("Bam Knight", "ARI") != _short_key("Z.Knight", "NYJ")
+
+
+# --- the standing check ------------------------------------------------------
+def test_the_audit_reports_a_broken_join_rather_than_waiting_to_be_noticed():
+    """It took a touchdown card missing its explanation to find that 32
+    players a season had no measured usage. Nothing errored, because a
+    failed join does not raise — the player just quietly has no data."""
+    c = _conn()
+    for w in range(1, 6):
+        c.execute("INSERT INTO player_game_logs (sport, season, period, "
+                  "player, team, market, value) VALUES "
+                  "('nfl', 2025, ?, 'Ghost Player', 'LV', 'carries', 12)",
+                  ("%03d" % w,))
+    bad = nflusage.join_audit(c, 2025)
+    assert [(r[0], r[1]) for r in bad] == [("Ghost Player", "LV")]
+    assert bad[0][2] == 60.0
+
+
+def test_a_player_who_actually_joins_is_not_reported():
+    c = _conn()
+    for w in range(1, 6):
+        for market, val in (("carries", 12), ("xfp", 9.0)):
+            c.execute("INSERT INTO player_game_logs (sport, season, period, "
+                      "player, team, market, value) VALUES "
+                      "('nfl', 2025, ?, ?, 'LV', ?, ?)",
+                      ("%03d" % w, "Real Player" if market == "carries"
+                       else "R.Player", market, val))
+    assert nflusage.join_audit(c, 2025) == []
+
+
+def test_a_zero_production_player_is_not_reported():
+    """42 of the 53 unmatched players in 2025 had every box-score value at
+    zero — special-teamers with no play-by-play because they generated
+    none. Reporting them would bury the real misses."""
+    c = _conn()
+    for w in range(1, 18):
+        c.execute("INSERT INTO player_game_logs (sport, season, period, "
+                  "player, team, market, value) VALUES "
+                  "('nfl', 2025, ?, 'Special Teamer', 'LV', 'targets', 0)",
+                  ("%03d" % w,))
+    assert nflusage.join_audit(c, 2025) == []
+
+
+def test_the_audit_is_reported_to_a_human_not_asserted_by_the_suite():
+    """It is tempting to assert the real database is clean — it is, on
+    all five ingested seasons, after the suffix, accent and alias fixes.
+    But run_tests.py is explicit that THE SUITE MUST NOT READ THE BOX IT
+    IS RUNNING ON, and a differently-ingested season on the droplet would
+    turn the suite red and block a deploy over a data question. So the
+    audit runs in the build, where a person is already reading output."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "nfl_build.py"), encoding="utf-8").read()
+    assert "join_audit" in src
+    # Checked as CALLS, not as text — this test's own message names
+    # db.connect() to explain the rule, and a substring scan matched
+    # itself. The lesson keeps recurring: a check that reads prose passes
+    # or fails on how a comment is worded.
+    import ast
+    import pathlib as _pl
+    for f in _pl.Path(root, "tests").glob("test_*.py"):
+        body = f.read_text()
+        if "join_audit" not in body:
+            continue
+        for node in ast.walk(ast.parse(body)):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "connect"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "db"):
+                raise AssertionError(
+                    f"{f.name} runs the audit against this box's own data")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

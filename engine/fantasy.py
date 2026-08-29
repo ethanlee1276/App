@@ -109,18 +109,47 @@ def _share(part: float, whole: float) -> float | None:
 NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
 
 
+#: Players the two feeds call different things, because the player
+#: changed the name he plays under. Rules cannot reach these, and every
+#: one was found by `nflusage.join_audit` rather than by reading names:
+#: each had 60-113 touches in a season with no measured usage at all.
+#:
+#: Keyed and valued as (first initial, surname), mapping the box score's
+#: spelling onto the play-by-play's. Kept deliberately short — an alias
+#: table is a place bad guesses hide, so nothing goes in without the
+#: audit naming it first.
+NAME_ALIASES = {
+    ("b", "knight"): ("z", "knight"),      # Zonovan "Bam" Knight
+    ("r", "chosen"): ("r", "anderson"),    # Robbie Anderson -> Robbie Chosen
+    ("d", "harty"): ("d", "harris"),       # Deonte Harris -> Deonte Harty
+}
+
+
+def _fold(text: str) -> str:
+    """Lowercase with accents removed.
+
+    The two feeds do not agree on them: the weekly box score writes
+    "Audric Estimé" and the play-by-play writes "A.Estime". One player a
+    season, which is why it went unnoticed — and exactly the reason to
+    fold rather than to keep finding them one at a time."""
+    import unicodedata
+    return "".join(ch for ch in unicodedata.normalize("NFD", str(text).lower())
+                   if not unicodedata.combining(ch))
+
+
 def _short_key(name: str, team: str) -> tuple:
     """Join key across name styles: pbp says "P.Mahomes", weekly stats say
     "Patrick Mahomes" — (first initial, last name, team) matches both.
 
     A trailing generational suffix is dropped, because it is not the
     surname and only one of the two feeds writes it."""
-    parts = [p for p in str(name).replace(".", " ").lower().split() if p]
+    parts = [p for p in _fold(name).replace(".", " ").split() if p]
     while len(parts) > 1 and parts[-1] in NAME_SUFFIXES:
         parts.pop()
     if not parts:
         return ("", "", team)
-    return (parts[0][0], parts[-1], team)
+    key = (parts[0][0], parts[-1])
+    return NAME_ALIASES.get(key, key) + (team,)
 
 
 def _pbp_weekly(conn, season: int) -> dict:

@@ -553,6 +553,26 @@ def main() -> None:
     except Exception:
         nfl_usage = None
 
+    # WHO HAS PRODUCTION BUT NO MEASURED USAGE. The two feeds in
+    # player_game_logs are joined by name, and when that join fails
+    # nothing errors — the player simply carries no red-zone work, no
+    # snap share and no xFP, and every model that asks about him answers
+    # confidently from nothing. That was true for 32 players a season
+    # until a touchdown card turned up missing its explanation.
+    if nfl_usage:
+        try:
+            from engine.nflusage import join_audit
+            unmatched = join_audit(_usage_connect())
+            if unmatched:
+                print(f"  ⚠️  {len(unmatched)} player(s) with real volume have "
+                      f"no play-by-play match — they carry NO measured usage:")
+                for name, team, touches in unmatched[:5]:
+                    print(f"        {name} ({team}), {touches:.0f} touches")
+                print("        add them to engine.fantasy.NAME_ALIASES, or "
+                      "check the ingest")
+        except Exception as exc:                              # noqa: BLE001
+            # Bookkeeping must never be the thing that kills a build.
+            print(f"  usage join audit skipped: {exc}")
     result = run_slate(slate, config, model=model, nfl_usage=nfl_usage,
                        team_notes=qb_notes)
     # Say on each card what the sample rule did — the reset that was
