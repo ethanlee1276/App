@@ -115,6 +115,54 @@ def test_temperature_alone_cannot_fix_a_centre_bias():
     assert brier(pairs, t, b) < brier(pairs, 6.0, 0.0)
 
 
+def test_the_verdict_names_the_bias_not_only_the_spread():
+    """A correction has two terms describing different faults, and the
+    verdict read only one of them.
+
+    ON 2026-08-30 the NFL touchdown fit came back T = 1.12, bias = +0.200
+    and printed "model was over-confident" directly under its own band
+    table, which had just flagged five consecutive bands "(conservative)"
+    — the model claiming 15.4% where 20.0% scored. The single sentence a
+    reader takes away contradicted every line above it and said the
+    opposite of the truth."""
+    got = Calibration(temperature=1.12, intercept=0.20).verdict
+    assert "CLAIMED TOO LITTLE" in got, got
+    assert "lifted" in got
+    # The spread fault is still named — it is also true.
+    assert "over-confident" in got
+
+
+def test_a_pure_bias_reads_as_a_bias_and_nothing_else():
+    """No spread fault to report, so no spread sentence. The subject has
+    to survive the missing first clause."""
+    got = Calibration(temperature=1.0, intercept=0.30).verdict
+    assert got.startswith("model CLAIMED TOO LITTLE"), got
+    assert "confident" not in got
+    other = Calibration(temperature=1.0, intercept=-0.30).verdict
+    assert other.startswith("model CLAIMED TOO MUCH"), other
+
+
+def test_a_bias_too_small_to_matter_is_not_announced():
+    """The search steps in 0.02 and every fit lands somewhere. Naming a
+    bias of 0.02 would make the verdict noise."""
+    from engine.calibrate import BIAS_FLOOR
+    got = Calibration(temperature=1.0, intercept=BIAS_FLOOR / 2).verdict
+    assert got == "model was already well calibrated", got
+    named = Calibration(temperature=1.0, intercept=BIAS_FLOOR).verdict
+    assert "CLAIMED TOO LITTLE" in named, named
+
+
+def test_the_direction_of_the_bias_matches_what_it_does_to_a_probability():
+    """The wording is only worth anything if it survives being checked
+    against the arithmetic it describes."""
+    lifted = apply_temperature(0.15, 1.0, 0.20)
+    assert lifted > 0.15
+    assert "LITTLE" in Calibration(temperature=1.0, intercept=0.20).verdict
+    cut = apply_temperature(0.15, 1.0, -0.20)
+    assert cut < 0.15
+    assert "MUCH" in Calibration(temperature=1.0, intercept=-0.20).verdict
+
+
 def test_missing_file_means_no_correction():
     from pathlib import Path
     reset_cache()

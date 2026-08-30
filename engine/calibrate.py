@@ -119,6 +119,12 @@ def brier(pairs: list[tuple[float, int]], temperature: float = 1.0,
                for p, o in pairs) / len(pairs)
 
 
+#: How large an intercept has to be before the verdict names it. The
+#: search steps in 0.02, and 0.05 in log-odds moves a 15% claim by about
+#: a point — below that the bias is not the story, above it the reader
+#: needs to be told which way the model is wrong.
+BIAS_FLOOR = 0.05
+
 # Intercept search: how far the whole distribution is shifted in log-odds.
 # ±1.2 covers roughly a 25-point swing at the centre, far more than any
 # believable model bias.
@@ -288,14 +294,42 @@ class Calibration:
 
     @property
     def verdict(self) -> str:
+        """What the fit says was wrong, in both of the ways it can be.
+
+        IT USED TO READ ONLY THE TEMPERATURE. A correction has two terms
+        and they describe different faults: the temperature is SPREAD
+        (too confident, too timid) and the intercept is BIAS (claiming
+        systematically more or less than happens). Naming only the first
+        and calling it the verdict is fine while the second is near zero,
+        and wrong the moment it is not.
+
+        It was not. On 2026-08-30 the NFL touchdown fit came back
+        T = 1.12, bias = +0.200 and printed "model was over-confident"
+        directly underneath its own band table, which had just flagged
+        five consecutive bands "(conservative)" — the model claiming
+        15.4% where 20.0% scored. The one sentence a reader takes away
+        contradicted every line above it, and said the opposite of the
+        truth.
+        """
+        parts = []
         if self.temperature >= GRID_MAX:
-            return ("model is SEVERELY over-confident — the fit hit the search "
-                    "ceiling, so even this much flattening may not be enough")
-        if self.temperature > 1.05:
-            return "model was over-confident — probabilities pulled toward 50%"
-        if self.temperature < 0.95:
-            return "model was under-confident — probabilities sharpened"
-        return "model was already well calibrated"
+            parts.append("model is SEVERELY over-confident — the fit hit the "
+                         "search ceiling, so even this much flattening may "
+                         "not be enough")
+        elif self.temperature > 1.05:
+            parts.append("model was over-confident — probabilities pulled "
+                         "toward 50%")
+        elif self.temperature < 0.95:
+            parts.append("model was under-confident — probabilities sharpened")
+        subject = "it" if parts else "model"
+        if self.intercept >= BIAS_FLOOR:
+            parts.append(f"{subject} CLAIMED TOO LITTLE — every probability "
+                         "lifted")
+        elif self.intercept <= -BIAS_FLOOR:
+            parts.append(f"{subject} CLAIMED TOO MUCH — every probability cut")
+        if not parts:
+            return "model was already well calibrated"
+        return "; and ".join(parts)
 
     def to_dict(self) -> dict:
         return {

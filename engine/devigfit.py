@@ -64,6 +64,21 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
     Both sports come through here. The only difference is the bridge to a
     date: an NFL log's period is a week number and the schedule supplies
     the date, while a college log's period IS the date.
+
+    EACH ROW SAYS WHETHER THE PLAYER TOOK A SNAP, because a bet on a man
+    who never took the field is VOID at every book — it is not a loss,
+    and grading it as one measures a hold nobody could have paid. That
+    matters here more than anywhere: non-participation is 9.6% of
+    player-weeks for a player whose career touchdown rate is under 5% and
+    0.1% for one above 35%, a hundred-fold gradient pointing straight at
+    the longshot band where the hold looks largest.
+
+    `played` is True where a snap count is positive, False where the logs
+    explicitly record ZERO snaps, and None where no snap row exists at
+    all. Three values, not two: 240 NFL player-weeks and every college one
+    genuinely cannot be classified, and collapsing "unknown" into either
+    answer would invent a fact. A zero-usage row with snaps is a real
+    loss and stays in.
     """
     from . import db as _db
     from .backtest import _norm
@@ -82,6 +97,14 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
     if seasons:
         where += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += [int(x) for x in seasons]
+
+    snaps: dict = {}
+    snap_where = where.replace("market='anytime_td'", "market='snap_pct'")
+    for r in conn.execute(
+            f"SELECT season, period, player, team, value "
+            f"FROM player_game_logs {snap_where}", args):
+        snaps[(r["season"], str(r["period"]), r["player"], r["team"])] = \
+            r["value"]
 
     rows: list = []
     for r in conn.execute(
@@ -103,8 +126,10 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
         market = _prob(quote.get("over_odds"))
         if market is None or not 0.0 < market < 1.0:
             continue
+        snap = snaps.get((r["season"], str(period), r["player"], r["team"]))
         rows.append({"season": r["season"], "week": str(period),
                      "market": market,
+                     "played": None if snap is None else float(snap) > 0,
                      "scored": 1 if float(r["value"] or 0) > 0 else 0})
     return rows
 
@@ -366,6 +391,59 @@ def haircut_lines(rows: list, min_band: int = 40) -> list:
     return lines
 
 
+def played_rows(rows: list) -> list:
+    """The rows a bettor could actually have lost.
+
+    Drops only player-weeks the logs EXPLICITLY record as zero snaps.
+    A row with no snap record at all stays in, because "unknown" is not
+    "absent" and guessing either way would invent the fact the whole
+    check is about.
+    """
+    return [r for r in rows if r.get("played") is not False]
+
+
+def void_lines(rows: list, min_band: int = 40) -> list:
+    """How much of the measured hold is bets that were never live.
+
+    THE ARTIFACT THIS EXISTS TO CATCH. An anytime-touchdown prop on a
+    player who does not take the field is VOID at every book. Graded here
+    as a loss, it lowers the realised rate without lowering the price,
+    which is arithmetically indistinguishable from the book charging a
+    bigger toll. And non-participation is not spread evenly: 9.6% of
+    player-weeks for a player whose career touchdown rate is under 5%
+    against 0.1% for one above 35%, which points at precisely the
+    longshot band where the hold reads largest.
+
+    So this prints the haircut table twice. The gap between them is not a
+    correction to apply — it is the width of what the logs cannot settle,
+    and the honest answer sits inside it.
+
+    A board with no snap records at all (college has no `snap_pct`
+    market) says so instead of printing an identical table twice and
+    letting it read as agreement.
+    """
+    known = [r for r in rows if r.get("played") is not None]
+    if not known:
+        return ["  participation unknown for every row — no snap records on "
+                "this board, so none of the hold above can be separated "
+                "from bets that were void at the book"]
+    live = played_rows(rows)
+    dropped = len(rows) - len(live)
+    if not dropped:
+        return [f"  every one of {len(known):,} rows with a snap record took "
+                "the field, so no part of the hold above is a void bet"]
+    scored = sum(r["scored"] for r in rows if r.get("played") is False)
+    lines = [f"  {dropped:,} of {len(rows):,} rows never took a snap "
+             f"({dropped / len(rows):.1%}) — VOID at the book, not losses; "
+             f"{scored} of them scored",
+             "  the same table over only the rows a bettor could have lost:"]
+    lines += haircut_lines(live, min_band=min_band)[1:]
+    lines.append("  the truth is between the two tables, not in either: the "
+                 "logs cannot tell an inactive from a healthy scratch of "
+                 "usage")
+    return lines
+
+
 def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     got = compare(rows, min_split)
     if got.get("thin"):
@@ -388,6 +466,7 @@ def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     ]
     lines += band_lines(rows, got["m"], got["k"])
     lines += [""] + haircut_lines(rows)
+    lines += [""] + void_lines(rows)
     lines += ["",
               "  A margin under 0.0005 is not a result — the two methods "
               "agree and the choice between them is not settled by this "
