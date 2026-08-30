@@ -688,16 +688,56 @@ def refresh_ufc(quiet: bool = False) -> bool:
     return ok
 
 
+#: What each board's last build did, and when. Written into the
+#: heartbeat every cycle.
+#:
+#: WHY THIS EXISTS. Ethan, 2026-08-30: "cfb is not showing picks or live
+#: games" on the opening Saturday of the college season. The journal
+#: could not answer it, and the reason is structural rather than one
+#: missing print: the background loop calls `refresh_all(quiet=True)`,
+#: every `refresh_*` prints only when NOT quiet, and `_run_build`
+#: captures the subprocess output and surfaces it only on failure. So a
+#: successful quiet build is completely silent, and a whole Saturday of
+#: them is indistinguishable from a loop that never reached CFB — the
+#: only CFB build lines in that day's journal were three non-quiet
+#: startup builds, twenty-one hours apart.
+#:
+#: `heartbeat.json` already answers "is the LOOP alive". It could not
+#: answer "did THIS BOARD rebuild", which is the question a dark sport
+#: actually raises, and it matters most for CFB because its board is
+#: also its live-games feed (`LIVE_FEEDS` maps cfb to cfb.json; there is
+#: no fast scoreboard behind it, so one stale board takes both down).
+_BOARD_RUNS: dict = {}
+
+
+def _note_board(name: str, ok) -> bool:
+    """Record that `name` just rebuilt, and whether it worked.
+
+    Written as a wrapper around the call rather than a loop over a table
+    of names so that `refresh_cfb(quiet=quiet)` stays literally present
+    in this file — `test_cfb_page` and `test_memecoins` both grep for
+    exactly that, guarding against a refresher that is defined and never
+    called, and an indirection through `globals()` would defeat a check
+    worth keeping.
+    """
+    _BOARD_RUNS[name] = {
+        "ok": bool(ok),
+        "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "at_epoch": round(time.time()),
+    }
+    return bool(ok)
+
+
 def refresh_all(quiet: bool = False) -> None:
-    refresh_mlb(quiet=quiet)
-    refresh_nfl(quiet=quiet)
-    refresh_predmarkets(quiet=quiet)
-    refresh_memes(quiet=quiet)
-    refresh_fantasy(quiet=quiet)
-    refresh_nba(quiet=quiet)
-    refresh_wnba(quiet=quiet)
-    refresh_cfb(quiet=quiet)
-    refresh_ufc(quiet=quiet)
+    _note_board("mlb", refresh_mlb(quiet=quiet))
+    _note_board("nfl", refresh_nfl(quiet=quiet))
+    _note_board("predmarkets", refresh_predmarkets(quiet=quiet))
+    _note_board("memes", refresh_memes(quiet=quiet))
+    _note_board("fantasy", refresh_fantasy(quiet=quiet))
+    _note_board("nba", refresh_nba(quiet=quiet))
+    _note_board("wnba", refresh_wnba(quiet=quiet))
+    _note_board("cfb", refresh_cfb(quiet=quiet))
+    _note_board("ufc", refresh_ufc(quiet=quiet))
     refresh_sport_rosters(quiet=quiet)
     refresh_injuries(quiet=quiet)
     refresh_standings(quiet=quiet)
@@ -1929,6 +1969,9 @@ def _write_heartbeat(interval: int) -> None:
             "cycle_s": _CYCLE_S[0] if _CYCLE_S else None,
             "cycle_p50_s": _cycle_p50(),
             "cycles_timed": len(_CYCLE_S),
+            # Per board, so "did CFB rebuild, and when" stops being a
+            # question only a journal forensic can answer. See _BOARD_RUNS.
+            "boards": dict(_BOARD_RUNS),
         }))
         os.replace(tmp, p)
     except OSError:

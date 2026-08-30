@@ -170,6 +170,78 @@ def test_the_build_still_exits_zero_which_is_why_the_word_matters():
     assert _word(lines[-1]) != "refreshed", lines[-1]
 
 
+# --- the reason the journal could not answer it --------------------------
+def test_the_quiet_loop_leaves_no_trace_of_a_successful_build():
+    """WHY THE FORENSIC FAILED, stated so nobody repeats it. The
+    background loop calls `refresh_all(quiet=True)`; every `refresh_*`
+    prints only when NOT quiet; `_run_build` captures the subprocess
+    output and surfaces it only on failure. A successful quiet build is
+    therefore completely silent, and a whole Saturday of them looks
+    exactly like a loop that never reached CFB.
+
+    The Aug 29 journal bears it out: the only CFB build lines all day
+    were three NON-quiet startup builds, twenty-one hours apart."""
+    with open(os.path.join(ROOT, "launch.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert "refresh_all(quiet=True)" in src
+    block = src[src.index("def _run_build("):]
+    block = block[:block.index("\ndef ")]
+    assert "capture_output=True" in block
+    assert "if proc.returncode != 0:" in block
+
+
+def test_every_board_records_what_its_build_did():
+    """`heartbeat.json` answered "is the LOOP alive" and could not answer
+    "did THIS BOARD rebuild" — the question a dark sport actually
+    raises, and the one that matters most for CFB, whose board is also
+    its live-games feed."""
+    with open(os.path.join(ROOT, "launch.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert '"boards": dict(_BOARD_RUNS)' in src
+    block = src[src.index("def _note_board("):]
+    block = block[:block.index("\ndef refresh_all(")]
+    for key in ('"ok"', '"at"', '"at_epoch"'):
+        assert key in block, key
+
+
+def test_the_record_says_ok_or_not_ok_and_when():
+    import launch
+    launch._BOARD_RUNS.clear()
+    assert launch._note_board("cfb", True) is True
+    assert launch._note_board("nfl", False) is False
+    assert launch._BOARD_RUNS["cfb"]["ok"] is True
+    assert launch._BOARD_RUNS["nfl"]["ok"] is False
+    assert launch._BOARD_RUNS["cfb"]["at_epoch"] > 0
+
+
+def test_the_recorder_wraps_the_call_rather_than_replacing_it():
+    """A LOOP OVER A TABLE OF NAMES WOULD HAVE BEEN TIDIER AND WORSE.
+    `test_cfb_page` and `test_memecoins` both grep launch.py for the
+    literal `refresh_cfb(quiet=quiet)` / `refresh_memes(`, guarding
+    against a refresher that is defined and never called. Reaching the
+    functions through `globals()[f"refresh_{name}"]` passed the suite's
+    own new tests and broke both of those — a real guarantee traded for
+    a cosmetic one. The wrapper keeps every call site literal."""
+    with open(os.path.join(ROOT, "launch.py"), encoding="utf-8") as f:
+        src = f.read()
+    block = src[src.index("def refresh_all("):]
+    block = block[:block.index("\n\ndef ")]
+    for name in ("mlb", "nfl", "nba", "wnba", "cfb", "ufc", "memes",
+                 "fantasy", "predmarkets"):
+        assert f"refresh_{name}(quiet=quiet)" in block, name
+        assert f'_note_board("{name}"' in block, name
+    assert "globals()" not in block
+
+
+def test_cfb_has_no_fast_scoreboard_which_is_why_one_failure_took_both():
+    """`LIVE_FAST` is MLB-only, so CFB's live games are read out of the
+    model board. That is the single root cause behind both halves of the
+    report: no rebuild means no picks AND no live games."""
+    src = _app()
+    assert 'const LIVE_FAST = { mlb: "data/live_mlb.json" }' in src
+    assert 'cfb: "data/cfb.json"' in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
