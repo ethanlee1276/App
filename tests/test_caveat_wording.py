@@ -69,12 +69,20 @@ def test_the_caveat_explains_that_the_price_does_not_exist_to_be_pulled():
         primary_reason="power", reasons=["r"], caveats=[], sport="mlb")
     assert pick is not None
     text = " ".join(pick.caveats)
-    assert "don't offer the NO side" in text, \
+    assert "no NO side" in text, \
         "the caveat still reads as a feed we failed to pull"
     assert "6%" in text, "the assumption is unquoted, so it cannot be judged"
     # And it must not oversell itself: the assumed hold is narrower than the
     # real one on a longshot, so this edge is a ceiling, not a floor.
     assert "optimistic" in text
+    # BOTH MEASUREMENTS FAILED, NOT ONE. There are three ways to know the
+    # margin — a two-way pair, this game's own scorer board, or the
+    # standing number — so reaching the standing number means neither
+    # measurement was available. Naming only the missing NO side left a
+    # reader thinking a two-sided quote was all that stood between them
+    # and a measured hold.
+    assert "couldn't be measured either" in text, \
+        "the caveat blames the NO side alone and hides the board failure"
 
 
 def test_a_measured_price_carries_no_such_caveat():

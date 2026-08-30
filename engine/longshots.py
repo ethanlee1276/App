@@ -486,11 +486,32 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
                 f"{hold - 1:.1%}, from {hn:,} settled quotes across the whole "
                 f"board this season"]
         else:
+            # TWO THINGS FAILED HERE, AND THE COPY USED TO NAME ONE.
+            # There are three ways to know the margin: read it off a
+            # two-way pair, measure it across the game's own scorer
+            # board, or fall back to a standing number. This branch is
+            # the fallback, so BOTH measurements were unavailable — and
+            # saying only "books don't offer the NO side" left a reader
+            # thinking a two-sided quote was all that stood between them
+            # and a measured number.
+            #
+            # The board measurement usually fails for a reason worth
+            # knowing: a menu whose listed prices do not even cover the
+            # scorers its game line supports has no visible margin to
+            # strip, which is what an early week looks like
+            # (engine.devigcheck reports it as EARLY MENU). Not asserted
+            # here, because this function cannot see which of the two it
+            # was — named as the usual cause, and pointed at the check
+            # that can tell.
             caveats = caveats + [
-                f"Books don't offer the NO side of this market, so the vig is "
-                f"assumed at {hold - 1:.0%} rather than measured off "
-                f"both prices. Real hold here is usually wider, so treat this "
-                f"edge as the optimistic end of a range"]
+                f"The vig here is assumed at {hold - 1:.0%}, not measured. "
+                f"Books quote no NO side on this market, so it can't be read "
+                f"off a two-way pair — and this game's own scorer board "
+                f"couldn't be measured either, which usually means the menu "
+                f"is still filling in and its prices don't yet cover the "
+                f"touchdowns the game line supports. Real hold is usually "
+                f"wider than the assumption, so treat this edge as the "
+                f"optimistic end of a range"]
 
     # Same discipline as the yardage-prop model: shrink toward the market while
     # the model is still uncalibrated, and treat an implausibly large

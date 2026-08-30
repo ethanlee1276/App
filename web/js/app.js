@@ -4977,10 +4977,17 @@ function likelyCard(r) {
   const evTxt = r.ev_per_unit == null ? "" :
     `<span class="mini" style="color:${ev > 0 ? "var(--good)" : "var(--text-mute)"}">
        ${ev > 0 ? "+" : ""}${(ev * 100).toFixed(0)}% EV at this price</span>`;
+  // "Its calibration is shut" was the wording, and it stopped being true
+  // the day the mixture started calibrating this page. Both lines then
+  // ran on the same card: one saying the market has no calibration, one
+  // showing the number it produced. What is actually shut is BETTING —
+  // the fitted temperature ran to the edge of its grid, which disqualifies
+  // it as a price to stake against and says nothing about ranking.
   const bet = r.bettable ? "" :
-    `<div class="warning">${icon("warn")} We can rank this market but not
-     price it — its calibration is shut for betting, so treat this as a
-     read on who hits, not as a card.</div>`;
+    `<div class="warning">${icon("warn")} No bettable price here — this
+     market’s fit against the book ran off the end of its range, so we
+     don’t stake it. The likelihood below is still measured, and this is a
+     read on who hits rather than a card.</div>`;
   // WHICH NUMBER YOU ARE READING. Yardage markets are a spike at zero
   // with a long tail, and a normal over that shape runs hot — the two
   // worst offenders had their calibration DISCARDED as a failed fit, so

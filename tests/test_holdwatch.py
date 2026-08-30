@@ -232,6 +232,16 @@ def test_the_card_says_which_number_it_is_wearing():
     assert "It is measured instead" in body
     assert "assumed at {hold - 1:.0%}" in body
     assert "one_sided_hold(sport, market)" in body
+    # AND THE FALLBACK NAMES BOTH FAILURES. There are three ways to know
+    # the margin — a two-way pair, the game's own scorer board, or a
+    # standing number — so reaching the standing number means BOTH
+    # measurements were unavailable. The copy used to blame the missing
+    # NO side alone, which left a reader thinking a two-sided quote was
+    # all that stood between them and a measured hold.
+    assert "couldn't be measured either" in body
+    # Matched on a contiguous fragment: the sentence wraps across two
+    # source lines, so a phrase spanning the break is never in the text.
+    assert "is still filling in" in body
 
 
 def test_the_build_and_the_chores_carry_the_journal():
