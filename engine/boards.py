@@ -110,3 +110,101 @@ def summary_line(board: dict) -> str:
              else f"recorded to the '{board['journal']}' book at no dollar "
                   f"risk — measured, not staked")
     return f"Picked on {board['selects_on']} · {where}."
+
+
+# ---------------------------------------------------------------------------
+# The shelves a bettor actually shops by.
+#
+# Ethan, 2026-08-30: "i made the site and im getting confused on it... a
+# normal better is going to be looking for bets that are most likely to
+# hit and probably not thinking about the edge a prop has. for someone
+# betting nfl, they wanna find good props and td props, so lets lay it
+# out that way."
+#
+# The likelihood board was one flat list of every market mixed together,
+# sorted by probability. That sorting is correct and the list is not: a
+# person opening an NFL slate is shopping for a KIND of bet — who scores,
+# who catches passes, who runs — and a flat list makes them re-derive
+# those groups by eye on every visit.
+#
+# NOT ORDERED BY AUC, DELIBERATELY, and this is the important part.
+# Receptions rank at 0.770 and touchdowns at 0.721, so sorting the page
+# on measured strength would put receptions first. That gap is nine
+# thousandths of an AUC across five markets, and nothing here has shown
+# it is a real difference rather than sampling noise — presenting it as
+# an ordering would be the same error as reading a non-monotone ROI
+# column as an edge, which this codebase has now made twice.
+#
+# So the shelves are ordered by what someone came to buy, and each one
+# carries its measured ranking figure as INFORMATION rather than as a
+# rank. The numbers still come from `likely.RANK_AUC`; only the sort key
+# is a product decision.
+
+#: `(key, title, markets, what a bettor is doing when they shop it)`.
+FOOTBALL_SHELVES = (
+    ("touchdowns", "Touchdown scorers", ("anytime_td",),
+     "Who finds the end zone. The market most NFL bettors open the app "
+     "for, and the one this model was built on first."),
+    ("receiving", "Catches & receiving yards", ("receptions", "rec_yds"),
+     "Volume receivers and the yardage that follows it — the markets "
+     "that rank strongest of anything we measure."),
+    ("rushing", "Rushing yards", ("rush_yds",),
+     "Backfield workload. Ranks well; the price fit is shut, so these "
+     "are a read rather than a card."),
+    ("passing", "Passing yards", ("pass_yds",),
+     "Quarterback volume. The weakest ranking of the five and labelled "
+     "as such rather than mixed in silently."),
+)
+
+#: Baseball has one market on this board today. It gets a shelf anyway so
+#: the page has one code path, not two.
+BASEBALL_SHELVES = (
+    ("hitting", "Hitters", (), "Tonight's most likely hitter props."),
+)
+
+FOOTBALL = ("nfl", "cfb")
+
+
+def shelves(sport: str, rows=None) -> list[dict]:
+    """The shelves for `sport`, each with the rows that belong on it.
+
+    `rows` is the `most_likely` board. Pass it and each shelf comes back
+    with its rows attached and empty shelves dropped; omit it and this is
+    just the shape, which is what the tests read.
+
+    A market with no shelf lands on a trailing "Other" rather than
+    vanishing. A board that silently drops rows because someone added a
+    market and not a shelf is precisely the failure this file exists to
+    prevent, and it would look like an empty page rather than an error.
+    """
+    spec = (FOOTBALL_SHELVES if (sport or "").lower() in FOOTBALL
+            else BASEBALL_SHELVES)
+    out = []
+    for key, title, markets, blurb in spec:
+        shelf = {"key": key, "title": title, "markets": list(markets),
+                 "blurb": blurb, "rank_auc": _shelf_auc(markets)}
+        if rows is not None:
+            shelf["rows"] = [r for r in rows
+                             if (r.get("market") or "") in markets]
+        out.append(shelf)
+    if rows is not None:
+        claimed = {m for _, _, ms, _ in spec for m in ms}
+        rest = [r for r in rows if (r.get("market") or "") not in claimed]
+        if rest:
+            out.append({"key": "other", "title": "Other markets",
+                        "markets": sorted({r.get("market") or "" for r in rest}),
+                        "blurb": "Markets without a shelf of their own yet.",
+                        "rank_auc": None, "rows": rest})
+        out = [s for s in out if s.get("rows")]
+    return out
+
+
+def _shelf_auc(markets) -> float | None:
+    """The measured ranking figure for a shelf, or None if unmeasured.
+
+    The MINIMUM across the shelf's markets, not the mean: a shelf is only
+    as trustworthy as its weakest row, and a reader scanning the header
+    is deciding whether to trust what is under it.
+    """
+    got = [RANK_AUC[m] for m in markets if m in RANK_AUC]
+    return min(got) if got else None

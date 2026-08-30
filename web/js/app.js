@@ -5132,8 +5132,54 @@ function renderLikely() {
     shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
     row(s) sit in markets we can rank but not price — they carry a note saying
     so.` : ""}</div>`;
-  host.innerHTML = rows.map(likelyCard).join("");
+  /* SHELVES, NOT ONE FLAT LIST. Ethan, 2026-08-30: "for someone betting
+     nfl, they wanna find good props and td props, so lets lay it out that
+     way." Every market used to be interleaved by probability, which is
+     the right sort and the wrong grouping — a person opening a slate is
+     shopping for a KIND of bet and was re-deriving the groups by eye.
+
+     The shelves come from engine/boards.shelves so their order and their
+     measured figures are one definition, not a copy in a template. If
+     the payload predates them the page falls back to the flat list
+     rather than rendering nothing. */
+  const shelves = state.data.board_shelves || [];
+  host.innerHTML = shelves.length
+    ? shelves.map(likelyShelf).join("")
+    : `<div class="cards">${rows.map(likelyCard).join("")}</div>`;
   revealChildren(host);
+}
+
+/* One shelf: what it is, how strongly it ranks, and its rows.
+
+   THE AUC IS PRINTED AND NEVER SORTED ON — see engine/boards.shelves for
+   why: the five markets sit close enough together that nothing has shown
+   the gaps are real, so ordering the page on them would present noise as
+   a ranking. It is shown because a reader deciding whether to trust a
+   shelf deserves the number.
+
+   NO FIGURE IS TYPED HERE. Every number arrives on the shelf from
+   `likely.RANK_AUC`; a copy in this template is a number that rots at
+   the next refit, which tests/test_board_guide.py enforces. */
+function likelyShelf(sh) {
+  const rows = sh.rows || [];
+  if (!rows.length) return "";
+  const auc = sh.rank_auc == null ? "" :
+    `<span class="chip" title="Area under the ROC curve: the chance we rank a
+      player who hits above one who does not. 0.50 is a coin flip.">ranks at
+      ${Number(sh.rank_auc).toFixed(2)}</span>`;
+  const shut = rows.filter((r) => !r.bettable).length;
+  const note = shut && shut === rows.length
+    ? `<span class="mini" style="opacity:.7">read-only — we don’t stake this
+       market</span>` : "";
+  return `<section class="likely-shelf">
+    <div class="shelf-head">
+      <h3 class="shelf-title">${escapeHtml(sh.title)}
+        <span class="mini" style="opacity:.6">${rows.length}</span></h3>
+      <div class="shelf-meta">${auc} ${note}</div>
+    </div>
+    <div class="shelf-sub mini">${escapeHtml(sh.blurb)}</div>
+    <div class="cards">${rows.map(likelyCard).join("")}</div>
+  </section>`;
 }
 
 function renderLongShots() {

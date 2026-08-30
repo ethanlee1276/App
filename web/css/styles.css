@@ -1748,6 +1748,42 @@ main { view-transition-name: page; }
 
 .tile-sub { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
 
+/* Most Likely shelves — one band per KIND of bet.
+
+   The board used to be a single card grid sorted by probability. It is
+   now a stack of shelves, each with its own grid, because a person
+   opening an NFL slate is shopping for touchdowns or catches or rushing
+   and was re-deriving those groups by eye. The heading is sticky so the
+   shelf you are scrolling stays named. */
+.likely-shelf { margin: 0 0 30px; }
+.likely-shelf:last-child { margin-bottom: 8px; }
+.shelf-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 2;
+  padding: 8px 0 6px;
+  /* A flat token, not a gradient: the design system routes every
+     gradient through a token (tests/test_newlook.py), and a solid page
+     background is what a sticky heading needs anyway. */
+  background: var(--bg);
+}
+.shelf-title {
+  font-size: var(--fs-lg); font-weight: 700; margin: 0;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.shelf-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.shelf-sub {
+  color: var(--text-dim); margin: 0 0 12px; max-width: var(--measure);
+}
+/* The shelf's own card grid. `.cards` already supplies the columns; this
+   only removes the gap the section wrapper would otherwise double up. */
+.likely-shelf .cards { margin-top: 0; }
+@media (max-width: 640px) {
+  /* Sticky headings stack badly on a phone once two of them are in view
+     at once, and the shelf titles are short enough to scan without it. */
+  .shelf-head { position: static; background: none; }
+}
+
 /* Long Shots */
 .ls-note { color: var(--text-dim); font-size: var(--fs-md); margin-bottom: 14px; }
 .card.longshot .ls-primary {

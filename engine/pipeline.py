@@ -691,6 +691,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     recommended = [r for r in results if r["recommended"]]
     td_census: dict = {}
     ls, ls_watch = _long_shots(slate, nfl_usage, td_census)
+    # Built once and read twice — the board itself and the shelves it is
+    # laid out on. Calling the builder again for the shelves would let
+    # the two disagree about the same slate, which is the failure
+    # `_likely_board`'s own header warns about one level up.
+    _likely = _likely_board(results, ls, ls_watch)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -724,7 +729,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # good at (0.721 for scorers, 0.69-0.77 for clearing a line).
         # Built from the SAME evaluated rows, so the two pages can never
         # disagree about the same player.
-        "most_likely": _likely_board(results, ls, ls_watch),
+        "most_likely": _likely,
         # WHAT EACH BOARD IS, travelling with the boards themselves.
         # Ethan, 2026-08-30: "we need to be more clear on what bets are
         # what and what bets to use and trust and whats being recorded
@@ -732,6 +737,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # including two AUC figures that are really `likely.RANK_AUC` and
         # would have rotted at the next refit. See engine/boards.
         "board_guide": _boards.guide(),
+        # HOW THE LIKELIHOOD BOARD IS LAID OUT — shelves by the kind of
+        # bet someone came to place, not one flat list of every market
+        # mixed together. See engine/boards.shelves for why they are NOT
+        # ordered by measured AUC.
+        # "nfl", matching `gate_census` above: this pipeline is the
+        # football one (nfl_build, the backtest, generate.py). Baseball
+        # assembles its payload in engine/mlb.
+        "board_shelves": _boards.shelves("nfl", _likely),
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,
