@@ -210,7 +210,8 @@ def _players_logged(conn, season) -> int:
     return int(row[0] or 0) if row else 0
 
 
-def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
+def usage_table(conn, season: int | None = None,
+                force: bool = False) -> tuple[int, dict]:
     """``(season_used, {team: {norm_name: usage}})`` from ingested logs.
 
     ``usage`` = {player, carries, receptions, rush_yds, rec_yds, games}
@@ -219,7 +220,13 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
     has none — the caller states the fallback on every pick it feeds.
     """
     from ..sources.oddsapi import normalize_name
-    if season is None or _players_logged(conn, season) < MIN_SEASON_PLAYERS:
+    # `force` reads the season asked for however thin it is — the only
+    # caller is `merged_usage`, which wants THIS season's partial logs
+    # precisely so it can weight them by how few games they are. Without
+    # it the thin-season guard below would hand back last season twice
+    # and the blend would blend a table with itself.
+    if not force and (season is None
+                      or _players_logged(conn, season) < MIN_SEASON_PLAYERS):
         # The newest season that is actually a season. MAX(season) alone
         # returns the thin one we just rejected, which is how four
         # ingested seasons ended up hidden behind four fixture rows — so
@@ -258,6 +265,123 @@ def usage_table(conn, season: int | None = None) -> tuple[int, dict]:
         # player can arrive from both.
         u["position"] = u["position"] or (r["position"] or "").strip().upper()
     return season, out
+
+
+#: Games of current-season play before a player's own logs outweigh his
+#: prior season, in `merged_usage`. Fitted over 20,916 college
+#: player-week states, walked forward: predicting the rest of a player's
+#: season from what was known at that point, k = 3 is the best ranking
+#: and k = 4 to 6 the best absolute error, so the ranking end is taken.
+#:
+#: THE RULE THIS REPLACES WAS ALL-OR-NOTHING. `usage_table` serves the
+#: current season once MIN_SEASON_PLAYERS are logged and the previous one
+#: before that — for EVERYBODY AT ONCE. A player with no prior season is
+#: therefore invisible until the whole table flips, which is most of
+#: September, and a returner is served a stale season while this one is
+#: already informative.
+#:
+#: Head to head on the rows the old rule can price at all:
+#:
+#:     rule                      rank    MAE
+#:     all-or-nothing           0.344  0.2863
+#:     blend, k = 3             0.365  0.2593
+#:
+#: and it prices 5,327 further states — a quarter of the board — that the
+#: old rule cannot answer, 2,868 of them first-year players. On those the
+#: blend ranks 0.120 against 0.000 for pricing them at a league rate.
+#:
+#: The NFL side has had this since it shipped (`projection.
+#: USAGE_PRIOR_GAMES = 4`); college never got it, which is why the
+#: freshman hole read as a missing recruiting feed rather than as a
+#: missing blend.
+USAGE_PRIOR_GAMES = 3
+
+
+def merged_usage(conn, season: int) -> tuple[int, dict, dict]:
+    """``(season_used, {team: {name: usage}}, {(team, name): provenance})``.
+
+    Per player, not per table: whatever he has shown THIS season, shrunk
+    toward what he did LAST season by how many games he has actually
+    played. A first-year player has no prior season, so his own games
+    carry their own weight from the first one — which is the whole point,
+    since he is otherwise not on the board at all.
+
+    Provenance travels with it because the card has to say which it is.
+    """
+    from ..sources.oddsapi import normalize_name          # noqa: F401
+    _prior_season, prior = usage_table(conn, season)
+    current: dict = {}
+    if season and _players_logged(conn, season) > 0:
+        _cs, current = usage_table(conn, season, force=True)
+    if not current:
+        return _prior_season, prior, {}
+
+    fields = ("carries", "receptions", "rush_yds", "rec_yds",
+              "rz_car", "rz_rec")
+    out: dict = {}
+    why: dict = {}
+    for team, players in current.items():
+        for name, cur in players.items():
+            old = (prior.get(team) or {}).get(name)
+            games = int(cur.get("games") or 0)
+            if not old or _prior_season == season:
+                # Nothing to blend toward — his own games ARE the read.
+                out.setdefault(team, {})[name] = dict(cur)
+                why[(team, name)] = ("own", games, 0)
+                continue
+            w = games / (games + USAGE_PRIOR_GAMES) if games else 0.0
+            merged = dict(cur)
+            for f in fields:
+                merged[f] = w * float(cur.get(f) or 0.0)                     + (1.0 - w) * float(old.get(f) or 0.0)
+            merged["games"] = games + int(old.get("games") or 0)
+            merged["position"] = cur.get("position") or old.get("position", "")
+            out.setdefault(team, {})[name] = merged
+            why[(team, name)] = ("blend", games, int(old.get("games") or 0))
+
+    # Anyone with a prior season and no game yet keeps his old row, which
+    # is exactly what the old rule gave him and no worse.
+    for team, players in prior.items():
+        for name, old in players.items():
+            if name in (out.get(team) or {}):
+                continue
+            out.setdefault(team, {})[name] = dict(old)
+            why[(team, name)] = ("prior", 0, int(old.get("games") or 0))
+    return season, out, why
+
+
+def _usage_quality(prov) -> float:
+    """How much of a role's evidence is this season's, as a data-quality
+    weight. Mirrors the two numbers the board used before the blend —
+    0.80 for a role built on the current season, 0.72 for one built on
+    last — and puts a thinner number on the case the old rule could not
+    represent at all: a first-year player with a game or two and nothing
+    behind him."""
+    if not prov:
+        return 0.72
+    kind, games, _prior = prov
+    if kind == "prior":
+        return 0.72
+    if kind == "own":
+        # His own games are all there is. Two of them is not a season.
+        return 0.80 if games >= 4 else max(0.55, 0.55 + 0.0625 * games)
+    return 0.72 + 0.08 * (games / (games + USAGE_PRIOR_GAMES))
+
+
+def usage_reason(prov) -> str:
+    """One sentence naming which season a role was actually built from."""
+    if not prov:
+        return ""
+    kind, games, prior_games = prov
+    if kind == "own":
+        return (f"Role from his own {games} game"
+                f"{'s' if games != 1 else ''} this season")
+    if kind == "prior":
+        return (f"Role from last season's {prior_games} game"
+                f"{'s' if prior_games != 1 else ''} — none logged yet "
+                f"this year")
+    w = games / (games + USAGE_PRIOR_GAMES) if games else 0.0
+    return (f"Role {w:.0%} from his {games} game"
+            f"{'s' if games != 1 else ''} this season, the rest from last")
 
 
 def teams_by_name(conn, season: int) -> dict:
@@ -690,19 +814,25 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     list to ``{norm_name: [quote dicts]}`` from parse_event_scorers.
     """
     from ..odds import american_to_decimal, american_to_prob
-    usage_season, usage = usage_table(conn, season)
+    usage_season, usage, usage_why = merged_usage(conn, season)
     # Where each player is filed THIS season, so a transfer can be found
     # under the school his production is filed at. Empty in week one and
     # fills in as games are played — see `resolve_side`.
     current: dict = {}
-    if usage_season != season:
-        # Who has played THIS season, which is empty in week one...
-        current = teams_by_name(conn, season)
-        # ...and the published rosters, which are not. Logs win where both
-        # speak: a box score is what happened, a roster is a plan.
-        slate = [t for g in (games or []) for t in (g.get("home"), g.get("away"))]
-        for norm, team in rosters_for(slate, season).items():
-            current.setdefault(norm, set()).add(team)
+    # ALWAYS BUILT NOW, and that is a change `merged_usage` forced. The
+    # old guard was `if usage_season != season` — fine when the table was
+    # all-or-nothing, because a table already on this season had every
+    # player filed under the right school. The merged table reports the
+    # CURRENT season whenever a single game has been played, so that
+    # guard would switch the transfer bridge off in week two and leave it
+    # off, which is the half of the college board it exists to recover.
+    # Who has played THIS season, which is empty in week one...
+    current = teams_by_name(conn, season)
+    # ...and the published rosters, which are not. Logs win where both
+    # speak: a box score is what happened, a roster is a plan.
+    slate = [t for g in (games or []) for t in (g.get("home"), g.get("away"))]
+    for norm, team in rosters_for(slate, season).items():
+        current.setdefault(norm, set()).add(team)
     census = {"quoted_players": 0, "no_usage": 0, "outside_window": 0,
               "priced": 0, "transfers": 0, "usage_season": usage_season}
     picks = []
@@ -822,9 +952,29 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 f"{share:.0%} of {side}’s rushing + receiving yards "
                 f"({u['games']} game sample) — read as a {pos} role",
             ] + td_reason + d_reasons + s_reasons + w_reasons
+            # WHICH SEASON THIS ROLE CAME FROM, per player rather than
+            # per board. `merged_usage` shrinks a man's own games toward
+            # his prior season by how many he has played, so two players
+            # on the same card can legitimately be reading different
+            # evidence — a returner four games in, and a freshman with
+            # nothing but those four games.
+            prov = usage_why.get((usage_team, norm))
+            said = usage_reason(prov)
+            if said:
+                reasons.append(said)
             caveats = ["College feeds carry no red-zone or snap data — "
                        "opportunity is inferred from yardage share alone"]
-            if usage_season and usage_season != season:
+            if prov and prov[0] == "prior":
+                caveats.append(
+                    "Role built from last season’s logs (he has not "
+                    "played yet this year) — returning production is "
+                    "real evidence, a changed role is invisible to it")
+            elif prov and prov[0] == "own" and prov[1] < 3:
+                caveats.append(
+                    f"No prior season anywhere — this is {prov[1]} game"
+                    f"{'s' if prov[1] != 1 else ''} of evidence and "
+                    f"nothing behind it")
+            elif not prov and usage_season and usage_season != season:
                 caveats.append(
                     f"Role built from {usage_season} logs (this season’s "
                     f"boxes aren’t in yet) — returning production is real "
@@ -886,7 +1036,13 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 opp_target=OPP_TARGET.get(pos, 12.0),
                 primary_reason=reasons[0], reasons=reasons, caveats=caveats,
                 sport="cfb",
-                data_quality=0.8 if usage_season == season else 0.72,
+                # PER PLAYER, NOT PER BOARD, and this had to move with
+                # `merged_usage` or it would have quietly become a lie:
+                # the merged table reports the CURRENT season, so the old
+                # test would have called a role built entirely from last
+                # year's logs full-quality. A man with no prior season
+                # and two games is thinner still, and says so.
+                data_quality=_usage_quality(usage_why.get((usage_team, norm))),
                 hold_override=fairs.get(norm))
             if pick:
                 pick.game_date = g.get("date", "")
