@@ -236,9 +236,13 @@ def test_a_line_nowhere_near_the_projection_is_a_different_player():
     far = {(Y._norm("Common Name"), "2023-09-10"):
            {"line": 80.5, "over_odds": -110, "under_odds": -110,
             "book": "DK"}}
-    assert len(Y.matched(rows, near)) == 1
-    assert Y.matched(rows, far) == [], \
+    assert len(Y.matched(rows, near)[0]) == 1
+    got, why = Y.matched(rows, far)
+    assert got == [], \
         "an 80-yard line on a 12-yard projection is somebody else"
+    # And it SAYS so — a join that drops rows silently reads as a thin
+    # market rather than as a strict guard.
+    assert why["line far from projection"] == 1, why
 
 
 def test_a_row_with_no_date_cannot_be_joined_at_all():
@@ -251,7 +255,8 @@ def test_a_row_with_no_date_cannot_be_joined_at_all():
              "period": "001"}]
     closes = {(Y._norm("A Back"), "2023-09-10"):
               {"line": 25.5, "over_odds": -110, "under_odds": -110}}
-    assert Y.matched(rows, closes) == []
+    got, why = Y.matched(rows, closes)
+    assert got == [] and why["no date"] == 1, why
 
 
 def test_the_book_name_is_normalised_the_way_the_rest_of_the_join_is():
@@ -314,15 +319,66 @@ def test_without_a_harvest_it_says_so_rather_than_reporting_zeroes():
     assert any("box that bought them" in x for x in lines), lines
 
 
-def test_the_parameters_are_fitted_off_the_season_being_scored():
-    """Both the zero-rate logistic and the width come from data the fold
-    never sees. Fitting on the scored season is how a mixture that
-    memorised the outcome reports an edge."""
+def test_the_parameters_are_fitted_off_the_weeks_being_scored():
+    """Both the zero-rate logistic and the width come from weeks the
+    scored half never contains. Fitting on the scored weeks is how a
+    mixture that memorised the outcome reports an edge."""
     import inspect
     src = inspect.getsource(Y.report_real)
-    assert "train = [r for r in joined if r[\"season\"] != season]" in src
+    assert "train, test = split_by_week(joined)" in src
     assert "fit_zero(train)" in src
     assert "fit_sigma_on_over(train, beta, lines)" in src
+    assert "fit_zero(test)" not in src and "fit_sigma_on_over(test" not in src
+def test_the_split_is_by_week_because_a_harvest_is_one_season_deep():
+    """THE CORRECTION THIS CODEBASE HAS ALREADY MADE ONCE. `devigfit`
+    split on season first — a season boundary certainly separates games,
+    but a PURCHASED HARVEST COVERS A STRETCH OF ONE SEASON. Run on
+    2026-08-30 against the real closes, leave-one-season-out returned
+    nothing for receiving (1,808 joined rows) and receptions (1,689) and
+    reported both as too thin, when the data was fine and the split was
+    wrong."""
+    rows = [{"season": 2025, "period": f"{w:03d}", "mu": 26.0,
+             "form_sd": 12.0, "zero_rate": 0.1, "actual": 30.0,
+             "line": 25.5, "over_odds": -110, "under_odds": -110}
+            for w in range(1, 18) for _ in range(20)]
+    train, test = Y.split_by_week(rows)
+    assert train and test, "one season must still split"
+    tr_weeks = {r["period"] for r in train}
+    te_weeks = {r["period"] for r in test}
+    assert not (tr_weeks & te_weeks), "a week cannot be in both halves"
+    assert max(tr_weeks) < min(te_weeks), "earlier weeks train, later score"
+
+
+def test_week_ten_sorts_after_week_nine():
+    """'10' before '9' is a silently wrong timeline, and a wrong timeline
+    leaks the future into training."""
+    assert Y._order("009") < Y._order("010")
+    assert Y._order("002") < Y._order("012")
+
+
+def test_a_single_week_cannot_be_split_at_all():
+    rows = [{"season": 2025, "period": "001"} for _ in range(50)]
+    assert Y.split_by_week(rows) == ([], [])
+
+
+def test_a_thin_harvest_says_it_is_a_harvest_problem_not_a_verdict():
+    """The difference between "the mixture lost" and "we have not bought
+    enough closes to ask". Reporting the first when it is the second is
+    how a good change gets dropped."""
+    conn = _db()
+    conn.execute("CREATE TABLE odds_history (sport TEXT, taken_at TEXT, "
+                 "event_id TEXT, home TEXT, away TEXT, player TEXT, "
+                 "market TEXT, book TEXT, line REAL, over_odds INT, "
+                 "under_odds INT)")
+    conn.execute("INSERT INTO odds_history VALUES ('nfl','2023-09-10T00:00:00',"
+                 "'e','KC','DEN','P1','rush_yds','DK',25.5,-110,-110)")
+    conn.commit()
+    try:
+        lines = Y.report_real("rush_yds", conn=conn)
+    finally:
+        conn.close()
+    text = "\n".join(lines)
+    assert "harvest size problem, not a verdict" in text, text
 
 
 if __name__ == "__main__":

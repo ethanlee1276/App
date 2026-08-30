@@ -361,6 +361,50 @@ MAX_LINE_GAP = 4.0
 #: at all, not whether it clears a threshold.
 MIN_EDGE = 0.03
 
+#: Share of the harvested WEEKS that train; the rest score.
+TRAIN_SHARE = 0.7
+
+#: Rows either side of that cut before the comparison means anything.
+MIN_SPLIT = 250
+
+
+def _order(period):
+    """Sort a period that may be a week number or a date, numerically.
+
+    '10' before '9' is a silently wrong timeline, and a wrong timeline
+    means the split leaks the future into training.
+    """
+    try:
+        return (0, int(str(period).lstrip("0") or 0), "")
+    except (TypeError, ValueError):
+        return (1, 0, str(period))
+
+
+def split_by_week(rows) -> tuple[list, list]:
+    """Earlier weeks train, later weeks score.
+
+    BY WEEK, NOT BY SEASON, and that is a correction this codebase has
+    already made once. `engine.devigfit` split on season first, reasoning
+    that a season boundary certainly separates games — it does, but a
+    PURCHASED HARVEST COVERS A STRETCH OF ONE SEASON. Leave-one-season-out
+    over 1,808 joined receiving rows returns nothing at all and reports
+    the data as too thin, when the data is fine and the split is wrong.
+
+    Split by time rather than at random for the usual reason: players in
+    one game share a scoreboard, so a random split leaves the same game
+    in both halves and the more flexible model wins on memory.
+    """
+    keys = sorted({(r["season"], _order(r["period"])) for r in rows})
+    if len(keys) < 2:
+        return [], []
+    cut = max(1, min(len(keys) - 1, round(len(keys) * TRAIN_SHARE)))
+    train_keys = set(keys[:cut])
+    train, test = [], []
+    for r in rows:
+        k = (r["season"], _order(r["period"]))
+        (train if k in train_keys else test).append(r)
+    return train, test
+
 
 def _norm(name: str) -> str:
     """The join key, shared rather than copied.
@@ -404,21 +448,32 @@ def dated(rows, seasons=None) -> int:
     return hit
 
 
-def matched(rows, closes) -> list:
-    """Rows a real close can be joined to, at a line near the projection."""
+def matched(rows, closes) -> tuple[list, dict]:
+    """``(joined rows, why the rest did not)``.
+
+    A join that quietly drops 40% of a purchased harvest and reports the
+    remainder as the answer is how a thin result gets read as a thin
+    market. The counts say which it is.
+    """
     out = []
+    why = {"no date": 0, "no close": 0, "line far from projection": 0}
     for r in rows:
         if not r.get("date"):
+            why["no date"] += 1
             continue
         close = closes.get((_norm(r["player"]), r["date"]))
         if not close or close.get("line") is None:
+            why["no close"] += 1
             continue
         line = float(close["line"])
         # A LINE NOWHERE NEAR THE PROJECTION IS A DIFFERENT PLAYER. Two
         # men share a name every season, and joining them silently is how
-        # a backtest reports an edge it never had.
+        # a backtest reports an edge it never had. Scaled by the square
+        # root of the projection, because four yards means something very
+        # different at 8 than at 80.
         if line <= 0 or abs(line - r["mu"]) > MAX_LINE_GAP * max(
                 1.0, r["mu"] ** 0.5):
+            why["line far from projection"] += 1
             continue
         got = dict(r)
         got["line"] = line
@@ -426,7 +481,7 @@ def matched(rows, closes) -> list:
         got["under_odds"] = close.get("under_odds")
         got["book"] = close.get("book", "")
         out.append(got)
-    return out
+    return out, why
 
 
 def _american_prob(odds) -> float | None:
@@ -472,7 +527,7 @@ def bet_record(rows, prob, min_edge: float = MIN_EDGE) -> dict:
 
 
 def report_real(market: str, conn=None, db_path=None) -> list:
-    """The same three candidates, judged at the prices books really hung."""
+    """The same candidates, judged at the prices books really hung."""
     import sqlite3 as _sq
     close_it = conn is None
     conn = conn or _sq.connect(str(db_path or DEFAULT_DB))
@@ -485,56 +540,45 @@ def report_real(market: str, conn=None, db_path=None) -> list:
             return out + ["  no harvested closing lines for this market — "
                           "this needs the box that bought them"]
         stamped = dated(data, sorted({d["season"] for d in data}))
-        joined = matched(data, closes)
+        joined, why = matched(data, closes)
         out.append(f"  {len(data):,} walked-forward rows, {stamped:,} dated, "
                    f"{len(closes):,} harvested closes, "
                    f"{len(joined):,} joined")
-        if len(joined) < MIN_TRAIN + MIN_TEST:
-            return out + [f"  only {len(joined):,} joined rows — needs "
-                          f"{MIN_TRAIN + MIN_TEST:,} to hold a season out"]
+        out.append("  unjoined: " + ", ".join(
+            f"{k} {v:,}" for k, v in why.items() if v))
 
         lines = MARKETS.get(market, ())
-        seasons = sorted({r["season"] for r in joined})
-        err = defaultdict(float)
-        rec = defaultdict(lambda: {"bets": 0, "wins": 0, "pnl": 0.0})
-        n = 0
-        for season in seasons:
-            train = [r for r in joined if r["season"] != season]
-            test = [r for r in joined if r["season"] == season]
-            if len(train) < MIN_TRAIN or len(test) < MIN_TEST:
-                continue
-            # FITTED ON THE OTHER SEASONS, always. Both parameters come
-            # from data this fold never sees.
-            beta = fit_zero(train)
-            s_over = fit_sigma_on_over(train, beta, lines)
-            cands = {
-                "SHIPPED normal": lambda r, L: shipped_over(r, L, market),
-                "mixture": (lambda r, L, b=beta, sg=s_over:
-                            mixture_over(r, L, b, sg)),
-            }
-            for label, prob in cands.items():
-                # Calibration at the REAL line, one number per row.
-                claimed = sum(prob(r, r["line"]) for r in test) / len(test)
-                actual = sum(1 for r in test if r["actual"] > r["line"]) \
-                    / len(test)
-                err[label] += abs(claimed - actual) * len(test)
-                got = bet_record(test, prob)
-                rec[label]["bets"] += got["bets"]
-                rec[label]["wins"] += got["wins"]
-                rec[label]["pnl"] += got["pnl"]
-            n += len(test)
-        if not n:
-            return out + ["  not enough seasons to hold one out"]
+        train, test = split_by_week(joined)
+        weeks = len({(r["season"], _order(r["period"])) for r in joined})
+        out.append(f"  harvest spans {weeks} week(s) over "
+                   f"{len({r['season'] for r in joined})} season(s) — "
+                   f"split {len(train):,} train / {len(test):,} score")
+        if len(train) < MIN_SPLIT or len(test) < MIN_SPLIT:
+            return out + [
+                f"  too thin to judge: needs {MIN_SPLIT} either side of the "
+                f"cut. This is a harvest size problem, not a verdict — "
+                f"buy more closes for this market and re-run"]
+
+        beta = fit_zero(train)
+        s_over = fit_sigma_on_over(train, beta, lines)
+        cands = {
+            "SHIPPED normal": lambda r, L: shipped_over(r, L, market),
+            "mixture": (lambda r, L, b=beta, sg=s_over:
+                        mixture_over(r, L, b, sg)),
+        }
         out.append(f"  {'model':<18}{'|claimed-real|':>15}{'bets':>7}"
                    f"{'hit':>8}{'ROI':>9}")
-        for label in ("SHIPPED normal", "mixture"):
-            g = rec[label]
-            roi = (g["pnl"] / g["bets"]) if g["bets"] else None
-            hit = (g["wins"] / g["bets"]) if g["bets"] else None
-            out.append(
-                f"  {label:<18}{err[label] / n:>15.4f}{g['bets']:>7}"
-                + (f"{hit:>8.1%}{roi:>9.1%}" if g["bets"] else
-                   f"{'-':>8}{'-':>9}"))
+        actual = sum(1 for r in test if r["actual"] > r["line"]) / len(test)
+        for label, prob in cands.items():
+            claimed = sum(prob(r, r["line"]) for r in test) / len(test)
+            got = bet_record(test, prob)
+            row = f"  {label:<18}{abs(claimed - actual):>15.4f}" \
+                  f"{got['bets']:>7}"
+            row += (f"{got['hit_rate']:>8.1%}{got['roi']:>9.1%}"
+                    if got["bets"] else f"{'-':>8}{'-':>9}")
+            out.append(row)
+        out.append(f"  overs actually landed {actual:.1%} of the time on "
+                   f"the scored weeks")
         out.append("  a better number that never bets differently is a "
                    "nicer model and the same board — the ROI column is "
                    "the one that decides whether to wire this in")
