@@ -935,7 +935,16 @@ def main() -> None:
             # than as narrow.
             from engine.likely import build as _likely
             from engine import boards as _boards
-            out["most_likely"] = _likely([], rows, watch, sport="cfb")
+            # THE CENSUS TRAVELS WITH THE BOARD. College's whole
+            # likelihood board is watch rows, so when it comes up short
+            # the reason is a refusal count and nothing else — and until
+            # `likely.admissible` existed there were no refusals to
+            # count, because the bar was only applied on the prop path
+            # college does not use.
+            _ml_census: dict = {}
+            out["most_likely"] = _likely([], rows, watch, sport="cfb",
+                                         census=_ml_census)
+            out["likely_census"] = _ml_census
             # THE SAME FURNITURE THE NFL BOARD CARRIES, and college had
             # none of it. `boardGuide` and the shelves both read the
             # payload, so a sport that omits them draws a likelihood

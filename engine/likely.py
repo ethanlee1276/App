@@ -147,6 +147,47 @@ def _sane(odds) -> bool:
     return SANE_ODDS[0] <= o <= SANE_ODDS[1] and is_quotable(o)
 
 
+def admissible(row: dict) -> str:
+    """"" if this row belongs on the board, else why it does not.
+
+    ONE BAR, APPLIED TO EVERY ROW, WHATEVER BUILT IT. `build` takes rows
+    from two makers — `from_prop` for the priced prop board and
+    `from_watch` for the touchdown chain — and only the first one
+    enforced anything. `build`'s own comment claimed "one board means one
+    bar" while applying that bar on one of its two paths, which is this
+    codebase's most-repeated bug: a rule announced in prose and enforced
+    in one place.
+
+    IT MATTERED MOST WHERE IT WAS CHECKED LEAST. College football's
+    entire likelihood board is watch rows — `cfb_build` calls
+    `build([], rows, watch)` with no props at all — so every refusal
+    added to this module protected the NFL prop board and left the whole
+    college board ungated. Measured 2026-08-30, all of these published:
+    an 8% row on a board whose floor is 30%, a -97 price no book can
+    post, and a `proxy` quote the model invented.
+
+    THE FLOOR IS ABOUT THE WORD, NOT THE SPORT. MIN_PROB says a
+    probability below it "is not likely by any reading" — that is a claim
+    about what the page is called, so a college board that empties under
+    it is a board honestly reporting it has nothing likely tonight,
+    rather than one relabelling 8% as likely.
+    """
+    prob = row.get("model_prob")
+    if prob is None:
+        return "no probability"
+    if float(prob) < MIN_PROB:
+        return "under the likelihood floor"
+    if (row.get("book") or "").lower() == "proxy":
+        # A fabricated price. `from_prop` catches this as `has_market`;
+        # watch rows carry no such key and the book name is the tell.
+        return "no real market price"
+    if not _sane(row.get("odds")):
+        return "price a book could not have posted"
+    if not _credible(prob, row.get("implied_prob")):
+        return "disagrees with the market by more than we credit"
+    return ""
+
+
 def from_prop(row: dict, bettable, fits=None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
@@ -264,7 +305,7 @@ def from_watch(row: dict) -> dict:
 
 
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
-          limit: int = LIMIT, fits=None) -> list:
+          limit: int = LIMIT, fits=None, census: dict | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
@@ -278,28 +319,44 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
 
     out = []
     seen = set()
+    refused: dict = {}
+
+    def keep(got) -> bool:
+        """The one gate. Every row passes through here or does not ship."""
+        why = admissible(got)
+        if why:
+            refused[why] = refused.get(why, 0) + 1
+            return False
+        return True
+
     for row in (td_picks or []) + (td_watch or []):
         got = from_watch(row)
         key = (got["player"], got["team"], "anytime_td")
-        if got["model_prob"] is None or key in seen:
-            continue
-        # Watch rows arrive pre-shrunk toward the market, so this almost
-        # never fires for them. Applied anyway: "almost never" is not a
-        # guarantee, and one board means one bar.
-        if not _credible(got["model_prob"], got.get("implied_prob")):
+        if key in seen or not keep(got):
             continue
         seen.add(key)
         out.append(got)
     for row in props or []:
         got = from_prop(row, bettable, fits=fits)
+        # `from_prop` already refuses on the same grounds and returns
+        # None; it stays as a cheap pre-filter because the mixture work
+        # below it is not cheap. `keep` is what actually decides.
         if got is None:
             continue
         key = (got["player"], got["team"], got["market"])
-        if key in seen:
+        if key in seen or not keep(got):
             continue
         seen.add(key)
         out.append(got)
     out.sort(key=lambda r: -float(r["model_prob"] or 0.0))
+    # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
+    # for it. An empty college Saturday has several causes and a census
+    # that only reaches stdout is one nobody has the morning they need
+    # it. Filled in place rather than returned, so no existing caller
+    # has to change and no row carries metadata that would follow it
+    # into the journal.
+    if census is not None:
+        census.update(refused)
     return out[:limit]
 
 

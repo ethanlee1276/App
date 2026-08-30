@@ -133,8 +133,14 @@ def test_the_board_and_its_shelves_are_built_from_one_list():
     """Calling the builder twice would let the page and its layout
     disagree about the same slate."""
     src = _src("engine", "pipeline.py")
-    assert src.count("_likely_board(results, ls, ls_watch)") == 1
+    # THE CONTRACT, NOT THE CALL STRING. This matched
+    # `_likely_board(results, ls, ls_watch)` exactly and went red when a
+    # `census=` kwarg was added — a change that leaves the contract
+    # untouched. What matters is that the builder runs ONCE and both
+    # consumers read that one result.
+    assert src.count("_likely_board(") == 2          # the def and one call
     assert '"most_likely": _likely,' in src
+    assert '_boards.shelves("nfl", _likely)' in src
 
 
 def test_the_renderer_draws_shelves():

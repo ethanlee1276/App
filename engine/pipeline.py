@@ -401,11 +401,13 @@ def _long_shots(slate, usage: dict | None = None,
 from . import boards as _boards                          # noqa: E402
 
 
-def _likely_board(results: list, td_picks: list, td_watch: list) -> list:
+def _likely_board(results: list, td_picks: list, td_watch: list,
+                  census: dict | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists."""
     from .likely import build
     try:
-        return build(results, td_picks, td_watch, sport="nfl")
+        return build(results, td_picks, td_watch, sport="nfl",
+                     census=census)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -695,7 +697,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # laid out on. Calling the builder again for the shelves would let
     # the two disagree about the same slate, which is the failure
     # `_likely_board`'s own header warns about one level up.
-    _likely = _likely_board(results, ls, ls_watch)
+    _likely_census: dict = {}
+    _likely = _likely_board(results, ls, ls_watch, census=_likely_census)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -745,6 +748,10 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # football one (nfl_build, the backtest, generate.py). Baseball
         # assembles its payload in engine/mlb.
         "board_shelves": _boards.shelves("nfl", _likely),
+        # WHY THE BOARD IS THE SIZE IT IS. Same reason `td_census` below
+        # exists: a board that comes up short has several causes and a
+        # count that only reaches stdout is one nobody has.
+        "likely_census": _likely_census,
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,

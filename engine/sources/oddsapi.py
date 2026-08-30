@@ -839,10 +839,26 @@ def parse_event_scorers(event_json: dict,
 
 
 def best_scorer_price(quotes: list[dict]) -> dict | None:
-    """Most bettor-friendly quote across books (highest Yes payout)."""
-    if not quotes:
+    """Most bettor-friendly quote across books (highest Yes payout).
+
+    A CORRUPT PRICE IS NOT SHOPPED, and this `max` is exactly the shape
+    that selects for one. American odds cannot fall strictly between -100
+    and +100, and a number inside that gap is by construction better than
+    any real price on its side of even money — so a -97 beats the -105 it
+    is a corruption of, wins the board, and books the smaller implied
+    probability it carries as edge the model never found.
+
+    `engine.odds.best_over_line` was taught this on 2026-08-30 and this
+    function was missed, which left the whole scorer-prop path — every
+    anytime-touchdown quote in BOTH football leagues — shopping
+    unguarded. If nothing survives the filter there is no real market
+    here, and the caller's existing `is None` branch is the right answer.
+    """
+    from ..odds import is_quotable
+    clean = [q for q in (quotes or []) if is_quotable(q.get("yes_odds"))]
+    if not clean:
         return None
-    return max(quotes, key=lambda q: q["yes_odds"])
+    return max(clean, key=lambda q: q["yes_odds"])
 
 
 def _modal_line(points: list[float]):
