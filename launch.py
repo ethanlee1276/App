@@ -570,10 +570,25 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # "refreshed" would be the log telling you a board is current when it
     # is the one from an hour ago, so the build's own last line decides
     # the word.
+    #
+    # THERE ARE TWO SUCH LINES AND THIS CAUGHT ONE. `cfb_build` keeps the
+    # last board only when there IS one; with no previous board it
+    # publishes an empty payload carrying `status: "unreachable"` and
+    # returns, also on exit 0, and its last line is "No previous board to
+    # keep, so an empty one was published with the reason on it." That
+    # missed the `kept` test and printed "refreshed" — the log saying a
+    # board is current when it is empty and the feed is down. Both
+    # branches are the same failure and neither is a refresh.
+    # Matched on the LAST line, because that is all `_run_build` returns.
+    # Both messages print two lines and "schedule unreachable" is on the
+    # first of them, so testing for it here would never fire.
     kept = ok and "Keeping the last board" in tail
+    unreachable = ok and "No previous board to keep" in tail
     if not quiet:
-        word = "kept last board (schedule unreachable)" if kept else \
-            ("refreshed" if ok else "unavailable")
+        word = ("kept last board (schedule unreachable)" if kept else
+                "EMPTY BOARD — schedule unreachable, nothing to keep"
+                if unreachable else
+                ("refreshed" if ok else "unavailable"))
         print(f"  CFB  {_slate_date()}: {word}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok

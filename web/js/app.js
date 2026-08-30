@@ -2001,7 +2001,27 @@ function renderEmptySlate() {
      here Aug 2026 and retired with the preseason block (2026-08-25).
      Its lesson stays taught elsewhere: a reason has to travel to where
      the question gets asked. */
-  el.innerHTML = state.data.status === "not built"
+  el.innerHTML = state.data.status === "unreachable"
+    /* AN EMPTY BOARD THAT KNOWS WHY IT IS EMPTY, and used to say the
+       opposite. `cfb_build` and `nba_build` publish
+       `status: "unreachable"` with the fetch error in `note` when the
+       schedule feed cannot be reached, and it survives the gate intact
+       — so the reason was sitting in the payload while this fell
+       through to "No games on the board right now · Nothing is
+       scheduled". On the opening Saturday of the college season that is
+       not a near-miss, it is the opposite of the truth, and it sends a
+       reader to check back later for games that were always there.
+
+       The comment three lines above this one already says it: a reason
+       has to travel to where the question gets asked. It travelled the
+       whole way and stopped at the last step. */
+    ? `<div class="es-icon">${icon("warn", 30)}</div><div class="es-title">Couldn’t reach the schedule feed</div>
+       <div class="es-sub">This is not an empty slate — the board could not load the
+       fixtures to build from, so nothing could be priced. It retries on every
+       refresh cycle.${state.data.note
+         ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
+         : ""}</div>`
+    : state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">Every sport rebuilds on a refresh cycle — give it a minute
        and hit Refresh.</div>`
