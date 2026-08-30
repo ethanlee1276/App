@@ -178,15 +178,24 @@ def test_the_report_survives_a_box_with_no_ledger_and_says_so():
 
 # --- what a replay has actually said -------------------------------------
 def test_a_market_nothing_has_ever_graded_is_worse_than_unmeasured():
-    """`team_total` publishes picks and no backtest for it exists. That
-    is a different and worse state than "never fitted": an unfitted
-    market announces itself, and this one looks like the three beside it
-    while nothing has ever checked whether it works."""
-    row = R.market_row("nfl", "team_total", None)
-    assert row["backtest"] is None
+    """A market publishing picks with no replay behind it is a different
+    and worse state than "never fitted": an unfitted market announces
+    itself, and this one looks like the ones beside it while nothing has
+    ever checked whether it works.
+
+    `team_total` WAS the example — it reached the live board, the journal
+    and the Record ungraded — and it graduated on 2026-08-30 when
+    `gamebacktest.backtest_team_totals` was written. The state stays
+    tested because the next market to arrive will land in it first."""
+    row = {"game": True, "backtest": None, "shrink": 0.03,
+           "shrink_src": "measured", "fitted": False, "one_sided": False,
+           "reliable": True, "settled": {"n": 0, "open": 4}}
     state, why = R.verdict_for(row)
     assert state == "NO BACKTEST", state
     assert "looks measured" in why
+    # And the market that used to be it no longer is.
+    assert R.BACKTESTED["team_total"], \
+        "team_total has a replay now — see engine.gamebacktest"
 
 
 def test_the_replay_result_reaches_the_verdict_for_markets_that_have_one():

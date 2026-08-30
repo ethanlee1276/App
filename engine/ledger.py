@@ -307,6 +307,82 @@ def bankroll(conn) -> float:
 LONGSHOT_MARKETS = {"home_runs", "anytime_td"}
 
 
+#: Game markets whose cards are priced through `engine.gamebets.temper`,
+#: i.e. every one that answers to a measured market haircut.
+SHRUNK_GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
+
+
+def void_unmeasured_game_bets(conn, sport: str = "nfl",
+                              markets=SHRUNK_GAME_MARKETS,
+                              dry_run: bool = True) -> list:
+    """Void OPEN game bets that were priced before the haircut was measured.
+
+    Ethan, 2026-08-30: "i would say void them, we should only be tracking
+    new nfl bets that created by the new models we are currently working
+    on."
+
+    WHICH ROWS, AND WHY THEY ARE IDENTIFIABLE. `gamebets.temper` shrinks a
+    claim toward the close, and the credibility ceiling refuses any raw
+    disagreement over MAX_CREDIBLE_EDGE first — so the largest edge that
+    can survive is 0.10 x shrink. At every value `engine.gamecal` has
+    actually measured that caps a game edge at 0.003 to 0.009; only the
+    0.5 fallback, in force before anything was measured, reaches 0.05.
+    An open game bet whose edge sits above the measured ceiling therefore
+    could not have been priced by the model that ships.
+
+    `cal_temp` records the haircut on every card written after 2026-08-30,
+    so newer rows say this about themselves. Older ones are identified by
+    the arithmetic instead, which is why this reads the edge rather than
+    trusting a column that did not exist when they were written.
+
+    VOIDED, NOT DELETED. The row stays with status='void', zero P&L and a
+    note saying what happened — a record that loses its own history is
+    worse than one that carries an explained mistake, and the next person
+    to wonder why NFL game bets start in September deserves the answer.
+
+    Returns the rows it touched; `dry_run` leaves them alone.
+    """
+    from .gamebets import MAX_CREDIBLE_EDGE
+    from .gamecal import shrink_for
+    marks = ",".join("?" * len(markets))
+    rows = conn.execute(
+        f"SELECT id, market, ts, edge, stake_units, grade FROM bets "
+        f"WHERE sport=? AND market IN ({marks}) "
+        f"AND status NOT IN ('won','lost','void') ORDER BY ts",
+        (sport, *markets)).fetchall()
+    hit = []
+    for r in rows:
+        # A TEAM TOTAL IS PRICED WITH THE TOTAL'S HAIRCUT.
+        # `gamebets.price_team_total` passes market="total" to `temper`,
+        # so asking gamecal for a "team_total" key returns None and the
+        # row is skipped — which would have left three of the twelve
+        # standing while their nine siblings were voided.
+        key = "total" if r["market"] == "team_total" else r["market"]
+        shrink = shrink_for(sport, key)
+        if shrink is None:
+            # Nothing measured for this market even now: the fallback is
+            # still in force, so its rows are not evidence of a SUPERSEDED
+            # calibration and this is not the tool for them.
+            continue
+        ceiling = MAX_CREDIBLE_EDGE * float(shrink)
+        if float(r["edge"] or 0.0) <= ceiling:
+            continue
+        hit.append({"id": r["id"], "market": r["market"], "ts": r["ts"],
+                    "edge": float(r["edge"] or 0.0), "ceiling": ceiling,
+                    "stake_units": float(r["stake_units"] or 0.0)})
+    if not dry_run and hit:
+        note = ("Voided 2026-08-30: priced on the 0.5 market-haircut guess "
+                "before engine.gamecal measured one. The measured haircut "
+                "caps a game edge far below this row's, so the model that "
+                "ships could not have placed it.")
+        conn.executemany(
+            "UPDATE bets SET status='void', pnl_units=0, pnl_dollars=0, "
+            "why_note=? WHERE id=?",
+            [(note, h["id"]) for h in hit])
+        conn.commit()
+    return hit
+
+
 def journal_skip_reason(r: dict, only_recommended: bool = True) -> str | None:
     """Why this recommendation will NOT be journaled — or None if it will.
 

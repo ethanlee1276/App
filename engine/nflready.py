@@ -62,10 +62,12 @@ GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 #:                 refused for exceeding the credibility ceiling, NOT ONE
 #:                 bet graded above Pass
 #:     spread      off by 4.05 points, 578 refused, NOT ONE bet graded
-#:     team_total  NO BACKTEST EXISTS
+#:     team_total  off the SPLIT line by 2.65 points, 1,078 refused,
+#:                 NOT ONE bet graded — written 2026-08-30, the last of
+#:                 the four to get a replay at all
 #:
-#: The three that can be measured have never produced a gradeable bet in
-#: four seasons. That is the gates working, not failing: the model does
+#: ALL FOUR have now been replayed and none has ever produced a
+#: gradeable bet in four seasons. That is the gates working, not failing: the model does
 #: not beat the closing number and correctly declines to bet it. Dropping
 #: `min_team_games` from 15 to 0 changes nothing, so it is not a
 #: thin-history effect either.
@@ -80,7 +82,8 @@ BACKTESTED = {
     "moneyline": "1,184 games, Brier 0.2336, no bet graded above Pass",
     "spread": "1,184 games, off the close by 4.05 pts, none graded",
     "total": "1,184 games, off the close by 3.18 pts, none graded",
-    "team_total": None,
+    "team_total": ("1,184 games, off the split line by 2.65 pts, "
+                   "none graded"),
 }
 
 #: Settled rows before a record means anything. Below this the ROI is a
@@ -305,8 +308,45 @@ def report(sport: str = "nfl", conn=None) -> list:
             conn.close()
 
 
+def void_stale(sport: str = "nfl", apply: bool = False) -> list:
+    """Report — or with `apply`, void — game bets the model could not place.
+
+    Kept beside the readiness table because it is the same question:
+    a row whose edge sits above what the MEASURED haircut allows was
+    priced by a calibration that no longer exists.
+    """
+    from . import ledger as L
+    conn = L.connect()
+    try:
+        hit = L.void_unmeasured_game_bets(conn, sport, dry_run=not apply)
+    finally:
+        conn.close()
+    out = [f"=== {sport.upper()} game bets priced before the haircut was "
+           f"measured"]
+    if not hit:
+        return out + ["  none — every open game bet is inside what the "
+                      "measured haircut allows"]
+    staked = sum(h["stake_units"] for h in hit)
+    for h in hit:
+        out.append(f"  {h['market']:<11} {str(h['ts'])[:10]}  "
+                   f"edge {h['edge']:.4f} over a {h['ceiling']:.4f} ceiling"
+                   f"  {h['stake_units']:.2f}u")
+    out.append(f"  {len(hit)} row(s), {staked:.2f} units")
+    out.append("  VOIDED — status='void', zero P&L, reason recorded on the row"
+               if apply else
+               "  dry run. Re-run with --void to apply; the rows stay in the "
+               "journal with a reason rather than being deleted")
+    return out
+
+
 def main(argv=None) -> int:
     args = list(argv if argv is not None else sys.argv[1:])
+    if "--void" in args or "--void-dry-run" in args:
+        apply = "--void" in args
+        rest = [a for a in args if not a.startswith("--")]
+        for line in void_stale(rest[0] if rest else "nfl", apply=apply):
+            print(line)
+        return 0
     for line in report(args[0] if args else "nfl"):
         print(line)
     return 0

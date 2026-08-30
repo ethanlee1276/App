@@ -738,6 +738,120 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     return r
 
 
+def _settle_team_total(line: float, side: str, points: float):
+    """``(won, push)`` for one team's own points against its number."""
+    if points == line:
+        return (False, True)
+    over = points > line
+    return ((over if side.lower().startswith("o") else not over), False)
+
+
+def backtest_team_totals(conn, sport: str = "nfl",
+                         min_team_games: int = 15) -> GameLineBacktest:
+    """The market nothing had ever graded.
+
+    `team_total` reached the live board, the journal and the Record with
+    no replay of any kind behind it — worse than unmeasured, because it
+    sat beside three markets that had one and looked identical to them.
+    Found by `engine.nflready`, which reports it as NO BACKTEST.
+
+    ITS LINE IS DERIVED, NOT QUOTED, and that shapes the whole
+    measurement. A book posts a game total and a spread; the board splits
+    them into two team numbers ((total - spread) / 2 and its mirror), and
+    `pipeline._game_bets` does the same arithmetic live. So this replays
+    THAT split rather than looking for a stored team-total close, which
+    does not exist in either feed.
+
+    The price is the game total's, which is what the live path uses too
+    — `price_team_total` takes over/under odds and the board hands it the
+    total's pair. Honest about what that means: a real team-total market
+    is priced separately and usually wider, so an ROI here is measured
+    against a price the book quotes for a DIFFERENT bet. That makes this
+    a floor on the model's accuracy and NOT a claim about beatable
+    prices, and the summary says so rather than leaving it to be assumed.
+    """
+    from .gamebets import price_team_total, project_team_points, _sd
+    from .gamebets import SCORING_BASELINE
+    baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
+
+    totals = dict(schedule_closes(conn, sport, "total", require_prices=False))
+    totals.update(game_line_closes(conn, sport, "total"))
+    spreads = dict(schedule_closes(conn, sport, "spread", require_prices=False))
+    spreads.update(game_line_closes(conn, sport, "spread"))
+
+    rows = conn.execute(
+        "SELECT period, home, away, home_score, away_score FROM games "
+        "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
+        "ORDER BY period", (sport,)).fetchall()
+
+    r = GameLineBacktest(sport=sport, market="team_total",
+                         source="schedule closes · line SPLIT from the "
+                                "game total and spread, priced at the "
+                                "total's odds")
+    agg: dict[str, tuple[float, float, int]] = {}
+
+    for row in rows:
+        date, home, away = row["period"], row["home"], row["away"]
+        hs, as_ = float(row["home_score"]), float(row["away_score"])
+        r.games_seen += 1
+        tq = totals.get((date, home, away))
+        sq = spreads.get((date, home, away))
+        enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
+                  and agg.get(away, (0, 0, 0))[2] >= min_team_games)
+
+        if tq and sq and enough:
+            h_off, h_def = _split(agg, home, baseline)
+            a_off, a_def = _split(agg, away, baseline)
+            total_line, odds_a, odds_b = tq
+            spread_line = sq[0]
+            r.games_quoted += 1
+            # The same split the board makes, on the same numbers.
+            h_line = (total_line - spread_line) / 2.0
+            a_line = (total_line + spread_line) / 2.0
+            h_proj = project_team_points(sport, h_off, a_def)
+            a_proj = project_team_points(sport, a_off, h_def)
+            r._abs_err += (abs(h_proj - h_line) + abs(a_proj - a_line)) / 2.0
+
+            if odds_a is None or odds_b is None:
+                r.unpriced += 1
+            else:
+                for team, proj, line, pts in ((home, h_proj, h_line, hs),
+                                              (away, a_proj, a_line, as_)):
+                    card = price_team_total(sport, team, home, away, proj,
+                                            line, odds_a, odds_b)
+                    if not card["credible"]:
+                        r.refused += 1
+                    if card["grade"] == "Pass":
+                        continue
+                    won, push = _settle_team_total(line, card["side"], pts)
+                    stake = (card["stake_units"]
+                             if card["stake_units"] > 0 else 1.0)
+                    gain = (0.0 if push else
+                            ((american_to_decimal(card["odds"]) - 1.0) * stake
+                             if won else -stake))
+                    r.n_bets += 1
+                    r.wins += 1 if won else 0
+                    r.pushes += 1 if push else 0
+                    r.staked += 0.0 if push else stake
+                    r.net += gain
+                    b = r.grades.setdefault(card["grade"],
+                                            {"n_bets": 0, "wins": 0,
+                                             "staked": 0.0, "net": 0.0})
+                    b["n_bets"] += 1
+                    b["wins"] += 1 if won else 0
+                    b["staked"] += 0.0 if push else stake
+                    b["net"] += gain
+
+        pf, pa, n = agg.get(home, (0.0, 0.0, 0))
+        agg[home] = (pf + hs, pa + as_, n + 1)
+        pf, pa, n = agg.get(away, (0.0, 0.0, 0))
+        agg[away] = (pf + as_, pa + hs, n + 1)
+
+    if r.games_quoted:
+        r.mae = r._abs_err / r.games_quoted
+    return r
+
+
 def _split(agg: dict, team: str, baseline: float) -> tuple[float, float]:
     """(offense, defense) ratings vs league baseline — the same shrunk form
     engine.teamrates computes, so the replay prices what the live board
