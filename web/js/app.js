@@ -8467,6 +8467,93 @@ function parlaySplitHTML(pz, q) {
     ${body}</div>`;
 }
 
+/* The Most Likely paper record.
+
+   Ethan, 2026-08-30: "we should also record the bets on the most likley
+   page and if it does good then we will attack money and roi and shit to
+   it. maybe we do papr bets with it."
+
+   The paper bets already existed — `ledger.log_most_likely` journals the
+   top of the board nightly at zero dollar exposure and it grades on the
+   same settle pass as everything else. What did not exist was anywhere
+   to READ it, which made the bucket write-only and "if it does good"
+   unanswerable.
+
+   TWO TESTS, SHOWN APART, because the board can pass one and fail the
+   other and the difference is the whole decision:
+
+     is the number true   we said 68%, did 68% land? The claim the page
+                          actually makes.
+     would it have paid   ROI at the price shown. A perfectly calibrated
+                          board still loses to the vig — the 22k-row
+                          replay said -5% to -7.4% at every depth — so
+                          the first test passing is not the second.
+
+   Money is gated on the second. The verdict string refuses to say
+   anything at all below `LIKELY_VERDICT_N` settled rows, and this
+   renders that refusal as the headline rather than burying it under a
+   number that looks like a result. */
+function recLikelySection(lk) {
+  if (!lk || (!lk.settled && !lk.open)) return "";
+  const cal = lk.calibration || {};
+  const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+  const bands = (lk.bands || []).map((b) => `
+    <div class="rl-row ${b.actual >= b.claimed ? "won" : "lost"}">
+      <span class="rl-date">${(b.lo * 100).toFixed(0)}–${(b.hi * 100).toFixed(0)}%</span>
+      <span class="rl-main">said ${pct(b.claimed)} · hit <strong>${pct(b.actual)}</strong></span>
+      <span class="rl-proc">${b.n} settled</span>
+      <span class="rl-pnl ${toneOf(b.roi)}">${b.roi >= 0 ? "+" : ""}${(b.roi * 100).toFixed(1)}%</span>
+    </div>`).join("");
+  const markets = Object.entries(lk.by_market || {}).map(([m, d]) => `
+    <div class="rl-row ${d.actual >= d.claimed ? "won" : "lost"}">
+      <span class="rl-date">${escapeHtml(m)}</span>
+      <span class="rl-main">said ${pct(d.claimed)} · hit <strong>${pct(d.actual)}</strong></span>
+      <span class="rl-proc">${d.w}/${d.n}</span>
+      <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>
+    </div>`).join("");
+  return `
+    <div class="section-title">Most Likely — the paper record
+      <span class="sub">— journaled nightly at no risk, graded like every other bet</span></div>
+    ${recDisclosure("What this is and what it is not", `The board claims to
+      rank who actually hits, and until it has a settled record that claim rests
+      on a backtest. So the top of it is written down every night at a nominal
+      stake with ZERO dollars behind it, and graded on the same pass as
+      everything else. Nothing here touches the headline record and nothing here
+      is a position. Two separate questions are being asked: whether the
+      probability we printed was true, and whether betting it at the price shown
+      would have made money. A board can be perfectly calibrated and still lose
+      to the vig — that is the expected outcome, not a contradiction — so real
+      money stays off until the ROI column, not the hit column, has earned it.`)}
+    <div class="card" style="padding:12px 14px;margin-bottom:12px">
+      <b>${escapeHtml(lk.verdict || "")}</b></div>
+    <div class="stats rec-kpis">
+      ${recTile("Claimed vs actual",
+                cal.n ? `${pct(cal.claimed)} → ${pct(cal.actual)}` : "—",
+                cal.n ? (cal.real ? "a real gap — outside the noise band"
+                                  : "inside the noise band")
+                      : "nothing settled yet",
+                { lead: true, tone: cal.n && cal.real && cal.gap < 0 ? "bad" : "" })}
+      ${recTile("Paper ROI",
+                lk.settled ? (lk.roi >= 0 ? "+" : "") + (lk.roi * 100).toFixed(1) + "%" : "—",
+                "at the price shown · no money staked",
+                { tone: toneOf(lk.roi) })}
+      ${recTile("Settled", `${lk.wins}-${lk.losses}`,
+                `${lk.open} open · ${lk.needed} needed for a verdict`)}
+      ${recTile("Sample", `${cal.n || 0}`,
+                lk.enough ? "enough to judge" :
+                  `${Math.max(0, lk.needed - (cal.n || 0))} more to go`,
+                { tone: lk.enough ? "good" : "" })}
+    </div>
+    ${bands ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">By claimed
+      probability — an average hides the shape, and the top of the board is what
+      a reader actually bets.</div>
+      <div class="card" style="padding:0;margin-top:6px">${bands}</div>` : ""}
+    ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">By market —
+      these are the shelves on the board. If one holds up and another does not,
+      that is a shelf-level decision.</div>
+      <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}`;
+}
+
 function recLongshotSection(ls) {
   // Show whenever EITHER bucket has data — after the watchlist split the
   // picks record can be tiny while the calibration sample is huge.
@@ -10709,7 +10796,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
-     (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
+     (scoped ? "" : recLikelySection(d.likely))
+     + (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
      + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))

@@ -3373,6 +3373,61 @@ def show_desk_probe() -> None:
             "events", nested=True)
 
 
+def show_likely() -> None:
+    """The Most Likely paper record, on the box that holds the ledger.
+
+    Ethan, 2026-08-30: "if it does good then we will attack money and roi
+    and shit to it." This is where "does good" gets read. Two columns,
+    kept apart on purpose: whether the probability we printed was TRUE,
+    and whether betting it at the price shown would have PAID. A
+    calibrated board still loses to the vig, so the first does not imply
+    the second, and money is gated on the second.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        p = ledger.likely_report(conn)
+    finally:
+        conn.close()
+    cal = p.get("calibration") or {}
+    n = cal.get("n") or 0
+    print("\nMOST LIKELY — the paper record (zero dollars at risk)\n")
+    print(f"  {p['verdict']}\n")
+    print(f"  settled {p['wins']}-{p['losses']}   open {p['open']}"
+          f"   paper ROI {p.get('roi', 0):+.2%}"
+          f"   {p.get('net_units', 0):+.2f}u")
+    if n:
+        band = cal.get("noise_band")
+        print(f"  claimed {cal['claimed']:.1%}   actual {cal['actual']:.1%}"
+              f"   gap {cal['gap']:+.1%}"
+              + (f"   (noise band +/-{band:.1%}, "
+                 f"{'REAL' if cal.get('real') else 'inside'})" if band else ""))
+    if p.get("bands"):
+        print("\n  by claimed probability")
+        print("    band        n    said     hit      roi")
+        for b in p["bands"]:
+            print(f"    {b['lo']:.0%}-{b['hi']:.0%}  {b['n']:5d}  "
+                  f"{b['claimed']:6.1%}  {b['actual']:6.1%}  {b['roi']:+7.2%}")
+    if p.get("by_market"):
+        print("\n  by market (the board's shelves)")
+        print("    market            n    said     hit      roi")
+        for m, d in sorted(p["by_market"].items()):
+            print(f"    {m:<15} {d['n']:5d}  {d['claimed']:6.1%}  "
+                  f"{d['actual']:6.1%}  {d['roi']:+7.2%}")
+    # SAID LAST, because it is the sentence that decides what happens
+    # next and a reader who stops early should still have hit it.
+    if not p.get("enough"):
+        print(f"\n  Not enough to act on: {n} of {p['needed']}. Below that a "
+              f"ten-point\n  miss and a run of luck are the same picture.")
+    elif (p.get("roi") or 0) <= 0:
+        print("\n  Calibration is one test and money is the other. The paper "
+              "ROI is not\n  positive, so nothing moves off paper yet.")
+    else:
+        print("\n  Both tests passed at this sample. Sizing this for real "
+              "money is now a\n  decision rather than a guess.")
+    print()
+
+
 def show_gates() -> None:
     """What the filters cost or saved — measured, not argued.
 
@@ -7182,6 +7237,9 @@ def main() -> None:
         return
     if "--gates" in argv:
         show_gates()
+        return
+    if "--likely" in argv:
+        show_likely()
         return
     if "--desk-probe" in argv:
         show_desk_probe()

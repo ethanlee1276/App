@@ -4479,6 +4479,167 @@ def longshot_report(conn, since: str | None = None) -> dict:
     return p
 
 
+#: Settled rows before this report will offer a verdict at all.
+#:
+#: DERIVED, NOT PICKED. The question is whether a claimed hit rate is
+#: true, and the standard error on a rate is sqrt(p(1-p)/n), worst at
+#: p=0.5. To resolve a ten-point calibration gap at two standard errors:
+#: n = (2 * 0.5 / 0.10)^2 = 100. Below that the report says so and
+#: refuses the verdict, because the alternative is what this codebase has
+#: now done three times — reading the first dozen settled rows as a
+#: finding and building on it.
+LIKELY_VERDICT_N = 100
+
+#: The bands the claimed probability is checked in. Wider than the
+#: betting bands on purpose: this board runs from MIN_PROB (0.30) up, and
+#: a band needs rows in it more than it needs to be narrow.
+LIKELY_BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
+
+
+def likely_report(conn, since: str | None = None) -> dict:
+    """The Most Likely scoreboard — the paper record, read back.
+
+    Ethan, 2026-08-30: "we should also record the bets on the most likley
+    page and if it does good then we will attack money and roi and shit
+    to it."
+
+    The recording half shipped in `log_most_likely`. This is the other
+    half, and without it the bucket was write-only: rows journaled every
+    night, graded on the same settle pass as everything else, and read by
+    nothing. A measurement nobody can read is not a measurement.
+
+    TWO DIFFERENT TESTS, REPORTED SEPARATELY, because a board can pass
+    one and fail the other and the difference decides what to do next:
+
+      * IS THE NUMBER TRUE — we said 68%, did 68% of them land? This is
+        the claim the page actually makes, and the only one the model was
+        built to make. `calibration`.
+      * WOULD IT HAVE MADE MONEY at the price shown? `roi`. A perfectly
+        calibrated board still loses to the vig, which is exactly what
+        the 22k-row replay said it would (-5% to -7.4% claimed at every
+        depth), so passing the first test is not passing this one.
+
+    Attaching money is gated on the SECOND, and the verdict says which
+    test the numbers currently answer.
+    """
+    win = " AND date >= ?" if since else ""
+    wargs: tuple = (since,) if since else ()
+    p = performance(conn, category="likely", since=since)
+    graded = ("AND status IN ('won','lost') AND category='likely'")
+
+    row = conn.execute(
+        "SELECT COUNT(*) n, AVG(hit_prob) claimed, "
+        "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual "
+        "FROM bets WHERE 1=1 " + graded + win, wargs).fetchone()
+    n = row["n"] or 0
+    claimed = row["claimed"]
+    actual = row["actual"]
+    cal = {"n": n,
+           "claimed": round(claimed, 4) if claimed is not None else None,
+           "actual": round(actual, 4) if actual is not None else None,
+           "gap": (round(actual - claimed, 4)
+                   if None not in (claimed, actual) else None)}
+    # HOW BIG THE GAP HAS TO BE BEFORE IT MEANS ANYTHING, carried beside
+    # it rather than left to the reader. Two standard errors on the
+    # observed rate; a gap inside this band is not evidence of anything.
+    cal["noise_band"] = (round(2.0 * ((actual * (1 - actual) / n) ** 0.5), 4)
+                         if n and actual is not None else None)
+    cal["real"] = bool(cal["gap"] is not None and cal["noise_band"] is not None
+                       and abs(cal["gap"]) > cal["noise_band"])
+    p["calibration"] = cal
+
+    # Per band, because an average hides the shape. A board that is right
+    # at 40% and wrong at 75% has an average that looks fine and a top
+    # that cannot be trusted — and the top is what a reader bets.
+    p["bands"] = []
+    for lo, hi in LIKELY_BANDS:
+        r = conn.execute(
+            "SELECT COUNT(*) n, AVG(hit_prob) claimed, "
+            "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+            "FROM bets WHERE hit_prob >= ? AND hit_prob < ? " + graded + win,
+            (lo, hi) + wargs).fetchone()
+        if not r["n"]:
+            continue
+        p["bands"].append({
+            "lo": lo, "hi": hi, "n": r["n"],
+            "claimed": round(r["claimed"], 4),
+            "actual": round(r["actual"], 4),
+            "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0})
+
+    # Per market, which is what the page's shelves are. If touchdowns
+    # hold up and passing does not, that is a shelf-level decision and
+    # an average across all five would never show it.
+    p["by_market"] = {}
+    for r in conn.execute(
+            "SELECT market, COUNT(*) n, SUM(status='won') w, "
+            "AVG(hit_prob) claimed, "
+            "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+            "FROM bets WHERE 1=1 " + graded + win + " GROUP BY market", wargs):
+        p["by_market"][r["market"]] = {
+            "n": r["n"], "w": r["w"],
+            "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
+            "actual": round(r["actual"], 4) if r["actual"] is not None else None,
+            "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
+
+    p["by_sport"] = {}
+    for r in conn.execute(
+            "SELECT sport, COUNT(*) n, SUM(status='won') w, "
+            "COALESCE(SUM(pnl_units),0) u FROM bets WHERE 1=1 "
+            + graded + win + " GROUP BY sport", wargs):
+        p["by_sport"][r["sport"]] = {"n": r["n"], "w": r["w"],
+                                     "net_u": round(r["u"], 2)}
+
+    p["open"] = conn.execute(
+        "SELECT COUNT(*) FROM bets WHERE category='likely' "
+        "AND status='open'").fetchone()[0]
+    p["recent"] = recent_settled(conn, limit=15, category="likely",
+                                 since=since)
+    p["needed"] = LIKELY_VERDICT_N
+    p["enough"] = n >= LIKELY_VERDICT_N
+    p["verdict"] = _likely_verdict(p)
+    return p
+
+
+def _likely_verdict(p: dict) -> str:
+    """One sentence a person can act on, or a refusal to give one.
+
+    THE REFUSAL IS THE POINT. Every wrong turn in this bucket's history
+    has been a small sample read as a result — a 493-row replay whose
+    actual column flipped sign five times, a calibration curve chosen on
+    a z of -0.38. With fewer than `LIKELY_VERDICT_N` settled rows the
+    honest output is the row count, not a verdict dressed up with a
+    hedge, because a hedged verdict still gets acted on.
+    """
+    cal, n = p.get("calibration") or {}, (p.get("calibration") or {}).get("n", 0)
+    if not n:
+        return ("Nothing has settled yet. The board is journaled every "
+                "night at no risk and grades itself on the same pass as "
+                "every other bet.")
+    if not p.get("enough"):
+        return (f"{n} settled, {p['needed']} needed before this can say "
+                f"anything. At this sample a ten-point miss and a run of "
+                f"luck look identical, so no verdict is offered.")
+    roi = p.get("roi")
+    honest = (f"Claimed {cal['claimed']:.0%}, hit {cal['actual']:.0%} "
+              f"over {n} settled")
+    if not cal.get("real"):
+        honest += " — inside the noise band, so the number is holding up"
+    elif cal["gap"] > 0:
+        honest += " — landing MORE than we claim, so the model is under-confident"
+    else:
+        honest += " — landing LESS than we claim, and that is a real miss"
+    # THE SECOND TEST, NEVER FOLDED INTO THE FIRST. A calibrated board
+    # that loses to the vig is the expected outcome, not a contradiction,
+    # and money is gated on this half.
+    if roi is not None:
+        honest += (f". At the prices shown it would have returned "
+                   f"{roi:+.1%} — money stays off until that is positive "
+                   f"over a sample this size.")
+    return honest
+
+
 def open_by_day(conn, today: str) -> list[dict]:
     """Open picks grouped by slate date, newest first.
 
@@ -4985,6 +5146,13 @@ def export_json(conn, path) -> None:
         "recent": recent_settled(conn, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),
+        # THE PAPER BOOK, READ BACK. `log_most_likely` has journaled this
+        # bucket every night since it shipped and nothing ever read it —
+        # a write-only measurement, which is the same as no measurement.
+        # Ethan, 2026-08-30: "if it does good then we will attack money
+        # and roi and shit to it." This is what "does good" is checked
+        # against.
+        "likely": likely_report(conn, since=since),
         "stale_flags": stale_report(conn, since=since),
         "form_sampler": form_report(conn, since=since),
         "loose_sampler": loose_report(conn, since=since),
