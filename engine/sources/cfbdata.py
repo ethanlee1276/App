@@ -495,6 +495,56 @@ def fetch_scoreboard(date: str, ttl: int = 300) -> dict:
                       user_agent=DEFAULT_AGENT)
 
 
+ROSTER = BASE + "/teams/{team_id}/roster"
+
+
+def parse_team_roster(payload: dict) -> dict:
+    """``{normalised name: position}`` for one team, this season.
+
+    THE WEEK-ONE HALF OF THE TRANSFER PROBLEM. Usage is filed under the
+    school a player produced for, so a summer transfer is invisible to a
+    board that looks him up under the two teams in front of it. From week
+    two his own box scores place him; in week one nobody has played, and
+    this is the only published source that says where he is now.
+
+    Keyed on the ESPN team id, which is what `games` already stores — so
+    the join is exact rather than a school-name match.
+
+    Athletes arrive grouped ("offense", "defense", "specialTeam") with
+    the real position on each item. The group label is kept as a fallback
+    because a payload that changes shape should cost a coarser position,
+    not an empty roster.
+    """
+    from .oddsapi import normalize_name
+    out: dict = {}
+    for group in (payload or {}).get("athletes") or []:
+        if not isinstance(group, dict):
+            continue
+        fallback = str(group.get("position") or "").upper()
+        for a in group.get("items") or []:
+            if not isinstance(a, dict):
+                continue
+            name = (a.get("fullName") or a.get("displayName") or
+                    " ".join(x for x in (a.get("firstName"),
+                                         a.get("lastName")) if x))
+            if not str(name).strip():
+                continue
+            pos = a.get("position")
+            if isinstance(pos, dict):
+                pos = pos.get("abbreviation") or pos.get("name") or ""
+            out[normalize_name(str(name))] = str(pos or fallback).upper()
+    return out
+
+
+def fetch_team_roster(team_id: str, ttl: int = 24 * 3600) -> dict:
+    """One team's current roster. A day's cache: rosters move slowly and
+    a Saturday slate would otherwise re-ask for the same twenty teams."""
+    ident = str(team_id).split(":")[-1]
+    return fetch_json(ROSTER.format(team_id=ident),
+                      f"espn_cfb_roster_{ident}.json", ttl=ttl,
+                      user_agent=DEFAULT_AGENT)
+
+
 def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:
     url = f"{TEAMS}?limit=900&groups={FBS_GROUP}"
     return fetch_json(url, "espn_cfb_teams.json", ttl=ttl,

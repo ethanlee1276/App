@@ -719,6 +719,75 @@ def test_the_current_season_map_is_built_from_who_has_actually_played():
     assert T.teams_by_name(conn, 2099) == {}
 
 
+def test_a_published_roster_places_a_transfer_in_week_one():
+    """The week this matters most is the week the logs are empty. ESPN
+    publishes the current roster keyed by the same team id `games`
+    stores, so a transfer can be placed before he has played a snap."""
+    from engine.sources.cfbdata import parse_team_roster
+    payload = {"season": {"year": 2026}, "athletes": [
+        {"position": "offense", "items": [
+            {"id": "1", "fullName": "Moved Guy",
+             "position": {"abbreviation": "RB"}}]}]}
+    roster = parse_team_roster(payload)
+    assert roster == {"moved guy": "RB"}
+    usage = {"GT": {"moved guy": {"carries": 12.0}}}
+    # With the roster placing him at UGA, the side resolves and the usage
+    # still comes from GT.
+    assert T.resolve_side("moved guy", "UGA", "CLEM", usage,
+                          {"moved guy": {"UGA"}}) == ("UGA", "GT")
+
+
+def test_a_roster_parser_survives_a_payload_that_changed_shape():
+    """A feed that reshapes should cost a coarser position, not an empty
+    roster and a silently smaller board."""
+    from engine.sources.cfbdata import parse_team_roster
+    assert parse_team_roster({}) == {}
+    assert parse_team_roster(None) == {}
+    assert parse_team_roster({"athletes": [{"items": [None, "x", {},
+                                                      {"fullName": "  "}]}]}) == {}
+    # No per-athlete position: the group label is kept rather than blank.
+    got = parse_team_roster({"athletes": [
+        {"position": "offense", "items": [{"fullName": "Some One"}]}]})
+    assert got == {"some one": "OFFENSE"}
+
+
+def test_a_name_on_two_rosters_is_placed_on_neither():
+    """Two players sharing a name across the slate cannot be told apart,
+    and guessing puts one of them on the wrong side of a spread."""
+    import engine.cfb.tds as mod
+    real = mod.__dict__.get("rosters_for")
+    from engine.sources import cfbdata
+    saved = cfbdata.fetch_team_roster
+    rosters = {"espn:1": {"athletes": [{"items": [
+                   {"fullName": "Same Name", "position": {"abbreviation": "RB"}},
+                   {"fullName": "Only Here", "position": {"abbreviation": "WR"}}]}]},
+               "espn:2": {"athletes": [{"items": [
+                   {"fullName": "Same Name", "position": {"abbreviation": "TE"}}]}]}}
+    try:
+        cfbdata.fetch_team_roster = lambda t, **k: rosters[t]
+        got = mod.rosters_for(["espn:1", "espn:2"], 2026)
+    finally:
+        cfbdata.fetch_team_roster = saved
+    assert got == {"only here": "espn:1"}
+    assert "same name" not in got
+
+
+def test_a_roster_that_will_not_load_never_blocks_the_board():
+    """Those players fall back to being dropped, which is exactly what
+    happened before any of this existed."""
+    import engine.cfb.tds as mod
+    from engine.sources import cfbdata
+    saved = cfbdata.fetch_team_roster
+
+    def boom(team, **kw):
+        raise RuntimeError("feed down")
+    try:
+        cfbdata.fetch_team_roster = boom
+        assert mod.rosters_for(["espn:1", "espn:2"], 2026) == {}
+    finally:
+        cfbdata.fetch_team_roster = saved
+
+
 def test_a_transfers_share_is_read_against_his_OLD_team():
     """His share is a statement about the season the numbers came from.
     Dividing last year's touches by this year's roster would compare two

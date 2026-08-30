@@ -293,6 +293,33 @@ def teams_by_name(conn, season: int) -> dict:
     return out
 
 
+def rosters_for(teams, season: int) -> dict:
+    """``{normalised name: team}`` for the teams on this slate, this season.
+
+    WEEK ONE IS THE ONLY WEEK THIS MATTERS and it is the week it matters
+    most. `teams_by_name` reads the current season's own logs, which are
+    empty until somebody plays — so in week one a transfer cannot be
+    placed at all and is dropped. ESPN publishes the current roster keyed
+    by the same team id `games` already stores, so the join is exact.
+
+    Never raises and never blocks a board: a team whose roster will not
+    load is simply absent, and those players fall back to being dropped,
+    which is what happened before this existed.
+    """
+    from ..sources.cfbdata import fetch_team_roster, parse_team_roster
+    out: dict = {}
+    for team in dict.fromkeys(t for t in teams if t):
+        try:
+            got = parse_team_roster(fetch_team_roster(team))
+        except Exception:                                     # noqa: BLE001
+            continue
+        for norm in got:
+            # A name on two rosters is a name we cannot place, so it goes
+            # on neither rather than on whichever loaded first.
+            out[norm] = "" if norm in out and out[norm] != team else team
+    return {k: v for k, v in out.items() if v}
+
+
 def resolve_side(norm: str, home: str, away: str, usage: dict,
                  current: dict | None = None) -> tuple[str, str]:
     """``(side he plays for, team his usage is filed under)``, or ``("","")``.
@@ -607,7 +634,15 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     # Where each player is filed THIS season, so a transfer can be found
     # under the school his production is filed at. Empty in week one and
     # fills in as games are played — see `resolve_side`.
-    current = teams_by_name(conn, season) if usage_season != season else {}
+    current: dict = {}
+    if usage_season != season:
+        # Who has played THIS season, which is empty in week one...
+        current = teams_by_name(conn, season)
+        # ...and the published rosters, which are not. Logs win where both
+        # speak: a box score is what happened, a roster is a plan.
+        slate = [t for g in (games or []) for t in (g.get("home"), g.get("away"))]
+        for norm, team in rosters_for(slate, season).items():
+            current.setdefault(norm, set()).add(team)
     census = {"quoted_players": 0, "no_usage": 0, "outside_window": 0,
               "priced": 0, "transfers": 0, "usage_season": usage_season}
     picks = []
