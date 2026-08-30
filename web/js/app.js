@@ -4981,6 +4981,16 @@ function likelyCard(r) {
     `<div class="warning">${icon("warn")} We can rank this market but not
      price it — its calibration is shut for betting, so treat this as a
      read on who hits, not as a card.</div>`;
+  // WHICH NUMBER YOU ARE READING. Yardage markets are a spike at zero
+  // with a long tail, and a normal over that shape runs hot — the two
+  // worst offenders had their calibration DISCARDED as a failed fit, so
+  // this page was quoting them uncorrected. The mixture is fitted on the
+  // shape the outcomes actually have and halves the gap between what we
+  // claim and what lands.
+  const cal = r.prob_source !== "mixture" ? "" :
+    `<div class="mini" style="opacity:.6;margin-top:4px">
+       Calibrated for this market’s shape — the model’s raw read was
+       ${(Number(r.raw_prob || 0) * 100).toFixed(0)}%.</div>`;
   const label = r.line == null ? escapeHtml(r.market_label)
     : `${escapeHtml(r.side || "over")} ${r.line} ${escapeHtml(r.market_label)}`;
   return `<article class="card longshot">
@@ -5010,7 +5020,7 @@ function likelyCard(r) {
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
-    ${bet}${evTxt}
+    ${bet}${cal}${evTxt}
   </article>`;
 }
 

@@ -575,6 +575,57 @@ def bet_record(rows, prob, min_edge: float = MIN_EDGE) -> dict:
             "hit_rate": (wins / bets) if bets else None}
 
 
+def ranked_record(rows, prob, by: str = "edge", take: float = 0.25,
+                  min_edge: float = MIN_EDGE) -> dict:
+    """Bet the TOP SLICE of a board, ordered either way, and settle it.
+
+    THE QUESTION ETHAN ASKED, 2026-08-30: "we need to figure out if we are
+    gonna put real money on these bets" — i.e. should the likelihood board
+    feed the money path, or only the edge board?
+
+    Ranking and pricing are different abilities and the site is now good
+    at one of them. But a board ordered by LIKELIHOOD is not automatically
+    a board worth betting: a -260 near-lock can be correctly ranked first
+    and still lose money, because being right 70% of the time at a price
+    that needs 72% is a losing bet made confidently.
+
+    So this settles it empirically rather than by argument. Both orderings
+    bet the same NUMBER of rows off the same qualifying pool — every row
+    where the model disagrees with the price by `min_edge`, so neither
+    ordering is allowed to bet something the other would refuse outright.
+    The only difference is WHICH of the qualifying rows get the money.
+
+    `by="prob"` takes the most likely; `by="edge"` takes the biggest
+    disagreement. Same stake, same prices, same vig.
+    """
+    pool = []
+    for r in rows:
+        p_over = prob(r, r["line"])
+        over_p = _american_prob(r["over_odds"])
+        under_p = _american_prob(r["under_odds"])
+        if over_p is None or under_p is None:
+            continue
+        if p_over - over_p >= min_edge:
+            pool.append((r, True, p_over, p_over - over_p))
+        elif (1.0 - p_over) - under_p >= min_edge:
+            pool.append((r, False, 1.0 - p_over, (1.0 - p_over) - under_p))
+    if not pool:
+        return {"bets": 0, "roi": None, "hit_rate": None}
+    key = (lambda t: -t[2]) if by == "prob" else (lambda t: -t[3])
+    pool.sort(key=key)
+    n = max(1, int(round(len(pool) * take)))
+    wins = 0
+    pnl = 0.0
+    for r, is_over, _p, _e in pool[:n]:
+        hit = r["actual"] > r["line"]
+        won = hit if is_over else not hit
+        odds = r["over_odds"] if is_over else r["under_odds"]
+        wins += 1 if won else 0
+        pnl += _payout(odds) if won else -1.0
+    return {"bets": n, "wins": wins, "pnl": pnl, "roi": pnl / n,
+            "hit_rate": wins / n, "pool": len(pool)}
+
+
 def report_real(market: str, conn=None, db_path=None) -> list:
     """The same candidates, judged at the prices books really hung."""
     import sqlite3 as _sq
@@ -631,16 +682,156 @@ def report_real(market: str, conn=None, db_path=None) -> list:
         out.append("  a better number that never bets differently is a "
                    "nicer model and the same board — the ROI column is "
                    "the one that decides whether to wire this in")
+
+        # DOES THE LIKELIHOOD BOARD DESERVE MONEY? Same qualifying pool,
+        # same stake, same prices — only the ORDER in which the money is
+        # spent differs. If likelihood wins here, the main board earns a
+        # place in the journal; if edge wins, the likelihood page stays
+        # insight and the edge board keeps the bankroll.
+        out.append(f"  {'top quarter picked by':<24}{'bets':>7}{'hit':>8}"
+                   f"{'ROI':>9}")
+        ship = lambda r, L: shipped_over(r, L, market)     # noqa: E731
+        for by, label in (("prob", "likelihood"), ("edge", "edge")):
+            got = ranked_record(test, ship, by=by)
+            if not got["bets"]:
+                continue
+            out.append(f"  {label:<24}{got['bets']:>7}"
+                       f"{got['hit_rate']:>8.1%}{got['roi']:>9.1%}")
         return out
     finally:
         if close_it:
             conn.close()
 
 
+# --- the fitted mixture, stored for the likelihood board -----------------
+#
+# DECLINED FOR BETTING, ADOPTED FOR DISPLAY, and those are not in tension.
+# Against real closes the mixture does not make money the normal was not
+# already making, so it has no business changing which bets get placed.
+# But the likelihood board's whole job is to state HOW LIKELY something
+# is, and there the mixture is measurably closer: it halves the miss
+# between what we claim and what lands (rec_yds 0.1137 -> 0.0709,
+# receptions 0.0610 -> 0.0285).
+#
+# The page needed it badly. `calibrate.correction_for` DISCARDS a
+# boundary fit rather than applying it — correctly, since a capped
+# temperature is the search failing — so rush_yds and rec_yds, the two
+# markets whose fits ran to the cap, were being displayed with NO
+# correction at all. The likelihood page was quoting the raw number from
+# the two markets measured most overconfident.
+#
+# pass_yds is excluded on the same evidence that adopted the others: it
+# is 2.3% zeroes, the normal fits it nearly perfectly, and the mixture
+# measured WORSE there (0.0389 against 0.0324).
+MIXTURE_MARKETS = ("rush_yds", "rec_yds", "receptions")
+
+#: Where the fitted mixture lives, beside the calibration store and
+#: per-box for the same reason: it is fitted from this box's history.
+STORE_NAME = "yardage.json"
+
+
+def store_path(models_dir=None):
+    import os
+    from pathlib import Path
+    base = models_dir or os.environ.get("QB_MODELS_DIR") or (
+        Path(__file__).resolve().parents[1] / "data" / "models")
+    return Path(base) / STORE_NAME
+
+
+def fit_market(conn, market: str) -> dict | None:
+    """``{"zero": [b0, b1], "sigma": s, "rows": n}`` fitted on all history."""
+    data = rows(conn, market)
+    lines = MARKETS.get(market, ())
+    if len(data) < MIN_TRAIN or not lines:
+        return None
+    beta = fit_zero(data, )
+    sigma = fit_sigma_on_over(data, beta, lines)
+    return {"zero": [round(beta[0], 5), round(beta[1], 5)],
+            "sigma": round(sigma, 4), "rows": len(data),
+            "market": market}
+
+
+def save_fits(conn, models_dir=None) -> dict:
+    """Fit every adopted market and write the store. Returns what it wrote."""
+    import json
+    out = {}
+    for market in MIXTURE_MARKETS:
+        got = fit_market(conn, market)
+        if got:
+            out[market] = got
+    path = store_path(models_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=2, sort_keys=True))
+    return out
+
+
+def load_fits(models_dir=None) -> dict:
+    import json
+    path = store_path(models_dir)
+    try:
+        got = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def display_prob(market: str, projection, line, recent_values,
+                 fits=None) -> float | None:
+    """P(over) under the fitted mixture, for DISPLAY. None when it cannot.
+
+    Returns None rather than a guess whenever anything is missing — the
+    caller then keeps the number it already had, which is the honest
+    fallback. A likelihood page that silently swapped in a worse number
+    would be the opposite of the point.
+    """
+    fits = load_fits() if fits is None else fits
+    got = fits.get(market)
+    if not got or projection is None or line is None:
+        return None
+    try:
+        mu = float(projection)
+        ln = float(line)
+    except (TypeError, ValueError):
+        return None
+    if mu <= MIN_PROJECTION or ln <= 0:
+        return None
+    vals = [v for v in (recent_values or []) if v is not None]
+    if len(vals) < 3:
+        return None
+    # ONE LEAGUE-WIDE WIDTH, NOT THE PLAYER'S OWN SPREAD, and that is a
+    # deliberate loss. The shipped normal uses max(form.std, CV x mean),
+    # so a volatile back and a metronome at the same projection get
+    # different numbers; this gives them the same one. The measured
+    # improvement was obtained WITH that simplification in place — the
+    # mixture halves the calibration miss while knowing less — so the
+    # player-specific width was not carrying what it appeared to. Adding
+    # it back is a real candidate, and it has to be measured, not assumed.
+    row = {"mu": mu, "form_sd": 0.0,
+           "zero_rate": sum(1 for v in vals if float(v) <= 0) / len(vals)}
+    beta = got.get("zero") or [0.0, 0.0]
+    sigma = float(got.get("sigma") or 0.6)
+    return mixture_over(row, ln, beta, sigma)
+
+
 def main(argv=None) -> int:
     args = list(argv if argv is not None else sys.argv[1:])
+    if "--fit" in args:
+        import sqlite3 as _sq
+        conn = _sq.connect(str(DEFAULT_DB))
+        try:
+            wrote = save_fits(conn)
+        finally:
+            conn.close()
+        for market, got in sorted(wrote.items()):
+            print(f"{market:<12} sigma {got['sigma']:.3f}  "
+                  f"P(zero) = sigmoid({got['zero'][0]:+.2f} "
+                  f"{got['zero'][1]:+.2f} x logit(prior blank rate))  "
+                  f"({got['rows']:,} rows)")
+        if not wrote:
+            print("nothing fitted — needs player_game_logs")
+        return 0
     real = "--real" in args
-    args = [a for a in args if a != "--real"]
+    args = [a for a in args if a not in ("--real", "--fit")]
     fn = report_real if real else report
     for i, market in enumerate(args or list(MARKETS)):
         if i:

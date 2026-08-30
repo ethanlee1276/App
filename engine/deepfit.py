@@ -223,6 +223,40 @@ def refit_cfb_touchdowns(db: str = "data/history.db") -> list[str]:
             f"Brier {fit.brier_before:.4f} → {fit.brier_after:.4f}"]
 
 
+def refit_yardage_mixture(db: str = "data/history.db") -> list[str]:
+    """Refit the zero-inflated mixture the LIKELIHOOD board displays.
+
+    Not the betting path — that still asks `statmath.prob_over`, because
+    against real closes the mixture makes no money the normal was not
+    already making. This is the number the Most Likely page quotes, and
+    there it is measurably closer to what lands: it halves the miss in
+    both markets big enough to score.
+
+    It matters most where the calibration store cannot help at all.
+    `calibrate.correction_for` discards a boundary fit rather than
+    applying it, so rush_yds and rec_yds — whose fitted temperatures both
+    ran to the grid cap — were displayed with NO correction whatsoever.
+    """
+    try:
+        import sqlite3
+        from .yardagefit import save_fits
+        path = db if os.path.isabs(db) else os.path.join(ROOT, db)
+        if not os.path.isfile(path):
+            return []
+        conn = sqlite3.connect(path)
+        try:
+            wrote = save_fits(conn)
+        finally:
+            conn.close()
+    except Exception as exc:                              # noqa: BLE001
+        return [f"⚠️  yardage mixture skipped: {exc}"]
+    if not wrote:
+        return ["deep refit: yardage mixture — not enough logged rows yet"]
+    bits = ", ".join(f"{m} sigma {g['sigma']:.2f}"
+                     for m, g in sorted(wrote.items()))
+    return [f"deep refit: yardage mixture for the likelihood board — {bits}"]
+
+
 def refit_all(db: str = "data/history.db") -> list[str]:
     """Every sport with the history for it. Returns log lines."""
     sports = sports_with_history(db)
@@ -234,6 +268,7 @@ def refit_all(db: str = "data/history.db") -> list[str]:
     # Outside the per-sport loop: both touchdown fits are driven by their
     # own replays rather than by the three CLIs above, because a
     # touchdown has no line for `calibrate.fit_market` to walk.
+    lines.extend(refit_yardage_mixture(db))
     lines.extend(refit_touchdowns(db))
     lines.extend(refit_cfb_touchdowns(db))
     # AFTER the three CLIs above, deliberately. `calibrate.py` fits these

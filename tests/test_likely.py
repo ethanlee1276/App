@@ -100,9 +100,17 @@ def test_ranked_by_probability_and_by_nothing_else():
     """Sorting by EV, or breaking ties on it, would quietly rebuild the
     edge board under a different name — the exact failure this page
     exists to correct."""
-    rows = [_prop(player="Low", prob=0.42, ev_per_unit=0.40),
-            _prop(player="High", prob=0.71, ev_per_unit=-0.10),
-            _prop(player="Mid", prob=0.55, ev_per_unit=0.20)]
+    # PROJECTIONS DIFFER, not just the claimed probability. The
+    # displayed number is recomputed from the projection against the
+    # line, so three players with identical projections SHOULD land on
+    # identical probabilities — an earlier version of this fixture varied
+    # only `hit_prob` and read that correct behaviour as a sorting bug.
+    rows = [_prop(player="Low", prob=0.42, projection=44.0,
+                  ev_per_unit=0.40),
+            _prop(player="High", prob=0.71, projection=72.0,
+                  ev_per_unit=-0.10),
+            _prop(player="Mid", prob=0.55, projection=55.0,
+                  ev_per_unit=0.20)]
     board = K.build(rows, [], [], sport="nfl")
     assert [r["player"] for r in board] == ["High", "Mid", "Low"], board
     # The juiciest EV on the slate is LAST, which is the whole point.
@@ -117,9 +125,12 @@ def test_a_long_shot_pick_and_its_watch_row_are_not_shown_twice():
 def test_touchdowns_and_yardage_rank_against_each_other():
     """One list, not two stacked. A 71% receiving over outranks a 58%
     scorer and has to say so."""
-    board = K.build([_prop(player="Wideout", prob=0.71)],
+    # Projected well clear of his line, so he leads on the CALIBRATED
+    # number rather than on a raw claim the mixture then pulls down.
+    board = K.build([_prop(player="Wideout", prob=0.71, projection=88.0)],
                     [], [_watch(player="Back", prob=0.58)], sport="nfl")
     assert [r["player"] for r in board] == ["Wideout", "Back"], board
+    assert board[0]["model_prob"] > board[1]["model_prob"]
 
 
 # --- what never reaches it ----------------------------------------------
@@ -184,6 +195,87 @@ def test_the_second_board_never_costs_the_first_one():
     from engine import pipeline
     src = inspect.getsource(pipeline._likely_board)
     assert "except Exception" in src and "return []" in src
+
+
+# --- calibrated, because the page claims a probability -------------------
+def test_a_boundary_fit_market_reaches_this_page_uncorrected_without_the_mixture():
+    """THE DEFECT ETHAN CAUGHT, 2026-08-30: "we have the calibration off
+    for the most likely page."
+
+    `calibrate.correction_for` DISCARDS a boundary fit rather than
+    applying it — correct for betting, since a capped temperature is the
+    search failing rather than a correction. But rush_yds and rec_yds
+    both fitted to T=6.0, exactly GRID_MAX, so the two markets measured
+    MOST overconfident were the two reaching this page with no correction
+    at all."""
+    from engine.calibrate import correction_for, GRID_MAX
+    import engine.calibrate as C
+    store = dict(C.load(C.DEFAULT_PATH))
+    # Whatever this box holds, a capped fit must resolve to no correction
+    # — that is the behaviour that left the page uncalibrated.
+    C._cache = {"nfl:rush_yds": (GRID_MAX, -0.16)}
+    try:
+        assert correction_for("nfl", "rush_yds") == (1.0, 0.0)
+    finally:
+        C._cache = None
+    assert store is not None
+
+
+def test_the_mixture_pulls_an_overconfident_number_down():
+    """A back with two blanks in six games, projected 58 against a 45.5
+    line: the raw model says 62%, the mixture says the mid-fifties. The
+    difference is the chance he simply does not touch it, which a normal
+    spreads below zero instead of piling at zero."""
+    row = _prop(market="rush_yds", prob=0.62, projection=58.0,
+                recent_values=[70, 0, 52, 61, 0, 44])
+    got = K.from_prop(row, _always)
+    if got["prob_source"] == "model":
+        return          # no fitted store on this box; nothing to assert
+    assert got["model_prob"] < got["raw_prob"], got
+    assert got["raw_prob"] == 0.62
+
+
+def test_the_reader_is_told_which_number_they_are_seeing():
+    """A page that silently swapped its probability source would be the
+    opposite of the point."""
+    got = K.from_prop(_prop(), _always)
+    assert got["prob_source"] in ("model", "mixture")
+    assert "raw_prob" in got
+    app = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "web", "js", "app.js")).read()
+    assert 'r.prob_source !== "mixture"' in app
+    assert "raw read was" in app
+
+
+def test_a_row_the_mixture_cannot_price_keeps_the_number_it_had():
+    """None rather than a guess whenever anything is missing. A
+    likelihood page that swapped in a WORSE number would be the opposite
+    of the point twice over."""
+    from engine.yardagefit import display_prob
+    assert display_prob("rush_yds", None, 45.5, [1, 2, 3]) is None
+    assert display_prob("rush_yds", 58.0, None, [1, 2, 3]) is None
+    assert display_prob("rush_yds", 58.0, 45.5, [1]) is None
+    assert display_prob("made_up_market", 58.0, 45.5, [1, 2, 3]) is None
+
+
+def test_passing_yards_is_left_on_the_normal_on_its_own_evidence():
+    """Adopted where measured better, refused where measured worse.
+    pass_yds is 2.3% zeroes, the normal fits it nearly perfectly, and the
+    mixture came out WORSE there (0.0389 against 0.0324)."""
+    from engine.yardagefit import MIXTURE_MARKETS
+    assert "pass_yds" not in MIXTURE_MARKETS
+    for m in ("rush_yds", "rec_yds", "receptions"):
+        assert m in MIXTURE_MARKETS
+
+
+def test_the_nightly_refits_it():
+    """A fitted number nobody refits goes stale, and this one is fitted
+    from the box's own logs."""
+    import inspect
+    from engine import deepfit
+    assert "refit_yardage_mixture(db)" in inspect.getsource(deepfit.refit_all)
+    src = inspect.getsource(deepfit.refit_yardage_mixture)
+    assert "save_fits" in src and "likelihood" in src.lower()
 
 
 if __name__ == "__main__":

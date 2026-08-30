@@ -44,6 +44,8 @@ Standard library only.
 
 from __future__ import annotations
 
+from .yardagefit import display_prob
+
 #: Markets this board will rank, and whether the model has been shown to
 #: rank them. Measured 2026-08-30 at synthetic lines over 2021-25 NFL
 #: logs; `anytime_td` comes from `engine.tdbacktest` against outcomes.
@@ -107,13 +109,39 @@ def from_prop(row: dict, bettable) -> dict | None:
         return None
     if not row.get("has_market") or not _sane(row.get("odds")):
         return None
+    # CALIBRATED FOR DISPLAY, and this is the fix for a real defect.
+    # `calibrate.correction_for` DISCARDS a boundary fit rather than
+    # applying it — right for betting, since a capped temperature is the
+    # search failing — so rush_yds and rec_yds, the two markets whose fits
+    # ran to the cap, reached this page with NO correction at all. The
+    # likelihood board was quoting the raw number from the two markets
+    # measured most overconfident.
+    #
+    # `yardagefit`'s mixture halves the miss between what is claimed and
+    # what lands (rec_yds 0.1137 -> 0.0709, receptions 0.0610 -> 0.0285).
+    # It was declined for BETTING because it makes no money the normal was
+    # not already making; this page's objective is calibration, not ROI,
+    # and there it is measurably the better number.
+    shown = float(prob)
+    source = "model"
+    fitted = display_prob(market, row.get("projection"), row.get("line"),
+                          row.get("recent_values"))
+    if fitted is not None:
+        shown, source = float(fitted), "mixture"
+    if shown < MIN_PROB:
+        return None
     return {
         "player": row.get("player", ""), "team": row.get("team", ""),
         "opponent": row.get("opponent", ""),
         "market": market, "market_label": row.get("market_label", market),
         "side": row.get("side", ""), "line": row.get("line"),
         "book": row.get("book", ""), "odds": row.get("odds"),
-        "model_prob": round(float(prob), 4),
+        "model_prob": round(shown, 4),
+        # WHICH NUMBER THE READER IS LOOKING AT. A page that silently
+        # swapped its probability source would be the opposite of the
+        # point.
+        "prob_source": source,
+        "raw_prob": round(float(prob), 4),
         "implied_prob": row.get("fair_prob"),
         "projection": row.get("projection"),
         "ev_per_unit": row.get("ev_per_unit"),
