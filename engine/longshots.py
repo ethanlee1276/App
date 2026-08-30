@@ -121,6 +121,11 @@ class LongShot:
     #: nothing said so. Defaulted, so a caller that predates it (or a
     #: test fixture) still constructs.
     book_prob: float = 0.0
+    #: The edge that PAYS: the model against the price on offer. `edge`
+    #: above is the model against the market consensus — the honest
+    #: disclosure, and a different question. This one decides the grade,
+    #: the stake and the selection.
+    net_edge: float = 0.0
     vig: float = 0.0
     vig_source: str = ""
     #: Players on the board the vig was measured off. Zero when it was
@@ -147,7 +152,9 @@ class LongShot:
             "model_prob": round(self.model_prob, 4),
             "implied_prob": round(self.implied_prob, 4),
             "book_prob": round(self.book_prob, 4),
-            "edge": round(self.edge, 4), "ev_per_unit": round(self.ev_per_unit, 4),
+            "edge": round(self.edge, 4),
+            "net_edge": round(self.net_edge, 4),
+            "ev_per_unit": round(self.ev_per_unit, 4),
             "confidence": self.confidence, "stake_units": self.stake_units,
             "grade": self.grade,
             "expected_opportunities": round(self.expected_opportunities, 2),
@@ -203,6 +210,28 @@ def in_odds_window(odds: int, window: tuple[int, int]) -> bool:
     return lo <= odds <= hi
 
 
+#: The net edge that earns full marks for edge in `_confidence`, and the
+#: three bars `_grade` applies to it.
+#:
+#: RESCALED WHEN GRADING MOVED TO NET EDGE, and it had to be. Net edge is
+#: smaller than edge-against-the-consensus by the entire vig, so the old
+#: bars (0.015 / 0.03 / 0.05, set against the consensus) would empty every
+#: board: at the 18.8% overround a real touchdown market carries, the
+#: widest net edge a CREDIBLE model can produce is about 0.007, because
+#: MAX_CREDIBLE_EDGE caps the disagreement at 0.10, the market shrink
+#: halves it to 0.05, and the vig eats 0.043 of what is left.
+#:
+#: Anchored on `betting.BASE_THRESHOLDS`, which has graded game lines on
+#: net edge at 0.020 / 0.010 since the same mistake was found there —
+#: rather than on a number picked to make this month's board look busy.
+#: The confidence gates stay where they were; only the quantity they are
+#: measured against changed.
+CONFIDENCE_FULL_EDGE = 0.020
+GRADE_BARS = (("Strong Play", 7.5, 0.020),
+              ("Play", 6.0, 0.010),
+              ("Lean", 4.5, 0.005))
+
+
 def _confidence(edge: float, opportunities: float, opp_target: float,
                 data_quality: float = 1.0) -> float:
     """0–10 confidence. Edge drives it; opportunity volume and data quality are
@@ -211,8 +240,11 @@ def _confidence(edge: float, opportunities: float, opp_target: float,
 
     Scaled for *tempered* edges: these markets are efficiently priced, so a
     genuine 5% edge is a strong result and earns full marks here.
+
+    ``edge`` here is the NET edge — the model against the price actually
+    on offer, not against the market consensus. See `build_pick`.
     """
-    edge_pts = clamp(edge / 0.05, 0.0, 1.0) * 6.5
+    edge_pts = clamp(edge / CONFIDENCE_FULL_EDGE, 0.0, 1.0) * 6.5
     opp_pts = clamp(opportunities / opp_target, 0.0, 1.0) * 2.5
     return round(clamp((edge_pts + opp_pts) * clamp(data_quality, 0.7, 1.0), 0.0, 10.0), 1)
 
@@ -247,12 +279,9 @@ def _grade(confidence: float, edge: float, ev: float | None = None) -> str:
     """
     if ev is not None and ev <= 0:
         return "Pass"
-    if confidence >= 7.5 and edge >= 0.05:
-        return "Strong Play"
-    if confidence >= 6.0 and edge >= 0.03:
-        return "Play"
-    if confidence >= 4.5 and edge >= 0.015:
-        return "Lean"
+    for name, conf_min, edge_min in GRADE_BARS:
+        if confidence >= conf_min and edge >= edge_min:
+            return name
     return "Pass"
 
 
@@ -466,7 +495,27 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"Model disagrees with the market by {abs(raw_prob - implied):.0%} — "
             f"too large to trust, treated as a pricing/data error"]
 
-    confidence = _confidence(edge, opportunities, opp_target, data_quality)
+    # THE EDGE THAT PAYS is against the price in front of you, not
+    # against the market's consensus, and grading the second one made us
+    # decline the first genuinely good bet the board ever produced.
+    #
+    # Jackson Arnold, 2026-08-29: DraftKings -170, Caesars -150, Hard
+    # Rock +150. Consensus fair 0.505, our blended model 0.434, the +150
+    # breakeven 0.400. BOTH estimates of the truth beat the breakeven, so
+    # the bet is +8.5% EV whichever you believe — and it was filtered out
+    # because `edge` (model minus consensus) was -0.071. You do not need
+    # a better model than the market. You need a better price than the
+    # truth, and that is a different comparison.
+    #
+    # `betting._grade` has graded game lines on "net edge — what's left
+    # after the vig, not before it" since the same thing was found there.
+    # The EV gate below adopted half of that doctrine on 2026-08-29; this
+    # is the other half.
+    #
+    # `edge` stays published as the honest model-versus-market
+    # disclosure. It is no longer what decides a bet.
+    net_edge = model_prob - american_to_prob(odds)
+    confidence = _confidence(net_edge, opportunities, opp_target, data_quality)
     vig, vig_source, vig_listed = vig_of(hold_override, sport, market,
                                          under_odds if exact else None)
     book_prob = american_to_prob(odds)
@@ -494,12 +543,13 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"— {implied - book_prob:.0%} of that edge is the price, not "
             f"the projection"]
     ev = expected_value(model_prob, odds)
-    grade = _grade(confidence, edge, ev) if credible else "Pass"
+    grade = _grade(confidence, net_edge, ev) if credible else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
         model_prob=model_prob, implied_prob=implied,
         book_prob=round(book_prob, 4), edge=edge,
+        net_edge=round(net_edge, 4),
         ev_per_unit=ev, vig=round(vig, 4), vig_source=vig_source,
         vig_listed=vig_listed,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
@@ -511,16 +561,24 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
 
 def select(picks: list[LongShot], per_key_cap: int, key, limit: int,
            require_edge: bool = True) -> list[LongShot]:
-    """Rank by edge and apply the spec's concentration limits.
+    """Rank by net edge and apply the spec's concentration limits.
 
     Sorting by edge (not by odds) is deliberate: the biggest payout is almost
     never the best bet, and ranking by price is how long-shot cards go broke.
+    NET edge, so the ranking answers the same question the grade does —
+    how good is this bet at this price.
     """
-    ranked = sorted(picks, key=lambda p: (p.edge, p.confidence), reverse=True)
+    ranked = sorted(picks, key=lambda p: (p.net_edge, p.confidence),
+                    reverse=True)
     out: list[LongShot] = []
     seen: dict = {}
     for p in ranked:
-        if require_edge and (p.edge <= 0 or p.grade == "Pass"):
+        # ON THE PRICE, NOT ON THE DISAGREEMENT. Filtering `edge <= 0`
+        # threw out every bet where the price beat the market consensus
+        # but our model sat below it — which is the most ordinary shape a
+        # real edge takes, and cost the board a +8.5% EV pick on
+        # 2026-08-29. See `build_pick` for the case.
+        if require_edge and (p.ev_per_unit <= 0 or p.grade == "Pass"):
             continue
         k = key(p)
         if seen.get(k, 0) >= per_key_cap:

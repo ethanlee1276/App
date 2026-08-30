@@ -238,13 +238,19 @@ def test_hr_board_caps_one_pick_per_team():
 
 def test_board_ranks_by_edge_not_by_payout():
     """The biggest price is almost never the best bet — ranking by odds is how
-    long-shot cards go broke."""
+    long-shot cards go broke.
+
+    NET edge since 2026-08-30: the model against the price on offer,
+    which is the same question the grade and the stake now ask. Ranking
+    on the model's disagreement with the market instead put a bet we
+    could not take above one we could."""
     from engine.longshots import LongShot
 
-    def ls(name, edge, odds):
+    def ls(name, net, odds):
         return LongShot(player=name, team=name, opponent="X", market="home_runs",
                         market_label="Home Runs", book="DK", odds=odds,
-                        model_prob=0.2, implied_prob=0.2 - edge, edge=edge,
+                        model_prob=0.2, implied_prob=0.2 - net, edge=net,
+                        net_edge=net,
                         ev_per_unit=0.1, confidence=8.0, stake_units=0.5,
                         grade="Play", expected_opportunities=4.3, primary_reason="")
 

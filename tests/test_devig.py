@@ -37,6 +37,7 @@ from engine.odds import american_to_prob
 from engine.models import (
     Prop, Game, Team, DefenseProfile, Weather, GameLog, SportsbookLine, ANYTIME_TD,
 )
+from engine.touchdowns import RedZoneUsage
 
 
 def _handbook_scorers(total_tds):
@@ -452,24 +453,27 @@ def _scan(hold, odds, want):
 
 
 def test_a_price_that_does_not_pay_cannot_carry_a_grade():
-    """The defect the measured hold uncovered: a mid-priced shot the model
-    likes by several points against the FAIR price, graded "Play" at high
-    confidence while losing money at the price on offer.
+    """This used to hunt for a graded pick with negative EV — the defect
+    where a +285 shot graded "Play" at confidence 8.8 while losing 4.5
+    cents on the dollar, because the grade was scored on the model's
+    disagreement with the fair price rather than on the bet.
 
-    It stayed hidden for as long as the hold was assumed at 6%, because
-    EV turns negative at edge = implied x (hold - 1) — 0.014 on a 24%
-    shot, just under the 0.015 Lean bar. The two lines coincided by
-    accident. A real overround pushes EV negative well past the Lean and
-    Play bars and opens the whole band underneath them."""
+    That class is now impossible by construction rather than by a guard.
+    Grading moved to NET edge (model minus the price on offer), and
+    net_edge > 0 and EV > 0 are the same condition — EV is
+    net_edge / book_prob. The explicit EV gate stays as belt and braces,
+    but there is no longer a gap for it to cover."""
     from engine.longshots import _grade
-    losing = _scan(1.30, 285, lambda p: p.ev_per_unit < 0 and p.edge >= 0.03
-                   and p.confidence >= 6.0)
-    assert losing, "no negative-EV pick in the graded band — check the scan"
-    # On edge and confidence alone the old grader called this a Play.
-    assert _grade(losing.confidence, losing.edge) != "Pass"
-    # Grading the bet instead of the disagreement refuses it.
-    assert losing.grade == "Pass"
-    assert losing.stake_units == 0.0
+    scan = [_scan(1.30, odds, lambda p: p.ev_per_unit < 0 and p.grade != "Pass")
+            for odds in (150, 285, 450)]
+    assert not any(scan), "a graded pick is losing money again"
+    # The two conditions really are one: same sign, always.
+    for odds in (-200, 120, 300, 700):
+        got = _scan(1.06, odds, lambda p: p.grade != "Pass")
+        if got:
+            assert (got.net_edge > 0) == (got.ev_per_unit > 0)
+    # And the gate itself still refuses, if it is ever reached.
+    assert _grade(9.0, 0.06, ev=-0.01) == "Pass"
 
 
 def test_no_graded_pick_anywhere_on_the_board_loses_money():
@@ -511,6 +515,83 @@ def test_the_grader_matches_the_game_lines_grader_s_doctrine():
     # Omitted EV keeps the old behaviour, so no caller is silently changed
     # by the new parameter — only the one that passes it.
     assert _grade(9.0, 0.06) == "Strong Play"
+
+
+# --- the edge that pays --------------------------------------------------
+def _priced(model, odds=150, fair=0.505, books=4):
+    return build_pick(
+        player="A", team="UNLV", opponent="MEM", market=ANYTIME_TD,
+        label="ATD", book="Hard Rock", odds=odds, model_prob=model,
+        under_odds=None, opportunities=14.0, opp_target=12.0,
+        primary_reason="r", reasons=[], caveats=[], sport="cfb",
+        hold_override=FairQuote(fair, 0.3126, "power", "hard rock", 31,
+                                books=books))
+
+
+def test_a_price_that_beats_the_consensus_is_a_bet_even_when_we_disagree():
+    """The first genuinely good bet the board ever produced, declined.
+
+    Jackson Arnold, 2026-08-29: DraftKings -170, Caesars -150, Hard Rock
+    +150. Consensus fair 0.505, the +150 breakeven 0.400. Every estimate
+    of the truth beat the breakeven, so the bet was +EV whichever you
+    believed — and it was filtered out because `edge` (model minus
+    CONSENSUS) was negative.
+
+    You do not need a better model than the market. You need a better
+    price than the truth."""
+    pick = _priced(0.45)
+    assert pick.edge < 0, "the model is below consensus, as in the real case"
+    assert pick.net_edge > 0, "but it beats the price on offer"
+    assert pick.ev_per_unit > 0
+    assert pick.grade != "Pass"
+    assert pick.stake_units > 0
+
+
+def test_selection_keeps_a_positive_ev_pick_the_old_filter_threw_out():
+    """`select` filtered `edge <= 0`, which rejected the whole class."""
+    from engine.longshots import select
+    pick = _priced(0.45)
+    kept = select([pick], per_key_cap=2, key=lambda p: p.team, limit=6)
+    assert kept == [pick]
+
+
+def test_a_losing_price_is_still_refused_however_big_the_disagreement():
+    """The other direction has to hold too, or this is just a looser
+    filter: a model far ABOVE the consensus on a price that does not pay
+    is not a bet."""
+    pick = _priced(0.55, odds=-400, fair=0.60)
+    assert pick.ev_per_unit <= 0
+    assert pick.grade == "Pass" and pick.stake_units == 0.0
+    from engine.longshots import select
+    assert select([pick], per_key_cap=2, key=lambda p: p.team, limit=6) == []
+
+
+def test_confidence_is_scored_on_the_price_not_on_the_disagreement():
+    """A better price at the same projection is a better bet, and the
+    confidence has to move with it."""
+    short, long_ = _priced(0.45, odds=110), _priced(0.45, odds=190)
+    assert long_.net_edge > short.net_edge
+    assert long_.confidence >= short.confidence
+    assert long_.ev_per_unit > short.ev_per_unit
+
+
+def test_the_disagreement_is_still_published_it_just_stopped_deciding():
+    """`edge` is the honest model-versus-market number and belongs on the
+    card. It is no longer what decides a bet."""
+    d = _priced(0.45).to_dict()
+    assert "edge" in d and "net_edge" in d
+    assert d["edge"] < 0 < d["net_edge"]
+
+
+def test_a_model_far_from_the_consensus_is_still_vetoed():
+    """The credibility guard is untouched and still fires. Arnold's own
+    raw model sat 14.5 points below the consensus, and a projection that
+    far out is treated as a data error rather than as alpha — even
+    though the price beat every estimate on the table."""
+    pick = _priced(0.3628)
+    assert pick.ev_per_unit > 0                 # the price is genuinely good
+    assert pick.grade == "Pass"                 # and we still decline
+    assert any("too large to trust" in c for c in pick.caveats)
 
 
 # --- one book is not a consensus -----------------------------------------
@@ -661,7 +742,7 @@ def test_a_two_way_price_makes_no_shopping_claim():
 
 
 # --- both lists, one book -------------------------------------------------
-def _td_candidates(hold=None, share=0.11, odds=250):
+def _td_candidates(hold=None, share=0.11, odds=150):
     """Two identical mid-priced scorers in one game."""
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
              spread=-7.0, total=52.0)
@@ -677,12 +758,31 @@ def _td_candidates(hold=None, share=0.11, odds=250):
                  lines=[SportsbookLine("DK", 0.5, odds, None)])
         out.append({"prop": p, "game": g, "opponent": opp,
                     "opportunity_share": share, "odds": odds, "book": "DK",
-                    "under_odds": None, "hold": hold})
+                    "under_odds": None, "hold": hold,
+                    # MEASURED red-zone work, not the inferred trickle the
+                    # bare fixture produces. Without it `opportunities`
+                    # lands near 0.2 against a target of 2.0, so
+                    # confidence is capped below every grade bar and the
+                    # fixture cannot make a pick for a reason that has
+                    # nothing to do with what is being tested.
+                    "red_zone": RedZoneUsage(carries_inside_5=1.4,
+                                             carries_inside_10=2.6,
+                                             targets_inside_10=1.1,
+                                             rz_touch_share=0.34,
+                                             measured=True)})
     return out
 
 
-#: The de-vig a real 22-player board produced (engine/devig's table).
-BOARD = Devig.power(1.1378, 0.188)
+#: The shape that actually produces a pick at a real overround, and the
+#: reason it does. With a 19-31% hold, MAX_CREDIBLE_EDGE and the grade
+#: bars leave almost no room for a MODEL disagreement — the arithmetic
+#: caps a credible net edge near 0.007. What clears the bar is a PRICE
+#: out of line with the consensus, which is what the college handbook
+#: says about high-hold markets and what the Jackson Arnold row was.
+#:
+#: So the board here is quoted at +150 against a 0.505 consensus across
+#: four books: the offered breakeven is 0.400 and the market says 0.505.
+BOARD = FairQuote(0.505, 0.3126, "power", "hard rock", 31, books=4)
 
 
 def _graded_candidates(hold):
@@ -695,8 +795,8 @@ def _graded_candidates(hold):
     of the vig stays under about 5 probability points.
     """
     from engine.touchdowns import build_td_longshots
-    for odds in (150, 200, 250, 300, 350, 400, 450):
-        for i in range(4, 60):
+    for odds in (120, 150, 180, 200, 250, 300):
+        for i in range(2, 80):
             cands = _td_candidates(hold, share=i / 100, odds=odds)
             if build_td_longshots(cands, limit=6, per_game=2):
                 return cands
@@ -727,13 +827,24 @@ def test_the_value_picks_and_the_watchlist_price_against_the_same_hold():
 
 def test_the_watchlist_alone_would_have_missed_the_hold():
     """Guards the half-wired case directly: if only the picks path took
-    the override, the watchlist's numbers would not move at all."""
+    the override, the watchlist's numbers would not move at all.
+
+    Asserts they MOVE, not that they move down. A measured consensus
+    above the offered price raises the implied rather than lowering it —
+    that is the Jackson Arnold shape, a book out of line with the market,
+    and it is the case worth finding rather than an anomaly to guard
+    against."""
     from engine.touchdowns import td_watchlist
     plain = {r["player"]: r["implied_prob"] for r in td_watchlist(_td_candidates())}
     held = {r["player"]: r["implied_prob"]
             for r in td_watchlist(_td_candidates(BOARD))}
-    assert plain and held
-    assert all(held[k] < plain[k] for k in plain)
+    assert plain and held and set(plain) == set(held)
+    assert all(held[k] != plain[k] for k in plain), "the hold never reached it"
+    # A FairQuote publishes the consensus itself, whatever this book asks.
+    assert all(abs(held[k] - BOARD.prob) < 1e-4 for k in held)
+    # And the consensus sits ABOVE this book's own price, which is the
+    # whole reason the row is interesting.
+    assert BOARD.prob > american_to_prob(150)
 
 
 # --- the pipeline ---------------------------------------------------------
