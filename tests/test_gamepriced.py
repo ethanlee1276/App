@@ -165,6 +165,70 @@ def test_the_suite_is_green_on_a_board_only_an_uncalibrated_box_produces():
     assert loose, "the 0.5 fallback is what produces a game board at all"
 
 
+# --- #73, answered ------------------------------------------------------
+def test_every_game_card_records_the_haircut_that_priced_it():
+    """WHY #73 TOOK THREE INVESTIGATIONS. Twelve NFL game bets sat open
+    from 2026-08-08 to 08-12 with 7.64 units staked, while the replay
+    graded none at all over 1,184 games. Nothing on those rows said which
+    market haircut had priced them, so the live board and the replay
+    could not be compared directly and the gap had to be cornered by
+    elimination.
+
+    `engine.ledger` has kept `cal_temp` on props all along for exactly
+    this — "the correction that was live when the row was logged", with
+    the contract that a row recording its correction can be un-corrected
+    and one that does not, cannot. Game bets recorded nothing."""
+    from engine import gamecal as GC
+    real = GC.shrink_for
+    try:
+        GC.shrink_for = lambda s, m: 0.03
+        cards = [price_total("nfl", "KC", "DEN", 47.0, 44.5, -110, -110),
+                 price_spread("nfl", "KC", "DEN", -3.0, -3.5, -110, -110),
+                 price_team_total("nfl", "KC", "KC", "DEN", 27.5, 23.5,
+                                  -110, -110)]
+        assert all(c["cal_temp"] == 0.03 for c in cards), \
+            [c["cal_temp"] for c in cards]
+        GC.shrink_for = lambda s, m: None
+        blind = price_total("nfl", "KC", "DEN", 47.0, 44.5, -110, -110)
+        assert blind["cal_temp"] is None, \
+            "an unmeasured market must be distinguishable from a measured one"
+    finally:
+        GC.shrink_for = real
+
+
+def test_the_moneyline_records_it_through_its_own_builder():
+    """It does not go through `_game_bet`, so it needed its own wiring
+    and would otherwise have been the one market with no memory."""
+    from engine.gamebets import price_moneyline, moneyline_to_dict
+    from engine import gamecal as GC
+    real = GC.shrink_for
+    try:
+        GC.shrink_for = lambda s, m: 0.07
+        got = moneyline_to_dict(price_moneyline("KC", "DEN", 0.62, -180, 155,
+                                                [], sport="nfl"))
+    finally:
+        GC.shrink_for = real
+    assert got["cal_temp"] == 0.07
+
+
+def test_the_arithmetic_that_closed_it():
+    """The largest edge that can survive is MAX_CREDIBLE_EDGE x shrink:
+    anything more disagreeable is refused as our error before the haircut
+    ever sees it. So a fitted shrink caps a game edge at 0.003 to 0.009,
+    and only the 0.5 fallback reaches 0.05.
+
+    The twelve open rows ran 0.0340 to 0.0495 — every one of them under
+    the fallback ceiling and none reachable at any fitted value. They were
+    priced before `gamecal` had measured anything, three weeks before the
+    replay they appeared to contradict. The board and the replay never
+    disagreed; they were run at different haircuts."""
+    from engine.gamebets import MAX_CREDIBLE_EDGE
+    observed = (0.0340, 0.0495)
+    for shrink in (0.0296, 0.0558, 0.0904):
+        assert MAX_CREDIBLE_EDGE * shrink < observed[0], shrink
+    assert MAX_CREDIBLE_EDGE * 0.5 >= observed[1]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

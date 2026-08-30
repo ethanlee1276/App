@@ -133,6 +133,10 @@ class MoneylineRec:
     stake_units: float
     grade: str
     reasons: list[str] = field(default_factory=list)
+    #: The market haircut in force when this was priced — see
+    #: `shrink_in_force`. None means nothing had been measured for the
+    #: market yet and the 0.5 guess was standing in.
+    cal_temp: float | None = None
 
 
 #: Post-haircut edge that saturates the confidence scale. It is half of the
@@ -357,6 +361,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
         win_prob=round(wp, 4), fair_prob=round(fair, 4), edge=round(edge, 4),
         odds=ml, ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
+        cal_temp=shrink_in_force(sport, "moneyline"),
     )
 
 
@@ -372,6 +377,9 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         # or `journal_skip_reason` sees None here and cannot tell this
         # card apart from one built on an invented number.
         "has_market": True,
+        # WHAT PRICED IT — see `shrink_in_force`. None means nothing had
+        # been measured for this market yet and the 0.5 guess stood in.
+        "cal_temp": rec.cal_temp,
         "home": rec.home,
         "away": rec.away,
         "team": rec.pick,                 # for the team badge in the UI
@@ -479,6 +487,35 @@ def _calibration_note(sport: str, market: str) -> list[str]:
         return []
 
 
+def shrink_in_force(sport: str, market: str):
+    """The market haircut this card was priced under, or None.
+
+    RECORDED ON EVERY GAME BET, because a row that does not remember what
+    priced it cannot be re-judged when the fit moves. `engine.ledger`
+    already keeps `cal_temp` for exactly this on props — "the correction
+    that was live when the row was logged", with the contract that a row
+    recording its correction can be un-corrected and one that does not,
+    cannot. Game bets recorded nothing.
+
+    THE COST OF THAT, 2026-08-30. Twelve NFL game bets sat open from
+    August 8-12 with edges from 0.0340 to 0.0495 and 7.64 units staked,
+    while the replay graded none at all. Nothing on the rows said which
+    haircut had priced them, so answering it took three separate
+    investigations. The arithmetic settles it: the largest edge that can
+    survive is MAX_CREDIBLE_EDGE x shrink, which is 0.003 to 0.009 at any
+    fitted value and 0.05 at the 0.5 fallback. All twelve sit just under
+    0.05 and none is reachable at a fitted shrink — they were priced
+    before `gamecal` had measured anything, on the guess it replaced.
+    """
+    if not (sport and market):
+        return None
+    try:
+        from .gamecal import shrink_for
+        return shrink_for(sport, market)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
 def _real_price(*odds) -> bool:
     """Did a book actually post every price this card was built on?
 
@@ -493,7 +530,7 @@ def _real_price(*odds) -> bool:
 
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
-              credible=True, has_market=True):
+              credible=True, has_market=True, cal_temp=None):
     ev = expected_value(win, odds)
     confidence = _ml_confidence(edge, win)
     grade = _grade(confidence, edge) if credible else "Pass"
@@ -505,6 +542,10 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
     return {
         "bet_type": bet_type,
         "market": bet_type,
+        # WHAT PRICED IT. None means the 0.5 fallback was in force, i.e.
+        # nothing had been measured for this market yet — the state that
+        # produced twelve open bets no fitted shrink could have graded.
+        "cal_temp": cal_temp,
         # NOW SET, and it never was. `ledger.journal_skip_reason` refuses
         # a proxy-priced row with `if r.get("has_market") is False` — and
         # a game bet returned None, which is not False, so every one of
@@ -556,7 +597,8 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
                      pick_label=f"{side} {market_total:g}", side=side, line=market_total,
                      reasons=reasons, headline=f"{side} {market_total:g} {units}",
                      credible=credible,
-                     has_market=_real_price(over_odds, under_odds))
+                     has_market=_real_price(over_odds, under_odds),
+                     cal_temp=shrink_in_force(sport, "total"))
 
 
 def price_team_total(sport: str, team: str, home: str, away: str,
@@ -585,7 +627,8 @@ def price_team_total(sport: str, team: str, home: str, away: str,
                      pick_label=f"{team} {side} {line:g}", team=team, side=side, line=line,
                      reasons=reasons, headline=f"{team} team {side} {line:g}",
                      credible=credible,
-                     has_market=_real_price(over_odds, under_odds))
+                     has_market=_real_price(over_odds, under_odds),
+                     cal_temp=shrink_in_force(sport, "total"))
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,
@@ -617,4 +660,5 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
                      pick_label=f"{team} {spread:+g}", team=team, line=spread,
                      reasons=reasons, headline=f"{team} {spread:+g}",
                      credible=credible,
-                     has_market=_real_price(home_odds, away_odds))
+                     has_market=_real_price(home_odds, away_odds),
+                     cal_temp=shrink_in_force(sport, "spread"))
