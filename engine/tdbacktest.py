@@ -223,6 +223,22 @@ def board_rows(rows, fitter=None) -> list:
     return rows
 
 
+def american_at(p: float) -> str:
+    """The American price a probability breaks even at.
+
+    THE NUMBER THAT TURNS A HIT RATE INTO A DECISION. A board landing
+    60.2% is worthless at -200 and free money at -110, and until this
+    column existed the report gave the rate with nothing to weigh it
+    against — which is how "the model ranks well" turns into "so it must
+    make money", a step that does not follow.
+    """
+    # `p > 0.5`, not `>=`: an even-money shot is quoted +100 everywhere,
+    # and -100 is the same payout written the way no book writes it.
+    p = min(max(float(p), 1e-6), 1.0 - 1e-6)
+    odds = (-100.0 * p / (1.0 - p)) if p > 0.5 else (100.0 * (1.0 - p) / p)
+    return f"{odds:+.0f}" if odds > 0 else f"{odds:.0f}"
+
+
 def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
     """How the TOP of the likelihood board did, depth by depth.
 
@@ -285,7 +301,8 @@ def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
 
     rng = random.Random(seed)
     out = [f"NFL likelihood board · top of {len(groups)} replayed slates",
-           "  depth      claimed   landed      gap   95% by slate"]
+           "  depth      claimed   landed      gap   95% by slate"
+           "        break even at"]
     for k in depths:
         got = gap(groups, k)
         if got is None:
@@ -300,10 +317,11 @@ def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
         boot.sort()
         lo = boot[int(0.025 * len(boot))]
         hi = boot[int(0.975 * len(boot)) - 1]
-        flag = "" if lo <= 0 <= hi else "   <-- real"
+        flag = "" if lo <= 0 <= hi else " <-- real"
         out.append(f"   top {k:<8d} {claimed:6.1%}   {landed:6.1%}  "
                    f"{landed - claimed:+7.1%}   "
-                   f"[{lo:+.1%},{hi:+.1%}]{flag}")
+                   f"[{lo:+.1%},{hi:+.1%}]{flag:<8}  "
+                   f"{american_at(landed)}")
     best = [max(g, key=lambda r: r["cal"]) for g in groups]
     hit = sum(r["scored"] for r in best)
     out.append(f"\n  the single most likely scorer on a slate landed "
@@ -316,6 +334,12 @@ def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
     out.append("  This is the MODEL's number; the page shows one already "
                "shrunk toward the book,")
     out.append("  so part of this gap is closed before a reader sees it.")
+    out.append("  BREAK EVEN AT is the price these rows would have to beat "
+               "to profit at all —")
+    out.append("  landing 60% is worthless at -200 and free money at -110. "
+               "Nothing here")
+    out.append("  knows what they were priced at: that is "
+               "`python3 -m engine.tdbook --roi`.")
     return "\n".join(out)
 
 

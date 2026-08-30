@@ -84,6 +84,140 @@ def joined(conn, sport: str = "nfl", seasons=None) -> list:
     return rows
 
 
+#: Depths the board is priced at, matching `tdbacktest.board_report` so
+#: the hit rate and the ROI can be read on the same line.
+ROI_DEPTHS = (5, 10, 20, 40)
+ROI_RESAMPLES = 600
+
+
+def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
+    """Replayed board rows with the price a shopper could have taken.
+
+    `joined` above keeps (model, market, scored) and drops the identity,
+    so it can measure calibration against the book and cannot rank a
+    slate. This keeps season, week, the corrected probability and the
+    LONGEST price on the screen — everything an ROI needs.
+    """
+    from . import db as _db
+    from .backtest import _norm
+    from .formbook import game_dates
+    from .tdbacktest import board_rows, run
+
+    closes = _db.closing_odds_all_books(conn, sport, "anytime_td")
+    if not closes:
+        return []
+    dates = game_dates(seasons)
+    rows: list = []
+    run(conn, sport=sport, seasons=seasons, collect=rows.append)
+    board_rows(rows, fitter=fitter)
+
+    out: list = []
+    for r in rows:
+        try:
+            date = dates.get((r["season"], int(r["week"]), r["team"]))
+        except (TypeError, ValueError):
+            continue
+        quotes = closes.get((_norm(r["player"]), date)) if date else None
+        if not quotes:
+            continue
+        priced = [o for o in (q.get("over_odds") for q in quotes) if o]
+        if not priced:
+            continue
+        # The longest price on the screen — what `odds.best_over_line`
+        # publishes, and the only price a shopping board actually takes.
+        #
+        # A NUMERIC MAX IS THE RIGHT ONE, which is worth saying because
+        # American odds look like they need a special case and do not:
+        # any plus price beats any minus price, +900 beats +650, and -110
+        # beats -200. All three are the same comparison.
+        best = max(int(o) for o in priced)
+        out.append({"season": r["season"], "week": r["week"],
+                    "cal": r["cal"], "rank": r["rank"],
+                    "player": r["player"], "odds": int(best),
+                    "scored": r["scored"]})
+    return out
+
+
+def _decimal(odds: int) -> float:
+    return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
+
+
+def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
+    """Flat-stake ROI at the top of the board, per depth.
+
+    THE QUESTION THIS ANSWERS, and the one nothing else could. Ethan,
+    2026-08-30: "why are we not putting money on the most likely and long
+    shots. i feel like we should expecially since we learned the ROI is
+    higher with the most likely bets."
+
+    We had not learned that. What was measured is RANKING (0.72 AUC on
+    who scores) and CALIBRATION (the top five rows of a slate land 60.2%
+    against 53.4% claimed). Neither is profit. A board that sorts the
+    field perfectly still loses money if it pays -200 for a 60% shot, and
+    whether it beats the price is the 0.468-AUC quantity that tests as
+    noise. This is the join that settles it: the rows the board would
+    have shown, at the prices actually on the screen, against what
+    happened.
+
+    Ranked WITHIN a slate and bootstrapped BY slate, for the same reason
+    `board_report` is: rows in one slate share games and scripts, and
+    resampling rows would report an interval several times too tight.
+    """
+    import random
+
+    slates: dict = {}
+    for r in rows:
+        slates.setdefault((r["season"], r["week"]), []).append(r)
+    groups = list(slates.values())
+    if not groups:
+        return ["  no priced board rows — this box has no odds_history, or "
+                "no season is ingested"]
+
+    def roi(sample, k):
+        staked = ret = hits = n = 0.0
+        for g in sample:
+            top = sorted(g, key=lambda r: -r["cal"])[:k]
+            if len(top) < k:
+                continue
+            for r in top:
+                staked += 1.0
+                hits += r["scored"]
+                ret += (_decimal(r["odds"]) - 1.0) if r["scored"] else -1.0
+                n += 1
+        return (ret / staked, hits / n, int(n)) if staked else None
+
+    rng = random.Random(seed)
+    out = [f"NFL likelihood board · ROI at the price on the screen "
+           f"({len(groups)} slates)",
+           "  depth        bets    hit    avg price      ROI    95% by slate"]
+    for k in depths:
+        got = roi(groups, k)
+        if not got:
+            continue
+        r_all, hit, n = got
+        boot = []
+        for _ in range(ROI_RESAMPLES):
+            draw = [groups[rng.randrange(len(groups))] for _ in groups]
+            g = roi(draw, k)
+            if g:
+                boot.append(g[0])
+        boot.sort()
+        lo = boot[int(0.025 * len(boot))]
+        hi = boot[int(0.975 * len(boot)) - 1]
+        avg = sum(r["odds"] for g in groups
+                  for r in sorted(g, key=lambda x: -x["cal"])[:k]
+                  if len(g) >= k) / max(n, 1)
+        verdict = ("   <-- profitable" if lo > 0 else
+                   "   <-- losing" if hi < 0 else "   inside the noise")
+        out.append(f"   top {k:<8d} {n:5d}  {hit:5.1%}   {avg:+7.0f}   "
+                   f"{r_all:+7.2%}   [{lo:+.1%},{hi:+.1%}]{verdict}")
+    out.append("  Flat one unit a row at the LONGEST price quoted, ranked "
+               "within each slate.")
+    out.append("  An interval spanning zero is not a green light: it is the "
+               "data declining to say.")
+    return out
+
+
 def bands(rows: list, min_band: int = MIN_BAND) -> list:
     """Per market band: model mean, market mean, realised rate, n."""
     out = []
@@ -225,5 +359,28 @@ def fit_lines(got, rows) -> list:
     return lines
 
 
-__all__ = ["BANDS", "MIN_BAND", "MIN_FIT", "joined", "bands", "report_lines",
-           "fit", "fit_lines"]
+__all__ = ["BANDS", "MIN_BAND", "MIN_FIT", "ROI_DEPTHS", "joined", "bands",
+           "board_priced", "report_lines", "roi_lines", "fit", "fit_lines"]
+
+
+if __name__ == "__main__":                       # pragma: no cover
+    import sys
+    from . import db as _db
+    argv = sys.argv[1:]
+    conn = _db.connect()
+    if "--roi" in argv:
+        print("joining the likelihood board to the prices on the screen...")
+        rows = board_priced(conn)
+        print(f"  {len(rows):,} board rows with a real close\n")
+        for line in roi_lines(rows):
+            print(line)
+    else:
+        rows = joined(conn)
+        if not rows:
+            print("  no joined player-weeks — this box has no odds_history, "
+                  "or no season is ingested")
+            sys.exit(1)
+        for line in report_lines(rows):
+            print(line)
+        print("\n  --roi to price the board instead of grading its bands.")
+    conn.close()
