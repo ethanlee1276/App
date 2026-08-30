@@ -812,6 +812,20 @@ def main() -> None:
                         "long_shots": result.get("long_shots") or []})
             if ls_logged:
                 print(f"Long shots: {ls_logged} TD pick(s) journaled.")
+            # THE LIKELIHOOD BOARD, to its own bucket. Ethan, 2026-08-30:
+            # "which bets do we trust more as now its confusing. also
+            # which ones are we recording?" The answer was that we
+            # recorded the board built on the signal that measures as
+            # noise and recorded nothing from the board built on the two
+            # that measure well. Same shape as the long shots above —
+            # flat stake, zero dollars, never the headline record — so
+            # that in a few weeks the ledger rather than an AUC says
+            # which board to trust.
+            ml_logged = ledger.log_most_likely(
+                lconn, {"sport": "nfl", "date": result.get("date", ""),
+                        "most_likely": result.get("most_likely") or []})
+            if ml_logged:
+                print(f"Most likely: {ml_logged} row(s) journaled.")
             # Yardage-market flags settle from the weekly stats that
             # maintenance ingests daily in season (Aug–Feb).
             st_logged = ledger.log_stale_flags(lconn, result)

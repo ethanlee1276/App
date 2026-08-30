@@ -674,13 +674,41 @@ def main() -> None:
     out["qb"] = cfbstatus.summary(games)
 
     if not games:
+        # "OFFSEASON" WAS AN INTERPRETATION ASSERTED AS A FACT, and on
+        # 2026-08-30 it was the wrong one: the board read `status:
+        # "offseason"` with a note saying the engine "goes live with the
+        # schedule", the day AFTER the college season opened.
+        #
+        # An empty fetch has more than one cause. There may genuinely be
+        # no FBS games on this date — a Tuesday in June, or a Sunday in
+        # September. The date may fall inside a running season on a quiet
+        # day. Or the feed may have answered with nothing. Only the first
+        # is the offseason, and the difference is exactly what a reader
+        # seeing an empty board needs.
+        #
+        # The build can tell them apart from data it already pays for:
+        # every successful build fetches RESULT_WINDOW_DAYS of history,
+        # so those days are in the same 24-hour cache this reads.
+        recent = _recent_games(day, lookup)
+        if recent:
+            last = max(g.get("date", "")[:10] for g in recent)
+            out.update(status="no games today",
+                       note=f"No FBS games on this date, but the season is "
+                            f"running — {len(recent)} game(s) in the last "
+                            f"{NEARBY_DAYS} days, most recently {last}. This "
+                            f"is a quiet date, not the offseason.")
+            _write(out, args.out)
+            print(f"CFB {args.date}: no games today (season running, last "
+                  f"{last}). Wrote {args.out}")
+            return
         out.update(status="offseason",
-                   note="No FBS games on this date. The engine (attention "
+                   note="No FBS games on this date, and none in the last "
+                        f"{NEARBY_DAYS} days either. The engine (attention "
                         "tiers, the two refusals, the 0–100 grade and the "
                         "slate caps) is built and tested — it goes live with "
                         "the schedule.")
         _write(out, args.out)
-        print(f"CFB {args.date}: no games. Wrote {args.out}")
+        print(f"CFB {args.date}: no games, none nearby. Wrote {args.out}")
         return
 
     priced, odds_note = ({}, "no odds requested — engine ran with no "
@@ -943,11 +971,18 @@ def main() -> None:
         ls_n = ledger.log_longshots(
             lconn, {"sport": "cfb", "date": args.date,
                     "long_shots": out.get("long_shots") or []})
+        # The likelihood board to its own bucket, same as the NFL's — see
+        # `ledger.log_most_likely`. College ranks at 0.675 AUC on who
+        # scores against the NFL's 0.721, so it needs the settled record
+        # at least as much.
+        ml_n = ledger.log_most_likely(
+            lconn, {"sport": "cfb", "date": args.date,
+                    "most_likely": out.get("most_likely") or []})
         settled = ledger.settle_from_history(lconn, conn, sport="cfb")
-        if n or ls_n or settled:
+        if n or ls_n or ml_n or settled:
             ledger.export_json(lconn, "web/data/record.json")
-            print(f"Journal: {n} CFB bet(s) + {ls_n} long shot(s) logged, "
-                  f"{settled} settled.")
+            print(f"Journal: {n} CFB bet(s) + {ls_n} long shot(s) + "
+                  f"{ml_n} likely row(s) logged, {settled} settled.")
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 
@@ -962,6 +997,31 @@ def main() -> None:
     if result["no_qualifying"]:
         print("  No qualifying plays at current numbers — the expected output "
               "on most Saturdays, not a failure.")
+
+
+#: How far back to look before calling an empty date the offseason.
+#: Ten days spans a bye week and the gap either side of it, and every one
+#: of those days is already in the scoreboard cache on any date the
+#: 14-day results window has been fetched for.
+NEARBY_DAYS = 10
+
+
+def _recent_games(day, lookup) -> list:
+    """FBS games in the ten days before `day`. Never raises.
+
+    Keyless and cached for 24 hours, so on a true offseason date this
+    costs ten requests once a day rather than ten per refresh cycle. A
+    fetch that fails is skipped by `load_range` itself, which means the
+    honest failure mode here is "found nothing" — and that lands on the
+    offseason branch, which is where an unknown belonged before this
+    existed. No new way to be wrong, one new way to be right.
+    """
+    try:
+        return cfbdata.load_range(
+            _iso(day - datetime.timedelta(days=NEARBY_DAYS)),
+            _iso(day - datetime.timedelta(days=1)), conferences=lookup)
+    except Exception:                                  # noqa: BLE001
+        return []
 
 
 def _has_board(path: str) -> bool:

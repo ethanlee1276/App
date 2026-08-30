@@ -720,6 +720,111 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
     return n
 
 
+#: How deep into the likelihood board to journal. Ethan, 2026-08-30, on
+#: the two boards: "which bets do we trust more as now its confusing.
+#: also which ones are we recording?"
+#:
+#: The answer was that we recorded the board built on the signal that
+#: measures as NOISE and recorded nothing from the board built on the two
+#: that measure well — 0.721 AUC on who scores, 0.69-0.77 on who clears a
+#: line, against 0.468 for where the market is wrong. Seven of eight
+#: likelihood rows on a sample slate left no trace anywhere.
+#:
+#: TEN, NOT FORTY, and the number is the lesson from `log_longshots`
+#: rather than a preference. The watchlist used to journal two hundred
+#: rows a night into a bucket nobody read, and it made every audit and
+#: every stuck-bet report a wall of names. `tdbacktest.board_report`
+#: grades this board at depths 5, 10, 20 and 40 and the signal is at the
+#: top: the first five rows land 6.8 points above what they claim, the
+#: first forty are inside the noise. Ten answers the headline claim at
+#: about seventy rows a week.
+LIKELY_JOURNAL_DEPTH = 10
+
+
+def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
+                    depth: int = LIKELY_JOURNAL_DEPTH) -> int:
+    """Journal the top of the likelihood board to its own bucket.
+
+    ``category='likely'``, a small flat stake and ZERO dollar exposure —
+    the same shape as the long-shot bucket, and for the same reason. This
+    is a measurement, not a position: the board claims to rank who
+    actually hits, and until it has a settled record that claim rests on
+    a backtest. Nothing here touches the headline record.
+
+    NO NEW SETTLE PATH. `settle_from_history` selects open bets with no
+    category filter and every market this board carries — anytime_td,
+    rush_yds, rec_yds, receptions, pass_yds — is a `player_game_logs`
+    market, so these grade themselves on the same pass as everything
+    else.
+
+    THE PROBABILITY JOURNALED IS THE ONE THE PAGE SHOWED. `model_prob`,
+    not the raw model number and not the recommendation's `hit_prob`:
+    the question this bucket exists to answer is whether the figure a
+    reader acted on was true.
+    """
+    sport = result.get("sport", "nfl")
+    date = result.get("date", "")
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    rows = (result.get("most_likely") or [])[:max(0, int(depth))]
+    n = 0
+    for r in rows:
+        market = r.get("market", "")
+        try:
+            odds = int(r.get("odds") or 0)
+        except (TypeError, ValueError):
+            continue
+        # `likely.build` already refuses a proxy price and an insane one.
+        # Repeated here for the reason the long-shot journal gives: the
+        # journal is the last line of defence against fictional P&L, and
+        # a board filter is one refactor away from not being one.
+        if not r.get("player") or abs(odds) < 100 \
+                or (r.get("book") or "").lower() == "proxy":
+            continue
+        if r.get("model_prob") is None:
+            continue
+        # NORMALISED SO IT CAN ACTUALLY GRADE, and the first cut of this
+        # could not. `_grade_side_aware` computes `actual > b["line"]`
+        # and compares the side against "OVER" — so a touchdown row
+        # journaled as the board renders it (side "yes", line None)
+        # raises a TypeError on the settle pass and, if it survived that,
+        # would invert its own result. `_journal_longshot_rows` writes
+        # OVER/0.5 for exactly this reason; a second bucket carrying the
+        # same markets needs the same normalisation, not a copy of the
+        # display shape.
+        side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+        if market in LONGSHOT_MARKETS:
+            side, line = "OVER", 0.5
+        if line is None:
+            # Nothing to grade against. A row that can never settle is
+            # the failure `log_longshots` retired the watchlist over —
+            # it sits open forever and turns every audit into a wall.
+            continue
+        # The NFL settles on its WEEK label; every other sport on the
+        # game's own date. Same fork, and the same reason, as
+        # `_journal_longshot_rows` — a bet dated one day off its own
+        # result cannot settle.
+        row_date = date if sport == "nfl" \
+            else str(r.get("game_date") or "").strip() or date
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, "
+            "side, line, book, odds, projection, hit_prob, edge, confidence, "
+            "grade, stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
+            (now, sport, row_date, r["player"], market,
+             side, line, r.get("book", ""), odds,
+             r.get("projection"), r.get("model_prob"),
+             # NOT an edge claim. This board is ranked on probability and
+             # never on price, so the column carries the gap against the
+             # book only as evidence — the thing being scored is
+             # `hit_prob` above.
+             None if r.get("implied_prob") is None
+             else round(float(r["model_prob"]) - float(r["implied_prob"]), 4),
+             None, "Likely", flat_stake, 0.0))
+        n += cur.rowcount or 0
+    conn.commit()
+    return n
+
+
 def _journal_longshot_rows(conn, rows, sport, date, now, category,
                            flat_stake) -> int:
     n = 0
