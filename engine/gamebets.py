@@ -366,6 +366,12 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         "bet_type": "moneyline",
         "market": "moneyline",
         "market_label": "Moneyline",
+        # The moneyline is the one game market that never grew the
+        # fabricated-price bug — `_game_bets` has always refused to price
+        # it without `g.home_ml and g.away_ml`. It still has to SAY so,
+        # or `journal_skip_reason` sees None here and cannot tell this
+        # card apart from one built on an invented number.
+        "has_market": True,
         "home": rec.home,
         "away": rec.away,
         "team": rec.pick,                 # for the team badge in the UI
@@ -473,9 +479,21 @@ def _calibration_note(sport: str, market: str) -> list[str]:
         return []
 
 
+def _real_price(*odds) -> bool:
+    """Did a book actually post every price this card was built on?
+
+    0 means NOT OFFERED (see engine/models.Game). A game bet that has
+    never carried `has_market` cannot be refused by
+    `ledger.journal_skip_reason`, whose proxy guard tests `is False` — and
+    None is not False, so every game bet slipped past a check the prop
+    layer has always applied.
+    """
+    return all(bool(o) for o in odds)
+
+
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
-              credible=True):
+              credible=True, has_market=True):
     ev = expected_value(win, odds)
     confidence = _ml_confidence(edge, win)
     grade = _grade(confidence, edge) if credible else "Pass"
@@ -487,6 +505,11 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
     return {
         "bet_type": bet_type,
         "market": bet_type,
+        # NOW SET, and it never was. `ledger.journal_skip_reason` refuses
+        # a proxy-priced row with `if r.get("has_market") is False` — and
+        # a game bet returned None, which is not False, so every one of
+        # them walked past a guard the prop layer has always applied.
+        "has_market": bool(has_market),
         "market_label": market_label,
         "home": home,
         "away": away,
@@ -532,7 +555,8 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
     return _game_bet("total", "Total", home, away, win, fair, edge, odds,
                      pick_label=f"{side} {market_total:g}", side=side, line=market_total,
                      reasons=reasons, headline=f"{side} {market_total:g} {units}",
-                     credible=credible)
+                     credible=credible,
+                     has_market=_real_price(over_odds, under_odds))
 
 
 def price_team_total(sport: str, team: str, home: str, away: str,
@@ -560,7 +584,8 @@ def price_team_total(sport: str, team: str, home: str, away: str,
     return _game_bet("team_total", "Team total", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {side} {line:g}", team=team, side=side, line=line,
                      reasons=reasons, headline=f"{team} team {side} {line:g}",
-                     credible=credible)
+                     credible=credible,
+                     has_market=_real_price(over_odds, under_odds))
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,
@@ -591,4 +616,5 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
     return _game_bet("spread", "Spread", home, away, win, fair, edge, odds,
                      pick_label=f"{team} {spread:+g}", team=team, line=spread,
                      reasons=reasons, headline=f"{team} {spread:+g}",
-                     credible=credible)
+                     credible=credible,
+                     has_market=_real_price(home_odds, away_odds))

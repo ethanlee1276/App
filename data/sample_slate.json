@@ -153,7 +153,11 @@
       "away_off": 2.0,
       "away_def": -0.5,
       "date": "2026-01-04",
-      "kickoff": "13:00"
+      "kickoff": "13:00",
+      "total_over_odds": -110,
+      "total_under_odds": -110,
+      "spread_home_odds": -110,
+      "spread_away_odds": -110
     },
     {
       "home": "MIN",
@@ -181,7 +185,11 @@
       "away_off": 4.0,
       "away_def": -1.0,
       "date": "2026-01-05",
-      "kickoff": "20:15"
+      "kickoff": "20:15",
+      "total_over_odds": -110,
+      "total_under_odds": -110,
+      "spread_home_odds": -110,
+      "spread_away_odds": -110
     },
     {
       "home": "KC",
@@ -225,7 +233,11 @@
       "away_off": 3.0,
       "away_def": -1.5,
       "date": "2026-01-04",
-      "kickoff": "16:25"
+      "kickoff": "16:25",
+      "total_over_odds": -110,
+      "total_under_odds": -110,
+      "spread_home_odds": -110,
+      "spread_away_odds": -110
     }
   ],
   "props": [

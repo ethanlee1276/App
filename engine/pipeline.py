@@ -542,7 +542,13 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                                                    g.home_ml, g.away_ml, ctx,
                                                    sport="nfl"))
             out.append(_finish_bet(ml, g, config))
-        if has_rating:
+        # A PRICE IS REQUIRED, the way the moneyline above has always
+        # required one. `g.total_over_odds` is 0 when no book posted the
+        # total, and pricing it anyway meant comparing a projection to
+        # `Game.total`'s fabricated 44.0 at a fabricated -110 — with
+        # nothing on the row to say either number was invented.
+        priced_total = bool(g.total_over_odds and g.total_under_odds)
+        if has_rating and priced_total:
             pt = project_total("nfl", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.1f} / def {g.home_def:+.1f}, "
                     f"{g.away} off {g.away_off:+.1f} / def {g.away_def:+.1f} (pts/game vs avg)"]
@@ -550,6 +556,9 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                                 g.total_over_odds, g.total_under_odds, "points", tctx)
             out.append(_finish_bet(total, g, config))
             # Team totals — each team's own points, line split from total ± spread.
+            # THE SAME PRICE GATE, because the line itself is derived from
+            # the total and the spread: without a posted total there is no
+            # number to split.
             ph = project_team_points("nfl", g.home_off, g.away_def)
             pa = project_team_points("nfl", g.away_off, g.home_def)
             hl, al = _half((g.total - g.spread) / 2), _half((g.total + g.spread) / 2)
@@ -557,7 +566,8 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                                                     units="points"), g, config))
             out.append(_finish_bet(price_team_total("nfl", g.away, g.home, g.away, pa, al,
                                                     units="points"), g, config))
-            if g.spread:
+        if has_rating:
+            if g.spread and g.spread_home_odds and g.spread_away_odds:
                 margin = game_margin("nfl", g.home_rating, g.away_rating)
                 sctx = [f"Projected margin {margin:+.1f} pts (home)"]
                 spread = price_spread("nfl", g.home, g.away, margin, g.spread,

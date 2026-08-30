@@ -97,10 +97,13 @@ def load_slate(path: str | Path) -> Slate:
             home_def=g.get("home_def", 0.0),
             away_off=g.get("away_off", 0.0),
             away_def=g.get("away_def", 0.0),
-            total_over_odds=g.get("total_over_odds", -110),
-            total_under_odds=g.get("total_under_odds", -110),
-            spread_home_odds=g.get("spread_home_odds", -110),
-            spread_away_odds=g.get("spread_away_odds", -110),
+            # 0, not -110 — see engine/models.Game. A missing price is
+            # "no book offered this", and filling it with the standard
+            # juice makes a fabricated market look like a real one.
+            total_over_odds=g.get("total_over_odds", 0),
+            total_under_odds=g.get("total_under_odds", 0),
+            spread_home_odds=g.get("spread_home_odds", 0),
+            spread_away_odds=g.get("spread_away_odds", 0),
         )
         for g in data["games"]
     ]

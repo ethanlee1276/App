@@ -257,7 +257,16 @@ class Game:
     home_def: float = 0.0
     away_off: float = 0.0
     away_def: float = 0.0
-    total_over_odds: int = -110
-    total_under_odds: int = -110
-    spread_home_odds: int = -110
-    spread_away_odds: int = -110
+    # 0 = NOT OFFERED, the same convention `home_ml` above already uses
+    # and the reason it is the only game market that never had this bug.
+    #
+    # These defaulted to -110, which is indistinguishable from a book
+    # actually quoting -110. A game whose total no book had posted was
+    # therefore priced against a fabricated price beside `total`'s own
+    # fabricated 44.0 — and `has_market`, the flag
+    # `ledger.journal_skip_reason` uses to refuse a proxy-priced bet, was
+    # never set on a game bet at all, so nothing downstream could tell.
+    total_over_odds: int = 0
+    total_under_odds: int = 0
+    spread_home_odds: int = 0
+    spread_away_odds: int = 0
