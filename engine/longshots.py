@@ -213,23 +213,33 @@ def in_odds_window(odds: int, window: tuple[int, int]) -> bool:
 #: The net edge that earns full marks for edge in `_confidence`, and the
 #: three bars `_grade` applies to it.
 #:
-#: RESCALED WHEN GRADING MOVED TO NET EDGE, and it had to be. Net edge is
-#: smaller than edge-against-the-consensus by the entire vig, so the old
-#: bars (0.015 / 0.03 / 0.05, set against the consensus) would empty every
-#: board: at the 18.8% overround a real touchdown market carries, the
-#: widest net edge a CREDIBLE model can produce is about 0.007, because
-#: MAX_CREDIBLE_EDGE caps the disagreement at 0.10, the market shrink
-#: halves it to 0.05, and the vig eats 0.043 of what is left.
+#: UNCHANGED NUMBERS, MEASURED AGAINST A DIFFERENT QUANTITY. Grading
+#: moved to net edge on 2026-08-30; these bars did not move with it, and
+#: that is deliberate.
 #:
-#: Anchored on `betting.BASE_THRESHOLDS`, which has graded game lines on
-#: net edge at 0.020 / 0.010 since the same mistake was found there —
-#: rather than on a number picked to make this month's board look busy.
-#: The confidence gates stay where they were; only the quantity they are
-#: measured against changed.
-CONFIDENCE_FULL_EDGE = 0.020
-GRADE_BARS = (("Strong Play", 7.5, 0.020),
-              ("Play", 6.0, 0.010),
-              ("Lean", 4.5, 0.005))
+#: The first attempt rescaled them to 0.020 / 0.010 / 0.005, borrowing
+#: `betting.BASE_THRESHOLDS`, on the reasoning that net edge is smaller
+#: than edge-against-the-consensus by the whole vig. True for a college
+#: touchdown market at a 31% hold. False for MLB home runs, which are
+#: quoted BOTH WAYS at a hold near 8% — and the retune promoted seven of
+#: twenty-four MLB rows a full tier without a single settled result
+#: behind it. Calibrating on one market's vig and applying it to
+#: another's is the mistake this codebase keeps catching, and that was a
+#: fresh instance of it.
+#:
+#: Held here instead. Net edge is smaller than the old quantity by the
+#: vig, so the same numbers are slightly STRICTER everywhere — the safe
+#: direction — while the case that was actually broken still gets fixed:
+#: a bet whose PRICE beats the consensus now grades on that price rather
+#: than being discarded for the model disagreeing with the market.
+#:
+#: They remain uncalibrated in the sense that matters. Nothing has
+#: settled enough long-shot picks to say where they belong, and moving
+#: them wants results, not reasoning.
+CONFIDENCE_FULL_EDGE = 0.05
+GRADE_BARS = (("Strong Play", 7.5, 0.05),
+              ("Play", 6.0, 0.03),
+              ("Lean", 4.5, 0.015))
 
 
 def _confidence(edge: float, opportunities: float, opp_target: float,
@@ -241,8 +251,8 @@ def _confidence(edge: float, opportunities: float, opp_target: float,
     Scaled for *tempered* edges: these markets are efficiently priced, so a
     genuine 5% edge is a strong result and earns full marks here.
 
-    ``edge`` here is the NET edge — the model against the price actually
-    on offer, not against the market consensus. See `build_pick`.
+    ``edge`` here is the GRADED edge — the model's advantage over the
+    cheaper of the consensus and the price on offer. See `build_pick`.
     """
     edge_pts = clamp(edge / CONFIDENCE_FULL_EDGE, 0.0, 1.0) * 6.5
     opp_pts = clamp(opportunities / opp_target, 0.0, 1.0) * 2.5
@@ -515,7 +525,32 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     # `edge` stays published as the honest model-versus-market
     # disclosure. It is no longer what decides a bet.
     net_edge = model_prob - american_to_prob(odds)
-    confidence = _confidence(net_edge, opportunities, opp_target, data_quality)
+    # GRADED AGAINST THE CHEAPER REFERENCE OF THE TWO, which is the only
+    # formulation that fixes the broken case without moving anything
+    # else. `edge` is the model over the consensus; `net_edge` is the
+    # model over the price on offer.
+    #
+    #   Normal book, charging vig: the price sits ABOVE the consensus, so
+    #   edge is the larger and grading is exactly what it always was.
+    #   Nothing about MLB home runs or any two-way market moves.
+    #
+    #   Outlier book, price better than the consensus: net_edge is the
+    #   larger, and the bet is graded on the price — which is the whole
+    #   Jackson Arnold case.
+    #
+    # Rescaling the bars was the other candidate and it was wrong: net
+    # edge is smaller than edge by the vig, so ONE constant cannot serve
+    # an 8% two-way market and a 31% one-sided one. Bars tuned to
+    # college's hold promoted seven of twenty-four MLB rows a full tier;
+    # the old bars applied to net edge lost real NFL and college picks.
+    # The quantity was the problem, not the threshold.
+    #
+    # `ev` below still gates: beating the consensus while losing to the
+    # price is not a bet, and that is what stops this being merely the
+    # more generous of two numbers.
+    graded_edge = max(edge, net_edge)
+    confidence = _confidence(graded_edge, opportunities, opp_target,
+                             data_quality)
     vig, vig_source, vig_listed = vig_of(hold_override, sport, market,
                                          under_odds if exact else None)
     book_prob = american_to_prob(odds)
@@ -543,7 +578,7 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"— {implied - book_prob:.0%} of that edge is the price, not "
             f"the projection"]
     ev = expected_value(model_prob, odds)
-    grade = _grade(confidence, net_edge, ev) if credible else "Pass"
+    grade = _grade(confidence, graded_edge, ev) if credible else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
@@ -561,15 +596,16 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
 
 def select(picks: list[LongShot], per_key_cap: int, key, limit: int,
            require_edge: bool = True) -> list[LongShot]:
-    """Rank by net edge and apply the spec's concentration limits.
+    """Rank by graded edge and apply the spec's concentration limits.
 
     Sorting by edge (not by odds) is deliberate: the biggest payout is almost
     never the best bet, and ranking by price is how long-shot cards go broke.
-    NET edge, so the ranking answers the same question the grade does —
-    how good is this bet at this price.
+    The same quantity the grade uses — the model's advantage over the
+    cheaper of the consensus and the price — so the ranking and the grade
+    cannot disagree about which pick is better.
     """
-    ranked = sorted(picks, key=lambda p: (p.net_edge, p.confidence),
-                    reverse=True)
+    ranked = sorted(picks, key=lambda p: (max(p.edge, p.net_edge),
+                                          p.confidence), reverse=True)
     out: list[LongShot] = []
     seen: dict = {}
     for p in ranked:

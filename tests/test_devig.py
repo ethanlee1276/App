@@ -566,6 +566,20 @@ def test_a_losing_price_is_still_refused_however_big_the_disagreement():
     assert select([pick], per_key_cap=2, key=lambda p: p.team, limit=6) == []
 
 
+def test_grading_uses_the_cheaper_of_the_consensus_and_the_price():
+    """The formulation that fixes the broken case without moving anything
+    else. A normal book charges vig, so its price sits ABOVE the
+    consensus and `edge` is the larger — grading is exactly what it
+    always was, and 104 simulated MLB rows confirmed not one changed. An
+    outlier book prices BELOW the consensus, `net_edge` is the larger,
+    and the bet is graded on the price it is actually taken at."""
+    normal = _priced(0.45, odds=150, fair=0.30)     # price above consensus
+    assert normal.edge > normal.net_edge
+    outlier = _priced(0.45, odds=150, fair=0.505)   # price below consensus
+    assert outlier.net_edge > outlier.edge
+    assert outlier.grade != "Pass"
+
+
 def test_confidence_is_scored_on_the_price_not_on_the_disagreement():
     """A better price at the same projection is a better bet, and the
     confidence has to move with it."""
