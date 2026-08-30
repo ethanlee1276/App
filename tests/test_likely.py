@@ -278,6 +278,34 @@ def test_the_nightly_refits_it():
     assert "save_fits" in src and "likelihood" in src.lower()
 
 
+def test_the_money_question_is_recorded_with_its_error_bars():
+    """The likelihood board is NOT journaled, and the reason is a
+    measurement rather than caution. Both orderings bet the top quarter
+    of the same qualifying pool; receptions favoured likelihood by +11.7%
+    against +2.4% ROI, and rec_yds showed no difference at all. Every one
+    of those numbers carries about ten points of standard error on 76-86
+    bets, and the hit-rate gap is z = +1.5.
+
+    Recorded with the intervals because a table without them is how a
+    1.5-sigma result becomes a strategy."""
+    import inspect
+    src = inspect.getsource(K)
+    for bit in ("+11.7%", "+2.4%", "65.8%", "z = +1.5", "not proof"):
+        assert bit in src, f"the money measurement lost {bit}"
+    assert "NOT JOURNALED" in src
+
+
+def test_nothing_on_this_board_reaches_the_journal():
+    """A likelihood row has no stake and no journal path. The guard is
+    `ledger.journal_skip_reason`, which only takes rows carrying
+    `recommended` and a positive stake — neither of which this board
+    emits."""
+    got = K.from_prop(_prop(), _always)
+    assert "stake_units" not in got and "recommended" not in got
+    from engine.ledger import journal_skip_reason
+    assert journal_skip_reason(dict(got)) is not None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

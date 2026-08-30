@@ -88,6 +88,49 @@ BACKTESTED = {
 MIN_SETTLED = 25
 
 
+def game_shrink(sport: str, market: str, lookup=None) -> tuple:
+    """``(shrink, source)`` — how much of a disagreement survives.
+
+    THE NUMBER THAT DECIDES WHETHER A GAME BET EXISTS, and it was
+    invisible. `gamebets.temper` shrinks every game-market claim toward
+    the close by a fraction `engine.gamecal` MEASURED from our own graded
+    history, falling back to a 0.5 guess where nothing has been measured.
+    On a box where it is fitted the fraction is near zero — the model has
+    no measured edge on game lines and the board correctly goes quiet.
+    On a box where it is not, half of every disagreement survives and the
+    board bets freely.
+
+    Replayed over 1,184 NFL games, the difference is the whole board:
+    fitted (0.03 / 0.09) grades NOTHING, and the 0.5 fallback places 232
+    total bets at -7.5% ROI and 188 spreads at +2.6%. A market missing its
+    fit is not a market with no opinion — it is a market betting on a
+    guess the data has already refused.
+    """
+    # INJECTABLE, because a test that reads this box's fitted store is
+    # asserting about the machine it happens to run on — and this file's
+    # whole subject is that two boxes disagree. `run_tests` points
+    # QB_MODELS_DIR at an empty sandbox, where an ambient lookup reports
+    # every game market unfitted and the assertions flip.
+    if lookup is None:
+        try:
+            from .gamecal import shrink_for as lookup
+        except Exception:                                 # noqa: BLE001
+            return (None, "unavailable")
+    try:
+        got = lookup(sport, market)
+    except Exception:                                     # noqa: BLE001
+        return (None, "unavailable")
+    if got is None:
+        # `price_team_total` asks for the TOTAL key, so its own missing
+        # entry costs nothing — say which is in force rather than
+        # implying it is unguarded.
+        if market == "team_total":
+            inherited = game_shrink(sport, "total", lookup)[0]
+            return (inherited, "inherits total")
+        return (None, "UNFITTED — falls back to the 0.5 guess")
+    return (got, "measured")
+
+
 def calib_state(sport: str, market: str) -> dict:
     """Everything the calibration layer knows about one market."""
     from . import calibrate as C
@@ -133,7 +176,7 @@ def settled_record(conn, sport: str, market: str) -> dict:
             "roi": (float(row[2] or 0.0) / staked) if staked else None}
 
 
-def market_row(sport: str, market: str, conn=None) -> dict:
+def market_row(sport: str, market: str, conn=None, lookup=None) -> dict:
     from .quality import tier_min_edge, market_tier
     game = market in GAME_MARKETS
     got = {"market": market, "game": game,
@@ -145,6 +188,8 @@ def market_row(sport: str, market: str, conn=None) -> dict:
            "min_edge": None if game else tier_min_edge(market)}
     got.update(calib_state(sport, market))
     got["backtest"] = BACKTESTED.get(market, "") if game else ""
+    if game:
+        got["shrink"], got["shrink_src"] = game_shrink(sport, market, lookup)
     got["settled"] = settled_record(conn, sport, market) if conn else {"n": 0}
     return got
 
@@ -164,6 +209,17 @@ def verdict_for(row: dict) -> tuple[str, str]:
                 "the data wanted a bigger correction than the search "
                 "allowed, so the stored temperature is a cap. Refit, or "
                 "accept the model is wrong here")
+    # AN UNFITTED SHRINK OUTRANKS EVERY OTHER GAME-MARKET DIAGNOSIS,
+    # because it is the one that is actively spending money. Replayed,
+    # the 0.5 fallback places 232 total bets at -7.5% ROI where the
+    # measured fraction places none at all.
+    if row.get("game") and row.get("shrink") is None \
+            and str(row.get("shrink_src", "")).startswith("UNFITTED"):
+        return ("BETTING ON A GUESS",
+                "no measured shrink for this market, so half of every "
+                "disagreement with the close survives — and the replay says "
+                "the measured fraction is near zero. Run the game-line "
+                "calibration before trusting a single one of these")
     if row.get("game") and row.get("backtest") is None:
         return ("NO BACKTEST",
                 "no replay exists for this market at all — it is publishing "
@@ -210,7 +266,7 @@ def report(sport: str = "nfl", conn=None) -> list:
     try:
         out = [f"=== {sport.upper()} readiness, market by market"]
         out.append(f"  {'market':<13}{'calib':>14}{'reliable':>10}"
-                   f"{'min edge':>10}{'settled':>9}  state")
+                   f"{'bar/shrink':>11}{'settled':>9}  state")
         rows = []
         for label, markets in (("player props", PLAYER_MARKETS),
                                ("game bets", GAME_MARKETS)):
@@ -224,12 +280,15 @@ def report(sport: str = "nfl", conn=None) -> list:
                 s = r["settled"]
                 bar = ("n/a" if r["min_edge"] is None
                        else f"{r['min_edge']:.1%}")
+                if r.get("game"):
+                    bar = ("none" if r.get("shrink") is None
+                           else f"k={r['shrink']:.3f}")
                 seen = (f"{s.get('n', 0)}"
                         + (f"+{s['open']}o" if s.get("open") else ""))
                 out.append(
                     f"  {market:<13}{calib:>14}"
                     f"{('yes' if r['reliable'] else 'NO'):>10}"
-                    f"{bar:>10}{seen:>9}  {state}")
+                    f"{bar:>11}{seen:>9}  {state}")
         out.append("")
         for r in rows:
             state, why = verdict_for(r)

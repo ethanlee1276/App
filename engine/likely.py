@@ -62,6 +62,38 @@ RANK_AUC = {
     "pass_yds": 0.691,
 }
 
+#: SHOULD THIS BOARD GET REAL MONEY? Ethan, 2026-08-30: "we need to
+#: figure out if we are gonna put real money on these bets and record
+#: them and if so we need them to be in the recommended bets."
+#:
+#: Measured rather than argued. Both orderings bet the TOP QUARTER of the
+#: same qualifying pool — same rows available, same stakes, same prices,
+#: same vig — so the only difference is which of them get the money:
+#:
+#:     market      picked by     bets   hit      ROI    95% interval
+#:     receptions  likelihood      76  65.8%   +11.7%   [-8.7%, +32.1%]
+#:     receptions  edge            76  53.9%    +2.4%   [-19.0%, +23.8%]
+#:     rec_yds     likelihood      86  54.7%    +3.2%   [-16.9%, +23.3%]
+#:     rec_yds     edge            86  54.7%    +3.9%   [-16.2%, +24.0%]
+#:
+#: The receptions result is the best evidence this thesis has, and it is
+#: not proof: the hit-rate gap is +11.9 points at z = +1.5, and every ROI
+#: above carries about ten points of standard error on 76-86 bets. One
+#: market suggests likelihood-ranking is better, one shows no difference
+#: at all, and both sit on fourteen weeks of a single season.
+#:
+#: SO THIS BOARD IS NOT JOURNALED, and the reason is specific rather than
+#: cautious. Ranking says who hits; it does not say whether the price is
+#: worth taking. A -260 near-lock can be correctly ranked first and still
+#: lose money, because being right 70% of the time at a price that needs
+#: 72% is a losing bet made confidently. This board deliberately ignores
+#: EV when ordering, so wiring it to the journal as it stands would stake
+#: negative-EV locks with conviction.
+#:
+#: What would settle it: the same table on two or three more seasons of
+#: closes, and on more than one market. `engine.yardagefit --real` prints
+#: it, and the harvest is the binding constraint, not the code.
+#:
 #: Below this a market cannot sort its own board and has no business
 #: claiming who will hit. 0.5 is a coin flip; this is the floor at which
 #: an ordering is worth showing a reader.

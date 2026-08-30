@@ -193,7 +193,11 @@ def test_the_replay_result_reaches_the_verdict_for_markets_that_have_one():
     """A market can be unfitted AND replayed, and the replay is the more
     useful sentence of the two — "off the close by 4 points and never
     qualified" says far more than "needs settled rows"."""
-    row = R.market_row("nfl", "spread", None)
+    # A MEASURED SHRINK IS INJECTED, not read off this box. The suite
+    # points QB_MODELS_DIR at an empty sandbox, where every game market
+    # is legitimately unfitted — so reading the ambient store would make
+    # this assert about the machine rather than about the code.
+    row = R.market_row("nfl", "spread", None, lookup=lambda s, m: 0.0558)
     state, why = R.verdict_for(row)
     assert state == "UNMEASURED", state
     assert "Replay says:" in why and "4.05" in why
@@ -216,6 +220,61 @@ def test_every_measured_game_market_is_recorded_with_its_numbers():
     assert "min_team_games" in src
     for market in ("moneyline", "spread", "total"):
         assert R.BACKTESTED[market], market
+
+
+def test_an_unfitted_game_shrink_outranks_every_other_diagnosis():
+    """THE ONE THAT IS ACTIVELY SPENDING MONEY. `gamebets.temper` shrinks
+    a game claim toward the close by a fraction `gamecal` measured from
+    our own graded history, falling back to a 0.5 guess where nothing has
+    been measured — and replayed over 1,184 NFL games the difference IS
+    the board: fitted (0.03 / 0.09) grades nothing at all, the 0.5
+    fallback places 232 total bets at -7.5% ROI.
+
+    A market missing its fit is not a market with no opinion. It is a
+    market betting on a guess the data has already refused."""
+    row = {"game": True, "shrink": None,
+           "shrink_src": "UNFITTED — falls back to the 0.5 guess",
+           "fitted": False, "one_sided": False, "reliable": True,
+           "backtest": "something", "settled": {"n": 0, "open": 4}}
+    state, why = R.verdict_for(row)
+    assert state == "BETTING ON A GUESS", state
+    assert "half of every disagreement" in why
+    assert "near zero" in why
+    assert "before trusting" in why
+
+
+def test_an_empty_store_is_exactly_what_raises_the_alarm():
+    """And the alarm is correct on a fresh box: nothing fitted means the
+    0.5 guess is in force, which the replay says places 232 losing total
+    bets where the measured fraction places none."""
+    row = R.market_row("nfl", "total", None, lookup=lambda s, m: None)
+    assert row["shrink"] is None
+    assert R.verdict_for(row)[0] == "BETTING ON A GUESS"
+
+
+def test_a_measured_shrink_is_not_flagged():
+    row = {"game": True, "shrink": 0.03, "shrink_src": "measured",
+           "fitted": False, "one_sided": False, "reliable": True,
+           "backtest": "something", "settled": {"n": 0, "open": 4}}
+    assert R.verdict_for(row)[0] != "BETTING ON A GUESS"
+
+
+def test_team_totals_are_shown_inheriting_the_total_key_not_unguarded():
+    """`price_team_total` asks `temper` for the TOTAL key, so its own
+    missing gamecal entry costs nothing. Reporting it as unfitted would
+    raise an alarm about a market that is in fact guarded."""
+    store = {("nfl", "total"): 0.0296}
+    look = lambda sp, mk: store.get((sp, mk))          # noqa: E731
+    got, src = R.game_shrink("nfl", "team_total", look)
+    assert src == "inherits total"
+    assert got == R.game_shrink("nfl", "total", look)[0] == 0.0296
+
+
+def test_the_replay_that_sized_the_shrink_is_written_down():
+    import inspect
+    src = inspect.getsource(R.game_shrink)
+    for bit in ("232", "-7.5%", "1,184"):
+        assert bit in src, f"the shrink replay lost {bit}"
 
 
 if __name__ == "__main__":
