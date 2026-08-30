@@ -29,6 +29,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from engine import tdbook                                # noqa: E402
 from engine.tdbacktest import american_at                # noqa: E402
 
@@ -288,6 +290,63 @@ def test_the_footer_says_how_many_questions_were_asked():
                                               [(0.9, 100, 1), (0.8, 100, 0)])],
         depths=(1, 2)))
     assert "2 depths" in got and "2 chances to be fooled" in got
+
+
+# --- the harness has to measure the board the page publishes -------------
+def test_the_harness_applies_the_pages_own_refusals():
+    """THE FAILURE THAT TOOK FOUR RUNS TO SURFACE, and the one this file
+    should have caught first.
+
+    `tdbacktest.run` replays every player with prior form.
+    `likely.build` — the actual page — refuses a row under MIN_PROB and
+    any row disagreeing with the de-vigged market by more than
+    MAX_CREDIBLE_EDGE, because a twenty-point gap in a heavily bet market
+    is our error far more often than a discovery.
+
+    The harness applied neither, so every ROI it reported was about a
+    board the site never publishes. The tell was the claimed column:
+    +72.24% at top 10, which backs out to a 48% model probability against
+    a +259 price. That is a 21.7-point disagreement, and the page drops
+    it before a reader sees it."""
+    import inspect
+    src = inspect.getsource(tdbook.board_priced)
+    assert "MAX_CREDIBLE_EDGE" in src
+    assert "MIN_PROB" in src
+    assert "ONE_SIDED_HOLD" in src
+
+
+def test_the_row_that_produced_the_impossible_claim_is_refused():
+    """Named numbers, so the regression names itself."""
+    from engine.betting import MAX_CREDIBLE_EDGE
+    from engine.longshots import ONE_SIDED_HOLD
+    from engine.odds import american_to_prob
+    fair = american_to_prob(259) / ONE_SIDED_HOLD
+    assert abs(0.48 - fair) > MAX_CREDIBLE_EDGE, fair
+
+
+def test_a_credible_favourite_still_gets_through():
+    """The filter must not empty the board — that would be the same
+    failure in the other direction and would read as "no signal"."""
+    from engine.betting import MAX_CREDIBLE_EDGE
+    from engine.longshots import ONE_SIDED_HOLD
+    from engine.odds import american_to_prob
+    fair = american_to_prob(-140) / ONE_SIDED_HOLD
+    assert abs(0.62 - fair) <= MAX_CREDIBLE_EDGE, fair
+
+
+def test_the_funnel_is_published_rather_than_inferred():
+    """A harness that quietly measures a different population than the
+    page is exactly what happened here. The counts now travel with the
+    report so the population is visible rather than assumed."""
+    import inspect
+    src = inspect.getsource(tdbook.board_priced)
+    for key in ('"replayed"', '"priced"', '"thin"', '"incredible"'):
+        assert key in src, key
+    assert "funnel = dict(seen, kept=len(out))" in src
+    cli = open(os.path.join(ROOT, "engine", "tdbook.py"),
+               encoding="utf-8").read()
+    assert "the board would show" in cli
+    assert "disagreeing with the market" in cli
 
 
 if __name__ == "__main__":

@@ -119,7 +119,10 @@ def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
     """
     from . import db as _db
     from .backtest import _norm
+    from .betting import MAX_CREDIBLE_EDGE
     from .formbook import game_dates
+    from .likely import MIN_PROB
+    from .longshots import ONE_SIDED_HOLD
     from .tdbacktest import board_rows, run
 
     closes = _db.closing_odds_all_books(conn, sport, "anytime_td")
@@ -130,6 +133,10 @@ def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
     run(conn, sport=sport, seasons=seasons, collect=rows.append)
     board_rows(rows, fitter=fitter)
 
+    #: The funnel, published rather than inferred. A harness that quietly
+    #: measures a different population than the page is the failure this
+    #: file has now had three times.
+    seen = {"replayed": len(rows), "priced": 0, "thin": 0, "incredible": 0}
     out: list = []
     for r in rows:
         try:
@@ -150,10 +157,38 @@ def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
         # any plus price beats any minus price, +900 beats +650, and -110
         # beats -200. All three are the same comparison.
         best = max(int(o) for o in priced)
+        seen["priced"] += 1
+
+        # THE PAGE'S OWN REFUSALS, APPLIED HERE TOO — and the first three
+        # versions of this harness applied none of them, which made every
+        # number it produced a claim about a board the site never
+        # publishes.
+        #
+        # The tell was the claimed-ROI column: +72% at top 10, which
+        # backs out to a 48% model probability against a +259 price. That
+        # is a twenty-point disagreement with the market, and
+        # `betting.MAX_CREDIBLE_EDGE` exists to refuse exactly it — a gap
+        # that size in a heavily bet market is our error far more often
+        # than a discovery. `likely.build` drops those rows before a
+        # reader ever sees them; this measured them and called the result
+        # the Most Likely board.
+        #
+        # Same population as the page, or the comparison is fiction.
+        implied = _prob(best)
+        if implied is None:
+            continue
+        fair = implied / ONE_SIDED_HOLD
+        if r["cal"] < MIN_PROB:
+            seen["thin"] += 1
+            continue
+        if abs(r["cal"] - fair) > MAX_CREDIBLE_EDGE:
+            seen["incredible"] += 1
+            continue
         out.append({"season": r["season"], "week": r["week"],
-                    "cal": r["cal"], "rank": r["rank"],
+                    "cal": r["cal"], "rank": r["rank"], "fair": fair,
                     "player": r["player"], "odds": int(best),
                     "scored": r["scored"]})
+    board_priced.funnel = dict(seen, kept=len(out))
     return out
 
 
@@ -431,12 +466,25 @@ __all__ = ["BANDS", "MIN_BAND", "MIN_FIT", "ROI_DEPTHS", "joined", "bands",
 if __name__ == "__main__":                       # pragma: no cover
     import sys
     from . import db as _db
+    from .betting import MAX_CREDIBLE_EDGE
+    from .likely import MIN_PROB
     argv = sys.argv[1:]
     conn = _db.connect()
     if "--roi" in argv:
         print("joining the likelihood board to the prices on the screen...")
         rows = board_priced(conn)
-        print(f"  {len(rows):,} board rows with a real close\n")
+        f = getattr(board_priced, "funnel", {})
+        if f:
+            # THE POPULATION, STATED. Three earlier versions of this
+            # report measured every replayed player rather than the ones
+            # the page publishes, and nothing in the output said so.
+            print(f"  {f['replayed']:,} replayed  ->  {f['priced']:,} with a "
+                  f"real close  ->  {f['kept']:,} the board would show")
+            print(f"     dropped: {f['thin']:,} under the {MIN_PROB:.0%} "
+                  f"floor, {f['incredible']:,} disagreeing with the market "
+                  f"by more than {MAX_CREDIBLE_EDGE:.0%}\n")
+        else:
+            print(f"  {len(rows):,} board rows with a real close\n")
         for line in roi_lines(rows):
             print(line)
     else:
