@@ -5323,26 +5323,62 @@ function watchlistHTML(watch, mlb) {
     const spark = (r.recent_values || []).length > 2
       ? gamelogBars(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
       : "";
-    return `<div class="drow" style="display:flex;align-items:center;gap:12px;padding:7px 14px;
+    // THE WHOLE CHAIN, not one sentence. This list ranks who is most
+    // likely to score, which is the thing the model is measurably good
+    // at (AUC 0.721 over 22,099 graded NFL player-weeks, 0.675 over
+    // 29,047 college ones) — where the edge it claims against the price
+    // tests as noise. Shipping the honest half with a single line of
+    // reasoning while the value cards carried six had it backwards.
+    const why = (r.reasons || []).filter((x) => x !== r.primary_reason)
+      .slice(0, 6).map((x) => reasonLI(x)).join("");
+    const caveats = (r.caveats || [])
+      .map((c) => `<div class="warning">${icon('warn')} ${escapeHtml(c)}</div>`).join("");
+    const detail = why || caveats
+      ? `<div class="watch-why" hidden style="padding:2px 14px 12px 44px">
+           ${why ? `<ul class="reasons">${why}</ul>` : ""}${caveats}</div>`
+      : "";
+    return `<div class="watch-item">
+      <div class="drow"${detail ? ' data-watch-toggle role="button" tabindex="0"' +
+          ` aria-expanded="false" style="cursor:pointer"` : ""}
+        style="display:flex;align-items:center;gap:12px;padding:7px 14px;
         border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden">
       <span style="opacity:.5;min-width:18px;font-size:.85em">${i + 1}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
         <strong>${escapeHtml(r.player)}</strong>
         <span style="opacity:.55;font-size:.85em"> ${teamName(r.team)} vs ${teamName(r.opponent)}
-          · ${escapeHtml(r.primary_reason || "")}</span></span>
+          · ${escapeHtml(r.primary_reason || "")}${detail ? " ▾" : ""}</span></span>
       <span class="mini" style="flex:0 0 auto" title="${mlb ? "Home runs" : "Touchdowns"}, last ${(r.recent_values || []).length} games">${spark}</span>
       <span style="min-width:96px;text-align:right;opacity:.85;font-size:.9em">
         ${(r.model_prob * 100).toFixed(0)}% vs ${(r.implied_prob * 100).toFixed(0)}%</span>
       <span style="min-width:56px;text-align:right">${american(r.odds)}</span>
       <span style="min-width:64px;text-align:right;color:${evColor};font-size:.9em">${r.ev_per_unit > 0 ? "+" : ""}${ev}% EV</span>
-    </div>`;
+      </div>${detail}</div>`;
   }).join("");
   return `<div style="grid-column:1/-1;min-width:0">
     <div class="section-title">Most likely ${mlb ? "to homer" : "to score"} tonight
-      <span class="sub">— model % vs the book’s implied %. Positive EV = price worth taking;
-      negative = likely but overpriced. Never a guarantee.</span></div>
+      <span class="sub">— model % vs the book’s implied %. Tap a row for the reasoning.
+      Positive EV = price worth taking; negative = likely but overpriced.
+      Never a guarantee.</span></div>
     <div class="card" style="padding:0">${rows}</div></div>`;
 }
+
+/* A watch row opens its own reasoning in place. It is not a pick, so it
+   has no prop page to open — the chain has to live on the row itself. */
+document.addEventListener("click", (e) => {
+  const head = e.target.closest("[data-watch-toggle]");
+  if (!head) return;
+  const why = head.parentElement && head.parentElement.querySelector(".watch-why");
+  if (!why) return;
+  why.hidden = !why.hidden;
+  head.setAttribute("aria-expanded", why.hidden ? "false" : "true");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const head = e.target.closest && e.target.closest("[data-watch-toggle]");
+  if (!head) return;
+  e.preventDefault();
+  head.click();
+});
 
 function longShotCard(r) {
   // stakeText answers the no-bankroll case itself (units, because

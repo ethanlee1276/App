@@ -470,9 +470,18 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
             "primary_reason": info["primary_reason"],
+            # THE WHOLE CHAIN, not one line of it. This list answers "who
+            # is most likely to score", which is the question the model is
+            # measurably GOOD at — it ranks a scorer above a non-scorer
+            # 72% of the time over 22,099 graded player-weeks, stable
+            # across five seasons — while the edge it claims against the
+            # market tests as noise. So this is the honest product, and
+            # shipping it with a single sentence of reasoning while the
+            # value picks carried the full chain had it exactly backwards.
+            "reasons": info["reasons"],
             # TDs per game, most recent first — the spark at line 0.5.
             "recent_values": [g.value for g in prop.logs][:12],
-            "caveats": info["caveats"][:1],
+            "caveats": info["caveats"],
             "game_date": getattr(game, "date", ""),
             "kickoff": getattr(game, "kickoff", ""),
             "headshot": getattr(prop, "headshot", "") or "",

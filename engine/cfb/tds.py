@@ -798,7 +798,18 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "vig_listed": wlisted,
                         "ev_per_unit": round(wev, 4),
                         "primary_reason": reasons[1],
-                        "caveats": caveats[:1],
+                        # THE WHOLE CHAIN — implied total, share of the
+                        # team's touchdowns, game script, everything the
+                        # value picks already carried. This list answers
+                        # "who is most likely to score", which is what
+                        # the model is measurably good at (AUC 0.675 over
+                        # 29,047 graded college player-games, stable
+                        # across four seasons) where its claimed edge
+                        # against the market tests as noise. Shipping the
+                        # honest product with one sentence of reasoning
+                        # had it backwards.
+                        "reasons": reasons,
+                        "caveats": caveats,
                         "game_date": g.get("date", ""),
                         "kickoff": g.get("kickoff", ""),
                     })

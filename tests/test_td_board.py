@@ -388,6 +388,58 @@ def _cfb_games():
              "weather": {"dome": False, "wind_mph": 5, "temp_f": 78}}]
 
 
+def test_the_most_likely_list_carries_the_whole_reasoning_chain():
+    """The list that answers "who is most likely to score" is the one the
+    model is measurably GOOD at — AUC 0.721 over 22,099 graded NFL
+    player-weeks and 0.675 over 29,047 college ones, both stable across
+    every season — while the edge it claims against the market tests as
+    noise (the site's own settle pass: claimed-edge AUC 0.468).
+
+    So it shipped the honest product with ONE sentence of reasoning while
+    the value picks carried the full chain, which was backwards. Same
+    shape of bug as feeding xFP and the hold to one list and not the
+    other, which this codebase has now hit four times — so this asserts
+    it on BOTH sports through their real entry points, not on one.
+    """
+    from engine.touchdowns import td_watchlist
+    g = Game(home="KC", away="BUF",
+             weather=Weather(dome=False, wind_mph=18, temp_f=30),
+             spread=-6.5, total=48.5)
+    opp = Team("BUF", "Bills", DefenseProfile("BUF", vs_rb_rush=1.25))
+    p = Prop(player="A Back", team="KC", opponent="BUF", position="RB",
+             market=ANYTIME_TD,
+             logs=[GameLog(week=i, opponent="X", value=float(i % 2))
+                   for i in range(1, 7)],
+             career_avg=1.0, vs_opponent_avg=None,
+             lines=[SportsbookLine("DK", 0.5, -140, 110)])
+    row = td_watchlist([{"prop": p, "game": g, "opponent": opp,
+                         "opportunity_share": 0.42, "odds": -140,
+                         "book": "DK", "under_odds": 110}])[0]
+    # More than the one line it used to carry, and the chain itself:
+    # how many touchdowns the team is worth, then his share of them.
+    assert len(row["reasons"]) >= 3, row["reasons"]
+    joined = " ".join(row["reasons"])
+    assert "implied total" in joined.lower(), row["reasons"]
+    assert "share of team tds" in joined.lower(), row["reasons"]
+    assert row["primary_reason"] in row["reasons"]
+
+    # And the college list, which is a wholly separate code path.
+    conn = _cfb_hist()
+    quotes = {0: {
+        oa.normalize_name("Nate Frazier"): [
+            {"book": "DraftKings", "yes_odds": -400, "no_odds": 300}],
+    }}
+    _, _, watch = T.build_cfb_td_longshots(conn, _cfb_games(), quotes, 2026)
+    assert watch, "a -400 favourite is a likelihood, not a value pick"
+    w = watch[0]
+    assert len(w["reasons"]) >= 2, w["reasons"]
+    assert "implied total" in " ".join(w["reasons"]).lower(), w["reasons"]
+    assert w["primary_reason"] in w["reasons"]
+    # Every caveat, not the first one. A proxy disclosure that gets
+    # truncated away is a disclosure that did not happen.
+    assert any("2025 logs" in c for c in w["caveats"]), w["caveats"]
+
+
 def test_a_goal_line_quarterback_dilutes_his_running_back():
     """The mechanism the CFB handbook's Section 6 rule is really about.
 
