@@ -4224,13 +4224,14 @@ function renderTonight() {
   host.innerHTML = `
     <div class="section-title">Tonight’s bets
       <span class="sub">— every pick that clears the bar, with the last
-      games it is priced against. ${n} bet(s) · journaled and graded in
-      public on the Record page.</span></div>
+      games it is priced against. ${n} bet(s).</span></div>
+    ${boardGuide("recommendations")}
     <div class="cards">${props.map(cardHTML).join("")}</div>
     ${bets.length ? `<div class="section-title minor">Game lines</div>
       <div class="cards">${bets.map(gameBetCard).join("")}</div>` : ""}
     ${shots.length ? `<div class="section-title minor">Long shots
       <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
+      ${boardGuide("long_shots")}
       <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
   if (typeof fillMeters === "function") fillMeters(host);
 }
@@ -5073,6 +5074,32 @@ function likelyCard(r) {
   </article>`;
 }
 
+/* WHAT THIS BOARD IS, in the reader's way. Ethan, 2026-08-30: "we need
+   to be more clear on what bets are what and what bets to use and trust
+   and whats being recorded and not."
+
+   Every word and every number comes from `engine/boards.py` and travels
+   in the slate payload. That is the whole point: the likelihood blurb
+   used to carry "0.72 AUC" and "0.69–0.77" as typed text, and those are
+   `likely.RANK_AUC` — a copy of a measurement in a template is a
+   measurement that rots at the next refit.
+
+   Draws nothing when the payload has no entry, so an older board or a
+   sport that has not been described yet loses a paragraph rather than
+   rendering "undefined". */
+function boardGuide(key) {
+  const g = (state.data.board_guide || []).find((b) => b.key === key);
+  if (!g) return "";
+  const money = g.money
+    ? `<span class="chip warn">real money · Record page</span>`
+    : `<span class="chip">recorded, not staked · ${escapeHtml(g.journal)} book</span>`;
+  return `<div class="ls-note">
+    <b>Picked on ${escapeHtml(g.selects_on)}.</b> ${escapeHtml(g.measured)}
+    <div style="margin-top:6px">${money}
+      <span class="mini" style="opacity:.8">${escapeHtml(g.trust)}</span></div>
+  </div>`;
+}
+
 function renderLikely() {
   const host = document.getElementById("likely");
   const note = document.getElementById("likely-note");
@@ -5087,13 +5114,12 @@ function renderLikely() {
     return;
   }
   const rankOnly = rows.filter((r) => !r.bettable).length;
-  note.innerHTML = `<div class="ls-note">Ranked by <b>how likely we think it is</b>,
-    not by how good the price is — the opposite of Long Shots, and on purpose.
-    Measured over five seasons the model sorts who scores at 0.72 AUC and who
-    clears their line at 0.69–0.77, while the edge it claims against the market
-    tests as noise. The price is shown on every row and is never what ordered
-    it.${rankOnly ? ` ${rankOnly} row(s) sit in markets we can rank but not
-    price — they carry a note saying so.` : ""}</div>`;
+  note.innerHTML = `${boardGuide("most_likely")}
+    <div class="ls-note">Ranked by how likely we think it is, not by how good
+    the price is — the opposite of Long Shots, and on purpose. The price is
+    shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
+    row(s) sit in markets we can rank but not price — they carry a note saying
+    so.` : ""}</div>`;
   host.innerHTML = rows.map(likelyCard).join("");
   revealChildren(host);
 }

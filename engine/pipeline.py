@@ -398,6 +398,9 @@ def _long_shots(slate, usage: dict | None = None,
     return picks, watch
 
 
+from . import boards as _boards                          # noqa: E402
+
+
 def _likely_board(results: list, td_picks: list, td_watch: list) -> list:
     """The likelihood board — see `engine.likely` for why it exists."""
     from .likely import build
@@ -722,6 +725,13 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # Built from the SAME evaluated rows, so the two pages can never
         # disagree about the same player.
         "most_likely": _likely_board(results, ls, ls_watch),
+        # WHAT EACH BOARD IS, travelling with the boards themselves.
+        # Ethan, 2026-08-30: "we need to be more clear on what bets are
+        # what and what bets to use and trust and whats being recorded
+        # and not." The page used to carry those claims as typed prose,
+        # including two AUC figures that are really `likely.RANK_AUC` and
+        # would have rotted at the next refit. See engine/boards.
+        "board_guide": _boards.guide(),
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,
