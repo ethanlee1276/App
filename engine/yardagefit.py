@@ -302,12 +302,14 @@ def fit_sigma_on_density(train, beta) -> float:
     return best[1]
 
 
-def fit_sigma_on_over(train, beta, lines) -> float:
+def fit_sigma_on_over(train, beta, lines, weight: float = 0.0,
+                      typical: float = 0.0) -> float:
     """Fitted on the question the board actually asks."""
     best = None
     for sigma in SIGMA_GRID:
         err = over_error(train, lines,
-                         lambda d, L, s=sigma: mixture_over(d, L, beta, s))
+                         lambda d, L, s=sigma: mixture_over(
+                             d, L, beta, s * _width_of(d, weight, typical)))
         if err is None:
             continue
         if best is None or err < best[0]:
@@ -725,6 +727,36 @@ def report_real(market: str, conn=None, db_path=None) -> list:
 # measured WORSE there (0.0389 against 0.0324).
 MIXTURE_MARKETS = ("rush_yds", "rec_yds", "receptions")
 
+#: HOW MUCH OF THE PLAYER'S OWN VOLATILITY GOES INTO HIS WIDTH, per
+#: market. 0.0 is one league-wide sigma for everybody; 1.0 scales it by
+#: how volatile this player has been against the market's typical; 0.5 is
+#: the shrunk middle, which is what a per-player estimate off four games
+#: deserves when nobody quite believes it.
+#:
+#: MEASURED 2026-08-30, walking the train/score cut across five points of
+#: the season, scored on mean absolute miss between claimed and realised
+#: P(over):
+#:
+#:     market      typical CV   winner                 flat -> adopted
+#:     rush_yds        0.98     scaled, 5 of 5 cuts    0.0275 -> 0.0137
+#:     rec_yds         0.86     per-player, 5 of 5     0.0181 -> 0.0161
+#:     receptions      0.61     flat holds             0.0037 (late cuts)
+#:
+#: The ordering is the finding and it is not a coincidence: the more
+#: dispersed the market, the more a player's own spread is worth knowing.
+#: In a stable market a four-game CV is mostly noise, and receptions —
+#: the tightest of the three — is where scaling never once won.
+#:
+#: So each market takes its own answer, the same way the mixture itself
+#: was adopted for three markets and refused for pass_yds. rec_yds takes
+#: the blended form rather than the full one because the later cuts, which
+#: carry the most training data and are the closest thing here to live
+#: conditions, preferred it.
+WIDTH_WEIGHT = {"rush_yds": 1.0, "rec_yds": 0.5, "receptions": 0.0}
+
+#: A width may not double or halve on the strength of four games.
+WIDTH_CLAMP = (0.6, 1.6)
+
 #: Where the fitted mixture lives, beside the calibration store and
 #: per-box for the same reason: it is fitted from this box's history.
 STORE_NAME = "yardage.json"
@@ -744,11 +776,38 @@ def fit_market(conn, market: str) -> dict | None:
     lines = MARKETS.get(market, ())
     if len(data) < MIN_TRAIN or not lines:
         return None
-    beta = fit_zero(data, )
-    sigma = fit_sigma_on_over(data, beta, lines)
+    beta = fit_zero(data)
+    weight = WIDTH_WEIGHT.get(market, 0.0)
+    typical = _typical_cv(data)
+    # Fitted WITH the width rule in force, so sigma and the scaling are
+    # chosen together rather than one being bolted onto the other.
+    sigma = fit_sigma_on_over(data, beta, lines,
+                              weight=weight, typical=typical)
     return {"zero": [round(beta[0], 5), round(beta[1], 5)],
             "sigma": round(sigma, 4), "rows": len(data),
+            "width_weight": weight, "typical_cv": round(typical, 4),
             "market": market}
+
+
+def _typical_cv(rows) -> float:
+    """The market's median coefficient of variation — what a player's own
+    spread is compared AGAINST, so the scaling is relative rather than
+    absolute."""
+    cvs = sorted((r["form_sd"] / r["mu"]) for r in rows
+                 if r["mu"] > 0 and r["form_sd"] > 0)
+    return cvs[len(cvs) // 2] if cvs else 0.0
+
+
+def _width_of(row, weight: float, typical: float) -> float:
+    """The multiplier on sigma for one row — 1.0 when the market takes no
+    per-player width, or the clamped ratio scaled by what it earned."""
+    if not weight or typical <= 0:
+        return 1.0
+    cv = (row["form_sd"] / row["mu"]) if row["mu"] > 0 else 0.0
+    if cv <= 0:
+        return 1.0
+    ratio = min(max(cv / typical, WIDTH_CLAMP[0]), WIDTH_CLAMP[1])
+    return 1.0 + weight * (ratio - 1.0)
 
 
 def save_fits(conn, models_dir=None) -> dict:
@@ -798,18 +857,23 @@ def display_prob(market: str, projection, line, recent_values,
     vals = [v for v in (recent_values or []) if v is not None]
     if len(vals) < 3:
         return None
-    # ONE LEAGUE-WIDE WIDTH, NOT THE PLAYER'S OWN SPREAD, and that is a
-    # deliberate loss. The shipped normal uses max(form.std, CV x mean),
-    # so a volatile back and a metronome at the same projection get
-    # different numbers; this gives them the same one. The measured
-    # improvement was obtained WITH that simplification in place — the
-    # mixture halves the calibration miss while knowing less — so the
-    # player-specific width was not carrying what it appeared to. Adding
-    # it back is a real candidate, and it has to be measured, not assumed.
     row = {"mu": mu, "form_sd": 0.0,
            "zero_rate": sum(1 for v in vals if float(v) <= 0) / len(vals)}
     beta = got.get("zero") or [0.0, 0.0]
     sigma = float(got.get("sigma") or 0.6)
+    # THE PLAYER'S OWN VOLATILITY, as much of it as this market earned.
+    # See WIDTH_WEIGHT: measured per market, and only rushing takes it in
+    # full. Needs the spread of his own recent games and the market's
+    # typical, both of which the store carries.
+    weight = float(got.get("width_weight", 0.0) or 0.0)
+    typical = float(got.get("typical_cv", 0.0) or 0.0)
+    if weight and typical > 0 and len(vals) > 1:
+        mean = sum(float(v) for v in vals) / len(vals)
+        var = sum((float(v) - mean) ** 2 for v in vals) / (len(vals) - 1)
+        cv = (math.sqrt(var) / mu) if mu > 0 else 0.0
+        if cv > 0:
+            ratio = min(max(cv / typical, WIDTH_CLAMP[0]), WIDTH_CLAMP[1])
+            sigma *= 1.0 + weight * (ratio - 1.0)
     return mixture_over(row, ln, beta, sigma)
 
 

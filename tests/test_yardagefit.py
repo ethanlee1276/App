@@ -424,6 +424,94 @@ def test_nothing_here_reaches_the_live_probability_path():
     assert "prob_over" in inspect.getsource(betting)
 
 
+# --- the player's own volatility, market by market -----------------------
+def test_a_boom_bust_back_clears_his_line_less_often_than_a_metronome():
+    """THE INFORMATION THE FLAT WIDTH THREW AWAY. Two backs with the same
+    52-yard projection against the same 45.5 line: one runs 50-55 every
+    week, the other alternates 0 and 100.
+
+    The volatile one is LESS likely to clear it, and that is real
+    football rather than an artifact. A right-skewed distribution's
+    median sits below its mean by exp(-sigma^2 / 2), so an average
+    carried by a few huge games clears a line near that average less
+    often than a steady one does."""
+    fits = {"rush_yds": {"zero": [-0.04, 0.82], "sigma": 0.76,
+                         "width_weight": 1.0, "typical_cv": 0.98}}
+    steady = Y.display_prob("rush_yds", 52.0, 45.5,
+                            [52, 55, 50, 54, 53, 51], fits=fits)
+    wild = Y.display_prob("rush_yds", 52.0, 45.5,
+                          [0, 110, 5, 95, 20, 80], fits=fits)
+    assert steady > wild + 0.05, (steady, wild)
+
+
+def test_each_market_takes_only_the_width_it_earned():
+    """Measured by walking the train/score cut across five points of the
+    season. Rushing wanted the player's spread in full and won all five;
+    receptions never once preferred it and keeps a flat width. The
+    ordering follows how dispersed the market is, which is why it is a
+    per-market number and not a global switch."""
+    assert Y.WIDTH_WEIGHT["rush_yds"] == 1.0
+    assert Y.WIDTH_WEIGHT["receptions"] == 0.0
+    assert 0.0 < Y.WIDTH_WEIGHT["rec_yds"] < 1.0
+    for market in Y.MIXTURE_MARKETS:
+        assert market in Y.WIDTH_WEIGHT, market
+
+
+def test_a_flat_market_ignores_volatility_entirely():
+    """receptions took no per-player width, so two histories with the
+    same projection must land on the same number — otherwise the weight
+    is not doing what the table says."""
+    fits = {"receptions": {"zero": [-0.82, 0.48], "sigma": 0.46,
+                           "width_weight": 0.0, "typical_cv": 0.61}}
+    # SAME BLANK RATE, different spread. The atom is a separate input
+    # fitted from the prior zero rate, so a history containing a zero
+    # moves the answer through P(zero) whatever the width does — an
+    # earlier version of this fixture compared a history with a blank
+    # against one without and read that as the width leaking.
+    a = Y.display_prob("receptions", 5.0, 3.5, [5, 5, 5, 5, 5, 5], fits=fits)
+    b = Y.display_prob("receptions", 5.0, 3.5, [2, 8, 2, 8, 2, 8], fits=fits)
+    assert a == b, (a, b)
+
+
+def test_a_width_cannot_double_or_halve_on_four_games():
+    """A per-player estimate off a handful of games is mostly noise at
+    the tails, so the ratio is clamped before it multiplies anything."""
+    assert Y.WIDTH_CLAMP[0] < 1.0 < Y.WIDTH_CLAMP[1]
+    row = {"mu": 50.0, "form_sd": 500.0}      # absurd volatility
+    assert Y._width_of(row, 1.0, 1.0) <= 1.0 + (Y.WIDTH_CLAMP[1] - 1.0)
+    row = {"mu": 50.0, "form_sd": 0.001}      # absurd steadiness
+    assert Y._width_of(row, 1.0, 1.0) >= 1.0 - (1.0 - Y.WIDTH_CLAMP[0])
+
+
+def test_a_player_with_no_spread_is_not_penalised_for_it():
+    """No history, no opinion — the width falls back to the market's."""
+    assert Y._width_of({"mu": 50.0, "form_sd": 0.0}, 1.0, 1.0) == 1.0
+    assert Y._width_of({"mu": 0.0, "form_sd": 10.0}, 1.0, 1.0) == 1.0
+    assert Y._width_of({"mu": 50.0, "form_sd": 10.0}, 1.0, 0.0) == 1.0
+
+
+def test_the_width_and_the_sigma_are_fitted_together():
+    """Bolting a scaling onto a sigma chosen without it would leave the
+    pair describing two different models."""
+    import inspect
+    src = inspect.getsource(Y.fit_market)
+    assert "weight=weight, typical=typical" in src
+    fit = inspect.getsource(Y.fit_sigma_on_over)
+    assert "_width_of(d, weight, typical)" in fit
+
+
+def test_the_store_carries_what_the_display_needs():
+    """`display_prob` reads the weight and the market's typical CV off
+    the store, so a fit written without them silently reverts to flat."""
+    got = {"zero": [0.0, 0.5], "sigma": 0.6, "width_weight": 1.0,
+           "typical_cv": 0.9}
+    for missing in ("width_weight", "typical_cv"):
+        thin = {k: v for k, v in got.items() if k != missing}
+        p = Y.display_prob("rush_yds", 52.0, 45.5, [40, 60, 50, 55],
+                           fits={"rush_yds": thin})
+        assert p is not None, missing
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
