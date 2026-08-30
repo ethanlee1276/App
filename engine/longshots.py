@@ -470,16 +470,29 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     vig, vig_source, vig_listed = vig_of(hold_override, sport, market,
                                          under_odds if exact else None)
     book_prob = american_to_prob(odds)
+    # Imported here rather than borrowed from the one-sided branch above,
+    # which only runs when `exact` is False.
+    from .devig import as_devig as _as_devig
+    backing = int(getattr(_as_devig(hold_override), "books", 0) or 0)
+    if backing == 1:
+        # ONE BOOK IS NOT A CONSENSUS. The 2026-08-29 college board
+        # de-vigged a single book's card and published it as the market's
+        # fair price; that book turned out to be the furthest from
+        # consensus on 10 of 16 scorers where books disagreed at all.
+        caveats = caveats + [
+            "Only one book's board could be measured for this game, so "
+            "the fair price is that book's opinion rather than the "
+            "market's — a stale number has nothing to be checked against"]
     # A price LONGER than the consensus says it should be is a find, and
     # it is the reason to shop at all. Say it, with both numbers, rather
     # than leaving a reader to notice that two probabilities on the card
     # disagree and assume one of them is broken.
-    if not exact and implied - book_prob >= 0.02:
+    if not exact and implied - book_prob >= 0.02 and backing > 1:
         reasons = reasons + [
             f"{book} is longer than the market: {book_prob:.0%} at this "
-            f"price against a {implied:.0%} consensus off the deepest "
-            f"board in the game — {implied - book_prob:.0%} of that edge "
-            f"is the price, not the projection"]
+            f"price against a {implied:.0%} median across {backing} book(s) "
+            f"— {implied - book_prob:.0%} of that edge is the price, not "
+            f"the projection"]
     ev = expected_value(model_prob, odds)
     grade = _grade(confidence, edge, ev) if credible else "Pass"
     return LongShot(

@@ -294,10 +294,10 @@ class FairQuote:
     edge comes from one book being out of line with it.
     """
 
-    __slots__ = ("prob", "overround", "kind", "book", "listed")
+    __slots__ = ("prob", "overround", "kind", "book", "listed", "books")
 
     def __init__(self, prob: float, overround: float, kind: str,
-                 book: str = "", listed: int = 0):
+                 book: str = "", listed: int = 0, books: int = 1):
         self.prob = float(prob)
         self.overround = float(overround)
         self.kind = kind
@@ -309,6 +309,9 @@ class FairQuote:
         #: that inflates edge. Inferring truncation from a suspiciously
         #: small vig is a guess; the board size is the fact.
         self.listed = int(listed)
+        #: How many books' de-vigged prices the median was taken over.
+        #: One is not a consensus and the card should be able to say so.
+        self.books = int(books)
 
     def fair(self, raw_implied: float) -> float:
         """The measured fair price. ``raw_implied`` is deliberately
@@ -318,17 +321,21 @@ class FairQuote:
 
     def __repr__(self) -> str:                                # pragma: no cover
         return (f"FairQuote({self.prob:.4f}, {self.overround:+.1%}, "
-                f"{self.kind}, {self.book!r}, listed={self.listed})")
+                f"{self.kind}, {self.book!r}, listed={self.listed}, "
+                f"books={self.books})")
 
 
 def reference_book(by_book: dict) -> str:
-    """The book whose board the hold is measured from.
+    """The book whose board sets the game's MARGIN.
 
     Most players listed, because a truncated board under-states the sum
-    and therefore the hold. Ties break to the LARGEST sum — the greediest
-    board of the ones that are equally complete — since assuming a book
-    is fairer than it is invents edge, and assuming it is greedier only
-    costs picks.
+    and therefore the hold. Ties break to the largest sum — the greediest
+    of the equally complete — since assuming a book is fairer than it is
+    invents edge.
+
+    This chooses whose OVERROUND to trust, not whose PRICE to trust. The
+    two were the same thing until 2026-08-30 and that was the bug; see
+    `board_fair`.
     """
     if not by_book:
         return ""
@@ -338,24 +345,68 @@ def reference_book(by_book: dict) -> str:
 
 def board_fair(by_book: dict, expected_scorers: float,
                method: str = None) -> dict:
-    """``{player: FairQuote}`` from one book's board, or ``{}``.
+    """``{player: FairQuote}`` — the MEDIAN de-vigged price across books.
 
-    ``by_book`` is ``{book: {player: raw implied probability}}``. A player
-    the reference book does not quote gets no entry, and the caller falls
-    back — better a standing assumption than a fair price invented from a
-    board that never listed him.
+    ONE BOOK IS NOT A CONSENSUS, and the first cut of this treated it as
+    one: it de-vigged the reference book's board and published that as
+    the market's fair price. The reference is chosen by board size, and
+    on 2026-08-29 that was Hard Rock — which turned out to be the
+    furthest-from-consensus book on 10 of 16 college scorers where books
+    disagreed by 8 points or more, systematically pricing LONGER than
+    everyone else:
+
+        player              consensus   Hard Rock
+        jackson arnold        0.600       0.400
+        manny covey           0.294       0.091
+        quintrevion wisner    0.627       0.455
+
+    Jackson Arnold was DraftKings -170, Caesars -150, Hard Rock +150.
+    Three majors agreed he was about 60%; the reference said 40%; so the
+    model was asked to beat 0.36 and the +150 sitting in front of it —
+    an enormous overlay against the other three — became invisible. The
+    design exists to price a consensus and attack the book out of line
+    with it, and taking the fair FROM that book erases exactly the thing
+    it was built to find.
+
+    So every book that quotes a player gets de-vigged and the MEDIAN is
+    published. A median rather than a mean because the failure mode is
+    one stale book, and that is precisely what a median ignores and a
+    mean absorbs.
+
+    A book with its own measurable board is de-vigged by its own
+    overround. One too thin to measure still contributes its price,
+    de-vigged by the median exponent of the books that could be measured
+    — a shape borrowed from its neighbours beats dropping a real quote.
     """
     method = method or DEFAULT_METHOD
-    book = reference_book(by_book)
-    if not book:
+    ref = reference_book(by_book)
+    if not ref:
         return {}
-    prices = by_book[book]
-    dv = game_devig(list(prices.values()), expected_scorers, method)
-    if not dv:
+    per_book: dict = {}
+    for book, prices in by_book.items():
+        dv = game_devig(list(prices.values()), expected_scorers, method)
+        if dv:
+            per_book[book] = dv
+    if not per_book:
         return {}
-    return {player: FairQuote(dv.fair(raw), dv.overround, dv.kind, book,
-                              listed=len(prices))
-            for player, raw in prices.items()}
+    # The shape a book without its own measurable board borrows.
+    shared = sorted(per_book.values(), key=lambda d: d.param)[len(per_book) // 2]
+    listed = len(by_book.get(ref) or {})
+
+    fairs: dict = {}
+    for book, prices in by_book.items():
+        dv = per_book.get(book) or shared
+        for player, raw in prices.items():
+            if raw and 0.0 < raw < 1.0:
+                fairs.setdefault(player, []).append(dv.fair(raw))
+    out: dict = {}
+    for player, got in fairs.items():
+        got.sort()
+        mid = (got[len(got) // 2] if len(got) % 2
+               else (got[len(got) // 2 - 1] + got[len(got) // 2]) / 2.0)
+        out[player] = FairQuote(mid, shared.overround, shared.kind, ref,
+                                listed=listed, books=len(got))
+    return out
 
 
 def as_devig(value) -> "Devig | None":

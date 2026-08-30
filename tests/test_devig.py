@@ -30,7 +30,7 @@ from engine.devig import (
     K_MIN, K_MAX, PROPORTIONAL, POWER, DEFAULT_METHOD, Devig, as_devig,
     expected_distinct_scorers, expected_tds_affine, hold_multiplier,
     power_exponent, fair_probability, american, game_prices, board_hold,
-    board_devig, FairQuote,
+    board_devig, FairQuote, board_fair, reference_book,
 )
 from engine.longshots import build_pick, calibrated_prob, ONE_SIDED_HOLD
 from engine.odds import american_to_prob
@@ -513,6 +513,89 @@ def test_the_grader_matches_the_game_lines_grader_s_doctrine():
     assert _grade(9.0, 0.06) == "Strong Play"
 
 
+# --- one book is not a consensus -----------------------------------------
+def _three_books():
+    """The 2026-08-29 college shape: two majors agreeing, one book out."""
+    dk = [-170, -300, 240, 275, 210, -330, 130, 330, 185, 255, -140]
+    cz = [-150, -230, 235, 330, 245, -275, 162, 250, 225, 270, -125]
+    hr = [+150, -275, 1000, 900, 550, -170, 200, 500, 375, 600, -105]
+    names = [f"p{i}" for i in range(len(dk))]
+    return {"DraftKings": {n: american_to_prob(v) for n, v in zip(names, dk)},
+            "Caesars": {n: american_to_prob(v) for n, v in zip(names, cz)},
+            "Hard Rock": {n: american_to_prob(v) for n, v in zip(names, hr)}}
+
+
+def test_the_fair_is_a_median_across_books_not_one_book_s_card():
+    """The defect this replaced. `reference_book` picks by board size, and
+    on 2026-08-29 that was Hard Rock — the furthest-from-consensus book on
+    10 of 16 college scorers where books disagreed by 8 points or more.
+
+    Jackson Arnold was DraftKings -170, Caesars -150, Hard Rock +150.
+    Publishing the reference's own price as the market's fair asked the
+    model to beat 0.36 when three majors said 0.60, and made the +150 —
+    an enormous overlay against the other two — invisible. The design
+    exists to price a consensus and attack the book out of line with it;
+    taking the fair FROM that book erases what it was built to find."""
+    books = _three_books()
+    got = board_fair(books, 4.6)
+    assert got
+    out = got["p0"]                       # the Jackson Arnold shape
+    assert out.books == 3
+    raws = {b: pr["p0"] for b, pr in books.items()}
+    # DraftKings 0.63 and Caesars 0.60 agree; Hard Rock says 0.40. The
+    # published fair has to sit with the two, not the one — under the
+    # old design it WAS the one, because Hard Rock was the reference.
+    assert out.prob > raws["Hard Rock"] + 0.15, (out.prob, raws)
+    assert abs(out.prob - raws["Caesars"]) < 0.06, (out.prob, raws)
+
+
+def test_a_median_ignores_the_stale_book_a_mean_would_absorb():
+    """A median rather than a mean because the failure mode is ONE book
+    being wrong, and that is exactly what a median discards."""
+    books = _three_books()
+    got = board_fair(books, 4.6)["p0"].prob
+    # Make the outlier far more extreme; the median must not follow.
+    books["Hard Rock"]["p0"] = american_to_prob(2000)
+    worse = board_fair(books, 4.6)["p0"].prob
+    assert abs(worse - got) < 0.05, (got, worse)
+
+
+def test_a_book_too_thin_to_measure_still_contributes_its_price():
+    """A shape borrowed from its neighbours beats dropping a real quote —
+    and dropping them is how a four-book market becomes a one-book fair."""
+    books = _three_books()
+    books["BetMGM"] = {"p0": american_to_prob(-160)}
+    got = board_fair(books, 4.6)
+    assert got["p0"].books == 4
+    assert got["p0"].prob > 0
+
+
+def test_a_single_book_fair_says_it_is_not_a_consensus():
+    """The card has to disclose it, because a stale number has nothing to
+    be checked against."""
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="FanDuel", odds=-170, model_prob=0.70, under_odds=None,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb",
+        hold_override=FairQuote(0.715, 0.138, "power", "hr", 31, books=1))
+    assert any("one book" in c for c in pick.caveats)
+    # And it makes no "longer than the market" claim off a market of one.
+    assert not [r for r in pick.reasons if "longer than the market" in r]
+
+
+def test_the_shopping_claim_names_how_many_books_back_it():
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="FanDuel", odds=-170, model_prob=0.70, under_odds=None,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb",
+        hold_override=FairQuote(0.715, 0.138, "power", "dk", 31, books=4))
+    said = [r for r in pick.reasons if "longer than the market" in r]
+    assert said and "4 book(s)" in said[0]
+    assert not any("one book" in c for c in pick.caveats)
+
+
 # --- two books, two numbers ----------------------------------------------
 def test_the_card_publishes_what_the_book_charges_and_what_the_market_says():
     """They are different numbers from different books and the card used
@@ -529,7 +612,8 @@ def test_the_card_publishes_what_the_book_charges_and_what_the_market_says():
         book="FanDuel", odds=-185, model_prob=0.70, under_odds=None,
         opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
         caveats=[], sport="cfb",
-        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31))
+        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31,
+                                books=3))
     d = pick.to_dict()
     assert abs(d["book_prob"] - american_to_prob(-185)) < 1e-4
     assert d["implied_prob"] == 0.7115
@@ -544,7 +628,8 @@ def test_a_price_longer_than_the_consensus_says_so_in_words():
         book="FanDuel", odds=-185, model_prob=0.70, under_odds=None,
         opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
         caveats=[], sport="cfb",
-        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31))
+        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31,
+                                books=3))
     said = [r for r in pick.reasons if "longer than the market" in r]
     assert said and "FanDuel" in said[0]
     assert "the price, not the projection" in said[0]
@@ -558,7 +643,8 @@ def test_a_price_in_line_with_the_consensus_says_nothing():
         book="dk", odds=-185, model_prob=0.70, under_odds=None,
         opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
         caveats=[], sport="cfb",
-        hold_override=FairQuote(raw - 0.005, 0.119, "power", "dk", 31))
+        hold_override=FairQuote(raw - 0.005, 0.119, "power", "dk", 31,
+                                books=3))
     assert not [r for r in pick.reasons if "longer than the market" in r]
 
 
@@ -743,15 +829,21 @@ def test_the_reference_board_is_the_most_complete_one():
     assert reference_book({}) == ""
 
 
-def test_a_player_the_reference_book_never_listed_gets_no_fair_price():
-    """Better a standing assumption than a fair price invented off a
-    board that never quoted him."""
+def test_a_player_only_one_book_quotes_still_gets_a_fair_price():
+    """The first cut published a fair only for players the REFERENCE book
+    listed, and dropped everyone else. That is how a four-book market
+    becomes a one-book fair: the quotes were there and were thrown away.
+
+    He gets a price, and the count of books behind it is published so the
+    card can say how thin it is."""
     from engine.devig import board_fair
     from engine.odds import american_to_prob as ap
     books = {"dk": {f"P{i}": ap(o) for i, o in enumerate(DK)},
-             "fd": {"Z": ap(300)}}
+             "fd": {"Z": ap(300), "P0": ap(-120)}}
     got = board_fair(books, 4.6)
-    assert "P0" in got and "Z" not in got
+    assert "P0" in got and "Z" in got
+    assert got["Z"].books == 1               # one book, and it says so
+    assert got["P0"].books == 2
 
 
 def test_a_game_with_no_total_is_left_unpriced():
