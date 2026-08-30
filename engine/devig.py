@@ -114,14 +114,32 @@ bets (+300 and longer), so being wrong with it costs picks rather than
 inventing edge. That is a safety argument, not a fit argument, and it
 should be replaced by a measurement as more closes land.
 
-THE SPIKE IS THE REAL FINDING. In the 0.10-0.18 raw band -- roughly +455
-to +800, which is where the touchdown board lives -- the market charged
-35% while every other band charged 14%. Realised scoring there was 8.8%
-against a raw price of 13.5% and a de-vigged fair of 10.6-11.7%, so even
-a correct de-vig still over-states that band. It corroborates what
-engine/tdbook found from the other direction (the model reading +24% over
-reality in the band it bets). One band, one season, 898 rows: reported
-and tracked, not yet wired into the pricing.
+THE SPIKE WAS NOT A FINDING AT ALL, and that took three passes to
+establish. In the 0.10-0.18 raw band -- roughly +456 to +900, which is
+where the touchdown board lives -- the market appeared to charge 35%
+while every other band charged 14%. It survived an error bar (z = +2.9,
+`devigfit.BAND_Z`) and it survived dropping every bet that was VOID
+because the player never took a snap (35.0% to 33.9%; that filter
+belonged to the +900-and-longer band, which fell from 13.7% to 0.8%).
+
+It did not survive being priced at the number a bettor takes. The quote
+behind every one of those rows was whichever book SQLite happened to
+hand back last, and `db.closing_odds_by_date` keeps exactly one per
+player-date while a single harvest writes six. Re-measured on the
+LONGEST price on the screen -- which is what `odds.best_over_line`
+publishes -- the band charges 8.6% +/-8.6%, z = +0.4, and no band on the
+board charges more than the rest:
+
+    raw band     arbitrary book    shopped
+    0.00-0.10          0.8%         -9.4%
+    0.10-0.18         33.9%          8.6%
+    0.18-0.28         16.0%          7.9%
+    0.28-0.45          9.2%          3.0%
+    0.45-1.01         14.6%          9.0%
+
+So the favourite-longshot spike is a property of reading one book, not
+of the market. What survives is the shape argument for POWER above and
+the fact that both methods beat the raw price.
 
 (The handbook's own worked example of this is wrong in both directions --
 it reports multiplicative at 55.9% for a -140/+110 pair, which is really
@@ -140,6 +158,16 @@ import math
 #: Distinct scorers from a game's total offensive touchdowns, fitted over
 #: 1,216 games. See the module note for why this is not the handbook's
 #: 0.90 / 0.12.
+#:
+#: THOSE 1,216 GAMES ARE EXACTLY THE ONES WHERE BOTH TEAMS SCORED, out of
+#: 1,424 with both teams logged, and that is worth knowing because it
+#: looks like a filtered fit and is not one. Refitting on all 1,424 gives
+#: 0.7114/0.6330 and removes a +0.0725 bias -- but it is WORSE once
+#: `expected_distinct_scorers` caps its answer at the touchdowns
+#: themselves (RMSE 0.6909 against 0.6860), because the bound is what
+#: those 208 extra games were really teaching. Fit on the region where
+#: the cap does not bind and the answer returns 0.6646/0.9131. These
+#: constants are right; the function was missing an identity.
 SCORERS_SLOPE = 0.666
 SCORERS_BASE = 0.920
 
@@ -170,9 +198,36 @@ def expected_distinct_scorers(team_a_tds: float, team_b_tds: float) -> float:
 
     The 0.92 base absorbs defensive and special-teams touchdowns, which
     take scoring equity out of the offensive market a book is pricing.
+
+    CAPPED AT THE TOUCHDOWNS THEMSELVES, which is not a tuning choice but
+    an identity: a game with two offensive touchdowns cannot have three
+    men score one. The affine form has no such knowledge and broke the
+    bound in 193 of 1,424 replayed NFL games — 13.6% — every one of them
+    a low-scoring game where the intercept outruns the slope. Below 2.75
+    total offensive touchdowns the line predicts more scorers than there
+    are scores.
+
+    Adding the cap takes the bias from +0.0725 scorers per game to
+    +0.0201 and the RMSE from 0.7075 to 0.6860, and moves no constant.
+
+    THE CONSTANTS WERE NOT THE PROBLEM, and that took two wrong turns to
+    establish. Refitting the line on all 1,424 games gives 0.7114/0.6330
+    and looks like a correction to a fit made on a filtered sample --
+    the 1,216 games this was fitted over are exactly the ones where BOTH
+    teams scored, which reproduces 0.666/0.920 to three decimals. But
+    that refit is WORSE once the cap is in place (RMSE 0.6909 against
+    0.6860), because the bound is what the extra games were really
+    teaching. Fit on the region where the cap does not bind and the
+    answer comes back 0.6646/0.9131 -- the shipped numbers.
+
+    So this changes nothing about live NFL pricing either: the cap binds
+    below 2.75 total offensive touchdowns, which is a game total under
+    26 points, and no NFL game is priced there. It is a correctness fix
+    for anyone grading this function against outcomes, which is how the
+    violation was found.
     """
     total = max(0.0, float(team_a_tds)) + max(0.0, float(team_b_tds))
-    return SCORERS_SLOPE * total + SCORERS_BASE
+    return min(SCORERS_SLOPE * total + SCORERS_BASE, total)
 
 
 def hold_multiplier(implied: list, expected_scorers: float,

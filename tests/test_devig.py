@@ -91,10 +91,53 @@ def test_the_measured_form_is_closer_at_every_level_of_scoring():
 
 def test_distinct_scorers_rises_with_scoring_and_never_goes_negative():
     assert expected_distinct_scorers(3.0, 3.0) > expected_distinct_scorers(1.0, 1.0)
-    assert expected_distinct_scorers(-5.0, -5.0) == SCORERS_BASE
-    # The base is not zero on purpose: defensive and special-teams scores
-    # take equity out of the offensive market a book is pricing.
+    # A game with no offensive touchdowns has no offensive scorers. The
+    # base still is not zero on purpose — defensive and special-teams
+    # scores take equity out of the market a book is pricing — but it
+    # cannot survive the cap, and it should not: this used to answer
+    # 0.92 scorers for a game expected to produce none.
+    assert expected_distinct_scorers(-5.0, -5.0) == 0.0
     assert SCORERS_BASE > 0
+
+
+def test_scorers_can_never_outnumber_the_touchdowns_themselves():
+    """AN IDENTITY, NOT A TUNING CHOICE. Two touchdowns cannot be scored
+    by three men. The affine form has no such knowledge and broke the
+    bound in 193 of 1,424 replayed NFL games — 13.6% — every one of them
+    low-scoring, where the intercept outruns the slope.
+
+    Found by grading the function against outcomes, which is the only way
+    it could be found: nothing upstream ever asks it a question it gets
+    visibly wrong."""
+    for total in (0.0, 0.5, 1.0, 2.0, 2.7):
+        got = expected_distinct_scorers(total / 2, total / 2)
+        assert got <= total + 1e-9, (total, got)
+    # And the cap must not touch the live range. It binds below 2.75
+    # total offensive touchdowns, which by `expected_team_tds` is a game
+    # total under 26 points — no NFL game is priced there.
+    from engine.touchdowns import expected_team_tds
+    for game_total in (33.0, 41.0, 47.5, 54.0):
+        half = game_total / 2.0
+        a = expected_team_tds(half)
+        assert expected_distinct_scorers(a, a) < 2 * a, game_total
+        assert expected_distinct_scorers(a, a) == \
+            SCORERS_SLOPE * 2 * a + SCORERS_BASE
+
+
+def test_the_cap_is_what_the_extra_games_were_teaching_not_new_constants():
+    """A REFIT THAT LOOKED RIGHT AND WAS NOT. The 1,216 games these
+    constants were fitted over are exactly the ones where BOTH teams
+    scored, out of 1,424 with both teams logged — which reads as a
+    filtered sample, and refitting on all of them gives 0.7114/0.6330 and
+    removes a +0.0725 bias.
+
+    That refit is WORSE once the cap is in place: RMSE 0.6909 against
+    0.6860. Fit on the region where the cap does not bind and the answer
+    comes back 0.6646/0.9131 — the shipped pair. The 208 extra games were
+    teaching the bound, not the slope, and changing the constants on the
+    strength of them would have been the fit chasing a shape it already
+    had."""
+    assert (SCORERS_SLOPE, SCORERS_BASE) == (0.666, 0.920)
 
 
 def test_the_affine_team_total_form_is_offered_but_is_not_what_the_board_uses():
