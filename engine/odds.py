@@ -111,6 +111,52 @@ def consensus_fair(lines: list[SportsbookLine], line: float | None = None
     return med, n
 
 
+#: American odds cannot fall strictly between -100 and +100. The two
+#: scales meet at even money and there is nothing between them left to
+#: express: a book quotes that price +100, or -100, never -97. Anything
+#: inside the gap was never posted by anyone. It is a decimal price
+#: stored as American, a percentage, a truncated string.
+#:
+#: Zero is separate and legitimate — it is this codebase's sentinel for
+#: a side the book does not quote at all (see devig_two_way), and is not
+#: a corrupt price.
+DEAD_ZONE = (-100, 100)
+
+
+def is_quotable(odds) -> bool:
+    """Is this a price a book could actually have posted?
+
+    ``american_to_prob`` converts a dead-zone number without complaint:
+    -97 comes back 49.2%, right in the middle of the range where nothing
+    downstream has any reason to question it. Worse, it then WINS the
+    best-price shop — -97 pays better than -105 — so a corrupted digit
+    does not merely survive, it is selected for, and the smaller implied
+    probability it carries is booked as edge the model did not find.
+
+    False for 0 as well: an unquoted side is not a price. Callers that
+    must keep the unquoted-side sentinel use ``shoppable`` instead.
+    """
+    try:
+        o = int(odds)
+    except (TypeError, ValueError):
+        return False
+    return not (DEAD_ZONE[0] < o < DEAD_ZONE[1])
+
+
+def shoppable(odds) -> bool:
+    """``is_quotable``, but the unquoted-side sentinel 0 passes.
+
+    Line shopping runs over both sides at once, and an Over-only market
+    carries under_odds of 0 on every book. Dropping those rows would
+    delete the market rather than clean it.
+    """
+    try:
+        o = int(odds)
+    except (TypeError, ValueError):
+        return False
+    return o == 0 or is_quotable(o)
+
+
 def best_over_line(lines: list[SportsbookLine]) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 
@@ -118,7 +164,11 @@ def best_over_line(lines: list[SportsbookLine]) -> BestLine:
     is the "shop for the best number" step every sharp bettor does.
     """
     best: BestLine | None = None
-    for ln in lines:
+    # A corrupt price is not shopped. It would win: the tie-break below
+    # takes the highest odds, and a dead-zone number is by construction
+    # better than any real one on its side of even money.
+    clean = [ln for ln in lines if shoppable(ln.over_odds)]
+    for ln in (clean or lines):
         fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds)
         cand = BestLine(ln.book, ln.line, ln.over_odds, fair_over)
         if best is None:
@@ -137,7 +187,8 @@ def best_under_line(lines: list[SportsbookLine]) -> BestLine:
     line (more cushion), breaking ties by the best (highest) under odds.
     """
     best: BestLine | None = None
-    for ln in lines:
+    clean = [ln for ln in lines if shoppable(ln.under_odds)]
+    for ln in (clean or lines):
         _, fair_under = devig_two_way(ln.over_odds, ln.under_odds)
         cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)
         if best is None:

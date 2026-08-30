@@ -2021,6 +2021,18 @@ function renderEmptySlate() {
        refresh cycle.${state.data.note
          ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
          : ""}</div>`
+    : state.data.status === "feed unreadable"
+    /* THE OTHER WAY AN EMPTY BOARD HAPPENS, and the one this page had no
+       words for. The schedule feed answered, listing games, and our own
+       parser could read none of them. Telling a reader "nothing is
+       scheduled" there is the board reporting the league's state when
+       what broke was ours. */
+    ? `<div class="es-icon">${icon("warn", 30)}</div><div class="es-title">Games are on today — we couldn’t read them</div>
+       <div class="es-sub">The schedule listed fixtures for this date and our board
+       failed to parse them, so nothing could be priced. This is a fault on our
+       side, not an empty slate, and it is being looked at.${state.data.note
+         ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
+         : ""}</div>`
     : state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">Every sport rebuilds on a refresh cycle — give it a minute

@@ -146,7 +146,11 @@ def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
         quotes = closes.get((_norm(r["player"]), date)) if date else None
         if not quotes:
             continue
-        priced = [o for o in (q.get("over_odds") for q in quotes) if o]
+        # `is_quotable` and not merely truthy: the numeric max below would
+        # otherwise select a dead-zone price over every real one.
+        from .odds import is_quotable
+        priced = [o for o in (q.get("over_odds") for q in quotes)
+                  if is_quotable(o)]
         if not priced:
             continue
         # The longest price on the screen — what `odds.best_over_line`

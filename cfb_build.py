@@ -540,8 +540,21 @@ def main() -> None:
 
     try:
         confs = cfbdata.fetch_conferences()
-        games = cfbdata.parse_scoreboard(cfbdata.fetch_scoreboard(args.date),
-                                         confs)
+        board = cfbdata.fetch_scoreboard(args.date)
+        games = cfbdata.parse_scoreboard(board, confs)
+        # WHAT THE FEED LISTED, BESIDE WHAT WE KEPT.
+        #
+        # `parse_scoreboard` drops any event whose two competitors do not
+        # both carry an abbreviation, and it drops them silently. So an
+        # empty `games` has two completely different causes: ESPN listed
+        # nothing, or ESPN listed sixty games and every one was discarded
+        # in that loop. Those need opposite fixes and the board recorded
+        # neither, which is why 2026-08-29 — college football's opening
+        # Saturday, when the page showed nothing — cannot be explained
+        # from anything we still have.
+        #
+        # One integer, taken before the filter runs, settles it.
+        listed = len(board.get("events") or [])
     except DataUnavailable as exc:
         # KEEP THE LAST GOOD BOARD. This used to publish `out` — an empty
         # payload carrying the error as its note — which meant one 403 or
@@ -672,6 +685,13 @@ def main() -> None:
     out["tuning"] = {"calibrated": fit.fitted, "inherited_from": "",
                      "note": fit.note}
     out["qb"] = cfbstatus.summary(games)
+    # Published, not merely printed: a log line is gone by the time
+    # anyone asks, and the question this answers is always asked later.
+    out["feed"] = {"listed": listed, "kept": len(games)}
+    if listed and not games:
+        print(f"CFB {args.date}: the feed listed {listed} game(s) and the "
+              f"parser kept none of them — this is a PARSE failure, not an "
+              f"empty schedule.")
 
     if not games:
         # "OFFSEASON" WAS AN INTERPRETATION ASSERTED AS A FACT, and on
@@ -689,6 +709,20 @@ def main() -> None:
         # The build can tell them apart from data it already pays for:
         # every successful build fetches RESULT_WINDOW_DAYS of history,
         # so those days are in the same 24-hour cache this reads.
+        if listed:
+            # The schedule was not empty; we discarded all of it. Saying
+            # "no games today" here would be the board reporting the
+            # league's state when what failed was our own parser.
+            out.update(status="feed unreadable",
+                       note=f"The schedule feed listed {listed} game(s) for "
+                            f"this date and none could be read — every one "
+                            f"was missing a team the parser could identify. "
+                            f"This is a fault on our side, not an empty "
+                            f"slate, and it is being looked at.")
+            _write(out, args.out)
+            print(f"CFB {args.date}: {listed} listed, 0 readable. "
+                  f"Wrote {args.out}")
+            return
         recent = _recent_games(day, lookup)
         if recent:
             last = max(g.get("date", "")[:10] for g in recent)

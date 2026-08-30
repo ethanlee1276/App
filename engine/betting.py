@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from .models import Prop, RECEPTIONS
 from .projection import Projection
 from .odds import (best_over_line, best_under_line, consensus_fair,
-                   devig_two_way, expected_value)
+                   devig_two_way, expected_value, is_quotable)
 from .statmath import prob_over, prob_over_discrete, clamp
 from .calibrate import apply_temperature, calibrated, correction_for
 
@@ -425,7 +425,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
                                       allow_synthetic_line,
                                       shrink=tier_shrink(prop.market))
     hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
-    has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
+    # A price no book could have posted is not a market, the same way a
+    # proxy is not. `is_quotable` also answers False for 0, which is the
+    # unquoted-side sentinel: if the side we chose is the side nobody
+    # quotes, there is nothing here to bet.
+    has_market = ((allow_synthetic_line or (best.book or "").lower() != "proxy")
+                  and is_quotable(best.odds))
     ev = expected_value(hit, best.odds)
     net = net_edge(hit, best.odds)
     if not has_market:

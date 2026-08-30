@@ -133,11 +133,18 @@ def rankable(market: str) -> bool:
 
 
 def _sane(odds) -> bool:
+    """In range for this board AND a price a book could have posted.
+
+    SANE_ODDS bounds the outside; it says nothing about the dead zone in
+    the middle, so -97 used to pass — and then win the shop, because it
+    pays better than the -105 it was corrupting. See odds.is_quotable.
+    """
+    from .odds import is_quotable
     try:
         o = int(odds)
     except (TypeError, ValueError):
         return False
-    return SANE_ODDS[0] <= o <= SANE_ODDS[1]
+    return SANE_ODDS[0] <= o <= SANE_ODDS[1] and is_quotable(o)
 
 
 def from_prop(row: dict, bettable, fits=None) -> dict | None:

@@ -584,10 +584,19 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # first of them, so testing for it here would never fire.
     kept = ok and "Keeping the last board" in tail
     unreachable = ok and "No previous board to keep" in tail
+    # THE THIRD WAY, and the one the log had no word for. The feed
+    # answered with a full Saturday and the parser kept none of it — exit
+    # 0, board written, "refreshed" printed. Every other empty-board
+    # cause on this line was added after it lied once; this one is added
+    # before, because it is the cause 2026-08-29 could not be checked
+    # against.
+    unreadable = ok and "listed, 0 readable" in tail
     if not quiet:
         word = ("kept last board (schedule unreachable)" if kept else
                 "EMPTY BOARD — schedule unreachable, nothing to keep"
                 if unreachable else
+                "EMPTY BOARD — feed listed games, parser read none"
+                if unreadable else
                 ("refreshed" if ok else "unavailable"))
         print(f"  CFB  {_slate_date()}: {word}"
               + (f"  ({tail})" if not ok and tail else ""))
