@@ -434,6 +434,38 @@ def implied_total_for(spread_home, total, is_home: bool) -> float | None:
 #: error cannot see this at all -- one player's share of one game is so
 #: noisy that a 20% systematic shift sits inside it, which is why the
 #: first pass through this looked like a tie.)
+#:
+#: RE-CHECKED AND LEFT ALONE, 2026-08-30, after a measurement that looked
+#: like it condemned the receiver curve and did not.
+#:
+#: Scoring the whole WR+TE GROUP's share of its team's touchdowns by
+#: weighted squared error, the shipped receiver curve was WORSE THAN
+#: HAVING NO SCRIPT TERM AT ALL in three of four held-out seasons
+#: (0.08845 against 0.08820), and a two-sided linear form beat both.
+#: That is a real result and it is about a different population.
+#:
+#: Re-run on the population the curve is FOR -- the lead receiver, who is
+#: the one the book actually quotes -- with the objective it was fitted
+#: under, the shipped form wins by a distance:
+#:
+#:     summed held-out chi-square   no script   SHIPPED   two-sided
+#:     CFB lead receiver               56.4       32.6       39.1
+#:     CFB lead back                  100.2       74.1       76.7
+#:     NFL lead receiver                26.7       25.8       28.8
+#:     NFL lead back                    41.9       39.3       44.7
+#:
+#: Both readings are true at once, and together they say something the
+#: curve alone does not: a heavy favourite's WR1 loses share TO HIS OWN
+#: BACKUPS. The group keeps its touchdowns, the starter stops getting
+#: them. That is the starters-come-out effect showing up on the passing
+#: side, and it is why the group-level number cannot see the curve.
+#:
+#: PINNED BECAUSE OF HOW CLOSE THIS CAME. The group measurement was run
+#: first and read as a refutation; acting on it would have deleted a term
+#: worth 24 chi-square points on the priced population to fix a bias in
+#: players nobody prices. Same error as the pick-bar reading earlier this
+#: month -- measure the population the model is applied to, or the number
+#: is about something else.
 RB_SCRIPT = (0.007047, -0.0002404)
 WR_SCRIPT = (-0.007889, 0.00008716)
 
@@ -515,6 +547,34 @@ def defense_multiplier(conn, opponent: str, season: int
     best-fitting partial weight (0.04 to 0.14) scores 14.6 — no better
     than zero. There is nothing left in this signal once the total is in,
     so it is worth exactly nothing and is applied as nothing.
+
+    CONFIRMED A THIRD TIME, BETWEEN GAMES, 2026-08-30. The player-level
+    AUC test could not settle this: the spread and the total are CONSTANT
+    inside a game, so they never separate two players on the same team,
+    and that measurement understates them by construction. Their real job
+    is scaling a whole team's expected touchdowns, which only shows up
+    between games. So it was measured there — one row per team-game,
+    predicting the offensive touchdowns the team's skill players actually
+    scored, leave-one-season-out:
+
+        held-out RMSE               NFL (2,820)   CFB (5,398)
+        nothing but the mean           1.3763        1.8186
+        implied total                  1.2721        1.5391
+        implied total + spread         1.2722        1.5392
+        implied total + opp defence    1.2722        1.5374
+
+    The implied total is the entire team-level signal. The spread adds
+    nothing, which is arithmetic — implied = (total - spread) / 2 already
+    contains it, and its raw correlation with touchdowns (-0.314 NFL,
+    -0.480 CFB) is the implied total wearing a different hat. The
+    opponent's own touchdowns-allowed history adds nothing either: dead
+    flat in the NFL (raw correlation +0.038) and a tenth of a per cent in
+    college, from a term with four seasons behind it.
+
+    What this does NOT say is that game script does not matter. Script
+    does not change how many touchdowns a team scores; it changes who
+    scores them, which is a within-team question this test cannot see and
+    `script_multiplier` answers separately.
 
     The RECORD is still returned as a reason, because a reader deserves
     to know what the opponent has been conceding. It is disclosure, not a

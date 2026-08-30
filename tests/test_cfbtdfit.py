@@ -287,6 +287,26 @@ def test_the_defence_term_is_neutral_because_the_total_prices_it():
     every season (13.1 against 196.1) and the best partial weight (0.04
     to 0.14) was no better than zero.
 
+    CONFIRMED A THIRD TIME, BETWEEN GAMES, 2026-08-30. The two results
+    above and the player-level AUC test all share a weakness: the spread
+    and the total are CONSTANT inside a game, so nothing measured within
+    one can separate two players on the same team. The between-game test
+    is the one that can, and it agrees — one row per team-game, target
+    the offensive touchdowns the team's skill players actually scored,
+    leave-one-season-out held-out RMSE:
+
+                                    NFL (2,820)   CFB (5,398)
+        nothing but the mean           1.3763        1.8186
+        implied total                  1.2721        1.5391
+        implied total + spread         1.2722        1.5392
+        implied total + opp defence    1.2722        1.5374
+
+    Three independent designs, one answer: once the implied total is in,
+    the opponent's defensive record is worth nothing. The spread is worth
+    nothing on top of it either, and that one is arithmetic — implied
+    total is (total - spread) / 2, so its raw correlation with touchdowns
+    (-0.314 NFL, -0.480 CFB) IS the implied total.
+
     This module replays the BOARD'S chain, so it has to go neutral here
     too or it would be grading a model nobody runs."""
     for allowed, played in ((45.0, 1), (None, 9), (45.0, 9), (10.0, 9)):

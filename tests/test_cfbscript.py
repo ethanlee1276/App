@@ -170,8 +170,62 @@ def test_the_two_sports_disagree_at_a_college_sized_spread():
     assert _mult(28, "RB") < 1.05              # college: turned over
 
 
+# --- the near-miss --------------------------------------------------------
+def test_the_receiver_curve_survives_the_measurement_that_looked_damning():
+    """2026-08-30. The receiver curve was nearly deleted on a real number
+    about the wrong players.
+
+    Scoring the whole WR+TE GROUP's share of its team's touchdowns by
+    weighted squared error, leave-one-season-out, the shipped curve came
+    out WORSE THAN NO SCRIPT TERM AT ALL in three of four held-out
+    seasons (0.08845 against 0.08820), and a two-sided linear form beat
+    both. Re-run on the population the curve is applied to — the lead
+    receiver, the one a book actually quotes — under the objective it was
+    fitted for, it wins by a distance:
+
+        summed held-out chi-square   no script   SHIPPED   two-sided
+        CFB lead receiver               56.4       32.6       39.1
+        CFB lead back                  100.2       74.1       76.7
+        NFL lead receiver                26.7       25.8       28.8
+        NFL lead back                    41.9       39.3       44.7
+
+    Both are true. A heavy favourite's WR1 loses share TO HIS OWN
+    BACKUPS — the group keeps the touchdowns, the starter stops getting
+    them — so the group number is blind to exactly the effect the curve
+    encodes.
+
+    What this test defends is the SIGN on the favoured side, which is the
+    thing the group measurement would have flattened. If a future refit
+    wants to change it, the bar is the lead-receiver population above,
+    not the group.
+    """
+    # A heavy favourite's top receiver: measurably DOWN, not flat.
+    assert _mult(21, "WR") < 0.95, \
+        "the favoured side of the receiver curve is the part that was " \
+        "nearly zeroed out on a group-level measurement"
+    assert _mult(28, "WR") < _mult(14, "WR") < _mult(0, "WR")
+    # And a buried underdog's receiver is up, which both readings agree on.
+    assert _mult(-21, "WR") > 1.05
+
+
+def test_the_two_curves_disagree_about_who_the_starters_coming_out_hurts():
+    """The reconciliation above only makes sense if the back and the
+    receiver come off the same effect from opposite ends, so pin it.
+
+    Past a two-touchdown lead the back's equity turns over (starters
+    come out, backups get the goal-line work) while the receiver's keeps
+    falling — a favourite that is already throwing less does not start
+    throwing more to its WR1 at +28."""
+    assert _mult(28, "RB") < _mult(14, "RB")      # turned over
+    assert _mult(28, "WR") < _mult(14, "WR")      # never turned
+    # And they never point the same way at a normal college line.
+    for lead in (7, 14, 21):
+        assert _mult(lead, "RB") > 1.0 > _mult(lead, "WR")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+
