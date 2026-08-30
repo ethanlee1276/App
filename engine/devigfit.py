@@ -492,6 +492,86 @@ def best_price_lines(rows: list, min_band: int = 40) -> list:
     return lines
 
 
+def shopped(rows: list) -> list:
+    """The same rows priced at the number a bettor would actually take.
+
+    `market` is whichever book sorted last out of the harvest. `best` is
+    the longest price on the screen. A board that shops bets the second
+    one, so that is the price its de-vig has to be fitted on.
+    """
+    return [dict(r, market=r["best"]) for r in rows
+            if r.get("best") is not None]
+
+
+def overall_hold(rows: list) -> float | None:
+    """One number: the overround across every row, probability-weighted.
+
+    Not the mean of the per-band haircuts. An overround is a ratio of
+    summed probabilities, and averaging five band percentages weights a
+    band of 300 longshots the same as one of 800 favourites — which is
+    how a table that reads flat produces a headline that does not.
+    """
+    if not rows:
+        return None
+    raw = sum(r["market"] for r in rows)
+    act = sum(r["scored"] for r in rows)
+    return (raw / act) if act > 0 else None
+
+
+def shopped_fit_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
+    """Refit the de-vig on the shopped price, and say why that is the fit.
+
+    WHAT WENT WRONG ABOVE, and it is worth being blunt about because the
+    number is load-bearing. `m` and `k` at the top of this report are
+    fitted on the arbitrary-book price, and on the NFL harvest that fit
+    says the hold is +16.5%. The shopped price says the hold is nearer
+    5%. Nobody bets an arbitrary book, so +16.5% is the answer to a
+    question no one asked — and wiring it into pricing would divide every
+    fair probability by three times too much, which INVENTS EDGE on
+    every prop, in the one direction that costs money.
+
+    `longshots.ONE_SIDED_HOLD` assumes 1.06 and used to call itself the
+    cautious end, noting that "real hold on a longshot prop is usually
+    wider than 6%". Measured against the close a shopper takes, that
+    caveat is backwards: 6% is very slightly GREEDIER than the market,
+    not more generous.
+
+    AND IT DISAGREES WITH `devig.board_hold`, which reads the overround
+    off the board being priced and reports 22-35% on touchdown menus.
+    Four to five times apart, and not the same quantity: `board_hold`
+    divides summed implied probabilities by the MODEL's expected distinct
+    scorers, this divides them by what actually happened. Both cannot be
+    right and the outcomes are not the half that can be wrong. Recorded,
+    not acted on — over-stating the hold cuts EV and publishes fewer
+    picks, so the cost of the disagreement is silence rather than loss.
+    """
+    shop = shopped(rows)
+    if not shop:
+        return ["  no shopped prices, so no fit to compare against"]
+    got = compare(shop, min_split)
+    if got.get("thin"):
+        return [f"  shopped fit too thin to split: {got['train']} train / "
+                f"{got['test']} test"]
+    lines = [f"  refitted on the SHOPPED price ({len(shop):,} rows):",
+             f"    proportional m = {got['m']:.4f}  "
+             f"({got['m'] - 1:+.1%} average hold)",
+             f"    power       k = {got['k']:.4f}",
+             f"    log loss   raw {got['raw_loss']:.5f}   "
+             f"prop {got['prop_loss']:.5f}   power {got['power_loss']:.5f}"]
+    hold = overall_hold(shop)
+    if hold:
+        lines.append(f"    overround across every shopped row: {hold:.4f} "
+                     f"({hold - 1:+.1%})")
+        from .longshots import ONE_SIDED_HOLD
+        lines.append(f"    the board assumes {ONE_SIDED_HOLD:.2f} on a "
+                     f"one-sided market — "
+                     + ("cautious, and close" if hold <= ONE_SIDED_HOLD
+                        else "GENEROUS: the book charges more than we assume"))
+    lines.append("  the fit at the top of this report is on an arbitrary "
+                 "book and must not be wired into a board that shops")
+    return lines
+
+
 def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     got = compare(rows, min_split)
     if got.get("thin"):
@@ -516,6 +596,7 @@ def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     lines += [""] + haircut_lines(rows)
     lines += [""] + void_lines(rows)
     lines += [""] + best_price_lines(played_rows(rows))
+    lines += [""] + shopped_fit_lines(played_rows(rows), min_split)
     lines += ["",
               "  A margin under 0.0005 is not a result — the two methods "
               "agree and the choice between them is not settled by this "

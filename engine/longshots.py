@@ -327,11 +327,42 @@ def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
 #: qualify. Assuming the book is fairer than it is costs us picks; assuming
 #: it is greedier than it is invents edge. 1.06 is the cautious end.
 #:
-#: It is still an assumption, not a measurement — real hold on a longshot
-#: prop is usually wider than 6%, which means this understates the book's
-#: true margin and the edge on these picks is the optimistic bound of a
-#: range, not a number. Every pick priced this way carries the caveat, and
-#: nothing here is staked off a one-sided quote without it being said.
+#: MEASURED AT LAST, on 2026-08-30, and the old caveat here was
+#: backwards. This used to say "real hold on a longshot prop is usually
+#: wider than 6%, which means this understates the book's true margin".
+#: That is true of ONE book's price and false of the screen. Over 3,700
+#: harvested NFL anytime-TD closes at 6.0 books per player-date,
+#: `engine.devigfit` puts the overround on the LONGEST price a shopper
+#: could take at about 1.05 — and finds no band charging more than the
+#: rest, including the +456-to-+900 band that reads as a 34% toll when
+#: measured off an arbitrarily chosen book.
+#:
+#: So 1.06 is very slightly GREEDIER than the market, not more generous.
+#: By the direction stated above that leaves implied a shade LOW and the
+#: edge a shade high — a fraction of a point at a 15% prop, which is
+#: small, and is the direction worth knowing about rather than the one we
+#: had written down. It stays at 1.06: a single season's harvest is not
+#: enough to move a constant that prices real money, and erring toward
+#: fewer picks is the error to make.
+#:
+#: AND IT NOW CONFLICTS WITH THE OTHER MEASUREMENT, which is worth
+#: recording rather than smoothing over. `engine.devig.board_hold` reads
+#: the overround straight off the board being priced and reports 22-35%
+#: on anytime-touchdown menus; `pipeline` prefers it over this constant
+#: whenever a game's market is thick enough. The two numbers are four to
+#: five times apart and they are not the same quantity: `board_hold`
+#: divides summed implied probabilities by the MODEL's expected distinct
+#: scorers, while devigfit divides them by what actually happened. Only
+#: one of those denominators can be wrong, and it is not the outcomes.
+#:
+#: Nothing is changed on the strength of that here. Over-stating the hold
+#: is the SAFE error in this path — a wider hold lowers implied, which
+#: `calibrated_prob` shrinks the model toward, cutting EV and publishing
+#: fewer picks. The cost is silence, not loss.
+#:
+#: It is still an assumption on any board whose hold has not been
+#: measured. Every pick priced this way carries the caveat, and nothing
+#: here is staked off a one-sided quote without it being said.
 ONE_SIDED_HOLD = 1.06
 
 

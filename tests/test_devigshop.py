@@ -180,6 +180,74 @@ def test_the_full_report_shops_only_rows_that_could_be_lost():
         inspect.getsource(D.report_lines)
 
 
+# --- the fit, and what it must not be wired into -------------------------
+def _weeks(seed=4, weeks=12, per=400, soft=0.75):
+    rng = random.Random(seed)
+    rows = []
+    for w in range(1, weeks + 1):
+        for _ in range(per):
+            p = rng.choice([0.05, 0.14, 0.22, 0.35, 0.55])
+            best = p * (soft if p < 0.18 else 0.95)
+            rows.append({"season": 2025, "week": str(w), "market": p,
+                         "best": best, "books": 6, "book": "x",
+                         "played": True,
+                         "scored": int(rng.random() < best * 0.96)})
+    return rows
+
+
+def test_the_fit_is_redone_on_the_price_the_board_actually_bets():
+    """`odds.best_over_line` shops across books — its own docstring calls
+    it "the 'shop for the best number' step every sharp bettor does" — so
+    the published pick carries the LONGEST price on the screen. A de-vig
+    fitted on some other book is fitted on a price nobody was offered."""
+    got = "\n".join(D.shopped_fit_lines(_weeks()))
+    assert "refitted on the SHOPPED price" in got
+    assert "must not be wired into a board that shops" in got
+
+
+def test_the_shopped_hold_is_far_smaller_than_the_arbitrary_one():
+    rows = _weeks()
+    loose = D.compare(rows)["m"]
+    tight = D.compare(D.shopped(rows))["m"]
+    assert tight < loose, (tight, loose)
+
+
+def test_the_overround_is_summed_not_averaged_over_bands():
+    """An overround is a ratio of summed probabilities. Averaging five
+    band percentages weights 300 longshots the same as 800 favourites,
+    which is how a table that reads flat produces a headline that does
+    not."""
+    rows = ([{"market": 0.50, "scored": 1} for _ in range(100)]
+            + [{"market": 0.10, "scored": 0} for _ in range(100)])
+    # summed: 60.0 implied against 100 hits -> 0.60
+    assert abs(D.overall_hold(rows) - 0.60) < 1e-9
+    assert D.overall_hold([]) is None
+    assert D.overall_hold([{"market": 0.2, "scored": 0}]) is None
+
+
+def test_the_line_says_which_way_the_assumption_errs():
+    """"Close" is not the same claim as "cautious", and the board prices
+    real money off the difference."""
+    got = "\n".join(D.shopped_fit_lines(_weeks()))
+    assert "the board assumes" in got
+    assert ("cautious, and close" in got
+            or "the book charges more than we assume" in got)
+
+
+def test_the_conflict_with_board_hold_is_recorded_not_smoothed_over():
+    """`devig.board_hold` reports 22-35% on the same menus. Four to five
+    times apart, different denominators, and only one of them can be
+    wrong. A module that quietly reports the friendlier number is worse
+    than one that reports the disagreement."""
+    assert "board_hold" in D.shopped_fit_lines.__doc__
+    from engine import longshots as L
+    import inspect
+    src = inspect.getsource(L)
+    head = src[:src.index("ONE_SIDED_HOLD = 1.06")]
+    assert "board_hold" in head
+    assert "expected distinct" in head
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
