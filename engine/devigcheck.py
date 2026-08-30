@@ -177,7 +177,8 @@ def summarise(board: dict) -> dict:
                             or board.get("built_at") or ""),
            "rows": len(rows), "measured": 0, "assumed": 0, "two_way": 0,
            "unknown": 0, "books": {}, "suspicious": [], "short": [],
-           "unverified": [], "vigs": [], "listed": [], "floor": floor}
+           "unverified": [], "vigs": [], "listed": [], "floor": floor,
+           "early": early_menu(board)}
     for r in rows:
         src = str(r.get("vig_source") or "")
         vig = r.get("vig")
@@ -234,6 +235,76 @@ WHY_TEXT = {
                  "supports, so no margin was visible to strip",
     "unsolved": "the exponent could not be placed on that board",
 }
+
+#: A full anytime-touchdown menu is 20 to 40 players deep. Books open a
+#: week or more out with the headline names only and fill in the depth,
+#: and the No side, as kickoff approaches.
+FULL_MENU = 20
+
+#: Below this share of the expected scorers, the listed prices provably
+#: do not cover the outcomes — there is no margin in them to strip,
+#: because the missing depth players carry real probability. 1.0 is the
+#: break-even: a book with any hold at all sums ABOVE the scorer count.
+INCOMPLETE_RATIO = 1.0
+
+
+def early_menu(board: dict) -> tuple[bool, list]:
+    """Is this board unmeasurable because the MARKET is early?
+
+    THE DISTINCTION THIS DRAWS, and it is the difference between a bug
+    and a Tuesday. Found on 2026-08-30, eleven days before NFL Week 1:
+    all sixteen games fell back to the standing assumption, and the check
+    reported it as CHECK with "no row got a measured vig", which reads as
+    a defect. Every book was parsed correctly — Gibbs was there at -265,
+    Henry at -205 — and 576 quotes were journalled across four books.
+
+    What was missing was the rest of the menu. Fanatics listed 14 to 17
+    players a game where a full board is 20 to 40, no game quoted a
+    single No side, and every book's prices summed BELOW the scorers the
+    game line supports. About eight depth players per game at +600 to
+    +1500 is exactly the ~0.8 of probability the sums were short.
+
+    You cannot strip a margin from prices that do not cover the outcomes.
+    The de-vig refusing to measure there is it working, and saying so as
+    though something broke trains the reader to ignore the check — which
+    is the one failure this module cannot afford.
+    """
+    c = board.get("td_census") or {}
+    boards = c.get("boards") or []
+    if not c.get("games") or not boards:
+        return False, []
+    short_sums, listed = [], []
+    for b in boards:
+        total = b.get("sum")
+        scorers = b.get("scorers")
+        if total is None or not scorers:
+            continue
+        listed.append(int(b.get("listed") or 0))
+        if float(total) < INCOMPLETE_RATIO * float(scorers):
+            short_sums.append(b)
+    if not listed or len(short_sums) < len(listed):
+        return False, []          # some game DID carry a margin
+    median = sorted(listed)[len(listed) // 2]
+    if median >= FULL_MENU:
+        # A full-depth menu that still sums short is NOT an early board.
+        # That is the real defect this state must not swallow.
+        return False, []
+    worst = min(short_sums, key=lambda b: float(b["sum"]) / float(b["scorers"]))
+    return True, [
+        f"every one of {len(listed)} game(s) is an INCOMPLETE MENU, not a "
+        f"failed measurement: the listed prices do not cover the scorers "
+        f"the game line supports, so there is no margin in them to strip",
+        f"reference menus run {min(listed)}-{max(listed)} players "
+        f"(median {median}); a full anytime-touchdown market is "
+        f"{FULL_MENU}-40 deep, and the missing depth carries real "
+        f"probability",
+        f"thinnest: {worst.get('game', '?')} listed {worst.get('listed')} "
+        f"summing {float(worst['sum']):.2f} against "
+        f"{float(worst['scorers']):.2f} expected scorers",
+        "books open with the headline names and fill in the depth, and "
+        "the No side, closer to kickoff — re-run then, and treat a full "
+        "menu that STILL sums short as the real fault",
+    ]
 
 
 def fallback_detail(board: dict) -> list:
@@ -346,6 +417,15 @@ def verdict(got: dict) -> tuple[str, list]:
             f"{got['floor']:.0%} off a full-looking board — too small to "
             f"be a real book, so something upstream of the sum is wrong")
     if not got["measured"] and not got["two_way"]:
+        # AN EARLY MENU IS NOT A FAULT, and calling it one teaches the
+        # reader to skip this check. `early_menu` proves the market is
+        # incomplete from its own arithmetic — prices that do not cover
+        # the scorers have no margin in them — rather than assuming it
+        # from the calendar, so a full menu that still cannot be measured
+        # falls through to the CHECK below where it belongs.
+        early, detail = got.get("early", (False, []))
+        if early:
+            return "EARLY MENU", detail
         why.append("no row got a measured vig — every one fell back to the "
                    "standing assumption")
     if got["assumed"]:
@@ -466,11 +546,12 @@ def _main(argv) -> int:                          # pragma: no cover
             print(line)
         state, _ = verdict(summarise(board))
         # A slate with no odds yet is not a failure, and exiting nonzero
-        # on it would train the reader to ignore this.
-        # A slate with no odds yet is not a failure, and exiting nonzero
-        # on it would train the reader to ignore this.
+        # on it would train the reader to ignore this. Nor is a market
+        # that has not finished opening: EARLY MENU is proved from the
+        # board's own arithmetic, not assumed from the date, so it is a
+        # statement about the books rather than about us.
         worst = max(worst, {"READY": 0, "NO ODDS YET": 0, "LOCKED": 0,
-                            "NO GAMES": 0, "CHECK": 1,
+                            "NO GAMES": 0, "EARLY MENU": 0, "CHECK": 1,
                             "NO SCORER PULL": 1, "PRICED, NONE KEPT": 1,
                             }.get(state, 2))
     return worst

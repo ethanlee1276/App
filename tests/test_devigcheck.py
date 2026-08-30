@@ -18,7 +18,9 @@ from engine.devigcheck import (
     SUSPICIOUS_VIG, SUSPICIOUS_DEFAULT, rows_of, summarise, verdict,
     report_lines, board_state, _sport_of, load, full_copy_of,
     MIN_BOARD, fallback_detail, WHY_TEXT, census_lines,
+    early_menu, FULL_MENU,
 )
+from engine import devigcheck as D                             # noqa: E402
 
 
 def _board(sport="nfl", picks=(), watch=()):
@@ -461,6 +463,75 @@ def test_it_infers_the_sport_when_the_board_does_not_carry_one():
 def test_the_report_states_the_verdict_last():
     lines = report_lines(_board(picks=[_row()]))
     assert "READY" in lines[-2]
+
+
+# --- an early market is not a broken one ---------------------------------
+def _early_board(listed=15, total=3.4, scorers=4.2, games=16, rows=11):
+    return {"sport": "nfl", "date": "2026-W01", "built_at": "x",
+            "long_shots": [{"vig": 0.06, "vig_source": "assumed",
+                            "vig_listed": 0} for _ in range(rows)],
+            "td_census": {
+                "games": games, "measured": 0, "no_line": 0,
+                "unmeasurable": games,
+                "boards": [{"game": f"A{i}/B{i}", "book": "fanatics",
+                            "listed": listed, "sum": total,
+                            "scorers": scorers, "why": "no margin"}
+                           for i in range(games)]}}
+
+
+def test_an_unopened_menu_reads_as_early_not_as_a_defect():
+    """2026-08-30, eleven days before NFL Week 1. All sixteen games fell
+    back to the standing assumption and the check said CHECK — "no row
+    got a measured vig" — which reads as something broken.
+
+    Nothing was. Every book parsed: 576 quotes across four books, Gibbs
+    at -265, Henry at -205. What was missing was the rest of the menu —
+    14 to 17 players a game where a full board is 20 to 40, not one No
+    side quoted anywhere, and every book's prices summing BELOW the
+    scorers the game line supports. You cannot strip a margin from prices
+    that do not cover the outcomes.
+
+    Reporting that as a fault trains the reader to ignore the check,
+    which is the one failure this module cannot afford."""
+    state, why = D.verdict(D.summarise(_early_board()))
+    assert state == "EARLY MENU", (state, why)
+    joined = " ".join(why)
+    assert "INCOMPLETE MENU" in joined
+    assert "closer to kickoff" in joined
+    # And it must not exit nonzero — that is the whole point.
+    assert D._main.__doc__ is not None or True
+    import inspect
+    src = inspect.getsource(D._main)
+    assert '"EARLY MENU": 0' in src,         "an early market must not fail the check"
+
+
+def test_a_full_menu_that_still_cannot_be_measured_is_the_real_fault():
+    """THE CASE THIS STATE MUST NOT SWALLOW. A 26-player board summing
+    below its scorer count is not a market still opening — it is prices
+    we are reading wrong, and it has to stay CHECK."""
+    state, why = D.verdict(D.summarise(_early_board(listed=26)))
+    assert state == "CHECK", (state, why)
+    assert any("fell back" in x for x in why), why
+
+
+def test_one_game_carrying_a_margin_is_enough_to_stop_calling_it_early():
+    """If any game on the slate DID have a measurable hold, the menu is
+    open and the others need explaining, not excusing."""
+    board = _early_board()
+    board["td_census"]["boards"][0].update(sum=5.4, scorers=4.2,
+                                           why="measured")
+    state, _why = D.verdict(D.summarise(board))
+    assert state == "CHECK", state
+
+
+def test_early_needs_the_census_and_says_nothing_without_it():
+    """No census, no claim. A board built before that field shipped
+    cannot prove its menus were thin, and guessing would be the same
+    error in the other direction."""
+    board = _early_board()
+    board["td_census"] = {}
+    assert D.early_menu(board) == (False, [])
+    assert D.verdict(D.summarise(board))[0] == "CHECK"
 
 
 if __name__ == "__main__":
