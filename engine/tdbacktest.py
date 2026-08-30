@@ -170,13 +170,23 @@ MIN_FIT_PAIRS = 2_000
 #: list, so "how often does a probability band land" is the wrong shape
 #: of question for it — "if you take the top five rows, how many score"
 #: is the one a reader is actually asking.
-BOARD_DEPTHS = (5, 10, 20, 40)
+BOARD_DEPTHS = (1, 2, 3, 5, 10, 20, 40)
 
 #: Resamples for the slate-level confidence interval. Rows inside one
 #: slate share games, weather and game scripts and are nowhere near
 #: independent; bootstrapping SLATES rather than rows is what keeps the
 #: interval honest about that.
-BOARD_RESAMPLES = 600
+#:
+#: Two thousand rather than six hundred since the flag moved to a
+#: corrected tail: at 0.05/7 two-sided that percentile sits three draws
+#: from the end of a 600-sample bootstrap, and a bound decided by three
+#: numbers is not a bound.
+BOARD_RESAMPLES = 2000
+
+#: The whole family is 0.05, split across the depths asked — the same
+#: correction `tdbook.ROI_FAMILY_ALPHA` applies, and for the same
+#: reason.
+BOARD_FAMILY_ALPHA = 0.05
 
 
 def _loso_probabilities(rows, fitter=None):
@@ -317,7 +327,16 @@ def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
         boot.sort()
         lo = boot[int(0.025 * len(boot))]
         hi = boot[int(0.975 * len(boot)) - 1]
-        flag = "" if lo <= 0 <= hi else " <-- real"
+        # DESCRIBED AT 95%, FLAGGED AT THE CORRECTED LEVEL. This table
+        # grew from four depths to seven when the shallow end was added,
+        # and seven looks at one board is seven chances to be surprised.
+        # `tdbook.roi_lines` corrects the same way, and leaving the
+        # sibling report uncorrected would be the inconsistency this
+        # codebase keeps finding in itself.
+        tail = BOARD_FAMILY_ALPHA / max(1, len(depths)) / 2.0
+        clo = boot[int(tail * len(boot))]
+        chi = boot[int((1.0 - tail) * len(boot)) - 1]
+        flag = "" if clo <= 0 <= chi else " <-- real"
         out.append(f"   top {k:<8d} {claimed:6.1%}   {landed:6.1%}  "
                    f"{landed - claimed:+7.1%}   "
                    f"[{lo:+.1%},{hi:+.1%}]{flag:<8}  "

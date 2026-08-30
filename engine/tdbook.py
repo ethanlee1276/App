@@ -84,10 +84,29 @@ def joined(conn, sport: str = "nfl", seasons=None) -> list:
     return rows
 
 
-#: Depths the board is priced at, matching `tdbacktest.board_report` so
+#: Depths the board is priced at, matching `tdbacktest.BOARD_DEPTHS` so
 #: the hit rate and the ROI can be read on the same line.
-ROI_DEPTHS = (5, 10, 20, 40)
-ROI_RESAMPLES = 600
+#:
+#: THE SHALLOW END IS WHY THIS GREW. Over 95 replayed slates the single
+#: most likely scorer landed 67.4%, well clear of the 60.0% it claimed —
+#: a much smaller and sharper board than the top five, and the place the
+#: ranking is most likely to outrun the price. Nothing was pricing it
+#: until now.
+ROI_DEPTHS = (1, 2, 3, 5, 10, 20, 40)
+
+#: Raised with the depth count. The verdict below is read off a
+#: Bonferroni-corrected tail, and at 0.05/7 two-sided that percentile
+#: sits three resamples from the end of a 600-draw bootstrap — an
+#: interval bound decided by three numbers is not one.
+ROI_RESAMPLES = 2000
+
+#: The whole family is 0.05, split across the depths asked. Seven looks
+#: at the same board is seven chances to be surprised, and a single
+#: "profitable" flag at a plain 95% across seven depths is close to a
+#: one-in-three coin flip. `devigfit.BAND_Z` and `calibrate.CURVE_Z`
+#: carry the same correction for the same reason; this is that
+#: discipline applied to the one report that would put money on a board.
+ROI_FAMILY_ALPHA = 0.05
 
 
 def board_priced(conn, sport: str = "nfl", seasons=None, fitter=None) -> list:
@@ -220,8 +239,14 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
         boot.sort()
         lo = boot[int(0.025 * len(boot))]
         hi = boot[int(0.975 * len(boot)) - 1]
-        verdict = ("   <-- profitable" if lo > 0 else
-                   "   <-- losing" if hi < 0 else "   inside the noise")
+        # DESCRIBED AT 95%, JUDGED AT THE CORRECTED LEVEL. The printed
+        # interval is the familiar one; the word beside it has to clear a
+        # bar raised for the number of depths being asked.
+        tail = ROI_FAMILY_ALPHA / max(1, len(depths)) / 2.0
+        clo = boot[int(tail * len(boot))]
+        chi = boot[int((1.0 - tail) * len(boot)) - 1]
+        verdict = ("   <-- profitable" if clo > 0 else
+                   "   <-- losing" if chi < 0 else "   inside the noise")
         out.append(f"   top {k:<8d} {n:5d}  {hit:6.1%}  {need:6.1%}  "
                    f"{hit - need:+6.1%}  {r_all:+7.2%}   "
                    f"[{lo:+.1%},{hi:+.1%}]{verdict}")
@@ -233,6 +258,10 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
                "that column is negative.")
     out.append("  An interval spanning zero is not a green light: it is the "
                "data declining to say.")
+    out.append(f"  The interval shown is 95%; the WORD beside it is judged "
+               f"at {ROI_FAMILY_ALPHA:.0%} split across")
+    out.append(f"  {len(depths)} depths, because asking the same board "
+               f"{len(depths)} times is {len(depths)} chances to be fooled.")
     return out
 
 

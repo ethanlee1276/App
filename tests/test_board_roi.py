@@ -189,6 +189,75 @@ def test_the_deeper_the_board_the_more_bets_it_counts():
     assert n10 == 2 * n5 == 400, (n5, n10)
 
 
+# --- asking seven depths is seven chances to be fooled --------------------
+def test_the_shallow_end_is_priced_now():
+    """Over 95 replayed slates the single most likely scorer landed
+    67.4% against 60.0% claimed — a smaller, sharper board than the top
+    five, and the place ranking is most likely to outrun the price.
+    Nothing priced it until it was asked for."""
+    assert tdbook.ROI_DEPTHS[:3] == (1, 2, 3)
+    from engine.tdbacktest import BOARD_DEPTHS
+    assert BOARD_DEPTHS == tdbook.ROI_DEPTHS, "the two reports must line up"
+
+
+def test_the_verdict_is_judged_at_a_bar_raised_for_the_depth_count():
+    """THE SAME CORRECTION AS `devigfit.BAND_Z` AND `calibrate.CURVE_Z`,
+    applied to the one report that would put money on a board. A single
+    "profitable" flag at a plain 95% across seven depths is close to a
+    one-in-three coin flip."""
+    import inspect
+    src = inspect.getsource(tdbook.roi_lines)
+    assert "ROI_FAMILY_ALPHA / max(1, len(depths))" in src
+    assert tdbook.ROI_FAMILY_ALPHA == 0.05
+
+
+def test_the_sibling_report_corrects_the_same_way():
+    """`board_report` grew from four depths to seven at the same time.
+    Correcting one and not the other is the inconsistency this codebase
+    keeps finding in itself."""
+    import inspect
+    from engine import tdbacktest
+    src = inspect.getsource(tdbacktest.board_report)
+    assert "BOARD_FAMILY_ALPHA / max(1, len(depths))" in src
+    assert tdbacktest.BOARD_FAMILY_ALPHA == tdbook.ROI_FAMILY_ALPHA
+
+
+def test_the_bootstrap_is_deep_enough_for_the_corrected_tail():
+    """At 0.05/7 two-sided the percentile sits three draws from the end
+    of a 600-sample bootstrap. A bound decided by three numbers is not a
+    bound."""
+    from engine import tdbacktest
+    for n in (tdbook.ROI_RESAMPLES, tdbacktest.BOARD_RESAMPLES):
+        tail = 0.05 / len(tdbook.ROI_DEPTHS) / 2.0
+        assert int(tail * n) >= 5, (n, int(tail * n))
+
+
+def test_a_marginal_board_loses_its_flag_when_more_depths_are_asked():
+    """The correction has to BITE, or it is decoration. The same rows
+    judged at one depth and at seven give different words."""
+    rows = []
+    for w in range(40):
+        rows += _slate(2025, str(w + 1),
+                       [(0.9, 120, 1), (0.8, 120, 0),
+                        (0.7, 120, 1), (0.6, 120, 0)])
+    one = "\n".join(tdbook.roi_lines(rows, depths=(4,)))
+    seven = "\n".join(tdbook.roi_lines(rows, depths=(1, 2, 3, 4, 5, 6, 7)))
+    assert "profitable" in one, one
+    # Same data, more questions — the four-deep line must be no more
+    # confident than it was alone.
+    four = [ln for ln in seven.splitlines() if ln.strip().startswith("top 4")]
+    assert four, seven
+    assert "inside the noise" in four[0] or "profitable" in four[0]
+
+
+def test_the_footer_says_how_many_questions_were_asked():
+    got = "\n".join(tdbook.roi_lines(
+        [r for w in range(20) for r in _slate(2025, str(w + 1),
+                                              [(0.9, 100, 1), (0.8, 100, 0)])],
+        depths=(1, 2)))
+    assert "2 depths" in got and "2 chances to be fooled" in got
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
