@@ -51,6 +51,17 @@ def _always(_market):
     return True
 
 
+#: THE MIXTURE, INJECTED. `run_tests` points QB_MODELS_DIR at an empty
+#: sandbox, where `display_prob` finds no store and every row falls back
+#: to its raw claim — so fixtures tuned to mixture output pass standalone
+#: and fail in the suite. These are the real fitted values from 2026-08-30.
+FITS = {
+    "rush_yds": {"zero": [-0.04, 0.82], "sigma": 0.54},
+    "rec_yds": {"zero": [-0.39, 0.61], "sigma": 0.60},
+    "receptions": {"zero": [-0.82, 0.48], "sigma": 0.46},
+}
+
+
 # --- what may be ranked --------------------------------------------------
 def test_only_markets_shown_to_rank_appear_at_all():
     """"We think he will hit" is a claim, and an unmeasured claim on the
@@ -60,7 +71,7 @@ def test_only_markets_shown_to_rank_appear_at_all():
         assert K.rankable(market), market
     for market in ("first_td", "longest_reception", "made_up"):
         assert not K.rankable(market), market
-    assert K.from_prop(_prop(market="made_up"), _always) is None
+    assert K.from_prop(_prop(market="made_up"), _always, fits=FITS) is None
 
 
 def test_the_rank_floor_is_above_a_coin_flip_by_a_margin():
@@ -84,14 +95,14 @@ def test_a_market_can_rank_without_being_bettable():
                        lambda m: m != "rush_yds")
     assert shut is not None, "a shut market must still be rankable"
     assert shut["bettable"] is False
-    open_ = K.from_prop(_prop(market="receptions"), _always)
+    open_ = K.from_prop(_prop(market="receptions"), _always, fits=FITS)
     assert open_["bettable"] is True
 
 
 def test_the_row_carries_the_measurement_that_justifies_it():
     """A reader should be able to ask "how good is this ordering" and get
     a number rather than a tone of voice."""
-    row = K.from_prop(_prop(market="rush_yds"), _always)
+    row = K.from_prop(_prop(market="rush_yds"), _always, fits=FITS)
     assert row["rank_auc"] == K.RANK_AUC["rush_yds"]
 
 
@@ -105,20 +116,26 @@ def test_ranked_by_probability_and_by_nothing_else():
     # line, so three players with identical projections SHOULD land on
     # identical probabilities — an earlier version of this fixture varied
     # only `hit_prob` and read that correct behaviour as a sorting bug.
+    # EACH ROW'S BOOK NUMBER SITS NEAR ITS OWN PROJECTION. The
+    # credibility bar refuses a displayed probability more than
+    # MAX_CREDIBLE_EDGE from the book's, so a fixture that gave three
+    # different projections one shared `fair_prob` had two of them
+    # correctly thrown out — for a reason that has nothing to do with
+    # ordering.
     rows = [_prop(player="Low", prob=0.42, projection=44.0,
-                  ev_per_unit=0.40),
+                  fair_prob=0.38, ev_per_unit=0.40),
             _prop(player="High", prob=0.71, projection=72.0,
-                  ev_per_unit=-0.10),
+                  fair_prob=0.67, ev_per_unit=-0.10),
             _prop(player="Mid", prob=0.55, projection=55.0,
-                  ev_per_unit=0.20)]
-    board = K.build(rows, [], [], sport="nfl")
+                  fair_prob=0.51, ev_per_unit=0.20)]
+    board = K.build(rows, [], [], sport="nfl", fits=FITS)
     assert [r["player"] for r in board] == ["High", "Mid", "Low"], board
     # The juiciest EV on the slate is LAST, which is the whole point.
     assert board[-1]["player"] == "Low"
 
 
 def test_a_long_shot_pick_and_its_watch_row_are_not_shown_twice():
-    board = K.build([], [_watch()], [_watch()], sport="nfl")
+    board = K.build([], [_watch()], [_watch()], sport="nfl", fits=FITS)
     assert len(board) == 1, board
 
 
@@ -127,38 +144,39 @@ def test_touchdowns_and_yardage_rank_against_each_other():
     scorer and has to say so."""
     # Projected well clear of his line, so he leads on the CALIBRATED
     # number rather than on a raw claim the mixture then pulls down.
-    board = K.build([_prop(player="Wideout", prob=0.71, projection=88.0)],
-                    [], [_watch(player="Back", prob=0.58)], sport="nfl")
+    board = K.build([_prop(player="Wideout", prob=0.71, projection=88.0,
+                           fair_prob=0.77)],
+                    [], [_watch(player="Back", prob=0.58)], sport="nfl", fits=FITS)
     assert [r["player"] for r in board] == ["Wideout", "Back"], board
     assert board[0]["model_prob"] > board[1]["model_prob"]
 
 
 # --- what never reaches it ----------------------------------------------
 def test_a_proxy_price_is_not_a_likelihood():
-    assert K.from_prop(_prop(has_market=False), _always) is None
+    assert K.from_prop(_prop(has_market=False), _always, fits=FITS) is None
 
 
 def test_a_stale_or_absurd_price_is_refused():
-    assert K.from_prop(_prop(odds=9000), _always) is None
-    assert K.from_prop(_prop(odds=None), _always) is None
+    assert K.from_prop(_prop(odds=9000), _always, fits=FITS) is None
+    assert K.from_prop(_prop(odds=None), _always, fits=FITS) is None
 
 
 def test_a_coin_flip_is_not_likely_however_it_ranks():
     """The page is called Most Likely. A 31% shot at the top of a thin
     slate is still not something to tell somebody is likely."""
-    assert K.from_prop(_prop(prob=0.12), _always) is None
+    assert K.from_prop(_prop(prob=0.12), _always, fits=FITS) is None
     assert K.MIN_PROB >= 0.30
 
 
 def test_a_missing_probability_never_becomes_a_zero():
-    assert K.from_prop(_prop(prob=None), _always) is None
-    board = K.build([], [], [dict(_watch(), model_prob=None)], sport="nfl")
+    assert K.from_prop(_prop(prob=None), _always, fits=FITS) is None
+    board = K.build([], [], [dict(_watch(), model_prob=None)], sport="nfl", fits=FITS)
     assert board == []
 
 
 # --- what the page says about itself -------------------------------------
 def test_the_summary_counts_rather_than_asserts():
-    board = K.build([_prop(market="rush_yds")], [], [_watch()], sport="nfl")
+    board = K.build([_prop(market="rush_yds")], [], [_watch()], sport="nfl", fits=FITS)
     got = K.summary(board)
     assert got["rows"] == len(board)
     assert got["bettable"] + got["rank_only"] == got["rows"]
@@ -167,7 +185,7 @@ def test_the_summary_counts_rather_than_asserts():
 
 def test_the_board_is_capped_so_it_stays_a_ranking():
     rows = [_prop(player=f"P{i}", prob=0.9 - i / 1000.0) for i in range(200)]
-    assert len(K.build(rows, [], [], sport="nfl")) == K.LIMIT
+    assert len(K.build(rows, [], [], sport="nfl", fits=FITS)) == K.LIMIT
 
 
 def test_the_page_is_paid_because_it_is_the_product():
@@ -228,7 +246,7 @@ def test_the_mixture_pulls_an_overconfident_number_down():
     spreads below zero instead of piling at zero."""
     row = _prop(market="rush_yds", prob=0.62, projection=58.0,
                 recent_values=[70, 0, 52, 61, 0, 44])
-    got = K.from_prop(row, _always)
+    got = K.from_prop(row, _always, fits=FITS)
     if got["prob_source"] == "model":
         return          # no fitted store on this box; nothing to assert
     assert got["model_prob"] < got["raw_prob"], got
@@ -238,7 +256,7 @@ def test_the_mixture_pulls_an_overconfident_number_down():
 def test_the_reader_is_told_which_number_they_are_seeing():
     """A page that silently swapped its probability source would be the
     opposite of the point."""
-    got = K.from_prop(_prop(), _always)
+    got = K.from_prop(_prop(), _always, fits=FITS)
     assert got["prob_source"] in ("model", "mixture")
     assert "raw_prob" in got
     app = open(os.path.join(os.path.dirname(os.path.dirname(
@@ -300,10 +318,75 @@ def test_nothing_on_this_board_reaches_the_journal():
     `ledger.journal_skip_reason`, which only takes rows carrying
     `recommended` and a positive stake — neither of which this board
     emits."""
-    got = K.from_prop(_prop(), _always)
+    got = K.from_prop(_prop(), _always, fits=FITS)
     assert "stake_units" not in got and "recommended" not in got
     from engine.ledger import journal_skip_reason
     assert journal_skip_reason(dict(got)) is not None
+
+
+# --- the guard this board never had --------------------------------------
+def test_a_probability_that_runs_away_from_the_book_is_refused():
+    """EVERY OTHER PICK PATH HAS THIS AND THIS ONE DID NOT.
+    `betting.evaluate_prop`, `longshots` and `gamebets.temper` all refuse
+    a probability disagreeing with the market past MAX_CREDIBLE_EDGE, on
+    the argument that a 20-point gap in a heavily bet market is our error
+    far more often than a discovery. The likelihood board carried no such
+    check, because it does not grade or stake and nothing forced the
+    question — while still making the claim that IS the product."""
+    # LINE AND PROJECTION HAVE TO AGREE with the market being named: the
+    # displayed number is recomputed from one against the other, so a
+    # receptions projection against the fixture's default 45.5 yardage
+    # line lands under MIN_PROB and is dropped for the wrong reason.
+    rec = dict(market="receptions", line=3.5, projection=5.2,
+               recent_values=[4, 5, 3, 6])
+    near = K.from_prop(_prop(prob=0.62, fair_prob=0.68, **rec), _always, fits=FITS)
+    far = K.from_prop(_prop(prob=0.62, fair_prob=0.25, **rec), _always, fits=FITS)
+    assert near is not None
+    assert far is None, "a 40-point disagreement is a modelling error"
+
+
+def test_credibility_is_judged_on_the_number_actually_shown():
+    """CHECKED AFTER THE MIXTURE, not before. The mixture recomputes from
+    the projection and discards the market shrink `hit_prob` carried, so
+    the rows most able to run away from the book are exactly the ones
+    this page calibrated. Checking the input would pass what this exists
+    to catch."""
+    import inspect
+    src = inspect.getsource(K.from_prop)
+    i_mix = src.index("display_prob(")
+    i_cred = src.index("_credible(shown")
+    assert i_cred > i_mix, \
+        "the bar is applied to the raw claim, not to what is displayed"
+
+
+def test_the_bar_is_the_same_one_the_rest_of_the_engine_uses():
+    from engine.betting import MAX_CREDIBLE_EDGE as BAR
+    assert K.MAX_CREDIBLE_EDGE == BAR
+
+
+def test_touchdown_rows_answer_to_the_same_bar():
+    """One board, one rule. They arrive pre-shrunk so it almost never
+    fires — and almost never is not a guarantee."""
+    wild = dict(_watch(prob=0.90), implied_prob=0.30)
+    assert K.build([], [], [wild], sport="nfl", fits=FITS) == []
+    sane = dict(_watch(prob=0.58), implied_prob=0.55)
+    assert len(K.build([], [], [sane], sport="nfl", fits=FITS)) == 1
+
+
+def test_a_missing_book_number_is_not_treated_as_a_disagreement():
+    """No fair price means nothing to disagree WITH. Refusing on absence
+    would empty the board on exactly the markets that quote one side."""
+    assert K._credible(0.80, None) is True
+    assert K._credible(None, 0.20) is True
+    assert K._credible(0.80, "not a number") is True
+
+
+def test_an_emptied_board_can_say_why():
+    """Census discipline: a board that came out short because the bar
+    fired must not look like a quiet slate."""
+    got = K.summary([], refused=7)
+    assert got["refused_incredible"] == 7
+    assert got["rows"] == 0
 
 
 if __name__ == "__main__":

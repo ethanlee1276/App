@@ -93,7 +93,7 @@ RANK_AUC = {
 #: What would settle it: the same table on two or three more seasons of
 #: closes, and on more than one market. `engine.yardagefit --real` prints
 #: it, and the harvest is the binding constraint, not the code.
-#:
+
 #: Below this a market cannot sort its own board and has no business
 #: claiming who will hit. 0.5 is a coin flip; this is the floor at which
 #: an ordering is worth showing a reader.
@@ -111,6 +111,21 @@ LIMIT = 40
 #: it is ranked against.
 MIN_PROB = 0.30
 
+#: How far the displayed probability may sit from the book's own de-vigged
+#: number before the row is refused — the same bar `engine.betting` uses,
+#: for the same reason.
+from .betting import MAX_CREDIBLE_EDGE                     # noqa: E402
+
+
+def _credible(prob, fair) -> bool:
+    """Is this probability defensible against the book's own number?"""
+    if fair is None or prob is None:
+        return True
+    try:
+        return abs(float(prob) - float(fair)) <= MAX_CREDIBLE_EDGE
+    except (TypeError, ValueError):
+        return True
+
 
 def rankable(market: str) -> bool:
     """Has this market been SHOWN to rank, not merely modelled?"""
@@ -125,7 +140,7 @@ def _sane(odds) -> bool:
     return SANE_ODDS[0] <= o <= SANE_ODDS[1]
 
 
-def from_prop(row: dict, bettable) -> dict | None:
+def from_prop(row: dict, bettable, fits=None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -156,11 +171,33 @@ def from_prop(row: dict, bettable) -> dict | None:
     # and there it is measurably the better number.
     shown = float(prob)
     source = "model"
+    # `fits` is INJECTABLE for the same reason `nflready`'s shrink lookup
+    # is: the suite points QB_MODELS_DIR at an empty sandbox, so a test
+    # reading the ambient store asserts about whether THIS box has been
+    # fitted rather than about the code.
     fitted = display_prob(market, row.get("projection"), row.get("line"),
-                          row.get("recent_values"))
+                          row.get("recent_values"), fits=fits)
     if fitted is not None:
         shown, source = float(fitted), "mixture"
     if shown < MIN_PROB:
+        return None
+    # CREDIBILITY, AND THIS BOARD HAD NONE. Every other pick path refuses
+    # a probability that disagrees with the market past
+    # MAX_CREDIBLE_EDGE — `betting.evaluate_prop`, `longshots`,
+    # `gamebets.temper` all carry it — because a 20-point disagreement in
+    # a heavily bet market is our error far more often than a discovery.
+    # This page does not grade or stake, so nothing ever forced the
+    # question; it still makes the claim, and the claim is the product.
+    #
+    # CHECKED AFTER THE MIXTURE, not before. The mixture recomputes from
+    # the projection and therefore discards the market shrink `hit_prob`
+    # already carried, so the rows most able to run away from the book
+    # are exactly the ones this page calibrated. Checking the input would
+    # pass precisely what this exists to catch.
+    #
+    # REFUSED, NOT SHRUNK: a likelihood board that quietly moves its
+    # number toward the market has stopped saying what it believes.
+    if not _credible(shown, row.get("fair_prob")):
         return None
     return {
         "player": row.get("player", ""), "team": row.get("team", ""),
@@ -220,7 +257,7 @@ def from_watch(row: dict) -> dict:
 
 
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
-          limit: int = LIMIT) -> list:
+          limit: int = LIMIT, fits=None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
@@ -239,10 +276,15 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         key = (got["player"], got["team"], "anytime_td")
         if got["model_prob"] is None or key in seen:
             continue
+        # Watch rows arrive pre-shrunk toward the market, so this almost
+        # never fires for them. Applied anyway: "almost never" is not a
+        # guarantee, and one board means one bar.
+        if not _credible(got["model_prob"], got.get("implied_prob")):
+            continue
         seen.add(key)
         out.append(got)
     for row in props or []:
-        got = from_prop(row, bettable)
+        got = from_prop(row, bettable, fits=fits)
         if got is None:
             continue
         key = (got["player"], got["team"], got["market"])
@@ -254,8 +296,13 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     return out[:limit]
 
 
-def summary(board: list) -> dict:
-    """What the page says about itself, counted rather than asserted."""
+def summary(board: list, refused: int = 0) -> dict:
+    """What the page says about itself, counted rather than asserted.
+
+    `refused` carries the rows the credibility bar dropped, so a board
+    that came out short can say WHY rather than looking like a quiet
+    slate — the same census discipline the pick funnel uses.
+    """
     by_market: dict = {}
     for r in board:
         by_market[r["market"]] = by_market.get(r["market"], 0) + 1
@@ -264,4 +311,5 @@ def summary(board: list) -> dict:
         "by_market": by_market,
         "bettable": sum(1 for r in board if r.get("bettable")),
         "rank_only": sum(1 for r in board if not r.get("bettable")),
+        "refused_incredible": refused,
     }
