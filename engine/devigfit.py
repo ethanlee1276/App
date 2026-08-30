@@ -241,6 +241,13 @@ def compare(rows: list, min_split: int = MIN_SPLIT) -> dict:
 #: the ends, so the ends get their own rows.
 BANDS = ((0.00, 0.10), (0.10, 0.18), (0.18, 0.28), (0.28, 0.45), (0.45, 1.01))
 
+#: How far a band's haircut must sit from the rest of the board before it
+#: is called a real difference. 2.58 is the 1% two-sided point, which is
+#: 5% split across the five bands — the bar for asking the question five
+#: times and reporting the loudest answer. A plain 2.0 flagged a band on
+#: a SIMULATED board charging a flat 14% everywhere.
+BAND_Z = 2.58
+
 
 def band_lines(rows: list, m: float, k: float, min_band: int = 40) -> list:
     """Per raw-price band: what each method says, and what happened.
@@ -297,8 +304,26 @@ def haircut_lines(rows: list, min_band: int = 40) -> list:
     near 14% and one sat at 35%, which is flat-plus-a-spike rather than
     the smooth monotone curve a power exponent draws.
     """
-    lines = ["  what the market actually charged, by band:",
-             "  raw band      n     raw  actual   haircut"]
+    # WITH ERROR BARS, for the reason `band_lines` above spells out and
+    # this table did not follow: a haircut is 1 - actual / raw, so the
+    # noise on the realised rate is DIVIDED BY THE RAW PRICE. At a 0.10
+    # longshot that multiplies the uncertainty tenfold, and a band of a
+    # couple of hundred rows can show a 35% toll on a market charging 14%
+    # without anything being there. That is exactly the shape the first
+    # live run reported, and exactly why it was never wired.
+    #
+    # The z-score is against the OTHER bands pooled, because the question
+    # is not "is this band's haircut non-zero" — every band's is. It is
+    # "does this band charge more than the rest of the board".
+    #
+    # AND THE BAR IS RAISED FOR LOOKING FIVE TIMES. On a simulated board
+    # charging a flat 14% in every band, a plain z >= 2 flagged one band
+    # at +2.3 — with five bands that happens about a quarter of the time
+    # by construction, and wiring a haircut on the strength of it would
+    # be charging a toll nobody levied. `engine.losspatterns` already
+    # runs its miner under false-discovery control for the same reason;
+    # this is the same discipline with one number instead of a procedure.
+    per: list = []
     for lo, hi in BANDS:
         got = [r for r in rows if lo <= r["market"] < hi]
         if len(got) < min_band:
@@ -306,9 +331,38 @@ def haircut_lines(rows: list, min_band: int = 40) -> list:
         n = float(len(got))
         raw = sum(r["market"] for r in got) / n
         act = sum(r["scored"] for r in got) / n
-        cut = 1.0 - act / raw if raw > 0 else float("nan")
-        lines.append(f"  {lo:.2f}-{hi:.2f} {len(got):>6} {raw:>7.3f} "
-                     f"{act:>7.3f} {cut:>9.1%}")
+        if raw <= 0:
+            continue
+        se_act = math.sqrt(max(act * (1.0 - act), 1e-12) / n)
+        per.append({"lo": lo, "hi": hi, "n": len(got), "raw": raw,
+                    "act": act, "cut": 1.0 - act / raw,
+                    "se": se_act / raw, "hits": act * n, "rows": n})
+    lines = ["  what the market actually charged, by band:",
+             "  raw band      n     raw  actual   haircut          vs "
+             "the other bands"]
+    for b in per:
+        others = [o for o in per if o is not b]
+        z = ""
+        if others:
+            o_raw = sum(o["raw"] * o["rows"] for o in others) \
+                / sum(o["rows"] for o in others)
+            o_hits = sum(o["hits"] for o in others)
+            o_rows = sum(o["rows"] for o in others)
+            o_act = o_hits / o_rows
+            o_cut = 1.0 - o_act / o_raw if o_raw > 0 else 0.0
+            o_se = math.sqrt(max(o_act * (1.0 - o_act), 1e-12) / o_rows) / o_raw
+            sd = math.sqrt(b["se"] ** 2 + o_se ** 2)
+            zz = (b["cut"] - o_cut) / sd if sd > 0 else 0.0
+            z = (f"{o_cut:>7.1%}   z = {zz:+5.1f}"
+                 + ("   <-- charges more" if zz >= BAND_Z else
+                    "   inside the noise"))
+        lines.append(f"  {b['lo']:.2f}-{b['hi']:.2f} {b['n']:>6} "
+                     f"{b['raw']:>7.3f} {b['act']:>7.3f} "
+                     f"{b['cut']:>7.1%} +/-{b['se']:.1%} {z}")
+    if per:
+        lines.append("  a haircut divides the outcome noise by the raw "
+                     "price, so a longshot band's error bar is many times "
+                     "a favourite's — read the z, not the gap")
     return lines
 
 

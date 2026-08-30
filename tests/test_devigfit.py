@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from engine import devigfit as D                    # noqa: E402
 from engine.devigfit import (
     M_MIN, M_MAX, K_MIN, K_MAX, MIN_SPLIT, PIN_TOL, BANDS, TRAIN_SHARE,
     log_loss, proportional, power, split, compare, band_lines, report_lines,
@@ -303,8 +304,16 @@ def test_the_haircut_column_shows_the_shape_without_either_method():
     rows = _at([(0.058, 0.050), (0.135, 0.088), (0.226, 0.193),
                 (0.352, 0.321), (0.547, 0.465)])
     lines = haircut_lines(rows)
-    cuts = [float(ln.split()[-1].rstrip("%")) for ln in lines[2:]]
-    assert len(cuts) == 5
+    # BY COLUMN, NOT BY LAST TOKEN. The table gained an error bar, a
+    # comparison against the other bands and a trailing note, so "the
+    # last thing on the line" stopped being the haircut.
+    cuts = []
+    for ln in lines:
+        bits = ln.split()
+        if not bits or "-" not in bits[0] or "." not in bits[0]:
+            continue
+        cuts.append(float(bits[4].rstrip("%")))
+    assert len(cuts) == 5, cuts
     flat = [cuts[0], cuts[2], cuts[3], cuts[4]]
     assert max(flat) - min(flat) < 10        # four bands cluster
     assert cuts[1] > max(flat) + 15          # one spikes well clear
@@ -356,6 +365,73 @@ def test_college_is_wired_through_the_same_fitter():
               if isinstance(n, ast.Constant) and isinstance(n.value, str)}
     assert "nfl" in consts, "collected does not branch on sport at all"
     assert "sport" in inspect.signature(devigfit.collected).parameters
+
+
+# --- the haircut table, with the noise it was hiding ----------------------
+def _board(spike=None, n=900, seed=4, cut=0.14, spike_cut=0.35):
+    """A synthetic board charging `cut` everywhere, or `spike_cut` inside
+    the `spike` price band."""
+    import random
+    rng = random.Random(seed)
+    rows = []
+    for _ in range(n):
+        raw = rng.choice([0.06, 0.14, 0.22, 0.35, 0.55])
+        c = spike_cut if (spike and spike[0] <= raw < spike[1]) else cut
+        rows.append({"market": raw,
+                     "scored": 1 if rng.random() < raw * (1 - c) else 0})
+    return rows
+
+
+def test_a_haircut_carries_the_error_bar_that_makes_it_readable():
+    """`band_lines` right above this says error bars are what stop its
+    table misleading, and the haircut table shipped without them.
+
+    It needs them MORE, not less: a haircut is 1 - actual / raw, so the
+    noise on the realised rate is DIVIDED BY THE RAW PRICE. At a 0.06
+    longshot that multiplies the uncertainty by sixteen, and a couple of
+    hundred rows can show a 30% toll on a market charging 14%."""
+    lines = D.haircut_lines(_board())
+    text = "\n".join(lines)
+    assert "+/-" in text, "the haircut table still has no error bar"
+    # And the longshot band's bar must be far wider than the favourite's.
+    import re
+    bars = [float(x) for x in re.findall(r"\+/-([\d.]+)%", text)]
+    assert len(bars) >= 2 and bars[0] > bars[-1] * 2, bars
+
+
+def test_a_flat_board_is_not_read_as_a_spike():
+    """THE FALSE POSITIVE THAT WOULD HAVE WIRED A TOLL NOBODY LEVIED. On
+    a board charging a flat 14% in every band, a plain z >= 2 flagged one
+    band at +2.3 — with five bands that lands about a quarter of the time
+    by construction."""
+    for seed in (1, 2, 3, 4, 5, 6):
+        flagged = sum("charges more" in x
+                      for x in D.haircut_lines(_board(seed=seed)))
+        assert flagged == 0, f"seed {seed} invented a spike"
+
+
+def test_a_real_spike_still_gets_caught():
+    """The bar has to be raised without going deaf."""
+    lines = D.haircut_lines(_board(spike=(0.0, 0.10)))
+    assert any("charges more" in x for x in lines), lines
+    hit = [x for x in lines if "charges more" in x][0]
+    assert hit.strip().startswith("0.00-0.10"), hit
+
+
+def test_the_bar_is_raised_for_asking_five_times():
+    assert D.BAND_Z > 2.0
+    import inspect
+    src = inspect.getsource(D)
+    assert "false-discovery" in src or "five times" in src
+
+
+def test_the_comparison_is_against_the_other_bands_not_against_zero():
+    """Every band has a non-zero haircut — books charge one. The question
+    is whether THIS band charges more than the rest of the board, so the
+    table has to show what the rest charged."""
+    text = "\n".join(D.haircut_lines(_board()))
+    assert "vs the other bands" in text
+    assert "read the z, not the gap" in text
 
 
 if __name__ == "__main__":
