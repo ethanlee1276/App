@@ -12,7 +12,8 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    Recommendation, apply_selection, net_edge, favourite_surcharge,
+    NO_CREDIBLE_EDGE_REASON, Recommendation, UNRELIABLE_CALIBRATION_REASON,
+    apply_selection, net_edge, favourite_surcharge,
     pick_side, temper_edge, under_reason,
 )
 from ..calibrate import (apply_temperature, calibrated, correction_for,
@@ -264,11 +265,13 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     if pattern_block:
         reasons.insert(0, pattern_block)
     if not calibration_ok:
-        reasons.insert(0, "This market's calibration fit hit the edge of its "
-                          "search range — the model can't price it reliably, "
-                          "so nothing here is bettable until it's fixed")
+        # SHARED WITH `engine.betting`, not copied. They were duplicated
+        # literals, so the two boards could drift apart in wording while
+        # both claimed to say the same thing — and the front end's
+        # refusal detector would then have to know about both.
+        reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
     if not credible:
-        reasons.insert(0, "No credible market edge — line unavailable or price looks off")
+        reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
     elif side == "UNDER":
         # Shared with the NFL/CFB engine — see `betting.under_reason`.
         # This file had the two-branch version for six days while the

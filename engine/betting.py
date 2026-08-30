@@ -122,6 +122,35 @@ class Recommendation:
     consensus_books: int = 0
 
 
+#: THE TWO REASONS THAT REFUSE THE BET, named rather than inlined.
+#:
+#: They used to be string literals at their insert sites, which made them
+#: invisible to anything that wanted to ask "is this reason a refusal or a
+#: point in the pick's favour". The front end has to answer exactly that —
+#: `NEG_REASON` in web/js/app.js decides whether a bullet renders as a
+#: green tick or a struck-through negative — and it answered by matching
+#: a hand-kept list of keywords that neither of these strings contained.
+#:
+#: So a card told a reader FOUR TIMES that nothing here was bettable, with
+#: two of those four wearing the same green tick as "Dome game — no
+#: weather impact". Reported 2026-08-30 from a live Puka Nacua card.
+#:
+#: Named constants make them referenceable, and `tests/test_refusals.py`
+#: asserts every one of them is classified as a refusal — so the next
+#: string added here fails the suite instead of shipping as an
+#: endorsement.
+UNRELIABLE_CALIBRATION_REASON = (
+    "This market's calibration fit hit the edge of its search range — the "
+    "model can't price it reliably, so nothing here is bettable until it's "
+    "fixed")
+NO_CREDIBLE_EDGE_REASON = (
+    "No credible market edge — line unavailable or price looks off")
+
+#: Every reason string that means "we are not betting this". Anything
+#: added above belongs here, and the suite checks that it is.
+REFUSAL_REASONS = (UNRELIABLE_CALIBRATION_REASON, NO_CREDIBLE_EDGE_REASON)
+
+
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
                       trend_align: float = 0.0) -> float:
     """How much do we trust THIS EDGE ESTIMATE, on a 0–10 scale?
@@ -498,11 +527,9 @@ def evaluate_prop(prop: Prop, proj: Projection,
     if pattern_block:
         reasons.insert(0, pattern_block)
     if not calibration_ok:
-        reasons.insert(0, "This market's calibration fit hit the edge of its "
-                          "search range — the model can't price it reliably, "
-                          "so nothing here is bettable until it's fixed")
+        reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
     if not credible:
-        reasons.insert(0, "No credible market edge — line unavailable or price looks off")
+        reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
     elif side == "UNDER":
         reasons.insert(0, under_reason(proj.mean, best.line, 1))
     # `calibration_ok` here too: without it a pick blocked by an

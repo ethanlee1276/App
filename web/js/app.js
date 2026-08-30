@@ -705,7 +705,16 @@ const NEG_REASON = new RegExp(
    "small zone", "moving against", "give back", "gives back",
    // College football: a reason that WITHHOLDS the bet is not a point in
    // its favour, whatever else the card says.
-   "unconfirmed", "unverified", "^CONDITIONAL", "EXTREME"].join("|"), "i");
+   "unconfirmed", "unverified", "^CONDITIONAL", "EXTREME",
+   // THE TWO THAT REFUSE THE BET OUTRIGHT, and the two that were missing.
+   // A live Puka Nacua card told a reader four times that nothing here
+   // was bettable, and two of those four wore the same green tick as
+   // "Dome game — no weather impact", because this list is keywords and
+   // neither string happened to contain one. `engine.betting.
+   // REFUSAL_REASONS` names them now and tests/test_refusals.py asserts
+   // every one of them matches here, so the next one added fails the
+   // suite instead of shipping as an endorsement.
+   "no credible", "nothing here is bettable"].join("|"), "i");
 
 /* NFL_MODEL §2.3: "Label your knowledge tiers in every output ... because
    the fix for a bad bet depends on which tier failed."
@@ -4969,12 +4978,25 @@ function cardHTML(r) {
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
-  const why = (r.reasons || []).slice(0, 5).map((x) => reasonLI(x)).join("");
+  // SAID ONCE, NOT TWICE. On a card that is not bettable the warning
+  // block below states the calibration refusal in this page's own voice
+  // ("a read on who hits rather than a card"); repeating the engine's
+  // version as a bullet said the same fact twice and pushed a real
+  // reason off the five-bullet list.
+  const why = (r.reasons || [])
+    .filter((x) => r.bettable || !/nothing here is bettable/i.test(x))
+    .slice(0, 5).map((x) => reasonLI(x)).join("");
   const ev = Number(r.ev_per_unit || 0);
   // THE PRICE IS SHOWN AND NEVER RANKED ON. Sorting or grading by it here
   // would quietly rebuild the edge board under a different name, which is
   // the exact thing this page exists to stop doing.
-  const evTxt = r.ev_per_unit == null ? "" :
+  // NOT ON A CARD THAT REFUSES TO STAKE. "+9% EV at this price" was
+  // printing as the last line of a card whose four lines above it said
+  // the market cannot be priced and we do not bet it — and the EV is
+  // computed against the very fair price the card has just called
+  // unusable. The bettable line is the one a reader acts on, so it was
+  // the one that had to go.
+  const evTxt = (r.ev_per_unit == null || !r.bettable) ? "" :
     `<span class="mini" style="color:${ev > 0 ? "var(--good)" : "var(--text-mute)"}">
        ${ev > 0 ? "+" : ""}${(ev * 100).toFixed(0)}% EV at this price</span>`;
   // "Its calibration is shut" was the wording, and it stopped being true
