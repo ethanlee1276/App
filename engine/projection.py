@@ -51,10 +51,20 @@ from .statmath import clamp
 #: these markets ran to the edge of its grid. A monotone squeeze cannot
 #: move mass from one end of a distribution to the other.
 #:
-#: `engine.yardagefit` has the replacement measured and held out by
-#: season, and it is deliberately NOT wired in here yet: it is validated
-#: against synthetic lines, and only the droplet holds the closing prices
-#: that can say whether better probabilities become a better board.
+#: `engine.yardagefit` has the replacement measured, and it is
+#: deliberately NOT wired in here — ASKED AND ANSWERED, 2026-08-30.
+#: Against real closing prices, walked forward and split by week, the
+#: replacement halves the calibration miss in both markets big enough to
+#: score (rec_yds 0.1137 -> 0.0709, receptions 0.0610 -> 0.0285) and does
+#: not make money the normal was not already making (-6.9% -> -7.9% and
+#: +4.5% -> +4.2% ROI). It is a better PROBABILITY and not a better
+#: BOARD, and at 300-360 flat stakes the ROI column cannot separate them
+#: anyway — every one of those numbers carries about five points of
+#: standard error.
+#:
+#: So the shape error described above is real and this constant is still
+#: the wrong shape; what is NOT established is that fixing it changes a
+#: single bet. Read the module docstring before reopening it.
 CV_FLOOR = {
     "pass_yds": 0.16,
     "rush_yds": 0.42,

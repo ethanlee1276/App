@@ -381,6 +381,49 @@ def test_a_thin_harvest_says_it_is_a_harvest_problem_not_a_verdict():
     assert "harvest size problem, not a verdict" in text, text
 
 
+def test_the_verdict_is_written_down_with_the_numbers_that_produced_it():
+    """MEASURED AND DECLINED, 2026-08-30. Against real closes the mixture
+    halves the calibration miss in both markets it could be scored on and
+    does not make money the normal was not already making — and at 300 to
+    360 flat stakes neither market's ROI is distinguishable from zero, let
+    alone from the other model's.
+
+    The decision not to wire it is worth more than the code would have
+    been, so the numbers behind it live in the module rather than in a
+    commit message nobody will find again. A later reader with a bigger
+    harvest needs to know exactly what was asked and what came back."""
+    import inspect
+    src = inspect.getsource(Y)
+    for number in ("0.1137", "0.0709", "0.0610", "0.0285",
+                   "-6.9%", "+4.5%", "+4.2%"):
+        assert number in src, f"the verdict lost {number}"
+    assert "NOT WIRED IN" in src
+    assert "WHAT WOULD CHANGE THE ANSWER" in src
+    # And the reason it was declined must not be misremembered as "it
+    # lost" — that is a different, wrong lesson.
+    assert "better PROBABILITY and not a better BOARD" in src
+
+
+def test_nothing_here_reaches_the_live_probability_path():
+    """The mixture is a measurement, not a model. `statmath.prob_over` is
+    what the board asks, and it must stay untouched until a harvest big
+    enough to judge says otherwise."""
+    import inspect
+    import re
+    from engine import projection, betting
+    for mod in (projection, betting):
+        src = inspect.getsource(mod)
+        # An IMPORT, not a mention. `projection.CV_FLOOR` cites this
+        # module in prose on purpose — that is the finding recorded where
+        # the constant it concerns lives, and banning the word would
+        # delete the pointer along with the coupling.
+        assert not re.search(r"^\s*(from|import)\s+.*yardagefit",
+                             src, re.M), \
+            f"{mod.__name__} imports a measurement as if it were a model"
+    # And the board still asks the normal.
+    assert "prob_over" in inspect.getsource(betting)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

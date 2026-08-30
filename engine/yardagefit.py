@@ -53,10 +53,59 @@ mean absolute miss in claimed-against-realised P(over):
     mixture, width from the density   0.0945    0.0587
     mixture, width from P(over)       0.0265    0.0161
 
-Standard library only. Needs `player_game_logs`; no odds history, so it
-runs anywhere.
+THE VERDICT, 2026-08-30: MEASURED, AND NOT WIRED IN.
+
+Run against the droplet's real closes — walked forward, split by week,
+both parameters fitted on the earlier weeks, bets priced against the
+book's own two sides so the vig is paid:
+
+    market       model      |claimed-real|   bets    hit      ROI
+    rec_yds      SHIPPED           0.1137     344   49.7%    -6.9%
+    rec_yds      mixture           0.0709     360   48.9%    -7.9%
+    receptions   SHIPPED           0.0610     304   55.6%    +4.5%
+    receptions   mixture           0.0285     332   56.6%    +4.2%
+
+The mixture is a better PROBABILITY and not a better BOARD. It halves the
+calibration miss in both markets — that part is real, large, and held
+out — and it does not make money that the normal was not already making.
+On receptions it takes 28 more bets and lifts the hit rate a point while
+the ROI does not move.
+
+AND AT THIS SAMPLE SIZE THE ROI COLUMN CANNOT SEPARATE THEM ANYWAY. At
+300-360 flat stakes the standard error on any of those numbers is about
+five points:
+
+    receptions mixture   +4.2%   95% CI roughly [-2%, +18%]
+    rec_yds    mixture   -7.9%   95% CI roughly [-17%, +3%]
+
+Neither market's ROI is distinguishable from zero, let alone from the
+other model's. So the honest reading is not "the mixture lost" — it is
+"the mixture is better calibrated and the board did not care, and we
+cannot yet measure whether it would."
+
+That is enough to decline the change. Rewriting every yardage probability
+on a live board — receptions is the market with the measured edge — buys
+a better-looking number and no demonstrated gain, and the live path is
+not where you find out.
+
+WHAT WOULD CHANGE THE ANSWER, in order:
+  * More closes. rush_yds (838 joined) and pass_yds (266) are still too
+    thin to ask, and rush_yds is one of the two shut markets this was
+    meant to reopen. The harvest covers 14 weeks of one season and about
+    58% of it joins; roughly three times the closes would take every
+    market past the noise floor.
+  * A reason to care about calibration for its own sake. The displayed
+    model %, the EV on the card and the stake all read the probability,
+    and being twice as close is worth something there even when the
+    bet/no-bet decision does not move. That is a product argument, not a
+    betting one, and it should be made as one.
+
+Standard library only. The synthetic-line half needs `player_game_logs`
+and runs anywhere; `--real` needs `odds_history` and only runs on the box
+that bought the closes.
 
     python3 -m engine.yardagefit [market ...]
+    python3 -m engine.yardagefit --real [market ...]
 """
 
 from __future__ import annotations
