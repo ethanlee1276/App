@@ -426,11 +426,27 @@ def evaluate_prop(prop: Prop, proj: Projection,
                                       shrink=tier_shrink(prop.market))
     hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
-    if not has_market:
-        # No real price to beat — don't report a number that reads as an edge.
-        edge = 0.0
     ev = expected_value(hit, best.odds)
     net = net_edge(hit, best.odds)
+    if not has_market:
+        # No real price to beat — don't report a number that reads as an
+        # edge. THAT USED TO MEAN `edge` ALONE, and the other two are
+        # computed from `best.odds`, which on a proxy row is the engine's
+        # own invented price. So a card whose Edge cell correctly read
+        # "—" printed "EV / unit +13%" one cell to its right, off a price
+        # no book had posted. Bigger than the +9% that got this looked at.
+        #
+        # Zeroed rather than blanked, matching what `edge` has always
+        # done: `ev_per_unit` is sorted and ranked on in three places and
+        # a None there is a NaN in the sort. The card blanks it on
+        # `has_market`, the same way it already blanks the edge.
+        edge = 0.0
+        ev = 0.0
+        # `net_edge` is the exception, and deliberately: its one render
+        # site is already guarded on null, and "+0.0% over the price you
+        # get" is a claim about a price that does not exist. None makes
+        # the sentence disappear, which is the right amount to say.
+        net = None
 
     # Game-script inputs: who's favored, by how much (None when no spread).
     favored, spread_abs = None, 0.0
@@ -565,7 +581,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         consensus_books=(_field[1] if _field else 0),
         edge=round(edge, 4),
         ev_per_unit=round(ev, 4),
-        net_edge=round(net, 4),
+        net_edge=(None if net is None else round(net, 4)),
         stake_basis=stake_basis,
         confidence=confidence,
         stake_units=round(stake, 2),

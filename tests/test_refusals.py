@@ -173,6 +173,77 @@ def test_the_filter_leaves_a_bettable_cards_reasons_alone():
     assert cond.index("r.bettable") < cond.index("nothing here is bettable")
 
 
+# --- the same fault on the main card --------------------------------------
+def _pair():
+    """The SAME prop evaluated twice: once at the book's real price, once
+    with the book renamed "proxy" so the engine treats the line as its
+    own invention. One prop, so nothing but the market can explain a
+    difference between the two."""
+    import copy
+    from engine.data_loader import load_slate
+    from engine.projection import build_projection
+    from engine.betting import evaluate_prop
+    sl = load_slate(os.path.join(ROOT, "data", "sample_slate.json"))
+    prop = sl.props[0]
+    game, opp = sl.game_for(prop), sl.team(prop.opponent)
+    real = evaluate_prop(prop, build_projection(prop, game, opp), game=game)
+    fake = copy.deepcopy(prop)
+    for ln in fake.lines:
+        ln.book = "proxy"
+    proxy = evaluate_prop(fake, build_projection(fake, game, opp), game=game)
+    return real, proxy
+
+
+def test_a_proxy_priced_row_reports_no_ev_not_a_fabricated_one():
+    """FOUND SWEEPING FOR THE REST OF THE PUKA CARD'S CLASS, and it is
+    the larger number of the two.
+
+    `evaluate_prop` has always zeroed `edge` when no book posted a line —
+    "don't report a number that reads as an edge". But `ev` and
+    `net_edge` are computed from `best.odds`, which on a proxy row is the
+    engine's own invented price, and they were left alone. So a card
+    whose Edge cell correctly read "—" printed "EV / unit +13%" in the
+    next cell along, off a price nobody offered.
+
+    At a 59% model probability against a -110 proxy that is +12.6% a
+    unit; at 62% against -115 it is +15.9%. Both larger than the +9% that
+    got this looked at in the first place."""
+    _real, proxy = _pair()
+    assert proxy.has_market is False
+    assert proxy.edge == 0.0, proxy.edge
+    assert proxy.ev_per_unit == 0.0, proxy.ev_per_unit
+    assert proxy.net_edge is None, proxy.net_edge
+
+
+def test_a_real_price_still_reports_its_ev():
+    """The gate must not silence a priced row — that is the same failure
+    in the other direction and it would empty the metric."""
+    real, _proxy = _pair()
+    assert real.has_market is True
+    assert real.ev_per_unit != 0.0
+    assert real.net_edge is not None
+
+
+def test_the_card_blanks_the_ev_cell_the_way_it_blanks_the_edge_cell():
+    """Both guards live one line apart and only one of them existed."""
+    src = _app()
+    body = src[src.index("function cardHTML(r)"):]
+    body = body[:body.index("\nfunction ")]
+    metrics = body[body.index('<div class="metrics">'):body.index("${confMeter")]
+    assert metrics.count('r.has_market === false ? "—"') == 2, metrics
+    assert "EV / unit" in metrics and "Edge" in metrics
+
+
+def test_ev_is_zeroed_rather_than_blanked_because_three_places_sort_on_it():
+    """A None here is a NaN in a sort. The card decides what to SHOW; the
+    engine still has to hand every consumer a number."""
+    import inspect
+    from engine import betting
+    src = inspect.getsource(betting.evaluate_prop)
+    assert "ev = 0.0" in src
+    assert "net = None" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
