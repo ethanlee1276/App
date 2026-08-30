@@ -519,6 +519,48 @@ def closing_odds_by_date(conn, sport: str, market: str) -> dict:
     return out
 
 
+def closing_odds_all_books(conn, sport: str, market: str) -> dict:
+    """``{(player, date): [quote, ...]}`` — EVERY book, not one of them.
+
+    Deliberately a second accessor rather than a wider return from
+    `closing_odds_by_date`, whose one-quote-per-key contract the backtest
+    joins depend on — the same reasoning `calibrate.load_curves` gives.
+
+    WHY THE OTHER ONE IS NOT ENOUGH. It keeps the last row per
+    (player, date), and a single harvest writes every book at ONE
+    `taken_at`, so among those rows the winner is whichever SQLite hands
+    back last. That is an arbitrary book, and books disagree most exactly
+    where the touchdown board lives: a soft +900 and a sharp +650 on the
+    same man are a 4-point gap in implied probability. Measuring "what
+    the market charged" off a coin-flipped book conflates one book's
+    pricing with the market's, and we do not bet an arbitrary book — we
+    bet the best price on the screen.
+
+    Each list is the latest snapshot for that date, one entry per book.
+    """
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
+    latest: dict = {}
+    out: dict = {}
+    for r in conn.execute(q, (sport, market)):
+        stamp = str(r["taken_at"])
+        key = (r["player"], stamp[:10])
+        seen = latest.get(key)
+        if seen is not None and stamp < seen:
+            continue                       # an older snapshot, already past
+        if seen is None or stamp > seen:
+            # A newer snapshot for this player-date: start the list over,
+            # so a stale book cannot linger beside a fresh one.
+            latest[key] = stamp
+            out[key] = []
+        out[key].append({
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        })
+    return out
+
+
 def closing_odds_for(conn, sport: str, market: str,
                      player: str | None = None) -> dict:
     """Latest harvested price per (player, market) — the closing line.

@@ -83,7 +83,7 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
     from . import db as _db
     from .backtest import _norm
 
-    closes = _db.closing_odds_by_date(conn, sport, "anytime_td")
+    closes = _db.closing_odds_all_books(conn, sport, "anytime_td")
     if not closes:
         return []
 
@@ -120,15 +120,24 @@ def collected(conn, sport: str = "nfl", seasons=None) -> list:
             date = str(period)[:10]
         if not date:
             continue
-        quote = closes.get((_norm(r["player"]), date))
-        if not quote:
+        quotes = closes.get((_norm(r["player"]), date))
+        if not quotes:
             continue
-        market = _prob(quote.get("over_odds"))
-        if market is None or not 0.0 < market < 1.0:
+        priced = [(p, q) for p, q in
+                  ((_prob(q.get("over_odds")), q) for q in quotes)
+                  if p is not None and 0.0 < p < 1.0]
+        if not priced:
             continue
+        # `market` stays whichever book sorted last, so every number this
+        # module has ever printed still means what it meant. `best` is the
+        # LONGEST price on the screen — the lowest implied probability —
+        # which is the one a bettor actually takes.
+        market = priced[-1][0]
+        best_p, best_q = min(priced, key=lambda pq: pq[0])
         snap = snaps.get((r["season"], str(period), r["player"], r["team"]))
         rows.append({"season": r["season"], "week": str(period),
-                     "market": market,
+                     "market": market, "best": best_p,
+                     "books": len(priced), "book": best_q.get("book", ""),
                      "played": None if snap is None else float(snap) > 0,
                      "scored": 1 if float(r["value"] or 0) > 0 else 0})
     return rows
@@ -444,6 +453,45 @@ def void_lines(rows: list, min_band: int = 40) -> list:
     return lines
 
 
+def best_price_lines(rows: list, min_band: int = 40) -> list:
+    """The same haircut at the price a bettor would actually have taken.
+
+    WHAT THE OTHER TABLES MEASURE. `closing_odds_by_date` keeps the last
+    row per (player, date), and one harvest writes every book at a single
+    `taken_at` — so among those rows the survivor is whichever SQLite
+    hands back last. Every hold this module has reported is therefore an
+    ARBITRARY BOOK's hold, and books disagree most exactly where the
+    touchdown board lives: a soft +900 and a sharp +650 on the same man
+    are four points of implied probability apart.
+
+    That matters because a hold is what you pay, and nobody pays an
+    arbitrary book. The board shops. So this recomputes the toll on the
+    LONGEST price quoted for each player-date, which is the number a
+    de-vig should be turning into a fair probability.
+
+    If the +456-to-+900 spike is one book's longshot loading, it shrinks
+    here. If it survives shopping, the books agree and the loading is the
+    market's.
+    """
+    have = [r for r in rows if r.get("best") is not None]
+    if not have:
+        return ["  no per-book prices on these rows — this harvest kept one "
+                "quote per player-date, so what the shopper pays cannot be "
+                "separated from what one book charged"]
+    books = [r.get("books", 1) for r in have]
+    solo = sum(1 for b in books if b <= 1)
+    lines = [f"  {len(have):,} rows carry every book's price; "
+             f"{sum(books) / len(books):.1f} books per player-date, "
+             f"{solo:,} quoted by only one",
+             "  the same table at the LONGEST price on the screen:"]
+    shopped = [dict(r, market=r["best"]) for r in have]
+    lines += haircut_lines(shopped, min_band=min_band)[1:]
+    if solo == len(have):
+        lines.append("  every row had a single book, so this table is the "
+                     "one above under another name — it says nothing yet")
+    return lines
+
+
 def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     got = compare(rows, min_split)
     if got.get("thin"):
@@ -467,6 +515,7 @@ def report_lines(rows: list, min_split: int = MIN_SPLIT) -> list:
     lines += band_lines(rows, got["m"], got["k"])
     lines += [""] + haircut_lines(rows)
     lines += [""] + void_lines(rows)
+    lines += [""] + best_price_lines(played_rows(rows))
     lines += ["",
               "  A margin under 0.0005 is not a result — the two methods "
               "agree and the choice between them is not settled by this "
