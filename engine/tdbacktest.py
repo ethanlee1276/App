@@ -181,15 +181,21 @@ def fit_calibration(conn, sport: str = "nfl", seasons=None, path=None):
 
     A walk-forward replay produces exactly what `calibrate.fit` wants —
     (claimed probability, did he score) — so the market can be fitted
-    through the front door after all. Measured over four seasons and
-    17,785 player-weeks the model was over-confident: it claimed 4.9% in
-    its bottom band where 9.2% actually scored, and 65.4% at the top
-    where 57.9% did. The correction takes the worst band gap from 7.5
-    points to 1.4.
+    through the front door after all. The model is CONSERVATIVE, and in
+    one direction at every level: over five seasons and 22,099
+    player-weeks it claims 15.5% on average where 20.0% actually score,
+    and every band lands high — 5.9% claiming against 8.4% landing at the
+    bottom, 46.1% against 55.3% at the top.
 
     That direction matters for the reason this was worth doing at all.
     Under-rating the bottom band is under-rating LONGSHOTS — the model
     was quietly passing over the very picks it exists to find.
+
+    HOW WELL THE CORRECTION HOLDS UP, measured leave-one-season-out so
+    the answer is not read off the data it was fitted on: every fold
+    lands on the same shape (T 1.10-1.14, intercept +0.16 to +0.24), and
+    on the held-out seasons the worst band gap falls from 9.2 points to
+    1.4 with the aggregate at 20.3% claimed against 20.0% landed.
     """
     from . import calibrate
     report = run(conn, sport=sport, seasons=seasons)

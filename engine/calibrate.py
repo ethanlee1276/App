@@ -318,6 +318,54 @@ HOLDOUT_FRACTION = 0.30
 #: is skipped — temperature only, as before.
 MIN_HOLDOUT = 400
 
+#: How far a CURVE must beat the temperature on the held-out slice before
+#: it is adopted, in standard errors of the PAIRED per-row difference.
+#:
+#: WHY THIS EXISTS. On 2026-08-28 `nfl:anytime_td` fitted a 29-knot
+#: isotonic curve and stored it because it scored 0.14171 against the
+#: temperature's 0.14178 — a margin of SEVEN HUNDRED-THOUSANDTHS of a
+#: Brier point on 6,631 rows, which is z = 0.4. A coin flip decided the
+#: form, and the coin flip was not free: replayed over 22,099
+#: player-weeks the stored curve leaves the 40%-60% band claiming 44.5%
+#: where 55.0% actually score, while the temperature it beat, fitted
+#: leave-one-season-out, holds every band inside 1.4%. That band is the
+#: top of the Most Likely board — the rows a reader trusts most.
+#:
+#: PAIRED, because both forms are scored on the identical held-out rows.
+#: The paired standard error on that comparison is 0.000186 where an
+#: unpaired one is several times larger; pairing is what makes a bar this
+#: high still able to detect a real curve.
+#:
+#: THE TEMPERATURE RUNG IS DELIBERATELY NOT GATED. Two parameters fitted
+#: on twenty thousand rows cannot meaningfully overfit, `fit_correction`
+#: already returns the exact neutral when its grid finds nothing, and a
+#: significance bar there would discard the CFB touchdown correction —
+#: which closes +3.0% and +2.3% in the two bands the college longshots
+#: actually live in while reading as "inside the noise" on aggregate
+#: Brier. Complexity is what needs a bar, not correction.
+CURVE_Z = 2.0
+
+
+def _paired_z(a: list[float] | None, b: list[float] | None) -> float | None:
+    """z of ``mean(a - b)``, negative when `a` scores better. None if it
+    cannot be computed.
+
+    The two error lists come from scoring two candidate forms on the SAME
+    held-out rows, so the difference is paired and most of the variance —
+    which rows happened to be hard — cancels. Scoring them independently
+    and comparing two means throws that cancellation away and asks a much
+    weaker question.
+    """
+    if not a or not b or len(a) != len(b) or len(a) < 2:
+        return None
+    d = [x - y for x, y in zip(a, b)]
+    n = len(d)
+    mean = sum(d) / n
+    var = sum((x - mean) ** 2 for x in d) / (n - 1)
+    if var <= 0:
+        return None
+    return mean / math.sqrt(var / n)
+
 
 def bake_off(pairs: list[tuple[float, int]],
              min_samples: int = 200) -> tuple[str, dict]:
@@ -339,9 +387,19 @@ def bake_off(pairs: list[tuple[float, int]],
     which also means it can bend where the noise bends; the held-out slice
     is the only thing standing between those two, and it is not optional.
 
+    IT ALSO WAS NOT SUFFICIENT. The sentence above was true and the code
+    under it compared the three scores with a bare argmin, which lets a
+    curve win by any margin at all — including a margin smaller than the
+    noise on the comparison. `nfl:anytime_td` adopted one that way on
+    2026-08-28 by 0.00007 of a Brier point, and paid for it with a
+    ten-point miss in its top band. The curve rung now has to clear
+    `CURVE_Z` standard errors of the paired difference; the temperature
+    rung deliberately does not.
+
     Returns ``(winner, detail)`` with winner in {"none", "temperature",
-    "isotonic"} and detail carrying every score, so the decision is
-    reconstructable from the store rather than trusted.
+    "isotonic"} and detail carrying every score, the curve's z and the bar
+    it had to clear, so the decision is reconstructable from the store
+    rather than trusted.
     """
     from . import isotonic as iso
 
@@ -357,15 +415,31 @@ def bake_off(pairs: list[tuple[float, int]],
 
     t, b = fit_correction(train, min_samples=min_samples)
     curve = iso.fit(train)
-    scores = {"none": brier(test, 1.0, 0.0),
-              "temperature": brier(test, t, b),
-              "isotonic": iso.brier(test, curve) if curve else float("inf")}
-    winner = min(scores, key=scores.get)
+    errs = {"none": [(p - o) ** 2 for p, o in test],
+            "temperature": [(apply_temperature(p, t, b) - o) ** 2
+                            for p, o in test]}
+    if curve:
+        errs["isotonic"] = [(curve.apply(p) - o) ** 2 for p, o in test]
+    scores = {k: sum(v) / len(v) for k, v in errs.items()}
+    scores.setdefault("isotonic", float("inf"))
+
+    # The simple rung, as before: whichever of nothing and a temperature
+    # scores better on the held-out slice.
+    simple = min(("none", "temperature"), key=lambda k: scores[k])
+
+    # THE CURVE RUNG, GATED. A step function with two dozen knots can
+    # bend where the noise bends, and the held-out slice only stands
+    # between those two if the margin is read against its own error bar.
+    # See CURVE_Z for the fit this was written after.
+    z = _paired_z(errs.get("isotonic"), errs[simple])
+    winner = "isotonic" if (z is not None and z <= -CURVE_Z) else simple
     return winner, {
         "ran": True, "train_n": len(train), "test_n": len(test),
         "knots": len(curve.knots),
         "held_out": {k: round(v, 5) for k, v in scores.items()
                      if v != float("inf")},
+        "curve_z": None if z is None else round(z, 2),
+        "curve_bar": CURVE_Z,
         "margin": round(scores["none"] - scores[winner], 5),
     }
 
