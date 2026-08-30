@@ -151,11 +151,25 @@ class Sample:
 
     __slots__ = ("season", "period", "position", "share", "rz_share",
                  "td_mean", "games", "team", "opponent", "is_home",
-                 "spread", "total", "team_tds", "script", "scored")
+                 "spread", "total", "team_tds", "script", "scored",
+                 # WHO THIS ROW IS. The slots stopped at the team, which
+                 # meant a replayed college row could not be joined back
+                 # to the player it graded — and every within-team
+                 # question is a question about a player. That is what
+                 # kept `engine.tdfeatures` NFL-only: the candidates all
+                 # need a prior window keyed by person. It was in scope
+                 # in `samples` the whole time and simply never stored.
+                 "player", "prior_periods")
 
     def __init__(self, season, position, share, td_mean, games, scored,
                  period="", team="", opponent="", is_home=True,
-                 spread=None, total=None, rz_share=None):
+                 spread=None, total=None, rz_share=None, player="",
+                 prior_periods=()):
+        self.player = player
+        #: The weeks the prior window was built from, in order. A feature
+        #: recomputing its own window would be comparing two histories
+        #: and calling the difference a signal.
+        self.prior_periods = tuple(prior_periods)
         self.season = season
         self.position = position
         self.share = share
@@ -265,6 +279,7 @@ def samples(conn, seasons=None, min_prior: int = MIN_PRIOR_GAMES) -> list:
                      "position": positions.get((season, team, player), "")}
             quote = lines.get((season, period, team))
             out.append(Sample(
+                player=player, prior_periods=prior,
                 season=season, position=role_of(usage),
                 share=clamp(volume / team_vol, 0.0, 1.0) if team_vol > 0 else 0.0,
                 td_mean=own["anytime_td"], games=n, period=period,
@@ -585,8 +600,16 @@ def _best_blend(train: list, defense, anchors, rz_weight) -> tuple:
 
 
 def run(conn, seasons=None, games_scale: float | None = None,
-        max_weight: float | None = None) -> TDBacktest:
-    """Replay the college touchdown model and grade what it claimed."""
+        max_weight: float | None = None, collect=None) -> TDBacktest:
+    """Replay the college touchdown model and grade what it claimed.
+
+    ``collect(row)`` optionally receives one dict per graded
+    player-period, in the shape `engine.tdbacktest.run` emits, so a
+    caller can ask "does feature X add to THIS model" without rebuilding
+    the walk. The prior window travels on the row for the same reason it
+    does there: a candidate that recomputes its own history is comparing
+    two different histories and calling the difference a signal.
+    """
     from .cfb.tds import TD_HISTORY_GAMES, TD_HISTORY_MAX_WEIGHT
     games_scale = TD_HISTORY_GAMES if games_scale is None else games_scale
     max_weight = (TD_HISTORY_MAX_WEIGHT if max_weight is None else max_weight)
@@ -595,8 +618,19 @@ def run(conn, seasons=None, games_scale: float | None = None,
                   key=lambda s: (s.season, s.period))
     defense = defense_to_date(conn, seasons)
     for s in rows:
-        report.add(probability(blended(s, games_scale, max_weight), s,
-                               _defense_for(defense, s)), s.scored)
+        prob = probability(blended(s, games_scale, max_weight), s,
+                           _defense_for(defense, s))
+        report.add(prob, s.scored)
+        if collect is not None:
+            collect({"season": s.season, "week": s.period,
+                     "player": s.player, "team": s.team,
+                     "prob": float(prob), "scored": s.scored,
+                     "position": s.position, "opponent": s.opponent,
+                     "spread": s.spread, "total": s.total,
+                     "is_home": s.is_home,
+                     "opp_share": s.share, "rz_share": s.rz_share,
+                     "td_mean": s.td_mean, "games": s.games,
+                     "prior_weeks": list(s.prior_periods)})
     return report.finish()
 
 

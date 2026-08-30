@@ -32,19 +32,31 @@ same walked-forward window `engine.tdbacktest` used for the probability
 it is being added to. Two different histories compared against each other
 will show a difference that is about the windows, not the feature.
 
-NFL ONLY, AND THAT IS A LIMIT NOT A CHOICE. The probability every
-candidate is judged against comes from `engine.tdbacktest`, which
-replays `engine.touchdowns` — the NFL model. College football ships a
-different chain (`engine.cfb.tds`, replayed by `engine.cfbtdfit`), and
-running this against college logs would grade the NFL model on college
-data. That was done once, on 2026-08-30, and produced a confident table
-showing the college calibration failing badly; on the real college chain
-the same bands are sound. `tdbacktest.run` now refuses the sport rather
-than answering the wrong question quietly.
+BOTH SPORTS, EACH ON ITS OWN CHAIN. The probability a candidate is
+judged against has to come from the model that actually ships for that
+sport: `engine.tdbacktest` replays `engine.touchdowns` for the NFL,
+`engine.cfbtdfit` replays `engine.cfb.tds` for college. Running one
+against the other's logs grades a model nobody runs — done once, on
+2026-08-30, producing a confident table showing the college calibration
+failing badly when on the real college chain the same bands are sound.
+`graded_rows` routes by sport and `tdbacktest.run` still refuses `cfb`
+rather than answering the wrong question quietly.
 
-Extending this to college needs `cfbtdfit.Sample` to carry the player's
-identity, which it does not — its slots stop at the team. Until then
-these four candidates are measured for the NFL and open for college.
+College was blocked until 2026-08-30 on `cfbtdfit.Sample` carrying no
+player identity — its slots stopped at the team, and every within-team
+question is a question about a person. The name was in scope in
+`samples` the whole time and simply never stored.
+
+THE TWO FEEDS DO NOT CARRY THE SAME COLUMNS, and that is the trap this
+extension had to avoid. The NFL logs a target and an inside-five carry;
+college logs neither, and logs receptions instead. Reading the NFL names
+against college rows does not raise — every lookup returns 0.0, the
+candidate takes a share of nothing, and the harness reports a flat AUC
+as though the feature had been measured. A negative result nobody can
+tell apart from a wiring fault is worse than no result, so the column
+names are declared per sport (`TOUCH_MARKETS`, `GOAL_LINE_MARKET`) and a
+candidate whose input this feed does not publish is REFUSED and printed
+as "not in this feed" rather than scored on zeros.
 
 Standard library only.
 
@@ -181,6 +193,26 @@ def log_loss(pairs) -> float:
 
 
 # --- the candidate features -----------------------------------------------
+#: WHAT COUNTS AS A TOUCH, PER SPORT. The NFL logs carry `targets`;
+#: the college feed does not and carries `receptions` instead. Reading
+#: the NFL name against college rows returns zeros from every lookup —
+#: which is not an error, it is a feature that silently measures nothing
+#: and reports a flat AUC as if it had been tested.
+TOUCH_MARKETS = {"nfl": ("targets", "carries"),
+                 "cfb": ("receptions", "carries")}
+
+#: The inside-five column, which only the NFL feed has. A candidate that
+#: needs it is REFUSED for college rather than run against zeros.
+GOAL_LINE_MARKET = {"nfl": "i5_car", "cfb": None}
+
+#: The red-zone columns each feed actually publishes.
+RZ_MARKETS = {"nfl": ("rz_car", "rz_tgt"), "cfb": ("rz_car", "rz_rec")}
+
+
+def touch_markets(sport: str) -> tuple:
+    return TOUCH_MARKETS.get((sport or "").lower(), TOUCH_MARKETS["nfl"])
+
+
 def _by_player(conn, sport: str, markets):
     """``{(season, short_key): {week: {market: value}}}``.
 
@@ -254,11 +286,13 @@ def usage_trend(row, ctx):
         return None
     tw = ctx["team_week"]
 
+    touches = ctx["touch_markets"]
+
     def share(window):
-        own = sum(_mean(weeks, [w], "targets") + _mean(weeks, [w], "carries")
+        own = sum(sum(_mean(weeks, [w], m) for m in touches)
                   for w in window) / len(window)
-        team = sum(tw.get((row["season"], w, row["team"]), {}).get("targets", 0.0)
-                   + tw.get((row["season"], w, row["team"]), {}).get("carries", 0.0)
+        team = sum(sum(tw.get((row["season"], w, row["team"]), {}).get(m, 0.0)
+                       for m in touches)
                    for w in window) / len(window)
         return (own / team) if team > 0 else None
 
@@ -279,13 +313,20 @@ def quarterback_goal_line(row, ctx):
     without anyone adding a term. This is that claim's actual test: if
     the dilution is complete, the number adds nothing HERE.
     """
+    # REFUSED, NOT ZEROED. The college feed publishes no inside-five
+    # column, and reading `i5_car` against it returns 0.0 from every
+    # lookup — a candidate that measures nothing and reports a flat AUC
+    # as though it had been tested. `evaluate` treats None as "no cover".
+    i5 = ctx.get("goal_line_market")
+    if not i5:
+        return None
     prior = row["prior_weeks"]
     weeks_by_team = ctx["qb_i5"].get((row["season"], row["team"]))
     team_i5 = ctx["team_week"]
     if not weeks_by_team:
         return None
     qb = sum(weeks_by_team.get(w, 0.0) for w in prior)
-    tot = sum(team_i5.get((row["season"], w, row["team"]), {}).get("i5_car", 0.0)
+    tot = sum(team_i5.get((row["season"], w, row["team"]), {}).get(i5, 0.0)
               for w in prior)
     if tot <= 0:
         return None
@@ -367,6 +408,30 @@ def teammate_vacancy(row, ctx):
 #: explanation offered then was that the red-zone denominator counts
 #: every player, so the dilution already happens. -0.0001 AUC over 21,885
 #: rows is that explanation being right.
+#:
+#: AND THE SAME ANSWER IN COLLEGE, 2026-08-30, over 29,047 graded
+#: player-weeks across 2022-2025 on the college chain:
+#:
+#:     candidate                      cover        AUC          log-loss
+#:     red-zone share over overall      84%   0.6704 -> 0.6703  0.5656 -> 0.5655
+#:     usage trend, last 3 weeks        79%   0.6738 -> 0.6739  0.5575 -> 0.5574
+#:     QB share of inside-5 work         —    not in this feed
+#:     teammate vacancy this week      100%   0.6749 -> 0.6756  0.5486 -> 0.5484
+#:
+#: Two leagues, two chains, two independent samples, one answer: the
+#: within-team allocation is spent. That is worth more than either table
+#: alone — a null in one sport is a null that might be about that sport,
+#: and the college numbers were measured against a DIFFERENT model with
+#: DIFFERENT columns and land in the same place.
+#:
+#: The college baseline sits ~0.67 against the NFL's ~0.72, which is the
+#: model being genuinely worse at ranking college players and not a
+#: defect in this harness — `cfbtdfit` reports the same figure.
+#:
+#: The vacancy term is again the largest mover and again the confound
+#: (+0.0007 here, +0.0005 there); `teammate_vacancy`'s own note already
+#: recorded that its band gradient is flat in college, and this is that
+#: observation arriving from the other direction.
 CANDIDATES = (
     ("red-zone share over overall", red_zone_over_overall),
     ("usage trend, last 3 weeks", usage_trend),
@@ -376,29 +441,60 @@ CANDIDATES = (
 
 
 def context(conn, sport: str) -> dict:
-    """Everything the candidates need, keyed the way the replay keys."""
-    form = _by_player(conn, sport, ("targets", "carries", "i5_car", "rz_car"))
-    team_week = _team_week(conn, sport, ("targets", "carries", "i5_car"))
+    """Everything the candidates need, keyed the way the replay keys.
+
+    PER SPORT, because the two feeds do not carry the same columns. The
+    NFL logs a target and an inside-five carry; the college feed logs
+    neither and logs receptions instead. Reading the NFL names against
+    college rows does not fail — every lookup returns 0.0, the candidate
+    computes a share of nothing, and the harness reports a flat AUC as
+    though the feature had been tested and found wanting. That is the
+    worst outcome available: a negative result nobody can distinguish
+    from a wiring fault.
+    """
+    sport = (sport or "nfl").lower()
+    touches = touch_markets(sport)
+    i5 = GOAL_LINE_MARKET.get(sport)
+    rz = RZ_MARKETS.get(sport, RZ_MARKETS["nfl"])
+    wanted = tuple(dict.fromkeys(touches + rz + ((i5,) if i5 else ())))
+    form = _by_player(conn, sport, wanted)
+    team_week = _team_week(conn, sport, tuple(dict.fromkeys(
+        touches + ((i5,) if i5 else ()))))
     qb_i5: dict = defaultdict(dict)
     roster: dict = defaultdict(dict)
     played: dict = defaultdict(set)
     for (season, short), weeks in form.items():
         team = short[2]
         for wk, marks in weeks.items():
-            touches = marks.get("targets", 0.0) + marks.get("carries", 0.0)
-            roster[(season, team)].setdefault(short, {})[wk] = touches
-            if touches > 0:
+            touch = sum(marks.get(m, 0.0) for m in touches)
+            roster[(season, team)].setdefault(short, {})[wk] = touch
+            if touch > 0:
                 played[(season, wk, team)].add(short)
-            if (marks.get("_pos") or "").upper() == "QB":
-                qb_i5[(season, team)][wk] = marks.get("i5_car", 0.0)
+            if i5 and (marks.get("_pos") or "").upper() == "QB":
+                qb_i5[(season, team)][wk] = marks.get(i5, 0.0)
     return {"form": form, "team_week": team_week, "qb_i5": qb_i5,
-            "roster": roster, "played": played}
+            "roster": roster, "played": played,
+            "sport": sport, "touch_markets": touches,
+            "goal_line_market": i5}
 
 
 def graded_rows(conn, sport: str) -> list:
-    """One row per graded player-week, with the replay's own inputs."""
+    """One row per graded player-week, with that sport's replay's inputs.
+
+    ROUTED BY SPORT, and this is the whole of what kept the file NFL-only.
+    `tdbacktest` replays `engine.touchdowns`; college ships a different
+    chain in `engine.cfb.tds`, replayed by `engine.cfbtdfit`. Running one
+    against the other's logs grades a model nobody runs — done once on
+    2026-08-30, and it produced a confident table showing the college
+    calibration failing badly when on the real chain the same bands are
+    sound.
+    """
     rows: list = []
-    B.run(conn, sport, collect=rows.append)
+    if (sport or "").lower() == "cfb":
+        from . import cfbtdfit
+        cfbtdfit.run(conn, collect=rows.append)
+    else:
+        B.run(conn, sport, collect=rows.append)
     for r in rows:
         r["short"] = _short_key(r["player"], r["team"]) if r["player"] \
             else ("", "", r["team"])
@@ -413,6 +509,13 @@ def evaluate(rows, feature, ctx) -> dict | None:
         if x is None or not math.isfinite(x):
             continue
         usable.append((r, float(x)))
+    if not usable:
+        # NOT THE SAME AS THIN, and the difference is the whole answer.
+        # Zero rows means the feature could not be BUILT here — a column
+        # this feed does not publish — not that it was measured and found
+        # small. Reporting both as "too thin" invites the reader to treat
+        # an untested candidate as a tested one.
+        return {"rows": 0, "unavailable": True}
     if len(usable) < MIN_ROWS:
         return {"rows": len(usable), "thin": True}
 
@@ -458,6 +561,10 @@ def report(sport: str = B.NFL_ONLY, conn=None) -> list:
                    f"{'AUC':>16} {'log-loss':>16}")
         for label, feature in CANDIDATES:
             got = evaluate(rows, feature, ctx)
+            if got is not None and got.get("unavailable"):
+                out.append(f"    {label:<28} {'—':>7}   not in this feed — "
+                           f"refused rather than scored on zeros")
+                continue
             if got is None or got.get("thin"):
                 n = 0 if got is None else got["rows"]
                 out.append(f"    {label:<28} {n:>7}   too thin to score")
