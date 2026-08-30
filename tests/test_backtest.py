@@ -330,6 +330,42 @@ def test_book_segment_splits_by_grade():
     assert 0 < text.find("Strong") < text.find("Play ") < text.find("Lean")
 
 
+def test_initialled_names_join_to_the_way_a_book_spells_them():
+    """2026-08-30. Stripping the dots turned "A.J. Brown" into "a j
+    brown" while a book writing "AJ Brown" gave "aj brown" — two
+    different people, in the key SIX join sites share. Every initialled
+    receiver and tight end could silently miss its price, and a failed
+    join here does not look like a bug: it looks like no line was ever
+    harvested for him.
+
+    Found while joining the yardage mixture to real closes, which is the
+    first thing that ever asked this key to match a book's spelling of a
+    name with initials in it."""
+    from engine.backtest import _norm
+    for dotted, plain in (("A.J. Brown", "AJ Brown"),
+                          ("D.K. Metcalf", "DK Metcalf"),
+                          ("T.J. Hockenson", "TJ Hockenson"),
+                          ("C.J. Stroud", "CJ Stroud")):
+        assert _norm(dotted) == _norm(plain), (dotted, plain)
+    # And it must not have eaten anything it should have kept.
+    assert _norm("Marvin Harrison Jr.") == "marvin harrison"
+    assert _norm("Ja'Marr Chase") == "jamarr chase"
+    assert _norm("Amon-Ra St. Brown") == "amon ra st brown"
+    assert _norm("Kenneth Walker III") == "kenneth walker"
+
+
+def test_gluing_initials_only_ever_adds_matches():
+    """The reason this was safe to change under six existing join sites:
+    two spellings that already agreed still agree, so measurements move
+    by gaining rows, never by losing them."""
+    from engine.backtest import _norm
+    for name in ("Christian McCaffrey", "Josh Jacobs", "Puka Nacua",
+                 "De'Von Achane", "Bijan Robinson"):
+        once = _norm(name)
+        assert _norm(once) == once, name       # idempotent
+        assert once == " ".join(once.split())
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

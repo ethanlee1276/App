@@ -213,6 +213,118 @@ def test_the_blend_is_the_shipped_one_not_a_second_opinion():
     assert abs(Y.blended([12.0] * 8) - 12.0) < 1e-9
 
 
+# --- against the prices a book really hung -------------------------------
+def _joined(n=40, line=25.5, over=-110, under=-110, mu=26.0):
+    return [{"season": 2023 + i % 3, "mu": mu, "form_sd": 12.0,
+             "zero_rate": 0.15, "actual": 40.0 if i % 2 else 5.0,
+             "player": f"P{i}", "team": "KC", "period": f"{i % 17 + 1:03d}",
+             "date": "2023-09-10", "line": line, "over_odds": over,
+             "under_odds": under, "book": "DK"} for i in range(n)]
+
+
+def test_a_line_nowhere_near_the_projection_is_a_different_player():
+    """THE JOIN GUARD. Two men share a name every season, and joining
+    them silently is how a backtest reports an edge it never had. A close
+    hung at 80 yards against a 12-yard projection is not that player's
+    line."""
+    rows = [{"season": 2023, "mu": 12.0, "form_sd": 6.0, "zero_rate": 0.2,
+             "actual": 10.0, "player": "Common Name", "team": "KC",
+             "period": "001", "date": "2023-09-10"}]
+    near = {(Y._norm("Common Name"), "2023-09-10"):
+            {"line": 13.5, "over_odds": -110, "under_odds": -110,
+             "book": "DK"}}
+    far = {(Y._norm("Common Name"), "2023-09-10"):
+           {"line": 80.5, "over_odds": -110, "under_odds": -110,
+            "book": "DK"}}
+    assert len(Y.matched(rows, near)) == 1
+    assert Y.matched(rows, far) == [], \
+        "an 80-yard line on a 12-yard projection is somebody else"
+
+
+def test_a_row_with_no_date_cannot_be_joined_at_all():
+    """The logs key a game by (season, period) and the harvest keys a
+    price by (player, date). A row the schedule could not date has no
+    way to meet a price, and guessing one would join it to the wrong
+    week."""
+    rows = [{"season": 2023, "mu": 26.0, "form_sd": 12.0, "zero_rate": 0.1,
+             "actual": 30.0, "player": "A Back", "team": "KC",
+             "period": "001"}]
+    closes = {(Y._norm("A Back"), "2023-09-10"):
+              {"line": 25.5, "over_odds": -110, "under_odds": -110}}
+    assert Y.matched(rows, closes) == []
+
+
+def test_the_book_name_is_normalised_the_way_the_rest_of_the_join_is():
+    """`engine.backtest` strips punctuation and suffixes to meet book
+    spellings. Anything else here would silently match nobody, which
+    reads as 'no harvested lines' rather than as a keying bug."""
+    assert Y._norm("Ken Walker III") == Y._norm("ken walker")
+    assert Y._norm("Ja'Marr Chase") == "jamarr chase"
+    assert Y._norm("A.J. Brown") == Y._norm("aj brown")
+
+
+def test_the_bet_record_pays_the_vig_on_both_sides():
+    """Priced against the book's own two prices, so the juice is paid
+    exactly as it would be. A model that is right 52% of the time at -110
+    still loses, and this has to show that."""
+    rows = _joined(n=100, line=25.5)
+    # A model that always screams OVER, on rows that go over half the
+    # time: 50% at -110 is a losing board and must read as one.
+    got = Y.bet_record(rows, lambda r, L: 0.99)
+    assert got["bets"] == 100
+    assert abs(got["hit_rate"] - 0.5) < 1e-9
+    assert got["roi"] < -0.04, got
+
+    # And the other side of the same board, for the same reason.
+    under = Y.bet_record(rows, lambda r, L: 0.01)
+    assert under["bets"] == 100 and under["roi"] < -0.04, under
+
+
+def test_a_model_that_never_disagrees_places_no_bets():
+    """The point of the ROI column. A better-calibrated number that never
+    finds a price worth taking is a nicer model and the same board."""
+    rows = _joined(n=60, over=-110, under=-110)
+    got = Y.bet_record(rows, lambda r, L: Y._american_prob(-110))
+    assert got["bets"] == 0 and got["roi"] is None
+
+
+def test_the_edge_bar_is_applied_to_both_sides():
+    rows = _joined(n=40, over=-110, under=-110)
+    p = Y._american_prob(-110) + Y.MIN_EDGE / 2.0
+    assert Y.bet_record(rows, lambda r, L: p)["bets"] == 0, \
+        "half the bar is not the bar"
+    p = Y._american_prob(-110) + Y.MIN_EDGE + 1e-9
+    assert Y.bet_record(rows, lambda r, L: p)["bets"] == 40
+
+
+def test_without_a_harvest_it_says_so_rather_than_reporting_zeroes():
+    """This half only runs where the closes were bought. Everywhere else
+    it has to say which box it needs, not print an empty table that
+    reads as a measurement."""
+    conn = _db()
+    conn.execute("CREATE TABLE odds_history (sport TEXT, taken_at TEXT, "
+                 "event_id TEXT, home TEXT, away TEXT, player TEXT, "
+                 "market TEXT, book TEXT, line REAL, over_odds INT, "
+                 "under_odds INT)")
+    conn.commit()
+    try:
+        lines = Y.report_real("rush_yds", conn=conn)
+    finally:
+        conn.close()
+    assert any("box that bought them" in x for x in lines), lines
+
+
+def test_the_parameters_are_fitted_off_the_season_being_scored():
+    """Both the zero-rate logistic and the width come from data the fold
+    never sees. Fitting on the scored season is how a mixture that
+    memorised the outcome reports an edge."""
+    import inspect
+    src = inspect.getsource(Y.report_real)
+    assert "train = [r for r in joined if r[\"season\"] != season]" in src
+    assert "fit_zero(train)" in src
+    assert "fit_sigma_on_over(train, beta, lines)" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

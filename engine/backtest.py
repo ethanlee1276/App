@@ -41,9 +41,29 @@ OVERCONFIDENT = 0.05
 
 
 def _norm(name: str) -> str:
+    """The join key every book-name lookup in this codebase shares.
+
+    INITIALS ARE GLUED BACK TOGETHER, and they were not until 2026-08-30.
+    Stripping the dots turned "A.J. Brown" into "a j brown" while a book
+    writing "AJ Brown" gave "aj brown", so the two were different people
+    and the price never met the player. Same for D.K. Metcalf, T.J.
+    Hockenson, D.J. Moore, C.J. Stroud — a real slice of the receiver and
+    tight-end board, and the ones most likely to be quoted.
+
+    A failed join here does not look like a bug. It looks like "no line
+    was harvested for him", which is why it sat in a shared key with six
+    call sites for as long as it did.
+
+    This only ever ADDS matches: two spellings that already agreed still
+    agree, and two that never met now do. Measurements that depend on the
+    join therefore move by gaining rows, never by losing them.
+    """
     s = name.lower().replace("-", " ").replace(".", " ").replace("'", "")
     s = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b", "", s)
-    return re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\s+", " ", s).strip()
+    # "a j brown" -> "aj brown". Bounded to runs of single letters so a
+    # real one-letter surname cannot be swallowed into a first name.
+    return re.sub(r"\b([a-z])\s+(?=[a-z]\b)", r"\1", s)
 
 
 @dataclass

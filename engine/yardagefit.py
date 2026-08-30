@@ -138,7 +138,12 @@ def rows(conn, market: str, sport: str = "nfl") -> list:
                 out.append({
                     "season": key[0], "mu": blended(vals), "form_sd": sd,
                     "zero_rate": sum(1 for v in vals if v <= 0) / len(vals),
-                    "actual": max(weeks[period], 0.0)})
+                    "actual": max(weeks[period], 0.0),
+                    # IDENTITY TRAVELS, so a row can be joined to the
+                    # price a book actually hung on it. Without this the
+                    # only lines available are synthetic ones placed at
+                    # round numbers, which is a weaker question.
+                    "player": key[1], "team": key[2], "period": period})
             vals.append(weeks[period])
     return [d for d in out if d["mu"] > MIN_PROJECTION]
 
@@ -334,12 +339,220 @@ def report(market: str, conn=None, db_path=None) -> list:
     return out
 
 
+# --- against the prices a book actually hung ------------------------------
+#
+# Everything above is scored at SYNTHETIC lines placed at round numbers,
+# on rows selected by projection. That is a weaker question than the one
+# the board answers, and it is the reason none of this is wired in: a
+# book hangs its line at its own number, which is sharper than a fixed
+# grid, so better calibration against 25.5 does not prove a better board.
+#
+# This half needs `odds_history`, which only the box that bought the
+# closes has. It is the same join `engine.tdbook` makes for touchdowns —
+# walk the model forward, then meet it with the price.
+
+#: A close further from the model's projection than this is a different
+#: player — a name collision, or a line for a market we mis-keyed.
+MAX_LINE_GAP = 4.0
+
+#: Bet only when the model disagrees with the price by at least this
+#: much. The board's own bar is higher; this is deliberately loose,
+#: because the question here is whether the DISAGREEMENT is informative
+#: at all, not whether it clears a threshold.
+MIN_EDGE = 0.03
+
+
+def _norm(name: str) -> str:
+    """The join key, shared rather than copied.
+
+    A second normaliser that drifts from the first is the same bug this
+    codebase keeps paying for — two spellings, two people. `backtest`
+    owns this one and six other join sites use it.
+    """
+    from .backtest import _norm as shared
+    return shared(name)
+
+
+def real_lines(conn, market: str, sport: str = "nfl") -> dict:
+    """``{(normalised player, YYYY-MM-DD): close}`` from the harvest."""
+    from .db import closing_odds_by_date
+    out = {}
+    for (player, date), row in closing_odds_by_date(conn, sport, market).items():
+        out[(_norm(player), date)] = row
+    return out
+
+
+def dated(rows, seasons=None) -> int:
+    """Stamp each row with its game's date, in place. Returns how many.
+
+    The logs key a game by (season, period); the harvest keys a price by
+    (player, date). `formbook.game_dates` is the bridge both sides of
+    this codebase already use.
+    """
+    from .formbook import game_dates
+    dates = game_dates(seasons)
+    hit = 0
+    for r in rows:
+        try:
+            week = int(str(r["period"]).lstrip("0") or 0)
+        except (TypeError, ValueError):
+            continue
+        date = dates.get((r["season"], week, r["team"]))
+        if date:
+            r["date"] = date
+            hit += 1
+    return hit
+
+
+def matched(rows, closes) -> list:
+    """Rows a real close can be joined to, at a line near the projection."""
+    out = []
+    for r in rows:
+        if not r.get("date"):
+            continue
+        close = closes.get((_norm(r["player"]), r["date"]))
+        if not close or close.get("line") is None:
+            continue
+        line = float(close["line"])
+        # A LINE NOWHERE NEAR THE PROJECTION IS A DIFFERENT PLAYER. Two
+        # men share a name every season, and joining them silently is how
+        # a backtest reports an edge it never had.
+        if line <= 0 or abs(line - r["mu"]) > MAX_LINE_GAP * max(
+                1.0, r["mu"] ** 0.5):
+            continue
+        got = dict(r)
+        got["line"] = line
+        got["over_odds"] = close.get("over_odds")
+        got["under_odds"] = close.get("under_odds")
+        got["book"] = close.get("book", "")
+        out.append(got)
+    return out
+
+
+def _american_prob(odds) -> float | None:
+    if odds is None:
+        return None
+    o = float(odds)
+    return (100.0 / (o + 100.0)) if o > 0 else ((-o) / (-o + 100.0))
+
+
+def _payout(odds) -> float:
+    o = float(odds)
+    return (o / 100.0) if o > 0 else (100.0 / -o)
+
+
+def bet_record(rows, prob, min_edge: float = MIN_EDGE) -> dict:
+    """Flat-stake ROI from betting whichever side the model prefers.
+
+    THE ONLY SCORE THAT SETTLES THIS. A better-calibrated probability
+    that never disagrees with the price profitably is a nicer number and
+    the same board. Priced against the book's own two sides, so the vig
+    is paid exactly as it would be.
+    """
+    bets = wins = 0
+    pnl = 0.0
+    for r in rows:
+        p_over = prob(r, r["line"])
+        over_p = _american_prob(r["over_odds"])
+        under_p = _american_prob(r["under_odds"])
+        if over_p is None or under_p is None:
+            continue
+        hit = r["actual"] > r["line"]
+        if p_over - over_p >= min_edge:
+            bets += 1
+            wins += 1 if hit else 0
+            pnl += _payout(r["over_odds"]) if hit else -1.0
+        elif (1.0 - p_over) - under_p >= min_edge:
+            bets += 1
+            wins += 0 if hit else 1
+            pnl += -1.0 if hit else _payout(r["under_odds"])
+    return {"bets": bets, "wins": wins, "pnl": pnl,
+            "roi": (pnl / bets) if bets else None,
+            "hit_rate": (wins / bets) if bets else None}
+
+
+def report_real(market: str, conn=None, db_path=None) -> list:
+    """The same three candidates, judged at the prices books really hung."""
+    import sqlite3 as _sq
+    close_it = conn is None
+    conn = conn or _sq.connect(str(db_path or DEFAULT_DB))
+    conn.row_factory = _sq.Row
+    try:
+        data = rows(conn, market)
+        closes = real_lines(conn, market)
+        out = [f"=== nfl:{market} against REAL closes"]
+        if not closes:
+            return out + ["  no harvested closing lines for this market — "
+                          "this needs the box that bought them"]
+        stamped = dated(data, sorted({d["season"] for d in data}))
+        joined = matched(data, closes)
+        out.append(f"  {len(data):,} walked-forward rows, {stamped:,} dated, "
+                   f"{len(closes):,} harvested closes, "
+                   f"{len(joined):,} joined")
+        if len(joined) < MIN_TRAIN + MIN_TEST:
+            return out + [f"  only {len(joined):,} joined rows — needs "
+                          f"{MIN_TRAIN + MIN_TEST:,} to hold a season out"]
+
+        lines = MARKETS.get(market, ())
+        seasons = sorted({r["season"] for r in joined})
+        err = defaultdict(float)
+        rec = defaultdict(lambda: {"bets": 0, "wins": 0, "pnl": 0.0})
+        n = 0
+        for season in seasons:
+            train = [r for r in joined if r["season"] != season]
+            test = [r for r in joined if r["season"] == season]
+            if len(train) < MIN_TRAIN or len(test) < MIN_TEST:
+                continue
+            # FITTED ON THE OTHER SEASONS, always. Both parameters come
+            # from data this fold never sees.
+            beta = fit_zero(train)
+            s_over = fit_sigma_on_over(train, beta, lines)
+            cands = {
+                "SHIPPED normal": lambda r, L: shipped_over(r, L, market),
+                "mixture": (lambda r, L, b=beta, sg=s_over:
+                            mixture_over(r, L, b, sg)),
+            }
+            for label, prob in cands.items():
+                # Calibration at the REAL line, one number per row.
+                claimed = sum(prob(r, r["line"]) for r in test) / len(test)
+                actual = sum(1 for r in test if r["actual"] > r["line"]) \
+                    / len(test)
+                err[label] += abs(claimed - actual) * len(test)
+                got = bet_record(test, prob)
+                rec[label]["bets"] += got["bets"]
+                rec[label]["wins"] += got["wins"]
+                rec[label]["pnl"] += got["pnl"]
+            n += len(test)
+        if not n:
+            return out + ["  not enough seasons to hold one out"]
+        out.append(f"  {'model':<18}{'|claimed-real|':>15}{'bets':>7}"
+                   f"{'hit':>8}{'ROI':>9}")
+        for label in ("SHIPPED normal", "mixture"):
+            g = rec[label]
+            roi = (g["pnl"] / g["bets"]) if g["bets"] else None
+            hit = (g["wins"] / g["bets"]) if g["bets"] else None
+            out.append(
+                f"  {label:<18}{err[label] / n:>15.4f}{g['bets']:>7}"
+                + (f"{hit:>8.1%}{roi:>9.1%}" if g["bets"] else
+                   f"{'-':>8}{'-':>9}"))
+        out.append("  a better number that never bets differently is a "
+                   "nicer model and the same board — the ROI column is "
+                   "the one that decides whether to wire this in")
+        return out
+    finally:
+        if close_it:
+            conn.close()
+
+
 def main(argv=None) -> int:
     args = list(argv if argv is not None else sys.argv[1:])
+    real = "--real" in args
+    args = [a for a in args if a != "--real"]
+    fn = report_real if real else report
     for i, market in enumerate(args or list(MARKETS)):
         if i:
             print()
-        for line in report(market):
+        for line in fn(market):
             print(line)
     return 0
 
