@@ -437,9 +437,15 @@ def test_the_displayed_edge_moves_the_OTHER_way_and_that_is_the_trap():
 
 
 def test_the_standing_assumption_is_the_fallback_not_the_answer():
-    """ONE_SIDED_HOLD's own comment says a longshot prop's real hold is
-    usually wider than its 6%. A game we could measure must not fall back
-    to it, and a game we could not must still price."""
+    """A game we could measure must not fall back to the standing number,
+    and a game we could not must still price.
+
+    ONE_SIDED_HOLD's comment used to justify itself by saying a longshot
+    prop's real hold is usually wider than its 6%. Measured against 3,700
+    harvested closes at the price a shopper takes, that is backwards —
+    the market takes about 5% — so the constant now rests on being the
+    cautious end rather than on a claim about the market. The behaviour
+    asserted below is unchanged either way."""
     assert ONE_SIDED_HOLD == 1.06
     assert _pick(hold=None).implied_prob == _pick().implied_prob
     assert _pick(hold=1.30).implied_prob < _pick(hold=1.06).implied_prob

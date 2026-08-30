@@ -534,15 +534,45 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             # here, because this function cannot see which of the two it
             # was — named as the usual cause, and pointed at the check
             # that can tell.
+            # THE LAST SENTENCE USED TO BE WRONG TWICE OVER. It read
+            # "Real hold is usually wider than the assumption, so treat
+            # this edge as the optimistic end of a range", and both
+            # halves failed.
+            #
+            # The premise is contradicted by measurement. Over 3,700
+            # harvested NFL anytime-TD closes at six books per
+            # player-date, `engine.devigfit` puts the toll on the LONGEST
+            # price on the screen — the one `odds.best_over_line`
+            # publishes — at about 5%, so 6% is a shade WIDER than the
+            # market, not narrower.
+            #
+            # And the inference points the wrong way for the number it
+            # sits under. `edge` here is MARKET_SHRINK x (raw - implied)
+            # and implied is raw_price / hold, so a WIDER hold makes the
+            # displayed edge BIGGER, not smaller. At +220 with this
+            # model: 1.06 shows +4.9%, 1.25 shows +7.2%, 1.35 shows
+            # +8.1%. Under its own premise the old sentence should have
+            # called +5.0% the pessimistic end.
+            #
+            # (EV moves the other way — +0.101, +0.029, -0.000 across the
+            # same three — because EV is the shrunk probability against
+            # the offered price rather than a difference of two
+            # probabilities. Two headline numbers on one card that
+            # respond to this assumption in opposite directions, which is
+            # most of why the old copy was easy to get backwards.)
             caveats = caveats + [
                 f"The vig here is assumed at {hold - 1:.0%}, not measured. "
                 f"Books quote no NO side on this market, so it can't be read "
                 f"off a two-way pair — and this game's own scorer board "
                 f"couldn't be measured either, which usually means the menu "
                 f"is still filling in and its prices don't yet cover the "
-                f"touchdowns the game line supports. Real hold is usually "
-                f"wider than the assumption, so treat this edge as the "
-                f"optimistic end of a range"]
+                f"touchdowns the game line supports. Measured across 3,700 "
+                f"harvested closes the market takes about 5% at the best "
+                f"price on the screen, so {hold - 1:.0%} is if anything a "
+                f"shade wide — which makes this edge generous by a fraction "
+                f"of a point, not by a range. Where a game's own board can "
+                f"be measured it reads far wider than either number, and the "
+                f"two have not been reconciled"]
 
     # Same discipline as the yardage-prop model: shrink toward the market while
     # the model is still uncalibrated, and treat an implausibly large

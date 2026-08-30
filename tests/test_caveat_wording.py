@@ -72,9 +72,20 @@ def test_the_caveat_explains_that_the_price_does_not_exist_to_be_pulled():
     assert "no NO side" in text, \
         "the caveat still reads as a feed we failed to pull"
     assert "6%" in text, "the assumption is unquoted, so it cannot be judged"
-    # And it must not oversell itself: the assumed hold is narrower than the
-    # real one on a longshot, so this edge is a ceiling, not a floor.
-    assert "optimistic" in text
+    # AND IT MUST BE RIGHT ABOUT WHICH WAY IT ERRS. This used to read
+    # "Real hold is usually wider than the assumption, so treat this edge
+    # as the optimistic end of a range", and both halves were wrong.
+    #
+    # The premise is contradicted by measurement: over 3,700 harvested
+    # NFL closes at six books per player-date, the toll on the LONGEST
+    # price on the screen is about 5%, so 6% is a shade WIDER than the
+    # market. And the inference points the wrong way for the number it
+    # sits under — see the direction test below.
+    assert "about 5%" in text, text
+    assert "shade wide" in text, text
+    assert "generous by a fraction of a point" in text, text
+    assert "optimistic end of a range" not in text, \
+        "the reversed caveat came back"
     # BOTH MEASUREMENTS FAILED, NOT ONE. There are three ways to know the
     # margin — a two-way pair, this game's own scorer board, or the
     # standing number — so reaching the standing number means neither
@@ -83,6 +94,37 @@ def test_the_caveat_explains_that_the_price_does_not_exist_to_be_pulled():
     # and a measured hold.
     assert "couldn't be measured either" in text, \
         "the caveat blames the NO side alone and hides the board failure"
+
+
+def test_a_wider_vig_makes_the_shown_edge_bigger_not_smaller():
+    """THE ARITHMETIC THE OLD CAVEAT HAD BACKWARDS, pinned so it cannot
+    be reasoned wrong again.
+
+    `edge` is MARKET_SHRINK x (raw - implied) and implied is
+    raw_price / hold, so a WIDER hold lowers implied and RAISES the
+    displayed edge. The old copy told a reader that a wider real hold
+    made this edge optimistic; under its own premise it was the
+    pessimistic end.
+
+    EV moves the other way over the same range, because EV is the shrunk
+    probability against the offered price rather than a difference of two
+    probabilities. Two headline numbers on one card responding to this
+    assumption in opposite directions is most of why it was easy to get
+    backwards, so both are asserted here."""
+    from engine.longshots import MARKET_SHRINK
+    raw_price = 100 / 320.0          # +220
+    raw_model = 0.39319
+    seen = []
+    for hold in (1.06, 1.25, 1.35):
+        implied = raw_price / hold
+        shown = implied + MARKET_SHRINK * (raw_model - implied)
+        seen.append((hold, shown - implied, shown * 2.2 - (1 - shown)))
+    edges = [e for _h, e, _ev in seen]
+    evs = [ev for _h, _e, ev in seen]
+    assert edges == sorted(edges), edges          # wider hold, bigger edge
+    assert evs == sorted(evs, reverse=True), evs  # wider hold, smaller EV
+    assert abs(edges[0] - 0.049) < 0.001, edges[0]
+    assert abs(edges[-1] - 0.081) < 0.001, edges[-1]
 
 
 def test_a_measured_price_carries_no_such_caveat():
