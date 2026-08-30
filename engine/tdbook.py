@@ -249,11 +249,20 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
         # `p*(d-1) - (1-p)` at its own price; the mean of those is the
         # ROI the board says it should return, and the realised ROI beside
         # it is the answer.
-        staked = ret = hits = n = claim = 0.0
+        staked = ret = hits = n = claim = slates = 0.0
         for g in sample:
             top = sorted(g, key=lambda r: -r["cal"])[:k]
+            # A slate with fewer than k priced rows cannot answer "how did
+            # the top k do", so it sits out — which means EACH DEPTH RESTS
+            # ON A DIFFERENT SET OF SLATES, and that has to be visible.
+            # The live run showed 240 bets at top 20 and 200 at top 40: a
+            # deeper board cannot have fewer bets, and the only reason it
+            # did is that five slates carry 40 priced rows where twelve
+            # carry 20. Reading those two lines as the same board getting
+            # deeper is reading two different samples.
             if len(top) < k:
                 continue
+            slates += 1
             for r in top:
                 staked += 1.0
                 hits += r["scored"]
@@ -264,18 +273,18 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
                 n += 1
         if not staked:
             return None
-        return (ret / staked, hits / n, int(n), claim / n)
+        return (ret / staked, hits / n, int(n), claim / n, int(slates))
 
     rng = random.Random(seed)
     out = [f"NFL likelihood board · ROI at the price on the screen "
            f"({len(groups)} slates)",
-           "  depth        bets     hit   claimed    actual      gap"
+           "  depth   slates   bets     hit   claimed    actual      gap"
            "    95% by slate"]
     for k in depths:
         got = roi(groups, k)
         if not got:
             continue
-        r_all, hit, n, claimed = got
+        r_all, hit, n, claimed, slates = got
         boot = []
         for _ in range(ROI_RESAMPLES):
             draw = [groups[rng.randrange(len(groups))] for _ in groups]
@@ -293,11 +302,17 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
         chi = boot[int((1.0 - tail) * len(boot)) - 1]
         verdict = ("   <-- profitable" if clo > 0 else
                    "   <-- losing" if chi < 0 else "   inside the noise")
-        out.append(f"   top {k:<8d} {n:5d}  {hit:6.1%}  {claimed:+7.2%}  "
-                   f"{r_all:+7.2%}  {r_all - claimed:+7.2%}   "
+        out.append(f"   top {k:<5d} {slates:5d}  {n:5d}  {hit:6.1%}  "
+                   f"{claimed:+7.2%}  {r_all:+7.2%}  "
+                   f"{r_all - claimed:+7.2%}   "
                    f"[{lo:+.1%},{hi:+.1%}]{verdict}")
     out.append("  Flat one unit a row at the LONGEST price quoted, ranked "
                "within each slate.")
+    out.append("  SLATES differs by depth on purpose: one with 20 priced "
+               "rows can answer top 20")
+    out.append("  and not top 40, so the deeper lines rest on fewer, "
+               "bigger slates — not the")
+    out.append("  same board seen further down.")
     out.append("  CLAIMED is what the board says these rows return, priced "
                "bet by bet at their")
     out.append("  own odds. ACTUAL is what they did. GAP is the whole "

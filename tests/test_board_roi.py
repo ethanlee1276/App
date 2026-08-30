@@ -35,6 +35,30 @@ from engine import tdbook                                # noqa: E402
 from engine.tdbacktest import american_at                # noqa: E402
 
 
+def _cells(line):
+    """One report row as a dict.
+
+    BY NAME, NOT BY INDEX. Adding the `slates` column shifted every
+    positional parse in this file at once and broke a test that had
+    nothing to do with the change. Column order is a rendering detail;
+    tests should not be coupled to it."""
+    parts = line.split()
+    keys = ("depth", "slates", "bets", "hit", "claimed", "actual", "gap")
+    got = dict(zip(keys, parts[1:1 + len(keys)]))
+    for k in ("hit", "claimed", "actual", "gap"):
+        got[k] = float(got[k].rstrip("%")) / 100.0
+    for k in ("depth", "slates", "bets"):
+        got[k] = int(got[k])
+    return got
+
+
+def _row(lines, k):
+    for ln in lines:
+        if ln.strip().startswith(f"top {k} "):
+            return _cells(ln)
+    raise AssertionError(f"no top {k} row in\n" + "\n".join(lines))
+
+
 def _slate(season, week, rows):
     return [{"season": season, "week": week, "cal": c, "rank": i + 1,
              "player": f"P{i}", "odds": o, "scored": s}
@@ -160,8 +184,7 @@ def test_the_claim_is_priced_bet_by_bet_not_compressed_to_one_rate():
                   "odds": 2000 if i == 9 else -140,
                   "scored": 1 if i < 5 else 0} for i in range(10)]
     got = tdbook.roi_lines(rows, depths=(10,))
-    cells = got[2].split()
-    claimed = float(cells[4].rstrip("%")) / 100.0
+    claimed = _row(got, 10)["claimed"]
     # Nine legs at -140 claim 0.5*0.714 - 0.5 = -0.143 each; the +2000 leg
     # claims 0.5*20 - 0.5 = +9.5. The mean is (9*-0.143 + 9.5)/10 = +0.821.
     assert abs(claimed - 0.821) < 0.01, claimed
@@ -177,10 +200,8 @@ def test_the_gap_is_realised_minus_claimed():
         rows += _slate(2025, str(w + 1),
                        [(0.5, 100, 1), (0.5, 100, 0)])
     got = tdbook.roi_lines(rows, depths=(2,))
-    cells = got[2].split()
-    claimed = float(cells[4].rstrip("%")) / 100.0
-    actual = float(cells[5].rstrip("%")) / 100.0
-    gap = float(cells[6].rstrip("%")) / 100.0
+    r = _row(got, 2)
+    claimed, actual, gap = r["claimed"], r["actual"], r["gap"]
     assert abs(claimed) < 1e-9, claimed        # 50% at +100 claims nothing
     assert abs(actual) < 1e-9, actual          # and returned nothing
     assert abs(gap - (actual - claimed)) < 1e-9
@@ -196,9 +217,8 @@ def test_a_board_the_price_already_knew_shows_the_gap():
                        [(0.60, -140, 1), (0.60, -140, 1),
                         (0.60, -140, 0), (0.60, -140, 0)])
     got = tdbook.roi_lines(rows, depths=(4,))
-    cells = got[2].split()
-    claimed = float(cells[4].rstrip("%")) / 100.0
-    actual = float(cells[5].rstrip("%")) / 100.0
+    r = _row(got, 4)
+    claimed, actual = r["claimed"], r["actual"]
     # Claims +2.9% at 60%/-140; delivers -14.3% on a 50% realised rate.
     assert claimed > 0 and actual < 0, (claimed, actual)
 
@@ -218,8 +238,7 @@ def test_the_deeper_the_board_the_more_bets_it_counts():
         rows += _slate(2025, str(w + 1),
                        [(0.9 - i * 0.05, 120, i % 2) for i in range(10)])
     got = tdbook.roi_lines(rows, depths=(5, 10))
-    n5 = int(got[2].split()[2])
-    n10 = int(got[3].split()[2])
+    n5, n10 = _row(got, 5)["bets"], _row(got, 10)["bets"]
     assert n10 == 2 * n5 == 400, (n5, n10)
 
 
@@ -347,6 +366,37 @@ def test_the_funnel_is_published_rather_than_inferred():
                encoding="utf-8").read()
     assert "the board would show" in cli
     assert "disagreeing with the market" in cli
+
+
+def test_each_depth_reports_the_slates_it_actually_rests_on():
+    """A DEEPER BOARD CANNOT HAVE FEWER BETS, and the live run showed
+    240 at top 20 against 200 at top 40. The reason is that a slate with
+    20 priced rows can answer "how did the top 20 do" and cannot answer
+    top 40, so it sits out — which means the depths are different SAMPLES
+    of slates, not one board seen further down.
+
+    Nothing in the output said so, and reading those two lines as
+    comparable is the population error one level down from the one that
+    put a +72% claim on the board."""
+    rows = []
+    for w in range(12):
+        depth = 40 if w < 5 else 20
+        rows += [{"season": 2025, "week": str(w + 1), "cal": 0.6 - i * 0.005,
+                  "rank": i + 1, "player": f"P{i}", "odds": -120,
+                  "scored": 1 if i % 2 else 0} for i in range(depth)]
+    got = tdbook.roi_lines(rows, depths=(20, 40))
+    twenty, forty = _row(got, 20), _row(got, 40)
+    assert (twenty["slates"], twenty["bets"]) == (12, 240), twenty
+    assert (forty["slates"], forty["bets"]) == (5, 200), forty
+    assert "SLATES differs by depth on purpose" in "\n".join(got)
+
+
+def test_the_header_carries_the_slate_column():
+    got = tdbook.roi_lines(
+        [r for w in range(20) for r in _slate(2025, str(w + 1),
+                                              [(0.9, 100, 1), (0.8, 100, 0)])],
+        depths=(2,))
+    assert "slates" in got[1] and "bets" in got[1]
 
 
 if __name__ == "__main__":
