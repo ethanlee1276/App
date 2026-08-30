@@ -198,7 +198,7 @@ listed honestly rather than faked).
 
 | Spec section | Status | Where in code |
 |---|---|---|
-| §1 Attention is the axis | ✅ | `engine/cfb/model.py` `attention_tier` — conference, ranking and the **Eastern** weekday decide marquee/standard/low. An unknown conference resolves to *standard*, never "soft" |
+| §1 Attention is the axis | ✅ | `engine/cfb/model.py` `attention_tier` — conference, ranking and the **Eastern** weekday decide marquee/standard/low. Both conferences unknown resolves to *standard*; one unknown paired with a known non-power conference resolves to *low*, same as two known non-power conferences |
 | §1 Softness is a dial, not a constant | ✅ | `model.HAIRCUT` — 50% of the raw edge held back in marquee games, 35% standard, 25% low. `test_cfb.py` pins the claim the module exists for: the same model probability is a pass in a ranked SEC game and a bet in a Wednesday MAC game |
 | §2.1 Never fabricate | ✅ | Only games with a real fetched price are evaluated; a team with no rating produces no opinion rather than a guess (`cfb_build.build_plays`) |
 | §2.2 Verify recency | ✅ | ESPN feeds are TTL'd; the payload carries `generated_at` and the server stamps `Last-Modified` from the file, so the freshness chip ages the DATA |

@@ -532,6 +532,24 @@ blending there. Rendered under "The recipe itself, refit" on the Record
 page, including "default kept" rows: a dial the record examined and left
 alone is a result.
 
+**Caveat added 2026-08-30, from the code's own finding.** Two of the four
+adopted NFL dials are hollower than "adopted" implies. `nfl:rush_yds` and
+`nfl:rec_yds` both fit to the hot boundary (r=+1.0) because `formfit`
+scores every candidate through `logwalk.walk`, which prices each game
+against `_naive_line` — the player's own trailing average. That makes the
+question "which window best predicts a number computed from that same
+window," and the hot end wins by being nearest to the same object, not by
+being right. `engine/formbook.py` (built this week) scores the same two
+dials against real harvested book closes instead and gets AUC 0.468 and
+0.477 — no better than a coin flip. `formfit.py`'s own in-line comment
+(lines ~206-225) already says as much and declines to add a guard, on the
+grounds that a guard here would only hide the upstream question being
+wrong. `formbook.py` is the fix path (`engine.propcal` made the same
+repair for calibrations) but is not yet wired into `fit()` — it exists
+only as a standalone measurement script, imported nowhere outside its own
+test. Until it is, treat "recency dial: BUILT" as true for `receptions`
+and `pass_yds` and unproven for `rush_yds`/`rec_yds`.
+
 ### BUILT 2026-08-03 — player memory (`engine/playerfit.py`)
 
 Rung three: learn WHO the blend misreads. Per player and market, one
