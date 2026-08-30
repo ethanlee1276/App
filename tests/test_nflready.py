@@ -176,6 +176,48 @@ def test_the_report_survives_a_box_with_no_ledger_and_says_so():
         any("UNMEASURED" in x for x in lines)
 
 
+# --- what a replay has actually said -------------------------------------
+def test_a_market_nothing_has_ever_graded_is_worse_than_unmeasured():
+    """`team_total` publishes picks and no backtest for it exists. That
+    is a different and worse state than "never fitted": an unfitted
+    market announces itself, and this one looks like the three beside it
+    while nothing has ever checked whether it works."""
+    row = R.market_row("nfl", "team_total", None)
+    assert row["backtest"] is None
+    state, why = R.verdict_for(row)
+    assert state == "NO BACKTEST", state
+    assert "looks measured" in why
+
+
+def test_the_replay_result_reaches_the_verdict_for_markets_that_have_one():
+    """A market can be unfitted AND replayed, and the replay is the more
+    useful sentence of the two — "off the close by 4 points and never
+    qualified" says far more than "needs settled rows"."""
+    row = R.market_row("nfl", "spread", None)
+    state, why = R.verdict_for(row)
+    assert state == "UNMEASURED", state
+    assert "Replay says:" in why and "4.05" in why
+
+
+def test_every_measured_game_market_is_recorded_with_its_numbers():
+    """2026-08-30, over 1,424 completed NFL games. The three game markets
+    that can be replayed have never produced a bet graded above Pass —
+    which is the GATES WORKING, not failing: the model does not beat the
+    closing number and correctly declines. Dropping `min_team_games` from
+    15 to 0 changes nothing, so it is not thin history either.
+
+    Written down because the live board publishes game bets anyway, and a
+    model that qualifies nothing in replay while publishing live is two
+    different models until somebody finds the difference."""
+    import inspect
+    src = inspect.getsource(R)
+    for number in ("0.2336", "3.18", "4.05", "1,184"):
+        assert number in src, f"the replay result lost {number}"
+    assert "min_team_games" in src
+    for market in ("moneyline", "spread", "total"):
+        assert R.BACKTESTED[market], market
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

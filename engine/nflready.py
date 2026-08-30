@@ -51,6 +51,38 @@ PLAYER_MARKETS = ("anytime_td", "receptions", "rec_yds", "rush_yds",
 #: could in principle emit.
 GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 
+#: WHAT A REPLAY HAS ACTUALLY SAID ABOUT EACH MARKET, 2026-08-30, over
+#: 1,424 completed NFL games (1,184 with a stored close and team history)
+#: through `engine.gamebacktest` against nflverse's closing consensus:
+#:
+#:     moneyline   Brier 0.2336, mean P(home) 55% against 55% actual —
+#:                 mild real skill, since always-guessing-the-base-rate
+#:                 scores 0.2475 — and NOT ONE bet graded above Pass
+#:     total       projection off the close by 3.18 points, 449 games
+#:                 refused for exceeding the credibility ceiling, NOT ONE
+#:                 bet graded above Pass
+#:     spread      off by 4.05 points, 578 refused, NOT ONE bet graded
+#:     team_total  NO BACKTEST EXISTS
+#:
+#: The three that can be measured have never produced a gradeable bet in
+#: four seasons. That is the gates working, not failing: the model does
+#: not beat the closing number and correctly declines to bet it. Dropping
+#: `min_team_games` from 15 to 0 changes nothing, so it is not a
+#: thin-history effect either.
+#:
+#: WHICH MAKES THE LIVE BOARD THE THING TO EXPLAIN. It carries open game
+#: bets in all four markets, and `ledger.journal_skip_reason` only
+#: journals a row that was RECOMMENDED with a positive stake. A model
+#: that qualifies nothing in replay and publishes live is describing two
+#: different models, and the difference has to be found before either is
+#: trusted.
+BACKTESTED = {
+    "moneyline": "1,184 games, Brier 0.2336, no bet graded above Pass",
+    "spread": "1,184 games, off the close by 4.05 pts, none graded",
+    "total": "1,184 games, off the close by 3.18 pts, none graded",
+    "team_total": None,
+}
+
 #: Settled rows before a record means anything. Below this the ROI is a
 #: number about four games.
 MIN_SETTLED = 25
@@ -112,6 +144,7 @@ def market_row(sport: str, market: str, conn=None) -> dict:
            # been subject to.
            "min_edge": None if game else tier_min_edge(market)}
     got.update(calib_state(sport, market))
+    got["backtest"] = BACKTESTED.get(market, "") if game else ""
     got["settled"] = settled_record(conn, sport, market) if conn else {"n": 0}
     return got
 
@@ -131,10 +164,19 @@ def verdict_for(row: dict) -> tuple[str, str]:
                 "the data wanted a bigger correction than the search "
                 "allowed, so the stored temperature is a cap. Refit, or "
                 "accept the model is wrong here")
+    if row.get("game") and row.get("backtest") is None:
+        return ("NO BACKTEST",
+                "no replay exists for this market at all — it is publishing "
+                "picks nothing has ever graded, which is worse than "
+                "unmeasured because it looks measured")
     if not row.get("fitted"):
-        return ("UNMEASURED",
-                "never fitted: not broken, unmeasured. Needs settled rows "
-                "or a harvest to fit against")
+        why = ("never fitted: not broken, unmeasured. Needs settled rows "
+               "or a harvest to fit against")
+        if row.get("backtest"):
+            # A market CAN be unfitted and still have been replayed, and
+            # that replay is the more useful sentence of the two.
+            why += f". Replay says: {row['backtest']}"
+        return ("UNMEASURED", why)
     s = row.get("settled") or {}
     if s.get("n", 0) < MIN_SETTLED:
         opened = s.get("open") or 0
