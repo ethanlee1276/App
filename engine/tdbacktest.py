@@ -211,9 +211,35 @@ def _prior_form(weeks: dict, upto: list, market: str) -> float:
     return (sum(vals) / len(vals)) if vals else 0.0
 
 
-def run(conn, sport: str = "nfl", seasons=None,
-        min_prior: int = MIN_PRIOR_WEEKS, collect=None) -> TDBacktest:
+#: THE ONLY SPORT THIS REPLAYS. `run` calls `touchdowns.td_probability`,
+#: which IS the NFL model — its own baselines, its own script curve, its
+#: own red-zone blend. College football ships `engine.cfb.tds`, a
+#: different chain with different constants, and its replay is
+#: `engine.cfbtdfit.run`.
+#:
+#: The `sport` argument names which LOGS to read, and nothing stopped it
+#: reading college ones. Doing that on 2026-08-30 produced a confident
+#: table showing the college calibration failing badly — 8% claimed
+#: against 15.7% landed AFTER correction — and it was the NFL model being
+#: graded on college data. On the real college chain the same bands come
+#: out at 1.25 and 1.05 and the stored fit is sound. Nothing was wrong
+#: except the question.
+#:
+#: So the guard is here rather than in a docstring nobody reads at the
+#: call site. Pass `allow_any_sport=True` to grade the NFL model on
+#: another sport's logs ON PURPOSE — that is a comparison between chains,
+#: not a measurement of that sport's board, and it must not be reported
+#: as one.
+NFL_ONLY = "nfl"
+
+
+def run(conn, sport: str = NFL_ONLY, seasons=None,
+        min_prior: int = MIN_PRIOR_WEEKS, collect=None,
+        allow_any_sport: bool = False) -> TDBacktest:
     """Walk forward through every ingested week and grade the model.
+
+    NFL ONLY unless ``allow_any_sport`` — see :data:`NFL_ONLY` for what
+    happened the one time that was ignored.
 
     ``collect(row)`` optionally receives one dict per graded player-week,
     carrying the identity the grading itself does not need — player,
@@ -222,6 +248,13 @@ def run(conn, sport: str = "nfl", seasons=None,
     price, which is the only way to ask where the model disagrees with
     the market rather than only where it disagrees with the outcome.
     """
+    if sport != NFL_ONLY and not allow_any_sport:
+        raise ValueError(
+            f"tdbacktest replays the NFL touchdown model; grading it on "
+            f"{sport!r} logs measures a chain that sport does not ship. "
+            f"College football is engine.cfbtdfit.run. Pass "
+            f"allow_any_sport=True only for a deliberate cross-chain "
+            f"comparison.")
     where = "WHERE sport=?"
     args: list = [sport]
     if seasons:
@@ -356,10 +389,24 @@ def run(conn, sport: str = "nfl", seasons=None,
             scored = 1 if marks.get("anytime_td", 0.0) > 0 else 0
             graded.append((season, wk, float(prob), scored))
             if collect is not None:
+                # THE PRIOR-WINDOW INPUTS TRAVEL WITH THE ROW. Anything
+                # asking "does feature X add to this model" has to be
+                # built on the same walked-forward window this used, or
+                # it is comparing two different histories and calling the
+                # difference a signal. Recomputing them in the caller is
+                # how that goes wrong quietly.
                 collect({"season": season, "week": wk,
                          "player": display.get((season, short), ""),
                          "team": team, "prob": float(prob), "scored": scored,
-                         "xfp_share": (xfp or {}).get("xfp_share")})
+                         "xfp_share": (xfp or {}).get("xfp_share"),
+                         "position": marks.get("_pos", ""),
+                         "opponent": marks.get("_opp", ""),
+                         "implied": implied, "spread": float(spread),
+                         "is_home": is_home,
+                         "opp_share": share, "team_opp": team_opp,
+                         "own_opp": opp_own, "rz_share": rz_share,
+                         "rz_car": rz_car, "i5_car": i5, "rz_tgt": rz_tgt,
+                         "prior_weeks": list(prior)})
     for _season, _wk, prob, scored in sorted(graded, key=lambda g: g[:2]):
         out.add(prob, scored)
     return out.finish()
