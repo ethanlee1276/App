@@ -16,7 +16,11 @@ gets worked on.
 
 WHAT THE COLUMNS MEAN
 
-    calib     the stored temperature and bias, or "none" — an unfitted
+    calib     the correction actually in force: the stored temperature
+              and bias, "curve(N)" where the bake-off chose an isotonic
+              curve instead (which `calibrated` applies IN PLACE OF the
+              temperature, so quoting the temperature there would name a
+              number the board never uses), or "none" — an unfitted
               market is not broken, it is unmeasured, and those are
               different states with different work behind them
     reliable  `calibrate.is_reliable`: False when the fit ran to the edge
@@ -146,6 +150,20 @@ def calib_state(sport: str, market: str) -> dict:
         entry["temperature"] = temp
         entry["bias"] = bias
         entry["boundary"] = temp in (C.GRID_MIN, C.GRID_MAX)
+    # WHICH FORM IS ACTUALLY IN FORCE. `C.load` returns a plain
+    # (temperature, intercept) per key by deliberate contract, so a market
+    # whose bake-off chose the ISOTONIC form reads back here as a
+    # temperature — and that temperature is a number `calibrate.calibrated`
+    # never applies, because a stored curve wins over it. Printing it as
+    # the market's calibration is the report describing something the
+    # board is not doing.
+    #
+    # It matters most exactly where it is least visible. `nfl:anytime_td`
+    # carried a curve from 2026-08-28 that left its 40%-60% band ten
+    # points light, and this table would have shown a tidy "T=1.10
+    # b=+0.12" over it the whole time.
+    curve = C.load_curves(C.DEFAULT_PATH).get(key)
+    entry["curve_knots"] = len(curve.knots) if curve else 0
     entry["one_sided"] = C.one_sided(sport, market)
     entry["reliable"] = C.is_reliable(sport, market)
     return entry
@@ -278,8 +296,15 @@ def report(sport: str = "nfl", conn=None) -> list:
                 r = market_row(sport, market, conn)
                 rows.append(r)
                 state, _why = verdict_for(r)
-                calib = ("none" if not r.get("fitted")
-                         else f"T={r['temperature']} b={r['bias']:+.2f}")
+                if not r.get("fitted"):
+                    calib = "none"
+                elif r.get("curve_knots"):
+                    # Named, not numbered: a curve has no temperature to
+                    # quote and the knot count is what says how flexible
+                    # the thing being applied is.
+                    calib = f"curve({r['curve_knots']})"
+                else:
+                    calib = f"T={r['temperature']} b={r['bias']:+.2f}"
                 s = r["settled"]
                 bar = ("n/a" if r["min_edge"] is None
                        else f"{r['min_edge']:.1%}")

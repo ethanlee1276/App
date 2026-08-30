@@ -279,6 +279,66 @@ def test_team_totals_are_shown_inheriting_the_total_key_not_unguarded():
     assert got == R.game_shrink("nfl", "total", look)[0] == 0.0296
 
 
+def test_the_calib_column_names_the_form_the_board_actually_applies():
+    """`calibrate.load` returns a plain (temperature, intercept) per key
+    by deliberate contract, so a market whose bake-off chose the ISOTONIC
+    form reads back as a temperature — and that temperature is a number
+    `calibrated` never applies, because a stored curve wins over it.
+
+    THIS IS NOT HYPOTHETICAL. `nfl:anytime_td` carried a curve from
+    2026-08-28 that left its 40%-60% band claiming 44.5% where 55.0%
+    scored, and this table would have shown a tidy "T=1.10 b=+0.12" over
+    it the whole time — a readiness report describing something the board
+    was not doing.
+    """
+    import json
+    import tempfile
+    from engine import calibrate as C
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "calibration.json")
+        with open(path, "w") as fh:
+            json.dump({"nfl:anytime_td": {
+                "temperature": 1.1, "intercept": 0.12, "samples": 22102,
+                "curve": {"knots": [[0.05, 0.06], [0.20, 0.25],
+                                    [0.45, 0.42]], "samples": 22102},
+            }}, fh)
+        real, C.DEFAULT_PATH = C.DEFAULT_PATH, path
+        C.reset_cache()
+        try:
+            got = R.calib_state("nfl", "anytime_td")
+        finally:
+            C.DEFAULT_PATH = real
+            C.reset_cache()
+    assert got["fitted"] is True
+    assert got["curve_knots"] == 3, got
+    # And the renderer says so rather than quoting the dead temperature.
+    import inspect
+    src = inspect.getsource(R.report)
+    assert 'calib = f"curve({r[\'curve_knots\']})"' in src
+
+
+def test_a_plain_temperature_still_prints_as_one():
+    """The other direction: a market with no curve must not start
+    claiming one, and its numbers must survive unchanged."""
+    import json
+    import tempfile
+    from engine import calibrate as C
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "calibration.json")
+        with open(path, "w") as fh:
+            json.dump({"nfl:anytime_td": {"temperature": 1.12,
+                                          "intercept": 0.2, "curve": {}}}, fh)
+        real, C.DEFAULT_PATH = C.DEFAULT_PATH, path
+        C.reset_cache()
+        try:
+            got = R.calib_state("nfl", "anytime_td")
+        finally:
+            C.DEFAULT_PATH = real
+            C.reset_cache()
+    assert got["curve_knots"] == 0, got
+    assert got["temperature"] == 1.12 and got["bias"] == 0.2
+
+
 def test_the_replay_that_sized_the_shrink_is_written_down():
     import inspect
     src = inspect.getsource(R.game_shrink)
