@@ -243,7 +243,9 @@ def test_the_conflict_with_board_hold_is_recorded_not_smoothed_over():
     from engine import longshots as L
     import inspect
     src = inspect.getsource(L)
-    head = src[:src.index("ONE_SIDED_HOLD = 1.06")]
+    # Anchored on the declaration rather than on its old literal: the
+    # constant now lives once, in engine.odds, and is re-exported here.
+    head = src[:src.index("from .odds import ONE_SIDED_HOLD")]
     assert "board_hold" in head
     assert "expected distinct" in head
 

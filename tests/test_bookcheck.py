@@ -77,7 +77,11 @@ def test_the_fair_really_does_come_from_the_taken_book():
     import inspect
     from engine import odds
     src = inspect.getsource(odds.best_over_line)
-    assert "devig_two_way(ln.over_odds, ln.under_odds)" in src
+    # THE CONTRACT, NOT THE ARGUMENT LIST. This matched the call
+    # character for character and went red when a `hold` argument was
+    # threaded through — a change that leaves the premise untouched. What
+    # matters is that the fair comes from THIS line's own two prices.
+    assert "devig_two_way(ln.over_odds, ln.under_odds" in src
     assert "consensus" not in src
 
 

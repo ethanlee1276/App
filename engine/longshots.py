@@ -363,7 +363,13 @@ def _stake(model_prob: float, odds: int, fraction: float = 0.2) -> float:
 #: It is still an assumption on any board whose hold has not been
 #: measured. Every pick priced this way carries the caveat, and nothing
 #: here is staked off a one-sided quote without it being said.
-ONE_SIDED_HOLD = 1.06
+#: ONE DEFINITION, LIVING IN `engine.odds`. This module and that one each
+#: declared a constant of this name and they held DIFFERENT values (1.06
+#: here, 1.05 there) — and the split ran the wrong way round: four
+#: modules import this one and reason about "6%" in prose, while the
+#: function that actually computes a fair price used the other. Re-
+#: exported rather than moved so every existing importer keeps working.
+from .odds import ONE_SIDED_HOLD                           # noqa: E402,F401
 
 
 def one_sided_hold(sport: str, market: str) -> tuple[float, int]:

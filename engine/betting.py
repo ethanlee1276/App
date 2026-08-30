@@ -203,14 +203,21 @@ def _trend_alignment(side: str, trend: str) -> float:
     return 0.0
 
 
-def pick_side(lines, p_over_at):
+def pick_side(lines, p_over_at, hold: float | None = None):
     """Shop both sides and return the one with the larger edge.
 
     ``p_over_at(line) -> P(stat > line)`` is supplied by the caller so each
     sport prices with its own distribution (normal, discrete, Poisson…).
     Returns ``(side, best_line, win_prob, fair_prob, edge)`` where ``win_prob``
-    is the probability the chosen bet cashes."""
-    over = best_over_line(lines)
+    is the probability the chosen bet cashes.
+
+    ``hold`` is the MEASURED one-sided hold for this market, passed down
+    to the de-vig. It matters only on a market quoted one side — every
+    scorer prop — where the fair price is an assumption until something
+    measures it. Without this the long-shot board priced those props off
+    `holdwatch`'s measurement and this board could not see it, so the
+    same prop carried two different fair prices depending on the page."""
+    over = best_over_line(lines, hold)
     p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
     over_edge = p_over_at_over - over.fair_prob
 
@@ -219,7 +226,7 @@ def pick_side(lines, p_over_at):
     two_sided = [ln for ln in lines if ln.under_odds]
     if not two_sided:
         return "OVER", over, p_over_at_over, over.fair_prob, over_edge
-    under = best_under_line(two_sided)
+    under = best_under_line(two_sided, hold)
 
     p_over_at_under = clamp(p_over_at(under.line), 1e-6, 1.0 - 1e-6)
     under_win = 1.0 - p_over_at_under
@@ -420,7 +427,15 @@ def evaluate_prop(prop: Prop, proj: Projection,
         # Calibrate before the side is chosen — see engine/mlb/betting.py.
         return calibrated(sport, prop.market, raw)
 
-    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    # THE MEASURED HOLD, NOT THE ASSUMPTION, when one exists for this
+    # market. `one_sided_hold` answers the fitted value from
+    # engine/holdwatch or falls back to the shared constant, so this is
+    # the same number the long-shot board prices against rather than a
+    # second opinion about the same market.
+    from .longshots import one_sided_hold
+    _hold, _hold_n = one_sided_hold(sport, prop.market)
+    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at,
+                                                    hold=_hold)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                       allow_synthetic_line,
                                       shrink=tier_shrink(prop.market))

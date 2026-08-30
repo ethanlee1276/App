@@ -22,23 +22,68 @@ def american_to_decimal(odds: int) -> float:
     return 1.0 + odds / 100.0
 
 
-# Assumed hold when a market is quoted on one side only (books shade the
-# quoted side by roughly this much).
-ONE_SIDED_HOLD = 1.05
+#: Assumed hold when a market is quoted on one side only.
+#:
+#: THE ONE DEFINITION. This was 1.05 here and 1.06 in `engine.longshots`
+#: — the same concept under the same name with two values — and the split
+#: was the worst way round. Four modules import the longshots one and
+#: reason about it in prose (`devigfit`, `tdbook`, `cfb.tds`, `pipeline`
+#: all say "6%"), while the function that actually computes a fair price
+#: — `devig_two_way`, right below — quietly used 5%. The documented rule
+#: and the enforced rule were different numbers.
+#:
+#: Standardised on 1.06, the documented one. 1.05 was undocumented and
+#: further from the measurement: `engine.devigfit` puts the real shopped
+#: hold on one-sided touchdown props near 8.6%, so both are guesses on
+#: the low side and 1.05 was the lower.
+#:
+#: THE DIRECTION IS OPPOSITE IN THE TWO PATHS, which is why one number
+#: serving both is delicate and worth saying out loud:
+#:
+#:   here          fair = implied / hold, and `betting.pick_side` takes
+#:                 edge = model - fair. A wider hold LOWERS fair and
+#:                 RAISES edge — permissive.
+#:   longshots     `calibrated_prob` shrinks the model TOWARD implied. A
+#:                 wider hold lowers implied and drags the model down,
+#:                 cutting EV and publishing fewer picks — conservative.
+#:                 That module's own note says so.
+#:
+#: So moving this 1.05 -> 1.06 loosens the recommendation board very
+#: slightly (about 0.2 points of edge on a one-sided +400) and leaves the
+#: long-shot board untouched, since that path already used 1.06. Small,
+#: real, and in the direction the measurement points — but a pricing
+#: change riding on a consistency fix, so it is stated rather than
+#: buried.
+#:
+#: Neither number should be doing this work for long. The fix is for the
+#: MEASUREMENT to reach this function, which is what `hold` below is for.
+ONE_SIDED_HOLD = 1.06
 
 
-def devig_two_way(over_odds: int, under_odds: int) -> tuple[float, float]:
+def devig_two_way(over_odds: int, under_odds: int,
+                  hold: float | None = None) -> tuple[float, float]:
     """Remove the vig from a two-way market, returning fair (over, under)
     probabilities that sum to 1.0.
 
     A missing side (odds of 0/None — e.g. home-run markets are quoted
     Over-only) de-vigs the quoted side with an assumed hold instead of
-    pretending a fabricated opposite price is information."""
+    pretending a fabricated opposite price is information.
+
+    ``hold`` lets a caller that knows the sport and market supply the
+    MEASURED one-sided hold (`longshots.one_sided_hold`) instead of the
+    assumption. Without it the longshot board priced off a measurement
+    the recommendation board could not see, so the same one-sided prop
+    carried two different fair prices depending on which page asked —
+    the failure engine/holdwatch exists to end, reappearing one level
+    below it. Ignored entirely on a two-sided market, where both prices
+    are real and nothing has to be assumed.
+    """
+    hold = float(hold) if hold else ONE_SIDED_HOLD
     if not under_odds and over_odds:
-        fair_over = min(0.99, american_to_prob(over_odds) / ONE_SIDED_HOLD)
+        fair_over = min(0.99, american_to_prob(over_odds) / hold)
         return fair_over, 1.0 - fair_over
     if not over_odds and under_odds:
-        fair_under = min(0.99, american_to_prob(under_odds) / ONE_SIDED_HOLD)
+        fair_under = min(0.99, american_to_prob(under_odds) / hold)
         return 1.0 - fair_under, fair_under
     if not over_odds and not under_odds:
         return 0.5, 0.5
@@ -157,7 +202,7 @@ def shoppable(odds) -> bool:
     return o == 0 or is_quotable(o)
 
 
-def best_over_line(lines: list[SportsbookLine]) -> BestLine:
+def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 
     We prefer the lowest line, breaking ties by the best (highest) odds. This
@@ -169,7 +214,7 @@ def best_over_line(lines: list[SportsbookLine]) -> BestLine:
     # better than any real one on its side of even money.
     clean = [ln for ln in lines if shoppable(ln.over_odds)]
     for ln in (clean or lines):
-        fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds)
+        fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.over_odds, fair_over)
         if best is None:
             best = cand
@@ -180,7 +225,7 @@ def best_over_line(lines: list[SportsbookLine]) -> BestLine:
     return best
 
 
-def best_under_line(lines: list[SportsbookLine]) -> BestLine:
+def best_under_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly UNDER line across books.
 
     Mirror image of ``best_over_line``: for an under you want the *highest*
@@ -189,7 +234,7 @@ def best_under_line(lines: list[SportsbookLine]) -> BestLine:
     best: BestLine | None = None
     clean = [ln for ln in lines if shoppable(ln.under_odds)]
     for ln in (clean or lines):
-        _, fair_under = devig_two_way(ln.over_odds, ln.under_odds)
+        _, fair_under = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)
         if best is None:
             best = cand
