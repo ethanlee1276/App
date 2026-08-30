@@ -22,6 +22,39 @@ from .statmath import clamp
 # variation (std / mean) per market. Player game logs are often too smooth to
 # capture true prop variance, so we never let the estimated std fall below
 # these market-typical levels — this is what keeps hit probabilities honest.
+#: Coefficient-of-variation floor under the projection's own spread, per
+#: market: `std = max(form std, CV x mean)`.
+#:
+#: MEASURED, AND THE FLOOR IS NOT THE PROBLEM — `engine.yardagefit`,
+#: 2026-08-30. Two things came out of walking 9,177 rushing and 16,557
+#: receiving player-weeks forward with the shipped blend.
+#:
+#: First, this floor almost never binds: `form.std` is above it in every
+#: projection band of both markets, so the number below is close to
+#: decorative. Raising it would be the obvious fix and the wrong one.
+#:
+#: Second, and this is what actually shuts those two markets: the FAMILY
+#: is wrong. `statmath.prob_over` is a normal, and rushing yards are a
+#: spike at zero with a long right tail — 29.0% of outcomes are exactly
+#: zero (21.2% receiving, 12.4% receptions, 2.3% passing). The normal's
+#: negative tail stands in for that spike and misses in both directions:
+#:
+#:     projection    P(zero)   normal's mass below zero
+#:       1-8          61.9%          36.0%
+#:      15-30         11.9%          18.4%
+#:      30-50          3.5%           9.1%
+#:      50-75          0.9%           3.8%
+#:
+#: Mass wrongly placed below zero comes straight off the over, by an
+#: amount that changes sign across the board — which is what an AUC of
+#: 0.47 looks like from the inside, and why the fitted temperature for
+#: these markets ran to the edge of its grid. A monotone squeeze cannot
+#: move mass from one end of a distribution to the other.
+#:
+#: `engine.yardagefit` has the replacement measured and held out by
+#: season, and it is deliberately NOT wired in here yet: it is validated
+#: against synthetic lines, and only the droplet holds the closing prices
+#: that can say whether better probabilities become a better board.
 CV_FLOOR = {
     "pass_yds": 0.16,
     "rush_yds": 0.42,

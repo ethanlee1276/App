@@ -612,6 +612,25 @@ def one_sided(sport: str, market: str, path=None) -> bool:
     calibration and become a constant side. `is_reliable` already refuses
     a boundary temperature fit for the same kind of reason, with the same
     remedy: keep it on disk so it can be reported, never apply it.
+
+    WHY THIS MARKET AND NOT ANOTHER, answered 2026-08-30 by
+    `engine.yardagefit`. Both symptoms — the saturating curve and the
+    boundary temperature — are one upstream cause: `statmath.prob_over`
+    models rushing yards as a NORMAL, and 29.0% of rushing outcomes are
+    exactly zero. The normal's negative tail stands in for that spike and
+    is far too small at the bottom of the board and two to five times too
+    large above fifteen yards, so the over is mispriced by an amount that
+    changes sign across the board. Nothing a calibrator can do fixes
+    that: a temperature is a monotone squeeze and an isotonic curve is a
+    monotone remap, and neither moves mass from one end of a distribution
+    to the other. Both were being asked to repair a shape with a dial,
+    and both failed in the way this veto catches.
+
+    The ordering across markets is the confirmation. Zero rate 2.3%
+    (pass_yds), 12.4% (receptions), 21.2% (rec_yds), 29.0% (rush_yds) —
+    and the two markets that are shut are the two with the most zeroes,
+    while the one whose normal fits almost perfectly is the one with
+    almost none.
     """
     if not _enabled:
         return False
