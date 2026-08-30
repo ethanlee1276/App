@@ -1784,6 +1784,15 @@ main { view-transition-name: page; }
   .shelf-head { position: static; background: none; }
 }
 
+/* Most Likely on the main board — the same shelves, capped.
+
+   Tighter than the full page: this is a preview under Tonight's picks,
+   so the shelf headings do not stick and the bands sit closer. */
+.likely-top .likely-shelf { margin-bottom: 18px; }
+.likely-top .shelf-head { position: static; background: none; padding-top: 0; }
+.likely-top .shelf-title { font-size: var(--fs-md); }
+.likely-top-more { margin: 2px 0 26px; }
+
 /* Long Shots */
 .ls-note { color: var(--text-dim); font-size: var(--fs-md); margin-bottom: 14px; }
 .card.longshot .ls-primary {

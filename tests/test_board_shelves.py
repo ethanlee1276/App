@@ -204,6 +204,79 @@ def test_the_long_shot_hint_is_not_baseball_only():
     assert "home-run darts" not in _betting_group()
 
 
+# --- and they are on the page people actually land on ---------------------
+# Ethan, 2026-08-30: "why are we not showing any of those bets on the main
+# page... thats bets the user is really looking for." The shelves were
+# built and then left entirely behind a menu row, so the landing page's
+# only answer to "what should I bet" stayed the board with the weakest
+# evidence behind it.
+def test_the_main_page_has_a_host_for_the_likelihood_board():
+    assert '<div id="likely-top"></div>' in _src("web", "index.html")
+
+
+def test_it_is_drawn_by_its_own_renderer():
+    assert "function renderLikelyTop()" in _src("web", "js", "app.js")
+
+
+def test_the_renderer_runs_before_the_room_grouping():
+    """`groupRecommended` reads what the renderers wrote to decide which
+    rooms exist. A host filled after it is sorted into no room."""
+    src = _src("web", "js", "app.js")
+    assert (src.index("  renderLikelyTop();")
+            < src.index("  groupRecommended();"))
+
+
+def test_the_block_is_placed_in_the_boards_room():
+    """In REC_ROOMS, which is the order a reader sees — not the DOM."""
+    src = _src("web", "js", "app.js")
+    at = src.index('["board", "Tonight')
+    room = src[at:src.index('["gamebets"', at)]
+    assert '"likely-top"' in room, room
+
+
+def test_it_sits_above_the_slider_filtered_edge_cards():
+    """The whole point of the placement. A normal bettor is shopping for
+    what hits, and was only ever offered where the price is wrong."""
+    src = _src("web", "js", "app.js")
+    at = src.index('["board", "Tonight')
+    room = src[at:src.index('["gamebets"', at)]
+    assert room.index('"likely-top"') < room.index('"cards"')
+    assert room.index('"likely-top"') < room.index('"rec-controls"')
+
+
+def test_the_preview_reuses_the_shelves_rather_than_refiltering():
+    """A second "top picks" filter is how two pages end up disagreeing
+    about the same player."""
+    src = _src("web", "js", "app.js")
+    at = src.index("function renderLikelyTop()")
+    body = src[at:src.index("function renderLikely()", at)]
+    assert "state.data.board_shelves" in body
+    assert "LIKELY_TOP_N" in body
+
+
+def test_the_preview_links_through_to_the_full_board():
+    src = _src("web", "js", "app.js")
+    at = src.index("function renderLikelyTop()")
+    body = src[at:src.index("function renderLikely()", at)]
+    assert 'switchView("likely"' in body
+
+
+def test_the_preview_carries_the_same_trust_line_as_the_full_page():
+    """It says what it is and where it is recorded, in the same words —
+    a shelf on the landing page must not become an unlabelled claim."""
+    src = _src("web", "js", "app.js")
+    at = src.index("function renderLikelyTop()")
+    body = src[at:src.index("function renderLikely()", at)]
+    assert 'boardGuide("most_likely")' in body
+
+
+def test_an_empty_board_draws_nothing_rather_than_a_heading():
+    src = _src("web", "js", "app.js")
+    at = src.index("function renderLikelyTop()")
+    body = src[at:src.index("function renderLikely()", at)]
+    assert 'host.innerHTML = ""; return;' in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

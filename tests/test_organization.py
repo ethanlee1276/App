@@ -408,7 +408,13 @@ def test_the_recommended_board_is_three_rooms():
     tallest room is 3.3 and the one you land on is 2.7."""
     js = _js()
     i = js.index("const REC_ROOMS = [")
-    body = js[i:i + 1200]
+    # THE WHOLE LITERAL, not `js[i:i + 1200]`. That window went red on
+    # 2026-08-30 because a COMMENT was added inside the array and pushed
+    # `rest-watch` past byte 1200 — the contract this protects was
+    # untouched. `_fn` at the top of this file already carries the same
+    # lesson: "a test that fails when a comment grows is a test that
+    # teaches people to stop reading it."
+    body = js[i:js.index("\n];", i)]
     for room in ("board", "gamebets", "watch"):
         assert f'["{room}"' in body or f'"{room}",' in body, room
     assert "gamebets-title" in body and "rest-watch" in body
@@ -444,10 +450,19 @@ def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
     room decided once at startup would offer a Game bets tab on a night
     with no game bets."""
     js = _js()
-    # Every path that re-renders the board must re-group after it.
-    for anchor in ("renderRecommended();\n  // AFTER the renderers",
-                   "renderGameBets(); renderRecommended(); groupRecommended();"):
-        assert anchor in js, anchor
+    # ORDER, NOT ADJACENCY. This read
+    # `"renderRecommended();\n  // AFTER the renderers"` and went red on
+    # 2026-08-30 when `renderLikelyTop()` was inserted between the two —
+    # which is exactly the arrangement the contract wants, since the
+    # grouping has to run after every renderer that fills a block. The
+    # contract is that grouping comes LAST, so that is what is asserted.
+    main = js[js.index("  renderRecommended();"):]
+    at = main.index("  groupRecommended();")
+    for renderer in ("renderRecommended();", "renderLikelyTop();"):
+        assert main.index(f"  {renderer}") < at, renderer
+    # The slider path re-renders the board and must re-group with it.
+    assert ("renderGameBets(); renderRecommended(); groupRecommended();"
+            in js)
     i = js.index("function subtabbedDOM(")
     body = js[i:i + 3600]
     assert "const live = groups.filter" in body, "emptiness must be recomputed"

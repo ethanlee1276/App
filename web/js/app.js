@@ -1757,6 +1757,10 @@ function renderAll() {
   renderRestWatch();
   renderInjuryWatch();
   renderRecommended();
+  // BEFORE groupRecommended, like every other board block: the grouping
+  // reads what the renderers wrote to decide which rooms exist, so a
+  // host filled after it would be sorted into no room at all.
+  renderLikelyTop();
   // AFTER the renderers, always. Which rooms exist is decided by what
   // they just wrote — grouping first would judge every block empty and
   // draw a single tab.
@@ -5110,6 +5114,49 @@ function boardGuide(key) {
     <div style="margin-top:6px">${money}
       <span class="mini" style="opacity:.8">${escapeHtml(g.trust)}</span></div>
   </div>`;
+}
+
+/* ============================================================
+   Most Likely, on the main page
+   ============================================================
+   Ethan, 2026-08-30: "why are we not showing any of those bets on the
+   main page". Fair. The likelihood board is the one the measurements
+   support, it had just been moved to the top of the menu — and the
+   landing page still answered "what should I bet tonight" with only the
+   edge board, which is the weakest thing on the site.
+
+   A SHELF OF THE SAME CARDS, NOT A SECOND MODEL. Every row here comes
+   from `board_shelves`, the identical list the full page draws, capped
+   per shelf. Rebuilding a "top picks" list with its own filter is how
+   two pages end up disagreeing about the same player, which is the
+   failure `_likely_board`'s header warns about one level up. */
+
+//: Rows per shelf on the main page. Three is a phone screen's worth and
+//: leaves the full board a reason to exist.
+const LIKELY_TOP_N = 3;
+
+function renderLikelyTop() {
+  const host = document.getElementById("likely-top");
+  if (!host) return;
+  const shelves = (state.data.board_shelves || [])
+    .map((sh) => ({ ...sh, rows: (sh.rows || []).slice(0, LIKELY_TOP_N) }))
+    .filter((sh) => sh.rows.length);
+  if (!shelves.length) { host.innerHTML = ""; return; }
+  const total = (state.data.most_likely || []).length;
+  const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
+  host.innerHTML = `
+    <div class="section-title">Most likely to hit
+      <span class="sub">— our strongest read, ranked by probability not by price</span>
+    </div>
+    ${boardGuide("most_likely")}
+    <div class="likely-top">${shelves.map(likelyShelf).join("")}</div>
+    <div class="likely-top-more">
+      <button class="btn ghost" id="likely-see-all" type="button">
+        See the full board${more > 0 ? ` · ${more} more` : ""}</button>
+    </div>`;
+  const all = document.getElementById("likely-see-all");
+  if (all) all.addEventListener("click", () => switchView("likely", true));
+  revealChildren(host);
 }
 
 function renderLikely() {
@@ -9810,9 +9857,14 @@ const REC_ROOMS = [
    // Ethan's order, 2026-08-11, from his phone: "top bets, the
    // stadiums, then roi." The room places blocks in THIS order — the
    // list, not the DOM, is what a reader sees.
+   // `likely-top` sits directly under Tonight's picks and ABOVE the
+   // slider-filtered edge cards. Ethan, 2026-08-30: "thats bets the user
+   // is really looking for" — a normal bettor is shopping for what hits,
+   // not for where the price is wrong, and until now the landing page
+   // only ever offered them the second thing.
    ["probation-note", "talent-note", "top-picks", "parlay-mode",
     "games-head", "games-outer", "stats", "home-perf",
-    "best-bets", "empty-slate", "rec-controls", "cards"]],
+    "best-bets", "likely-top", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
