@@ -135,47 +135,79 @@ def test_an_empty_harvest_refuses_rather_than_reporting_zero():
     assert "odds_history" in " ".join(got)
 
 
-def test_the_price_summary_is_a_break_even_rate_not_an_average_of_odds():
-    """THE COLUMN THIS REPLACED WAS ARITHMETIC NONSENSE, and the live run
-    proved it: "+396" printed beside a 48% hit rate and an ROI of
-    -11.86%, three numbers that cannot all be true. Backing the price out
-    of the ROI gave -120. American odds are not a linear scale and a
-    handful of long losers had dragged a mean that described nothing.
+def test_the_claim_is_priced_bet_by_bet_not_compressed_to_one_rate():
+    """THE THIRD VERSION OF THIS COLUMN, and the first two were both
+    wrong on live data.
 
-    A flat-stake portfolio breaks even at n / sum(decimal odds). That is
-    exact, it is the number the hit rate has to beat, and one outlier
-    cannot move it far."""
+    The first averaged AMERICAN odds, which are not a linear scale: the
+    harvest printed "+396" beside a 48% hit rate and a -11.86% ROI.
+
+    The second was `n / sum(decimal)` — the uniform win rate a flat
+    portfolio breaks even at. Exact, and meaningless the moment prices
+    differ: nine bets at -140 beside one at +2000 "break even at 27.5%"
+    while the favourites each need 58.3% and the ticket needs 4.8%. It
+    printed "needs 15.6%" against a 48% hit rate and a losing ROI, the
+    same impossible triple in a subtler costume.
+
+    A per-bet expectation cannot be dragged that way, because nothing is
+    averaged across prices — each row is scored at its own."""
     rows = []
     for w in range(40):
-        slate = [{"season": 2025, "week": str(w + 1), "cal": 0.9 - i * 0.1,
+        rows += [{"season": 2025, "week": str(w + 1), "cal": 0.5,
                   "rank": i + 1, "player": f"P{i}",
-                  # One +2000 lottery ticket among four -110 favourites.
-                  "odds": 2000 if i == 4 else -110, "scored": 1 if i < 2 else 0}
-                 for i in range(5)]
-        rows += slate
-    got = tdbook.roi_lines(rows, depths=(5,))
+                  "odds": 2000 if i == 9 else -140,
+                  "scored": 1 if i < 5 else 0} for i in range(10)]
+    got = tdbook.roi_lines(rows, depths=(10,))
     cells = got[2].split()
-    need = float(cells[4].rstrip("%")) / 100.0
-    # Four at -110 (decimal 1.909) and one at +2000 (21.0) sum to 28.64,
-    # so the portfolio breaks even at 5/28.64 = 17.5%. An AVERAGE of the
-    # American values would have read about +378.
-    assert 0.16 < need < 0.19, need
-    assert "+378" not in got[2] and "396" not in got[2]
+    claimed = float(cells[4].rstrip("%")) / 100.0
+    # Nine legs at -140 claim 0.5*0.714 - 0.5 = -0.143 each; the +2000 leg
+    # claims 0.5*20 - 0.5 = +9.5. The mean is (9*-0.143 + 9.5)/10 = +0.821.
+    assert abs(claimed - 0.821) < 0.01, claimed
+    # And the retired scalar is gone from the output entirely.
+    assert "needs" not in got[1]
 
 
-def test_short_is_the_column_that_decides():
-    """Hit minus needs. Negative at every depth means the board does not
-    clear its own prices, however well it ranks."""
+def test_the_gap_is_realised_minus_claimed():
+    """One column, and the only one that decides. A board claiming +5%
+    and returning -5% is a ten-point gap however well it ranks."""
     rows = []
-    for w in range(30):
+    for w in range(40):
         rows += _slate(2025, str(w + 1),
-                       [(0.9, -200, 1), (0.8, -200, 1),
-                        (0.7, -200, 0), (0.6, -200, 0)])
-    got = "\n".join(tdbook.roi_lines(rows, depths=(4,)))
-    # 50% hit against -200, which needs 66.7%.
-    assert "50.0%" in got and "66.7%" in got
-    assert "-16.7%" in got, got
-    assert "rank the field perfectly and you still lose" in got
+                       [(0.5, 100, 1), (0.5, 100, 0)])
+    got = tdbook.roi_lines(rows, depths=(2,))
+    cells = got[2].split()
+    claimed = float(cells[4].rstrip("%")) / 100.0
+    actual = float(cells[5].rstrip("%")) / 100.0
+    gap = float(cells[6].rstrip("%")) / 100.0
+    assert abs(claimed) < 1e-9, claimed        # 50% at +100 claims nothing
+    assert abs(actual) < 1e-9, actual          # and returned nothing
+    assert abs(gap - (actual - claimed)) < 1e-9
+
+
+def test_a_board_the_price_already_knew_shows_the_gap():
+    """The failure mode this whole report exists to catch: the model is
+    right about who hits, the price is right too, and the vig is the
+    difference."""
+    rows = []
+    for w in range(50):
+        rows += _slate(2025, str(w + 1),
+                       [(0.60, -140, 1), (0.60, -140, 1),
+                        (0.60, -140, 0), (0.60, -140, 0)])
+    got = tdbook.roi_lines(rows, depths=(4,))
+    cells = got[2].split()
+    claimed = float(cells[4].rstrip("%")) / 100.0
+    actual = float(cells[5].rstrip("%")) / 100.0
+    # Claims +2.9% at 60%/-140; delivers -14.3% on a 50% realised rate.
+    assert claimed > 0 and actual < 0, (claimed, actual)
+
+
+def test_one_depth_does_not_pretend_to_correct_for_a_family():
+    got = "\n".join(tdbook.roi_lines(
+        [r for w in range(20) for r in _slate(2025, str(w + 1),
+                                              [(0.9, 100, 1), (0.8, 100, 0)])],
+        depths=(2,)))
+    assert "One depth asked" in got
+    assert "1 depths" not in got and "1 chances" not in got
 
 
 def test_the_deeper_the_board_the_more_bets_it_counts():

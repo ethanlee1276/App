@@ -193,7 +193,28 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
                 "no season is ingested"]
 
     def roi(sample, k):
-        staked = ret = hits = n = dec = 0.0
+        # WHAT THE BOARD CLAIMED IT WOULD RETURN, priced bet by bet at
+        # that bet's OWN odds — and the third summary this column has
+        # had, because the first two compressed a vector into a scalar
+        # and lost the plot doing it.
+        #
+        # The first averaged AMERICAN odds, which are not a linear
+        # scale: the live harvest printed "+396" beside a 48% hit rate
+        # and a -11.86% ROI, three numbers that cannot all be true.
+        #
+        # The second was `n / sum(decimal)` — the uniform win rate a flat
+        # portfolio breaks even at. Arithmetically exact, and meaningless
+        # the moment the prices differ: nine bets at -140 beside one at
+        # +2000 "break even at 27.5%" when the favourites each need 58.3%
+        # and the lottery ticket needs 4.8%. It printed "needs 15.6%"
+        # against a 48% hit rate and a losing ROI, which is the same
+        # impossible triple in a subtler costume.
+        #
+        # A per-bet expectation has no such problem. Each row claims
+        # `p*(d-1) - (1-p)` at its own price; the mean of those is the
+        # ROI the board says it should return, and the realised ROI beside
+        # it is the answer.
+        staked = ret = hits = n = claim = 0.0
         for g in sample:
             top = sorted(g, key=lambda r: -r["cal"])[:k]
             if len(top) < k:
@@ -202,34 +223,24 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
                 staked += 1.0
                 hits += r["scored"]
                 d = _decimal(r["odds"])
-                dec += d
+                p = float(r["cal"])
+                claim += p * (d - 1.0) - (1.0 - p)
                 ret += (d - 1.0) if r["scored"] else -1.0
                 n += 1
         if not staked:
             return None
-        # THE HIT RATE THESE PRICES DEMAND. For a flat stake the
-        # portfolio returns zero when the win rate is n / sum(decimal
-        # odds) — exact, and the only summary of a set of prices that
-        # means anything.
-        #
-        # THE COLUMN THIS REPLACED WAS ARITHMETIC NONSENSE. It averaged
-        # the AMERICAN odds, which are not a linear scale: on the live
-        # harvest it printed "+396" beside a 48% hit rate and an ROI of
-        # -11.86%, three numbers that cannot all be true. Backing the
-        # price out of the ROI gave -120. A handful of long losers had
-        # dragged a mean that never described anything.
-        return (ret / staked, hits / n, int(n), n / dec)
+        return (ret / staked, hits / n, int(n), claim / n)
 
     rng = random.Random(seed)
     out = [f"NFL likelihood board · ROI at the price on the screen "
            f"({len(groups)} slates)",
-           "  depth        bets     hit    needs    short     ROI"
+           "  depth        bets     hit   claimed    actual      gap"
            "    95% by slate"]
     for k in depths:
         got = roi(groups, k)
         if not got:
             continue
-        r_all, hit, n, need = got
+        r_all, hit, n, claimed = got
         boot = []
         for _ in range(ROI_RESAMPLES):
             draw = [groups[rng.randrange(len(groups))] for _ in groups]
@@ -247,21 +258,28 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
         chi = boot[int((1.0 - tail) * len(boot)) - 1]
         verdict = ("   <-- profitable" if clo > 0 else
                    "   <-- losing" if chi < 0 else "   inside the noise")
-        out.append(f"   top {k:<8d} {n:5d}  {hit:6.1%}  {need:6.1%}  "
-                   f"{hit - need:+6.1%}  {r_all:+7.2%}   "
+        out.append(f"   top {k:<8d} {n:5d}  {hit:6.1%}  {claimed:+7.2%}  "
+                   f"{r_all:+7.2%}  {r_all - claimed:+7.2%}   "
                    f"[{lo:+.1%},{hi:+.1%}]{verdict}")
     out.append("  Flat one unit a row at the LONGEST price quoted, ranked "
                "within each slate.")
-    out.append("  NEEDS is the win rate these exact prices break even at. "
-               "SHORT is the whole")
-    out.append("  question: rank the field perfectly and you still lose if "
-               "that column is negative.")
+    out.append("  CLAIMED is what the board says these rows return, priced "
+               "bet by bet at their")
+    out.append("  own odds. ACTUAL is what they did. GAP is the whole "
+               "question — a board can")
+    out.append("  rank the field perfectly and still lose if the price "
+               "already knew.")
     out.append("  An interval spanning zero is not a green light: it is the "
                "data declining to say.")
-    out.append(f"  The interval shown is 95%; the WORD beside it is judged "
-               f"at {ROI_FAMILY_ALPHA:.0%} split across")
-    out.append(f"  {len(depths)} depths, because asking the same board "
-               f"{len(depths)} times is {len(depths)} chances to be fooled.")
+    m = len(depths)
+    if m > 1:
+        out.append(f"  The interval shown is 95%; the WORD beside it is "
+                   f"judged at {ROI_FAMILY_ALPHA:.0%} split across")
+        out.append(f"  {m} depths, because asking the same board {m} times "
+                   f"is {m} chances to be fooled.")
+    else:
+        out.append("  One depth asked, so the interval and the verdict are "
+                   "the same 95%.")
     return out
 
 
