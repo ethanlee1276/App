@@ -174,7 +174,7 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
                 "no season is ingested"]
 
     def roi(sample, k):
-        staked = ret = hits = n = 0.0
+        staked = ret = hits = n = dec = 0.0
         for g in sample:
             top = sorted(g, key=lambda r: -r["cal"])[:k]
             if len(top) < k:
@@ -182,19 +182,35 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
             for r in top:
                 staked += 1.0
                 hits += r["scored"]
-                ret += (_decimal(r["odds"]) - 1.0) if r["scored"] else -1.0
+                d = _decimal(r["odds"])
+                dec += d
+                ret += (d - 1.0) if r["scored"] else -1.0
                 n += 1
-        return (ret / staked, hits / n, int(n)) if staked else None
+        if not staked:
+            return None
+        # THE HIT RATE THESE PRICES DEMAND. For a flat stake the
+        # portfolio returns zero when the win rate is n / sum(decimal
+        # odds) — exact, and the only summary of a set of prices that
+        # means anything.
+        #
+        # THE COLUMN THIS REPLACED WAS ARITHMETIC NONSENSE. It averaged
+        # the AMERICAN odds, which are not a linear scale: on the live
+        # harvest it printed "+396" beside a 48% hit rate and an ROI of
+        # -11.86%, three numbers that cannot all be true. Backing the
+        # price out of the ROI gave -120. A handful of long losers had
+        # dragged a mean that never described anything.
+        return (ret / staked, hits / n, int(n), n / dec)
 
     rng = random.Random(seed)
     out = [f"NFL likelihood board · ROI at the price on the screen "
            f"({len(groups)} slates)",
-           "  depth        bets    hit    avg price      ROI    95% by slate"]
+           "  depth        bets     hit    needs    short     ROI"
+           "    95% by slate"]
     for k in depths:
         got = roi(groups, k)
         if not got:
             continue
-        r_all, hit, n = got
+        r_all, hit, n, need = got
         boot = []
         for _ in range(ROI_RESAMPLES):
             draw = [groups[rng.randrange(len(groups))] for _ in groups]
@@ -204,15 +220,17 @@ def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
         boot.sort()
         lo = boot[int(0.025 * len(boot))]
         hi = boot[int(0.975 * len(boot)) - 1]
-        avg = sum(r["odds"] for g in groups
-                  for r in sorted(g, key=lambda x: -x["cal"])[:k]
-                  if len(g) >= k) / max(n, 1)
         verdict = ("   <-- profitable" if lo > 0 else
                    "   <-- losing" if hi < 0 else "   inside the noise")
-        out.append(f"   top {k:<8d} {n:5d}  {hit:5.1%}   {avg:+7.0f}   "
-                   f"{r_all:+7.2%}   [{lo:+.1%},{hi:+.1%}]{verdict}")
+        out.append(f"   top {k:<8d} {n:5d}  {hit:6.1%}  {need:6.1%}  "
+                   f"{hit - need:+6.1%}  {r_all:+7.2%}   "
+                   f"[{lo:+.1%},{hi:+.1%}]{verdict}")
     out.append("  Flat one unit a row at the LONGEST price quoted, ranked "
                "within each slate.")
+    out.append("  NEEDS is the win rate these exact prices break even at. "
+               "SHORT is the whole")
+    out.append("  question: rank the field perfectly and you still lose if "
+               "that column is negative.")
     out.append("  An interval spanning zero is not a green light: it is the "
                "data declining to say.")
     return out
