@@ -934,7 +934,18 @@ def main() -> None:
             # that publishes an empty one would read as broken rather
             # than as narrow.
             from engine.likely import build as _likely
+            from engine import boards as _boards
             out["most_likely"] = _likely([], rows, watch, sport="cfb")
+            # THE SAME FURNITURE THE NFL BOARD CARRIES, and college had
+            # none of it. `boardGuide` and the shelves both read the
+            # payload, so a sport that omits them draws a likelihood
+            # board with no trust line — no "picked on how likely it is",
+            # no "recorded, not staked" — which is precisely the
+            # confusion engine/boards was written to end. The college
+            # board prices touchdowns and nothing else, so `shelves`
+            # returns the one shelf with rows on it and drops the rest.
+            out["board_guide"] = _boards.guide()
+            out["board_shelves"] = _boards.shelves("cfb", out["most_likely"])
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every

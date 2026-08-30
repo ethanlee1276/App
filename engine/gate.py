@@ -80,6 +80,18 @@ PAID_KEYS = (
     # think will actually hit. Ranked by likelihood rather than edge, and
     # every bit as much the thing somebody is paying for.
     "most_likely",
+    # THE SAME BOARD UNDER A SECOND NAME, and it leaked. `board_shelves`
+    # groups the likelihood rows by market for the page's layout, which
+    # means it carries a COPY of every row `most_likely` holds — player,
+    # market, price and probability. Stripping one and not the other
+    # emptied the board a reader sees and handed the identical rows back
+    # in the next key down.
+    #
+    # This is the third time this file has been taught the same lesson
+    # (predmarkets, then UFC's `picks`/`pass_list`), and the comment
+    # below already names it: key-stripping only protects boards whose
+    # keys were anticipated. A new view of a paid board is a new key.
+    "board_shelves",
     "market_scan",
     "correlation",
     "parlays",

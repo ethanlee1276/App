@@ -156,12 +156,17 @@ FOOTBALL_SHELVES = (
      "as such rather than mixed in silently."),
 )
 
-#: Baseball has one market on this board today. It gets a shelf anyway so
-#: the page has one code path, not two.
-BASEBALL_SHELVES = (
-    ("hitting", "Hitters", (), "Tonight's most likely hitter props."),
-)
-
+#: ONLY FOOTBALL HAS A LIKELIHOOD BOARD, so only football has shelves.
+#: An earlier cut of this carried a BASEBALL_SHELVES stub — one "Hitters"
+#: shelf with an empty market list — written on the assumption that
+#: baseball would want the same page. Nothing in engine/mlb or
+#: mlb_build.py produces a `most_likely` key at all, so that spec
+#: described a board that does not exist, which is the exact failure this
+#: module was written to stop: a claim in code that nothing enforces.
+#:
+#: A sport with no board gets no shelves and the page falls back to its
+#: flat list, which is also what it does for a payload built before
+#: shelves existed.
 FOOTBALL = ("nfl", "cfb")
 
 
@@ -172,13 +177,17 @@ def shelves(sport: str, rows=None) -> list[dict]:
     with its rows attached and empty shelves dropped; omit it and this is
     just the shape, which is what the tests read.
 
+    A sport with no likelihood board answers `[]`, and the page falls
+    back to its flat list rather than drawing an empty frame.
+
     A market with no shelf lands on a trailing "Other" rather than
     vanishing. A board that silently drops rows because someone added a
     market and not a shelf is precisely the failure this file exists to
     prevent, and it would look like an empty page rather than an error.
     """
-    spec = (FOOTBALL_SHELVES if (sport or "").lower() in FOOTBALL
-            else BASEBALL_SHELVES)
+    if (sport or "").lower() not in FOOTBALL:
+        return []
+    spec = FOOTBALL_SHELVES
     out = []
     for key, title, markets, blurb in spec:
         shelf = {"key": key, "title": title, "markets": list(markets),
