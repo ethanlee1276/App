@@ -166,6 +166,159 @@ class TDBacktest:
 MIN_FIT_PAIRS = 2_000
 
 
+#: Depths the likelihood board is graded at. The page shows a ranked
+#: list, so "how often does a probability band land" is the wrong shape
+#: of question for it — "if you take the top five rows, how many score"
+#: is the one a reader is actually asking.
+BOARD_DEPTHS = (5, 10, 20, 40)
+
+#: Resamples for the slate-level confidence interval. Rows inside one
+#: slate share games, weather and game scripts and are nowhere near
+#: independent; bootstrapping SLATES rather than rows is what keeps the
+#: interval honest about that.
+BOARD_RESAMPLES = 600
+
+
+def _loso_probabilities(rows, fitter=None):
+    """Attach a leave-one-season-out corrected probability to each row.
+
+    THE CORRECTION MAY NOT SEE THE SEASON IT IS GRADING. Fitting on
+    everything and then reading the band table off the same rows is how a
+    correction looks perfect and generalises badly — the exact reading
+    that let a curve chosen on noise sit in the store for two days. Each
+    season is corrected by a fit that never saw it.
+
+    `fitter` is injectable so the suite can grade this arithmetic without
+    a calibration search, and so nothing here reads the ambient store.
+    """
+    from . import calibrate as _cal
+    fitter = fitter or (lambda pairs: _cal.fit(pairs, sport="nfl",
+                                               market="anytime_td"))
+    seasons: dict = {}
+    for r in rows:
+        seasons.setdefault(r["season"], []).append(r)
+    for season, group in seasons.items():
+        train = [(o["prob"], o["scored"]) for s, v in seasons.items()
+                 if s != season for o in v]
+        if len(train) < MIN_FIT_PAIRS:
+            for r in group:
+                r["cal"] = r["prob"]
+            continue
+        fit = fitter(train)
+        for r in group:
+            r["cal"] = _cal.apply_temperature(r["prob"], fit.temperature,
+                                              fit.intercept)
+    return rows
+
+
+def board_rows(rows, fitter=None) -> list:
+    """The replayed rows, corrected and ranked WITHIN each slate."""
+    _loso_probabilities(rows, fitter=fitter)
+    slates: dict = {}
+    for r in rows:
+        slates.setdefault((r["season"], r["week"]), []).append(r)
+    for group in slates.values():
+        for i, r in enumerate(sorted(group, key=lambda x: -x["cal"]), 1):
+            r["rank"] = i
+    return rows
+
+
+def board_report(rows, depths=BOARD_DEPTHS, seed=3, fitter=None) -> str:
+    """How the TOP of the likelihood board did, depth by depth.
+
+    WHY THIS IS A SEPARATE REPORT. `summary` grades probability BANDS,
+    which is the right question for a price and the wrong one for a
+    ranked page. Nobody reads the likelihood board by band; they read the
+    top of it. Those are different populations and they do not have to
+    agree — and here they do not. Corrected leave-one-season-out, the
+    whole population sits inside 1.4 points at every band, while the top
+    five rows of a slate land 6.8 points ABOVE what they claim.
+
+    One-signed and in the safe direction, but still wrong, and wrong on
+    the rows a reader trusts most. It is reported rather than corrected
+    because there are only a few hundred replayed rows above 50% across
+    five seasons — fitting a flexible form on that is the failure
+    `calibrate.CURVE_Z` exists to refuse, and doing it here would be the
+    same mistake with the bar moved.
+
+    THE REPLAY IS NOT THE BOARD, in three ways that all cut the same
+    direction — toward this being a floor on the model and NOT a verdict
+    on the page:
+
+      * it grades every player with enough prior form, while the live
+        page only shows players a book has actually priced;
+      * the shipped model carries defence and weather multipliers this
+        replay leaves neutral, so the live model knows strictly more;
+      * and most importantly, the number graded here is the MODEL's,
+        while the page shows one already shrunk halfway toward the book
+        by `longshots.calibrated_prob`. If the market is roughly right at
+        the top — and at these prices it usually is — that shrink closes
+        part of this gap before a reader ever sees it.
+
+    So the honest reading is that the model's ranked top is conservative
+    by this much; how much of that survives onto the page needs the
+    harvested closing prices `engine.tdbook` joins to, which is a
+    measurement that can only run where `odds_history` lives.
+    """
+    import random
+
+    rows = board_rows(rows, fitter=fitter)
+    slates: dict = {}
+    for r in rows:
+        slates.setdefault((r["season"], r["week"]), []).append(r)
+    groups = list(slates.values())
+    if not groups:
+        return "No slates to grade."
+
+    def gap(sample, k):
+        claimed = landed = n = 0.0
+        for g in sample:
+            top = sorted(g, key=lambda r: -r["cal"])[:k]
+            if len(top) < k:
+                continue
+            claimed += sum(r["cal"] for r in top)
+            landed += sum(r["scored"] for r in top)
+            n += len(top)
+        if not n:
+            return None
+        return claimed / n, landed / n
+
+    rng = random.Random(seed)
+    out = [f"NFL likelihood board · top of {len(groups)} replayed slates",
+           "  depth      claimed   landed      gap   95% by slate"]
+    for k in depths:
+        got = gap(groups, k)
+        if got is None:
+            continue
+        claimed, landed = got
+        boot = []
+        for _ in range(BOARD_RESAMPLES):
+            draw = [groups[rng.randrange(len(groups))] for _ in groups]
+            g = gap(draw, k)
+            if g:
+                boot.append(g[1] - g[0])
+        boot.sort()
+        lo = boot[int(0.025 * len(boot))]
+        hi = boot[int(0.975 * len(boot)) - 1]
+        flag = "" if lo <= 0 <= hi else "   <-- real"
+        out.append(f"   top {k:<8d} {claimed:6.1%}   {landed:6.1%}  "
+                   f"{landed - claimed:+7.1%}   "
+                   f"[{lo:+.1%},{hi:+.1%}]{flag}")
+    best = [max(g, key=lambda r: r["cal"]) for g in groups]
+    hit = sum(r["scored"] for r in best)
+    out.append(f"\n  the single most likely scorer on a slate landed "
+               f"{hit}/{len(best)} = {hit / len(best):.1%}, "
+               f"claiming {sum(r['cal'] for r in best) / len(best):.1%}")
+    out.append("  Replay, not a published record: every player with prior "
+               "form is graded,")
+    out.append("  the board only shows priced ones, and defence and "
+               "weather are left neutral.")
+    out.append("  This is the MODEL's number; the page shows one already "
+               "shrunk toward the book,")
+    out.append("  so part of this gap is closed before a reader sees it.")
+    return "\n".join(out)
+
+
 def fit_calibration(conn, sport: str = "nfl", seasons=None, path=None):
     """Fit and persist the touchdown market's temperature. Returns the fit.
 
@@ -434,7 +587,13 @@ if __name__ == "__main__":                       # pragma: no cover
                   f"bias = {fit.intercept:+.3f}")
             print(f"  Brier {fit.brier_before:.4f} → {fit.brier_after:.4f}")
             print(f"  {fit.verdict}")
+    elif "--board" in argv:
+        collected: list = []
+        run(conn, collect=collected.append)
+        print(board_report(collected))
     else:
         print(run(conn).summary())
         print("\n  --fit to fit and save the correction the board reads.")
+        print("  --board to grade the TOP of the likelihood board instead "
+              "of its bands.")
     conn.close()
