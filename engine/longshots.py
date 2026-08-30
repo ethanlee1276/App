@@ -94,7 +94,10 @@ class LongShot:
     book: str
     odds: int
     model_prob: float           # our probability of the event
-    implied_prob: float         # book's de-vigged probability
+    #: THE MARKET CONSENSUS, de-vigged off one book's complete board —
+    #: an estimate of the true probability, which does NOT move with
+    #: where you happen to bet.
+    implied_prob: float
     edge: float
     ev_per_unit: float
     confidence: float           # 0..10
@@ -109,6 +112,15 @@ class LongShot:
     #: preflight needs to count how many of a live board's games got a
     #: MEASURED vig and how many fell back, and parsing a sentence to
     #: find out is how a check quietly stops checking.
+    #: WHAT THIS BOOK IS CHARGING, raw, vig included. A different number
+    #: from `implied_prob`, which is the market consensus off another
+    #: book's board — and the gap between the two is the whole value of
+    #: having shopped. Published because a card showing only the
+    #: consensus beside a price can read as a de-vig that made the price
+    #: SHORTER, which is impossible: they simply come from two books and
+    #: nothing said so. Defaulted, so a caller that predates it (or a
+    #: test fixture) still constructs.
+    book_prob: float = 0.0
     vig: float = 0.0
     vig_source: str = ""
     #: Players on the board the vig was measured off. Zero when it was
@@ -134,6 +146,7 @@ class LongShot:
             "book": self.book, "odds": self.odds,
             "model_prob": round(self.model_prob, 4),
             "implied_prob": round(self.implied_prob, 4),
+            "book_prob": round(self.book_prob, 4),
             "edge": round(self.edge, 4), "ev_per_unit": round(self.ev_per_unit, 4),
             "confidence": self.confidence, "stake_units": self.stake_units,
             "grade": self.grade,
@@ -456,12 +469,24 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
     confidence = _confidence(edge, opportunities, opp_target, data_quality)
     vig, vig_source, vig_listed = vig_of(hold_override, sport, market,
                                          under_odds if exact else None)
+    book_prob = american_to_prob(odds)
+    # A price LONGER than the consensus says it should be is a find, and
+    # it is the reason to shop at all. Say it, with both numbers, rather
+    # than leaving a reader to notice that two probabilities on the card
+    # disagree and assume one of them is broken.
+    if not exact and implied - book_prob >= 0.02:
+        reasons = reasons + [
+            f"{book} is longer than the market: {book_prob:.0%} at this "
+            f"price against a {implied:.0%} consensus off the deepest "
+            f"board in the game — {implied - book_prob:.0%} of that edge "
+            f"is the price, not the projection"]
     ev = expected_value(model_prob, odds)
     grade = _grade(confidence, edge, ev) if credible else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
-        model_prob=model_prob, implied_prob=implied, edge=edge,
+        model_prob=model_prob, implied_prob=implied,
+        book_prob=round(book_prob, 4), edge=edge,
         ev_per_unit=ev, vig=round(vig, 4), vig_source=vig_source,
         vig_listed=vig_listed,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,

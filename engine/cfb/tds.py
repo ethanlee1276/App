@@ -629,7 +629,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     already stamped); ``quotes_by_game`` maps the game's index in that
     list to ``{norm_name: [quote dicts]}`` from parse_event_scorers.
     """
-    from ..odds import american_to_decimal
+    from ..odds import american_to_decimal, american_to_prob
     usage_season, usage = usage_table(conn, season)
     # Where each player is filed THIS season, so a transfer can be found
     # under the school his production is filed at. Empty in week one and
@@ -793,6 +793,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "odds": odds,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),
+                        "book_prob": round(american_to_prob(odds), 4),
                         "vig": round(wvig, 4), "vig_source": wsrc,
                         "vig_listed": wlisted,
                         "ev_per_unit": round(wev, 4),

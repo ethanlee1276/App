@@ -30,7 +30,7 @@ from engine.devig import (
     K_MIN, K_MAX, PROPORTIONAL, POWER, DEFAULT_METHOD, Devig, as_devig,
     expected_distinct_scorers, expected_tds_affine, hold_multiplier,
     power_exponent, fair_probability, american, game_prices, board_hold,
-    board_devig,
+    board_devig, FairQuote,
 )
 from engine.longshots import build_pick, calibrated_prob, ONE_SIDED_HOLD
 from engine.odds import american_to_prob
@@ -511,6 +511,67 @@ def test_the_grader_matches_the_game_lines_grader_s_doctrine():
     # Omitted EV keeps the old behaviour, so no caller is silently changed
     # by the new parameter — only the one that passes it.
     assert _grade(9.0, 0.06) == "Strong Play"
+
+
+# --- two books, two numbers ----------------------------------------------
+def test_the_card_publishes_what_the_book_charges_and_what_the_market_says():
+    """They are different numbers from different books and the card used
+    to show only one. `implied_prob` is a consensus fair de-vigged off
+    the deepest board in the game — an estimate of the true probability,
+    which correctly does NOT move with where you bet. `book_prob` is what
+    the quote in front of you is charging, vig included.
+
+    On the live college board that gap read as broken: -185 shown beside
+    a 0.7115 "implied", which looks like a de-vig that made the price
+    shorter. It was two books, 70-90 cents apart, and nothing said so."""
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="FanDuel", odds=-185, model_prob=0.70, under_odds=None,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb",
+        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31))
+    d = pick.to_dict()
+    assert abs(d["book_prob"] - american_to_prob(-185)) < 1e-4
+    assert d["implied_prob"] == 0.7115
+    assert d["book_prob"] < d["implied_prob"]
+
+
+def test_a_price_longer_than_the_consensus_says_so_in_words():
+    """That gap is the shopping gain, and a reader should not have to
+    infer it from two probabilities disagreeing."""
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="FanDuel", odds=-185, model_prob=0.70, under_odds=None,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb",
+        hold_override=FairQuote(0.7115, 0.119, "power", "hard rock", 31))
+    said = [r for r in pick.reasons if "longer than the market" in r]
+    assert said and "FanDuel" in said[0]
+    assert "the price, not the projection" in said[0]
+
+
+def test_a_price_in_line_with_the_consensus_says_nothing():
+    """A one-point gap is not a find, and a card full of them is noise."""
+    raw = american_to_prob(-185)
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="dk", odds=-185, model_prob=0.70, under_odds=None,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb",
+        hold_override=FairQuote(raw - 0.005, 0.119, "power", "dk", 31))
+    assert not [r for r in pick.reasons if "longer than the market" in r]
+
+
+def test_a_two_way_price_makes_no_shopping_claim():
+    """With both sides quoted the de-vig is exact and comes from this
+    same book, so there is no second book to be longer than."""
+    pick = build_pick(
+        player="A", team="A", opponent="B", market=ANYTIME_TD, label="ATD",
+        book="dk", odds=-185, model_prob=0.70, under_odds=140,
+        opportunities=12.0, opp_target=12.0, primary_reason="r", reasons=[],
+        caveats=[], sport="cfb")
+    assert not [r for r in pick.reasons if "longer than the market" in r]
+    assert pick.book_prob > 0
 
 
 # --- both lists, one book -------------------------------------------------

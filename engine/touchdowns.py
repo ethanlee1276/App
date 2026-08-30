@@ -428,7 +428,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
     a fair or losing price reads as exactly that — insight, never a
     journaled bet.
     """
-    from .odds import american_to_decimal
+    from .odds import american_to_decimal, american_to_prob
     from .longshots import calibrated_prob
     rows: list[dict] = []
     for c in candidates:
@@ -465,6 +465,7 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "odds": odds,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
+            "book_prob": round(american_to_prob(odds), 4),
             "vig": round(vig, 4), "vig_source": vig_source,
             "vig_listed": vig_listed,
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),
