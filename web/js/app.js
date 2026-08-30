@@ -313,11 +313,11 @@ let _railDeskCache = null, _railDeskAt = 0;
 let _feedCache = null, _feedAt = 0;
 
 const HIDDEN_VIEWS = {
-  nba: ["longshots", "weather"],
+  nba: ["longshots", "likely", "weather"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "futures", "weather"],
+  wnba: ["longshots", "likely", "futures", "weather"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -470,8 +470,12 @@ function applyNavLeagues() {
 const HIDDEN_WHY = {
   nba: { longshots: "no long-shot market exists in basketball — there is "
                     + "nothing like a home run or an anytime touchdown",
+         likely: "the likelihood board ranks scorers and yardage overs, "
+                 + "and basketball prices neither",
          weather: "played indoors" },
   wnba: { longshots: "no long-shot market exists in basketball",
+          likely: "the likelihood board ranks scorers and yardage overs, "
+                  + "and basketball prices neither",
           futures: "no outrights market is published for the league",
           weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "
@@ -1756,6 +1760,7 @@ function renderAll() {
   renderEdgeBoard();
   renderScanner();
   renderLongShots();
+  renderLikely();
   renderParlays();
   renderTrending();
   renderPlayers();
@@ -4938,6 +4943,102 @@ function cardHTML(r) {
 /* ============================================================
    Long Shots — NFL anytime TDs / MLB home runs
    ============================================================ */
+/* ============================================================
+   Most Likely — the board the measurements actually support
+   ============================================================
+   Ethan, 2026-08-30: "we need to focus more on using the data to figure
+   out who will score each game, not who has the best edge... a separate
+   page which will be the main page for bets, that will show who we
+   genuinely think will score or hit the over."
+
+   The numbers agree, and they are not close. The model ranks outcomes
+   and prices them badly, and those are separate abilities:
+
+     who scores a touchdown    AUC 0.721
+     who clears their line     0.76 rushing, 0.77 receptions,
+                               0.73 receiving, 0.69 passing
+     where the market is wrong AUC 0.468 — noise
+
+   Long Shots is built on the last one. This page is built on the first
+   two, which is why it is the main board and that one is the specialist.
+
+   A row can appear here WITHOUT being bettable: rushing yards ranks at
+   0.76 while its calibration is shut for betting, because ordering a
+   list and pricing against a book are different tests. The badge says
+   which, rather than leaving a reader to infer it. */
+function likelyCard(r) {
+  const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
+  const spark = likelySpark(r);
+  const why = (r.reasons || []).slice(0, 5).map((x) => reasonLI(x)).join("");
+  const ev = Number(r.ev_per_unit || 0);
+  // THE PRICE IS SHOWN AND NEVER RANKED ON. Sorting or grading by it here
+  // would quietly rebuild the edge board under a different name, which is
+  // the exact thing this page exists to stop doing.
+  const evTxt = r.ev_per_unit == null ? "" :
+    `<span class="mini" style="color:${ev > 0 ? "var(--good)" : "var(--text-mute)"}">
+       ${ev > 0 ? "+" : ""}${(ev * 100).toFixed(0)}% EV at this price</span>`;
+  const bet = r.bettable ? "" :
+    `<div class="warning">${icon("warn")} We can rank this market but not
+     price it — its calibration is shut for betting, so treat this as a
+     read on who hits, not as a card.</div>`;
+  const label = r.line == null ? escapeHtml(r.market_label)
+    : `${escapeHtml(r.side || "over")} ${r.line} ${escapeHtml(r.market_label)}`;
+  return `<article class="card longshot">
+    <div class="card-head">
+      <div class="card-id">${playerAvatar(r.player, r.team,
+          { map: nflMap(), headshot: r.headshot })}
+        <div>
+          <div class="player">${escapeHtml(r.player)}
+            <span class="ml-odds">${american(r.odds)}</span></div>
+          <div class="subtitle">${teamName(r.team)} vs ${teamName(r.opponent)}${
+            whenLabel(r.game_date, r.kickoff)
+              ? ` · ${escapeHtml(whenLabel(r.game_date, r.kickoff))}` : ""}</div>
+          <div class="pick">${label}
+            <span class="book">· ${escapeHtml(r.book)}</span></div>
+        </div>
+      </div>
+      <span class="grade" style="background:var(--good);color:#08130c">
+        ${pct(r.model_prob)}</span>
+    </div>
+    <div class="metrics">
+      <div class="metric hero"><div class="k">Model</div>
+        <div class="v">${pct(r.model_prob)}</div></div>
+      <div class="metric"><div class="k">Book implied</div>
+        <div class="v">${r.implied_prob == null ? "—" : pct(r.implied_prob)}</div></div>
+      ${r.projection == null ? "" : `<div class="metric"><div class="k">Projection</div>
+        <div class="v">${Number(r.projection).toFixed(1)}</div></div>`}
+    </div>
+    ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
+    ${why ? `<ul class="reasons">${why}</ul>` : ""}
+    ${bet}${evTxt}
+  </article>`;
+}
+
+function renderLikely() {
+  const host = document.getElementById("likely");
+  const note = document.getElementById("likely-note");
+  if (!host || !note) return;
+  const rows = state.data.most_likely || [];
+  if (!rows.length) {
+    host.innerHTML = "";
+    note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
+      <div class="es-title">Nothing to rank yet</div>
+      <div class="es-sub">This board needs priced player props on the slate.
+      It fills in as the books post their menus.</div></div>`;
+    return;
+  }
+  const rankOnly = rows.filter((r) => !r.bettable).length;
+  note.innerHTML = `<div class="ls-note">Ranked by <b>how likely we think it is</b>,
+    not by how good the price is — the opposite of Long Shots, and on purpose.
+    Measured over five seasons the model sorts who scores at 0.72 AUC and who
+    clears their line at 0.69–0.77, while the edge it claims against the market
+    tests as noise. The price is shown on every row and is never what ordered
+    it.${rankOnly ? ` ${rankOnly} row(s) sit in markets we can rank but not
+    price — they carry a note saying so.` : ""}</div>`;
+  host.innerHTML = rows.map(likelyCard).join("");
+  revealChildren(host);
+}
+
 function renderLongShots() {
   const mlb = state.sport === "mlb";
   const picks = state.data.long_shots || [];
@@ -5315,14 +5416,26 @@ function longshotEmptyReason(mlb) {
          ` picks that beat the book’s price inside a sane odds range (${range}).`;
 }
 
+/* The ONE call site for a player's own game log as bars. Asserted single
+   by tests/test_gamelog_bars.py, for a reason worth keeping: a second
+   copy drifts, and a chart call that can never render reads as covered
+   when it is not. Both likelihood boards draw through here. */
+function likelySpark(r, opts) {
+  const vals = r.recent_values || [];
+  if (vals.length <= 2) return "";
+  const o = opts || {};
+  return gamelogBars(r.recent_values, {
+    line: o.line != null ? o.line : (r.line == null ? 0.5 : r.line),
+    stroke: teamPrimary(r.team),
+    w: o.w || 96, h: o.h || 30 });
+}
+
 function watchlistHTML(watch, mlb) {
   if (!watch || !watch.length) return "";
   const rows = watch.map((r, i) => {
     const ev = (r.ev_per_unit * 100).toFixed(0);
     const evColor = r.ev_per_unit > 0 ? "var(--good)" : "var(--text-mute)";
-    const spark = (r.recent_values || []).length > 2
-      ? gamelogBars(r.recent_values, { line: 0.5, stroke: teamPrimary(r.team), w: 64, h: 22 })
-      : "";
+    const spark = likelySpark(r, { line: 0.5, w: 64, h: 22 });
     // THE WHOLE CHAIN, not one sentence. This list ranks who is most
     // likely to score, which is the thing the model is measurably good
     // at (AUC 0.721 over 22,099 graded NFL player-weeks, 0.675 over
@@ -24694,7 +24807,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -24874,6 +24987,12 @@ function _switchViewNow(name, push, dir) {
     _landScroll(name, leaving);
     return;
   }
+  // THE MAIN BOARD REDRAWS ON ENTRY, like every other view that is not
+  // in `SHARED`. The board-wide pass paints it too, but a deep link or a
+  // tab switch between refreshes lands here first — and a routable view
+  // that nothing draws is the exact hole tests/test_preservation.py
+  // exists to catch.
+  if (name === "likely") renderLikely();
   if (name === "tonight") renderTonight();
   if (name === "rosters") renderRosters();
   if (name === "injuries") renderInjuries();

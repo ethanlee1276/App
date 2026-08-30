@@ -495,7 +495,7 @@ def main() -> None:
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "date": args.date, "sport": "cfb", "generated_from": "live-cfb",
         "games": [], "recommendations": [], "game_bets": [],
-        "long_shots": [], "longshot_watch": [],
+        "long_shots": [], "longshot_watch": [], "most_likely": [],
         "market_scan": {"stale": [], "arbs": [], "middles": [], "low_holds": [],
                         "longshots": []},
         "counts": {"props_analyzed": 0, "recommended": 0},
@@ -865,6 +865,14 @@ def main() -> None:
             out["long_shots"] = rows
             # The most-likely-scorers list — shown, never journaled.
             out["longshot_watch"] = watch
+            # THE MAIN BOARD, ranked by likelihood rather than edge. The
+            # college board prices touchdowns and nothing else, so this
+            # is that one market ordered honestly — but it belongs on the
+            # same page as the NFL's for the same reason, and a sport
+            # that publishes an empty one would read as broken rather
+            # than as narrow.
+            from engine.likely import build as _likely
+            out["most_likely"] = _likely([], rows, watch, sport="cfb")
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
             # game qualified for a pull, the pull returned nothing, every

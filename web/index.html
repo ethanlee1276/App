@@ -371,6 +371,9 @@
         <button class="nav-btn sb-item" data-view="scanner" data-hint="stale &amp; arb lines across books">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h5M4 4v5M20 4h-5M20 4v5M4 20h5M4 20v-5M20 20h-5M20 20v-5M7 12h10"/></svg>
           Line Shopping</button>
+        <button class="nav-btn sb-item" data-view="likely" id="likely-tab" data-hint="who we think actually hits">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10z"/></svg>
+          Most Likely</button>
         <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="home-run darts">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
           Long Shots</button>
@@ -1011,6 +1014,14 @@
     </section>
 
     <!-- Long Shots -->
+    <section class="view" id="view-likely">
+      <div class="section-title" id="likely-title">Most Likely to Hit
+        <span class="sub" id="likely-sub">— ranked by how likely it is, not by how good the price is</span>
+      </div>
+      <div class="longshot-note" id="likely-note"></div>
+      <div class="cards" id="likely"></div>
+    </section>
+
     <section class="view" id="view-longshots">
       <div class="section-title" id="longshots-title">Long Shots
         <span class="sub" id="longshots-sub">— anytime touchdowns, priced on opportunity not hype</span>

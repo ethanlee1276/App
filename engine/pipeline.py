@@ -398,6 +398,19 @@ def _long_shots(slate, usage: dict | None = None,
     return picks, watch
 
 
+def _likely_board(results: list, td_picks: list, td_watch: list) -> list:
+    """The likelihood board — see `engine.likely` for why it exists."""
+    from .likely import build
+    try:
+        return build(results, td_picks, td_watch, sport="nfl")
+    except Exception:                                         # noqa: BLE001
+        # A second board must never cost the first one. This is an
+        # additional view of rows that are already published; if it
+        # cannot be assembled the page renders empty rather than the
+        # slate failing to build at all.
+        return []
+
+
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     started = game_has_started(g)
     # No Leans (docs §10): a lean is a bet that failed the filter published
@@ -691,6 +704,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "game_bets": game_bets,
         "long_shots": ls,
         "longshot_watch": ls_watch,
+        # THE OTHER BOARD, and the one the measurements actually support.
+        # `long_shots` ranks by edge, which the model is demonstrably bad
+        # at (claimed-edge AUC 0.468 on the site's own settle pass);
+        # `most_likely` ranks by probability, which it is demonstrably
+        # good at (0.721 for scorers, 0.69-0.77 for clearing a line).
+        # Built from the SAME evaluated rows, so the two pages can never
+        # disagree about the same player.
+        "most_likely": _likely_board(results, ls, ls_watch),
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,

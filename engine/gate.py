@@ -76,6 +76,10 @@ PAID_KEYS = (
     "game_bets",
     "long_shots",
     "longshot_watch",
+    # THE MAIN BOARD, which is the product under its own name — who we
+    # think will actually hit. Ranked by likelihood rather than edge, and
+    # every bit as much the thing somebody is paying for.
+    "most_likely",
     "market_scan",
     "correlation",
     "parlays",
