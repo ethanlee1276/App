@@ -313,11 +313,15 @@ let _railDeskCache = null, _railDeskAt = 0;
 let _feedCache = null, _feedAt = 0;
 
 const HIDDEN_VIEWS = {
-  nba: ["longshots", "likely", "weather"],
+  // "likely" OPENED for both hoops leagues 2026-08-31: nba_build
+  // publishes most_likely now, gated per market by the rank fitter —
+  // the tab shows an honest "nothing measured yet" until the box that
+  // holds the logs fits one, which beats a page that cannot exist.
+  nba: ["longshots", "weather"],
   // The WNBA has no futures board: engine/futures.py has a shape for it but
   // futures_build.py does not run it, because there is no outrights key for
   // the league and its season is nearly over by the time this ships.
-  wnba: ["longshots", "likely", "futures", "weather"],
+  wnba: ["longshots", "futures", "weather"],
   // §9.1 caps UFC at two legs in ONE fight, and every construction §9.3
   // permits pairs a winner with a method, distance or round-group market.
   // We price fight winners and nothing else, so there is no pair to screen
@@ -468,14 +472,13 @@ function applyNavLeagues() {
  * would have to be vague enough to be useless. These mirror the comments
  * already sitting on HIDDEN_VIEWS above. */
 const HIDDEN_WHY = {
+  // The "likely" reasons LEFT both hoops entries 2026-08-31 — the claim
+  // "basketball prices neither" went stale when nba_build started
+  // publishing most_likely, gated per market by engine.rankfit.
   nba: { longshots: "no long-shot market exists in basketball — there is "
                     + "nothing like a home run or an anytime touchdown",
-         likely: "the likelihood board ranks scorers and yardage overs, "
-                 + "and basketball prices neither",
          weather: "played indoors" },
   wnba: { longshots: "no long-shot market exists in basketball",
-          likely: "the likelihood board ranks scorers and yardage overs, "
-                  + "and basketball prices neither",
           futures: "no outrights market is published for the league",
           weather: "played indoors" },
   ufc: { parlays: "§9.1 caps a card at two legs in one fight, and we price "

@@ -1134,7 +1134,7 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             from .rankfit import measure as _rank_measure
             _rkc = _rkdb.connect()
             try:
-                for _sp in ("mlb", "wnba"):
+                for _sp in ("mlb", "wnba", "nba"):
                     _rank_measure(_rkc, _sp, log=log)
             finally:
                 _rkc.close()
@@ -1152,7 +1152,7 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         _rbs = _rank_load()
         _rbc = _rbdb.connect()
         try:
-            for _sp in ("mlb",):
+            for _sp in ("mlb", "wnba", "nba"):
                 if any(k.startswith(f"{_sp}:") for k in _rbs):
                     continue
                 have = _rbc.execute(

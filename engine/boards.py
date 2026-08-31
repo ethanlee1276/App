@@ -177,6 +177,22 @@ BASEBALL_SHELVES = (
      "and shelved apart so its evidence reads apart."),
 )
 
+#: Hoops — one spec, both leagues, because the boards are the same
+#: pipeline on the same markets. The trust line still reads per league:
+#: _shelf_auc asks likely.rank_auc with the sport, so a WNBA shelf shows
+#: the WNBA's own fitted figure and an NBA one the NBA's, or nothing.
+HOOPS_SHELVES = (
+    ("scoring", "Points", ("pts", "pra"),
+     "Scoring volume — points alone and the PRA combo the books "
+     "headline."),
+    ("glass", "Rebounds & assists", ("reb", "ast"),
+     "The possession game: boards and playmaking, shelved together "
+     "because the same role players carry both."),
+    ("threes", "Three-pointers", ("fg3m",),
+     "Makes from deep — the highest-variance market on this board, "
+     "and labelled by its own measurement rather than the shelf above."),
+)
+
 #: Sports with a likelihood board, and each one's shelf spec. A sport
 #: not listed gets no shelves and the page falls back to its flat list —
 #: also what happens for a payload built before shelves existed.
@@ -184,6 +200,8 @@ SHELVES_BY_SPORT = {
     "nfl": None,        # filled below — FOOTBALL_SHELVES defined next
     "cfb": None,
     "mlb": BASEBALL_SHELVES,
+    "nba": HOOPS_SHELVES,
+    "wnba": HOOPS_SHELVES,
 }
 FOOTBALL = ("nfl", "cfb")
 

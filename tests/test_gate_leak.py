@@ -135,11 +135,14 @@ def test_a_sport_with_no_likelihood_board_gets_no_shelves():
     (2026-08-31), so baseball has real shelves — and the rule moves to
     the sports that still have no board."""
     from engine import boards
-    for sport in ("ufc", "nba", "wnba"):
-        assert boards.shelves(sport) == [], sport
-        assert boards.shelves(sport, [{"market": "pts"}]) == [], sport
-    assert boards.shelves("mlb") != [], \
-        "mlb_build publishes most_likely now — its shelves must exist"
+    assert boards.shelves("ufc") == []
+    assert boards.shelves("ufc", [{"market": "moneyline"}]) == []
+    # Every league whose build publishes most_likely has real shelves
+    # now (mlb 2026-08-31, hoops the same day) — the rule guards the
+    # sports that genuinely have no board, not a snapshot of which
+    # those were the day it was written.
+    for sport in ("mlb", "nba", "wnba"):
+        assert boards.shelves(sport) != [], sport
 
 
 if __name__ == "__main__":

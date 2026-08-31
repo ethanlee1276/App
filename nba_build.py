@@ -417,7 +417,7 @@ def main() -> None:
                             "inherited_from": tune.inherited_from,
                             "note": tune.note},
                  "recommendations": [], "game_bets": [], "long_shots": [],
-                 "longshot_watch": [],
+                 "longshot_watch": [], "most_likely": [], "board_shelves": [],
                  "market_scan": {"stale": [], "arbs": [], "middles": [],
                                  "low_holds": [], "longshots": []},
                  "counts": {"props_analyzed": 0, "recommended": 0}}
@@ -787,6 +787,31 @@ def main() -> None:
                     gd["total"] = g.total
         except Exception as exc:
             print(f"⚠️  shared-schema layer skipped: {exc}")
+
+        # THE LIKELIHOOD BOARD, for hoops. Same maker and same one bar
+        # as every other league's (likely.admissible), and the same
+        # earned-per-market rule: rows appear only for markets
+        # engine.rankfit has measured to rank ON THIS BOX — the weekly
+        # pass fits wnba/nba wherever their logs are ingested, and until
+        # it has, this board is honestly empty with the census saying so.
+        try:
+            from engine.likely import build as _likely_build
+            from engine import boards as _hboards
+            _ml_census: dict = {}
+            out["most_likely"] = _likely_build(
+                out.get("recommendations") or [], sport=args.league,
+                census=_ml_census)
+            if not out["most_likely"]:
+                from engine.rankfit import load as _rank_store
+                if not any(k.startswith(f"{args.league}:")
+                           for k in _rank_store()):
+                    _ml_census["no market measured to rank yet"] = 1
+            out["likely_census"] = _ml_census
+            out["board_guide"] = _hboards.guide()
+            out["board_shelves"] = _hboards.shelves(args.league,
+                                                    out["most_likely"])
+        except Exception as exc:                          # noqa: BLE001
+            print(f"⚠️  likelihood board skipped: {exc}")
 
         # Journal picks + stale flags under the league that produced them —
         # this build runs as BOTH leagues, and journaling "nba" while the

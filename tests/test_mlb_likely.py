@@ -214,6 +214,64 @@ def test_the_weekly_pass_measures_and_an_empty_store_bootstraps():
     assert "measuring now, not Wednesday" in src
 
 
+# --- hoops rides the same rails --------------------------------------------
+def test_hoops_shelves_exist_for_both_leagues():
+    for sport in ("nba", "wnba"):
+        keys = [s["key"] for s in boards.shelves(sport)]
+        assert keys == ["scoring", "glass", "threes"], (sport, keys)
+
+
+def test_a_wnba_measurement_lights_only_the_wnba_shelf():
+    _clear_store()
+    rankfit._save({"wnba:pts": {"auc": 0.70, "n": 9000}})
+    try:
+        assert likely.rankable("pts", "wnba")
+        assert not likely.rankable("pts", "nba"), \
+            "one league's measurement must not open the other's board"
+        w = [s for s in boards.shelves("wnba") if s["key"] == "scoring"][0]
+        n = [s for s in boards.shelves("nba") if s["key"] == "scoring"][0]
+        assert w["rank_auc"] == 0.70 and n["rank_auc"] is None
+    finally:
+        _clear_store()
+
+
+def test_a_hoops_row_flows_through_build():
+    _clear_store()
+    rankfit._save({"wnba:pts": {"auc": 0.70, "n": 9000}})
+    row = {"player": "A Guard", "team": "LV", "market": "pts",
+           "market_label": "Points", "side": "over", "line": 18.5,
+           "hit_prob": 0.61, "has_market": True, "odds": -125,
+           "book": "fanduel", "fair_prob": 0.57}
+    try:
+        got = likely.build([row], sport="wnba")
+        assert got and got[0]["rank_auc"] == 0.70
+        assert got[0]["implied_prob"] == 0.57, \
+            "hoops rows carry fair_prob; from_prop must map it"
+    finally:
+        _clear_store()
+
+
+def test_the_hoops_build_publishes_the_board():
+    with open(os.path.join(ROOT, "nba_build.py"), encoding="utf-8") as f:
+        src = f.read()
+    assert 'out["most_likely"] = _likely_build(' in src
+    assert "sport=args.league" in src
+    assert '"most_likely": [], "board_shelves": []' in src, \
+        "the empty paths must still ship the shape"
+
+
+def test_the_likely_tab_is_no_longer_hidden_for_hoops():
+    with open(os.path.join(ROOT, "web", "js", "app.js"),
+              encoding="utf-8") as f:
+        js = f.read()
+    at = js.index("const HIDDEN_VIEWS")
+    block = js[at:at + 1200]
+    import re
+    nba = re.search(r"nba: \[([^\]]*)\]", block).group(1)
+    wnba = re.search(r"wnba: \[([^\]]*)\]", block).group(1)
+    assert '"likely"' not in nba and '"likely"' not in wnba
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
