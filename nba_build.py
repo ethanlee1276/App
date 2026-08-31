@@ -807,7 +807,7 @@ def main() -> None:
                            for k in _rank_store()):
                     _ml_census["no market measured to rank yet"] = 1
             out["likely_census"] = _ml_census
-            out["board_guide"] = _hboards.guide()
+            out["board_guide"] = _hboards.guide(args.league)
             out["board_shelves"] = _hboards.shelves(args.league,
                                                     out["most_likely"])
         except Exception as exc:                          # noqa: BLE001

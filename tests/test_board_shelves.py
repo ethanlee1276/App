@@ -342,11 +342,19 @@ def test_the_preview_carries_the_same_trust_line_as_the_full_page():
     assert 'boardGuide("most_likely")' in body
 
 
-def test_an_empty_board_draws_nothing_rather_than_a_heading():
+def test_an_empty_board_explains_itself_or_draws_nothing():
+    """Re-anchored 2026-08-31. The old rule — empty board, no section —
+    read as "the page is not loading" the night MLB/WNBA launched with
+    an unmeasured rank store (Ethan's words, verbatim). Now: a sport
+    whose build ships likely_census gets the heading and the census's
+    own reason; a sport with no likelihood pipeline at all still draws
+    nothing."""
     src = _src("web", "js", "app.js")
     at = src.index("function renderLikelyTop()")
     body = src[at:src.index("function renderLikely()", at)]
-    assert 'host.innerHTML = ""; return;' in body
+    assert "state.data.likely_census === undefined" in body
+    assert 'host.innerHTML = "";' in body, "the no-pipeline arm must survive"
+    assert "likelyEmptyWhy(state.data.likely_census)" in body
 
 
 # --- the preview is rows, the depth is one tap away ------------------------

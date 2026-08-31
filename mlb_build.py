@@ -671,7 +671,7 @@ def main() -> None:
             if not any(k.startswith("mlb:") for k in _rank_store()):
                 _ml_census["no market measured to rank yet"] = 1
         result["likely_census"] = _ml_census
-        result["board_guide"] = _mlboards.guide()
+        result["board_guide"] = _mlboards.guide("mlb")
         result["board_shelves"] = _mlboards.shelves(
             "mlb", result["most_likely"])
     except Exception as exc:                              # noqa: BLE001

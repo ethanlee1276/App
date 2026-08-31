@@ -1110,7 +1110,7 @@ def main() -> None:
             # confusion engine/boards was written to end. The college
             # board prices touchdowns and nothing else, so `shelves`
             # returns the one shelf with rows on it and drops the rest.
-            out["board_guide"] = _boards.guide()
+            out["board_guide"] = _boards.guide("cfb")
             out["board_shelves"] = _boards.shelves("cfb", out["most_likely"])
             # WHY THE BOARD IS THE SIZE IT IS, published rather than
             # printed. An empty touchdown board has several causes — no
@@ -1241,7 +1241,7 @@ def _boards_guide() -> list:
     that whole function, which is how the college board spent a day
     dying on an UnboundLocalError."""
     from engine import boards as _boards
-    return _boards.guide()
+    return _boards.guide("cfb")
 
 
 def _recent_games(day, lookup):

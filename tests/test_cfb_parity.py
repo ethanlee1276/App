@@ -157,7 +157,7 @@ def test_an_empty_menu_still_answers_none():
 def test_college_publishes_the_board_guide():
     """Without it `boardGuide` renders nothing and the college board
     carries no trust line at all."""
-    assert 'out["board_guide"] = _boards.guide()' in _src("cfb_build.py")
+    assert 'out["board_guide"] = _boards.guide("cfb")' in _src("cfb_build.py")
 
 
 def test_college_publishes_the_shelves():

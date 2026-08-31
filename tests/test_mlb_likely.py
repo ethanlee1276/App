@@ -214,6 +214,102 @@ def test_the_weekly_pass_measures_and_an_empty_store_bootstraps():
     assert "measuring now, not Wednesday" in src
 
 
+# --- the guide speaks each sport's own numbers ------------------------------
+def _measured(sport):
+    return [b for b in boards.guide(sport)
+            if b["key"] == "most_likely"][0]["measured"]
+
+
+def test_the_wnba_guide_does_not_quote_football():
+    """The night the hoops boards launched, the WNBA page's evidence
+    line read "22,099 player-weeks" — five seasons of NFL. A measurement
+    sentence about a different sport's measurement is prose wearing a
+    number."""
+    _clear_store()
+    for sport in ("mlb", "nba", "wnba"):
+        got = _measured(sport)
+        assert "player-weeks" not in got, (sport, got)
+        assert "No market has passed" in got, (sport, got)
+    assert "player-weeks" in _measured("nfl"), "the NFL keeps its own line"
+    assert f"{likely.CFB_TD_AUC:.2f}" in _measured("cfb")
+
+
+def test_a_fitted_store_writes_the_sentence():
+    _clear_store()
+    rankfit._save({"wnba:pts": {"auc": 0.7, "n": 4000},
+                   "wnba:reb": {"auc": 0.66, "n": 3000},
+                   "wnba:ast": {"auc": 0.55, "n": 9000},
+                   "nba:pts": {"auc": 0.9, "n": 9000}})
+    try:
+        got = _measured("wnba")
+        assert "0.66-0.70" in got and "2 measured" in got, got
+        assert "7,000" in got, got
+        assert "0.55" not in got, "a sub-floor fit earned no quote"
+        assert "0.90" not in got, "the NBA's fit is not the WNBA's"
+    finally:
+        _clear_store()
+
+
+def test_a_store_of_only_subfloor_fits_says_not_good_enough():
+    _clear_store()
+    rankfit._save({"mlb:hits": {"auc": 0.53, "n": 9000}})
+    try:
+        assert "not good enough" in _measured("mlb")
+    finally:
+        _clear_store()
+
+
+def test_the_settled_yet_claim_stays_nfl_only():
+    """"No NFL bet has settled yet" was true of the NFL board and shipped
+    on the MLB one, where bets have settled all season."""
+    for sport in ("mlb", "nba", "wnba", "cfb"):
+        rec = [b for b in boards.guide(sport)
+               if b["key"] == "recommendations"][0]
+        assert "No NFL bet has settled" not in rec["measured"], sport
+    for path, want in (("mlb_build.py", '_mlboards.guide("mlb")'),
+                       ("nba_build.py", "_hboards.guide(args.league)"),
+                       ("cfb_build.py", '_boards.guide("cfb")')):
+        with open(os.path.join(ROOT, path), encoding="utf-8") as f:
+            assert want in f.read(), (path, want)
+
+
+# --- the page explains an empty board instead of guessing -------------------
+def test_the_empty_state_reads_the_census_not_a_guess():
+    """Ethan, 2026-08-31: "the mlb and wnba page is not loading with our
+    most likely picks" — the boards were empty BY DESIGN (unmeasured rank
+    store) but the page showed its one canned guess ("needs priced props
+    on the slate"), which was false: props were on the slate all night.
+    The build ships likely_census with the real reason; the page now
+    reads it, on the Top Picks page AND the home preview."""
+    with open(os.path.join(ROOT, "web", "js", "app.js"),
+              encoding="utf-8") as f:
+        js = f.read()
+    assert "function likelyEmptyWhy(census)" in js
+    assert "no market measured to rank yet" in js
+    at = js.index("function renderLikely()")
+    body = js[at:js.index("\nfunction ", at + 10)]
+    assert "likelyEmptyWhy(state.data.likely_census)" in body
+    top = js[js.index("function renderLikelyTop()"):]
+    top = top[:top.index("\nfunction ", 10)]
+    assert "likelyEmptyWhy(state.data.likely_census)" in top
+    # And the home section only vanishes for sports with no board at
+    # all — census presence, not board_shelves, is the tell, because
+    # engine/boards drops rowless shelves from the payload.
+    assert "state.data.likely_census === undefined" in top
+
+
+def test_a_likely_card_never_prints_vs_nobody():
+    """Rows default opponent to ""; hoops and MLB props may not carry
+    one at all. "LV vs undefined" shipped in the first hoops render."""
+    with open(os.path.join(ROOT, "web", "js", "app.js"),
+              encoding="utf-8") as f:
+        js = f.read()
+    at = js.index("function likelyCard(r)")
+    body = js[at:js.index("\nfunction ", at + 10)]
+    assert "r.opponent\n            ? ` vs ${teamName(r.opponent)}` : \"\"" \
+        in body, "the vs half must be conditional on having an opponent"
+
+
 # --- hoops rides the same rails --------------------------------------------
 def test_hoops_shelves_exist_for_both_leagues():
     for sport in ("nba", "wnba"):

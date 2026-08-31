@@ -125,7 +125,7 @@ def test_college_serves_the_guide_and_the_shelves():
     exists to end."""
     with open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8") as f:
         src = f.read()
-    assert 'out["board_guide"] = _boards.guide()' in src
+    assert 'out["board_guide"] = _boards.guide("cfb")' in src
     assert 'out["board_shelves"] = _boards.shelves("cfb"' in src
 
 

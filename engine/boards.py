@@ -45,18 +45,59 @@ def _auc_range() -> str:
 #: One entry per board a reader can land on. `key` matches the payload
 #: key the page renders from, so a board that exists without an entry —
 #: or an entry with no board — is a test failure rather than a surprise.
-def guide() -> list[dict]:
+def _likely_measured(sport: str) -> str:
+    """The likelihood board's evidence sentence, in the sport's OWN
+    numbers. The first cut had one sentence — the NFL's — and every
+    build shipped it verbatim, so the WNBA board opened on 2026-08-31
+    quoting "22,099 player-weeks" of football. A measurement sentence
+    that describes a different sport's measurement is prose wearing a
+    number; each sport quotes only what was measured on its own logs."""
+    td = RANK_AUC.get("anytime_td", 0.0)
+    if sport == "nfl":
+        return (f"Ranked at {td:.2f} AUC on who scores and "
+                f"{_auc_range()} on who clears a line, over five seasons "
+                f"and 22,099 player-weeks.")
+    if sport == "cfb":
+        from .likely import CFB_TD_AUC
+        return (f"Ranked at {CFB_TD_AUC:.2f} AUC on who scores, measured "
+                f"on college football's own game logs.")
+    # Store-fitted sports (mlb, nba, wnba): quote only the markets that
+    # are actually ON the board — a sub-floor fit is stored for the next
+    # refit to see, but quoting it here would claim a shelf it never
+    # earned.
+    from . import rankfit
+    from .likely import MIN_RANK_AUC
+    fitted = {k.split(":", 1)[1]: v for k, v in rankfit.load().items()
+              if k.startswith(f"{sport}:")}
+    live = {m: v for m, v in fitted.items()
+            if (v.get("auc") or 0) >= MIN_RANK_AUC}
+    if live:
+        aucs = sorted(v["auc"] for v in live.values())
+        pairs = sum(v.get("n", 0) for v in live.values())
+        span = (f"{aucs[0]:.2f}" if aucs[-1] - aucs[0] < 0.005
+                else f"{aucs[0]:.2f}-{aucs[-1]:.2f}")
+        return (f"Ranked at {span} AUC across {len(live)} measured "
+                f"market(s), walked forward over {pairs:,} of our own "
+                f"logged picks.")
+    if fitted:
+        return (f"Measured, and not good enough yet: no market here "
+                f"ranks above the {MIN_RANK_AUC} floor, so the board "
+                f"stays off rather than lower the bar.")
+    return ("No market has passed the ranking measurement on this "
+            "server yet — the board switches itself on the moment "
+            "one does.")
+
+
+def guide(sport: str = "nfl") -> list[dict]:
     """The boards, ordered by how much evidence stands behind them."""
     td = RANK_AUC.get("anytime_td", 0.0)
+    football = sport in ("nfl", "cfb")
     return [
         {
             "key": "most_likely",
             "title": "Most Likely",
             "selects_on": "how likely we think it is to happen",
-            "measured": (
-                f"Ranked at {td:.2f} AUC on who scores and "
-                f"{_auc_range()} on who clears a line, over five seasons "
-                f"and 22,099 player-weeks."),
+            "measured": _likely_measured(sport),
             "journal": "likely",
             "money": False,
             "trust": (
@@ -72,7 +113,9 @@ def guide() -> list[dict]:
             "measured": (
                 f"Built on the same {td:.2f} AUC ranking, then filtered on "
                 f"price — so it inherits a strong signal and adds a weak "
-                f"one."),
+                f"one." if football else
+                "Built on the same likelihood ranking, then filtered on "
+                "price — so it inherits that signal and adds a weak one."),
             "journal": "longshot",
             "money": False,
             "trust": (
@@ -88,7 +131,11 @@ def guide() -> list[dict]:
                 f"The edge claim itself tests at {EDGE_AUC:.3f} AUC — "
                 f"indistinguishable from a coin flip. No NFL bet has "
                 f"settled yet, so the live record cannot referee it "
-                f"either."),
+                f"either." if sport == "nfl" else
+                f"The edge claim tests at {EDGE_AUC:.3f} AUC on NFL "
+                f"closes — indistinguishable from a coin flip. Judge "
+                f"this board by the Record page's settled rows, not by "
+                f"how confident it sounds."),
             "journal": "main",
             "money": True,
             "trust": (

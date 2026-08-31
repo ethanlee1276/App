@@ -5142,7 +5142,8 @@ function likelyCard(r) {
         <div>
           <div class="player">${escapeHtml(r.player)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${teamName(r.team)} vs ${teamName(r.opponent)}${
+          <div class="subtitle">${teamName(r.team)}${r.opponent
+            ? ` vs ${teamName(r.opponent)}` : ""}${
             whenLabel(r.game_date, r.kickoff)
               ? ` · ${escapeHtml(whenLabel(r.game_date, r.kickoff))}` : ""}</div>
           <div class="pick">${label}
@@ -5235,13 +5236,58 @@ function renderQuickTools() {
     </div>`;
 }
 
+/* Why an empty likelihood board is empty, in the reader's language.
+
+   The build ships `likely_census` — {reason: count} — with every
+   payload, and until 2026-08-31 no renderer read it. The page showed
+   one guess ("needs priced props on the slate") for every cause, and
+   the night MLB/WNBA launched with an unmeasured rank store that guess
+   was wrong: props were on the slate all evening. Ethan read the blank
+   as broken — "the mlb and wnba page is not loading with our most
+   likely picks" — which is what a wrong explanation costs. */
+function likelyEmptyWhy(census) {
+  const c = census || {};
+  if (c["no market measured to rank yet"]) {
+    return `This sport’s markets haven’t yet passed the ranking test —
+      we only list a market after measuring, on our own logged picks,
+      that the model actually ranks it. That measurement runs on the
+      server and each market switches itself on the moment it passes.`;
+  }
+  const parts = Object.entries(c).map(([k, n]) => `${n} ${escapeHtml(k)}`);
+  if (parts.length) {
+    return `Tonight’s slate was checked and nothing cleared the board’s
+      bar — ${parts.join(" · ")}. The board would rather sit empty than
+      lower it.`;
+  }
+  return `This board needs priced player props on the slate. It fills
+    in as the books post their menus.`;
+}
+
 function renderLikelyTop() {
   const host = document.getElementById("likely-top");
   if (!host) return;
   const shelves = (state.data.board_shelves || [])
     .map((sh) => ({ ...sh, rows: (sh.rows || []).slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
-  if (!shelves.length) { host.innerHTML = ""; return; }
+  if (!shelves.length) {
+    /* A sport that HAS a likelihood board deserves a one-line reason on
+       the home page, not a section that silently ceases to exist. The
+       tell is `likely_census` — every likelihood-capable build ships it
+       (empty or not), and `board_shelves` cannot serve here because
+       engine/boards drops rowless shelves from the payload entirely. A
+       sport with no board pipeline still renders nothing. */
+    if (state.data.likely_census === undefined) {
+      host.innerHTML = "";
+      return;
+    }
+    host.innerHTML = `
+      <div class="section-title">Qellys’ top picks
+        <span class="sub">— who’s most likely to hit</span>
+      </div>
+      <div class="ls-note">${likelyEmptyWhy(state.data.likely_census)}</div>`;
+    revealChildren(host);
+    return;
+  }
   const total = (state.data.most_likely || []).length;
   const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
   host.innerHTML = `
@@ -5276,8 +5322,7 @@ function renderLikely() {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <div class="es-title">Nothing to rank yet</div>
-      <div class="es-sub">This board needs priced player props on the slate.
-      It fills in as the books post their menus.</div></div>`;
+      <div class="es-sub">${likelyEmptyWhy(state.data.likely_census)}</div></div>`;
     return;
   }
   const rankOnly = rows.filter((r) => !r.bettable).length;
