@@ -574,6 +574,20 @@ def main() -> None:
         "market_scan": {"stale": [], "arbs": [], "middles": [], "low_holds": [],
                         "longshots": []},
         "counts": {"props_analyzed": 0, "recommended": 0},
+        # THE BOARD'S OWN FURNITURE, ON EVERY PATH. These lived inside
+        # `if args.odds or args.cached_odds:` with the touchdown pull,
+        # so a cycle that did not spend on odds — most of them, and
+        # every early return — published a likelihood board with NO
+        # trust line: no "picked on how likely it is", no "recorded, not
+        # staked". That is precisely the confusion engine/boards was
+        # written to end, and I had called it fixed for college.
+        #
+        # Neither depends on a price. `guide()` is a static description
+        # of what each board IS, and `shelves()` groups whatever rows
+        # exist — none, here, until the odds block fills them and
+        # replaces this.
+        "board_guide": _boards_guide(),
+        "board_shelves": [],
     }
 
     # Team identity ships in the payload — 134 schools is exactly the list
@@ -1096,6 +1110,24 @@ def main() -> None:
                       f"window; roles from {census['usage_season']})")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  TD long shots unavailable: {_exc}")
+    else:
+        # NO PULL THIS CYCLE, SAID OUT LOUD. Without this the board goes
+        # out with games on it and no player props and nothing anywhere
+        # explaining which of the several possible reasons it was —
+        # which is what "it's not showing any player props" looks like
+        # from a phone. Most cycles do not spend on odds: the budget is
+        # rationed per slate, and scorer prices are pulled per event.
+        #
+        # An honest empty census, not a fabricated one. Every count is
+        # zero because nothing was asked, and the note says so.
+        out["td_census"] = {
+            "quoted_players": 0, "no_usage": 0, "outside_window": 0,
+            "quotes_note": "no odds pulled on this cycle — touchdown "
+                           "prices are metered per event, so they arrive "
+                           "on the cycles that can afford them rather "
+                           "than every minute",
+            "games_quoted": 0,
+        }
     out["status"] = "slate"
     out["no_qualifying"] = result["no_qualifying"]
     # The funnel under the count (engine/census). CFB's board is game
@@ -1159,6 +1191,15 @@ def main() -> None:
 #: of those days is already in the scoreboard cache on any date the
 #: 14-day results window has been fetched for.
 NEARBY_DAYS = 10
+
+
+def _boards_guide() -> list:
+    """`engine.boards.guide()`, imported at call time and never aliased
+    into `main()` — a local `from ... import` there binds the name for
+    that whole function, which is how the college board spent a day
+    dying on an UnboundLocalError."""
+    from engine import boards as _boards
+    return _boards.guide()
 
 
 def _recent_games(day, lookup):

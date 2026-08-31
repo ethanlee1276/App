@@ -188,6 +188,72 @@ def test_the_census_travels_on_the_readable_empty_day():
     assert got["feed"] == {"listed": 0, "kept": 0}
 
 
+# --- and a real slate actually fills the board ----------------------------
+#
+# EVERY TEST ABOVE ASSERTS ON AN EMPTY BOARD, which is what the last
+# three days produced and therefore what needed pinning. But "the empty
+# cases are handled" is not "Saturday works" — the touchdown chain, the
+# venues and the game cards have not run in production since before the
+# crash, so the FCS-opponent fix has never actually been exercised by a
+# real slate. These are the ones that say the board fills.
+def test_a_slate_with_games_publishes_them():
+    got = _board({DATE: {"events": [_game_event()]}})
+    assert got["status"] not in ("offseason", "no games today",
+                                 "schedule unknown", "feed unreadable"), got["status"]
+    assert len(got["games"]) == 1, got["games"]
+
+
+def test_the_published_game_names_both_teams():
+    """"Not showing any stadiums" starts here: a game card with no teams
+    draws nothing whatever the rest of the payload holds."""
+    g = _board({DATE: {"events": [_game_event()]}})["games"][0]
+    assert g["home"] == "BAMA" and g["away"] == "UGA"
+
+
+def test_an_fbs_versus_fcs_game_survives_to_the_board():
+    """THE FIX THAT HAS NEVER RUN IN PRODUCTION. The build crashed
+    before reaching it, so opening weekend's most common pairing has
+    still not been through the real main()."""
+    fcs = {"competitions": [{"competitors": [
+        {"homeAway": "home", "team": {"abbreviation": "BAMA",
+                                      "displayName": "Alabama", "id": "333"}},
+        {"homeAway": "away", "team": {"abbreviation": "",
+                                      "displayName": "Mercer", "id": "2579"}}]}]}
+    got = _board({DATE: {"events": [fcs]}})
+    assert len(got["games"]) == 1, got.get("status")
+    assert got["games"][0]["away"] == "espn:2579"
+
+
+def test_a_mixed_saturday_keeps_every_game():
+    """The shape of opening weekend: mostly FBS-vs-FCS. Before the fix
+    this board came back with one game on it."""
+    fcs = {"competitions": [{"competitors": [
+        {"homeAway": "home", "team": {"abbreviation": "UGA",
+                                      "displayName": "Georgia", "id": "61"}},
+        {"homeAway": "away", "team": {"abbreviation": "",
+                                      "displayName": "Austin Peay",
+                                      "id": "2046"}}]}]}
+    got = _board({DATE: {"events": [_game_event(), fcs, fcs]}})
+    assert len(got["games"]) == 3, got["games"]
+    assert got["feed"] == {"listed": 3, "kept": 3}
+
+
+def test_a_filled_board_still_carries_the_boards_furniture():
+    """The likelihood board's guide and shelves ride on every CFB
+    payload; without them the page draws a board with no trust line."""
+    got = _board({DATE: {"events": [_game_event()]}})
+    assert "board_guide" in got, sorted(got)
+    assert "most_likely" in got
+
+
+def test_the_prop_census_says_why_there_are_no_player_props():
+    """With no odds pulled there are no priced props, and that must be
+    a stated count rather than a blank space — "no player props" and
+    "nobody has priced them yet" are different facts."""
+    got = _board({DATE: {"events": [_game_event()]}})
+    assert "td_census" in got, sorted(got)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
