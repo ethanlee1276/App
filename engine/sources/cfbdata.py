@@ -381,6 +381,33 @@ def _score(raw) -> float | None:
         return None
 
 
+def _team_key(team: dict) -> str:
+    """A stable identifier for one side, or "" if there is genuinely none.
+
+    THE ABBREVIATION IS NOT ALWAYS THERE, AND THAT USED TO DELETE THE
+    GAME. `parse_scoreboard` discarded any event whose two competitors
+    did not both carry `abbreviation`, and ESPN's FBS scoreboard
+    (groups=80) routinely returns an FBS host against a non-FBS visitor
+    whose team object has a displayName and an id but no abbreviation.
+
+    Opening weekend is when that pairing is most concentrated — most of
+    the slate is FBS-vs-FCS — so the filter deleted most of the biggest
+    Saturday of the year and left the handful of FBS-vs-FBS games behind.
+    Reported 2026-08-31: "there was one instance on saturday where i did
+    see one live game but that was it."
+
+    `espn:{id}` is the fallback because this codebase already speaks it
+    (`ingest.ESPN_KEY_PREFIX`, `cfbfastr`), so a side named that way
+    joins the same lookups as any other rather than becoming a second
+    kind of team key.
+    """
+    abbr = (team.get("abbreviation") or "").strip()
+    if abbr:
+        return abbr
+    ident = str(team.get("id") or "").strip()
+    return f"espn:{ident}" if ident else ""
+
+
 def parse_scoreboard(payload: dict,
                      conferences: dict[str, str] | None = None) -> list[dict]:
     """An ESPN scoreboard payload → the game dicts the CFB model reads.
@@ -407,7 +434,7 @@ def parse_scoreboard(payload: dict,
         for c in comp.get("competitors", []) or []:
             team = c.get("team") or {}
             side = {
-                "abbr": (team.get("abbreviation") or "").strip(),
+                "abbr": _team_key(team),
                 "name": team.get("displayName") or "",
                 "conference": conference_name(
                     confs.get(str(team.get("conferenceId") or ""), "")),
@@ -418,6 +445,10 @@ def parse_scoreboard(payload: dict,
                 home = side
             else:
                 away = side
+        # A SIDE WE CANNOT NAME AT ALL, which is rarer than it was.
+        # `_team_key` now falls back to the ESPN id, so this drops only
+        # an event carrying neither an abbreviation nor an id — genuinely
+        # unidentifiable, rather than merely not-FBS.
         if not home or not away or not home["abbr"] or not away["abbr"]:
             continue
 
@@ -449,7 +480,12 @@ def parse_scoreboard(payload: dict,
             "detail": stype.get("shortDetail", ""),
             "venue": venue.get("fullName", ""),
             "indoor": bool(venue.get("indoor")),
-            "label": ev.get("shortName") or f"{away['abbr']} @ {home['abbr']}",
+            # NAMES BEFORE KEYS in the fallback. `abbr` may now be an
+            # `espn:NNN` id for a side ESPN gave no abbreviation, which
+            # is a fine lookup key and a poor thing to read on a card.
+            "label": (ev.get("shortName")
+                      or f"{away['name'] or away['abbr']} @ "
+                         f"{home['name'] or home['abbr']}"),
             # §2 — nothing here confirms a quarterback or a bowl roster.
             "qb_confirmed": False,
             "participation_verified": False,
