@@ -257,7 +257,14 @@ def test_the_production_unit_runs_the_process_that_refreshes_the_data():
     unit = _read("deploy", "qellys.service")
     exec_line = [l for l in unit.splitlines() if l.startswith("ExecStart=")]
     assert len(exec_line) == 1, exec_line
-    assert exec_line[0].endswith("launch.py --bind 127.0.0.1 8000"), exec_line[0]
+    # THE CONTRACT, NOT THE WHOLE LINE. This was an `endswith` on the
+    # exact command, so `--auto-update` broke it — a flag that leaves
+    # every claim in this docstring true. What matters is that the unit
+    # runs the process carrying the refresh loop, and binds it to
+    # loopback; extra flags are how that process gets configured.
+    assert "launch.py" in exec_line[0], exec_line[0]
+    assert "server.py" not in exec_line[0], exec_line[0]
+    assert "--bind 127.0.0.1 8000" in exec_line[0], exec_line[0]
 
     # And the flag it needs is real, applied to the site's own bind —
     # not just accepted and ignored.

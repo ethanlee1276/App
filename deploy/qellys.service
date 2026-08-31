@@ -55,7 +55,31 @@ WorkingDirectory=/srv/qellys
 #
 # The launcher always serves built JSON rather than running the pipeline
 # per request, so the `--live` that server.py needs is implied here.
-ExecStart=/usr/bin/python3 /srv/qellys/launch.py --bind 127.0.0.1 8000
+#
+# --auto-update: PUSHED CODE GOES LIVE WITHOUT ANYONE TYPING ANYTHING.
+# Turned on 2026-08-31 at Ethan's request. `launch.py` calls this flag
+# "opt-in, every run: this pulls code and executes it, so it should be a
+# thing you asked for this morning, not a setting you forgot" — and on a
+# laptop that is exactly right. This is not a laptop. It is a droplet
+# nobody is sitting at, and the alternative was a fix waiting hours for
+# someone to reach a terminal. The CFB board sat crashed most of a day
+# for want of a deploy.
+#
+# What it will and will not do (`_auto_update`):
+#   * `git pull --ff-only` — never merges, never rebases, never resolves.
+#     A diverged branch stops it and says so.
+#   * a dirty working tree is left completely alone; it skips and says
+#     why. Nothing here edits the checkout, so a dirty tree on this box
+#     means someone is mid-something and should not be interrupted.
+#   * it stays on the branch already checked out and never switches.
+#   * on new code it re-execs the launcher, same PID, same unit.
+# Every five minutes (AUTO_UPDATE_EVERY_S).
+#
+# THE TEST SUITE IS NOW THE ONLY GATE between a push and this box, which
+# is what it was already claiming to be — deploy.sh's own header says the
+# normal deploy is "green tick on GitHub, then ./deploy.sh --no-tests".
+# This removes the second step, not the first.
+ExecStart=/usr/bin/python3 /srv/qellys/launch.py --bind 127.0.0.1 8000 --auto-update
 
 Restart=always
 RestartSec=3
