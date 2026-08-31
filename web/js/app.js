@@ -10174,6 +10174,12 @@ function labBins(m) {
 
 function labPropCard(m, note) {
   const naive = m.basis === "naive";
+  /* A THIRD BASIS, and the chip must not lie about it. "outcomes" is
+     the college touchdown harness: graded purely against who scored,
+     with no price anywhere in the replay. The old ternary would have
+     dressed it in the green "real closes" chip — the exact
+     market-relative claim it cannot make. */
+  const outcomes = m.basis === "outcomes";
   const sk = m.skill;
   const hedged = sk && sk.hedged > 0.5;
   // A backtest ROI under ~100 bets is noise wearing a percentage — the
@@ -10217,7 +10223,7 @@ function labPropCard(m, note) {
       <td class="num ${toneOf(g.net)}">${g.net >= 0 ? "+" : ""}${g.net.toFixed(2)}u</td></tr>`).join("");
   return `<div class="card lab-card">
     <div class="lab-head"><strong>${escapeHtml(m.label)}</strong>
-      <span class="chip ${naive ? "warn" : "good"}">${naive ? "naive lines" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
+      <span class="chip ${naive ? "warn" : outcomes ? "" : "good"}">${naive ? "naive lines" : outcomes ? "outcomes only" : m.basis === "mixed" ? "mixed basis" : "real closes"}</span>
       <span class="mini">${m.n.toLocaleString()} settled props</span></div>
     <div class="stats rec-kpis">
       ${labSkillTile(m)}
@@ -10230,7 +10236,9 @@ function labPropCard(m, note) {
                 headline.n_bets
                   ? `${headline.roi >= 0 ? "+" : ""}${(headline.roi * 100).toFixed(1)}%`
                   : "—",
-                m.n_bets ? roiSub : "no bets cleared the gates",
+                m.n_bets ? roiSub
+                         : outcomes ? "never priced — nothing here is a bet"
+                                    : "no bets cleared the gates",
                 { tone: (naive || thin) ? "" : toneOf(headline.roi) })}
     </div>
     ${hedged ? `<div class="warning">${icon("warn")} ${(sk.hedged * 100).toFixed(0)}% of
@@ -10238,6 +10246,7 @@ function labPropCard(m, note) {
       forecasting. A model that answers "about average" to everything scores
       well on calibration and finds no edges worth betting.</div>` : ""}
     ${naive && m.n_bets ? `<div class="warning">${icon("warn")} ${escapeHtml(note || "")}</div>` : ""}
+    ${outcomes ? `<div class="ls-note">${escapeHtml(m.basis_note || "Graded against outcomes only — predictive skill, not an edge over a book.")}</div>` : ""}
     ${labBins(m)}
     ${seg ? `<table class="agate"><thead><tr><th>Priced against</th>
       <th class="num">Bets</th><th class="num">Won</th><th class="num">Win%</th>

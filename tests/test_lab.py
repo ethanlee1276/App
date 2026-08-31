@@ -134,8 +134,12 @@ def test_a_league_with_no_registered_variance_says_so():
 
 def test_the_sports_with_no_prop_harness_are_named_not_omitted():
     out = lab.build(hconn=_seeded(), log=_quiet, nfl=False)
-    for sport in ("nba", "wnba", "cfb", "ufc"):
+    for sport in ("nba", "wnba", "ufc"):
         assert out["sports"][sport]["props"]["unavailable"]
+    # CFB is NOT in that club any more — engine.cfbtdfit is its
+    # walk-forward harness. On a seeded DB with no college logs the row
+    # is the harness's own honest gap, not "no harness".
+    assert "college" in out["sports"]["cfb"]["props"]["unavailable"]
 
 
 def test_the_basis_caveat_ships_with_the_data():

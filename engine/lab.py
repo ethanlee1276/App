@@ -69,7 +69,10 @@ MIN_HISTORY = 8
 NO_PROP_HARNESS = {
     "nba": "no walk-forward prop harness yet — projections ship unreplayed",
     "wnba": "no walk-forward prop harness yet — projections ship unreplayed",
-    "cfb": "no walk-forward prop harness yet — game lines only",
+    # CFB left this dict on 2026-08-31: engine.cfbtdfit IS a walk-forward
+    # prop harness (29,047 graded player-weeks) and had been for days
+    # while this page — the site's trust furniture — told subscribers
+    # the college touchdown board ships unmeasured. See cfb_props().
     "ufc": "fight picks are graded forward in the journal, not backtested",
 }
 
@@ -320,6 +323,69 @@ def nfl_props(season: int | None = None, weeks=None, log=print,
     return {"markets": markets, "season": season}
 
 
+def cfb_props(log=print, conn=None, runner=None) -> dict:
+    """The college touchdown harness, on the Lab page at last.
+
+    `engine.cfbtdfit` replays the exact role chain the college board
+    prices — walk-forward, weeks strictly before the week being graded —
+    and its pairs are what fitted `cfb:anytime_td`. This page said "no
+    walk-forward prop harness yet" the whole time, which told a reader
+    the one market the college board actually prices was unmeasured.
+
+    BASIS IS "outcomes", A THIRD KIND. "book" means priced against
+    harvested closes and "naive" against a baseline line; this is
+    neither — a touchdown has no line, and no college closes are joined
+    in the replay. It is graded purely against who scored: predictive
+    skill, never an edge over a book, and the card says so instead of
+    wearing the market-relative chip.
+
+    ``runner`` is injectable so the suite can grade this shaping without
+    a six-figure replay. ``conn`` is the SAME history handle the rest of
+    the lab replays — the first cut opened the ambient DB instead, so a
+    seeded test database saw the real box's college seasons and the
+    suite ran the full replay by accident.
+    """
+    from . import db as _db
+    from .cfbtdfit import run as _run
+    runner = runner or (lambda: _run(conn if conn is not None
+                                     else _db.connect()))
+    try:
+        rep = runner()
+    except Exception as exc:                              # noqa: BLE001
+        return {"unavailable": f"college replay failed: {exc}"}
+    if not rep.n:
+        return {"unavailable": "no ingested college player logs to replay "
+                               "— the Monday backfill fills them"}
+    base = rep.base_rate
+    base_brier = base * (1.0 - base)
+    hedged = (sum(1 for p, _ in rep.pairs if abs(p - base) <= 0.05)
+              / rep.n) if rep.pairs else 0.0
+    m = {
+        "market": "anytime_td", "label": "Anytime touchdown",
+        "basis": "outcomes",
+        "basis_note": ("graded against who actually scored — predictive "
+                       "skill, not an edge over a book; no college closing "
+                       "prices are joined in this replay"),
+        "n": rep.n,
+        "brier": _round(rep.brier),
+        "mae": None, "ece": None,
+        "skill": ({"n": rep.n, "base_rate": _round(base, 4),
+                   "base_brier": _round(base_brier),
+                   "skill": _round(1.0 - rep.brier / base_brier, 4),
+                   "hedged": _round(hedged, 3)}
+                  if rep.n >= 100 and base_brier else None),
+        "bins": [{"lo": _round(lo, 2), "hi": _round(hi, 2), "n": b["n"],
+                  "mean_pred": _round(b["claimed"], 3),
+                  "hit_rate": _round(b["landed"], 3)}
+                 for (lo, hi), b in sorted(rep.bands.items()) if b["n"]],
+        # No ROI columns AT ALL, rather than zeros pretending to be a
+        # record: nothing here ever met a price.
+        "n_bets": 0, "wins": 0, "win_rate": None, "roi": None,
+        "net_units": None, "segments": {},
+    }
+    return {"markets": [m]}
+
+
 # --- game lines --------------------------------------------------------------
 def game_lines(conn, sport: str, log=print) -> dict:
     """Spreads and totals through the production pricer, graded on real
@@ -402,7 +468,9 @@ def build(conn=None, hconn=None, log=print, nfl: bool = True) -> dict:
         sports["nfl"] = {"props": nfl_props(log=log, conn=hconn) if nfl else
                          {"unavailable": "skipped"},
                          "game_lines": game_lines(hconn, "nfl", log=log)}
-        for sp in ("cfb", "nba", "wnba"):
+        sports["cfb"] = {"props": cfb_props(log=log, conn=hconn),
+                         "game_lines": game_lines(hconn, "cfb", log=log)}
+        for sp in ("nba", "wnba"):
             sports[sp] = {"props": {"unavailable": NO_PROP_HARNESS[sp]},
                           "game_lines": game_lines(hconn, sp, log=log)}
         sports["ufc"] = {
