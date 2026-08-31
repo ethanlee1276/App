@@ -265,6 +265,9 @@
   /* Worst-to-best track for range strips. Built from the semantic
      tones, which flip per theme on their own — one definition serves. */
   --grad-range: linear-gradient(90deg, var(--bad), var(--warn), var(--good));
+  /* The "more below" fade for scroll rails — a mask, so the color is
+     alpha only and no theme ever has to restate it. */
+  --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
   /* The stub pages' big numeral, filled with the brand ramp. */
   --grad-brand: linear-gradient(180deg, var(--brand-2), var(--brand));
   /* The draft room's hero strip. A token rather than a rule, because a
@@ -5503,6 +5506,17 @@ body.has-rail .shell {
   display: flex; flex-direction: column; gap: 14px;
   padding: 18px 14px 20px; border-right: var(--hairline) solid var(--border-soft);
   background: var(--bg-2); scrollbar-width: thin; }
+/* THE RAIL'S LAST LINE WAS GUILLOTINED, NOT FADED. Measured 2026-08-19
+   (queue item; approved for action 2026-08-31): 1222px of content in a
+   1036px box with overlay scrollbars showing nothing — the running-ROI
+   note sliced mid-sentence reads as broken rather than as "more below".
+   The fade rides a CLASS the JS toggles, never the bare element: a
+   permanent mask would fade the final line even at the end of the
+   scroll, which is the same defect wearing a gradient. Applies to the
+   phone drawer too — same element, same fix. */
+.sidebar.sb-more {
+  -webkit-mask-image: var(--mask-more);
+  mask-image: var(--mask-more); }
 
 /* One line, not a two-row block — the drawer declutter (2026-08-17)
    reclaimed the stacked greeting's height without losing the greeting. */

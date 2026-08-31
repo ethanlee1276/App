@@ -29318,6 +29318,27 @@ async function renderLiveBoard() {
       } catch (e) { /* the glyph on its own is the honest fallback */ }
     })();
   }
+  // THE MORE-BELOW FADE. The rail's content ran 186px past its box with
+  // an overlay scrollbar showing nothing, so the last visible line was
+  // sliced mid-sentence — design-queue item, 2026-08-19. `.sb-more`
+  // carries the mask only while content actually remains below; at the
+  // end of the scroll the fade lifts and the real last line reads whole.
+  (() => {
+    const sb = document.querySelector(".sidebar");
+    if (!sb) return;
+    const sync = () => sb.classList.toggle("sb-more",
+      sb.scrollTop + sb.clientHeight < sb.scrollHeight - 4);
+    sb.addEventListener("scroll", sync, { passive: true });
+    // The rail's CONTENT changes (league chips, fold state, ROI note)
+    // without the box ever resizing, so watch both.
+    // Both guarded: every real browser has both, but the suite's eval
+    // harness has neither, and a boot-time throw there is a blank page
+    // in the failure mode it exists to catch.
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(sb);
+    if (window.MutationObserver)
+      new MutationObserver(sync).observe(sb, { childList: true, subtree: true });
+    sync();
+  })();
   // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
   document.querySelectorAll(".sb-anchor").forEach((b) =>
     b.addEventListener("click", () => {

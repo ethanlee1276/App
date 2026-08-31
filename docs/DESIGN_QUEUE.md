@@ -275,8 +275,11 @@ the bottom rather than acting on it.
   it sits relative to what it is overriding.
 
 
-- [ ] **The masthead tagline is capped at 21 characters by a rule that says
-  34.** `.tagline` is `max-width: 34ch` with `letter-spacing: .22em` and
+- [x] **The masthead tagline is capped at 21 characters by a rule that says
+  34.** *STALE, verified 2026-08-31: `.tagline` was retired outright on
+  2026-08-23 with the line it styled (see the tombstone comment in
+  styles.css) — the element, the rule and the defect all left together,
+  four days after this item was filed. Nothing renders to cap.* `.tagline` is `max-width: 34ch` with `letter-spacing: .22em` and
   `text-transform: uppercase`. `ch` is the width of a "0" with NO tracking,
   so the spacing makes every rendered character wider than the unit the cap
   is counted in: measured at 1280px the element wants **292px and is given
@@ -296,7 +299,14 @@ the bottom rather than acting on it.
   *Found 2026-08-19 while reading rendercheck's screenshots; not acted on,
   per the "never redesign something not on this list" rule.*
 
-- [ ] **The sidebar guillotines its last line instead of fading it.** The
+- [x] **The sidebar guillotines its last line instead of fading it.**
+  *DONE 2026-08-31 (Ethan: "work through the list"). Reproduced first:
+  1222px of content in a 1036px box, mask none. After: a 56px bottom
+  mask fade rides `.sb-more`, toggled by scroll position — masked:true
+  while content remains below, masked:false at the end of the scroll,
+  so the true last line always reads whole. Same element serves the
+  phone drawer, so it inherits the fix; screenshots at 1280×1100 and
+  390×780 both checked by eye. Pinned in tests/test_rail_fade.py.* The
   rail is `overflow-y: auto`, so nothing is lost — but at 1280×1100 its
   content is **1201px in a 1036px box**, and what a reader sees is the
   running-ROI note sliced through the middle of "book price and graded in
