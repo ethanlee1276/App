@@ -162,20 +162,27 @@ def pitcher_multiplier(prop: MLBProp, game: MLBGame) -> tuple[float, list[str]]:
     return clamp(mult, 0.60, 1.55), reasons
 
 
-def park_weather_multiplier(game: MLBGame) -> tuple[float, list[str], list[str]]:
-    """Park home-run factor plus wind and temperature."""
+def park_weather_multiplier(game: MLBGame,
+                            bats: str = "") -> tuple[float, list[str],
+                                                     list[str]]:
+    """Park home-run factor — by the batter's hand where the park splits
+    (script §5) — plus wind and temperature."""
+    from .parks import hr_factor_for
+
     park = get_park(game.park)
     w = game.weather
     reasons: list[str] = []
     caveats: list[str] = []
 
-    mult = clamp(park.hr_factor, 0.75, 1.35)
-    if park.hr_factor >= 1.10:
-        reasons.append(f"{park.name} plays big for home runs "
-                       f"({(park.hr_factor - 1) * 100:+.0f}% HR factor)")
-    elif park.hr_factor <= 0.92:
-        reasons.append(f"{park.name} suppresses home runs "
-                       f"({(park.hr_factor - 1) * 100:+.0f}% HR factor)")
+    hr_f, hand_word = hr_factor_for(park, bats)
+    mult = clamp(hr_f, 0.70, 1.35)
+    what = f"{hand_word} home runs" if hand_word else "home runs"
+    if hr_f >= 1.10:
+        reasons.append(f"{park.name} plays big for {what} "
+                       f"({(hr_f - 1) * 100:+.0f}% HR factor)")
+    elif hr_f <= 0.92:
+        reasons.append(f"{park.name} suppresses {what} "
+                       f"({(hr_f - 1) * 100:+.0f}% HR factor)")
     if park.altitude_ft >= 3000:
         reasons.append(f"Altitude {park.altitude_ft:,} ft — thin air carries the ball")
     if park.key == "generic":
@@ -193,13 +200,17 @@ def park_weather_multiplier(game: MLBGame) -> tuple[float, list[str], list[str]]
             cut = clamp(1.0 - 0.010 * speed, 0.82, 1.0)
             mult *= cut
             reasons.append(f"Wind blowing IN at {speed:.0f} mph — knocks balls down")
+        # One temperature curve for the whole engine — the continuous
+        # ramp lives in engine/mlb/weather.py (script §6); a second step
+        # function here was the rules-on-one-path bug wearing a jacket.
+        from .weather import TEMP_HR_PER_F, TEMP_NEUTRAL_F
         temp = getattr(w, "temp_f", 70.0)
-        if temp >= 85:
-            mult *= 1.05
-            reasons.append(f"{temp:.0f}°F — warm, thin air helps carry")
-        elif temp <= 50:
-            mult *= 0.93
-            reasons.append(f"{temp:.0f}°F — cold, heavy air kills carry")
+        dt = clamp(temp, 40.0, 100.0) - TEMP_NEUTRAL_F
+        if abs(dt) >= 3.0:
+            mult *= 1.0 + clamp(dt * TEMP_HR_PER_F, -0.15, 0.14)
+            word = ("warm, thin air helps carry" if dt > 0
+                    else "cold, heavy air kills carry")
+            reasons.append(f"{temp:.0f}°F — {word}")
     elif w is not None and getattr(w, "roof_closed", False):
         reasons.append("Roof closed — weather-neutral conditions")
 
@@ -227,7 +238,8 @@ def hr_probability(prop: MLBProp, game: MLBGame) -> tuple[float, dict]:
 
     contact_m, contact_r, has_statcast = contact_multiplier(prop)
     pitch_m, pitch_r = pitcher_multiplier(prop, game)
-    env_m, env_r, env_caveats = park_weather_multiplier(game)
+    env_m, env_r, env_caveats = park_weather_multiplier(
+        game, bats=getattr(prop, "bats", "") or "")
 
     # Cap the *combined* adjustment rather than each part: three independent
     # 1.4x factors would otherwise compound to nearly 3x, which no real
@@ -271,6 +283,7 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
     exactly that — insight, not a guaranteed bet."""
     from ..odds import american_to_decimal
     from ..longshots import calibrated_prob
+    devigs = hr_board_devigs(candidates)
     rows: list[dict] = []
     for c in candidates:
         odds = c.get("odds")
@@ -287,7 +300,9 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
         # probability here once inflated EV past the broken-price guard and
         # silently emptied the entire watchlist.
         under = c.get("under_odds") or None
-        prob, implied = calibrated_prob("mlb", HOME_RUNS, raw_prob, odds, under)
+        prob, implied = calibrated_prob(
+            "mlb", HOME_RUNS, raw_prob, odds, under,
+            hold_override=devigs.get(id(game)) if game is not None else None)
         if prob * american_to_decimal(odds) - 1.0 > 0.60:
             # A claimed +60% EV on a homer market is a broken price, not an
             # edge — same too-good-to-be-true guard as the sharp anchor.
@@ -323,6 +338,42 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
 MIN_MODEL_PROB = 0.12
 
 
+def hr_board_devigs(candidates: list[dict]) -> dict:
+    """``{id(game): Devig}`` measured off tonight's own HR menus.
+
+    The market-sum method, ported from the touchdown board (script §2.1):
+    sum every listed hitter's raw implied HR probability in a game,
+    divide by the distinct-hitter count the game total supports, and the
+    ratio is that board's hold — measured on the prices being priced,
+    tonight, rather than assumed at a season constant. A menu with fewer
+    than MIN_PRICED listed hitters is absent from the result and the
+    caller's standing one-sided-hold assumption answers instead.
+    """
+    from ..devig import board_devig, expected_distinct_hr_hitters
+    from ..odds import american_to_prob
+
+    totals = {}
+    for c in candidates:
+        g = c.get("game")
+        if g is not None:
+            totals[id(g)] = float(getattr(g, "total", 0.0) or 0.0)
+
+    def game_of(c):
+        g = c.get("game")
+        return id(g) if g is not None else None
+
+    def implied_of(c):
+        odds = c.get("odds")
+        try:
+            return american_to_prob(int(odds)) if odds else None
+        except (TypeError, ValueError):
+            return None
+
+    return board_devig(candidates, game_of, implied_of,
+                       lambda key: expected_distinct_hr_hitters(
+                           totals.get(key, 0.0)))
+
+
 def build_hr_longshots(candidates: list[dict], limit: int = 3,
                        per_team: int = 1,
                        min_prob: float = MIN_MODEL_PROB) -> list[LongShot]:
@@ -332,6 +383,7 @@ def build_hr_longshots(candidates: list[dict], limit: int = 3,
     strategy's +250..+650 odds window, the measured ``min_prob`` floor and
     the one-per-team cap, and returns at most ``limit`` picks.
     """
+    devigs = hr_board_devigs(candidates)
     picks: list[LongShot] = []
     for c in candidates:
         odds = int(c["odds"])
@@ -343,6 +395,7 @@ def build_hr_longshots(candidates: list[dict], limit: int = 3,
         if prob < min_prob:
             continue
         pick = build_pick(
+            hold_override=devigs.get(id(game)) if game is not None else None,
             player=prop.player, team=prop.team, opponent=prop.opponent,
             market=HOME_RUNS, label=MARKET_LABELS[HOME_RUNS],
             book=c.get("book", ""), odds=odds, model_prob=prob,

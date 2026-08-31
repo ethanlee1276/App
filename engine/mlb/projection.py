@@ -199,13 +199,22 @@ def build_mlb_projection(prop: MLBProp, game: MLBGame, model=None,
     # supposed to anchor. Now that career_avg spans the whole season, the
     # blend gets a floor, and thin logs stop projecting a hitter at a .014
     # batting average because he had a quiet week.
-    form = compute_form(logs, prop.career_avg, prop.vs_pitcher_avg,
+    # Batter-vs-pitcher history is NEVER a projection input (script §11,
+    # §16: "eight career at-bats against a pitcher is a coin flipped
+    # eight times... auto-faded"). It was inert here only by accident —
+    # no live source emits vs_pitcher_avg — and an accident is not a
+    # policy: if a source ever starts shipping it, it must land on the
+    # card as context (pipeline shows it as "vs_opponent") and nowhere
+    # near the number. The real matchup signal is arsenal-vs-swing,
+    # which the matchup layer carries.
+    form = compute_form(logs, prop.career_avg, None,
                         weights=form_weights or MLB_WINDOW_WEIGHTS,
                         prior=prop.career_avg,
                         prior_n=int(getattr(prop, "career_games", 0) or 0),
                         prior_games=CAREER_PRIOR_GAMES)
 
-    park = evaluate_park(get_park(game.park))
+    park = evaluate_park(get_park(game.park),
+                         bats=getattr(prop, "bats", "") or "")
     weather = evaluate_weather(game.weather)
     matchup = evaluate_matchup(prop, game)
 

@@ -230,6 +230,30 @@ def expected_distinct_scorers(team_a_tds: float, team_b_tds: float) -> float:
     return min(SCORERS_SLOPE * total + SCORERS_BASE, total)
 
 
+#: MLB home-run anchor (the MLB handicapping script, §1.2–1.3). Roughly
+#: 40% of modern MLB runs score via the home run at ~1.6 runs per homer,
+#: so expected team HRs ≈ team total × 0.25; multi-homer games trim the
+#: DISTINCT-hitter count by ~5%. Both constants are the script's own —
+#: unlike football's, they have not yet been re-fitted on our logs; the
+#: weekly devig instrument will say if they need to be.
+HR_PER_RUN = 0.25
+HR_DISTINCT = 0.95
+
+
+def expected_distinct_hr_hitters(game_total: float) -> float:
+    """How many distinct HR hitters a game's run total supports.
+
+    The market-sum method's denominator for baseball: sum every listed
+    hitter's raw implied HR probability in the game, divide by this, and
+    the ratio is the board's hold — the same mechanic
+    ``expected_distinct_scorers`` anchors for football, priced off the
+    game total because MLB books list both teams' hitters on one menu.
+    """
+    if not game_total or game_total <= 0:
+        return 0.0
+    return float(game_total) * HR_PER_RUN * HR_DISTINCT
+
+
 def hold_multiplier(implied: list, expected_scorers: float,
                     min_priced: int = MIN_PRICED) -> float | None:
     """``sum(implied) / expected_scorers``, or None when unmeasurable.
@@ -601,5 +625,6 @@ __all__ = ["SCORERS_SLOPE", "SCORERS_BASE", "TD_OFFSET", "TD_DIVISOR",
            "board_hold", "board_devig", "Devig", "as_devig", "power_exponent",
            "PROPORTIONAL", "POWER", "DEFAULT_METHOD", "K_MIN", "K_MAX",
            "MIN_PRICED", "expected_tds_affine", "expected_distinct_scorers",
+           "HR_PER_RUN", "HR_DISTINCT", "expected_distinct_hr_hitters",
            "hold_multiplier", "fair_probability", "american", "game_prices",
            "game_devig", "FairQuote", "board_fair", "reference_book"]

@@ -70,6 +70,14 @@ class ParkProfile:
     hr_factor: float = 1.0
     run_factor: float = 1.0
     k_factor: float = 1.0
+    # Handedness-split HR factors (handicapping script §5: "the handedness
+    # split is mandatory" — the same park can be a top-five HR environment
+    # for lefties and average for righties, and a single blended factor
+    # misprices both). Set only where the asymmetry is structural and
+    # documented in ``plays``; None falls back to the blended factor.
+    # Sanity anchor: blended ≈ 0.42·lhb + 0.58·rhb (league L/R PA mix).
+    hr_factor_lhb: Optional[float] = None
+    hr_factor_rhb: Optional[float] = None
     altitude_ft: int = 0
     roof: str = "open"           # open | retractable | dome
     surface: str = "grass"

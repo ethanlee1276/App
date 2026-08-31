@@ -57,12 +57,18 @@ def _hitter_matchup(prop: MLBProp, game: MLBGame) -> MatchupEffect:
                 reasons.append(prop.platoon_note)
         else:
             # Platoon: L vs R (or R vs L) is the classic advantage; switch
-            # hitters always have it.
-            adv = (prop.bats == "S") or (prop.bats != starter.throws)
-            if adv:
-                mult *= 1.04
-                reasons.append(f"Platoon edge — {prop.bats}HB vs {starter.throws}HP "
-                               f"({starter.name})")
+            # hitters always have it. Both directions speak — the script
+            # (§4): "handedness drives lineup construction"; a same-hand
+            # matchup is a real drag, not an absence of edge, and pricing
+            # only the favorable half skewed every unmeasured righty
+            # facing a righty.
+            from .platoon import league_norm
+            norm = league_norm(prop.bats, starter.throws)
+            if norm != 1.0:
+                mult *= norm
+                word = "edge" if norm > 1.0 else "disadvantage"
+                reasons.append(f"Platoon {word} — {prop.bats}HB vs "
+                               f"{starter.throws}HP ({starter.name})")
 
         # Starter's quality against this batter's side. Tempered (×0.35)
         # because books price obvious splits in — edges come from the sum of

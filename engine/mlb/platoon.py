@@ -21,6 +21,29 @@ MIN_PER_SIDE = 8
 SHRINK = 15.0
 FACTOR_CLAMP = (0.85, 1.18)
 
+#: League platoon norms — the handicapping script (§11): a thin personal
+#: split regresses "toward the league-average platoon effect for his
+#: handedness, NOT toward no effect". Shrinking to 1.0 meant a hitter
+#: with nine games against lefties ERASED the advantage the league says
+#: exists, while a hitter with zero games kept it via the generic bump —
+#: less data was treated as more information. The advantage figure is
+#: the same +4% the generic bump has always used; the same-hand penalty
+#: is its mirror, slightly tempered because books price the obvious side.
+LEAGUE_ADV = 1.04
+LEAGUE_DIS = 0.97
+
+
+def league_norm(bats: str, throws: str) -> float:
+    """The league-average platoon factor for this matchup direction.
+    Switch hitters always hold the advantage; unknown hands claim none."""
+    bats = (bats or "").upper()
+    throws = (throws or "").upper()
+    if throws not in ("L", "R") or bats not in ("L", "R", "S"):
+        return 1.0
+    if bats == "S" or bats != throws:
+        return LEAGUE_ADV
+    return LEAGUE_DIS
+
 # Official-split fallback: shrink by plate appearances (a half season vs
 # one hand is ~200 PA) and demand a real sample before it speaks.
 OFFICIAL_SHRINK_PA = 130.0
@@ -87,8 +110,17 @@ def attach_platoon(slate, splits_by_market: dict[str, dict]) -> int:
         if not s:
             continue
         factor = s.get(hand, 1.0)
-        prop.platoon_factor = factor
         n = s.get(f"n{hand}", 0)
+        # The stored factor was shrunk toward 1.0 with weight n/(n+SHRINK);
+        # the script's rule is to regress toward the LEAGUE platoon norm
+        # instead. Same weight, so the unclaimed (1-w) mass moves from
+        # "no effect" onto the effect the league actually shows.
+        norm = league_norm(getattr(prop, "bats", ""), hand)
+        if norm != 1.0 and n >= MIN_PER_SIDE:
+            w = n / (n + SHRINK)
+            factor = round(clamp(factor + (1.0 - w) * (norm - 1.0),
+                                 *FACTOR_CLAMP), 3)
+        prop.platoon_factor = factor
         if abs(factor - 1.0) >= 0.03:
             verb = "hits" if factor > 1.0 else "struggles"
             prop.platoon_note = (f"Measured split: {verb} vs "
@@ -135,7 +167,10 @@ def attach_official_splits(slate, splits: dict[int, dict]) -> int:
             continue
         raw = side["slg"] / blended
         w = pa_s / (pa_s + OFFICIAL_SHRINK_PA)
-        factor = round(clamp(1.0 + (raw - 1.0) * w, *FACTOR_CLAMP), 3)
+        # Same regression target as the game-log path: the league norm
+        # holds the weight the personal sample hasn't earned.
+        norm = league_norm(getattr(prop, "bats", ""), hand)
+        factor = round(clamp(norm + (raw - norm) * w, *FACTOR_CLAMP), 3)
         if factor == 1.0:
             continue
         prop.platoon_factor = factor

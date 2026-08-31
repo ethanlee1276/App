@@ -56,7 +56,11 @@ def test_attach_uses_tonights_starter_hand():
     splits = {TOTAL_BASES: {"lefty masher": {"L": 1.12, "R": 0.92,
                                              "nL": 15, "nR": 15}}}
     assert attach_platoon(slate, splits) == 1
-    assert prop.platoon_factor == 1.12
+    # Re-anchored 2026-08-31 (the MLB handicapping script, §11): the
+    # stored 1.12 was shrunk toward 1.0 with weight nL/(nL+SHRINK)=0.5;
+    # the unearned half now regresses toward the LEAGUE advantage norm
+    # (1.04) instead of toward "no effect": 1.12 + 0.5×0.04 = 1.14.
+    assert prop.platoon_factor == 1.14, prop.platoon_factor
     assert "vs lefties" in prop.platoon_note
 
     # The matchup layer uses the measured split INSTEAD of the generic bump.

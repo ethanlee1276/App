@@ -47,6 +47,7 @@ PARKS: dict[str, ParkProfile] = {
                                    "one of the hardest parks in the league to homer in."),
     "yankee": ParkProfile("yankee", "Yankee Stadium", "NYY",
                           hr_factor=1.10, run_factor=1.04, k_factor=1.00,
+                          hr_factor_lhb=1.22, hr_factor_rhb=1.03,
                           lf_ft=318, cf_ft=408, rf_ft=314,
                           lf_wall_ft=8, rf_wall_ft=8,
                           capacity=46537, opened=2009,
@@ -55,6 +56,7 @@ PARKS: dict[str, ParkProfile] = {
                                 "other park — a 335-foot fly that dies elsewhere is a homer."),
     "fenway": ParkProfile("fenway", "Fenway Park", "BOS",
                           hr_factor=0.96, run_factor=1.08, k_factor=0.97,
+                          hr_factor_lhb=0.88, hr_factor_rhb=1.00,
                           lf_ft=310, cf_ft=420, rf_ft=302,
                           lf_wall_ft=37, rf_wall_ft=5,
                           capacity=37755, opened=1912,
@@ -65,6 +67,7 @@ PARKS: dict[str, ParkProfile] = {
                                 "(Triangle, 420) punishes left-handed power."),
     "oracle": ParkProfile("oracle", "Oracle Park", "SF",
                           hr_factor=0.85, run_factor=0.94, k_factor=1.02,
+                          hr_factor_lhb=0.75, hr_factor_rhb=0.92,
                           lf_ft=339, cf_ft=399, rf_ft=309,
                           lf_wall_ft=8, rf_wall_ft=24,
                           capacity=41265, opened=2000,
@@ -133,6 +136,7 @@ PARKS: dict[str, ParkProfile] = {
                                   "league-average because doubles and triples replace them."),
     "target": ParkProfile("target", "Target Field", "MIN",
                           hr_factor=0.98, run_factor=0.99, k_factor=1.00,
+                          hr_factor_lhb=0.92, hr_factor_rhb=1.02,
                           lf_ft=339, cf_ft=404, rf_ft=328,
                           lf_wall_ft=8, rf_wall_ft=23,
                           capacity=38544, opened=2010,
@@ -141,6 +145,7 @@ PARKS: dict[str, ParkProfile] = {
                                 "is a bigger factor than the dimensions."),
     "daikin": ParkProfile("daikin", "Daikin Park", "HOU",
                           hr_factor=1.08, run_factor=1.02, k_factor=1.00,
+                          hr_factor_lhb=0.98, hr_factor_rhb=1.16,
                           roof="retractable",
                           lf_ft=315, cf_ft=409, rf_ft=326,
                           lf_wall_ft=19, rf_wall_ft=7,
@@ -238,6 +243,7 @@ PARKS: dict[str, ParkProfile] = {
                        lf_ft=325, cf_ft=399, rf_ft=320,
                        lf_wall_ft=6, rf_wall_ft=21,
                        hr_factor=0.88, run_factor=0.96, k_factor=1.00,
+                       hr_factor_lhb=0.80, hr_factor_rhb=0.94,
                        capacity=38747, opened=2001,
                        plays="Right field is only 320 down the line but the 21-foot Clemente "
                              "Wall stands in front of it, so left-handed power turns into "
@@ -295,7 +301,25 @@ class ParkEffect:
     reasons: list[str] = field(default_factory=list)
 
 
-def evaluate_park(park: ParkProfile) -> ParkEffect:
+def hr_factor_for(park: ParkProfile, bats: str = "") -> tuple[float, str]:
+    """The HR factor for THIS batter's hand, and the hand word used.
+
+    Handicapping script §5: "the handedness split is mandatory" — a single
+    blended factor at Yankee Stadium underprices every lefty and
+    overprices every righty at once. Splits exist only where the
+    asymmetry is structural (see the profiles); everywhere else, and for
+    switch hitters (whose side tonight depends on the starter), the
+    blended factor answers.
+    """
+    bats = (bats or "").upper()
+    if bats == "L" and park.hr_factor_lhb is not None:
+        return park.hr_factor_lhb, "left-handed"
+    if bats == "R" and park.hr_factor_rhb is not None:
+        return park.hr_factor_rhb, "right-handed"
+    return park.hr_factor, ""
+
+
+def evaluate_park(park: ParkProfile, bats: str = "") -> ParkEffect:
     # Outs stays at 1.0 deliberately. A park moves how often contact goes
     # for damage; how long a manager leaves his starter in is a bullpen and
     # scoreboard decision, and inventing a park factor for it would be
@@ -304,13 +328,16 @@ def evaluate_park(park: ParkProfile) -> ParkEffect:
             OUTS: 1.0}
     reasons: list[str] = []
 
-    # HR factor hits home-run props hardest and total bases partially.
-    if abs(park.hr_factor - 1.0) >= 0.05:
-        mult[HOME_RUNS] *= park.hr_factor
-        mult[TOTAL_BASES] *= 1.0 + (park.hr_factor - 1.0) * 0.45
-        verb = "boosts" if park.hr_factor > 1 else "suppresses"
-        reasons.append(f"{park.name} {verb} home runs "
-                       f"({(park.hr_factor - 1) * 100:+.0f}% vs average)")
+    # HR factor hits home-run props hardest and total bases partially —
+    # by the batter's hand where the park demands it.
+    hr_f, hand_word = hr_factor_for(park, bats)
+    if abs(hr_f - 1.0) >= 0.05:
+        mult[HOME_RUNS] *= hr_f
+        mult[TOTAL_BASES] *= 1.0 + (hr_f - 1.0) * 0.45
+        verb = "boosts" if hr_f > 1 else "suppresses"
+        who = f"{hand_word} home runs" if hand_word else "home runs"
+        reasons.append(f"{park.name} {verb} {who} "
+                       f"({(hr_f - 1) * 100:+.0f}% vs average)")
 
     # Run factor lifts hits/TB generally.
     if abs(park.run_factor - 1.0) >= 0.04:
