@@ -179,7 +179,8 @@ def best_market(cards: list[dict]) -> dict | None:
     tiers would systematically push money into the highest-vig markets.
     """
     priced = [c for c in cards
-              if c.get("priced") and c.get("edge") is not None]
+              if c.get("priced") and c.get("edge") is not None
+              and not c.get("gate")]
     if not priced:
         return None
     return max(priced, key=lambda c: c["edge"] - c["required_edge"])

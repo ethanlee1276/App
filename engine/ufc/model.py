@@ -155,7 +155,20 @@ def scorecard(a: dict, b: dict) -> tuple[float, list[str]]:
     cardio = _clamp3(sdiff(b.get("r3_decay", 0.15), a.get("r3_decay", 0.15), 0.15))
     situational = _clamp3(3.0 * (age_mult(a.get("age")) - age_mult(b.get("age")))
                           - 0.5 * (len(a.get("red_flags", []))
-                                   - len(b.get("red_flags", []))))
+                                   - len(b.get("red_flags", [])))
+                          # Script §5: "short notice is the largest
+                          # situational penalty in the sport" — sub-two-week
+                          # replacements win in the high thirties against
+                          # lines that say more. This was a data-quality
+                          # flag only; the MODEL now knows it too.
+                          - (0.9 if a.get("short_notice") else 0.0)
+                          + (0.9 if b.get("short_notice") else 0.0))
+    if a.get("short_notice"):
+        notes.append(f"{a.get('name', 'A')} on short notice — no camp, no "
+                     f"path analysis; replacements win far below their lines")
+    if b.get("short_notice"):
+        notes.append(f"{b.get('name', 'B')} on short notice — no camp, no "
+                     f"path analysis; replacements win far below their lines")
 
     diff = (WEIGHTS["style"] * 4 * style_shift
             + WEIGHTS["striking"] * striking
@@ -181,6 +194,15 @@ def method_conditionals(f: dict, opp: dict, division: str) -> dict:
     # Knockdown rate & the opponent's chin push KO; the chin doesn't heal.
     ko *= 1.0 + 0.8 * min(1.5, f.get("kd_per100", 1.0) / 2.0)
     ko *= 1.0 + 0.35 * min(3, opp.get("ko_losses_last3", 0))
+    # Script §4: the age cliff is ASYMMETRIC — reflexes and durability
+    # decay from the mid-thirties while power ages last, so an older
+    # opponent is a softer target regardless of what his record shows.
+    # This is the mechanism behind the aging-slugger structure: his
+    # OWN ko share survives (kd rate above), the opponent's rises here,
+    # and the fight's ITD widens in both directions.
+    opp_age = opp.get("age") or 0
+    if opp_age > 34:
+        ko *= 1.0 + min(0.45, 0.11 * (opp_age - 34))
     # Sub threat needs BOTH an active hunter and a takedown-vulnerable
     # opponent; a wrestler on top produces decisions, not submissions.
     if f.get("archetype") == "wrestler":
@@ -400,6 +422,26 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
             haircut_p=p_final if is_ml_side else None,
             thin_data=thin, book=prices.get("book", "")))
 
+    # §2/§8 — the triangle's gate: a method bet is a HOW purchased on a
+    # WHO, and only worth buying when the sharp moneyline already
+    # endorses the who. A method row on a fighter the devigged
+    # moneyline prices far below our number is a moneyline opinion
+    # mispriced into a 20-30% overround — gated, with the reason on the
+    # row, and never chosen as the fight's best market.
+    from .triangle import expected_minutes, hazard_tilt, ml_agreement
+    for c in board:
+        if c["market"] not in ("method", "fighter_finish"):
+            continue
+        sel = c.get("selection") or ""
+        if sel.startswith(name_a):
+            why = ml_agreement(p_model, mkt_a)
+        elif sel.startswith(name_b):
+            why = ml_agreement(1.0 - p_model, mkt_b)
+        else:
+            why = ""
+        if why:
+            c["gate"] = why
+
     best = markets.best_market(board)
     ml_card = next(c for c in board
                    if c["market"] == "moneyline" and c["selection"] == side)
@@ -420,8 +462,20 @@ def evaluate_fight(a: dict | None, b: dict | None, prices: dict,
         style=sc["score"], env=es["score"], movement=None)
     score = gd["score"]
 
+    # §1.3 — expected duration, "the quiet workhorse of the entire prop
+    # menu", derived from the ITD probability over the script's
+    # front-loaded hazard prior (§6), bent by the fight's own profile.
+    # The feed carries no scheduled-rounds field, so three rounds is
+    # assumed and SAID — §1.4's warning stands, and a five-round main
+    # event's number is knowably conservative rather than silently wrong.
+    _tilt = hazard_tilt(a, b)
+    _rounds = int(prices.get("rounds") or 3)
+    _e_min = expected_minutes(1.0 - joint["distance"], _rounds, _tilt)
+
     card = {
         **base, "pick": side, "odds": odds, "book": prices.get("book", ""),
+        "e_minutes": _e_min, "scheduled_rounds": _rounds,
+        "hazard_tilt": _tilt,
         "p_model": round(p_m, 4), "p_market": round(p_mkt, 4),
         "p_final": p_final, "w": w,
         "break_even": round(1.0 / _dec_odds(odds), 4),
