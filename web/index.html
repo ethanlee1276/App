@@ -338,9 +338,22 @@
         <button class="nav-btn sb-item active" data-view="recommended" data-hint="tonight’s picks">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
           Dashboard</button>
+        <button class="nav-btn sb-item" data-view="likely" id="likely-tab" data-hint="most likely to hit — start here">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10z"/></svg>
+          Top Picks</button>
+        <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="plus-money darts, sized like lottery tickets">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
+          Long Shots</button>
         <button class="nav-btn sb-item" data-view="live" data-hint="live scores and open bets">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
           Live Now <span class="sb-badge" id="sb-live-badge" hidden></span></button>
+        <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
+          My Bets</button>
+        <button class="sport-btn sb-item" data-sport="record" data-kind="tool"
+                title="Every pick journaled at its real price, graded in public">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
+          Record</button>
       </div>
 
       <!-- The declutter, 2026-08-17. Ethan: "theres so much on the site
@@ -358,10 +371,10 @@
                Library; the daily surfaces ship open, reference ships
                folded, and the choice is remembered (qb_sb_folds). -->
       <button class="sb-label sb-fold" data-head="research" data-fold="research"
-              type="button" aria-expanded="true">Betting
+              type="button" aria-expanded="false">Betting
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="sb-group" data-group="research">
+      <div class="sb-group" data-group="research" hidden>
         <!-- ORDERED BY THE EVIDENCE BEHIND EACH BOARD, which is the order
              engine/boards.guide() has always used and this menu never did.
              Ethan, 2026-08-30: "i made the site and im getting confused on
@@ -373,12 +386,6 @@
              claim tests at 0.468, a coin flip, and it is the only one
              that stakes money. A menu that led with it was pointing
              people at the weakest thing on the site. -->
-        <button class="nav-btn sb-item" data-view="likely" id="likely-tab" data-hint="most likely to hit — start here">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10z"/></svg>
-          Most Likely</button>
-        <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="plus-money darts, sized like lottery tickets">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
-          Long Shots</button>
         <button class="nav-btn sb-item" data-view="edge" data-hint="where we think the price is wrong — the only board we stake">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           Value Bets</button>
@@ -422,13 +429,10 @@
       </div>
 
       <button class="sb-label sb-fold" data-head="tools" data-fold="tools"
-              type="button" aria-expanded="true">My Book
+              type="button" aria-expanded="false">My Book
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <div class="sb-group" data-group="tools">
-        <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
-          My Bets</button>
+      <div class="sb-group" data-group="tools" hidden>
         <button class="nav-btn sb-item" data-view="alerts" data-hint="line moves, injuries, the desk">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
           Alerts <span class="sb-badge" id="sb-alert-badge" hidden></span></button>
@@ -460,10 +464,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
       </button>
       <div class="sb-group" data-group="proof" hidden>
-        <button class="sport-btn sb-item" data-sport="record" data-kind="tool"
-                title="Every pick journaled at its real price, graded in public">
-          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
-          Results Tracker</button>
         <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
           The Lab</button>

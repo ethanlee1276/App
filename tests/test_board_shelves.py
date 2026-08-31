@@ -176,14 +176,25 @@ def _order(group):
     return re.findall(r'data-(?:view|subtab)="([a-z]+)"', group)
 
 
-def test_most_likely_leads_the_betting_menu():
-    assert _order(_betting_group())[0] == "likely"
+def test_most_likely_outgrew_the_betting_menu():
+    """It LED the group until 2026-08-31; the drawer rework promoted it
+    (and Long Shots) to the always-open tier above every fold — Ethan's
+    nightly six. Leading a folded group would now be a demotion."""
+    html = _src("web", "index.html")
+    pages = html[html.index('data-group="pages"'):html.index("sb-fold")]
+    order = _order(pages)
+    assert "likely" in order and "longshots" in order, order
+    assert order.index("likely") < order.index("longshots")
+    assert 'data-view="likely"' not in _betting_group()
 
 
 def test_the_staking_board_sits_below_the_two_that_do_not_stake():
-    order = _order(_betting_group())
-    assert order.index("edge") > order.index("likely")
-    assert order.index("edge") > order.index("longshots")
+    """Same claim, new geometry: the two no-stake boards are tier-1;
+    the staking board stays behind the Betting fold below them."""
+    html = _src("web", "index.html")
+    assert html.index('data-view="likely"') < html.index('data-view="edge"')
+    assert html.index('data-view="longshots"') < html.index('data-view="edge"')
+    assert 'data-view="edge"' in _betting_group()
 
 
 def test_the_menu_order_matches_the_guide_it_never_read():
@@ -191,8 +202,12 @@ def test_the_menu_order_matches_the_guide_it_never_read():
     them". The menu is now the same order for the three bet boards."""
     want = [b["key"] for b in boards.guide()]
     assert want == ["most_likely", "long_shots", "recommendations"], want
-    seen = [k for k in _order(_betting_group())
-            if k in ("likely", "longshots", "edge")]
+    # The three no longer share a group — likely and longshots are
+    # tier-1 rows above the Betting fold (2026-08-31) — but their
+    # DOCUMENT order still tells the guide's story: most evidence first.
+    html = _src("web", "index.html")
+    seen = sorted(("likely", "longshots", "edge"),
+                  key=lambda k: html.index(f'data-view="{k}"'))
     assert seen == ["likely", "longshots", "edge"], seen
 
 

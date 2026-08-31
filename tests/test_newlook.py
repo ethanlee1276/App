@@ -157,10 +157,14 @@ def test_the_library_folds_and_remembers():
     for grp in ("library", "proof"):
         assert f'<div class="sb-group" data-group="{grp}" hidden>' in sb, \
             f"{grp}'s group lost its markup-default [hidden]"
+    # research and tools shipped OPEN while they held the daily rows.
+    # 2026-08-31: those rows (Top Picks, Long Shots, My Bets, Record)
+    # were promoted to the always-open tier, and what remains in both
+    # groups is reference — so they fold like Library and Proof now.
     for fold in ('data-fold="research"', 'data-fold="tools"'):
         seg = sb[sb.index(fold):]
-        assert 'aria-expanded="true"' in seg[:220], \
-            f"{fold} must ship open — it is a daily surface"
+        assert 'aria-expanded="false"' in seg[:220], \
+            f"{fold} no longer ships shut — its daily rows moved out"
     assert ".sb-group[hidden] { display: none; }" in CSS, \
         "a folded group only pretends to fold without this rule"
     assert "qb_sb_folds" in APP, "the fold choice is no longer remembered"
