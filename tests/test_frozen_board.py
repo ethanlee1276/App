@@ -147,7 +147,9 @@ def test_cfbs_degraded_words_no_longer_wait_for_a_non_quiet_run():
     """The exact line that reported to nobody. Production is always
     quiet, so `if not quiet` meant never."""
     src = _src()
-    assert "if not quiet or kept or unreachable or unreadable:" in src
+    # The list of degraded words grows; what matters is that the gate is
+    # not `if not quiet` alone.
+    assert "if not quiet or kept or unreachable or unreadable" in src
 
 
 def test_a_genuine_refresh_still_keeps_its_silence():

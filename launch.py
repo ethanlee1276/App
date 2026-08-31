@@ -630,16 +630,19 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # before, because it is the cause 2026-08-29 could not be checked
     # against.
     unreadable = ok and "listed, 0 readable" in tail
+    unknown = ok and "schedule unknown" in tail
     # DEGRADED STATES PRINT EVEN WHEN QUIET. These three are the ones a
     # reader needs and the loop is always quiet, so gating them behind
     # `not quiet` reported them to nobody — the whole of why #82 stayed
     # open. A refresh that actually refreshed still keeps its silence.
-    if not quiet or kept or unreachable or unreadable:
+    if not quiet or kept or unreachable or unreadable or unknown:
         word = ("kept last board (schedule unreachable)" if kept else
                 "EMPTY BOARD — schedule unreachable, nothing to keep"
                 if unreachable else
                 "EMPTY BOARD — feed listed games, parser read none"
                 if unreadable else
+                "EMPTY BOARD — no games and no lookback; season state unknown"
+                if unknown else
                 # The three above are causes CFB can name. Everything
                 # else routes through the shared helper, which is where
                 # the plain "refreshed" over an empty board was caught

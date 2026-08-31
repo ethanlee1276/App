@@ -2046,6 +2046,19 @@ function renderEmptySlate() {
        side, not an empty slate, and it is being looked at.${state.data.note
          ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
          : ""}</div>`
+    : state.data.status === "schedule unknown"
+    /* NEITHER "no games" NOR "offseason", because both are claims about
+       the LEAGUE and what failed was our lookback. Saying the season is
+       over on the strength of a fetch we could not make is how a board
+       told a reader college football had not started, the day after it
+       had. */
+    ? `<div class="es-icon">${icon("warn", 30)}</div><div class="es-title">We can’t tell what’s on today</div>
+       <div class="es-sub">Nothing came back for this date, and the lookback that
+       would say whether the season is running didn’t answer either. That’s a gap
+       on our side, not a statement that there’s no football — it retries every
+       refresh.${state.data.note
+         ? ` <span class="mini" style="opacity:.7">${escapeHtml(String(state.data.note).slice(0, 160))}</span>`
+         : ""}</div>`
     : state.data.status === "not built"
     ? `<div class="es-icon">${icon("clock", 30)}</div><div class="es-title">This slate hasn’t been built yet</div>
        <div class="es-sub">Every sport rebuilds on a refresh cycle — give it a minute

@@ -79,41 +79,60 @@ def test_the_lookback_spans_a_bye_week():
     assert cfb_build.NEARBY_DAYS >= 8, cfb_build.NEARBY_DAYS
 
 
-def test_a_failed_lookback_falls_back_to_the_old_answer_not_a_new_wrong_one():
-    """`load_range` skips days it cannot fetch, so a dead feed returns an
-    empty list — which lands on the offseason branch, exactly where an
-    unknown landed before this existed. No new way to be wrong."""
+def test_a_failed_lookback_is_no_longer_reported_as_an_empty_league():
+    """SUPERSEDED 2026-08-31, and the old contract is worth stating.
+
+    This test used to assert `got == []` and was named "falls back to the
+    old answer not a new wrong one", on the reasoning that a dead feed
+    landing on the offseason branch was "exactly where an unknown landed
+    before this existed. No new way to be wrong."
+
+    That reasoning was wrong, and Ethan found it from the page: "why does
+    it say offseason if cfb started yesterday." Landing an unknown on the
+    offseason branch IS a way to be wrong — it publishes a claim about
+    college football on the strength of a fetch we could not make. Not a
+    NEW way, which is what the old note actually established, and a bug
+    that predates a fix is still a bug.
+
+    So the lookback is tri-state now: games, no games, or could not look.
+    See tests/test_cfb_offseason_claim2.py for the full shape."""
     def boom(*_a, **_k):
         raise RuntimeError("feed down")
 
-    real = cfb_build.cfbdata.load_range
-    cfb_build.cfbdata.load_range = boom
+    real = cfb_build.cfbdata.fetch_scoreboard
+    cfb_build.cfbdata.fetch_scoreboard = boom
     try:
         got = cfb_build._recent_games(datetime.date(2026, 8, 30), {})
     finally:
-        cfb_build.cfbdata.load_range = real
-    assert got == []
+        cfb_build.cfbdata.fetch_scoreboard = real
+    assert got is None, got
 
 
 def test_the_lookback_asks_for_the_ten_days_before_the_date_not_after():
     """Forward-looking would call the day before a season opener "running",
     which is not what the word means and is not what an empty board on
     that day should say."""
-    seen = {}
+    # Re-expressed against the per-day fetch `_recent_games` uses now
+    # (it stopped calling `load_range`, which hid a failed day). Checking
+    # every date rather than the two endpoints is the stronger form of
+    # the same contract.
+    seen = []
 
-    def spy(start, end, **kw):
-        seen["start"], seen["end"] = start, end
-        return [{"date": "2026-08-29"}]
+    def spy(date, ttl=None):
+        seen.append(date)
+        return {"events": []}
 
-    real = cfb_build.cfbdata.load_range
-    cfb_build.cfbdata.load_range = spy
+    real = cfb_build.cfbdata.fetch_scoreboard
+    cfb_build.cfbdata.fetch_scoreboard = spy
     try:
-        got = cfb_build._recent_games(datetime.date(2026, 8, 30), {})
+        cfb_build._recent_games(datetime.date(2026, 8, 30), {})
     finally:
-        cfb_build.cfbdata.load_range = real
-    assert seen["end"] == "2026-08-29", seen
-    assert seen["start"] == "2026-08-20", seen
-    assert len(got) == 1
+        cfb_build.cfbdata.fetch_scoreboard = real
+    assert seen, "the lookback asked for nothing"
+    assert max(seen) == "2026-08-29", seen        # the day before, not after
+    assert min(seen) == "2026-08-20", seen
+    assert "2026-08-30" not in seen, "asked about the date itself"
+    assert "2026-08-31" not in seen, "asked about the future"
 
 
 def test_the_lookback_is_cheap_because_the_cache_is_already_warm():
@@ -123,7 +142,12 @@ def test_the_lookback_is_cheap_because_the_cache_is_already_warm():
     src = _src()
     block = src[src.index("def _recent_games("):]
     block = block[:block.index("\ndef ")]
-    assert "cfbdata.load_range" in block
+    # It fetches per day now rather than through `load_range` — that
+    # helper swallows a failed day, which is the distinction the tri-state
+    # exists to draw. The COST argument is unchanged: the same keyless,
+    # 24-hour-cached scoreboard call either way.
+    assert "cfbdata.fetch_scoreboard" in block
+    assert "cfbdata.load_range" not in block
     assert "NEARBY_DAYS" in block
     # No ttl override: it takes load_range's 24h default deliberately.
     assert "ttl=" not in block

@@ -799,6 +799,20 @@ def main() -> None:
                   f"Wrote {args.out}")
             return
         recent = _recent_games(day, lookup)
+        if recent is None:
+            # We could not look. Neither "offseason" nor "quiet day" is
+            # a claim we have earned.
+            out.update(status="schedule unknown",
+                       note="No games came back for this date, and the "
+                            "ten-day lookback that would say whether the "
+                            "season is running could not be fetched "
+                            "either. This is not a claim that there is no "
+                            "football — it is that we cannot currently "
+                            "tell, and would rather say so.")
+            _write(out, args.out)
+            print(f"CFB {args.date}: 0 games and no lookback — schedule "
+                  f"unknown. Wrote {args.out}")
+            return
         if recent:
             last = max(g.get("date", "")[:10] for g in recent)
             out.update(status="no games today",
@@ -1135,22 +1149,50 @@ def main() -> None:
 NEARBY_DAYS = 10
 
 
-def _recent_games(day, lookup) -> list:
-    """FBS games in the ten days before `day`. Never raises.
+def _recent_games(day, lookup):
+    """FBS games in the ten days before `day`, or None if we could not look.
 
-    Keyless and cached for 24 hours, so on a true offseason date this
-    costs ten requests once a day rather than ten per refresh cycle. A
-    fetch that fails is skipped by `load_range` itself, which means the
-    honest failure mode here is "found nothing" — and that lands on the
-    offseason branch, which is where an unknown belonged before this
-    existed. No new way to be wrong, one new way to be right.
+    TRI-STATE, AND THE THIRD STATE IS THE POINT. This returned a bare
+    list, and its own docstring rationalised the gap: "a fetch that fails
+    is skipped by `load_range` itself, which means the honest failure
+    mode here is 'found nothing' — and that lands on the offseason
+    branch, which is where an unknown belonged." That is not honest. "We
+    could not look" and "we looked and the league is dormant" are
+    different facts, and publishing OFFSEASON off the first one asserts
+    something about college football on the strength of our own failure.
+
+    Ethan, 2026-08-31: "why does it say offseason if cfb started
+    yesterday." Because zero games today plus zero found in the lookback
+    reads as a dormant league, and the lookback can come back empty for
+    reasons that have nothing to do with the league:
+
+      * every day's fetch failed — the case this now separates.
+      * the fetch worked and `parse_scoreboard` discarded the games. On
+        opening weekend the lookback window is mostly FBS-vs-FCS, and
+        that filter dropped every one of them until the `_team_key`
+        fallback landed. The same parser serves this window and the
+        slate, so the Saturday that showed one game had a lookback that
+        found close to none — and the board called that the offseason.
+
+    Fetching per day rather than through `load_range` because that helper
+    swallows a failed day silently, which is the distinction being drawn.
     """
-    try:
-        return cfbdata.load_range(
-            _iso(day - datetime.timedelta(days=NEARBY_DAYS)),
-            _iso(day - datetime.timedelta(days=1)), conferences=lookup)
-    except Exception:                                  # noqa: BLE001
-        return []
+    start = day - datetime.timedelta(days=NEARBY_DAYS)
+    got, looked = [], 0
+    for n in range(NEARBY_DAYS):
+        d = start + datetime.timedelta(days=n)
+        try:
+            payload = cfbdata.fetch_scoreboard(_iso(d))
+        except Exception:                              # noqa: BLE001
+            continue
+        looked += 1
+        try:
+            got += cfbdata.parse_scoreboard(payload, lookup)
+        except Exception:                              # noqa: BLE001
+            continue
+    # Not one day answered. We know nothing about the last ten days, and
+    # saying "offseason" would be inventing the one thing we lack.
+    return got if looked else None
 
 
 def _has_board(path: str) -> bool:
