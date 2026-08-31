@@ -618,7 +618,11 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # before, because it is the cause 2026-08-29 could not be checked
     # against.
     unreadable = ok and "listed, 0 readable" in tail
-    if not quiet:
+    # DEGRADED STATES PRINT EVEN WHEN QUIET. These three are the ones a
+    # reader needs and the loop is always quiet, so gating them behind
+    # `not quiet` reported them to nobody — the whole of why #82 stayed
+    # open. A refresh that actually refreshed still keeps its silence.
+    if not quiet or kept or unreachable or unreadable:
         word = ("kept last board (schedule unreachable)" if kept else
                 "EMPTY BOARD — schedule unreachable, nothing to keep"
                 if unreachable else
@@ -750,6 +754,76 @@ def refresh_ufc(quiet: bool = False) -> bool:
 _BOARD_RUNS: dict = {}
 
 
+#: The slate boards a stuck build would freeze, by the name
+#: `_note_board` records them under.
+BOARD_FILES = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+               "wnba": WNBA_OUT, "cfb": CFB_OUT}
+
+#: How long a board may go without being rewritten before that is worth
+#: saying out loud. The loop rebuilds every board every cycle, so the
+#: only way to exceed this is a build that keeps returning without
+#: writing — which is exactly the state that hid for three weeks.
+STALE_BOARD_SECONDS = 1800
+
+#: One line per board per this many seconds, so a genuinely stuck board
+#: reports steadily without filling the journal at loop frequency.
+STALE_REPEAT_SECONDS = 1800
+
+_STALE_SAID: dict = {}
+
+
+def _warn_if_frozen(name: str) -> None:
+    """Say when a board has stopped being rewritten. UNCONDITIONALLY.
+
+    THE BUG THIS EXISTS FOR, found 2026-08-31 and open since #82.
+    `cfb.json` was stamped 2026-08-30T15:27:09 and had not moved for
+    twenty hours, and the journal held nothing about it. Every link in
+    that chain worked as designed:
+
+      * `cfb_build` cannot reach the schedule, takes the "keep the last
+        board" branch, WRITES NOTHING (deliberately — rewriting would
+        refresh `generated_at` and hide the very staleness a reader
+        needs) and exits 0.
+      * `_run_build` sees returncode 0 and swallows the subprocess
+        output, because it only forwards it on failure.
+      * `refresh_cfb` detects the kept board correctly, and prints it
+        behind `if not quiet`.
+      * The background loop is `refresh_all(quiet=True)`. Production is
+        always quiet.
+
+    So a degraded state was detected accurately and reported to nobody.
+    `_run_build` already carries this doctrine for failures — "failures
+    now print unconditionally: one line, into stdout, which systemd
+    forwards to the journal" — and a board frozen for a day is not a
+    smaller problem than a build that exited 1.
+
+    Checked on the FILE rather than on any sport's own reporting, so it
+    covers the sports that cannot yet describe themselves, and any sport
+    added later without anyone remembering this exists.
+    """
+    path = BOARD_FILES.get(name)
+    if not path:
+        return
+    try:
+        age = time.time() - os.path.getmtime(path)
+    except OSError:
+        # No board at all is its own alarm, and a louder one.
+        age = None
+    now = time.time()
+    if now - _STALE_SAID.get(name, 0.0) < STALE_REPEAT_SECONDS:
+        return
+    if age is None:
+        _STALE_SAID[name] = now
+        print(f"  {name.upper():<4} BOARD MISSING — {path} does not exist; "
+              f"nothing has published this slate.")
+    elif age > STALE_BOARD_SECONDS:
+        _STALE_SAID[name] = now
+        print(f"  {name.upper():<4} BOARD FROZEN — last written "
+              f"{age / 3600:.1f}h ago. The build is returning without "
+              f"writing (usually a feed it cannot reach, keeping the last "
+              f"board), so the page is serving stale data.")
+
+
 def _note_board(name: str, ok) -> bool:
     """Record that `name` just rebuilt, and whether it worked.
 
@@ -765,6 +839,9 @@ def _note_board(name: str, ok) -> bool:
         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "at_epoch": round(time.time()),
     }
+    # AFTER the run is recorded, so the heartbeat is written even if this
+    # raises, and unconditional because the loop that matters is quiet.
+    _warn_if_frozen(name)
     return bool(ok)
 
 
