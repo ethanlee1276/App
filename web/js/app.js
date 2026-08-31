@@ -3652,8 +3652,18 @@ function renderStats() {
           ? `${plural(nb, "game bet")} journaled`
             + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
           : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")} — all journaled` },
+    /* THE SUBTITLE CARRIES WHAT THE NUMBER CANNOT. `props_analyzed`
+       counts rows that got a REAL BOOK PRICE, so on a thin menu it
+       always reads as though the model considered almost nothing —
+       "4 props analyzed" on a two-game slate looks like a broken model
+       and is usually a book that has not posted yet. `props_built` is
+       how many the model actually projected from history, and the gap
+       between them is the whole diagnosis. */
     { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
-      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)` : "" },
+      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)`
+        : (d.counts.props_built > d.counts.props_analyzed
+           ? `of ${d.counts.props_built} built from history — the rest have no book price yet`
+           : "") },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     // A reader who set stakes to units asked not to be shown money, and
     // the tile that leads with a dollar figure is the one that would say

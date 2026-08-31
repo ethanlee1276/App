@@ -656,7 +656,20 @@ def main() -> None:
                       + ("" if _fj["got"] else
                          "  ← none joined; check the name spellings in "
                          "player_assets"))
-            out["counts"] = {**picks_result["counts"],
+            # MERGED, NOT REPLACED. This assigned a fresh dict and threw
+            # away `props_built`, set sixty lines above — the one number
+            # that separates "we only had four players' worth of history"
+            # from "we built two hundred props and a book priced four".
+            # Those need opposite fixes and the page could not tell them
+            # apart, which is exactly what the census three hundred lines
+            # up was added to prevent: "430 props buildable from history,
+            # zero priced, no census, no explanation anywhere."
+            #
+            # `props_analyzed` counts rows that got a REAL PRICE, so on
+            # its own it always looks like the model considered almost
+            # nothing.
+            out["counts"] = {**(out.get("counts") or {}),
+                             **picks_result["counts"],
                              "props_analyzed": len(recs),
                              "recommended": sum(1 for r in recs
                                                 if r["recommended"])}
