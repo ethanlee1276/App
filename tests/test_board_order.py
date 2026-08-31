@@ -125,6 +125,11 @@ def test_nothing_new_slipped_in_above_the_picks():
                "games-head", "games-controls", "games-sport", "games-sort",
                "games-mode-strip", "games-mode-grid", "games-outer",
                "games-prev", "games-next",
+               # Quick Tools (2026-08-31, Ethan's screenshot circling the
+               # four tiles: "We should show this at the top of the
+               # page"). Four launcher chips, one compact row — the fold
+               # cost was his call to spend.
+               "quick-tools",
                # Parlay Mode (2026-08-11): the old Parlay Zone's tickets,
                # hidden unless the sidebar switch is on — zero fold cost
                # in the default state.

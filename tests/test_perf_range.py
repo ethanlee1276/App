@@ -179,9 +179,17 @@ def test_the_dashboard_deltas_are_doors_and_measurements():
     """Render 3's extras (2026-08-19): a Quick Tools row of doors to
     rooms that already exist, a Recent Results tail read off the curve
     itself, and a per-sport donut fed by the ledger's own per-sport
-    export. None of the three may invent a number."""
+    export. None of the three may invent a number. The tools row moved
+    to its own top-of-page renderer 2026-08-31 (Ethan's screenshot:
+    "We should show this at the top of the page") — the doors are
+    asserted where they live now."""
+    with open(os.path.join(ROOT, "web", "js", "app.js"),
+              encoding="utf-8") as f:
+        app = f.read()
+    qt = app[app.index("function renderQuickTools("):]
+    qt = qt[:qt.index("\n}")]
     for href in ("#fantasy", "#scanner", "#mybets", "#bankroll"):
-        assert f'href="{href}"' in FN, f"quick tools lost {href}"
+        assert f'href="{href}"' in qt, f"quick tools lost {href}"
     # Recent results are curve ROWS, and only when the rows carry the
     # per-day record — a stale file drops the block instead of guessing.
     assert "const tail = full.slice(-5).reverse();" in FN

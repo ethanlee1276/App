@@ -284,7 +284,11 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
     # …and refined the same night: "We should have the performance
     # under the top picks." Picks, then the proof, then the edge
     # summary beside the cards it counts.
-    order = ['"likely-top"', '"home-perf"', '"stats"', '"best-bets"']
+    # …and once more, from his screenshot circling the four tool tiles:
+    # "We should show this at the top of the page." The launcher row
+    # opens the page; the venues follow it.
+    order = ['"quick-tools"', '"games-head"',
+             '"likely-top"', '"home-perf"', '"stats"', '"best-bets"']
     idx = [room.index(k) for k in order]
     assert idx == sorted(idx), order
     assert '"top-picks"' not in room, "the duplicate strip is back"

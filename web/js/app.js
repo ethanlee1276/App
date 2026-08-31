@@ -1773,6 +1773,7 @@ function renderAll() {
   // reads what the renderers wrote to decide which rooms exist, so a
   // host filled after it would be sorted into no room at all.
   renderLikelyTop();
+  renderQuickTools();
   // AFTER the renderers, always. Which rooms exist is decided by what
   // they just wrote — grouping first would judge every block empty and
   // draw a single tab.
@@ -5196,6 +5197,30 @@ function boardGuide(key) {
 //: Rows per shelf on the main page. Three is a phone screen's worth and
 //: leaves the full board a reason to exist.
 const LIKELY_TOP_N = 3;
+
+/* The Quick Tools row — doors to rooms that already exist, not new
+   features wearing buttons. It has moved three times in one day and
+   each move was Ethan's call, so the history rides here: built inside
+   the performance panel (above the record), moved below the record in
+   the picks-and-record consolidation ("a hallway of buttons between
+   the claim and its evidence"), and then promoted to the TOP of the
+   page — his screenshot circled the four tiles: "We should show this
+   at the top of the page." An app opens with its launcher row. */
+function renderQuickTools() {
+  const host = document.getElementById("quick-tools");
+  if (!host) return;
+  host.innerHTML = `
+    <div class="qt-row">
+      <a class="qt-chip" href="#fantasy">${icon("trophy", 17)}<span class="qt-t">
+        <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span></a>
+      <a class="qt-chip" href="#scanner">${icon("search", 17)}<span class="qt-t">
+        <b>Props scanner</b><span class="k">filter every priced prop</span></span></a>
+      <a class="qt-chip" href="#mybets">${icon("book", 17)}<span class="qt-t">
+        <b>Bet tracker</b><span class="k">log your own tickets</span></span></a>
+      <a class="qt-chip" href="#bankroll">${icon("chart", 17)}<span class="qt-t">
+        <b>Bankroll</b><span class="k">stakes and limits</span></span></a>
+    </div>`;
+}
 
 function renderLikelyTop() {
   const host = document.getElementById("likely-top");
@@ -10025,7 +10050,8 @@ const REC_ROOMS = [
    // on tonight (venues), what should I bet (top picks), why should I
    // trust you (the record), what's staked and why (the edge summary
    // beside its cards), then the deep board and its dials.
-   ["probation-note", "talent-note", "games-head", "games-outer",
+   ["probation-note", "talent-note", "quick-tools",
+    "games-head", "games-outer",
     "likely-top", "home-perf", "stats", "best-bets",
     "parlay-mode", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
@@ -28506,19 +28532,6 @@ async function renderHomePerf() {
       stroke-dashoffset="${(-off / n * C).toFixed(1)}" />`;
   };
   const pct = (x) => n ? (100 * x / n).toFixed(1) + "%" : "—";
-  // Render 3's Quick Tools row — doors to rooms that already exist, not
-  // new features wearing buttons.
-  const tools = `
-    <div class="qt-row">
-      <a class="qt-chip" href="#fantasy">${icon("trophy", 17)}<span class="qt-t">
-        <b>Fantasy room</b><span class="k">draft kit · calendar · mock draft</span></span></a>
-      <a class="qt-chip" href="#scanner">${icon("search", 17)}<span class="qt-t">
-        <b>Props scanner</b><span class="k">filter every priced prop</span></span></a>
-      <a class="qt-chip" href="#mybets">${icon("book", 17)}<span class="qt-t">
-        <b>Bet tracker</b><span class="k">log your own tickets</span></span></a>
-      <a class="qt-chip" href="#bankroll">${icon("chart", 17)}<span class="qt-t">
-        <b>Bankroll</b><span class="k">stakes and limits</span></span></a>
-    </div>`;
   // Render 3's Recent Results: the last graded slates, each with its own
   // record and units — the curve's tail, not a recomputation.
   const tail = full.slice(-5).reverse();
@@ -28567,10 +28580,6 @@ async function renderHomePerf() {
         </div>
       </div>`;
   }
-  // TOOLS BELOW THE PROOF. The quick-tools row rendered above the
-  // performance card, so the page read picks → doors → record: a
-  // hallway of buttons between the claim and its evidence. The doors
-  // still exist one scroll later; the record answers first.
   host.innerHTML = `
     <div class="perf-grid">
       <div class="card perf-card">
@@ -28643,8 +28652,7 @@ async function renderHomePerf() {
         <a class="perf-link" href="#record">Full record &#8594;</a>
       </div>
       ${sportsCard}
-    </div>
-    ${tools}`;
+    </div>`;
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
