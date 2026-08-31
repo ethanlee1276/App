@@ -327,21 +327,37 @@ def _live_block(g: dict) -> dict | None:
     "scheduled" is indistinguishable from one the build forgot to fill —
     and the site's own empty check is what draws the pre-game card.
     """
+    # TWO FEED SHAPES, ONE BLOCK. The NBA's CDN speaks numeric
+    # `gameStatus` (1 scheduled, 2 live, 3 final); the WNBA path now
+    # rides ESPN's scoreboard, whose rows carry a string `state` and a
+    # separate running score. This function read only the number — so
+    # after the ESPN parser learned to say "live", every WNBA game still
+    # arrived here as None-status and rendered as not started. The
+    # comment above already says it: nothing carried it the last two
+    # inches. This was the second inch.
     status = g.get("status")
-    if status == 2:
+    if status == 2 or g.get("state") == "live":
         state = "live"
-    elif status == 3:
+    elif status == 3 or g.get("state") == "final" or g.get("completed"):
         state = "final"
     else:
         return None
-    return {"state": state,
-            "home_score": g.get("home_score"),
-            "away_score": g.get("away_score"),
-            # Scalpy's schedule feed carries no clock or period, and an
-            # invented one is worse than none: the card falls back to the
-            # state word rather than printing "Q1 12:00" for a game in the
-            # fourth.
-            "detail": "final" if state == "final" else "in progress"}
+    if state == "final":
+        home, away = g.get("home_score"), g.get("away_score")
+    else:
+        # The running score where the feed carries one (ESPN does;
+        # Scalpy's schedule does not). `home_score` stays final-only on
+        # the ESPN rows so settlement cannot read a third-quarter score
+        # as a result — the live pair is the display copy.
+        home = g.get("live_home_score", g.get("home_score"))
+        away = g.get("live_away_score", g.get("away_score"))
+    return {"state": state, "home_score": home, "away_score": away,
+            # ESPN carries a clock ("Q3 4:21"); Scalpy's schedule feed
+            # does not, and an invented one is worse than none: the card
+            # falls back to the state word rather than printing "Q1
+            # 12:00" for a game in the fourth.
+            "detail": (g.get("clock") or
+                       ("final" if state == "final" else "in progress"))}
 
 
 def main() -> None:
@@ -408,12 +424,22 @@ def main() -> None:
 
     try:
         games = parse_schedule_day(fetch_schedule(), args.date)
-        yesterday = parse_schedule_day(
-            fetch_schedule(), (datetime.date.fromisoformat(args.date)
-                               - datetime.timedelta(days=1)).isoformat())
     except DataUnavailable as exc:
         out.update(status="unreachable", note=str(exc))
         games, yesterday = [], []
+    else:
+        # SEPARATELY, because on the ESPN path each parse is its own
+        # fetch: sharing one try meant yesterday's scoreboard failing
+        # threw away a slate that had already been read, and the board
+        # published "unreachable" over games it was holding. Yesterday
+        # only feeds the back-to-back read — that degrades; the slate
+        # does not go down with it.
+        try:
+            yesterday = parse_schedule_day(
+                fetch_schedule(), (datetime.date.fromisoformat(args.date)
+                                   - datetime.timedelta(days=1)).isoformat())
+        except DataUnavailable:
+            yesterday = []
 
     # The slate's games ride in the JSON like every other board's: it's how
     # the launcher's pacer knows the slate is live, what a refresh costs,

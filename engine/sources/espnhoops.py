@@ -331,11 +331,20 @@ def fetch_schedule(ttl: int = 21600) -> dict:
 
 def parse_schedule_day(_schedule: dict, date: str,
                        league: str = "wnba") -> list[dict]:
-    """One day's games in the shape the shared build expects."""
-    try:
-        games = load_day(date, league=league)
-    except DataUnavailable:
-        return []
+    """One day's games in the shape the shared build expects.
+
+    ``DataUnavailable`` PROPAGATES. The first cut caught it and returned
+    ``[]`` — the same value an honestly empty day returns — so on this
+    path a dead feed was indistinguishable from a quiet Monday. The
+    build's "unreachable" branch could never fire, and worse, its
+    offseason lookback counted every dark day as *looked at and empty*:
+    ten fetch failures in a row published "offseason" about a league in
+    mid-season, on the strength of our own network being down. Every
+    caller already handles the exception (the build says "unreachable",
+    the lookback counts it as not-looked), so swallowing it here only
+    destroyed the information they needed.
+    """
+    games = load_day(date, league=league)
     # THE STATE TRAVELS. This mapping listed six fields and dropped the
     # rest, so even once `parse_scoreboard` knew a game was live the
     # board never heard about it — the reason has to reach the page, not
