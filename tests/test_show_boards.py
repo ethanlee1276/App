@@ -110,12 +110,31 @@ def test_it_reads_the_files_rather_than_the_loops_own_opinion():
         or "reads FILES" in doc
 
 
-def test_it_also_prints_what_the_loop_recorded():
-    """So the disagreement between them is visible, which is what #82
-    turned out to be."""
-    launch._note_board("mlb", True)
-    out = _run()
-    assert "last refresh attempt" in out
+def test_it_reads_the_loops_view_from_the_heartbeat_file():
+    """NOT from `_BOARD_RUNS`. This command is its own process, so the
+    server's in-memory record is not in it — the first cut printed
+    nothing at all here, silently dropping the half of the output that
+    carries the finding. The heartbeat is written every cycle for
+    exactly this."""
+    import inspect
+    src = inspect.getsource(launch.show_boards)
+    assert "heartbeat.json" in src
+    # Not merely absent as a NAME — the comment explaining why it is not
+    # read mentions it, and should. What must not happen is a READ.
+    used = [ln for ln in src.splitlines()
+            if "_BOARD_RUNS" in ln and not ln.strip().startswith("#")]
+    assert not used, used
+
+
+def test_a_missing_heartbeat_says_so_rather_than_printing_nothing():
+    """Absent output reads as "nothing to report", which is the wrong
+    conclusion when the loop is dead."""
+    assert "cannot say whether the loop is alive" in _run()
+
+
+def test_a_stale_heartbeat_is_called_out():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "THE LOOP ITSELF IS NOT TICKING" in src
 
 
 def test_the_parse_census_shows_when_a_feed_was_read_away():
@@ -131,6 +150,17 @@ def test_it_names_the_usual_cause_of_a_frozen_board():
     out = _run()
     assert "returns without writing" in out
     assert "keeping the" in out
+
+
+def test_the_college_build_gets_the_same_ceiling_as_the_mlb_one():
+    """`_run_build`'s default is 180s, and its own header says the big
+    model boards pass their own. MLB learned that when a board too slow
+    for three minutes was killed every cycle and froze at its last write
+    — which is the shape CFB has been stuck in. This was the last slate
+    build still on the small ceiling."""
+    import inspect
+    src = inspect.getsource(launch.refresh_cfb)
+    assert "_run_build(args, timeout=600)" in src
 
 
 def test_it_is_reachable_from_the_command_line():

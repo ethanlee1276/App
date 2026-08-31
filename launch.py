@@ -589,7 +589,19 @@ def refresh_cfb(quiet: bool = False) -> bool:
         args.append("--odds")
     elif _with_odds():
         args.append("--cached-odds")
-    ok, tail = _run_build(args)
+    # 600s, NOT THE DEFAULT 180. The same ceiling refresh_mlb carries and
+    # for the same measured reason: a 1 vCPU box building a full college
+    # Saturday runs the touchdown model over sixty games, and MLB already
+    # proved that a board which does not fit inside three minutes is
+    # killed EVERY cycle and freezes at its last successful write. That is
+    # the shape #82 has been wearing — a board stuck hours behind while
+    # everything around it is minutes fresh — and this refresh was the one
+    # slate build still on the small ceiling.
+    #
+    # A guillotine for a hang, not for honest work. `_run_build` prints a
+    # timeout unconditionally, so if ten minutes is also not enough the
+    # journal will say so instead of the board simply stopping.
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb")
     # An unreachable schedule now KEEPS the last board rather than
     # publishing an empty one (see cfb_build.py), which exits 0 — a
@@ -3535,16 +3547,34 @@ def show_boards() -> None:
     # WHAT THE LOOP THINKS, beside what the files say. The two
     # disagreeing is itself the finding: a refresh that reports ok while
     # its board does not move is the exact failure #82 turned out to be.
-    if _BOARD_RUNS:
-        print("\n  last refresh attempt, as the loop recorded it")
-        for name in BOARD_FILES:
-            run = _BOARD_RUNS.get(name)
-            if run:
-                print(f"    {name.upper():<6} {run['at']}  "
-                      f"{'ok' if run['ok'] else 'FAILED'}")
-            else:
-                print(f"    {name.upper():<6} never ran this process")
-    cyc = _cycle_p50()
+    #
+    # READ FROM heartbeat.json, NOT FROM _BOARD_RUNS. This command runs
+    # as its own process; the server's in-memory record is not in it, so
+    # the first cut printed nothing at all here — the half of the output
+    # that carries the actual finding, silently absent. The heartbeat is
+    # written every cycle for exactly this reason.
+    beat = {}
+    try:
+        with open(ROOT / "web" / "data" / "heartbeat.json") as fh:
+            beat = json.load(fh) or {}
+    except Exception:                                     # noqa: BLE001
+        pass
+    if beat:
+        age = (time.time() - float(beat.get("at_epoch") or 0)) / 60.0
+        print(f"\n  loop heartbeat: {beat.get('at')} ({age:.0f} min ago)"
+              + ("   <-- THE LOOP ITSELF IS NOT TICKING"
+                 if age > 15 else ""))
+        runs = beat.get("boards") or {}
+        if runs:
+            print("  last refresh attempt, as the loop recorded it")
+            for name in BOARD_FILES:
+                run = runs.get(name)
+                print(f"    {name.upper():<6} "
+                      + (f"{run['at']}  {'ok' if run.get('ok') else 'FAILED'}"
+                         if run else "no record — the loop never reached it"))
+    else:
+        print("\n  no heartbeat.json — cannot say whether the loop is alive.")
+    cyc = beat.get("cycle_p50_s") or _cycle_p50()
     print(f"\n  typical refresh cycle: "
           f"{f'{cyc:.0f}s' if cyc else 'not measured yet'}")
     print("\n  A board older than the cycle is not being written. The usual "
