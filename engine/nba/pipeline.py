@@ -74,7 +74,17 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     # restraints (shrinkage, ±15% clamp, causal adoption) as every sport.
     from ..playerfit import mult_for as pf_mult
     pmult = pf_mult(tune.key, stat, prop["player"])
-    proj = round(rate * proj_min * pmult, 2)
+    # The WNBA script's context layer (engine/nba/context.py): tonight's
+    # scoring environment scales volume (§1.2, damped — the total prices
+    # pace AND efficiency), and a first game after a long team layoff
+    # shades shooting efficiency (§6 — the World Cup resumption is the
+    # season's premier mispriced window, and the rule keys on the GAP so
+    # it prices every future break too).
+    from .context import env_factor, layoff_adjustment, star_tax
+    env_m, env_note = env_factor(prop.get("game_total"), tune.key)
+    lay_m, lay_note = layoff_adjustment(prop.get("days_off"), stat)
+    proj = round(rate * proj_min * pmult * env_m * lay_m, 2)
+    context_notes = [n for n in (env_note, lay_note) if n]
 
     over_odds, under_odds = int(prop["over_odds"]), int(prop["under_odds"])
     line = float(prop["line"])
@@ -140,6 +150,18 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
     if _block:
         fails = fails + [_block]
     need = required_edge(stat, hold, tune, high_hold_market=stat == "fg3m")
+    # §7 — the star tax. Marquee overs must clear an extra point of
+    # required edge (the public's shade is already in the price); a
+    # marquee under says the subsidy out loud on its card.
+    tax, tax_note = star_tax(stat, side, proj, tune.key)
+    if tax_note:
+        context_notes.append(tax_note)
+    if tax:
+        need = round(need + tax, 4)
+        if p_final - break_even(odds) < need:
+            fails = fails + ["star tax — a marquee over must beat the "
+                             "public's shade, and this edge doesn't cover "
+                             "the extra point it costs"]
     tier = (tune.market_tier or {}).get(stat, 2)
     # §8 — the five context components, each a restatement of something
     # measured. Freshness is what the build could actually confirm about
@@ -176,6 +198,7 @@ def evaluate_prop(prop: dict, tune: LeagueTuning = NBA) -> dict:
         "kill_if": ("late scratch, minutes restriction, or lineup change "
                     "touching this player → automatic void"),
         "clamp_note": clamp_note,
+        "context": context_notes,
     }
     # "Below 70: no bet, no leans" — but only where a league's tuning says
     # the grade is the authority. The NBA board predates this grade and is

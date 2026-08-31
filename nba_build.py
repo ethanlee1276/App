@@ -97,6 +97,15 @@ def player_history(conn, teams: set[str], sport: str = "nba",
     return hist
 
 
+def _ctx_layoff(dates, game_date: str):
+    """Days since this player's team last played, for the layoff rule."""
+    try:
+        from engine.nba.context import layoff_days
+        return layoff_days(dates, game_date)
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
 def schedule_density(schedule_days: dict, team: str, date: str) -> dict:
     """§6 — how compressed this team's last week has been.
 
@@ -623,10 +632,14 @@ def main() -> None:
             out["market_scan"] = {"stale": []}
 
         spread_by_team: dict = {}
+        total_by_team: dict = {}
         for g in slate.games:
             if g.spread is not None:
                 spread_by_team[g.home] = (float(g.spread), float(g.spread) < 0)
                 spread_by_team[g.away] = (-float(g.spread), float(g.spread) > 0)
+            if g.total is not None:
+                total_by_team[g.home] = float(g.total)
+                total_by_team[g.away] = float(g.total)
 
         defense = defense_ratings(conn, args.league)
         density = {t: schedule_density(sched_days, t, args.date) for t in teams}
@@ -668,6 +681,12 @@ def main() -> None:
                 "book": book, "minutes": h["minutes"],
                 "values": h[prop.market], "is_starter": bool(h["starter"]),
                 "spread": spread, "is_favorite": fav,
+                # The context layer's inputs (engine/nba/context.py):
+                # tonight's total prices the scoring environment, and the
+                # gap since the team's last logged game prices the
+                # first-game-back dip — the World Cup resumption above all.
+                "game_total": total_by_team.get(h["team"]),
+                "days_off": _ctx_layoff(h.get("dates"), args.date),
                 "rest": density.get(h["team"], {}).get(
                     "rest", "b2b_home" if h["team"] in played_yday else "1day"),
                 "density": density.get(h["team"], {}),
@@ -681,6 +700,20 @@ def main() -> None:
                 # listed as parked rather than quietly assumed favourable.
                 "movement_fit": 0.5,
             })
+
+        # §1.3 — the menu's two accounting identities, audited per team
+        # and PUBLISHED. Listed points must square with the team total;
+        # implied minutes must approach 200. A menu that fails either is
+        # named, with the unmoved players the missing production sits on.
+        try:
+            from engine.nba.coherence import menu_audit
+            out["menu_audit"] = menu_audit(
+                props, [{"home": g.home, "away": g.away,
+                         "total": g.total, "spread": g.spread}
+                        for g in slate.games], tune)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"⚠️  menu audit skipped: {exc}")
+            out["menu_audit"] = []
 
         picks_result = run_nba_slate(props, tune=tune, meta={
             "games": len(games), "odds": odds_note,
