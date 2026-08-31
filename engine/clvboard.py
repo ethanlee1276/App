@@ -118,3 +118,95 @@ def scoreboard(conn, category: str = "main",
         "min_n": CLV_MIN_N,
         "min_row_n": MIN_ROW_N,
     }
+
+
+#: Lead-time buckets, in minutes before kickoff. The split is where the
+#: market's week actually bends: prices are softest when menus post,
+#: firm through the middle, and sharpest in the final hours.
+LEAD_BUCKETS = ((2880, None, "2+ days out"),
+                (720, 2880, "12–48 hours"),
+                (120, 720, "2–12 hours"),
+                (0, 120, "under 2 hours"))
+
+
+def leadtime(conn, category: str = "main", since: str | None = None) -> dict:
+    """Price CLV by HOW EARLY the pick was journaled.
+
+    THE ACTIONABLE CUT. Ethan, 2026-08-31: "make the model better…
+    making more money and winning more." The models rank well and show
+    no edge against the CLOSE — but nobody bets the close. Every
+    journaled pick carries `lead_min` (minutes to kickoff when it was
+    made) and, once settled, the closing price beside the price taken.
+    If picks made days out consistently beat the close and picks made
+    hours out do not, "bet Tuesday, not Sunday" stops being folklore
+    and becomes the book's own measured instruction — the one kind of
+    edge a small operation can actually keep, because it comes from
+    WHEN, not from out-modelling the market.
+
+    Price CLV (probability points, `_bet_price_clv`), not line CLV — a
+    touchdown line cannot move, and the touchdown board is the point.
+    Gated at ``ledger.CLV_MIN_N`` per bucket like every CLV verdict:
+    below it the counts print and the call is refused.
+    """
+    from .ledger import _bet_price_clv, CLV_MIN_N
+
+    rows = conn.execute(
+        "SELECT sport, market, side, line, odds, closing_line, "
+        "closing_odds, lead_min, status FROM bets "
+        "WHERE status IN ('won','lost','push') AND category=? "
+        "AND lead_min IS NOT NULL"
+        + (" AND date >= ?" if since else ""),
+        ([category, since] if since else [category])).fetchall()
+
+    buckets = []
+    for lo, hi, label in LEAD_BUCKETS:
+        clvs, settled = [], 0
+        for b in rows:
+            lead = b["lead_min"]
+            if lead is None or lead < lo or (hi is not None and lead >= hi):
+                continue
+            settled += 1
+            c = _bet_price_clv(b)
+            if c is not None:
+                clvs.append(c)
+        n = len(clvs)
+        buckets.append({
+            "label": label, "settled": settled, "with_close": n,
+            "avg_clv": round(sum(clvs) / n, 4) if n else None,
+            "beat_close": round(sum(1 for c in clvs if c > 0) / n, 4)
+            if n else None,
+            "verdict": (None if n < CLV_MIN_N else
+                        "beats the close" if sum(clvs) / n > 0 else
+                        "loses to the close"),
+        })
+    return {"category": category, "buckets": buckets,
+            "min_n": CLV_MIN_N,
+            "note": ("Positive means the market moved toward our side "
+                     "after we bet — we got the better number. Measured "
+                     "in probability points at the price taken.")}
+
+
+def leadtime_lines(conn, since: str | None = None) -> list[str]:
+    """The weekly-log rendering, both books side by side."""
+    out = []
+    for cat, name in (("main", "staked book"), ("likely", "likely book")):
+        got = leadtime(conn, category=cat, since=since)
+        live = [b for b in got["buckets"] if b["settled"]]
+        if not live:
+            out.append(f"  when we bet ({name}): no settled picks carry "
+                       f"a lead time yet")
+            continue
+        out.append(f"  when we bet ({name}) — price CLV by lead time:")
+        for b in got["buckets"]:
+            if not b["settled"]:
+                continue
+            word = (b["verdict"] or
+                    f"needs {got['min_n']} closes, has {b['with_close']}")
+            avg = ("—" if b["avg_clv"] is None
+                   else f"{b['avg_clv']:+.2f}pt")
+            beat = ("" if b["beat_close"] is None
+                    else f", beat the close {b['beat_close']:.0%}")
+            out.append(f"    {b['label']:<14} {b['settled']:4d} settled, "
+                       f"{b['with_close']:4d} closed   {avg}{beat}   "
+                       f"{word}")
+    return out

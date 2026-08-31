@@ -1140,6 +1140,19 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 _rkc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  rank fit skipped: {exc}")
+        # WHEN we bet, graded against the close — the cut that turns
+        # "bet early" from folklore into this book's own instruction.
+        try:
+            from . import ledger as _clvled
+            from .clvboard import leadtime_lines
+            _cc = _clvled.connect()
+            try:
+                for line in leadtime_lines(_cc):
+                    log(line)
+            finally:
+                _cc.close()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  lead-time CLV skipped: {exc}")
 
     # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
     # measures now rather than waiting for Wednesday — the same "fit it

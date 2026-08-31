@@ -3087,6 +3087,16 @@ def process_grade(b) -> str | None:
 CLV_MIN_N = 40
 
 
+def _clv_leadtime(conn, since: str | None):
+    """Both books' lead-time cuts, never fatal to the export."""
+    try:
+        from .clvboard import leadtime
+        return {"main": leadtime(conn, "main", since),
+                "likely": leadtime(conn, "likely", since)}
+    except Exception:                                        # noqa: BLE001
+        return {}
+
+
 def _clv_board(conn, since: str | None):
     """The scoreboard, or an empty one. Never raises into the export: a
     presentation layer must not be able to stop the record publishing."""
@@ -5258,6 +5268,11 @@ def export_json(conn, path) -> None:
         # sport at all"; this answers "does it beat the close", one
         # market at a time, with the sample size beside every number.
         "clv_board": _clv_board(conn, since),
+        # WHEN we bet, graded against the close — both books. The models
+        # show no edge over the closing price; whether our EARLY prices
+        # beat it is the money question, and it accrues on every settled
+        # pick instead of waiting on win-loss variance.
+        "clv_leadtime": _clv_leadtime(conn, since),
         # §13: the parlay record is reported SEPARATELY and never blended.
         # Its own key, its own tables, its own notional — nothing above this
         # line moves when a ticket settles.

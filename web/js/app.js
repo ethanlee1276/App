@@ -8625,6 +8625,45 @@ function parlaySplitHTML(pz, q) {
    anything at all below `LIKELY_VERDICT_N` settled rows, and this
    renders that refusal as the headline rather than burying it under a
    number that looks like a result. */
+/* WHEN we bet, graded against the close. The models show no edge over
+   the closing price (0.468 AUC — noise); whether our EARLY prices beat
+   it is the money question, and it accrues on every settled pick
+   instead of waiting on win-loss variance. If "2+ days out" goes green
+   and "under 2 hours" does not, the site has measured its own betting
+   instruction. Verdicts gate at CLV_MIN_N like every CLV number. */
+function recLeadtimeSection(lt) {
+  if (!lt || (!lt.main && !lt.likely)) return "";
+  const table = (got, name) => {
+    if (!got || !(got.buckets || []).some((b) => b.settled)) return "";
+    const rows = got.buckets.filter((b) => b.settled).map((b) => `<tr>
+      <td>${escapeHtml(b.label)}</td>
+      <td class="num">${b.settled}</td>
+      <td class="num">${b.with_close}</td>
+      <td class="num ${b.avg_clv > 0 ? "pos" : b.avg_clv < 0 ? "neg" : ""}">${
+        b.avg_clv == null ? "—" : (b.avg_clv >= 0 ? "+" : "") + b.avg_clv.toFixed(2)}</td>
+      <td class="num">${b.beat_close == null ? "—" : (b.beat_close * 100).toFixed(0) + "%"}</td>
+      <td>${b.verdict ? escapeHtml(b.verdict)
+            : `<span class="mini" style="opacity:.6">needs ${got.min_n} closes</span>`}</td>
+    </tr>`).join("");
+    if (!rows) return "";
+    return `<div class="section-title minor">When we bet — ${escapeHtml(name)}
+        <span class="sub">— price CLV by how early the pick was made</span></div>
+      <table class="agate"><thead><tr><th>Lead time</th>
+        <th class="num">Settled</th><th class="num">Closed</th>
+        <th class="num">Avg CLV</th><th class="num">Beat close</th>
+        <th>Verdict</th></tr></thead><tbody>${rows}</tbody></table>`;
+  };
+  const body = table(lt.main, "the staked book")
+    + table(lt.likely, "the likely book");
+  if (!body) return "";
+  return `${body}
+    <div class="ls-note">Positive CLV means the market moved toward our
+    side after we bet — we got the better number, in probability points.
+    Beating the close persistently is the earliest sign a book earns;
+    if the early buckets earn it and the late ones don’t, the finding is
+    an instruction: bet sooner.</div>`;
+}
+
 function recLikelySection(lk) {
   if (!lk || (!lk.settled && !lk.open)) return "";
   const cal = lk.calibration || {};
@@ -10970,7 +11009,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      + (scoped && scope !== "intel" ? "" : recPolymarketSection(pmv))],
     ["calibration", "Calibration",
      "did “60%” actually mean 60%?",
-     (scoped ? "" : recEraSection(d.model_eras))
+     (scoped ? "" : recLeadtimeSection(d.clv_leadtime))
+     + (scoped ? "" : recEraSection(d.model_eras))
      + recCalibrationSection(src.calibration, src.calibration_era)
      + recSelectionHaircut(d.selection_haircut, scoped ? scope : null)
      + (scoped ? "" : recCalibrationSplits(d.calibration_splits))
