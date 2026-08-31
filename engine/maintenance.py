@@ -1124,6 +1124,48 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 _vc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  devig band check skipped: {exc}")
+        # The ranking fitter behind every non-football likelihood board:
+        # measures each market's walk-forward AUC on this box's own logs
+        # and stores what the sample supports. likely.rank_auc reads the
+        # store, so an MLB shelf turns on HERE, where the logs are — the
+        # dev box has no MLB logs at all and can never claim one.
+        try:
+            from . import db as _rkdb
+            from .rankfit import measure as _rank_measure
+            _rkc = _rkdb.connect()
+            try:
+                for _sp in ("mlb", "wnba"):
+                    _rank_measure(_rkc, _sp, log=log)
+            finally:
+                _rkc.close()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  rank fit skipped: {exc}")
+
+    # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
+    # measures now rather than waiting for Wednesday — the same "fit it
+    # now, not on Wednesday" precedent the CFB touchdown backfill set.
+    # Without this, "most likely for MLB" ships and then sits dark for
+    # up to a week on the one box that could light it.
+    try:
+        from . import db as _rbdb
+        from .rankfit import load as _rank_load, measure as _rank_boot
+        _rbs = _rank_load()
+        _rbc = _rbdb.connect()
+        try:
+            for _sp in ("mlb",):
+                if any(k.startswith(f"{_sp}:") for k in _rbs):
+                    continue
+                have = _rbc.execute(
+                    "SELECT COUNT(*) FROM player_game_logs WHERE sport=?",
+                    (_sp,)).fetchone()[0]
+                if have:
+                    log(f"  rank store has no {_sp} entry and {have:,} "
+                        f"log rows exist — measuring now, not Wednesday")
+                    _rank_boot(_rbc, _sp, log=log)
+        finally:
+            _rbc.close()
+    except Exception as exc:  # noqa: BLE001
+        log(f"  ⚠️  rank bootstrap skipped: {exc}")
 
     # Settle the one-sided quote journals against whatever stat rows the
     # ingests above just wrote, and refit each market's measured hold

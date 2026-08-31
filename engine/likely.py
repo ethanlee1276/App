@@ -127,9 +127,41 @@ def _credible(prob, fair) -> bool:
         return True
 
 
-def rankable(market: str) -> bool:
+#: The college touchdown ranking, measured by engine.cfbtdfit over
+#: 29,047 player-weeks. Shipped like the NFL constants because it was
+#: measured the same way — by a person, against this repo's own replay —
+#: and previously the CFB board wore the NFL's 0.721 by accident:
+#: `from_watch` read RANK_AUC["anytime_td"] with no idea whose chain
+#: built the row.
+CFB_TD_AUC = 0.675
+
+
+def rank_auc(sport: str, market: str):
+    """The measured ranking AUC for this market, or None.
+
+    THREE SOURCES, IN TRUST ORDER. The fitted store first — written by
+    engine.rankfit on the box whose logs it walked, which is the only
+    number that can exist for MLB at all (its logs never leave the
+    droplet). Then the shipped constants: NFL's hand-measured five and
+    the college touchdown figure. A market in none of them has no
+    measurement, and no measurement means no shelf — the founding rule
+    of this board, now enforced per sport instead of assuming every
+    caller was the NFL.
+    """
+    from .rankfit import rank_auc as _fitted
+    got = _fitted(sport, market)
+    if got is not None:
+        return got
+    if sport == "nfl":
+        return RANK_AUC.get(market)
+    if sport == "cfb" and market == "anytime_td":
+        return CFB_TD_AUC
+    return None
+
+
+def rankable(market: str, sport: str = "nfl") -> bool:
     """Has this market been SHOWN to rank, not merely modelled?"""
-    return RANK_AUC.get(market, 0.0) >= MIN_RANK_AUC
+    return (rank_auc(sport, market) or 0.0) >= MIN_RANK_AUC
 
 
 def _sane(odds) -> bool:
@@ -188,7 +220,8 @@ def admissible(row: dict) -> str:
     return ""
 
 
-def from_prop(row: dict, bettable, fits=None) -> dict | None:
+def from_prop(row: dict, bettable, fits=None,
+              sport: str = "nfl") -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -197,7 +230,7 @@ def from_prop(row: dict, bettable, fits=None) -> dict | None:
     would let the two pages disagree about the same player.
     """
     market = row.get("market") or ""
-    if not rankable(market):
+    if not rankable(market, sport):
         return None
     prob = row.get("hit_prob")
     if prob is None or float(prob) < MIN_PROB:
@@ -267,7 +300,7 @@ def from_prop(row: dict, bettable, fits=None) -> dict | None:
         # looking at rather than inferring it from the absence of a
         # stake.
         "bettable": bool(bettable(market)),
-        "rank_auc": RANK_AUC.get(market),
+        "rank_auc": rank_auc(sport, market),
         "reasons": row.get("reasons") or [],
         "recent_values": row.get("recent_values") or [],
         "game_date": row.get("date", ""), "kickoff": row.get("kickoff", ""),
@@ -276,7 +309,7 @@ def from_prop(row: dict, bettable, fits=None) -> dict | None:
     }
 
 
-def from_watch(row: dict) -> dict:
+def from_watch(row: dict, sport: str = "nfl") -> dict:
     """A touchdown watch row, in the same shape.
 
     The most-likely-scorers list was already this board for one market;
@@ -294,7 +327,7 @@ def from_watch(row: dict) -> dict:
         "projection": None,
         "ev_per_unit": row.get("ev_per_unit"),
         "bettable": True,
-        "rank_auc": RANK_AUC["anytime_td"],
+        "rank_auc": rank_auc(sport, "anytime_td"),
         "reasons": row.get("reasons") or [],
         "recent_values": row.get("recent_values") or [],
         "game_date": row.get("game_date", ""),
@@ -330,14 +363,14 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return True
 
     for row in (td_picks or []) + (td_watch or []):
-        got = from_watch(row)
+        got = from_watch(row, sport=sport)
         key = (got["player"], got["team"], "anytime_td")
         if key in seen or not keep(got):
             continue
         seen.add(key)
         out.append(got)
     for row in props or []:
-        got = from_prop(row, bettable, fits=fits)
+        got = from_prop(row, bettable, fits=fits, sport=sport)
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides.

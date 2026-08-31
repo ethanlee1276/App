@@ -156,17 +156,35 @@ FOOTBALL_SHELVES = (
      "as such rather than mixed in silently."),
 )
 
-#: ONLY FOOTBALL HAS A LIKELIHOOD BOARD, so only football has shelves.
-#: An earlier cut of this carried a BASEBALL_SHELVES stub — one "Hitters"
-#: shelf with an empty market list — written on the assumption that
-#: baseball would want the same page. Nothing in engine/mlb or
-#: mlb_build.py produces a `most_likely` key at all, so that spec
-#: described a board that does not exist, which is the exact failure this
-#: module was written to stop: a claim in code that nothing enforces.
-#:
-#: A sport with no board gets no shelves and the page falls back to its
-#: flat list, which is also what it does for a payload built before
-#: shelves existed.
+#: Baseball's shelves — real this time. The earlier BASEBALL_SHELVES
+#: stub was deleted because nothing produced an MLB `most_likely` key
+#: and a spec for a board that does not exist is a claim nothing
+#: enforces. mlb_build publishes the board now, and the rule that kept
+#: the stub out still governs what lands on it: a market appears only
+#: once engine.rankfit has MEASURED that it ranks (>= likely.MIN_RANK_AUC
+#: on 2,000+ walk-forward pairs, on the box whose logs it walked). So
+#: these shelves can exist here in full while every one of them stays
+#: empty on a box that has not measured its markets — the shape is
+#: declared, the claim is earned per row.
+BASEBALL_SHELVES = (
+    ("homers", "Home runs", ("home_runs",),
+     "Who leaves the yard. The market the long-shot board prices; here "
+     "it is ranked by likelihood instead of edge."),
+    ("bats", "Hits & total bases", ("hits", "total_bases"),
+     "Contact and extra bases — the volume side of a hitter's night."),
+    ("arms", "Strikeouts", ("strikeouts",),
+     "Pitcher swing-and-miss. A different engine from the bats above, "
+     "and shelved apart so its evidence reads apart."),
+)
+
+#: Sports with a likelihood board, and each one's shelf spec. A sport
+#: not listed gets no shelves and the page falls back to its flat list —
+#: also what happens for a payload built before shelves existed.
+SHELVES_BY_SPORT = {
+    "nfl": None,        # filled below — FOOTBALL_SHELVES defined next
+    "cfb": None,
+    "mlb": BASEBALL_SHELVES,
+}
 FOOTBALL = ("nfl", "cfb")
 
 
@@ -185,13 +203,14 @@ def shelves(sport: str, rows=None) -> list[dict]:
     market and not a shelf is precisely the failure this file exists to
     prevent, and it would look like an empty page rather than an error.
     """
-    if (sport or "").lower() not in FOOTBALL:
+    sp = (sport or "").lower()
+    if sp not in SHELVES_BY_SPORT:
         return []
-    spec = FOOTBALL_SHELVES
+    spec = SHELVES_BY_SPORT[sp] or FOOTBALL_SHELVES
     out = []
     for key, title, markets, blurb in spec:
         shelf = {"key": key, "title": title, "markets": list(markets),
-                 "blurb": blurb, "rank_auc": _shelf_auc(markets)}
+                 "blurb": blurb, "rank_auc": _shelf_auc(markets, sp)}
         if rows is not None:
             shelf["rows"] = [r for r in rows
                              if (r.get("market") or "") in markets]
@@ -208,12 +227,16 @@ def shelves(sport: str, rows=None) -> list[dict]:
     return out
 
 
-def _shelf_auc(markets) -> float | None:
+def _shelf_auc(markets, sport: str = "nfl") -> float | None:
     """The measured ranking figure for a shelf, or None if unmeasured.
 
     The MINIMUM across the shelf's markets, not the mean: a shelf is only
     as trustworthy as its weakest row, and a reader scanning the header
-    is deciding whether to trust what is under it.
+    is deciding whether to trust what is under it. Sport-aware via
+    likely.rank_auc, so an MLB shelf reads the droplet's own fitted
+    store and a CFB touchdown shelf stops borrowing the NFL's figure.
     """
-    got = [RANK_AUC[m] for m in markets if m in RANK_AUC]
+    from .likely import rank_auc
+    got = [rank_auc(sport, m) for m in markets]
+    got = [g for g in got if g is not None]
     return min(got) if got else None

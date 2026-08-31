@@ -130,12 +130,16 @@ def test_college_serves_the_guide_and_the_shelves():
 
 
 def test_a_sport_with_no_likelihood_board_gets_no_shelves():
-    """Nothing in engine/mlb produces `most_likely`, so a shelf spec for
-    baseball described a board that does not exist."""
+    """The rule survives its own example changing. When this was written
+    nothing produced an MLB `most_likely`; mlb_build does now
+    (2026-08-31), so baseball has real shelves — and the rule moves to
+    the sports that still have no board."""
     from engine import boards
-    assert boards.shelves("mlb") == []
-    assert boards.shelves("mlb", [{"market": "hits"}]) == []
-    assert not hasattr(boards, "BASEBALL_SHELVES")
+    for sport in ("ufc", "nba", "wnba"):
+        assert boards.shelves(sport) == [], sport
+        assert boards.shelves(sport, [{"market": "pts"}]) == [], sport
+    assert boards.shelves("mlb") != [], \
+        "mlb_build publishes most_likely now — its shelves must exist"
 
 
 if __name__ == "__main__":

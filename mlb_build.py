@@ -651,6 +651,34 @@ def main() -> None:
               f"plus-money in window → {len(result.get('long_shots') or [])} picks, "
               f"{len(result.get('longshot_watch') or [])} watchlist.")
 
+    # THE LIKELIHOOD BOARD, for baseball at last. Ethan, 2026-08-31:
+    # "We should have a most likely page for every sport… dive deeper
+    # into getting the most likely page for MLB set up." Same maker,
+    # same one bar (likely.admissible), same shelves machinery as the
+    # football boards — and the same founding rule: a market only lands
+    # here once engine.rankfit has measured, on THIS box's own logs,
+    # that the model can rank it. On a box with an empty rank store the
+    # board publishes empty with the census saying exactly that, and
+    # fills by itself after the first measurement pass.
+    try:
+        from engine.likely import build as _likely_build
+        from engine import boards as _mlboards
+        _ml_census: dict = {}
+        result["most_likely"] = _likely_build(
+            result["recommendations"], sport="mlb", census=_ml_census)
+        if not result["most_likely"]:
+            from engine.rankfit import load as _rank_store
+            if not any(k.startswith("mlb:") for k in _rank_store()):
+                _ml_census["no market measured to rank yet"] = 1
+        result["likely_census"] = _ml_census
+        result["board_guide"] = _mlboards.guide()
+        result["board_shelves"] = _mlboards.shelves(
+            "mlb", result["most_likely"])
+    except Exception as exc:                              # noqa: BLE001
+        print(f"⚠️  likelihood board skipped: {exc}")
+        result.setdefault("most_likely", [])
+        result.setdefault("board_shelves", [])
+
     c = result["counts"]
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
     print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")

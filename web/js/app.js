@@ -10862,11 +10862,18 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // that pooled book, so the comparison it drew was paper against
      // paper-plus-money. If the split is ever wanted back, build it from
      // `performance(conn, category="main")`.
-     receipts],
+     // THE LIKELY RECORD LEADS. Ethan, 2026-08-31: "maybe use those
+     // picks instead on our record page instead of showing off the
+     // props that lose more." The main journal's cold streak was the
+     // first thing every visitor read, while the board the model is
+     // best at — and the record that decides whether money ever rides
+     // on it — sat two tabs deep. It moves here, above the curve; the
+     // honest under-100-settles refusal explains itself while the
+     // sample builds.
+     (scoped ? "" : recLikelySection(d.likely)) + receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
-     (scoped ? "" : recLikelySection(d.likely))
-     + (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
+     (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
      + (scoped ? "" : recStaleSection(d.stale_flags)) + (scoped ? "" : recFormSection(d.form_sampler))
      + (scoped ? "" : recLooseSection(d.loose_sampler))
      + (scoped && scope !== "ufc" ? "" : recUfcSection(d.ufc_record))
