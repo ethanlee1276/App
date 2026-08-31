@@ -51,6 +51,25 @@ UA = "qellys-book/0.1 (college football talent layer)"
 # A signed recruiting class is immutable; returning production is fixed at
 # the start of a season. Nothing here is worth re-fetching often.
 SEASON_TTL = 30 * 24 * 3600
+
+#: How long an EMPTY response may be cached. Minutes, not a month.
+#:
+#: THIS IS THE THREE-WEEK BUG. `/talent?year=2026` answered 200 with an
+#: empty array — CFBD had not published the season's composites yet, which
+#: is the ordinary state of that endpoint in the spring. `_get` wrote `[]`
+#: to disk like any other success and then served it for THIRTY DAYS
+#: without asking again, so a temporary absence became a permanent one and
+#: the college board sat with no preseason prior for weeks.
+#:
+#: An empty payload is exactly the response that must not be cached long.
+#: A full one is a fact that will not change this season; an empty one is
+#: almost always "not published yet", and the whole value of asking again
+#: is that the answer changes.
+#:
+#: Applied ON READ as well as on write, so a cache already poisoned by a
+#: month-long empty entry heals itself on the next cycle instead of
+#: needing someone to know to delete the file.
+EMPTY_TTL = 15 * 60
 # 4- and 5-star recruits. The blue-chip ratio is the share of a roster
 # drawn from these, and it is the single most durable predictor in the
 # sport — no team has won a national title with a ratio under ~50%.
@@ -85,11 +104,19 @@ def _get(path: str, params: dict, cache_name: str,
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path_c = CACHE_DIR / cache_name
     import time
-    if path_c.exists() and (time.time() - path_c.stat().st_mtime) < ttl:
+    if path_c.exists():
+        age = time.time() - path_c.stat().st_mtime
         try:
-            return json.loads(path_c.read_text())
+            cached = json.loads(path_c.read_text())
         except ValueError:
-            pass
+            cached = None
+        if cached is not None:
+            # An empty cached answer expires in minutes; a real one keeps
+            # the season. See EMPTY_TTL — serving `[]` for a month is how
+            # a not-published-yet endpoint became a missing feature.
+            good_for = ttl if cached else min(ttl, EMPTY_TTL)
+            if age < good_for:
+                return cached
 
     key = get_api_key(api_key)
     url = f"{BASE}{path}?{urllib.parse.urlencode(params)}"
@@ -106,11 +133,19 @@ def _get(path: str, params: dict, cache_name: str,
                 f"CFBD_API_KEY in secrets.local.") from exc
         raise CFBDUnavailable(f"CFBD HTTP {exc.code}") from exc
     except Exception as exc:
+        # A stale cache beats an exception — but only if it HOLDS
+        # something. Falling back to a cached empty array returns nothing
+        # while reporting success, which is the same failure the read
+        # above was just fixed for: the caller cannot tell "the feed is
+        # down" from "the feed says there is nothing", and picks the
+        # wrong one silently.
         if path_c.exists():
             try:
-                return json.loads(path_c.read_text())
+                cached = json.loads(path_c.read_text())
             except ValueError:
-                pass
+                cached = None
+            if cached:
+                return cached
         raise CFBDUnavailable(f"CFBD request failed: {exc}") from exc
 
     path_c.write_text(body)
