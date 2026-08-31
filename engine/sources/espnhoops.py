@@ -96,13 +96,35 @@ def parse_scoreboard(payload: dict) -> list[dict]:
         if not home or not away or not home["abbr"] or not away["abbr"]:
             continue
         status = (comp.get("status") or ev.get("status") or {})
-        completed = bool((status.get("type") or {}).get("completed"))
+        stype = status.get("type") or {}
+        completed = bool(stype.get("completed"))
+        # IN PROGRESS WAS NOT REPRESENTED AT ALL. This read `completed`
+        # and nothing else, so the only two states a hoops game could
+        # ever have here were "finished" and "not finished" — a game
+        # actually being played was indistinguishable from one that had
+        # not tipped. `cfbdata.parse_scoreboard` has carried the three
+        # states since it was written; this one never did, and that is
+        # why a WNBA board could not show a live game no matter how
+        # fresh the fetch was (reported 2026-08-30, 8:56 PM, two games
+        # from 3:00 and 5:00 still reading "lines post closer to
+        # tip-off").
+        state = {"pre": "scheduled", "in": "live",
+                 "post": "final"}.get(stype.get("state", "pre"), "scheduled")
         out.append({
             "game_id": str(ev.get("id") or ""),
             "home": home["abbr"], "away": away["abbr"],
             "home_name": home["name"], "away_name": away["name"],
+            # UNCHANGED, and deliberately: settlement reads these and a
+            # third-quarter score written here would grade a bet against
+            # a game still being played.
             "home_score": home["score"] if completed else None,
             "away_score": away["score"] if completed else None,
+            # The running score, carried separately for the same reason.
+            "live_home_score": home["score"],
+            "live_away_score": away["score"],
+            "state": state,
+            "period": status.get("period"),
+            "clock": stype.get("shortDetail") or status.get("displayClock") or "",
             "completed": completed,
             "kickoff": ev.get("date", ""),
         })
@@ -171,11 +193,52 @@ def parse_summary(payload: dict) -> list[dict]:
     return rows
 
 
-def fetch_scoreboard(date: str, ttl: int = 21600,
+#: A day that has not finished yet. The scoreboard carries the STATE of
+#: every game — scheduled, in progress, final — and the score with it, so
+#: on today's date it is a live feed and must be read like one. Five
+#: minutes is what `cfbdata.fetch_scoreboard` uses for the same payload.
+LIVE_TTL = 300
+
+
+def _is_settled(date: str) -> bool:
+    """Is this date over, so its scoreboard can never change again?
+
+    The slate day rolls at 5 AM, not midnight (see `launch._slate_date`):
+    a game that tips at 10 PM Pacific is still last night's, and treating
+    it as settled at 00:01 would freeze it mid-fourth-quarter.
+    """
+    import datetime as _d
+    try:
+        asked = _d.date.fromisoformat(date)
+    except ValueError:
+        return False
+    today = (_d.datetime.now() - _d.timedelta(hours=5)).date()
+    return asked < today
+
+
+def fetch_scoreboard(date: str, ttl: int | None = None,
                      league: str = "wnba") -> dict:
+    """One day's board. ``ttl`` defaults to the day's own lifetime.
+
+    SIX HOURS WAS THE DEFAULT AND IT FROZE THE LIVE BOARD. Reported
+    2026-08-30 at 8:56 PM: two WNBA games that had tipped at 3:00 and
+    5:00 still reading "lines post closer to tip-off", hours after they
+    finished. The board itself was six minutes old — it was the
+    SCOREBOARD UNDER it that was six hours old, so every game's state
+    was a snapshot from before either had started.
+
+    The old default's reasoning was sound and applied to the wrong days:
+    "a finished day never changes, so history caches effectively forever
+    and a re-run of a six-season backfill costs nothing." True of a
+    finished day. Today is not one, and the same constant served both.
+
+    So the lifetime now follows whether the day can still change. A
+    backfill over past seasons keeps its month-long cache and costs
+    nothing; today is read every five minutes like the live feed it is.
+    """
     day = date.replace("-", "")
-    # A finished day never changes, so history caches effectively forever
-    # and a re-run of a six-season backfill costs nothing.
+    if ttl is None:
+        ttl = 30 * 24 * 3600 if _is_settled(date) else LIVE_TTL
     return fetch_json(f"{_base(league)}/scoreboard?dates={day}&limit=60",
                       f"espn_{league}_{day}.json", ttl=ttl,
                       user_agent=DEFAULT_AGENT)
@@ -188,7 +251,9 @@ def fetch_summary(game_id: str, ttl: int = 30 * 24 * 3600,
                       user_agent=DEFAULT_AGENT)
 
 
-def load_day(date: str, ttl: int = 21600, league: str = "wnba") -> list[dict]:
+def load_day(date: str, ttl: int | None = None,
+             league: str = "wnba") -> list[dict]:
+    """``ttl=None`` lets the date decide — see `fetch_scoreboard`."""
     return parse_scoreboard(fetch_scoreboard(date, ttl=ttl, league=league))
 
 
@@ -271,9 +336,18 @@ def parse_schedule_day(_schedule: dict, date: str,
         games = load_day(date, league=league)
     except DataUnavailable:
         return []
+    # THE STATE TRAVELS. This mapping listed six fields and dropped the
+    # rest, so even once `parse_scoreboard` knew a game was live the
+    # board never heard about it — the reason has to reach the page, not
+    # merely exist upstream of it.
     return [{"game_id": g["game_id"], "home": g["home"], "away": g["away"],
              "home_name": g.get("home_name", ""),
              "away_name": g.get("away_name", ""),
              "kickoff": g.get("kickoff", ""),
-             "home_score": g["home_score"], "away_score": g["away_score"]}
+             "home_score": g["home_score"], "away_score": g["away_score"],
+             "live_home_score": g.get("live_home_score"),
+             "live_away_score": g.get("live_away_score"),
+             "state": g.get("state", "scheduled"),
+             "period": g.get("period"), "clock": g.get("clock", ""),
+             "completed": g.get("completed", False)}
             for g in games]
