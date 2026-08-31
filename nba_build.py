@@ -273,6 +273,53 @@ def diagnose(league: str, date: str) -> None:
               f"will be missing every player on {', '.join(sorted(miss))}.")
 
 
+#: How far back to look before calling an empty date the offseason. Wide
+#: enough to span an All-Star break, which is the longest gap a running
+#: hoops season produces.
+LOOKBACK_DAYS = 10
+
+
+def _recent_slate(args, tune) -> tuple[int, bool]:
+    """``(games found, did we manage to look)`` over the days before this.
+
+    THE SECOND VALUE IS THE POINT, and it is the same distinction
+    `cfb_build._recent_games` had to learn: "we looked and the league is
+    dormant" and "we could not look" are different facts, and only the
+    first is the offseason. A fetch that fails must not publish a claim
+    about the league on the strength of our own failure.
+    """
+    import datetime as _d
+    try:
+        day = _d.date.fromisoformat(args.date)
+    except ValueError:
+        return 0, False
+    # IMPORTED HERE, per league, because `main()` does the same and these
+    # names exist nowhere else. The first cut of this function called
+    # `parse_schedule_day` as though it were module-level — it is not,
+    # and that is the same scoping mistake that had just been fixed one
+    # file over. A test caught it; nothing in the source would have.
+    league = getattr(args, "league", "nba")
+    try:
+        if league == "wnba":
+            from engine.sources.wnbaespn import (fetch_schedule,
+                                                 parse_schedule_day)
+        else:
+            from engine.sources.nbadata import (fetch_schedule,
+                                                parse_schedule_day)
+    except Exception:                                      # noqa: BLE001
+        return 0, False
+    found, looked = 0, 0
+    for n in range(1, LOOKBACK_DAYS + 1):
+        past = (day - _d.timedelta(days=n)).isoformat()
+        try:
+            rows = parse_schedule_day(fetch_schedule(), past)
+        except Exception:                                  # noqa: BLE001
+            continue
+        looked += 1
+        found += len(rows or [])
+    return found, bool(looked)
+
+
 def _live_block(g: dict) -> dict | None:
     """The shared `live` shape every other board emits, from `gameStatus`.
 
@@ -383,11 +430,38 @@ def main() -> None:
                      "live": _live_block(g)} for g in games]
 
     if not games and "status" not in out:
-        out.update(status="offseason",
-                   note=f"No {tune.name} games on this date. The engine "
-                        "(minutes model, "
-                        "distributions, humility clamp, approval gate) is built "
-                        "and tested — it goes live with the schedule.")
+        # "OFFSEASON" FROM A SINGLE EMPTY DAY IS NOT A FINDING. This
+        # asserted it whenever today had no games — no lookback, no
+        # evidence — and on 2026-08-31, a Sunday in the middle of a WNBA
+        # season that runs into September, the board said the league was
+        # out of season because that one date was quiet.
+        #
+        # `cfb_build` made the same claim and was corrected the same day;
+        # it at least looked back ten days first. This one did not look
+        # at all. A quiet Monday, a bye, an All-Star break and a finished
+        # season all produce zero games, and only the last is what the
+        # word means.
+        recent, looked = _recent_slate(args, tune)
+        if not looked:
+            out.update(status="schedule unknown",
+                       note=f"No {tune.name} games came back for this date, "
+                            f"and the lookback that would say whether the "
+                            f"season is running could not be fetched either. "
+                            f"That is a gap on our side, not a claim that "
+                            f"the league is finished.")
+        elif recent:
+            out.update(status="no games today",
+                       note=f"No {tune.name} games on this date, but the "
+                            f"season is running — {recent} game(s) in the "
+                            f"last {LOOKBACK_DAYS} days. A quiet date, not "
+                            f"the offseason.")
+        else:
+            out.update(status="offseason",
+                       note=f"No {tune.name} games on this date, and none in "
+                            f"the last {LOOKBACK_DAYS} days either. The engine "
+                            "(minutes model, "
+                            "distributions, humility clamp, approval gate) is built "
+                            "and tested — it goes live with the schedule.")
 
     picks_result = None
     if games:
