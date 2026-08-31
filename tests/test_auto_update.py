@@ -398,13 +398,58 @@ def test_new_code_is_pulled_and_the_service_restarted():
         assert "restart qellys" in f.read()
 
 
-def test_a_dirty_tree_is_skipped_and_says_whose_fault_that_is_not():
+def test_a_dirty_tree_is_skipped_and_the_note_names_the_file():
+    """"Dirty" without a path cost a round trip over SSH on 2026-08-31:
+    the state file said the tree was dirty every five minutes for a day
+    and never once said WHICH file, which was the entire question."""
     _, repo, _ = _make_repo()
     with open(os.path.join(repo, "f.txt"), "a") as f:
         f.write("wip\n")
     bindir, log = _fake_systemctl()
     state = _run_updater(repo, bindir)
     assert not state["ok"] and "dirty" in state["note"], state
+    assert "f.txt" in state["note"], state
+    assert not os.path.exists(log)
+
+
+def test_an_untracked_stray_file_does_not_jam_the_pull():
+    """THE DROPLET INCIDENT, 2026-08-31. `git status --porcelain` lists
+    untracked files, and the first cut treated any output as dirt — so
+    one stray unignored file skipped every clean pull for a day. A
+    fast-forward cannot harm an untracked file (git refuses the pull if
+    it would collide), so it must not block one. It IS a .gitignore
+    hole, so the note names it without stopping for it."""
+    origin, repo, g = _make_repo()
+    with open(os.path.join(repo, "stray.log"), "w") as f:
+        f.write("dropped by some tool\n")
+    with open(os.path.join(origin, "f.txt"), "w") as f:
+        f.write("two\n")
+    g(origin, "add", "."); g(origin, "commit", "-m", "two")
+    bindir, _ = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert state["ok"], state
+    with open(os.path.join(repo, "f.txt")) as f:
+        assert f.read() == "two\n", "the stray file blocked a clean pull"
+    assert "stray.log" in state["note"], state
+    assert "not ignored" in state["note"], state
+
+
+def test_a_colliding_untracked_file_is_protected_by_git_itself():
+    """The loosened guard leans on git's own refusal — so run that
+    refusal, don't cite it. Upstream commits stray.log; the clone holds
+    an untracked stray.log with different content. The pull must fail,
+    recorded, and the local file must survive byte-for-byte."""
+    origin, repo, g = _make_repo()
+    with open(os.path.join(repo, "stray.log"), "w") as f:
+        f.write("MY LOCAL CONTENT\n")
+    with open(os.path.join(origin, "stray.log"), "w") as f:
+        f.write("upstream content\n")
+    g(origin, "add", "."); g(origin, "commit", "-m", "collide")
+    bindir, log = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert not state["ok"] and "pull failed" in state["note"], state
+    with open(os.path.join(repo, "stray.log")) as f:
+        assert f.read() == "MY LOCAL CONTENT\n", "git clobbered untracked work"
     assert not os.path.exists(log)
 
 
