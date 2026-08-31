@@ -5684,32 +5684,8 @@ body.has-rail .shell {
   color: var(--text-dim); }
 
 /* ---------------- Home: Top Picks strip ---------------- */
-.tp-title { align-items: baseline; flex-wrap: wrap; }
-.tp-more { margin-left: auto; color: var(--brand-2); font-size: var(--fs-xs);
-  font-weight: 700; text-decoration: none; }
-.tp-more:hover { color: var(--text); }
-#top-picks { margin: 26px 0 6px; }
-.tp-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 292px;
-  gap: 12px; overflow-x: auto; padding: 4px 2px 12px;
-  scrollbar-width: thin; scroll-snap-type: x proximity; }
-.tp-card { scroll-snap-align: start; border: var(--hairline) solid var(--border);
-  border-radius: var(--radius); background-color: var(--panel);
-  background-image: var(--grad-card); padding: 13px 14px 12px;
-  display: flex; flex-direction: column; gap: 10px;
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
-.tp-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
-.tp-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.tp-who { min-width: 0; flex: 1; line-height: var(--lh-tight); }
-.tp-who b { display: block; font-size: var(--fs-md); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-.tp-who span { display: block; color: var(--text-dim); font-size: var(--fs-xs);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tp-who .tp-when { color: var(--text-mute); }
-.tp-foot { display: flex; align-items: baseline; gap: 10px;
-  border-top: var(--hairline) solid var(--border-soft); padding-top: 9px; }
-.tp-odds { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text); }
-.tp-book { color: var(--text-mute); font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .08em; text-transform: uppercase; }
+/* The .tp-* strip family retired 2026-08-31 with renderTopPicks — the
+   edge board's one home is #best-bets. */
 
 /* ---------------- Home: performance panels ---------------- */
 #home-perf { margin: 8px 0 26px; }
@@ -5984,8 +5960,7 @@ body.has-rail .shell {
      only by listing every under-32px element WITH ITS PARENT, because
      "sport-btn is 27px" was false of the chips and true of these two. */
   .sb-foot-links .sport-btn { min-height: 36px; padding: 8px 10px; }
-  .tp-add { min-height: 40px; padding: 10px 13px; }
-  .tp-more, .rail-more, .perf-link { min-height: 32px;
+  .rail-more, .perf-link { min-height: 32px;
     display: inline-flex; align-items: center; }
   /* Both, because the ROOT is the scroller: overflow on body alone
      still let the page scroll under the open drawer (measured — a
@@ -6065,7 +6040,6 @@ body.has-rail .shell {
   #slate-date { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; max-width: 34vw; font-size: var(--fs-xs); }
   .perf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .tp-strip { grid-auto-columns: 84vw; }
 }
 
 /* Sidebar items are sentence-case whatever class machinery they carry —
@@ -6147,25 +6121,6 @@ body.has-rail .shell {
   letter-spacing: .08em; text-transform: uppercase; }
 :root[data-theme="light"] .gc-picks { background: rgba(255, 255, 255, .8); }
 
-/* Top Picks: tile + green action, the render's geometry. */
-.tp-tile { display: grid; place-items: center; width: 46px; height: 46px;
-  flex: 0 0 auto; border-radius: var(--radius-sm);
-  background: var(--panel-3); border: var(--hairline) solid var(--border-soft); }
-/* Quiet controls, not green blocks (Ethan, 2026-08-25, circling two
-   of them: "The color of the buttons along with the bulky of them loos
-   bad"). A pick card's actions are furniture — the PICK is the loud
-   thing — so they wear the ghost-chip look every other control does:
-   hairline, small caps, brand on touch. */
-.tp-add { margin-left: 8px; cursor: pointer;
-  background: none; color: var(--text-dim);
-  border: var(--hairline) solid var(--border);
-  font: inherit; font-size: var(--fs-2xs); font-weight: 800;
-  letter-spacing: .05em; text-transform: uppercase;
-  padding: 7px 12px; border-radius: 999px;
-  transition: color var(--dur-fast) var(--ease-out),
-              border-color var(--dur-fast) var(--ease-out); }
-.tp-foot .tp-add:first-of-type { margin-left: auto; }
-.tp-add:hover { color: var(--brand); border-color: var(--brand); }
 .perf-window { border: var(--hairline) solid var(--border);
   border-radius: var(--radius-sm); padding: 4px 9px; }
 .rail-list li::before { background: var(--good); }
@@ -6291,7 +6246,6 @@ body.has-rail .shell {
   /* RE-ORDERED 2026-08-11 (Ethan: "top bets, the stadiums, then roi")
      — the order lives in the DOM now, one order on every screen, so
      the phone-only flex reordering retired. */
-  .tp-strip { grid-auto-columns: 86vw; }
   .hero-games .game-card { min-width: 66vw; }
   .lb-grid { grid-template-columns: 1fr; }
 }
@@ -6908,7 +6862,6 @@ body.has-rail .shell {
 /* The list rows are not cards, so they say "clickable" the way rows do. */
 .ls-row.openable:hover, div.openable:not(.card):not(.tp-card):hover {
   background: var(--panel-3); }
-.tp-card.openable:hover { border-color: var(--brand-2); }
 .pp-card { padding: 14px; }
 .pp-log, .pp-form {
   display: grid; align-items: center; gap: 10px;

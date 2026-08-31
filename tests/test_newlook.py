@@ -375,9 +375,9 @@ def test_high_confidence_mode_is_a_real_filter():
     fn = APP[APP.index("function passesFilters("):]
     fn = fn[:fn.index("\n}")]
     assert "hcmOn()" in fn and "80" in fn
-    tp = APP[APP.index("function renderTopPicks("):]
-    tp = tp[:tp.index("\n}")]
-    assert "hcmOn()" in tp
+    # The Top Picks strip half of this claim RETIRED 2026-08-31 with the
+    # strip itself — every remaining card list flows through
+    # passesFilters, which is the one gate asserted above.
     assert 'role="switch"' in HTML                 # a switch, announced as one
 
 

@@ -2503,9 +2503,9 @@ async function renderBestBets() {
   if (!picks.length && !signals.length && !ridden.length
       && !earlyRows.length) { host.innerHTML = ""; return; }
   host.innerHTML = `
-    <div class="section-title">Tonight’s picks
-      <span class="sub">— the one designated space for what we’d actually bet. If it isn’t
-      in this box, it isn’t a pick.</span></div>
+    <div class="section-title">Qellys’ edge picks
+      <span class="sub">— where our number beats the price · journaled and staked. If it isn’t
+      in this box, it isn’t a bet.</span></div>
     ${picksBlock}
     ${earlyBlock}
     ${signalsBlock}`;
@@ -10012,9 +10012,17 @@ const REC_ROOMS = [
    // likely to hit." So: venues set the scene, the likelihood board —
    // the model's strongest measured ability — is the first read, and
    // the edge strip stays demoted to where the likely preview once sat.
+   // ONE PICKS AREA, 2026-08-31 evening. Ethan: "we have the top
+   // picks, then you scroll down more then there is recommended picks.
+   // That's super confusing… just one area on the main page showing
+   // the picks and our record and all that." The strip (top-picks) was
+   // the same five edge bets best-bets already draws in full — a
+   // duplicate built for the old hero slot — so it is retired, and the
+   // area reads as one block: likely picks, the recommended-bets
+   // summary tiles, the actual bet cards, then the record.
    ["probation-note", "talent-note", "games-head", "games-outer",
-    "likely-top", "parlay-mode", "stats", "home-perf",
-    "best-bets", "top-picks", "empty-slate", "rec-controls", "cards"]],
+    "likely-top", "stats", "best-bets", "home-perf",
+    "parlay-mode", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
@@ -15534,30 +15542,9 @@ async function acctSync() {
   }
 }
 
-/* The render's green button, honestly framed. One tap opens My Bets
-   with this pick's description, odds, book and sport already typed —
-   the stake stays yours, focused and empty. Nothing is logged until
-   you press Log bet. */
-window.tpTrack = function (i) {
-  const p = (window._tpPicks || [])[i];
-  if (!p) return;
-  enterStandaloneMode("mybets");
-  setTimeout(() => {
-    const put = (id, v) => { const el = document.getElementById(id); if (el != null && v != null && v !== "") el.value = v; };
-    const bookSel = document.getElementById("mb-book");
-    if (bookSel) {
-      const hit = [...bookSel.options].find((o) => o.value.toLowerCase() === String(p.book).toLowerCase());
-      bookSel.value = hit ? hit.value : "Other";
-    }
-    put("mb-sport", p.sport);
-    put("mb-desc", p.desc);
-    put("mb-odds", p.odds);
-    const warn = document.getElementById("mb-form-warn");
-    if (warn) warn.textContent = "Prefilled from tonight’s board — enter your stake, then Log bet.";
-    const stake = document.getElementById("mb-stake");
-    if (stake) stake.focus();
-  }, 250);
-};
+/* `tpTrack` (the strip's green My-Bets prefill) retired with the strip
+   it served, 2026-08-31 — the full cards in #best-bets carry their own
+   My Bets action. */
 
 function acctPaintNote() {
   document.querySelectorAll(".acct-note").forEach((el) => {
@@ -28348,75 +28335,15 @@ function initPz() {
   syncParlayMode();
 }
 
-/* The Top Picks strip — the render's "QELLY'S TOP PICKS" row. The same
-   recommended list the board draws, compacted: best grades first, real
-   prices, and the grade badge the journal will grade it under. */
+/* The Top Picks strip RETIRED 2026-08-31. It compacted the same five
+   edge bets `renderBestBets` draws in full, built for the hero slot the
+   likelihood board now owns — two surfaces for one list is exactly the
+   "super confusing" Ethan named. The host div stays in the HTML (order
+   tests index it) and is emptied here so nothing can quietly refill it.
+   The edge board's single home is #best-bets. */
 function renderTopPicks() {
   const host = document.getElementById("top-picks");
-  if (!host) return;
-  const d = state.data || {};
-  let recs = (d.recommendations || []).filter((r) => r.recommended);
-  if (hcmOn()) recs = recs.filter((r) => (r.quality || 0) >= 80);
-  recs = recs.slice().sort((a, b) => (b.quality || 0) - (a.quality || 0)).slice(0, 8);
-  const gb = (d.game_bets || []).filter((g) => g.recommended)
-    .sort((a, b) => (b.quality || 0) - (a.quality || 0)).slice(0, Math.max(0, 4 - recs.length));
-  if (!recs.length && !gb.length) { host.innerHTML = ""; return; }
-  const odds = (o) => o == null ? "" : (o > 0 ? "+" + o : String(o));
-  // The picks the buttons refer to, cached for tpTrack (the render's
-  // green action, honestly framed: it PREFILLS My Bets — the one thing
-  // it never invents is your stake).
-  window._tpPicks = [];
-  const track = (pick, desc) => {
-    window._tpPicks.push({ desc, odds: pick.odds, book: pick.book || "",
-                           sport: (state.sport || "").toUpperCase() });
-    return window._tpPicks.length - 1;
-  };
-  const propCard = (r) => {
-    const desc = `${r.player} ${r.side || ""} ${r.line != null ? r.line : ""} ${r.market_label || r.market || ""}`
-      .replace(/\s+/g, " ").trim();
-    const i = track(r, desc);
-    return `
-    <div class="tp-card ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}>
-      <div class="tp-top"><span class="tp-tile">${playerAvatar(r.player, r.team, { size: 40, headshot: r.headshot })}</span>
-        <div class="tp-who"><b>${escapeHtml(r.player)}</b>
-          <span>${escapeHtml(r.side || "")} ${r.line != null ? r.line : ""} ${escapeHtml(r.market_label || r.market || "")}</span>
-          <span class="tp-when">${escapeHtml(r.team || "")}${r.opponent ? " vs " + escapeHtml(r.opponent) : ""}${r.edge != null ? ` · +${(100 * r.edge).toFixed(1)}% edge` : ""}</span></div>
-        <span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade || "")}</span></div>
-      <div class="tp-foot"><b class="tp-odds">${odds(r.odds)}</b>
-        <span class="tp-book">${escapeHtml(r.book || "")}</span>
-        ${r.odds != null ? `<button class="tp-add" type="button"
-                data-slip="${escapeAttr(propId(r))}"
-                title="Add to your parlay slip — it docks at the bottom">${
-                slipHas(r) ? "On slip" : "+ Parlay"}</button>` : ""}
-        <button class="tp-add" type="button" onclick="tpTrack(${i})"
-                title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
-    </div>`;
-  };
-  const gameCardMini = (g) => {
-    const desc = `${g.pick_label || g.label || ""}`.trim() || `${g.away} @ ${g.home}`;
-    const i = track(g, desc);
-    return `
-    <div class="tp-card ${gameBetOpenable(g) ? "openable" : ""}"${gameBetAttrs(g)}>
-      <div class="tp-top"><span class="tp-tile">${teamMark(g.team || (g.side === "home" ? g.home : g.away), 30) || ""}</span>
-        <div class="tp-who"><b>${escapeHtml(g.pick_label || g.label || "")}</b>
-          <span>${escapeHtml(g.market_label || g.market || "")}</span>
-          <span class="tp-when">${escapeHtml(g.away || "")} @ ${escapeHtml(g.home || "")}${g.edge != null ? ` · +${(100 * g.edge).toFixed(1)}% edge` : ""}</span></div>
-        <span class="grade ${gradeClass(g.grade)}">${escapeHtml(g.grade || "")}</span></div>
-      <div class="tp-foot"><b class="tp-odds">${odds(g.odds)}</b>
-        <span class="tp-book">${escapeHtml(g.book || "")}</span>
-        ${g.odds != null && gameBetOpenable(g) ? `<button class="tp-add" type="button"
-                data-slip="${escapeAttr(gameBetId(g))}"
-                title="Add to your parlay slip — it docks at the bottom">${
-                slipHas(g) ? "On slip" : "+ Parlay"}</button>` : ""}
-        <button class="tp-add" type="button" onclick="tpTrack(${i})"
-                title="Open My Bets with this pick prefilled — you enter the stake">+ My Bets</button></div>
-    </div>`;
-  };
-  host.innerHTML = `
-    <div class="section-title tp-title">Qellys’ edge picks
-      <span class="sub">— ${hcmOn() ? "A-grade only (High Confidence is on)" : "where our number beats the price, best grades first"} · every one is journaled and graded in public</span>
-      <a class="tp-more" href="#record">Why these picks?</a></div>
-    <div class="tp-strip">${recs.map(propCard).join("")}${gb.map(gameCardMini).join("")}</div>`;
+  if (host) host.innerHTML = "";
 }
 
 /* YOUR PERFORMANCE — the render's best panel, powered by the real

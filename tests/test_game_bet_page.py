@@ -54,13 +54,15 @@ def test_a_game_bet_can_be_opened():
     assert "function gameBetAttrs(" in APP
 
 
-def test_the_top_picks_strip_opens_its_game_cards():
-    """The exact card in his screenshot. It used to render with no
-    data-prop at all, which is why nothing happened when he clicked."""
-    i = APP.index("const gameCardMini")
-    block = APP[i:i + 700]
-    assert "gameBetAttrs(g)" in block, "the dashboard's game card is still inert"
-    assert "openable" in block
+def test_the_retired_strip_cannot_come_back_inert():
+    """The strip whose inert card started this file RETIRED 2026-08-31 —
+    it duplicated best-bets, and Ethan called the duplication out by
+    name ("that's super confusing"). Its renderer must stay an empty
+    stub: a refill would bring the no-door card back with it."""
+    i = APP.index("function renderTopPicks(")
+    body = APP[i:APP.index("\n}", i)]
+    assert 'innerHTML = ""' in body
+    assert "gameCardMini" not in APP, "the strip's game card is back"
 
 
 def test_the_board_and_the_edge_list_open_them_too():

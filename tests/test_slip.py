@@ -115,21 +115,27 @@ def test_game_bets_parlay_too_and_their_label_never_travels():
     assert "function findSlipRow(id)" in APP
     chip = _fn("function slipChip(r)")
     assert "gameBetOpenable(r)" in chip, "the chip still refuses game bets"
-    # the control reaches all three game-bet surfaces
-    assert APP.count('data-slip="${escapeAttr(gameBetId(') >= 2, \
-        "a game-bet surface lost its + Parlay control"
+    # The control reaches every game-bet surface that remains: the game
+    # page's nav carries its own, and every CARD goes through slipChip
+    # (asserted above). The second bespoke gameBetId site was the Top
+    # Picks strip, retired 2026-08-31 as a duplicate of best-bets.
+    assert APP.count('data-slip="${escapeAttr(gameBetId(') >= 1, \
+        "the game page lost its + Parlay control"
 
 
 def test_the_card_buttons_are_quiet_controls_not_green_blocks():
     """Ethan, 2026-08-25, circling + Parlay and + My Bets: "The color of
     the buttons along with the bulky of them loos bad." The pick is the
     loud thing on a pick card; its controls wear the ghost-chip look."""
+    # Re-anchored 2026-08-31: .tp-add retired with the Top Picks strip.
+    # The surviving card control is slipChip's `.chip` + the page navs'
+    # `.btn.ghost` — both ghost looks by definition; the pin is that the
+    # slip chip never carries its own loud paint.
     css = _read("web", "css", "styles.css")
-    i = css.index(".tp-add { margin-left")
+    i = css.index(".slip-chip.on")
     rule = css[i:css.index("}", i)]
-    assert "background: none" in rule, "the buttons are solid blocks again"
     assert "var(--good)" not in rule, "the green came back"
-    assert "text-transform: uppercase" in rule
+    assert "background" not in rule, "the chip grew a solid block"
 
 
 def test_the_add_control_reaches_the_places_picks_live():

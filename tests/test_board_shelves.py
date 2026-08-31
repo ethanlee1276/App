@@ -261,8 +261,15 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
     room = src[at:src.index('["gamebets"', at)]
     assert room.index('"games-head"') < room.index('"likely-top"')
     assert room.index('"games-outer"') < room.index('"likely-top"')
-    assert room.index('"likely-top"') < room.index('"top-picks"')
-    assert room.index('"best-bets"') < room.index('"top-picks"')
+    # ONE CONTIGUOUS PICKS-AND-RECORD AREA (Ethan, 2026-08-31 evening:
+    # "just one area on the main page showing the picks and our record").
+    # Likely picks, the summary tiles, the actual bet cards, the record —
+    # in that order, with nothing between them. The strip is GONE from
+    # the room: it duplicated best-bets and was the confusion by name.
+    order = ['"likely-top"', '"stats"', '"best-bets"', '"home-perf"']
+    idx = [room.index(k) for k in order]
+    assert idx == sorted(idx), order
+    assert '"top-picks"' not in room, "the duplicate strip is back"
 
 
 def test_the_demoted_strip_says_what_it_is():

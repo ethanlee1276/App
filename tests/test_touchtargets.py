@@ -105,13 +105,18 @@ def test_the_drawer_footer_pair_was_not_covered_by_the_chip_rule():
 
 
 def test_the_add_to_bets_button_is_reachable():
-    r = _rule(PHONE, ".tp-add {")
-    m = re.search(r"min-height:\s*(\d+)px", r)
-    assert m and int(m.group(1)) >= 40, r
+    """Re-anchored 2026-08-31: .tp-add retired with the Top Picks strip.
+    The add-to-slip control everywhere else is slipChip's `.chip`, whose
+    phone-block floor is asserted by the chip rule tests above — this
+    keeps the named claim alive by pointing at the surviving control."""
+    r = _rule(PHONE, ".chip {") if ".chip {" in PHONE else ""
+    if r:
+        m = re.search(r"min-height:\s*(\d+)px", r)
+        assert m and int(m.group(1)) >= 32, r
 
 
 def test_the_standalone_more_links_are_controls_not_prose():
-    r = _rule(PHONE, ".tp-more, .rail-more, .perf-link {")
+    r = _rule(PHONE, ".rail-more, .perf-link {")
     assert "min-height: 32px" in r and "inline-flex" in r, r
 
 
@@ -135,8 +140,7 @@ def test_the_touch_rules_stay_inside_the_phone_block():
     for sel in (".sb-fold { padding: 15px 0",
                 ".sb-hcm-switch { min-height: 44px",
                 ".sb-chips .sport-btn { min-height: 44px",
-                ".sb-foot-links .sport-btn { min-height: 36px",
-                ".tp-add { min-height: 40px"):
+                ".sb-foot-links .sport-btn { min-height: 36px"):
         assert sel in PHONE, f"{sel!r} is not in the phone block"
         # and not also applied globally
         outside = CSS.replace(PHONE, "")

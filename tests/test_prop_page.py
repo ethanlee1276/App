@@ -161,11 +161,12 @@ def test_every_surface_that_lists_a_prop_offers_the_door():
         body = APP[i:i + 3000]
         assert "propAttrs(r)" in body, f"{fn} is not a door"
         assert "propOpenable(r)" in body, f"{fn} claims the class unconditionally"
-    # The dashboard's best-bets rows, the Edge Board rows and Top Picks.
+    # The dashboard's best-bets rows and the Edge Board rows. (The Top
+    # Picks strip's door retired with the strip, 2026-08-31 — its picks
+    # live in best-bets, whose rows are asserted here.)
     assert "id: betMark(r), open: propAttrs(r)" in APP, "dashboard rows"
     assert 'ev: r.ev_per_unit, grade: r.grade, rec: passesFilters(r),\n      open: propAttrs(r),' in APP \
         or "open: propAttrs(r)," in APP, "edge board rows"
-    assert '<div class="tp-card ${propOpenable(r) ? "openable" : ""}"${propAttrs(r)}>' in APP
 
 
 def test_a_riding_row_is_a_door_too():
