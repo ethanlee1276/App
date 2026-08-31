@@ -266,12 +266,25 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
 
 
 def test_the_demoted_strip_says_what_it_is():
-    """Two pick sections on one page must name their difference, or
-    "top picks" below "most likely" reads as a contradiction. The strip
-    is the EDGE board's shelf and says so."""
+    """Two pick sections on one page must name their difference. The
+    strip is the EDGE board's shelf and says so."""
     src = _src("web", "js", "app.js")
     assert "Qellys’ edge picks" in src
     assert "where our number beats the price" in src
+
+
+def test_the_likelihood_hero_wears_the_top_picks_name():
+    """Ethan, 2026-08-31: "the most likely too hit should be labeled as
+    our top picks, the we label what we WERE labeling as our top picks
+    as our most edge picks." The crown follows the promotion: the board
+    with the strongest evidence carries the site's headline name, and
+    the subtitle keeps saying what the ranking actually is."""
+    src = _src("web", "js", "app.js")
+    at = src.index("function renderLikelyTop")
+    block = src[at:at + 2400]
+    assert "Qellys’ top picks" in block
+    assert "most likely to hit" in block
+    assert "Most likely to hit\n" not in block, "old title lingering"
 
 
 def test_the_preview_reuses_the_shelves_rather_than_refiltering():

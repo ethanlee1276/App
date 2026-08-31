@@ -5207,8 +5207,8 @@ function renderLikelyTop() {
   const total = (state.data.most_likely || []).length;
   const more = total - shelves.reduce((n, sh) => n + sh.rows.length, 0);
   host.innerHTML = `
-    <div class="section-title">Most likely to hit
-      <span class="sub">— our strongest read, ranked by probability not by price</span>
+    <div class="section-title">Qellys’ top picks
+      <span class="sub">— who’s most likely to hit · ranked by probability, not by price</span>
     </div>
     ${boardGuide("most_likely")}
     <div class="likely-top">${shelves.map(likelyShelf).join("")}</div>
