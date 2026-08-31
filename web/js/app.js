@@ -1688,14 +1688,23 @@ function renderTalent() {
   if (state.sport !== "cfb" || !t) { host.innerHTML = ""; return; }
 
   if (!t.available) {
+    /* WHICH LAYERS ARRIVED EMPTY, on the card. `empty_layers` names the
+       feeds that answered 200 with no rows — a different fault from one
+       that failed, and the one that was invisible here for three weeks:
+       the card read `available` as "the fetch did not raise", so an
+       empty composite drew a green tick over the words "0 team(s)". */
+    const empty = (t.empty_layers || []).length
+      ? `<div class="mini" style="margin-top:6px;opacity:.8">Answered with no
+         rows: <b>${(t.empty_layers || []).map(escapeHtml).join(", ")}</b> —
+         these fetched cleanly and had nothing in them, which is not the same
+         as a feed that failed.</div>` : "";
     host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-      <div class="player">${iconMark("list")}No preseason talent prior</div>
+      <div class="player">${iconMark("warn")}No preseason talent prior — running on results only</div>
       <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
-        The board is running on results only. In September that means an
-        unproven Alabama and an unproven Kent State are both rated near
-        average, which is wrong in a direction the market will take money
-        for. ${escapeHtml(t.note || "")}
-      </div></div>`;
+        In September that means an unproven Alabama and an unproven Kent State
+        are both rated near average, which is wrong in a direction the market
+        will take money for. ${escapeHtml(t.note || "")}
+      </div>${empty}</div>`;
     return;
   }
   const L = t.layers || {};

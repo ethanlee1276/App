@@ -300,6 +300,44 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
         if by_year else T.PRIOR_FIT
 
     prior = T.talent_prior(talent, fit, blue)
+    #: WHAT THE PRIOR WAS BUILT FROM, because it is about to have two
+    #: possible answers and the card must not conflate them.
+    source = "composite"
+    if not prior and blue:
+        # THE HIGH-SCHOOL DATA WE ALREADY PAY FOR, USED INSTEAD OF
+        # NOTHING. `talent_prior`'s note is right that blue-chip ratio
+        # must not ADD to the composite — same star ratings, counted
+        # twice. It says nothing about the case where the composite is
+        # absent, and there the ratio is not a second view of a fact we
+        # have, it is the only view. CFBD /talent returned no rows for
+        # 2026 while /recruiting/players returned 229 teams, so the board
+        # sat with no prior for three weeks next to data that could
+        # carry one.
+        #
+        # FITTED ON ITS OWN SCALE, NEVER ON THE COMPOSITE'S. 2.451 points
+        # per SD was measured against composite z-scores; blue-chip ratio
+        # is a different variable and reusing that slope would be
+        # applying a number fitted on one population to another. The fit
+        # below runs on blue-chip z against the same realised margins,
+        # and if it does not converge the prior stays off rather than
+        # borrowing a slope that does not describe it.
+        bc_by_year: dict = {}
+        for y in range(year - 1, year - 5, -1):
+            try:
+                rows = cfbd.blue_chip_ratio(y)
+            except DataUnavailable:
+                continue
+            got = {a: v.get("ratio") for a, v in
+                   ((_abbr(s), v) for s, v in rows.items()) if a}
+            if got:
+                bc_by_year[y] = {k: v for k, v in got.items() if v is not None}
+        bc_fit = (T.fit_points_per_sd(T.team_seasons_from_db(conn, bc_by_year))
+                  if bc_by_year else None)
+        if bc_fit is not None and bc_fit.fitted:
+            ratios = {a: v.get("ratio") for a, v in blue.items()
+                      if v.get("ratio") is not None}
+            prior = T.talent_prior(ratios, bc_fit)
+            fit, source = bc_fit, "blue_chip"
     blended, blend_report = T.apply_prior(ratings, prior, returning, portal)
     # Each sub-layer is reported separately. "The talent layer is on" and
     # "all four of its inputs arrived" are different facts, and a page that
@@ -308,17 +346,54 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
     layers = {"talent": len(talent), "blue_chip": len(blue),
               "returning": len(returning), "portal": len(portal)}
     missing = [k for k, v in layers.items() if not v]
+    # AVAILABLE MEANS A PRIOR IS IN FORCE, not that the fetch did not
+    # raise. Reported 2026-08-30 from the live board: a green tick and a
+    # green border over the words "Preseason talent prior — 0 team(s)"
+    # and "Not loaded: talent", three weeks running. `fetch_talent`
+    # returned 200 with an empty array, which is not an exception, so
+    # this said True and the page drew a success.
+    #
+    # An empty successful response and a full one are the same shape at
+    # every layer between the API and the card. The only place the
+    # difference exists is the row count, so that is what decides.
+    in_force = bool(blend_report["teams"])
     report.update(
-        ratings=blended, available=True,
+        ratings=blended if in_force else ratings, available=in_force,
         teams_with_prior=blend_report["teams"],
+        # WHICH OF THE TWO SOURCES CARRIED IT, since they are not the
+        # same claim and the weaker one must say so.
+        prior_source=source,
+        # WHICH LAYERS ANSWERED WITH NOTHING, as against which ones
+        # failed. `_get` returns [] for a 200-with-no-rows and raises for
+        # everything else, so a layer at zero here fetched cleanly and
+        # had no data — a different problem with a different fix, and the
+        # payload could not tell them apart.
+        empty_layers=[k for k, v in {"talent": len(talent),
+                                     "blue_chip": len(blue),
+                                     "returning": len(returning),
+                                     "portal": len(portal)}.items() if not v],
         portal_teams=blend_report.get("portal_teams", 0),
         blue_chip_teams=len(blue), returning_teams=len(returning),
         layers=layers, missing_layers=missing,
         fit={"points_per_sd": fit.points_per_sd, "fitted": fit.fitted,
              "samples": fit.samples, "r": fit.r, "note": fit.note},
-        note=(f"Preseason prior from recruiting applied to "
-              f"{blend_report['teams']} team(s); portal adjusted "
-              f"{blend_report.get('portal_teams', 0)}. {fit.note}"
+        note=((f"Preseason prior from recruiting applied to "
+               f"{blend_report['teams']} team(s); portal adjusted "
+               f"{blend_report.get('portal_teams', 0)}. {fit.note}")
+              + (" Built from the BLUE-CHIP RATIO, not the recruiting "
+                 "composite, which returned no rows — the same "
+                 "high-school ratings seen a coarser way, on a slope "
+                 "fitted to that variable rather than borrowed."
+                 if source == "blue_chip" else "")
+              if in_force else
+              (f"No prior is in force, so the board is running on results "
+               f"only. The recruiting composite (CFBD /talent) returned "
+               f"no rows for {year}."
+               + (f" The blue-chip fallback had {len(blue)} team(s) of "
+                  f"high-school data but its own slope would not fit, so "
+                  f"nothing was applied rather than a borrowed one."
+                  if blue else
+                  " No high-school recruiting data arrived either."))
               + (f" NOT loaded: {', '.join(missing)}." if missing else "")))
     return report
 
