@@ -266,7 +266,10 @@ def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
     # Likely picks, the summary tiles, the actual bet cards, the record —
     # in that order, with nothing between them. The strip is GONE from
     # the room: it duplicated best-bets and was the confusion by name.
-    order = ['"likely-top"', '"stats"', '"best-bets"', '"home-perf"']
+    # …and refined the same night: "We should have the performance
+    # under the top picks." Picks, then the proof, then the edge
+    # summary beside the cards it counts.
+    order = ['"likely-top"', '"home-perf"', '"stats"', '"best-bets"']
     idx = [room.index(k) for k in order]
     assert idx == sorted(idx), order
     assert '"top-picks"' not in room, "the duplicate strip is back"

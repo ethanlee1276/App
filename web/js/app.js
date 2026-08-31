@@ -10020,8 +10020,13 @@ const REC_ROOMS = [
    // duplicate built for the old hero slot — so it is retired, and the
    // area reads as one block: likely picks, the recommended-bets
    // summary tiles, the actual bet cards, then the record.
+   // Ethan, 2026-08-31 night: "We should have the performance under
+   // the top picks." The order is the reader's own questions: what's
+   // on tonight (venues), what should I bet (top picks), why should I
+   // trust you (the record), what's staked and why (the edge summary
+   // beside its cards), then the deep board and its dials.
    ["probation-note", "talent-note", "games-head", "games-outer",
-    "likely-top", "stats", "best-bets", "home-perf",
+    "likely-top", "home-perf", "stats", "best-bets",
     "parlay-mode", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
@@ -28562,8 +28567,11 @@ async function renderHomePerf() {
         </div>
       </div>`;
   }
+  // TOOLS BELOW THE PROOF. The quick-tools row rendered above the
+  // performance card, so the page read picks → doors → record: a
+  // hallway of buttons between the claim and its evidence. The doors
+  // still exist one scroll later; the record answers first.
   host.innerHTML = `
-    ${tools}
     <div class="perf-grid">
       <div class="card perf-card">
         <div class="perf-head"><span class="rail-title">Your ${scopedToSport
@@ -28635,7 +28643,8 @@ async function renderHomePerf() {
         <a class="perf-link" href="#record">Full record &#8594;</a>
       </div>
       ${sportsCard}
-    </div>`;
+    </div>
+    ${tools}`;
   if (typeof mountGlossCharts === "function") mountGlossCharts(host);
 }
 
