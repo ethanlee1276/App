@@ -22,6 +22,16 @@ RUNS AGAINST A TEMPORARY DATABASE, via QB_ACCOUNTS_DB. Signing a test
 account up into the file real accounts live in is how a test deletes
 somebody.
 
+AND AGAINST A TEMPORARY web/, via QB_WEB_DIR, for the same reason one step
+over. This fixture boots with QB_PAYWALL=1, and `server.py` seals the
+public path at startup: every paid board in the web directory it is given
+is rewritten in place with its picks removed. Pointed at the working copy
+— which it was until 2026-08-31 — that meant running this file emptied
+whatever boards the machine had built, and in a parallel suite run it
+raced whichever test was writing one (test_side_bias, intermittently
+red). A test that redacts your real boards as a side effect is a worse
+bug than the one it is checking for.
+
     python3 tests/test_billing_e2e.py
 """
 
@@ -29,6 +39,7 @@ import hashlib
 import hmac
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -56,14 +67,34 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
+def _not_the_real_boards(directory, names):
+    """copytree filter: take all of web/ except its data directory.
+
+    Only the top-level web/data is skipped — a `data` folder nested
+    deeper is a real asset and gets copied. Same filter, same reason, as
+    tests/test_paywall_live.py."""
+    web = os.path.abspath(os.path.join(ROOT, "web"))
+    if os.path.abspath(directory) == web:
+        return {"data"} & set(names)
+    return set()
+
+
 class Server:
     def __init__(self):
         self.port = _free_port()
         self.dir = tempfile.mkdtemp(prefix="qb-e2e-")
         self.db = os.path.join(self.dir, "accounts.db")
+        # A web/ of our own, minus the boards. Nothing below reads a
+        # board, so an empty data directory is the whole requirement —
+        # and an empty one cannot be sealed, which is the point.
+        self.web = os.path.join(self.dir, "web")
+        shutil.copytree(os.path.join(ROOT, "web"), self.web,
+                        ignore=_not_the_real_boards)
+        os.makedirs(os.path.join(self.web, "data"), exist_ok=True)
         env = dict(os.environ)
         env.update({
             "QB_ACCOUNTS_DB": self.db,
+            "QB_WEB_DIR": self.web,
             "STRIPE_SECRET_KEY": "sk_test_e2e",
             "STRIPE_WEBHOOK_SECRET": WEBHOOK_SECRET,
             "STRIPE_PRICE_MONTHLY": "price_m",
@@ -75,6 +106,7 @@ class Server:
             # assertion below would pass for the wrong reason.
             "QB_COMP_EMAILS": "",
         })
+        self.env = env
         self.proc = subprocess.Popen(
             [sys.executable, "server.py", "--port", str(self.port)],
             cwd=ROOT, env=env, stdout=subprocess.PIPE,
@@ -125,6 +157,7 @@ class Server:
             self.proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             self.proc.kill()
+        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 def _signed(payload: bytes, secret=WEBHOOK_SECRET, ts=None):
@@ -155,6 +188,25 @@ def main():
         print(f"  ok  {name}")
 
     try:
+        # --- the fixture is not the machine ------------------------------
+        # ASSERTED ON THE FIXTURE, NOT ON THE DISK. The tempting check is
+        # to fingerprint the working copy's web/data before and after the
+        # boot and demand it be unchanged — but the suite runs eight files
+        # at a time and test_side_bias legitimately writes a board into
+        # that directory, so that check would fail for a reason that has
+        # nothing to do with this file. This asserts the structure that
+        # makes the damage impossible instead, which is true whatever else
+        # is running.
+        served = os.path.realpath(srv.env["QB_WEB_DIR"])
+        real = os.path.realpath(os.path.join(ROOT, "web"))
+        assert served != real and not served.startswith(real + os.sep), \
+            f"the paywalled fixture is serving the working copy: {served}"
+        assert not [n for n in os.listdir(os.path.join(srv.web, "data"))
+                    if n.endswith(".json")], \
+            "the fixture copied the machine's boards in, so the startup " \
+            "seal has something of Ethan's to strip"
+        step("a paywalled server is pointed away from the real boards")
+
         # --- what an anonymous visitor is told ---------------------------
         code, body, _ = srv.get("/api/billing/status")
         assert code == 200, body

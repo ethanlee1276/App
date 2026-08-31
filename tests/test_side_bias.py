@@ -55,9 +55,20 @@ def _board(overs, unders, over_edge, under_edge, path):
 
 
 def _run(overs, unders, over_edge, under_edge):
-    """Run the real CLI against a synthetic board, then put the real one
-    back — the launcher reads a fixed path."""
+    """Run the real CLI against a synthetic board, then put the tree back
+    the way it was — the launcher reads a fixed path.
+
+    PUT BACK MEANS PUT BACK, INCLUDING WHEN THERE WAS NOTHING THERE. The
+    restore used to be conditional on a backup existing, which is the
+    same thing as saying "clean up only on Ethan's laptop": web/data is
+    gitignored, so in a fresh clone and on CI there is no board to save,
+    nothing was restored, and the synthetic 120-row card was left sitting
+    in the working tree for every file that ran afterwards. One of them
+    is test_paywall_live, whose whole fixture guard is the sentence
+    "anything extra in here is the machine leaking into the verdict".
+    """
     real = os.path.join(ROOT, "web", "data", "mlb_recommendations.json")
+    os.makedirs(os.path.dirname(real), exist_ok=True)
     backup = None
     if os.path.exists(real):
         backup = tempfile.mktemp(suffix=".json")
@@ -74,6 +85,8 @@ def _run(overs, unders, over_edge, under_edge):
             with open(backup, encoding="utf-8") as fh:
                 open(real, "w", encoding="utf-8").write(fh.read())
             os.unlink(backup)
+        elif os.path.exists(real):
+            os.unlink(real)
 
 
 # --- the two verdicts -------------------------------------------------------

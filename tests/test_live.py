@@ -226,6 +226,17 @@ def test_settle_runs_even_when_the_results_ingest_fails():
     import engine.db as _db
     orig_ingest = _ing.ingest_mlb_results
     orig_connect_l, orig_connect_h = ledger.connect, _db.connect
+    # AND export_json, because settle_open finishes by publishing the
+    # journal to ROOT/web/data/record.json — an absolute path, so the
+    # temp ledger above does not redirect it. Unpatched, this test wrote
+    # its own one-bet fixture over the working copy's public record page:
+    # Ethan's on the laptop, and in a parallel suite run a file another
+    # test may be reading. The assertions below are about the settle, the
+    # bet's status and the log; none of them is about the export, so
+    # counting the call is all that is lost by not making it.
+    orig_export = ledger.export_json
+    exported = []
+    ledger.export_json = lambda conn, path: exported.append(path)
     _ing.ingest_mlb_results = boom
     ledger.connect = lambda *a, **kw: lconn
     _db.connect = lambda *a, **kw: hconn
@@ -237,9 +248,14 @@ def test_settle_runs_even_when_the_results_ingest_fails():
     finally:
         _ing.ingest_mlb_results = orig_ingest
         ledger.connect, _db.connect = orig_connect_l, orig_connect_h
+        ledger.export_json = orig_export
     assert n == 1, f"settle did not run: {logs}"
     assert lconn.execute("SELECT status FROM bets").fetchone()[0] == "won"
     assert any("ingest skipped" in m for m in logs), logs
+    # It still publishes — that is part of settling — it just publishes
+    # into the patch. If this ever stops firing, the redirect above has
+    # gone stale and the real page is being written again.
+    assert exported, "settle_open no longer exports the journal"
 
 
 if __name__ == "__main__":
