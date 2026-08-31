@@ -203,7 +203,8 @@ def _trend_alignment(side: str, trend: str) -> float:
     return 0.0
 
 
-def pick_side(lines, p_over_at, hold: float | None = None):
+def pick_side(lines, p_over_at, hold: float | None = None,
+              allow_under: bool = True):
     """Shop both sides and return the one with the larger edge.
 
     ``p_over_at(line) -> P(stat > line)`` is supplied by the caller so each
@@ -222,9 +223,17 @@ def pick_side(lines, p_over_at, hold: float | None = None):
     over_edge = p_over_at_over - over.fair_prob
 
     # A market quoted Over-only (home runs, most scorer props) has no under
-    # to bet: never price the side that doesn't exist.
-    two_sided = [ln for ln in lines if ln.under_odds]
-    if not two_sided:
+    # to bet: never price the side that doesn't exist. A pair that fails
+    # the sanity check is the same case wearing a fake price — the
+    # backtests and the longshot board both filtered these and this path
+    # did not, which is how a placeholder -110 "no homer" beat a real
+    # +850 over on its own fabricated edge. ``allow_under=False`` is for
+    # markets whose under is not a product at all (a rare-event ladder's
+    # "won't happen" side), whatever the feed recorded.
+    from .odds import pair_is_sane
+    two_sided = [ln for ln in lines if ln.under_odds
+                 and pair_is_sane(ln.over_odds, ln.under_odds)]
+    if not two_sided or not allow_under:
         return "OVER", over, p_over_at_over, over.fair_prob, over_edge
     under = best_under_line(two_sided, hold)
 

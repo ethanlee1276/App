@@ -120,9 +120,8 @@ def test_the_edge_board_prices_hr_with_the_same_measured_hold():
               encoding="utf-8") as f:
         bet = f.read()
     assert "hold_override=None) -> Recommendation" in bet
-    assert "pick_side(prop.lines, p_over_at,\n" \
-           "                                                    " \
-           "hold=hold_override)" in bet
+    assert "pick_side(\n        prop.lines, p_over_at, hold=hold_override," \
+        in bet
     with open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
               encoding="utf-8") as f:
         pipe = f.read()

@@ -171,8 +171,14 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # was live has to be recoverable from the row itself.
         return calibrated("mlb", prop.market, raw)
 
-    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at,
-                                                    hold=hold_override)
+    # Home runs are a yes-market: "to hit a home run" is the product,
+    # and 'Under 0.5 Home Runs' — a heavy-juice bet that a thing does
+    # NOT happen — is not a board-worthy bet even where some book quotes
+    # it. Ethan, 2026-09-01: "'under 0.5 homeruns' ... is not a real
+    # bet." The over is the only side this market sells.
+    side, best, hit_raw, fair, edge_raw = pick_side(
+        prop.lines, p_over_at, hold=hold_override,
+        allow_under=prop.market != HOME_RUNS)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                       allow_synthetic_line,
                                       shrink=mlb_tier_shrink(prop.market))

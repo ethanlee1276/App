@@ -88,6 +88,15 @@ def devig_two_way(over_odds: int, under_odds: int,
     """
     dv = hold if hasattr(hold, "fair") else None
     hold = ONE_SIDED_HOLD if (dv or not hold) else float(hold)
+    # An arithmetically impossible pair — the fabricated-under classic,
+    # "over +850 / under -110" summing to 63% — is treated as one-sided
+    # on the over, exactly as longshots._price and the scanner treat it.
+    # This path did not check, and "devigging" the corrupt pair INFLATED
+    # both fairs at once: the under's toward certainty (which is how
+    # 'Under 0.5 Home Runs' reached the best-bets board, 2026-09-01)
+    # and the over's by half again.
+    if over_odds and under_odds and not pair_is_sane(over_odds, under_odds):
+        under_odds = 0
     if not under_odds and over_odds:
         raw = american_to_prob(over_odds)
         fair_over = min(0.99, dv.fair(raw) if dv else raw / hold)

@@ -384,7 +384,7 @@ def test_the_haircut_runs_after_the_side_is_chosen():
     from engine.mlb import betting as mlb_betting
     for mod in (betting, mlb_betting):
         src = inspect.getsource(mod)
-        assert src.index("pick_side(prop.lines") < src.index("= apply_selection("), \
+        assert src.index("= pick_side(") < src.index("= apply_selection("), \
             f"{mod.__name__}: the haircut must not run before pick_side"
 
 
