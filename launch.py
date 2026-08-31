@@ -1976,6 +1976,10 @@ def _running_commit() -> str:
 _running_commit()
 
 
+#: Consecutive failed pull checks, for the escalation above 3.
+_PULL_FAILS = [0]
+
+
 def _auto_update() -> bool:
     """Fast-forward to whatever has been pushed. True if new code arrived.
 
@@ -2005,12 +2009,25 @@ def _auto_update() -> bool:
         return False
     ok, out = _git("pull", "--ff-only", "origin", branch)
     if not ok:
-        # Offline is the common case and not worth shouting about; a real
-        # divergence is, because it means auto-update has stopped working.
         if "diverge" in out.lower() or "non-fast-forward" in out.lower():
             print(f"  ⚠️  auto-update stopped: {branch} has diverged from "
                   f"origin. Sort it out by hand — nothing was changed.")
+            return False
+        # A PERSISTENT FAILURE MUST NOT LOOK LIKE OFFLINE. This used to
+        # say nothing on any non-divergence failure, on the theory that
+        # offline is common and not worth shouting about — and then ran
+        # for an hour on a box where the pull could never succeed (the
+        # working copy was read-only to the process) without a word. One
+        # failed check IS probably a dead wifi; the third in a row is a
+        # pattern, and the reason has been in `out` the whole time.
+        _PULL_FAILS[0] += 1
+        if _PULL_FAILS[0] == 3 or _PULL_FAILS[0] % 12 == 0:
+            mins = _PULL_FAILS[0] * AUTO_UPDATE_EVERY_S // 60
+            print(f"  ⚠️  auto-update: the pull has failed "
+                  f"{_PULL_FAILS[0]} checks running (~{mins} min) — "
+                  + (out.splitlines() or ["no output"])[-1])
         return False
+    _PULL_FAILS[0] = 0
     ok, after = _git("rev-parse", "HEAD")
     return bool(ok and after != before)
 
@@ -3631,9 +3648,31 @@ def show_boards() -> None:
         served = beat.get("commit")
         if served:
             ok, disk = _git("rev-parse", "--short", "HEAD")
-            word = ("ON" if beat.get("auto_update") else
+            # THE TIMER'S WORD BEATS THE PROCESS'S FLAG. On the droplet
+            # updates arrive via qellys-update.timer (a root oneshot —
+            # the app's sandbox correctly cannot rewrite its own
+            # checkout), which records every attempt in
+            # data/autoupdate.json precisely so this screen can say
+            # whether pulling WORKS, not merely whether it is wanted.
+            word = ("ON (in-process)" if beat.get("auto_update") else
                     "off — pushes wait for a manual deploy")
-            line = f"  running commit {served} · auto-update {word}"
+            extra = ""
+            try:
+                with open(ROOT / "data" / "autoupdate.json") as fh:
+                    au = json.load(fh) or {}
+                mins = (time.time() - float(au.get("at_epoch") or 0)) / 60.0
+                if mins > 20:
+                    word = "timer STALLED"
+                    extra = (f"\n    <-- the update timer has not run for "
+                             f"{mins:.0f} min (last: {au.get('note')})")
+                elif au.get("ok"):
+                    word = f"ON (timer, checked {mins:.0f} min ago)"
+                else:
+                    word = "timer FAILING"
+                    extra = f"\n    <-- {au.get('note')}"
+            except Exception:                             # noqa: BLE001
+                pass                # no state file — not a timer box
+            line = f"  running commit {served} · auto-update {word}" + extra
             if ok and disk and disk != served:
                 line += (f"\n    <-- {disk} is on disk but not running: "
                          f"the loop never restarted into it")

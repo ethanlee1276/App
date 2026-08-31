@@ -41,6 +41,12 @@ def _src(*parts):
         return f.read()
 
 
+def t_block(sh):
+    """The unit-install region of deploy.sh, wherever it moves."""
+    at = sh.index("UNIT_SRC")
+    return sh[at:at + 2400]
+
+
 #: Everything the running service writes, by the constants that name it.
 #: A path here that git tracks is a path that jams auto-update shut.
 WRITTEN_WHILE_RUNNING = (
@@ -53,6 +59,7 @@ WRITTEN_WHILE_RUNNING = (
     "data/models/calibration.json",
     "data/feedstate/hold.json",
     "data/ledger.db",
+    "data/autoupdate.json",       # the update timer's own state
 )
 
 
@@ -65,9 +72,14 @@ def test_the_deploy_installs_the_unit_when_it_changes():
     unit that had never heard of the flag. A deploy that pulls a change
     and restarts into something else is a deploy that lies."""
     sh = _src("deploy", "deploy.sh")
-    assert "/etc/systemd/system/${SERVICE}.service" in sh
+    assert '/etc/systemd/system/$(basename "$UNIT_SRC")' in sh
     assert "cmp -s" in sh, "it must compare before writing a system file"
     assert "daemon-reload" in sh, "systemd will not reread it otherwise"
+    # All three units ride the same install loop — the app, the update
+    # oneshot, and its clock.
+    for unit in ("qellys.service", "qellys-update.service",
+                 "qellys-update.timer"):
+        assert f"deploy/{unit}" in sh, unit
 
 
 def test_the_unit_is_installed_before_the_restart():
@@ -81,13 +93,13 @@ def test_it_shows_what_changed_rather_than_writing_silently():
     """This edits a system file. A unit that changed under you is worth
     reading about."""
     sh = _src("deploy", "deploy.sh")
-    assert "diff" in sh and "the systemd unit changed" in sh
+    assert "diff" in sh and "changed — installing it" in sh
 
 
 def test_an_unchanged_unit_is_left_alone():
     """`cmp` gates it, so an ordinary deploy neither writes nor reloads."""
     sh = _src("deploy", "deploy.sh")
-    at = sh.index("UNIT_SRC=")
+    at = sh.index("UNIT_SRC")
     block = sh[at:at + 1400]
     assert "! sudo cmp -s" in block, block[:200]
 
@@ -100,27 +112,45 @@ def test_a_matching_unit_is_reported_rather_than_silent():
     on success is fine for a loop that runs every minute; a deploy runs
     once, watched, and every step should account for itself."""
     sh = _src("deploy", "deploy.sh")
-    at = sh.index("UNIT_SRC=")
+    at = sh.index("UNIT_SRC")
     block = sh[at:at + 1400]
     assert "matches the repo" in block, block
-    # And the one fact being deployed for rides on the line, read from
-    # the file rather than asserted.
-    assert "auto-update: ON" in block
+    # And the fact being deployed for rides on its own line, read from
+    # systemd rather than asserted.
+    assert "auto-update timer:" in t_block(sh)
 
 
-# --- the unit asks for it -------------------------------------------------
-def test_the_service_passes_the_flag():
+# --- the app unit must NOT ask for it -------------------------------------
+def test_the_service_does_not_pass_the_flag():
+    """The reversal is the lesson. --auto-update was put ON this line on
+    2026-08-31 and failed silently every five minutes: the app runs as
+    `qellys` under ProtectSystem=strict, so its own checkout is
+    read-only to it — as it should be. Updates come from the root timer
+    (qellys-update.timer) instead; the flag reappearing here would be
+    the broken design coming back."""
     unit = _src("deploy", "qellys.service")
     line = [ln for ln in unit.splitlines() if ln.startswith("ExecStart=")]
-    assert line, "no ExecStart"
-    assert "--auto-update" in line[0], line[0]
+    assert line and "--auto-update" not in line[0], line
 
 
-def test_only_one_execstart_carries_it():
-    """A second ExecStart would silently win or lose depending on order."""
+def test_the_unit_records_why_the_flag_was_removed():
     unit = _src("deploy", "qellys.service")
-    assert len([ln for ln in unit.splitlines()
-                if ln.startswith("ExecStart=")]) == 1
+    assert "qellys-update.timer" in unit
+    assert "read-only" in unit.lower()
+
+
+def test_the_timer_units_exist_and_agree():
+    svc = _src("deploy", "qellys-update.service")
+    tim = _src("deploy", "qellys-update.timer")
+    assert "autoupdate.py" in svc
+    assert "oneshot" in svc
+    assert "OnUnitActiveSec=5min" in tim
+
+
+def test_the_deploy_installs_and_enables_the_timer():
+    sh = _src("deploy", "deploy.sh")
+    assert "qellys-update.timer" in sh
+    assert "enable --now qellys-update.timer" in sh
 
 
 def test_the_launcher_still_treats_it_as_opt_in():
@@ -128,11 +158,6 @@ def test_the_launcher_still_treats_it_as_opt_in():
     laptop starts pulling and running code nobody asked it to."""
     src = _src("launch.py")
     assert 'if "--auto-update" in argv:' in src
-
-
-def test_the_unit_records_why_a_deliberate_opt_in_was_opted_into():
-    unit = _src("deploy", "qellys.service")
-    assert "not a laptop" in unit.lower()
 
 
 # --- and nothing the app writes can jam it shut ---------------------------
@@ -240,6 +265,178 @@ def test_the_commit_is_captured_once_not_reread_from_disk():
     src = inspect.getsource(launch._running_commit)
     assert "_RUNNING_COMMIT" in src
     assert "if not _RUNNING_COMMIT" in src
+
+
+# --- a persistent pull failure must not look like offline ------------------
+def _fail_git(*a, **k):
+    if a[0] == "status":
+        return True, ""
+    if a[0] == "rev-parse" and "--abbrev-ref" in a:
+        return True, "main"
+    if a[0] == "rev-parse":
+        return True, "abc123"
+    if a[0] == "pull":
+        return False, "fatal: could not read from remote repository"
+    return True, ""
+
+
+def _run_checks(n, git):
+    import io
+    from contextlib import redirect_stdout
+    import launch
+    saved_git, saved = launch._git, launch._PULL_FAILS[0]
+    launch._git, launch._PULL_FAILS[0] = git, 0
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            for _ in range(n):
+                launch._auto_update()
+        return buf.getvalue(), launch._PULL_FAILS[0]
+    finally:
+        launch._git, launch._PULL_FAILS[0] = saved_git, saved
+
+
+def test_one_failed_check_is_still_just_offline():
+    out, _ = _run_checks(1, _fail_git)
+    assert out == "", out
+
+
+def test_the_third_straight_failure_says_why():
+    """The in-process updater ran for an HOUR on a box where the pull
+    could never succeed, without a word — by design, because offline is
+    common. Offline is one check. Three in a row is a pattern, and the
+    reason was in git's own output the whole time."""
+    out, fails = _run_checks(3, _fail_git)
+    assert fails == 3
+    assert "auto-update" in out
+    assert "could not read from remote" in out
+
+
+def test_a_success_resets_the_streak():
+    import launch
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        if a[0] == "pull":
+            calls["n"] += 1
+            return (False, "boom") if calls["n"] < 3 else (True, "ok")
+        return _fail_git(*a, **k)
+    _, fails = _run_checks(3, flaky)
+    assert fails == 0
+
+
+# --- the timer's state file, produced by actually running the script -------
+def _make_repo():
+    import tempfile
+    origin = tempfile.mkdtemp()
+    clone = tempfile.mkdtemp()
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def g(cwd, *a):
+        return subprocess.run(("git", "-C", cwd) + a, env=env, check=True,
+                              capture_output=True, text=True)
+    g(origin, "init", "-b", "main")
+    with open(os.path.join(origin, "f.txt"), "w") as f:
+        f.write("one\n")
+    # The real repo ignores the updater's state file; the test repo must
+    # too, or the double-run test below fails for the fixed reason.
+    with open(os.path.join(origin, ".gitignore"), "w") as f:
+        f.write("data/autoupdate.json\n")
+    g(origin, "add", "."); g(origin, "commit", "-m", "one")
+    subprocess.run(("git", "clone", origin, clone), env=env, check=True,
+                   capture_output=True)
+    # clone into itself leaves clone/<basename>; clone dir must BE the repo
+    inner = os.path.join(clone, os.path.basename(origin))
+    repo = inner if os.path.isdir(os.path.join(inner, ".git")) else clone
+    return origin, repo, g
+
+
+def _run_updater(repo, bindir):
+    subprocess.run((sys.executable, os.path.join(ROOT, "deploy",
+                                                 "autoupdate.py"),
+                    "--repo", repo, "--service", "qellys"),
+                   env={**os.environ, "PATH": bindir + os.pathsep
+                        + os.environ["PATH"]},
+                   check=True, capture_output=True, text=True)
+    import json
+    with open(os.path.join(repo, "data", "autoupdate.json")) as f:
+        return json.load(f)
+
+
+def _fake_systemctl():
+    """A systemctl on PATH that records its argv instead of acting."""
+    import tempfile
+    bindir = tempfile.mkdtemp()
+    log = os.path.join(bindir, "calls")
+    path = os.path.join(bindir, "systemctl")
+    with open(path, "w") as f:
+        f.write(f'#!/bin/sh\necho "$@" >> {log}\n')
+    os.chmod(path, 0o755)
+    return bindir, log
+
+
+def test_an_up_to_date_repo_records_ok_and_restarts_nothing():
+    _, repo, _ = _make_repo()
+    bindir, log = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert state["ok"] and state["note"] == "up to date", state
+    assert not os.path.exists(log), "restarted with nothing pulled"
+
+
+def test_new_code_is_pulled_and_the_service_restarted():
+    origin, repo, g = _make_repo()
+    with open(os.path.join(origin, "f.txt"), "w") as f:
+        f.write("two\n")
+    g(origin, "add", "."); g(origin, "commit", "-m", "two")
+    bindir, log = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert state["ok"] and "restarted" in state["note"], state
+    with open(os.path.join(repo, "f.txt")) as f:
+        assert f.read() == "two\n", "the pull did not land"
+    with open(log) as f:
+        assert "restart qellys" in f.read()
+
+
+def test_a_dirty_tree_is_skipped_and_says_whose_fault_that_is_not():
+    _, repo, _ = _make_repo()
+    with open(os.path.join(repo, "f.txt"), "a") as f:
+        f.write("wip\n")
+    bindir, log = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert not state["ok"] and "dirty" in state["note"], state
+    assert not os.path.exists(log)
+
+
+def test_a_dead_remote_is_recorded_not_swallowed():
+    """THE WHOLE POINT OF THE STATE FILE. The last updater's pull failed
+    every five minutes for an hour and said nothing anywhere."""
+    import shutil
+    origin, repo, _ = _make_repo()
+    shutil.rmtree(origin)
+    bindir, log = _fake_systemctl()
+    state = _run_updater(repo, bindir)
+    assert not state["ok"] and "pull failed" in state["note"], state
+    assert not os.path.exists(log)
+
+
+def test_the_updaters_own_state_file_does_not_jam_the_updater():
+    """`git status --porcelain` lists UNTRACKED files. Unignored, the
+    state file written by run one reads as a dirty tree on run two, and
+    the updater deadlocks itself forever — reporting "dirty" about its
+    own droppings. The .gitignore entry is the fix; this runs it."""
+    _, repo, _ = _make_repo()
+    bindir, _ = _fake_systemctl()
+    first = _run_updater(repo, bindir)
+    second = _run_updater(repo, bindir)
+    assert first["ok"] and second["ok"], (first, second)
+    assert "dirty" not in second["note"]
+
+
+def test_the_real_repo_ignores_the_state_file():
+    r = subprocess.run(["git", "-C", ROOT, "check-ignore",
+                        "data/autoupdate.json"], capture_output=True)
+    assert r.returncode == 0, "data/autoupdate.json is not gitignored"
 
 
 if __name__ == "__main__":

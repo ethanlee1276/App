@@ -171,25 +171,36 @@ fi
 #
 # Announced and diffed rather than done quietly: this writes a system
 # file, and a unit that changed under you is worth reading about.
-UNIT_SRC="deploy/qellys.service"
-UNIT_DST="/etc/systemd/system/${SERVICE}.service"
-if [ -f "$UNIT_SRC" ] && ! sudo cmp -s "$UNIT_SRC" "$UNIT_DST"; then
-  say "the systemd unit changed — installing it"
-  sudo diff "$UNIT_DST" "$UNIT_SRC" | grep -E '^[<>]' | head -20 || true
-  sudo cp "$UNIT_SRC" "$UNIT_DST"
-  sudo systemctl daemon-reload
-  echo "  installed and reloaded — the restart below runs the new unit"
-else
-  # SAY SO WHEN NOTHING CHANGED, TOO. The first cut printed nothing on a
-  # match, and from a phone that is indistinguishable from the step not
-  # existing — which is exactly the round trip it caused the day it
-  # shipped: the unit had already been installed by hand, this skipped
-  # silently, and the deploy output gave no way to tell "already there"
-  # from "never ran". One line, with the fact that actually matters on
-  # it, read from the file systemd will use rather than asserted.
-  echo "  systemd unit matches the repo$(
-    grep -q -- '--auto-update' "$UNIT_SRC"       && echo ' (auto-update: ON)' || echo ' (auto-update: off)')"
-fi
+# THREE UNITS NOW, not one: the app, the auto-update oneshot, and its
+# timer. The in-process --auto-update failed silently for an hour on
+# 2026-08-31 because the app's own sandbox (correctly) forbids it from
+# rewriting its checkout — see deploy/qellys-update.service for the
+# whole story. Auto-update is a root timer now, installed here the same
+# way the app unit is.
+CHANGED=0
+for UNIT_SRC in deploy/qellys.service deploy/qellys-update.service \
+                deploy/qellys-update.timer; do
+  UNIT_DST="/etc/systemd/system/$(basename "$UNIT_SRC")"
+  if [ -f "$UNIT_SRC" ] && ! sudo cmp -s "$UNIT_SRC" "$UNIT_DST"; then
+    say "$(basename "$UNIT_SRC") changed — installing it"
+    sudo diff "$UNIT_DST" "$UNIT_SRC" 2>/dev/null | grep -E '^[<>]' | head -20 || true
+    sudo cp "$UNIT_SRC" "$UNIT_DST"
+    CHANGED=1
+  else
+    # SAY SO WHEN NOTHING CHANGED, TOO. The first cut printed nothing on
+    # a match, and from a phone that is indistinguishable from the step
+    # not existing — the exact round trip it caused the day it shipped.
+    echo "  $(basename "$UNIT_SRC") matches the repo"
+  fi
+done
+[ "$CHANGED" = 1 ] && { sudo systemctl daemon-reload; \
+  echo "  reloaded — the restart below runs the new units"; }
+# enable --now is idempotent; the state line makes the fact visible
+# either way, read from systemd rather than asserted.
+sudo systemctl enable --now qellys-update.timer >/dev/null 2>&1 || true
+echo "  auto-update timer: $(systemctl is-active qellys-update.timer \
+  2>/dev/null || echo not installed) — pulls every 5 min as root, "\
+"restarts on new code (state: data/autoupdate.json)"
 
 say "restarting $SERVICE"
 sudo systemctl restart "$SERVICE"

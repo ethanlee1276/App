@@ -229,6 +229,47 @@ def test_updater_off_names_the_consequence():
     assert "manual deploy" in out
 
 
+# --- the timer's word beats the process's flag -----------------------------
+def _timer_root(beat, au):
+    tmp = _heartbeat_root(beat)
+    (tmp / "data").mkdir()
+    (tmp / "data" / "autoupdate.json").write_text(json.dumps(au))
+    return tmp
+
+
+def _live_beat():
+    return {"at_epoch": time.time(), "at": "now", "boards": {},
+            "commit": DISK, "auto_update": False}
+
+
+def test_a_healthy_timer_reports_on_with_its_last_check():
+    out = _run_with_root(_timer_root(_live_beat(),
+        {"at_epoch": time.time() - 120, "ok": True, "note": "up to date"}))
+    assert "auto-update ON (timer" in out
+
+
+def test_a_failing_timer_names_the_reason_on_the_screen():
+    """The whole reason the state file exists: the in-process updater
+    failed every five minutes for an hour and nothing anywhere said so
+    or why."""
+    out = _run_with_root(_timer_root(_live_beat(),
+        {"at_epoch": time.time() - 120, "ok": False,
+         "note": "pull failed: fatal: could not read from remote"}))
+    assert "timer FAILING" in out
+    assert "could not read from remote" in out
+
+
+def test_a_timer_that_stopped_running_is_its_own_alarm():
+    out = _run_with_root(_timer_root(_live_beat(),
+        {"at_epoch": time.time() - 3600, "ok": True, "note": "up to date"}))
+    assert "STALLED" in out
+
+
+def test_no_state_file_falls_back_to_the_process_flag():
+    out = _run_with_root(_heartbeat_root(_live_beat()))
+    assert "manual deploy" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

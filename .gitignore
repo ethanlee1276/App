@@ -46,6 +46,11 @@ data/yahoo_token.json
 data/history.db
 *.db
 data/ledger.db
+# The auto-update timer's own state (deploy/autoupdate.py). MUST stay
+# ignored: the updater refuses a dirty tree, and `git status --porcelain`
+# lists untracked files — unignored, the state file the updater writes
+# would jam the updater itself on its second run.
+data/autoupdate.json
 # Rocket Radar's own record — the calls, their marks and their
 # paths. Same reasoning as the bet ledger: it is the machine's
 # memory of what it said, not source, and it only means anything
