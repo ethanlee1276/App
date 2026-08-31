@@ -175,6 +175,25 @@ def test_the_measurement_lives_in_this_file():
     assert "1030px" in doc
 
 
+def test_the_stadium_strip_is_capped_not_aspect_sized():
+    """Ethan, 2026-08-31: the stadiums lead "but it takes up way too
+    much space." In the strip the art is a capped letterbox band, and
+    the cap is SCOPED — the grid view and game page keep full art,
+    because there the art is the content."""
+    with open(os.path.join(ROOT, "web", "css", "styles.css"),
+              encoding="utf-8") as f:
+        css = f.read()
+    at = css.index(".games-scroller .stadium-wrap")
+    rule = css[at:css.index("}", at)]
+    assert " height:" in rule and "overflow: hidden" in rule
+    # The bare rule must NOT carry the cap, or every venue everywhere
+    # shrinks with the strip. (" height:" with the space — line-height
+    # is a different property that lives there legitimately.)
+    bare = css.index(".stadium-wrap { line-height")
+    bare_rule = css[bare:css.index("}", bare)]
+    assert " height:" not in bare_rule.replace("line-height", "")
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

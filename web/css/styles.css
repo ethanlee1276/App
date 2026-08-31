@@ -639,6 +639,21 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 .game-card { transform-style: preserve-3d; transition: border-color var(--dur-base) var(--ease-out); }
 .game-card:hover { border-color: var(--brand-2); box-shadow: var(--glow); }
 .stadium-wrap { line-height: 0; background: #070b16; }
+/* THE STRIP GETS SHORTER, NOT EMPTIER. Ethan, 2026-08-31: the stadiums
+   lead the page again "but it takes up way too much space so we need to
+   make it look better and not take up so much space." The art was
+   aspect-sized from the SVG scene, so every card carried a cinema
+   poster; in the STRIP the art is now a capped letterbox band — the
+   photo covers it, the SVG fallback scales into it — and the info
+   paddings tighten. Scoped to .games-scroller on purpose: the grid
+   view and the game page keep the full-size art, because there the art
+   IS the content rather than the scene-setter. */
+.games-scroller .game-card { flex-basis: 228px; }
+.games-scroller .stadium-wrap { position: relative; height: 86px;
+  overflow: hidden; }
+.games-scroller .stadium-wrap .stadium { width: 100%; height: 100%; }
+.games-scroller .game-info { padding: 8px 12px 2px; }
+.games-scroller { padding-bottom: 8px; }
 /* A card that HAS a photo element does not render the SVG scene under
    it at all. The scene's floodlight bloom is two feGaussianBlur
    filters per card — real GPU work — and it was rasterizing beneath

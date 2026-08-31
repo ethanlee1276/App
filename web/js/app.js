@@ -4195,7 +4195,7 @@ function gameCard(g) {
           // drawing stays as the fallback when every photo 404s, because
           // then onload never fires and nothing is hidden.
           return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-          onload="this.parentNode.classList.add('vp-on')"
+          onload="this.parentNode&&this.parentNode.classList.add('vp-on')"
           src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
           ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
           onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
@@ -6985,7 +6985,7 @@ function renderGamePage() {
   // Same onload mark as the board cards: a painted photo drops the
   // blurred SVG scene under it (see .vp-on in the stylesheet).
   const gpPhoto = `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-      onload="this.parentNode.classList.add('vp-on')"
+      onload="this.parentNode&&this.parentNode.classList.add('vp-on')"
       src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
       ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
       onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
@@ -10004,16 +10004,16 @@ const REC_ROOMS = [
    // arrows); moving the bare title/scroller out of them orphaned the
    // controls at the top of the page.
    // The room places blocks in THIS order — the list, not the DOM, is
-   // what a reader sees. Ethan's order 2026-08-11 was "top bets, the
-   // stadiums, then roi"; on 2026-08-31 he swapped which picks LEAD:
-   // "I want the picks on the most likely page here so we should swap
-   // the locations." So the likelihood board — the model's strongest
-   // measured ability (0.72 AUC on who scores) — opens the page, and
-   // the edge strip moved down to where the likely preview sat. The
-   // measurements were already saying this: the hero slot was showing
-   // the 0.468-AUC quantity while the 0.72 one sat below the fold.
-   ["probation-note", "talent-note", "likely-top", "parlay-mode",
-    "games-head", "games-outer", "stats", "home-perf",
+   // what a reader sees. Three decisions layer here, newest last:
+   // 2026-08-11 "top bets, the stadiums, then roi"; 2026-08-31 morning,
+   // the likelihood board displaced the edge strip ("I want the picks
+   // on the most likely page here"); 2026-08-31 midday, the final
+   // order: "the stadiums should always be first the follows the most
+   // likely to hit." So: venues set the scene, the likelihood board —
+   // the model's strongest measured ability — is the first read, and
+   // the edge strip stays demoted to where the likely preview once sat.
+   ["probation-note", "talent-note", "games-head", "games-outer",
+    "likely-top", "parlay-mode", "stats", "home-perf",
     "best-bets", "top-picks", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",

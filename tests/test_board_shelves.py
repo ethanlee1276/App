@@ -250,15 +250,17 @@ def test_it_sits_above_the_slider_filtered_edge_cards():
     assert room.index('"likely-top"') < room.index('"rec-controls"')
 
 
-def test_the_likelihood_board_leads_the_page_and_the_edge_strip_follows():
-    """Ethan, 2026-08-31, pointing at the hero slot showing a +3.6%-edge
-    pick: "I want the picks on the most likely page here so we should
-    swap the locations." The hero was the 0.468-AUC quantity; what hits
-    is the 0.72 one. The room order IS the page order."""
+def test_the_stadiums_lead_then_the_likelihood_board_then_everything():
+    """Ethan's final order, 2026-08-31: "the stadiums should always be
+    first the follows the most likely to hit." Venues set the scene, the
+    board with the strongest evidence is the first read, and the edge
+    strip stays demoted below the fold. The room order IS the page
+    order."""
     src = _src("web", "js", "app.js")
     at = src.index('["board", "Tonight')
     room = src[at:src.index('["gamebets"', at)]
-    assert room.index('"likely-top"') < room.index('"games-head"')
+    assert room.index('"games-head"') < room.index('"likely-top"')
+    assert room.index('"games-outer"') < room.index('"likely-top"')
     assert room.index('"likely-top"') < room.index('"top-picks"')
     assert room.index('"best-bets"') < room.index('"top-picks"')
 
