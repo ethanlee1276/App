@@ -250,6 +250,28 @@ def test_it_sits_above_the_slider_filtered_edge_cards():
     assert room.index('"likely-top"') < room.index('"rec-controls"')
 
 
+def test_the_likelihood_board_leads_the_page_and_the_edge_strip_follows():
+    """Ethan, 2026-08-31, pointing at the hero slot showing a +3.6%-edge
+    pick: "I want the picks on the most likely page here so we should
+    swap the locations." The hero was the 0.468-AUC quantity; what hits
+    is the 0.72 one. The room order IS the page order."""
+    src = _src("web", "js", "app.js")
+    at = src.index('["board", "Tonight')
+    room = src[at:src.index('["gamebets"', at)]
+    assert room.index('"likely-top"') < room.index('"games-head"')
+    assert room.index('"likely-top"') < room.index('"top-picks"')
+    assert room.index('"best-bets"') < room.index('"top-picks"')
+
+
+def test_the_demoted_strip_says_what_it_is():
+    """Two pick sections on one page must name their difference, or
+    "top picks" below "most likely" reads as a contradiction. The strip
+    is the EDGE board's shelf and says so."""
+    src = _src("web", "js", "app.js")
+    assert "Qellys’ edge picks" in src
+    assert "where our number beats the price" in src
+
+
 def test_the_preview_reuses_the_shelves_rather_than_refiltering():
     """A second "top picks" filter is how two pages end up disagreeing
     about the same player."""

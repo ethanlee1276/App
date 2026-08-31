@@ -10000,17 +10000,18 @@ const REC_ROOMS = [
    // games-head/games-outer are the strip's wrappers (controls +
    // arrows); moving the bare title/scroller out of them orphaned the
    // controls at the top of the page.
-   // Ethan's order, 2026-08-11, from his phone: "top bets, the
-   // stadiums, then roi." The room places blocks in THIS order — the
-   // list, not the DOM, is what a reader sees.
-   // `likely-top` sits directly under Tonight's picks and ABOVE the
-   // slider-filtered edge cards. Ethan, 2026-08-30: "thats bets the user
-   // is really looking for" — a normal bettor is shopping for what hits,
-   // not for where the price is wrong, and until now the landing page
-   // only ever offered them the second thing.
-   ["probation-note", "talent-note", "top-picks", "parlay-mode",
+   // The room places blocks in THIS order — the list, not the DOM, is
+   // what a reader sees. Ethan's order 2026-08-11 was "top bets, the
+   // stadiums, then roi"; on 2026-08-31 he swapped which picks LEAD:
+   // "I want the picks on the most likely page here so we should swap
+   // the locations." So the likelihood board — the model's strongest
+   // measured ability (0.72 AUC on who scores) — opens the page, and
+   // the edge strip moved down to where the likely preview sat. The
+   // measurements were already saying this: the hero slot was showing
+   // the 0.468-AUC quantity while the 0.72 one sat below the fold.
+   ["probation-note", "talent-note", "likely-top", "parlay-mode",
     "games-head", "games-outer", "stats", "home-perf",
-    "best-bets", "likely-top", "empty-slate", "rec-controls", "cards"]],
+    "best-bets", "top-picks", "empty-slate", "rec-controls", "cards"]],
   ["gamebets", "Game bets",
    "moneyline, spread and total edges from the team model",
    ["gamebets-title", "gamebets"]],
@@ -28393,8 +28394,8 @@ function renderTopPicks() {
     </div>`;
   };
   host.innerHTML = `
-    <div class="section-title tp-title">Qellys’ top picks
-      <span class="sub">— ${hcmOn() ? "A-grade only (High Confidence is on)" : "tonight’s best grades first"} · every one is journaled and graded in public</span>
+    <div class="section-title tp-title">Qellys’ edge picks
+      <span class="sub">— ${hcmOn() ? "A-grade only (High Confidence is on)" : "where our number beats the price, best grades first"} · every one is journaled and graded in public</span>
       <a class="tp-more" href="#record">Why these picks?</a></div>
     <div class="tp-strip">${recs.map(propCard).join("")}${gb.map(gameCardMini).join("")}</div>`;
 }
