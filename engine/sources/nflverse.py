@@ -163,8 +163,18 @@ def load_snap_counts(season: int) -> list[dict]:
     the volume stats can't provide (a back can have 8 carries on 70% of
     snaps or on 20%, and those are different players to bet on)."""
     local = CACHE_DIR / f"snap_counts_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
+    # NO local.exists() SHORT-CIRCUIT — it froze this feed forever.
+    # `fetch_csv` caches at this same path with a 12-hour TTL and falls
+    # back to the stale file when the network is down (and to a
+    # hand-exported file when the release 404s, since that lands at the
+    # same path). The exists() check that used to sit here defeated all
+    # of that: the first file ever written — by a fetch OR an export —
+    # was served eternally. For rosters that meant cut-day (Aug 26) and
+    # every trade since never reached the board: a cut player stayed
+    # ACT with props built off last season, a waiver claim did not
+    # exist, a traded player kept his old team. For weekly stats it was
+    # worse: a file cached in Week 1 would have frozen every projection
+    # at Week 1 for the season.
     last_err = None
     for url in _snap_urls(season):
         try:
@@ -178,9 +188,8 @@ def load_snap_counts(season: int) -> list[dict]:
 def load_weekly_stats(season: int) -> list[dict]:
     """Weekly player stats for a season, from release URLs or a local CSV."""
     local = CACHE_DIR / f"player_stats_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
-
+    # See load_snap_counts — the exists() short-circuit that sat here
+    # froze the file at its first write, forever.
     last_err = None
     for url in _weekly_stats_urls(season):
         try:
@@ -215,8 +224,9 @@ def load_rosters(season: int) -> list[dict]:
     2019 and would silently return nothing for a current season.
     """
     local = CACHE_DIR / f"roster_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
+    # See load_snap_counts — the exists() short-circuit that sat here
+    # served the first roster ever written for the rest of the season,
+    # which in roster-churn week prices teams that no longer exist.
     last_err = None
     for url in _roster_urls(season):
         try:

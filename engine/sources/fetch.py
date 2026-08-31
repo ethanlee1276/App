@@ -191,9 +191,15 @@ def fetch_json(url: str, cache_name: str, ttl: int = DEFAULT_TTL,
 
 
 def fetch_csv(url: str, cache_name: str, **kw) -> list[dict]:
-    """Fetch a CSV and return it as a list of row dicts."""
+    """Fetch a CSV and return it as a list of row dicts.
+
+    BOM-stripped, same as `load_local_csv` and for the same reason: a
+    hand-exported file lands on this cache path and is served by the
+    stale-fallback, and a leading BOM before a quoted first header cell
+    breaks the quoting and shifts every column by one.
+    """
     text = fetch_text(url, cache_name, **kw)
-    return list(csv.DictReader(io.StringIO(text)))
+    return list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
 
 
 def load_local_csv(path: str | Path) -> list[dict]:
