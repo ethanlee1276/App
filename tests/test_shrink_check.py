@@ -118,6 +118,20 @@ def test_the_weekly_pass_carries_the_check():
     assert "shrink_report(board_priced(" in src
 
 
+def test_the_weekly_pass_tracks_the_devig_bands_too():
+    """#65: the +455-800 band finding came from a CLI nobody would
+    remember to re-run. Both sports, weekly, refusing without closes."""
+    with open(os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "engine", "maintenance.py"),
+            encoding="utf-8") as f:
+        src = f.read()
+    at = src.index("devig bands")
+    block = src[at - 1200:at + 800]
+    assert "from .devigfit import collected, report_lines" in block
+    assert '("nfl", "cfb")' in block
+    assert "stays open" in block
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

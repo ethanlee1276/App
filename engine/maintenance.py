@@ -1099,6 +1099,31 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 _sc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  shrink check skipped: {exc}")
+        # #65's tracker, on the same weekly clock. devigfit measures how
+        # the touchdown market's vig is SHARED OUT across prices — its
+        # band table is where "the +455 to +800 band charges double" was
+        # found — and it was CLI-only, so the finding could never
+        # re-measure as closes accrued. It needs odds_history, refuses
+        # thin splits itself, and answers on the box that harvests.
+        try:
+            from . import db as _vdb
+            from .devigfit import collected, report_lines
+            _vc = _vdb.connect()
+            try:
+                for _sp in ("nfl", "cfb"):
+                    rows = collected(_vc, sport=_sp)
+                    if not rows:
+                        log(f"  devig bands ({_sp}): no joined closes on "
+                            f"this box — the question stays open")
+                        continue
+                    log(f"  devig bands ({_sp}): {len(rows):,} player-weeks "
+                        f"with a real close")
+                    for line in report_lines(rows):
+                        log(f"  {line}")
+            finally:
+                _vc.close()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  devig band check skipped: {exc}")
 
     # Settle the one-sided quote journals against whatever stat rows the
     # ingests above just wrote, and refit each market's measured hold
