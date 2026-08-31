@@ -200,6 +200,139 @@ def _decimal(odds: int) -> float:
     return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
 
 
+#: Slates with priced rows before the shrink comparison may speak at all.
+#: Below this the bootstrap is resampling anecdotes.
+MIN_SHRINK_SLATES = 30
+
+#: Depths the shrink question is asked at. The top of the board is the
+#: subject — the deep rows already sit near their bands.
+SHRINK_DEPTHS = (1, 3, 5, 10)
+
+#: Resamples for the slate bootstrap, same scale as the ROI's and for
+#: the same corrected-tail reason.
+SHRINK_RESAMPLES = 2000
+
+
+def shrink_report(rows: list, depths=SHRINK_DEPTHS, seed: int = 7) -> list[str]:
+    """Does the market shrink help or hurt the TOP of the board? (#77)
+
+    THE GAP THIS SETTLES. The replay says the top of the likelihood
+    board underclaims even after the fitted temperature — top-1 claims
+    60.0% and lands 67.4%, top-5 is +6.8 with a corrected interval clear
+    of zero — while the page shows a number already shrunk halfway to
+    the book, and the Week 1 board shape had the book ABOVE the model on
+    every top row. So the shrink might be closing exactly this gap, or
+    it might be dragging good numbers toward a lazy consensus; those
+    read identically on the page, and nothing measured which.
+
+    Three claims per top-of-board row — the corrected MODEL, the SHRUNK
+    number the page prints, and the de-vigged MARKET — against what
+    landed, ranked the way the page actually ranks (by the shrunk
+    number). The verdict per depth is which claim the landed rate sits
+    nearest, and it is only spoken when a slate bootstrap at the
+    family-corrected tail separates the contenders; otherwise it says
+    noise, which is an answer and not a failure.
+
+    A second panel asks the ordering half: does ranking by the shrunk
+    number land more of the top k than ranking by the model alone? The
+    same rows, the same slates, paired by slate.
+    """
+    import random
+    from .betting import MARKET_SHRINK
+
+    for r in rows:
+        r["shrunk"] = r["fair"] + MARKET_SHRINK * (r["cal"] - r["fair"])
+    slates: dict = {}
+    for r in rows:
+        slates.setdefault((r["season"], r["week"]), []).append(r)
+    groups = list(slates.values())
+    if len(groups) < MIN_SHRINK_SLATES:
+        return [f"  shrink check: {len(groups)} priced slate(s) — needs "
+                f"{MIN_SHRINK_SLATES}. This box has no odds_history, or "
+                f"the harvest is young; the question stays open, not "
+                f"answered."]
+
+    def panel(sample, k, key):
+        """(claims by name, landed, rows, slates) at depth k ranked by key."""
+        sums = {"cal": 0.0, "shrunk": 0.0, "fair": 0.0}
+        hit = n = ns = 0
+        for g in sample:
+            top = sorted(g, key=lambda r: -r[key])[:k]
+            if len(top) < k:
+                continue                 # same sit-out rule as roi_lines
+            ns += 1
+            for r in top:
+                for name in sums:
+                    sums[name] += r[name]
+                hit += r["scored"]
+                n += 1
+        if not n:
+            return None
+        return {name: s / n for name, s in sums.items()}, hit / n, n, ns
+
+    rng = random.Random(seed)
+    tail = ROI_FAMILY_ALPHA / max(1, len(depths)) / 2.0
+    out = [f"Market shrink at the top of the board · {len(groups)} priced "
+           f"slate(s)",
+           "  depth   slates   rows   model   shrunk   market   landed"
+           "   nearest"]
+    for k in depths:
+        got = panel(groups, k, "shrunk")
+        if not got:
+            continue
+        claims, landed, n, ns = got
+        gaps = {name: abs(c - landed) for name, c in claims.items()}
+        best = min(gaps, key=gaps.get)
+        runner = min((g for g in gaps if g != best), key=gaps.get)
+        # The verdict must survive resampling: bootstrap the winner's
+        # margin over the runner-up, judged at the corrected tail.
+        margins = []
+        for _ in range(SHRINK_RESAMPLES):
+            draw = [groups[rng.randrange(len(groups))] for _ in groups]
+            g2 = panel(draw, k, "shrunk")
+            if not g2:
+                continue
+            c2, l2, _, _ = g2
+            margins.append(abs(c2[runner] - l2) - abs(c2[best] - l2))
+        margins.sort()
+        clear = bool(margins) and margins[int(tail * len(margins))] > 0
+        word = ({"cal": "the model", "shrunk": "the shrunk number",
+                 "fair": "the market"}[best]
+                + ("" if clear else "   (inside the noise)"))
+        out.append(f"   top {k:<4d} {ns:5d}  {n:5d}  "
+                   f"{claims['cal']:6.1%}  {claims['shrunk']:6.1%}  "
+                   f"{claims['fair']:6.1%}  {landed:6.1%}   {word}")
+
+    # The ordering half: same depths, landed by-model vs by-shrunk.
+    out.append("  ordering — does ranking by the shrunk number pick better "
+               "scorers than the model alone?")
+    for k in depths:
+        a, b = panel(groups, k, "cal"), panel(groups, k, "shrunk")
+        if not a or not b:
+            continue
+        diffs = []
+        for _ in range(SHRINK_RESAMPLES):
+            draw = [groups[rng.randrange(len(groups))] for _ in groups]
+            ga, gb = panel(draw, k, "cal"), panel(draw, k, "shrunk")
+            if ga and gb:
+                diffs.append(gb[1] - ga[1])
+        diffs.sort()
+        lo = diffs[int(tail * len(diffs))] if diffs else 0.0
+        hi = diffs[int((1 - tail) * len(diffs)) - 1] if diffs else 0.0
+        verdict = ("   <-- shrunk ranks better" if lo > 0 else
+                   "   <-- model ranks better" if hi < 0 else
+                   "   inside the noise")
+        out.append(f"   top {k:<4d} by model {a[1]:6.1%}   by shrunk "
+                   f"{b[1]:6.1%}   diff {b[1] - a[1]:+6.1%}{verdict}")
+    out.append("  Ranked by the SHRUNK number in the first panel because "
+               "that is the page's own order.")
+    out.append("  NEAREST names whichever claim the landed rate sits "
+               "closest to, and only speaks")
+    out.append("  when a slate bootstrap at the corrected tail separates "
+               "first from second place.")
+    return out
+
+
 def roi_lines(rows: list, depths=ROI_DEPTHS, seed: int = 5) -> list:
     """Flat-stake ROI at the top of the board, per depth.
 
@@ -489,7 +622,12 @@ if __name__ == "__main__":                       # pragma: no cover
     from .likely import MIN_PROB
     argv = sys.argv[1:]
     conn = _db.connect()
-    if "--roi" in argv:
+    if "--shrink" in argv:
+        print("joining the likelihood board to the prices on the screen...")
+        rows = board_priced(conn)
+        for line in shrink_report(rows):
+            print(line)
+    elif "--roi" in argv:
         print("joining the likelihood board to the prices on the screen...")
         rows = board_priced(conn)
         f = getattr(board_priced, "funnel", {})

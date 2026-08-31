@@ -1078,6 +1078,27 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 log(f"  {line}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  deep refit skipped: {exc}")
+        # #77, answered on the box that can: does the market shrink help
+        # or hurt the top of the likelihood board? The replay says the
+        # top still underclaims after the fitted temperature (top-1 60.0%
+        # claimed, 67.4% landed) while the page prints a number shrunk
+        # halfway to the book — and only a join to HARVESTED CLOSES can
+        # say whether that shrink is closing the gap or dragging good
+        # numbers toward a lazy consensus. The dev box has no
+        # odds_history, so the report refuses there and answers here,
+        # weekly, in this log — where the question was going to be asked
+        # anyway the next time the board had a big Sunday.
+        try:
+            from . import db as _sdb
+            from .tdbook import board_priced, shrink_report
+            _sc = _sdb.connect()
+            try:
+                for line in shrink_report(board_priced(_sc)):
+                    log(f"  {line}")
+            finally:
+                _sc.close()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  shrink check skipped: {exc}")
 
     # Settle the one-sided quote journals against whatever stat rows the
     # ingests above just wrote, and refit each market's measured hold
