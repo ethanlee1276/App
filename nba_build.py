@@ -853,6 +853,14 @@ def main() -> None:
             st = ledger.log_stale_flags(
                 lconn, {"sport": args.league, "date": args.date,
                         "market_scan": out.get("market_scan") or {}})
+            # The likelihood board's paper book — hoops joined the board
+            # on 2026-08-31, and its markets settle from the same
+            # player_game_logs the ingest already writes.
+            ml = ledger.log_most_likely(
+                lconn, {"sport": args.league, "date": args.date,
+                        "most_likely": out.get("most_likely") or []})
+            if ml:
+                print(f"Most likely: {ml} row(s) journaled.")
             settled = ledger.settle_from_history(lconn, connect(), sport=args.league)
             if n or st or settled:
                 ledger.export_json(lconn, "web/data/record.json")

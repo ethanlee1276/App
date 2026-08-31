@@ -742,6 +742,15 @@ def main() -> None:
             logged = ledger.log_recommendations(lconn, result)
             ls_logged = ledger.log_longshots(lconn, result)
             st_logged = ledger.log_stale_flags(lconn, result)
+            # The likelihood board's paper book, same as NFL/CFB — the
+            # board shipped for baseball on 2026-08-31 and a most-likely
+            # pick that never journals is a claim the ledger can never
+            # grade. Flat stake, zero dollars, never the headline record.
+            ml_logged = ledger.log_most_likely(
+                lconn, {"sport": "mlb", "date": args.date,
+                        "most_likely": result.get("most_likely") or []})
+            if ml_logged:
+                print(f"Most likely: {ml_logged} row(s) journaled.")
             fm_logged = ledger.log_form_picks(lconn, result, team_form_map)
             nm_logged = ledger.log_near_misses(lconn, result)
             if nm_logged:

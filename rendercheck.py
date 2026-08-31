@@ -158,8 +158,17 @@ SCREENS = [
      ['[data-sport="fantasy"]', '[data-subnav="fantasy"] [data-subtab="days"]'],
      '[data-subgroup="days"]',
      ".ffcal-layout",
-     [("three-column", "calendar+summary / ranked cards / sticky panel",
-       ".ffcal-layout", "cols", 3, (1280,)),
+     # TWO columns at 1280, and that was a MEASURED decision, not drift:
+     # at 1280 the three-column grid left each calendar day 44.3px beside
+     # the sidebar and the face overlapped the score by ten pixels — see
+     # the @media (max-width: 1500px) comment in styles.css, September
+     # 2026 board. The CSS was fixed and this claim was not, so the
+     # instrument spent a run flagging the repair as the regression. The
+     # three-column layout still exists; it needs the width it was drawn
+     # for, and no standard sweep width is that wide, so the column claim
+     # here is the two-column one a 1280 reader actually gets.
+     [("two-column", "calendar+summary+cards / sticky panel (3-col needs >1500px)",
+       ".ffcal-layout", "cols", 2, (1280,)),
       ("month-grid", "month grid card with dot/star day markers",
        ".ffcal-month", "n", 1, (1280, 390)),
       ("legend", "legend (Elite/Top/Good day)",

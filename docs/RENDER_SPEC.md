@@ -99,8 +99,10 @@ two-sided book, $250 volume floor, 6¢ spread cap — mirrored in
 link-out button, no-wagers note. Phone: detail stacks above the table.
 
 ### Fantasy Calendar (render 6/7 + full render) — SHIPPED
-As-built notes: `.ffcal-layout` three-column grid (calendar+summary /
-ranked cards / sticky `ffcal-panel`); cards are compact pickers
+As-built notes: `.ffcal-layout` three-column grid above 1500px
+(calendar+summary / ranked cards / sticky `ffcal-panel`), two columns
+at common desktop widths — measured 2026: three columns at 1280 left a
+calendar day 44.3px and the face overlapped the score; cards are compact pickers
 (`data-calpick`), the why-checklist moved into the panel; matchup
 tiles are the market's implied-points split (the honest version of the
 render's offense/defense tiles); per-sport chips became per-position
