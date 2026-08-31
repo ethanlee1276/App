@@ -1154,6 +1154,28 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  lead-time CLV skipped: {exc}")
 
+        # The per-sport Most Likely scoreboard — the standing order
+        # ("don't stop testing each sport until the most likely for
+        # each sport is making money") run as an instrument. One line
+        # per sport, every week: calibration gap, ROI, and either a
+        # verdict-eligible sample or the honest distance to one.
+        try:
+            from . import ledger as _lkled
+            _lc = _lkled.connect()
+            try:
+                _rep = _lkled.likely_report(_lc)
+                for _sp, _e in sorted((_rep.get("by_sport") or {}).items()):
+                    line = (f"  likely book {_sp}: {_e['n']} settled, "
+                            f"claimed {(_e['claimed'] or 0) * 100:.0f}% → "
+                            f"landed {(_e['actual'] or 0) * 100:.0f}%, "
+                            f"ROI {_e['roi'] * 100:+.1f}%")
+                    log(line + ("" if _e.get("enough")
+                                else f" ({_e.get('note', '')})"))
+            finally:
+                _lc.close()
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  likely scoreboard skipped: {exc}")
+
     # BOOTSTRAP: a box holding a sport's logs with an EMPTY rank store
     # measures now rather than waiting for Wednesday — the same "fit it
     # now, not on Wednesday" precedent the CFB touchdown backfill set.

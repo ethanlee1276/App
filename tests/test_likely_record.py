@@ -278,6 +278,35 @@ def test_the_command_prints_the_refusal_last():
     assert body.index("Not enough to act on") > body.index("by market")
 
 
+
+def test_each_sport_carries_its_own_two_tests():
+    """Ethan, 2026-09-01: "make sure you dont stop testing each sport
+    until the most likley for eavh sport is making money and positive
+    roi." A standing order is an instrument, not a task: every sport in
+    the likely book reports its own calibration gap and ROI, and a
+    sport under the settle floor says how far it has to go instead of
+    passing its early number off as a verdict."""
+    conn = _conn()
+    for _ in range(6):
+        _bet(conn, 0.65, "won")
+    for _ in range(4):
+        _bet(conn, 0.65, "lost")
+    got = ledger.likely_report(conn)
+    sp = got["by_sport"]["nfl"]
+    assert sp["n"] == 10 and sp["w"] == 6
+    assert sp["actual"] == 0.6 and sp["claimed"] == 0.65
+    assert isinstance(sp["roi"], float)
+    assert not sp["enough"]
+    assert "of 100 settles" in sp["note"] and "no verdict" in sp["note"]
+
+
+def test_the_weekly_pass_prints_the_per_sport_scoreboard():
+    with open(os.path.join(ROOT, "engine", "maintenance.py"),
+              encoding="utf-8") as f:
+        src = f.read()
+    assert "likely book {_sp}:" in src
+    assert 'by_sport' in src
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

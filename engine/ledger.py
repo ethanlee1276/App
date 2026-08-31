@@ -4593,13 +4593,32 @@ def likely_report(conn, since: str | None = None) -> dict:
             "actual": round(r["actual"], 4) if r["actual"] is not None else None,
             "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
 
+    # Per sport, with the same two tests the headline gets — Ethan,
+    # 2026-09-01: "make sure you dont stop testing each sport until the
+    # most likley for eavh sport is making money and positive roi."
+    # That is a standing order, so it is an instrument, not a task: every
+    # sport's likely book carries its own calibration gap and ROI here,
+    # and a sport under the settle floor says how far it has to go
+    # instead of pretending its early number is a verdict.
     p["by_sport"] = {}
     for r in conn.execute(
             "SELECT sport, COUNT(*) n, SUM(status='won') w, "
-            "COALESCE(SUM(pnl_units),0) u FROM bets WHERE 1=1 "
-            + graded + win + " GROUP BY sport", wargs):
-        p["by_sport"][r["sport"]] = {"n": r["n"], "w": r["w"],
-                                     "net_u": round(r["u"], 2)}
+            "AVG(hit_prob) claimed, "
+            "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+            "FROM bets WHERE 1=1 " + graded + win + " GROUP BY sport",
+            wargs):
+        entry = {"n": r["n"], "w": r["w"], "net_u": round(r["u"], 2),
+                 "claimed": (round(r["claimed"], 4)
+                             if r["claimed"] is not None else None),
+                 "actual": (round(r["actual"], 4)
+                            if r["actual"] is not None else None),
+                 "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0,
+                 "enough": r["n"] >= LIKELY_VERDICT_N}
+        if not entry["enough"]:
+            entry["note"] = (f"{r['n']} of {LIKELY_VERDICT_N} settles — "
+                             f"no verdict yet, keep it journaling")
+        p["by_sport"][r["sport"]] = entry
 
     p["open"] = conn.execute(
         "SELECT COUNT(*) FROM bets WHERE category='likely' "
