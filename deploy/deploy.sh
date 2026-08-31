@@ -179,6 +179,16 @@ if [ -f "$UNIT_SRC" ] && ! sudo cmp -s "$UNIT_SRC" "$UNIT_DST"; then
   sudo cp "$UNIT_SRC" "$UNIT_DST"
   sudo systemctl daemon-reload
   echo "  installed and reloaded — the restart below runs the new unit"
+else
+  # SAY SO WHEN NOTHING CHANGED, TOO. The first cut printed nothing on a
+  # match, and from a phone that is indistinguishable from the step not
+  # existing — which is exactly the round trip it caused the day it
+  # shipped: the unit had already been installed by hand, this skipped
+  # silently, and the deploy output gave no way to tell "already there"
+  # from "never ran". One line, with the fact that actually matters on
+  # it, read from the file systemd will use rather than asserted.
+  echo "  systemd unit matches the repo$(
+    grep -q -- '--auto-update' "$UNIT_SRC"       && echo ' (auto-update: ON)' || echo ' (auto-update: off)')"
 fi
 
 say "restarting $SERVICE"

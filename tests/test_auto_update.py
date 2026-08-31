@@ -88,8 +88,24 @@ def test_an_unchanged_unit_is_left_alone():
     """`cmp` gates it, so an ordinary deploy neither writes nor reloads."""
     sh = _src("deploy", "deploy.sh")
     at = sh.index("UNIT_SRC=")
-    block = sh[at:at + 700]
+    block = sh[at:at + 1400]
     assert "! sudo cmp -s" in block, block[:200]
+
+
+def test_a_matching_unit_is_reported_rather_than_silent():
+    """The first cut printed nothing on a match. From a phone that is
+    indistinguishable from the step not existing, and it cost a round
+    trip the day it shipped: the unit was already installed by hand, the
+    step skipped silently, and the output could not say which. Silence
+    on success is fine for a loop that runs every minute; a deploy runs
+    once, watched, and every step should account for itself."""
+    sh = _src("deploy", "deploy.sh")
+    at = sh.index("UNIT_SRC=")
+    block = sh[at:at + 1400]
+    assert "matches the repo" in block, block
+    # And the one fact being deployed for rides on the line, read from
+    # the file rather than asserted.
+    assert "auto-update: ON" in block
 
 
 # --- the unit asks for it -------------------------------------------------
