@@ -3481,6 +3481,78 @@ def show_desk_probe() -> None:
             "events", nested=True)
 
 
+def show_boards() -> None:
+    """Every slate board: how old, how big, and what it last said.
+
+    ONE PLACE THAT ANSWERS "WHY IS THIS PAGE EMPTY", because answering it
+    has taken a different ad-hoc command every time. Over two days the
+    CFB board needed: a journalctl grep (which proved nothing, because
+    the loop is quiet), a python one-liner for `generated_at`, an `ls -l`
+    for WNBA, a curl for the CFBD key, and another one-liner for the
+    talent layer. Each was written fresh, several were wrong, and two of
+    them measured something other than what they were read as.
+
+    The facts are all on disk. This prints them together, so the next
+    time a board is empty the first question is answered before anyone
+    has to invent a way to ask it.
+
+    Deliberately reads FILES, not the running process: a board frozen
+    because the loop died looks exactly like a healthy one from inside
+    the loop.
+    """
+    import datetime as _dt
+    print("\nBOARDS — from the files on disk, not from this process\n")
+    print(f"  {'board':<6} {'age':>8}  {'games':>5}  {'recs':>4}  status")
+    rows = []
+    for name, path in BOARD_FILES.items():
+        full = ROOT / path if not os.path.isabs(path) else Path(path)
+        if not full.exists():
+            rows.append((name, None, None, None, "FILE MISSING", ""))
+            continue
+        age = (time.time() - full.stat().st_mtime) / 3600.0
+        try:
+            with open(full) as fh:
+                d = json.load(fh)
+        except Exception as exc:                          # noqa: BLE001
+            rows.append((name, age, None, None, f"UNREADABLE — {exc}", ""))
+            continue
+        feed = d.get("feed") or {}
+        note = ""
+        if feed:
+            note = f"feed listed {feed.get('listed')}, kept {feed.get('kept')}"
+        rows.append((name, age, len(d.get("games") or []),
+                     len(d.get("recommendations") or []),
+                     d.get("status") or "—", note))
+    for name, age, games, recs, status, note in rows:
+        age_s = "—" if age is None else f"{age:.1f}h"
+        flag = "  <-- STALE" if age is not None and \
+            age * 3600 > STALE_BOARD_SECONDS else ""
+        print(f"  {name.upper():<6} {age_s:>8}  "
+              f"{'—' if games is None else games:>5}  "
+              f"{'—' if recs is None else recs:>4}  {status}{flag}")
+        if note:
+            print(f"         {note}")
+    # WHAT THE LOOP THINKS, beside what the files say. The two
+    # disagreeing is itself the finding: a refresh that reports ok while
+    # its board does not move is the exact failure #82 turned out to be.
+    if _BOARD_RUNS:
+        print("\n  last refresh attempt, as the loop recorded it")
+        for name in BOARD_FILES:
+            run = _BOARD_RUNS.get(name)
+            if run:
+                print(f"    {name.upper():<6} {run['at']}  "
+                      f"{'ok' if run['ok'] else 'FAILED'}")
+            else:
+                print(f"    {name.upper():<6} never ran this process")
+    cyc = _cycle_p50()
+    print(f"\n  typical refresh cycle: "
+          f"{f'{cyc:.0f}s' if cyc else 'not measured yet'}")
+    print("\n  A board older than the cycle is not being written. The usual "
+          "cause is a\n  build that returns without writing — a feed it "
+          "cannot reach, keeping the\n  last board rather than publishing "
+          "an empty one.\n")
+
+
 def show_likely() -> None:
     """The Most Likely paper record, on the box that holds the ledger.
 
@@ -7345,6 +7417,9 @@ def main() -> None:
         return
     if "--gates" in argv:
         show_gates()
+        return
+    if "--boards" in argv:
+        show_boards()
         return
     if "--likely" in argv:
         show_likely()
