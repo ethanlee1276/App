@@ -1807,6 +1807,26 @@ main { view-transition-name: page; }
    Tighter than the full page: this is a preview under Tonight's picks,
    so the shelf headings do not stick and the bands sit closer. */
 .likely-top .likely-shelf { margin-bottom: 18px; }
+/* The compact likelihood ROWS — the preview and the Tonight tab. One
+   line a pick: face, name, the bet, the price, the probability. The
+   full cards live one tap away on the Top Picks board. */
+.ml-rows { display: flex; flex-direction: column; }
+.ml-row { display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; background: none; border: none; cursor: pointer;
+  border-bottom: var(--hairline) solid var(--border-soft);
+  font: inherit; color: var(--text); text-align: left; }
+.ml-row:last-child { border-bottom: none; }
+.ml-row:hover { background: var(--fill-hover); }
+.ml-row .ml-who { min-width: 0; flex: 1; line-height: var(--lh-tight); }
+.ml-row .ml-who b { display: block; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-row .ml-who .k { display: block; color: var(--text-dim);
+  font-size: var(--fs-xs); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.ml-row .ml-pct { flex: 0 0 auto; font-family: var(--font-mono);
+  font-weight: 800; font-size: var(--fs-sm); color: var(--good);
+  background: rgba(70, 167, 88, .12); padding: 3px 9px;
+  border-radius: 999px; }
 .likely-top .shelf-head { position: static; background: none; padding-top: 0; }
 .likely-top .shelf-title { font-size: var(--fs-md); }
 .likely-top-more { margin: 2px 0 26px; }

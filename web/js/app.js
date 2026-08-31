@@ -4292,8 +4292,14 @@ function renderTonight() {
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b._ok);
   const shots = (d.long_shots || []).slice(0, 3);
+  // MOST LIKELY LEADS THE TAB. Ethan, 2026-08-31: "tonight's bets page
+  // should be the most likely to hit bets. Think about how your
+  // average better would think this app would be layed out." A bettor
+  // tapping "Tonight" is asking who hits tonight — the model's
+  // strongest measured ability — and only then what we would stake.
+  const ml = (d.most_likely || []).slice(0, 10);
   const n = props.length + bets.length;
-  if (!n && !shots.length) {
+  if (!n && !shots.length && !ml.length) {
     host.innerHTML = `<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <h3>${noMarketHeading()}</h3>
@@ -4301,9 +4307,14 @@ function renderTonight() {
     return;
   }
   host.innerHTML = `
-    <div class="section-title">Tonight’s bets
-      <span class="sub">— every pick that clears the bar, with the last
-      games it is priced against. ${n} bet(s).</span></div>
+    ${ml.length ? `<div class="section-title">Most likely to hit tonight
+      <span class="sub">— ranked by probability, not by price · the full board
+      is under Top Picks</span></div>
+    ${boardGuide("most_likely")}
+    <div class="ml-rows">${ml.map(likelyRow).join("")}</div>` : ""}
+    <div class="section-title${ml.length ? " minor" : ""}">Our edge bets
+      <span class="sub">— every pick that clears the bar, journaled and staked.
+      ${n} bet(s).</span></div>
     ${boardGuide("recommendations")}
     <div class="cards">${props.map(cardHTML).join("")}</div>
     ${bets.length ? `<div class="section-title minor">Game lines</div>
@@ -4312,6 +4323,8 @@ function renderTonight() {
       <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
       ${boardGuide("long_shots")}
       <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
+  host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
+    b.addEventListener("click", () => switchView("likely", true)));
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
@@ -5236,13 +5249,21 @@ function renderLikelyTop() {
       <span class="sub">— who’s most likely to hit · ranked by probability, not by price</span>
     </div>
     ${boardGuide("most_likely")}
-    <div class="likely-top">${shelves.map(likelyShelf).join("")}</div>
+    <div class="likely-top">${shelves.map((sh) => `
+      <section class="likely-shelf">
+        <div class="shelf-head"><h3 class="shelf-title">${escapeHtml(sh.title)}
+          <span class="mini" style="opacity:.6">${(sh.rows || []).length}</span></h3>
+          ${sh.rank_auc != null ? `<span class="chip">ranks at ${Number(sh.rank_auc).toFixed(2)}</span>` : ""}</div>
+        <div class="ml-rows">${(sh.rows || []).map(likelyRow).join("")}</div>
+      </section>`).join("")}</div>
     <div class="likely-top-more">
       <button class="btn ghost" id="likely-see-all" type="button">
-        See the full board${more > 0 ? ` · ${more} more` : ""}</button>
+        See the full board — every pick with its full reasoning${more > 0 ? ` · ${more} more` : ""}</button>
     </div>`;
   const all = document.getElementById("likely-see-all");
   if (all) all.addEventListener("click", () => switchView("likely", true));
+  host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
+    b.addEventListener("click", () => switchView("likely", true)));
   revealChildren(host);
 }
 
@@ -5294,6 +5315,30 @@ function renderLikely() {
    NO FIGURE IS TYPED HERE. Every number arrives on the shelf from
    `likely.RANK_AUC`; a copy in this template is a number that rots at
    the next refit, which tests/test_board_guide.py enforces. */
+/* One likelihood pick as a ROW, not a poster. Ethan's screen
+   recording, 2026-08-31: "this area takes up way too much space, I
+   have to scroll so much down to see all the picks." Each full card is
+   nearly a phone screen — tiles, history bars, five reasons, the
+   calibration note — and the home PREVIEW was drawing nine of them.
+   A preview's job is scanning: face, name, the bet, the price, the
+   probability, one line. The full cards still live on the Top Picks
+   page, one tap away, where depth is the point. */
+function likelyRow(r) {
+  const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
+  const label = r.line == null ? (r.market_label || r.market)
+    : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`;
+  return `<button class="ml-row" type="button" data-goto="likely"
+      title="Open the full Top Picks board">
+    ${playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
+                                       headshot: r.headshot })}
+    <span class="ml-who"><b>${escapeHtml(r.player)}</b>
+      <span class="k">${escapeHtml(label)}${r.odds != null
+        ? ` · ${american(r.odds)}` : ""}${r.book
+        ? ` · ${escapeHtml(r.book)}` : ""}</span></span>
+    <span class="ml-pct">${pct}</span>
+  </button>`;
+}
+
 function likelyShelf(sh) {
   const rows = sh.rows || [];
   if (!rows.length) return "";

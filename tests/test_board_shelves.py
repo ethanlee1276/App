@@ -349,6 +349,46 @@ def test_an_empty_board_draws_nothing_rather_than_a_heading():
     assert 'host.innerHTML = ""; return;' in body
 
 
+# --- the preview is rows, the depth is one tap away ------------------------
+def test_the_home_preview_draws_rows_not_posters():
+    """Ethan's screen recording, 2026-08-31: "this area takes up way too
+    much space, I have to scroll so much down to see all the picks."
+    Measured: each full card is nearly a phone screen, and the preview
+    drew nine; the compact rows brought the whole section to 0.47
+    screens. The full cards still exist — on the Top Picks page, where
+    depth is the point."""
+    src = _src("web", "js", "app.js")
+    assert "function likelyRow(r)" in src
+    i = src.index("function renderLikelyTop()")
+    body = src[i:src.index("\nfunction ", i + 10)]
+    assert "likelyRow" in body, "the preview lost its compact rows"
+    assert "likelyCard" not in body, "the posters came back to the preview"
+    # The full page keeps the full cards.
+    j = src.index("function renderLikely()")
+    full = src[j:src.index("\nfunction ", j + 10)]
+    assert "likelyShelf" in full
+
+
+def test_a_preview_row_is_a_door_not_a_dead_control():
+    src = _src("web", "js", "app.js")
+    assert 'data-goto="likely"' in src
+    assert 'switchView("likely", true)' in src
+
+
+def test_the_tonight_tab_leads_with_most_likely():
+    """Ethan: "tonight's bets page should be the most likely to hit
+    bets. Think about how your average better would think this app
+    would be layed out." A bettor tapping Tonight asks who hits — then
+    what we would stake."""
+    src = _src("web", "js", "app.js")
+    i = src.index("function renderTonight()")
+    body = src[i:src.index("\nfunction ", i + 10)]
+    assert "d.most_likely" in body
+    assert body.index("Most likely to hit tonight") \
+        < body.index("Our edge bets")
+    assert 'boardGuide("most_likely")' in body, "the trust line travels"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
