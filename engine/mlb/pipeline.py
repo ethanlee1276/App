@@ -784,8 +784,31 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         if abs(tb_new - t.mean) > 1e-9:
             t.mean = tb_new
             t.reasons.append(f"Coherence: {note}")
+    # The HR market-sum devig (script §2.1), measured once per game off
+    # the slate's own menus and handed to EVERY path that prices a
+    # one-sided home-run quote — the watchlist and long shots got it
+    # first, and an edge board without it was quoting a different fair
+    # for the same prop.
+    from .homeruns import hr_board_devigs
+    from .models import HOME_RUNS as _HR_MKT
+    _hr_cands = []
+    for _p in slate.props:
+        if _p.market != _HR_MKT or not _p.lines:
+            continue
+        _overs = [ln for ln in _p.lines
+                  if ln.line == 0.5 and ln.over_odds]
+        if _overs:
+            _hr_cands.append({
+                "game": slate.game_for(_p),
+                "odds": max(_overs, key=lambda ln: ln.over_odds).over_odds})
+    _hr_devigs = hr_board_devigs(_hr_cands)
+
     for prop, game, proj in built:
-        rec = evaluate_mlb_prop(prop, proj, game=game)
+        rec = evaluate_mlb_prop(
+            prop, proj, game=game,
+            hold_override=(_hr_devigs.get(id(game))
+                           if prop.market == _HR_MKT and game is not None
+                           else None))
         decision = apply_mlb_rules(rec, prop, game, proj, config)
         d = _rec_to_dict(rec, prop, decision, proj)
         il = il_map.get(normalize_name(prop.player))

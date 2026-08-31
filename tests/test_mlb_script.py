@@ -108,6 +108,48 @@ def test_both_hr_pricing_paths_carry_the_measured_hold():
         assert "hold_override=devigs.get(id(game))" in body(fn), fn
 
 
+def test_the_edge_board_prices_hr_with_the_same_measured_hold():
+    """Ethan, 2026-08-31: 'the things we added ... should also be
+    implemented for the edge bets.' The watchlist and long shots got the
+    market-sum devig first; the edge board's evaluate_mlb_prop still
+    priced one-sided HR quotes off the standing assumption — the same
+    prop carrying two fair prices depending on the page, the exact
+    failure devig_two_way's own docstring records. One measured Devig
+    now rides every path."""
+    with open(os.path.join(ROOT, "engine", "mlb", "betting.py"),
+              encoding="utf-8") as f:
+        bet = f.read()
+    assert "hold_override=None) -> Recommendation" in bet
+    assert "pick_side(prop.lines, p_over_at,\n" \
+           "                                                    " \
+           "hold=hold_override)" in bet
+    with open(os.path.join(ROOT, "engine", "mlb", "pipeline.py"),
+              encoding="utf-8") as f:
+        pipe = f.read()
+    assert "_hr_devigs = hr_board_devigs(_hr_cands)" in pipe
+    assert "hold_override=(_hr_devigs.get(id(game))" in pipe
+
+
+def test_devig_two_way_accepts_a_measured_devig_object():
+    """A Devig carries how the overround is SHARED OUT, not just its
+    size — flattening it to a float applies the wrong haircut at the
+    ends of the board. One-sided overs go through dv.fair; a one-sided
+    under (a shape the HR board never produces) falls back to the
+    overall multiplier; a real two-way pair ignores it entirely."""
+    from engine.devig import Devig
+    from engine.odds import american_to_prob, devig_two_way
+    dv = Devig.proportional(1.30)
+    raw = american_to_prob(320)
+    fair, _ = devig_two_way(320, 0, dv)
+    assert abs(fair - raw / 1.30) < 1e-9, (fair, raw)
+    assert fair < raw
+    _, fair_u = devig_two_way(0, -150, dv)
+    assert abs(fair_u - american_to_prob(-150) / 1.30) < 1e-9
+    two_a, two_b = devig_two_way(-110, -110, dv)
+    assert abs(two_a - 0.5) < 1e-9 and abs(two_b - 0.5) < 1e-9, \
+        "a real pair needs no assumption, measured or otherwise"
+
+
 # --- §5: park factors by hand -----------------------------------------------
 def test_the_split_parks_price_each_hand_differently():
     yankee = PARKS["yankee"]

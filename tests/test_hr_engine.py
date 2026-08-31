@@ -128,7 +128,7 @@ def test_the_pipeline_reconciles_every_trio_before_it_prices():
     body = src[src.index("def run_mlb_slate("):]
     assert "reconcile_triple" in body
     assert body.index("reconcile_triple") < body.index(
-        "evaluate_mlb_prop(prop, proj"), \
+        "rec = evaluate_mlb_prop("), \
         "projections are priced before the trio is made possible baseball"
 
 

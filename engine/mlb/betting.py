@@ -135,11 +135,17 @@ def _tto_for(prop):
 
 def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                       allow_synthetic_line: bool = False,
-                      game=None) -> Recommendation:
+                      game=None, hold_override=None) -> Recommendation:
     """docs/MLB_MODEL.md §3 end to end: shop the ladder, devig, price with
     the market's own distribution, haircut by tier, gate on the tier
     minimum, grade 0–100 with baseball's weights, size with fractional
-    Kelly. ``game`` supplies lineup/probable/umpire context (None → neutral)."""
+    Kelly. ``game`` supplies lineup/probable/umpire context (None → neutral).
+
+    ``hold_override`` is the game's measured HR-board Devig (the
+    market-sum method, script §2.1) for one-sided home-run quotes. The
+    watchlist and the long-shot picks got it first and the edge board
+    did not — the same prop carrying two fair prices depending on the
+    page, the exact failure devig_two_way's own docstring records."""
     from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
                           mlb_volatility, mlb_quality_score, mlb_letter,
                           STAKE_CAP_U)
@@ -165,7 +171,8 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # was live has to be recoverable from the row itself.
         return calibrated("mlb", prop.market, raw)
 
-    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at)
+    side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at,
+                                                    hold=hold_override)
     hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                       allow_synthetic_line,
                                       shrink=mlb_tier_shrink(prop.market))

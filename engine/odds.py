@@ -77,13 +77,25 @@ def devig_two_way(over_odds: int, under_odds: int,
     the failure engine/holdwatch exists to end, reappearing one level
     below it. Ignored entirely on a two-sided market, where both prices
     are real and nothing has to be assumed.
+
+    ``hold`` may also be an `engine.devig.Devig` measured off the board
+    being priced (the market-sum method). A Devig carries HOW the
+    overround is shared out across prices, not just how big it is — a
+    float flattens that, which is exactly the wrongness engine/devig's
+    `as_devig` docstring warns about. The Devig devigs the quoted OVER;
+    a one-sided UNDER (a market shape the HR/TD boards never produce)
+    falls back to its overall multiplier.
     """
-    hold = float(hold) if hold else ONE_SIDED_HOLD
+    dv = hold if hasattr(hold, "fair") else None
+    hold = ONE_SIDED_HOLD if (dv or not hold) else float(hold)
     if not under_odds and over_odds:
-        fair_over = min(0.99, american_to_prob(over_odds) / hold)
+        raw = american_to_prob(over_odds)
+        fair_over = min(0.99, dv.fair(raw) if dv else raw / hold)
         return fair_over, 1.0 - fair_over
     if not over_odds and under_odds:
-        fair_under = min(0.99, american_to_prob(under_odds) / hold)
+        raw = american_to_prob(under_odds)
+        div = (1.0 + getattr(dv, "overround", 0.0)) if dv else hold
+        fair_under = min(0.99, raw / max(div, 1.0))
         return 1.0 - fair_under, fair_under
     if not over_odds and not under_odds:
         return 0.5, 0.5
