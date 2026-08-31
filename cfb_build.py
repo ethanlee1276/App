@@ -973,10 +973,22 @@ def main() -> None:
     try:
         from engine.db import connect as _tl_connect
         from engine.seasons import season_of as _season_of
-        from engine.teamlogs import recent_games as _recent_games
+        # ALIASED AWAY FROM `_recent_games`, which is a MODULE-LEVEL
+        # function this same `main()` calls 175 lines above. Python binds
+        # a name for the WHOLE function body wherever it is assigned, and
+        # an `import ... as` is an assignment — so this line made every
+        # earlier reference an unbound local and `main()` died with
+        # `UnboundLocalError: cannot access local variable
+        # '_recent_games'` on every cycle it reached the no-games branch.
+        #
+        # That is why the college board was frozen: not a feed, not a
+        # timeout, not the offseason logic. The build crashed before it
+        # could write, so the file kept its last good payload and the
+        # status word on it aged into a fossil.
+        from engine.teamlogs import recent_games as _tl_recent_games
         _season = _season_of("cfb", args.date)
         _tlc = _tl_connect()
-        out["team_recent"] = _recent_games(
+        out["team_recent"] = _tl_recent_games(
             _tlc, "cfb",
             {t for g in out["games"] for t in (g.get("home"), g.get("away")) if t},
             before=args.date, seasons=[_season - 1, _season])
