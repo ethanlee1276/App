@@ -3807,6 +3807,33 @@ function renderSlateHorizon() {
 function renderGames() {
   const games = [...(state.data.games || [])];
   const host = document.getElementById("games");
+  /* THE BOARD MAY BE SHOWING A FUTURE SLATE. Football is weekly: the
+     college build advances past an empty date to the next day the feed
+     lists games (2026-08-31: "NFL is showing games and it doesn't even
+     start for another week, and yet CFB has started and isn't showing
+     any"). The payload says so in `upcoming`, and a reader looking at
+     Saturday's games on a Monday must be told that's what they are —
+     an unlabelled future slate reads as today's and sends someone
+     looking for a 3:30 kick that is five days out. */
+  let upEl = document.getElementById("upcoming-banner");
+  const up = state.data.upcoming;
+  if (up && up.date && games.length) {
+    if (!upEl) {
+      upEl = document.createElement("div");
+      upEl.id = "upcoming-banner";
+      upEl.style.cssText = "margin:0 0 10px;padding:8px 12px;border-radius:var(--radius);" +
+        "background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.25);" +
+        "font-size:.85rem;opacity:.9";
+      host.parentNode.insertBefore(upEl, host);
+    }
+    const when = new Date(up.date + "T12:00:00");
+    const label = isNaN(when) ? up.date : when.toLocaleDateString(undefined,
+      { weekday: "long", month: "short", day: "numeric" });
+    upEl.innerHTML = `${icon("calendar", 14)} No games today — this is the next slate, <b>${escapeHtml(label)}</b> (${games.length} game${games.length === 1 ? "" : "s"}). Lines firm up as kickoff nears.`;
+    upEl.style.display = "";
+  } else if (upEl) {
+    upEl.style.display = "none";
+  }
   if (!games.length) {
     /* TWO DEAD BUTTONS ON AN EMPTY BOARD. This early return skipped the
        `syncStripArrows()` call further down, so on any night with no

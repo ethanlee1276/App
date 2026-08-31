@@ -45,6 +45,11 @@ from engine import gate
 # How far back each build re-reads results. A season fills the table one
 # rolling window at a time; --backfill does a whole span in one go.
 RESULT_WINDOW_DAYS = 14
+#: How far past an empty date the build hunts for the next slate. Six
+#: covers the longest quiet stretch a football season has (Sunday to
+#: Friday); seven would start answering "what is on NEXT Saturday" on a
+#: Saturday morning before the feed fills, which is a different question.
+LOOKAHEAD_DAYS = 6
 # Either side of the slate, for the letdown / lookahead / short-week reads.
 NEIGHBOUR_DAYS = 8
 
@@ -644,6 +649,43 @@ def main() -> None:
         #
         # One integer, taken before the filter runs, settles it.
         listed = len(board.get("events") or [])
+        if not listed:
+            # LOOK AHEAD, THE WAY THE NFL BOARD ALWAYS HAS. Football is
+            # not a daily sport: the NFL board builds a WEEK, so on the
+            # Monday before Week 1 it shows sixteen games with Thursday
+            # kickoffs — while this board, keyed to a single date,
+            # showed "no games today" every Sunday-through-Thursday of
+            # a running season. Asked on 2026-08-31, with Saturday's
+            # full slate five days out and lines already posted: "NFL
+            # is showing games and it doesn't even start for another
+            # week, and yet CFB has started and isn't showing any."
+            #
+            # So an honestly blank date (listed == 0 — a parse failure
+            # is a different problem and must keep saying so) advances
+            # to the NEXT day the feed lists games, and the whole
+            # pipeline — odds, touchdown pull, venues, journal — runs
+            # on that slate. `args.date` moves WITH it so picks journal
+            # under the date their games are actually played and settle
+            # against the right results; `out["date"]` keeps the build
+            # date, and `upcoming` says what the reader is looking at.
+            # A day that cannot be fetched is skipped, not fatal: the
+            # fallback is today's truthful empty board, never a claim.
+            for ahead in range(1, LOOKAHEAD_DAYS + 1):
+                nd = (day + datetime.timedelta(days=ahead)).isoformat()
+                try:
+                    nboard = cfbdata.fetch_scoreboard(nd)
+                except DataUnavailable:
+                    continue
+                ngames = cfbdata.parse_scoreboard(nboard, confs)
+                if not ngames:
+                    continue
+                board, games, listed = (nboard, ngames,
+                                        len(nboard.get("events") or []))
+                out["upcoming"] = {"date": nd, "days_ahead": ahead}
+                args.date = nd
+                print(f"CFB: nothing on {out['date']} — building the "
+                      f"next slate, {nd} ({len(ngames)} game(s)).")
+                break
     except DataUnavailable as exc:
         # KEEP THE LAST GOOD BOARD. This used to publish `out` — an empty
         # payload carrying the error as its note — which meant one 403 or

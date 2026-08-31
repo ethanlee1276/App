@@ -188,6 +188,53 @@ def test_the_census_travels_on_the_readable_empty_day():
     assert got["feed"] == {"listed": 0, "kept": 0}
 
 
+# --- football is weekly: an empty date advances to the next slate ---------
+def _future(n):
+    return (datetime.date.fromisoformat(DATE)
+            + datetime.timedelta(days=n)).isoformat()
+
+
+def test_an_empty_monday_publishes_the_coming_saturdays_slate():
+    """2026-08-31: "NFL is showing games and it doesn't even start for
+    another week, and yet CFB has started and isn't showing any." The
+    NFL board builds a week; this one, keyed to one date, went blank
+    every Sunday-through-Friday of a running season."""
+    got = _board({DATE: {"events": []},
+                  _future(5): {"events": [_game_event()]}})
+    assert got["status"] not in ("no games today", "offseason",
+                                 "schedule unknown"), got.get("status")
+    assert len(got["games"]) == 1
+    assert got["upcoming"] == {"date": _future(5), "days_ahead": 5}
+    assert got["date"] == DATE, "the build date must not move"
+
+
+def test_the_lookahead_skips_a_dark_day_rather_than_dying_on_it():
+    boards = {DATE: {"events": []},
+              _future(2): DataUnavailable("espn 403"),
+              _future(5): {"events": [_game_event()]}}
+    got = _board(boards)
+    assert (got.get("upcoming") or {}).get("date") == _future(5), \
+        got.get("status")
+
+
+def test_a_week_with_nothing_ahead_still_tells_the_truth_about_today():
+    """The lookahead finds nothing → the honest tri-state is unchanged.
+    Advancing must never manufacture a slate or replace the offseason
+    and quiet-day answers."""
+    got = _board({DATE: {"events": []}})
+    assert got["status"] == "offseason", got.get("status")
+    assert "upcoming" not in got
+
+
+def test_a_parse_failure_today_does_not_go_hunting_for_tomorrow():
+    """listed > 0 and kept == 0 is OUR fault, and skipping ahead would
+    bury it under a future slate that happens to parse."""
+    got = _board({DATE: {"events": [_nameless_event()] * 3},
+                  _future(5): {"events": [_game_event()]}})
+    assert got["status"] == "feed unreadable", got.get("status")
+    assert "upcoming" not in got
+
+
 # --- and a real slate actually fills the board ----------------------------
 #
 # EVERY TEST ABOVE ASSERTS ON AN EMPTY BOARD, which is what the last
