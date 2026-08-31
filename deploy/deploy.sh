@@ -156,6 +156,31 @@ if [ -f /etc/qellys/env ]; then
          "run 'python3 launch.py --promos' later to check)"
 fi
 
+# --- 5b. the systemd unit, which git tracks and systemd does not read
+#
+# THE FILE IN THE REPO IS NOT THE FILE THAT RUNS. `deploy/qellys.service`
+# is a template; systemd reads /etc/systemd/system/qellys.service, and
+# the two only meet when somebody copies one onto the other. Nothing
+# checked, so they could drift for as long as nobody looked.
+#
+# Found 2026-08-31 the way these always are: --auto-update was added to
+# the tracked unit, the deploy reported success, the service restarted
+# on new code, and the flag was not on — because the running unit had
+# never heard of it. A deploy that pulls a change and restarts into
+# something else is a deploy that lies.
+#
+# Announced and diffed rather than done quietly: this writes a system
+# file, and a unit that changed under you is worth reading about.
+UNIT_SRC="deploy/qellys.service"
+UNIT_DST="/etc/systemd/system/${SERVICE}.service"
+if [ -f "$UNIT_SRC" ] && ! sudo cmp -s "$UNIT_SRC" "$UNIT_DST"; then
+  say "the systemd unit changed — installing it"
+  sudo diff "$UNIT_DST" "$UNIT_SRC" | grep -E '^[<>]' | head -20 || true
+  sudo cp "$UNIT_SRC" "$UNIT_DST"
+  sudo systemctl daemon-reload
+  echo "  installed and reloaded — the restart below runs the new unit"
+fi
+
 say "restarting $SERVICE"
 sudo systemctl restart "$SERVICE"
 sleep 2

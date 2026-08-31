@@ -56,6 +56,42 @@ WRITTEN_WHILE_RUNNING = (
 )
 
 
+# --- the tracked unit is the unit that runs -------------------------------
+def test_the_deploy_installs_the_unit_when_it_changes():
+    """THE GAP THAT MADE THIS COMMIT NECESSARY TWICE.
+    `deploy/qellys.service` is tracked by git; systemd reads
+    /etc/systemd/system/. Nothing copied one onto the other, so the
+    deploy pulled --auto-update, restarted, reported success, and ran a
+    unit that had never heard of the flag. A deploy that pulls a change
+    and restarts into something else is a deploy that lies."""
+    sh = _src("deploy", "deploy.sh")
+    assert "/etc/systemd/system/${SERVICE}.service" in sh
+    assert "cmp -s" in sh, "it must compare before writing a system file"
+    assert "daemon-reload" in sh, "systemd will not reread it otherwise"
+
+
+def test_the_unit_is_installed_before_the_restart():
+    """Installing after would need a second restart to take effect, and
+    the deploy's own health check would pass on the old unit."""
+    sh = _src("deploy", "deploy.sh")
+    assert sh.index("cp \"$UNIT_SRC\"") < sh.index('systemctl restart "$SERVICE"')
+
+
+def test_it_shows_what_changed_rather_than_writing_silently():
+    """This edits a system file. A unit that changed under you is worth
+    reading about."""
+    sh = _src("deploy", "deploy.sh")
+    assert "diff" in sh and "the systemd unit changed" in sh
+
+
+def test_an_unchanged_unit_is_left_alone():
+    """`cmp` gates it, so an ordinary deploy neither writes nor reloads."""
+    sh = _src("deploy", "deploy.sh")
+    at = sh.index("UNIT_SRC=")
+    block = sh[at:at + 700]
+    assert "! sudo cmp -s" in block, block[:200]
+
+
 # --- the unit asks for it -------------------------------------------------
 def test_the_service_passes_the_flag():
     unit = _src("deploy", "qellys.service")
