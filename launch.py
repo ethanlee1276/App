@@ -45,6 +45,12 @@ ROOT = Path(__file__).parent
 load_local_secrets()  # pull ODDS_API_KEY from secrets.local into the environment
 
 
+#: Lines of a failing build's output to forward. Enough for a traceback's
+#: last frame plus its exception, few enough that a build failing every
+#: cycle does not bury the journal.
+FAIL_LINES = 6
+
+
 def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     """Run a build script as a subprocess. Returns (ok, last_output_line).
 
@@ -72,6 +78,20 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
     if proc.returncode != 0:
+        # THE LAST LINE ALONE IS NOT THE ERROR. This printed
+        # `tail[:140]`, and for a Python traceback that is the exception
+        # message with the frame that raised it thrown away — so a
+        # failing build reported WHAT went wrong and never WHERE. CFB has
+        # been exiting non-zero every cycle for half a day (found
+        # 2026-08-31 via `--boards`, which recorded the refresh as FAILED
+        # while the file sat 13.5 hours old), and one truncated line is
+        # what there was to go on.
+        #
+        # A few lines, not the whole log: a build that fails every cycle
+        # must not fill the journal, and the last frames are where the
+        # answer lives.
+        for line in out[-FAIL_LINES:] if out else []:
+            print(f"    | {line[:200]}")
         print(f"  build failed: {' '.join(args[:2])} — exit "
               f"{proc.returncode}: {tail[:140]}")
     return proc.returncode == 0, tail
