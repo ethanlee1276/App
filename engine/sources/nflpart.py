@@ -59,12 +59,18 @@ def _urls(season: int) -> list[str]:
 def load_participation(season: int) -> list[dict]:
     """One row per play for a season, cached on disk after the first pull."""
     local = CACHE_DIR / f"pbp_participation_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
+    # A WEEKLY TTL, not the eternal cache this had and not the layer's
+    # 12-hour default. The old exists() check served the first pull
+    # forever, so a season aggregate that fills week by week froze at
+    # whatever week it was first asked — the coverage zone rates were
+    # August's all year. But the file is ~49 MB and its consumers run on
+    # a weekly cadence, so twice-daily refetches buy nothing: six days
+    # keeps it one week fresh at a seventh of the transfer.
     last_err = None
     for url in _urls(season):
         try:
-            return fetch_csv(url, f"pbp_participation_{season}.csv")
+            return fetch_csv(url, f"pbp_participation_{season}.csv",
+                             ttl=6 * 24 * 3600)
         except DataUnavailable as exc:
             last_err = exc
     raise last_err or DataUnavailable(

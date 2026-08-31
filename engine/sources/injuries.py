@@ -57,9 +57,10 @@ POSITION_ROLE = {
 def load_injuries(season: int) -> list[dict]:
     """Weekly injury reports for a season, from release URLs or a local CSV."""
     local = CACHE_DIR / f"injuries_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
-
+    # No exists() short-circuit — the worst place of all for the freeze
+    # test_roster_freshness documents: injury reports change DAILY in
+    # season, and a file cached in Week 1 would apply Week 1's OUT list
+    # to every board for the rest of the year. fetch_csv's TTL decides.
     last_err = None
     for url in _injuries_urls(season):
         try:

@@ -37,8 +37,12 @@ def _urls(season: int) -> list[str]:
 
 def load_depth_charts(season: int) -> list[dict]:
     local = CACHE_DIR / f"depth_charts_{season}.csv"
-    if local.exists():
-        return load_local_csv(local)
+    # No exists() short-circuit — the same freeze test_roster_freshness
+    # documents on the roster loader, and worse here: a depth chart is
+    # the ROLE truth, and one cached in August still names August's
+    # starters in November. fetch_csv's 12-hour TTL decides, and its
+    # stale fallback still serves a hand-exported file when the release
+    # is unreachable.
     last_err = None
     for url in _urls(season):
         try:

@@ -142,14 +142,61 @@ def test_a_bom_on_an_exported_file_does_not_shift_the_columns():
     assert rows[0]["full_name"] == "A Back", rows[0]
 
 
+def test_depth_charts_and_injuries_ask_the_fetch_layer_too():
+    """The same freeze lived in two worse places: a depth chart cached
+    in August names August's starters in November, and an injury file
+    cached in Week 1 applies Week 1's OUT list all season."""
+    from engine.sources import depthcharts, injuries
+    for mod, loader, name in (
+            (depthcharts, depthcharts.load_depth_charts,
+             "depth_charts_2026.csv"),
+            (injuries, injuries.load_injuries, "injuries_2026.csv")):
+        calls = []
+
+        def spy(url, cname, **kw):
+            calls.append(cname)
+            return [{"player_name": "x"}]
+        tmp = _with_cache({name: ("player_name\nold\n", 3 * 24 * 3600)})
+        saved = (mod.CACHE_DIR, mod.fetch_csv)
+        mod.CACHE_DIR, mod.fetch_csv = tmp, spy
+        try:
+            loader(2026)
+        finally:
+            mod.CACHE_DIR, mod.fetch_csv = saved
+        assert calls and calls[0] == name, (loader.__name__, calls)
+
+
+def test_participation_refreshes_weekly_not_never():
+    """49 MB and weekly consumers: the TTL is six days, not twelve hours
+    and not eternity."""
+    from engine.sources import nflpart
+    calls = []
+
+    def spy(url, cname, ttl=None, **kw):
+        calls.append(ttl)
+        return [{"x": "1"}]
+    tmp = _with_cache({"pbp_participation_2026.csv": ("x\n1\n",
+                                                      30 * 24 * 3600)})
+    saved = (nflpart.CACHE_DIR, nflpart.fetch_csv)
+    nflpart.CACHE_DIR, nflpart.fetch_csv = tmp, spy
+    try:
+        nflpart.load_participation(2026)
+    finally:
+        nflpart.CACHE_DIR, nflpart.fetch_csv = saved
+    assert calls == [6 * 24 * 3600], calls
+
+
 def test_the_short_circuit_is_gone_from_the_source():
     """The pattern must not come back under a new name: no loader may
     return a local file without consulting the fetch layer first."""
-    with open(os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), "engine", "sources",
-            "nflverse.py"), encoding="utf-8") as f:
-        src = f.read()
-    assert "if local.exists():\n        return load_local_csv" not in src
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for fname in ("nflverse.py", "depthcharts.py", "injuries.py",
+                  "nflpart.py"):
+        with open(os.path.join(root, "engine", "sources", fname),
+                  encoding="utf-8") as f:
+            src = f.read()
+        assert "if local.exists():\n        return load_local_csv" \
+            not in src, fname
 
 
 if __name__ == "__main__":
