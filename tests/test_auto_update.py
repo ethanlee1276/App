@@ -184,6 +184,64 @@ def test_it_never_merges_or_switches_branch():
     assert "checkout" not in body
 
 
+# --- the grep that came back empty on a WORKING updater --------------------
+def test_the_success_line_contains_the_words_people_grep_for():
+    """2026-08-31, from a phone: `journalctl | grep -i auto-update` came
+    back empty and read as "it isn't running". Every failure path said
+    "auto-update"; the success path said "new code pulled" — so a healthy
+    updater and a dead one produced the same empty grep. The one line
+    that proves it worked must contain the term anyone would search."""
+    import io
+    from contextlib import redirect_stdout
+    import launch
+
+    real = os.execv
+    os.execv = lambda *a: (_ for _ in ()).throw(RuntimeError("held"))
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            launch._restart_into_new_code()
+    finally:
+        os.execv = real
+    first = buf.getvalue().splitlines()[0]
+    assert "auto-update" in first.lower(), first
+
+
+def test_the_heartbeat_stamps_the_serving_commit_and_updater_state():
+    """"Did my push land" was answerable only over SSH. The heartbeat now
+    carries the commit this PROCESS started from and whether it would
+    ever pull on its own — which `--boards` reads back."""
+    import json
+    import tempfile
+    from pathlib import Path
+    import launch
+
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "web" / "data").mkdir(parents=True)
+    saved = launch.ROOT
+    launch.ROOT = tmp
+    try:
+        launch._write_heartbeat(60)
+    finally:
+        launch.ROOT = saved
+    beat = json.loads((tmp / "web" / "data" / "heartbeat.json").read_text())
+    assert "auto_update" in beat
+    head = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    assert beat["commit"] == head, (beat["commit"], head)
+
+
+def test_the_commit_is_captured_once_not_reread_from_disk():
+    """After a pull whose restart failed, `git rev-parse` names code that
+    is on disk but NOT in memory. First-read-and-keep is what makes the
+    heartbeat truthful about what is actually serving."""
+    import inspect
+    import launch
+    src = inspect.getsource(launch._running_commit)
+    assert "_RUNNING_COMMIT" in src
+    assert "if not _RUNNING_COMMIT" in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

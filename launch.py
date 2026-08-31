@@ -1949,6 +1949,33 @@ def _git(*args, timeout: int = 60):
         return False, str(exc)
 
 
+#: The commit the RUNNING PROCESS came from, resolved once and kept.
+#: Deliberately not re-read each heartbeat: after a pull that failed to
+#: restart, `git rev-parse` names code that is on disk but not in memory
+#: — the exact gap this exists to expose. The auto-updater re-execs on
+#: every pull, so first-read is the truth about what is actually serving.
+_RUNNING_COMMIT: list = []
+#: Flipped on when the auto-update thread starts, so the heartbeat can
+#: say whether this process would ever pull on its own. "Is auto-update
+#: on" was answerable only by grepping the journal for a phrase that —
+#: it turned out — the success path never even printed.
+_UPDATER_ON = [False]
+
+
+def _running_commit() -> str:
+    if not _RUNNING_COMMIT:
+        ok, out = _git("rev-parse", "--short", "HEAD")
+        _RUNNING_COMMIT.append(out if ok else "")
+    return _RUNNING_COMMIT[0]
+
+
+# Resolved AT IMPORT, not at first heartbeat: by heartbeat time a test
+# (or anything else) may have repointed ROOT, and a lazy read under the
+# wrong ROOT caches "" forever. Import is the one moment this process's
+# code and its checkout are guaranteed to be the same thing.
+_running_commit()
+
+
 def _auto_update() -> bool:
     """Fast-forward to whatever has been pushed. True if new code arrived.
 
@@ -1997,7 +2024,11 @@ def _restart_into_new_code() -> None:
     the new code and the phone reconnects on its next poll.
     """
     import os
-    print("  ↻ new code pulled — restarting the launcher into it…\n")
+    # "auto-update" appears IN the line on purpose: the one journal grep
+    # anyone reaches for is `grep -i auto-update`, and the success path
+    # was the only path that didn't say it — so a working updater and a
+    # dead one produced the same empty grep (2026-08-31, from a phone).
+    print("  ↻ auto-update: new code pulled — restarting into it…\n")
     sys.stdout.flush()
     try:
         os.execv(sys.executable, [sys.executable] + sys.argv)
@@ -2124,6 +2155,11 @@ def _write_heartbeat(interval: int) -> None:
             # Per board, so "did CFB rebuild, and when" stops being a
             # question only a journal forensic can answer. See _BOARD_RUNS.
             "boards": dict(_BOARD_RUNS),
+            # Which code is SERVING and whether it updates itself — read
+            # by --boards, so "did my push land" stops being a journal
+            # question asked over SSH from a phone.
+            "commit": _running_commit(),
+            "auto_update": _UPDATER_ON[0],
         }))
         os.replace(tmp, p)
     except OSError:
@@ -3587,6 +3623,21 @@ def show_boards() -> None:
         print(f"\n  loop heartbeat: {beat.get('at')} ({age:.0f} min ago)"
               + ("   <-- THE LOOP ITSELF IS NOT TICKING"
                  if age > 15 else ""))
+        # The commit the LOOP is serving, beside the commit ON DISK. The
+        # same disagreement rule as everything above: matching is fine,
+        # and each mismatch names its own failure — disk ahead means a
+        # pull landed but the restart didn't, which is precisely the
+        # state auto-update can silently die in.
+        served = beat.get("commit")
+        if served:
+            ok, disk = _git("rev-parse", "--short", "HEAD")
+            word = ("ON" if beat.get("auto_update") else
+                    "off — pushes wait for a manual deploy")
+            line = f"  running commit {served} · auto-update {word}"
+            if ok and disk and disk != served:
+                line += (f"\n    <-- {disk} is on disk but not running: "
+                         f"the loop never restarted into it")
+            print(line)
         runs = beat.get("boards") or {}
         if runs:
             print("  last refresh attempt, as the loop recorded it")
@@ -7636,6 +7687,7 @@ def main() -> None:
         # be a thing you asked for this morning, not a setting you forgot.
         if _auto_update():
             _restart_into_new_code()
+        _UPDATER_ON[0] = True
         threading.Thread(target=_auto_updater, daemon=True).start()
         print(f"Auto-update ON — pulling pushed fixes every "
               f"{AUTO_UPDATE_EVERY_S // 60} min and restarting into them.")

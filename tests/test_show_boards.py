@@ -170,6 +170,65 @@ def test_it_is_reachable_from_the_command_line():
     assert "show_boards()" in src
 
 
+# --- which code is serving, beside which code is on disk -------------------
+def _heartbeat_root(beat):
+    from pathlib import Path
+    import launch
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "web" / "data").mkdir(parents=True)
+    (tmp / "web" / "data" / "heartbeat.json").write_text(json.dumps(beat))
+    return tmp
+
+
+DISK = "f00d123"
+
+
+def _run_with_root(tmp):
+    """show_boards under a repointed ROOT. `_git` is stubbed because the
+    tempdir ROOT is not a git checkout — the stub answers the one
+    question show_boards asks it (what is on disk) with DISK."""
+    import launch
+    saved_root, saved_git = launch.ROOT, launch._git
+    launch.ROOT = tmp
+    launch._git = lambda *a, **k: (True, DISK)
+    try:
+        return _run()
+    finally:
+        launch.ROOT, launch._git = saved_root, saved_git
+
+
+def test_it_prints_the_serving_commit_and_updater_state():
+    out = _run_with_root(_heartbeat_root(
+        {"at_epoch": time.time(), "at": "now", "boards": {},
+         "commit": "abc1234", "auto_update": True}))
+    assert "abc1234" in out
+    assert "auto-update ON" in out
+
+
+def test_disk_ahead_of_the_loop_is_called_out_by_name():
+    """A pull that landed without a restart is the one state auto-update
+    can silently die in — the code is there, and nothing runs it."""
+    out = _run_with_root(_heartbeat_root(
+        {"at_epoch": time.time(), "at": "now", "boards": {},
+         "commit": "abc1234", "auto_update": True}))
+    assert "on disk but not running" in out
+    assert DISK in out
+
+
+def test_matching_commits_raise_no_alarm():
+    out = _run_with_root(_heartbeat_root(
+        {"at_epoch": time.time(), "at": "now", "boards": {},
+         "commit": DISK, "auto_update": True}))
+    assert "on disk but not running" not in out
+
+
+def test_updater_off_names_the_consequence():
+    out = _run_with_root(_heartbeat_root(
+        {"at_epoch": time.time(), "at": "now", "boards": {},
+         "commit": DISK, "auto_update": False}))
+    assert "manual deploy" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
