@@ -60,6 +60,7 @@ WRITTEN_WHILE_RUNNING = (
     "data/feedstate/hold.json",
     "data/ledger.db",
     "data/autoupdate.json",       # the update timer's own state
+    "data/sweatstate.json",       # the sweat page's 12-second history
 )
 
 
@@ -173,6 +174,21 @@ def test_nothing_the_service_writes_is_tracked_by_git():
     into a log nobody reads."""
     tracked = [p for p in WRITTEN_WHILE_RUNNING if _tracked(p)]
     assert not tracked, tracked
+
+
+def test_everything_the_service_writes_is_ignored_not_just_untracked():
+    """Untracked-but-unignored passed the test above and still hurt:
+    data/sweatstate.json (engine/sweat.py, missing from .gitignore) sat
+    in `git status --porcelain` and jammed the old updater for a day on
+    2026-08-31 — and an unignored runtime file is one `git add -A` from
+    committing paid picks to a public repo besides."""
+    unignored = []
+    for p in WRITTEN_WHILE_RUNNING:
+        r = subprocess.run(["git", "check-ignore", p], cwd=ROOT,
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            unignored.append(p)
+    assert not unignored, unignored
 
 
 def test_the_board_and_state_directories_are_ignored_wholesale():

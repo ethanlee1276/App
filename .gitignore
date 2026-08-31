@@ -63,6 +63,10 @@ data/simrecon_log.jsonl
 # The drive sim's forward journal (engine/drivesim.py; nfl_build
 # appends) — same contract, graded by the clock-sport reconciliation.
 data/drivesim_log.jsonl
+# The sweat page's probability history (engine/sweat.py, written on the
+# 12-second live clock). Missing from this file, it sat untracked on
+# the droplet and jammed the auto-update timer for a day — 2026-08-31.
+data/sweatstate.json
 # The FULL boards — every pick, before redaction. These are the product,
 # and they live outside web/ precisely so no web server can reach them;
 # committing them would publish to GitHub what the paywall withholds from
