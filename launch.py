@@ -106,6 +106,33 @@ def _slate_games(path: str) -> int:
         return 0
 
 
+def _board_word(path: str, ok: bool) -> str:
+    """What a refresh should actually say about the board it just wrote.
+
+    "refreshed" WAS PRINTED ON AN EMPTY BOARD, for every sport but one.
+    `refresh_cfb` learned in August to tell an unreachable feed and an
+    empty slate apart from a real refresh — and the lesson stopped
+    there. MLB, NFL, NBA and WNBA all printed "refreshed" the moment the
+    build exited 0, whether it wrote a twelve-game slate or nothing at
+    all, so a board that quietly went empty looked identical in the
+    journal to one that worked.
+
+    Reported 2026-08-31: "cfb and wnba are both not showing picks or
+    live games", with nothing in the log to say which of them had a feed
+    problem, an empty schedule, or a build that ran fine and found
+    nothing. This is that question answered before it is asked.
+
+    The game count rides along on every line for the same reason: a bare
+    "refreshed" is compatible with every failure below the fetch.
+    """
+    if not ok:
+        return "unavailable"
+    n = _slate_games(path)
+    if not n:
+        return "EMPTY BOARD — built cleanly and found no games"
+    return f"refreshed · {n} game(s)"
+
+
 def _games_on_slate(path: str) -> int:
     """How many games the last build found — the per-refresh odds cost."""
     try:
@@ -270,7 +297,7 @@ def refresh_mlb(quiet: bool = False) -> bool:
     ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "MLB", sport="mlb")
     if not quiet:
-        print(f"  MLB  {date}: {'refreshed' if ok else 'unavailable — kept existing data'}"
+        print(f"  MLB  {date}: {_board_word(out, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
@@ -416,7 +443,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
             return True
         tail = tail or tail2
     if not quiet:
-        print(f"  NFL  {season} wk {week}: {'refreshed' if ok else 'unavailable — kept existing data'}"
+        print(f"  NFL  {season} wk {week}: {_board_word(out, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
@@ -515,7 +542,7 @@ def refresh_nba(quiet: bool = False) -> bool:
     ok, tail = _run_build(args)
     _finish_paid_pull(spend, before_seen, ok, tail, "NBA", sport="nba")
     if not quiet:
-        print(f"  NBA  slate: {'refreshed' if ok else 'unavailable'}"
+        print(f"  NBA  slate: {_board_word(NBA_OUT, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
@@ -539,7 +566,7 @@ def refresh_wnba(quiet: bool = False) -> bool:
     ok, tail = _run_build(args)
     _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
     if not quiet:
-        print(f"  WNBA {_slate_date()}: {'refreshed' if ok else 'unavailable'}"
+        print(f"  WNBA {_slate_date()}: {_board_word(WNBA_OUT, ok)}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
 
@@ -597,7 +624,11 @@ def refresh_cfb(quiet: bool = False) -> bool:
                 if unreachable else
                 "EMPTY BOARD — feed listed games, parser read none"
                 if unreadable else
-                ("refreshed" if ok else "unavailable"))
+                # The three above are causes CFB can name. Everything
+                # else routes through the shared helper, which is where
+                # the plain "refreshed" over an empty board was caught
+                # for every other sport.
+                _board_word(CFB_OUT, ok))
         print(f"  CFB  {_slate_date()}: {word}"
               + (f"  ({tail})" if not ok and tail else ""))
     return ok
