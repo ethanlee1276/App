@@ -239,6 +239,33 @@ def test_the_page_scopes_the_search_to_the_tab_and_says_so_when_empty():
     assert "switch the sport" in apology[k:k + 300]
 
 
+def test_the_search_page_wears_its_scope_and_a_hop_keeps_the_typed_name():
+    """Ethan, 2026-09-01, minutes after the scoping: "on the search page
+    we should be letting people know what sport they are searching for,
+    so maybve we add a little button showing what sport they are on."
+    Chips for every league the box can reach, the lit one being the
+    scope — and hopping leagues from the row must carry the typed name
+    across, or the empty state's own advice ("switch the sport up top")
+    costs the reader a retype."""
+    html = open(os.path.join(ROOT, "web", "index.html"),
+                encoding="utf-8").read()
+    assert 'id="search-scope"' in html
+    js = _js()
+    i = js.index("const SEARCH_SCOPES")
+    assert '"nfl", "mlb", "nba", "wnba", "cfb", "ufc"' in js[i:i + 120], \
+        "the row is the honest list of where the box can look"
+    fn = js[js.index("function renderSearchScope("):]
+    fn = fn[:fn.index("\n}")]
+    assert 's === state.sport ? " on"' in fn, "the lit chip is the scope"
+    assert "LEAGUE_LABEL[s]" in fn, "league names come from the one table"
+    j = js.index('e.target.closest(".scope-chip")')
+    hop = js[j:j + 900]
+    assert ".sport-btn[data-sport=" in hop, \
+        "the hop must ride the real switcher, not a second one"
+    assert "state.search = q" in hop and "inp.value = q" in hop, \
+        "a league hop wiped the typed name"
+
+
 def test_the_ufc_tab_still_finds_fighters_under_the_scope():
     """Fighters are not in the history DB — a scope branch that only
     knows statlogs turns the UFC tab's search box into a 400."""

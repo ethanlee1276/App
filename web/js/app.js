@@ -7401,8 +7401,49 @@ function trendRow(r, i, col) {
    A token, taken at entry and re-checked after every await. */
 let _playersSeq = 0;
 
+/* THE SCOPE, WORN ON THE PAGE. Ethan, 2026-09-01, minutes after search
+   went tab-scoped: "on the search page we should be letting people know
+   what sport they are searching for, so maybve we add a little button
+   showing what sport they are on on the search page." Chips rather than
+   a label, because showing the scope and offering to change it are the
+   same control — and every league the search can reach gets one, so the
+   row is also the honest list of where the box is able to look. */
+const SEARCH_SCOPES = ["nfl", "mlb", "nba", "wnba", "cfb", "ufc"];
+
+function renderSearchScope() {
+  const host = document.getElementById("search-scope");
+  if (!host) return;
+  host.innerHTML = SEARCH_SCOPES.map((s) => `<button type="button"
+      class="al-cat scope-chip${s === state.sport ? " on" : ""}"
+      data-scope="${s}" aria-pressed="${s === state.sport}">
+      ${(SPORT_META[s] || {}).logo || (s === "ufc" ? "🥊" : "")}
+      ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}</button>`).join("");
+}
+
+/* Hopping leagues from the scope row CARRIES THE TYPED NAME ACROSS. The
+   top bar wipes the search on a sport switch, and up there that is
+   right — a query from the league you left means nothing to a roster
+   grid. Down here the person is mid-search and the empty state just
+   told them to switch tabs; making them retype the name would be the
+   page charging for its own advice. Delegated, because renderPlayers
+   redraws the chips on every keystroke. */
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest && e.target.closest(".scope-chip");
+  if (!chip || chip.dataset.scope === state.sport) return;
+  const q = state.search;
+  const top = document.querySelector(
+    `.sport-btn[data-sport="${chip.dataset.scope}"]`);
+  if (!top) return;
+  top.click();
+  state.search = q;
+  const inp = document.getElementById("player-search");
+  if (inp) inp.value = q;
+  renderPlayers();
+});
+
 async function renderPlayers() {
   const seq = ++_playersSeq;
+  renderSearchScope();
   const q = state.search.trim().toLowerCase();
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
