@@ -320,6 +320,21 @@ def test_every_cycle_step_is_clocked_and_the_bill_is_printed():
     assert "key=lambda kv: -kv[1]" in body, "the bill must read worst first"
 
 
+def test_the_boards_screen_reads_the_load_average_first():
+    """Three staleness hunts have ended at a process OUTSIDE the loop
+    eating the core (fitter cascade 08-31; two forgotten formfit copies
+    09-01, load 5+ on one vCPU while every page aged 45 minutes). The
+    number was in `uptime` all along — the screen must ask for it so a
+    person doesn't have to remember to."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def show_boards")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert "os.getloadavg()" in body
+    assert "OVERSUBSCRIBED" in body, "a high load must say what to run next"
+    assert "l5 > cores * 1.5" in body, \
+        "the flag keys off sustained load per core, not a one-second spike"
+
+
 def test_builds_run_niced_below_the_serving_process():
     """One core serves the pages AND chews the builds. At equal priority
     a ten-minute board rebuild makes every tap feel broken while it runs

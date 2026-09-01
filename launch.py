@@ -3688,6 +3688,24 @@ def show_boards() -> None:
               f"{'—' if recs is None else recs:>4}  {status}{flag}")
         if note:
             print(f"         {note}")
+    # THE BOX ITSELF, before blaming any build. Three staleness hunts
+    # have now ended at a process OUTSIDE the loop eating the core — a
+    # background fitter cascade on 2026-08-31, and two forgotten
+    # terminal-started formfit copies on 2026-09-01 that held load above
+    # 5 on one vCPU while every page aged 45 minutes. The number was
+    # sitting in `uptime` all along; this screen exists so nobody has to
+    # remember to ask.
+    try:
+        l1, l5, l15 = os.getloadavg()
+        cores = os.cpu_count() or 1
+        flag = ("   <-- OVERSUBSCRIBED: something outside the loop is "
+                "eating the core — ps aux --sort=-%cpu names it"
+                if l5 > cores * 1.5 else "")
+        print(f"\n  load average: {l1:.2f} {l5:.2f} {l15:.2f} on "
+              f"{cores} core{'s' if cores != 1 else ''}{flag}")
+    except (AttributeError, OSError):
+        pass
+
     # WHAT THE LOOP THINKS, beside what the files say. The two
     # disagreeing is itself the finding: a refresh that reports ok while
     # its board does not move is the exact failure #82 turned out to be.
