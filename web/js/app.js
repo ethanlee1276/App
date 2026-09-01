@@ -17591,7 +17591,10 @@ async function renderPaywall() {
     // through it (it tracks which endpoints have answered), and the
     // account block this function sits inside is contracted to call
     // nothing but our own API endpoints directly.
-    const r = await boardFetch("/data/record.json", { cache: "no-store" });
+    // no-cache, not no-store: revalidate every time, but let a 304
+    // reuse the cached body — the record only moves when a cycle
+    // grades something. Same trade fetchAllLive documents.
+    const r = await boardFetch("/data/record.json", { cache: "no-cache" });
     if (r.ok) rec = await r.json();
   } catch (e) { /* the shop still renders without the proof strip */ }
   host.innerHTML = paywallHTML(rec, _pwStatus);
@@ -28891,7 +28894,8 @@ async function renderHomePerf() {
   if (!host) return;
   try {
     if (!_perfCache) {
-      const r = await boardFetch("data/record.json", { cache: "no-store" });
+      // Revalidate-don't-redownload, like the other record.json read.
+      const r = await boardFetch("data/record.json", { cache: "no-cache" });
       if (!r.ok) throw new Error(String(r.status));
       _perfCache = await r.json();
     }
@@ -29395,7 +29399,17 @@ async function fetchAllLive() {
   const out = [];
   await Promise.all(Object.entries(LIVE_FEEDS).map(async ([sport, url]) => {
     try {
-      const r = await fetch(url, { cache: "no-store" });
+      /* REVALIDATE, NEVER TRUST BLIND, NEVER RE-DOWNLOAD BLIND. This
+         fires every 30 seconds on the Live tab for every league's board
+         — the MLB file is 8MB — and `no-store` re-downloaded all of it
+         even when the build had not moved. `no-cache` asks the server
+         every time (same freshness guarantee, and it defeats the iOS
+         heuristic-cache bug the board poll documents) but reuses the
+         cached body on a 304, which is most polls, since the builds
+         rewrite on the minutes-long cycle. These are the FREE redacted
+         files, so the browser cache holding them is fine — the paid
+         board rides /api with its own rules. */
+      const r = await fetch(url, { cache: "no-cache" });
       if (!r.ok) return;
       const d = await r.json();
       if (sport === "cfb" && d.teams) _cfbTeams = d.teams;

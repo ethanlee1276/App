@@ -61,6 +61,31 @@ def test_the_shelf_is_data_driven_not_a_league_list():
         assert word not in code, f"{word} hardcoded in the shelf builder"
 
 
+def test_live_polls_revalidate_instead_of_redownloading_the_boards():
+    """fetchAllLive pulls every league's board every 30 seconds on the
+    Live tab — the MLB file is 8MB — and `no-store` re-downloaded all
+    of it even when the build had not moved. `no-cache` keeps the exact
+    freshness guarantee (the server is asked every time) and reuses the
+    cached body on a 304, which is most polls. The fast scoreboard file
+    keeps `no-store`: it is tiny and changes every few seconds, so a
+    304 there is the rare case, not the common one."""
+    src = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = src.index("async function fetchAllLive()")
+    body = src[i:src.index("\nfunction ", i)]
+    assert 'await fetch(url, { cache: "no-cache" })' in body
+    assert 'fetch(LIVE_FAST[sport], { cache: "no-store" })' in body
+    # A cache-busting query string would defeat every 304 — the URL must
+    # stay byte-identical between polls. (The Date.now() at the top of
+    # the function is the 30-second memory cache, not a buster.)
+    assert "?_=" not in body and "`${url}?" not in body
+    # The two record.json readers ride the same trade.
+    assert src.count('boardFetch("/data/record.json", { cache: "no-cache" })'
+                     ) + src.count(
+                     'boardFetch("data/record.json", { cache: "no-cache" })'
+                     ) == 2
+
+
 def test_the_shelf_has_its_own_css():
     css = open(os.path.join(ROOT, "web", "css", "styles.css"),
                encoding="utf-8").read()

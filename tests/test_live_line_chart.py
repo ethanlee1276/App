@@ -208,7 +208,10 @@ def test_cfb_marks_survive_the_cross_sport_live_tab():
     i = APP.index("function teamsForSport(")
     assert "_cfbTeams ||" in APP[i:i + 500]
     j = APP.index("async function fetchAllLive(")
-    assert '_cfbTeams = d.teams' in APP[j:j + 800]
+    # Widened 2026-09-01: the fetch grew a revalidation comment above the
+    # line this reads (no-cache over no-store), and the window is not the
+    # contract — the assignment is.
+    assert '_cfbTeams = d.teams' in APP[j:j + 1400]
 
 
 def test_cfb_games_speak_the_live_dict_every_other_league_speaks():
