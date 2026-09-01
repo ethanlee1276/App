@@ -316,14 +316,23 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
 
 
 def _slate_date() -> str:
-    """The BASEBALL day, which rolls at 5 AM local — not midnight.
+    """The BASEBALL day, which rolls at 5 AM EASTERN — not midnight.
 
     West-coast games run past 12:00, and flipping the board on the
     calendar tick yanked still-live bets off the Live tab in the 7th
     inning. Until 5 AM the slate (board, tracker, journal date) stays on
     the night being played; results ingest and settling use the real
-    calendar independently."""
-    return (_dt.datetime.now() - _dt.timedelta(hours=5)).date().isoformat()
+    calendar independently.
+
+    EASTERN, SAID OUT LOUD (QA audit, 2026-09-01). This read the
+    process's local clock, and the droplet runs UTC — so the "5 AM" roll
+    was happening at 05:00 UTC, which is 1 AM in New York, exactly when
+    a west-coast night game is in its last innings. Same answer every
+    other clock-sensitive module already gives (engine/streak.py,
+    engine/oddsbudget.py): compute the hour where the games are."""
+    from zoneinfo import ZoneInfo
+    now = _dt.datetime.now(ZoneInfo("America/New_York"))
+    return (now - _dt.timedelta(hours=5)).date().isoformat()
 
 
 def refresh_mlb(quiet: bool = False) -> bool:
