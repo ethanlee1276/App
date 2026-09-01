@@ -297,6 +297,42 @@ def _row(sport: str, rank: int, r: Record) -> dict:
     return d
 
 
+#: Sports whose pages carry the offense/defense unit rankings. Ethan,
+#: 2026-09-02: "For nfl and cfb on the rankings page, we should have a
+#: section ranking the current ranking for teams defense and offense."
+UNIT_RANKING_SPORTS = ("nfl", "cfb")
+
+
+def unit_rankings(table: dict) -> dict | None:
+    """Scoring offense and scoring defense, ranked league-wide.
+
+    Built from the SAME rows the standings table shows — points per game
+    scored (offense, high is good) and allowed (defense, low is good) —
+    so the two sections can never disagree with the table above them.
+    Labeled "scoring" honestly: we hold league-wide points, not yardage,
+    and a section called "offense rankings" built on points alone should
+    say which measure it means. None for other sports, thin seasons, and
+    the preseason wait — an unplayed season has no rankings to claim.
+    """
+    if table.get("sport") not in UNIT_RANKING_SPORTS:
+        return None
+    rows = [t for g in table.get("groups") or []
+            for t in g.get("teams") or [] if t.get("games")]
+    if len(rows) < 4:
+        return None
+
+    def entries(ordered, key):
+        return [{"rank": i + 1, "team": t["team"], "value": t[key],
+                 "games": t["games"], "record": t["record"]}
+                for i, t in enumerate(ordered)]
+
+    off = sorted(rows, key=lambda t: (-t["pf_per_game"], t["team"]))
+    dfn = sorted(rows, key=lambda t: (t["pa_per_game"], t["team"]))
+    return {"measure": "points per game",
+            "offense": entries(off, "pf_per_game"),
+            "defense": entries(dfn, "pa_per_game")}
+
+
 def conference_seeds(standings: dict, per_conference: int = 8) -> list[dict]:
     """Who would be seeded where if the season ended today.
 

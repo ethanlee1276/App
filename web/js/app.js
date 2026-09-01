@@ -19224,6 +19224,50 @@ function injRow(r, withTeam) {
   </div>`;
 }
 
+/* Around the league — headlines beside the injury board. Ethan,
+   2026-09-02: "We have an injuries and news page but only display
+   injuries. We should add a section for sports news. Figure out what
+   we are allowed to pull and display."
+
+   What we're allowed to show is settled in engine/sources/news.py,
+   where the parser enforces it: TITLES from publisher-offered RSS
+   feeds, the source's name, and a link out to the original reporting —
+   never article text, never images. This renderer has nothing else to
+   work with even if it wanted to. */
+let _newsCache = null;
+async function loadNews() {
+  if (_newsCache) return _newsCache;
+  try {
+    const res = await boardFetch("data/news.json?t=" + (Date.now() / 600000 | 0));
+    if (res.ok) _newsCache = await res.json();
+  } catch (e) { /* headlines are furniture — the page stands without them */ }
+  return _newsCache;
+}
+
+function newsSectionHTML(sport, news) {
+  const rows = (((news || {}).sports) || {})[sport] || [];
+  if (!rows.length) return "";
+  const agoWord = (epoch) => {
+    if (!epoch) return "";
+    const h = (Date.now() / 1000 - epoch) / 3600;
+    return h < 1 ? `${Math.max(1, Math.round(h * 60))}m ago`
+      : h < 24 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`;
+  };
+  return `
+    <div class="section-title">Around the league
+      <span class="sub">— headlines only; every one links to the original
+      reporting at its source</span></div>
+    <div class="card rec-list">
+      ${rows.map((r) => `
+        <div class="rb-row" style="gap:10px">
+          <a href="${escapeAttr(r.link)}" target="_blank"
+             rel="noopener noreferrer" style="flex:1;min-width:0">${escapeHtml(r.title)}</a>
+          <span class="k" style="white-space:nowrap;opacity:.65">${escapeHtml(r.source)}${
+            r.epoch ? ` · ${agoWord(r.epoch)}` : ""}</span>
+        </div>`).join("")}
+    </div>`;
+}
+
 async function renderInjuries() {
   const host = document.getElementById("injuries-body");
   if (!host) return;
@@ -19233,6 +19277,7 @@ async function renderInjuries() {
   // is how they stop agreeing.
   const d = await loadInjuryBoard();
   const sport = state.sport || "nfl";
+  const newsHTML = newsSectionHTML(sport, await loadNews());
   const rows = (((d || {}).sports) || {})[sport] || [];
   if (!rows.length) {
     const note = sport === "cfb"
@@ -19243,7 +19288,7 @@ async function renderInjuries() {
          refresh.`;
     host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("signal", 30)}</div>
       <div class="es-title">No injury designations to show</div>
-      <div class="es-sub">${note}</div></div>`;
+      <div class="es-sub">${note}</div></div>` + newsHTML;
     return;
   }
 
@@ -19321,7 +19366,8 @@ async function renderInjuries() {
       Fantasy page — this board is availability, league-wide.
       ${ageS != null
         ? `Designations collected ${escapeHtml(ageText(ageS))} ago.`
-        : `Page built ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.`}</p>`;
+        : `Page built ${escapeHtml(((d || {}).generated_at || "").slice(11, 16))}.`}</p>`
+    + newsHTML;
 }
 
 /* ONE TEAM, FOLDED. Ethan, 2026-08-25: "we should make each team as a
@@ -19361,6 +19407,48 @@ function injTeamBlock(team, rows, sev) {
       ${tiers}<span class="inj-team-n">${rows.length}</span></summary>
     <div class="card inj-list">${rows.map((r) => injRow(r, false)).join("")}</div>
   </details>`;
+}
+
+/* Team unit rankings — Ethan, 2026-09-02: "For nfl and cfb on the
+   rankings page, we should have a section ranking the current ranking
+   for teams defense and offense." Built from the standings table's own
+   rows (engine/standings.unit_rankings), so the two can never disagree.
+   CFB's 130+ teams show a top 25 with the rest one tap away. */
+let _stdUnitsAll = false;
+window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings(); };
+
+function unitRankingsHTML(ur) {
+  if (!ur || !(ur.offense || []).length) return "";
+  const meta = (typeof teamsForSport === "function"
+    ? teamsForSport(state.sport) : {}) || {};
+  const CAP = 25;
+  const col = (title, note, rows) => `
+    <div class="rec-bucket">
+      <div class="rb-head">${escapeHtml(title)}
+        <span class="mini" style="opacity:.6"> ${escapeHtml(note)}</span></div>
+      ${rows.slice(0, _stdUnitsAll ? rows.length : CAP).map((r) => `
+        <div class="std-row std-unit-row">
+          <span class="std-rank">${r.rank}</span>
+          <span class="std-mark">${teamMarkIn(state.sport, r.team, 22)}</span>
+          <span class="std-name">${escapeHtml((meta[r.team] || {}).name
+            || (meta[r.team] || {}).nick || r.team)}
+            <span class="k" style="opacity:.6">${escapeHtml(r.record)}</span></span>
+          <span class="std-n">${Number(r.value).toFixed(1)}</span>
+        </div>`).join("")}
+    </div>`;
+  const more = ur.offense.length - CAP;
+  return `
+    <div class="section-title">Team rankings
+      <span class="sub">— scoring offense and defense, in ${escapeHtml(
+        ur.measure || "points per game")} · from the same finished games
+        as the table above</span></div>
+    <div class="rec-buckets">
+      ${col("Offense", "most points scored", ur.offense)}
+      ${col("Defense", "fewest points allowed", ur.defense)}
+    </div>
+    ${more > 0 ? `<button class="btn ghost" type="button"
+      onclick="_stdUnitsToggle()">${_stdUnitsAll
+        ? "Show the top 25" : `Show all ${ur.offense.length} teams`}</button>` : ""}`;
 }
 
 async function renderStandings() {
@@ -19439,6 +19527,7 @@ async function renderStandings() {
           || (g.label || g.conference || "") === _stdGroup)
         .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
+    ${unitRankingsHTML(d.unit_rankings)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
 }

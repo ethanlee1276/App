@@ -536,6 +536,17 @@ def refresh_injuries(quiet: bool = False) -> bool:
     return ok
 
 
+def refresh_news(quiet: bool = False) -> bool:
+    """League headlines (publisher RSS, titles + links only) →
+    web/data/news.json. The 30-minute fetch TTL makes riding the cycle
+    free; see engine/sources/news.py for the display policy."""
+    ok, tail = _run_build(["news_build.py", "--out", "web/data/news.json"])
+    if not quiet:
+        print(f"  NEWS headlines: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
 def refresh_standings(quiet: bool = False) -> bool:
     """Standings and the postseason bracket. Zero network — both are
     counted from the same finished games every other board reads, so they
@@ -907,6 +918,7 @@ def refresh_all(quiet: bool = False) -> None:
     _note_board("ufc", refresh_ufc(quiet=quiet))
     refresh_sport_rosters(quiet=quiet)
     refresh_injuries(quiet=quiet)
+    refresh_news(quiet=quiet)
     refresh_standings(quiet=quiet)
     _arbitrate_parlays(quiet=quiet)
     _journal_parlays(quiet=quiet)

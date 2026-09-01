@@ -230,6 +230,10 @@ PAID_FILES = (
 #: and the model's output inside them is stripped. See PAID_KEYS_BY_FILE.
 FREE_FILES = (
     "record.json", "memerecord.json", "injuries.json",
+    # League headlines — titles and links out to their publishers, no
+    # model output in the file at all (engine/sources/news.py). Facts
+    # and furniture, free like the injuries beside them.
+    "news.json",
     # The refresher's liveness stamp: when the last cycle finished and
     # how long cycles take on this box. Every visitor's stale bar reads
     # it, signed in or not, so gating it would break the one line on the
@@ -287,7 +291,8 @@ KNOWN_BOARDS = (
     "wnba.json", "cfb.json", "ufc.json",
     "futures_cfb.json", "futures_mlb.json", "futures_nba.json",
     "futures_nfl.json", "backtest.json", "kalshi.json", "predmarkets.json",
-    "record.json", "injuries.json", "fantasy.json", "memecoins.json",
+    "record.json", "injuries.json", "news.json", "fantasy.json",
+    "memecoins.json",
     # memes_build.py has written this since the meme ledger shipped and
     # nothing here had ever heard of it — the third time a pipeline grew
     # a board without telling the gate. Unregistered meant `is_free` said

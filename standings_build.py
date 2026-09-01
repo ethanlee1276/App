@@ -158,6 +158,12 @@ def build(sport: str, season: int | None = None,
             + (f" ({table['feed_error']})" if table.get("feed_error") else "")
             + ". Records here can differ from the league's until the ingest "
               "catches up.")
+    # The football unit rankings ride the same payload — derived from the
+    # table's own rows, so they cannot disagree with it, and absent for
+    # sports/seasons where they'd be a claim about nothing.
+    ur = standings.unit_rankings(table)
+    if ur:
+        table["unit_rankings"] = ur
     return table
 
 
