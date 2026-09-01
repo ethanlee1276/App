@@ -322,7 +322,23 @@ hosts — the same expected noise as Phase 2.
   −100 → +100 even-money display seam (**documented in test, not changed** — identical money; changing the spelling is a product choice);
   cards not keyboard-reachable / a handful of sub-24px icon targets (**needs decision**).
 
-### Ask Ethan
+### Ask Ethan — answered 2026-09-01
+
+1. **Slip vs engine → "3 legs."** The reader's slip now caps at three
+   (device and share agree), and every added pair is run through the
+   engine's clash taxonomy via `POST /api/parlay/check` →
+   `engine.parlays.check_ticket`: a killed pair (same player twice,
+   teammates splitting one pie, both sides of a game, a duplicate) is
+   taken back off with the reason; a merely correlated pair stays and is
+   named. Legs now carry opponent / game date / home / away so "same
+   game" is not confused with "same club". `tests/test_slip_rules.py`.
+2. **Even money → "−100."** `decimal_to_american(2.0)` and the slip's
+   combined price both spell it −100. `tests/test_qa_numerics.py`
+   re-anchored; `+100` now lands on −100 too (same money).
+3. **Keyboard focus on cards → leave for now.** Unchanged; logged as
+   the open P3.
+
+## Ask Ethan (as originally posed)
 1. **Parlay cap on the user slip.** The brief says a hard cap of 3 with
    conflict detection "at every entry point". The ENGINE honours both
    (`MAX_LEGS = 3`, clash taxonomy). The user-built slip allows **8**
