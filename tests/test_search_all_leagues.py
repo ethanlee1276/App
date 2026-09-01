@@ -204,6 +204,21 @@ def test_the_page_asks_for_every_league():
     assert "sport=${encodeURIComponent(state.sport)}&q=" not in body
 
 
+def test_a_failed_search_is_retried_not_cached_for_the_session():
+    """Ethan, 2026-09-01: "it wont let me search any nfl player at all."
+    He had opened the app in the exact minute the auto-updater was
+    restarting the service; every name he typed cached a permanent empty
+    answer, and search stayed dead long after the server was back. A
+    failure may be remembered for seconds — never for the session."""
+    js = _js()
+    i = js.index("async function leagueSearch(")
+    body = js[i:i + 1200]
+    assert "hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS" in body, \
+        "a failed fetch must expire, not answer forever"
+    assert "ok = true" in body, "only a 200 earns the permanent cache"
+    assert "LEAGUE_RETRY_MS = 30000" in js
+
+
 def test_a_hits_logs_come_from_that_hits_league():
     """Asking the NFL endpoint for a WNBA guard returns an empty card —
     which looks exactly like "found him, know nothing about him"."""

@@ -7717,20 +7717,30 @@ function playerBrowseCap() {
    leads the ranking, and every other league is behind it rather than
    missing. Cached per (preference, query) because the input handler
    re-renders on every keystroke and the answer for "jud" does not change
-   between letters typed and deleted. A failed fetch caches [] for the
-   session — the roster fallback takes over, and a static host is not
-   retried on every key. */
+   between letters typed and deleted.
+
+   A FAILED FETCH IS CACHED FOR 30 SECONDS, NOT FOR THE SESSION. It was
+   for the session, and on 2026-09-01 that turned a two-second service
+   restart into "it wont let me search any nfl player at all" — Ethan
+   opened the app in the exact minute the auto-updater was restarting
+   qellys, every name he tried cached a permanent empty answer, and the
+   page stayed broken long after the server was back. The short window
+   still protects a static host (one probe per key per half minute, not
+   one per keystroke), but a healthy server that was briefly away gets
+   asked again. */
 const _leagueCache = new Map();
+const LEAGUE_RETRY_MS = 30000;
 async function leagueSearch(q) {
   const key = `${state.sport}|${q}`;
-  if (_leagueCache.has(key)) return _leagueCache.get(key);
-  let hits = [];
+  const hit = _leagueCache.get(key);
+  if (hit && (hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS)) return hit.players;
+  let players = [], ok = false;
   try {
     const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(state.sport)}`);
-    if (r.ok) hits = (await r.json()).players || [];
+    if (r.ok) { players = (await r.json()).players || []; ok = true; }
   } catch (e) {}
-  _leagueCache.set(key, hits);
-  return hits;
+  _leagueCache.set(key, { players, ok, at: Date.now() });
+  return players;
 }
 
 /* A hit's logs come from the hit's OWN league. Reading state.sport here
