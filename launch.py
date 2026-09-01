@@ -74,6 +74,7 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
                               capture_output=True, text=True, timeout=timeout)
     except Exception as exc:  # noqa: BLE001 — never let a refresh crash the server
         print(f"  build failed: {' '.join(args[:2])} — {str(exc)[:140]}")
+        _LAST_BUILD_NOTE[0] = str(exc)[:240]
         return False, str(exc)
     out = (proc.stdout + proc.stderr).strip().splitlines()
     tail = out[-1] if out else ""
@@ -94,6 +95,8 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
             print(f"    | {line[:200]}")
         print(f"  build failed: {' '.join(args[:2])} — exit "
               f"{proc.returncode}: {tail[:140]}")
+    _LAST_BUILD_NOTE[0] = ("" if proc.returncode == 0
+                           else f"exit {proc.returncode}: {tail[:200]}")
     return proc.returncode == 0, tail
 
 
@@ -787,6 +790,9 @@ def refresh_ufc(quiet: bool = False) -> bool:
 #: also its live-games feed (`LIVE_FEEDS` maps cfb to cfb.json; there is
 #: no fast scoreboard behind it, so one stale board takes both down).
 _BOARD_RUNS: dict = {}
+#: The last _run_build failure's reason (cleared on success) — read by
+#: _note_board so the heartbeat can carry WHY a board's refresh failed.
+_LAST_BUILD_NOTE = [""]
 
 
 #: The slate boards a stuck build would freeze, by the name
@@ -874,6 +880,15 @@ def _note_board(name: str, ok) -> bool:
         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "at_epoch": round(time.time()),
     }
+    # WHY it failed, carried into the heartbeat so `--boards` can say —
+    # a bare FAILED cost a journal dig over SSH on 2026-08-31 (the MLB
+    # build was timing out under a background fitter's CPU load, and the
+    # reason was captured, printed to a log nobody was reading, and
+    # thrown away by this record). _run_build leaves its last failure in
+    # _LAST_BUILD_NOTE; success clears it, so a stale note can't outlive
+    # the run it described.
+    if not ok and _LAST_BUILD_NOTE[0]:
+        _BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]
     # AFTER the run is recorded, so the heartbeat is written even if this
     # raises, and unconditional because the loop that matters is quiet.
     _warn_if_frozen(name)
@@ -3682,9 +3697,11 @@ def show_boards() -> None:
             print("  last refresh attempt, as the loop recorded it")
             for name in BOARD_FILES:
                 run = runs.get(name)
-                print(f"    {name.upper():<6} "
-                      + (f"{run['at']}  {'ok' if run.get('ok') else 'FAILED'}"
-                         if run else "no record — the loop never reached it"))
+                line = (f"{run['at']}  {'ok' if run.get('ok') else 'FAILED'}"
+                        if run else "no record — the loop never reached it")
+                print(f"    {name.upper():<6} " + line)
+                if run and not run.get("ok") and run.get("note"):
+                    print(f"      <-- {run['note']}")
     else:
         print("\n  no heartbeat.json — cannot say whether the loop is alive.")
     cyc = beat.get("cycle_p50_s") or _cycle_p50()

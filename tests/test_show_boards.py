@@ -270,6 +270,33 @@ def test_no_state_file_falls_back_to_the_process_flag():
     assert "manual deploy" in out
 
 
+
+# --- a failed refresh names its reason on the one screen -------------------
+def test_a_failed_board_refresh_carries_its_reason():
+    """2026-08-31: MLB showed FAILED with nothing else, and the reason —
+    the build timing out under a background fitter's CPU load — was
+    captured by _run_build, printed to a journal nobody was reading, and
+    dropped by the run record. The note now rides the heartbeat."""
+    out = _run_with_root(_heartbeat_root(
+        {"at_epoch": time.time(), "at": "now",
+         "boards": {"mlb": {"ok": False, "at": "2026-08-31T19:00:43",
+                            "note": "exit 1: TimeoutExpired after 600s"}},
+         "commit": DISK, "auto_update": True}))
+    assert "FAILED" in out
+    assert "TimeoutExpired after 600s" in out
+
+
+def test_the_note_is_written_on_failure_and_cleared_on_success():
+    import launch
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def _run_build")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert "_LAST_BUILD_NOTE[0] = str(exc)[:240]" in body
+    assert '_LAST_BUILD_NOTE[0] = ("" if proc.returncode == 0' in body
+    at = src.index("def _note_board")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert '_BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]' in body
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
