@@ -141,6 +141,31 @@ def _slate_games(path: str) -> int:
         return 0
 
 
+def _slate_props(path: str) -> int:
+    """Priced player props on a built board (0 when missing/unreadable).
+
+    READ FROM THE FULL COPY. With the paywall on, the public file at
+    ``path`` carries `recommendations: []` by design (engine/gate.py
+    redacts it), so counting there would call every subscriber board
+    propless. gate.publish always writes the full board beside it under
+    data/built/, paywall or not — that is the copy that knows.
+    """
+    try:
+        from engine import gate as _gate
+        src = path
+        full = _gate.full_board_file(os.path.basename(path))
+        # Only a full copy at least as fresh as the public file may
+        # answer for it: a writer that bypassed gate.publish would leave
+        # an older full copy behind, and an old count is a wrong count.
+        if full is not None and full.is_file() and os.path.isfile(path) \
+                and full.stat().st_mtime >= os.stat(path).st_mtime - 1:
+            src = full
+        with open(src) as fh:
+            return len(json.load(fh).get("recommendations") or [])
+    except Exception:                                     # noqa: BLE001
+        return 0
+
+
 def _board_word(path: str, ok: bool) -> str:
     """What a refresh should actually say about the board it just wrote.
 
@@ -445,8 +470,32 @@ def refresh_nfl(quiet: bool = False) -> bool:
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
-    ok, tail = _run_build(args)
+    # 600s, the same ceiling MLB and CFB carry — not the 180s default,
+    # which is for the small fast builds. With --injuries --depth --carry
+    # and an odds pull this is a model board, and on 2026-09-01 the
+    # default guillotine fell on it whenever the droplet's one core was
+    # busy: the full build died mid-run, the fallback below rewrote the
+    # board without props, the next cycle's full build put them back —
+    # Ethan: "nfl keeps showing props, then not showing props, then
+    # showing props, then not showing props."
+    ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    if not ok and _slate_props(out) > 0:
+        # NEVER DOWNGRADE A BOARD THAT HAS PROPS. The fallback below
+        # exists for the week BEFORE a season's first stats, when the
+        # alternative to a game-lines-only board is no board at all. It
+        # was never meant to replace a props board that is one cycle
+        # old with one that has none — that is the flicker above, and
+        # it reported "ok" while doing it. Keep the last good board,
+        # say why, and let --boards show a FAILED with the reason.
+        n = _slate_props(out)
+        _LAST_BUILD_NOTE[0] = (f"kept last board ({n} props) — full build "
+                               f"failed: {(_LAST_BUILD_NOTE[0] or tail)[:160]}")
+        if not quiet:
+            print(f"  NFL  {season} wk {week}: full build failed — kept the "
+                  f"last board with {n} props rather than publishing game "
+                  f"lines only  ({tail})")
+        return False
     if not ok:
         # THE SCHEDULE IS STILL WORTH HAVING.
         #

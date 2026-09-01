@@ -265,11 +265,40 @@ def test_the_launcher_falls_back_rather_than_keeping_an_empty_board():
     assert '"--games-only", "--cached-odds",' in body, \
         "refresh_nfl has no schedule-only fallback, or stopped reading the "\
         "cached odds the moneyline needs"
-    # It must only fall back AFTER the full build failed.
-    assert body.index("ok, tail = _run_build(args)") < body.index("--games-only")
+    # It must only fall back AFTER the full build failed. (Prefix, not
+    # the whole call: the full build grew a 600s ceiling on 2026-09-01,
+    # and the ORDER is the contract here.)
+    assert body.index("ok, tail = _run_build(args") < body.index("--games-only")
     assert "if not ok:" in body
     # A successful fallback is a success, not a silent failure.
     assert "return True" in body
+
+
+def test_the_fallback_never_replaces_a_board_that_already_has_props():
+    """Ethan, 2026-09-01: "nfl keeps showing props, then not showing
+    props, then showing props, then not showing props."
+
+    The full build and the --games-only fallback write the SAME file.
+    Under load the full build was guillotined by the 180s default, the
+    fallback rewrote the board without props and reported ok, and the
+    next cycle put the props back — a flicker the loop called healthy.
+    Two rules now: the model board gets the model-board ceiling, and a
+    board that carries props is never downgraded to game lines only —
+    it is kept, the failure is recorded, and --boards says so."""
+    i = LAUNCH.index("def refresh_nfl(")
+    body = LAUNCH[i:LAUNCH.index("\ndef ", i + 10)]
+    assert "ok, tail = _run_build(args, timeout=600)" in body, \
+        "the full NFL build is back on the 180s guillotine"
+    guard = body.index("if not ok and _slate_props(out) > 0:")
+    assert guard < body.index("--games-only"), \
+        "the props guard must stand BEFORE the fallback"
+    assert "kept last board" in body[guard:guard + 900]
+    assert "return False" in body[guard:guard + 1200], \
+        "a kept board is a FAILED refresh, not a quiet ok"
+    # And the count reads the FULL copy, or every paywalled board
+    # counts as propless.
+    j = LAUNCH.index("def _slate_props(")
+    assert "full_board_file" in LAUNCH[j:j + 900]
 
 def test_the_edge_board_says_where_a_schedule_only_price_came_from():
     """Pricing the fallback made one existing sentence false.
