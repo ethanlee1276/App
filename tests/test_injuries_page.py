@@ -409,6 +409,17 @@ def test_the_page_says_when_the_data_stopped_moving():
     # And the footer must stop claiming a refresh time it cannot vouch for.
     assert "Designations collected" in page
 
+def test_in_season_an_injury_board_is_never_believed_past_ten_minutes():
+    """Ethan, 2026-09-01, ten minutes after a running back went on IR:
+    "how often does the NFL Injuries pull data". The cache sat at 30
+    minutes under an offseason comment calling injuries "a
+    practice-report cadence" — but an IR move re-prices the whole depth
+    chart behind the man, and the rules engine's own-player hold reads
+    this feed. Ten minutes is the ceiling; anyone raising it back should
+    have to argue with the season."""
+    assert inj.INJURY_TTL <= 600, inj.INJURY_TTL
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

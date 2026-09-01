@@ -44,8 +44,20 @@ LEAGUES = {
     "cfb": f"{ROOT}/football/college-football/injuries",
 }
 
-#: Injury designations move on a practice-report cadence, not a ticker's.
-INJURY_TTL = 1800
+#: How long a fetched injury board is believed before ESPN is asked again.
+#:
+#: Was 1800 under a comment calling injuries "a practice-report cadence,
+#: not a ticker's" — an August assumption that stopped being true the
+#: week the season started. Ethan, 2026-09-01, ten minutes after a
+#: running back went on IR: "how often does the NFL Injuries pull data" —
+#: and the honest answer was "up to half an hour behind ESPN, plus a
+#: build cycle". An IR move re-prices every back behind the man on the
+#: depth chart, and the rules engine's own-player hold reads this feed;
+#: both deserve better than a 30-minute-old answer. Ten minutes keeps the
+#: endpoint's courtesy (six keyless calls an hour per league) while the
+#: refresh loop, which runs far more often than this, picks changes up
+#: on the first cycle after the cache turns.
+INJURY_TTL = 600
 
 
 def _cache_file(league: str):
