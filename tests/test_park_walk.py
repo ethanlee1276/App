@@ -143,6 +143,17 @@ def test_other_sports_are_told_no_rather_than_walked_wrong():
     assert "no venue-aware walk" in lines[0]
 
 
+def test_the_weekly_maintenance_answers_the_ab_by_itself():
+    """The one-liner that runs this report was never pasted on the
+    droplet, so the park question sat unanswered for a day. The weekly
+    pass now prints it beside the rank fits — measured where the logs
+    are, with nobody needing to remember a command."""
+    src = open(os.path.join(ROOT, "engine", "maintenance.py"),
+               encoding="utf-8").read()
+    assert "context_report as _rank_ctx" in src
+    assert '_rank_ctx(_rkc, "mlb", log=log)' in src
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

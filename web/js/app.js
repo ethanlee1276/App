@@ -7796,7 +7796,8 @@ function profileHTML(player) {
           ${escapeHtml(t)}${priced.has(t)
             ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
     </div>` : "";
-  const vsTail = vsBlockHTML(player, (rows[0] && rows[0].sport) || state.sport);
+  const vsTail = vsBlockHTML(player, (rows[0] && rows[0].sport) || state.sport,
+                             (rows[0] && rows[0].opponent) || "");
   return priced.has(mkt)
     ? pricedProfileHTML(priced.get(mkt), chips, vsTail)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
@@ -7820,12 +7821,20 @@ function profileHTML(player) {
    them — he asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more. */
 const VS_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba"];
 
-function vsBlockHTML(player, sport) {
+function vsBlockHTML(player, sport, opp = "") {
   const lg = String(sport || "").toLowerCase();
   if (!VS_SPORTS.includes(lg)) return "";
+  /* ONE TAP WHEN THE CARD KNOWS TONIGHT'S OPPONENT. Ethan's own flow
+     (2026-09-01) was "the rams take on the 49ers week one and I wanna
+     see how Devonte Adam's did the last time the 49ers played the rams"
+     — so a priced card, which knows who he plays, names them on the
+     button and loads that matchup directly. The full picker still
+     renders for every other club he has faced. */
   return `<div class="prof-vs" data-player="${escapeAttr(player)}"
-      data-sport="${escapeAttr(lg)}">
-    <button class="btn vs-open" type="button">History vs a team…</button>
+      data-sport="${escapeAttr(lg)}"${opp ? ` data-opp="${escapeAttr(opp)}"` : ""}>
+    <button class="btn vs-open" type="button">${opp
+      ? `How he’s done vs ${escapeHtml(teamNameIn(lg, opp))}…`
+      : "History vs a team…"}</button>
   </div>`;
 }
 
@@ -7860,6 +7869,15 @@ document.addEventListener("click", async (e) => {
         game${o.games === 1 ? "" : "s"}</option>`).join("")}
     </select>
     <div class="vs-out"></div>`;
+  // Tonight's opponent, already loaded: the tap that opened the box IS
+  // the pick when the card knows who he plays and we hold games against
+  // them. The stored keys came back exact, so the match is exact too.
+  const tonight = box.dataset.opp;
+  if (tonight && opps.some((o) => o.opponent === tonight)) {
+    const sel = box.querySelector(".vs-select");
+    sel.value = tonight;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
 });
 
 document.addEventListener("change", async (e) => {

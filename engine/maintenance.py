@@ -1131,11 +1131,21 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
         # dev box has no MLB logs at all and can never claim one.
         try:
             from . import db as _rkdb
+            from .rankfit import context_report as _rank_ctx
             from .rankfit import measure as _rank_measure
             _rkc = _rkdb.connect()
             try:
                 for _sp in ("mlb", "wnba", "nba"):
                     _rank_measure(_rkc, _sp, log=log)
+                # THE PARK A/B, ANSWERED WHERE THE LOGS ARE. The standing
+                # finding (2026-08-31): the walk replays history in a
+                # NEUTRAL stadium, so the venue layer the MLB handicapping
+                # script wired in is invisible to the store's AUCs. The
+                # one-liner that measures it was never pasted on the
+                # droplet, so the question sat unanswered — now the weekly
+                # log answers it by itself. It still WRITES NOTHING:
+                # adoption is a decision for whoever reads the deltas.
+                _rank_ctx(_rkc, "mlb", log=log)
             finally:
                 _rkc.close()
         except Exception as exc:  # noqa: BLE001

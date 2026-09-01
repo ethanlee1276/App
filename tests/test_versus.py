@@ -192,6 +192,27 @@ def test_the_page_offers_stored_opponents_and_sends_the_choice_verbatim():
         or "vs=${encodeURIComponent(vs)}" in sel
 
 
+def test_a_card_that_knows_tonights_opponent_loads_that_matchup_in_one_tap():
+    """Ethan's flow IS the one-tap case: "the rams take on the 49ers week
+    one and I wanna see how Devonte Adam's did the last time the 49ers
+    played the rams." A priced card knows who he plays, so the button
+    names them and the tap that opens the box picks them — the full
+    picker still stands for every other club he has faced."""
+    src = open(os.path.join(ROOT, "web", "js", "app.js"),
+               encoding="utf-8").read()
+    i = src.index("function vsBlockHTML(")
+    blk = src[i:i + 1400]
+    assert 'data-opp="${escapeAttr(opp)}"' in blk
+    assert "teamNameIn(lg, opp)" in blk, \
+        "the button must name the club, not print an abbreviation"
+    j = src.index('e.target.closest(".vs-open")')
+    body = src[j:j + 3000]
+    assert "box.dataset.opp" in body
+    assert "opps.some((o) => o.opponent === tonight)" in body, \
+        "preselect only a club we actually hold games against"
+    assert 'dispatchEvent(new Event("change", { bubbles: true }))' in body
+
+
 def test_no_league_or_team_names_are_hardcoded_in_the_flow():
     """The block is data-driven end to end: the sports list is the only
     constant, and 49ers/Rams/schools never appear in the code."""
