@@ -27113,7 +27113,7 @@ function slipToggle(r) {
       return false;
     }
     if (s.legs.length >= SLIP_MAX) {
-      tfToast(`${SLIP_MAX} legs is the ceiling — the same rule the model's own tickets follow.`);
+      tfToast(`${SLIP_MAX} legs is the ceiling — the same rule the model’s own tickets follow.`);
       return false;
     }
     const kind = r.bet_type || r.market || "";
@@ -27175,7 +27175,7 @@ async function slipCheck(addedKey) {
     const cur = slipState();
     const i = cur.legs.findIndex((l) => slipLegKey(l) === addedKey);
     if (i >= 0) { cur.legs.splice(i, 1); slipSave(); slipRender(); }
-    tfToast(`Not added — ${got.reason || "the engine's parlay rules refuse that pair"}.`);
+    tfToast(`Not added — ${got.reason || "the engine’s parlay rules refuse that pair"}.`);
     return;
   }
   if ((got.warnings || []).length) {
