@@ -7408,7 +7408,7 @@ let _playersSeq = 0;
    a label, because showing the scope and offering to change it are the
    same control — and every league the search can reach gets one, so the
    row is also the honest list of where the box is able to look. */
-const SEARCH_SCOPES = ["nfl", "mlb", "nba", "wnba", "cfb", "ufc"];
+const SEARCH_SCOPES = ["nfl", "cfb", "mlb", "nba", "wnba", "ufc"];   // his order of importance
 
 function renderSearchScope() {
   const host = document.getElementById("search-scope");
@@ -29374,9 +29374,13 @@ function syncStripArrows() {
    slate carries — spread, total, and the moneyline when a game bet
    priced one. Only sports we actually model appear; there is no NHL
    chip because there is no NHL model. */
+// In Ethan's order of importance (2026-09-01: "NFL … then CFB, then MLB,
+// then NBA, then WNBA, then UFC") — the Live tab's shelves and chips
+// read this table in key order, so the order IS the layout.
 const LIVE_FEEDS = {
-  nfl: "data/recommendations.json", mlb: "data/mlb_recommendations.json",
-  nba: "data/nba.json", wnba: "data/wnba.json", cfb: "data/cfb.json",
+  nfl: "data/recommendations.json", cfb: "data/cfb.json",
+  mlb: "data/mlb_recommendations.json",
+  nba: "data/nba.json", wnba: "data/wnba.json",
 };
 
 /* SCORES DO NOT COME FROM THE MODEL BOARD ANY MORE — measured 2026-08-16.

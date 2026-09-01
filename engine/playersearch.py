@@ -33,7 +33,10 @@ import unicodedata
 
 #: Every source this box covers, in the order a tie is broken. The log
 #: leagues come from statlogs; ufc is its own reader.
-SOURCES = ("nfl", "mlb", "nba", "wnba", "cfb", "ufc")
+#: In the order of importance Ethan set on 2026-09-01 ("NFL … then CFB,
+#: then MLB, then NBA, then WNBA, then UFC") — this is the tie-break
+#: order when no tab preference says otherwise.
+SOURCES = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
 
 
 def norm(s: str) -> str:

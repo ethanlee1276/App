@@ -252,8 +252,8 @@ def test_the_search_page_wears_its_scope_and_a_hop_keeps_the_typed_name():
     assert 'id="search-scope"' in html
     js = _js()
     i = js.index("const SEARCH_SCOPES")
-    assert '"nfl", "mlb", "nba", "wnba", "cfb", "ufc"' in js[i:i + 120], \
-        "the row is the honest list of where the box can look"
+    assert '"nfl", "cfb", "mlb", "nba", "wnba", "ufc"' in js[i:i + 120], \
+        "the row is the honest list of where the box can look, in his order"
     fn = js[js.index("function renderSearchScope("):]
     fn = fn[:fn.index("\n}")]
     assert 's === state.sport ? " on"' in fn, "the lit chip is the scope"

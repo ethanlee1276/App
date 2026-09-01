@@ -905,8 +905,19 @@ _LAST_BUILD_NOTE = [""]
 
 #: The slate boards a stuck build would freeze, by the name
 #: `_note_board` records them under.
-BOARD_FILES = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
-               "wnba": WNBA_OUT, "cfb": CFB_OUT}
+#: THE ORDER OF IMPORTANCE, said once. Ethan, 2026-09-01: "the NFL
+#: needs to be first, then CFB, then MLB, then NBA, then WNBA, then UFC
+#: in the level of importance." Every list that enumerates the leagues
+#: — the rebuild cycle below, the boards screen, the Live tab's shelves,
+#: the search scope chips, the search tie-break — follows this tuple,
+#: so a board's place in the cycle is its place in his priorities. The
+#: cycle is a sequential sum on one core: whoever builds first is
+#: freshest when a cycle is cut short, and does not wait four minutes
+#: behind a league he cares about less.
+SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
+
+BOARD_FILES = {"nfl": NFL_OUT, "cfb": CFB_OUT, "mlb": MLB_OUT,
+               "nba": NBA_OUT, "wnba": WNBA_OUT}
 
 #: How long a board may go without being rewritten before that is worth
 #: saying out loud. The loop rebuilds every board every cycle, so the
@@ -1020,15 +1031,17 @@ def refresh_all(quiet: bool = False) -> None:
         _STEP_S[step] = round(time.time() - _lap[0], 1)
         _lap[0] = time.time()
 
-    _note_board("mlb", refresh_mlb(quiet=quiet)); lap("mlb")
+    # In SPORT_PRIORITY order — the leagues first, as he ranks them,
+    # then the tool boards. See the tuple's own comment.
     _note_board("nfl", refresh_nfl(quiet=quiet)); lap("nfl")
+    _note_board("cfb", refresh_cfb(quiet=quiet)); lap("cfb")
+    _note_board("mlb", refresh_mlb(quiet=quiet)); lap("mlb")
+    _note_board("nba", refresh_nba(quiet=quiet)); lap("nba")
+    _note_board("wnba", refresh_wnba(quiet=quiet)); lap("wnba")
+    _note_board("ufc", refresh_ufc(quiet=quiet)); lap("ufc")
     _note_board("predmarkets", refresh_predmarkets(quiet=quiet)); lap("predmarkets")
     _note_board("memes", refresh_memes(quiet=quiet)); lap("memes")
     _note_board("fantasy", refresh_fantasy(quiet=quiet)); lap("fantasy")
-    _note_board("nba", refresh_nba(quiet=quiet)); lap("nba")
-    _note_board("wnba", refresh_wnba(quiet=quiet)); lap("wnba")
-    _note_board("cfb", refresh_cfb(quiet=quiet)); lap("cfb")
-    _note_board("ufc", refresh_ufc(quiet=quiet)); lap("ufc")
     refresh_sport_rosters(quiet=quiet); lap("rosters")
     refresh_injuries(quiet=quiet); lap("injuries")
     refresh_news(quiet=quiet); lap("news")
