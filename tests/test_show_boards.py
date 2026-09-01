@@ -297,6 +297,39 @@ def test_the_note_is_written_on_failure_and_cleared_on_success():
     body = src[at:src.index("\ndef ", at + 10)]
     assert '_BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]' in body
 
+def test_every_cycle_step_is_clocked_and_the_bill_is_printed():
+    """Ethan, 2026-09-01: "im noticing all the pages are stale 45 mins.
+    we gotta stop that issue." Every page's age is the cycle length, the
+    cycle is a sequential sum on one core, and nothing measured the
+    addends — so the first fix is a ledger: every step laps into
+    _STEP_S, the heartbeat publishes it, and --boards prints it worst
+    first. A staleness complaint becomes one paste, not a profiling
+    session over SSH."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def refresh_all(")
+    body = src[at:src.index("\ndef ", at + 10)]
+    # Every _note_board'ed build laps, and so does every tail chore —
+    # counted, so a new step added without a lap goes red here.
+    assert body.count('; lap("') == body.count("_note_board(") + 9, body
+    for chore in ("maintenance", "autosettle", "doctor"):
+        assert f'_STEP_S["{chore}"]' in src, f"{chore} is not clocked"
+    assert '"step_s": dict(_STEP_S),' in src, "the heartbeat lost the bill"
+    at = src.index("def show_boards")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert "where the last cycle's time went" in body
+    assert "key=lambda kv: -kv[1]" in body, "the bill must read worst first"
+
+
+def test_builds_run_niced_below_the_serving_process():
+    """One core serves the pages AND chews the builds. At equal priority
+    a ten-minute board rebuild makes every tap feel broken while it runs
+    — the 2026-08-31 CPU-starvation cascade, from inside the house."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def _run_build")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert "os.nice(10)" in body and "preexec_fn=nicer" in body
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

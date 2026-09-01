@@ -70,8 +70,20 @@ def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
     their own ceiling.
     """
     try:
+        # NICED BELOW THE SERVER, every build, always. The serving
+        # process answers searches and page loads on the same single
+        # core these builds chew for minutes at a stretch — at equal
+        # priority a ten-minute MLB rebuild makes every tap feel broken
+        # while it runs (Ethan, 2026-09-01: "make sure nothing is laggy
+        # … everything is snappy and fast"). The build finishing thirty
+        # seconds later is a price nobody can perceive; the site
+        # hitching for ten minutes is the one everybody does. Same
+        # doctrine as the droplet's background fitters after the
+        # 2026-08-31 CPU-starvation cascade.
+        nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
         proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
-                              capture_output=True, text=True, timeout=timeout)
+                              capture_output=True, text=True,
+                              timeout=timeout, preexec_fn=nicer)
     except Exception as exc:  # noqa: BLE001 — never let a refresh crash the server
         print(f"  build failed: {' '.join(args[:2])} — {str(exc)[:140]}")
         _LAST_BUILD_NOTE[0] = str(exc)[:240]
@@ -906,25 +918,41 @@ def _note_board(name: str, ok) -> bool:
     return bool(ok)
 
 
+#: Where the LAST refresh cycle's time actually went, step by step, in
+#: seconds. Ethan, 2026-09-01: "im noticing all the pages are stale 45
+#: mins. we gotta stop that issue." Every page's age is the cycle
+#: length, the cycle is a sequential sum of a dozen builds on one core,
+#: and nothing measured the addends — so "which build is eating the 45
+#: minutes" was a profiling session over SSH. Now it is one paste: the
+#: heartbeat publishes this and --boards prints it, worst first.
+_STEP_S: dict = {}
+
+
 def refresh_all(quiet: bool = False) -> None:
-    _note_board("mlb", refresh_mlb(quiet=quiet))
-    _note_board("nfl", refresh_nfl(quiet=quiet))
-    _note_board("predmarkets", refresh_predmarkets(quiet=quiet))
-    _note_board("memes", refresh_memes(quiet=quiet))
-    _note_board("fantasy", refresh_fantasy(quiet=quiet))
-    _note_board("nba", refresh_nba(quiet=quiet))
-    _note_board("wnba", refresh_wnba(quiet=quiet))
-    _note_board("cfb", refresh_cfb(quiet=quiet))
-    _note_board("ufc", refresh_ufc(quiet=quiet))
-    refresh_sport_rosters(quiet=quiet)
-    refresh_injuries(quiet=quiet)
-    refresh_news(quiet=quiet)
-    refresh_standings(quiet=quiet)
-    _arbitrate_parlays(quiet=quiet)
-    _journal_parlays(quiet=quiet)
-    _seal_forecasts(quiet=quiet)
-    _run_futures(quiet=quiet)
-    _publish_feed(quiet=quiet)
+    _lap = [time.time()]
+
+    def lap(step: str) -> None:
+        _STEP_S[step] = round(time.time() - _lap[0], 1)
+        _lap[0] = time.time()
+
+    _note_board("mlb", refresh_mlb(quiet=quiet)); lap("mlb")
+    _note_board("nfl", refresh_nfl(quiet=quiet)); lap("nfl")
+    _note_board("predmarkets", refresh_predmarkets(quiet=quiet)); lap("predmarkets")
+    _note_board("memes", refresh_memes(quiet=quiet)); lap("memes")
+    _note_board("fantasy", refresh_fantasy(quiet=quiet)); lap("fantasy")
+    _note_board("nba", refresh_nba(quiet=quiet)); lap("nba")
+    _note_board("wnba", refresh_wnba(quiet=quiet)); lap("wnba")
+    _note_board("cfb", refresh_cfb(quiet=quiet)); lap("cfb")
+    _note_board("ufc", refresh_ufc(quiet=quiet)); lap("ufc")
+    refresh_sport_rosters(quiet=quiet); lap("rosters")
+    refresh_injuries(quiet=quiet); lap("injuries")
+    refresh_news(quiet=quiet); lap("news")
+    refresh_standings(quiet=quiet); lap("standings")
+    _arbitrate_parlays(quiet=quiet); lap("parlays")
+    _journal_parlays(quiet=quiet); lap("parlay-journal")
+    _seal_forecasts(quiet=quiet); lap("forecast-seal")
+    _run_futures(quiet=quiet); lap("futures")
+    _publish_feed(quiet=quiet); lap("feed")
 
 
 def _publish_feed(quiet: bool = False) -> None:
@@ -2151,11 +2179,20 @@ def _background_refresher(interval: int) -> None:
         _cycle_started = time.time()
         try:
             # Catches the date rolling over while the server runs overnight.
+            # Clocked like the builds: the first cycle of the day carries
+            # the daily chores — and on fitter days those chores ARE the
+            # long cycle, which the step ledger must be able to say.
+            _t = time.time()
             _run_maintenance()
+            _STEP_S["maintenance"] = round(time.time() - _t, 1)
             # Closes out tonight's games as they end, rather than tomorrow.
+            _t = time.time()
             _run_autosettle()
+            _STEP_S["autosettle"] = round(time.time() - _t, 1)
             # Once a day, and only when something is wrong.
+            _t = time.time()
             _run_doctor()
+            _STEP_S["doctor"] = round(time.time() - _t, 1)
             # Skips rather than queues when the startup build is still
             # going: this loop runs on a timer, so the next tick is a
             # better moment than piling up behind a build that is already
@@ -2199,6 +2236,10 @@ def _write_heartbeat(interval: int) -> None:
             # Per board, so "did CFB rebuild, and when" stops being a
             # question only a journal forensic can answer. See _BOARD_RUNS.
             "boards": dict(_BOARD_RUNS),
+            # Where the last cycle's seconds went, step by step — the
+            # answer to "why are all the pages stale 45 minutes" as a
+            # paste instead of a profiling session. See _STEP_S.
+            "step_s": dict(_STEP_S),
             # Which code is SERVING and whether it updates itself — read
             # by --boards, so "did my push land" stops being a journal
             # question asked over SSH from a phone.
@@ -3714,6 +3755,16 @@ def show_boards() -> None:
                 print(f"    {name.upper():<6} " + line)
                 if run and not run.get("ok") and run.get("note"):
                     print(f"      <-- {run['note']}")
+        # The cycle's bill, worst first. When every page is stale by the
+        # same ~45 minutes, the cycle IS the staleness, and this names
+        # the builds actually spending it.
+        steps = beat.get("step_s") or {}
+        if steps:
+            total = sum(v for v in steps.values() if isinstance(v, (int, float)))
+            print(f"\n  where the last cycle's time went ({total:.0f}s total)")
+            for k, v in sorted(steps.items(), key=lambda kv: -kv[1]):
+                if v >= 1:
+                    print(f"    {k:<15} {v:>7.0f}s")
     else:
         print("\n  no heartbeat.json — cannot say whether the loop is alive.")
     cyc = beat.get("cycle_p50_s") or _cycle_p50()
