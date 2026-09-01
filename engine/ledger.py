@@ -5128,6 +5128,67 @@ def _edge_series(conn, category: str = "main") -> list[dict]:
     return edgehistory.series(conn, category)
 
 
+#: The Record page's section order and reader-facing names, keyed by the
+#: ledger categories each section pools. Ethan, 2026-09-01: "the edge
+#: bets have a certain section and record spot, the most likely bets
+#: have a record spot, and excetra."
+BOOK_SECTIONS = (
+    ("edge", "Edge bets", ("main", "paper")),
+    ("likely", "Most Likely", ("likely",)),
+    ("longshots", "Long Shots", ("longshot",)),
+)
+
+
+def book_records(conn, since: str | None = None) -> dict:
+    """``{sport: {section: {label, n, w, l, push, net_u, roi, markets}}}``.
+
+    One scan, grouped by sport × category × market, so the Record page
+    can give every book its own record spot per sport, with per-market
+    rows underneath (labeled by ``markets.words`` on the page — the
+    homers/touchdowns/hits/rebounds words, never retyped). Sections a
+    sport has never journaled are simply absent, and markets ride inside
+    their section sorted by volume so the busiest line leads.
+    """
+    win = " AND date >= ?" if since else ""
+    args: tuple = (since,) if since else ()
+    cat_to_sec = {c: key for key, _, cats in BOOK_SECTIONS for c in cats}
+    labels = {key: label for key, label, _ in BOOK_SECTIONS}
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT sport, category, market, COUNT(*) n, "
+            "SUM(status='won') w, SUM(status='lost') l, "
+            "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
+            "COALESCE(SUM(stake_units),0) s FROM bets "
+            "WHERE status IN ('won','lost','push')" + win
+            + " GROUP BY sport, category, market", args):
+        sec = cat_to_sec.get(r["category"])
+        if not sec or not r["sport"]:
+            continue
+        sport = out.setdefault(r["sport"], {})
+        book = sport.setdefault(sec, {
+            "label": labels[sec], "n": 0, "w": 0, "l": 0, "push": 0,
+            "net_u": 0.0, "staked": 0.0, "markets": {}})
+        book["n"] += r["n"]; book["w"] += r["w"] or 0
+        book["l"] += r["l"] or 0; book["push"] += r["p"] or 0
+        book["net_u"] += r["u"]; book["staked"] += r["s"]
+        m = book["markets"].setdefault(r["market"], {
+            "n": 0, "w": 0, "l": 0, "net_u": 0.0, "staked": 0.0})
+        m["n"] += r["n"]; m["w"] += r["w"] or 0; m["l"] += r["l"] or 0
+        m["net_u"] += r["u"]; m["staked"] += r["s"]
+    for sport in out.values():
+        for book in sport.values():
+            book["roi"] = (round(book["net_u"] / book["staked"], 4)
+                           if book["staked"] else 0.0)
+            book["net_u"] = round(book["net_u"], 2)
+            book["staked"] = round(book["staked"], 2)
+            for m in book["markets"].values():
+                m["roi"] = (round(m["net_u"] / m["staked"], 4)
+                            if m["staked"] else 0.0)
+                m["net_u"] = round(m["net_u"], 2)
+                m["staked"] = round(m["staked"], 2)
+    return out
+
+
 def export_json(conn, path) -> None:
     """Write the journal's performance to a JSON file the website renders.
 
@@ -5182,6 +5243,10 @@ def export_json(conn, path) -> None:
         # and roi and shit to it." This is what "does good" is checked
         # against.
         "likely": likely_report(conn, since=since),
+        # Per sport × per book × per market — the Record page's section
+        # spots (edge / most likely / long shots), with the market rows
+        # the page labels via market_words above.
+        "book_records": book_records(conn, since=since),
         "stale_flags": stale_report(conn, since=since),
         "form_sampler": form_report(conn, since=since),
         "loose_sampler": loose_report(conn, since=since),

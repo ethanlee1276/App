@@ -133,7 +133,10 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     js = _js()
     assert "_recordRooms(d, src, pmv, scope, scoped, receipts)" in js
     i = js.index("function _recordRooms(")
-    assert "receipts]," in js[i:i + 2600]
+    # `receipts` still lands inside the first room; the Records-by-book
+    # sections (Ethan, 2026-09-01) ride directly after it in the same
+    # room, so the tail grew.
+    assert "+ recBookSections(d.book_records, scope)]," in js[i:i + 2700]
 
 
 def test_the_receipts_room_opens_on_the_receipts():

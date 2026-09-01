@@ -8249,6 +8249,58 @@ function marketWord(k) {
   ).join(" ");
 }
 
+/* Records by book, per sport — Ethan, 2026-09-01: "the edge bets have
+   a certain section and record spot, the most likely bets have a
+   record spot, and excetra. We should also label homers and touchdowns
+   and hits and receptions and rebounds and 3 pointers." Each book gets
+   its own headline W-L and ROI with its markets underneath, labeled by
+   the shipped market_words — never retyped here (the splits table
+   already paid for that lesson once). Scoped pages show the sport's
+   own books; the all-sports view pools them. */
+function recBookSections(br, scope) {
+  if (!br) return "";
+  const ORDER = [["edge", "Edge bets"], ["likely", "Most Likely"],
+                 ["longshots", "Long Shots"]];
+  let books;
+  if (scope && scope !== "all" && scope !== "intel") {
+    books = br[scope];
+  } else {
+    books = {};
+    for (const sp of Object.values(br)) {
+      for (const [k, b] of Object.entries(sp)) {
+        const t = books[k] || (books[k] = {
+          w: 0, l: 0, push: 0, net_u: 0, staked: 0, markets: {} });
+        t.w += b.w; t.l += b.l; t.push += b.push || 0;
+        t.net_u += b.net_u; t.staked += b.staked;
+        for (const [m, v] of Object.entries(b.markets || {})) {
+          const tm = t.markets[m] || (t.markets[m] = {
+            w: 0, l: 0, net_u: 0, staked: 0 });
+          tm.w += v.w; tm.l += v.l;
+          tm.net_u += v.net_u; tm.staked += v.staked;
+        }
+      }
+    }
+  }
+  if (!books || !Object.keys(books).length) return "";
+  const cards = ORDER.map(([key, label]) => {
+    const b = books[key];
+    if (!b || !(b.w + b.l)) return "";
+    const roi = b.staked ? b.net_u / b.staked : 0;
+    const head = `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
+      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI`;
+    const pretty = Object.fromEntries(Object.entries(b.markets || {})
+      .map(([m, v]) => [marketWord(m), v]));
+    return recBucketTable(head, pretty);
+  }).join("");
+  if (!cards) return "";
+  return `
+    <div class="section-title">Records by book
+      <span class="sub">— every kind of pick keeps its own record spot:
+      the staked edge bets, the Most Likely paper book, the long shots —
+      and how each market inside them did</span></div>
+    <div class="rec-buckets">${cards}</div>`;
+}
+
 function recSplitsSection(o) {
   const SPLITS = [["market", "Market", o.by_market],
                   ["side", "Side", o.by_side],
@@ -11041,7 +11093,8 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // on it — sat two tabs deep. It moves here, above the curve; the
      // honest under-100-settles refusal explains itself while the
      // sample builds.
-     (scoped ? "" : recLikelySection(d.likely)) + receipts],
+     (scoped ? "" : recLikelySection(d.likely)) + receipts
+     + recBookSections(d.book_records, scope)],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
