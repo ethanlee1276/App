@@ -188,6 +188,20 @@ CREATE INDEX IF NOT EXISTS idx_logs_period
 -- un-ANALYZEd file does not have. This makes it deterministic.
 CREATE INDEX IF NOT EXISTS idx_logs_game
     ON player_game_logs (sport, market, game_id, player);
+-- WHO, without caring WHAT. Every index above leads (sport, market, …),
+-- because the model reads one market at a time. The SITE does not: the
+-- player search, the profile head's team lookup, and the head-to-head
+-- (versus/opponents_of) all ask "everything on this man" — WHERE sport
+-- AND player, no market — and with nothing to use they degraded to
+-- scanning the sport's whole partition per query. Measured on a
+-- 2,030,400-row fixture: an NFL head-to-head 501ms → 111ms, a CFB
+-- name-prefix search 81ms → 5ms — and that is on a dev box with fast
+-- disk; the droplet's one core is where Ethan felt it (2026-09-01:
+-- "the versus button takes a long time to load"). season+period ride
+-- along so "most recent appearance" ordering comes straight off the
+-- index.
+CREATE INDEX IF NOT EXISTS idx_logs_player
+    ON player_game_logs (sport, player, season, period);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",

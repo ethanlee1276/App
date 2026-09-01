@@ -227,7 +227,10 @@ def test_an_empty_board_is_explained_not_apologised_for():
     # start), not its words — the first draft of this test matched the
     # words inside the fix's own comment, the same trap this suite has
     # now sprung four times.
-    apology = "No players match “${"
+    # Re-anchored 2026-09-01 when the apology grew the league's name in
+    # front (the scoped search must SAY its scope): the stable code form
+    # is now the tail of the sentence, not its head.
+    apology = "players match “${"
     assert body.index("No priced props on the") < body.index(apology), \
         "the empty-board branch must be tried before the search apology"
     j = body.index("if (!q) {")

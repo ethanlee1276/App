@@ -7474,7 +7474,6 @@ async function renderPlayers() {
         const drawn = full.filter((m) =>
           m.sport === "ufc" ? m.fighter : playerStats(m.player));
         const rest = hits.filter((m) => !drawn.some((d) => d.player === m.player));
-        const leagues = [...new Set(hits.map((m) => m.sport).filter(Boolean))];
         /* SAY WHEN THESE ARE GUESSES. The search reaches past an exact
            spelling now — swapped first and last name, a missing accent,
            a wrong letter — which is what stops an empty page for a name
@@ -7487,21 +7486,20 @@ async function renderPlayers() {
            guess, it is his name typed backwards. Calling that a "closest
            match" would apologise for finding exactly the right man. */
         const guessed = hits.length && hits.every((m) => (m.rank || 0) >= 3);
+        const lgName = LEAGUE_LABEL[state.sport] ||
+          String(state.sport || "").toUpperCase();
         host.innerHTML = `
           <div class="section-title minor">${
-            guessed ? "Closest matches" : "Found across every league"}
+            guessed ? "Closest matches" : `Found in ${escapeHtml(lgName)}`}
             <span class="sub">— ${guessed
-              ? `nothing we hold is spelled exactly “${escapeHtml(state.search)}”,
+              ? `no ${escapeHtml(lgName)} name we hold is spelled exactly
+                 “${escapeHtml(state.search)}”,
                  so ${drawn.length + rest.length > 1 ? "these are the nearest names"
                                                      : "this is the nearest name"}`
               : `nothing priced on tonight’s
                  ${escapeHtml(String(state.sport || "").toUpperCase())} board for
                  “${escapeHtml(state.search)}”, so this is what we store on
-                 ${drawn.length + rest.length > 1 ? "them" : "him"}`}${
-              leagues.length
-                ? `. Matches in ${leagues.map((l) =>
-                    escapeHtml(LEAGUE_LABEL[l] || l.toUpperCase())).join(", ")}`
-                : ""}</span></div>
+                 ${drawn.length + rest.length > 1 ? "them" : "him"}`}</span></div>
           <div class="player-grid">${drawn.map((m) => m.sport === "ufc"
             ? ufcProfileHTML(m) : profileHTML(m.player)).join("")}</div>
           ${rest.length ? `<div class="section-title minor">Also matching</div>` : ""}
@@ -7563,7 +7561,17 @@ async function renderPlayers() {
         board’s prop cards. The page fills as soon as a slate prices.</div>`;
       return;
     }
-    host.innerHTML = `<div class="empty">No players match “${escapeHtml(state.search)}”.</div>`;
+    /* SAY THE SCOPE. The search looks only at the league whose tab is
+       lit (Ethan, 2026-09-01: "if im on mlb then i should only be able
+       to search mlb and so forth") — so an empty answer must name the
+       league it looked in, or "we have nothing on him" and "you are on
+       the wrong tab" become indistinguishable again, which was the
+       whole 08-23 complaint about the last scoped box. */
+    host.innerHTML = `<div class="empty">No
+      ${escapeHtml(LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase())}
+      players match “${escapeHtml(state.search)}” — the search looks only at
+      the league whose tab is lit, so switch the sport up top to look in
+      another one.</div>`;
     return;
   }
   // MEASURED IN CHROMIUM, 2026-08-08: with no query this rendered 293 full
@@ -7702,22 +7710,25 @@ function playerBrowseCap() {
     && window.matchMedia("(max-width: 760px)").matches) ? 4 : 12;
 }
 
-/* The all-league search pair.
+/* The search pair — scoped to the tab you are standing on.
 
-   EVERY SPORT, WHATEVER TAB YOU ARE ON. Ethan, 2026-08-23: "i want the
-   search bar to be to search any player in every leauge … even if im
-   selected on nfl, i shoudl still be able to look up mlb or ufc or wnba
-   players." It shipped scoped to `state.sport`, which made an empty
-   result mean two very different things at once — "we have no logs on
-   him" and "you are standing on the wrong tab" — and left the visitor
-   no way to tell which. A search box you cannot trust to look is worse
-   than no search box.
+   THIS DECISION HAS NOW GONE BOTH WAYS, so the record matters. It
+   shipped scoped; Ethan, 2026-08-23: "even if im selected on nfl, i
+   shoudl still be able to look up mlb or ufc or wnba players" — so it
+   went league-wide. A week of mixed lists later, Ethan, 2026-09-01: "i
+   wanna switch that decicion … i wanna be able to search any player
+   only on what sport tabe we are on. if im on mlb then i should only be
+   able to search mlb and so forth." So it is scoped again — his call,
+   made with both versions lived in. The difference from the original
+   scoped box is that the EMPTY STATE now says the scope out loud, so
+   "we have nothing on him" and "you are on the wrong tab" no longer
+   look identical — which was the real 08-23 complaint.
 
-   `sport` still rides along as a PREFERENCE: the league you are on
-   leads the ranking, and every other league is behind it rather than
-   missing. Cached per (preference, query) because the input handler
-   re-renders on every keystroke and the answer for "jud" does not change
-   between letters typed and deleted.
+   Scoping is also a fifth of the work per keystroke: one league's
+   query instead of five plus the fighter store, on a one-core box.
+   Cached per (sport, query) because the input handler re-renders on
+   every keystroke and the answer for "jud" does not change between
+   letters typed and deleted.
 
    A FAILED FETCH IS CACHED FOR 30 SECONDS, NOT FOR THE SESSION. It was
    for the session, and on 2026-09-01 that turned a two-second service
@@ -7736,7 +7747,7 @@ async function leagueSearch(q) {
   if (hit && (hit.ok || Date.now() - hit.at < LEAGUE_RETRY_MS)) return hit.players;
   let players = [], ok = false;
   try {
-    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(state.sport)}`);
+    const r = await fetch(`/api/players/search?q=${encodeURIComponent(q)}&sport=${encodeURIComponent(state.sport)}&scope=sport`);
     if (r.ok) { players = (await r.json()).players || []; ok = true; }
   } catch (e) {}
   _leagueCache.set(key, { players, ok, at: Date.now() });

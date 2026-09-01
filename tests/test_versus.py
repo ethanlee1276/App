@@ -157,6 +157,35 @@ def test_no_db_degrades_to_empty_like_everything_else_here():
         "no log-backed sport, no head-to-head"
 
 
+def test_the_head_to_head_reads_an_index_not_the_whole_partition():
+    """Ethan, 2026-09-01: "the versus button takes a long time to load."
+    Every player_game_logs index led (sport, market, …) because the
+    model reads one market at a time — but the site asks "everything on
+    this man", and those queries were scanning the sport's entire
+    partition (measured on a 2M-row fixture: 501ms for one head-to-head
+    on a fast dev disk; the droplet's one core is where it hurt). The
+    plan, not the timing, is what a test can hold still."""
+    path = _fixture()
+    conn = _db.connect(path)
+    try:
+        for sql in (
+            "SELECT season, period, game_id, team, home, market, value "
+            "FROM player_game_logs WHERE sport=? AND player=? AND opponent=?",
+            "SELECT opponent, COUNT(DISTINCT game_id) FROM player_game_logs "
+            "WHERE sport=? AND player=? GROUP BY opponent",
+            "SELECT team, position FROM player_game_logs "
+            "WHERE sport=? AND player=? ORDER BY season DESC, period DESC "
+            "LIMIT 1",
+        ):
+            plan = " ".join(str(tuple(r)) for r in conn.execute(
+                f"EXPLAIN QUERY PLAN {sql}",
+                ("nfl", "Davante Adams") + (("SF",) if sql.count("?") == 3
+                                            else ())))
+            assert "idx_logs_player" in plan, (sql, plan)
+    finally:
+        conn.close()
+
+
 # --- the server route: exists, reads statlogs, gates nothing -----------------
 def test_the_server_serves_the_head_to_head_and_gates_it_not():
     src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()

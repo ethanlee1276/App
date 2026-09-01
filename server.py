@@ -2015,10 +2015,20 @@ class Handler(BaseHTTPRequestHandler):
         sport = (q.get("sport") or [""])[0].lower()
         term = (q.get("q") or [""])[0][:40]
         if (q.get("scope") or [""])[0].lower() == "sport":
-            if sport not in statlogs.SPORT_MARKETS:
+            # Ethan, 2026-09-01, reversing the 08-23 all-league decision:
+            # "i wanna be able to search any player only on what sport
+            # tabe we are on. if im on mlb then i should only be able to
+            # search mlb and so forth." The page sends scope=sport now,
+            # so this branch is the search — and the UFC tab's players
+            # live in the fighter store, not the history DB.
+            if sport == "ufc":
+                from engine.ufc import fighters
+                hits = fighters.search(term)
+            elif sport in statlogs.SPORT_MARKETS:
+                hits = statlogs.search(sport, term)
+            else:
                 return self._send(400, b'{"error":"no log-backed search '
                                        b'for this sport"}', ".json")
-            hits = statlogs.search(sport, term)
         else:
             # playersearch, not statlogs: fighters are not in the history
             # DB and never were, so the league-wide log search could not

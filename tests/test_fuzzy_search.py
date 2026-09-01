@@ -213,7 +213,10 @@ def test_the_page_says_when_it_is_showing_a_corrected_spelling():
     body = _fn(js, "async function renderPlayers(")
     assert "const guessed = hits.length && hits.every((m) => (m.rank || 0) >= 3);" in body
     assert "Closest matches" in body
-    assert "nothing we hold is spelled exactly" in body
+    # Tail of the sentence, not its head: the scoped search (2026-09-01)
+    # put the league's name in front — "no MLB name we hold is spelled
+    # exactly…" — and the honesty this pins lives in the rest.
+    assert "we hold is spelled exactly" in body
 
 
 def test_a_name_typed_backwards_is_not_called_a_guess():

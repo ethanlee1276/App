@@ -217,12 +217,37 @@ def test_one_league_can_still_be_asked_for_explicitly():
 
 # --- the page -------------------------------------------------------------
 
-def test_the_page_asks_for_every_league():
+def test_the_page_scopes_the_search_to_the_tab_and_says_so_when_empty():
+    """THE DECISION REVERSED, on the record. 2026-08-23: "even if im
+    selected on nfl, i shoudl still be able to look up mlb or ufc or
+    wnba players" — the box went league-wide. 2026-09-01: "i wanna
+    switch that decicion … if im on mlb then i should only be able to
+    search mlb and so forth" — scoped again, with both versions lived
+    in. What must NOT come back is the original scoped box's sin: an
+    empty answer that cannot be told apart from "wrong tab" — so the
+    apology now names the league it looked in and points at the tabs.
+    The engine keeps its all-league search for callers that want it;
+    this pins only what the PAGE asks for."""
     js = _js()
     i = js.index("async function leagueSearch(")
-    body = js[i:i + 900]
-    assert "/api/players/search?q=" in body
-    assert "sport=${encodeURIComponent(state.sport)}&q=" not in body
+    body = js[i:i + 1200]
+    assert "&scope=sport" in body, "the page's search lost its tab scope"
+    apology = _fn(js, "async function renderPlayers(")
+    k = apology.index("players match “${")
+    assert "LEAGUE_LABEL[state.sport]" in apology[k - 300:k], \
+        "an empty scoped answer must name the league it looked in"
+    assert "switch the sport" in apology[k:k + 300]
+
+
+def test_the_ufc_tab_still_finds_fighters_under_the_scope():
+    """Fighters are not in the history DB — a scope branch that only
+    knows statlogs turns the UFC tab's search box into a 400."""
+    src = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
+    i = src.index("def _players_search(")
+    body = src[i:src.index("\n    def ", i + 10)]
+    j = body.index('== "sport"')
+    scoped = body[j:j + 600]
+    assert 'sport == "ufc"' in scoped and "fighters.search(term)" in scoped
 
 
 def test_a_failed_search_is_retried_not_cached_for_the_session():
