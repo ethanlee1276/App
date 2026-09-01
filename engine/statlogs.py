@@ -322,7 +322,8 @@ def search_all(q: str, limit: int = 12, prefer: str = "",
     if not q:
         return []
     order = [s for s in source_order(prefer) if s in SPORT_MARKETS]
-    return merge(search_by_sport(q, limit, order, db_path), q, limit, order)
+    return merge(search_by_sport(q, limit, order, db_path), q, limit, order,
+                 prefer=prefer)
 
 
 def for_player(sport: str, player: str, db_path=None) -> dict:

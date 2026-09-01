@@ -138,7 +138,8 @@ def rank(name: str, q: str):
     return None
 
 
-def merge(per_source: dict, q: str, limit: int, order) -> list[dict]:
+def merge(per_source: dict, q: str, limit: int, order,
+          prefer: str = "") -> list[dict]:
     """Round-robin over already-ranked lists, best matches first.
 
     ONE ROUND PER TIER, not one round overall. A guessed spelling from a
@@ -147,6 +148,15 @@ def merge(per_source: dict, q: str, limit: int, order) -> list[dict]:
     source offers its rank-0 hits before any source offers a rank-1, and
     so on down. Within a tier the round-robin is what keeps a short list
     from being filled by one league.
+
+    THE TAB YOU ARE ON EMPTIES ITS SHELF FIRST. Ethan, 2026-09-01: "MLB
+    players are popping up on the NFL search." They belong there — his
+    own 2026-08-23 ask is why the box spans leagues at all — but the
+    round-robin WOVE them between the NFL names on the NFL tab, which
+    reads as the search not knowing where you are standing. So within
+    each tier, ``prefer`` now lists ALL of its hits before the other
+    leagues take their turns. Across tiers nothing moves: a name that
+    starts with what you typed still beats the tab you happen to be on.
     """
     order = [s for s in order if s in per_source]
     tiers = []
@@ -156,10 +166,14 @@ def merge(per_source: dict, q: str, limit: int, order) -> list[dict]:
                       for s in order})
     out: list[dict] = []
     for tier in tiers:
+        if prefer in tier:
+            out.extend(tier[prefer][:max(0, limit - len(out))])
         depth = 0
         while len(out) < limit:
             took = False
             for s in order:
+                if s == prefer:
+                    continue
                 lst = tier[s]
                 if depth < len(lst):
                     out.append(lst[depth])
@@ -193,4 +207,4 @@ def search(q: str, limit: int = 12, prefer: str = "",
         q, limit, [s for s in order if s != "ufc"], db_path))
     # A store that is missing is not an error — see fighters.load.
     per["ufc"] = fighters.search(q, limit=limit, path=ufc_path)
-    return merge(per, q, limit, order)
+    return merge(per, q, limit, order, prefer=prefer)

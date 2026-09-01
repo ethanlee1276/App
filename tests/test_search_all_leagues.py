@@ -124,6 +124,27 @@ def test_the_preferred_league_leads_but_never_excludes():
         assert len({h["sport"] for h in hits}) == 4, tab
 
 
+def test_the_tab_you_are_on_empties_its_shelf_before_other_leagues():
+    """Ethan, 2026-09-01: "MLB players are popping up on the NFL search."
+    They stay findable — his 2026-08-23 ask is why the box spans leagues
+    at all — but the round-robin WOVE them between the NFL names on the
+    NFL tab. Within a tier, the tab's own league now lists ALL of its
+    names before another league takes a turn."""
+    path = _db_with_all_leagues()
+    conn = db.connect(path)
+    db.upsert_player_logs(conn, [{
+        "sport": "nfl", "season": 2026, "period": f"{i:03d}",
+        "game_id": f"nz2{i}", "player": "Zamir White", "team": "LV",
+        "opponent": "OPP", "position": "RB", "home": 1,
+        "market": "rush_yds", "value": 40.0} for i in range(6)])
+    conn.close()
+    hits = statlogs.search_all("z", limit=12, prefer="nfl", db_path=path)
+    sports = [h["sport"] for h in hits]
+    assert sports[:2] == ["nfl", "nfl"], \
+        f"an MLB name was woven between the NFL hits: {sports}"
+    assert len(set(sports)) == 4, "the other leagues must still be reachable"
+
+
 def test_a_leading_match_outranks_the_tab_you_are_standing_on():
     """The preference is a tie-break, not a thumb on the scale: someone
     whose name STARTS with what you typed is the better answer even when
