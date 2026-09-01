@@ -511,9 +511,58 @@ def american_to_decimal(odds: float) -> float:
 
 
 def decimal_to_american(dec: float) -> int:
+    """Decimal → American. Even money (2.0) is spelled −100, not +100:
+    Ethan's call in the 2026-09-01 QA audit — the two are the same
+    payout and a decimal cannot remember which spelling it came from,
+    so one spelling has to be chosen, and it is this one."""
     if dec <= 1.0:
         return -100000
-    return int(round((dec - 1) * 100)) if dec >= 2.0 else int(round(-100 / (dec - 1)))
+    return int(round((dec - 1) * 100)) if dec > 2.0 else int(round(-100 / (dec - 1)))
+
+
+def check_ticket(sport: str, legs: list[dict]) -> dict:
+    """The engine's parlay rules, applied to a ticket a PERSON built.
+
+    Ethan, 2026-09-01, closing the QA audit's open question: the user
+    slip must obey the same rule as the model's own tickets — "3 legs",
+    with conflicting picks detected and handled. This is the check the
+    slip calls as legs are added: every pair goes through `relate`, the
+    §3 clash taxonomy. A pair the taxonomy KILLS (or a duplicate) makes
+    the ticket refusable, with the mechanism as the reason; a merely
+    correlated pair is allowed and named, so the reader knows the
+    combined price is not what independence would say.
+
+    Returns ``{"ok", "legs", "reason", "pair", "warnings"}`` — never
+    raises: a malformed leg is skipped, not a 500.
+    """
+    # A leg is a named pick — a player or a game (home/away) with a
+    # market. Two nameless legs would otherwise share the empty game key
+    # and be "two unders in one game" to the taxonomy; junk is dropped,
+    # not judged (same cleaning engine/social.py's share applies).
+    clean = [l for l in (legs or []) if isinstance(l, dict)
+             and isinstance(l.get("market"), str) and l.get("market")
+             and ((isinstance(l.get("player"), str) and l.get("player"))
+                  or (l.get("home") and l.get("away")))]
+    if len(clean) > MAX_LEGS:
+        return {"ok": False, "legs": len(clean), "pair": None,
+                "reason": f"{MAX_LEGS} legs is the ceiling",
+                "warnings": []}
+    warnings: list[dict] = []
+    for i in range(len(clean)):
+        for j in range(i + 1, len(clean)):
+            try:
+                r = relate(sport, clean[i], clean[j])
+            except Exception:                              # noqa: BLE001
+                continue
+            if r.verdict in ("kill", "duplicate"):
+                return {"ok": False, "legs": len(clean), "pair": [i, j],
+                        "reason": r.mechanism or r.verdict,
+                        "warnings": warnings}
+            if r.clash or abs(r.rho) >= 0.15:
+                warnings.append({"pair": [i, j], "rho": round(r.rho, 2),
+                                 "reason": r.mechanism})
+    return {"ok": True, "legs": len(clean), "pair": None, "reason": "",
+            "warnings": warnings}
 
 
 # --- §3: the clash taxonomy --------------------------------------------------

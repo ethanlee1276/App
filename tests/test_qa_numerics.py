@@ -52,15 +52,15 @@ def test_american_to_decimal_by_hand():
 
 def test_decimal_to_american_round_trips_and_the_even_money_seam():
     assert P.decimal_to_american(2.5) == 150
-    assert P.decimal_to_american(2.0) == 100          # exactly even money
+    assert P.decimal_to_american(2.0) == -100      # even money, spelled −100 (Ethan, 2026-09-01)          # exactly even money
     assert P.decimal_to_american(1 + 100 / 110) == -110
     assert P.decimal_to_american(1.5) == -200
-    for o in (-110, -150, -250, +120, +300, +100):
+    for o in (-110, -150, -250, +120, +300, -100):
         assert P.decimal_to_american(P.american_to_decimal(o)) == o, o
     # -100 and +100 are the same price (decimal 2.0); a decimal cannot
-    # remember which spelling it came from, so the round trip lands on
-    # +100. Equivalent money, a display seam only — logged in QA_AUDIT.md.
-    assert P.decimal_to_american(P.american_to_decimal(-100)) == 100
+    # remember which spelling it came from, so ONE spelling is chosen:
+    # −100, Ethan's call in the 2026-09-01 QA audit. +100 lands there too.
+    assert P.decimal_to_american(P.american_to_decimal(100)) == -100
 
 
 # --- vig removal --------------------------------------------------------------

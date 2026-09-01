@@ -66,7 +66,7 @@ MAX_NOTE = 280
 #: Legs a shared parlay may carry. Two is the smallest parlay there is;
 #: eight is where every book stops taking props seriously anyway.
 MIN_PARLAY_LEGS = 2
-MAX_PARLAY_LEGS = 8
+MAX_PARLAY_LEGS = 3     # the engine's own cap — Ethan, 2026-09-01: "3 legs"
 
 #: Friend requests one account may have outstanding. The cap is what
 #: keeps name-search from becoming the spam channel the module header

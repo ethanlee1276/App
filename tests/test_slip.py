@@ -52,10 +52,13 @@ def test_the_slip_survives_a_reload_and_holds_one_board():
     assert "SLIP_MAX" in body
 
 
-def test_the_ceiling_is_eight_legs():
-    assert "const SLIP_MAX = 8;" in APP
+def test_the_ceiling_is_three_legs():
+    """Was eight. Ethan, 2026-09-01, closing the QA audit's open question
+    on whether the reader's own slip follows the model's parlay rule:
+    "3 legs". The slip and the share must agree on the number."""
+    assert "const SLIP_MAX = 3;" in APP
     src = _read("engine", "social.py")
-    assert "MAX_PARLAY_LEGS = 8" in src, \
+    assert "MAX_PARLAY_LEGS = 3" in src, \
         "the slip and the share disagree about how long a ticket can be"
 
 

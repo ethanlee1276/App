@@ -27053,7 +27053,7 @@ function initialView() {
    engine's correlation-priced SGP tickets are a different product and
    keep their own page. */
 const SLIP_KEY = "qb_slip_v1";
-const SLIP_MAX = 8;
+const SLIP_MAX = 3;   // the engine's own cap — Ethan, 2026-09-01: "3 legs"
 let _slip = null;
 let _slipOpen = false;
 
@@ -27113,7 +27113,7 @@ function slipToggle(r) {
       return false;
     }
     if (s.legs.length >= SLIP_MAX) {
-      tfToast(`${SLIP_MAX} legs is the ceiling — a longer ticket is a lottery slip.`);
+      tfToast(`${SLIP_MAX} legs is the ceiling — the same rule the model's own tickets follow.`);
       return false;
     }
     const kind = r.bet_type || r.market || "";
@@ -27125,14 +27125,20 @@ function slipToggle(r) {
           market_label: r.market_label || r.market,
           side: r.side || "", line: r.line != null ? r.line : null,
           odds: r.odds != null ? r.odds : null, team: r.team || "",
-          book: r.book || "" }
+          book: r.book || "",
+          // What the engine's clash rules key on (engine/parlays.game_key):
+          // the opponent and the date name the GAME, so two legs from one
+          // game can be told apart from two legs that merely share a club.
+          opponent: r.opponent || "", game_date: r.game_date || r.date || "" }
       : { gid: gameBetId(r), label: gameBetSlipLabel(r),
           matchup: r.matchup || `${r.away || ""} @ ${r.home || ""}`,
           market: kind,
           market_label: GAME_MARKET_WORDS[kind] || r.market_label || kind,
           side: r.side || "", line: r.line != null ? r.line : null,
           odds: r.odds != null ? r.odds : null, team: r.team || "",
-          book: r.book || "", bet_type: r.bet_type || "" });
+          book: r.book || "", bet_type: r.bet_type || "",
+          home: r.home || "", away: r.away || "",
+          game_date: r.game_date || r.date || "" });
     if (!s.legs.length || s.legs.length === 1) _slipOpen = false;
   }
   s.sport = s.legs.length ? state.sport : "";
@@ -27140,7 +27146,41 @@ function slipToggle(r) {
     ? (r.game_date || r.date || (state.data || {}).date || s.date || "") : "";
   slipSave();
   slipRender();
+  if (i < 0 && s.legs.length >= 2) slipCheck(key);
   return true;
+}
+
+/* THE ENGINE'S RULES, ON THE READER'S OWN TICKET. Ethan, 2026-09-01,
+   closing the QA audit's open question: the slip obeys the same rule as
+   the model's tickets — three legs, conflicts detected and handled. The
+   leg is added at once (the tap must feel instant), then the ticket is
+   sent to /api/parlay/check, which runs every pair through the engine's
+   clash taxonomy. A pair the engine KILLS (same player twice, both sides
+   of one game, a duplicate) takes the new leg back off with the reason;
+   a merely correlated pair stays and is named, because the combined
+   price the panel prints assumes independence and the reader should
+   know when it is flattering them. A failed request changes nothing —
+   the cap and the both-sides guard already hold on the device. */
+async function slipCheck(addedKey) {
+  const s = slipState();
+  let got = null;
+  try {
+    const r = await fetch("/api/parlay/check", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport: s.sport, legs: s.legs }) });
+    if (r.ok) got = await r.json();
+  } catch (e) {}
+  if (!got) return;
+  if (got.ok === false) {
+    const cur = slipState();
+    const i = cur.legs.findIndex((l) => slipLegKey(l) === addedKey);
+    if (i >= 0) { cur.legs.splice(i, 1); slipSave(); slipRender(); }
+    tfToast(`Not added — ${got.reason || "the engine's parlay rules refuse that pair"}.`);
+    return;
+  }
+  if ((got.warnings || []).length) {
+    tfToast(`Heads up — ${got.warnings[0].reason || "those legs are correlated"}; the combined price assumes they are not.`);
+  }
 }
 
 /* The book's arithmetic: decimal odds multiply, independence assumed —
@@ -27155,8 +27195,10 @@ function slipAmerican() {
     if (d == null) return null;
     dec *= d;
   }
-  return dec >= 2 ? Math.round((dec - 1) * 100)
-                  : -Math.round(100 / (dec - 1));
+  // Even money (decimal 2.0) is spelled −100, matching the engine's
+  // decimal_to_american — Ethan's call, 2026-09-01.
+  return dec > 2 ? Math.round((dec - 1) * 100)
+                 : -Math.round(100 / (dec - 1));
 }
 
 function slipImplied() {

@@ -894,7 +894,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._tailfade_post(
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
         if (parsed.path.startswith("/api/social/")
-                or parsed.path.startswith("/api/alerts/")):
+                or parsed.path.startswith("/api/alerts/")
+                or parsed.path in ("/api/parlay/check", "/api/parlay/check/")):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -911,6 +912,8 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path.startswith("/api/alerts/"):
                 return self._alerts_post(
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
+            if parsed.path.startswith("/api/parlay/check"):
+                return self._parlay_check(body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
@@ -2053,6 +2056,26 @@ class Handler(BaseHTTPRequestHandler):
         stats = statlogs.for_player(sport, player)
         return self._send(200, json.dumps(
             {"player": player, "stats": stats}).encode(), ".json")
+
+    def _parlay_check(self, body: dict):
+        """The engine's parlay rules for a ticket the reader is building.
+
+        Ethan, 2026-09-01: the user slip obeys the model's own rule —
+        three legs, conflicts detected. Ungated and unauthenticated on
+        purpose: it reads nothing but the legs it is sent and returns a
+        verdict; there is no record to protect. Rate-limited with the
+        other reads."""
+        from engine.parlays import check_ticket
+        sport = str(body.get("sport") or "").strip().lower()[:8]
+        legs = body.get("legs")
+        legs = [l for l in (legs if isinstance(legs, list) else [])
+                if isinstance(l, dict)][:12]
+        clean = []
+        for l in legs:
+            clean.append({k: (str(v)[:60] if isinstance(v, str) else v)
+                          for k, v in l.items() if isinstance(k, str)})
+        return self._send(200, json.dumps(check_ticket(sport, clean)).encode(),
+                          ".json")
 
     def _players_versus(self, q):
         """A player's history against one opponent — the head-to-head.
