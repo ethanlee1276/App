@@ -5362,9 +5362,26 @@ function renderLikely() {
   const shelves = (state.data.board_shelves || [])
     .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow) }))
     .filter((sh) => sh.rows.length);
+  /* THE JUMP BAR. Ethan, 2026-09-02, circling a shelf head halfway down
+     his screen: "we should put home run and hits and shit like that all
+     at the top so we can not have too scroll and just click. Do the
+     same thing for nfl and CFB and nba and wnba too." Built from the
+     same shelves array every sport publishes — football gets touchdown
+     chips, baseball gets homers, hoops gets threes — with no market
+     name typed here, so a new shelf grows its own chip. */
+  const jump = shelves.length > 1 ? `<div class="std-chips likely-jump">
+      ${shelves.map((sh) => `<button class="al-cat" type="button"
+        data-jump="shelf-${escapeAttr(sh.key || "")}">${escapeHtml(sh.title)}
+        <span class="mini" style="opacity:.6">${sh.rows.length}</span></button>`).join("")}
+    </div>` : "";
   host.innerHTML = shelves.length
-    ? shelves.map(likelyShelf).join("")
+    ? jump + shelves.map(likelyShelf).join("")
     : `<div class="cards">${rows.map(likelyCard).join("")}</div>`;
+  host.querySelectorAll("[data-jump]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const el = document.getElementById(b.dataset.jump);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
   revealChildren(host);
 }
 
@@ -5414,7 +5431,7 @@ function likelyShelf(sh) {
   const note = shut && shut === rows.length
     ? `<span class="mini" style="opacity:.7">read-only — we don’t stake this
        market</span>` : "";
-  return `<section class="likely-shelf">
+  return `<section class="likely-shelf" id="shelf-${escapeAttr(sh.key || "")}">
     <div class="shelf-head">
       <h3 class="shelf-title">${escapeHtml(sh.title)}
         <span class="mini" style="opacity:.6">${rows.length}</span></h3>

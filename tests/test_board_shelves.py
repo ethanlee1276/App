@@ -158,8 +158,10 @@ def test_it_falls_back_to_the_flat_list_on_an_older_payload():
     # assignment, so the anchor starts inside renderLikely itself. The
     # fallback it guards is unchanged.
     fn = src.index("function renderLikely()")
-    at = src.index("const shelves = (state.data.board_shelves || [])", fn)
-    assert "rows.map(likelyCard)" in src[at:at + 800]
+    body = src[fn:src.index("\nfunction ", fn + 10)]
+    assert "const shelves = (state.data.board_shelves || [])" in body
+    assert 'rows.map(likelyCard).join("")' in body, \
+        "the flat-list fallback left renderLikely"
 
 
 def test_the_host_is_not_a_card_grid_any_more():
@@ -169,6 +171,27 @@ def test_the_host_is_not_a_card_grid_any_more():
     assert '<div class="cards" id="likely">' not in src
     assert '<div id="likely"></div>' in src
 
+
+
+def test_the_jump_bar_puts_every_shelf_one_tap_from_the_top():
+    """Ethan, 2026-09-02, circling a shelf head halfway down his phone:
+    "we should put home run and hits and shit like that all at the top
+    so we can not have too scroll and just click. Do the same thing for
+    nfl and CFB and nba and wnba too." The chips are built from the
+    SAME shelves array every sport publishes — no market name typed in
+    the template, so each league grows its own chips and a new shelf
+    arrives with one."""
+    src = _src("web", "js", "app.js")
+    fn = src.index("function renderLikely()")
+    body = src[fn:src.index("\nfunction likelyShelf", fn)]
+    assert 'data-jump="shelf-${escapeAttr(sh.key || "")}"' in body
+    assert "scrollIntoView" in body
+    assert "shelves.length > 1" in body, "one shelf needs no bar"
+    shelf = src[src.index("function likelyShelf(sh)"):]
+    shelf = shelf[:shelf.index("\nfunction ", 10)]
+    assert 'id="shelf-${escapeAttr(sh.key || "")}"' in shelf
+    for word in ("Home Runs", "Touchdowns", "Hits"):
+        assert word not in body, f"{word} hardcoded — chips must be data-driven"
 
 # --- the menu -------------------------------------------------------------
 def _betting_group():
