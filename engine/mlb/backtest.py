@@ -57,7 +57,8 @@ def settled_props_from_logs(entries: list[dict], market: str,
                             config: RuleConfig | None = None, model=None,
                             real_lines: dict | None = None,
                             form_weights: dict | None = None,
-                            player_adjust=None, player_record=None
+                            player_adjust=None, player_record=None,
+                            game_for_index=None
                             ) -> tuple[list[SettledProp], int]:
     """The walk-forward itself, returning the per-prop settled rows.
 
@@ -76,6 +77,14 @@ def settled_props_from_logs(entries: list[dict], market: str,
     actually have taken** — which is the difference between "does this beat a
     trailing average?" and "would this have beaten the book?". Games without a
     harvested price fall back to the naive baseline.
+
+    ``game_for_index(entry, i)`` — optionally, the CONTEXT each historical
+    game was actually played in (an MLBGame; today that means the
+    ballpark, named by the log's own team/opponent/home columns). The
+    default stays the neutral stadium, which is the honest baseline:
+    weather is unknowable historically, and a context walk exists to be
+    COMPARED against neutral, not to replace it silently — see
+    rankfit.context_report for the A/B that decides.
     """
     config = config or RuleConfig()
     game = _neutral_game()
@@ -131,7 +140,8 @@ def settled_props_from_logs(entries: list[dict], market: str,
             # accumulates the RAW blend's (projected, actual) sums — raw,
             # or the correction would learn to correct itself.
             mult = player_adjust(e["name"]) if player_adjust else None
-            proj = build_mlb_projection(prop, game, model=model,
+            g = game_for_index(e, i) if game_for_index else game
+            proj = build_mlb_projection(prop, g, model=model,
                                         form_weights=form_weights,
                                         player_mult=mult)
             if player_record is not None:
@@ -139,7 +149,7 @@ def settled_props_from_logs(entries: list[dict], market: str,
             # The naive line above IS the baseline we're measuring against, so
             # the live "placeholder line" guard doesn't apply here.
             rec = evaluate_mlb_prop(prop, proj, allow_synthetic_line=True)
-            decision = apply_mlb_rules(rec, prop, game, proj, config)
+            decision = apply_mlb_rules(rec, prop, g, proj, config)
             settled.append(SettledProp(
                 player=e["name"], market=market, line=line, odds=rec.odds,
                 hit_prob=rec.hit_prob, raw_prob=rec.raw_prob,
@@ -156,13 +166,14 @@ def backtest_from_logs(entries: list[dict], market: str, min_history: int = 8,
                        limit: int = 40, config: RuleConfig | None = None,
                        model=None, real_lines: dict | None = None,
                        form_weights: dict | None = None,
-                       player_adjust=None, player_record=None) -> BacktestReport:
+                       player_adjust=None, player_record=None,
+                       game_for_index=None) -> BacktestReport:
     """Walk forward and aggregate — see ``settled_props_from_logs``."""
     settled, real_used = settled_props_from_logs(
         entries, market, min_history=min_history, limit=limit,
         config=config, model=model, real_lines=real_lines,
         form_weights=form_weights, player_adjust=player_adjust,
-        player_record=player_record)
+        player_record=player_record, game_for_index=game_for_index)
     report = evaluate(settled)
     report.used_real_lines = real_used
     report.total_priced = len(settled)

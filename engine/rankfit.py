@@ -92,6 +92,78 @@ def rank_auc(sport: str, market: str, store: dict | None = None):
     return got.get("auc") if got else None
 
 
+def _park_context():
+    """``game_for_index`` for the MLB walk: each historical game in the
+    ballpark it was actually played in, named by the log's own
+    team/opponent/home columns — static factors, so nothing the walk
+    sees postdates the game it is predicting."""
+    from .mlb.models import MLBGame
+    from .mlb.parks import park_of_game
+
+    def game_for_index(e, i):
+        def at(key):
+            lst = e.get(key) or []
+            return lst[i] if i < len(lst) else ""
+        team, opp = at("teams"), at("opps")
+        home = bool(at("homes"))
+        park = park_of_game(team, opp, home)
+        return MLBGame(home=(team if home else opp),
+                       away=(opp if home else team),
+                       park=park.key if park else "generic")
+    return game_for_index
+
+
+def context_report(conn, sport: str = "mlb", markets=None,
+                   log=print) -> list[str]:
+    """Baseline vs park-context ranking AUC, per market — the A/B.
+
+    The standing finding this answers: the walk replays history in a
+    NEUTRAL stadium, so the venue layer the handicapping script wired
+    into the live model is invisible to the rank store's numbers. This
+    runs each market twice — neutral, then with every game in its real
+    ballpark — and prints both AUCs side by side. It writes NOTHING:
+    adoption (making the context walk the store's standard) is a
+    decision for whoever reads the deltas, not a side effect of
+    measuring them. MLB only — it is the sport whose logs carry venue
+    context and whose engine prices it.
+    """
+    if sport != "mlb":
+        return [f"context report: no venue-aware walk for {sport}"]
+    from . import calibrate as _cal
+    from . import db as _db
+    from .logwalk import walk
+
+    lines: list[str] = []
+    gfi = _park_context()
+    for market in markets or MARKETS.get(sport, ()):
+        key = f"{sport}:{market}"
+        try:
+            entries = _db.entries_for_market(conn, sport, market)
+            if not entries:
+                lines.append(f"context {key}: no ingested logs")
+                continue
+            with _cal.disabled():
+                base = walk(sport, entries, market)
+                ctx = walk(sport, entries, market, game_for_index=gfi)
+            a, b = auc(base.pairs), auc(ctx.pairs)
+        except Exception as exc:                          # noqa: BLE001
+            lines.append(f"context {key}: walk failed — {exc}")
+            continue
+        if a is None or b is None or len(base.pairs) < MIN_PAIRS:
+            lines.append(f"context {key}: too thin to compare "
+                         f"({len(base.pairs):,} pairs)")
+            continue
+        word = ("park context RANKS BETTER" if b > a + 0.002
+                else "park context ranks worse" if b < a - 0.002
+                else "no measurable difference")
+        lines.append(f"context {key}: neutral {a:.4f} → in-park {b:.4f} "
+                     f"({(b - a) * 100:+.2f} pts on {len(ctx.pairs):,} "
+                     f"pairs) — {word}")
+    for ln in lines:
+        log(f"  {ln}")
+    return lines
+
+
 def measure(conn, sport: str, markets=None, log=print,
             path: Path | str = STORE) -> list[str]:
     """Walk each market forward, store what the sample supports.

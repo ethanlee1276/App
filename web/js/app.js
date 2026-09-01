@@ -24113,7 +24113,7 @@ async function renderUFC() {
     return;
   }
 
-  const methodBar = (m) => {
+  const methodBar = (m, card) => {
     const segs = [["a_ko", "var(--bad)"], ["a_sub", "var(--plum)"],
                   ["a_dec", "var(--brand)"], ["b_dec", "var(--cyan)"],
                   ["b_sub", "var(--warn)"], ["b_ko", "var(--good)"]];
@@ -24123,7 +24123,18 @@ async function renderUFC() {
     </div>
     <div style="display:flex;justify-content:space-between;color:var(--text-mute);font-size:var(--fs-xs);margin-top:3px">
       <span>KO ${pctv(m.a_ko)} · SUB ${pctv(m.a_sub)} · DEC ${pctv(m.a_dec)}</span>
-      <span>distance ${pctv(m.distance)}</span></div>`;
+      <span>distance ${pctv(m.distance)}${
+        /* The duration read (script §1.3, engine/ufc/triangle.py):
+           E[minutes] over the front-loaded hazard prior, bent by the
+           fight's own profile. Assumed three rounds and SAID — the feed
+           has no scheduled-rounds field, so a main event's number is
+           knowably conservative rather than silently wrong. */
+        card && card.e_minutes
+          ? ` · ~${card.e_minutes} min${card.hazard_tilt === "late"
+              ? " (late-tilted)" : card.hazard_tilt === "flat"
+              ? " (flat hazard)" : ""}${(card.scheduled_rounds || 3) === 3
+              ? "" : ` of ${card.scheduled_rounds * 5}`}`
+          : ""}</span></div>`;
   };
 
   /* The bet is no longer always the moneyline. Books derive method props
@@ -24169,7 +24180,7 @@ async function renderUFC() {
         <div class="metric"><div class="k">Edge</div><div class="v pos">+${(p.edge * 100).toFixed(1)}pts</div></div>
         <div class="metric primary"><div class="k">EV</div><div class="v pos">+${(p.ev * 100).toFixed(1)}%</div></div>
       </div>
-      ${methodBar(p.method || {})}
+      ${methodBar(p.method || {}, p)}
       <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">
         ${(p.style_notes || []).map(escapeHtml).join(" · ")} · hold ${(p.hold * 100).toFixed(1)}%
         · stake ${p.stake_units}u${p.required_edge ? ` · needs ${(p.required_edge * 100).toFixed(1)}%` : ""}</div>

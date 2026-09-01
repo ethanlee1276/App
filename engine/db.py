@@ -608,8 +608,8 @@ def entries_for_market(conn, sport: str, market: str,
                        min_games: int = 8, seasons: list[int] | None = None) -> list[dict]:
     """Chronological per-player values for a market, as the backtest's
     ``entries`` shape: ``[{"name", "values": [...]}, ...]``."""
-    q = ("SELECT player, value, period FROM player_game_logs "
-         "WHERE sport=? AND market=?")
+    q = ("SELECT player, value, period, team, opponent, home "
+         "FROM player_game_logs WHERE sport=? AND market=?")
     args: list = [sport, market]
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
@@ -618,12 +618,23 @@ def entries_for_market(conn, sport: str, market: str,
 
     grouped: dict[str, list[float]] = {}
     dates: dict[str, list[str]] = {}
+    teams: dict[str, list[str]] = {}
+    opps: dict[str, list[str]] = {}
+    homes: dict[str, list[int]] = {}
     for row in conn.execute(q, args):
         grouped.setdefault(row["player"], []).append(float(row["value"]))
         # ``period`` is the game's real date (see engine.ingest), which is what
         # lets a backtest line each game up with the price offered that day.
         dates.setdefault(row["player"], []).append(str(row["period"]))
-    return [{"name": name, "values": vals, "dates": dates.get(name, [])}
+        # WHERE each game happened, for the context-aware walk: team +
+        # home flag name the park, so a replay can re-run history with
+        # the venue layer switched on instead of a neutral stadium.
+        teams.setdefault(row["player"], []).append(str(row["team"] or ""))
+        opps.setdefault(row["player"], []).append(str(row["opponent"] or ""))
+        homes.setdefault(row["player"], []).append(int(row["home"] or 0))
+    return [{"name": name, "values": vals, "dates": dates.get(name, []),
+             "teams": teams.get(name, []), "opps": opps.get(name, []),
+             "homes": homes.get(name, [])}
             for name, vals in grouped.items() if len(vals) >= min_games]
 
 
