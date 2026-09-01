@@ -103,6 +103,20 @@ MIN_RANK_AUC = 0.60
 #: not a likelihood — the same guard the touchdown watch uses.
 SANE_ODDS = (-100000, 2000)
 
+#: The heaviest price the board will show. Ethan, 2026-09-01, reading
+#: the likely book's first settled night (52/73 won, ROI -11.2%, rows
+#: at -800/-1200/-1800): "i dont wanna be betting on -1200 or -1800
+#: bets. the point of the most likley page is to push bets based of
+#: game data, game script, weather, offense, defense... not just
+#: grabbing random -1200 props. and thats for every sport." The model
+#: WAS using all of that — the probabilities were calibrated (claimed
+#: 75%, landed 71%) — but the gate never asked whether a row was a bet
+#: a human would want, and baseball's most-likely outcomes are mostly
+#: heavy-juice failures to do things. At -250 a bet needs 71.4% to
+#: break even; past it, "most likely" stops being a pick and becomes
+#: chalk.
+HEAVIEST_PRICE = -250
+
 #: How many rows the board carries per sport before it stops being a
 #: ranking and starts being a dump.
 LIMIT = 40
@@ -215,6 +229,14 @@ def admissible(row: dict) -> str:
         return "no real market price"
     if not _sane(row.get("odds")):
         return "price a book could not have posted"
+    # The two product refusals (Ethan, 2026-09-01 — see HEAVIEST_PRICE):
+    # the board shows who's most likely to DO something, priced like a
+    # bet. An UNDER is a wager on failure — the most likely outcome of
+    # most baseball nights, and not what anyone opens a picks page for.
+    if (row.get("side") or "").lower() == "under":
+        return "a bet on something not happening"
+    if int(row["odds"]) < HEAVIEST_PRICE:
+        return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
         return "disagrees with the market by more than we credit"
     return ""

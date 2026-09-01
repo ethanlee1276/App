@@ -389,6 +389,37 @@ def test_an_emptied_board_can_say_why():
     assert got["rows"] == 0
 
 
+
+# --- the board shows bets, not chalk (Ethan, 2026-09-01) --------------------
+def test_an_under_is_never_a_top_pick():
+    """First settled night of the MLB likely book: 52/73 won, ROI -11.2%,
+    and nearly every row an UNDER at -300 to -1800. Ethan: "the point of
+    the most likley page is to push bets... too put together the most
+    likley bets too hit, not just grabbing random -1200 props. and thats
+    for every sport." The board shows who's most likely to DO something."""
+    rows = K.build([_prop(side="under", prob=0.85, odds=-180)])
+    assert rows == [], rows
+    # Asserted on the gate itself — from_prop's cheap pre-filter may
+    # refuse first (uncensused, by design), but admissible is the one
+    # bar every maker answers to.
+    row = {"model_prob": 0.85, "side": "under", "odds": -180,
+           "book": "DK", "implied_prob": 0.8}
+    assert K.admissible(row) == "a bet on something not happening"
+
+
+def test_chalk_beyond_the_price_cap_is_refused_everywhere():
+    """-250 is the line: past it a 'most likely' row is a fee, not a
+    pick. The cap lives in admissible — the ONE bar — so every sport's
+    board inherits it, watch rows included."""
+    assert K.build([_prop(odds=K.HEAVIEST_PRICE)]),         "the cap itself is still a showable price"
+    assert K.build([_prop(odds=K.HEAVIEST_PRICE - 1,
+                               prob=0.85)]) == []
+    row = {"model_prob": 0.9, "side": "over", "odds": -1200,
+           "book": "DK", "implied_prob": 0.88}
+    assert "chalk" in K.admissible(row)
+    heavy_watch = _watch(prob=0.75, odds=-800)
+    assert K.build([], [heavy_watch]) == [],         "the touchdown chain passes the same bar"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
