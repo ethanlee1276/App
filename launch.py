@@ -532,13 +532,45 @@ def refresh_nfl(quiet: bool = False) -> bool:
     return ok
 
 
+#: FLOORS BETWEEN REBUILDS for boards whose answer barely moves inside
+#: a cycle. Measured on the droplet, 2026-09-01, first cycle after the
+#: rogue fitters were killed: predmarkets 72s and fantasy 13s of a 524s
+#: cycle — 16% of every page's age spent re-asking two questions whose
+#: answers change on a clock of minutes, not seconds. Stamped like the
+#: futures boards (.futures_built): the loop skips a board younger than
+#: its floor, a hand-run `launch.py` still rebuilds everything.
+PREDMARKETS_EVERY_S = 600
+FANTASY_EVERY_S = 900
+
+
+def _due(stamp: str, every_s: int) -> bool:
+    """Is web/data/<stamp> older than ``every_s`` seconds, or absent?"""
+    try:
+        return (time.time() - (ROOT / "web" / "data" / stamp).stat().st_mtime) >= every_s
+    except OSError:
+        return True
+
+
+def _stamp(stamp: str) -> None:
+    try:
+        (ROOT / "web" / "data" / stamp).touch()
+    except OSError:
+        pass
+
+
 def refresh_predmarkets(quiet: bool = False) -> bool:
     """Polymarket markets + trade tape → web/data/predmarkets.json.
 
     Free keyless endpoints with short-TTL caching, so riding the normal
     refresh cycle costs nothing metered. Recording runs on every build —
-    the tape cannot be backfilled."""
+    the tape cannot be backfilled — so the floor below is the tape's
+    sampling interval, and ten minutes is the cadence it was sampled at
+    anyway on a healthy nine-minute cycle."""
+    if quiet and not _due(".pm_built", PREDMARKETS_EVERY_S):
+        return True                         # fresh enough — see the floors above
     ok, tail = _run_build(["pm_build.py", "--out", "web/data/predmarkets.json"])
+    if ok:
+        _stamp(".pm_built")
     if not quiet:
         print(f"  PM   markets: {'refreshed' if ok else 'unavailable — kept existing data'}"
               + (f"  ({tail})" if not ok and tail else ""))
@@ -562,7 +594,11 @@ def refresh_memes(quiet: bool = False) -> bool:
 
 def refresh_fantasy(quiet: bool = False) -> bool:
     """Fantasy usage boards from the local DB — zero network."""
+    if quiet and not _due(".fantasy_built", FANTASY_EVERY_S):
+        return True                         # fresh enough — see the floors above
     ok, tail = _run_build(["fantasy_build.py", "--out", "web/data/fantasy.json"])
+    if ok:
+        _stamp(".fantasy_built")
     if not quiet:
         print(f"  FF   fantasy: {'refreshed' if ok else 'unavailable'}"
               + (f"  ({tail})" if not ok and tail else ""))

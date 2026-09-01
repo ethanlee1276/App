@@ -335,6 +335,27 @@ def test_the_boards_screen_reads_the_load_average_first():
         "the flag keys off sustained load per core, not a one-second spike"
 
 
+def test_slow_moving_boards_get_a_floor_between_rebuilds():
+    """The cycle bill, first cycle after the rogue fitters died
+    (2026-09-01): predmarkets 72s and fantasy 13s of 524s — a sixth of
+    every page's age spent re-asking two questions whose answers move
+    on a clock of minutes. Stamped like futures: the LOOP (quiet) skips
+    a board younger than its floor; a hand-run launch still rebuilds."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    assert "PREDMARKETS_EVERY_S = 600" in src
+    assert "FANTASY_EVERY_S = 900" in src
+    for fn, stamp, every in (("refresh_predmarkets", ".pm_built",
+                              "PREDMARKETS_EVERY_S"),
+                             ("refresh_fantasy", ".fantasy_built",
+                              "FANTASY_EVERY_S")):
+        at = src.index(f"def {fn}(")
+        body = src[at:src.index("\ndef ", at + 10)]
+        assert f'if quiet and not _due("{stamp}", {every}):' in body, fn
+        assert f'_stamp("{stamp}")' in body, f"{fn} never stamps a success"
+        # Gated on `quiet` so `python3 launch.py` by hand still rebuilds.
+        assert body.index("if quiet and not _due(") < body.index("_run_build(")
+
+
 def test_builds_run_niced_below_the_serving_process():
     """One core serves the pages AND chews the builds. At equal priority
     a ten-minute board rebuild makes every tap feel broken while it runs
