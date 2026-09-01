@@ -3147,6 +3147,11 @@ let _tfMe = null, _tfAt = 0;
 
 async function tfFetch(force) {
   if (_tfMe && !force && Date.now() - _tfAt < 60000) return _tfMe;
+  // A visitor the account probe has already called signed-out has no
+  // tail/fade record to fetch; asking anyway logged a 401 in the console
+  // on every card render (QA audit, 2026-09-01). Unknown state (probe
+  // not back yet) still asks, so a signed-in reader is never denied.
+  if (_acctUser && !_acctUser.signed_in) { _tfMe = null; return null; }
   try {
     const r = await fetch("/api/tailfade/me", { credentials: "same-origin" });
     _tfMe = r.ok ? await r.json() : null;
