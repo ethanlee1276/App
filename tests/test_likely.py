@@ -420,6 +420,26 @@ def test_chalk_beyond_the_price_cap_is_refused_everywhere():
     heavy_watch = _watch(prob=0.75, odds=-800)
     assert K.build([], [heavy_watch]) == [],         "the touchdown chain passes the same bar"
 
+
+def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
+    """2026-09-02: the droplet served a PRE-FIX board file while its
+    builds were starved, and the page happily drew the -1200 unders the
+    engine had already banned — Ethan, from his phone: "your still doing
+    these dumb ass bets." A rule the render does not also enforce is a
+    rule any stale file overrides; the page is the last gate, and its
+    price cap is pinned equal to the engine's so they cannot drift."""
+    import os as _os
+    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), "web", "js", "app.js"),
+            encoding="utf-8") as f:
+        js = f.read()
+    assert "function showableLikelyRow(r)" in js
+    assert f"const LIKELY_HEAVIEST_PRICE = {K.HEAVIEST_PRICE};" in js
+    for anchor in (".filter(showableLikelyRow).slice(0, 10)",
+                   "rows: (sh.rows || []).filter(showableLikelyRow)",
+                   "(state.data.most_likely || []).filter(showableLikelyRow)"):
+        assert anchor in js, anchor
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

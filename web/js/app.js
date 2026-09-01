@@ -4297,7 +4297,7 @@ function renderTonight() {
   // average better would think this app would be layed out." A bettor
   // tapping "Tonight" is asking who hits tonight — the model's
   // strongest measured ability — and only then what we would stake.
-  const ml = (d.most_likely || []).slice(0, 10);
+  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
   const n = props.length + bets.length;
   if (!n && !shots.length && !ml.length) {
     host.innerHTML = `<div class="section-title">Tonight’s bets</div>
@@ -5245,6 +5245,21 @@ function renderQuickTools() {
    was wrong: props were on the slate all evening. Ethan read the blank
    as broken — "the mlb and wnba page is not loading with our most
    likely picks" — which is what a wrong explanation costs. */
+/* The board's product rules, enforced AT RENDER too. Ethan, 2026-09-01:
+   "i dont wanna be betting on -1200 or -1800 bets"; 2026-09-02, seeing
+   them anyway on a phone: "your still doing these dumb ass bets."
+   engine/likely.admissible refuses unders and prices past -250 — but a
+   STALE board file predates the rule, and the droplet was serving one
+   while its builds were starved. A rule the page does not also enforce
+   is a rule any old file can override; the render is the last gate.
+   Mirrors engine/likely.HEAVIEST_PRICE — pinned equal by test. */
+const LIKELY_HEAVIEST_PRICE = -250;
+function showableLikelyRow(r) {
+  if (String((r || {}).side || "").toLowerCase() === "under") return false;
+  const odds = (r || {}).odds;
+  return odds == null || Number(odds) >= LIKELY_HEAVIEST_PRICE;
+}
+
 function likelyEmptyWhy(census) {
   const c = census || {};
   if (c["no market measured to rank yet"]) {
@@ -5267,7 +5282,9 @@ function renderLikelyTop() {
   const host = document.getElementById("likely-top");
   if (!host) return;
   const shelves = (state.data.board_shelves || [])
-    .map((sh) => ({ ...sh, rows: (sh.rows || []).slice(0, LIKELY_TOP_N) }))
+    .map((sh) => ({ ...sh,
+                    rows: (sh.rows || []).filter(showableLikelyRow)
+                      .slice(0, LIKELY_TOP_N) }))
     .filter((sh) => sh.rows.length);
   if (!shelves.length) {
     /* A sport that HAS a likelihood board deserves a one-line reason on
@@ -5317,7 +5334,7 @@ function renderLikely() {
   const host = document.getElementById("likely");
   const note = document.getElementById("likely-note");
   if (!host || !note) return;
-  const rows = state.data.most_likely || [];
+  const rows = (state.data.most_likely || []).filter(showableLikelyRow);
   if (!rows.length) {
     host.innerHTML = "";
     note.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
@@ -5342,7 +5359,9 @@ function renderLikely() {
      measured figures are one definition, not a copy in a template. If
      the payload predates them the page falls back to the flat list
      rather than rendering nothing. */
-  const shelves = state.data.board_shelves || [];
+  const shelves = (state.data.board_shelves || [])
+    .map((sh) => ({ ...sh, rows: (sh.rows || []).filter(showableLikelyRow) }))
+    .filter((sh) => sh.rows.length);
   host.innerHTML = shelves.length
     ? shelves.map(likelyShelf).join("")
     : `<div class="cards">${rows.map(likelyCard).join("")}</div>`;

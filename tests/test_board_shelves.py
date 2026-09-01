@@ -152,8 +152,14 @@ def test_the_renderer_draws_shelves():
 def test_it_falls_back_to_the_flat_list_on_an_older_payload():
     """A droplet serving yesterday's JSON must not render an empty page."""
     src = _src("web", "js", "app.js")
-    at = src.index("const shelves = state.data.board_shelves")
-    assert "rows.map(likelyCard)" in src[at:at + 400]
+    # Re-anchored 2026-09-02: the shelves now pass the render gate
+    # (showableLikelyRow) before drawing, so the assignment gained a
+    # filter chain — and the home preview gained an identical-looking
+    # assignment, so the anchor starts inside renderLikely itself. The
+    # fallback it guards is unchanged.
+    fn = src.index("function renderLikely()")
+    at = src.index("const shelves = (state.data.board_shelves || [])", fn)
+    assert "rows.map(likelyCard)" in src[at:at + 800]
 
 
 def test_the_host_is_not_a_card_grid_any_more():
