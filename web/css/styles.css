@@ -6173,6 +6173,18 @@ body.has-rail .shell {
 
 .lb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 12px; margin-bottom: 30px; }
+/* Live-now league shelves (2026-09-01): on "All" the mixed slate is
+   grouped under one header per league so the reader never has to squint
+   at a card corner to tell an MLB game from a CFB one. */
+.lb-shelf { display: flex; align-items: baseline; gap: 8px;
+  margin: 4px 0 12px; padding-bottom: 8px;
+  border-bottom: var(--hairline) solid var(--border);
+  font-size: var(--fs-md); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text); }
+.lb-shelf .lb-shelf-logo { font-size: var(--fs-lg); }
+.lb-shelf .mini { color: var(--text-mute); font-weight: 600;
+  letter-spacing: 0; text-transform: none; }
+.lb-shelf + .lb-grid { margin-bottom: 24px; }
 .lb-card { border: var(--hairline) solid var(--border); border-radius: var(--radius);
   background-color: var(--panel); background-image: var(--grad-card);
   padding: 13px 15px; cursor: pointer;

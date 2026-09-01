@@ -29569,6 +29569,23 @@ async function renderLiveBoard() {
       the board below tracks tonight’s open bets as they start.</p>`;
     return;
   }
+  /* SHELVED BY LEAGUE ON "ALL". Ethan, 2026-09-01, from this very tab:
+     "make it easier too see which games that are live is what sport.
+     Right now they are all in a row and it's hard too tell which is
+     what sport." The tag in a card's corner is a whisper; a mixed
+     slate gets a header per league — logo, name, live count — in the
+     same feed order the chips use, so the leagues always read in the
+     same sequence. A single-league filter keeps the flat grid: the
+     chip you pressed IS the label. */
+  const shelved = _liveChip === "all"
+    ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
+        <div class="lb-shelf">
+          <span class="lb-shelf-logo">${(SPORT_META[s] || {}).logo || ""}</span>
+          ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}
+          <span class="mini">— ${bySport[s]} live</span></div>
+        <div class="lb-grid">${games.filter((x) => x.sport === s)
+          .map(liveCardHTML).join("")}</div>`).join("")
+    : `<div class="lb-grid">${shown.map(liveCardHTML).join("")}</div>`;
   host.innerHTML = `
     <div class="section-title">Live now
       <span class="sub">— every game in progress across the sports we model</span></div>
@@ -29577,7 +29594,7 @@ async function renderLiveBoard() {
         ${s === "all" ? "All" : s.toUpperCase()}
         <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
     </div>
-    <div class="lb-grid">${shown.map(liveCardHTML).join("")}</div>`;
+    ${shelved}`;
   host.querySelectorAll(".lb-chip").forEach((b) =>
     b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
   if (typeof mountLiveTicks === "function") mountLiveTicks(host);
