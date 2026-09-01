@@ -7796,10 +7796,109 @@ function profileHTML(player) {
           ${escapeHtml(t)}${priced.has(t)
             ? ` <b>${priced.get(t).line}</b>` : ""}</button>`).join("")}
     </div>` : "";
+  const vsTail = vsBlockHTML(player, (rows[0] && rows[0].sport) || state.sport);
   return priced.has(mkt)
-    ? pricedProfileHTML(priced.get(mkt), chips)
-    : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips);
+    ? pricedProfileHTML(priced.get(mkt), chips, vsTail)
+    : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
 }
+
+/* HEAD-TO-HEAD. Ethan, 2026-09-01: "Add an option too be able too look
+   up past game data for player for nfl and CFB. For example, the rams
+   take on the 49ers week one and I wanna see how Devonte Adam's did the
+   last time the 49ers played the rams. Also make sure we don't have any
+   issues with the names like we did before."
+
+   The names lesson is the design: the opponent is PICKED, never typed —
+   /api/players/versus hands back the exact opponent keys stored on this
+   player's own log rows, the picker offers those, and the choice goes
+   back verbatim. A join that never leaves the database cannot misspell.
+   The player name rides through the same ranked resolution the search
+   box uses server-side, so even a hand-built URL with "devonte adams"
+   in it lands on the stored spelling.
+
+   Every log-backed league, because the data is the same shape in all of
+   them — he asked for NFL and CFB, and MLB/NBA/WNBA cost nothing more. */
+const VS_SPORTS = ["nfl", "cfb", "mlb", "nba", "wnba"];
+
+function vsBlockHTML(player, sport) {
+  const lg = String(sport || "").toLowerCase();
+  if (!VS_SPORTS.includes(lg)) return "";
+  return `<div class="prof-vs" data-player="${escapeAttr(player)}"
+      data-sport="${escapeAttr(lg)}">
+    <button class="btn vs-open" type="button">History vs a team…</button>
+  </div>`;
+}
+
+/* One delegated pair, like .prof-tab above: profile cards are innerHTML'd
+   away on every refresh and drawn in more than one place (Players grid,
+   the peek overlay), so nothing is bound to the card itself. */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest && e.target.closest(".vs-open");
+  if (!b) return;
+  const box = b.closest(".prof-vs");
+  if (!box) return;
+  b.disabled = true;
+  b.textContent = "Loading his opponents…";
+  const { player, sport } = box.dataset;
+  let got = null;
+  try {
+    const r = await fetch(`/api/players/versus?sport=${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}`);
+    if (r.ok) got = await r.json();
+  } catch (err) {}
+  const opps = (got && got.opponents) || [];
+  if (!opps.length) {
+    box.innerHTML = `<div class="empty" style="padding:8px 0">No logged
+      games stored for ${escapeHtml(player)} yet, so there is no
+      head-to-head to show.</div>`;
+    return;
+  }
+  box.innerHTML = `
+    <select class="vs-select" aria-label="History vs a team for ${escapeAttr(player)}">
+      <option value="">History vs a team…</option>
+      ${opps.map((o) => `<option value="${escapeAttr(o.opponent)}">
+        ${escapeHtml(teamNameIn(sport, o.opponent))} — ${o.games}
+        game${o.games === 1 ? "" : "s"}</option>`).join("")}
+    </select>
+    <div class="vs-out"></div>`;
+});
+
+document.addEventListener("change", async (e) => {
+  const sel = e.target.closest && e.target.closest(".vs-select");
+  if (!sel || !sel.value) return;
+  const box = sel.closest(".prof-vs");
+  const out = box && box.querySelector(".vs-out");
+  if (!out) return;
+  const { player, sport } = box.dataset;
+  const vs = sel.value;
+  out.innerHTML = `<div class="pk-wait">Loading…</div>`;
+  let got = null;
+  try {
+    const r = await fetch(`/api/players/versus?sport=${encodeURIComponent(sport)}&player=${encodeURIComponent(player)}&vs=${encodeURIComponent(vs)}`);
+    if (r.ok) got = await r.json();
+  } catch (err) {}
+  if (sel.value !== vs) return;                      // picked again meanwhile
+  const games = (got && got.games) || [];
+  if (!games.length) {
+    out.innerHTML = `<div class="empty" style="padding:8px 0">Nothing
+      stored against ${escapeHtml(teamNameIn(sport, vs))}.</div>`;
+    return;
+  }
+  const rows = games.map((g) => {
+    const when = g.week != null
+      ? `’${escapeHtml(String(g.season).slice(2))} Wk ${g.week}`
+      : escapeHtml(g.date ? formatGameDate(g.date) : String(g.season));
+    const line = Object.entries(g.stats || {})
+      .map(([k, v]) => `${+v} ${k.toLowerCase()}`).join(" · ");
+    // His club that day, said per row: the history follows the man, so
+    // Adams's games against the 49ers include his Raiders ones.
+    return `<tr><td>${when} ${g.home ? "vs" : "@"} ${escapeHtml(teamNameIn(sport, vs))}
+        <span class="mini" style="opacity:.6">with ${escapeHtml(teamNameIn(sport, g.team))}</span></td>
+      <td class="num">${escapeHtml(line) || "—"}</td></tr>`;
+  }).join("");
+  out.innerHTML = `<table class="log-table">
+      <tr><th>Game</th><th style="text-align:right">His line</th></tr>
+      ${rows}</table>`;
+});
 
 //: Shared head: who this is, on the market's accent.
 //:
@@ -7821,7 +7920,7 @@ function _profileHead(r, right) {
       </div>`;
 }
 
-function pricedProfileHTML(r, chips) {
+function pricedProfileHTML(r, chips, tail = "") {
   const f = r.form || {};
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
@@ -7858,13 +7957,14 @@ function pricedProfileHTML(r, chips) {
             · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
       </div>
+      ${tail}
     </article>`;
 }
 
 /* A market nobody priced tonight: the history IS the content. Chart and
    log only — averages without a line to read them against would invite
    the reader to invent one. */
-function historyProfileHTML(r0, label, logs, chips) {
+function historyProfileHTML(r0, label, logs, chips, tail = "") {
   const vals = logs.map((l) => l.value);
   const nfl = logs.length && logs[0].week != null && !logs[0].date;
   const when = (l) => (nfl ? `Wk ${l.week}`
@@ -7887,6 +7987,7 @@ function historyProfileHTML(r0, label, logs, chips) {
       </table>
       <div class="profile-pick"><div class="lbl">${escapeHtml(label)}
         <small>no line on tonight’s board — his last ${logs.length} games, for the read</small></div></div>
+      ${tail}
     </article>`;
 }
 

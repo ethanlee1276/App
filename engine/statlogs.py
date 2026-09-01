@@ -344,6 +344,186 @@ def for_player(sport: str, player: str, db_path=None) -> dict:
         conn.close()
 
 
+# --- head-to-head: every game against ONE opponent --------------------------
+# Ethan, 2026-09-01: "Add an option too be able too look up past game data
+# for player for nfl and CFB. For example, the rams take on the 49ers week
+# one and I wanna see how Devonte Adam's did the last time the 49ers
+# played the rams. Also make sure we don't have any issues with the names
+# like we did before."
+#
+# Two answers in one contract. The DATA one: player_game_logs already
+# stores the opponent on every ingested row, across every stored season —
+# so "how did he do against them" is a filter, not a new feed. The NAMES
+# one: the typed name goes through the SAME ranked resolution the search
+# box uses (playersearch.rank — his own example, "Devonte Adam's", lands
+# on Davante Adams as a closest-spelling hit), and the OPPONENT is never
+# free-typed at all: `opponents_of` hands the page the exact stored
+# values, the page offers them as a picker, and `versus` receives one
+# back verbatim. A join that never leaves the database cannot misspell.
+
+#: Games a head-to-head answer carries. Deeper than the profile chart's
+#: N_GAMES on purpose — two clubs meet twice a year, so ten games of
+#: history IS five seasons, and the reader asked for the history.
+VS_GAMES = 20
+
+
+def resolve_player(conn, sport: str, q: str) -> str:
+    """The stored spelling for a typed name, or "".
+
+    Exact hit first (free, and almost always the case — the page sends
+    the name it already displays). Then the ranked search the box uses,
+    best tier only; a tie inside the tier goes to the man seen most
+    recently, the same "current starter over 2021 namesake" rule search
+    results follow.
+    """
+    q = (q or "").strip()
+    if not q:
+        return ""
+    row = conn.execute(
+        "SELECT player FROM player_game_logs WHERE sport=? AND player=? "
+        "LIMIT 1", (sport, q)).fetchone()
+    if row:
+        return row["player"]
+    ranked = _ranked_names(conn, sport, q, 12)
+    if not ranked:
+        return ""
+    best = min(ranked.values())
+    names = sorted(n for n in ranked if ranked[n] == best)
+    if len(names) == 1:
+        return names[0]
+    marks = ", ".join("?" for _ in names)
+    row = conn.execute(
+        f"SELECT player FROM player_game_logs WHERE sport=? "
+        f"AND player IN ({marks}) ORDER BY season DESC, period DESC "
+        f"LIMIT 1", (sport, *names)).fetchone()
+    return row["player"] if row else names[0]
+
+
+def _resolve_opponent(conn, sport: str, player: str, opp: str) -> str:
+    """The stored opponent key ``opp`` means, or "".
+
+    Matched against the opponents THIS player has actually logged —
+    exact, then case-insensitive, then normalised containment (a CFB
+    school typed as "ohio state" against a stored "Ohio State"). NFL
+    keys are abbreviations the picker supplies verbatim, so the fallbacks
+    exist for hand-built URLs, not for the page.
+    """
+    opp = (opp or "").strip()
+    if not opp:
+        return ""
+    stored = [r[0] for r in conn.execute(
+        "SELECT DISTINCT opponent FROM player_game_logs "
+        "WHERE sport=? AND player=? AND opponent != ''",
+        (sport, player))]
+    if opp in stored:
+        return opp
+    low = opp.lower()
+    for cand in stored:
+        if cand.lower() == low:
+            return cand
+    from .playersearch import norm
+    n = norm(opp)
+    for cand in stored:
+        cn = norm(cand)
+        if n and cn and (n in cn or cn in n):
+            return cand
+    return ""
+
+
+def opponents_of(sport: str, player: str, db_path=None) -> dict:
+    """Who this player has logged games against — the picker's options.
+
+    ``{"player": stored spelling, "opponents": [{"opponent", "games"},
+    …most recently met first]}``, or ``{}`` when the name resolves to
+    nobody. Same honest degradation as everything here: no DB, ``{}``.
+    """
+    if sport not in SPORT_MARKETS or not (player or "").strip():
+        return {}
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return {}
+    conn = _db.connect(path)
+    try:
+        name = resolve_player(conn, sport, player)
+        if not name:
+            return {}
+        rows = conn.execute(
+            "SELECT opponent, COUNT(DISTINCT game_id) AS games, "
+            "MAX(season || '-' || period) AS last "
+            "FROM player_game_logs "
+            "WHERE sport=? AND player=? AND opponent != '' "
+            "GROUP BY opponent ORDER BY last DESC, games DESC",
+            (sport, name)).fetchall()
+        return {"player": name,
+                "opponents": [{"opponent": r["opponent"],
+                               "games": int(r["games"])} for r in rows]}
+    finally:
+        conn.close()
+
+
+def versus(sport: str, player: str, opponent: str, db_path=None) -> dict:
+    """Every stored game this player has against that opponent.
+
+    ``{"player", "opponent", "games": [{"season", "week"|"date", "home",
+    "team", "stats": {label: value}}, …newest first]}`` — one row PER
+    GAME with every ingested market on it, because "how did he do last
+    time they played" is a question about the game, not about one stat.
+
+    ``team`` is HIS club in that game, kept per row on purpose: the
+    history follows the man, not the laundry — Adams's games against the
+    49ers include the ones he played as a Raider, and the row says so.
+    """
+    markets = SPORT_MARKETS.get(sport)
+    if not markets or not (player or "").strip():
+        return {}
+    path = str(db_path or _db.DEFAULT_DB)
+    if not os.path.exists(path):
+        return {}
+    conn = _db.connect(path)
+    try:
+        name = resolve_player(conn, sport, player)
+        if not name:
+            return {}
+        opp = _resolve_opponent(conn, sport, name, opponent)
+        if not opp:
+            return {"player": name, "opponent": "", "games": []}
+        ids = [m for m, _ in markets]
+        labels = dict(markets)
+        rows = conn.execute(
+            "SELECT season, period, game_id, team, home, market, value "
+            "FROM player_game_logs "
+            "WHERE sport=? AND player=? AND opponent=? "
+            f"AND market IN ({','.join('?' * len(ids))}) "
+            "ORDER BY season DESC, period DESC",
+            (sport, name, opp, *ids)).fetchall()
+        games: list[dict] = []
+        seen: dict = {}
+        for r in rows:
+            key = (r["season"], r["period"], r["game_id"])
+            g = seen.get(key)
+            if g is None:
+                if len(games) >= VS_GAMES:
+                    continue
+                g = {"season": int(r["season"]),
+                     "home": bool(r["home"]), "team": r["team"],
+                     "stats": {}}
+                if sport == "nfl":
+                    g["week"] = int(r["period"])
+                else:
+                    g["date"] = str(r["period"])
+                seen[key] = g
+                games.append(g)
+            g["stats"][labels[r["market"]]] = float(r["value"])
+        # Stats in SPORT_MARKETS display order, decided here once — the
+        # same argument _query's rebuild carries.
+        for g in games:
+            g["stats"] = {labels[m]: g["stats"][labels[m]]
+                          for m, _ in markets if labels[m] in g["stats"]}
+        return {"player": name, "opponent": opp, "games": games}
+    finally:
+        conn.close()
+
+
 def _query(conn, sport, markets, players) -> dict:
     ids = [m for m, _ in markets]
     labels = dict(markets)

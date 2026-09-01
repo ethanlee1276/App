@@ -762,6 +762,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._players_logs(parse_qs(parsed.query))
         if parsed.path in ("/api/players/fantasy", "/api/players/fantasy/"):
             return self._players_fantasy(parse_qs(parsed.query))
+        if parsed.path in ("/api/players/versus", "/api/players/versus/"):
+            return self._players_versus(parse_qs(parsed.query))
         if parsed.path in ("/api/leaguedesk", "/api/leaguedesk/"):
             return self._league_desk(parse_qs(parsed.query))
         if parsed.path.startswith("/api/yahoo/"):
@@ -2041,6 +2043,29 @@ class Handler(BaseHTTPRequestHandler):
         stats = statlogs.for_player(sport, player)
         return self._send(200, json.dumps(
             {"player": player, "stats": stats}).encode(), ".json")
+
+    def _players_versus(self, q):
+        """A player's history against one opponent — the head-to-head.
+
+        Ethan, 2026-09-01: "the rams take on the 49ers week one and I
+        wanna see how Devonte Adam's did the last time the 49ers played
+        the rams." Without ``vs`` this returns the opponents he has
+        logged games against (the page's picker options — exact stored
+        keys, so the join back can never misspell); with ``vs`` it
+        returns every stored game against them, one row per game with
+        every ingested market. UNGATED like the other log endpoints:
+        game logs are FACTS on the free footing of rosters and injuries.
+        """
+        from engine import statlogs
+        sport = (q.get("sport") or [""])[0].lower()
+        player = (q.get("player") or [""])[0][:60]
+        vs = (q.get("vs") or [""])[0][:60]
+        if sport not in statlogs.SPORT_MARKETS:
+            return self._send(400, b'{"error":"no log-backed lookup for '
+                                   b'this sport"}', ".json")
+        out = (statlogs.versus(sport, player, vs) if vs
+               else statlogs.opponents_of(sport, player))
+        return self._send(200, json.dumps(out or {}).encode(), ".json")
 
     def _players_fantasy(self, q):
         """The full fantasy dossier — engine/ffprofile.py's page, served.

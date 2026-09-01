@@ -1145,6 +1145,15 @@ svg[data-scrub] { touch-action: pan-y; }
 .log-table td.num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .log-table .hit { color: var(--good); } .log-table .miss { color: var(--text-dim); }
 
+/* Head-to-head (2026-09-01): the "History vs a team" picker at the foot
+   of every profile card, and the per-game table it opens. */
+.prof-vs { padding: 10px 18px 14px; border-top: var(--hairline) solid var(--border-soft); }
+.prof-vs .vs-select { width: 100%; font: inherit; font-size: var(--fs-md);
+  padding: 8px 10px; background: var(--bg-2); color: var(--text);
+  border: var(--hairline) solid var(--border); }
+.prof-vs .vs-out .log-table th, .prof-vs .vs-out .log-table td { padding: 6px 0; }
+.prof-vs .vs-out td.num { font-weight: 600; white-space: normal; }
+
 
 /* ---------------- Parlay Zone ----------------
    Night Form: no shadows, no gradients, square corners, rules instead of
