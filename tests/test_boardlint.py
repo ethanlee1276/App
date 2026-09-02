@@ -161,6 +161,50 @@ def test_both_sides_of_one_player_is_named():
     assert "BOTH SIDES recommended" in got[0]["flags"]
 
 
+def _gl(**kw):
+    """A likelihood GAME row as likely.from_game_bet builds it."""
+    d = dict(kind="game", player="Over 43", pick_label="Over 43", team="", home="CHI",
+             away="GB", matchup="GB @ CHI", bet_type="total", market="total",
+             market_label="Total", side="Over", line=43.0, book="best", odds=-110,
+             model_prob=0.55, implied_prob=0.5, bettable=True, rank_auc=0.497,
+             ranked=False, rank_note="Shown as the model’s lean at this number.",
+             flipped=False, kickoff="2026-09-13T17:00:00+00:00")
+    d.update(kw)
+    return d
+
+
+def test_game_rows_say_what_they_are():
+    """Ethan, 2026-09-02: spreads and totals go on the board as leans.
+    The lint prints the lean with its figure, names a flipped side, and
+    refuses a game row the page could not open."""
+    rows = [_gl(),
+            _gl(player="DET -3.5", pick_label="DET -3.5", team="DET", bet_type="spread",
+                market="spread", side="", line=-3.5, home="DET", away="NO",
+                matchup="NO @ DET", rank_auc=0.491, flipped=True),
+            _gl(player="GB ML", pick_label="GB ML", team="GB", bet_type="moneyline",
+                market="moneyline", side="", line=0.0, ranked=True, rank_note="",
+                rank_auc=0.641),
+            _gl(player="Under 49", pick_label="Under 49", home="MIN", away="DET",
+                matchup="DET @ MIN", side="Under", line=49.0, rank_note=""),
+            _gl(player="Over 51", pick_label="Over 51", home="", away="", matchup="")]
+    got = L.lint_likely(rows, {})
+    assert "LEAN measured 0.50" in _flags(got, "Over 43")
+    assert "FLIP" in _flags(got, "DET -3.5") and "LEAN measured 0.49" in _flags(got, "DET -3.5")
+    assert not any(f.startswith("LEAN") or f == "FLIP" for f in _flags(got, "GB ML"))
+    assert "LEAN without its note" in _flags(got, "Under 49")
+    assert any(f.startswith("NO DOOR") for f in _flags(got, "Over 51"))
+
+
+def test_the_same_total_in_two_games_is_two_bets_not_a_repeat():
+    """"Over 43" can be the honest pick in two different games on one
+    Sunday; the REPEAT check keys a game row within its matchup."""
+    rows = [_gl(), _gl(home="MIN", away="DET", matchup="DET @ MIN")]
+    got = L.lint_likely(rows, {})
+    assert not any(f.startswith("REPEAT") for x in got for f in x["flags"]), got
+    twice = [_gl(), _gl()]
+    assert "REPEAT x2" in L.lint_likely(twice, {})[0]["flags"]
+
+
 # --- Game bets -------------------------------------------------------------------
 def test_game_bets_are_held_to_their_own_ceiling():
     rows = [_gb(matchup="Clean", quality=74, grade="B+", stake_units=0.5),

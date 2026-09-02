@@ -24,8 +24,14 @@ implies that the row fails:
                   while the board says 60%+ (the reader will ask)
       SCRIPT      the game script tilts against the side
       ROLE        a market that does not fit the position
-      REPEAT      the same player on the board more than once
+      REPEAT      the same player on the board more than once (a game row
+                  repeats only within its own matchup — "Over 43" in two
+                  games is two bets)
       RANK-ONLY   a market that ranks but cannot be bet (shown, not a defect)
+      LEAN        a game row from a market measured below the ranking floor
+                  (shown with its figure, by Ethan's call — not a defect)
+      FLIP        a game row built for the other side of the edge card,
+                  because the card backed the short end on price (info)
       STARTED     the game has kicked off
     Recommended props
       HELD, GAP, PROJ vs SIDE, SCRIPT, REPEAT as above, plus
@@ -171,10 +177,20 @@ def _started(row: dict, now: _dt.datetime | None) -> bool:
     return t <= now
 
 
+def _who(r: dict) -> str:
+    """The identity REPEAT counts on. A player row is the player; a game
+    row is its pick label WITHIN its matchup, since "Over 43" can be the
+    honest pick in two different games on one Sunday."""
+    key = _norm(r.get("player"))
+    if r.get("kind") == "game":
+        key += "|" + _norm(r.get("matchup"))
+    return key
+
+
 def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
     seen: dict = {}
     for r in rows:
-        seen[_norm(r.get("player"))] = seen.get(_norm(r.get("player")), 0) + 1
+        seen[_who(r)] = seen.get(_who(r), 0) + 1
     out = []
     for r in rows:
         flags = []
@@ -207,10 +223,24 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
         pos = str(r.get("position") or "").upper()
         if r.get("market") in ROLE_MISFIT.get(pos, set()):
             flags.append(f"ROLE {pos} on {r.get('market')}")
-        if seen.get(_norm(r.get("player")), 0) > 1:
-            flags.append(f"REPEAT x{seen[_norm(r.get('player'))]}")
+        if seen.get(_who(r), 0) > 1:
+            flags.append(f"REPEAT x{seen[_who(r)]}")
         if r.get("bettable") is False:
             flags.append("RANK-ONLY")
+        if r.get("kind") == "game":
+            # The game rows' own facts, printed so the audit reads what
+            # the page says: a lean is labelled, a flipped side names
+            # the card it came from, and a game row must carry the id
+            # parts the page opens it by.
+            if r.get("ranked") is False:
+                auc = _f(r.get("rank_auc"))
+                flags.append(f"LEAN measured {auc:.2f}" if auc is not None else "LEAN")
+                if not r.get("rank_note"):
+                    flags.append("LEAN without its note")
+            if r.get("flipped"):
+                flags.append("FLIP")
+            if not (r.get("home") and r.get("away") and (r.get("market") or r.get("bet_type"))):
+                flags.append("NO DOOR (home/away/market missing)")
         if _started(r, now):
             flags.append("STARTED")
         out.append({"row": r, "flags": flags})
