@@ -27,6 +27,15 @@ Wants=network-online.target
 # CPU and filling the journal instead of stopping and showing a failed
 # unit. Give up after 5 restarts in 60s, so a genuine crash is VISIBLE in
 # `systemctl status` rather than hidden behind an infinite retry.
+#
+# KNOWN LIMIT: this catches a process that dies at startup and nothing
+# slower. A process that serves for two minutes and then dies lands one
+# restart per window, the counter never reaches five, and the unit shows
+# "activating (auto-restart)" for ever (2026-09-02, 223 restarts). The
+# fix for that class of failure is OOMPolicy=continue below plus running
+# heavy work out of process — not a longer window, which would turn a
+# flapping site into a dead one. To see it happen: journalctl -u qellys
+# | grep -c oom-kill.
 StartLimitBurst=5
 StartLimitIntervalSec=60
 
@@ -97,6 +106,18 @@ RestartSec=3
 # box leaves the system and Caddy their room; raise it with the droplet.
 MemoryMax=1600M
 MemoryAccounting=true
+# WHEN THE CAP IS HIT, THE CHILD DIES AND THE SITE STAYS UP. systemd's
+# default OOMPolicy=stop stops the WHOLE service the moment the kernel
+# kills any process in its cgroup — so the day a build subprocess or a
+# weekly fitter outgrew the box, the server bound to the port died with
+# it. Measured 2026-09-02 (a Wednesday): the deep refit ran inside the
+# server, the unit was killed 223 times between 01:24 and the afternoon,
+# and the StartLimit guard above never fired because a process that
+# lives 150 seconds barely lands one restart in any 60-second window.
+# The fitters run as children now (engine/maintenance._run_module) and
+# this line is what makes that isolation real: the kernel takes the
+# child, the journal logs which one, and launch.py carries on serving.
+OOMPolicy=continue
 # THE CLOCK THE SLATES LIVE ON. Every "today" in the pipeline is the
 # machine's local date, and a stock droplet runs UTC — so from 8pm
 # Eastern onward its evening rebuilds label TONIGHT'S slate with
