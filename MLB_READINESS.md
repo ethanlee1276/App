@@ -206,7 +206,8 @@ population is the Record page's (main + paper, stake > 0, settled).
 **What those numbers say, read carefully:**
 
 - **At the price taken the record is losing**: −5.7% on 803 bets for the season, −0.7% on 614 since the 2026-08-04 rescale. Flat-staked it is −2.0% in the current era, so sizing is not the cause; the model is.
-- **"+17.2% at close" is not good news, and it is also not believable as printed.** ROI at the close means "the same results, paid at the closing price". A close-side ROI *above* the price-side ROI means the closes were **longer** than the prices we took — the market moved **against** these bets after they were placed. That is negative CLV. And +17–22% is a rule-5 number on its own: a closing price that belongs to a *different line* than the one bet (a hits over 1.5 taken at +120 whose "close" is the 0.5 line at −200, or the reverse) is not comparable to the price taken, and 295 such rows can produce any ROI at all. The tool now prints the **same-line subset** beside it (`same line: n=… ROI@price→ROI@close`) so the next run separates a real negative CLV from a mismatched close. Until that run, the honest reading is: **losing at price, and no trustworthy close-side number yet.**
+- **The picks beat the close.** Ethan's second paste from the droplet (the CLV board rendered by hand, `main` book, 698 settled): **price CLV +1.22 points on 287 closes, 74% of bets beating the close**; line CLV +0.026 line-points with a 9% beat rate on 449 (a 0.5 line cannot move, so the line instrument reads zero on most props — the price instrument is the one that sees them). A 74% beat share on 287 closes is about eight standard errors from a coin flip. The record tool's "+17.2% at close on the 295 with a close" is consistent with that once it is read against the *same rows*: those 295 bets had their own price-side ROI, and the close paid less than the price taken. My first reading of the gap ("the market moved against these bets") compared ROI at close on 295 rows with ROI at price on 803 and was wrong; the verdict line now compares the closed subset's own price-side ROI against its close-side ROI and prints the CLV mean and beat share beside it. The same-line subset still prints, because a +17–22% figure on any subset is a rule-5 number until the closes are known to belong to the lines bet.
+- **Positive CLV and a negative record at price, on the same journal.** That combination has one honest reading: the model finds prices that the market then moves toward, and the picks still lose to the hold at the price taken. +1.22 points of CLV against a typical 4–5 point two-way hold is not enough edge to be profitable at −110 juice; it is enough to say the picks are not random. The −0.7% since the rescale on 614 bets is the number to watch, and the flat-ROI 95% interval on that era (printed by `mlbrecord --since 2026-08-04`) is what decides whether it is distinguishable from zero.
 - **The HR model is hedged, not skilled.** Brier 0.0957 vs 0.0967 for always guessing the base rate is a 1% improvement, and the droplet run notes 83% of its forecasts sit within five points of that base rate. The `min(n/40, 0.5)` shrink and the 0.5 rare-event damp pull almost every hitter to the league rate; what is left is the park/weather/lineup tilt. That is calibrated (it does not lose to the base rate) and it is not an edge against a book that prices the same tilt.
 - **The grade is still inverted** — A+ below B+ at the asked-for stakes — the same finding `stakecheck` made on 2026-08-12. Nothing in this audit changed a grade weight (rule 2); the finding stands and is the strongest argument in this log against sizing on the letter.
 - **Thirty sub-floor stakes dated after the 2026-08-09 floor fix.** `apply_exposure_caps` drops sub-floor bets and cannot have written them; the diagnostic that pointed there was wrong. `stakecheck` now prints the offending rows with category and market so the next run names the journaling path.
@@ -365,13 +366,14 @@ No threshold or weight was changed (rule 2). Nothing was removed
 ## Phase 8 — Go / no-go
 
 **Is this model profitable on its 2026 record?** **No, at the price
-taken.** Droplet run, 2026-09-02: 803 settled bets, −5.7% ROI at price;
-614 since the rescale, −0.7% at price and −2.0% flat. The close-side
-number (+17.2% on 295 closes) reads as *negative* CLV — the closes were
-longer than the prices taken — and is itself a rule-5 figure until the
-same-line subset the tool now prints confirms the closes belong to the
-lines bet. So: losing at price on a sample large enough to say so;
-CLV **unverified** until the next run.
+taken — and it beats the close.** Droplet run, 2026-09-02: 803 settled
+bets, −5.7% ROI at price; 614 since the rescale, −0.7% at price and
+−2.0% flat. Price CLV **+1.22 points, 74% of 287 closed bets beating
+the close** (main book). The picks are not random — the market moves
+toward them — but the edge is smaller than the juice, and the record at
+price is negative on a sample large enough to say so. The +17.2%
+close-side ROI on the 295 closed rows is a rule-5 figure until the
+same-line subset confirms the closes belong to the lines bet.
 
 **Month-by-month trend:** the droplet output pasted back carried the
 headline rows only; the month table is in the same command's output and
@@ -380,9 +382,9 @@ says the earlier era was worse, not that the model is decaying.
 
 **GO / NO-GO for tonight's slate: NO-GO on the money verdict, GO on
 the mechanics.** The single biggest reason: the scored record is
-negative at the price taken (−5.7% on 803), and the close-side number
-that would show whether the picks are at least beating the market is
-not yet trustworthy. The mechanics that
+negative at the price taken (−5.7% on 803, −0.7% on 614 since the
+rescale) even though the picks beat the close (+1.22 pts, 74%). An edge
+that shows up in CLV and not in P&L is an edge smaller than the hold. The mechanics that
 gate a card — lineup hold, probable-starter certainty, per-park weather,
 tonight's umpire, market-sum HR devig, 3-leg cap, exposure caps, the
 refusal wording (fixed) — are correct by code and by 47 hand pins.
