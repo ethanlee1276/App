@@ -190,6 +190,34 @@ Every expected value below was computed by hand before the assertion.
 
 ## Phase 4 — Is it actually making money? (the main event)
 
+### The droplet run (Ethan, 2026-09-02, via Remote Control on `/srv/qellys`)
+
+Reported back after the merge deployed. Numbers as printed there; the
+population is the Record page's (main + paper, stake > 0, settled).
+
+| tool | headline |
+|---|---|
+| `engine.mlbrecord`, all of 2026 | **803 bets**, **−5.7% at price**, +17.2% "at close" on the 295 with a close |
+| `engine.mlbrecord --since 2026-08-04` | 614 bets, −0.7% at price, +21.7% "at close" on 272 |
+| `stakecheck.py --sport mlb`, current era | 614 bets, −0.68% as staked, −1.98% flat |
+| `hr_backtest.py --seasons 2026` | 32,661 props, Brier 0.0957 against 0.0967 for always guessing the base rate |
+| `python3 -m engine.clvboard` | printed nothing (no entry point — fixed below) |
+
+**What those numbers say, read carefully:**
+
+- **At the price taken the record is losing**: −5.7% on 803 bets for the season, −0.7% on 614 since the 2026-08-04 rescale. Flat-staked it is −2.0% in the current era, so sizing is not the cause; the model is.
+- **"+17.2% at close" is not good news, and it is also not believable as printed.** ROI at the close means "the same results, paid at the closing price". A close-side ROI *above* the price-side ROI means the closes were **longer** than the prices we took — the market moved **against** these bets after they were placed. That is negative CLV. And +17–22% is a rule-5 number on its own: a closing price that belongs to a *different line* than the one bet (a hits over 1.5 taken at +120 whose "close" is the 0.5 line at −200, or the reverse) is not comparable to the price taken, and 295 such rows can produce any ROI at all. The tool now prints the **same-line subset** beside it (`same line: n=… ROI@price→ROI@close`) so the next run separates a real negative CLV from a mismatched close. Until that run, the honest reading is: **losing at price, and no trustworthy close-side number yet.**
+- **The HR model is hedged, not skilled.** Brier 0.0957 vs 0.0967 for always guessing the base rate is a 1% improvement, and the droplet run notes 83% of its forecasts sit within five points of that base rate. The `min(n/40, 0.5)` shrink and the 0.5 rare-event damp pull almost every hitter to the league rate; what is left is the park/weather/lineup tilt. That is calibrated (it does not lose to the base rate) and it is not an edge against a book that prices the same tilt.
+- **The grade is still inverted** — A+ below B+ at the asked-for stakes — the same finding `stakecheck` made on 2026-08-12. Nothing in this audit changed a grade weight (rule 2); the finding stands and is the strongest argument in this log against sizing on the letter.
+- **Thirty sub-floor stakes dated after the 2026-08-09 floor fix.** `apply_exposure_caps` drops sub-floor bets and cannot have written them; the diagnostic that pointed there was wrong. `stakecheck` now prints the offending rows with category and market so the next run names the journaling path.
+
+### Tooling defects the droplet run exposed (fixed in this branch)
+
+- **`engine/clvboard.py` was not a command.** No main, no argument parsing; `python3 -m engine.clvboard` imported it and exited 0 in silence. It has `main()` now: the scoreboard and the lead-time cut, `--db`, `--since`, `--category`.
+- **Three CLVs under one label.** The scoreboard measured *line* movement in line points and never selected the price columns, so a hits or total-bases prop (whose line barely moves) reported near zero and a 9% beat rate; the lead-time view and the record tool measure *price* movement in probability, and printed it a hundred times apart (`+0.02pt` vs `+2.17pts`). The scoreboard now carries price CLV beside line CLV with its own count; every printed CLV is in probability points (×100).
+- **`--no-tests` typed on a phone becomes `—no-tests`** and the deploy script ran the hour-long suite on the one-core box. Both spellings are accepted now.
+
+
 **Profitability is unverified** in this sandbox, for the reasons in
 "Read this first". What the local journal copy shows, so nobody mistakes
 it for a record: 32 settled `hits` bets (Jul 6 – Aug 25), 21–11, +24.0%
@@ -336,20 +364,25 @@ No threshold or weight was changed (rule 2). Nothing was removed
 
 ## Phase 8 — Go / no-go
 
-**Is this model profitable on its 2026 record?** **Unverified** — this
-sandbox holds no scorable 2026 record (0 closes, 0 stored probabilities,
-32 stale rows). The tool that answers it ships in this branch; the
-answer is one droplet command away (Phase 4). Fill in from
-`python3 -m engine.mlbrecord`: n = ___, ROI at price ___, ROI at close
-___ on ___ closes, mean CLV ___ pts, beat share ___.
+**Is this model profitable on its 2026 record?** **No, at the price
+taken.** Droplet run, 2026-09-02: 803 settled bets, −5.7% ROI at price;
+614 since the rescale, −0.7% at price and −2.0% flat. The close-side
+number (+17.2% on 295 closes) reads as *negative* CLV — the closes were
+longer than the prices taken — and is itself a rule-5 figure until the
+same-line subset the tool now prints confirms the closes belong to the
+lines bet. So: losing at price on a sample large enough to say so;
+CLV **unverified** until the next run.
 
-**Month-by-month trend:** unverified here — the same command prints it;
-if July–August are negative after a positive April–June, that line is
-the top of this report.
+**Month-by-month trend:** the droplet output pasted back carried the
+headline rows only; the month table is in the same command's output and
+is the next thing to read. All-season −5.7% against post-August-4 −0.7%
+says the earlier era was worse, not that the model is decaying.
 
 **GO / NO-GO for tonight's slate: NO-GO on the money verdict, GO on
-the mechanics.** The single biggest reason: a record nobody has scored
-is not an edge, and this audit could not score it. The mechanics that
+the mechanics.** The single biggest reason: the scored record is
+negative at the price taken (−5.7% on 803), and the close-side number
+that would show whether the picks are at least beating the market is
+not yet trustworthy. The mechanics that
 gate a card — lineup hold, probable-starter certainty, per-park weather,
 tonight's umpire, market-sum HR devig, 3-leg cap, exposure caps, the
 refusal wording (fixed) — are correct by code and by 47 hand pins.
