@@ -755,7 +755,9 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
     category filter and every market this board carries — anytime_td,
     rush_yds, rec_yds, receptions, pass_yds — is a `player_game_logs`
     market, so these grade themselves on the same pass as everything
-    else.
+    else. The game rows the board carries since 2026-09-02 (moneylines,
+    by measurement) are written in the exact shapes `log_recommendations`
+    uses for the same markets, so `_game_actual` grades them too.
 
     THE PROBABILITY JOURNALED IS THE ONE THE PAGE SHOWED. `model_prob`,
     not the raw model number and not the recommendation's `hit_prob`:
@@ -782,18 +784,45 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             continue
         if r.get("model_prob") is None:
             continue
-        # NORMALISED SO IT CAN ACTUALLY GRADE, and the first cut of this
-        # could not. `_grade_side_aware` computes `actual > b["line"]`
-        # and compares the side against "OVER" — so a touchdown row
-        # journaled as the board renders it (side "yes", line None)
-        # raises a TypeError on the settle pass and, if it survived that,
-        # would invert its own result. `_journal_longshot_rows` writes
-        # OVER/0.5 for exactly this reason; a second bucket carrying the
-        # same markets needs the same normalisation, not a copy of the
-        # display shape.
-        side, line = str(r.get("side") or "OVER").upper(), r.get("line")
-        if market in LONGSHOT_MARKETS:
-            side, line = "OVER", 0.5
+        player = r["player"]
+        if r.get("kind") == "game" or market in GAME_MARKETS:
+            # A GAME ROW, in the shapes `log_recommendations` writes for
+            # the same markets, so `_game_actual` grades it with no new
+            # settle path: a moneyline is the team at OVER 0.5, a total
+            # the matchup key at its line, a spread the team at the
+            # NEGATED number, a team total the team at its number. The
+            # board's `player` is the pick label ("KC ML"), which reads
+            # well on a page and matches nothing in the games table.
+            bt = r.get("bet_type") or market
+            if bt == "moneyline":
+                player, side, line = r.get("team") or "", "OVER", 0.5
+            elif bt == "total":
+                player = (r.get("matchup") or "").replace(" ", "")
+                side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+            elif bt == "spread":
+                player, side = r.get("team") or "", "OVER"
+                line = None if r.get("line") is None else -float(r["line"])
+            elif bt == "team_total":
+                player = r.get("team") or ""
+                side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+            else:
+                continue
+            if not player or line is None:
+                continue
+            market, line = bt, float(line)
+        else:
+            # NORMALISED SO IT CAN ACTUALLY GRADE, and the first cut of
+            # this could not. `_grade_side_aware` computes
+            # `actual > b["line"]` and compares the side against "OVER" —
+            # so a touchdown row journaled as the board renders it (side
+            # "yes", line None) raises a TypeError on the settle pass
+            # and, if it survived that, would invert its own result.
+            # `_journal_longshot_rows` writes OVER/0.5 for exactly this
+            # reason; a second bucket carrying the same markets needs
+            # the same normalisation, not a copy of the display shape.
+            side, line = str(r.get("side") or "OVER").upper(), r.get("line")
+            if market in LONGSHOT_MARKETS:
+                side, line = "OVER", 0.5
         if line is None:
             # Nothing to grade against. A row that can never settle is
             # the failure `log_longshots` retired the watchlist over —
@@ -810,7 +839,7 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             "side, line, book, odds, projection, hit_prob, edge, confidence, "
             "grade, stake_units, stake_dollars, status, category) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'likely')",
-            (now, sport, row_date, r["player"], market,
+            (now, sport, row_date, player, market,
              side, line, r.get("book", ""), odds,
              r.get("projection"), r.get("model_prob"),
              # NOT an edge claim. This board is ranked on probability and

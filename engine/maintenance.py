@@ -1285,6 +1285,18 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 # log answers it by itself. It still WRITES NOTHING:
                 # adoption is a decision for whoever reads the deltas.
                 _rank_ctx(_rkc, "mlb", log=log)
+                # GAME MARKETS, the same discipline. engine.gamerank
+                # replays each league's stored closes and writes the
+                # moneyline / spread / total ranking into the same
+                # store, so an MLB moneyline can earn its shelf on the
+                # one box that holds the MLB games (Ethan, 2026-09-02:
+                # "we have no money lines or spreads or totals").
+                from .gamerank import measure_and_store as _game_rank
+                for _sp in ("mlb", "nfl", "cfb"):
+                    try:
+                        _game_rank(_rkc, _sp, log=log)
+                    except Exception as _gexc:  # noqa: BLE001
+                        log(f"  ⚠️  game rank {_sp} skipped: {_gexc}")
             finally:
                 _rkc.close()
         except Exception as exc:  # noqa: BLE001

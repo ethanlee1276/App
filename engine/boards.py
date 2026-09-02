@@ -28,7 +28,7 @@ Standard library only.
 
 from __future__ import annotations
 
-from .likely import RANK_AUC
+from .likely import GAME_RANK_AUC, RANK_AUC
 
 #: What the edge claim measures at. From `engine/likely`'s own header:
 #: the model sorts who scores and who clears a line well, and its claim
@@ -56,11 +56,11 @@ def _likely_measured(sport: str) -> str:
     if sport == "nfl":
         return (f"Ranked at {td:.2f} AUC on who scores and "
                 f"{_auc_range()} on who clears a line, over five seasons "
-                f"and 22,099 player-weeks.")
+                f"and 22,099 player-weeks.{_game_sentence(sport)}")
     if sport == "cfb":
         from .likely import CFB_TD_AUC
         return (f"Ranked at {CFB_TD_AUC:.2f} AUC on who scores, measured "
-                f"on college football's own game logs.")
+                f"on college football's own game logs.{_game_sentence(sport)}")
     # Store-fitted sports (mlb, nba, wnba): quote only the markets that
     # are actually ON the board — a sub-floor fit is stored for the next
     # refit to see, but quoting it here would claim a shelf it never
@@ -86,6 +86,22 @@ def _likely_measured(sport: str) -> str:
     return ("No market has passed the ranking measurement on this "
             "server yet — the board switches itself on the moment "
             "one does.")
+
+
+def _game_sentence(sport: str) -> str:
+    """The game-line half of the evidence line, from the shipped
+    measurement — and only for the markets that cleared the floor. The
+    sentence says what was measured OFF the board too, because a reader
+    who sees moneylines and no spreads deserves the reason rather than
+    a guess (Ethan, 2026-09-02: "we have no money lines or spreads or
+    totals")."""
+    got = GAME_RANK_AUC.get(sport) or {}
+    ml = got.get("moneyline")
+    if ml is None:
+        return ""
+    return (f" Who wins a game ranks at {ml:.2f} — moneylines only; "
+            f"spreads and totals tested as a coin flip against the close "
+            f"and stay off.")
 
 
 def guide(sport: str = "nfl") -> list[dict]:
@@ -201,6 +217,16 @@ FOOTBALL_SHELVES = (
     ("passing", "Passing yards", ("pass_yds",),
      "Quarterback volume. The weakest ranking of the five and labelled "
      "as such rather than mixed in silently."),
+    # GAME LINES, LAST AND NARROW. Ethan, 2026-09-02: "we have no money
+    # lines or spreads or totals or anything like that." Measured the
+    # same day (engine.gamerank): the model ranks who WINS and cannot
+    # rank who covers or which side of the total lands, so the shelf
+    # names all four markets and only moneylines ever reach it — the
+    # spec is the shape, the rows are earned per market.
+    ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
+     "Who wins the game. The model ranks winners from its power ratings; "
+     "spreads and totals tested as a coin flip against the close and are "
+     "not shown here until a measurement says otherwise."),
 )
 
 #: Baseball's shelves — real this time. The earlier BASEBALL_SHELVES
@@ -222,6 +248,10 @@ BASEBALL_SHELVES = (
     ("arms", "Strikeouts", ("strikeouts",),
      "Pitcher swing-and-miss. A different engine from the bats above, "
      "and shelved apart so its evidence reads apart."),
+    ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
+     "Who wins the game, from the run ratings and the starters. Each "
+     "market appears only once the weekly measurement on this server "
+     "shows the model ranks it."),
 )
 
 #: Hoops — one spec, both leagues, because the boards are the same
@@ -301,7 +331,12 @@ def _shelf_auc(markets, sport: str = "nfl") -> float | None:
     likely.rank_auc, so an MLB shelf reads the droplet's own fitted
     store and a CFB touchdown shelf stops borrowing the NFL's figure.
     """
-    from .likely import rank_auc
+    from .likely import MIN_RANK_AUC, rank_auc
     got = [rank_auc(sport, m) for m in markets]
-    got = [g for g in got if g is not None]
+    # Over the markets that can PUT A ROW on the shelf. A measured
+    # sub-floor market (the NFL spread at 0.49, say) never builds a row,
+    # so it is not the weakest row under the header — reading it as the
+    # shelf's figure would stamp "ranks at 0.49" over a shelf of
+    # moneylines that rank at 0.64.
+    got = [g for g in got if g is not None and g >= MIN_RANK_AUC]
     return min(got) if got else None

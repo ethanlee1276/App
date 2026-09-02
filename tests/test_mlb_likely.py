@@ -166,7 +166,7 @@ def test_a_cfb_watch_row_carries_colleges_own_figure():
 def test_mlb_has_shelves_and_unlisted_sports_still_do_not():
     shape = boards.shelves("mlb")
     keys = [s["key"] for s in shape]
-    assert keys == ["homers", "bats", "arms"], keys
+    assert keys == ["homers", "bats", "arms", "gamelines"], keys
     assert boards.shelves("ufc") == []
 
 
@@ -306,8 +306,10 @@ def test_a_likely_card_never_prints_vs_nobody():
         js = f.read()
     at = js.index("function likelyCard(r)")
     body = js[at:js.index("\nfunction ", at + 10)]
-    assert "r.opponent\n            ? ` vs ${teamName(r.opponent)}` : \"\"" \
-        in body, "the vs half must be conditional on having an opponent"
+    # Re-anchored 2026-09-02: the subtitle is built once into `sub`
+    # (a game row shows its matchup instead) — the guard is unchanged.
+    assert 'r.opponent ? ` vs ${teamName(r.opponent)}` : ""' in body, \
+        "the vs half must be conditional on having an opponent"
 
 
 # --- hoops rides the same rails --------------------------------------------

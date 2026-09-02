@@ -19,6 +19,27 @@ So the edge board is built on the model's weakest ability and the
 likelihood board on its strongest, and until now only the weak one had a
 page.
 
+GAME LINES, MEASURED THE SAME WAY. Ethan, 2026-09-02: "all I see us is
+doing overs, but we have no unders, and we also have no money lines or
+spreads or totals ... there is more bets that we can salvage." Measured
+by `engine.gamerank` — the ratings-only replay `engine.gamebacktest`
+runs over the stored closes, keeping for EVERY quoted game the
+probability the pricer put on its side and whether that side won:
+
+    who wins the game (moneyline)   AUC 0.641 NFL (1,181 games)
+                                    AUC 0.708 CFB (2,016 games)
+    who covers the spread           0.491 NFL · 0.517 CFB — a coin flip
+    over or under the total         0.497 NFL · 0.512 CFB — a coin flip
+    a team over its own number      0.513 NFL · 0.492 CFB — a coin flip
+
+The model can say who WINS and cannot say who COVERS. That is not a
+surprise — the close already holds the ratings, and the market's own
+de-vigged moneyline ranks the winner at 0.714 — and it is what decides
+the board: moneylines are ranked here, spreads and totals are not, and
+they stay off until a measurement says otherwise. The MLB figures can
+only be measured where the MLB history is (`gamerank --save` on the
+droplet writes them into the store `rank_auc` reads first).
+
 WHY A SHUT MARKET STILL BELONGS HERE, which looks wrong and is not.
 `calibrate.is_reliable` closes rush_yds and rec_yds for BETTING because
 their probability is wrong in ABSOLUTE terms — it cannot be compared to a
@@ -60,6 +81,21 @@ RANK_AUC = {
     "rush_yds": 0.761,
     "rec_yds": 0.733,
     "pass_yds": 0.691,
+}
+
+#: The game markets a card can carry (`gamebets._game_bet` bet_type).
+GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
+
+#: Game markets shown to rank, per sport — measured 2026-09-02 by
+#: `engine.gamerank` (see the header). ONLY the markets that cleared
+#: MIN_RANK_AUC are listed, because an entry here is what puts a market
+#: on the board; the ones that tested as a coin flip are written out in
+#: the header so nobody re-measures them by accident and nobody quietly
+#: adds them. A sport with no entry ranks no game market until the
+#: store on its own box says so.
+GAME_RANK_AUC = {
+    "nfl": {"moneyline": 0.641},
+    "cfb": {"moneyline": 0.708},
 }
 
 #: SHOULD THIS BOARD GET REAL MONEY? Ethan, 2026-08-30: "we need to
@@ -166,6 +202,8 @@ def rank_auc(sport: str, market: str):
     got = _fitted(sport, market)
     if got is not None:
         return got
+    if market in GAME_MARKETS:
+        return GAME_RANK_AUC.get(sport, {}).get(market)
     if sport == "nfl":
         return RANK_AUC.get(market)
     if sport == "cfb" and market == "anytime_td":
@@ -229,12 +267,23 @@ def admissible(row: dict) -> str:
         return "no real market price"
     if not _sane(row.get("odds")):
         return "price a book could not have posted"
-    # The two product refusals (Ethan, 2026-09-01 — see HEAVIEST_PRICE):
-    # the board shows who's most likely to DO something, priced like a
-    # bet. An UNDER is a wager on failure — the most likely outcome of
-    # most baseball nights, and not what anyone opens a picks page for.
-    if (row.get("side") or "").lower() == "under":
-        return "a bet on something not happening"
+    # THE PRODUCT REFUSAL (Ethan, 2026-09-01 — see HEAVIEST_PRICE): the
+    # board shows who's most likely to DO something, priced like a bet.
+    #
+    # AN UNDER IS ADMITTED AGAIN, and the history is worth keeping. The
+    # ban went in on 09-01 beside the price cap, aimed at the first MLB
+    # night's rows — unders at -300 to -1800, "the most likely outcome
+    # of most baseball nights" — and the CAP is what answered that
+    # complaint: every one of those rows is heavier than -250. The
+    # under rule swept the rest out with them, and a day later Ethan,
+    # 2026-09-02: "all I see us is doing overs, but we have no unders
+    # ... there is more bets that we can salvage." The measurement
+    # agrees with him: an AUC is symmetric, so a market whose over
+    # ranks at 0.77 ranks its under at 0.77 — 1 - P(over) is the same
+    # ordering read from the other end (pinned in
+    # tests/test_likely_gamelines.py). `from_prop` shows the under's
+    # own probability; this bar holds it to the same cap, floor and
+    # credibility as an over.
     if int(row["odds"]) < HEAVIEST_PRICE:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
@@ -294,7 +343,14 @@ def from_prop(row: dict, bettable, fits=None,
     fitted = display_prob(market, row.get("projection"), row.get("line"),
                           row.get("recent_values"), fits=fits)
     if fitted is not None:
-        shown, source = float(fitted), "mixture"
+        # The mixture is P(over); an UNDER row shows its complement.
+        # Every yardage line a book hangs is a half-number, so there
+        # is no push to subtract — the same convention `hit_prob`
+        # already arrived with (betting.choose_side: under_win =
+        # 1 - p_over_at_under).
+        under = str(row.get("side") or "").lower() == "under"
+        shown = 1.0 - float(fitted) if under else float(fitted)
+        source = "mixture"
     if shown < MIN_PROB:
         return None
     # CREDIBILITY, AND THIS BOARD HAD NONE. Every other pick path refuses
@@ -316,6 +372,10 @@ def from_prop(row: dict, bettable, fits=None,
     if not _credible(shown, row.get("fair_prob")):
         return None
     return {
+        # WHICH MAKER BUILT IT — "prop", "td" or "game" — so the page,
+        # the journal and the lint branch on a flag rather than on the
+        # absence of a position or a line.
+        "kind": "prop",
         "player": row.get("player", ""), "team": row.get("team", ""),
         "opponent": row.get("opponent", ""),
         "market": market, "market_label": row.get("market_label", market),
@@ -357,6 +417,7 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
     chain, and is merged here rather than rebuilt.
     """
     return {
+        "kind": "td",
         "player": row.get("player", ""), "team": row.get("team", ""),
         "opponent": row.get("opponent", ""),
         "market": "anytime_td", "market_label": "Anytime TD",
@@ -380,8 +441,134 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
     }
 
 
+def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
+    """One likelihood row from a priced game bet, or None.
+
+    `row` is the card the edge board already built — `gamebets._game_bet`,
+    `gamebets.moneyline_to_dict`, cfb_build.to_game_bet — so this is, once
+    more, a different cut of the same evaluation and not a second model.
+    `win_prob` is the model's probability of the side the card took and
+    `fair_prob` the book's de-vigged number for that side; both are on
+    the card, and `admissible` holds them to the same cap, floor and
+    credibility bar as every player row.
+
+    THE MARKET HAS TO HAVE RANKED. `GAME_RANK_AUC` (or the box's own
+    store) says which game markets the model has been shown to sort;
+    today that is the moneyline and nothing else, because spreads and
+    totals measured as a coin flip against the close. A spread card
+    handed in here comes back None, and that is the board working.
+
+    THE LIKELY SIDE, NOT THE PRICED SIDE. The edge card backs whichever
+    side has the edge, and on a moneyline that is the dog more often
+    than not — the first end-to-end run put "CHI ML +190, 37%" on a
+    board called Most Likely, with the 63% favourite nowhere on it. A
+    moneyline is two-way with no push, so the other side's probability
+    is on the card already (1 - win_prob, 1 - fair_prob); its price is
+    now too (`MoneylineRec.home_odds` / `away_odds`). When the card's
+    pick sits under 50% the row is built for the favourite. A dog card
+    without the other price (a stale payload) is refused rather than
+    shown as "likely". Spreads and totals would need the same flip the
+    day they rank, and their cards do not carry the other price yet —
+    noted here so it is not rediscovered.
+
+    HOLDS, NOT PICKS: a card on an in-play market a pre-game model
+    cannot price (`live`), and a college conditional waiting on a
+    starter (`conditional`) — the same reading the injury hold gives a
+    listed player. A card the edge board refused as not credible still
+    arrives here with `credible` False and a Pass grade; `admissible`
+    refuses it again on the numbers, which is the one bar doing its job.
+
+    THE ROW WEARS THE CARD'S SHAPE (win_prob, fair_prob, edge, grade,
+    headline, matchup …) beside the board's own keys, so the game-bet
+    page can draw a flipped row it will not find among the edge cards.
+    """
+    from .gamebets import expected_value
+    market = row.get("bet_type") or row.get("market") or ""
+    if market not in GAME_MARKETS or not rankable(market, sport):
+        return None
+    if row.get("has_market") is False or row.get("live") or row.get("conditional"):
+        return None
+    prob = row.get("win_prob")
+    if prob is None:
+        return None
+    prob, fair = float(prob), row.get("fair_prob")
+    home, away = row.get("home", "") or "", row.get("away", "") or ""
+    team = row.get("team") or ""
+    odds = row.get("odds")
+    label = row.get("pick_label") or row.get("headline") or ""
+    flipped = False
+    if market == "moneyline" and prob < 0.5:
+        other = away if team == home else home
+        other_odds = row.get("away_odds") if team == home else row.get("home_odds")
+        if not other or other_odds is None or fair is None:
+            return None
+        team, odds, prob, fair = other, other_odds, 1.0 - prob, 1.0 - float(fair)
+        label, flipped = f"{other} ML", True
+    if prob < MIN_PROB:
+        return None
+    edge = None if fair is None else round(prob - float(fair), 4)
+    try:
+        ev = round(expected_value(prob, int(odds)), 4)
+    except (TypeError, ValueError):
+        ev = None
+    reasons = list(row.get("reasons") or [])
+    if flipped:
+        reasons.insert(0, f"The likely winner. The edge board backed "
+                          f"{row.get('team') or ''} at {int(row.get('odds') or 0):+d} "
+                          f"on price; this is the side the same numbers "
+                          f"say wins more often ({prob:.0%}).")
+    return {
+        # WHAT KIND OF ROW THIS IS, said once, so the page, the journal
+        # and the lint branch on a flag rather than on the absence of a
+        # position. `player` carries the pick label because every reader
+        # of this board keys on it; the journal re-derives the team or
+        # matchup it needs from the fields below.
+        "kind": "game",
+        "player": label, "team": team or home,
+        "opponent": (away if (team or home) == home else home),
+        "home": home, "away": away,
+        "matchup": row.get("matchup", "") or f"{away} @ {home}",
+        "pick_label": label, "pick": team or "",
+        "pick_is_home": (team == home) if team else None,
+        "headline": label,
+        "bet_type": market, "market": market,
+        "market_label": row.get("market_label", market),
+        "side": row.get("side", "") or "", "line": row.get("line"),
+        # A game card carries no book name on the NFL path; the journal
+        # has always written these as the shopped-best price.
+        "book": row.get("book") or "best", "odds": odds,
+        "model_prob": round(prob, 4),
+        "prob_source": "model",
+        "raw_prob": round(prob, 4),
+        "implied_prob": None if fair is None else round(float(fair), 4),
+        "projection": None,
+        "ev_per_unit": ev,
+        "bettable": True,
+        "rank_auc": rank_auc(sport, market),
+        "reasons": reasons,
+        "game_script": row.get("game_script"),
+        "recent_values": [],
+        "game_date": row.get("date", "") or "", "kickoff": row.get("kickoff", "") or "",
+        "date": row.get("date", "") or "",
+        "headshot": "", "position": "", "usage_role": "",
+        "injury_status": "",
+        "warnings": list(row.get("warnings") or []),
+        # The card shape, for the game-bet page. NOT a stake: this board
+        # ranks and never sizes, and a flipped row is not on the edge
+        # board at all.
+        "win_prob": round(prob, 4),
+        "fair_prob": None if fair is None else round(float(fair), 4),
+        "edge": edge,
+        "has_market": True, "live": False, "credible": True,
+        "grade": "Likely", "quality": None, "confidence": None,
+        "stake_units": 0.0, "recommended": False,
+        "flipped": flipped,
+    }
+
+
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
-          limit: int = LIMIT, fits=None, census: dict | None = None) -> list:
+          limit: int = LIMIT, fits=None, census: dict | None = None,
+          game_bets=None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
@@ -420,6 +607,20 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         if got is None:
             continue
         key = (got["player"], got["team"], got["market"])
+        if key in seen or not keep(got):
+            continue
+        seen.add(key)
+        out.append(got)
+    # THE THIRD MAKER, same bar. Game cards arrive from the edge board's
+    # own pricing (`pipeline._game_bets`, `mlb.pipeline._game_bets`,
+    # cfb_build.build_plays); a market the model has not been shown to
+    # rank never leaves `from_game_bet`, and everything that does answers
+    # to `keep` like every other row.
+    for row in game_bets or []:
+        got = from_game_bet(row, sport=sport)
+        if got is None:
+            continue
+        key = ("game", got["matchup"], got["market"], got["team"], got["side"])
         if key in seen or not keep(got):
             continue
         seen.add(key)

@@ -100,8 +100,9 @@ def test_the_gate_is_one_function_not_two_copies():
     assert "def admissible(row: dict) -> str:" in src
     at = src.index("    def keep(got) -> bool:")
     body = src[at:src.index("out.sort(", at)]
-    # Both loops go through it.
-    assert body.count("not keep(got)") == 2, body
+    # Every maker's loop goes through it — watch rows, prop rows and,
+    # since 2026-09-02, the game cards (likely.from_game_bet).
+    assert body.count("not keep(got)") == 3, body
 
 
 # --- and it says why ------------------------------------------------------

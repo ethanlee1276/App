@@ -391,20 +391,39 @@ def test_an_emptied_board_can_say_why():
 
 
 # --- the board shows bets, not chalk (Ethan, 2026-09-01) --------------------
-def test_an_under_is_never_a_top_pick():
+def test_an_under_is_a_pick_held_to_the_same_bar():
     """First settled night of the MLB likely book: 52/73 won, ROI -11.2%,
     and nearly every row an UNDER at -300 to -1800. Ethan: "the point of
-    the most likley page is to push bets... too put together the most
-    likley bets too hit, not just grabbing random -1200 props. and thats
-    for every sport." The board shows who's most likely to DO something."""
-    rows = K.build([_prop(side="under", prob=0.85, odds=-180)])
-    assert rows == [], rows
-    # Asserted on the gate itself — from_prop's cheap pre-filter may
-    # refuse first (uncensused, by design), but admissible is the one
-    # bar every maker answers to.
-    row = {"model_prob": 0.85, "side": "under", "odds": -180,
-           "book": "DK", "implied_prob": 0.8}
-    assert K.admissible(row) == "a bet on something not happening"
+    the most likley page is to push bets... not just grabbing random
+    -1200 props." The first fix banned every under; the price cap beside
+    it was what actually answered him, and a day later (2026-09-02): "all
+    I see us is doing overs, but we have no unders ... there is more bets
+    that we can salvage." So: an under at a bettable price is a pick, and
+    an under past the cap is still chalk."""
+    rows = K.build([_prop(side="under", prob=0.62, odds=-115)])
+    assert len(rows) == 1 and rows[0]["side"] == "under", rows
+    assert K.build([_prop(side="under", prob=0.85, odds=-400)]) == []
+    row = {"model_prob": 0.66, "side": "under", "odds": -180,
+           "book": "DK", "implied_prob": 0.64}
+    assert K.admissible(row) == ""
+    assert "chalk" in K.admissible({**row, "odds": -400})
+    assert "not happening" not in K.admissible(row)
+
+
+def test_an_under_shows_its_own_probability_through_the_mixture():
+    """The mixture is P(over); an under row shows the complement rather
+    than the over's number wearing an under label. The two sides of one
+    line sum to one — which is also why the ranking measurement covers
+    both: an AUC is symmetric under the complement."""
+    over = K.from_prop(_prop(market="rec_yds", side="over", prob=0.58,
+                             fair_prob=0.55), _always, fits=FITS)
+    under = K.from_prop(_prop(market="rec_yds", side="under", prob=0.42,
+                              fair_prob=0.45), _always, fits=FITS)
+    assert over and under, (over, under)
+    assert over["prob_source"] == "mixture" == under["prob_source"]
+    assert abs(over["model_prob"] + under["model_prob"] - 1.0) < 1e-3, \
+        (over["model_prob"], under["model_prob"])
+    assert under["raw_prob"] == 0.42
 
 
 def test_chalk_beyond_the_price_cap_is_refused_everywhere():

@@ -1147,8 +1147,15 @@ def main() -> None:
             # count, because the bar was only applied on the prop path
             # college does not use.
             _ml_census: dict = {}
+            # THE GAME CARDS RIDE ALONG (Ethan, 2026-09-02: "we have no
+            # money lines or spreads or totals"). `out["game_bets"]` is
+            # already built above; `likely.from_game_bet` keeps the
+            # markets college has been measured to rank — the moneyline,
+            # at 0.708 over 2,016 replayed games — and refuses the
+            # conditionals, which are holds and not picks.
             out["most_likely"] = _likely([], rows, watch, sport="cfb",
-                                         census=_ml_census)
+                                         census=_ml_census,
+                                         game_bets=out.get("game_bets") or [])
             out["likely_census"] = _ml_census
             # THE SAME FURNITURE THE NFL BOARD CARRIES, and college had
             # none of it. `boardGuide` and the shelves both read the

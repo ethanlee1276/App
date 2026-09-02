@@ -75,12 +75,19 @@ def test_the_injury_hold_is_the_first_thing_asked():
 
 def test_the_page_rules_are_checked_again_on_the_payload():
     rows = [_likely(player="Chalk", odds=-300),
-            _likely(player="Fade", side="under"),
+            _likely(player="Fade", side="under", projection=6.8, line=5.5),
             _likely(player="Runaway", model_prob=0.75, implied_prob=0.55),
-            _likely(player="Thin", model_prob=0.25)]
+            _likely(player="Thin", model_prob=0.25),
+            _likely(player="Fine Under", side="under", projection=4.2, line=5.5)]
     got = L.lint_likely(rows, {})
     assert "CHALK -300" in _flags(got, "Chalk")
-    assert "UNDER" in _flags(got, "Fade")
+    # An under is a bet since 2026-09-02 (Ethan: "we have no unders");
+    # what the lint asks of one is that the projection sits on its side
+    # of the number, the mirror of PROJ<LINE on an over.
+    assert any(f.startswith("PROJ>LINE") for f in _flags(got, "Fade")), _flags(got, "Fade")
+    assert "UNDER" not in _flags(got, "Fade")
+    assert not any(f.startswith("PROJ") for f in _flags(got, "Fine Under")), \
+        _flags(got, "Fine Under")
     assert any(f.startswith("GAP") for f in _flags(got, "Runaway"))
     assert any(f.startswith("UNDER-FLOOR") for f in _flags(got, "Thin"))
 

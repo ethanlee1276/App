@@ -21,9 +21,13 @@ row only if its market has a measured ranking AUC ≥ 0.60 (anytime TD
 0.721, receptions 0.770, rush yds 0.761, rec yds 0.733, pass yds 0.691),
 shows the **mixture-calibrated** probability where a fit exists (else the
 model's), and refuses a row that: has no probability; sits under 30%; is
-priced by a proxy; carries a price no book could post; is an **under**;
-is heavier than **−250**; or disagrees with the book's de-vigged number
-by more than 10 points. It sorts by probability and nothing else, caps
+priced by a proxy; carries a price no book could post; is heavier than
+**−250**; or disagrees with the book's de-vigged number by more than 10
+points. (Until 2026-09-02 it also refused every **under**; the cap was
+what answered the −1200 rows that rule was aimed at, and unders are bets
+again — see `docs/LIKELY_GAME_LINES.md`, which also covers the game
+cards the board now ranks: moneylines, by measurement, and nothing
+else.) It sorts by probability and nothing else, caps
 at 40 rows, and the page shows three per shelf on the home page. The top
 ten are journaled to the `likely` book at a flat 0.1u, zero dollars.
 
@@ -80,7 +84,8 @@ Fixed on both paths:
 Reads the published payload and the injuries page, prints every row on
 the three boards with its numbers, and beside each the checks it fails.
 Every flag is a question for a human, printed with enough of the row to
-answer it. Most Likely: HELD, UNDER, CHALK, UNDER-FLOOR, GAP, PROJ<LINE,
+answer it. Most Likely: HELD, CHALK, UNDER-FLOOR, GAP, PROJ<LINE (and
+PROJ>LINE on an under),
 HISTORY (a 60%+ row whose recent games cleared the line less than a
 third of the time), SCRIPT against the side, ROLE misfit (a QB on a
 receptions line), REPEAT, RANK-ONLY, STARTED. Recommended props: HELD,

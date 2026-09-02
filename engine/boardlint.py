@@ -14,11 +14,12 @@ implies that the row fails:
 
     Most Likely
       HELD        listed Questionable / Doubtful / Out (the injury hold)
-      UNDER       a bet on something not happening
       CHALK       heavier than the -250 cap
       GAP         shown probability more than MAX_CREDIBLE_EDGE from the
                   book's de-vigged number
       PROJ<LINE   an over whose projection sits below the line
+      PROJ>LINE   an under whose projection sits above it (unders are
+                  admitted since 2026-09-02 — the cap answers the chalk)
       HISTORY     fewer than a third of his recent games cleared the line
                   while the board says 60%+ (the reader will ask)
       SCRIPT      the game script tilts against the side
@@ -184,8 +185,6 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
             flags.append(f"HELD listed {status}")
         elif listed:
             flags.append(f"HELD injuries page says {listed}")
-        if side == "under":
-            flags.append("UNDER")
         odds = _f(r.get("odds"))
         if odds is not None and odds < HEAVIEST_PRICE:
             flags.append(f"CHALK {int(odds):+d}")
@@ -197,6 +196,8 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
         proj, line = _f(r.get("projection")), _f(r.get("line"))
         if proj is not None and line is not None and side != "under" and proj < line:
             flags.append(f"PROJ<LINE {proj:.1f} < {line:g}")
+        if proj is not None and line is not None and side == "under" and proj > line:
+            flags.append(f"PROJ>LINE {proj:.1f} > {line:g} on an under")
         share = _history_share(r)
         if (share is not None and prob is not None and prob >= HISTORY_PROB
                 and share < HISTORY_MIN_SHARE and side != "under"):

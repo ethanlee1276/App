@@ -422,12 +422,16 @@ from . import boards as _boards                          # noqa: E402
 
 
 def _likely_board(results: list, td_picks: list, td_watch: list,
-                  census: dict | None = None) -> list:
-    """The likelihood board — see `engine.likely` for why it exists."""
+                  census: dict | None = None, game_bets=None) -> list:
+    """The likelihood board — see `engine.likely` for why it exists.
+
+    `game_bets` are the cards `_game_bets` priced for the edge board; the
+    likelihood board ranks the ones whose market has been measured to
+    rank (today: the moneyline) beside the player rows."""
     from .likely import build
     try:
         return build(results, td_picks, td_watch, sport="nfl",
-                     census=census)
+                     census=census, game_bets=game_bets)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -727,7 +731,8 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # the two disagree about the same slate, which is the failure
     # `_likely_board`'s own header warns about one level up.
     _likely_census: dict = {}
-    _likely = _likely_board(results, ls, ls_watch, census=_likely_census)
+    _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
+                            game_bets=game_bets)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",

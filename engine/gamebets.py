@@ -144,6 +144,12 @@ class MoneylineRec:
     #: `shrink_in_force`. None means nothing had been measured for the
     #: market yet and the 0.5 guess was standing in.
     cal_temp: float | None = None
+    #: BOTH prices, not just the pick's. The likelihood board ranks the
+    #: side more likely to WIN, which is the favourite whenever this
+    #: card backed the dog on price — and the favourite's row needs the
+    #: favourite's price (Ethan, 2026-09-02: "we have no money lines").
+    home_odds: int | None = None
+    away_odds: int | None = None
 
 
 #: Post-haircut edge that saturates the confidence scale. It is half of the
@@ -326,7 +332,7 @@ def price_moneyline_sharp(home: str, away: str,
         edge=round(edge, 4), odds=ml,
         ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
-        quality=quality,
+        quality=quality, home_odds=home_ml, away_odds=away_ml,
     )
 
 
@@ -373,6 +379,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
         odds=ml, ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
         quality=quality, cal_temp=shrink_in_force(sport, "moneyline"),
+        home_odds=home_ml, away_odds=away_ml,
     )
 
 
@@ -411,6 +418,9 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         "quality": rec.quality,
         "headline": f"{rec.pick} Moneyline ({rec.odds:+d})",
         "reasons": rec.reasons,
+        # Both sides' prices — see MoneylineRec.home_odds.
+        "home_odds": rec.home_odds,
+        "away_odds": rec.away_odds,
     }
 
 

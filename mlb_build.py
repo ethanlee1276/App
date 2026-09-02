@@ -664,8 +664,13 @@ def main() -> None:
         from engine.likely import build as _likely_build
         from engine import boards as _mlboards
         _ml_census: dict = {}
+        # The game cards too. A baseball moneyline reaches this board
+        # only after `engine.gamerank --save` has measured, on THIS
+        # box's game history, that the run-rating model ranks winners —
+        # the same earned-per-market rule the prop shelves live by.
         result["most_likely"] = _likely_build(
-            result["recommendations"], sport="mlb", census=_ml_census)
+            result["recommendations"], sport="mlb", census=_ml_census,
+            game_bets=result.get("game_bets") or [])
         if not result["most_likely"]:
             from engine.rankfit import load as _rank_store
             if not any(k.startswith("mlb:") for k in _rank_store()):

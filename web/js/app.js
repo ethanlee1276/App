@@ -5155,7 +5155,13 @@ function cardHTML(r) {
    behind it (a touchdown watch) opens the player page, which carries
    the versus block too. */
 function likelyDoor(r) {
-  if (!r || !r.player) return "";
+  if (!r) return "";
+  // A GAME ROW opens the game-bet page by the same id the edge card
+  // carries: home, away, market, side and line travel on the row, so
+  // gameBetId agrees with the card it was cut from (Ethan, 2026-09-02:
+  // "we have no money lines or spreads or totals").
+  if (r.kind === "game") return gameBetAttrs(r);
+  if (!r.player) return "";
   const id = propId(r);
   if (propOpenable(r) && findProp(id)) {
     return ` data-prop="${escapeAttr(id)}" tabindex="0" role="link"`;
@@ -5163,7 +5169,12 @@ function likelyDoor(r) {
   return ` data-player-page="${escapeAttr(slugify(r.player))}" tabindex="0" role="link"`;
 }
 function likelyOpen(r) {
-  if (!r || !r.player) return "";
+  if (!r) return "";
+  if (r.kind === "game") {
+    return gameBetOpenable(r)
+      ? ` data-open="prop:${escapeAttr(gameBetId(r))}"` : "";
+  }
+  if (!r.player) return "";
   const id = propId(r);
   return (propOpenable(r) && findProp(id))
     ? ` data-open="prop:${escapeAttr(id)}"`
@@ -5228,19 +5239,25 @@ function likelyCard(r) {
     `<div class="mini" style="opacity:.6;margin-top:4px">
        Calibrated for this market’s shape — the model’s raw read was
        ${(Number(r.raw_prob || 0) * 100).toFixed(0)}%.</div>`;
-  const label = r.line == null ? escapeHtml(r.market_label)
+  const game = r.kind === "game";
+  const label = game ? escapeHtml(r.market_label || r.market)
+    : r.line == null ? escapeHtml(r.market_label)
     : `${escapeHtml(r.side || "over")} ${r.line} ${escapeHtml(r.market_label)}`;
+  const when = whenLabel(r.game_date, r.kickoff);
+  // A game row is the pick label ("DET ML") over its matchup; a player
+  // row is the player over team and opponent. Same card, same door.
+  const mark = game ? likelyGameMark(r, 56)
+    : playerAvatar(r.player, r.team, { map: nflMap(), headshot: r.headshot });
+  const who = game ? (r.pick_label || r.player) : r.player;
+  const sub = game ? escapeHtml(r.matchup || "")
+    : `${teamName(r.team)}${r.opponent ? ` vs ${teamName(r.opponent)}` : ""}`;
   return `<article class="card longshot"${likelyDoor(r)}>
     <div class="card-head">
-      <div class="card-id">${playerAvatar(r.player, r.team,
-          { map: nflMap(), headshot: r.headshot })}
+      <div class="card-id">${mark}
         <div>
-          <div class="player">${escapeHtml(r.player)}
+          <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${teamName(r.team)}${r.opponent
-            ? ` vs ${teamName(r.opponent)}` : ""}${
-            whenLabel(r.game_date, r.kickoff)
-              ? ` · ${escapeHtml(whenLabel(r.game_date, r.kickoff))}` : ""}</div>
+          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}</div>
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span></div>
         </div>
@@ -5344,14 +5361,18 @@ function renderQuickTools() {
 /* The board's product rules, enforced AT RENDER too. Ethan, 2026-09-01:
    "i dont wanna be betting on -1200 or -1800 bets"; 2026-09-02, seeing
    them anyway on a phone: "your still doing these dumb ass bets."
-   engine/likely.admissible refuses unders and prices past -250 — but a
-   STALE board file predates the rule, and the droplet was serving one
-   while its builds were starved. A rule the page does not also enforce
-   is a rule any old file can override; the render is the last gate.
-   Mirrors engine/likely.HEAVIEST_PRICE — pinned equal by test. */
+   engine/likely.admissible refuses prices past -250 — but a STALE board
+   file predates the rule, and the droplet was serving one while its
+   builds were starved. A rule the page does not also enforce is a rule
+   any old file can override; the render is the last gate.
+   Mirrors engine/likely.HEAVIEST_PRICE — pinned equal by test.
+
+   UNDERS PASS. From 09-01 to 09-02 this gate also dropped every under,
+   which was the cap’s job done twice: the -1200 rows it was aimed at
+   are chalk, and a -140 under is a bet. Ethan, 2026-09-02: "all I see
+   us is doing overs, but we have no unders." */
 const LIKELY_HEAVIEST_PRICE = -250;
 function showableLikelyRow(r) {
-  if (String((r || {}).side || "").toLowerCase() === "under") return false;
   const odds = (r || {}).odds;
   return odds == null || Number(odds) >= LIKELY_HEAVIEST_PRICE;
 }
@@ -5502,15 +5523,28 @@ function renderLikely() {
    A preview's job is scanning: face, name, the bet, the price, the
    probability, one line. The full cards still live on the Top Picks
    page, one tap away, where depth is the point. */
+/* A game row’s badge: the team taken, or the league’s mark for a total,
+   which belongs to the game and not to either side — the rule
+   gameBetCard already draws by. */
+function likelyGameMark(r, size) {
+  return r.bet_type === "total" ? leagueMark(state.sport, size)
+    : teamMark(r.team, size);
+}
+
 function likelyRow(r) {
   const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
-  const label = r.line == null ? (r.market_label || r.market)
+  const game = r.kind === "game";
+  const label = game ? `${r.market_label || r.market} · ${r.matchup || ""}`
+    : r.line == null ? (r.market_label || r.market)
     : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`;
+  const mark = game ? likelyGameMark(r, 30)
+    : playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
+                                       headshot: r.headshot });
   return `<button class="ml-row" type="button"${likelyOpen(r)}
-      title="Open this pick — the bar graph, the logs and the versus block">
-    ${playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
-                                       headshot: r.headshot })}
-    <span class="ml-who"><b>${escapeHtml(r.player)}</b>
+      title="${game ? "Open this game — the margin chart and the reasons"
+                    : "Open this pick — the bar graph, the logs and the versus block"}">
+    ${mark}
+    <span class="ml-who"><b>${escapeHtml(game ? (r.pick_label || r.player) : r.player)}</b>
       <span class="k">${escapeHtml(label)}${r.odds != null
         ? ` · ${american(r.odds)}` : ""}${r.book
         ? ` · ${escapeHtml(r.book)}` : ""}</span></span>
@@ -6802,7 +6836,14 @@ function renderPropPage() {
        rendered "That pick is not on tonight's board" correctly — because
        `allProps()` already guards and this line did not. */
     const b = ((state.data || {}).game_bets || [])
-      .find((x) => gameBetId(x) === state.propId);
+      .find((x) => gameBetId(x) === state.propId)
+      /* A likelihood game row can be the OTHER side of the edge card —
+         the favourite the board ranks where the edge board backed the
+         dog on price — so it is looked up in its own list too. It
+         carries the card shape (likely.from_game_bet), so the same
+         page draws it. */
+      || ((state.data || {}).most_likely || [])
+        .find((x) => x.kind === "game" && gameBetId(x) === state.propId);
     if (b) return renderGameBetPage(b);
   }
   const r = findProp(state.propId);
