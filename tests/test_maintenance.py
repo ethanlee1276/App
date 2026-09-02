@@ -567,6 +567,36 @@ def test_the_closes_harvest_follows_the_journal_not_a_hardcode(monkeypatch):
     assert maintenance._harvest_targets(dt.date(2026, 9, 14)) == []
 
 
+def test_the_wednesday_deep_refit_reads_the_today_it_was_given(monkeypatch):
+    """The deep refit gate read the WALL CLOCK while every other weekday
+    gate in run_if_due read the `today` parameter. On a real Wednesday
+    (2026-09-02) the suite's fake July Saturdays therefore spawned the
+    real fitters against data/history.db and hung for 15 minutes — a
+    test reading the box it runs on, which test_preservation forbids."""
+    from engine import db, ingest, ledger, deepfit
+    ran = []
+    monkeypatch.setattr(deepfit, "refit_all",
+                        lambda db="data/history.db": ran.append(db) or [])
+    monkeypatch.setattr(ingest, "ingest_mlb_results",
+                        lambda conn, start, end, with_logs=True, progress=None:
+                        {"games": 0, "player_logs": 0, "skipped": []})
+    monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
+    monkeypatch.setattr(ledger, "connect", lambda path=None: None)
+    monkeypatch.setattr(db, "connect", lambda path=None: None)
+    monkeypatch.setattr(maintenance, "_wnba_day", None)
+    with tempfile.TemporaryDirectory() as td:
+        # Thursday 2026-07-23: no refit, whatever day it really is.
+        maintenance.run_if_due(harvest=False, log=lambda *_: None,
+                               state_path=Path(td) / "a.json",
+                               today=dt.date(2026, 7, 23))
+        assert ran == []
+        # Wednesday 2026-07-22: the refit runs, whatever day it really is.
+        maintenance.run_if_due(harvest=False, log=lambda *_: None,
+                               state_path=Path(td) / "b.json",
+                               today=dt.date(2026, 7, 22))
+        assert ran == ["data/history.db"]
+
+
 if __name__ == "__main__":
     class MP:
         def __init__(self): self._undo = []
