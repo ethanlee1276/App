@@ -440,6 +440,61 @@ def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
                    "(state.data.most_likely || []).filter(showableLikelyRow)"):
         assert anchor in js, anchor
 
+# --- the injury hold, on this board too -----------------------------------
+def test_a_listed_player_is_held_off_the_likelihood_board():
+    """Ethan, 2026-09-02: "some of them seem weird ... especially the most
+    likely bets." `rules.apply_rules` holds a Questionable / Doubtful /
+    Out player off the edge board; this board took the same row, ignored
+    `recommended`, and carried no field with the designation. A player
+    ruled out on Friday could top "who is most likely to hit" on Sunday."""
+    fine = _prop(player="Healthy", prob=0.66)
+    out = _prop(player="Ruled Out", prob=0.80, injury_status="OUT",
+                recommended=False,
+                warnings=["Ruled Out listed OUT — hold until inactives confirm status"])
+    census: dict = {}
+    board = K.build([fine, out], sport="nfl", fits=FITS, census=census)
+    assert [r["player"] for r in board] == ["Healthy"]
+    assert census == {"listed OUT — held until inactives confirm": 1}
+
+
+def test_questionable_is_held_the_same_way_the_edge_board_holds_it():
+    q = _prop(player="Game Time", prob=0.70, injury_status="QUESTIONABLE")
+    assert K.admissible(K.from_prop(q, _always, fits=FITS)).startswith(
+        "listed QUESTIONABLE")
+
+
+def test_a_watch_row_carries_the_designation_and_is_refused_on_it():
+    w = _watch(player="Hurt Back", prob=0.61)
+    w["injury_status"] = "DOUBTFUL"
+    w["caveats"] = ["Hurt Back listed DOUBTFUL — hold until inactives confirm status"]
+    got = K.from_watch(w)
+    assert got["injury_status"] == "DOUBTFUL"
+    assert got["warnings"] == w["caveats"]
+    assert K.admissible(got).startswith("listed DOUBTFUL")
+    assert K.build([], [w], sport="nfl", fits=FITS) == []
+
+
+def test_the_designation_rides_on_every_prop_row_from_the_decision():
+    """The pipeline stamps `injury_status` from the rules decision's own
+    `health` check, so this board cannot disagree with the hold."""
+    from engine import pipeline as P
+    class D:
+        checks = [{"key": "juice", "value": "-115"},
+                  {"key": "health", "value": "OUT"}]
+    assert P._injury_status(D()) == "OUT"
+    class Clean:
+        checks = [{"key": "health", "value": "not listed"}]
+    assert P._injury_status(Clean()) == ""
+    assert P._injury_status(object()) == ""
+    import inspect
+    assert '"injury_status": _injury_status(decision)' in inspect.getsource(P._rec_to_dict)
+
+
+def test_a_row_with_no_designation_field_is_unaffected():
+    """CFB and MLB rows never carried the field; absence is health."""
+    assert K.admissible(K.from_prop(_prop(), _always, fits=FITS)) == ""
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

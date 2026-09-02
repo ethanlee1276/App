@@ -34,6 +34,16 @@ def _avg(vals: list[float]):
     return round(sum(vals) / len(vals), 1) if vals else None
 
 
+def _injury_status(decision) -> str:
+    """The designation the rules engine found, or "" — read from the
+    decision's own `health` check so this cannot disagree with the hold."""
+    for c in getattr(decision, "checks", None) or []:
+        if c.get("key") == "health":
+            v = str(c.get("value") or "")
+            return "" if v == "not listed" else v
+    return ""
+
+
 def _rec_to_dict(rec, prop, decision, proj) -> dict:
     vals = [g.value for g in prop.logs]
     return {
@@ -45,6 +55,16 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         "position": prop.position,
         "usage_role": prop.usage_role,
         "headshot": prop.headshot,
+        # THE DESIGNATION, ON THE ROW. `apply_rules` turns a Questionable /
+        # Doubtful / Out listing into `recommended=False` plus a warning —
+        # which took the player off the edge board and off nothing else.
+        # The likelihood board and the touchdown watch read this same
+        # row, never looked at `recommended`, and had no field to look
+        # at: a player ruled out on Friday could sit at the top of "who
+        # is most likely to hit" on Sunday with a live price beside him.
+        # (Ethan, 2026-09-02: "some of them seem weird ... especially the
+        # most likely bets.")
+        "injury_status": _injury_status(decision),
         "side": rec.side,
         "book": rec.book,
         "line": rec.line,

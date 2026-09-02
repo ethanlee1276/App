@@ -863,6 +863,40 @@ def test_a_transfers_share_is_read_against_his_OLD_team():
     assert "usage[side]" not in src, "the player and his denominator disagree"
 
 
+def test_the_watch_carries_a_listed_players_designation():
+    """The watch was built straight from the prop menu with no injury
+    read at all — a back ruled out on Friday stayed the week's "most
+    likely scorer". Now the row says so, and the likelihood board's gate
+    refuses it (tests/test_likely.py)."""
+    from engine.touchdowns import td_watchlist
+    from engine.models import Injury
+    g = Game(home="KC", away="BUF",
+             weather=Weather(dome=False, wind_mph=4, temp_f=60),
+             spread=-6.5, total=48.5,
+             injuries=[Injury(player="A Back", team="KC", position="RB",
+                              role="rb1", status="OUT")])
+    opp = Team("BUF", "Bills", DefenseProfile("BUF", vs_rb_rush=1.25))
+    p = Prop(player="A Back", team="KC", opponent="BUF", position="RB",
+             market=ANYTIME_TD,
+             logs=[GameLog(week=i, opponent="X", value=float(i % 2))
+                   for i in range(1, 7)],
+             career_avg=1.0, vs_opponent_avg=None,
+             lines=[SportsbookLine("DK", 0.5, -140, 110)])
+    row = td_watchlist([{"prop": p, "game": g, "opponent": opp,
+                         "opportunity_share": 0.42, "odds": -140,
+                         "book": "DK", "under_odds": 110}])[0]
+    assert row["injury_status"] == "OUT"
+    assert any("listed OUT" in c for c in row["caveats"])
+    from engine import likely as K
+    assert K.build([], [row], sport="nfl") == []
+    # positive control: the same back with no listing is on the board
+    g.injuries = []
+    row = td_watchlist([{"prop": p, "game": g, "opponent": opp,
+                         "opportunity_share": 0.42, "odds": -140,
+                         "book": "DK", "under_odds": 110}])[0]
+    assert row["injury_status"] == "" and K.build([], [row], sport="nfl")
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

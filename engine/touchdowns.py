@@ -442,6 +442,15 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
         if (c.get("book") or "").lower() == "proxy":
             continue
         prop, game, opp = c["prop"], c["game"], c["opponent"]
+        # THE OWN-PLAYER HOLD, which this list never applied. The value
+        # picks go through `rules.apply_rules` and a Questionable /
+        # Doubtful / Out listing holds them; the watch was built straight
+        # from the prop menu, so a ruled-out back could be the week's
+        # "most likely scorer" with a live price beside him. The status
+        # rides on the row and `likely.admissible` refuses it, the same
+        # gate the prop board answers to.
+        from .injuries import player_injury_status
+        status = player_injury_status(prop, getattr(game, "injuries", None) or [])
         raw_prob, info = td_probability(prop, game, opp,
                                         c.get("opportunity_share", 0.15),
                                         c.get("red_zone"), c.get("xfp"))
@@ -481,7 +490,10 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "reasons": info["reasons"],
             # TDs per game, most recent first — the spark at line 0.5.
             "recent_values": [g.value for g in prop.logs][:12],
-            "caveats": info["caveats"],
+            "caveats": (list(info["caveats"]) + (
+                [f"{prop.player} listed {status} — hold until inactives "
+                 f"confirm status"] if status else [])),
+            "injury_status": status,
             "game_date": getattr(game, "date", ""),
             "kickoff": getattr(game, "kickoff", ""),
             "headshot": getattr(prop, "headshot", "") or "",

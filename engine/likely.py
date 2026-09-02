@@ -239,6 +239,19 @@ def admissible(row: dict) -> str:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
         return "disagrees with the market by more than we credit"
+    # THE INJURY HOLD, WHICH THIS BOARD NEVER HAD. `rules.apply_rules`
+    # holds a Questionable / Doubtful / Out player "until inactives
+    # confirm status" — and only the edge board read that decision. This
+    # page took the same evaluated row, ignored `recommended`, and had
+    # no field carrying the designation at all, so a player ruled out
+    # on Friday could top "who is most likely to hit" on Sunday. Ethan,
+    # 2026-09-02: "some of them seem weird ... especially the most likely
+    # bets." A hold that applies to one board and not the other is not a
+    # hold; it is the announced-in-prose, enforced-in-one-place bug this
+    # module's own docstring names.
+    status = str(row.get("injury_status") or "").strip()
+    if status:
+        return f"listed {status} — held until inactives confirm"
     return ""
 
 
@@ -329,6 +342,10 @@ def from_prop(row: dict, bettable, fits=None,
         "game_date": row.get("date", ""), "kickoff": row.get("kickoff", ""),
         "headshot": row.get("headshot", ""),
         "position": row.get("position", ""),
+        "usage_role": row.get("usage_role", ""),
+        # Carried so `admissible` can refuse on it and a lint can see it.
+        "injury_status": row.get("injury_status", "") or "",
+        "warnings": list(row.get("warnings") or []),
     }
 
 
@@ -358,6 +375,8 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
         "kickoff": row.get("kickoff", ""),
         "headshot": row.get("headshot", ""),
         "position": row.get("position", ""),
+        "injury_status": row.get("injury_status", "") or "",
+        "warnings": list(row.get("caveats") or []),
     }
 
 
