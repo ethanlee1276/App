@@ -397,9 +397,12 @@ def test_the_build_hands_the_variance_fit_every_season():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "cfb_build.py"), encoding="utf-8") as fh:
         source = fh.read()
-    block = source[source.index("ratings = teamrates.compute_team_ratings"):]
+    block = source[source.index("teamrates.ratings_for_season("):]
     block = block[:block.index("cfbratings.install(fit)")]
-    assert 'compute_team_ratings(conn, "cfb", shrink=8.0)' in block,         "the variance fit must get a map that is not current-season only"
+    # every season, with the same FCS exclusion the board's own map gets
+    assert 'compute_team_ratings(conn, "cfb", shrink=8.0,' in block, \
+        "the variance fit must get a map that is not current-season only"
+    assert "seasons=" not in block[block.index("all_seasons = "):block.index("fit = ")]
     assert "fit_from_history(conn, all_seasons or ratings)" in block
 
 

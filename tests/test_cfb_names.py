@@ -85,3 +85,10 @@ def test_the_2026_schedule_carries_no_two_programs_under_one_key():
         keys.setdefault(C.name_key(n), []).append(n)
     dups = {k: v for k, v in keys.items() if len(v) > 1}
     assert not dups, dups
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
