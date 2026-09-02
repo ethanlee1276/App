@@ -521,6 +521,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "home": game["home"], "away": game["away"],
         "matchup": f"{game['away']} @ {game['home']}",
         "date": game.get("date", ""), "kickoff": game.get("kickoff", ""),
+        # IN PLAY, SAID ON THE CARD. Both other sports stamp this in
+        # their `_finish_bet` and college never did, so every consumer
+        # that refuses a live game — `likely.from_game_bet` most
+        # recently, since a pre-game model cannot price a game already
+        # being played — was reading a key that was simply absent here
+        # and admitting the row.
+        "live": (game.get("live") or {}).get("state") == "live",
         "win_prob": card["p_model"], "fair_prob": card["p_market"],
         "edge": card["edge"], "odds": card["odds"],
         "ev_per_unit": round(expected_value(card["p_model"], card["odds"]), 4),

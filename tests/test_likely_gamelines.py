@@ -268,6 +268,19 @@ def test_game_rows_are_capped_apart_from_player_rows():
         (r["model_prob"] for r in got), reverse=True), "one order"
 
 
+def test_a_game_already_being_played_is_not_on_the_board_in_any_sport():
+    """`from_game_bet` refuses `live` — a pre-game model cannot price a
+    game in progress. NFL and MLB stamp that key in their `_finish_bet`;
+    college never did, so the guard fired on two sports out of three and
+    a Saturday game at halftime could top the college board with its
+    pre-game number."""
+    src = _src("cfb_build.py")
+    at = src.index("def to_game_bet(")
+    body = src[at:src.index("\ndef ", at + 10)]
+    assert '"live": (game.get("live") or {}).get("state") == "live"' in body, \
+        "college game cards do not say whether the game is being played"
+
+
 def test_holds_are_not_picks():
     assert K.from_game_bet(_ml(live=True), sport="nfl") is None
     assert K.from_game_bet(_ml(conditional=True), sport="nfl") is None
