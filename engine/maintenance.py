@@ -1332,6 +1332,16 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                             f"ROI {_e['roi'] * 100:+.1f}%")
                     log(line + ("" if _e.get("enough")
                                 else f" ({_e.get('note', '')})"))
+                    # The game rows, per market, under their sport —
+                    # so a lean shelf that drags the book is named
+                    # rather than averaged away.
+                    for _mk, _g in sorted(
+                            ((_rep.get("by_sport_market") or {})
+                             .get(_sp) or {}).items()):
+                        log(f"    {_mk}: {_g['n']} settled, claimed "
+                            f"{(_g['claimed'] or 0) * 100:.0f}% → landed "
+                            f"{(_g['actual'] or 0) * 100:.0f}%, ROI "
+                            f"{_g['roi'] * 100:+.1f}%")
             finally:
                 _lc.close()
         except Exception as exc:  # noqa: BLE001

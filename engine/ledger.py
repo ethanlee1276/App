@@ -4649,6 +4649,27 @@ def likely_report(conn, since: str | None = None) -> dict:
                              f"no verdict yet, keep it journaling")
         p["by_sport"][r["sport"]] = entry
 
+    # Per sport AND market for the GAME rows the board carries since
+    # 2026-09-02 (moneylines ranked; spreads, totals and team totals as
+    # labelled leans, Ethan's call). `by_market` above pools sports, and
+    # an NFL moneyline and an MLB one are different models — so whether
+    # the leans drag or lift a sport's book is read here, per sport,
+    # rather than guessed from a pooled line.
+    p["by_sport_market"] = {}
+    for r in conn.execute(
+            "SELECT sport, market, COUNT(*) n, SUM(status='won') w, "
+            "AVG(hit_prob) claimed, "
+            "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
+            "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
+            "FROM bets WHERE market IN (%s) " % ",".join("?" * len(GAME_MARKETS))
+            + graded + win + " GROUP BY sport, market",
+            tuple(GAME_MARKETS) + wargs):
+        p["by_sport_market"].setdefault(r["sport"], {})[r["market"]] = {
+            "n": r["n"], "w": r["w"],
+            "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
+            "actual": round(r["actual"], 4) if r["actual"] is not None else None,
+            "roi": round(r["u"] / r["s"], 4) if r["s"] else 0.0}
+
     p["open"] = conn.execute(
         "SELECT COUNT(*) FROM bets WHERE category='likely' "
         "AND status='open'").fetchone()[0]
