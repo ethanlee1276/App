@@ -272,7 +272,7 @@ def test_the_conditional_promises_exactly_what_confirming_delivers():
     an advertisement, not a promise — and it is the number the human is
     deciding whether to go and check."""
     base = {"home": "TOL", "away": "BGSU", "game_id": "2", "date": "2026-10-10",
-            "home_conference": "MAC", "away_conference": "MAC",
+            "home_conference": "MAC", "away_conference": "Big Ten",   # a power side: G5-only games are not bet since 2026-09-02
             "weekday": "Wednesday", "kickoff": "2026-10-11T02:30:00Z",
             "spread": 6.5}
     CONF = {"state": S.CONFIRMED}
@@ -290,7 +290,7 @@ def test_the_conditional_promises_exactly_what_confirming_delivers():
 def test_a_conditional_still_has_to_clear_the_bar():
     """Holding every thin number would bury the games worth a phone call."""
     base = {"home": "TOL", "away": "BGSU", "game_id": "2", "date": "2026-10-10",
-            "home_conference": "MAC", "away_conference": "MAC",
+            "home_conference": "MAC", "away_conference": "Big Ten",   # a power side: G5-only games are not bet since 2026-09-02
             "weekday": "Wednesday", "kickoff": "2026-10-11T02:30:00Z"}
     thin = evaluate_play(_play(S.annotate_game(base, {}), p_model=0.51))
     assert thin["kind"] == "pass"

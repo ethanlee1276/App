@@ -76,10 +76,15 @@ def test_the_haircut_is_a_dial_not_a_constant():
 
 
 def test_the_same_edge_is_a_pass_in_a_marquee_game_and_a_bet_in_a_mac_game():
-    """The claim the whole module exists to implement."""
+    """The claim the whole module exists to implement.
+
+    The MAC host takes a Big 12 visitor since 2026-09-02: a game with no
+    power-conference side is not bet at all (Ethan: "No" to Group of
+    Five), and a Wednesday game with one is still the low-attention tier
+    this thesis is about."""
     marquee = evaluate_play(_play(_game(home_rank=4)))
     mac = evaluate_play(_play(_game(home_conference="MAC",
-                                    away_conference="MAC",
+                                    away_conference="Big 12",
                                     weekday="Wednesday")))
     assert marquee["p_model"] == mac["p_model"], "the model saw the same thing"
     assert marquee["kind"] == "pass"
@@ -135,9 +140,12 @@ def test_below_seventy_is_no_bet_no_leans():
     assert M.grade_label(70) == "B+"
     assert M.grade_label(80) == "A"
     assert M.grade_label(90) == "A+"
+    # A power visitor since 2026-09-02: a game with no power-conference
+    # side is refused earlier, by decision (Ethan: "No" to Group of Five),
+    # and this pins the grade floor, not that rule.
     thin = evaluate_play(_play(_game(home_conference="Sun Belt",
-                                     away_conference="C-USA"), info=0.05))
-    assert thin["kind"] == "pass" and "no leans" in thin["why"]
+                                     away_conference="SEC"), info=0.05))
+    assert thin["kind"] == "pass" and "no leans" in thin["why"], thin["why"]
 
 
 def test_half_kelly_only_for_an_a_plus_in_a_tier_one_spot():
@@ -205,8 +213,11 @@ def test_a_slate_with_nothing_says_so():
 
 
 def test_a_published_play_carries_its_conditions_and_tier():
+    # A Wednesday MAC game is still the LOW-attention tier this pins; since
+    # 2026-09-02 a game with no power-conference side is not bet at all
+    # (Ethan: "No" to Group of Five), so the visitor is a Big 12 team here.
     out = run_cfb_slate([_play(_game(home_conference="MAC",
-                                     away_conference="MAC",
+                                     away_conference="Big 12",
                                      weekday="Wednesday"))])
     p = out["plays"][0]
     for key in ("attention_tier", "volatility", "grade", "grade_label",
