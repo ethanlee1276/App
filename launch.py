@@ -5477,6 +5477,16 @@ def show_haircut(refit: bool = False) -> None:
               f"{e['se'] * 100:>6.1f}p{e['shift']:>+8.3f}   "
               f"{'LIVE' if e.get('applied') else 'off'} — {e.get('reason', '')}")
 
+    # A sport can be refused the POOLED fallback even while the pooled row
+    # says LIVE — see selectionfit.POOL_BORROW_MAX_SHARE. Said out loud
+    # here because the table above only has room for "off", and "off" on a
+    # night when the all-sports row is live reads as "so it uses that one".
+    for _sport in sorted(blob.get("sports") or {}):
+        _why = sf.borrow_block(blob, _sport)
+        if _why:
+            print(f"\n  {_sport} does NOT fall back to the pooled cut:"
+                  f"\n    {_why}\n  Its bets price on the model's own numbers.")
+
     live = [(n, e) for n, e in rows if e.get("applied")]
     if not live:
         print("\n  Nothing is being applied. The board runs on the model's own"

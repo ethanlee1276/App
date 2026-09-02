@@ -57,7 +57,7 @@ WHAT IT DOES AND DOES NOT TOUCH
 THE RESTRAINTS
 --------------
 A single pooled number applied to every price is a blunt instrument, and a
-blunt instrument fitted on 300 rows can do real damage. Four guards:
+blunt instrument fitted on 300 rows can do real damage. Five guards:
 
 * **Floor** (:data:`MIN_SETTLED`) — nothing is applied to a sport under
   100 settled bets. Below it the store says "collecting: n of 100".
@@ -73,6 +73,12 @@ blunt instrument fitted on 300 rows can do real damage. Four guards:
   model that is actually fine costs us some bets we would have won;
   inflating a model on 100 rows of good luck raises stakes on an edge that
   may not exist. We publish the number and refuse to bet it.
+* **No borrowing around a refusal** (:data:`POOL_BORROW_MAX_SHARE`) — a
+  sport whose own fit was refused does not fall back to the pooled one
+  when it IS most of the pooled sample. The fallback exists so a small
+  sport can borrow evidence from a large, diverse pool; when the borrower
+  is 92% of the pool that sentence runs backwards and the fallback turns
+  a refusal into an application.
 
 REFIT SAFETY
 ------------
@@ -497,12 +503,37 @@ def _entry(pairs: list, min_settled: int = MIN_SETTLED) -> dict:
 
 def measure(lconn, stored: dict | None = None,
             min_settled: int = MIN_SETTLED) -> dict:
-    """Fit the haircut for every sport in the journal, plus the pool."""
+    """Fit the haircut for every sport in the journal, plus the pool.
+
+    OPEN FINDING, 2026-09-02, LEFT AS IT IS ON PURPOSE. The pool below is
+    built by walking the sports in NAME order and concatenating them, so
+    it is sport-blocked, not chronological — and `_holdout` is documented
+    on the assumption that "pairs arrive in journal order". They do,
+    within a sport. Across sports they do not: with 808 mlb rows and 69
+    wnba ones, every wnba row lands after every mlb row because 'w' sorts
+    after 'm', which puts all 69 of them in the walk-forward's last block
+    and its final held-out window and none of them in any training
+    window.
+
+    It matters. On a reconstruction of the droplet's 2026-09-02 table
+    (808 mlb refused 1-of-3, 69 wnba, pooled −0.143 applied), the pooled
+    verdict flips with the ORDER of the same 877 rows and nothing else:
+    sport-blocked it passes 2-of-3 and the final block; ordered by ts, or
+    with wnba first, it fails 1-of-3 exactly as mlb's own does. The fit
+    itself is identical — order changes only the exam.
+
+    Not changed here because this commit was scoped to the fallback rule
+    and fixing the order changes what the pooled shift IS for every sport
+    borrowing it, which is a live pricing change that deserves its own
+    run and its own before/after. `POOL_BORROW_MAX_SHARE` already stops
+    the case that motivated it; the residue is that sports genuinely
+    under the floor still borrow a fit whose gate was scored partly on
+    their own rows. The fix, when someone takes it: build `pool` from
+    `rows` in the order `_settled` returned them, resolving each row's
+    prior shift by its sport, instead of concatenating per-sport lists.
+    """
     stored = stored or {}
     stamp = stored.get("fitted_at") or ""
-    sports_prior = {k: (v or {}).get("shift", 0.0)
-                    for k, v in (stored.get("sports") or {}).items()}
-    pooled_prior = (stored.get("pooled") or {}).get("shift", 0.0)
 
     rows = _settled(lconn)
     by_sport: dict[str, list] = {}
@@ -511,11 +542,20 @@ def measure(lconn, stored: dict | None = None,
 
     sports, pool = {}, []
     for sport, srows in sorted(by_sport.items()):
-        # Which shift was live for THIS sport's rows: its own if it had
-        # one, otherwise the pooled one it was borrowing.
-        prior = sports_prior.get(sport)
-        if not prior:
-            prior = pooled_prior if _borrowed(stored, sport) else 0.0
+        # Which shift was live for THIS sport's rows — asked of the store
+        # that was live, by the same rule the betting path used.
+        #
+        # It used to be asked a different way: "its own stored shift if
+        # that is non-zero, otherwise the pooled one if it borrowed". That
+        # reads the same and is not, because a REFUSED fit still stores a
+        # shift. On 2026-09-02 MLB's store held −0.117 with applied
+        # false, so the refit un-shifted 808 rows by a number the board
+        # had never applied to any of them — it was pricing with the
+        # pooled −0.143 — and then fitted on claims nobody ever published.
+        # A young sport under the floor had the same problem for the same
+        # reason. `live_shift` is the betting path's own rule, so the two
+        # cannot drift apart again.
+        prior = live_shift(stored, sport)
         pairs = _pairs(srows, prior, stamp)
         sports[sport] = _entry(pairs, min_settled)
         pool.extend(pairs)
@@ -523,10 +563,122 @@ def measure(lconn, stored: dict | None = None,
             "min_settled": min_settled}
 
 
-def _borrowed(stored: dict, sport: str) -> bool:
-    entry = (stored.get("sports") or {}).get(sport) or {}
-    return not entry.get("applied") and bool(
-        (stored.get("pooled") or {}).get("applied"))
+#: How much of the pooled sample a sport may BE and still be allowed to
+#: borrow the pooled fit after its own fit was refused.
+#:
+#: THE TABLE THIS EXISTS FOR — `launch.py --haircut`, droplet, 2026-09-02:
+#:
+#:     all sports  877  52.7%  48.5%  −4.2p  −0.143  LIVE
+#:     mlb         808  52.8%  49.0%  −3.7p  −0.117  off — fitted, then
+#:                                                   refused by its own
+#:                                                   walk-forward
+#:     wnba         69  52.1%  42.0% −10.1p  −0.261  off — collecting
+#:
+#: MLB is 808 of those 877 rows. Its own walk-forward closed the gap in 1
+#: of 3 blocks and improved Brier in 1 of 3, so its fit was refused — and
+#: `shift_for` then handed it the pooled one, which is the same 808 rows
+#: plus 69 WNBA ones. Every MLB bet on the board, 92% of the volume, was
+#: priced with a correction MLB's own data had just declined. A refusal
+#: became an application by falling through.
+#:
+#: WHY THE FALLBACK'S OWN JUSTIFICATION DOES NOT REACH THIS CASE. It is
+#: written for a small sport borrowing from a big one: "the thing being
+#: corrected is a property of the SELECTION PROCEDURE ... shared by every
+#: sport", so evidence from the rest of the board is evidence about the
+#: sport that has none of its own. Reverse the sizes and the sentence
+#: stops being true. When the borrower IS the pool, the pooled fit is not
+#: evidence from elsewhere — it is the borrower's own evidence, re-cut at
+#: different block boundaries with 69 foreign rows on the end, answering
+#: a question that already came back no. The pool cannot be a second
+#: opinion on data that is mostly itself.
+#:
+#: AND THE TWO VERDICTS ARE NOT EVEN SCORED ON THE SAME BETS. `_origins`
+#: cuts by n, so 877 rows put the walk-forward's boundaries at 351/526/701
+#: and the final 70/30 cut at 613; 808 rows put them at 324/485/646 and
+#: 565. Worse, `measure` builds the pool by sport name — see its own
+#: docstring — so all 69 WNBA rows land in the pooled walk-forward's LAST
+#: block (39% of it) and its final held-out window (26% of it), and in
+#: none of its training windows. The pooled fit passes a gate whose
+#: deciding windows are a quarter foreign rows; MLB's fails one scored on
+#: MLB alone. Same estimator, different exam.
+#:
+#: AND THE POOLED CUT IS NOT A BETTER NUMBER FOR MLB EITHER — the
+#: question worth asking before treating any of this as bookkeeping. The
+#: pooled shift is LARGER than the one MLB's own data asked for (−0.143
+#: against −0.117; 3.6 points off a 52.8% claim rather than 2.9) and in
+#: the same direction, and the direction is what MLB's walk-forward
+#: rejected: on the last 243 MLB bets the claim landed within 0.6 points
+#: of the result and the smaller cut moved it to 3.6 points wrong. A
+#: correction that overshoots overshoots further when you take more of
+#: it, and the error it now makes is an UNDER-claim — bets dropped and
+#: stakes shrunk on picks that were priced honestly. Scored on MLB rows
+#: only, in MLB's own held-out windows, on the reconstruction in
+#: `tests/test_selection_haircut.two_sport_journal`: pooled is worse than
+#: own and own is worse than nothing in three of four windows, the most
+#: recent included (gap 0.1 → 3.5 → 4.7 points, Brier 0.2452 → 0.2465 →
+#: 0.2475). Borrowing here is not a safe default; it is the worst of the
+#: three numbers available.
+#:
+#: 0.50 is the line because "mostly" is the claim being made. Below it the
+#: pool is genuinely other sports and the fallback's reasoning holds; at
+#: 92% it does not. A sport that is most of the pool and has been refused
+#: prices on its own numbers, which is where the board started.
+POOL_BORROW_MAX_SHARE = 0.50
+
+
+def borrow_block(blob: dict, sport: str) -> str:
+    """Why ``sport`` may not fall back to the pooled fit — '' if it may.
+
+    ONE PREDICATE, FOUR READERS: the live betting path (`shift_for`),
+    what the page is told (`basis_for`, `report`), the terminal table
+    (`launch.py --haircut`) and the refit's un-shift (`live_shift`, via
+    `measure`). They have to agree exactly. A refit that un-shifted rows
+    the board never shifted would measure a claim that was never
+    published, which is the oscillation the `fitted_at` stamp exists to
+    prevent, arrived at from the other direction.
+    """
+    sports = blob.get("sports") or {}
+    own = sports.get((sport or "").lower()) or {}
+    pooled = blob.get("pooled") or {}
+    if own.get("applied") or not pooled.get("applied"):
+        return ""                  # nothing to borrow, or no need to
+    own_n = int(own.get("n") or 0)
+    if own_n < int(blob.get("min_settled", MIN_SETTLED)):
+        # Under the floor the sport has returned no verdict of its own,
+        # so there is none to route around: the pooled fit is the only
+        # evidence in the room and it cleared the floor and the
+        # walk-forward on its own sample. This is the case the fallback
+        # was written for, and it is untouched — including when the
+        # sport is a large share of a young pool, because "we have not
+        # measured you yet" is not "we measured you and said no".
+        return ""
+    pooled_n = int(pooled.get("n") or 0)
+    share = (own_n / pooled_n) if pooled_n else 0.0
+    if share <= POOL_BORROW_MAX_SHARE:
+        return ""
+    # Deliberately short, and it does not restate the refusal itself:
+    # every surface that prints this prints the sport's own row, with its
+    # own reason on it, directly above.
+    return (f"its own fit was refused and the pooled fit is "
+            f"{share * 100:.0f}% the same {own_n} bets")
+
+
+def live_shift(blob: dict, sport: str) -> float:
+    """What a stored blob says this sport's claims were priced with.
+
+    `shift_for` is this against the file on disk; this is it against a
+    blob already in hand — `measure`'s, which must un-shift by exactly
+    what the board applied, and `shapecheck`'s, which restates the same
+    journal. There were three copies of this rule and two of them had
+    drifted; now there is one.
+    """
+    own = (blob.get("sports") or {}).get((sport or "").lower()) or {}
+    if own.get("applied"):
+        return float(own.get("shift") or 0.0)
+    pooled = blob.get("pooled") or {}
+    if pooled.get("applied") and not borrow_block(blob, sport):
+        return float(pooled.get("shift") or 0.0)
+    return 0.0
 
 
 def refresh(lconn, path=None, min_settled: int = MIN_SETTLED,
@@ -592,26 +744,30 @@ def shift_for(sport: str, path=None) -> float:
     property of the SELECTION PROCEDURE — taking the top edges out of a
     noisy estimator — and that procedure is shared by every sport on the
     board. Borrowing is labelled everywhere it is shown.
+
+    What it will not do is borrow around its own refusal: a sport that is
+    most of the pooled sample and was refused by its own walk-forward
+    gets nothing, because the pool is then not a second opinion. See
+    :data:`POOL_BORROW_MAX_SHARE`.
     """
     if not _enabled:
         return 0.0
-    blob = load(path)
-    own = (blob.get("sports") or {}).get((sport or "").lower()) or {}
-    if own.get("applied"):
-        return float(own.get("shift") or 0.0)
-    pooled = blob.get("pooled") or {}
-    if pooled.get("applied"):
-        return float(pooled.get("shift") or 0.0)
-    return 0.0
+    return live_shift(load(path), sport)
 
 
 def basis_for(sport: str, path=None) -> str:
-    """'own' | 'pooled' | '' — which fit a sport is actually using."""
+    """'own' | 'pooled' | '' — which fit a sport is actually using.
+
+    '' covers both "nothing was fitted" and "a fit exists and this sport
+    is not allowed to use it", which the caller tells apart by asking
+    `borrow_block` for the sentence.
+    """
     blob = load(path)
     own = (blob.get("sports") or {}).get((sport or "").lower()) or {}
     if own.get("applied"):
         return "own"
-    if (blob.get("pooled") or {}).get("applied"):
+    if (blob.get("pooled") or {}).get("applied") and not borrow_block(blob,
+                                                                     sport):
         return "pooled"
     return ""
 
@@ -778,8 +934,13 @@ def report(path=None) -> dict:
     pooled = blob.get("pooled") or {}
     live = bool(pooled.get("applied")) or any(
         (v or {}).get("applied") for v in sports.values())
+    blocked = {sp: borrow_block(blob, sp) for sp in sports}
     return {"fitted_at": blob.get("fitted_at"),
             "sports": sports, "pooled": pooled,
             "min_settled": blob.get("min_settled", MIN_SETTLED),
             "live": live,
-            "using": {sp: basis_for(sp, path) for sp in sports}}
+            "using": {sp: basis_for(sp, path) for sp in sports},
+            # Sports the pooled fit is LIVE for elsewhere and refused to.
+            # Without this the page can only say "not applied", which
+            # reads as "nothing was measured" — the one thing it is not.
+            "not_borrowing": {sp: why for sp, why in blocked.items() if why}}

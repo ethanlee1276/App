@@ -162,6 +162,151 @@ def test_a_sport_under_the_floor_borrows_the_pool():
     # A sport with no journal at all still gets the pool: the thing being
     # corrected is how we select, not what we know about basketball.
     assert sf.shift_for("cfb", store) < 0
+    # And nothing here is a dominance case: NBA is 20 of 330 rows, so the
+    # pool really is mostly other sports' evidence.
+    assert sf.borrow_block(sf.load(store), "nba") == ""
+    assert sf.report(store)["not_borrowing"] == {}
+
+
+def two_sport_journal(seed=1):
+    """The droplet's 2026-09-02 shape: one sport that is nearly all of the
+    pool and whose own fit is refused, plus a small one that is not.
+
+    808 MLB bets — an early era that really over-claims and a late era
+    that does not, so the fit is real in-sample and fails walk-forward —
+    and 69 WNBA bets with a much larger miss. It reproduces the table
+    that raised the question closely enough to be arguing about the same
+    thing: mlb refused 1-of-3 blocks with a fitted −0.141, pooled applied
+    at −0.189 over 877 rows, MLB 92% of them.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE bets (sport TEXT, market TEXT, side TEXT, "
+                 "hit_prob REAL, odds INTEGER, status TEXT, ts TEXT, "
+                 "category TEXT)")
+    for src in (journal(560, 0.53, -0.30, "mlb", "2026-06-01", seed),
+                journal(248, 0.53, 0.0, "mlb", "2026-08-01", seed + 500),
+                journal(69, 0.52, -0.45, "wnba", "2026-07-01", seed + 900)):
+        for r in src.execute("SELECT * FROM bets"):
+            conn.execute("INSERT INTO bets VALUES (?,?,?,?,?,?,?,?)", tuple(r))
+    return conn
+
+
+def test_a_sport_that_is_most_of_the_pool_cannot_borrow_its_own_refusal():
+    """THE HOLE THIS CLOSES, from `launch.py --haircut` on 2026-09-02:
+
+        all sports  877  52.7%  48.5%  -4.2p  -0.143  LIVE
+        mlb         808  52.8%  49.0%  -3.7p  -0.117  off — refused by
+                                                      its own walk-forward
+        wnba         69  52.1%  42.0% -10.1p  -0.261  off — collecting
+
+    MLB's own walk-forward refused its fit, and `shift_for` handed it the
+    pooled one — 92% of which is those same refused MLB rows. The board's
+    biggest sport was priced with a correction its own data had declined,
+    by falling through a rule written for the opposite situation.
+
+    The preconditions are asserted, not assumed: a fixture that stopped
+    reproducing the configuration would make the real assertion vacuous
+    and this test would go green on nothing.
+    """
+    store = Path(tempfile.mkdtemp()) / "selection.json"
+    blob = sf.refresh(two_sport_journal(), path=store)
+    sf.reset_cache()
+
+    mlb, pooled = blob["sports"]["mlb"], blob["pooled"]
+    assert mlb["applied"] is False and "refused" in mlb["reason"], mlb["reason"]
+    assert pooled["applied"] is True, pooled["reason"]
+    assert mlb["n"] / pooled["n"] > sf.POOL_BORROW_MAX_SHARE
+
+    # The fix: no fallback, and a sentence saying why rather than silence.
+    assert sf.shift_for("mlb", store) == 0.0
+    assert sf.apply_haircut("mlb", 0.58, store) == 0.58
+    assert sf.basis_for("mlb", store) == ""
+    why = sf.borrow_block(sf.load(store), "mlb")
+    assert "refused" in why and "92%" in why, why
+    assert "mlb" in sf.report(store)["not_borrowing"]
+
+    # WNBA is 8% of the pool and has no verdict of its own, which is the
+    # case the fallback was written for. It is untouched.
+    assert sf.basis_for("wnba", store) == "pooled"
+    assert sf.shift_for("wnba", store) == pooled["shift"] < 0
+    # As is a sport with no journal at all.
+    assert sf.shift_for("nfl", store) == pooled["shift"]
+
+
+def test_the_refit_undoes_exactly_what_the_board_applied():
+    """`live_shift` decides which shift a refit strips off a sport's
+    logged claims, and it has to be the number the board actually
+    applied — the two must be one rule, not two that agree today.
+
+    THE TRAP IS REAL AND IT WAS LIVE. A refused fit still STORES its
+    shift, and the refit used to read that stored number whenever it was
+    non-zero, without asking whether it had been applied. On 2026-09-02
+    MLB's store held −0.117 with `applied` false, so a refit would have
+    un-shifted 808 rows by a correction the board had never put in them,
+    and then fitted on claims nobody ever published. Same failure as
+    naively refitting on already-corrected claims, in the other
+    direction, and it is worse now that a refused sport gets nothing at
+    all rather than the pooled cut.
+    """
+    store = Path(tempfile.mkdtemp()) / "selection.json"
+    stored = sf.refresh(two_sport_journal(), path=store)
+    sf.reset_cache()
+    for sport in list(stored["sports"]) + ["nfl"]:
+        assert sf.live_shift(stored, sport) == sf.shift_for(sport, store), sport
+    assert stored["sports"]["mlb"]["shift"] < -0.1     # the trap is baited
+    assert sf.live_shift(stored, "mlb") == 0.0         # and not fallen into
+    assert sf.live_shift(stored, "wnba") == stored["pooled"]["shift"]
+
+    # End to end: a later era of MLB bets, logged after the stamp and
+    # therefore priced with whatever was live — which for MLB is nothing.
+    # The refit has to read those claims exactly as they were written.
+    later = journal(310, 0.515, REAL_BIAS, "mlb", "2099-01-01", seed=11)
+    raw = [r["hit_prob"] for r in later.execute("SELECT hit_prob FROM bets")]
+    got = sf.measure(later, stored)["sports"]["mlb"]
+    assert abs(got["claimed"] - sum(raw) / len(raw)) < 1e-4, (
+        f"the refit moved claims the board never moved: {got['claimed']}")
+
+
+def test_the_guard_reads_a_refusal_and_not_a_shortage():
+    """The rule is "do not borrow around your own no", not "do not borrow
+    when you are big". A sport under the floor has returned no verdict to
+    route around — the pooled fit is the only evidence in the room, and
+    that is exactly what the fallback is for. Only a sport that had enough
+    bets to be judged, and was judged, is refused the fallback.
+    """
+    under = {"min_settled": 100,
+             "sports": {"mlb": {"n": 95, "applied": False,
+                                "reason": "collecting: 95 of 100"}},
+             "pooled": {"n": 115, "applied": True, "shift": -0.2}}
+    assert 95 / 115 > sf.POOL_BORROW_MAX_SHARE      # dominant either way
+    assert sf.borrow_block(under, "mlb") == ""
+
+    judged = {"min_settled": 100,
+              "sports": {"mlb": {"n": 105, "applied": False,
+                                 "reason": "fitted, then refused by its own "
+                                           "walk-forward"}},
+              "pooled": {"n": 125, "applied": True, "shift": -0.2}}
+    assert sf.borrow_block(judged, "mlb")
+
+    # An under-claim is a verdict too: MLB's own rows saying "raise" is
+    # not a reason to hand it a cut fitted mostly on those same rows.
+    judged["sports"]["mlb"]["reason"] = "measured, not applied — we UNDER-claim"
+    assert sf.borrow_block(judged, "mlb")
+
+    # And a sport that is half the pool or less still borrows: below that
+    # the pool is genuinely other sports, which is the whole premise.
+    minority = {"min_settled": 100,
+                "sports": {"mlb": {"n": 105, "applied": False,
+                                   "reason": "refused"}},
+                "pooled": {"n": 210, "applied": True, "shift": -0.2}}
+    assert sf.borrow_block(minority, "mlb") == ""
+
+    # Its own applied fit always wins, dominance or not.
+    own = {"min_settled": 100,
+           "sports": {"mlb": {"n": 800, "applied": True, "shift": -0.11}},
+           "pooled": {"n": 870, "applied": True, "shift": -0.14}}
+    assert sf.borrow_block(own, "mlb") == ""
 
 
 def test_no_store_means_no_correction():

@@ -2274,6 +2274,14 @@ function haircutLine(sh) {
   const applied = Object.values(sh.sports || {}).filter((e) => e && e.applied);
   const lead = p.applied ? p : (applied[0] || {});
   if (lead.claimed == null) return "";
+  /* This board mixes sports, and a sport can be REFUSED the pooled cut —
+     engine/selectionfit.POOL_BORROW_MAX_SHARE — so "these probabilities
+     are already cut" is not true of every row unless it says which. */
+  const off = Object.keys(sh.not_borrowing || {});
+  const except = !off.length ? "" : ` ${off.map(
+    (s) => escapeHtml(s.toUpperCase())).join(", ")} ${off.length > 1
+    ? "are exceptions: their" : "is the exception: its"} own record refused
+    this correction, so those picks carry the model’s own numbers.`;
   return `<p style="margin:0;padding:8px 14px;border-left:3px solid var(--brand);
              background:var(--panel-3);font-size:var(--fs-sm);color:var(--text-body)">
     <b style="color:var(--brand)">These probabilities are already cut.</b>
@@ -2281,8 +2289,8 @@ function haircutLine(sh) {
     landed ${(lead.landed * 100).toFixed(1)}%, so every claim below is moved
     ${lead.shift.toFixed(3)} in log-odds before its edge, EV and stake are
     computed — a 55% call ships as ${(lead.example_55 * 100).toFixed(1)}%. Fewer
-    picks clear the bar and the ones that do ask for less. The working is on the
-    <b style="color:var(--text)">Record</b> page.</p>`;
+    picks clear the bar and the ones that do ask for less.${except} The working is
+    on the <b style="color:var(--text)">Record</b> page.</p>`;
 }
 
 
@@ -10354,10 +10362,15 @@ function recSelectionHaircut(sh, scope) {
   const live = keys.filter((s) => sports[s].applied).length || pooled.applied;
   const ex = (pooled.applied ? pooled : (sports[keys.find(
     (s) => sports[s].applied)] || {}));
+  // Sports the pooled fit is live for elsewhere and refused to, named
+  // here so the "every probability" sentence below stays true.
+  const refused = keys.filter((s) => (sh.not_borrowing || {})[s]);
+  const except = !refused.length ? "" : ` outside ${refused.map(
+    (s) => escapeHtml(s.toUpperCase())).join(", ")}`;
   const effect = !live ? "" : `
     <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-body)">
-      Every probability on the board is moved by this before anything is
-      computed from it. A pick the model called <strong>55.0%</strong> now
+      Every probability on the board${except} is moved by this before anything
+      is computed from it. A pick the model called <strong>55.0%</strong> now
       ships as <strong>${pct(ex.example_55)}</strong> — under the 52.4%
       a −110 price needs — so its edge, its EV and its stake all fall,
       and picks that only just cleared the bar stop clearing it. That is
@@ -10378,11 +10391,26 @@ function recSelectionHaircut(sh, scope) {
   const borrowNote = !borrowed.length ? "" : `
     <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
       ${borrowed.map((s) => escapeHtml(s.toUpperCase())).join(", ")} ${
-      borrowed.length > 1 ? "are" : "is"}
-      still under the ${sh.min_settled || 100}-bet floor and ${
-      borrowed.length > 1 ? "are" : "is"} borrowing the pooled number. What is
-      being corrected is a property of how we SELECT — taking the top edges out
-      of a noisy estimate — and that is shared by every sport on the board.</p>`;
+      borrowed.length > 1 ? "have" : "has"} no fit of ${
+      borrowed.length > 1 ? "their" : "its"} own that cleared the bar, so ${
+      borrowed.length > 1 ? "they are" : "it is"} borrowing the pooled number.
+      What is being corrected is a property of how we SELECT — taking the top
+      edges out of a noisy estimate — and that is shared by every sport on the
+      board.</p>`;
+  /* THE OTHER HALF OF THAT SENTENCE, and the reason the row above it can
+     say "not applied" on a night when the pooled row says LIVE. A sport
+     that is most of the pooled sample and was refused by its own
+     walk-forward does not borrow: the pool is then mostly its own refused
+     rows, which is not a second opinion about it. See
+     engine/selectionfit.POOL_BORROW_MAX_SHARE. Unexplained, this reads as
+     a bug on the one row the reader most wants to trust. */
+  const refusedNote = !refused.length ? "" : `
+    <p style="margin:8px 0 0;font-size:var(--fs-sm);color:var(--text-mute)">
+      ${refused.map((s) => escapeHtml(s.toUpperCase())).join(", ")} ${
+      refused.length > 1 ? "do" : "does"} not borrow it — ${refused.map(
+      (s) => escapeHtml(sh.not_borrowing[s])).join(" · ")}. A pooled fit that
+      is mostly one sport’s own refused bets is not a second opinion about
+      that sport, so those bets price on the model’s own numbers.</p>`;
   return `<div class="section-title">The selection haircut
       <span class="sub">— the chart above grades the model’s whole surface.
       This grades the bets we actually made.</span></div>
@@ -10393,7 +10421,7 @@ function recSelectionHaircut(sh, scope) {
         bets, pooled across markets, per sport — one number, shrunk by its own
         standard error and never applied upward.</p>
       ${pooled.n && !scope ? row("all", pooled, "own") : ""}${rows}
-      ${effect}${heldOut}${borrowNote}
+      ${effect}${heldOut}${borrowNote}${refusedNote}
       <p style="margin:10px 0 0;font-size:var(--fs-sm);color:var(--text-faint)">
         Last fitted ${escapeHtml(sh.fitted_at || "—")} · refits every settle
         pass, un-doing its own prior correction first so it cannot compound.</p>

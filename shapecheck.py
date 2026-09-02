@@ -189,16 +189,15 @@ def _rows(db, sport=None, since=None):
 
     stored = sf.load()
     stamp = stored.get("fitted_at") or ""
-    per_sport = {k: (v or {}).get("shift", 0.0)
-                 for k, v in (stored.get("sports") or {}).items()}
-    pooled = (stored.get("pooled") or {}).get("shift", 0.0)
 
     out = []
     for r in rows:
-        s = (r["sport"] or "").lower()
-        prior = per_sport.get(s) or 0.0
-        if not prior and sf._borrowed(stored, s):
-            prior = pooled
+        # `selectionfit.live_shift` and not a local copy of the rule: this
+        # asks "what was this row priced with", which is the same question
+        # the refit asks, and the local copy had drifted — it took a
+        # sport's stored shift whether or not that fit was APPLIED, so a
+        # refused one un-shifted rows the board never touched.
+        prior = sf.live_shift(stored, (r["sport"] or "").lower())
         pair = sf._pairs([r], prior, stamp)
         if pair:
             out.append(pair[0])
