@@ -28,7 +28,10 @@ cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 SERVICE="${QB_SERVICE:-qellys}"
 RUN_TESTS=1
-[[ "${1:-}" == "--no-tests" ]] && RUN_TESTS=0
+# Both spellings. A phone keyboard turns "--" into an em dash, and on
+# 2026-09-02 "—no-tests" silently ran the hour-long suite on the one-core
+# box instead of skipping it.
+[[ "${1:-}" == "--no-tests" || "${1:-}" == "—no-tests" ]] && RUN_TESTS=0
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
