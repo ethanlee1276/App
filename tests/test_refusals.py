@@ -260,6 +260,19 @@ def test_a_real_line_the_model_disagrees_with_is_named_as_such():
     assert IMPLAUSIBLE_EDGE_REASON in REFUSAL_REASONS
 
 
+def test_the_mlb_board_names_the_same_two_causes():
+    """MLB readiness audit, 2026-09-02: `engine/mlb/betting.py` kept the
+    one-branch version, so a Judge HR card with a DraftKings price and a
+    12-point model disagreement was told the book line did not exist."""
+    import inspect
+    from engine.mlb import betting as mlb
+    src = inspect.getsource(mlb)
+    assert "if not credible and not has_market:" in src
+    assert "reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)" in src
+    assert "IMPLAUSIBLE_EDGE_REASON" in src.split("def ")[0], \
+        "the constant must be imported from engine.betting, not restated"
+
+
 def test_a_script_bullet_against_the_side_taken_is_not_a_tick():
     """The engine signs the bullet; the page honours the sign over its
     keyword list — "underdog" in the middle of a bullet that ends "with

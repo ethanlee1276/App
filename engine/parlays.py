@@ -538,6 +538,35 @@ def decimal_to_american(dec: float) -> int:
     return int(round((dec - 1) * 100)) if dec > 2.0 else int(round(-100 / (dec - 1)))
 
 
+#: Ethan, 2026-09-02, closing the MLB readiness audit's "Ask Ethan" A-3
+#: (the slip priced two home-run props from one lineup at the independent
+#: product and merely warned): "Yes use hr just not players on the same
+#: team in the same game." So an HR leg is welcome on a person's slip —
+#: the engine's own tickets still refuse the market as EXTREME, §8.4 —
+#: but a second HR leg from the SAME team in the SAME game is refused
+#: outright, not warned about. The pair carries the strongest positive
+#: dependence in the taxonomy (+0.186 measured on 27,613 lineup pairs,
+#: and the doc's own band runs to +0.35), and the slip's price assumes
+#: independence, so it is exactly the ticket the brief called "the most
+#: likely way this system loses money fast".
+SAME_LINEUP_HR_REASON = ("two home-run legs from the same team in the same "
+                         "game — one bat per lineup on a ticket (Ethan, "
+                         "2026-09-02): the pair moves together and the "
+                         "combined price assumes it does not")
+
+
+def same_lineup_hr_pair(a: dict, b: dict) -> str | None:
+    """The reason to refuse, or None. Same team AND same game — two HR
+    legs from one team on different dates are two different lineups."""
+    if a.get("market") != "home_runs" or b.get("market") != "home_runs":
+        return None
+    if not (a.get("team") and a.get("team") == b.get("team")):
+        return None
+    if game_key(a) != game_key(b):
+        return None
+    return SAME_LINEUP_HR_REASON
+
+
 def check_ticket(sport: str, legs: list[dict]) -> dict:
     """The engine's parlay rules, applied to a ticket a PERSON built.
 
@@ -568,6 +597,10 @@ def check_ticket(sport: str, legs: list[dict]) -> dict:
     warnings: list[dict] = []
     for i in range(len(clean)):
         for j in range(i + 1, len(clean)):
+            why = same_lineup_hr_pair(clean[i], clean[j])
+            if why:
+                return {"ok": False, "legs": len(clean), "pair": [i, j],
+                        "reason": why, "warnings": warnings}
             try:
                 r = relate(sport, clean[i], clean[j])
             except Exception:                              # noqa: BLE001

@@ -12,7 +12,8 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    NO_CREDIBLE_EDGE_REASON, Recommendation, UNRELIABLE_CALIBRATION_REASON,
+    IMPLAUSIBLE_EDGE_REASON, NO_CREDIBLE_EDGE_REASON, Recommendation,
+    UNRELIABLE_CALIBRATION_REASON,
     apply_selection, net_edge, favourite_surcharge,
     pick_side, temper_edge, under_reason,
 )
@@ -283,8 +284,16 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # both claimed to say the same thing — and the front end's
         # refusal detector would then have to know about both.
         reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
-    if not credible:
+    if not credible and not has_market:
         reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
+    elif not credible:
+        # The NFL board got this split on 2026-09-02 (an Amon-Ra St. Brown
+        # card quoted at FanDuel -114 was told "line unavailable"); this
+        # file kept the one-branch version, so a Judge HR card with a real
+        # DraftKings price and a 12-point model disagreement was still
+        # told the book line did not exist. Same two causes, same two
+        # sentences as `engine.betting`.
+        reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)
     elif side == "UNDER":
         # Shared with the NFL/CFB engine — see `betting.under_reason`.
         # This file had the two-branch version for six days while the
