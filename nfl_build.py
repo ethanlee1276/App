@@ -615,11 +615,17 @@ def main() -> None:
         from engine import ledger as _ledger
         dd = _ledger.drawdown_factor(_ledger.connect(), sport="nfl")
         if dd < 1.0:
-            for r in result["recommendations"] + result.get("game_bets", []):
-                if r.get("recommended") and r.get("stake_units", 0) > 0:
-                    r["stake_units"] = round(r["stake_units"] * dd, 2)
+            # One rule for a scale-down, in one place: halve, and drop
+            # anything that falls under the floor — the same thing
+            # `correlation.apply_exposure_caps` does one step earlier.
+            from engine.staking import apply_drawdown as _dd_apply
+            _sc, _dr = _dd_apply(
+                result["recommendations"] + result.get("game_bets", []), dd)
             result["staking_note"] = ("Drawdown rule active: stakes halved "
-                                      "until the journal recovers its peak")
+                                      "until the journal recovers its peak"
+                                      + (f"; {_dr} bet(s) fell under the "
+                                         f"minimum and came off the board"
+                                         if _dr else ""))
             print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
     except Exception:
         pass

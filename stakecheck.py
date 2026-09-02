@@ -556,6 +556,7 @@ def report(rows: list[dict]) -> None:
     # sample and said so nowhere. A report that omits what it did not
     # anticipate is worse than one that crashes.
     _order = {"A+": 0, "A": 1, "B+": 2, "Pass": 8, "?": 9}
+    asked_by_grade: dict = {}
     for g in sorted(by_grade, key=lambda k: (_order.get(k, 5), k)):
         chunk = by_grade.get(g)
         if not chunk:
@@ -572,11 +573,17 @@ def report(rows: list[dict]) -> None:
             wn += (american_to_decimal(int(c["odds"])) - 1.0) * iw \
                 if c["status"] == "won" else -iw
         asked_roi = f"{_roi(wn, ws):+.1%}" if ws else "—"
+        asked_by_grade[g] = (_roi(wn, ws) if ws else None, len(chunk))
         print(f"    {g:<8}{len(chunk):>6}{w / len(chunk):>9.1%}"
               f"{_roi(n, s):>14.1%}{asked_roi:>14}")
-    print("\n    A+ below B+ in that last column means the confidence signal "
-          "is\n    inverted, and no cap policy can fix a ranking that points "
-          "the wrong way.")
+    # READ OFF THE TABLE, NOT TYPED UNDER IT. This caption used to assert
+    # "A+ below B+ ... the confidence signal is inverted" on every run,
+    # whatever the rows above it said — and on 2026-09-02's 680-bet
+    # sample they said the opposite: A+ -2.9% against B+ -6.1%, the right
+    # way round. A tool whose commentary can contradict its own table
+    # teaches a reader to skip the commentary, which is the whole output
+    # of a tool like this.
+    print("\n" + _grade_order_note(asked_by_grade))
 
     # --- does stake size predict the result? ----------------------------
     print("\n  DOES STAKE SIZE PREDICT THE RESULT?")
@@ -618,6 +625,44 @@ def report(rows: list[dict]) -> None:
 
 
 _GRADE_RANK = {"A+": 3, "A": 2, "B+": 1}
+
+
+#: How far apart two grades' ROI has to be before the gap is worth a
+#: sentence. Well inside the noise on a few hundred bets — this is a
+#: guard against narrating a rounding difference, not a significance
+#: test, and the note says which it is.
+GRADE_GAP_U = 0.02
+
+
+def _grade_order_note(asked: dict) -> str:
+    """What the grade column actually shows, in a sentence built from it.
+
+    The three ladder grades in order, compared on ROI at the stakes the
+    rules asked for — the column a cap policy would sort on. Says
+    "inverted" only when the top grade really does sit below the bottom
+    one by more than a rounding difference, "flat" when they are inside
+    it, and names the missing grades rather than reasoning over absent
+    rows.
+    """
+    have = [(g, asked[g][0]) for g in ("A+", "A", "B+")
+            if g in asked and asked[g][0] is not None]
+    if len(have) < 2:
+        got = ", ".join(g for g, _ in have) or "none of A+, A, B+"
+        return (f"    Not enough graded rows to say whether the ranking "
+                f"holds up — {got} present with a priced ask.")
+    top, bottom = have[0], have[-1]
+    gap = top[1] - bottom[1]
+    line = (f"    At the asked-for stakes {top[0]} is {top[1]:+.1%} and "
+            f"{bottom[0]} is {bottom[1]:+.1%}")
+    if gap < -GRADE_GAP_U:
+        return (line + f" — {top[0]} BELOW {bottom[0]}. The confidence "
+                f"signal is inverted, and no cap policy can fix a ranking "
+                f"that points the wrong way.")
+    if gap > GRADE_GAP_U:
+        return (line + f" — the ranking points the right way, which is what "
+                f"every cap policy sorting on grade assumes.")
+    return (line + " — inside a rounding difference of each other, so the "
+            "grade is not separating these bets in either direction.")
 
 
 def simulate_trim(rows: list[dict], cap: float) -> dict:

@@ -874,10 +874,12 @@ def main() -> None:
                 try:
                     dd = ledger.drawdown_factor(lconn, sport=args.league)
                     if dd < 1.0:
-                        for p in recs:
-                            p["stake_units"] = round(p["stake_units"] * dd, 2)
+                        from engine.staking import apply_drawdown as _dd_apply
+                        _sc, _dr = _dd_apply(recs, dd)
                         print(f"  ⚠️  Drawdown rule active — "
-                              f"{args.league.upper()} stakes halved")
+                              f"{args.league.upper()} stakes halved"
+                              + (f", {_dr} under the floor and dropped"
+                                 if _dr else ""))
                 except Exception:
                     pass
                 n = ledger.log_recommendations(

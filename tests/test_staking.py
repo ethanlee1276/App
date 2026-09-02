@@ -396,6 +396,55 @@ def test_the_stakes_preview_reads_the_board_and_names_the_policies():
     assert "Size multiplies whatever edge is really there" in fn
     assert "stakecheck.py" in fn
 
+
+# --- the drawdown brake honours the floor (2026-09-02) --------------------
+def test_a_halved_stake_under_the_floor_comes_off_the_board():
+    """`stakecheck.py` on the droplet, 2026-09-02: 42 settled bets under
+    the documented minimum, 30 of them AFTER the fix that was supposed to
+    end sub-floor stakes, every one an MLB row. The cause was the
+    drawdown rule halving a floored 0.1u into 0.05u — the exact rounding
+    artefact with a ticket that `correlation.apply_exposure_caps`
+    refuses to write one step earlier in the same pipeline."""
+    from engine.staking import apply_drawdown, MIN_STAKE_UNITS
+    rows = [{"recommended": True, "stake_units": 0.10, "grade": "B+"},
+            {"recommended": True, "stake_units": 1.00, "grade": "A"},
+            {"recommended": True, "stake_units": 0.19, "grade": "A+"}]
+    scaled, dropped = apply_drawdown(rows, 0.5)
+    assert (scaled, dropped) == (2, 1), (scaled, dropped)
+    assert rows[0]["recommended"] is False and rows[0]["stake_units"] == 0.0
+    assert rows[0]["grade"] == "Pass"
+    assert "under the" in rows[0]["warnings"][0]
+    assert rows[1]["stake_units"] == 0.50 and rows[1]["recommended"] is True
+    assert rows[2]["stake_units"] == 0.10 >= MIN_STAKE_UNITS
+
+
+def test_no_drawdown_means_nothing_moves():
+    from engine.staking import apply_drawdown
+    rows = [{"recommended": True, "stake_units": 0.10, "grade": "B+"}]
+    assert apply_drawdown(rows, 1.0) == (0, 0)
+    assert rows[0]["stake_units"] == 0.10 and rows[0]["recommended"] is True
+
+
+def test_a_row_that_was_never_a_bet_is_left_alone():
+    from engine.staking import apply_drawdown
+    rows = [{"recommended": False, "stake_units": 0.0, "grade": "Pass"},
+            {"recommended": True, "stake_units": 0.0, "grade": "Pass"}]
+    assert apply_drawdown(rows, 0.5) == (0, 0)
+    assert all(r["grade"] == "Pass" for r in rows)
+
+
+def test_every_build_scales_through_the_one_rule():
+    """Three copies of the halving loop is how one of them keeps the bug
+    after the other two are fixed."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for name in ("nfl_build.py", "mlb_build.py", "nba_build.py"):
+        with open(os.path.join(root, name), encoding="utf-8") as fh:
+            src = fh.read()
+        assert "apply_drawdown as _dd_apply" in src, name
+        assert '* dd, 2)' not in src, f"{name} still has its own halving loop"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

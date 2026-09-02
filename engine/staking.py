@@ -242,6 +242,65 @@ def to_units(fraction: float, odds: int, mult: float = 1.0) -> float:
     return units_with_reason(fraction, odds, mult=mult)[0]
 
 
+def apply_drawdown(rows, factor: float) -> tuple[int, int]:
+    """Halve every staked row, and honour the floor the way the rest of
+    the system does. ``(scaled, dropped)``.
+
+    THE CONTRADICTION THIS CLOSES. The drawdown rule — computed from the
+    settled journal elsewhere, never here; this module reads no book —
+    halves stakes after a 10u peak-to-trough, and three builds
+    (nfl_build, mlb_build, nba_build) each carried their own copy of the
+    loop:
+
+        r["stake_units"] = round(r["stake_units"] * dd, 2)
+
+    None re-applied `MIN_STAKE_UNITS`, so a floored 0.1u stake became
+    0.05u and went into the journal — the exact rounding artefact with a
+    ticket that `correlation.apply_exposure_caps` refuses to write, one
+    scale-down earlier in the same pipeline. Found 2026-09-02 by
+    `stakecheck.py` on the droplet: 42 settled bets under the documented
+    minimum, 30 of them dated after the fix that was supposed to end it,
+    every one an MLB row halved by this rule.
+
+    So the two scale-downs now behave the same way, which is the point:
+    a bet too small to be a bet comes OFF the board rather than going on
+    it at a size nobody would place. Marked exactly as the exposure caps
+    mark one — off the board, zero stake, graded Pass, and a warning
+    that says which rule did it — because a dropped bet that keeps its
+    grade reads as a recommendation nobody sized.
+
+    NOT THE SAME AS A CALLER'S DOWNWEIGHT, and the difference is
+    deliberate rather than an oversight. `units_with_reason`'s ``mult``
+    floors UP: the NBA's minutes uncertainty says "less on this one",
+    which is an opinion about one bet and not an instruction to skip it.
+    A drawdown is a portfolio brake, the same shape as the exposure cap
+    — it says the book as a whole is carrying too much, and a bet
+    rounded to a token by that is exactly what should come off.
+    """
+    if factor >= 1.0:
+        return (0, 0)
+    scaled = dropped = 0
+    for r in rows:
+        if not r.get("recommended") or (r.get("stake_units") or 0) <= 0:
+            continue
+        cut = round(float(r["stake_units"]) * float(factor), 2)
+        if cut < MIN_STAKE_UNITS:
+            r["recommended"] = False
+            r["stake_units"] = 0.0
+            r["grade"] = "Pass"
+            r.setdefault("warnings", []).append(
+                f"Drawdown rule — every stake was halved to {factor:.2f} of "
+                f"its size and this one fell under the {MIN_STAKE_UNITS}u "
+                f"minimum. A stake that small is a rounding artefact with a "
+                f"ticket, so the bet comes off the board rather than going "
+                f"on it at a size nobody would place.")
+            dropped += 1
+        else:
+            r["stake_units"] = cut
+            scaled += 1
+    return (scaled, dropped)
+
+
 def kelly_units(p: float, odds: int, fraction: float = 0.25) -> float:
     """The whole path in one call: Kelly decides IF, the price decides how
     much. ``fraction`` is retained because a caller may want a stricter
