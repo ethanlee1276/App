@@ -127,6 +127,113 @@ def compute_team_ratings(conn, sport: str, seasons: list[int] | None = None,
     return ratings
 
 
+ADJ_MAX_ITER = 400
+ADJ_TOL = 1e-7
+
+
+def compute_adjusted_ratings(conn, sport: str, seasons: list[int] | None = None,
+                             shrink: float = 6.0,
+                             exclude_prefix: str | None = None,
+                             home_field: float = 0.0) -> dict[str, TeamRating]:
+    """Opponent-adjusted offense/defense ratings — the college fix.
+
+    `compute_team_ratings` above averages a team's own margins, which is
+    fine in a league where everyone plays everyone (the NFL, more or
+    less) and wrong in one where a Sun Belt schedule and an SEC schedule
+    are not comparable numbers. §5 of the college spec calls opponent
+    adjustment "everything", and the 2026-09-02 readiness audit measured
+    the cost of not having it: the twenty largest Week-2 disagreements
+    with the market were all buy games, model LSU −6 against a −36.5
+    close, 8.2 points RMSE against the close overall.
+
+    THE MODEL. Points the home side scores are
+        baseline + off[home] + def[away] + H/2
+    and the away side's are ``baseline + off[away] + def[home] − H/2``,
+    with ``def`` positive for a leaky defence (the same sign convention
+    every consumer of TeamRating already uses: ``proj_home = baseline +
+    hr.off + ar.def_``) and ``H`` the home-field advantage the caller
+    has already solved (`engine/cfb/ratings.home_field`) — zero on a
+    neutral site. Each team's offense is then the average of what its
+    games imply once the opponent's defence is taken out, and its
+    defence likewise, alternated to convergence: coordinate descent on
+    the least-squares problem, the same shape `home_field` uses and for
+    the same reason (no matrix library here). The ridge is the SAME
+    shrink the plain rating applies — every sum is divided by
+    ``n + shrink`` rather than ``n`` — so a one-game team is regressed
+    exactly as far toward zero as before; what changes is what the one
+    game is worth.
+
+    ``net = off − def`` and so ``proj_margin = net_h − net_a + H``,
+    unchanged from the plain rating's contract with `gamebets`.
+    """
+    baseline = SCORING_BASELINE.get(sport, 0.0)
+    q = ("SELECT home, away, home_score, away_score, extra FROM games "
+         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL")
+    args: list = [sport]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    if exclude_prefix:
+        q += " AND home NOT LIKE ? AND away NOT LIKE ?"
+        args += [exclude_prefix + "%", exclude_prefix + "%"]
+    rows = []
+    for home, away, hs, as_, extra in conn.execute(q, args).fetchall():
+        neutral = False
+        try:
+            import json as _json
+            neutral = bool(_json.loads(extra or "{}").get("neutral"))
+        except (ValueError, TypeError):
+            pass
+        rows.append((home, away, float(hs), float(as_),
+                     0.0 if neutral else float(home_field)))
+    if not rows:
+        return {}
+    n: dict[str, int] = {}
+    for h, a, *_ in rows:
+        n[h] = n.get(h, 0) + 1
+        n[a] = n.get(a, 0) + 1
+    off = {t: 0.0 for t in n}
+    de = {t: 0.0 for t in n}
+    for _ in range(ADJ_MAX_ITER):
+        acc_off = {t: 0.0 for t in n}
+        acc_def = {t: 0.0 for t in n}
+        for h, a, hs, as_, hfa in rows:
+            acc_off[h] += hs - baseline - de[a] - hfa / 2.0
+            acc_def[a] += hs - baseline - off[h] - hfa / 2.0
+            acc_off[a] += as_ - baseline - de[h] + hfa / 2.0
+            acc_def[h] += as_ - baseline - off[a] + hfa / 2.0
+        new_off = {t: acc_off[t] / (n[t] + shrink) for t in n}
+        new_def = {t: acc_def[t] / (n[t] + shrink) for t in n}
+        moved = max(max(abs(new_off[t] - off[t]) for t in n),
+                    max(abs(new_def[t] - de[t]) for t in n))
+        off, de = new_off, new_def
+        if moved < ADJ_TOL:
+            break
+    return {t: TeamRating(net=round(off[t] - de[t], 3), off=round(off[t], 3),
+                          def_=round(de[t], 3), games=int(n[t]))
+            for t in n}
+
+
+def adjusted_ratings_for_season(conn, sport: str, season: int,
+                                shrink: float = 6.0,
+                                exclude_prefix: str | None = None,
+                                home_field: float = 0.0):
+    """`ratings_for_season`'s pooling rule, on the adjusted rating."""
+    got = compute_adjusted_ratings(conn, sport, seasons=[season], shrink=shrink,
+                                   exclude_prefix=exclude_prefix,
+                                   home_field=home_field)
+    if got:
+        per_team = sum(r.games for r in got.values()) / len(got)
+        if per_team >= MIN_GAMES_PER_TEAM:
+            return got, [season]
+    pooled = compute_adjusted_ratings(conn, sport, seasons=[season - 1, season],
+                                      shrink=shrink, exclude_prefix=exclude_prefix,
+                                      home_field=home_field)
+    if pooled:
+        return pooled, [season - 1, season]
+    return got, [season]
+
+
 def attach_ratings(games, ratings: dict[str, TeamRating]) -> int:
     """Set net + offense/defense ratings on each game from ``ratings``.
 

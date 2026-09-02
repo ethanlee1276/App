@@ -60,12 +60,85 @@ def test_a_one_game_season_is_carried_by_last_season():
     assert got["C"].net < 0
 
 
+def test_the_college_build_prices_on_the_adjusted_rating():
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(here, "cfb_build.py"), encoding="utf-8").read()
+    assert "teamrates.adjusted_ratings_for_season(" in src
+    assert "home_field=fit.home_field" in src
+    # the variance is re-fitted around the projection actually priced
+    assert "fit_from_history(conn, all_seasons_adj or all_seasons" in src
+    assert '"method": "opponent-adjusted"' in src
+
+
 def test_the_college_build_uses_the_pooled_rule_like_every_other_build():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(here, "cfb_build.py"), encoding="utf-8").read()
     assert "teamrates.ratings_for_season(" in src
     assert 'exclude_prefix=_fallback' in src
     assert "seasons=[day.year])" not in src.split("ratings_for_season")[0][-400:]
+
+
+# ---------------------------------------------------------------------------
+# Opponent adjustment (Ethan, 2026-09-02: "3. Whatever u think" → built).
+# ---------------------------------------------------------------------------
+
+def _schedule_db():
+    """D is a 30-point better team than C. A beat weak C by 20; B beat
+    strong D by 3. Averaging margins says A > B; adjusting for who they
+    played says B > A — B's three points came against a far better team."""
+    conn = hist_db.connect(":memory:")
+    rows = [_game(2026, "2026-09-05", "D", "C", 40, 10),
+            _game(2026, "2026-09-12", "A", "C", 30, 10),
+            _game(2026, "2026-09-12", "B", "D", 24, 21),
+            _game(2026, "2026-09-19", "C", "D", 7, 35),
+            _game(2026, "2026-09-19", "D", "A", 28, 14)]
+    hist_db.upsert_games(conn, rows)
+    return conn
+
+
+def test_opponent_adjustment_credits_the_schedule():
+    conn = _schedule_db()
+    plain = TR.compute_team_ratings(conn, "cfb", seasons=[2026], shrink=2.0)
+    adj = TR.compute_adjusted_ratings(conn, "cfb", seasons=[2026], shrink=2.0)
+    assert plain["A"].net > plain["B"].net, (plain["A"], plain["B"])
+    assert adj["B"].net > adj["A"].net, (adj["B"], adj["A"])
+    assert adj["D"].net > adj["A"].net > adj["C"].net
+    assert all(r.games == plain[t].games for t, r in adj.items())
+    # the contract every consumer relies on: net = off − def
+    for r in adj.values():
+        assert abs(r.net - (r.off - r.def_)) < 2e-3
+
+
+def test_the_adjusted_rating_reproduces_a_planted_structure():
+    """Four teams, every pair home and away, true strengths +9/+3/−3/−9
+    and a 3-point home field: with no shrink the solver must hand the
+    strengths back (up to the ridge, set to 0 here)."""
+    conn = hist_db.connect(":memory:")
+    true = {"W": 9.0, "X": 3.0, "Y": -3.0, "Z": -9.0}
+    base = TR.SCORING_BASELINE.get("cfb", 0.0) or 27.0
+    TR.SCORING_BASELINE["cfb"] = base
+    rows, i = [], 0
+    for h in true:
+        for a in true:
+            if h == a:
+                continue
+            i += 1
+            margin = true[h] - true[a] + 3.0
+            rows.append(_game(2026, f"2026-10-{i:02d}", h, a,
+                              base + margin / 2, base - margin / 2))
+    hist_db.upsert_games(conn, rows)
+    adj = TR.compute_adjusted_ratings(conn, "cfb", seasons=[2026], shrink=0.0,
+                                      home_field=3.0)
+    for t, v in true.items():
+        assert abs(adj[t].net - v) < 0.05, (t, adj[t].net, v)
+
+
+def test_the_adjusted_pooling_follows_the_same_rule():
+    conn = _db()
+    got, used = TR.adjusted_ratings_for_season(conn, "cfb", 2026, shrink=8.0,
+                                               exclude_prefix="espn:")
+    assert used == [2025, 2026]
+    assert "espn:9999" not in got and got["A"].games == 3
 
 
 if __name__ == "__main__":
