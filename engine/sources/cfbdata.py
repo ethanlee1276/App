@@ -144,6 +144,14 @@ def name_key(name: str) -> str:
     """
     s = unicodedata.normalize("NFKD", name or "")
     s = "".join(c for c in s if not unicodedata.combining(c))
+    # An apostrophe COLLAPSES too, and for the opposite reason from the
+    # ampersand: ESPN spells "Hawai'i Rainbow Warriors" and the odds feed
+    # spells "Hawaii Rainbow Warriors", and turning the mark into a space
+    # ("hawai i") made the two disagree — so every Hawai'i price failed to
+    # join and the school was a counted miss on every board it was quoted
+    # on (CFB readiness audit, 2026-09-02). "Ragin' Cajuns" and "Ragin
+    # Cajuns" are the same words either way.
+    s = s.replace("'", "").replace("\u2019", "")
     s = s.lower().replace("&", " ").replace("-", " ").replace(".", " ")
     s = _PUNCT.sub(" ", s)
     return re.sub(r"\s+", " ", s).strip()

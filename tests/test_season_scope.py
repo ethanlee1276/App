@@ -88,11 +88,19 @@ def test_cfb_ratings_are_fit_on_one_season():
     """
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "cfb_build.py")).read()
-    i = src.index("compute_team_ratings(conn, \"cfb\"")
-    call = src[i:src.index(")", src.index("shrink", i))]
-    assert "seasons=" in call, (
-        "cfb_build must bound team ratings to one season — college rosters "
-        "turn over every year, so an unbounded fit rates graduated players")
+    # Since 2026-09-02 (CFB readiness audit) the build asks
+    # `ratings_for_season` for the season being built — bounded to THAT
+    # season, carried by the one before it only until this one averages
+    # four games a team, which is the rule every other build runs. What
+    # this pins is unchanged: never an unbounded fit across every
+    # ingested season, which would rate graduated players.
+    i = src.index("teamrates.ratings_for_season(")
+    call = src[i:src.index(")", i)]
+    assert '"cfb", day.year' in call, (
+        "cfb_build must bound team ratings to the season being built — "
+        "college rosters turn over every year, so an unbounded fit rates "
+        "graduated players")
+    assert "ratings = teamrates.compute_team_ratings(conn, \"cfb\", shrink=8.0)" not in src
 
 
 def test_team_form_baseline_stops_at_the_season_boundary():
