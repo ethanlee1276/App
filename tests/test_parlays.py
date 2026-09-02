@@ -1408,6 +1408,25 @@ def test_the_verdict_never_contradicts_the_cards_below_it():
     assert "cleared" in live["verdict"]
 
 
+def test_both_sides_of_one_game_total_cannot_share_a_ticket():
+    """NFL readiness audit, 2026-09-02: Over 45.5 and Under 45.5 on the
+    same game fell through to the generic same-game pace rule and came
+    back "ok, ρ +0.10". They cannot both win — §3 Type 1, the same as two
+    sides of one spread."""
+    over = gline("total", "", "CHI", "GB", side="Over", line=45.5)
+    under = gline("total", "", "CHI", "GB", side="Under", line=45.5)
+    rel = P.relate("nfl", over, under)
+    assert rel.verdict == "kill", rel
+    assert rel.clash == 1
+    assert rel.rho <= -0.9
+    # the same side twice is one opinion sold twice, not a ticket
+    rel2 = P.relate("nfl", over, dict(over))
+    assert rel2.verdict == "duplicate", rel2
+    # and the slip check refuses it with the reason on show
+    out = P.check_ticket("nfl", [over, under])
+    assert out["ok"] is False and "cannot both win" in out["reason"]
+
+
 if __name__ == "__main__":
     # Collect by scanning the SOURCE, not just globals(). Tests appended
     # below this block get defined after it has already run, so they are

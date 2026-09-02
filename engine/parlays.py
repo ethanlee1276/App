@@ -681,6 +681,16 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
                                       "its most extreme", 6, "duplicate")
             return Relation(-0.90, "two sides of one game — they cannot both "
                                    "win; §3 Type 1", 1, "kill")
+        if fams == {"gametotal"}:
+            # Both sides of one game total — Over 45.5 with Under 45.5 —
+            # fell through to the generic same-game pace rule and came
+            # back "ok, ρ +0.10" (NFL readiness audit, 2026-09-02). They
+            # cannot both win; the same side twice is one bet sold twice.
+            if ua != ub:
+                return Relation(-1.0, "both sides of one game total — they "
+                                      "cannot both win; §3 Type 1", 1, "kill")
+            return Relation(1.0, "the same game total twice — one opinion "
+                                 "sold twice; §3 Type 6", 6, "duplicate")
         if fams == {"teamtotal"} and not same_team:
             if ua == ub:
                 # Both teams over (or both under) is the pace bet, twice.
