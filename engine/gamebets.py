@@ -260,7 +260,8 @@ def price_total_sharp(home: str, away: str, line: float,
                      american_to_prob(odds), fair - american_to_prob(odds),
                      odds, pick_label=f"{side} {line:g}", side=side, line=line,
                      reasons=list(context or []),
-                     headline=f"{side} {line:g} {units}")
+                     headline=f"{side} {line:g} {units}",
+                     other_odds=(under_odds if i == 0 else over_odds))
     return _sharpify(card, fair, odds, ev, f"{side} {line:g}")
 
 
@@ -283,7 +284,8 @@ def price_spread_sharp(home: str, away: str, home_spread: float,
                      home, away, fair, american_to_prob(odds),
                      fair - american_to_prob(odds), odds,
                      pick_label=label, team=team, line=line,
-                     reasons=list(context or []), headline=label)
+                     reasons=list(context or []), headline=label,
+                     other_odds=(away_odds if i == 0 else home_odds))
     return _sharpify(card, fair, odds, ev, label)
 
 
@@ -552,7 +554,7 @@ def _real_price(*odds) -> bool:
 
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
-              credible=True, has_market=True, cal_temp=None):
+              credible=True, has_market=True, cal_temp=None, other_odds=None):
     ev = expected_value(win, odds)
     quality = game_bet_score(edge, bet_type) if credible else 0
     confidence = round(quality / 10.0, 1)
@@ -574,6 +576,13 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
         # a game bet returned None, which is not False, so every one of
         # them walked past a guard the prop layer has always applied.
         "has_market": bool(has_market),
+        # THE OTHER SIDE'S PRICE. The likelihood board ranks the side
+        # more likely to LAND, which is the other side whenever this card
+        # backed a sub-50% side on price (Ethan, 2026-09-02: "I don't see
+        # team totals over or unders ... I don't see spread bets"). None
+        # on a card built without it, and the board then refuses to
+        # guess.
+        "other_odds": other_odds,
         "market_label": market_label,
         "home": home,
         "away": away,
@@ -622,7 +631,8 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
                      reasons=reasons, headline=f"{side} {market_total:g} {units}",
                      credible=credible,
                      has_market=_real_price(over_odds, under_odds),
-                     cal_temp=shrink_in_force(sport, "total"))
+                     cal_temp=shrink_in_force(sport, "total"),
+                     other_odds=(under_odds if side == "Over" else over_odds))
 
 
 def price_team_total(sport: str, team: str, home: str, away: str,
@@ -652,7 +662,8 @@ def price_team_total(sport: str, team: str, home: str, away: str,
                      reasons=reasons, headline=f"{team} team {side} {line:g}",
                      credible=credible,
                      has_market=_real_price(over_odds, under_odds),
-                     cal_temp=shrink_in_force(sport, "total"))
+                     cal_temp=shrink_in_force(sport, "total"),
+                     other_odds=(under_odds if side == "Over" else over_odds))
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,
@@ -685,4 +696,5 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
                      reasons=reasons, headline=f"{team} {spread:+g}",
                      credible=credible,
                      has_market=_real_price(home_odds, away_odds),
-                     cal_temp=shrink_in_force(sport, "spread"))
+                     cal_temp=shrink_in_force(sport, "spread"),
+                     other_odds=(away_odds if team == home else home_odds))

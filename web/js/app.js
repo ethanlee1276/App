@@ -5235,6 +5235,15 @@ function likelyCard(r) {
   // this page was quoting them uncorrected. The mixture is fitted on the
   // shape the outcomes actually have and halves the gap between what we
   // claim and what lands.
+  /* A LEAN, SAID ON THE CARD. A spread or total row sits on a shelf
+     whose header quotes the moneyline’s 0.64; the row’s own market
+     measured at a coin flip for sorting games, and the row says so
+     rather than borrowing the header’s number (Ethan, 2026-09-02:
+     "I don’t see team totals over or unders ... I don’t see spread
+     bets" — shown, and labelled). */
+  const lean = r.ranked === false && r.rank_note
+    ? `<div class="mini" style="opacity:.75;margin-top:4px">${escapeHtml(r.rank_note)}</div>`
+    : "";
   const cal = r.prob_source !== "mixture" ? "" :
     `<div class="mini" style="opacity:.6;margin-top:4px">
        Calibrated for this market’s shape — the model’s raw read was
@@ -5276,7 +5285,7 @@ function likelyCard(r) {
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
     ${scriptLine}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
-    ${bet}${cal}${evTxt}
+    ${bet}${lean}${cal}${evTxt}
   </article>`;
 }
 
@@ -5534,9 +5543,10 @@ function likelyGameMark(r, size) {
 function likelyRow(r) {
   const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
   const game = r.kind === "game";
-  const label = game ? `${r.market_label || r.market} · ${r.matchup || ""}`
+  const label = (game ? `${r.market_label || r.market} · ${r.matchup || ""}`
     : r.line == null ? (r.market_label || r.market)
-    : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`;
+    : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`)
+    + (r.ranked === false ? " · lean" : "");
   const mark = game ? likelyGameMark(r, 30)
     : playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
                                        headshot: r.headshot });
@@ -5560,9 +5570,13 @@ function likelyShelf(sh) {
       player who hits above one who does not. 0.50 is a coin flip.">ranks at
       ${Number(sh.rank_auc).toFixed(2)}</span>`;
   const shut = rows.filter((r) => !r.bettable).length;
+  const leans = rows.filter((r) => r.ranked === false).length;
   const note = shut && shut === rows.length
     ? `<span class="mini" style="opacity:.7">read-only — we don’t stake this
-       market</span>` : "";
+       market</span>`
+    : leans ? `<span class="mini" style="opacity:.7">${leans} shown as
+       lean${leans === 1 ? "" : "s"} — the model’s side at the number, not
+       ranked</span>` : "";
   return `<section class="likely-shelf" id="shelf-${escapeAttr(sh.key || "")}">
     <div class="shelf-head">
       <h3 class="shelf-title">${escapeHtml(sh.title)}

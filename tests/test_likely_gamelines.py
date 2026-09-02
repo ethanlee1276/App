@@ -142,8 +142,8 @@ def test_a_dog_card_becomes_the_favourites_row():
     assert row["odds"] == -165, "the favourite's own price"
     assert row["model_prob"] == 0.63 and row["implied_prob"] == 0.62
     assert row["opponent"] == "NO" and row["pick_is_home"] is True
-    assert row["reasons"][0].startswith("The likely winner.")
-    assert "NO at +140" in row["reasons"][0]
+    assert row["reasons"][0].startswith("The likely side.")
+    assert "NO ML at +140" in row["reasons"][0]
     # The card shape rides along so the game page can draw a row the
     # edge board never published.
     assert row["win_prob"] == 0.63 and row["grade"] == "Likely"
@@ -178,13 +178,93 @@ def test_a_flipped_row_journals_the_favourite():
     assert got == {"player": "DET", "odds": -165, "hit_prob": 0.63}, got
 
 
-def test_a_spread_or_total_card_is_refused_as_unmeasured():
-    """They tested as a coin flip. A spread handed in comes back None,
-    and that is the board working, not a gap."""
+def _tot(**kw):
+    d = _ml(bet_type="total", market="total", market_label="Total", team="",
+            side="Over", line=47.5, pick_label="Over 47.5", headline="Over 47.5 points",
+            odds=-110, other_odds=-110, win_prob=0.56, fair_prob=0.52)
+    d.pop("home_odds"); d.pop("away_odds")
+    d.update(kw)
+    return d
+
+
+def test_a_spread_or_total_row_is_shown_as_a_lean_with_its_figure():
+    """Ethan, after the first cut shipped moneylines alone: "I only see
+    money lines ... I don't see team totals over or unders ... I don't
+    see spread bets." His call. They tested as a coin flip at sorting
+    games, so the row carries that figure and says it is a lean."""
     for market in ("spread", "total", "team_total"):
-        card = _ml(bet_type=market, market=market, side="Over", line=47.5,
-                   pick_label=f"Over 47.5 {market}")
-        assert K.from_game_bet(card, sport="nfl") is None, market
+        card = _tot(bet_type=market, market=market, team="DET",
+                    pick_label=f"DET Over 24.5" if market == "team_total" else "x")
+        row = K.from_game_bet(card, sport="nfl")
+        assert row is not None, market
+        assert row["ranked"] is False
+        assert row["rank_auc"] == K.GAME_RANK_MEASURED["nfl"][market]
+        assert "coin flip" in row["rank_note"] and "not a ranking" in row["rank_note"]
+    ml = K.from_game_bet(_ml(), sport="nfl")
+    assert ml["ranked"] is True and ml["rank_note"] == ""
+
+
+def test_a_market_with_no_figure_at_all_stays_off():
+    """Measured-and-failed is shown with its number; never-measured has
+    nothing to say. MLB sits here until `gamerank --save` runs on the
+    droplet."""
+    assert K.from_game_bet(_ml(), sport="wnba") is None
+    assert K.from_game_bet(_tot(), sport="wnba") is None
+
+
+def test_the_shipped_table_and_the_floor_agree():
+    """GAME_RANK_AUC is exactly the part of the measured table that
+    cleared the floor — one measurement, two views of it."""
+    for sport, got in K.GAME_RANK_MEASURED.items():
+        want = {m: a for m, a in got.items() if a >= K.MIN_RANK_AUC}
+        assert K.GAME_RANK_AUC.get(sport, {}) == want, sport
+
+
+def test_a_total_backed_from_the_short_end_flips_to_the_likely_side():
+    row = K.from_game_bet(_tot(side="Under", win_prob=0.44, fair_prob=0.47,
+                               odds=-105, other_odds=-115,
+                               pick_label="Under 47.5"), sport="nfl")
+    assert row["flipped"] is True and row["side"] == "Over"
+    assert row["player"] == "Over 47.5" and row["odds"] == -115
+    assert row["model_prob"] == 0.56 and row["implied_prob"] == 0.53
+    assert row["reasons"][0].startswith("The likely side.")
+
+
+def test_a_spread_backed_from_the_short_end_flips_team_and_number():
+    card = _tot(bet_type="spread", market="spread", market_label="Spread",
+                team="NO", side="", line=3.5, pick_label="NO +3.5",
+                win_prob=0.46, fair_prob=0.48, odds=-105, other_odds=-115)
+    row = K.from_game_bet(card, sport="nfl")
+    assert row["flipped"] is True and row["team"] == "DET"
+    assert row["line"] == -3.5 and row["player"] == "DET -3.5"
+    assert row["odds"] == -115 and row["model_prob"] == 0.54
+
+
+def test_a_team_total_flips_its_side_and_keeps_its_team():
+    card = _tot(bet_type="team_total", market="team_total", team="DET",
+                side="Over", line=24.5, pick_label="DET Over 24.5",
+                win_prob=0.45, fair_prob=0.49, odds=-110, other_odds=-110)
+    row = K.from_game_bet(card, sport="nfl")
+    assert row["flipped"] is True and row["team"] == "DET"
+    assert row["side"] == "Under" and row["player"] == "DET Under 24.5"
+
+
+def test_a_short_side_without_the_other_price_is_refused():
+    assert K.from_game_bet(_tot(win_prob=0.44, other_odds=None), sport="nfl") is None
+
+
+def test_game_rows_are_capped_apart_from_player_rows():
+    """A Sunday's five cards a game is eighty leans; they must not push
+    the player rows off a forty-row board."""
+    cards = [_tot(home=f"H{i}", away=f"A{i}", matchup=f"A{i} @ H{i}",
+                  win_prob=0.55) for i in range(30)]
+    props = [_prop(player=f"P{i}", prob=0.52) for i in range(5)]
+    got = K.build(props, game_bets=cards)
+    assert sum(1 for r in got if r["kind"] == "game") == K.GAME_LIMIT
+    assert sum(1 for r in got if r["kind"] == "prop") == 5, \
+        "the 52% props survived beside twenty 55% leans"
+    assert [r["model_prob"] for r in got] == sorted(
+        (r["model_prob"] for r in got), reverse=True), "one order"
 
 
 def test_holds_are_not_picks():
@@ -258,7 +338,7 @@ def test_the_evidence_line_says_what_was_measured_off_the_board_too():
         ml = K.GAME_RANK_AUC[sport]["moneyline"]
         line = boards.guide(sport)[0]["measured"]
         assert f"{ml:.2f}" in line, line
-        assert "coin flip" in line and "moneylines only" in line, line
+        assert "coin flip" in line and "lean" in line, line
 
 
 # --- the journal ----------------------------------------------------------
@@ -374,8 +454,12 @@ def test_a_game_row_is_drawn_as_the_pick_it_is_and_opens_the_game_page():
     assert 'r.kind === "game"' in opn and "gameBetId(r)" in opn
     row = _fn(js, "likelyRow")
     assert "r.pick_label" in row and "likelyGameMark(r, 30)" in row
+    assert '" · lean"' in row, "a lean row says so in the list too"
     card = _fn(js, "likelyCard")
     assert "r.pick_label" in card and "likelyGameMark(r, 56)" in card
+    assert "r.rank_note" in card and "${lean}" in card
+    shelf = _fn(js, "likelyShelf")
+    assert "r.ranked === false" in shelf
     mark = _fn(js, "likelyGameMark")
     assert "leagueMark(state.sport, size)" in mark and "teamMark(r.team, size)" in mark
 

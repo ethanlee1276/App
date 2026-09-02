@@ -98,6 +98,28 @@ GAME_RANK_AUC = {
     "cfb": {"moneyline": 0.708},
 }
 
+#: EVERY game-market figure that was measured, floor or not — the same
+#: run, the whole table. Ethan, 2026-09-02, after the first cut shipped
+#: moneylines alone: "I only see money lines in the best bets. I don't
+#: see team totals over or unders ... I don't see spread bets, I don't
+#: see anything like that I just asked you to do." His call: the
+#: spreads, totals and team totals go on the board. The measurement's
+#: job is then to be PRINTED on each of them — a row from a market that
+#: sorts games at 0.49 says so on its face, carries `ranked` False, and
+#: is shown as the model's lean at that number rather than as a claim to
+#: rank. A market with NO figure at all (MLB, until `gamerank --save`
+#: runs on the droplet) still has nothing to say and stays off.
+GAME_RANK_MEASURED = {
+    "nfl": {"moneyline": 0.641, "spread": 0.491, "total": 0.497, "team_total": 0.513},
+    "cfb": {"moneyline": 0.708, "spread": 0.517, "total": 0.512, "team_total": 0.492},
+}
+
+#: Game rows the board carries per sport, beside LIMIT player rows.
+#: Five cards a game across a sixteen-game Sunday is eighty rows of
+#: 50-60% leans, which would push every player row off a board capped
+#: at forty; the two kinds are capped apart so neither crowds the other.
+GAME_LIMIT = 20
+
 #: SHOULD THIS BOARD GET REAL MONEY? Ethan, 2026-08-30: "we need to
 #: figure out if we are gonna put real money on these bets and record
 #: them and if so we need them to be in the recommended bets."
@@ -214,6 +236,23 @@ def rank_auc(sport: str, market: str):
 def rankable(market: str, sport: str = "nfl") -> bool:
     """Has this market been SHOWN to rank, not merely modelled?"""
     return (rank_auc(sport, market) or 0.0) >= MIN_RANK_AUC
+
+
+def measured_auc(sport: str, market: str):
+    """The measured figure for a GAME market whether or not it cleared
+    the floor: the box's own store first (gamerank --save writes
+    sub-floor numbers too), then the shipped table. None = never
+    measured, which is a different fact from measured-and-failed."""
+    from .rankfit import rank_auc as _fitted
+    got = _fitted(sport, market)
+    if got is not None:
+        return got
+    return GAME_RANK_MEASURED.get(sport, {}).get(market)
+
+
+#: The word a lean note uses for each market, plural.
+_GAME_WORDS = {"spread": "spreads", "total": "totals",
+               "team_total": "team totals", "moneyline": "moneylines"}
 
 
 def _sane(odds) -> bool:
@@ -484,8 +523,15 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
     """
     from .gamebets import expected_value
     market = row.get("bet_type") or row.get("market") or ""
-    if market not in GAME_MARKETS or not rankable(market, sport):
+    if market not in GAME_MARKETS:
         return None
+    # MEASURED IS THE BAR FOR A GAME MARKET, not ranked (see
+    # GAME_RANK_MEASURED). A market with a figure is shown with it; a
+    # market with none is not shown at all.
+    auc = measured_auc(sport, market)
+    if auc is None:
+        return None
+    ranked = float(auc) >= MIN_RANK_AUC
     if row.get("has_market") is False or row.get("live") or row.get("conditional"):
         return None
     prob = row.get("win_prob")
@@ -494,16 +540,37 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
     prob, fair = float(prob), row.get("fair_prob")
     home, away = row.get("home", "") or "", row.get("away", "") or ""
     team = row.get("team") or ""
+    side = row.get("side", "") or ""
+    line = row.get("line")
     odds = row.get("odds")
     label = row.get("pick_label") or row.get("headline") or ""
-    flipped = False
-    if market == "moneyline" and prob < 0.5:
-        other = away if team == home else home
-        other_odds = row.get("away_odds") if team == home else row.get("home_odds")
-        if not other or other_odds is None or fair is None:
+    flipped, backed, backed_odds = False, label, odds
+    if prob < 0.5:
+        # THE LIKELY SIDE. Every game market here is two-way, so the
+        # other side is 1 - p at the other side's price (`other_odds`
+        # on every card since 2026-09-02; the moneyline also carries
+        # both prices by name). A card without it is refused rather
+        # than shown as "likely" from the wrong end.
+        if market == "moneyline":
+            other_odds = row.get("away_odds") if team == home else row.get("home_odds")
+            other_odds = row.get("other_odds") if other_odds is None else other_odds
+            team = away if team == home else home
+            label = f"{team} ML"
+        elif market == "spread":
+            other_odds = row.get("other_odds")
+            team = away if team == home else home
+            line = None if line is None else -float(line)
+            label = f"{team} {line:+g}" if line is not None else f"{team}"
+        else:                                   # total, team_total
+            other_odds = row.get("other_odds")
+            side = "Under" if str(side).lower().startswith("o") else "Over"
+            label = (f"{side} {line:g}" if market == "total"
+                     else f"{team} {side} {line:g}") if line is not None else side
+        if not team and market != "total":
             return None
-        team, odds, prob, fair = other, other_odds, 1.0 - prob, 1.0 - float(fair)
-        label, flipped = f"{other} ML", True
+        if other_odds is None or fair is None:
+            return None
+        odds, prob, fair, flipped = other_odds, 1.0 - prob, 1.0 - float(fair), True
     if prob < MIN_PROB:
         return None
     edge = None if fair is None else round(prob - float(fair), 4)
@@ -513,10 +580,22 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         ev = None
     reasons = list(row.get("reasons") or [])
     if flipped:
-        reasons.insert(0, f"The likely winner. The edge board backed "
-                          f"{row.get('team') or ''} at {int(row.get('odds') or 0):+d} "
-                          f"on price; this is the side the same numbers "
-                          f"say wins more often ({prob:.0%}).")
+        try:
+            at = f" at {int(backed_odds):+d}"
+        except (TypeError, ValueError):
+            at = ""
+        reasons.insert(0, f"The likely side. The edge board backed {backed}{at} "
+                          f"on price; this is the side the same numbers say "
+                          f"lands more often ({prob:.0%}).")
+    # WHAT THE FIGURE MEANS, on the row. A ranked market's number is a
+    # ranking; a measured-below-floor market's number is the model's
+    # lean at this line, and the row says which it is rather than
+    # letting a shelf header speak for it.
+    rank_note = "" if ranked else (
+        f"Shown as the model’s lean at this number. Sorting "
+        f"{_GAME_WORDS.get(market, market)} across games measured at "
+        f"{float(auc):.2f} against the close — a coin flip — so the "
+        f"percentage is a read on this game, not a ranking.")
     return {
         # WHAT KIND OF ROW THIS IS, said once, so the page, the journal
         # and the lint branch on a flag rather than on the absence of a
@@ -533,7 +612,7 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         "headline": label,
         "bet_type": market, "market": market,
         "market_label": row.get("market_label", market),
-        "side": row.get("side", "") or "", "line": row.get("line"),
+        "side": side, "line": line,
         # A game card carries no book name on the NFL path; the journal
         # has always written these as the shopped-best price.
         "book": row.get("book") or "best", "odds": odds,
@@ -544,7 +623,9 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         "projection": None,
         "ev_per_unit": ev,
         "bettable": True,
-        "rank_auc": rank_auc(sport, market),
+        "rank_auc": round(float(auc), 4),
+        "ranked": ranked,
+        "rank_note": rank_note,
         "reasons": reasons,
         "game_script": row.get("game_script"),
         "recent_values": [],
@@ -626,6 +707,13 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         seen.add(key)
         out.append(got)
     out.sort(key=lambda r: -float(r["model_prob"] or 0.0))
+    # TWO CAPS, ONE ORDER. Player rows keep LIMIT; game rows keep
+    # GAME_LIMIT; the survivors are one list in probability order, so a
+    # 63% favourite still sits above a 55% catch and a Sunday's eighty
+    # game leans cannot push the player rows off (see GAME_LIMIT).
+    players = [r for r in out if r.get("kind") != "game"][:limit]
+    games = [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]
+    out = sorted(players + games, key=lambda r: -float(r["model_prob"] or 0.0))
     # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
     # for it. An empty college Saturday has several causes and a census
     # that only reaches stdout is one nobody has the morning they need
@@ -634,7 +722,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # into the journal.
     if census is not None:
         census.update(refused)
-    return out[:limit]
+    return out
 
 
 def summary(board: list, refused: int = 0) -> dict:

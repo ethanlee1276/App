@@ -61,12 +61,36 @@ coin flip against the close on both leagues. That is not a surprise (the
 close already contains the ratings, and the market's own de-vigged
 moneyline ranks NFL winners at 0.714), and it decides the board.
 
+The first cut shipped moneylines alone and kept the rest off. Ethan,
+the same day: "I only see money lines in the best bets. I don't see team
+totals over or unders, I don't see player unders, I don't see spread
+bets, I don't see anything like that I just asked you to do." His call,
+and the measurement's job became to be printed on each row rather than
+to gate it.
+
 So:
 
-* **On the board:** NFL and CFB moneylines, via `likely.GAME_RANK_AUC`.
-* **Off the board:** spreads, totals, team totals, everywhere, until a
-  measurement says otherwise. A spread card handed to
-  `likely.from_game_bet` comes back None. That is the board working.
+* **Ranked:** NFL and CFB moneylines, via `likely.GAME_RANK_AUC`. The
+  shelf's "ranks at" figure is theirs.
+* **Shown as leans:** spreads, totals and team totals, via
+  `likely.GAME_RANK_MEASURED`. Each row carries `ranked` False, its own
+  measured figure, and a `rank_note` the card prints: the model's lean
+  at this number, sorting these across games measured at 0.49 against
+  the close, a coin flip, so the percentage is a read on this game and
+  not a ranking. The list shows "lean" beside the market and the shelf
+  header counts them.
+* **Capped apart:** player rows keep `likely.LIMIT` (40) and game rows
+  get `likely.GAME_LIMIT` (20), then the survivors share one probability
+  order. Five cards a game across a Sunday is eighty 50–60% leans, and
+  a single cap would have pushed every player row off.
+* **The likely side, on every market:** every two-way card now carries
+  the other side's price (`other_odds` from `gamebets._game_bet`), so a
+  card backed from the short end on price flips to the side the same
+  numbers say lands more often: the other team and the mirrored number
+  on a spread, the other side of a total or team total, the favourite
+  on a moneyline.
+* **Never measured stays off:** a market with no figure at all has
+  nothing to say.
 * **MLB:** nothing yet. The MLB game history lives only on the droplet,
   so the measurement runs there and writes into the rank store
   `likely.rank_auc` reads first (`rankfit.STORE`):

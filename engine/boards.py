@@ -99,9 +99,10 @@ def _game_sentence(sport: str) -> str:
     ml = got.get("moneyline")
     if ml is None:
         return ""
-    return (f" Who wins a game ranks at {ml:.2f} — moneylines only; "
-            f"spreads and totals tested as a coin flip against the close "
-            f"and stay off.")
+    return (f" Who wins a game ranks at {ml:.2f}. Spreads and totals "
+            f"tested as a coin flip against the close, so those rows are "
+            f"the model’s lean at the number, each labelled with its own "
+            f"figure.")
 
 
 def guide(sport: str = "nfl") -> list[dict]:
@@ -217,16 +218,18 @@ FOOTBALL_SHELVES = (
     ("passing", "Passing yards", ("pass_yds",),
      "Quarterback volume. The weakest ranking of the five and labelled "
      "as such rather than mixed in silently."),
-    # GAME LINES, LAST AND NARROW. Ethan, 2026-09-02: "we have no money
-    # lines or spreads or totals or anything like that." Measured the
-    # same day (engine.gamerank): the model ranks who WINS and cannot
-    # rank who covers or which side of the total lands, so the shelf
-    # names all four markets and only moneylines ever reach it — the
-    # spec is the shape, the rows are earned per market.
+    # GAME LINES, LAST. Ethan, 2026-09-02: "we have no money lines or
+    # spreads or totals or anything like that." Measured the same day
+    # (engine.gamerank): the model ranks who WINS (0.64) and sorts
+    # spreads and totals at a coin flip. The first cut shipped
+    # moneylines alone; Ethan, same day: "I don't see team totals over
+    # or unders ... I don't see spread bets." His call — all four
+    # markets sit here, and every row carries its own measured figure
+    # (likely.GAME_RANK_MEASURED) so a lean reads as a lean.
     ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
-     "Who wins the game. The model ranks winners from its power ratings; "
-     "spreads and totals tested as a coin flip against the close and are "
-     "not shown here until a measurement says otherwise."),
+     "Who wins, who covers, over or under. Winners rank from the power "
+     "ratings; spreads and totals tested as a coin flip against the "
+     "close, so those rows are the model’s lean at the number and say so."),
 )
 
 #: Baseball's shelves — real this time. The earlier BASEBALL_SHELVES
@@ -249,9 +252,9 @@ BASEBALL_SHELVES = (
      "Pitcher swing-and-miss. A different engine from the bats above, "
      "and shelved apart so its evidence reads apart."),
     ("gamelines", "Game lines", ("moneyline", "spread", "total", "team_total"),
-     "Who wins the game, from the run ratings and the starters. Each "
-     "market appears only once the weekly measurement on this server "
-     "shows the model ranks it."),
+     "Who wins, the run line, over or under — from the run ratings and "
+     "the starters. Each market appears once the weekly measurement on "
+     "this server has a figure for it, and wears that figure."),
 )
 
 #: Hoops — one spec, both leagues, because the boards are the same
