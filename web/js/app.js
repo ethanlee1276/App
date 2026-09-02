@@ -9148,7 +9148,7 @@ function recLikelySection(lk) {
     </div>`).join("");
   const markets = Object.entries(lk.by_market || {}).map(([m, d]) => `
     <div class="rl-row ${d.actual >= d.claimed ? "won" : "lost"}">
-      <span class="rl-date">${escapeHtml(m)}</span>
+      <span class="rl-date">${escapeHtml(marketWord(m))}</span>
       <span class="rl-main">said ${pct(d.claimed)} · hit <strong>${pct(d.actual)}</strong></span>
       <span class="rl-proc">${d.w}/${d.n}</span>
       <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>

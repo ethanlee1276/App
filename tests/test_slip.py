@@ -162,6 +162,18 @@ def test_the_slip_finds_a_row_the_edge_board_never_published():
         "a second bespoke game-bet lookup is how the two drift apart"
 
 
+def test_the_paper_records_market_column_speaks_english():
+    """Every other table on the Record page labels a market through
+    `marketWord`, which reads the vocabulary engine/markets ships. The
+    Most Likely table printed the raw key — invisible while that book
+    held `receptions` and `pass_yds`, plain the moment its game rows put
+    `team_total` in the column."""
+    i = APP.index("function recLikelySection(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "escapeHtml(marketWord(m))" in body
+    assert "escapeHtml(m)}</span>" not in body
+
+
 def test_the_card_buttons_are_quiet_controls_not_green_blocks():
     """Ethan, 2026-08-25, circling + Parlay and + My Bets: "The color of
     the buttons along with the bulky of them loos bad." The pick is the
