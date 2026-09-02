@@ -144,11 +144,23 @@ UNRELIABLE_CALIBRATION_REASON = (
     "model can't price it reliably, so nothing here is bettable until it's "
     "fixed")
 NO_CREDIBLE_EDGE_REASON = (
-    "No credible market edge — line unavailable or price looks off")
+    "No credible market edge — no real book line to price against")
+#: THE OTHER WAY `credible` IS FALSE, and it wore the sentence above for a
+#: month. Ethan, 2026-09-02, from an Amon-Ra St. Brown card quoted at
+#: FanDuel −114 with the line and the price on the card: "No credible
+#: market edge — line unavailable or price looks off". The line was
+#: available and the price was fine; what had happened was the model's
+#: raw read disagreeing with the market by more than MAX_CREDIBLE_EDGE,
+#: which §2.5 treats as OUR error rather than found money. A refusal that
+#: names the wrong cause sends the reader hunting for a bug in the feed.
+IMPLAUSIBLE_EDGE_REASON = (
+    "Model disagrees with the market by more than 10 points — treated as a "
+    "modelling or data error, not an edge, so this is not staked")
 
 #: Every reason string that means "we are not betting this". Anything
 #: added above belongs here, and the suite checks that it is.
-REFUSAL_REASONS = (UNRELIABLE_CALIBRATION_REASON, NO_CREDIBLE_EDGE_REASON)
+REFUSAL_REASONS = (UNRELIABLE_CALIBRATION_REASON, NO_CREDIBLE_EDGE_REASON,
+                   IMPLAUSIBLE_EDGE_REASON)
 
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
@@ -573,8 +585,10 @@ def evaluate_prop(prop: Prop, proj: Projection,
         reasons.insert(0, pattern_block)
     if not calibration_ok:
         reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
-    if not credible:
+    if not credible and not has_market:
         reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
+    elif not credible:
+        reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)
     elif side == "UNDER":
         reasons.insert(0, under_reason(proj.mean, best.line, 1))
     # `calibration_ok` here too: without it a pick blocked by an
@@ -584,7 +598,23 @@ def evaluate_prop(prop: Prop, proj: Projection,
     if credible and calibration_ok and has_market and 0 < edge < min_edge:
         reasons.append(f"Edge {edge:+.1%} is under the Tier {tier} bar "
                        f"({min_edge:.1%} post-haircut) — pass, not a lean")
-    reasons.extend(quality_notes)
+    # THE SCRIPT BULLET, SIGNED BY THE SIDE. The matchup layer writes
+    # "leans pass volume down (×0.97)" without knowing which side of the
+    # number this card took, and the page decides tick-or-cross from the
+    # words alone — so a 7-point favourite's receiver OVER wore a green
+    # tick beside the sentence arguing against it (Ethan, 2026-09-02,
+    # St. Brown card). The side is known here; say which way it cuts.
+    for i, r in enumerate(reasons):
+        if r.startswith("Game script:") and ("volume up" in r or "volume down" in r):
+            helps = ("volume up" in r) == (side == "OVER")
+            reasons[i] = r + (" — with this side" if helps else " — against this side")
+    # And the grade's own script note said the same thing a second time
+    # in different words, under a green tick. One sentence per fact: the
+    # numbered bullet above carries it; the note only runs when there is
+    # no numbered bullet to carry it.
+    has_script_bullet = any(r.startswith("Game script:") for r in reasons)
+    reasons.extend(n for n in quality_notes
+                   if not (has_script_bullet and n.startswith("Game script leans")))
 
     # The field's opinion at pick time, captured beside the book we
     # shopped to. Restricted to books quoting the SAME number, since

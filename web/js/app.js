@@ -718,7 +718,10 @@ const NEG_REASON = new RegExp(
    // REFUSAL_REASONS` names them now and tests/test_refusals.py asserts
    // every one of them matches here, so the next one added fails the
    // suite instead of shipping as an endorsement.
-   "no credible", "nothing here is bettable"].join("|"), "i");
+   "no credible", "nothing here is bettable",
+   // 2026-09-02, St. Brown card: the implausible-disagreement refusal,
+   // and a game-script bullet that argues against the side taken.
+   "not an edge", "not staked", "against this side"].join("|"), "i");
 
 /* NFL_MODEL §2.3: "Label your knowledge tiers in every output ... because
    the fix for a bad bet depends on which tier failed."
@@ -744,7 +747,18 @@ const TIER_LABEL = {
 function reasonLI(x, tier) {
   const t = TIER_LABEL[tier]
     ? `<span class="r-tier r-${tier}">${TIER_LABEL[tier]}</span>` : "";
-  return `<li class="${NEG_REASON.test(x) ? "neg" : ""}">${escapeHtml(x)}${t}</li>`;
+  return `<li class="${isNegReason(x) ? "neg" : ""}">${escapeHtml(x)}${t}</li>`;
+}
+/* A bullet the engine has SIGNED wins over the keyword list. Game-script
+   bullets end in "— with this side" or "— against this side" since
+   2026-09-02 (engine/betting.py), because the words in the middle
+   ("underdog", "volume down") cut both ways depending on which side of
+   the number the card took, and the list cannot know that. */
+function isNegReason(x) {
+  const s = String(x || "");
+  if (/—\s*with this side\s*$/i.test(s)) return false;
+  if (/—\s*against this side\s*$/i.test(s)) return true;
+  return NEG_REASON.test(s);
 }
 
 /* ---------------------------------------------------------------------

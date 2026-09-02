@@ -42,6 +42,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.betting import (NO_CREDIBLE_EDGE_REASON,     # noqa: E402
+                            IMPLAUSIBLE_EDGE_REASON,
                             REFUSAL_REASONS,
                             UNRELIABLE_CALIBRATION_REASON)
 
@@ -242,6 +243,53 @@ def test_ev_is_zeroed_rather_than_blanked_because_three_places_sort_on_it():
     src = inspect.getsource(betting.evaluate_prop)
     assert "ev = 0.0" in src
     assert "net = None" in src
+
+
+def test_a_real_line_the_model_disagrees_with_is_named_as_such():
+    """St. Brown, 2026-09-02: FanDuel −114 on the card and the refusal
+    said "line unavailable or price looks off". `credible` is False two
+    ways, and they get two sentences now."""
+    import inspect
+    from engine import betting
+    src = inspect.getsource(betting)
+    assert "if not credible and not has_market:" in src
+    assert "reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)" in src
+    assert "line unavailable" not in NO_CREDIBLE_EDGE_REASON
+    neg = _neg_reason()
+    assert neg.search(IMPLAUSIBLE_EDGE_REASON)
+    assert IMPLAUSIBLE_EDGE_REASON in REFUSAL_REASONS
+
+
+def test_a_script_bullet_against_the_side_taken_is_not_a_tick():
+    """The engine signs the bullet; the page honours the sign over its
+    keyword list — "underdog" in the middle of a bullet that ends "with
+    this side" must not strike it through."""
+    neg = _neg_reason()
+    against = ("Game script: 7.0-pt favorite — projected leading script leans "
+               "pass volume down (×0.97) — against this side")
+    with_fav_under = ("Game script: 7.0-pt favorite — projected leading script "
+                      "leans pass volume down (×0.97) — with this side")
+    assert neg.search(against) and not neg.search(with_fav_under)
+    js = _app()
+    assert "function isNegReason(x)" in js
+    assert "with this side" in js and "against this side" in js
+    # every tick-or-cross decision goes through the signed door
+    assert "NEG_REASON.test(" not in js.replace("return NEG_REASON.test(s);", "")
+
+
+def test_the_grade_note_does_not_repeat_the_script_bullet():
+    """One sentence per fact: with a numbered script bullet on the card,
+    the grade's "leans against this side of the number" note stays off."""
+    from engine.pipeline import run_slate
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = run_slate(os.path.join(here, "data", "sample_slate.json"))
+    for r in out["recommendations"]:
+        rs = r.get("reasons") or []
+        if any(x.startswith("Game script:") for x in rs):
+            assert not any(x.startswith("Game script leans") for x in rs), rs
+        for x in rs:
+            if x.startswith("Game script:") and ("volume up" in x or "volume down" in x):
+                assert x.endswith("this side"), x
 
 
 if __name__ == "__main__":
