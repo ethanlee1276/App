@@ -10,7 +10,8 @@ most-tapped controls were far too small to hit one-handed:
     .sb-fold          279 x 13     the drawer's collapsible group heads
     .sb-hcm-switch    271 x 22     the two rail switches
     .sb-chips .sport-btn    27px   the league chips — how you change sport
-    .sb-foot-links .sport-btn 27px  Why Us / About
+    .sb-item                  ~38px drawer nav rows (Why Us / About live
+                                    here since 2026-08-25)
     .tp-add                 31px   "+ My Bets" on a pick card
 
 THE RULE IS NOT "44px ON EVERY ANCHOR". WCAG 2.5.8 exempts a link inside
@@ -44,6 +45,13 @@ CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").rea
 #: Every rule below lives in the drawer media block, because that is where
 #: the site is used one-handed. Desktop keeps its tighter rhythm.
 _DRAWER_BLOCK_START = "@media (max-width: 900px)"
+
+
+def _rules_only(css: str) -> str:
+    """CSS with its comments stripped. The rot check has to read rules:
+    the replacement rule's own comment names the retired class, which is
+    the codebase remembering its own defect rather than a live rule."""
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
 
 
 def _phone_css() -> str:
@@ -97,11 +105,32 @@ def test_the_league_chips_take_the_full_target():
     assert "min-height: 44px" in r, r
 
 
-def test_the_drawer_footer_pair_was_not_covered_by_the_chip_rule():
-    """The one a class-name-only search would have called fixed."""
-    r = _rule(PHONE, ".sb-foot-links .sport-btn {")
+def test_the_drawer_nav_rows_carry_a_thumb_target():
+    """Re-anchored 2026-09-02, and it is the `.tp-add` failure again.
+
+    This guarded `.sb-foot-links .sport-btn` — the footer pair (Why Us /
+    About) at 55x27 and 47x27. Those chips moved up into the Proof group
+    as `.sb-item` rows on 2026-08-25; `tests/test_trust.py` asserts the
+    class is gone from the footer, and nothing has carried it since. So
+    for eight days this file guaranteed the thumb size of an element
+    that does not exist, while the rows that replaced it — the drawer's
+    entire navigation — had no floor in the phone block at all.
+
+    A touch-target test that passes by protecting nothing is worse than
+    no test: it reports the area as covered. Found by the nightly
+    sweep."""
+    r = _rule(PHONE, ".sb-item {")
     m = re.search(r"min-height:\s*(\d+)px", r)
     assert m and int(m.group(1)) >= 32, r
+
+
+def test_the_retired_footer_class_left_no_css_behind():
+    """The other half: five rules for `.sb-foot-links` outlived the
+    element by eight days. Dead CSS is how a selector gets re-used later
+    for something else and inherits rules nobody remembers writing."""
+    assert ".sb-foot-links {" not in CSS
+    assert ".sb-foot-links .sport-btn" not in _rules_only(CSS), \
+        "a live rule still targets the retired class"
 
 
 def test_the_add_to_bets_button_is_reachable():
@@ -140,7 +169,7 @@ def test_the_touch_rules_stay_inside_the_phone_block():
     for sel in (".sb-fold { padding: 15px 0",
                 ".sb-hcm-switch { min-height: 44px",
                 ".sb-chips .sport-btn { min-height: 44px",
-                ".sb-foot-links .sport-btn { min-height: 36px"):
+                ".sb-item { min-height: 36px"):
         assert sel in PHONE, f"{sel!r} is not in the phone block"
         # and not also applied globally
         outside = CSS.replace(PHONE, "")

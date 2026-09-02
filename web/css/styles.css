@@ -5664,12 +5664,6 @@ body.has-rail .shell {
 .standing b.neg { color: var(--bad); }
 .standing .lbl { text-transform: uppercase; letter-spacing: .14em; font-weight: 700; }
 .standing:empty { display: none; }
-.sb-foot-links { display: flex; gap: 4px; }
-.sb-foot-links .sport-btn { border: 0; background: transparent; color: var(--text-mute);
-  cursor: pointer; font: inherit; font-size: var(--fs-xs); font-weight: 700;
-  padding: 5px 8px; border-radius: var(--radius-sm); letter-spacing: .06em; }
-.sb-foot-links .sport-btn:hover { color: var(--text-dim); background: var(--panel-2); }
-.sb-foot-links .sport-btn.active { color: var(--text); }
 
 /* ---------------- The rail ---------------- */
 .rail { position: sticky; top: var(--topbar-h); max-height: calc(100vh - var(--topbar-h)); overflow-y: auto;
@@ -5983,12 +5977,20 @@ body.has-rail .shell {
   .meta-ico, .theme-toggle, .menu-toggle { flex-shrink: 0; }
   #data-source, #slate-date { display: none; }
 
-  /* The drawer's footer pair (Why Us / About) are `.sport-btn` too, but
-     they sit in `.sb-foot-links` and never inherited the chip padding —
-     55x27 and 47x27. Standalone controls, so they take a target; found
-     only by listing every under-32px element WITH ITS PARENT, because
-     "sport-btn is 27px" was false of the chips and true of these two. */
-  .sb-foot-links .sport-btn { min-height: 36px; padding: 8px 10px; }
+  /* The drawer's nav rows. This guarantee used to hang on
+     `.sb-foot-links .sport-btn` — the footer pair (Why Us / About),
+     which were 55x27 and 47x27 and needed it. Those chips moved up into
+     the Proof group as `.sb-item` rows on 2026-08-25 and nothing has
+     carried the class since, so the rule guarded an element that does
+     not exist while the rows that replaced it had no floor at all: the
+     `.tp-add` failure exactly, found by the nightly sweep 2026-09-02.
+
+     36px DOCUMENTS what these already compute to (9px padding either
+     side of a 13.5px/600 line box with an icon, about 38px) rather than
+     changing the drawer's density, which is a design decision and not a
+     rot fix. Raising it to the 44px the sport chips take is a separate
+     call. */
+  .sb-item { min-height: 36px; }
   .rail-more, .perf-link { min-height: 32px;
     display: inline-flex; align-items: center; }
   /* Both, because the ROOT is the scroller: overflow on body alone
