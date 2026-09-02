@@ -40,6 +40,8 @@ from __future__ import annotations
 #: 89b2d03). Rows older than this are receipts from the era of the bug;
 #: rows newer than it would mean the bug is back.
 FLOOR_FIX_DATE = "2026-08-09"
+#: How many post-fix sub-floor rows to print by name.
+SUB_FLOOR_LIST = 15
 
 import argparse
 import os
@@ -426,8 +428,24 @@ def report(rows: list[dict]) -> None:
         else:
             print(f"    {len(after)} of them are dated ON OR AFTER the "
                   f"{FLOOR_FIX_DATE} fix, so something\n         is STILL "
-                  f"emitting sub-floor stakes — start at "
-                  f"`correlation.apply_exposure_caps`.")
+                  f"emitting sub-floor stakes.")
+            # NAME THEM. The 2026-09-02 droplet run of the MLB readiness
+            # audit found thirty and this message sent the reader to
+            # `apply_exposure_caps`, which drops sub-floor bets and cannot
+            # have written them. The rows themselves say which path did:
+            # the category and market narrow it to one journaling call.
+            for r in sorted((r for r in below if (r["date"] or "") >= FLOOR_FIX_DATE),
+                            key=lambda r: (r["date"], r["market"]))[:SUB_FLOOR_LIST]:
+                print(f"         {r['date']}  {r['sport']:<4} {r['category']:<8} "
+                      f"{(r['market'] or '?'):<14} {r['stake_units']:.3f}u  "
+                      f"{r.get('grade') or '?':<4} {r['player']}")
+            by_cat: dict = {}
+            for r in below:
+                if (r["date"] or "") >= FLOOR_FIX_DATE:
+                    k = (r["category"], r["market"])
+                    by_cat[k] = by_cat.get(k, 0) + 1
+            print("         by category × market: " + ", ".join(
+                f"{c}/{m}: {n}" for (c, m), n in sorted(by_cat.items())))
 
     # --- intended vs actual ---------------------------------------------
     have = [(r, intended_stake(r)) for r in rows]

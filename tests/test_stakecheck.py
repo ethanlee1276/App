@@ -2154,6 +2154,26 @@ def test_the_floor_fix_date_is_a_named_constant():
     assert "89b2d03" in src, "the commit that changed it should be named"
 
 
+def test_post_fix_sub_floor_rows_are_named_not_just_counted():
+    """Ethan's droplet run, 2026-09-02: thirty sub-floor stakes dated
+    after the fix, and the message pointed at a function that drops such
+    bets and cannot have written them. The rows name the path."""
+    import contextlib
+    import io
+    path = _db([_row(date="2026-08-20", player="Named Hitter", market="hits",
+                     stake_units=0.05, pnl_units=-0.05, category="paper")])
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            stakecheck.report(stakecheck._rows(path, "mlb", None))
+    finally:
+        os.unlink(path)
+    out = buf.getvalue()
+    assert "STILL" in out and "Named Hitter" in out
+    assert "paper/hits: 1" in out
+    assert "apply_exposure_caps" not in out.split("STILL")[1].split("intended")[0]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
