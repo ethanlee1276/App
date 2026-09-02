@@ -117,6 +117,21 @@ def test_the_export_and_the_page_carry_it():
     assert "leadtime_lines" in mnt
 
 
+def test_the_printed_unit_is_probability_points_like_the_record_tool():
+    """Ethan's droplet run, 2026-09-02: this view and engine/mlbrecord
+    "print the same number a hundred times apart" — +0.02pt here,
+    +2.17pts there. Both print points now; the fraction stays in
+    `avg_clv` for callers, `avg_clv_pts` is what renders."""
+    rows = [{"odds": 150, "closing_odds": 120, "lead_min": 4000}] * 45
+    c = _conn(rows)
+    early = leadtime(c)["buckets"][0]
+    # +150 → .4000, +120 → .4545: +5.45 points
+    assert abs(early["avg_clv"] - 0.0545) < 1e-3
+    assert abs(early["avg_clv_pts"] - 5.45) < 0.01
+    text = "\n".join(leadtime_lines(c))
+    assert "+5.45pts" in text and "+0.05pt" not in text
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

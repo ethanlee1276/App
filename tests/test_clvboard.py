@@ -246,6 +246,49 @@ def test_a_covered_board_passes():
     assert level == "ok"
 
 
+def test_price_clv_sits_beside_line_clv_with_its_own_count():
+    """Ethan's droplet run, 2026-09-02: the scoreboard could not see a
+    hits or total-bases prop because its query never selected the price
+    columns. Now a 0.5 line that closes at 0.5 (line CLV 0) still grades
+    by its price: +400 taken, +350 close = +2.22 points."""
+    b = _Book()
+    b.conn.execute(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book,"
+        " odds, closing_odds, stake_units, status, category, closing_line,"
+        " pnl_units) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("2026-08-20T10:00:00", "mlb", "2026-08-20", "HR1", "home_runs",
+         "OVER", 0.5, "DK", 400, 350, 1.0, "lost", "main", 0.5, -1.0))
+    b.conn.commit()
+    row = clvboard.scoreboard(b.conn)["rows"][0]
+    assert row["with_close"] == 1 and row["avg_clv"] == 0.0
+    assert row["with_price_close"] == 1
+    assert abs(row["avg_price_clv_pts"] - 2.22) < 0.01
+    assert row["price_beat_rate"] == 1.0 and row["price_ready"] is False
+    t = clvboard.scoreboard(b.conn)["totals"]
+    assert t["with_price_close"] == 1 and abs(t["avg_price_clv_pts"] - 2.22) < 0.01
+
+
+def test_the_module_is_a_runnable_command():
+    """`python3 -m engine.clvboard` printed nothing on the droplet: no
+    main, no argument parsing, no top-level code. It has one now, and
+    the text carries both instruments."""
+    import contextlib
+    import io
+    b = _Book().bet("mlb", "hits", "OVER", 0.5, 0.5)
+    path = b.conn.execute("PRAGMA database_list").fetchone()[2]
+    b.conn.close()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = clvboard.main(["--db", path])
+    out = buf.getvalue()
+    assert rc == 0
+    assert "CLV scoreboard" in out and "price CLV in probability points" in out
+    assert "when we bet" in out
+    assert clvboard.main(["--db", path + ".missing"]) == 2
+    src = _read("engine", "clvboard.py")
+    assert 'if __name__ == "__main__":' in src
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

@@ -53,7 +53,8 @@ def _label(market: str) -> str:
 
 
 def _rows(conn, category: str, since: str | None):
-    q = ("SELECT sport, market, side, line, closing_line, status "
+    q = ("SELECT sport, market, side, line, closing_line, odds, "
+         "closing_odds, status "
          "FROM bets WHERE status IN ('won','lost','push') "
          "AND category=? AND stake_units > 0")
     args: list = [category]
@@ -70,22 +71,32 @@ def scoreboard(conn, category: str = "main",
     Rows are sorted by sample size — the thing a reader should weigh
     first — not by how good the number looks.
     """
-    from .ledger import _bet_clv, CLV_MIN_N
+    from .ledger import _bet_clv, _bet_price_clv, CLV_MIN_N
 
     by: dict = {}
     for b in _rows(conn, category, since):
         key = (b["sport"] or "?", b["market"] or "?")
-        d = by.setdefault(key, {"settled": 0, "clvs": []})
+        d = by.setdefault(key, {"settled": 0, "clvs": [], "pclvs": []})
         d["settled"] += 1
         c = _bet_clv(b)
         if c is not None:
             d["clvs"].append(c)
+        # PRICE CLV BESIDE LINE CLV, since 2026-09-02. Ethan's droplet
+        # run of the MLB readiness audit: "The scoreboard measures line
+        # movement in prop-line points. Its query does not select the
+        # price columns at all, so it structurally cannot measure price
+        # movement. On a hits or total-bases prop the line barely moves,
+        # so it reports near zero and a 9% beat rate." A 0.5 line closes
+        # at 0.5; the price is the instrument that can see those markets.
+        pc = _bet_price_clv(b)
+        if pc is not None:
+            d["pclvs"].append(pc)
 
     rows = []
     for (sport, market), d in by.items():
         label = _label(market)
-        clvs, settled = d["clvs"], d["settled"]
-        n = len(clvs)
+        clvs, settled, pclvs = d["clvs"], d["settled"], d["pclvs"]
+        n, pn = len(clvs), len(pclvs)
         rows.append({
             "sport": sport, "market": market, "market_label": label,
             "settled": settled, "with_close": n,
@@ -93,6 +104,14 @@ def scoreboard(conn, category: str = "main",
             "avg_clv": round(sum(clvs) / n, 3) if n else None,
             "beat_rate": (round(sum(1 for c in clvs if c > 0) / n, 3)
                           if n else None),
+            # Price CLV in PROBABILITY POINTS (x100), the unit every
+            # other CLV readout in this repo prints.
+            "with_price_close": pn,
+            "avg_price_clv_pts": (round(100.0 * sum(pclvs) / pn, 2)
+                                  if pn else None),
+            "price_beat_rate": (round(sum(1 for c in pclvs if c > 0) / pn, 3)
+                                if pn else None),
+            "price_ready": pn >= CLV_MIN_N,
             # The verdict is a SEPARATE field from the number, so a page
             # can print the average honestly while refusing to call it.
             "ready": n >= CLV_MIN_N,
@@ -102,6 +121,7 @@ def scoreboard(conn, category: str = "main",
                              r["sport"], r["market"]))
 
     all_clv = [c for d in by.values() for c in d["clvs"]]
+    all_pclv = [c for d in by.values() for c in d["pclvs"]]
     settled = sum(d["settled"] for d in by.values())
     return {
         "rows": rows,
@@ -114,6 +134,12 @@ def scoreboard(conn, category: str = "main",
             "beat_rate": (round(sum(1 for c in all_clv if c > 0)
                                 / len(all_clv), 3) if all_clv else None),
             "ready": len(all_clv) >= CLV_MIN_N,
+            "with_price_close": len(all_pclv),
+            "avg_price_clv_pts": (round(100.0 * sum(all_pclv) / len(all_pclv), 2)
+                                  if all_pclv else None),
+            "price_beat_rate": (round(sum(1 for c in all_pclv if c > 0)
+                                      / len(all_pclv), 3) if all_pclv else None),
+            "price_ready": len(all_pclv) >= CLV_MIN_N,
         },
         "min_n": CLV_MIN_N,
         "min_row_n": MIN_ROW_N,
@@ -173,6 +199,11 @@ def leadtime(conn, category: str = "main", since: str | None = None) -> dict:
         buckets.append({
             "label": label, "settled": settled, "with_close": n,
             "avg_clv": round(sum(clvs) / n, 4) if n else None,
+            # The same number in the unit the record tool prints —
+            # probability POINTS. This view printed the raw fraction as
+            # "+0.02pt" while engine/mlbrecord printed "+2.17pts" for the
+            # same bets (Ethan's droplet run, 2026-09-02).
+            "avg_clv_pts": round(100.0 * sum(clvs) / n, 2) if n else None,
             "beat_close": round(sum(1 for c in clvs if c > 0) / n, 4)
             if n else None,
             "verdict": (None if n < CLV_MIN_N else
@@ -182,8 +213,9 @@ def leadtime(conn, category: str = "main", since: str | None = None) -> dict:
     return {"category": category, "buckets": buckets,
             "min_n": CLV_MIN_N,
             "note": ("Positive means the market moved toward our side "
-                     "after we bet — we got the better number. Measured "
-                     "in probability points at the price taken.")}
+                     "after we bet — we got the better number. avg_clv is "
+                     "a probability fraction; avg_clv_pts is the same "
+                     "number in points (x100), which is what prints.")}
 
 
 def leadtime_lines(conn, since: str | None = None) -> list[str]:
@@ -202,11 +234,81 @@ def leadtime_lines(conn, since: str | None = None) -> list[str]:
                 continue
             word = (b["verdict"] or
                     f"needs {got['min_n']} closes, has {b['with_close']}")
-            avg = ("—" if b["avg_clv"] is None
-                   else f"{b['avg_clv']:+.2f}pt")
+            avg = ("—" if b["avg_clv_pts"] is None
+                   else f"{b['avg_clv_pts']:+.2f}pts")
             beat = ("" if b["beat_close"] is None
                     else f", beat the close {b['beat_close']:.0%}")
             out.append(f"    {b['label']:<14} {b['settled']:4d} settled, "
                        f"{b['with_close']:4d} closed   {avg}{beat}   "
                        f"{word}")
     return out
+
+
+# --- runnable ---------------------------------------------------------------
+def scoreboard_lines(conn, category: str = "main",
+                     since: str | None = None) -> list[str]:
+    """The scoreboard as text: line CLV and price CLV side by side, each
+    with its own count, so a market whose line cannot move (a 0.5 home
+    run or hits line) is graded by the instrument that can see it."""
+    got = scoreboard(conn, category, since)
+    out = [f"  CLV scoreboard ({category} book"
+           + (f", since {since}" if since else "") + ") — "
+           f"line CLV in line points, price CLV in probability points; "
+           f"verdicts need {got['min_n']} closes"]
+    if not got["rows"]:
+        out.append("    no settled bets")
+        return out
+    out.append(f"    {'sport':<5} {'market':<16} {'settled':>7} | "
+               f"{'line: n':>8} {'avg':>7} {'beat':>5} | "
+               f"{'price: n':>9} {'avg pts':>8} {'beat':>5}")
+    for r in got["rows"]:
+        la = "—" if r["avg_clv"] is None else f"{r['avg_clv']:+.2f}"
+        lb = "—" if r["beat_rate"] is None else f"{r['beat_rate']:.0%}"
+        pa = ("—" if r["avg_price_clv_pts"] is None
+              else f"{r['avg_price_clv_pts']:+.2f}")
+        pb = ("—" if r["price_beat_rate"] is None
+              else f"{r['price_beat_rate']:.0%}")
+        out.append(f"    {r['sport']:<5} {r['market']:<16} {r['settled']:>7} | "
+                   f"{r['with_close']:>8} {la:>7} {lb:>5} | "
+                   f"{r['with_price_close']:>9} {pa:>8} {pb:>5}"
+                   + ("" if r["price_ready"] else "   (price verdict: not enough yet)"))
+    t = got["totals"]
+    pa = "—" if t["avg_price_clv_pts"] is None else f"{t['avg_price_clv_pts']:+.2f}"
+    out.append(f"    all   {'':<16} {t['settled']:>7} | {t['with_close']:>8} "
+               f"{'':>7} {'':>5} | {t['with_price_close']:>9} {pa:>8}")
+    return out
+
+
+def main(argv=None) -> int:
+    """``python3 -m engine.clvboard`` — the command MLB_READINESS.md told
+    Ethan to run, which on 2026-09-02 printed nothing: this module had
+    no entry point, so importing it as a module exited zero in silence."""
+    import argparse
+    import os
+    import sys
+    ap = argparse.ArgumentParser(description="CLV scoreboard and lead-time cut")
+    ap.add_argument("--db", default=None, help="ledger path (default: data/ledger.db)")
+    ap.add_argument("--category", default="main")
+    ap.add_argument("--since", default=None)
+    a = ap.parse_args(argv)
+    from . import ledger as _ledger
+    path = a.db or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "ledger.db")
+    if not os.path.exists(path):
+        print(f"no ledger at {path}", file=sys.stderr)
+        return 2
+    conn = _ledger.connect(path)
+    try:
+        for line in scoreboard_lines(conn, a.category, a.since):
+            print(line)
+        print()
+        for line in leadtime_lines(conn, a.since):
+            print(line)
+    finally:
+        conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
