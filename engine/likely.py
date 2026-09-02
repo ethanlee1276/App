@@ -27,10 +27,14 @@ runs over the stored closes, keeping for EVERY quoted game the
 probability the pricer put on its side and whether that side won:
 
     who wins the game (moneyline)   AUC 0.641 NFL (1,181 games)
-                                    AUC 0.708 CFB (2,016 games)
-    who covers the spread           0.491 NFL · 0.517 CFB — a coin flip
-    over or under the total         0.497 NFL · 0.512 CFB — a coin flip
+                                    AUC 0.752 CFB (2,729 games)
+    who covers the spread           0.491 NFL · 0.496 CFB — a coin flip
+    over or under the total         0.497 NFL · 0.503 CFB — a coin flip
     a team over its own number      0.513 NFL · 0.492 CFB — a coin flip
+
+(The college walk rebuilds the production opponent-adjusted ratings
+before every date — `gamerank.measure_cfb`; the plain-ratings floor
+had said 0.708 for the moneyline and the same coin flips elsewhere.)
 
 The model can say who WINS and cannot say who COVERS. That is not a
 surprise — the close already holds the ratings, and the market's own
@@ -95,7 +99,7 @@ GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 #: store on its own box says so.
 GAME_RANK_AUC = {
     "nfl": {"moneyline": 0.641},
-    "cfb": {"moneyline": 0.708},
+    "cfb": {"moneyline": 0.752},
 }
 
 #: EVERY game-market figure that was measured, floor or not — the same
@@ -111,7 +115,7 @@ GAME_RANK_AUC = {
 #: runs on the droplet) still has nothing to say and stays off.
 GAME_RANK_MEASURED = {
     "nfl": {"moneyline": 0.641, "spread": 0.491, "total": 0.497, "team_total": 0.513},
-    "cfb": {"moneyline": 0.708, "spread": 0.517, "total": 0.512, "team_total": 0.492},
+    "cfb": {"moneyline": 0.752, "spread": 0.496, "total": 0.503, "team_total": 0.492},
 }
 
 #: Game rows the board carries per sport, beside LIMIT player rows.

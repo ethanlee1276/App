@@ -1150,9 +1150,10 @@ def main() -> None:
             # THE GAME CARDS RIDE ALONG (Ethan, 2026-09-02: "we have no
             # money lines or spreads or totals"). `out["game_bets"]` is
             # already built above; `likely.from_game_bet` keeps the
-            # markets college has been measured to rank — the moneyline,
-            # at 0.708 over 2,016 replayed games — and refuses the
-            # conditionals, which are holds and not picks.
+            # markets college has been measured on — the moneyline ranks
+            # at 0.752 over 2,729 replayed games; spreads and totals ride
+            # as labelled leans — and refuses the conditionals, which are
+            # holds and not picks.
             out["most_likely"] = _likely([], rows, watch, sport="cfb",
                                          census=_ml_census,
                                          game_bets=out.get("game_bets") or [])

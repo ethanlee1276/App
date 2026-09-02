@@ -20,7 +20,7 @@ to rank, so `engine.gamerank` measured them (2026-09-02, the same
 ratings-only replay the game backtests use, over the stored closes):
 
     nfl  moneyline 0.641   spread 0.491   total 0.497   team_total 0.513
-    cfb  moneyline 0.708   spread 0.517   total 0.512   team_total 0.492
+    cfb  moneyline 0.752   spread 0.496   total 0.503   team_total 0.492
 
 The model can say who wins and cannot say who covers. So moneylines are
 on the board and spreads and totals are not — whatever anyone would
@@ -107,9 +107,10 @@ def test_the_shipped_figures_are_the_measured_ones():
     """Measured 2026-09-02 by engine.gamerank on this repo's history.
     Re-measure before moving these; do not tune them."""
     assert K.GAME_RANK_AUC["nfl"]["moneyline"] == 0.641
-    assert K.GAME_RANK_AUC["cfb"]["moneyline"] == 0.708
+    assert K.GAME_RANK_AUC["cfb"]["moneyline"] == 0.752
     src = _src("engine", "gamerank.py")
-    assert "0.6412" in src and "0.7077" in src, "the measurement log left the module"
+    assert "0.6412" in src and "0.7522" in src, "the measurement log left the module"
+    assert "def measure_cfb(" in src, "college is measured with the production ratings"
 
 
 # --- the maker --------------------------------------------------------------
@@ -389,6 +390,23 @@ def test_a_game_row_with_no_team_or_line_is_refused_not_stranded():
     row = K.from_game_bet(_ml(), sport="nfl")
     _conn, n = _book([{**row, "team": ""}])
     assert n == 0
+
+
+def test_the_record_cuts_the_game_rows_per_sport_and_market():
+    """Whether the leans drag or lift a sport's book is read off the
+    record per sport and market, not off a line that pools the NFL's
+    moneylines with the MLB's."""
+    row = K.from_game_bet(_ml(), sport="nfl")
+    conn, n = _book([row])
+    assert n == 1
+    conn.execute("UPDATE bets SET status='won', pnl_units=0.0606 WHERE category='likely'")
+    conn.commit()
+    rep = ledger.likely_report(conn)
+    got = rep["by_sport_market"]["nfl"]["moneyline"]
+    assert got["n"] == 1 and got["w"] == 1 and got["actual"] == 1.0
+    assert got["claimed"] == 0.66
+    src = _src("engine", "maintenance.py")
+    assert 'by_sport_market' in src, "the weekly log prints the per-market cut"
 
 
 # --- the builds hand their cards over -------------------------------------

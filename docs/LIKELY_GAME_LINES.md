@@ -53,7 +53,7 @@ Measured 2026-09-02 on this repo's history (NFL 2021–25, CFB 2022–25):
 | sport | moneyline | spread | total | team total |
 |---|---|---|---|---|
 | NFL | **0.641** (1,181 games) | 0.491 | 0.497 | 0.513 |
-| CFB | **0.708** (2,016 games) | 0.517 | 0.512 | 0.492 |
+| CFB | **0.752** (2,729 games) | 0.496 | 0.503 | 0.492 |
 
 The floor is `likely.MIN_RANK_AUC` (0.60). The model can say who wins
 and cannot say who covers: spreads, totals and team totals test as a
@@ -108,9 +108,12 @@ cd /srv/qellys && python3 -m engine.gamerank --sport mlb --save   # into the sto
   own entry; a market that could not be measured at all leaves the
   store alone.
 
-The college figure is a floor on the production model: the replay uses
-the plain ratings, not the opponent-adjusted map the live CFB board
-prices with.
+The college walk (`gamerank.measure_cfb`) rebuilds the production
+opponent-adjusted ratings before every date from an in-memory table
+that holds only the past, so its figure is the build's own model; the
+plain-ratings walk had put the moneyline at 0.708. Not replayed: the
+recruiting prior blended in before week four and the FCS exclusion that
+needs the live team map, so it is still a floor, a higher one.
 
 ## How a game card reaches the board
 
@@ -164,8 +167,10 @@ team at the negated number, a team total the team at its number. Flat
 
 ## What to watch
 
-* The `likely` book now carries moneylines. `ledger.likely_report`
-  reads them with everything else; a per-market cut of that book is the
-  next thing to add if the moneyline rows drag or lift the calibration.
+* The `likely` book now carries game rows. `ledger.likely_report`
+  already cuts the book per market (`by_market`), and the weekly
+  maintenance log prints the game markets' lines beside each sport's, so
+  whether moneylines, spreads or totals drag or lift the calibration is
+  read off the record rather than guessed.
 * MLB: run the droplet command above and read the printed line before
   expecting a baseball moneyline on the board.

@@ -28,12 +28,14 @@ either way.
 MEASURED 2026-09-02 on this repo's history (NFL 2021-25, CFB 2022-25):
 
     nfl  moneyline 0.6412 (1,181)   spread 0.4911   total 0.4968   team_total 0.5132
-    cfb  moneyline 0.7077 (2,016)   spread 0.5170   total 0.5121   team_total 0.4915
+    cfb  moneyline 0.7522 (2,729)   spread 0.4963   total 0.5034   team_total 0.4917
 
-Moneylines rank; nothing else does. Shipped as `likely.GAME_RANK_AUC`.
-The college walk uses the plain ratings, not the opponent-adjusted map
-the live board prices with, so its figure is a floor on the production
-model rather than the production model's own number.
+Moneylines rank; nothing else does. Shipped as `likely.GAME_RANK_AUC`
+(the ranked ones) and `likely.GAME_RANK_MEASURED` (the whole table —
+the sub-floor markets are on the board as labelled leans since
+2026-09-02, by Ethan's call). The college walk rebuilds the production
+opponent-adjusted ratings before every date (`measure_cfb`); the plain
+walk had put its moneyline at 0.7077 on 2,016 games.
 
 `--save` writes each market the sample supports into `engine.rankfit`'s
 store — `likely.rank_auc` reads that store FIRST — which is the only way
@@ -242,7 +244,146 @@ def measure_moneylines(conn, sport: str, min_team_games: int = 15) -> GameRank:
     return r.finish()
 
 
+def _cfb_prior_table(mem, rows, before: str, seasons) -> None:
+    """Refill the in-memory games table with every game strictly before
+    `before` from `seasons` — the production solver reads a connection,
+    so the walk hands it one that only knows the past."""
+    mem.execute("DELETE FROM games")
+    mem.executemany(
+        "INSERT INTO games VALUES (?,?,?,?,?,?,?,?)",
+        [tuple(r) for r in rows if r["period"] < before and r["season"] in seasons])
+    mem.commit()
+
+
+def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
+    """College, with the PRODUCTION ratings rather than the plain floor.
+
+    cfb_build prices from `teamrates.adjusted_ratings_for_season` — the
+    opponent-adjusted solve with the fitted home field, pooled with the
+    prior season until the current one averages four games a team — and
+    the plain `_split` walk the NFL and MLB paths use understates it:
+    measured 2026-09-02, the moneyline rose from 0.708 (plain, 2,016
+    games) to 0.752 (adjusted, 2,729 — the four-game floor admits more
+    of each season), while the spread and the total stayed at a coin
+    flip either way. So this walk rebuilds the production
+    ratings before every date, from games strictly before it, using the
+    same function the build calls. An in-memory games table is what
+    makes that leak-free: the solver reads a connection, and it is
+    handed one that holds only the past.
+
+    `min_team_games` is four, not the fifteen the pro leagues use: a
+    college season is twelve games and the build prices week one on the
+    pooled prior season, so fifteen would skip most of every season.
+
+    NOT the whole production model: the recruiting prior blended in
+    before week four and the FCS exclusion that needs the live team map
+    are not replayed, so this is a floor on the build's own number —
+    a higher one than the plain walk, and the one the shipped figure
+    should carry.
+    """
+    import sqlite3
+    from . import teamrates
+    from .cfb import ratings as cfbratings
+    prepare(conn, "cfb")
+    baseline = _sd(SCORING_BASELINE, "cfb", "scoring baseline")
+    plain = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    fit = cfbratings.fit_from_history(conn, plain)
+    cols = "sport, season, period, home, away, home_score, away_score, extra"
+    rows = conn.execute(
+        f"SELECT {cols} FROM games WHERE sport='cfb' AND home_score IS NOT NULL "
+        f"AND away_score IS NOT NULL ORDER BY period").fetchall()
+    # The FCS exclusion only when the map loaded (cfb_build's rule): on a
+    # box where every key is the espn: fallback, excluding it would drop
+    # the league.
+    espn = sum(1 for r in rows if str(r["home"]).startswith("espn:")
+               or str(r["away"]).startswith("espn:"))
+    exclude = "espn:" if rows and espn / len(rows) < 0.5 else None
+    spreads = dict(schedule_closes(conn, "cfb", "spread", require_prices=False))
+    spreads.update(game_line_closes(conn, "cfb", "spread"))
+    totals = dict(schedule_closes(conn, "cfb", "total", require_prices=False))
+    totals.update(game_line_closes(conn, "cfb", "total"))
+    mls = moneyline_closes(conn, "cfb")
+    if not mls:
+        mls = {k: {k[1]: h, k[2]: a}
+               for k, (h, a) in schedule_moneylines(conn, "cfb").items()}
+    out = {m: GameRank(sport="cfb", market=m)
+           for m in ("total", "spread", "team_total", "moneyline")}
+    mem = sqlite3.connect(":memory:")
+    mem.row_factory = sqlite3.Row
+    mem.execute(f"CREATE TABLE games ({cols})")
+    by_date: dict = {}
+    for r in rows:
+        by_date.setdefault(r["period"], []).append(r)
+    for date in sorted(by_date):
+        games = by_date[date]
+        season = games[0]["season"]
+        _cfb_prior_table(mem, rows, date, (season - 1, season))
+        ratings, _used = teamrates.adjusted_ratings_for_season(
+            mem, "cfb", season, shrink=8.0, exclude_prefix=exclude,
+            home_field=fit.home_field)
+        for g in games:
+            for m in out.values():
+                m.games_seen += 1
+            hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
+            if not hr or not ar or hr.games < min_team_games or ar.games < min_team_games:
+                continue
+            key = (date, g["home"], g["away"])
+            hs, as_ = float(g["home_score"]), float(g["away_score"])
+            margin = (hr.net - ar.net) + fit.home_field
+            sq, tq = spreads.get(key), totals.get(key)
+            if sq:
+                line, oa, ob = sq
+                oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
+                card = price_spread("cfb", g["home"], g["away"], margin, line, oa, ob)
+                won, push = _settle_spread(line, card["team"] == g["home"], hs, as_)
+                out["spread"].games_quoted += 1
+                if push:
+                    out["spread"].pushes += 1
+                else:
+                    out["spread"].pairs.append((float(card["win_prob"]), bool(won)))
+            if tq:
+                line, oa, ob = tq
+                oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
+                proj = project_total("cfb", hr.off, hr.def_, ar.off, ar.def_)
+                card = price_total("cfb", g["home"], g["away"], proj, line, oa, ob)
+                won, push = _settle_total(line, card["side"], hs, as_)
+                out["total"].games_quoted += 1
+                if push:
+                    out["total"].pushes += 1
+                else:
+                    out["total"].pairs.append((float(card["win_prob"]), bool(won)))
+                if sq:
+                    h_line, a_line = (line - sq[0]) / 2.0, (line + sq[0]) / 2.0
+                    out["team_total"].games_quoted += 1
+                    for team, pr, ln, pts in (
+                            (g["home"], project_team_points("cfb", hr.off, ar.def_), h_line, hs),
+                            (g["away"], project_team_points("cfb", ar.off, hr.def_), a_line, as_)):
+                        c = price_team_total("cfb", team, g["home"], g["away"], pr, ln, oa, ob)
+                        won, push = _settle_team_total(ln, c["side"], pts)
+                        if push:
+                            out["team_total"].pushes += 1
+                        else:
+                            out["team_total"].pairs.append((float(c["win_prob"]), bool(won)))
+            q = mls.get(key) or {}
+            if q.get(g["home"]) is not None and q.get(g["away"]) is not None:
+                out["moneyline"].games_quoted += 1
+                if hs != as_:
+                    out["moneyline"].pairs.append(
+                        (float(cfbratings.win_prob(margin, fit)), hs > as_))
+                else:
+                    out["moneyline"].pushes += 1
+    mem.close()
+    return [out[m].finish() for m in ("total", "spread", "team_total", "moneyline")]
+
+
 def measure(conn, sport: str) -> list[GameRank]:
+    if sport == "cfb":
+        try:
+            return measure_cfb(conn)
+        except Exception as exc:                          # noqa: BLE001
+            return [GameRank(sport="cfb", market=m,
+                             note=f"could not measure — {exc}")
+                    for m in ("total", "spread", "team_total", "moneyline")]
     prepare(conn, sport)
     out = []
     for market in ("total", "spread", "team_total"):
@@ -264,8 +405,9 @@ def lines(results: list[GameRank]) -> list[str]:
         if r.auc is None:
             out.append(f"game rank {r.sport}:{r.market}: {r.note}")
             continue
-        word = ("on the board" if r.auc >= MIN_RANK_AUC
-                else f"UNDER the {MIN_RANK_AUC} floor — stays off the board")
+        word = ("ranked — on the board" if r.auc >= MIN_RANK_AUC
+                else f"UNDER the {MIN_RANK_AUC} floor — shown as a lean, "
+                     f"not ranked")
         out.append(f"game rank {r.sport}:{r.market}: AUC {r.auc:.4f} on "
                    f"{len(r.pairs):,} quoted games ({r.pushes} pushes) — {word}")
     return out
