@@ -249,15 +249,23 @@ def test_a_close_for_a_moved_line_is_counted_out_of_the_same_line_subset():
     assert _close(o["roi_at_close_same_line"], -0.0455, 1e-3)
 
 
-def test_the_verdict_reads_the_direction_of_the_close_gap():
-    s = dict(n=500, roi_at_price=-0.057, roi_at_close=0.172, clv_mean_pts=-0.03,
-             n_with_close=295, flat_roi_ci95=(-0.1, 0.02))
+def test_the_verdict_compares_the_close_against_the_same_rows():
+    """The droplet's -5.7% at price / +17.2% at close read as "the market
+    moved against these bets" until the closed subset's own price-side
+    ROI was looked at. Against the same rows the close paid less, which
+    is positive CLV — and the journal said +1.22 pts, 74% beating."""
+    s = dict(n=803, roi_at_price=-0.057, roi_at_close=0.172,
+             roi_at_price_closed_subset=0.21, clv_mean_pts=0.0122,
+             clv_beat_share=0.74, n_with_close=295, flat_roi_ci95=(-0.1, 0.02))
     v = M.verdict(s)
+    assert "on the 295 with a close: +21.0% at price vs +17.2% at the close" in v
+    assert "market moved toward these bets" in v and "AGAINST" not in v
+    assert "+1.22 pts, 74% beat the close" in v
     assert "ROI AT CLOSE ABOVE 10%" in v
-    assert "market moved AGAINST these bets" in v
-    s = dict(n=500, roi_at_price=0.02, roi_at_close=-0.01, clv_mean_pts=0.01,
-             n_with_close=295, flat_roi_ci95=(-0.1, 0.05))
-    assert "beat the close" in M.verdict(s)
+    s = dict(n=500, roi_at_price=0.02, roi_at_close=0.05,
+             roi_at_price_closed_subset=0.01, clv_mean_pts=-0.01,
+             clv_beat_share=0.4, n_with_close=295, flat_roi_ci95=(-0.1, 0.05))
+    assert "AGAINST" in M.verdict(s)
 
 
 if __name__ == "__main__":

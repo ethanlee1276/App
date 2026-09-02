@@ -367,13 +367,27 @@ def verdict(s: dict) -> str:
     ci = s.get("flat_roi_ci95")
     roi = s.get("roi_at_price")
     close = s.get("roi_at_close")
+    # THE SAME ROWS. Ethan's droplet run, 2026-09-02: 803 bets at -5.7%,
+    # +17.2% "at close" on the 295 with a close — and the first reading
+    # of that gap was "the market moved against these bets", which is
+    # backwards: the 295 closed rows had their own price-side ROI, and
+    # against THAT the close-side number was lower, i.e. positive CLV
+    # (+1.22 pts, 74% beating the close, on the same journal). A gap
+    # across two populations is not CLV. Only the closed subset's own
+    # price-side ROI is comparable to its close-side ROI.
+    roi_closed = s.get("roi_at_price_closed_subset")
     clv = s.get("clv_mean_pts")
+    beat = s.get("clv_beat_share")
     nclose = s.get("n_with_close") or 0
     parts = [f"{n} bets, ROI at price {roi:+.1%}"]
-    if close is not None:
+    if close is not None and roi_closed is not None:
+        parts.append(f"on the {nclose} with a close: {roi_closed:+.1%} at price "
+                     f"vs {close:+.1%} at the close")
+    elif close is not None:
         parts.append(f"ROI at close {close:+.1%} on the {nclose} with a close")
     if clv is not None:
-        parts.append(f"mean CLV {clv * 100:+.2f} pts")
+        parts.append(f"mean CLV {clv * 100:+.2f} pts"
+                     + (f", {beat:.0%} beat the close" if beat is not None else ""))
     if ci:
         lo, hi = ci
         if lo > 0:
@@ -388,14 +402,15 @@ def verdict(s: dict) -> str:
     if close is not None and close > 0.10:
         parts.append("ROI AT CLOSE ABOVE 10% — a rule-5 number: check the "
                      "same-line subset before believing it")
-    if close is not None and roi is not None:
-        if close > roi:
-            parts.append("close-side ROI above price-side ROI means the closes "
-                         "were LONGER than the prices taken — the market moved "
-                         "AGAINST these bets after they were placed")
-        elif close < roi:
-            parts.append("price-side ROI above close-side ROI: the market moved "
-                         "toward these bets — they beat the close")
+    if close is not None and roi_closed is not None:
+        if close > roi_closed:
+            parts.append("on those rows the close paid MORE than the price taken "
+                         "— the closes were longer, the market moved AGAINST "
+                         "these bets")
+        elif close < roi_closed:
+            parts.append("on those rows the price taken paid more than the close "
+                         "— the market moved toward these bets, they beat the "
+                         "close")
     return "; ".join(parts)
 
 
