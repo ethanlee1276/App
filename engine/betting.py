@@ -157,10 +157,70 @@ IMPLAUSIBLE_EDGE_REASON = (
     "Model disagrees with the market by more than 10 points — treated as a "
     "modelling or data error, not an edge, so this is not staked")
 
+#: A price that cannot belong to the number beside it. Deliberately NOT
+#: NO_CREDIBLE_EDGE_REASON ("line unavailable"), which this board spent
+#: 2026-09-02 learning not to say about a line that is plainly there, and
+#: deliberately not IMPLAUSIBLE_EDGE_REASON either: that one blames our
+#: model, and here the arithmetic points at the quote.
+MISPOSTED_QUOTE_REASON = (
+    "The price posted beside this number cannot be a price for it — treated "
+    "as a bad quote, not an edge, so this is not staked or ranked")
+
 #: Every reason string that means "we are not betting this". Anything
 #: added above belongs here, and the suite checks that it is.
 REFUSAL_REASONS = (UNRELIABLE_CALIBRATION_REASON, NO_CREDIBLE_EDGE_REASON,
-                   IMPLAUSIBLE_EDGE_REASON)
+                   IMPLAUSIBLE_EDGE_REASON, MISPOSTED_QUOTE_REASON)
+
+
+#: How far a book's de-vigged price may sit from the model's own
+#: probability FOR THE NUMBER IT IS POSTED AGAINST before the quote stops
+#: being a price for that number at all.
+#:
+#: Ethan, 2026-09-02, from a phone: "How is a under 4.5 bases -200".
+#: theScore Bet showed Zack Gelof UNDER 4.5 Total Bases at -200 against a
+#: 1.7 projection and a log reading 0/10 cleared 4.5. Our ingest is
+#: faithful — `sources.oddsapi.parse_event_lines` keys the over and the
+#: under on the same `(player, point)` outcome, `best_under_line` carries
+#: `ln.line` and `ln.under_odds` off one row, and nothing downstream
+#: rewrites either — so the number came off the book that way. The pair
+#: de-vigs to 37/63 at a 5.8% hold, which is a real quote for a line near
+#: 2.5, printed against 4.5. P(under 4.5) on that projection is ~96%.
+#:
+#: THIS IS A DIFFERENT QUESTION FROM MAX_CREDIBLE_EDGE, which is why it
+#: is a second constant and not a wider first one. That bar asks "do we
+#: disagree with this price too much to bet it?" and answers Pass — the
+#: price is real and our number may be the wrong one, so the card still
+#: shows the market. This bar asks "is this a price for this line at
+#: all?", and past it the answer is no: no book prices a 96% event at
+#: -200, so the number beside the line is not the market's opinion about
+#: that line and must not be published as one.
+#:
+#: 0.25 sits well clear of MAX_CREDIBLE_EDGE (0.10) on purpose. Nothing
+#: bettable is lost — everything past 10 points is already refused — so
+#: the only rows this can reach are ones already ungraded, and the width
+#: keeps an honest-but-badly-modelled market from being called corrupt.
+IMPLAUSIBLE_QUOTE_GAP = 0.25
+
+
+def quote_prices_its_line(side: str, best, p_over_at,
+                          gap: float = IMPLAUSIBLE_QUOTE_GAP) -> bool:
+    """Is this quote a price for the number it is posted against?
+
+    ``best`` is a :class:`odds.BestLine`, whose ``fair_prob`` is already
+    the de-vigged probability of ``side`` at ``best.line`` — so the
+    comparison is the book's own opinion about this line against ours.
+
+    The shop is what makes this necessary rather than merely tidy.
+    ``best_under_line`` prefers the HIGHEST line on the board and calls it
+    more cushion; a book that posts 4.5 while carrying a 2.5 price is
+    therefore SELECTED, exactly the way a dead-zone -97 used to win on
+    "highest odds" until `is_quotable` stopped shopping it. A mis-posted
+    number does not sit quietly at the bottom of the board — it goes
+    straight to the top.
+    """
+    p_over = clamp(p_over_at(best.line), 1e-6, 1.0 - 1e-6)
+    model = p_over if side == "OVER" else 1.0 - p_over
+    return abs(model - best.fair_prob) <= gap
 
 
 def _confidence_score(edge: float, hit_prob: float, proj: Projection,
@@ -230,7 +290,23 @@ def pick_side(lines, p_over_at, hold: float | None = None,
     measures it. Without this the long-shot board priced those props off
     `holdwatch`'s measurement and this board could not see it, so the
     same prop carried two different fair prices depending on the page."""
-    over = best_over_line(lines, hold)
+    from .odds import devig_two_way
+
+    def _prices_its_line(ln, side: str) -> bool:
+        """``quote_prices_its_line`` for a raw quote, before it is shopped."""
+        fair_over, fair_under = devig_two_way(ln.over_odds, ln.under_odds, hold)
+        p = clamp(p_over_at(ln.line), 1e-6, 1.0 - 1e-6)
+        model = p if side == "OVER" else 1.0 - p
+        fair = fair_over if side == "OVER" else fair_under
+        return abs(model - fair) <= IMPLAUSIBLE_QUOTE_GAP
+
+    # A quote that cannot be a price for its own number does not get to win
+    # the shop. Same shape as `best_over_line`'s dead-zone filter: prefer the
+    # quotes that are real, and fall back to the full field when none are, so
+    # a market where every book looks wrong still returns a line to display —
+    # the caller's `has_market` is what refuses to price it.
+    real_over = [ln for ln in lines if _prices_its_line(ln, "OVER")]
+    over = best_over_line(real_over or lines, hold)
     p_over_at_over = clamp(p_over_at(over.line), 1e-6, 1.0 - 1e-6)
     over_edge = p_over_at_over - over.fair_prob
 
@@ -247,7 +323,8 @@ def pick_side(lines, p_over_at, hold: float | None = None,
                  and pair_is_sane(ln.over_odds, ln.under_odds)]
     if not two_sided or not allow_under:
         return "OVER", over, p_over_at_over, over.fair_prob, over_edge
-    under = best_under_line(two_sided, hold)
+    real_under = [ln for ln in two_sided if _prices_its_line(ln, "UNDER")]
+    under = best_under_line(real_under or two_sided, hold)
 
     p_over_at_under = clamp(p_over_at(under.line), 1e-6, 1.0 - 1e-6)
     under_win = 1.0 - p_over_at_under
@@ -467,6 +544,13 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # quotes, there is nothing here to bet.
     has_market = ((allow_synthetic_line or (best.book or "").lower() != "proxy")
                   and is_quotable(best.odds))
+    # …and separately: is the price one this LINE could carry? `has_market`
+    # stays "there is a real number on the screen", because that is what its
+    # refusal sentence tells the reader, and this line IS on the screen.
+    # Skipped on a synthetic line, where pricing against a deliberately naive
+    # baseline is the exercise rather than a fault.
+    prices_line = (allow_synthetic_line
+                   or quote_prices_its_line(side, best, p_over_at))
     ev = expected_value(hit, best.odds)
     net = net_edge(hit, best.odds)
     if not has_market:
@@ -556,7 +640,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
                             **_env)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
-    gate_ok = (credible and has_market
+    gate_ok = (credible and has_market and prices_line
                and calibration_ok and pattern_block is None
                and edge >= min_edge
                and net > favourite_surcharge(best.odds))
@@ -585,7 +669,12 @@ def evaluate_prop(prop: Prop, proj: Projection,
         reasons.insert(0, pattern_block)
     if not calibration_ok:
         reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
-    if not credible and not has_market:
+    # Most specific cause first. A mis-posted quote also fails `credible`
+    # — 25 points is past 10 — so without this branch the card would blame
+    # the model for a gap the arithmetic pins on the price.
+    if not prices_line:
+        reasons.insert(0, MISPOSTED_QUOTE_REASON)
+    elif not credible and not has_market:
         reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
     elif not credible:
         reasons.insert(0, IMPLAUSIBLE_EDGE_REASON)

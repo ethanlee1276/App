@@ -12,10 +12,11 @@ from __future__ import annotations
 import math
 
 from ..betting import (
-    IMPLAUSIBLE_EDGE_REASON, NO_CREDIBLE_EDGE_REASON, Recommendation,
+    IMPLAUSIBLE_EDGE_REASON, MISPOSTED_QUOTE_REASON,
+    NO_CREDIBLE_EDGE_REASON, Recommendation,
     UNRELIABLE_CALIBRATION_REASON,
     apply_selection, net_edge, favourite_surcharge,
-    pick_side, temper_edge, under_reason,
+    pick_side, quote_prices_its_line, temper_edge, under_reason,
 )
 from ..calibrate import (apply_temperature, calibrated, correction_for,
                         is_reliable)
@@ -188,6 +189,14 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # corrected one rather than the corrected one plus an old headline.
     hit, edge = apply_selection(hit, edge, "mlb")
     has_market = allow_synthetic_line or (best.book or "").lower() != "proxy"
+    # Separately: is the price one this LINE could carry? See
+    # `betting.IMPLAUSIBLE_QUOTE_GAP`, which this board is the reason for.
+    # Kept out of `has_market`, which stays "there is a real number on the
+    # screen" — this line IS on the screen, and its refusal sentence says
+    # otherwise. Skipped on a synthetic line, where pricing against a
+    # deliberately naive baseline is the exercise rather than a fault.
+    prices_line = (allow_synthetic_line
+                   or quote_prices_its_line(side, best, p_over_at))
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.
         edge = 0.0
@@ -257,7 +266,8 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
                             **_env)
     tier = mlb_tier(prop.market)
     min_edge = mlb_tier_min_edge(prop.market)
-    gate_ok = (credible and calibration_ok and pattern_block is None
+    gate_ok = (credible and prices_line and calibration_ok
+               and pattern_block is None
                and has_market and edge >= min_edge
                and net > favourite_surcharge(best.odds))
     grade = mlb_letter(quality) if gate_ok else "Pass"
@@ -283,7 +293,12 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
         # both claimed to say the same thing — and the front end's
         # refusal detector would then have to know about both.
         reasons.insert(0, UNRELIABLE_CALIBRATION_REASON)
-    if not credible and not has_market:
+    # Most specific cause first — a mis-posted quote also fails `credible`,
+    # and blaming the model for a gap the arithmetic pins on the price is
+    # the same wrong-cause mistake the two branches below exist to avoid.
+    if not prices_line:
+        reasons.insert(0, MISPOSTED_QUOTE_REASON)
+    elif not credible and not has_market:
         reasons.insert(0, NO_CREDIBLE_EDGE_REASON)
     elif not credible:
         # The NFL board got this split on 2026-09-02 (an Amon-Ra St. Brown
