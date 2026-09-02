@@ -24,6 +24,7 @@ from engine.mlb.sources.statslogs import build_live_slate
 from engine.mlb.pipeline import run_mlb_slate
 from engine.sources.fetch import DataUnavailable
 from engine.rules import RuleConfig
+from engine import stagetime as _stg
 
 
 def _shift_day(date: str, days: int) -> str:
@@ -63,27 +64,38 @@ def main() -> None:
     ap.add_argument("--min-confidence", type=float, default=6.0)
     ap.add_argument("--min-edge", type=float, default=0.02)
     ap.add_argument("--out", default=None, help="write recommendations JSON here")
+    ap.add_argument("--timings", action="store_true",
+                    help="print a per-stage wall-time / peak-RSS table at the "
+                         "end (also on QELLYS_STAGE_TIMES=1). Pair it with "
+                         "`python3 deploy/peakrss.py` for the whole-run peak.")
     args = ap.parse_args()
+    if args.timings:
+        _stg.enable()
 
+    _tk = _stg.start("live slate (schedule, lineups, logs)")
     try:
         slate = build_live_slate(args.date)
     except DataUnavailable as exc:
         print("⚠️  Live MLB data unavailable.\n")
         print(exc)
         sys.exit(2)
+    _stg.stop(_tk)
 
     # Overlay live scores / inning state.
     from engine.mlb.sources.live import attach_live
+    _tk = _stg.start("live scores")
     live_n = attach_live(slate, args.date)
     if live_n:
         live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
         print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
+    _stg.stop(_tk)
 
     real_odds = False
     res = None
     odds_status = {"checked": bool(args.odds or args.cached_odds), "matched": 0,
                    "events": 0, "moneylines": 0, "error": None,
                    "quota_remaining": None, "source": None}
+    _tk = _stg.start("odds api")
     if args.odds or args.cached_odds:
         from engine.sources import oddsapi
         try:
@@ -137,12 +149,14 @@ def main() -> None:
         except oddsapi.OddsAPIError as exc:
             odds_status["error"] = str(exc)
             print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+    _stg.stop(_tk)
 
     # Write down the game lines we just paid for. The build has always asked
     # the API for h2h, spreads and totals and journaled only h2h, so the
     # spread and total models had no stored closing number to be graded
     # against — the reason that layer shipped ungraded. Free: the prices are
     # already in memory.
+    _tk = _stg.start("line ledger")
     try:
         from engine import lineledger, db as _hdb
         _hc = _hdb.connect()
@@ -150,12 +164,14 @@ def main() -> None:
         _hc.close()
     except Exception:
         pass
+    _stg.stop(_tk)
 
     # WHEN the book prices on this board were last pulled, and when the
     # pre-game window opens. Both were only visible in the launcher's
     # terminal, which is the one place you can't see from a phone at work —
     # and "753 props with no book price" reads like a broken feed at 9 AM
     # when it is really just the books not having posted hitter props yet.
+    _tk = _stg.start("odds pacing telemetry")
     try:
         from engine import oddsbudget
         _st = oddsbudget.load()
@@ -222,10 +238,12 @@ def main() -> None:
                 odds_status["next_pull_at"] = max(_next, _opens)
     except Exception:      # telemetry must never fail a build
         pass
+    _stg.stop(_tk)
 
     # Book-menu props: players the books have priced who aren't on the slate
     # (lineup not posted, nothing to project). The books' menu says they're
     # playing — build their props from real prices + our own ingested logs.
+    _tk = _stg.start("book-menu props")
     if res is not None and res.book_only:
         try:
             from engine.db import connect as _bconn
@@ -239,8 +257,10 @@ def main() -> None:
                       f"players not in a posted lineup yet.")
         except Exception as exc:
             print(f"⚠️  Book-menu props skipped: {exc}")
+    _stg.stop(_tk)
 
     # Team ratings for the moneyline model, from ingested historical scores.
+    _tk = _stg.start("team ratings")
     try:
         from engine.db import connect
         from engine.teamrates import ratings_for_season, attach_ratings
@@ -261,9 +281,11 @@ def main() -> None:
                   "model has team strength to find an edge.")
     except Exception as exc:
         print(f"⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
+    _stg.stop(_tk)
 
     # Home-plate umpire profiles (announced hours before first pitch) — a
     # measured K/run-environment adjustment from our own ingested history.
+    _tk = _stg.start("umpire profiles")
     try:
         from engine.db import connect as _uconn
         from engine.mlb.umpires import umpire_profiles, attach_umpires
@@ -275,10 +297,12 @@ def main() -> None:
                   f"profile ({len(profs)} umps profiled from history).")
     except Exception as exc:
         print(f"⚠️  Umpire profiles unavailable — neutral zones assumed.\n   {exc}")
+    _stg.stop(_tk)
 
     # Bullpen fatigue: measured relief workload per pen over the last two
     # days (free MLB Stats boxscores) — tired arms give the late innings
     # back to opposing hitters.
+    _tk = _stg.start("bullpen fatigue")
     try:
         from engine.mlb.bullpen import attach_fatigue, TIRED_MIN
         from engine.mlb.sources.mlbstats import TEAM_ID_ABBR
@@ -290,10 +314,12 @@ def main() -> None:
                   f"{tired} clearly overworked ({TIRED_MIN:g}+ weighted relief IP).")
     except Exception as exc:
         print(f"⚠️  Bullpen fatigue unavailable — rested pens assumed.\n   {exc}")
+    _stg.stop(_tk)
 
     # Statcast (Baseball Savant): xSLG/xwOBA regression + barrel / hard-hit
     # power profiles — turns "season home-run rate only" into process-based
     # contact quality on props and the HR board.
+    _tk = _stg.start("statcast profiles")
     try:
         from engine.mlb.sources.savant import attach_statcast
         n_sc = attach_statcast(slate.props, int(args.date[:4]))
@@ -303,10 +329,12 @@ def main() -> None:
                   f"hitter props.")
     except Exception as exc:
         print(f"⚠️  Statcast unavailable — season rates only.\n   {exc}")
+    _stg.stop(_tk)
 
     # Measured platoon splits from our own game logs (each hitter vs the
     # starter hand he actually faced) — replaces the generic +4% handedness
     # bump wherever a real split exists.
+    _tk = _stg.start("platoon splits (own logs)")
     try:
         from engine.db import connect as _pconn
         from engine.mlb.platoon import platoon_splits, attach_platoon
@@ -326,11 +354,13 @@ def main() -> None:
                   "backfills on the next full ingest; generic bump applies.")
     except Exception as exc:
         print(f"⚠️  Platoon splits unavailable — generic bump applies.\n   {exc}")
+    _stg.stop(_tk)
 
     # Official season splits (vs LHP / vs RHP) from the MLB Stats API —
     # a few batched, cached-daily requests. The HR model reads the power
     # split; hitters our own logs can't measure get an official SLG-split
     # platoon factor instead of the generic bump.
+    _tk = _stg.start("official splits (MLB API)")
     try:
         import datetime as _spdt
         from engine.mlb.sources.mlbstats import fetch_batting_splits
@@ -346,10 +376,12 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  Official splits unavailable — flat platoon bump where "
               f"unmeasured.\n   {exc}")
+    _stg.stop(_tk)
 
     # Opportunity model: tonight's expected plate appearances (batting slot +
     # run environment) vs each hitter's OWN measured PA average — volume is
     # the most predictable half of any counting prop.
+    _tk = _stg.start("opportunity (PA volume)")
     try:
         from engine.db import connect as _oconn
         from engine.mlb.opportunity import avg_pa_by_player, attach_opportunity
@@ -365,10 +397,12 @@ def main() -> None:
                   "ingest; static lineup-slot bump applies.")
     except Exception as exc:
         print(f"⚠️  Opportunity model unavailable — static slot bump applies.\n   {exc}")
+    _stg.stop(_tk)
 
     # Streak reversion: measured from our own logs, league-wide — what the
     # game AFTER a hot/cold 5-game stretch actually looks like. Never a
     # hunch: if the data shows no reversion, no factor is applied.
+    _tk = _stg.start("streak reversion")
     try:
         from engine.db import connect as _sconn
         from engine.mlb.streaks import (measure_reversion, attach_streaks,
@@ -387,6 +421,7 @@ def main() -> None:
                   "yet — no streak factors applied.")
     except Exception as exc:
         print(f"⚠️  Streak analysis unavailable.\n   {exc}")
+    _stg.stop(_tk)
 
     if not slate.props:
         print(f"No props built for {args.date} — lineups may not be posted yet. "
@@ -397,6 +432,7 @@ def main() -> None:
     # injured list (never a pick) and who just came back (form caveat).
     # Unreachable wire → None → the board behaves exactly as before.
     il_map = None
+    _tk = _stg.start("IL wire (transactions)")
     try:
         import datetime as _ildt
         from engine.mlb.sources.mlbstats import fetch_transactions
@@ -407,14 +443,17 @@ def main() -> None:
         il_map = il_status(fetch_transactions(_start, _end), args.date)
     except Exception:
         il_map = None
+    _stg.stop(_tk)
 
-    result = run_mlb_slate(slate, config, il_map=il_map)
+    with _stg.stage("model (run_mlb_slate)"):
+        result = run_mlb_slate(slate, config, il_map=il_map)
 
     # Team form: hot & cold from our own ingested results, plus the season
     # audit (did hot form predict the next game at all?). Track → measure →
     # only then adjust; the form SAMPLER below journals the hot side at
     # real prices so the Record can answer the question that matters.
     team_form_map = {}
+    _tk = _stg.start("team form + recent games")
     try:
         from engine.db import connect as hist_connect
         from engine.mlb.teamform import team_form, hot_cold, audit
@@ -437,11 +476,13 @@ def main() -> None:
                                              before=args.date)
     except Exception as exc:
         print(f"⚠️  team form skipped: {exc}")
+    _stg.stop(_tk)
 
     # §10 drawdown circuit-breaker (docs/MLB_MODEL.md): after a 10u
     # peak-to-trough drawdown on the settled journal, every stake is halved
     # until the peak is recovered. Applied before journaling so the ledger
     # records what we'd actually bet.
+    _tk = _stg.start("drawdown brake")
     try:
         from engine import ledger as _ledger
         dd = _ledger.drawdown_factor(_ledger.connect(), sport="mlb")
@@ -460,10 +501,12 @@ def main() -> None:
             print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
     except Exception:
         pass
+    _stg.stop(_tk)
 
     # Line movement: what the market has done since our first snapshot.
     # Movement is 10% of the quality grade: with-steam raises it, sharp
     # movement against can reject the pick (see engine/quality.py).
+    _tk = _stg.start("line movement")
     if real_odds:
         try:
             from engine.linemoves import (load_history, analyze, summary_lines,
@@ -477,12 +520,14 @@ def main() -> None:
                     print(line)
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
+    _stg.stop(_tk)
     # THE LINE, AS A PICTURE. Ethan, 2026-08-20: "applying the same tape to
     # sportsbook lines — open → now, with our pick's entry marked — turns
     # CLV from a number on a page into something you can see. The data is
     # already collected." It is: lineledger.record above has been writing a
     # row per observed minute since it shipped, and nothing read it back.
     # Costs no API credit and no extra fetch.
+    _tk = _stg.start("line tape")
     try:
         from engine import linetape, db as _tdb
         _tc = _tdb.connect()
@@ -493,10 +538,12 @@ def main() -> None:
             print(f"Line tape: {_n_tape} pick(s) carry their own movement.")
     except Exception as exc:                                   # noqa: BLE001
         print(f"⚠️  Line tape skipped: {exc}")
+    _stg.stop(_tk)
 
     # Live picks: journaled pre-game picks whose games are in progress,
     # with each player's current stat line from the live boxscore. The
     # model never bets in-play; this is the tracker for bets already made.
+    _tk = _stg.start("live-pick tracker (boxscores)")
     try:
         from engine import ledger as _lp_ledger
         from engine.livepicks import assemble_live_picks
@@ -648,6 +695,7 @@ def main() -> None:
         # output, so a print-only failure is invisible on the site.
         result["live_picks_error"] = str(exc)
         print(f"⚠️  live-pick tracker skipped: {exc}")
+    _stg.stop(_tk)
 
     # HR board funnel — when the Long Shots page is empty, this line says why.
     dg = result.get("longshot_diag") or {}
@@ -666,6 +714,7 @@ def main() -> None:
     # that the model can rank it. On a box with an empty rank store the
     # board publishes empty with the census saying exactly that, and
     # fills by itself after the first measurement pass.
+    _tk = _stg.start("likelihood board")
     try:
         from engine.likely import build as _likely_build
         from engine import boards as _mlboards
@@ -689,6 +738,7 @@ def main() -> None:
         print(f"⚠️  likelihood board skipped: {exc}")
         result.setdefault("most_likely", [])
         result.setdefault("board_shelves", [])
+    _stg.stop(_tk)
 
     c = result["counts"]
     confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
@@ -717,6 +767,7 @@ def main() -> None:
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
               f"edge {r['edge']:+.1%}  {r['headline']}{held}")
 
+    _tk = _stg.start("write JSON")
     if args.out:
         import datetime as _dt
         from pathlib import Path
@@ -733,11 +784,13 @@ def main() -> None:
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
+    _stg.stop(_tk)
 
     # Learning engine: journal today's real-priced picks and settle any open
     # ones whose results have since been ingested. Only real book prices are
     # journaled — a proxy line isn't a bet anyone could place. Never let the
     # journal break a build.
+    _tk = _stg.start("journal + settle")
     if real_odds:
         try:
             from engine import ledger
@@ -783,6 +836,13 @@ def main() -> None:
                       f"`python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
+    _stg.stop(_tk)
+
+    # WHERE THE BUILD'S TIME AND MEMORY WENT, when asked. The refresh loop
+    # is serial, so the slowest board sets the floor for every board, and
+    # "the MLB build takes 235 seconds" is the absence of a finding rather
+    # than one. `deploy/peakrss.py` wraps this for the whole-run peak.
+    _stg.report("MLB build")
 
 
 if __name__ == "__main__":

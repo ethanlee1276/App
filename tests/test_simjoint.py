@@ -233,6 +233,74 @@ def test_the_mlb_pipeline_asks_for_them_and_cannot_be_killed_by_them():
     i = src.index("from .simjoint import build")
     assert "except Exception" in src[i:i + 400], "a joint must never kill a slate"
     assert 'attach(out, "mlb", joints=joints)' in src
+    assert "_build_joints(slate, recommended)" in src, (
+        "the sim is asked about the legs a ticket could be built from")
+
+
+def test_the_pipeline_asks_only_about_legs_a_ticket_could_be_built_from():
+    """The lineups fitted are the ones a CANDIDATE pair shares — not every
+    lineup with two over-side bats anywhere on the board.
+
+    `build` is documented to do work "proportional to what the Parlay Zone
+    will actually ask about", and the screen can only ever ask about a pair
+    of RECOMMENDED legs sharing one game. Handed the whole board instead,
+    the premise collapses: on a fifteen-game card 492 of 870 rows are
+    over-side hits/TB/HR, so all thirty lineups qualified and the fit was
+    48.1s of a 48.7s model stage for joints no ticket could reach. This
+    pins the call site, because nothing downstream would ever notice —
+    with ENABLED False the surplus lineups cost only time, and with it
+    True they price pairs the screen never asks about.
+    """
+    import engine.mlb.pipeline as pipeline
+    from engine.models import SportsbookLine
+
+    props = []
+    for i in range(9):
+        for m, line in ((HITS, 0.5), (TOTAL_BASES, 1.5), (HOME_RUNS, 0.5)):
+            p = _prop(f"Hitter {i + 1}", m, i + 1)
+            p.lines = [SportsbookLine(book="DraftKings", line=line,
+                                      over_odds=120, under_odds=-140)]
+            props.append(p)
+    slate = MLBSlate(date="2026-08-05", props=props,
+                     games=[MLBGame(home="NYY", away="BOS", park="yankee",
+                                    date="2026-08-05")])
+
+    seen: dict = {}
+    real, real_rules = simjoint.build, pipeline.apply_mlb_rules
+
+    def spy(slate, legs, **kw):
+        seen["legs"] = list(legs)
+        return {"rho": {}, "lineups": {}}
+
+    # Nothing on a slate this synthetic clears the real gates, and a test
+    # where NOTHING is recommended cannot tell "only the candidates go in"
+    # from "nothing goes in". So two rows are put on the board by hand,
+    # which is also the only way to check that a candidate leg still
+    # reaches the sim.
+    def rules(rec, prop, game, proj, config=None):
+        d = real_rules(rec, prop, game, proj, config)
+        if prop.player in ("Hitter 1", "Hitter 2") and prop.market == HITS:
+            d.recommend = True
+        return d
+
+    simjoint.build, pipeline.apply_mlb_rules = spy, rules
+    try:
+        out = pipeline.run_mlb_slate(slate)
+    finally:
+        simjoint.build, pipeline.apply_mlb_rules = real, real_rules
+
+    assert "legs" in seen, "the pipeline must still ask for tonight's joints"
+    recommended = [r for r in out["recommendations"] if r["recommended"]]
+    assert len(seen["legs"]) == len(recommended), (
+        f"{len(seen['legs'])} legs handed to the sim against "
+        f"{len(recommended)} recommended rows — the sim is being asked "
+        f"about pairs the Parlay Zone can never offer")
+    assert len(recommended) == 2, len(recommended)
+    assert len(seen["legs"]) < len(out["recommendations"]), (
+        "this slate must contain rows the screen cannot use, or the test "
+        "proves nothing")
+    ids = {id(r) for r in recommended}
+    assert all(id(l) in ids for l in seen["legs"])
 
 
 if __name__ == "__main__":
