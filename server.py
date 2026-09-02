@@ -895,7 +895,8 @@ class Handler(BaseHTTPRequestHandler):
                 parsed.path[len("/api/tailfade/"):].strip("/"), body)
         if (parsed.path.startswith("/api/social/")
                 or parsed.path.startswith("/api/alerts/")
-                or parsed.path in ("/api/parlay/check", "/api/parlay/check/")):
+                or parsed.path in ("/api/parlay/check", "/api/parlay/check/")
+                or parsed.path in ("/api/draftplan", "/api/draftplan/")):
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -914,6 +915,8 @@ class Handler(BaseHTTPRequestHandler):
                     parsed.path[len("/api/alerts/"):].strip("/"), body)
             if parsed.path.startswith("/api/parlay/check"):
                 return self._parlay_check(body)
+            if parsed.path.startswith("/api/draftplan"):
+                return self._draft_plan(body)
             return self._social_post(
                 parsed.path[len("/api/social/"):].strip("/"), body)
         if not parsed.path.startswith("/api/profile/"):
@@ -1039,6 +1042,106 @@ class Handler(BaseHTTPRequestHandler):
             slots = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}
         out = fantasy_pick.advice(draft, picks, ranks, board, user_id, slots)
         out["slots"] = slots
+        self._send(200, json.dumps(out).encode(), ".json")
+
+    def _kit_and_ranks(self):
+        """The published draft kit, keyed, and the consensus ranks — the
+        two inputs every draft tool reads. One place so the live Sleeper
+        advice and the hand-marked draft cannot disagree about them."""
+        from engine import fantasy_ranks
+        try:
+            blob = json.loads((WEB / "data" / "fantasy.json").read_text())
+        except Exception:                                     # noqa: BLE001
+            blob = {}
+        board = []
+        for row in (blob.get("draft_kit") or {}).get("board") or []:
+            key = fantasy_ranks.normalize(row.get("player"))
+            if key:
+                board.append({**row, "key": key})
+        ranks = {r["key"]: (r.get("consensus") or i + 1)
+                 for i, r in enumerate((blob.get("ranks") or {}).get("rows") or [])
+                 if r.get("key")}
+        if not ranks:                       # no ranks built yet: use the board
+            ranks = {r["key"]: i + 1 for i, r in enumerate(board)}
+        return board, ranks, blob
+
+    def _draft_plan(self, body: dict):
+        """The round-by-round plan, and the advice for a draft marked by hand.
+
+        Ethan, 2026-09-02: "who they should draft in what round ... a tool
+        to help users in their draft while they are doing it." The live
+        Sleeper advice reads a pick feed; ESPN, Yahoo and the table have
+        none, so the page sends the picks a person has marked — who is
+        gone, who is theirs — and this returns the pick on the clock
+        through the same `fantasy_pick.advice` the Sleeper room gets,
+        plus `draftplan.build` for every pick after it. POST because the
+        marked picks are the request; nothing is stored.
+
+        Bounded on every axis a stranger controls: league size, seat and
+        rounds are clamped, names are cut to a few hundred, and the
+        response is the same shape whether the board is paid or free —
+        the kit itself is what the paywall gates, and a caller who cannot
+        read the kit gets a plan over an empty board, which is honest and
+        useless.
+        """
+        from engine import draftplan, fantasy_pick, fantasy_ranks
+        try:
+            teams = max(2, min(20, int(body.get("teams") or 12)))
+            rounds = max(1, min(30, int(body.get("rounds") or 15)))
+            slot = max(1, min(teams, int(body.get("slot") or 1)))
+        except (TypeError, ValueError):
+            return self._send(400, b'{"error":"teams, slot and rounds must be numbers"}',
+                              ".json")
+        kind = "linear" if str(body.get("type") or "").lower() == "linear" else "snake"
+        slots = {}
+        for pos in ("QB", "RB", "WR", "TE", "FLEX"):
+            try:
+                n = int((body.get("slots") or {}).get(pos, draftplan.DEFAULT_SLOTS.get(pos, 0)))
+            except (TypeError, ValueError):
+                n = draftplan.DEFAULT_SLOTS.get(pos, 0)
+            slots[pos] = max(0, min(4, n))
+
+        def keys(names):
+            out = []
+            for n in (names or [])[:400]:
+                k = fantasy_ranks.normalize(str(n)[:60])
+                if k:
+                    out.append(k)
+            return out
+        taken, mine = keys(body.get("taken")), keys(body.get("mine"))
+        board, ranks, _ = self._kit_and_ranks()
+        # A gated reader sees no board: say so rather than plan over nothing.
+        if not board:
+            return self._send(200, json.dumps({
+                "empty": True,
+                "note": "The draft kit is not available to this session, so "
+                        "there is no board to plan from."}).encode(), ".json")
+        # The advice for the pick on the clock, through the live room's code.
+        order = (body.get("order") or [])[:400]
+        picks = []
+        for n in order:
+            if not isinstance(n, dict):
+                continue
+            k = fantasy_ranks.normalize(str(n.get("player") or "")[:60])
+            if k:
+                picks.append({"key": k, "player": str(n.get("player"))[:60],
+                              "picked_by": "me" if n.get("mine") else "them"})
+        if picks:
+            # The order is the record: who is gone and who is yours are
+            # read off it, so the advice and the plan cannot disagree
+            # about the state of the room.
+            taken = [p["key"] for p in picks if p["picked_by"] != "me"]
+            mine = [p["key"] for p in picks if p["picked_by"] == "me"]
+        else:                               # order not given: rebuild it
+            picks = ([{"key": k, "player": k.title(), "picked_by": "them"} for k in taken]
+                     + [{"key": k, "player": k.title(), "picked_by": "me"} for k in mine])
+        draft = draftplan.draft_state(teams=teams, slot=slot, rounds=rounds, kind=kind)
+        starter_slots = {p: n for p, n in slots.items() if p != "FLEX" and n > 0}
+        advice = fantasy_pick.advice(draft, picks, ranks, board, "me", starter_slots)
+        plan = draftplan.build(board, ranks, teams, slot, rounds, kind, slots,
+                               taken=taken, mine=mine, picks=picks)
+        out = {"advice": advice, "plan": plan, "slots": slots,
+               "board_rounds": draftplan.annotate_rounds(board, ranks, teams)[:150]}
         self._send(200, json.dumps(out).encode(), ".json")
 
     def _league_desk(self, query: dict):
