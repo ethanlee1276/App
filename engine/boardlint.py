@@ -39,14 +39,15 @@ implies that the row fails:
       REFUSED     a refusal sentence in its reasons
       BAR         edge under its tier's bar
       GRADE       grade and quality disagree, or quality under the floor
-      CAP         stake over the grade's cap
+      LADDER      stake above what the PRICE allows (engine/staking) —
+                  the rule that actually sets a size since 2026-08-12
       EV          non-positive EV
       PROXY       no real book price
       BOTH SIDES  the same player recommended over AND under
     Game bets
       CREDIBLE    recommended with `credible` False
       QUALITY     a game-bet quality above the ceiling a NEUTRAL context allows
-      GRADE / CAP / EV / STARTED as above
+      GRADE / LADDER / EV / STARTED as above
 
 Nothing here re-prices anything. It reads the payload and the injuries
 page and says what it sees; a flag is a question for a human, not a
@@ -69,7 +70,8 @@ import os
 import sys
 
 from .betting import MAX_CREDIBLE_EDGE, REFUSAL_REASONS
-from .quality import GRADE_BANDS, MARKET_TIER, STAKE_CAP_U, TIER_MIN_EDGE
+from .quality import GRADE_BANDS, MARKET_TIER, TIER_MIN_EDGE
+from .staking import units_for_price
 from .quality import NEUTRAL as _NEUTRAL
 from .likely import HEAVIEST_PRICE, MIN_PROB
 
@@ -160,6 +162,47 @@ def _history_share(row: dict) -> float | None:
     if line is None or len(vals) < 3:
         return None
     return sum(1 for v in vals if _f(v, 0.0) > line) / len(vals)
+
+
+def _ladder_flags(stake, odds) -> list:
+    """Is this stake bigger than the rule that sets stakes allows?
+
+    THE CHECK THAT WAS AUDITING A RETIRED RULE. This compared every
+    stake against `quality.STAKE_CAP_U`, the per-grade ceiling — and
+    that ceiling stopped deciding sizes on 2026-08-12, when the price
+    ladder replaced Kelly-times-grade for every board (see
+    engine/staking.py for the three measurements that retired it).
+    Nothing in production has enforced it since; the lint was the last
+    place it was alive, so it flagged CORRECT rows. A "+190 at 0.66u"
+    card is the ladder's own answer, and a check that calls the shipped
+    rule a defect teaches a reader to ignore the flags.
+
+    Re-measured 2026-09-02 on 1,050 settled NFL game bets before this
+    was changed, because "the cap is retired" is not the same claim as
+    "the cap does no good": ROI -2.76% on the ladder, -2.53% with the
+    grade cap on top, -2.14% flat, -3.44% at quarter Kelly. Every gap
+    sits inside a 95% band of about six points, so nothing here
+    separates. What the cap demonstrably DOES is halve the money
+    staked (1,007u to 522u) while leaving ROI where it was — which is
+    Ethan's point, 2026-09-02: "i dont care about what grade it allowed
+    how much money."
+
+    WHAT IS CHECKED INSTEAD is the rule that runs: the price ladder is
+    the ceiling for a given price, and every caller-side adjustment is
+    a DOWNWEIGHT (the NBA's minutes multiplier, the correlation pass's
+    trims), so a stake ABOVE the ladder cannot come from any path that
+    exists and is worth a human's attention. Under it is legitimate and
+    silent.
+    """
+    if stake is None or odds is None:
+        return []
+    try:
+        allowed = units_for_price(int(odds))
+    except (TypeError, ValueError):
+        return []
+    if allowed > 0 and stake > allowed + 1e-9:
+        return [f"LADDER {stake:g}u over the {allowed:g}u this price allows"]
+    return []
 
 
 def _started(row: dict, now: _dt.datetime | None) -> bool:
@@ -280,9 +323,8 @@ def lint_props(rows: list[dict], injuries: dict, now=None) -> list[dict]:
             elif _letter(q) != grade:
                 flags.append(f"GRADE {grade} on quality {q:.0f} (bands say {_letter(q)})")
         stake = _f(r.get("stake_units"), 0.0)
-        cap = STAKE_CAP_U.get(grade)
-        if cap is not None and stake > cap + 1e-9:
-            flags.append(f"CAP {stake:g}u over {grade}'s {cap:g}u")
+        for _flag in _ladder_flags(stake, r.get("odds")):
+            flags.append(_flag)
         ev = _f(r.get("ev_per_unit"))
         if ev is not None and ev <= 0:
             flags.append(f"EV {ev:+.3f}")
@@ -324,9 +366,8 @@ def lint_game_bets(rows: list[dict], now=None) -> list[dict]:
             elif _letter(q) != grade:
                 flags.append(f"GRADE {grade} on quality {q:.0f} (bands say {_letter(q)})")
         stake = _f(r.get("stake_units"), 0.0)
-        cap = STAKE_CAP_U.get(grade)
-        if cap is not None and stake > cap + 1e-9:
-            flags.append(f"CAP {stake:g}u over {grade}'s {cap:g}u")
+        for _flag in _ladder_flags(stake, r.get("odds")):
+            flags.append(_flag)
         ev = _f(r.get("ev_per_unit"))
         if ev is not None and ev <= 0:
             flags.append(f"EV {ev:+.3f}")

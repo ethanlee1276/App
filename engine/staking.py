@@ -101,6 +101,30 @@ MIN_STAKE_UNITS = 0.1
 # kept. What is dropped is Kelly's opinion about how MUCH, because the
 # quartile table above says that opinion is worse than useless.
 
+# AND THE SAME QUESTION ASKED AGAIN FOR GAME BETS, 2026-09-02. Ethan,
+# reading a lint flag that called a +190 card at 0.66u an over-stake:
+# "i want it where we just make the most money and roi looks the best, i
+# dont care about what grade it allowed how much money." The 0.66u was
+# this ladder's own answer, and the flag was auditing `quality
+# .STAKE_CAP_U`, which this file retired — but "the cap is retired" is
+# not the same claim as "the cap does no good", so it was replayed.
+#
+# 1,050 settled NFL game bets (moneyline, spread, total, team total),
+# the production pricers over stored closes, the SAME bets re-sized:
+#
+#   ladder (ships now)   -2.76%   ± 6.11 (95%)
+#   flat 1u              -2.14%   ± 6.57
+#   grade cap on top     -2.53%   ± 6.37     1,007u staked -> 522u
+#   quarter Kelly size   -3.44%   ± 6.90
+#   half Kelly size      -3.45%   ± 6.90
+#
+# Every gap is inside the noise band, so nothing here is a reason to
+# change the rule — and the ladder is kept for that reason rather than
+# because it won. What the table DOES settle is the cap: it halves the
+# money staked and leaves ROI where it was, which is the one thing a
+# risk limit is supposed to buy and does not. Kelly sizing is worst
+# again, on a different board from the one that retired it.
+
 #: The standard bet, at the reference price. 1u = 1% of bankroll, so at a
 #: $1,000 bankroll this is $10 — the floor Ethan asked for.
 BASE_UNITS = 1.0

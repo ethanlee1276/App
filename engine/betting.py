@@ -435,7 +435,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     either stopped being true."""
     from .quality import (tier_shrink, tier_min_edge, market_tier,
                           volatility as market_volatility, quality_score,
-                          letter as quality_letter, STAKE_CAP_U)
+                          letter as quality_letter)
     from .calibrate import is_reliable
     from .losspatterns import veto as lp_veto
     temp, bias = correction_for(sport, prop.market)

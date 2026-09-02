@@ -53,7 +53,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from engine.odds import american_to_decimal
 from engine.staking import (BANKROLL_UNITS, MIN_STAKE_UNITS, kelly_units,
                             price_cap_units)
-from engine.quality import STAKE_CAP_U
 
 # The day the unit scale changed (commit 3f86208, "One scale for every
 # stake"). Stakes before it were sized on a 20-unit bankroll and are NOT
@@ -1362,9 +1361,16 @@ def main() -> None:
             report(new)
         if not old and not new:
             report(rows)
+    # THE RULE IN FORCE, NOT THE ONE THAT WAS. This footer listed
+    # `quality.STAKE_CAP_U` — the per-grade ceiling the price ladder
+    # replaced on 2026-08-12 — under a tool whose whole job is telling
+    # the reader what sizing is actually doing. Nothing has enforced
+    # those caps since; the ladder's ends are what bound a stake now.
+    from engine.staking import MAX_PRICED_U, MIN_PRICED_U, REF_ODDS
     print(f"\n  scale: 1u = 1/{BANKROLL_UNITS:.0f} of bankroll · "
-          f"floor {MIN_STAKE_UNITS}u · grade caps "
-          + ", ".join(f"{g} {c}u" for g, c in STAKE_CAP_U.items()))
+          f"floor {MIN_STAKE_UNITS}u · the PRICE sets the size "
+          f"({REF_ODDS} = 1u, {MIN_PRICED_U}u to {MAX_PRICED_U}u) — "
+          f"no grade cap since 2026-08-12")
     print("  read-only; nothing was written.\n")
 
 

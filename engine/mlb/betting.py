@@ -148,8 +148,7 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     did not — the same prop carrying two fair prices depending on the
     page, the exact failure devig_two_way's own docstring records."""
     from .quality import (mlb_tier, mlb_tier_shrink, mlb_tier_min_edge,
-                          mlb_volatility, mlb_quality_score, mlb_letter,
-                          STAKE_CAP_U)
+                          mlb_volatility, mlb_quality_score, mlb_letter)
     history = [g.value for g in prop.logs] if prop.logs else []
     temp, bias = correction_for("mlb", prop.market)
 

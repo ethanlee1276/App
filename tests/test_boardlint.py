@@ -139,7 +139,7 @@ def test_the_doctrine_gates_are_checked_on_the_payload():
             _prop(player="Refused", reasons=[L.REFUSAL_REASONS[0]]),
             _prop(player="Under Bar", edge=0.01),
             _prop(player="Wrong Grade", quality=85, grade="B+"),
-            _prop(player="Over Cap", stake_units=1.0, grade="B+"),
+            _prop(player="Over Ladder", stake_units=1.5, grade="B+"),
             _prop(player="No EV", ev_per_unit=-0.01),
             _prop(player="Proxy", book="proxy", has_market=False),
             _prop(player="Gap", hit_prob=0.70, fair_prob=0.52),
@@ -149,11 +149,31 @@ def test_the_doctrine_gates_are_checked_on_the_payload():
     assert any(f.startswith("REFUSED") for f in _flags(got, "Refused"))
     assert any(f.startswith("BAR") for f in _flags(got, "Under Bar"))
     assert "GRADE B+ on quality 85 (bands say A)" in _flags(got, "Wrong Grade")
-    assert "CAP 1u over B+'s 0.5u" in _flags(got, "Over Cap")
+    assert any(f.startswith("LADDER 1.5u over the") for f in _flags(got, "Over Ladder")), \
+        _flags(got, "Over Ladder")
     assert "EV -0.010" in _flags(got, "No EV")
     assert "PROXY no real price" in _flags(got, "Proxy")
     assert any(f.startswith("GAP") for f in _flags(got, "Gap"))
     assert any(f.startswith("PROJ>LINE") for f in _flags(got, "Wrong Way"))
+
+
+def test_a_stake_the_price_ladder_itself_set_is_not_a_defect():
+    """The false positive that started this. Ethan, 2026-09-02, reading
+    a +190 game bet flagged for staking 0.66u: "i dont care about what
+    grade it allowed how much money." 0.66u IS what the ladder gives
+    +190 — the lint was auditing `quality.STAKE_CAP_U`, the per-grade
+    ceiling engine/staking retired in August, and calling the shipped
+    rule a defect. A check that flags correct rows teaches a reader to
+    ignore the flags."""
+    from engine.staking import units_for_price
+    for odds in (-200, -110, 100, 190, 400):
+        allowed = units_for_price(odds)
+        row = _gb(odds=odds, stake_units=allowed, grade="B+", quality=74)
+        flags = L.lint_game_bets([row], now=None)[0]["flags"]
+        assert not any(f.startswith("LADDER") for f in flags), (odds, flags)
+        over = _gb(odds=odds, stake_units=allowed + 0.5, grade="B+", quality=74)
+        assert any(f.startswith("LADDER") for f in
+                   L.lint_game_bets([over], now=None)[0]["flags"]), odds
 
 
 def test_both_sides_of_one_player_is_named():
