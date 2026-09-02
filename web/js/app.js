@@ -4345,6 +4345,8 @@ function renderTonight() {
       <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
+  host.querySelectorAll("[data-open]").forEach((b) =>
+    b.addEventListener("click", () => openFrom(b.dataset.open)));
   if (typeof fillMeters === "function") fillMeters(host);
 }
 
@@ -5144,6 +5146,36 @@ function cardHTML(r) {
    0.76 while its calibration is shut for betting, because ordering a
    list and pricing against a book are different tests. The badge says
    which, rather than leaving a reader to infer it. */
+/* A MOST LIKELY CARD IS A DOOR. Ethan, 2026-09-02: "we should be able
+   too click on these players and it takes us too a more detailed stat
+   bar graph and shit with more data and the versus button." The row is
+   the same evaluation the prop page draws (likely.from_prop reads the
+   prop row), so when that prop is on the board the card opens it — bar
+   graph, logs, form, game script, versus. A watch row with no prop
+   behind it (a touchdown watch) opens the player page, which carries
+   the versus block too. */
+function likelyDoor(r) {
+  if (!r || !r.player) return "";
+  const id = propId(r);
+  if (propOpenable(r) && findProp(id)) {
+    return ` data-prop="${escapeAttr(id)}" tabindex="0" role="link"`;
+  }
+  return ` data-player-page="${escapeAttr(slugify(r.player))}" tabindex="0" role="link"`;
+}
+function likelyOpen(r) {
+  if (!r || !r.player) return "";
+  const id = propId(r);
+  return (propOpenable(r) && findProp(id))
+    ? ` data-open="prop:${escapeAttr(id)}"`
+    : ` data-open="player:${escapeAttr(slugify(r.player))}"`;
+}
+function openFrom(spec) {
+  const [kind, ...rest] = String(spec || "").split(":");
+  const target = rest.join(":");
+  if (kind === "prop") return openProp(target);
+  if (kind === "player") return openPlayerRoute(target);
+}
+
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
@@ -5198,7 +5230,7 @@ function likelyCard(r) {
        ${(Number(r.raw_prob || 0) * 100).toFixed(0)}%.</div>`;
   const label = r.line == null ? escapeHtml(r.market_label)
     : `${escapeHtml(r.side || "over")} ${r.line} ${escapeHtml(r.market_label)}`;
-  return `<article class="card longshot">
+  return `<article class="card longshot"${likelyDoor(r)}>
     <div class="card-head">
       <div class="card-id">${playerAvatar(r.player, r.team,
           { map: nflMap(), headshot: r.headshot })}
@@ -5391,6 +5423,8 @@ function renderLikelyTop() {
   if (all) all.addEventListener("click", () => switchView("likely", true));
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
+  host.querySelectorAll("[data-open]").forEach((b) =>
+    b.addEventListener("click", () => openFrom(b.dataset.open)));
   revealChildren(host);
 }
 
@@ -5472,8 +5506,8 @@ function likelyRow(r) {
   const pct = `${(Number(r.model_prob || 0) * 100).toFixed(0)}%`;
   const label = r.line == null ? (r.market_label || r.market)
     : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`;
-  return `<button class="ml-row" type="button" data-goto="likely"
-      title="Open the full Top Picks board">
+  return `<button class="ml-row" type="button"${likelyOpen(r)}
+      title="Open this pick — the bar graph, the logs and the versus block">
     ${playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
                                        headshot: r.headshot })}
     <span class="ml-who"><b>${escapeHtml(r.player)}</b>
@@ -6867,6 +6901,12 @@ function renderPropPage() {
     <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
 
     ${scriptCardHTML(r)}
+
+    ${(() => { const vs = vsBlockHTML(r.player, state.sport, r.opponent || "");
+      return vs ? `<div class="section-title minor">Versus
+        <span class="sub">— his games against ${escapeHtml(teamName(r.opponent || ""))}
+        and any other club he has faced.</span></div>
+      <div class="card">${vs}</div>` : ""; })()}
 
     ${reasons ? `<div class="section-title minor">Why this pick</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
@@ -26932,6 +26972,10 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-player-page]");
   if (!b) return;
+  // A whole card can be this door now (likelyDoor); its inner controls
+  // — a chip, a slip button, a select — still win, as on prop cards.
+  if (b.tagName !== "BUTTON"
+      && e.target.closest("a, button, input, label, select, .chip")) return;
   e.preventDefault();
   openPlayerRoute(b.dataset.playerPage);
 });

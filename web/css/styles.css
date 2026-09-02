@@ -9011,3 +9011,7 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
      meaningful once you know what it is summarising. */
   .co-what { order: -1; }
 }
+
+/* Every card that is a door reads as one. 2026-09-02: the Most Likely
+   cards and shelf rows open the prop page like the board's cards do. */
+[data-prop], [data-player-page], [data-open] { cursor: pointer; }

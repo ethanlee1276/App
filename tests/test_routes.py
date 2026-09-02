@@ -409,8 +409,12 @@ def test_every_prop_reaches_the_player_page():
     so every priced row is two taps from the full player page, logs and
     form windows and all."""
     assert 'data-player-page="${escapeAttr(slugify(r.player))}"' in APP
-    i = APP.index('e.target.closest("[data-player-page]")')
-    assert "openPlayerRoute(b.dataset.playerPage)" in APP[i:i + 300]
+    # The listener's own block, not a character count (tests/_windows.py):
+    # the door yields to a card's own controls since 2026-09-02, and the
+    # guard sits between the lookup and the open.
+    from _windows import until
+    listener = until(APP, 'e.target.closest("[data-player-page]")', "});")
+    assert "openPlayerRoute(b.dataset.playerPage)" in listener
 
 
 def test_a_player_page_is_the_players_view_with_his_name_in_it():
