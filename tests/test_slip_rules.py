@@ -88,6 +88,49 @@ def test_even_money_is_spelled_minus_100_on_both_sides():
     assert "dec > 2 ? Math.round((dec - 1) * 100)" in js[i:i + 900]
 
 
+def _hr(player, team="PHI", opp="CHC", date="2026-09-02", **kw):
+    d = dict(player=player, team=team, opponent=opp, market="home_runs",
+             market_label="Home Runs", side="OVER", line=0.5, odds=400,
+             game_date=date)
+    d.update(kw)
+    return d
+
+
+def test_an_hr_leg_is_welcome_on_the_slip():
+    """Ethan, 2026-09-02: "Yes use hr" — the engine refuses the market on
+    its own tickets, a person may put it on theirs."""
+    assert P.check_ticket("mlb", [_hr("A"), _leg("Q", "strikeouts")])["ok"] is True
+
+
+def test_two_hr_legs_from_one_team_in_one_game_are_refused_not_warned():
+    """"... just not players on the same team in the same game." Before
+    this the pair was allowed with a +0.19 warning and the slip printed
+    the independent price."""
+    got = P.check_ticket("mlb", [_hr("A"), _hr("B")])
+    assert got["ok"] is False and got["pair"] == [0, 1]
+    assert got["reason"] == P.SAME_LINEUP_HR_REASON
+    assert "same team in the same game" in got["reason"]
+
+
+def test_two_hr_legs_from_different_teams_in_one_game_are_allowed():
+    got = P.check_ticket("mlb", [_hr("A", "PHI", "CHC"), _hr("B", "CHC", "PHI")])
+    assert got["ok"] is True
+
+
+def test_two_hr_legs_from_one_team_on_different_days_are_two_lineups():
+    got = P.check_ticket("mlb", [_hr("A", date="2026-09-02"),
+                                 _hr("B", date="2026-09-03")])
+    assert got["ok"] is True
+
+
+def test_the_hr_rule_is_by_market_not_by_team_alone():
+    """Two teammates on hits / total bases keep the taxonomy's answer
+    (a permitted, priced lineup stack) — Ethan's rule names home runs."""
+    got = P.check_ticket("mlb", [_leg("A", "hits", team="PHI", opp="CHC"),
+                                 _leg("B", "total_bases", team="PHI", opp="CHC")])
+    assert got["ok"] is True
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

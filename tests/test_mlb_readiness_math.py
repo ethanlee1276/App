@@ -203,15 +203,21 @@ def test_a_fourth_leg_is_refused_at_the_ceiling():
 def test_two_hr_props_from_one_lineup_are_priced_as_correlated():
     """The brief's worst case: "a parlay of correlated HR props priced as
     independent legs". The taxonomy carries +0.186 measured on 27,613
-    games of lineup stacks, and the slip warns with that number."""
+    games of lineup stacks. Until 2026-09-02 the slip allowed the pair
+    with that number as a warning and printed the independent price;
+    Ethan closed A-3 ("use hr just not players on the same team in the
+    same game"), so the slip now refuses the pair outright."""
     a = dict(player="A", team="PHI", opponent="CHC", market="home_runs",
-             side="OVER", line=0.5, odds=400)
+             side="OVER", line=0.5, odds=400, game_date="2026-09-02")
     b = dict(player="B", team="PHI", opponent="CHC", market="home_runs",
-             side="OVER", line=0.5, odds=350)
+             side="OVER", line=0.5, odds=350, game_date="2026-09-02")
     r = P.relate("mlb", a, b)
     assert r.verdict == "ok" and r.measured and close(r.rho, 0.186, 1e-3)
     out = P.check_ticket("mlb", [a, b])
-    assert out["ok"] and out["warnings"] and out["warnings"][0]["rho"] == 0.19
+    assert out["ok"] is False and out["reason"] == P.SAME_LINEUP_HR_REASON
+    # the same two bats on opposite sides of the game are two lineups
+    b2 = dict(b, team="CHC", opponent="PHI")
+    assert P.check_ticket("mlb", [a, b2])["ok"] is True
 
 
 def test_an_hr_prop_and_the_opposing_strikeout_over_is_killed():
