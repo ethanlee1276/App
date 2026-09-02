@@ -2178,6 +2178,133 @@ function haircutLine(sh) {
     <b style="color:var(--text)">Record</b> page.</p>`;
 }
 
+
+/* ============================================================
+   EVERY MARKET, THE BEST WE HAVE — beside the picks, never inside them
+   ============================================================
+   Ethan, 2026-09-02, on the Best Bets page: "I'm only seeing the money
+   lines that I asked you to add. I'm not seeing any under or over props
+   for players... passing yards... rushing or receiving yards... game
+   totals... spread bets."
+
+   HE IS READING THE PAGE RIGHT AND THE PAGE WAS TELLING THE TRUTH. Every
+   one of those markets IS priced and evaluated every build, overs and
+   unders both — a sample slate prices 7 props (4 over, 3 under) and 15
+   game bets across all four game markets. What reaches this box is only
+   what cleared the staking bar, and on a normal slate that is one or two
+   rows, because the bar is an edge bar and the edge claim measures at a
+   coin flip. So the page showed a true thing in a way that read as a
+   missing feature.
+
+   THE FIX IS NOT A LOWER BAR. Loosening the gate to fill the page would
+   put money on bets the model's own record says lose, which is the
+   opposite of what he asked for ("we wanna make the best bets
+   possible"). What was actually missing is the OTHER half of the
+   answer: what the model's best available bet in each market IS, and
+   why it did not make the cut. That is a different sentence from "bet
+   this", so it gets a different box, no stake, no journal entry, and
+   the refusal printed on every row.
+
+   WHAT IS EXCLUDED, and each exclusion is the point:
+     · anything already in the picks box — one row, one place
+     · a game already under way — a pre-game model cannot price it
+     · a row the model itself called NOT CREDIBLE (quality 0): a
+       >10-point disagreement with the market is our error, and
+       showing our worst error as "the best we have" would be the
+       single most misleading row on the site
+     · a player held on an injury designation — the same hold the
+       picks box keeps */
+const MARKET_ORDER = ["moneyline", "spread", "total", "team_total",
+                      "pass_yds", "rush_yds", "rec_yds", "receptions",
+                      "anytime_td", "home_runs", "hits", "total_bases",
+                      "strikeouts", "pts", "reb", "ast", "fg3m", "pra"];
+
+function marketRank(m) {
+  const i = MARKET_ORDER.indexOf(String(m || ""));
+  return i < 0 ? MARKET_ORDER.length : i;
+}
+
+/* The one refusal sentence worth printing: the engine already writes it
+   into the row's reasons, so this picks it out rather than re-deriving
+   a bar the front end would then own a second copy of. */
+function whyNotStaked(r) {
+  const reasons = (r.reasons || []).map(String);
+  const bar = reasons.find((x) => /under the Tier \d+ bar/i.test(x));
+  if (bar) return bar;
+  const credible = reasons.find((x) => /disagrees with the market/i.test(x));
+  if (credible) return credible;
+  const warn = (r.warnings || []).map(String)
+    .find((x) => !/already started/i.test(x));
+  if (warn) return warn;
+  const q = r.quality != null ? r.quality : null;
+  return q != null ? `Graded ${q}/100 — under the 70 a pick needs`
+                   : "Did not clear the gate";
+}
+
+function marketBest(sig) {
+  const d = state.data || {};
+  const staked = new Set([...sig.props, ...sig.sharpBets, ...sig.modelBets]
+    .map((r) => (r.player ? betLabelKey(r) : gameBetId(r))));
+  const rows = [...(d.recommendations || []), ...(d.game_bets || [])];
+  const best = new Map();
+  for (const r of rows) {
+    const market = r.market || r.bet_type || "";
+    if (!market || r.odds == null) continue;
+    const key = r.player ? betLabelKey(r) : gameBetId(r);
+    if (staked.has(key)) continue;               // already a pick above
+    if (r.live || r.conditional) continue;        // cannot be bet now
+    if ((r.warnings || []).some((w) => /already started/i.test(String(w)))) continue;
+    if (r.credible === false || r.quality === 0) continue;   // our error, not our best
+    if (r.injury_status) continue;                // the same hold the picks keep
+    const cur = best.get(market);
+    const q = r.quality != null ? r.quality : (r.confidence || 0) * 10;
+    const curQ = cur ? (cur.quality != null ? cur.quality : (cur.confidence || 0) * 10) : -1;
+    if (!cur || q > curQ) best.set(market, r);
+  }
+  return [...best.values()].sort(
+    (a, b) => marketRank(a.market || a.bet_type) - marketRank(b.market || b.bet_type));
+}
+
+/* The label a row wears in this box, and the key it is deduped by — a
+   player prop reads as the bet, a game bet as its own pick label. */
+function betLabelKey(r) {
+  return `${slugify(r.player || "")}|${slugify(r.market || "")}|${
+    String(r.side || "").toLowerCase()}|${r.line == null ? "" : r.line}`;
+}
+
+function marketBestLabel(r) {
+  if (!r.player) return gameBetSlipLabel(r);
+  const line = r.line == null ? "" : ` ${r.line}`;
+  return `${r.player} ${r.side || ""}${line} ${r.market_label || r.market}`.replace(/\s+/g, " ").trim();
+}
+
+function marketBestHTML(sig) {
+  const rows = marketBest(sig);
+  if (!rows.length) return "";
+  const row = (r) => {
+    const door = r.player ? propAttrs(r) : gameBetAttrs(r);
+    const edge = r.edge != null ? signedPct(r.edge) : "—";
+    return `<div class="${door ? "openable" : ""}"${door || ""}
+        style="display:flex;gap:12px;align-items:flex-start;padding:11px 14px;
+               border-bottom:1px solid rgba(255,255,255,.05)">
+      <span class="chip" style="flex-shrink:0;min-width:96px">${escapeHtml(
+        marketWord(r.market || r.bet_type))}</span>
+      <span style="flex:1;min-width:0"><strong>${escapeHtml(marketBestLabel(r))}
+        ${american(r.odds)}</strong>${r.book ? `<span class="book"> · ${escapeHtml(r.book)}</span>` : ""}
+        <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px"
+          >${escapeHtml(whyNotStaked(r))}</span></span>
+      <span style="text-align:right;white-space:nowrap;font-weight:800">${edge}</span>
+    </div>`;
+  };
+  return `
+    <div class="section-title minor">Every market, the best we have
+      <span class="sub">— the strongest row in each market that did NOT clear the bar.
+      Shown so the board is readable, not because we would bet them. No stake, no journal.</span></div>
+    <div class="card" style="padding:0;border-left:3px solid var(--text-mute)">
+      ${rows.map(row).join("")}
+    </div>`;
+}
+
 let _picksForCopy = [];
 
 async function renderBestBets() {
@@ -2516,13 +2643,15 @@ async function renderBestBets() {
      2026-08-20 at Ethan's request — its rows now sit in the recommended
      box beside the picks, marked in warn colour. One night, one list. */
 
+  const marketBlock = marketBestHTML(sig);
   if (!picks.length && !signals.length && !ridden.length
-      && !earlyRows.length) { host.innerHTML = ""; return; }
+      && !earlyRows.length && !marketBlock) { host.innerHTML = ""; return; }
   host.innerHTML = `
     <div class="section-title">Qellys’ edge picks
       <span class="sub">— where our number beats the price · journaled and staked. If it isn’t
       in this box, it isn’t a bet.</span></div>
     ${picksBlock}
+    ${marketBlock}
     ${earlyBlock}
     ${signalsBlock}`;
 }
