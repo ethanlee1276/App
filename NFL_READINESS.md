@@ -404,3 +404,93 @@ and this audit should be re-run against them.
 7. On the droplet, paste `python3 -m engine.tdbook --roi` and the
    Week 1 `--boards` de-vig line once the ATD menus post — those are
    the two numbers this audit could not produce.
+
+## Phase 8 — Ethan's decisions (2026-09-02) and what shipped for each
+
+Ethan's answers to the seven Ask-Ethan items, verbatim: "1. 0-100 2.
+Measure and price 3. Idk I like touchdown picks 4. None 5. U decide what
+ever makes us more money and higher roi 6. Yes that's correct".
+
+**1. The 0–100 score gates publication — everywhere.** (commit 95884b0)
+Finding it exposed: the prop board already gated on the §10 score
+(`betting.py:551`, `quality_letter(quality)`); my Phase 2 note
+attributing the prop gate to `betting._grade` was wrong in that detail.
+The two word ladders lived on the OTHER boards — game lines graded
+Strong Play / Play / Pass through `betting._grade`, and the long-shot
+boards (NFL/CFB anytime TD, MLB home runs) graded Strong Play / Play /
+Lean / Pass through `longshots._grade`, publishing Leans at 1.5% of
+edge, which §10 forbids in so many words. Three vocabularies on one site.
+Shipped: `quality.game_bet_score` and `quality.longshot_score` — §10's
+weights, the board's own edge, and the prop score's own NEUTRAL values
+(movement 8/15, script 6/10, matchup 6/10, weather 7/10) for every
+component the board does not measure. Game lines carry `quality` and
+grade A+/A/B+/Pass; long shots the same. The old functions stay for the
+replays that reproduce the old ladder. Hand-worked pins in
+`tests/test_one_grade.py`.
+Consequences, stated rather than hidden:
+- A game bet tops out at 75 (B+, the minimum stake) — with every context
+  component neutral, nothing but its edge recommends it. Its gate moves
+  from ≈3.4% of tempered edge (the old Play bar) to 3.3% — nearly the
+  same number, one vocabulary.
+- **A Tier 3 pick (anytime TD, home run) now grades only at a clearly
+  outlier price.** §3's 6% bar sits above the 5% a credible consensus
+  disagreement can reach after the 0.5 market shrink, so a touchdown
+  grades only when the shopped book is well longer than the consensus
+  (the Jackson Arnold shape: +150 against a 0.505 consensus, 7.75 points
+  of net edge, B+). Inside the credible band the long-shot boards will
+  show their WATCH rows — most-likely scorers, ranked by probability,
+  explained, ungraded, never journaled — and no bets. The 51 anytime-TD
+  bets the pre-registered test collected all graded Lean; under the one
+  score every one of them is a Pass. This is §8 ("only at clearly outlier
+  prices") enforced by the same score as everything else, and it is the
+  part of decision 1 Ethan should look at against decision 3.
+- The MLB sharp-anchor cards grade the same way: −155/+135 sharp against
+  a soft −125 is 3.3 points and B+; a 2-point gap at +7% EV is a Pass
+  with its EV still on the card.
+
+**2. QB pass-TD + WR anytime-TD: measured and priced.** (commit 38547ad)
+On 2,844 NFL team-weeks, 2021–2025, quarterback = the week's top
+pass_att, WR1 = its top targets (by role, never by the touchdown):
+QB pass_yds × WR1 anytime_td **+0.260**; QB pass_td × WR1 anytime_td
+**+0.489** (the WR1 scores in 50.2% of games where his QB throws a TD,
+4.5% where he does not); WR1 × RB1 anytime_td −0.029 (Type 3 stays a
+kill). Both pairs sat at the +0.10 floor. `corrfit` gained a `role_pair`
+fit kind and two adoptions so the settle-time refit keeps them live;
+`parlays.MEASURED` carries the numbers with provenance; `pass_td` is
+named as a family so a slip that carries one is priced. The reader's
+slip now warns "+0.26, measured on 2,844 team-weeks" on a QB-over +
+WR-touchdown pair.
+
+**3. "Idk I like touchdown picks."** Read as: keep them visible. Shipped:
+nothing removed — anytime-TD legs stay allowed on the reader's slip
+(warned, now with the measured correlation), the engine's own tickets
+still never carry one (§4.3/§8.4), the most-likely-scorer boards are
+untouched. See the consequence under decision 1: the Long Shots board's
+graded picks will be rarer; the watch rows carry the names.
+
+**4. No weekly cap.** Nothing built; recorded here so nobody adds one
+later thinking it was forgotten.
+
+**5. Sizing: "whatever makes us more money and higher ROI."** Decided:
+**nothing changes.** Quarter Kelly (half only A+ in Tier 1), 1u = 1% of
+bankroll, the 2u/5u/15u caps, the price ladder (0.35u–1.25u), the
+drawdown halving, and the ODDS_API book list stand. The reasoning, since
+Ethan delegated it: Phase 4 says the edge is unproven on every market —
+and when the edge estimate is uncertain, fractional Kelly is the
+growth-optimal policy, not a cautious one; full Kelly on an overstated
+edge has negative expected growth. Raising stakes is the one move that
+cannot raise ROI (it scales net and staked together) and can turn a
+noise-compatible +4.5% into ruin. The measurement that could justify
+more is the Week 1–4 CLV and hit numbers from the paper journal; that
+is when this gets revisited. Books: the harvested ones, because CLV can
+only be measured where closes are captured.
+
+**6. Wednesday 9/9 NE@SEA opener confirmed.** The build already uses the
+feed's date. Nothing to change.
+
+**7. Still open (needs the droplet):** `python3 -m engine.tdbook --roi`
+and the Week 1 `--boards` de-vig line once the ATD menus post.
+
+Verdict unchanged by these decisions: **GO on correctness, NO-GO for
+real money on game lines, NOT PROVEN on props, UNKNOWN on ATD prices.**
+Decision 1 makes the published card stricter, not looser.
