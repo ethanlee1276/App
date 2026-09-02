@@ -123,7 +123,7 @@ or hide that it is, P2 wrong but bounded, P3 cosmetic / doc.
 | F-2.4 | P3 | Park factors are hand-curated constants (per outcome, roof-aware, handedness HR splits on six parks), not fitted from multi-year data. The doc's map said handedness splits were "📋 parked" — they are built. | `parks.py`, `docs/MLB_MODEL.md` map row | doc row corrected in this branch; factors unchanged |
 | F-2.5 | P3 | CLV is computed on raw implied probabilities (`_bet_price_clv`, and the same in `mlbrecord.price_clv`), not de-vigged ones. Sign is unaffected; magnitude on a one-sided market is overstated by the hold (÷1.06). | `ledger.py:3021` | flagged; pinned (`test_clv_on_devigged_probabilities_keeps_the_sign_of_raw_clv`) |
 | F-2.6 | P2 | HR + game-over and HR + opposing-K-under pairs are allowed at a +0.10 *prior* ("§1.1's floor"), not a measurement. HR + HR same lineup uses ρ = +0.186 measured on 27,613 games of lineup pairs — measured on total-bases outcomes and applied to HR outcomes. | `parlays.py` MEASURED, `relate` | flagged; pinned in `test_mlb_readiness_math.py` |
-| F-2.7 | P2 | **The slip prices HR parlays at the independent product.** The engine's own tickets refuse HR legs (`EXTREME_MARKETS`), but a person can put two HR props on the slip: `check_ticket` warns "two bats in one lineup … +0.19", and the slip prints the naive combined price with "% if the legs were independent · correlation is not priced here". Disclosed, not priced. The modeled joint is never shown. | `app.js slipAmerican`, `parlays.check_ticket` | flagged; Ask Ethan (money decision) |
+| F-2.7 | P2 | **The slip priced HR parlays at the independent product.** The engine's own tickets refuse HR legs (`EXTREME_MARKETS`), but a person could put two HR props from one lineup on the slip: `check_ticket` warned "two bats in one lineup … +0.19" and the slip printed the naive combined price with "correlation is not priced here". | `app.js slipAmerican`, `parlays.check_ticket` | **decided and fixed** — Ethan (A-3): HR legs stay welcome on the slip; two HR legs from the same team in the same game are refused outright (`parlays.same_lineup_hr_pair`, `SAME_LINEUP_HR_REASON`); pinned in `tests/test_slip_rules.py` |
 | F-2.8 | P2 | No drawdown behaviour. Sizing has a per-bet ladder (0.35–1.25u), 5u per game, 15u per slate (uniform scale — pinned), but nothing reduces size after a losing run or a bankroll drop. §10 of the doc lists "circuit breakers" as caps only. | `staking.py`, `correlation.py` | flagged; Ask Ethan |
 | F-2.9 | P3 | Umpire effects are applied to K props at full weight and to hitter markets at half weight, shrunk over 8 games and clamped to ±10%. Plausible and small — no overfitting found. | `umpires.py` | none needed |
 | F-2.10 | P3 | Batter-vs-pitcher career numbers: the field exists (`vs_pitcher_avg`), is shown on the card as history, and is **not priced** (`projection.py` L205: "no live source emits vs_pitcher_avg"). The amateur error is absent. | — | none |
@@ -320,15 +320,16 @@ One defect per commit on `qa/mlb-readiness`; the full suite
 | `test(mlb): Phase 3 arithmetic checked by hand` | `tests/test_mlb_readiness_math.py`, 28 pins |
 | `docs(mlb): the map said handedness park splits were parked` | F-2.4 |
 | `docs(mlb): the readiness audit log` | this file |
+| `fix(mlb): the slip let two home-run legs from one lineup ride at the independent price` | F-2.7 / A-3 — Ethan's rule in `parlays.check_ticket` |
 
 No threshold or weight was changed (rule 2). Nothing was removed
 (rule 1). No number in this file was estimated.
 
 ### Ask Ethan
 
-- **A-1 Postseason.** Recommendation: **do not bet MLB player props or parlays in the postseason with this model**, and do not bet sides/totals in October unless `mlbrecord` shows a positive CLV on ≥100 settled game bets. The pitching engine's usage assumptions are the ones that break, and pitcher grade is 15% of every MLB grade.
+- **A-1 Postseason.** Recommendation was: do not bet MLB player props or parlays in the postseason with this model. **Ethan, 2026-09-02: "No keep props, we are a betting tool."** Decided — props keep publishing through the postseason, no postseason gate is added. What remains true and is logged, not acted on: the pitching engine's usage assumptions (leash, `tto_proj`, two-day bullpen fatigue) are regular-season ones, and pitcher certainty is 15% of every MLB grade. The record tool's October rows will show what that costs; nothing else measures it.
 - **A-2 September.** Keep betting? The lineup hold and the shrinkage handle call-ups mechanically, but nothing flags an eliminated team's bulk-relief games or a contender resting regulars. Options: (a) keep as is; (b) add a September flag that lowers lineup certainty for hitters with under 30 MLB PA this season and refuses K props on bulk-relief starts. (b) is a rule addition with a number in it — your call.
-- **A-3 HR parlays on the slip.** The slip shows the independent price and says correlation is not priced. Options: (a) leave as disclosed; (b) show the modeled joint (the taxonomy already has ρ) beside the naive price; (c) refuse two HR legs from one lineup on the slip the way the engine refuses them. Ethan bets these — this is his decision.
+- **A-3 HR parlays on the slip.** Options were: leave as disclosed; show the modeled joint; refuse same-lineup HR pairs. **Ethan, 2026-09-02: "Yes use hr just not players on the same team in the same game."** Decided and shipped — HR legs stay allowed on the slip; two HR legs from the same team in the same game are refused with the reason on the toast; two HR legs from opposite teams in one game, or the same team on different days, pass. The engine's own tickets are unchanged (HR remains EXTREME there, §8.4).
 - **A-4 PA tables.** Reconcile `homeruns.PA_BY_SPOT` to one table, and add a home/away term? It is a parameter change; the measurement route is `hr_backtest.py --seasons 2026` run twice on the droplet (once per table) and reported before-and-after on the holdout. Say yes and that measurement runs first.
 - **A-5 Drawdown rule.** None exists. Add one (e.g. halve stakes after a 15u drawdown from peak until recovered)? A money rule with a number in it — not guessed here.
 - **A-6 Game totals distribution.** Normal today. Measure on the droplet's totals record before any change.
@@ -369,12 +370,13 @@ unverified here; the 5–10 / 10–15 buckets print from the record tool.
 
 **Parlays:** engine tickets never contain HR legs; same-lineup HR pairs
 carry a measured +0.186 (on TB outcomes); HR + total and HR + K-under
-are unmeasured +0.10 priors; the slip discloses rather than prices
-correlation. Correlation is priced *where the engine bets* and
-*disclosed where a person bets*. Parlay ROI vs the same legs as singles:
+are unmeasured +0.10 priors; the slip now refuses two HR legs from one
+team in one game (Ethan, A-3) and discloses the rest. Correlation is
+priced *where the engine bets* and *refused or disclosed where a person
+bets*. Parlay ROI vs the same legs as singles:
 unverified here; `mlbrecord` prints both.
 
-**Postseason:** not ready — no rule exists; recommendation A-1.
+**Postseason:** no rule exists; Ethan's decision (A-1) is to keep betting props as a betting tool. The October rows of `mlbrecord` are the only measurement of that decision.
 
 **Could not test, and what it takes:** tonight's card and render (needs
 statsapi + Open-Meteo + Savant + an Odds API key, i.e. the droplet);
