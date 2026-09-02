@@ -296,3 +296,83 @@ staked bet this week on this evidence.
    `seasons_used` / `fcs_excluded`), `talent`, `qb`, `feed` blocks and
    the play/conditional counts for 9/5, so Phase 1 can be closed on the
    real feed.
+
+## Phase 8 — Ethan's decisions (2026-09-02) and what shipped for each
+
+Ethan's answers to the six Ask-Ethan items, verbatim: "Ok merge that if
+u didn't. And 1. No 2.no 3. Whatever u think. 4. whatever u think 5. Idk
+what ur saying". The audit branch was merged as it stood (4b3c853); the
+work below followed on the same branch.
+
+**1. Bet Group of Five at all? — "No."** Shipped: `model.BET_GROUP_OF_FIVE
+= False`. A game in which neither side is a power-conference team is
+priced, shown with its number, edge and the reason, and never a play —
+in `pipeline.evaluate_play` for sides, totals and moneylines, and on the
+touchdown board, where such a pick keeps its reasoning and lands on the
+watch. A power opponent lifts a game out of the rule (a buy game IS a
+power-conference game); an Independents-vs-G5 game stays under it. The
+attention dial is untouched. Effect on the replay: the bet count falls
+from 2,902 to 1,324 (the 65% of bets that were low-attention games), and
+what remains still loses at the close (−4.1%). Pinned in
+`tests/test_cfb_group_of_five.py`.
+
+**2. Sit out September? — "no."** Nothing changes: the board publishes
+in September as it does in November. Recorded so the evidence is next to
+the decision: weeks 1–4 replayed at −5.1% (adjusted, 692 bets) against
++0.1% later (570). The QB gate (item 5) means nothing is staked without
+a confirmation either way.
+
+**3. Opponent-adjusted ratings — "whatever u think." Built and adopted.**
+`teamrates.compute_adjusted_ratings`: offense and defence solved jointly
+with the opponent taken out (coordinate descent, no matrix library), the
+same n/(n+8) shrink, the home field the variance fit solves first, zero on
+a neutral site; `adjusted_ratings_for_season` applies the same pooling
+rule. The build prices on it and re-fits the variance around the
+projection actually priced. Rule 2 (no tuning; before/after on the
+holdout), same replay, same gates, same dates, Group of Five off in both:
+
+| | plain, pooled (B) | opponent-adjusted (D) |
+|---|---|---|
+| model-vs-close spread RMSE, all / weeks 1–4 / later | 8.23 / 11.06 / 6.60 | **7.62 / 9.86 / 6.39** |
+| bets, ROI at the close | 1,324, −4.1% ± 4.5 | 1,262, **−2.7%** ± 4.2 |
+| sides | 646, −4.4% | 634, −5.0% |
+| totals | 295, +4.3% | 311, +0.7% |
+| moneylines | 383, −9.9% | 317, −1.6% |
+| early / late | −8.1% / +1.1% | −5.1% / +0.1% |
+| 2023 / 2024 / 2025 | −4.6 / −3.3 / −4.3 | −7.6 / **+1.1** / −1.8 |
+| max drawdown (flat) | 80.7 u | 66.4 u |
+| ML Brier vs base | 0.1674 vs 0.1865 | 0.1750 vs 0.1918 |
+
+Less wrong about the market, smaller drawdown, still not a profitable
+model — adopted for the first reason, reported with the third. The
+end-of-2025 adjusted top 25 moves Miami, Georgia, Alabama, Penn State
+and Michigan up and James Madison, North Texas and Toledo down, which is
+the direction the schedule says. The twenty largest Week-2
+disagreements are still buy games (Auburn −16 vs −42.75), now 5–10
+points closer. Pinned: a planted four-team structure is recovered
+exactly; a team that beat a strong opponent by 3 ranks above one that
+beat a weak opponent by 20.
+
+**4. Bankroll / Kelly / books — "whatever u think."** Unchanged: quarter
+Kelly, half only for an A+ in a low-attention spot, 2% / 5% / 12% caps,
+drawdown halving, the harvested books. Nothing in the replay argues for
+more, and the model is not one to size up on.
+
+**5. Manual QB confirmation — "Idk what ur saying."** In plain words:
+college football has no injury report, so the site cannot know who is
+starting at quarterback. The spec's rule (§2.3) is that a bet is not a
+bet until both starting quarterbacks are confirmed. The site publishes
+every qualifying college play as a **Conditional** — the number, the
+price, the edge, and a note saying it is waiting on the quarterbacks —
+with no stake. To turn one into a real, staked bet you run
+`python3 launch.py --confirm-qb TEAM` for BOTH teams on the droplet once
+you have seen who is starting (beat writers, the broadcast, the school's
+availability report). If you never run it, no college bet is ever
+staked or journaled as a bet; the conditionals still show. **Decision
+taken for you: keep the gate.** It is the one rule in this spec that
+protects you from the biggest single price-mover in the sport, and on
+this week's evidence there is nothing worth un-gating.
+
+Verdict after the decisions: unchanged — **NO-GO for real money.** The
+model is less wrong than it was this morning and Group of Five is off
+the board; neither makes the remaining bets profitable at the close.

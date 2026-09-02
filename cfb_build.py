@@ -773,6 +773,28 @@ def main() -> None:
     all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
                                                  exclude_prefix=_fallback)
     fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
+    # OPPONENT-ADJUSTED, since 2026-09-02 (Ethan, on the audit's third Ask:
+    # "whatever u think"). §5 calls opponent adjustment "everything" in a
+    # sport where a Sun Belt schedule and an SEC schedule are not
+    # comparable numbers, and the plain rating above averages a team's
+    # own margins as if they were. `teamrates.compute_adjusted_ratings`
+    # solves offense and defence jointly with the opponent taken out, at
+    # the same shrink, with the home field the fit above just solved.
+    # Replayed leak-free on 2023–2025 against closes, same gates, same
+    # dates: model-vs-close spread RMSE 8.23 → 7.62 points (weeks 1–4:
+    # 11.06 → 9.86), ROI at the close −4.1% → −2.7% on ~1,300 bets, max
+    # drawdown 81u → 66u. Not a profitable model — a less wrong one; the
+    # plain map is kept for the first variance pass because the home
+    # field has to be solved before the adjustment can use it, and the
+    # variance is then re-fitted around the projection actually priced.
+    ratings, seasons_used = teamrates.adjusted_ratings_for_season(
+        conn, "cfb", day.year, shrink=8.0, exclude_prefix=_fallback,
+        home_field=fit.home_field)
+    all_seasons_adj = teamrates.compute_adjusted_ratings(
+        conn, "cfb", shrink=8.0, exclude_prefix=_fallback,
+        home_field=fit.home_field)
+    fit = cfbratings.fit_from_history(conn, all_seasons_adj or all_seasons
+                                      or ratings)
     cfbratings.install(fit)
 
     # §5/§6 — the preseason prior, built from high-school recruiting. In
@@ -831,6 +853,7 @@ def main() -> None:
     out["ratings"] = {"fitted": fit.fitted, "games": fit.games,
                       "seasons_used": seasons_used,
                       "fcs_excluded": bool(_fallback),
+                      "method": "opponent-adjusted",
                       "margin_sd": fit.margin_sd, "total_sd": fit.total_sd,
                       "home_field": fit.home_field,
                       "scoring_baseline": fit.scoring_baseline,

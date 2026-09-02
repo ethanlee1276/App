@@ -93,6 +93,24 @@ KELLY_FRACTION_MAX = 0.50      # half Kelly: A+ in a Tier 1 (low-attention) spot
 # which is where the spec says the soft numbers live.
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 
+#: Ethan, 2026-09-02, closing the CFB readiness audit's first Ask ("Bet
+#: Group of Five at all? … On this evidence, no"): "1. No". A game in
+#: which NEITHER side is a power-conference team is not bet — priced,
+#: shown with its number and its edge, never a play. The attention dial
+#: is unchanged: it decides how much of an edge to believe, this decides
+#: whether the money follows. (An Independents-vs-G5 game — Navy hosting
+#: Notre Dame — falls under the rule too; a power opponent lifts it out.)
+BET_GROUP_OF_FIVE = False
+
+
+def is_group_of_five(game: dict) -> bool:
+    """Both conferences known, neither a power conference."""
+    home_conf = (game.get("home_conference") or "").strip()
+    away_conf = (game.get("away_conference") or "").strip()
+    if not home_conf or not away_conf:
+        return False
+    return not (home_conf in POWER_CONFERENCES or away_conf in POWER_CONFERENCES)
+
 # §7 — situational tags. Named because the spec is explicit that these are
 # priced deliberately rather than narrated after the fact.
 SITUATIONAL_TAGS = ("letdown", "lookahead", "rivalry", "sandwich",
