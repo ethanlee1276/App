@@ -626,6 +626,17 @@ def settle_open(log=print, state_path: Path | None = None,
             try:
                 from . import selectionfit
                 sf = selectionfit.refresh(lconn)
+                # AND WHETHER ONE NUMBER IS THE RIGHT SHAPE. The pooled
+                # haircut assumes the over-claim is the same size at
+                # every price; the droplet's book says it grows with the
+                # price. Reported weekly, applied never — a band earns a
+                # correction by clearing the floor on its own.
+                try:
+                    for _bl in selectionfit.band_lines(
+                            selectionfit.bands(lconn)):
+                        log("  " + _bl)
+                except Exception as _bexc:  # noqa: BLE001
+                    log(f"  ⚠️  haircut band check skipped: {_bexc}")
                 for name, e in [("pooled", sf["pooled"])] + sorted(
                         sf["sports"].items()):
                     if e.get("applied"):

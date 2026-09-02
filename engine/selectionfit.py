@@ -630,6 +630,126 @@ def points_at(p: float, sport: str, path=None) -> float:
     return apply_haircut(sport, p, path) - float(p)
 
 
+#: The price bands the haircut is CHECKED against, matching
+#: `stakecheck.py`'s so the two tools cannot disagree about which bets
+#: are in which bucket. `(label, low, high)`, American odds, high
+#: exclusive.
+PRICE_BANDS = (
+    ("shorter than +100", -100000, 100),
+    ("+100 to +119", 100, 120),
+    ("+120 to +199", 120, 200),
+    ("+200 and longer", 200, 100001),
+)
+
+
+def _band_of(odds) -> str | None:
+    try:
+        o = int(odds)
+    except (TypeError, ValueError):
+        return None
+    for label, lo, hi in PRICE_BANDS:
+        if lo <= o < hi:
+            return label
+    return None
+
+
+def bands(lconn, categories=LEARNING_CATEGORIES) -> dict:
+    """Does the over-claim depend on the PRICE? Measured, applied to nothing.
+
+    THE QUESTION THIS MODULE'S OWN DOCSTRING RAISES. "A single pooled
+    number applied to every price is a blunt instrument" — and the
+    droplet's book on 2026-09-02 says the instrument may be too blunt.
+    Over 680 settled bets the miss grows monotonically with the price:
+
+        shorter than +100   -2.1 pts   (inside one SE)
+        +100 to +119        +0.1
+        +120 to +199        -4.6
+        +200 and longer    -15.4       (16 bets)
+
+    One shift cannot fit that shape: fitted on the pool it over-corrects
+    the short prices, where the claim is already honest, and
+    under-corrects the long ones, where the money actually leaks.
+
+    WHY THE FIX IS NOT MODEL CALIBRATION, which is the trap here. The
+    raw touchdown model — the plus-money market — UNDER-claims on every
+    band of its 22,099 graded player-weeks (claimed .155, landed .200).
+    Raising those probabilities to fix the surface would make the
+    selected subset worse, because selection is what turns an
+    under-claiming surface into an over-claiming board: it picks the
+    rows where model minus market is largest, which is where the
+    model's error is most positive. That is the winner's curse this
+    module was written for, now visible from both ends.
+
+    THIS REPORTS AND CHANGES NOTHING, deliberately. Sixteen bets in the
+    band that matters cannot fit a parameter, and a price-dependent
+    haircut chosen on the sample that suggested it is the exact mistake
+    `_holdout` exists to prevent. The band that would justify one has to
+    reach `MIN_SETTLED` on its own and survive its own noise, and this
+    is the instrument that says when it has.
+    """
+    rows = _settled(lconn, categories)
+    stored = load()
+    out: dict = {"bands": [], "n": 0,
+                 "min_settled": MIN_SETTLED,
+                 "note": ("report only — no band correction is applied, and "
+                          "none will be until a band clears the floor on its "
+                          "own and survives its own noise")}
+    by_band: dict = {}
+    for r in rows:
+        label = _band_of(r["odds"])
+        if label is None:
+            continue
+        by_band.setdefault(label, []).append(r)
+    for label, lo, hi in PRICE_BANDS:
+        got = by_band.get(label) or []
+        sp = (stored.get("sports") or {})
+        prior = (stored.get("pooled") or {}).get("shift", 0.0) or 0.0
+        stamp = (stored.get("fitted_at") or "")
+        pairs = _pairs(got, prior, stamp)
+        n = len(pairs)
+        if not n:
+            out["bands"].append({"band": label, "n": 0})
+            continue
+        claimed = sum(p for p, _ in pairs) / n
+        landed = sum(o for _, o in pairs) / n
+        gap = landed - claimed
+        se = math.sqrt(max(landed * (1.0 - landed), 1e-9) / n)
+        out["bands"].append({
+            "band": label, "n": n,
+            "claimed": round(claimed, 4), "landed": round(landed, 4),
+            "gap": round(gap, 4), "se": round(se, 4),
+            "keep": round(_keep_fraction(gap, se), 3),
+            "enough": n >= MIN_SETTLED,
+            "real": bool(_keep_fraction(gap, se) > 0 and n >= MIN_SETTLED),
+        })
+        out["n"] += n
+    return out
+
+
+def band_lines(got: dict) -> list:
+    """The band table as text, for a terminal and a weekly log."""
+    lines = [f"selection haircut by price — {got['n']:,} settled bets "
+             f"({got['note']})"]
+    lines.append(f"  {'band':<20}{'n':>7}{'claimed':>10}{'landed':>9}"
+                 f"{'gap':>9}{'1 SE':>8}  verdict")
+    for b in got["bands"]:
+        if not b.get("n"):
+            lines.append(f"  {b['band']:<20}{0:>7}   no settled bets in this band")
+            continue
+        if not b["enough"]:
+            verdict = f"collecting: {b['n']} of {got['min_settled']}"
+        elif not b["real"]:
+            verdict = "inside one standard error — noise"
+        elif b["gap"] < 0:
+            verdict = f"over-claiming, keeps {b['keep'] * 100:.0f}% of the gap"
+        else:
+            verdict = "under-claiming — never acted on"
+        lines.append(f"  {b['band']:<20}{b['n']:>7}{b['claimed']:>10.3f}"
+                     f"{b['landed']:>9.3f}{b['gap']:>+9.3f}{b['se']:>8.3f}"
+                     f"  {verdict}")
+    return lines
+
+
 def report(path=None) -> dict:
     """The site's payload: the store plus the sentences it implies.
 

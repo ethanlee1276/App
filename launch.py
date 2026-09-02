@@ -5511,6 +5511,18 @@ def show_haircut(refit: bool = False) -> None:
           "\n  cannot: whether one parameter is the right SHAPE, and whether"
           "\n  the cut survives more than the single split that passed it.")
 
+    # DOES THE MISS DEPEND ON THE PRICE? Report only — see
+    # `selectionfit.bands` for why nothing is applied per band yet, and
+    # for the winner's-curse reading that makes this the right cut.
+    try:
+        with ledger.connect() as _bc:
+            got = sf.bands(_bc)
+        print()
+        for line in sf.band_lines(got):
+            print("  " + line)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\n  ⚠️  band check unavailable: {exc}")
+
 
 def show_standings() -> None:
     """Rebuild every standings table NOW and say where each came from.
