@@ -147,22 +147,29 @@ def test_depth_charts_and_injuries_ask_the_fetch_layer_too():
     in August names August's starters in November, and an injury file
     cached in Week 1 applies Week 1's OUT list all season."""
     from engine.sources import depthcharts, injuries
-    for mod, loader, name in (
+    # The depth-chart loader asks for the TEXT (it refreshes the cache and
+    # streams the rows off the file — 2026-09-02, the 550 MB load); the
+    # injury loader still asks for parsed rows. Both go through the fetch
+    # layer, which is the contract.
+    for mod, loader, name, attr in (
             (depthcharts, depthcharts.load_depth_charts,
-             "depth_charts_2026.csv"),
-            (injuries, injuries.load_injuries, "injuries_2026.csv")):
+             "depth_charts_2026.csv", "fetch_text"),
+            (injuries, injuries.load_injuries, "injuries_2026.csv", "fetch_csv")):
         calls = []
 
         def spy(url, cname, **kw):
             calls.append(cname)
-            return [{"player_name": "x"}]
+            return ("player_name\nx\n" if attr == "fetch_text"
+                    else [{"player_name": "x"}])
         tmp = _with_cache({name: ("player_name\nold\n", 3 * 24 * 3600)})
-        saved = (mod.CACHE_DIR, mod.fetch_csv)
-        mod.CACHE_DIR, mod.fetch_csv = tmp, spy
+        saved = (mod.CACHE_DIR, getattr(mod, attr))
+        mod.CACHE_DIR = tmp
+        setattr(mod, attr, spy)
         try:
             loader(2026)
         finally:
-            mod.CACHE_DIR, mod.fetch_csv = saved
+            mod.CACHE_DIR = saved[0]
+            setattr(mod, attr, saved[1])
         assert calls and calls[0] == name, (loader.__name__, calls)
 
 

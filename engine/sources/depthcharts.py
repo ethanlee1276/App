@@ -20,8 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
-                    release_unavailable)
+from .fetch import (fetch_csv, fetch_text, load_local_csv, CACHE_DIR,
+                    DataUnavailable, release_unavailable)
 from .nflverse import _s, _f
 from .oddsapi import normalize_name
 from ..models import Injury
@@ -35,20 +35,92 @@ def _urls(season: int) -> list[str]:
     ]
 
 
-def load_depth_charts(season: int) -> list[dict]:
+#: The columns the consumers of a depth row actually read — every
+#: `_s(r, ...)` / `_f(r, ...)` key in this module, both schemas. A row
+#: kept with only these is indistinguishable to them from the full row.
+KEEP_COLUMNS = ("dt", "week", "team", "club_code",
+                "player_name", "full_name", "player_display_name",
+                "depth_position", "position", "pos_abb",
+                "depth_team", "depth", "pos_rank")
+
+#: How far back from the newest snapshot the date-keyed schema is kept.
+#: The furthest any reader looks is `qb1_map(week - 1, back_days=7)`;
+#: three weeks is that with room, against a season file that holds six
+#: months of daily snapshots nobody reads.
+KEEP_DAYS = 21
+
+
+def _slim(open_rows, keep_days: int | None) -> list[dict]:
+    """Two passes over a CSV opened by ``open_rows()`` (a callable
+    returning a fresh file-like), keeping the columns this module reads
+    and, on the date-keyed schema, only the newest ``keep_days``."""
+    import csv
+    import datetime as _dt
+    with open_rows() as fh:
+        fields = csv.DictReader(fh).fieldnames or []
+    fields = [f.lstrip("\ufeff") for f in fields]
+    keep = [c for c in KEEP_COLUMNS if c in fields]
+    cutoff = None
+    if "dt" in fields and "week" not in fields and keep_days:
+        latest = ""
+        with open_rows() as fh:
+            for row in csv.DictReader(fh):
+                d = (row.get("dt") or "")[:10]
+                if d > latest:
+                    latest = d
+        try:
+            cutoff = (_dt.date.fromisoformat(latest)
+                      - _dt.timedelta(days=int(keep_days))).isoformat()
+        except ValueError:
+            cutoff = None
+    out = []
+    with open_rows() as fh:
+        for row in csv.DictReader(fh):
+            if cutoff and (row.get("dt") or "")[:10] < cutoff:
+                continue
+            out.append({c: row.get(c) for c in keep})
+    return out
+
+
+def slim_rows(text: str, keep_days: int | None = KEEP_DAYS) -> list[dict]:
+    """`_slim` over a CSV held as text — the test seam, and small files."""
+    import io
+    text = text.lstrip("\ufeff")
+    return _slim(lambda: io.StringIO(text), keep_days)
+
+
+def load_depth_charts(season: int, keep_days: int | None = KEEP_DAYS) -> list[dict]:
+    """The season's depth charts, slimmed to what this module reads.
+
+    WHY THIS IS NOT `fetch_csv`. The 2026 file is 492,320 rows — a
+    snapshot of every team's every position group, every day since
+    March — and `csv.DictReader` into a list turned its 47 MB into about
+    550 MB of Python dicts, held for the length of the build for the
+    sake of one day's rows and six columns. Measured 2026-09-02 while
+    chasing the memory ceiling that was killing builds on the droplet:
+    the NFL build peaked at 780 MB and this load was 500 MB of it.
+
+    So the fetch only refreshes the cache file (`fetch_text`'s TTL and
+    stale-fallback rules are unchanged — a depth chart cached in August
+    must not name August's starters in November), its returned text is
+    dropped on the spot, and the rows are STREAMED off the cache file
+    twice: once to find the newest snapshot, once to keep the rows that
+    matter, slimmed. Holding the text and two StringIO copies of it was
+    itself a 490 MB spike (StringIO keeps four bytes a character).
+    """
     local = CACHE_DIR / f"depth_charts_{season}.csv"
-    # No exists() short-circuit — the same freeze test_roster_freshness
-    # documents on the roster loader, and worse here: a depth chart is
-    # the ROLE truth, and one cached in August still names August's
-    # starters in November. fetch_csv's 12-hour TTL decides, and its
-    # stale fallback still serves a hand-exported file when the release
-    # is unreachable.
     last_err = None
     for url in _urls(season):
         try:
-            return fetch_csv(url, f"depth_charts_{season}.csv")
+            # The module-level name, so the freshness suite can spy on it:
+            # every depth-chart read asks the fetch layer, never exists().
+            fetch_text(url, local.name)         # refresh the cache; drop the text
+            return _slim(lambda: open(local, encoding="utf-8", newline=""),
+                         keep_days)
         except DataUnavailable as exc:
             last_err = exc
+        except OSError as exc:
+            last_err = DataUnavailable(str(exc))
     raise release_unavailable(
         "depth charts", season, local,
         f"nfl.import_depth_charts([{season}]).to_csv('{local}', index=False)",

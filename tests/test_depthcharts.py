@@ -147,6 +147,59 @@ def test_new_schema_backups_are_still_demoted():
     assert res.demoted == 1 and res.refined == 1
 
 
+# --- the load is slimmed to what this module reads (2026-09-02) -------------
+def test_slim_rows_keeps_only_the_columns_the_readers_use():
+    from engine.sources import depthcharts as D
+    csv = ("dt,team,player_name,espn_id,gsis_id,pos_grp,pos_abb,pos_rank\n"
+           "2026-09-02,DET,Jared Goff,1,00-1,QB,QB,1\n")
+    rows = D.slim_rows(csv, 21)
+    assert rows == [{"dt": "2026-09-02", "team": "DET", "player_name": "Jared Goff",
+                     "pos_abb": "QB", "pos_rank": "1"}]
+    for c in ("espn_id", "gsis_id", "pos_grp"):
+        assert c not in rows[0]
+
+
+def test_slim_rows_keeps_the_newest_snapshots_and_the_week_back_one():
+    """`qb1_map(week - 1, back_days=7)` needs a snapshot at least seven
+    days older than the newest; the cut keeps three weeks, not one day."""
+    from engine.sources import depthcharts as D
+    csv = ("dt,team,player_name,pos_abb,pos_rank\n"
+           "2026-03-22,DET,Spring Guy,QB,1\n"
+           "2026-08-20,DET,Camp Guy,QB,1\n"
+           "2026-09-02,DET,Week One,QB,1\n")
+    rows = D.slim_rows(csv, 21)
+    assert [r["player_name"] for r in rows] == ["Camp Guy", "Week One"]
+    # and the readers see the same answers they always did
+    assert D.qb1_map(rows, 1) == {"DET": "Week One"}
+    assert D.qb1_map(rows, 1, back_days=7) == {"DET": "Camp Guy"}
+
+
+def test_slim_rows_keeps_every_week_of_the_legacy_schema():
+    from engine.sources import depthcharts as D
+    csv = ("week,club_code,full_name,depth_position,depth_team,jersey_number\n"
+           "1,DET,A,QB,1,16\n2,DET,B,QB,1,16\n18,DET,C,QB,1,16\n")
+    rows = D.slim_rows(csv, 21)
+    assert [r["week"] for r in rows] == ["1", "2", "18"]
+    assert "jersey_number" not in rows[0]
+    assert D.qb1_map(rows, 18) == {"DET": "C"}
+
+
+def test_the_loader_streams_through_slim_rows_not_fetch_csv():
+    """The 2026 file is 492,320 rows; fetch_csv into a list was 550 MB of
+    dicts held for the whole build for one day's six columns."""
+    import inspect
+    from engine.sources import depthcharts as D
+    src = inspect.getsource(D.load_depth_charts)
+    # the fetch only refreshes the cache; the rows stream off the file
+    assert "fetch_text(url, local.name)" in src and "fetch_csv(" not in src
+    assert "_slim(lambda: open(local" in src
+    assert D.KEEP_DAYS >= 14
+    for key in ("dt", "week", "team", "club_code", "player_name", "full_name",
+                "player_display_name", "depth_position", "position", "pos_abb",
+                "depth_team", "depth", "pos_rank"):
+        assert key in D.KEEP_COLUMNS, key
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
