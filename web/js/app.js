@@ -20861,6 +20861,7 @@ function dkAucApply() {
 }
 
 function dkBindMore(kit) {
+  dkBindPlan();
   const more = document.getElementById("dk-more");
   if (!more) return;
   more.addEventListener("click", () => {
@@ -20914,9 +20915,17 @@ function initAuction(kit) {
 /* The live draft’s strikeouts, re-applied. The poll owns the set and
    refreshes it every twelve seconds; a re-render inside that window
    would otherwise put every drafted player back on the board. */
+function dkAssistTaken() {
+  return new Set((dkPlan.order || []).map((o) => ffNorm(o.player)).filter(Boolean));
+}
+
 function dkCrossOff() {
-  const taken = (dkState || {}).taken;
-  if (!taken) return;
+  /* The Sleeper poll's set and the assistant's hand-marked picks, as
+     one set: a player gone in either room is gone on every surface. */
+  const live = (dkState || {}).taken;
+  const marked = dkAssistTaken();
+  if (!live && !marked.size) return;
+  const taken = new Set([...(live || []), ...marked]);
   document.querySelectorAll("[data-ffp]").forEach((el) =>
     el.classList.toggle("dk-taken", taken.has(el.dataset.ffp)));
 }
@@ -20952,6 +20961,8 @@ function draftKitHTML(kit) {
       <div id="dk-advice"></div>
       <div id="dk-best" class="ff-hidden" style="margin-top:12px"></div>
     </div>
+    ${dkAssistantHTML(kit)}
+    ${dkPlanHTML(kit)}
     ${dkAucCardHTML(kit)}
     <div id="dk-boardwrap">${dkBoardHTML(kit)}</div>
     <div class="section-title">Position tiers
@@ -20965,6 +20976,293 @@ function draftKitHTML(kit) {
     ${marketLine(kit)}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:10px">
       ${(kit.notes || []).map(escapeHtml).join(" ")}</p>`;
+}
+
+/* ---------------- Your draft plan, and a draft on any platform ----------------
+   Ethan, 2026-09-02: "a list for best draft orders of players ... who
+   they should draft in what round ... a tool to help users in their
+   draft while they are doing it." Both read /api/draftplan, which runs
+   the same survival model the Sleeper room gets (engine/fantasy_pick)
+   and the greedy round plan (engine/draftplan) over the published kit
+   and the consensus ranks. The assistant is for ESPN, Yahoo and the
+   kitchen table: mark who is gone and who is yours, and the advice for
+   the pick on the clock plus the plan for every pick after it come
+   back. State lives in localStorage so a phone that sleeps mid-draft
+   comes back where it was. */
+const DK_PLAN_KEY = "ff_draft_plan";
+const dkPlan = { teams: 12, slot: 7, rounds: 15, type: "snake",
+                 order: [], busy: false, last: null };
+
+function dkPlanLoad() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DK_PLAN_KEY) || "null");
+    if (raw && typeof raw === "object") {
+      dkPlan.teams = Math.min(20, Math.max(2, parseInt(raw.teams, 10) || 12));
+      dkPlan.rounds = Math.min(30, Math.max(1, parseInt(raw.rounds, 10) || 15));
+      dkPlan.slot = Math.min(dkPlan.teams, Math.max(1, parseInt(raw.slot, 10) || 1));
+      dkPlan.type = raw.type === "linear" ? "linear" : "snake";
+      dkPlan.order = Array.isArray(raw.order)
+        ? raw.order.filter((o) => o && typeof o.player === "string").slice(0, 400) : [];
+    }
+  } catch (e) {}
+}
+
+function dkPlanSave() {
+  try {
+    localStorage.setItem(DK_PLAN_KEY, JSON.stringify({
+      teams: dkPlan.teams, slot: dkPlan.slot, rounds: dkPlan.rounds,
+      type: dkPlan.type, order: dkPlan.order }));
+  } catch (e) {}
+}
+
+function dkPlanHTML(kit) {
+  dkPlanLoad();
+  const seats = Array.from({ length: dkPlan.teams }, (_, i) => i + 1);
+  const opt = (vals, cur) => vals.map((v) =>
+    `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`).join("");
+  return `
+    <div class="section-title">Your draft plan
+      <span class="sub">— who to take in which round from your seat. The most
+      valuable player likely to still be there at each of your picks, starting
+      slots first, a stretch and a fallback beside every one.</span></div>
+    <div class="card dk-plan" id="dk-plan">
+      <div class="dk-plan-controls">
+        <label>League <select id="dk-plan-teams">${opt([8, 10, 12, 14, 16], dkPlan.teams)}</select></label>
+        <label>Your seat <select id="dk-plan-slot">${opt(seats, dkPlan.slot)}</select></label>
+        <label>Rounds <select id="dk-plan-rounds">${opt([10, 12, 14, 15, 16, 18, 20], dkPlan.rounds)}</select></label>
+        <label>Order <select id="dk-plan-type">
+          <option value="snake"${dkPlan.type === "snake" ? " selected" : ""}>Snake</option>
+          <option value="linear"${dkPlan.type === "linear" ? " selected" : ""}>Linear</option>
+        </select></label>
+      </div>
+      <div id="dk-plan-body"><div class="dk-advice-note">Building your plan…</div></div>
+    </div>`;
+}
+
+function dkAssistantHTML(kit) {
+  dkPlanLoad();
+  return `
+    <div class="card dk-draftday" id="dk-assist">
+      <div class="card-head"><div><div class="player">Draft assistant — any platform</div>
+        <div class="subtitle">ESPN, Yahoo or the kitchen table: type a name as each pick
+          is made and mark it <b>Gone</b> or <b>Mine</b>. The pick on the clock and the
+          plan for every pick after it update from your seat.</div></div>
+        <span class="pm-status" id="dk-assist-status" style="color:var(--text-mute)">${
+          dkPlan.order.length ? `${dkPlan.order.length} PICKED` : "READY"}</span></div>
+      <div class="dk-assist-search">
+        <input id="dk-assist-q" type="text" autocomplete="off" placeholder="Type a player’s name…"
+          style="flex:1;min-width:200px;background:var(--panel-2);color:inherit;
+          border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;font-family:inherit"/>
+        <button class="btn ghost" id="dk-assist-undo" type="button" title="Take back the last pick">Undo</button>
+        <button class="btn ghost" id="dk-assist-reset" type="button" title="Start the draft over">Reset</button>
+      </div>
+      <div id="dk-assist-hits" class="dk-assist-hits"></div>
+      <div id="dk-assist-advice"></div>
+      <div id="dk-assist-log" class="dk-assist-log"></div>
+    </div>`;
+}
+
+/* The pool the search reads: the kit's board plus every consensus row,
+   so a rookie or a defense the board cannot project is still markable
+   as gone (the plan only needs to know he is off the board). */
+function dkAssistPool() {
+  const d = _ffData || {};
+  const seen = new Set();
+  const out = [];
+  const add = (r, pos, team) => {
+    const k = ffNorm(r.player || "");
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    out.push({ key: k, player: r.player, position: pos || r.position || "", team: team || r.team || "" });
+  };
+  ((d.draft_kit || {}).board || []).forEach((r) => add(r));
+  ((d.ranks || {}).rows || []).forEach((r) => add(r, r.position, r.team));
+  return out;
+}
+
+function dkAssistSearch(q) {
+  const term = ffNorm(q || "");
+  if (term.length < 2) return [];
+  const gone = new Set(dkPlan.order.map((o) => ffNorm(o.player)));
+  return dkAssistPool()
+    .filter((p) => p.key.includes(term) && !gone.has(p.key))
+    .slice(0, 8);
+}
+
+function dkAssistMark(player, mine) {
+  dkPlan.order.push({ player, mine: !!mine });
+  dkPlanSave();
+  const q = document.getElementById("dk-assist-q");
+  if (q) { q.value = ""; }
+  const hits = document.getElementById("dk-assist-hits");
+  if (hits) hits.innerHTML = "";
+  dkPlanRefresh();
+}
+
+function dkAssistLogHTML() {
+  if (!dkPlan.order.length) return "";
+  const rows = dkPlan.order.map((o, i) => `<span class="chip ${o.mine ? "up" : ""}">${
+    i + 1}. ${escapeHtml(o.player)}${o.mine ? " · mine" : ""}</span>`);
+  return `<div class="dk-bestrow"><span class="dk-bl">Picks so far</span>${rows.join("")}</div>`;
+}
+
+async function dkPlanRefresh() {
+  const body = {
+    teams: dkPlan.teams, slot: dkPlan.slot, rounds: dkPlan.rounds, type: dkPlan.type,
+    order: dkPlan.order,
+    taken: dkPlan.order.filter((o) => !o.mine).map((o) => o.player),
+    mine: dkPlan.order.filter((o) => o.mine).map((o) => o.player),
+  };
+  const planHost = document.getElementById("dk-plan-body");
+  const adviceHost = document.getElementById("dk-assist-advice");
+  const logHost = document.getElementById("dk-assist-log");
+  const st = document.getElementById("dk-assist-status");
+  if (st) st.textContent = dkPlan.order.length ? `${dkPlan.order.length} PICKED` : "READY";
+  if (logHost) logHost.innerHTML = dkAssistLogHTML();
+  if (dkPlan.busy) return;
+  dkPlan.busy = true;
+  let got = null;
+  try {
+    const r = await fetch("/api/draftplan", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body) });
+    if (r.ok) got = await r.json();
+  } catch (e) {}
+  dkPlan.busy = false;
+  dkPlan.last = got;
+  if (!got || got.empty) {
+    if (planHost) planHost.innerHTML = `<div class="dk-advice-note">${escapeHtml(
+      (got && got.note) || "The plan could not be built right now.")}</div>`;
+    if (adviceHost) adviceHost.innerHTML = "";
+    return;
+  }
+  if (planHost) planHost.innerHTML = dkPlanBodyHTML(got.plan);
+  if (adviceHost) adviceHost.innerHTML = dkAssistAdviceHTML(got.advice, got.plan);
+  dkCrossOff();
+}
+
+function dkPlanBodyHTML(plan) {
+  if (!plan || !(plan.rounds || []).length) {
+    return `<div class="dk-advice-note">No picks left to plan from this seat.</div>`;
+  }
+  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const s = plan.summary || {};
+  const who = (c) => c ? `<b>${escapeHtml(c.player)}</b>${mkt(c)} <span class="chip">${
+    escapeHtml(c.position)}</span> <span class="mini">+${c.vorp} · ${pct(c.survives)} there</span>` : "";
+  const rows = plan.rounds.map((r) => `
+    <div class="dk-plan-row${r.empty ? " dk-plan-empty" : ""}">
+      <div class="dk-plan-rnd"><b>R${r.round}</b><span class="mini">pick ${r.pick}</span></div>
+      <div class="dk-plan-main">
+        ${r.plan ? `<div class="dk-plan-take">${who(r.plan)}${
+            r.plan.verdict !== "safe" ? ` <span class="chip warn">toss-up</span>` : ""}</div>`
+          : `<div class="dk-advice-note">nobody on the board is likely to be here — best available when you get there</div>`}
+        ${r.stretch ? `<div class="mini"><span class="dk-bl">If he falls</span> ${
+            escapeHtml(r.stretch.player)} (${escapeHtml(r.stretch.position)}, ${pct(r.stretch.survives)})</div>` : ""}
+        ${(r.fallbacks || []).length ? `<div class="mini"><span class="dk-bl">Or</span> ${
+            r.fallbacks.map((c) => `${escapeHtml(c.player)} (${escapeHtml(c.position)}, ${pct(c.survives)})`).join(" · ")}</div>` : ""}
+        ${(r.reach || []).length ? `<div class="mini" style="opacity:.75"><span class="dk-bl">Gone by now</span> ${
+            r.reach.map((c) => `${escapeHtml(c.player)} (${pct(c.survives)})`).join(" · ")} — take a round earlier or let go</div>` : ""}
+      </div>
+    </div>`).join("");
+  return `
+    <div class="dk-plan-sum">
+      <span class="chip">${escapeHtml(s.shape || "")}</span>
+      ${s.starters_proj ? `<span class="chip up">starters project ${s.starters_proj} PPG</span>` : ""}
+      <span class="chip">room reach ${plan.window}${plan.window_fitted ? "" : " (prior)"}</span>
+    </div>
+    <div class="dk-plan-rows">${rows}</div>
+    <div class="dk-advice-note">${escapeHtml(plan.note || "")}</div>`;
+}
+
+function dkAssistAdviceHTML(a, plan) {
+  if (!a) return "";
+  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const tone = { gone: "down", "toss-up": "warn", safe: "up" };
+  const take = a.take;
+  const need = Object.entries(a.needs || {}).map(([p, n]) => `${p}×${n}`).join(" ");
+  return `
+    <div class="dk-advice">
+      <div class="dk-advice-head">
+        Seat ${a.slot} of ${a.teams} · ${a.on_the_clock ? "ON THE CLOCK"
+          : `next pick ${a.next_pick == null ? "—" : a.next_pick} — ${a.picks_until == null ? "—" : a.picks_until} pick(s) away`}
+        <span class="dk-window">room reach ${a.window} deep${a.window_fitted ? "" : " (prior — too few picks to fit yet)"}</span>
+      </div>
+      ${take ? `<div class="dk-take">
+        <b>${escapeHtml(take.player)}</b>${injTag("nfl", take.player)}
+        <span class="chip">${escapeHtml(take.position)}</span>
+        <span class="chip ${tone[take.verdict] || ""}">${
+          take.verdict === "gone" ? "won’t last" : take.verdict === "safe" ? "will last" : "toss-up"} · ${
+          pct(take.survives)} to be here at ${a.next_pick || "your next pick"}</span>
+        ${take.fills_need ? `<span class="chip up">fills a starting slot</span>` : ""}
+        ${mkt(take)}
+        <button class="btn" type="button" data-assist-mine="${escapeAttr(take.player)}">I took him</button>
+      </div>` : ""}
+      ${(a.board || []).length ? `<div class="dk-wait"><span class="dk-bl">Best available</span>
+        ${a.board.slice(0, 6).map((r) => `<span class="chip ${tone[r.verdict] || ""}">${
+          escapeHtml(r.player)} · ${escapeHtml(r.position)} · ${pct(r.survives)}</span>`).join("")}</div>` : ""}
+      ${(a.can_wait || []).length ? `<div class="dk-wait"><span class="dk-bl">Can wait</span>
+        ${a.can_wait.slice(0, 4).map((r) => `<span class="chip">${escapeHtml(r.player)} · ${pct(r.survives)}</span>`).join("")}</div>` : ""}
+      ${need ? `<div class="mini"><span class="dk-bl">Starters still open</span> ${escapeHtml(need)}</div>` : ""}
+    </div>`;
+}
+
+function dkBindPlan() {
+  const teams = document.getElementById("dk-plan-teams");
+  const slot = document.getElementById("dk-plan-slot");
+  const rounds = document.getElementById("dk-plan-rounds");
+  const type = document.getElementById("dk-plan-type");
+  if (!teams || !slot) return;
+  const reseat = () => {
+    const n = parseInt(teams.value, 10) || 12;
+    const cur = Math.min(n, parseInt(slot.value, 10) || 1);
+    slot.innerHTML = Array.from({ length: n }, (_, i) => i + 1)
+      .map((v) => `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`).join("");
+  };
+  const apply = () => {
+    dkPlan.teams = parseInt(teams.value, 10) || 12;
+    dkPlan.slot = parseInt(slot.value, 10) || 1;
+    dkPlan.rounds = parseInt(rounds.value, 10) || 15;
+    dkPlan.type = type.value === "linear" ? "linear" : "snake";
+    dkPlanSave();
+    dkPlanRefresh();
+  };
+  teams.addEventListener("change", () => { reseat(); apply(); });
+  [slot, rounds, type].forEach((el) => el.addEventListener("change", apply));
+
+  const q = document.getElementById("dk-assist-q");
+  const hits = document.getElementById("dk-assist-hits");
+  if (q && hits) {
+    q.addEventListener("input", () => {
+      const rows = dkAssistSearch(q.value);
+      hits.innerHTML = rows.map((p) => `
+        <div class="dk-assist-hit">
+          <span class="dk-pn">${escapeHtml(p.player)} <span class="dk-pt">${escapeHtml(p.position)}${
+            p.team ? ` · ${escapeHtml(p.team)}` : ""}</span></span>
+          <button class="btn ghost" type="button" data-assist-gone="${escapeAttr(p.player)}">Gone</button>
+          <button class="btn" type="button" data-assist-mine="${escapeAttr(p.player)}">Mine</button>
+        </div>`).join("") || (q.value.trim().length >= 2
+          ? `<div class="dk-advice-note">Nobody by that name on the board.</div>` : "");
+    });
+  }
+  const host = document.getElementById("dk-assist");
+  if (host) {
+    host.addEventListener("click", (e) => {
+      const g = e.target.closest("[data-assist-gone]");
+      const m = e.target.closest("[data-assist-mine]");
+      if (g) dkAssistMark(g.dataset.assistGone, false);
+      else if (m) dkAssistMark(m.dataset.assistMine, true);
+    });
+    const undo = document.getElementById("dk-assist-undo");
+    const reset = document.getElementById("dk-assist-reset");
+    if (undo) undo.addEventListener("click", () => {
+      dkPlan.order.pop(); dkPlanSave(); dkPlanRefresh(); });
+    if (reset) reset.addEventListener("click", () => {
+      if (!dkPlan.order.length || confirm("Start the draft over? Every marked pick is cleared.")) {
+        dkPlan.order = []; dkPlanSave(); dkPlanRefresh();
+      }
+    });
+  }
+  dkPlanRefresh();
 }
 
 /* ---------------- The fantasy player dossier ----------------

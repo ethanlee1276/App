@@ -9015,3 +9015,22 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 /* Every card that is a door reads as one. 2026-09-02: the Most Likely
    cards and shelf rows open the prop page like the board's cards do. */
 [data-prop], [data-player-page], [data-open] { cursor: pointer; }
+
+/* Your draft plan, and the any-platform draft assistant (2026-09-02). */
+.dk-plan-controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.dk-plan-controls label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-xs); color: var(--text-mute); font-weight: 700; }
+.dk-plan-controls select { background: var(--panel-2); color: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; font-family: inherit; }
+.dk-plan-sum { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.dk-plan-rows { display: flex; flex-direction: column; }
+.dk-plan-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.dk-plan-row:first-child { border-top: none; }
+.dk-plan-rnd { display: flex; flex-direction: column; gap: 2px; }
+.dk-plan-rnd .mini { color: var(--text-mute); }
+.dk-plan-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dk-plan-take { font-size: var(--fs-md); }
+.dk-plan-empty { opacity: .6; }
+.dk-assist-search { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.dk-assist-hits { display: flex; flex-direction: column; margin-top: 6px; }
+.dk-assist-hit { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
+.dk-assist-hit:first-child { border-top: none; }
+.dk-assist-log { margin-top: 8px; }
