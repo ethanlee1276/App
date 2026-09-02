@@ -206,6 +206,21 @@ MEASURED: dict[str, tuple[float, int, str]] = {
     # 27,613 games it is a real one, and it makes §5.2's lineup stack a
     # fractionally harder ticket to clear rather than an easier one.
     "lineup_stack": (0.186, 27613, "2026-08-02 · mlb, live history"),
+    # THE TOUCHDOWN PAIRS, 2026-09-02. Ethan, closing the NFL readiness
+    # audit's open question ("QB passing TD + his WR anytime TD: prohibit,
+    # or measure and price it?"): "Measure and price". Both were priced
+    # at the generic same-game floor, +0.10, unmeasured.
+    #
+    # +0.260: the quarterback's passing yards against his most-targeted
+    # receiver's anytime touchdown — the pair the board can form today
+    # (pass_yds over + anytime_td). Two and a half times the floor.
+    "qb_td_game": (0.260, 2844, "2026-09-02 · nfl 2021-2025"),
+    # +0.489: the literal pair, his passing touchdowns against that
+    # receiver's anytime touchdown. On the same 2,844 team-weeks the WR1
+    # scores in 50.2% of games where his quarterback throws a touchdown
+    # and 4.5% of games where he does not. No passing-touchdown market is
+    # on the board yet; the number is kept live for the day one is.
+    "qb_td_wr_td": (0.489, 2844, "2026-09-02 · nfl 2021-2025"),
 }
 
 
@@ -335,6 +350,9 @@ RULES: dict[str, SportRules] = {
 FAMILY = {
     "pass_yds": "pass", "rec_yds": "catch", "receptions": "catch",
     "rush_yds": "rush", "anytime_td": "td",
+    # Not a board market yet (2026-09-02); named so a slip that carries one
+    # is priced against the measured QB-TD/WR-TD number, not the floor.
+    "pass_td": "passtd",
     "strikeouts": "pitch", "outs": "pitch",
     "total_bases": "bat", "hits": "bat", "home_runs": "bat",
     "pts": "score", "pra": "score", "ast": "assist", "reb": "board",
@@ -348,7 +366,7 @@ FAMILY = {
 }
 TIER = {
     "receptions": 1, "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
-    "anytime_td": 3,
+    "anytime_td": 3, "pass_td": 3,
     "strikeouts": 1, "outs": 1, "total_bases": 2, "hits": 2, "home_runs": 3,
     "reb": 1, "ast": 1, "pra": 1, "pts": 2, "fg3m": 3, "stl": 3, "blk": 3,
     # Sides and totals are the most modelable markets on the board and the
@@ -1011,6 +1029,26 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                         measured=meas)
     if same_team and {fa, fb} == {"assist", "score"} and ua and ub:
         return Relation(0.225, "the same possessions completing — §8.2", 0, "ok")
+    # A quarterback and his receiver's touchdown. Both of these fell to
+    # the +0.10 floor below until 2026-09-02 (NFL readiness audit, Phase
+    # 2; Ethan: "measure and price"). Measured on 2,844 team-weeks — see
+    # MEASURED and engine/corrfit's role_pair fits.
+    if same_team and {fa, fb} == {"passtd", "td"} and ua and ub:
+        r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO)
+        return Relation(r, "his passing touchdown is usually this receiver's "
+                           "touchdown — the WR1 scores in half the games his "
+                           "quarterback throws one and one in twenty when he "
+                           "does not" + (f", measured at {r:+.2f} on "
+                                         f"{rho_n('qb_td_wr_td'):,} team-weeks"
+                                         if meas else ""), 0, "ok", measured=meas)
+    if same_team and {fa, fb} == {"pass", "td"} and ua and ub:
+        r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO)
+        return Relation(r, "the passing game that reaches the end zone is the "
+                           "one that piles up yards — the quarterback's "
+                           "yardage against his receiver's touchdown" + (
+                               f", measured at {r:+.2f} on "
+                               f"{rho_n('qb_td_game'):,} team-weeks"
+                               if meas else ""), 0, "ok", measured=meas)
 
     if ua and ub:
         return Relation(SAME_GAME_BASELINE_RHO,

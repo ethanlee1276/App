@@ -75,6 +75,13 @@ class Prior:
     kind: str
     a: str = ""
     b: str = ""
+    #: For `role_pair` only: the market that decides WHO on each side is
+    #: measured — the quarterback is the team-week's top `pass_att`, the
+    #: WR1 its top `targets`. Choosing him by the measured market itself
+    #: (the teammate who scored most) would select on the outcome and
+    #: inflate every touchdown correlation on this table.
+    by_a: str = ""
+    by_b: str = ""
 
 
 PRIORS: tuple[Prior, ...] = (
@@ -104,6 +111,27 @@ PRIORS: tuple[Prior, ...] = (
     Prior("both_teams_overs__pace", "nfl", (0.15, 0.30), "§4.1",
           "the pace link across the two sides of one game", "cross_team",
           "rec_yds", "rec_yds"),
+    # THE TOUCHDOWN PAIRS. Ethan, 2026-09-02, closing the NFL readiness
+    # audit's open question on QB passing TD + his WR anytime TD: "Measure
+    # and price". No band is published for any of these; the generic
+    # same-game floor (+0.10) is what they were priced at, so that is the
+    # band each is judged against — a measurement outside it is the
+    # pricer leaving correlation on the table, which is what the audit
+    # found. The quarterback is the team-week's top pass_att, the WR1 its
+    # top targets, the RB1 its top carries.
+    Prior("qb_pass_td__wr1_anytime_td", "nfl", (0.10, 0.10), "§9",
+          "the literal pair: the quarterback's passing touchdowns against "
+          "his most-targeted receiver's anytime TD — the WR's touchdown "
+          "usually IS the QB's touchdown", "role_pair", "pass_td",
+          "anytime_td", by_a="pass_att", by_b="targets"),
+    Prior("qb_pass_yds__wr1_anytime_td", "nfl", (0.10, 0.10), "§9",
+          "the pair the board can actually form today — the QB's yardage "
+          "over next to his WR1's anytime TD", "role_pair", "pass_yds",
+          "anytime_td", by_a="pass_att", by_b="targets"),
+    Prior("wr1_anytime_td__rb1_anytime_td", "nfl", (-0.10, 0.10), "§3",
+          "Type 3 on touchdowns: the receiver and the back splitting one "
+          "end zone", "role_pair", "anytime_td", "anytime_td",
+          by_a="targets", by_b="carries"),
     # MLB — measurable the moment the history carries the markets.
     Prior("sp_strikeouts__opp_runs", "mlb", (-0.35, -0.20), "§5.1",
           "§5.2's pitcher stack: strikeouts against the runs the lineup he is "
@@ -229,6 +257,34 @@ def fit_one(conn, prior: Prior, min_games: int = 30) -> Fit:
     f = Fit(prior)
     kind = prior.kind
 
+    if kind == "role_pair":
+        A, B = _logs(conn, prior.sport, prior.a), _logs(conn, prior.sport, prior.b)
+        RA, RB = _logs(conn, prior.sport, prior.by_a), _logs(conn, prior.sport, prior.by_b)
+        for name, table in ((prior.a, A), (prior.b, B), (prior.by_a, RA),
+                            (prior.by_b, RB)):
+            if not table:
+                f.missing = f"no {name} logs for {prior.sport}"
+                return f
+        xs, ys = [], []
+        for key, arows in A.items():
+            brows, ra, rb = B.get(key), RA.get(key), RB.get(key)
+            if not brows or not ra or not rb:
+                continue
+            who_a, who_b = _top(ra)[0], _top(rb)[0]
+            if who_a == who_b:
+                continue                 # one man is not a pair
+            av = dict(arows).get(who_a)
+            bv = dict(brows).get(who_b)
+            if av is None or bv is None:
+                continue
+            xs.append(av)
+            ys.append(bv)
+        f.n = len(xs)
+        if f.n >= 3:
+            f.r = pearson(xs, ys)
+            f.se = stderr(f.r, f.n)
+        return f
+
     if kind in ("teammates", "same_market_teammates", "cross_team"):
         A, B = _logs(conn, prior.sport, prior.a), _logs(conn, prior.sport, prior.b)
         if not A:
@@ -349,6 +405,11 @@ ADOPT: dict[str, tuple[str, int]] = {
     "rb_rush_yds__own_margin": ("run_game_script", +1),
     "sp_strikeouts__opp_runs": ("pitcher_vs_lineup", -1),
     "two_hitters_total_bases": ("lineup_stack", +1),
+    # The touchdown pairs (2026-09-02). `qb_td_game` prices the pair the
+    # board forms today; `qb_td_wr_td` is the literal QB-TD/WR-TD pair,
+    # kept live for the day a passing-touchdown market is on the board.
+    "qb_pass_yds__wr1_anytime_td": ("qb_td_game", +1),
+    "qb_pass_td__wr1_anytime_td": ("qb_td_wr_td", +1),
 }
 
 #: Below this a correlation is a rumour. The standing hand-taken numbers
