@@ -491,12 +491,15 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
 
 
 def build_td_longshots(candidates: list[dict], limit: int = 6,
-                       per_game: int = 2) -> list[LongShot]:
+                       per_game: int = 2,
+                       require_edge: bool = True) -> list[LongShot]:
     """Rank anytime-touchdown picks.
 
     ``candidates`` = ``[{prop, game, opponent, opportunity_share, odds, book,
     under_odds?, red_zone?}]``. Applies the strategy's odds window and the
-    1–2-per-game concentration cap.
+    1–2-per-game concentration cap. ``require_edge=False`` returns the
+    ranked pool with the Pass rows still in it — what a caller that wants
+    the reasoning on every priced man (a watch row, a test) asks for.
     """
     picks: list[LongShot] = []
     for c in candidates:
@@ -534,4 +537,5 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
             picks.append(pick)
 
     return select(picks, per_key_cap=per_game,
-                  key=lambda p: tuple(sorted((p.team, p.opponent))), limit=limit)
+                  key=lambda p: tuple(sorted((p.team, p.opponent))), limit=limit,
+                  require_edge=require_edge)

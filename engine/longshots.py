@@ -143,6 +143,8 @@ class LongShot:
     #: every card fell through to the drawn chip. The prop object beside
     #: the candidate had the URL the whole time; nothing copied it across.
     headshot: str = ""
+    #: The §10 0–100 score the grade is read from (one grade, 2026-09-02).
+    quality: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -156,7 +158,7 @@ class LongShot:
             "net_edge": round(self.net_edge, 4),
             "ev_per_unit": round(self.ev_per_unit, 4),
             "confidence": self.confidence, "stake_units": self.stake_units,
-            "grade": self.grade,
+            "grade": self.grade, "quality": self.quality,
             "expected_opportunities": round(self.expected_opportunities, 2),
             "primary_reason": self.primary_reason,
             "reasons": self.reasons, "caveats": self.caveats,
@@ -666,7 +668,17 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
             f"— {implied - book_prob:.0%} of that edge is the price, not "
             f"the projection"]
     ev = expected_value(model_prob, odds)
-    grade = _grade(confidence, graded_edge, ev) if credible else "Pass"
+    # ONE GRADE (Ethan, 2026-09-02: "1. 0-100"). This board graded Strong
+    # Play / Play / Lean / Pass on its own ladder — and published Leans at
+    # 1.5% of edge, which §10 forbids outright. It now carries the same §10
+    # score and letter as every prop. The one rule of the old ladder that
+    # was never about thresholds stays: a price that does not pay cannot
+    # carry a grade, whatever the model thinks of the fair number.
+    from .quality import longshot_score, letter as quality_letter
+    quality = longshot_score(graded_edge, market, opportunities, opp_target,
+                             data_quality) if credible else 0
+    confidence = round(quality / 10.0, 1)
+    grade = quality_letter(quality) if (credible and ev > 0) else "Pass"
     return LongShot(
         player=player, team=team, opponent=opponent, market=market,
         market_label=label, book=book, odds=odds,
@@ -678,7 +690,7 @@ def build_pick(player: str, team: str, opponent: str, market: str, label: str,
         confidence=confidence, stake_units=_stake(model_prob, odds) if grade != "Pass" else 0.0,
         grade=grade, expected_opportunities=opportunities,
         primary_reason=primary_reason, reasons=reasons, caveats=caveats,
-        headshot=headshot,
+        headshot=headshot, quality=quality,
     )
 
 

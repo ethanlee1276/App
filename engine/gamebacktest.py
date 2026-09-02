@@ -90,7 +90,7 @@ class MoneylineBacktest:
                 f"  Bets        {self.n_bets} placed, {self.wins} won "
                 f"({self.wins / self.n_bets:.1%})  ROI {self.roi:+.1%}  "
                 f"net {self.net:+.2f}u")
-            for name in ("Strong Play", "Play", "Lean"):
+            for name in ("A+", "A", "B+", "Strong Play", "Play", "Lean"):
                 g = self.grades.get(name)
                 if g and g["n_bets"]:
                     roi = g["net"] / g["staked"] if g["staked"] else 0.0
@@ -562,7 +562,7 @@ class GameLineBacktest:
                 f"  Bets        {self.n_bets} placed, {self.wins} won, "
                 f"{self.pushes} push ({rate:.1%})  ROI {self.roi:+.1%}  "
                 f"net {self.net:+.2f}u")
-            for name in ("Strong Play", "Play"):
+            for name in ("A+", "A", "B+", "Strong Play", "Play"):
                 g = self.grades.get(name)
                 if g and g["n_bets"]:
                     roi = g["net"] / g["staked"] if g["staked"] else 0.0

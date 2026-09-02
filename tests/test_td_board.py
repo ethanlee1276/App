@@ -515,20 +515,28 @@ def test_cfb_board_prices_quoted_players_with_usage_and_says_the_rest():
     assert census["no_usage"] == 1
     assert census["outside_window"] == 1
     assert census["usage_season"] == 2025
-    # A NON-EMPTY assertion, learned the hard way: the first cut checked
-    # subset membership and passed on a board that priced nothing.
-    assert rows, f"no picks graduated — census {census}"
-    players = {r["player"] for r in rows}
-    assert players <= {"Nate Frazier", "Zachariah Branch", "Slot Guy"}
-    for r in rows:
-        # The prior-season fallback is DISCLOSED on the pick itself.
-        assert any("2025 logs" in c for c in r["caveats"]), r["caveats"]
-        assert r["market"] == "anytime_td"
-        assert any("implied total" in x.lower() for x in r["reasons"])
-    frazier = next((r for r in rows if r["player"] == "Nate Frazier"), None)
-    if frazier:
-        # His measured touchdowns reached the card.
-        assert any("measured" in x for x in frazier["reasons"])
+    assert census["priced"] == 3
+    # NO PICK GRADUATES INSIDE THE CREDIBLE BAND — since 2026-09-02, when
+    # the board moved onto the §10 0–100 grade (Ethan: "1. 0-100"). Tier
+    # 3's bar is 6% of graded edge (§3) and a consensus-derived edge is
+    # capped at 5% by the credibility guard times the market shrink, so
+    # a touchdown grades only when a book's price is clearly longer than
+    # the consensus — §8's "only at clearly outlier prices", now enforced
+    # by the same score as every prop. These three are priced, ranked
+    # and explained on the WATCH, never as bets. (This asserted a
+    # non-empty board until then, "learned the hard way" — the lesson
+    # survives below: the watch must carry every priced man.)
+    assert rows == [], [(r["player"], r["grade"]) for r in rows]
+    watched = {w["player"]: w for w in watch}
+    for name in ("Nate Frazier", "Zachariah Branch", "Slot Guy"):
+        assert name in watched, (name, list(watched))
+        w = watched[name]
+        # The prior-season fallback is DISCLOSED on the row itself.
+        assert any("2025 logs" in c for c in w["caveats"]), w["caveats"]
+        assert any("implied total" in x.lower() for x in w["reasons"])
+        assert w["ev_per_unit"] > 0
+    # His measured touchdowns reached the card.
+    assert any("measured" in x for x in watched["Nate Frazier"]["reasons"])
 
 
 def test_cfb_model_distrusts_its_own_outsized_disagreements():

@@ -28,6 +28,14 @@ MARKET_TIER = {
     "receptions": 1,
     "pass_yds": 2, "rush_yds": 2, "rec_yds": 2,
     "anytime_td": 3,
+    # Game lines, since the 0–100 grade became the ONE gate (Ethan,
+    # 2026-09-02: "1. 0-100"). Tier 1 is `engine/parlays.TIER`'s standing
+    # classification — "the numbers a book prices most carefully and we
+    # price most carefully" — so the §3 minimum edge is 2.5%.
+    "moneyline": 1, "spread": 1, "total": 1, "team_total": 1,
+    # The other long-shot market, Tier 3 with anytime_td for the same
+    # reason §8 gives: high vig, rare event, most of a raw edge is error.
+    "home_runs": 3, "pass_td": 3,
 }
 
 # §3 step 5: how much of a raw model-vs-market disagreement we trust.
@@ -156,6 +164,62 @@ def quality_score(*, edge: float, market: str, side: str,
 
     total = edge_pts + stability_pts + move_pts + script_pts + matchup_pts + weather_pts
     return int(round(clamp(total, 0.0, 100.0))), notes
+
+
+# --- the same score for the boards that used to grade in words --------------
+#
+# Ethan, 2026-09-02, closing the NFL readiness audit's first Ask: "1. 0-100".
+# Until then `quality_score` above graded the prop board and TWO other
+# ladders graded everything else — `betting._grade`'s Strong Play / Play /
+# Pass on game lines and `longshots._grade`'s Strong Play / Play / Lean /
+# Pass on the long-shot boards — three vocabularies on one site, which is
+# the loophole §10 names ("two systems that can disagree"). The long-shot
+# ladder also published Leans at 1.5% of edge, the thing §10 says is "how
+# discipline dies in public".
+#
+# So: one score, §10's weights, for every board. A component a board has
+# no measurement for takes the NEUTRAL value the prop score already uses
+# for the same situation — movement 8/15 with no snapshots, script 6/10
+# with no spread, weather 7/10 on a calm day — rather than a number
+# invented for the occasion. Stability has no neutral in the prop score
+# (a prop always has a sample), so a game bet, which has no per-player
+# usage to be stable, takes the same 8/15 movement uses. The consequence
+# is stated rather than hidden: with every context component neutral a
+# game bet tops out at 75, B+, the minimum stake — which is also what
+# §10 says about a bet nothing but its edge recommends.
+NEUTRAL = {"stability": 8.0, "movement": 8.0, "script": 6.0,
+           "matchup": 6.0, "weather": 7.0}
+
+
+def _edge_points(edge: float, market: str) -> float:
+    """§10's 40: the tier minimum earns two-thirds, 1.5× the minimum all."""
+    return clamp(edge / (1.5 * tier_min_edge(market)), 0.0, 1.0) * 40.0
+
+
+def game_bet_score(edge: float, market: str) -> int:
+    """The unified grade for a side or a total — edge, and neutral context."""
+    total = (_edge_points(edge, market) + NEUTRAL["stability"]
+             + NEUTRAL["movement"] + NEUTRAL["script"] + NEUTRAL["matchup"]
+             + NEUTRAL["weather"])
+    return int(round(clamp(total, 0.0, 100.0)))
+
+
+def longshot_score(edge: float, market: str, opportunities: float,
+                   opp_target: float, data_quality: float = 1.0) -> int:
+    """The unified grade for a touchdown or home-run pick.
+
+    ``edge`` is the GRADED edge (`longshots.build_pick`: the model over the
+    cheaper of the consensus and the price). Usage stability is the one
+    context component these boards measure — expected chances against
+    the target a full-role player carries, discounted by the quality of
+    the red-zone data behind it, exactly the two discounts the old
+    confidence formula applied. Everything else is neutral.
+    """
+    opp_q = clamp(opportunities / opp_target, 0.0, 1.0) if opp_target > 0 else 0.0
+    stability = 15.0 * opp_q * clamp(data_quality, 0.7, 1.0)
+    total = (_edge_points(edge, market) + stability + NEUTRAL["movement"]
+             + NEUTRAL["script"] + NEUTRAL["matchup"] + NEUTRAL["weather"])
+    return int(round(clamp(total, 0.0, 100.0)))
 
 
 def apply_movement(rec: dict, with_us: bool, steam: bool) -> None:

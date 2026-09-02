@@ -338,16 +338,22 @@ def test_it_populates_from_the_longshot_ladder_not_the_prop_one():
     import os, tempfile
     from engine.longshots import _grade
     t = _td_test(os.path.join(tempfile.mkdtemp(), "p.json"))
-    assert set(t["population"]) == {"Strong Play", "Play", "Lean"}
+    assert set(t["population"]) == {"A+", "A", "B+", "Strong Play", "Play", "Lean"}
     emitted = {_grade(c, e) for c in (4.6, 6.1, 7.6) for e in (0.02, 0.04, 0.06)}
     assert emitted - {"Pass"} <= set(t["population"])
 
 
 def test_a_prop_graded_A_does_not_count_toward_it():
+    """Since 2026-09-02 the long-shot board grades on the same A+/A/B+
+    letters as the prop board (Ethan: "1. 0-100"), so the letter alone no
+    longer tells the two apart — the BUCKET does. An A in the long-shot
+    bucket is a scorer-board pick and counts; an A in the headline record
+    is a prop and does not."""
     import os, tempfile
     tmp = os.path.join(tempfile.mkdtemp(), "p.json")
     t = _td_test(tmp)
-    assert prereg.verdict(t, _td_rows(200, 20, grade="A"))["n"] == 0
+    assert prereg.verdict(t, _td_rows(200, 20, grade="A"))["n"] == 200
+    assert prereg.verdict(t, _td_rows(200, 20, grade="A", category="main"))["n"] == 0
 
 
 def test_another_market_does_not_count_toward_it():

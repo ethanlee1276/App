@@ -621,8 +621,9 @@ function setSelected(el, on) {
 }
 
 /* ---------------- formatting helpers ---------------- */
-// NFL props grade A+/A/B+/Pass (the unified 0–100 grade, docs/NFL_MODEL.md
-// §10 — no Leans); other modules still use the word grades.
+// Every board grades A+/A/B+/Pass (the unified 0–100 grade, docs/NFL_MODEL.md
+// §10 — no Leans) since 2026-09-02 (Ethan: "1. 0-100"). The word grades below
+// stay mapped for journaled rows and shares written before that.
 /* "Conditional" is a college-football grade with no equivalent elsewhere:
    the number and the edge are real, the bet is waiting on news (a starting
    QB, a bowl roster). Amber, never green — it must not read as a play. */

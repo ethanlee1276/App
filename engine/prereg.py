@@ -437,7 +437,10 @@ TD_EDGE_NFL = {
     # wrong one collects nothing forever while looking healthy. All 51
     # bets behind this graded "Lean"; the other two are named so the
     # test does not go blind the day one clears a higher bar.
-    "population": ["Strong Play", "Play", "Lean"],
+    # BOTH LADDERS since 2026-09-02, when the long-shot board moved to the
+    # §10 0–100 letter (Ethan: "1. 0-100"): the 51 bets already collected
+    # graded on the old words and must stay counted.
+    "population": ["A+", "A", "B+", "Strong Play", "Play", "Lean"],
     # The scorer board journals here, not in the headline record.
     "categories": ["longshot"],
     # NO COMPARISON BAND, because there is no second population to
@@ -485,7 +488,10 @@ TD_EDGE_NFL_XFP = {
     # wrong one collects nothing forever while looking healthy. All 51
     # bets behind this graded "Lean"; the other two are named so the
     # test does not go blind the day one clears a higher bar.
-    "population": ["Strong Play", "Play", "Lean"],
+    # BOTH LADDERS since 2026-09-02, when the long-shot board moved to the
+    # §10 0–100 letter (Ethan: "1. 0-100"): the 51 bets already collected
+    # graded on the old words and must stay counted.
+    "population": ["A+", "A", "B+", "Strong Play", "Play", "Lean"],
     # The scorer board journals here, not in the headline record.
     "categories": ["longshot"],
     # NO COMPARISON BAND, because there is no second population to
