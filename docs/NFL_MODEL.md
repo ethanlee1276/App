@@ -126,8 +126,10 @@ no-vig implied probability?*
    edge and part is your error. How much: in Tier 1 markets (most modelable),
    trust roughly half your raw edge; in Tier 3 markets, assume most of a raw
    edge is model error.
-6. **Minimum post-haircut edge to bet:** Tier 1: +2.5% · Tier 2: +4% ·
-   Tier 3: +6% (and rarely). Why thresholds scale by tier: noisier markets
+6. **Minimum post-haircut edge to bet:** Tier 1: +2.5% · Tier 2: +3% ·
+   Tier 3: +6% (and rarely). (Tier 2 was written as +4% and re-tuned to
+   +3% on 2026-07-29 — see the §3 row of the Implementation Map for why;
+   `engine/quality.py` `TIER_MIN_EDGE` is the number that is enforced.) Why thresholds scale by tier: noisier markets
    need bigger cushions to make sure the edge is real.
 7. **Line shop, always.** The bet only qualifies at the best available price
    across your books — a play that clears at -105 does not clear at -118,
