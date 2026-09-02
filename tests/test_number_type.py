@@ -40,6 +40,16 @@ def _block(selector_start: str) -> str:
     return CSS[i:CSS.index("}", i)]
 
 
+#: The mono-face rule, located by a member that is ACTUALLY RENDERED.
+#: These four lookups used to spell the whole selector list including
+#: `.stat-v` — a class no element has carried for some time — which made
+#: a dead selector load-bearing: removing the rot would have broken the
+#: tests that describe the rule. Found by the nightly sweep 2026-09-02.
+#: `.conf-num` is the discriminator (the tabular-nums list above does not
+#: contain it), so this still cannot match the wrong block.
+MONO_RULE = ".tile .v, .metric .v, .ml-odds, .conf-num"
+
+
 # --- the face ---------------------------------------------------------------
 def test_the_mono_is_self_hosted_like_everything_else():
     """A board that renders with the network unplugged does not get to make
@@ -72,7 +82,7 @@ def test_both_weights_have_a_job():
 
 # --- what is set in it ------------------------------------------------------
 def test_the_numbers_are_the_mono_and_the_prose_is_not():
-    block = _block(".tile .v, .metric .v, .stat-v, .ml-odds, .conf-num")
+    block = _block(MONO_RULE)
     assert "font-family: var(--font-mono)" in block
     for kpi in (".tile .v", ".metric .v", ".ml-odds", ".rec-chart .rc-net"):
         assert kpi in block, f"{kpi} is still set in the sans"
@@ -84,7 +94,7 @@ def test_the_numbers_are_the_mono_and_the_prose_is_not():
 def test_the_weight_is_one_the_font_actually_ships():
     """800 on a face that ships 400 and 500 is browser-faked bold — a
     smeared outline at 30px, the loudest thing on the page."""
-    block = _block(".tile .v, .metric .v, .stat-v, .ml-odds, .conf-num")
+    block = _block(MONO_RULE)
     assert "font-weight: 500;" in block
     assert "800" not in block
 
@@ -92,12 +102,12 @@ def test_the_weight_is_one_the_font_actually_ships():
 def test_the_negative_tracking_is_gone():
     """Tight tracking is the Inter-dashboard tell, and on a fixed-pitch face
     it fights the one property the face has."""
-    block = _block(".tile .v, .metric .v, .stat-v, .ml-odds, .conf-num")
+    block = _block(MONO_RULE)
     assert "letter-spacing: 0;" in block
 
 
 def test_figures_are_tabular_and_the_zero_is_slashed():
-    block = _block(".tile .v, .metric .v, .stat-v, .ml-odds, .conf-num")
+    block = _block(MONO_RULE)
     assert '"tnum" 1' in block
     assert '"zero" 1' in block
 

@@ -1857,7 +1857,7 @@ main { view-transition-name: page; }
 body { font-size: var(--fs-lg); }
 
 /* Numbers line up like a terminal. */
-.tile .v, .metric .v, .stat-v, .ml-odds, .book, .spark, td, .v {
+.tile .v, .metric .v, .ml-odds, .book, .spark, td, .v {
   font-variant-numeric: tabular-nums;
 }
 
@@ -1869,7 +1869,7 @@ body { font-size: var(--fs-lg); }
    have the browser fake it, and a smeared outline at 30px is the loudest
    thing on the page. The tracking goes back to 0 too — negative letter
    spacing on a fixed-pitch face fights the one property it has. */
-.tile .v, .metric .v, .stat-v, .ml-odds, .conf-num, .trow .val,
+.tile .v, .metric .v, .ml-odds, .conf-num, .trow .val,
 .form-tile .v, .rec-chart .rc-net, .lf-region-n,
 .brk-score, .rec-scope-n,
 /* Found by sweeping every view for text that is mostly digits and still in
