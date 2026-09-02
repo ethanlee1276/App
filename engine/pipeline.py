@@ -632,6 +632,15 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         d["live"] = bool(game.live and game.live.state == "live")
         d["game_date"] = game.date
         d["game_kickoff"] = game.kickoff
+        # THE GAME SCRIPT, said the way every other page says it (Ethan,
+        # 2026-09-02: the Fantasy page called Lions–Saints a favourite-runs
+        # game while the prop board recommended Goff's passing over, and
+        # nothing on the card said the projection had already taken the
+        # script out). One description, from engine/gamescript, with what
+        # the projection actually did about it for THIS market.
+        from .gamescript import for_prop as _script_for_prop
+        d["game_script"] = _script_for_prop(game, prop.team, prop.market,
+                                            prop.position)
         # The environment dimension, football flavor: wind is MAGNITUDE
         # here (no center field to blow out of — speed is what leans on
         # the passing and kicking game) plus the dome flag. Journaled so

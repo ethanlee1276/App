@@ -28,17 +28,11 @@ from .statmath import clamp
 USAGE_MIN_WEEKS = 4
 BOARD_LIMIT = 60
 SUSTAINABLE_PPG = 1.5          # gap within this band is skill/noise, not signal
-SCRIPT_ARCHETYPES = {
-    ("high", "close"): ("Everyone eats", "High total, close spread — the best "
-                        "environment in fantasy. Prime stacking."),
-    ("high", "big"): ("Favorite runs, dog throws", "High total, big spread — "
-                      "favorite's RB gets clock-killing volume; underdog WRs "
-                      "get garbage-time targets. Underdog RB nearly unstartable."),
-    ("low", "big"): ("Floor, no ceiling", "Low total, big spread — favorite's "
-                     "RB is a floor play; fade the underdog backfield entirely."),
-    ("low", "close"): ("Nobody's good", "Low total, close spread — downgrade "
-                       "across the board."),
-}
+# THE ONE TABLE, moved to engine/gamescript on 2026-09-02 so the prop
+# card, the Most Likely page and this page say the same thing about
+# the same number (Ethan: "conflicting data with our most likely
+# page and the fantasy game script page"). Imported, not copied.
+from .gamescript import ARCHETYPES as SCRIPT_ARCHETYPES  # noqa: E402
 
 
 def latest_season(conn) -> int | None:
@@ -343,23 +337,18 @@ def game_scripts(conn) -> list[dict]:
             "AND home_score IS NULL "
             "ORDER BY season DESC, period ASC LIMIT 32"):
         total, spread = float(g["total"]), float(g["spread"])
-        if total <= 0:
+        from .gamescript import describe
+        d = describe(spread, total, g["home"], g["away"])
+        if d is None:
             continue
-        home_imp = total / 2.0 - spread / 2.0     # spread<0 = home favored
-        away_imp = total - home_imp
-        size = abs(spread)
-        conf = ("high — favorites this size win ~79%" if size >= 7
-                else "moderate" if size >= 3
-                else "coin flip — don't project a script off this")
-        key = ("high" if total >= 47 else "low",
-               "big" if size >= 6.5 else "close")
-        name, desc = SCRIPT_ARCHETYPES[key]
+        home_imp, away_imp = d["home_implied"], d["away_implied"]
+        conf, name, desc = d["confidence"], d["archetype"], d["read"]
         out.append({
             "season": g["season"], "week": g["period"],
             "home": g["home"], "away": g["away"],
             "total": total, "spread": spread,
-            "home_implied": round(home_imp, 1),
-            "away_implied": round(away_imp, 1),
+            "home_implied": home_imp,
+            "away_implied": away_imp,
             "home_proe": proe.get(g["home"]),
             "away_proe": proe.get(g["away"]),
             # Measured efficiency + pace from pbp (None until ingested).

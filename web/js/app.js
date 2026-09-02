@@ -5022,6 +5022,42 @@ function propSpark(r, opts = {}) {
     gamelogBars(vals, { line, side, w: opts.w || 150, h: opts.h || 42 })}</span>`;
 }
 
+/* THE GAME SCRIPT, on every football prop, in the same words the Fantasy
+   page and the Most Likely page use for the same number. Ethan,
+   2026-09-02: "ur showing it to be a heavy RB running game for the lions
+   but then recommending Goffs over passing yards … we should b showing
+   the game script under the player props too." The chip names the
+   archetype and the line; the prop page carries the whole read and what
+   the projection did about it, so a pass-yards over on a touchdown
+   favourite says out loud that the script is already priced in. */
+function scriptChip(r) {
+  const s = r && r.game_script;
+  if (!s || !s.archetype) return "";
+  return `<span class="chip" title="${escapeHtml(s.summary || s.read || "")}">${
+    iconMark("calendar", 11)}${escapeHtml(s.archetype)} · ${escapeHtml(s.line || "")}</span>`;
+}
+function scriptCardHTML(r) {
+  const s = r && r.game_script;
+  if (!s || !s.archetype) return "";
+  const tilt = Number(s.tilt || 1);
+  const pickem = /pick/.test(String(s.role || ""));
+  return `<div class="section-title minor">Game script
+      <span class="sub">— the same read the Fantasy and Most Likely pages
+      give this game, and what the projection did about it.</span></div>
+    <div class="card">
+      <div><b>${escapeHtml(s.archetype)}</b> · ${escapeHtml(s.line || "")}
+        · ${escapeHtml(s.team)} implied ${Number(s.team_implied).toFixed(1)},
+        ${escapeHtml(s.opponent)} ${Number(s.opp_implied).toFixed(1)}</div>
+      <div class="mini" style="margin-top:4px">${escapeHtml(s.read || "")}</div>
+      <div class="mini" style="margin-top:4px">${escapeHtml(s.team)} ${escapeHtml(s.role)}${
+        pickem ? "" : ` by ${Math.abs(Number(s.team_spread))}`} — ${escapeHtml(s.lean)}.</div>
+      <div class="mini" style="margin-top:4px;color:${
+        Math.abs(tilt - 1) >= 0.005 ? "var(--warn)" : "var(--text-mute)"}">${
+        escapeHtml(s.applied || "")}.</div>
+      <div class="mini" style="margin-top:4px;opacity:.7">Confidence in the script: ${escapeHtml(s.confidence || "")}.</div>
+    </div>`;
+}
+
 function cardHTML(r) {
   const reasons = (r.reasons || []).map(
     (x, i) => reasonLI(x, (r.reason_tiers || [])[i])).join("");
@@ -5056,7 +5092,7 @@ function cardHTML(r) {
       </div>
       ${confMeter(r)}
       ${propAnalysis(r)}
-      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
+      <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
@@ -5105,6 +5141,13 @@ function likelyCard(r) {
   const why = (r.reasons || [])
     .filter((x) => r.bettable || !/nothing here is bettable/i.test(x))
     .slice(0, 5).map((x) => reasonLI(x)).join("");
+  // The same game-script sentence the prop card and the Fantasy page
+  // carry for this game — one read per number (Ethan, 2026-09-02).
+  const scriptLine = r.game_script && r.game_script.archetype
+    ? `<div class="mini" style="margin-top:4px"><b>${escapeHtml(r.game_script.archetype)}</b>
+         · ${escapeHtml(r.game_script.line || "")} — ${escapeHtml(r.game_script.lean || "")}${
+         r.game_script.applied ? `; ${escapeHtml(r.game_script.applied)}` : ""}.</div>`
+    : "";
   const ev = Number(r.ev_per_unit || 0);
   // THE PRICE IS SHOWN AND NEVER RANKED ON. Sorting or grading by it here
   // would quietly rebuild the edge board under a different name, which is
@@ -5168,6 +5211,7 @@ function likelyCard(r) {
         <div class="v">${Number(r.projection).toFixed(1)}</div></div>`}
     </div>
     ${spark ? `<div class="mini" style="margin:6px 0">${spark}</div>` : ""}
+    ${scriptLine}
     ${why ? `<ul class="reasons">${why}</ul>` : ""}
     ${bet}${cal}${evTxt}
   </article>`;
@@ -6807,6 +6851,8 @@ function renderPropPage() {
       <span class="sub">— the same player over longer windows, each read
       against the same number.</span></div>
     <div class="card pp-forms">${propFormRows(r.form, line, over)}</div>` : ""}
+
+    ${scriptCardHTML(r)}
 
     ${reasons ? `<div class="section-title minor">Why this pick</div>
       <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
