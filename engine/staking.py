@@ -124,6 +124,16 @@ MIN_STAKE_UNITS = 0.1
 # money staked and leaves ROI where it was, which is the one thing a
 # risk limit is supposed to buy and does not. Kelly sizing is worst
 # again, on a different board from the one that retired it.
+#
+# AND WHERE THIS QUESTION CANNOT BE ASKED, recorded so the dead end is
+# walked once. The same bake-off over the PROP board's walk-forward
+# backtest (`backtest.backtest_from_stats`, 1,094 recommended bets
+# across 2023-25) returned an IDENTICAL 10.11% for the ladder, flat and
+# the grade cap — not a tie, an artefact: without harvested closes that
+# walk prices every prop at `nflverse.build_slate`'s synthetic -110, so
+# a rule whose whole input is the price has nothing to vary over. Any
+# staking comparison needs real prices, which means the settled journal
+# — `stakecheck.py` on the box that holds it — and not this replay.
 
 #: The standard bet, at the reference price. 1u = 1% of bankroll, so at a
 #: $1,000 bankroll this is $10 — the floor Ethan asked for.
