@@ -513,6 +513,53 @@ def test_the_table_records_that_its_data_moved_underneath_it():
     assert "wide receivers" in head
 
 
+def test_the_touchdown_pairs_pick_the_man_by_his_role_not_by_his_outcome():
+    """Ethan, 2026-09-02: "measure and price" the QB-TD / WR-TD pair.
+
+    The trap: choosing the receiver by the measured market itself — the
+    teammate who scored most — selects on the outcome and manufactures
+    correlation. The WR1 is the team-week's top TARGETS, the quarterback
+    its top PASS ATTEMPTS. Built here so the decoy — a third receiver
+    who scores every week on one target — must NOT be the one measured,
+    and the recovered number is the one planted on the real WR1."""
+    import random
+    random.seed(9)
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "h.db")
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE player_game_logs (sport, season, period, "
+                     "team, player, market, value)")
+        rows = []
+        for wk in range(1, 401):
+            key = ("nfl", 2025, f"{wk:03d}", "T")
+            qb_td = random.choice([0, 0, 1, 1, 2, 3])
+            wr_td = 1 if (qb_td and random.random() < 0.6) else 0
+            rows += [key + ("QB", "pass_att", 30), key + ("QB", "pass_td", qb_td),
+                     key + ("WR1", "targets", 10), key + ("WR1", "anytime_td", wr_td),
+                     key + ("WR2", "targets", 5), key + ("WR2", "anytime_td", 0),
+                     # the decoy: one target, a touchdown every single week
+                     key + ("DECOY", "targets", 1), key + ("DECOY", "anytime_td", 1)]
+        conn.executemany("INSERT INTO player_game_logs VALUES (?,?,?,?,?,?,?)", rows)
+        conn.commit()
+        prior = next(p for p in C.PRIORS if p.key == "qb_pass_td__wr1_anytime_td")
+        f = C.fit_one(conn, prior)
+        assert f.n == 400, f.missing or f.n
+        # the planted dependence is strongly positive; measuring the decoy
+        # (constant 1) would have given nan
+        assert 0.35 < f.r < 0.85, f.r
+        assert f.r == f.r
+        conn.close()
+
+
+def test_the_touchdown_pairs_are_adopted_into_the_pricer_by_name():
+    for key, (parlay_key, sign) in C.ADOPT.items():
+        if key.endswith("anytime_td"):
+            assert parlay_key in P.MEASURED, parlay_key
+            assert sign == +1
+    assert P.MEASURED["qb_td_game"][1] >= 2000
+    assert P.MEASURED["qb_td_wr_td"][0] > P.MEASURED["qb_td_game"][0] > P.SAME_GAME_BASELINE_RHO
+
+
 if __name__ == "__main__":
     import re as _re
     declared = _re.findall(r"^def (test_\w+)",

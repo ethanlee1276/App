@@ -193,7 +193,7 @@ def test_an_unreadable_state_file_costs_the_calibration_not_the_board():
         assert G.measured("nfl", "total") is None
         # …and the pricer still prices.
         card = gamebets.price_total("nfl", "KC", "BUF", 47.0, 47.0)
-        assert card["grade"] in ("Pass", "Lean", "Play", "Strong Play")
+        assert card["grade"] in ("Pass", "B+", "A", "A+")
 
 
 # --- the direction the measurement may move the number ----------------------
@@ -229,6 +229,9 @@ def test_a_measured_zero_shrink_collapses_the_edge_onto_the_market():
     inside the credibility ceiling, so the flat prior GRADES IT A PLAY
     and the board ships it. This is a bet that used to go out and now
     does not.
+
+    "Play" became "B+" on 2026-09-02 when game lines moved onto the §10
+    0–100 grade (Ethan: "1. 0-100"); the shape of the claim is unchanged.
     """
     with sandbox_state():
         loud = gamebets.price_total("nfl", "KC", "BUF", 50.5, 47.5)
@@ -236,7 +239,7 @@ def test_a_measured_zero_shrink_collapses_the_edge_onto_the_market():
                                       "n": 899, "hit_rate": 0.507,
                                       "market": "total", "sport": "nfl"}}):
         quiet = gamebets.price_total("nfl", "KC", "BUF", 50.5, 47.5)
-    assert loud["grade"] == "Play", loud["grade"]
+    assert loud["grade"] == "B+", loud["grade"]
     assert loud["edge"] > 0.04, loud["edge"]
     assert quiet["edge"] < loud["edge"] / 10, (quiet["edge"], loud["edge"])
     assert quiet["grade"] == "Pass"

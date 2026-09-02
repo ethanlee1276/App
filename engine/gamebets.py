@@ -27,7 +27,12 @@ from dataclasses import dataclass, field
 from .statmath import normal_cdf, clamp
 from .odds import (american_to_decimal, american_to_prob, devig_two_way,
                    expected_value)
-from .betting import _grade, _kelly_stake, temper_edge, MAX_CREDIBLE_EDGE
+from .betting import _kelly_stake, temper_edge, MAX_CREDIBLE_EDGE
+# ONE GRADE (Ethan, 2026-09-02: "1. 0-100"). Game lines graded Strong Play /
+# Play / Pass through `betting._grade` until then; they now carry the same
+# §10 score and letter as every prop. `betting._grade` itself stays for the
+# replays that reproduce the old ladder.
+from .quality import game_bet_score, letter as quality_letter
 
 # NFL: SD of a game's final margin. MLB: SD of the run margin used for win prob.
 NFL_MARGIN_SD = 13.5
@@ -133,6 +138,8 @@ class MoneylineRec:
     stake_units: float
     grade: str
     reasons: list[str] = field(default_factory=list)
+    #: The §10 0–100 score the letter above is read from.
+    quality: int = 0
     #: The market haircut in force when this was priced — see
     #: `shrink_in_force`. None means nothing had been measured for the
     #: market yet and the 0.5 guess was standing in.
@@ -218,9 +225,11 @@ def _sharpify(card: dict, fair: float, soft_odds: int, ev: float,
         card["suspect_gap"] = True
         card["reasons"].insert(0, _SUSPECT_NOTE.format(ev=ev))
         return card
-    card["grade"] = ("Strong Play" if ev >= 0.06 else
-                     "Play" if ev >= 0.035 else "Lean")
-    card["stake_units"] = round(_kelly_stake(fair, soft_odds), 2)
+    card["quality"] = game_bet_score(card["edge"], card.get("bet_type") or "total")
+    card["confidence"] = round(card["quality"] / 10.0, 1)
+    card["grade"] = quality_letter(card["quality"])
+    card["stake_units"] = (round(_kelly_stake(fair, soft_odds), 2)
+                           if card["grade"] != "Pass" else 0.0)
     card["reasons"].insert(0, f"Sharp anchor: {pick_desc} implies "
                               f"{implied:.0%} but the sharp book's fair is "
                               f"{fair:.0%} — {ev:+.1%} EV on the price alone")
@@ -295,14 +304,14 @@ def price_moneyline_sharp(home: str, away: str,
     pick, is_home, fair, ml, ev = best
     soft_implied = american_to_prob(ml)
     edge = fair - soft_implied            # probability points of value
-    confidence = _ml_confidence(edge, fair)
+    quality = game_bet_score(edge, "moneyline")
+    confidence = round(quality / 10.0, 1)
     if ev > SHARP_SUSPECT_EV:
         grade, stake = "Pass", 0.0
         reasons = [_SUSPECT_NOTE.format(ev=ev)]
     else:
-        grade = ("Strong Play" if ev >= 0.06 else
-                 "Play" if ev >= 0.035 else "Lean")
-        stake = _kelly_stake(fair, ml)
+        grade = quality_letter(quality)
+        stake = _kelly_stake(fair, ml) if grade != "Pass" else 0.0
         reasons = [f"Sharp anchor: this price implies {soft_implied:.0%} but the "
                    f"sharp book prices {pick} at {fair:.0%} fair — {ev:+.1%} EV "
                    f"on the price alone"]
@@ -317,6 +326,7 @@ def price_moneyline_sharp(home: str, away: str,
         edge=round(edge, 4), odds=ml,
         ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
+        quality=quality,
     )
 
 
@@ -344,8 +354,9 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
     wp, edge, credible = temper(raw, fair, sport, "moneyline")
 
     ev = expected_value(wp, ml)
-    confidence = _ml_confidence(edge, wp)
-    grade = _grade(confidence, edge) if credible else "Pass"
+    quality = game_bet_score(edge, "moneyline") if credible else 0
+    confidence = round(quality / 10.0, 1)
+    grade = quality_letter(quality) if credible else "Pass"
     stake = _kelly_stake(wp, ml) if grade != "Pass" else 0.0
 
     reasons = list(context or [])
@@ -361,7 +372,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
         win_prob=round(wp, 4), fair_prob=round(fair, 4), edge=round(edge, 4),
         odds=ml, ev_per_unit=round(ev, 4), confidence=confidence,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
-        cal_temp=shrink_in_force(sport, "moneyline"),
+        quality=quality, cal_temp=shrink_in_force(sport, "moneyline"),
     )
 
 
@@ -397,6 +408,7 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         "confidence": rec.confidence,
         "stake_units": rec.stake_units,
         "grade": rec.grade,
+        "quality": rec.quality,
         "headline": f"{rec.pick} Moneyline ({rec.odds:+d})",
         "reasons": rec.reasons,
     }
@@ -532,8 +544,9 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
               credible=True, has_market=True, cal_temp=None):
     ev = expected_value(win, odds)
-    confidence = _ml_confidence(edge, win)
-    grade = _grade(confidence, edge) if credible else "Pass"
+    quality = game_bet_score(edge, bet_type) if credible else 0
+    confidence = round(quality / 10.0, 1)
+    grade = quality_letter(quality) if credible else "Pass"
     stake = _kelly_stake(win, odds) if grade != "Pass" else 0.0
     if not credible:
         reasons = [f"Model disagrees with the market by more than "
@@ -565,6 +578,7 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
         "odds": odds,
         "ev_per_unit": round(ev, 4),
         "confidence": confidence,
+        "quality": quality,
         "stake_units": round(stake, 2),
         "grade": grade,
         "credible": credible,

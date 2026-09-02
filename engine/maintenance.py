@@ -1071,7 +1071,12 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     # Wednesdays, and ORDER MATTERS: dial, then memory, then temperature
     # last, because the first two move the model the third is calibrating.
     # `refit_order` is the same sequence launch.py's command runs.
-    if _dt.date.today().weekday() == 2:
+    # `today`, not the wall clock: every other weekday gate in this
+    # function reads the parameter, and this one alone read the real
+    # date — so on a Wednesday the test suite's fake July Saturdays
+    # launched the REAL fitters against the box's history.db and hung
+    # for 15 minutes (found 2026-09-02, a Wednesday).
+    if today.weekday() == 2:
         try:
             from .deepfit import refit_all
             for line in refit_all():

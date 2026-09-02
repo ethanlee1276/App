@@ -1408,6 +1408,48 @@ def test_the_verdict_never_contradicts_the_cards_below_it():
     assert "cleared" in live["verdict"]
 
 
+def test_both_sides_of_one_game_total_cannot_share_a_ticket():
+    """NFL readiness audit, 2026-09-02: Over 45.5 and Under 45.5 on the
+    same game fell through to the generic same-game pace rule and came
+    back "ok, ρ +0.10". They cannot both win — §3 Type 1, the same as two
+    sides of one spread."""
+    over = gline("total", "", "CHI", "GB", side="Over", line=45.5)
+    under = gline("total", "", "CHI", "GB", side="Under", line=45.5)
+    rel = P.relate("nfl", over, under)
+    assert rel.verdict == "kill", rel
+    assert rel.clash == 1
+    assert rel.rho <= -0.9
+    # the same side twice is one opinion sold twice, not a ticket
+    rel2 = P.relate("nfl", over, dict(over))
+    assert rel2.verdict == "duplicate", rel2
+    # and the slip check refuses it with the reason on show
+    out = P.check_ticket("nfl", [over, under])
+    assert out["ok"] is False and "cannot both win" in out["reason"]
+
+
+def test_a_quarterback_and_his_receivers_touchdown_are_priced_on_the_measurement():
+    """NFL readiness audit, 2026-09-02, Ethan: "measure and price". A QB
+    pass-yards over next to his WR's anytime TD sat at the +0.10 same-game
+    floor, unmeasured; 2,844 team-weeks put it at +0.26, and the literal
+    passing-TD pair at +0.49. Neither is a clash, and the slip names the
+    number."""
+    qb = leg("QB", "GB", "CHI", "pass_yds", p=0.6)
+    wr = leg("WR1", "GB", "CHI", "anytime_td", p=0.4, odds=150)
+    rel = P.relate("nfl", qb, wr)
+    assert rel.verdict == "ok" and rel.clash == 0
+    assert rel.measured is True
+    assert rel.rho == P.rho_meta("qb_td_game")[0] > P.SAME_GAME_BASELINE_RHO
+    qbtd = leg("QB", "GB", "CHI", "pass_td", p=0.6)
+    rel2 = P.relate("nfl", qbtd, wr)
+    assert rel2.measured is True and rel2.rho == P.rho_meta("qb_td_wr_td")[0]
+    assert rel2.rho > rel.rho
+    # the reader's slip carries the measured number as its warning
+    out = P.check_ticket("nfl", [qb, wr])
+    assert out["ok"] is True
+    assert out["warnings"] and out["warnings"][0]["rho"] == round(rel.rho, 2)
+    assert "measured" in out["warnings"][0]["reason"]
+
+
 if __name__ == "__main__":
     # Collect by scanning the SOURCE, not just globals(). Tests appended
     # below this block get defined after it has already run, so they are

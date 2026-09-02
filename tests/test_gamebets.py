@@ -164,14 +164,16 @@ def test_moneyline_to_dict_shape():
 
 
 def test_price_moneyline_sharp_finds_price_value():
-    """Sharp pair -155/+135 de-vigs home to ~60%; a soft -125 implies 55.6%
-    -> ~+7% EV on the price alone, graded Play, no model needed."""
+    """Sharp pair -155/+135 de-vigs home to ~59%; a soft -125 implies 55.6%
+    -> ~+6% EV on the price alone, 3.3 points of edge, graded B+ (the §10
+    0–100 letter since 2026-09-02 — it read "Play" on the old word ladder;
+    3.3 points is exactly where the one score's 70 sits), no model needed."""
     from engine.gamebets import price_moneyline_sharp
     rec = price_moneyline_sharp("KC", "BUF", -155, 135, -125, -120)
     assert rec is not None
     assert rec.pick == "KC" and rec.pick_is_home
     assert 0.05 < rec.ev_per_unit < 0.10
-    assert rec.grade == "Play" and rec.stake_units > 0
+    assert rec.grade == "B+" and rec.stake_units > 0 and rec.quality >= 70
     assert "Sharp anchor" in rec.reasons[0]
 
 
@@ -209,7 +211,7 @@ def test_price_total_sharp_backs_the_underpriced_side():
     assert card["bet_type"] == "total" and card["side"] == "Under"
     assert card["line"] == 8.5 and card["odds"] == 100
     assert 0.02 <= card["ev_per_unit"] <= 0.15
-    assert card["grade"] in ("Lean", "Play", "Strong Play")
+    assert card["grade"] in ("B+", "A", "A+", "Pass") and card["quality"] >= 0
     assert "Sharp anchor" in card["reasons"][0]
     # No disagreement -> no pick.
     assert price_total_sharp("NYY", "BOS", 8.5, -110, -110, -110, -110) is None

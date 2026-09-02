@@ -546,7 +546,14 @@ def test_no_graded_pick_anywhere_on_the_board_loses_money():
 def test_the_ev_gate_does_not_touch_a_pick_that_does_pay():
     """A guard that also removed the good picks would be a worse bug than
     the one it fixes."""
-    good = _scan(1.06, 300, lambda p: p.grade != "Pass")
+    # Searched at an OUTLIER price since 2026-09-02, when the board moved
+    # onto the §10 0–100 grade (Ethan: "1. 0-100"): Tier 3's bar is 6% of
+    # graded edge, and a consensus-derived edge is capped at 5% by the
+    # credibility guard times the market shrink, so only a price that
+    # beats the consensus can grade at all — §8's "only at clearly
+    # outlier prices", now enforced by the same score as every prop.
+    good = next((p for p in (_priced(m / 100) for m in range(40, 61))
+                 if p.grade != "Pass"), None)
     assert good, "the EV gate left nothing gradeable at all"
     assert good.ev_per_unit > 0
     assert good.stake_units > 0
@@ -594,6 +601,11 @@ def test_a_price_that_beats_the_consensus_is_a_bet_even_when_we_disagree():
     assert pick.ev_per_unit > 0
     assert pick.grade != "Pass"
     assert pick.stake_units > 0
+    # Since 2026-09-02 the board grades on the §10 0–100 score (Ethan:
+    # "1. 0-100"): this case is 7.75 points of net edge against Tier 3's
+    # 6% bar, a B+ — an outlier price is exactly the shape §8 says a
+    # Tier 3 bet must have.
+    assert pick.grade == "B+" and pick.quality >= 70
 
 
 def test_selection_keeps_a_positive_ev_pick_the_old_filter_threw_out():

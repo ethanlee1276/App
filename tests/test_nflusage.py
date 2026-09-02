@@ -138,9 +138,13 @@ def test_measured_red_zone_changes_the_pick_story():
     measured = RedZoneUsage(carries_inside_5=1.0, carries_inside_10=2.0,
                             targets_inside_10=0.5, rz_touch_share=0.30,
                             measured=True)
+    # `require_edge=False`: this is about the STORY on the card, not the
+    # grade. Since 2026-09-02 the board grades on the §10 0–100 score,
+    # and a credible four-point disagreement at +120 is a Pass under
+    # Tier 3's 6% bar — the pick is still built, ranked and explained.
     picks = build_td_longshots(
         [cand("Measured Back", measured, snap=0.72), cand("Proxy Back")],
-        limit=6, per_game=6)
+        limit=6, per_game=6, require_edge=False)
     by = {p.player: p for p in picks}
     m = by["Measured Back"]
     assert not any("inferred" in c for c in m.caveats)
