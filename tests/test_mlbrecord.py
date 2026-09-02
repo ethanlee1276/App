@@ -227,6 +227,39 @@ def test_the_cli_runs_read_only_end_to_end(capsys=None):
     assert M.main(["--db", path + ".missing"]) == 2
 
 
+def test_roi_at_close_is_also_scored_on_the_same_line_subset():
+    """A closing price for a DIFFERENT line is not comparable to the price
+    taken. The droplet run printed +17.2% at close against −5.7% at
+    price — a rule-5 number — so the same-line subset is printed beside
+    it. Here every close carries its own line (A, B, D at the line bet),
+    so the subset is the whole closed set."""
+    o = M.report(_conn())["overall"]
+    assert o["n_same_line_close"] == 3
+    assert _close(o["roi_at_close_same_line"], o["roi_at_close"], 1e-6)
+    assert _close(o["roi_at_price_same_line"], o["roi_at_price_closed_subset"], 1e-6)
+
+
+def test_a_close_for_a_moved_line_is_counted_out_of_the_same_line_subset():
+    conn = _conn()
+    conn.execute("UPDATE bets SET closing_line=1.5 WHERE player='A'")
+    conn.commit()
+    o = M.report(conn)["overall"]
+    assert o["n_with_close"] == 3 and o["n_same_line_close"] == 2
+    # B lost at close −130 (−1), D won at −110 (+.9091): −.0909 over 2u
+    assert _close(o["roi_at_close_same_line"], -0.0455, 1e-3)
+
+
+def test_the_verdict_reads_the_direction_of_the_close_gap():
+    s = dict(n=500, roi_at_price=-0.057, roi_at_close=0.172, clv_mean_pts=-0.03,
+             n_with_close=295, flat_roi_ci95=(-0.1, 0.02))
+    v = M.verdict(s)
+    assert "ROI AT CLOSE ABOVE 10%" in v
+    assert "market moved AGAINST these bets" in v
+    s = dict(n=500, roi_at_price=0.02, roi_at_close=-0.01, clv_mean_pts=0.01,
+             n_with_close=295, flat_roi_ci95=(-0.1, 0.05))
+    assert "beat the close" in M.verdict(s)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

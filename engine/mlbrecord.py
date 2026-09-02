@@ -197,6 +197,20 @@ def score(rows: list[dict]) -> dict:
     close_net = sum(pnl_at(b, b["closing_odds"], float(b.get("stake_units") or 0.0))
                     for b in with_close)
     clvs = [c for c in (price_clv(b) for b in with_close) if c is not None]
+    # A closing PRICE is only comparable to the price taken when it is
+    # for the SAME LINE. A hits over 1.5 taken at +120 that "closes" as
+    # the 0.5 line at -200 is a different bet, and a close-side ROI built
+    # on such rows can say anything. Ethan's droplet run (2026-09-02)
+    # printed +17.2% at close against -5.7% at price, which is a rule-5
+    # number; this subset is the check.
+    same_line = [b for b in with_close
+                 if b.get("closing_line") is None
+                 or b.get("line") is None
+                 or float(b["closing_line"]) == float(b["line"])]
+    same_staked = sum(float(b.get("stake_units") or 0.0) for b in same_line)
+    same_net_price = sum(float(b.get("pnl_units") or 0.0) for b in same_line)
+    same_net_close = sum(pnl_at(b, b["closing_odds"], float(b.get("stake_units") or 0.0))
+                         for b in same_line)
 
     # Flat 1u vs the stakes actually used. Flat is the control: same
     # bets, same results, sizing removed.
@@ -236,6 +250,9 @@ def score(rows: list[dict]) -> dict:
         "n_with_close": len(with_close),
         "roi_at_price_closed_subset": _r(_roi(close_net_at_price, close_staked)),
         "roi_at_close": _r(_roi(close_net, close_staked)),
+        "n_same_line_close": len(same_line),
+        "roi_at_price_same_line": _r(_roi(same_net_price, same_staked)),
+        "roi_at_close_same_line": _r(_roi(same_net_close, same_staked)),
         "clv_mean_pts": round(sum(clvs) / len(clvs), 4) if clvs else None,
         "clv_beat_share": round(sum(1 for c in clvs if c > 0) / len(clvs), 4) if clvs else None,
         "flat_roi": _r(_roi(flat_net, float(n))),
@@ -368,6 +385,17 @@ def verdict(s: dict) -> str:
                          "not distinguishable from zero at this sample")
     if roi is not None and roi > 0.10:
         parts.append("ABOVE 10% — treat as a bug until proven otherwise (brief rule 5)")
+    if close is not None and close > 0.10:
+        parts.append("ROI AT CLOSE ABOVE 10% — a rule-5 number: check the "
+                     "same-line subset before believing it")
+    if close is not None and roi is not None:
+        if close > roi:
+            parts.append("close-side ROI above price-side ROI means the closes "
+                         "were LONGER than the prices taken — the market moved "
+                         "AGAINST these bets after they were placed")
+        elif close < roi:
+            parts.append("price-side ROI above close-side ROI: the market moved "
+                         "toward these bets — they beat the close")
     return "; ".join(parts)
 
 
@@ -397,6 +425,8 @@ def _line(name: str, s: dict) -> str:
     return (f"{name:<22} n={s['n']:<5} hit {hit:>6} vs BE {be:>6} | "
             f"ROI@price {_pct(s['roi_at_price'])} "
             f"| close: n={s['n_with_close']} ROI@close {_pct(s['roi_at_close'])} "
+            f"(same line: n={s['n_same_line_close']} "
+            f"{_pct(s['roi_at_price_same_line'])}→{_pct(s['roi_at_close_same_line'])}) "
             f"CLV {clv} beat {beat} "
             f"| flat {_pct(s['flat_roi'])} | DD {s['max_drawdown_u']:.1f}u "
             f"| L-streak {s['longest_losing_streak']}")
@@ -451,7 +481,10 @@ def render(r: dict) -> str:
               f"net {p['singles_net_flat']:+.3f}u, ROI {_pct(p['singles_roi_flat'])}"]
     lines += ["", f"Verdict floor: {r['min_n_for_verdict']} settled bets. "
               "Close-side numbers use only the bets that carry a closing price; "
-              "the count is printed beside each."]
+              "the count is printed beside each. \"same line\" is the subset whose "
+              "closing price is for the line we bet — the only rows where "
+              "ROI@price→ROI@close is a like-for-like comparison. CLV is in "
+              "probability points (x100), positive = the market moved toward us."]
     return "\n".join(lines)
 
 
