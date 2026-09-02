@@ -710,7 +710,17 @@ def settle_open(log=print, state_path: Path | None = None,
             # does the model forecast better than guessing?
             try:
                 from . import lab
-                lab.run_if_due(hconn=hconn, log=log)
+                # Same discipline as the deep refit: the lab replays
+                # whole seasons in memory and its own "done" stamp is
+                # written only when it finishes, so a killed run would
+                # be due again on the next cycle. Attempted once a day,
+                # and out of process.
+                if lab._due(Path(lab.LAB_PATH), today) \
+                        and state.get("lab_attempted") != today.isoformat():
+                    state["lab_attempted"] = today.isoformat()
+                    _save_state(state_path, state)
+                    for line in _run_lab(log):
+                        log(f"  {line}")
             except Exception as exc:  # noqa: BLE001
                 log(f"  ⚠️  backtest lab skipped: {exc}")
         if settled or fixed or parlays_moved:
@@ -754,6 +764,54 @@ def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
     cap = yesterday - _dt.timedelta(days=MAX_CATCH_UP_DAYS - 1)
     last = _last_result_day(hconn, sport) if hconn is not None else None
     return max(last or floor, cap)
+
+
+#: How long a weekly fitter may run before it is cut off. The deep refit
+#: was measured in minutes per season on the droplet; an hour is room,
+#: not a target, and a job that needs more than that is a job to split.
+WEEKLY_JOB_TIMEOUT_S = 3600
+
+
+def _run_module(module: str, log, timeout: int = WEEKLY_JOB_TIMEOUT_S,
+                args: tuple = ()) -> list[str]:
+    """Run ``python3 -m module`` as a niced child and return its lines.
+
+    A child, not an import: everything the weekly fitters load — every
+    ingested season, every replayed prop — is freed when the child
+    exits instead of sitting in the server's heap, and if the box cannot
+    afford the job it is the child the OOM killer takes. The unit's
+    OOMPolicy=continue is what lets the server survive that; without it
+    systemd would stop the whole service when any process in the cgroup
+    is killed. Never raises: a fitter that dies is a logged line, not a
+    dead maintenance pass.
+    """
+    import subprocess
+    import sys
+    cmd = [sys.executable, "-m", module, *args]
+    nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    try:
+        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                              text=True, timeout=timeout, preexec_fn=nicer)
+    except subprocess.TimeoutExpired:
+        return [f"⚠️  {module}: cut off after {timeout}s"]
+    except Exception as exc:  # noqa: BLE001
+        return [f"⚠️  {module}: could not start — {exc}"]
+    lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    if proc.returncode != 0:
+        tail = ((proc.stderr or "").strip().splitlines() or ["no output"])[-1]
+        lines.append(f"⚠️  {module}: exit {proc.returncode} — {tail[:200]}")
+    return lines
+
+
+def _run_deep_refit(log) -> list[str]:
+    """The Wednesday deep fitters, out of process. Injectable for tests,
+    which must never spawn the real fitters against the box."""
+    return _run_module("engine.deepfit", log)
+
+
+def _run_lab(log) -> list[str]:
+    """The weekly backtest lab, out of process — see `_run_module`."""
+    return _run_module("engine.lab", log, args=("--auto",))
 
 
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
@@ -1076,10 +1134,29 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     # date — so on a Wednesday the test suite's fake July Saturdays
     # launched the REAL fitters against the box's history.db and hung
     # for 15 minutes (found 2026-09-02, a Wednesday).
-    if today.weekday() == 2:
+    if today.weekday() == 2 and state.get("deep_attempted") != today.isoformat():
+        # THE MARKER IS WRITTEN BEFORE THE WORK, and that is the whole
+        # fix. On Wednesday 2026-09-02 the deep refit ran here, IN THE
+        # SERVER PROCESS, for the first time in production. It loads
+        # every ingested season and replays every prop week by week; the
+        # process passed the unit's 1600 MB cap and the OOM killer took
+        # it — the server, port and all. `last_done` is written at the
+        # END of this function, so the day was never marked, systemd
+        # restarted the unit three seconds later, the first cycle ran
+        # the chores again, and the site cycled up-for-two-minutes,
+        # dead-for-three from 01:24 to the afternoon: 223 kills, and the
+        # StartLimit guard never fired because it counts restarts per
+        # minute and this loop was slower than that.
+        #
+        # Two things follow. The attempt is recorded before it starts,
+        # so a job that dies takes one day off rather than every cycle
+        # of it. And the fitters run in a CHILD process (below), so if
+        # the box cannot afford them the child is what the kernel
+        # takes, and the site keeps serving.
+        state["deep_attempted"] = today.isoformat()
+        _save_state(state_path, state)
         try:
-            from .deepfit import refit_all
-            for line in refit_all():
+            for line in _run_deep_refit(log):
                 log(f"  {line}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  deep refit skipped: {exc}")

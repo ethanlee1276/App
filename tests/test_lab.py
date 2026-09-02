@@ -243,7 +243,14 @@ def test_the_maintenance_pass_runs_the_lab():
     backtest you have to remember to run is a backtest that stops running."""
     src = open(os.path.join(ROOT, "engine", "maintenance.py"),
                encoding="utf-8").read()
-    assert "lab.run_if_due" in src
+    # Out of process since 2026-09-02: the pass calls `_run_lab`, which
+    # runs `python3 -m engine.lab --auto`, and --auto is `run_if_due`.
+    assert "_run_lab(log)" in src
+    import inspect
+    from engine import maintenance as _m
+    assert "engine.lab" in inspect.getsource(_m._run_lab)
+    assert '"--auto"' in inspect.getsource(_m._run_lab)
+    assert "run_if_due(hconn=hconn, log=print)" in inspect.getsource(lab.main)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Tests for the daily self-maintenance loop (stubbed chores, temp state)."""
 
 import datetime as dt
+import json
 import os
 import sys
 import tempfile
@@ -573,10 +574,12 @@ def test_the_wednesday_deep_refit_reads_the_today_it_was_given(monkeypatch):
     (2026-09-02) the suite's fake July Saturdays therefore spawned the
     real fitters against data/history.db and hung for 15 minutes — a
     test reading the box it runs on, which test_preservation forbids."""
-    from engine import db, ingest, ledger, deepfit
+    from engine import db, ingest, ledger
     ran = []
-    monkeypatch.setattr(deepfit, "refit_all",
-                        lambda db="data/history.db": ran.append(db) or [])
+    # The refit runs OUT OF PROCESS now (2026-09-02); the runner is the
+    # seam, and stubbing it is what keeps this test off the box.
+    monkeypatch.setattr(maintenance, "_run_deep_refit",
+                        lambda log: ran.append("data/history.db") or [])
     monkeypatch.setattr(ingest, "ingest_mlb_results",
                         lambda conn, start, end, with_logs=True, progress=None:
                         {"games": 0, "player_logs": 0, "skipped": []})
@@ -595,6 +598,92 @@ def test_the_wednesday_deep_refit_reads_the_today_it_was_given(monkeypatch):
                                state_path=Path(td) / "b.json",
                                today=dt.date(2026, 7, 22))
         assert ran == ["data/history.db"]
+
+
+def _quiet(monkeypatch):
+    from engine import db, ingest, ledger
+    monkeypatch.setattr(ingest, "ingest_mlb_results",
+                        lambda conn, start, end, with_logs=True, progress=None:
+                        {"games": 0, "player_logs": 0, "skipped": []})
+    monkeypatch.setattr(ledger, "settle_from_history", lambda c, h, sport=None: 0)
+    monkeypatch.setattr(ledger, "connect", lambda path=None: None)
+    monkeypatch.setattr(db, "connect", lambda path=None: None)
+    monkeypatch.setattr(maintenance, "_wnba_day", None)
+
+
+def test_the_deep_refit_is_attempted_once_a_day_even_if_it_dies(monkeypatch):
+    """2026-09-02, a Wednesday. The refit ran in the server process, the
+    OOM killer took it, `last_done` had not been written, and every
+    restart ran it again: 223 kills. The attempt is recorded BEFORE the
+    work now, so a job that dies takes one day off, not every cycle."""
+    _quiet(monkeypatch)
+    calls = []
+
+    def dies(log):
+        calls.append("run")
+        raise MemoryError("the kernel took the child")
+
+    monkeypatch.setattr(maintenance, "_run_deep_refit", dies)
+    with tempfile.TemporaryDirectory() as td:
+        state = Path(td) / "m.json"
+        wed = dt.date(2026, 9, 2)
+        maintenance.run_if_due(harvest=False, log=lambda *_: None,
+                               state_path=state, today=wed)
+        assert calls == ["run"]
+        assert json.loads(state.read_text())["deep_attempted"] == "2026-09-02"
+        # The same day again, with the day NOT marked done (force the
+        # chores to re-run the way a restart does): no second attempt.
+        maintenance.run_if_due(force=True, harvest=False, log=lambda *_: None,
+                               state_path=state, today=wed)
+        assert calls == ["run"]
+        # Next Wednesday it is due again.
+        maintenance.run_if_due(force=True, harvest=False, log=lambda *_: None,
+                               state_path=state, today=wed + dt.timedelta(days=7))
+        assert calls == ["run", "run"]
+
+
+def test_the_marker_is_written_before_the_refit_starts(monkeypatch):
+    _quiet(monkeypatch)
+    seen = []
+    holder = {}
+
+    def peek(log):
+        seen.append(json.loads(holder["state"].read_text()).get("deep_attempted"))
+        return []
+
+    monkeypatch.setattr(maintenance, "_run_deep_refit", peek)
+    with tempfile.TemporaryDirectory() as td:
+        holder["state"] = Path(td) / "m.json"
+        maintenance.run_if_due(harvest=False, log=lambda *_: None,
+                               state_path=holder["state"], today=dt.date(2026, 9, 2))
+    assert seen == ["2026-09-02"]
+
+
+def test_the_weekly_fitters_run_out_of_process(monkeypatch):
+    """Everything a fitter loads is freed when the child exits, and if the
+    box cannot afford it the child is what the kernel takes."""
+    import inspect
+    src = inspect.getsource(maintenance._run_module)
+    assert "subprocess.run" in src and '"-m", module' in src
+    assert "engine.deepfit" in inspect.getsource(maintenance._run_deep_refit)
+    assert "engine.lab" in inspect.getsource(maintenance._run_lab)
+    assert "refit_all()" not in inspect.getsource(maintenance.run_if_due)
+    assert "lab.run_if_due(" not in inspect.getsource(maintenance.run_if_due)
+
+
+def test_a_child_that_dies_is_a_logged_line_not_a_dead_pass(monkeypatch):
+    import subprocess
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            subprocess.TimeoutExpired(a[0], k.get("timeout", 0))))
+    lines = maintenance._run_module("engine.nothing", lambda *_: None, timeout=1)
+    assert lines and "cut off" in lines[0]
+
+
+def test_the_unit_lets_the_server_outlive_a_killed_child(monkeypatch):
+    unit = (Path(__file__).resolve().parent.parent / "deploy" / "qellys.service").read_text()
+    assert "\nOOMPolicy=continue" in unit
+    assert "\nMemoryMax=1600M" in unit
 
 
 if __name__ == "__main__":

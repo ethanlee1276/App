@@ -706,9 +706,18 @@ def main(argv=None) -> int:
     ap.add_argument("--bets", action="store_true",
                     help="Print every settled NFL bet with its price and "
                          "result, plus a per-price-band summary")
+    ap.add_argument("--auto", action="store_true",
+                    help="The maintenance lane: build and publish the lab "
+                         "if it is due, print one status line. Run as a "
+                         "child of the server since 2026-09-02 so the "
+                         "replay's memory never sits in the serving process")
     args = ap.parse_args(argv)
 
     hconn = _db.connect()
+    if args.auto:
+        status = run_if_due(hconn=hconn, log=print)
+        print(f"lab: {status}")
+        return 0
     if args.bets:
         # ITS OWN PATH, and NFL only. The bet rows live on the
         # BacktestReport, which `build()` has already flattened to JSON by

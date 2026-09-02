@@ -116,12 +116,23 @@ def test_the_row_floor_sits_below_every_fitters_own_gate():
 def test_the_nightly_runs_it_weekly_and_in_a_guard():
     src = open(os.path.join(ROOT, "engine", "maintenance.py"),
                encoding="utf-8").read()
-    assert "from .deepfit import refit_all" in src
+    # Out of process since 2026-09-02: the pass calls `_run_deep_refit`,
+    # which spawns `python3 -m engine.deepfit` (its __main__ is
+    # refit_all) — the Wednesday it ran in-process it was OOM-killed 223
+    # times. The import lives in the child now, not the server.
+    assert "from .deepfit import refit_all" not in src
+    assert "_run_deep_refit(log)" in src
+    import inspect
+    from engine import maintenance as _m
+    assert "engine.deepfit" in inspect.getsource(_m._run_deep_refit)
     # Weekly, not nightly: this is the slow fit.
     block = src[src.index("The DEEP fitters, weekly"):]
-    block = block[:block.index("refit_all()") + 200]
+    block = block[:block.index("_run_deep_refit(log)") + 200]
     assert "weekday() == 2" in block
     assert "except Exception" in block
+    # Attempted once a day, marked BEFORE it starts.
+    assert 'state["deep_attempted"] = today.isoformat()' in block
+    assert block.index('state["deep_attempted"]') < block.index("_run_deep_refit(log)")
 
 
 if __name__ == "__main__":
