@@ -405,6 +405,24 @@ def test_a_game_row_with_no_team_or_line_is_refused_not_stranded():
     assert n == 0
 
 
+def test_the_page_shows_that_cut_where_a_reader_will_see_it():
+    """A measurement nobody can read is not a measurement — the rule
+    that got `likely_report` written in the first place. The weekly log
+    is for whoever reads logs; the Record page is where a reader goes."""
+    js = _src("web", "js", "app.js")
+    assert "function recLikelyGameLines(lk)" in js
+    body = _fn(js, "recLikelyGameLines")
+    assert "by_sport_market" in body
+    assert "marketWord(m)" in body, "a raw market key would reach the column"
+    # It is drawn from the section that owns the likely book, not bolted
+    # onto some other table.
+    sec = js[js.index("function recLikelySection(lk)"):]
+    sec = sec[:sec.index("\nfunction ")]
+    assert "recLikelyGameLines(lk)" in sec
+    # And it says why the pooled table above it is not enough.
+    assert "different models" in body
+
+
 def test_the_record_cuts_the_game_rows_per_sport_and_market():
     """Whether the leans drag or lift a sport's book is read off the
     record per sport and market, not off a line that pools the NFL's

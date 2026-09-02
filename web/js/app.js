@@ -9376,7 +9376,48 @@ function recLikelySection(lk) {
     ${markets ? `<div style="opacity:.7;font-size:.9em;margin-top:14px">By market —
       these are the shelves on the board. If one holds up and another does not,
       that is a shelf-level decision.</div>
-      <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}`;
+      <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}
+    ${recLikelyGameLines(lk)}`;
+}
+
+/* THE GAME ROWS, PER SPORT, because the table above pools them.
+
+   The board began carrying game lines on 2026-09-02 — moneylines
+   ranked, spreads and totals as labelled leans — and they journal to
+   the same book as the player rows. `by_market` above therefore mixes
+   an NFL moneyline with an MLB one, and those are different models with
+   different records: the pooled line can read fine while one sport
+   quietly pays for the other.
+
+   `ledger.likely_report` cuts it per sport and market; the weekly
+   maintenance log already prints it. This is the same cut on the page a
+   reader actually opens, which is the rule this bucket exists under —
+   a measurement nobody can read is not a measurement. */
+function recLikelyGameLines(lk) {
+  const by = (lk || {}).by_sport_market || {};
+  const sports = Object.keys(by).sort();
+  if (!sports.length) return "";
+  const pct1 = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+  const rows = sports.map((sp) => {
+    const markets = by[sp] || {};
+    return Object.keys(markets).sort().map((m) => {
+      const d = markets[m] || {};
+      return `<div class="rl-row ${d.actual >= d.claimed ? "won" : "lost"}">
+        <span class="rl-date">${escapeHtml(sp.toUpperCase())}</span>
+        <span class="rl-main">${escapeHtml(marketWord(m))} — said ${pct1(d.claimed)}
+          · hit <strong>${pct1(d.actual)}</strong></span>
+        <span class="rl-proc">${d.w}/${d.n}</span>
+        <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${
+          (d.roi * 100).toFixed(1)}%</span>
+      </div>`;
+    }).join("");
+  }).join("");
+  if (!rows) return "";
+  return `<div style="opacity:.7;font-size:.9em;margin-top:14px">Game lines, per
+    sport — the table above pools them, and an NFL moneyline and an MLB one are
+    different models. Moneylines are ranked; spreads and totals ride as leans and
+    say so on the board.</div>
+    <div class="card" style="padding:0;margin-top:6px">${rows}</div>`;
 }
 
 function recLongshotSection(ls) {
