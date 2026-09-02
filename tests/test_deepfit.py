@@ -125,6 +125,7 @@ def test_the_nightly_runs_it_weekly_and_in_a_guard():
     import inspect
     from engine import maintenance as _m
     assert "engine.deepfit" in inspect.getsource(_m._run_deep_refit)
+    assert "_spawn_module(" in inspect.getsource(_m._run_deep_refit)
     # Weekly, not nightly: this is the slow fit.
     block = src[src.index("The DEEP fitters, weekly"):]
     block = block[:block.index("_run_deep_refit(log)") + 200]

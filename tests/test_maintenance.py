@@ -659,25 +659,80 @@ def test_the_marker_is_written_before_the_refit_starts(monkeypatch):
     assert seen == ["2026-09-02"]
 
 
-def test_the_weekly_fitters_run_out_of_process(monkeypatch):
+def test_the_weekly_fitters_run_out_of_process_and_detached(monkeypatch):
     """Everything a fitter loads is freed when the child exits, and if the
-    box cannot afford it the child is what the kernel takes."""
+    box cannot afford it the child is what the kernel takes. DETACHED,
+    because the refresh loop runs the chores before any board: a child
+    the loop waited on froze every board for the length of the fit."""
     import inspect
-    src = inspect.getsource(maintenance._run_module)
-    assert "subprocess.run" in src and '"-m", module' in src
+    import re
+    # The code, not the docstring that explains why the old way was wrong.
+    src = re.sub(r'""".*?"""', "", inspect.getsource(maintenance._spawn_module),
+                 flags=re.S)
+    assert "subprocess.Popen" in src and '"-m", module' in src
+    assert "subprocess.run" not in src and ".wait(" not in src
     assert "engine.deepfit" in inspect.getsource(maintenance._run_deep_refit)
     assert "engine.lab" in inspect.getsource(maintenance._run_lab)
-    assert "refit_all()" not in inspect.getsource(maintenance.run_if_due)
-    assert "lab.run_if_due(" not in inspect.getsource(maintenance.run_if_due)
+    body = inspect.getsource(maintenance.run_if_due)
+    assert "refit_all()" not in body and "lab.run_if_due(" not in body
+    # reaped every cycle, ahead of the once-a-day gate
+    assert body.index("reap_children(log)") < body.index('state.get("last_done")')
 
 
-def test_a_child_that_dies_is_a_logged_line_not_a_dead_pass(monkeypatch):
-    import subprocess
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: (_ for _ in ()).throw(
-                            subprocess.TimeoutExpired(a[0], k.get("timeout", 0))))
-    lines = maintenance._run_module("engine.nothing", lambda *_: None, timeout=1)
-    assert lines and "cut off" in lines[0]
+class _FakeProc:
+    def __init__(self, code=None):
+        self.code, self.pid, self.killed = code, 4242, False
+
+    def poll(self):
+        return self.code
+
+    def kill(self):
+        self.killed = True
+        self.code = -9
+
+    def wait(self):
+        return self.code
+
+
+def test_a_finished_child_is_logged_once_with_its_tail(monkeypatch):
+    import io
+    with tempfile.TemporaryDirectory() as td:
+        logp = Path(td) / "weekly_x.log"
+        logp.write_text("line one\nline two\n")
+        maintenance._CHILDREN.clear()
+        maintenance._CHILDREN["engine.x"] = {"proc": _FakeProc(0), "started": 0.0,
+                                             "log": logp, "fh": io.StringIO()}
+        got = maintenance.reap_children(lambda *_: None, now=600.0)
+        assert got[0].startswith("engine.x: finished in 10 min with exit 0")
+        assert "  line two" in got
+        assert "engine.x" not in maintenance._CHILDREN
+        assert maintenance.reap_children(lambda *_: None, now=601.0) == []
+
+
+def test_a_child_past_its_ceiling_is_cut_off(monkeypatch):
+    import io
+    with tempfile.TemporaryDirectory() as td:
+        logp = Path(td) / "weekly_y.log"
+        logp.write_text("")
+        maintenance._CHILDREN.clear()
+        proc = _FakeProc(None)
+        maintenance._CHILDREN["engine.y"] = {"proc": proc, "started": 0.0,
+                                             "log": logp, "fh": io.StringIO()}
+        got = maintenance.reap_children(lambda *_: None,
+                                        now=maintenance.WEEKLY_JOB_TIMEOUT_S + 1)
+        assert proc.killed and any("cut off" in g for g in got)
+        assert "engine.y" not in maintenance._CHILDREN
+
+
+def test_a_child_still_running_is_left_alone_and_not_started_twice(monkeypatch):
+    import io
+    maintenance._CHILDREN.clear()
+    maintenance._CHILDREN["engine.deepfit"] = {"proc": _FakeProc(None), "started": 0.0,
+                                               "log": Path("/nonexistent"), "fh": io.StringIO()}
+    assert maintenance.reap_children(lambda *_: None, now=5.0) == []
+    got = maintenance._spawn_module("engine.deepfit", lambda *_: None)
+    assert "not started again" in got[0]
+    maintenance._CHILDREN.clear()
 
 
 def test_the_unit_lets_the_server_outlive_a_killed_child(monkeypatch):

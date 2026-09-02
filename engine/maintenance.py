@@ -771,47 +771,101 @@ def _catch_up_start(hconn, sport: str, yesterday: _dt.date) -> _dt.date:
 #: not a target, and a job that needs more than that is a job to split.
 WEEKLY_JOB_TIMEOUT_S = 3600
 
+#: The weekly children this process has started and not yet reaped:
+#: ``{module: {"proc", "started", "log"}}``. Module-level on purpose —
+#: the refresh loop calls `run_if_due` every cycle, and the reaping has
+#: to see the children an earlier cycle spawned.
+_CHILDREN: dict = {}
 
-def _run_module(module: str, log, timeout: int = WEEKLY_JOB_TIMEOUT_S,
-                args: tuple = ()) -> list[str]:
-    """Run ``python3 -m module`` as a niced child and return its lines.
 
-    A child, not an import: everything the weekly fitters load — every
-    ingested season, every replayed prop — is freed when the child
-    exits instead of sitting in the server's heap, and if the box cannot
-    afford the job it is the child the OOM killer takes. The unit's
-    OOMPolicy=continue is what lets the server survive that; without it
-    systemd would stop the whole service when any process in the cgroup
-    is killed. Never raises: a fitter that dies is a logged line, not a
-    dead maintenance pass.
+def _child_log_path(module: str) -> Path:
+    return ROOT / "data" / "cache" / f"weekly_{module.rsplit('.', 1)[-1]}.log"
+
+
+def _spawn_module(module: str, log, args: tuple = ()) -> list[str]:
+    """Start ``python3 -m module`` as a niced, DETACHED child.
+
+    Detached, and that word is the fix. The first version of this ran the
+    child with `subprocess.run` and waited — and the refresh loop calls
+    the daily chores BEFORE it rebuilds a single board, so on the
+    fitters' day every board on the site stood still until the refit
+    and then the lab had finished, up to an hour each. A weekly job that
+    freezes the day's boards is the outage in a different coat. Now the
+    child is started and left; its output goes to a log file under
+    data/cache; and `reap_children` — called every cycle — logs its exit
+    when it lands, and cuts it off past WEEKLY_JOB_TIMEOUT_S.
+
+    Everything the child loads is freed when it exits, and if the box
+    cannot afford the job it is the child the OOM killer takes; the
+    unit's OOMPolicy=continue is what lets the server survive that.
+    Never raises: a fitter that cannot start is a logged line.
     """
     import subprocess
     import sys
+    import time as _time
+    if module in _CHILDREN:
+        return [f"{module}: still running from an earlier cycle — not started again"]
     cmd = [sys.executable, "-m", module, *args]
     nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+    path = _child_log_path(module)
     try:
-        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
-                              text=True, timeout=timeout, preexec_fn=nicer)
-    except subprocess.TimeoutExpired:
-        return [f"⚠️  {module}: cut off after {timeout}s"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fh = open(path, "w", encoding="utf-8")
+        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=fh, stderr=subprocess.STDOUT,
+                                preexec_fn=nicer, start_new_session=True)
     except Exception as exc:  # noqa: BLE001
         return [f"⚠️  {module}: could not start — {exc}"]
-    lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
-    if proc.returncode != 0:
-        tail = ((proc.stderr or "").strip().splitlines() or ["no output"])[-1]
-        lines.append(f"⚠️  {module}: exit {proc.returncode} — {tail[:200]}")
-    return lines
+    _CHILDREN[module] = {"proc": proc, "started": _time.time(), "log": path, "fh": fh}
+    return [f"{module}: started in the background (pid {proc.pid}), "
+            f"output in {path.relative_to(ROOT)}"]
+
+
+def reap_children(log=print, now: float | None = None) -> list[str]:
+    """Log every weekly child that has finished since the last cycle, and
+    cut off any that has run past its ceiling. Called every cycle."""
+    import time as _time
+    now = _time.time() if now is None else now
+    out = []
+    for module, c in list(_CHILDREN.items()):
+        proc = c["proc"]
+        code = proc.poll()
+        if code is None and now - c["started"] > WEEKLY_JOB_TIMEOUT_S:
+            try:
+                proc.kill()
+            except Exception:  # noqa: BLE001
+                pass
+            code = proc.wait() if hasattr(proc, "wait") else -9
+            out.append(f"⚠️  {module}: cut off after {WEEKLY_JOB_TIMEOUT_S}s")
+        if code is None:
+            continue
+        try:
+            c["fh"].close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            tail = [ln for ln in c["log"].read_text(encoding="utf-8").splitlines()
+                    if ln.strip()][-12:]
+        except Exception:  # noqa: BLE001
+            tail = []
+        mins = (now - c["started"]) / 60.0
+        out.append(f"{module}: finished in {mins:.0f} min with exit {code}"
+                   + ("" if code == 0 else " ⚠️"))
+        out.extend(f"  {ln}" for ln in tail)
+        del _CHILDREN[module]
+    for line in out:
+        log(f"  {line}")
+    return out
 
 
 def _run_deep_refit(log) -> list[str]:
-    """The Wednesday deep fitters, out of process. Injectable for tests,
-    which must never spawn the real fitters against the box."""
-    return _run_module("engine.deepfit", log)
+    """The Wednesday deep fitters, out of process and detached.
+    Injectable for tests, which must never spawn the real fitters."""
+    return _spawn_module("engine.deepfit", log)
 
 
 def _run_lab(log) -> list[str]:
-    """The weekly backtest lab, out of process — see `_run_module`."""
-    return _run_module("engine.lab", log, args=("--auto",))
+    """The weekly backtest lab, out of process and detached."""
+    return _spawn_module("engine.lab", log, args=("--auto",))
 
 
 def run_if_due(force: bool = False, harvest: bool = True, log=print,
@@ -824,6 +878,9 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     """
     state_path = state_path or STATE_PATH
     today = today or _dt.date.today()
+    # Every cycle, before the once-a-day gate: the weekly children an
+    # earlier cycle started are logged when they finish, or cut off.
+    reap_children(log)
     state = _load_state(state_path)
     if not force and state.get("last_done") == today.isoformat():
         return False
