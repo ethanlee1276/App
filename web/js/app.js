@@ -5565,6 +5565,32 @@ function showableLikelyRow(r) {
   return odds == null || Number(odds) >= LIKELY_HEAVIEST_PRICE;
 }
 
+/* WHY THE BOARD IS THE SIZE IT IS, on a board that HAS rows.
+
+   `likely_census` counts what the one bar refused, and until now the
+   page read it only when the board came back empty. That is the rarer
+   case and the less confusing one: an empty board with a reason reads
+   as a working system, while a SHORT board with no reason reads as the
+   model having nothing to say. The censuses this bucket actually
+   produces are large — 18 NFL and 162 MLB refusals on 2026-09-02 — and
+   a reader looking at four cards had no way to know that 162 rows were
+   considered and turned down, or why.
+
+   The engine already counts it and `engine/likely.build` already hands
+   it back. This is the same sentence the empty state gets, in the place
+   the question is actually asked. */
+function likelyRefusedNote(census, shown) {
+  const c = census || {};
+  const total = Object.values(c).reduce((n, v) => n + (Number(v) || 0), 0);
+  if (!total) return "";
+  const parts = Object.entries(c)
+    .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+    .map(([k, n]) => `${n} ${escapeHtml(k)}`);
+  return `<div class="ls-note" style="opacity:.75">
+    <b>${shown} shown, ${total} turned down.</b> ${parts.join(" · ")}. The bar is
+    the same for every row and the board would rather be short than lower it.</div>`;
+}
+
 function likelyEmptyWhy(census) {
   const c = census || {};
   if (c["no market measured to rank yet"]) {
@@ -5655,7 +5681,8 @@ function renderLikely() {
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
     row(s) sit in markets we can rank but not price — they carry a note saying
-    so.` : ""}</div>`;
+    so.` : ""}</div>
+    ${likelyRefusedNote(state.data.likely_census, rows.length)}`;
   /* SHELVES, NOT ONE FLAT LIST. Ethan, 2026-08-30: "for someone betting
      nfl, they wanna find good props and td props, so lets lay it out that
      way." Every market used to be interleaved by probability, which is

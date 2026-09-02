@@ -493,6 +493,32 @@ def test_from_prop_carries_the_engine_numbers_the_bar_needs():
     assert got["fair_prob"] == row["fair_prob"]
 
 
+def test_a_short_board_says_how_many_it_turned_down():
+    """`likely_census` was read only when the board came back EMPTY —
+    the rarer case and the less confusing one. An empty board with a
+    reason reads as a working system; a SHORT board with no reason
+    reads as the model having nothing to say. The real censuses are
+    large (18 NFL and 162 MLB refusals on 2026-09-02), so a reader
+    looking at four cards could not know 162 rows were considered."""
+    import os as _os
+    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), "web", "js", "app.js"),
+            encoding="utf-8") as f:
+        js = f.read()
+    assert "function likelyRefusedNote(census, shown)" in js
+    body = js[js.index("function likelyRefusedNote(census, shown)"):]
+    body = body[:body.index("\n}")]
+    assert "turned down" in body
+    assert "escapeHtml(k)" in body, "a census key reaches the page unescaped"
+    # Drawn on the board that HAS rows, beside the trust line.
+    at = js.index("function renderLikely()")
+    full = js[at:js.index("\nfunction ", at + 10)]
+    assert "likelyRefusedNote(state.data.likely_census, rows.length)" in full
+    # …and the empty state keeps its own, different sentence.
+    assert "function likelyEmptyWhy(census)" in js
+    assert "likelyEmptyWhy(state.data.likely_census)" in full
+
+
 def test_the_page_never_labels_a_shrink_artefact_as_the_model():
     """Ethan's Gelof card read MODEL 73% on a claim of about 96%. That
     73% is `fair + shrink x (raw - fair)` — a statement about how far we
