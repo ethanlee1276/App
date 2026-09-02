@@ -440,6 +440,59 @@ def test_chalk_beyond_the_price_cap_is_refused_everywhere():
     assert K.build([], [heavy_watch]) == [],         "the touchdown chain passes the same bar"
 
 
+def test_a_row_the_engine_calls_a_data_error_is_off_this_board_too():
+    """Ethan, 2026-09-02, from a phone: "How is a under 4.5 bases -200,
+    we need to figure out how and why we showed that and fix it."
+
+    Zack Gelof, UNDER 4.5 total bases at -200, the card reading MODEL
+    73% against a book-implied 63%, projection 1.7, none of his last ten
+    games clearing 4.5 — on the Most Likely board while its own card
+    printed `betting.IMPLAUSIBLE_EDGE_REASON` in red.
+
+    THE MODEL WAS RIGHT. P(under 4.5) on a 1.7 projection is about 96%.
+    73% is what 96% becomes after `temper_edge` shrinks it toward a
+    market number that cannot be a real price for that line, and the
+    board was ranking the shrink artefact.
+
+    And the old guard could not have caught it at any threshold: since
+    `hit - fair` equals `shrink x (raw - fair)`, a shrunk gap can only
+    exceed the 10-point cap when the RAW gap exceeds 20, so every row
+    the engine refuses between 10 and 20 points passed a check made on
+    the shrunk number. The bar now asks the engine's question of the
+    engine's number."""
+    row = {"model_prob": 0.73, "side": "under", "odds": -200,
+           "book": "theScore Bet", "implied_prob": 0.63,
+           "engine_raw_prob": 0.963, "fair_prob": 0.63}
+    assert K.admissible(row) == \
+        "the model and the market disagree by more than we credit"
+    # The band that made the old check useless: 15 raw points, shrunk to
+    # well under the cap.
+    fifteen = {**row, "engine_raw_prob": 0.78, "model_prob": 0.675}
+    assert K.admissible(fifteen), "the 10-to-20 point band is still invisible"
+    # A real under, whose raw claim IS near the market, still ships.
+    ok = {**row, "line": 1.5, "odds": -250, "engine_raw_prob": 0.75,
+          "implied_prob": 0.67, "fair_prob": 0.67, "model_prob": 0.73}
+    assert K.admissible(ok) == "", K.admissible(ok)
+
+
+def test_a_maker_with_no_pre_shrink_claim_is_judged_on_what_it_has():
+    """Watch rows and game cards carry no `engine_raw_prob`; they answer
+    the credibility question on their own displayed number rather than
+    being refused for a field they never had."""
+    watch = {"model_prob": 0.66, "side": "over", "odds": -140,
+             "book": "DK", "implied_prob": 0.60}
+    assert K.engine_credible(watch) is True
+    assert K.admissible(watch) == ""
+
+
+def test_from_prop_carries_the_engine_numbers_the_bar_needs():
+    row = _prop(prob=0.62)
+    row["raw_prob"] = 0.71
+    got = K.from_prop(row, _always, fits=FITS)
+    assert got["engine_raw_prob"] == 0.71
+    assert got["fair_prob"] == row["fair_prob"]
+
+
 def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
     """2026-09-02: the droplet served a PRE-FIX board file while its
     builds were starved, and the page happily drew the -1200 unders the

@@ -203,6 +203,50 @@ def _credible(prob, fair) -> bool:
         return True
 
 
+def engine_credible(row: dict) -> bool:
+    """The ENGINE's own credibility test, on the engine's own numbers.
+
+    THE CHECK ABOVE CANNOT CATCH WHAT THIS CATCHES, and the reason is
+    arithmetic rather than an oversight. `betting.temper_edge` shrinks
+    the published claim toward the market:
+
+        hit = fair + shrink x (raw - fair)
+
+    so `hit - fair` is at most `shrink x (raw - fair)`, and with shrink
+    at or below 0.5 a row needs a RAW disagreement above 20 points
+    before the shrunk gap can exceed the 10-point cap. Every row with a
+    raw gap between 10 and 20 points — exactly the band the engine
+    calls a modelling or data error — sails through a check made on the
+    shrunk number. The check looked like a guard and could not fire on
+    the rows it existed for.
+
+    Ethan found one on a phone, 2026-09-02: Zack Gelof, UNDER 4.5 total
+    bases at -200, "MODEL 73%", projection 1.7, none of his last ten
+    games clearing 4.5 — sitting on the Most Likely board while its own
+    card printed `betting.IMPLAUSIBLE_EDGE_REASON` in red. The model was
+    RIGHT: P(under 4.5) on a 1.7 projection is about 96%, and 73% is
+    what 96% becomes after being shrunk toward a market number that
+    cannot be a real price for that line. The board then ranked the
+    shrink artefact as a top pick.
+
+    So this asks what the engine asked: is the RAW claim within
+    MAX_CREDIBLE_EDGE of the book's de-vigged number? A row that has no
+    raw claim (the touchdown chain, game cards) answers True and is
+    judged by `_credible` on what it does carry.
+    """
+    # ONLY the engine's pre-shrink claim. This board's own `raw_prob` is
+    # the display number before the mixture, which is a different
+    # quantity measured against a different thing — falling back to it
+    # would refuse honest rows for a disagreement the engine never had.
+    raw, fair = row.get("engine_raw_prob"), row.get("fair_prob")
+    if raw is None or fair is None:
+        return True
+    try:
+        return abs(float(raw) - float(fair)) <= MAX_CREDIBLE_EDGE
+    except (TypeError, ValueError):
+        return True
+
+
 #: The college touchdown ranking, measured by engine.cfbtdfit over
 #: 29,047 player-weeks. Shipped like the NFL constants because it was
 #: measured the same way — by a person, against this repo's own replay —
@@ -331,6 +375,11 @@ def admissible(row: dict) -> str:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
         return "disagrees with the market by more than we credit"
+    # …and the same question asked of the claim BEFORE the shrink, which
+    # is the only place a big disagreement is still visible. See
+    # `engine_credible`.
+    if not engine_credible(row):
+        return "the model and the market disagree by more than we credit"
     # THE INJURY HOLD, WHICH THIS BOARD NEVER HAD. `rules.apply_rules`
     # holds a Questionable / Doubtful / Out player "until inactives
     # confirm status" — and only the edge board read that decision. This
@@ -430,6 +479,13 @@ def from_prop(row: dict, bettable, fits=None,
         # point.
         "prob_source": source,
         "raw_prob": round(float(prob), 4),
+        # THE PRE-SHRINK CLAIM AND THE BOOK'S OWN NUMBER, carried so the
+        # one bar can ask the engine's question (see `engine_credible`).
+        # `raw_prob` above is this board's own raw display number, which
+        # is a different thing from the engine's pre-shrink claim, so
+        # the engine's travels under its own name.
+        "engine_raw_prob": row.get("raw_prob"),
+        "fair_prob": row.get("fair_prob"),
         "implied_prob": row.get("fair_prob"),
         "projection": row.get("projection"),
         "ev_per_unit": row.get("ev_per_unit"),

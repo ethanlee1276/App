@@ -17,6 +17,9 @@ implies that the row fails:
       CHALK       heavier than the -250 cap
       GAP         shown probability more than MAX_CREDIBLE_EDGE from the
                   book's de-vigged number
+      RAW GAP     the engine's PRE-SHRINK claim more than MAX_CREDIBLE_EDGE
+                  from it — the check GAP cannot make, because the shrink
+                  caps the shown gap (see likely.engine_credible)
       PROJ<LINE   an over whose projection sits below the line
       PROJ>LINE   an under whose projection sits above it (unders are
                   admitted since 2026-09-02 — the cap answers the chalk)
@@ -252,6 +255,14 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
             flags.append(f"UNDER-FLOOR {prob:.0%}")
         if prob is not None and fair is not None and abs(prob - fair) > MAX_CREDIBLE_EDGE:
             flags.append(f"GAP {prob:.0%} vs book {fair:.0%}")
+        # The same question of the number the ENGINE judged. Ethan's
+        # Gelof card, 2026-09-02: shown 73% against a 63% book, which
+        # passes GAP, while the claim underneath it was 96%.
+        eraw = _f(r.get("engine_raw_prob"))
+        efair = _f(r.get("fair_prob"))
+        if eraw is not None and efair is not None and abs(eraw - efair) > MAX_CREDIBLE_EDGE:
+            flags.append(f"RAW GAP model {eraw:.0%} vs book {efair:.0%} "
+                         f"before the shrink")
         proj, line = _f(r.get("projection")), _f(r.get("line"))
         if proj is not None and line is not None and side != "under" and proj < line:
             flags.append(f"PROJ<LINE {proj:.1f} < {line:g}")

@@ -215,6 +215,21 @@ def test_game_rows_say_what_they_are():
     assert any(f.startswith("NO DOOR") for f in _flags(got, "Over 51"))
 
 
+def test_the_shrink_hides_a_disagreement_and_the_lint_says_so():
+    """Ethan's Gelof card, 2026-09-02: shown 73% against a book-implied
+    63% — inside the 10-point bar — while the claim underneath it was
+    96%. GAP cannot see that, because the shrink caps what GAP reads."""
+    row = _likely(player="Zack Gelof", market="total_bases", side="under",
+                  line=4.5, odds=-200, model_prob=0.73, implied_prob=0.63,
+                  engine_raw_prob=0.963, fair_prob=0.63, projection=1.7)
+    flags = _flags(L.lint_likely([row], {}), "Zack Gelof")
+    assert not any(f.startswith("GAP") for f in flags), flags
+    assert any(f.startswith("RAW GAP") for f in flags), flags
+    ok = {**row, "engine_raw_prob": 0.70}
+    assert not any(f.startswith("RAW GAP") for f in
+                   _flags(L.lint_likely([ok], {}), "Zack Gelof"))
+
+
 def test_the_same_total_in_two_games_is_two_bets_not_a_repeat():
     """"Over 43" can be the honest pick in two different games on one
     Sunday; the REPEAT check keys a game row within its matchup."""
