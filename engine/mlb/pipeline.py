@@ -11,6 +11,8 @@ from pathlib import Path
 
 from ..rules import RuleConfig, game_has_started
 from ..models import live_to_dict
+from .. import stagetime as _st
+from ..stagetime import stage as _stage
 from ..gamebets import (
     mlb_win_prob, price_moneyline, price_moneyline_sharp, moneyline_to_dict,
     LEAGUE_AVG_XERA,
@@ -725,7 +727,8 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     from .models import HITS, TOTAL_BASES, HOME_RUNS
     from .transactions import just_returned
     if not isinstance(slate, MLBSlate):
-        slate = load_mlb_slate(slate)
+        with _stage("load slate"):
+            slate = load_mlb_slate(slate)
     config = config or RuleConfig()
     il_map = il_map or {}
 
@@ -740,10 +743,11 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     try:
         from .velocity import warm_starts
         import datetime as _dt0
-        warm_starts([p.person_id for p in slate.props
-                     if p.market in PITCHER_MARKETS
-                     and getattr(p, "person_id", 0)],
-                    _dt0.date.today().year)
+        with _stage("warm pitcher starts"):
+            warm_starts([p.person_id for p in slate.props
+                         if p.market in PITCHER_MARKETS
+                         and getattr(p, "person_id", 0)],
+                        _dt0.date.today().year)
     except Exception:                                       # noqa: BLE001
         pass                      # a warm pass never decides whether we price
 
@@ -757,33 +761,36 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     # read the same, possible, numbers.
     built = []
     trio: dict = {}
-    for prop in slate.props:
-        game = slate.game_for(prop)
-        proj = build_mlb_projection(prop, game, model=model)
-        built.append((prop, game, proj))
-        if prop.market in (HITS, TOTAL_BASES, HOME_RUNS):
-            key = (normalize_name(prop.player),
-                   getattr(game, "game_number", 1))
-            trio.setdefault(key, {})[prop.market] = proj
+    with _stage("projections"):
+        for prop in slate.props:
+            game = slate.game_for(prop)
+            proj = build_mlb_projection(prop, game, model=model)
+            built.append((prop, game, proj))
+            if prop.market in (HITS, TOTAL_BASES, HOME_RUNS):
+                key = (normalize_name(prop.player),
+                       getattr(game, "game_number", 1))
+                trio.setdefault(key, {})[prop.market] = proj
     from .projection import reconcile_triple
-    for markets in trio.values():
-        if not all(m in markets for m in (HITS, TOTAL_BASES, HOME_RUNS)):
-            continue
-        h, t, r = markets[HITS], markets[TOTAL_BASES], markets[HOME_RUNS]
-        hr_new, tb_new, note = reconcile_triple(h.mean, t.mean, r.mean)
-        if not note:
-            continue
-        # Assigned EXACTLY as returned, never re-rounded. round(tb, 4)
-        # can land a hair BELOW the hits projection, which re-creates the
-        # "total bases below hits" inconsistency reconcile_triple exists
-        # to remove — a 1e-5 violation, but the sim's inverter checks the
-        # box to 1e-9 and correctly called those triples impossible.
-        if abs(hr_new - r.mean) > 1e-9:
-            r.mean = hr_new
-            r.reasons.append(f"Coherence: {note}")
-        if abs(tb_new - t.mean) > 1e-9:
-            t.mean = tb_new
-            t.reasons.append(f"Coherence: {note}")
+    with _stage("coherence (hits/TB/HR)"):
+        for markets in trio.values():
+            if not all(m in markets for m in (HITS, TOTAL_BASES, HOME_RUNS)):
+                continue
+            h, t, r = markets[HITS], markets[TOTAL_BASES], markets[HOME_RUNS]
+            hr_new, tb_new, note = reconcile_triple(h.mean, t.mean, r.mean)
+            if not note:
+                continue
+            # Assigned EXACTLY as returned, never re-rounded. round(tb, 4)
+            # can land a hair BELOW the hits projection, which re-creates
+            # the "total bases below hits" inconsistency reconcile_triple
+            # exists to remove — a 1e-5 violation, but the sim's inverter
+            # checks the box to 1e-9 and correctly called those triples
+            # impossible.
+            if abs(hr_new - r.mean) > 1e-9:
+                r.mean = hr_new
+                r.reasons.append(f"Coherence: {note}")
+            if abs(tb_new - t.mean) > 1e-9:
+                t.mean = tb_new
+                t.reasons.append(f"Coherence: {note}")
     # The HR market-sum devig (script §2.1), measured once per game off
     # the slate's own menus and handed to EVERY path that prices a
     # one-sided home-run quote — the watchlist and long shots got it
@@ -801,8 +808,10 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             _hr_cands.append({
                 "game": slate.game_for(_p),
                 "odds": max(_overs, key=lambda ln: ln.over_odds).over_odds})
-    _hr_devigs = hr_board_devigs(_hr_cands)
+    with _stage("HR market-sum devig"):
+        _hr_devigs = hr_board_devigs(_hr_cands)
 
+    _evaluate = _st.start("evaluate + rules")
     for prop, game, proj in built:
         rec = evaluate_mlb_prop(
             prop, proj, game=game,
@@ -892,22 +901,26 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
             d["doubleheader"] = True
             d["headline"] += f" (DH Game {game.game_number})"
         results.append(d)
+    _st.stop(_evaluate)
 
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),
                  reverse=True)
 
-    game_bets = _game_bets(slate.games, config)
+    with _stage("game bets"):
+        game_bets = _game_bets(slate.games, config)
 
     # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
     # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts
     # as recommended and capped stakes are what the page (and journal) see.
     from ..correlation import flag_mlb_correlations, apply_exposure_caps
-    corr = flag_mlb_correlations(results)
-    corr["cap_notes"] = apply_exposure_caps(results, game_bets)
+    with _stage("correlation + exposure caps"):
+        corr = flag_mlb_correlations(results)
+        corr["cap_notes"] = apply_exposure_caps(results, game_bets)
 
     recommended = [r for r in results if r["recommended"]]
 
-    ls_picks, ls_watch, ls_diag, ls_pool = _long_shots(slate)
+    with _stage("long shots (HR board)"):
+        ls_picks, ls_watch, ls_diag, ls_pool = _long_shots(slate)
     if il_on_slate:
         # The HR board runs on the same projected lineups — an IL'd hitter
         # must not sit on a "most likely tonight" list.
@@ -923,6 +936,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         if r["market"] == _HR:
             r["hr_featured"] = r["player"] in featured
 
+    _assemble = _st.start("board assembly (games, statlogs, scan)")
     out = {
         "date": slate.date,
         "sport": "mlb",
@@ -952,11 +966,13 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         # runs would be contradicting its own page.
         "market_scan": _market_scan(results, ls_picks + ls_pool),
     }
+    _st.stop(_assemble)
     # The outside view: what similar past spots actually did, counted off
     # the ingested logs with no distribution assumed. Evidence and a
     # divergence warning only — never a price input (see engine/comps.py).
     from ..pipeline import _attach_comps
-    out["comps"] = _attach_comps(results, "mlb")
+    with _stage("comps"):
+        out["comps"] = _attach_comps(results, "mlb")
     # §14, and §5's lineup rule is enforced inside the screen: a hitter leg
     # is ineligible until the card is posted.
     #
@@ -972,11 +988,37 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
     # inverted from, and never fatally: build() catches its own trouble and
     # an empty result means every pair keeps the prior, which is exactly
     # what shipped before this line existed.
+    #
+    # WHAT IT IS HANDED, AND WHY IT IS NOT THE WHOLE BOARD. `build` is
+    # documented to "simulate only the lineups that two candidate legs
+    # actually share", on the reasoning that "a pair of legs on the same
+    # team is rare, so the work is proportional to what the Parlay Zone
+    # will actually ask about". This call used to pass `results` — every
+    # prop on the slate, recommended or not — and that broke the premise
+    # rather than the promise: on a fifteen-game card 492 of the 870 rows
+    # are over-side hits/TB/HR, so every one of the thirty lineups had two
+    # of them and every one was simulated and fitted. Measured 2026-09-02
+    # on a full fifteen-game board: 48.1s of a 48.7s model stage, thirty
+    # lineups fitted, 3,480,000 simulated lineup-games, 132 million plate
+    # appearances — and 2,525 pairs solved a night, against the "a few
+    # pairs a night" simrecon.py describes its own journal as holding.
+    #
+    # The screen can only ever ask about a pair of RECOMMENDED legs
+    # sharing one game (`parlays.screen` builds its pool from
+    # `recommended` rows and groups by game), and `rho_for` is reached
+    # from nowhere else. So the candidate legs are what goes in. Every
+    # pair the Parlay Zone can consult is still solved, out of the same
+    # nine-hitter lineup, at the same trial counts, behind the same
+    # reconcile gate: the sim is unchanged, only the list of lineups it
+    # is asked about. What stops is fitting twenty-three lineups a night
+    # that no ticket can be built from.
     joints = None
     try:
         from .simjoint import build as _build_joints
-        joints = _build_joints(slate, results)
+        with _stage("simjoint (lineup sim)"):
+            joints = _build_joints(slate, recommended)
     except Exception:                                       # noqa: BLE001
         joints = None
     from ..parlays import attach
-    return attach(out, "mlb", joints=joints)
+    with _stage("parlay screen"):
+        return attach(out, "mlb", joints=joints)
