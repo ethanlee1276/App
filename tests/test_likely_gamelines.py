@@ -483,13 +483,16 @@ def test_a_game_row_is_drawn_as_the_pick_it_is_and_opens_the_game_page():
 
 
 def test_the_game_page_finds_the_row_by_the_same_id():
-    """`openProp` falls through to `state.data.game_bets` by gameBetId,
-    so the row must carry the id's five parts verbatim from the card —
-    and, for a flipped row the edge board never published, to the
-    likelihood list itself."""
+    """`openProp` falls through to the game row by gameBetId, so the row
+    must carry the id's five parts verbatim from the card. Re-anchored
+    2026-09-02: the two lookups (edge cards, and the likelihood board
+    for a FLIPPED row the edge board never published) became one shared
+    `findGameRow`, which the slip and the share card use too."""
     js = _src("web", "js", "app.js")
-    assert ".find((x) => gameBetId(x) === state.propId)" in js
-    assert '.find((x) => x.kind === "game" && gameBetId(x) === state.propId)' in js
+    assert "const b = findGameRow(state.propId);" in js
+    i = js.index("function findGameRow(id)")
+    body = js[i:js.index("\n}", i)]
+    assert "d.game_bets" in body and "d.most_likely" in body, body
     gid = _fn(js, "gameBetId")
     for part in ("b.away", "b.home", "b.market || b.bet_type", "b.side || b.team", "b.line"):
         assert part in gid, part

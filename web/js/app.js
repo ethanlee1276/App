@@ -6849,15 +6849,11 @@ function renderPropPage() {
        rendered an empty view, while the same link to a PLAYER prop
        rendered "That pick is not on tonight's board" correctly — because
        `allProps()` already guards and this line did not. */
-    const b = ((state.data || {}).game_bets || [])
-      .find((x) => gameBetId(x) === state.propId)
-      /* A likelihood game row can be the OTHER side of the edge card —
-         the favourite the board ranks where the edge board backed the
-         dog on price — so it is looked up in its own list too. It
-         carries the card shape (likely.from_game_bet), so the same
-         page draws it. */
-      || ((state.data || {}).most_likely || [])
-        .find((x) => x.kind === "game" && gameBetId(x) === state.propId);
+    /* Both lists: a likelihood game row can be the OTHER side of the
+       edge card — the side the board ranks where the edge board backed
+       the other one on price — and it carries the card shape
+       (likely.from_game_bet), so the same page draws it. */
+    const b = findGameRow(state.propId);
     if (b) return renderGameBetPage(b);
   }
   const r = findProp(state.propId);
@@ -27337,8 +27333,7 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-card]");
   if (!b) return;
   e.preventDefault();
-  const r = findProp(b.dataset.card)
-    || ((state.data || {}).game_bets || []).find((g) => gameBetId(g) === b.dataset.card);
+  const r = findProp(b.dataset.card) || findGameRow(b.dataset.card);
   if (r) shareCard(r, b);
 });
 
@@ -27534,15 +27529,35 @@ function slipSave() {
 const slipLegKey = (l) =>
   l.gid || `${slugify(l.player)}|${slugify(l.market)}`;
 
-const slipRowId = (r) => (r.player ? propId(r) : gameBetId(r));
+/* IS THIS A GAME ROW? Asked explicitly, because "has no player" stopped
+   being the answer on 2026-09-02. The likelihood board now carries game
+   rows (likely.from_game_bet) and they DO have a `player` — the pick
+   label, "DET ML" — so every `r.player ? prop : game` branch quietly
+   filed them as player props and would have stored a leg naming a
+   player who does not exist. `kind` is stamped by the maker; an edge
+   board's game card has no `kind` and no `player`, and both are game
+   rows. */
+const isGameRow = (r) => !!(r && (r.kind === "game" || !r.player));
+
+const slipRowId = (r) => (isGameRow(r) ? gameBetId(r) : propId(r));
+
+/* BOTH LISTS. A FLIPPED game row — the side the same numbers say lands
+   more often, where the edge board backed the other one on price —
+   exists ONLY on the likelihood board, so a lookup that reads
+   `game_bets` alone returns nothing and its button does nothing at all.
+   That is the dead-control bug this codebase keeps rediscovering. */
+function findGameRow(id) {
+  const d = state.data || {};
+  return (d.game_bets || []).find((g) => gameBetId(g) === id)
+    || (d.most_likely || []).find((g) => g.kind === "game" && gameBetId(g) === id);
+}
 
 function findSlipRow(id) {
-  return findProp(id)
-    || ((state.data || {}).game_bets || []).find((g) => gameBetId(g) === id);
+  return findProp(id) || findGameRow(id);
 }
 
 function slipHas(r) {
-  const key = r.player ? slipLegKey(r) : gameBetId(r);
+  const key = isGameRow(r) ? gameBetId(r) : slipLegKey(r);
   return slipState().legs.some((l) => slipLegKey(l) === key);
 }
 
@@ -27561,7 +27576,7 @@ const GAME_MARKET_WORDS = { spread: "Spread", total: "Game total",
 
 function slipToggle(r) {
   const s = slipState();
-  const key = r.player ? slipLegKey(r) : gameBetId(r);
+  const key = isGameRow(r) ? gameBetId(r) : slipLegKey(r);
   const i = s.legs.findIndex((l) => slipLegKey(l) === key);
   if (i >= 0) {
     s.legs.splice(i, 1);
@@ -27578,7 +27593,7 @@ function slipToggle(r) {
     // `book` rides along for the text export: a price is only useful to
     // key in if you know WHICH book was showing it. It is stored, never
     // drawn on the panel — the slip is already dense enough.
-    s.legs.push(r.player
+    s.legs.push(!isGameRow(r)
       ? { player: r.player, market: r.market,
           market_label: r.market_label || r.market,
           side: r.side || "", line: r.line != null ? r.line : null,
@@ -27672,7 +27687,7 @@ function slipChip(r) {
   // inner controls from opening the card already knows .chip. Props and
   // game bets alike — anything priced can be a leg.
   if (!r || r.odds == null) return "";
-  if (!r.player && !gameBetOpenable(r)) return "";
+  if (isGameRow(r) ? !gameBetOpenable(r) : !r.player) return "";
   const on = slipHas(r);
   return `<button class="chip slip-chip${on ? " on" : ""}"
     data-slip="${escapeAttr(slipRowId(r))}" type="button"

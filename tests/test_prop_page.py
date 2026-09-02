@@ -448,11 +448,23 @@ def test_a_shared_game_bet_link_opened_cold_is_not_a_blank_page():
     # 2026-08-25, when the page learned to resolve the `juan-soto-home-runs`
     # slug a real /pick/ URL carries as well as the long propId. The
     # guard being tested is the same one: the GAME-BET branch above it.
+    #
+    # Re-anchored 2026-09-02: the branch's inline lookup became
+    # `findGameRow`, which searches the edge board AND the likelihood
+    # board (a FLIPPED game row — the side the numbers favour where the
+    # edge board backed the other one — exists only on the latter). The
+    # guard moved with the lookup, so it is asserted in the helper, and
+    # the cold branch is asserted to go through it.
     i = APP.index("function renderPropPage(")
     head = APP[i:APP.index("const r = findProp(", i)]
-    assert "(state.data || {}).game_bets" in head, (
+    assert "findGameRow(state.propId)" in head, (
+        "the game-bet branch stopped using the guarded lookup")
+    g = APP.index("function findGameRow(")
+    guarded = APP[g:APP.index("\n}", g)]
+    assert "const d = state.data || {};" in guarded, (
         "a cold deep link to a game bet dereferences null and renders "
         "nothing at all")
+    assert "d.most_likely" in guarded, "a flipped game row is unreachable"
     # The player-prop path was already safe because allProps() guards;
     # that is what made the two links behave differently. findProp is a
     # wrapper around it and inherits the guard — checked here so the

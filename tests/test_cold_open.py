@@ -50,16 +50,39 @@ VIEWS = ["recommended", "scanner", "longshots", "futures", "edge", "injuries",
 
 # --- the source, always ------------------------------------------------------
 def test_the_two_that_were_caught_stay_guarded():
+    # `renderPropPage`'s game-bet lookup moved into `findGameRow` on
+    # 2026-09-02 — the likelihood board's own game rows had to be
+    # searched too, and a second copy of a lookup is how two callers
+    # drift apart. The guard travelled with it and is asserted where it
+    # now lives; the caller is checked below.
     for name, needle in (
             ("noMarketHeading", "(state.data || {}).generated_from"),
             ("noMarketExplainer", "const d = state.data || {};"),
-            ("renderPropPage", "(state.data || {}).game_bets"),
+            ("findGameRow", "const d = state.data || {};"),
             ("renderScanner", "(state.data || {}).market_scan")):
         i = APP.index(f"function {name}(")
         body = APP[i:APP.index("\n}", i)]
         assert needle in body, (
             f"{name} dereferences state.data unguarded again — it is "
             "reachable before the board answers")
+
+
+def test_the_prop_page_reaches_a_game_row_only_through_the_guarded_lookup():
+    """The guard is only worth anything if the cold path actually uses
+    it. renderPropPage must not grow its own `state.data.game_bets`
+    back."""
+    import re
+    i = APP.index("function renderPropPage(")
+    body = APP[i:APP.index("\n}", i)]
+    assert "findGameRow(state.propId)" in body
+    # CODE ONLY. The function's own comment tells the story of the 2026-08
+    # blank-page bug and quotes the unguarded expression that caused it;
+    # a check that reads comments would forbid the codebase from
+    # remembering its own defects.
+    code = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+    for bad in ("state.data.game_bets", "state.data.most_likely"):
+        assert bad not in code, bad
 
 
 def test_render_all_still_carries_the_guard_the_tab_bar_lacks():

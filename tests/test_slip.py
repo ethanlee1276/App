@@ -126,6 +126,42 @@ def test_game_bets_parlay_too_and_their_label_never_travels():
         "the game page lost its + Parlay control"
 
 
+def test_a_likelihood_game_row_is_read_as_a_game_row_not_a_player():
+    """2026-09-02: the likelihood board began carrying game rows, and
+    they DO have a `player` — the pick label, "DET ML". Every
+    `r.player ? prop : game` branch would have filed one as a player
+    prop and stored a leg naming a player who does not exist. The test
+    is `kind`, asked once, in a helper the three call sites share."""
+    assert "const isGameRow = (r) =>" in APP
+    i = APP.index("const isGameRow = (r) =>")
+    assert 'r.kind === "game"' in APP[i:i + 200]
+    for marker in ("function slipToggle(r)", "function slipHas(r)",
+                   "function slipChip(r)"):
+        assert "isGameRow(r)" in _fn(marker), marker
+    i = APP.index("const slipRowId =")
+    assert "isGameRow(r)" in APP[i:i + 120]
+    assert "r.player ? slipLegKey(l" not in APP
+
+
+def test_the_slip_finds_a_row_the_edge_board_never_published():
+    """A FLIPPED game row — the side the numbers say lands more often,
+    where the edge board backed the other one on price — exists only in
+    `most_likely`. A lookup reading `game_bets` alone returns nothing
+    and the + Parlay button does nothing at all: the dead-control bug
+    this codebase keeps rediscovering. One lookup, both lists, used by
+    the slip, the share card and the game page."""
+    body = _fn("function findGameRow(id)")
+    assert "d.game_bets" in body and "d.most_likely" in body
+    assert 'g.kind === "game"' in body
+    assert "function findSlipRow(id)" in APP
+    assert "findProp(id) || findGameRow(id)" in APP
+    # The other two callers went through the same door.
+    assert "findProp(b.dataset.card) || findGameRow(b.dataset.card)" in APP
+    assert "const b = findGameRow(state.propId);" in APP
+    assert APP.count("(d.game_bets || []).find((g) => gameBetId(g) === id)") <= 1, \
+        "a second bespoke game-bet lookup is how the two drift apart"
+
+
 def test_the_card_buttons_are_quiet_controls_not_green_blocks():
     """Ethan, 2026-08-25, circling + Parlay and + My Bets: "The color of
     the buttons along with the bulky of them loos bad." The pick is the
