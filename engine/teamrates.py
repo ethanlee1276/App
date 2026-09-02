@@ -40,7 +40,8 @@ class TeamRating:
 MIN_GAMES_PER_TEAM = 4.0
 
 
-def ratings_for_season(conn, sport: str, season: int, shrink: float = 6.0):
+def ratings_for_season(conn, sport: str, season: int, shrink: float = 6.0,
+                       exclude_prefix: str | None = None):
     """``(ratings, seasons_used)`` — the current season, widened when it is
     too thin to say anything.
 
@@ -63,13 +64,14 @@ def ratings_for_season(conn, sport: str, season: int, shrink: float = 6.0):
     which is a small discontinuity accepted on purpose — a rating that
     still carried last year's roster in December would be worse.
     """
-    got = compute_team_ratings(conn, sport, seasons=[season], shrink=shrink)
+    got = compute_team_ratings(conn, sport, seasons=[season], shrink=shrink,
+                               exclude_prefix=exclude_prefix)
     if got:
         per_team = sum(r.games for r in got.values()) / len(got)
         if per_team >= MIN_GAMES_PER_TEAM:
             return got, [season]
     pooled = compute_team_ratings(conn, sport, seasons=[season - 1, season],
-                                  shrink=shrink)
+                                  shrink=shrink, exclude_prefix=exclude_prefix)
     if pooled:
         return pooled, [season - 1, season]
     # Nothing in either — say so by returning what the caller asked for
@@ -78,13 +80,23 @@ def ratings_for_season(conn, sport: str, season: int, shrink: float = 6.0):
 
 
 def compute_team_ratings(conn, sport: str, seasons: list[int] | None = None,
-                         shrink: float = 6.0) -> dict[str, TeamRating]:
+                         shrink: float = 6.0,
+                         exclude_prefix: str | None = None) -> dict[str, TeamRating]:
     """Return ``{team_abbr: TeamRating}`` from the ``games`` table.
 
     Offense/defense are deviations from ``SCORING_BASELINE[sport]`` (a fixed
     per-team scoring average) so they line up with the totals projection in
     gamebets. Every rating is regressed toward 0 by ``n / (n + shrink)``.
     ``seasons`` restricts the window (e.g. the current season) when given.
+
+    ``exclude_prefix`` leaves out every game in which EITHER side's key
+    starts with it. College football's ESPN scoreboard lists FBS hosts
+    against FCS visitors, and the visitor arrives keyed ``espn:{id}``
+    because it has no FBS abbreviation; a 70–0 buy game counted at full
+    weight here was the FBS team's whole rating for a fortnight (CFB
+    readiness audit, 2026-09-02 — the brief's own P1). The caller passes
+    the fallback prefix only when it KNOWS the FBS map loaded, because on a
+    box where the teams feed never answered every key is a fallback key.
     """
     baseline = SCORING_BASELINE.get(sport, 0.0)
     q = ("SELECT home, away, home_score, away_score FROM games "
@@ -93,6 +105,9 @@ def compute_team_ratings(conn, sport: str, seasons: list[int] | None = None,
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args += list(seasons)
+    if exclude_prefix:
+        q += " AND home NOT LIKE ? AND away NOT LIKE ?"
+        args += [exclude_prefix + "%", exclude_prefix + "%"]
 
     agg: dict[str, list[float]] = {}   # team -> [pf_sum, pa_sum, games]
     for home, away, hs, as_ in conn.execute(q, args).fetchall():

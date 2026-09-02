@@ -726,14 +726,36 @@ def main() -> None:
                                   _iso(day + datetime.timedelta(days=NEIGHBOUR_DAYS)))
     prev, nxt = cfbcontext.neighbours(history, upcoming)
 
-    # THIS season only. College rosters turn over ~25% a year, so blending
-    # six ingested seasons would rate a team on players who have graduated
-    # — and it is exactly the gap the recruiting prior below exists to fill
-    # while the current season is still young. The VARIANCE fit underneath
-    # deliberately uses every season it can get: how far games land from a
-    # projection is a property of the sport, not of one roster.
-    ratings = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
-                                             seasons=[day.year])
+    # THIS season, carried by LAST season until it can stand up — the same
+    # `ratings_for_season` rule the NFL and MLB builds run, which this build
+    # alone bypassed (CFB readiness audit, 2026-09-02). It read "this
+    # season only" on the reasoning that six ingested seasons would rate a
+    # team on players who have graduated, and that the recruiting prior
+    # fills the gap. Two things were wrong with that in practice: the prior
+    # is key-gated and worth 23% of the rating after one game, so 77% of a
+    # Week-2 number was one result shrunk to a ninth of itself — every
+    # team sat within a few points of zero, the model called LSU a 6-point
+    # favourite the market had at 36.5, and the credibility guard refused
+    # most of the slate; and §5's own preseason prior is "last year's
+    # efficiency × returning production × talent", so last season IS part
+    # of the spec. Replayed leak-free on 2023–2025 against closes: the
+    # early-season (weeks 1–4) model-vs-close spread RMSE fell from 11.97
+    # to 11.06 points and the early ROI at the close from −6.9% (638 bets)
+    # to −3.1% (1,163) — still a losing number, stated as such; the pool
+    # only lasts until the season averages four games a team, then this
+    # season stands alone. The VARIANCE fit underneath uses every season it
+    # can get: how far games land from a projection is a property of the
+    # sport, not of one roster.
+    #
+    # And FCS results are OUT of an FBS team's rating once the teams feed
+    # has said who is FBS: a non-FBS visitor carries an `espn:{id}` key
+    # because it has no abbreviation, and a 70–0 buy game counted at full
+    # weight was that team's whole rating for a fortnight. On a box where
+    # the teams feed never answered every key is that fallback key, so the
+    # exclusion is only asked for when the map actually loaded.
+    _fallback = "espn:" if teams else None
+    ratings, seasons_used = teamrates.ratings_for_season(
+        conn, "cfb", day.year, shrink=8.0, exclude_prefix=_fallback)
     # …AND A SECOND MAP, FOR THE VARIANCE ONLY. `fit_from_history`
     # measures residuals around whatever ratings it is handed, and can
     # only use a game where BOTH teams are in the map — so passing the
@@ -748,7 +770,8 @@ def main() -> None:
     # The two maps are not interchangeable. The board projects with the
     # current season because rosters turn over; the variance is a
     # property of the sport and wants every game there is.
-    all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0)
+    all_seasons = teamrates.compute_team_ratings(conn, "cfb", shrink=8.0,
+                                                 exclude_prefix=_fallback)
     fit = cfbratings.fit_from_history(conn, all_seasons or ratings)
     cfbratings.install(fit)
 
@@ -806,6 +829,8 @@ def main() -> None:
                               "period": g.get("detail", "")}}
                     for g in games]
     out["ratings"] = {"fitted": fit.fitted, "games": fit.games,
+                      "seasons_used": seasons_used,
+                      "fcs_excluded": bool(_fallback),
                       "margin_sd": fit.margin_sd, "total_sd": fit.total_sd,
                       "home_field": fit.home_field,
                       "scoring_baseline": fit.scoring_baseline,
