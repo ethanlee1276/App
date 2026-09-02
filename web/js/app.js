@@ -701,6 +701,50 @@ function leagueBadge(sport) {
 /* A reason that WORKS AGAINST the bet must not wear a green check. The
    engine phrases negative factors consistently; match those phrasings and
    render them with a red ✗ instead. */
+/* WHEN THE NUMBER ON THE CARD IS NOT A PROBABILITY.
+
+   Ethan, 2026-09-02, from a phone: "How is a under 4.5 bases -200, we
+   need to figure out how and why we showed that and fix it." The card
+   read MODEL 73% on a hitter projected for 1.7 total bases, none of
+   whose last ten games cleared 4.5. The model's actual claim was about
+   96%, which is right. 73% is what `betting.temper_edge` produces —
+
+       hit = fair + shrink x (raw - fair)
+
+   — when it shrinks a correct claim toward a book number that cannot be
+   a real price for that line. On a row the engine has REFUSED for that
+   very disagreement, the shown number is an artefact of the
+   disagreement itself, and printing it under the label "Model" tells a
+   reader the model believes something it does not.
+
+   Computed from the row's own numbers rather than from its reason text:
+   `raw_prob` (the claim before the shrink) and `fair_prob` (the book's
+   de-vigged number) ride on every prop row, so this asks exactly what
+   `betting.temper_edge` asked and needs no keyword to match.
+
+   Mirrors engine/betting.MAX_CREDIBLE_EDGE — pinned equal by test. */
+const MAX_CREDIBLE_EDGE = 0.10;
+
+function shrinkArtefact(r) {
+  const raw = Number((r || {}).raw_prob);
+  const fair = Number((r || {}).fair_prob);
+  if (!Number.isFinite(raw) || !Number.isFinite(fair)) return false;
+  return Math.abs(raw - fair) > MAX_CREDIBLE_EDGE;
+}
+
+/* The Model tile, honest on both kinds of row. On an ordinary row it is
+   the shown probability, unchanged. On a refused one it is the model's
+   own claim, with the shrink named underneath — the reader gets the
+   number the model actually produced and the reason it is not the one
+   the rest of the card is computed from. */
+function modelMetric(r, shown, label) {
+  const cell = (v, note) => `<div class="metric"><div class="k">${label || "Model"}</div>
+      <div class="v">${pct(v)}</div>${note || ""}</div>`;
+  if (!shrinkArtefact(r)) return cell(shown);
+  return cell(r.raw_prob, `<div class="mini" style="opacity:.7;margin-top:2px"
+      >shown as ${pct(shown)} once shrunk toward a price we don’t credit</div>`);
+}
+
 const NEG_REASON = new RegExp(
   ["suppress", "tough ", "holds (lefties|righties)", "capped",
    "strong late relief", "fewer ", "struggles", "knocks balls down",
@@ -5231,7 +5275,7 @@ function cardHTML(r) {
       </div>
       ${projBar(r)}
       <div class="metrics">
-        <div class="metric"><div class="k">Hit prob</div><div class="v">${pct(r.hit_prob)}</div></div>
+        ${modelMetric(r, r.hit_prob, "Hit prob")}
         <div class="metric primary"><div class="k">Edge</div><div class="v ${r.has_market === false ? "" : (r.edge >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.edge)}</div></div>
         <div class="metric"><div class="k">EV / unit</div><div class="v ${r.has_market === false ? "" : (r.ev_per_unit >= 0 ? "pos" : "neg")}">${r.has_market === false ? "—" : signedPct(r.ev_per_unit)}</div></div>
       </div>
@@ -5511,6 +5555,12 @@ function renderQuickTools() {
    us is doing overs, but we have no unders." */
 const LIKELY_HEAVIEST_PRICE = -250;
 function showableLikelyRow(r) {
+  // A row the ENGINE refused as a modelling or data error, caught here
+  // too. `likely.engine_credible` drops these at build time; this gate
+  // exists for the board file that predates a rule, which is exactly
+  // how the -1200 unders survived their own ban in September.
+  if (shrinkArtefact({ raw_prob: (r || {}).engine_raw_prob,
+                       fair_prob: (r || {}).fair_prob })) return false;
   const odds = (r || {}).odds;
   return odds == null || Number(odds) >= LIKELY_HEAVIEST_PRICE;
 }
@@ -6933,7 +6983,11 @@ function compsHTML(r) {
   const over = String(r.side || "OVER").toUpperCase() === "OVER";
   const rate = c.side_rate != null ? Number(c.side_rate)
     : (over ? Number(c.hit_rate) : 1 - Number(c.hit_rate));
-  const model = r.hit_prob != null ? Number(r.hit_prob) : null;
+  // The model's OWN claim when the shown one is a shrink artefact:
+  // this bar asks whether the model agrees with history, and the
+  // shrunk number is a statement about the price, not about the player.
+  const model = shrinkArtefact(r) ? Number(r.raw_prob)
+    : (r.hit_prob != null ? Number(r.hit_prob) : null);
   const w = Math.max(0, Math.min(100, rate * 100));
   const agree = model == null ? null : Math.abs(rate - model) < 0.08;
   return `
@@ -7056,8 +7110,7 @@ function renderPropPage() {
       <div id="fr-send-slot"></div>
       <div class="metrics">
         ${proj}
-        ${r.hit_prob != null ? `<div class="metric"><div class="k">Model</div>
-          <div class="v">${pct(r.hit_prob)}</div></div>` : ""}
+        ${r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
         ${r.edge != null ? `<div class="metric primary"><div class="k">Edge</div>
           <div class="v ${r.edge >= 0 ? "pos" : "neg"}">${signedPct(r.edge)}</div></div>` : ""}
         ${/* EV deliberately absent: the chart's own stat row below carries
@@ -8319,7 +8372,8 @@ function pricedProfileHTML(r, chips, tail = "") {
       <div class="profile-pick">
         <div class="lbl">${escapeHtml(r.side)} ${r.line} ${escapeHtml(r.market_label)}
           <small>${escapeHtml(r.book)} ${american(r.odds)} · proj ${r.projection}
-            · <span title="Probability the ${escapeHtml(r.side)} hits. Can side against the raw projection: baseball stats are right-skewed, so a few big games pull the AVERAGE above the line while MOST games still land under it.">${pct(r.hit_prob)} to hit</span>
+            · <span title="Probability the ${escapeHtml(r.side)} hits. Can side against the raw projection: baseball stats are right-skewed, so a few big games pull the AVERAGE above the line while MOST games still land under it.">${pct(shrinkArtefact(r) ? r.raw_prob : r.hit_prob)} to hit${
+              shrinkArtefact(r) ? " (before the shrink)" : ""}</span>
             · edge ${signedPct(r.edge)}</small></div>
         <div style="min-width:120px">${confMeter(r)}</div>
       </div>

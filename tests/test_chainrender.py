@@ -82,9 +82,13 @@ function pct(v) { return (Number(v) * 100).toFixed(1) + "%"; }
 def _run(script):
     src = (_STUBS
            + _const("CHAIN_FLAT") + "\n" + _const("CHAIN_WINDOWS") + "\n"
+           # `shrinkArtefact` joined compsHTML's dependencies on
+           # 2026-09-02: the bar compares history against the MODEL's
+           # claim, and on a refused row the shown probability is a
+           # statement about the price instead.
            + "\n".join(_fn(n) for n in (
                "chainProduct", "chainCloses", "chainStepRow", "chainHTML",
-               "checksHTML", "compsHTML"))
+               "checksHTML", "shrinkArtefact", "compsHTML"))
            + "\n" + script)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src)

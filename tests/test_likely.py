@@ -493,6 +493,59 @@ def test_from_prop_carries_the_engine_numbers_the_bar_needs():
     assert got["fair_prob"] == row["fair_prob"]
 
 
+def test_the_page_never_labels_a_shrink_artefact_as_the_model():
+    """Ethan's Gelof card read MODEL 73% on a claim of about 96%. That
+    73% is `fair + shrink x (raw - fair)` — a statement about how far we
+    are from a price we do not credit, not a probability of anything, so
+    printing it under "Model" tells a reader the model believes
+    something it does not.
+
+    Computed from the row's own `raw_prob` and `fair_prob`, which ride
+    on every prop row, so no reason text has to be matched."""
+    import os as _os
+    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), "web", "js", "app.js"),
+            encoding="utf-8") as f:
+        js = f.read()
+    import re as _re
+    from engine.betting import MAX_CREDIBLE_EDGE as _cap
+    # THE VALUE, NOT ITS SPELLING. Python renders the constant "0.1" and
+    # the page reads better as "0.10"; a string compare would fail on
+    # that and pass on a real drift to 0.15, which is backwards.
+    _m = _re.search(r"const MAX_CREDIBLE_EDGE = ([0-9.]+);", js)
+    assert _m, "the page lost its copy of the cap"
+    assert abs(float(_m.group(1)) - _cap) < 1e-9, \
+        f"the page's cap ({_m.group(1)}) drifted from the engine's ({_cap})"
+    assert "function shrinkArtefact(r)" in js
+    art = js[js.index("function shrinkArtefact(r)"):]
+    art = art[:art.index("\n}")]
+    assert "raw_prob" in art and "fair_prob" in art
+    # Every surface that printed the shrunk number goes through the tile.
+    assert "function modelMetric(r, shown, label)" in js
+    assert "modelMetric(r, r.hit_prob)" in js
+    assert 'modelMetric(r, r.hit_prob, "Hit prob")' in js
+    assert '<div class="v">${pct(r.hit_prob)}</div></div>` : ""}' not in js, \
+        "a Model tile still prints the shrunk number unconditionally"
+    # …including the comps bar, which asks whether the model agrees with
+    # history — a question about the player, not about the price.
+    assert "shrinkArtefact(r) ? Number(r.raw_prob)" in js
+
+
+def test_the_render_gate_catches_a_refused_row_from_a_stale_file():
+    """The engine drops these at build time; this gate is for the board
+    file that predates the rule — the way the -1200 unders outlived
+    their own ban."""
+    import os as _os
+    with open(_os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), "web", "js", "app.js"),
+            encoding="utf-8") as f:
+        js = f.read()
+    body = js[js.index("function showableLikelyRow(r)"):]
+    body = body[:body.index("\n}")]
+    assert "engine_raw_prob" in body and "shrinkArtefact" in body
+    assert "LIKELY_HEAVIEST_PRICE" in body, "the price cap must survive"
+
+
 def test_the_page_enforces_the_same_rules_a_stale_file_could_dodge():
     """2026-09-02: the droplet served a PRE-FIX board file while its
     builds were starved, and the page happily drew the -1200 unders the

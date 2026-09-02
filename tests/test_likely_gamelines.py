@@ -471,10 +471,17 @@ def test_the_store_writer_keeps_and_retires_honestly(monkeypatch=None):
 
 # --- the page ---------------------------------------------------------------
 def test_the_render_gate_no_longer_drops_unders():
+    import re
     js = _src("web", "js", "app.js")
     gate = _fn(js, "showableLikelyRow")
-    assert "under" not in gate, gate
-    assert "LIKELY_HEAVIEST_PRICE" in gate, "the cap stays"
+    # CODE ONLY. The gate's comment now tells the story of the -1200
+    # unders that outlived their own ban, and a check that reads
+    # comments would forbid the codebase from remembering its own
+    # defects — the same correction test_cold_open needed.
+    code = re.sub(r"/\*.*?\*/", "", gate, flags=re.S)
+    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+    assert "under" not in code, code
+    assert "LIKELY_HEAVIEST_PRICE" in code, "the cap stays"
 
 
 def test_a_game_row_is_drawn_as_the_pick_it_is_and_opens_the_game_page():
