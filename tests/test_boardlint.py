@@ -468,6 +468,25 @@ def test_the_private_copy_is_found_when_no_public_copy_exists():
     assert str(gate.board_source(__import__("pathlib").Path(public))) == private
 
 
+def test_the_no_markets_flag_names_the_reason_when_the_builder_says():
+    """"lines or team ratings are missing" is a guess between two very
+    different faults. `game_census` counts the games refused before the
+    model ran, and the commonest of them is a non-FBS visitor excluded
+    from the ratings on purpose — the likeliest reading of 2026-09-03."""
+    flags = L.lint_board(
+        {"counts": {"games_priced": 3, "markets_priced": 0}, "game_bets": [],
+         "game_census": {"with a side that has no team rating "
+                         "(usually a non-FBS visitor)": 2,
+                         "with no book lines": 1}}, "cfb")
+    assert len(flags) == 1
+    assert "2 with a side that has no team rating" in flags[0], flags[0]
+    assert "1 with no book lines" in flags[0], flags[0]
+    # …and falls back to the guess when the builder published nothing.
+    bare = L.lint_board({"counts": {"games_priced": 3, "markets_priced": 0},
+                         "game_bets": []}, "cfb")
+    assert "lines or team ratings are missing" in bare[0]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

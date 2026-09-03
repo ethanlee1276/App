@@ -473,16 +473,55 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
 
 
 def build_plays(games: list[dict], priced: dict, ratings: dict,
-                fit, prev: dict, nxt: dict) -> list[dict]:
-    """Every game with a price → the plays the CFB pipeline will judge."""
+                fit, prev: dict, nxt: dict,
+                census: dict | None = None) -> list[dict]:
+    """Every game with a price → the plays the CFB pipeline will judge.
+
+    ``census`` counts the games this REFUSES TO PRICE AT ALL, by reason.
+    Both refusals below are correct and both were silent, which is the
+    problem: they happen BEFORE `evaluate_play`, so a game dropped here
+    never reaches a gate, never lands in the pass list, and never appears
+    in `gate_census`. The build log then prints "11 game(s), 9 priced →
+    0 play(s)" — the same sentence it prints when every market WAS priced
+    and every gate refused it. Opposite diagnoses, one sentence, and no
+    way to tell them apart from the board.
+
+    THE ONE THAT ACTUALLY BITES IS THE SECOND, and it bites hardest in
+    the first weeks of a season. `teamrates.compute_team_ratings` is
+    called with `exclude_prefix="espn:"`, which leaves out every game
+    whose visitor has no FBS abbreviation — the FCS buy games, correctly,
+    because a 70-0 result was owning the host's rating for a fortnight.
+    The consequence nobody wrote down is that the FCS side then appears
+    in no ratings map at all, so the guard below drops the WHOLE GAME,
+    priced and all. In week one or two, when buy games are most of the
+    card, that can be the majority of a slate leaving without a word.
+
+    Reproduced: five priced games, three of them FBS-vs-FCS → six markets
+    built, three games gone, nothing anywhere saying so.
+    """
+    def _skip(why: str) -> None:
+        if census is not None:
+            census[why] = census.get(why, 0) + 1
+
     plays: list[dict] = []
     for g in games:
         lines = priced.get(g["game_id"])
         if not lines:
+            _skip("with no book lines")
             continue
         hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
         if not hr or not ar:
-            continue                     # no rating = no opinion, not a guess
+            # no rating = no opinion, not a guess. A `TeamRating` is a
+            # plain dataclass and always truthy, so this only ever means
+            # the team is ABSENT from the map — almost always a non-FBS
+            # side excluded from the ratings by `exclude_prefix`.
+            # Phrased to read after a count ("2 with a side that has
+            # no team rating"), which is how every census in this repo
+            # is rendered.
+            _skip("with neither side rated" if not hr and not ar else
+                  "with a side that has no team rating "
+                  "(usually a non-FBS visitor)")
+            continue
 
         tier = attention_tier(g)
         tags = cfbcontext.situational_tags(g, prev, nxt)
@@ -1145,7 +1184,20 @@ def main() -> None:
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  live line tracking unavailable: {_exc}")
 
-    plays = build_plays(games, priced, ratings, fit, prev, nxt)
+    # WHY A PRICED GAME PRODUCED NO MARKET, counted. `build_plays`
+    # refuses before the model runs — no lines, or a side with no team
+    # rating — and both refusals were invisible: the game never reaches
+    # a gate, so it never lands in the pass list or `gate_census`, and
+    # the log line reads the same as a slate the model priced and turned
+    # down. Opposite diagnoses, one sentence.
+    game_census: dict = {}
+    plays = build_plays(games, priced, ratings, fit, prev, nxt,
+                        census=game_census)
+    # Published as its own key rather than folded into `gate_census`,
+    # which counts what the MODEL refused. These are games the model was
+    # never asked about, and merging the two would let a slate with no
+    # ratings read as a slate with no edges.
+    out["game_census"] = game_census
     by_id = {g["game_id"]: g for g in games}
     result = run_cfb_slate(plays, meta={
         "games": len(games), "priced": len(priced), "odds": odds_note,
@@ -1640,8 +1692,16 @@ def main() -> None:
     _write(out, args.out)
     conn.close()
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "
-          f"{len(bets)} play(s), {len(conditionals)} conditional(s). "
-          f"Wrote {args.out}")
+          f"{len(plays)} market(s) → {len(bets)} play(s), "
+          f"{len(conditionals)} conditional(s). Wrote {args.out}")
+    # THE MISSING MIDDLE NUMBER, and the reason it is missing. Between
+    # "priced" and "play(s)" sits `build_plays`, which can refuse a
+    # priced game outright; without the market count the same sentence
+    # described a slate nothing was built from and a slate every gate
+    # turned down.
+    if game_census:
+        print("  Not priced by the model: "
+              + "; ".join(f"{v} {k}" for k, v in sorted(game_census.items())))
     if not fit.fitted:
         print("  ⚠️  Variance is a prior, not a fit — this board is journaled "
               "and graded, not staked.")

@@ -459,9 +459,17 @@ def lint_board(d: dict, sport: str) -> list:
     # The feed priced games and the model never built a market from them:
     # missing lines or missing ratings, upstream of any verdict.
     if games and not markets:
+        # …and WHICH of the two, when the builder says. `game_census`
+        # counts the games refused before the model ran, so this stops
+        # being a guess between "no lines" and "no ratings" — the second
+        # of which is usually a non-FBS visitor excluded from the ratings
+        # on purpose, and was the likeliest reading of 2026-09-03.
+        why = d.get("game_census") or {}
+        detail = ("; ".join(f"{v} {k}" for k, v in sorted(why.items()))
+                  if why else "lines or team ratings are missing before the "
+                              "model runs")
         out.append(f"COVERAGE the odds feed priced {games} game(s) and 0 "
-                   f"markets were built — lines or team ratings are missing "
-                   f"before the model runs, so no gate ever ran")
+                   f"markets were built — {detail} — so no gate ever ran")
     # A market measured to RANK, with nothing of it on the board that
     # ranks. This is the 2026-09-03 shape exactly: college moneylines
     # measured at 0.752 AUC and not one row on the likelihood board,
