@@ -270,14 +270,44 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     return conn
 
 
+#: How many rows one write transaction may carry.
+#:
+#: A 115,000-row `executemany` is ONE transaction, and it holds SQLite's
+#: single write lock for as long as it takes. On the droplet — one core,
+#: the refresh loop building boards against the same file — the college
+#: backfill and a board build deadlocked each other past the 30-second
+#: `busy_timeout` and the ingest died on its third season:
+#:
+#:     sqlite3.OperationalError: database is locked
+#:     (ingest.py cfb --seasons 2022-2026, 2026-09-03, after 229,277 rows)
+#:
+#: WAL lets readers run during a write; it does NOT let two writers
+#: overlap, so the only thing that helps is holding the lock in slices.
+#: Committing every few thousand rows means the longest any writer waits
+#: is one slice rather than one season.
+#:
+#: The trade is that a killed ingest leaves part of its rows written.
+#: Every writer here is an upsert keyed on identity, so re-running is
+#: idempotent and lands exactly where it left off — against the current
+#: behaviour, which is that the whole season is lost and the error names
+#: a lock rather than the fix.
+WRITE_CHUNK = 5000
+
+
+def _chunked(conn, sql: str, params: list) -> int:
+    """Run one bulk write in transactions of WRITE_CHUNK rows."""
+    for i in range(0, len(params), WRITE_CHUNK):
+        conn.executemany(sql, params[i:i + WRITE_CHUNK])
+        conn.commit()
+    return len(params)
+
+
 def _upsert(conn, table: str, cols: list[str], rows: list[dict]) -> int:
     if not rows:
         return 0
     placeholders = ", ".join(f":{c}" for c in cols)
     sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
-    conn.executemany(sql, [{c: r.get(c) for c in cols} for r in rows])
-    conn.commit()
-    return len(rows)
+    return _chunked(conn, sql, [{c: r.get(c) for c in cols} for r in rows])
 
 
 def upsert_games(conn, rows: list[dict]) -> int:
@@ -298,9 +328,7 @@ def upsert_games(conn, rows: list[dict]) -> int:
                         for c in GAME_COLS if c not in keys)
     sql = (f"INSERT INTO games ({', '.join(GAME_COLS)}) VALUES ({placeholders}) "
            f"ON CONFLICT({', '.join(keys)}) DO UPDATE SET {updates}")
-    conn.executemany(sql, [{c: r.get(c) for c in GAME_COLS} for r in rows])
-    conn.commit()
-    return len(rows)
+    return _chunked(conn, sql, [{c: r.get(c) for c in GAME_COLS} for r in rows])
 
 
 def drop_games(conn, rows: list[dict]) -> int:
@@ -352,11 +380,10 @@ def upsert_preseason_logs(conn, rows: list[dict]) -> int:
         return 0
     cols = ",".join(PRESEASON_COLS)
     marks = ",".join("?" * len(PRESEASON_COLS))
-    conn.executemany(
+    return _chunked(
+        conn,
         f"INSERT OR REPLACE INTO preseason_player_logs ({cols}) VALUES ({marks})",
         [tuple(r.get(c) for c in PRESEASON_COLS) for r in rows])
-    conn.commit()
-    return len(rows)
 
 
 PRESEASON_GAME_COLS = ["sport", "season", "week", "game_id", "date",
@@ -422,13 +449,12 @@ def upsert_player_assets(conn, rows: list[dict]) -> int:
     updates = ", ".join(
         f"{c}=COALESCE(NULLIF(excluded.{c}, ''), player_assets.{c})"
         for c in ASSET_COLS if c not in ("sport", "player"))
-    conn.executemany(
+    return _chunked(
+        conn,
         f"INSERT INTO player_assets ({', '.join(ASSET_COLS)}) "
         f"VALUES ({placeholders}) "
         f"ON CONFLICT(sport, player) DO UPDATE SET {updates}",
         [{c: r.get(c) for c in ASSET_COLS} for r in rows])
-    conn.commit()
-    return len(rows)
 
 
 def player_assets(conn, sport: str) -> dict[str, dict]:
