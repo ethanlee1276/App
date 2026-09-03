@@ -60,9 +60,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: The served tree. `server.py` reads QB_WEB_DIR the same way and for the
+#: same reason, and this follows it so the private half cannot be left
+#: behind pointing at a different checkout.
+#:
+#: NOTHING IN PRODUCTION SETS IT — it is how the three server tests stand
+#: a real server up on a temp copy of web/ — so with it unset this is
+#: ROOT/web and the line below is exactly the constant it replaces.
+_WEB = Path(os.environ.get("QB_WEB_DIR", "").strip() or (ROOT / "web"))
+
 #: Where the FULL boards live: outside web/, so Caddy cannot route to them
 #: even by accident. `web/data/` holds the redacted copies.
-FULL_DIR = ROOT / "data" / "built"
+#:
+#: A SIBLING OF THE SERVED TREE, not a fixed path under this checkout.
+#: `seal` used to write here while READING a directory it was handed, so
+#: a server told to serve a temp tree wrote that tree's private copies
+#: into the developer's own `data/built/` — and `full_board` then read
+#: them back out of it. The two ends cancelled, which is why it went
+#: unnoticed, and they stop cancelling the moment a file is already
+#: there: `seal` declines to overwrite an existing full copy, so
+#: whichever fixture landed first stayed, and every later reader got it.
+#: Found on this checkout, where `board_source("web/data/recommendations
+#: .json")` returned a three-pick fixture from tests/test_paywall_bypass
+#: instead of a board — the exact substitution `board_source` exists to
+#: prevent, listed in its own docstring.
+FULL_DIR = _WEB.parent / "data" / "built"
 
 #: Fields that ARE the product. Present in the sport boards, stripped for
 #: anyone without a live subscription.
@@ -501,7 +523,6 @@ def seal(web_data=None, verbose=True) -> dict:
     if not enabled():
         out["off"] = True
         return out
-    FULL_DIR.mkdir(parents=True, exist_ok=True)
     for path in sorted(root.glob("*.json")):
         name = path.name
         if is_free(name):
@@ -522,7 +543,12 @@ def seal(web_data=None, verbose=True) -> dict:
         # Keep the full copy the subscriber endpoint reads, but never
         # overwrite one that is already there — it may be fresher than
         # this public file, and it is the only surviving full board.
-        full_path = FULL_DIR / name
+        # ROOT-RELATIVE, the same way `publish` and `board_source`
+        # resolve it, so a seal against a tree that is not this checkout
+        # keeps that tree's private copies beside it.
+        built = _full_dir_for(path)
+        built.mkdir(parents=True, exist_ok=True)
+        full_path = built / name
         if not full_path.is_file():
             tmp = full_path.with_suffix(full_path.suffix + ".tmp")
             tmp.write_text(json.dumps(payload))

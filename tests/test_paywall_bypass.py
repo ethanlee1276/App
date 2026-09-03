@@ -50,6 +50,27 @@ def _env(**kw):
     return restore
 
 
+def _public(tmp, name="recommendations.json"):
+    """A public board path shaped like the real one: `<tmp>/web/data/<name>`.
+
+    `publish` puts the private copy in the tree the public path belongs
+    to — `<root>/web/data/x.json` gives `<root>/data/built` — and falls
+    back to the module's own FULL_DIR for a path it cannot place. A flat
+    `<tmp>/recommendations.json` is such a path, so these fixtures were
+    writing their full copies into THIS CHECKOUT's `data/built/`, where
+    `gate.board_source` reads them ahead of the real boards. The crash
+    test below already built the tree properly and asserted against
+    `<td>/data/built`; the two cheaper call sites did not.
+
+    Found by the nightly sweep 2026-09-03: `board_source` on a working
+    copy returned `BOARD` — three picks named A, B and C — under the
+    name `recommendations.json`."""
+    import os
+    path = os.path.join(tmp, "web", "data", name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
 BOARD = {
     "generated_at": "2026-08-20T12:00:00",
     "games": [{"id": "g1"}, {"id": "g2"}],
@@ -68,7 +89,7 @@ def test_curling_the_public_file_returns_no_picks():
     restore = _env(QB_PAYWALL="1")
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            pub = os.path.join(tmp, "recommendations.json")
+            pub = _public(tmp)
             gate.publish(dict(BOARD), pub, "recommendations.json")
             on_disk = json.loads(open(pub).read())
         # THE KEY SURVIVES, THE ROWS DO NOT — and that is the design, not
@@ -227,7 +248,7 @@ def test_turning_the_flag_off_restores_the_old_site_exactly():
     restore = _env(QB_PAYWALL=None)
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            pub = os.path.join(tmp, "recommendations.json")
+            pub = _public(tmp)
             gate.publish(dict(BOARD), pub, "recommendations.json")
             on_disk = json.loads(open(pub).read())
         assert on_disk == BOARD, "the paywall being off is not a no-op"
@@ -257,12 +278,28 @@ def test_the_record_stays_free_on_purpose():
 
 
 def _boards(tmp, **files):
+    """A board directory shaped like the real one: `<tmp>/web/data`.
+
+    IT USED TO BE A FLAT `<tmp>`, and that is what leaked. `gate.seal`
+    keeps a full copy of every board it strips, and it resolves where to
+    put that copy from the public path — `<root>/web/data/x.json` gives
+    `<root>/data/built`. A flat directory matches no root, so the
+    fallback sent every full copy into THIS CHECKOUT's `data/built/`,
+    where `gate.board_source` reads them in preference to the real
+    boards. `BOARD` below was sitting in a working copy as
+    `recommendations.json`, three picks named A, B and C, and every
+    internal tool that opens a board through `board_source` was reading
+    it.
+
+    Nothing about the assertions changes: callers take the directory
+    back from here and never spell it themselves."""
     import os
-    os.makedirs(tmp, exist_ok=True)
+    data = os.path.join(tmp, "web", "data")
+    os.makedirs(data, exist_ok=True)
     for name, doc in files.items():
-        with open(os.path.join(tmp, name), "w") as fh:
+        with open(os.path.join(data, name), "w") as fh:
             json.dump(doc, fh)
-    return tmp
+    return data
 
 
 def test_turning_the_flag_on_does_not_touch_a_file_already_written():
@@ -314,6 +351,98 @@ def test_sealing_twice_is_harmless():
             assert open(os.path.join(d, "recommendations.json")).read() == first
     finally:
         restore()
+
+
+def test_a_seal_against_another_tree_writes_nothing_into_this_one():
+    """THE FIXTURE WAS ENDING UP IN THE WORKING COPY.
+
+    `seal` reads the directory it is handed and used to write its full
+    copies to the module-global FULL_DIR — so sealing a temp tree kept
+    that tree's private boards in THIS checkout's `data/built/`, which is
+    where `gate.board_source` looks first. `BOARD` was sitting there as
+    `recommendations.json`, and every internal tool that opens a board
+    through `board_source` — `parlays.arbitrate_slate`, `parlaycheck.py`,
+    `launch.py --odds-doctor`, all three named in `board_source`'s own
+    docstring as the reason it exists — was reading three picks called A,
+    B and C instead of a board.
+
+    It survived because the two ends cancelled: whatever `seal` wrote,
+    `full_board` read back out of the same global. They stop cancelling
+    the moment a file is already there, because `seal` declines to
+    overwrite an existing full copy — so the first fixture to land won,
+    permanently, and every later reader got it.
+
+    Found by the nightly sweep 2026-09-03."""
+    from pathlib import Path
+    from engine import gate
+    leak = gate.FULL_DIR / "recommendations.json"
+    was_there = leak.is_file()
+    restore = _env(QB_PAYWALL="1")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _boards(tmp, **{"recommendations.json": dict(BOARD)})
+            gate.seal(d, verbose=False)
+            kept = Path(tmp) / "data" / "built" / "recommendations.json"
+            assert kept.is_file(), \
+                "the subscribers' copy was not kept beside the tree it came from"
+            assert len(json.loads(kept.read_text())["recommendations"]) == 3, \
+                "the full copy kept is not the full board"
+    finally:
+        restore()
+    assert leak.is_file() == was_there, \
+        f"sealing a temp tree wrote into this checkout: {leak}"
+
+
+def test_publishing_into_another_tree_writes_nothing_into_this_one():
+    """The same defect from `publish`'s side. It has always resolved the
+    private directory from the public path, so this only ever went wrong
+    when a CALLER handed it a path with no tree around it — which the
+    two cheap fixtures in this file did, and the crash test below did
+    not."""
+    from pathlib import Path
+    from engine import gate
+    leak = gate.FULL_DIR / "recommendations.json"
+    was_there = leak.is_file()
+    restore = _env(QB_PAYWALL="1")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            gate.publish(dict(BOARD), _public(tmp), "recommendations.json")
+            assert (Path(tmp) / "data" / "built" / "recommendations.json").is_file()
+    finally:
+        restore()
+    assert leak.is_file() == was_there, \
+        f"publishing to a temp tree wrote into this checkout: {leak}"
+
+
+def test_the_private_half_follows_the_tree_the_server_was_pointed_at():
+    """Both ends have to move together or neither may move.
+
+    `seal` writes the private copy and `full_board` reads it; if only the
+    writer became tree-relative, a server told to serve a temp tree would
+    write there and read here. QB_WEB_DIR is the variable `server.py`
+    already uses to relocate the served tree, and NOTHING IN PRODUCTION
+    SETS IT — with it unset this is the constant it replaces, asserted
+    here so the production path is pinned and not merely believed."""
+    import subprocess
+    import sys as _sys
+    from pathlib import Path
+    prog = ("from engine import gate; print(gate.FULL_DIR)")
+
+    env = dict(os.environ)
+    env.pop("QB_WEB_DIR", None)
+    plain = subprocess.run([_sys.executable, "-c", prog], cwd=ROOT, env=env,
+                           capture_output=True, text=True)
+    assert plain.returncode == 0, plain.stderr[-800:]
+    assert plain.stdout.strip() == str(Path(ROOT) / "data" / "built"), \
+        f"the production path moved: {plain.stdout.strip()}"
+
+    env["QB_WEB_DIR"] = "/tmp/qb-not-a-real-tree/web"
+    moved = subprocess.run([_sys.executable, "-c", prog], cwd=ROOT, env=env,
+                           capture_output=True, text=True)
+    assert moved.returncode == 0, moved.stderr[-800:]
+    assert moved.stdout.strip() == "/tmp/qb-not-a-real-tree/data/built", \
+        ("the reader did not follow the served tree, so a server on a "
+         f"temp copy still reads this checkout: {moved.stdout.strip()}")
 
 
 def test_seal_never_overwrites_the_subscribers_full_copy():
