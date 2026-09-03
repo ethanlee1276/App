@@ -164,6 +164,38 @@ def test_the_per_sport_cache_does_not_answer_for_the_wrong_league():
     ob._TODAY_CACHE.clear()
 
 
+def test_unattributed_spend_is_charged_to_everyone_not_to_nobody():
+    """THE HOLE THE PER-SPORT FILTER OPENED, and it is the dangerous kind:
+    it makes the ceiling weaker the more of it there is, and a ledger of
+    nothing but unattributed rows would switch the cap off entirely while
+    every other test in this file still passed.
+
+    `_classify` reads the league off the cache filename and some calls
+    carry none — the key-ring probe writes `ring_test.json`, and this
+    checkout's own ledger is 646 such rows. The money left the account; we
+    only failed to learn whose. Charge it to whoever asks."""
+    now = _time.time()
+    spend = _ledger(("mlb", 128), ("cfb", 3), ("", 7))
+    assert ob.spent_today(now, spend, sport="mlb") == 135, "mlb lost the probe"
+    assert ob.spent_today(now, spend, sport="cfb") == 10, "cfb lost the probe"
+    assert ob.spent_today(now, spend, sport="nfl") == 7, \
+        "a league with no spend of its own is not charged for the probe"
+    assert ob.spent_today(now, spend) == 138
+    ob._TODAY_CACHE.clear()
+
+
+def test_a_ledger_of_only_unattributed_rows_still_caps():
+    """The failure this exists for, stated as its own case: if every row
+    were unattributed, a filter that dropped them would report every league
+    at zero spend and the ceiling would never fire again."""
+    now = _time.time()
+    spend = _ledger(("", 4000), ("", 1000))
+    for sport in ("mlb", "nfl", "cfb"):
+        assert ob.spent_today(now, spend, sport=sport) == 5000, \
+            f"{sport} sees an empty account on a ledger of 5,000 spent credits"
+    ob._TODAY_CACHE.clear()
+
+
 # --- the allocation ---------------------------------------------------------
 def test_the_day_is_allocated_exactly_once():
     """THE OVERSPEND GUARD. The first cut of the game-day concentration

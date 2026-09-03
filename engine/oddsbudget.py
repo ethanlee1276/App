@@ -267,7 +267,22 @@ def spent_today(now: float | None = None,
     for r in read_spend(f):
         if str(r.get("iso", ""))[:10] != day:
             continue
-        if want and str(r.get("sport", "")) != want:
+        got = str(r.get("sport", "") or "")
+        # UNATTRIBUTED SPEND COUNTS AGAINST EVERYONE, not against nobody.
+        #
+        # `_classify` reads the league off the cache filename and some
+        # calls carry none — the key-ring probe writes `ring_test.json`,
+        # and any future call named without a league token will do the
+        # same. Filtering those out of every league's total would have
+        # made the cap quietly weaker the more of them there were, and a
+        # ledger of nothing but unattributed rows would switch the ceiling
+        # off altogether while every test still passed.
+        #
+        # The money left the account; we only failed to learn whose. So it
+        # is charged to whoever asks. That errs toward under-spending,
+        # which is the correct direction for a guard whose failure mode is
+        # an empty plan mid-season.
+        if want and got and got != want:
             continue
         try:
             total += int(r.get("credits", 0) or 0)
