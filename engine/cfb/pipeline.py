@@ -32,6 +32,41 @@ from .model import (attention_tier, haircut_edge, min_edge_for, grade,
 MARKET_LABELS = {"side": "Spread", "total": "Total", "moneyline": "Moneyline",
                  "team_total": "Team total", "prop": "Player prop"}
 
+#: The name each market answers to OUTSIDE this module.
+#:
+#: This file calls the spread "side" — §3's word, and the word
+#: `MARKET_LABELS`, `min_edge_for` and every play dict use. Every SHARED
+#: store calls the same market "spread": that is what
+#: `ledger.log_recommendations` writes for a game bet, what
+#: `engine.journalfit` therefore groups and fits under, what
+#: `engine.losspatterns` mines its closures from, and what
+#: `engine.gamecal` measures its haircut on.
+#:
+#: WHICH MEANT TWO SELF-TUNING GATES WERE DEAD FOR THE CFB SPREAD, under
+#: a comment saying they were "in parity with every engine":
+#:
+#:   * `calibrate.calibrated("cfb", "side", p)` looked up `cfb:side`.
+#:     A temperature or an isotonic curve fitted on our own settled
+#:     spreads is stored at `cfb:spread`, so the correction was written
+#:     and never read — and `is_reliable("cfb", "side")` could not see a
+#:     boundary fit at `cfb:spread` either, so the hard pass on a capped
+#:     calibration never fired on the one market it was fitted for.
+#:   * `losspatterns.veto("cfb", "side", …)` compares against closures
+#:     mined from the same `bets` table, i.e. keyed "spread". A closure
+#:     on the CFB spread matched nothing.
+#:
+#: Both fell back to something harmless-looking — identity, and no veto —
+#: which is why nothing ever looked broken. "total" and "moneyline" are
+#: spelled the same on both sides, so this is the spread and only the
+#: spread. MLB was never exposed to it: `mlb.pipeline` passes the row's
+#: own market, which is already the stored vocabulary.
+STORE_MARKET = {"side": "spread"}
+
+
+def store_key(market: str) -> str:
+    """This module's market name, as the shared stores spell it."""
+    return STORE_MARKET.get(market, market)
+
 
 def _dec(odds: int) -> float:
     return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
@@ -84,7 +119,7 @@ def evaluate_play(play: dict) -> dict:
     # temperature alone silently discards a stored isotonic curve. See
     # engine/longshots.build_pick for what that cost.
     from ..calibrate import calibrated
-    p_model = calibrated("cfb", market, float(play["p_model"]))
+    p_model = calibrated("cfb", store_key(market), float(play["p_model"]))
 
     p_market, _ = devig(odds, opp_odds)
     raw = p_model - p_market
@@ -117,19 +152,18 @@ def evaluate_play(play: dict) -> dict:
     }
 
     # The other two self-tuning gates, in parity with every engine.
-    from .model import BET_GROUP_OF_FIVE, is_group_of_five
+    from .model import BET_GROUP_OF_FIVE, is_group_of_five, NOT_A_POWER_GAME
     if not BET_GROUP_OF_FIVE and is_group_of_five(game):
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
-                "why": ("Group of Five game — priced and shown, not bet "
-                        "(Ethan, 2026-09-02: \"No\")")}
+                "why": NOT_A_POWER_GAME}
     from ..calibrate import is_reliable
     from ..losspatterns import veto as lp_veto
-    if not is_reliable("cfb", market):
+    if not is_reliable("cfb", store_key(market)):
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
                 "why": ("this market's calibration fit hit the edge of its "
                         "search range — closed by its own fit")}
     from ..losspatterns import minutes_until
-    _block = lp_veto("cfb", market, side=play.get("side"), odds=odds,
+    _block = lp_veto("cfb", store_key(market), side=play.get("side"), odds=odds,
                      prob=p_model, book=play.get("book"), horizon_days=0,
                      lead_min=minutes_until(play.get("kickoff")))
     if _block:

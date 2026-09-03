@@ -91,7 +91,83 @@ KELLY_FRACTION_MAX = 0.50      # half Kelly: A+ in a Tier 1 (low-attention) spot
 
 # The power conferences. Everything else is Group of Five or independent,
 # which is where the spec says the soft numbers live.
+#
+# FOUR OF THE ELEVEN CONFERENCES THE FEED CAN NAME, so this set decides
+# far more of a card than "Group of Five" suggests. The seven it leaves
+# out are American, Conference USA, FBS Independents, MAC, Mountain West,
+# Pac-12 and Sun Belt (engine/sources/cfbdata.CONFERENCE_IDS), and on the
+# replay behind the rule below that is 65% of the bets.
+#
+# THE PAC-12 IS THE JUDGEMENT IN HERE, and it was never written down.
+# After the 2024 realignment the league is a rebuilt one, so treating it
+# as non-power is a read on what it is in 2026 rather than a fact about
+# its name — and it is the one member of that list a reader is most
+# likely to be surprised by. Recorded here so that if the read stops
+# being true the set is changed deliberately, by someone who knows they
+# are changing a betting rule, rather than left to age quietly.
+#
+# THIS SET IS THE ATTENTION AXIS AND NOTHING ELSE. It answers "how hard
+# is the market looking at this game", which is what `attention_tier`
+# needs and the only question a conference name can honestly answer.
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
+
+#: …and this one answers whether the MONEY follows. Same membership, so
+#: nothing about today's board changes; a different question, so the two
+#: can move apart.
+#:
+#: THEY WERE ONE SET, AND THAT MADE THE PAC-12 QUESTION UNANSWERABLE.
+#: `BET_GROUP_OF_FIVE`'s own note promises "the attention dial is
+#: unchanged: it decides how much of an edge to believe, this decides
+#: whether the money follows" — a real distinction, written down, and
+#: not kept, because both read POWER_CONFERENCES. Measured on the three
+#: shapes a Pac-12 card comes in, adding "Pac-12" to that one set did
+#: two opposite things at once:
+#:
+#:     Pac-12 vs Mountain West   not bet, LOW   ->  bet, STANDARD
+#:     Pac-12 vs Pac-12          not bet, LOW   ->  bet, STANDARD
+#:
+#: It opens the money gate AND tightens the model in the same stroke:
+#: LOW to STANDARD moves the haircut 25% -> 35% and the bar 2.5% -> 3.0%,
+#: so the games it just made bettable are simultaneously harder to bet.
+#: Nobody would ask for those together, and no replay of "should we bet
+#: the Pac-12" could mean anything while one edit did both.
+#:
+#: Split, the question is one dial: put "Pac-12" in the set below and
+#: nowhere else, replay, and read the bet count and the ROI at the close
+#: the way Phase 8 read them for the Group of Five. Whether it belongs
+#: there is a money decision and is not made here.
+BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
+
+#: The sentence both boards show when the rule below refuses a game.
+#:
+#: ONE COPY. It is user-facing text with two producers —
+#: `pipeline.evaluate_play` for the game markets and `tds` for the
+#: touchdown board — and this codebase's most-repeated bug is a rule
+#: written out twice and then changed once.
+#:
+#: IT NAMES THE FOUR RATHER THAN THE CATEGORY, and that is the whole
+#: rewording. "Group of Five game" is what the Ask was called; it is not
+#: what the code TESTS. The test is membership of POWER_CONFERENCES, and
+#: two of the seven conferences that fails are not Group of Five by any
+#: ordinary reading: the Pac-12 (above), and FBS Independents, which is
+#: Notre Dame's conference. The rule was written knowing the second —
+#: CFB_READINESS.md, Phase 8: "an Independents-vs-G5 game stays under
+#: it" — and it is still a sentence a reader would call wrong reading
+#: "Group of Five game" over Notre Dame at Navy.
+#:
+#: Until 2026-09-03 the sentence only ever reached a pass list nothing
+#: rendered, so being loosely worded cost nothing. It is on the card now.
+#: DERIVED FROM THE SET, not typed out beside it. The names were a
+#: literal here, which is the same defect one layer down: add "Pac-12" to
+#: BETTABLE_CONFERENCES and the card would go on refusing games in the
+#: name of a list that no longer matched the rule. "Power" is dropped
+#: from the wording for the same reason it was dropped from "Group of
+#: Five" — the set is whatever this board bets, and calling its members
+#: power conferences is a claim the set does not make.
+NOT_A_POWER_GAME = (
+    "Neither side is in a conference this board bets ("
+    + ", ".join(sorted(BETTABLE_CONFERENCES)) + ") — "
+    "priced and shown, not bet (Ethan, 2026-09-02: \"No\")")
 
 #: Ethan, 2026-09-02, closing the CFB readiness audit's first Ask ("Bet
 #: Group of Five at all? … On this evidence, no"): "1. No". A game in
@@ -104,12 +180,28 @@ BET_GROUP_OF_FIVE = False
 
 
 def is_group_of_five(game: dict) -> bool:
-    """Both conferences known, neither a power conference."""
+    """Both conferences known, neither a power conference.
+
+    THE NAME IS THE ASK'S, NOT THE TEST'S. What this returns True for is
+    "neither side is in POWER_CONFERENCES", which catches a Pac-12 team
+    and Notre Dame along with the actual Group of Five — see the notes on
+    that set and on `NOT_A_POWER_GAME`, which is the sentence a reader
+    sees and which says what was tested rather than what it is called.
+
+    An UNKNOWN conference is never Group of Five. A side the feed could
+    not name is a side we know nothing about, and refusing a game for a
+    fact we do not have would silently take FCS visitors — and any game
+    at all on a box where the conference join failed — off the board
+    under a rule about conference strength.
+    """
     home_conf = (game.get("home_conference") or "").strip()
     away_conf = (game.get("away_conference") or "").strip()
     if not home_conf or not away_conf:
         return False
-    return not (home_conf in POWER_CONFERENCES or away_conf in POWER_CONFERENCES)
+    # BETTABLE_CONFERENCES, not POWER_CONFERENCES — this is the money
+    # question, and the two sets exist so it can be asked on its own.
+    return not (home_conf in BETTABLE_CONFERENCES
+                or away_conf in BETTABLE_CONFERENCES)
 
 # §7 — situational tags. Named because the spec is explicit that these are
 # priced deliberately rather than narrated after the fact.

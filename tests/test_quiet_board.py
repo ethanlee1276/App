@@ -86,6 +86,104 @@ def test_the_page_has_a_branch_for_a_priced_card_with_nothing_on_it():
     assert "line_calibration" in app
 
 
+def test_the_quiet_branch_measures_priced_not_recommended():
+    """`pricedButQuiet` opens `const priced = (d.game_bets || []).length`.
+
+    That is the right question — "did we price this card?" — and it only
+    answers it if the producer ships what it priced. College shipped the
+    SURVIVORS, so on the one board this branch exists for (2026-09-03:
+    nine games priced, every market refused) `priced` was 0, the branch
+    returned null, and the page fell through to the waiting-on-prices
+    sentence it was written to prevent. NFL never hit it because
+    `pipeline._game_bets` appends every priced market.
+    """
+    app = _app()
+    at = app.index("function pricedButQuiet()")
+    body = app[at:app.index("\nfunction ", at + 1)]
+    assert "(d.game_bets || []).length" in body
+    assert "filter(passesGameBet).length" in body, \
+        "the branch must ask whether any priced row SURVIVED, separately"
+    cfb = _read("cfb_build.py")
+    line = cfb[cfb.index('out["game_bets"] = '):]
+    assert "refused" in line[:line.index("\n")], \
+        ("cfb_build must ship its refusals or this branch is dead on the "
+         "board it exists for")
+
+
+def test_a_fully_refused_college_card_still_reaches_the_quiet_branch():
+    """The Python half of the same contract, run rather than grepped: a
+    Group of Five card produces game_bets that are non-empty and contain
+    nothing a reader would call a bet — which is exactly the state
+    `pricedButQuiet` renders for."""
+    from tests.test_likely_gamelines import _cfb_g5_slate
+
+    _result, rows = _cfb_g5_slate()
+    assert rows, "priced markets must reach the payload"
+    # `passesGameBet` in web/js/app.js, restated: a bet is not a Pass and
+    # not a conditional.
+    survivors = [r for r in rows
+                 if r["grade"] != "Pass" and not r["conditional"]]
+    assert survivors == [], survivors
+
+
+def test_the_quiet_branch_says_how_big_the_card_was():
+    """"Recommended none" is a mood until it is a proportion.
+
+    Both builds already publish the number twice — `counts
+    .markets_priced` and `cfb.counts` — and no renderer has ever read
+    either of them, so the branch counts the rows it has instead and
+    works for every sport rather than the one that happens to ship the
+    key."""
+    app = _app()
+    at = app.index("function pricedButQuiet()")
+    body = app[at:app.index("\nfunction ", at + 1)]
+    assert "priced game market" in body
+    assert "nearestMisses(" in body, "the closest misses are still unread"
+
+
+def test_the_near_miss_list_is_measured_against_the_bar():
+    """§11 wants "the closest misses, so a no-play slate still says
+    something". College's bar moves by attention tier — 2.5% in a Tuesday
+    MAC game, 4% in a marquee one — so the biggest edge on the card is
+    not necessarily the one that came closest, and a list sorted on edge
+    alone would name the wrong game."""
+    app = _app()
+    at = app.index("function nearestMisses(")
+    body = app[at:app.index("\n}", at) + 2]
+    assert "b.required_edge != null" in body, "the bar is not consulted"
+    assert "!b.recommended" in body, "a play is not a near miss"
+    assert "(b.edge || 0) > 0" in body, \
+        "a market we like less than the book did not nearly qualify"
+
+
+def test_the_college_card_carries_the_bar_it_was_measured_against():
+    """The bar rode only inside a reason sentence, so the page could not
+    compute a gap from it. Run rather than grepped."""
+    from tests.test_likely_gamelines import _cfb_g5_slate
+
+    _result, rows = _cfb_g5_slate()
+    assert rows
+    for r in rows:
+        assert r["required_edge"] is not None, r["market"]
+        assert 0 < r["required_edge"] < 1, r["required_edge"]
+
+
+def test_the_college_board_keeps_no_second_copy_of_its_refusals():
+    """`out["cfb"]` carried a 20-row `pass_list` and a `near_misses` top
+    three that nothing has ever read — `d.cfb` appears nowhere in
+    app.js — while `gate.PAID_KEYS` names both and `redact` walked only
+    the top level, so both shipped through the paywall whole. Fixing the
+    stripper was the urgent half; not keeping a second copy of the paid
+    rows is the half that stops it recurring."""
+    src = _read("cfb_build.py")
+    at = src.index('out["cfb"] = {')
+    block = src[at:src.index("}", at)]
+    for gone in ("pass_list", "near_misses"):
+        assert gone not in block, f"{gone} is back in the nested block"
+    for kept in ("counts", "by_tier", "no_qualifying", "exposure"):
+        assert kept in block, f"{kept} is a cheap diagnostic and should stay"
+
+
 def test_the_quiet_branch_runs_before_the_waiting_on_prices_copy():
     """Order is the whole fix. The fallback sentence is about a missing
     feed; reaching it on a priced card is what this exists to stop."""

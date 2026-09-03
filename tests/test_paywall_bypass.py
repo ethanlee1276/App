@@ -319,6 +319,104 @@ def test_turning_the_flag_on_does_not_touch_a_file_already_written():
         restore()
 
 
+def test_a_paid_board_nested_one_level_down_is_stripped_too():
+    """THE ATTACK: read the picks out of a container the stripper never
+    looked inside.
+
+    `redact` walked `payload.items()` and nothing else, so a paid key was
+    only paid at the top of the file. `cfb_build` publishes
+    `out["cfb"] = {"near_misses": …, "pass_list": …}` — both names are in
+    PAID_KEYS — and the public `web/data/cfb.json` carried twenty refused
+    game markets with price, edge, book and the model's own number on
+    each, while the identical key names at the top of the same file were
+    correctly emptied. The board looked locked, which is what kept it
+    invisible.
+    """
+    from engine import gate
+
+    payload = {
+        "generated_at": "2026-09-03T12:00:00Z", "sport": "cfb",
+        "game_bets": [{"pick_label": "TOL ML", "odds": -160}],
+        "cfb": {
+            "pass_list": [{"selection": "TOL -3.5", "odds": -110,
+                           "edge": 0.031, "book": "dk", "p_model": 0.61}],
+            "near_misses": [{"selection": "Over 52.5", "edge": 0.024}],
+            "no_qualifying": True,
+            "counts": {"priced": 24, "published": 0},
+        },
+        "team_recent": {"TOL": [{"pts": 31}]},
+        "games": [{"home": "TOL", "away": "BGSU"}],
+    }
+    out = gate.redact(payload, "cfb.json")
+    assert out["cfb"]["pass_list"] == [], "the nested pass list shipped whole"
+    assert out["cfb"]["near_misses"] == []
+    blob = json.dumps(out)
+    for secret in ("-110", '"dk"', "0.031", "TOL -3.5", "Over 52.5"):
+        assert secret not in blob, f"{secret} survived redaction"
+    # The free half of the same container, and the free keys beside it,
+    # are untouched — a stripper that took those would be its own bug.
+    assert out["cfb"]["counts"] == {"priced": 24, "published": 0}
+    assert out["cfb"]["no_qualifying"] is True
+    assert out["team_recent"] == {"TOL": [{"pts": 31}]}
+    assert out["games"] == [{"home": "TOL", "away": "BGSU"}]
+    # …and the count of what was withheld stays honest, by path.
+    assert out["locked"]["cfb.pass_list"] == 1
+    assert out["locked"]["cfb.near_misses"] == 1
+    assert out["locked"]["game_bets"] == 1, \
+        "top-level keys keep their bare names for every existing reader"
+    # The caller's copy is the FULL one and must not have been touched.
+    assert payload["cfb"]["pass_list"], "redact mutated its argument"
+
+
+def test_the_detector_can_see_a_nested_leak_too():
+    """`unsealed()` says "with the paywall on this must be empty. If it
+    is not, the product is public and nobody has noticed." It counted the
+    top level only, so the board that WAS leaking read as clean — the
+    same shape as the board lint reading the stripped public copy and
+    reporting it fine. A stripper and a detector that disagree about
+    where to look is worse than neither."""
+    from engine import gate
+
+    leaky = {"sport": "cfb",
+             "game_bets": [{"a": 1}, {"b": 2}],
+             "cfb": {"pass_list": [{"odds": -110}]}}
+    assert gate._paid_rows(leaky, "cfb.json") == 3, \
+        "the nested row is invisible to the detector"
+    assert gate._paid_rows(gate.redact(leaky, "cfb.json"), "cfb.json") == 0
+
+
+def test_sealing_a_sealed_board_keeps_its_disclosure_intact():
+    """`seal()` promises it is "safe at any time, safe twice", so a
+    sealed board comes back through `redact`. The `locked` block's keys
+    are deliberately the paid key names, so a walk that descends into it
+    empties the disclosure and re-reports it as `locked.game_bets`.
+
+    `_paid_rows` records the hour this cost on 2026-08-20 when it read
+    `locked` as content; recursion is a new way into the same room."""
+    from engine import gate
+
+    payload = {"sport": "cfb", "game_bets": [{"a": 1}, {"b": 2}],
+               "cfb": {"pass_list": [{"odds": -110}]}}
+    once = gate.redact(payload, "cfb.json")
+    twice = gate.redact(once, "cfb.json")
+    assert once["locked"] == {"game_bets": 2, "cfb.pass_list": 1}
+    assert twice == once, "re-sealing changed a correctly sealed board"
+
+
+def test_redaction_does_not_descend_into_the_rows_of_free_keys():
+    """Dicts only. A field inside a free board's rows that happens to
+    share a name with a paid board is data, not a paywall breach, and
+    emptying it would be over-reach dressed as safety."""
+    from engine import gate
+
+    payload = {"sport": "nfl",
+               "games": [{"home": "DET", "correlation": 0.4, "picks": 3}],
+               "recommendations": [{"player": "X"}]}
+    out = gate.redact(payload, "recommendations.json")
+    assert out["games"] == [{"home": "DET", "correlation": 0.4, "picks": 3}]
+    assert out["recommendations"] == []
+
+
 def test_seal_strips_them_and_says_how_many():
     from engine import gate
     restore = _env(QB_PAYWALL="1")

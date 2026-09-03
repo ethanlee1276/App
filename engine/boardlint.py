@@ -429,9 +429,74 @@ def _gb_line(r: dict) -> str:
             f"q {r.get('quality')} {r.get('grade')} {r.get('stake_units')}u ev {r.get('ev_per_unit')}")
 
 
+def lint_board(d: dict, sport: str) -> list:
+    """Flags about the board AS A WHOLE, rather than about one of its rows.
+
+    THE FAILURE EVERY OTHER CHECK HERE IS BLIND TO. Each one reads a row
+    and asks whether it is sound, which cannot see what shipped on
+    2026-09-03: a college board with nine of eleven games priced, thirty
+    game-line rows in the ledger, and ZERO game markets published. It
+    passed this lint without a flag, because a board with no rows has no
+    bad rows. An absence is the one thing a row-by-row reader cannot
+    report, and an absence is what a quiet board is made of.
+
+    Each check below is a real failure this repo has actually had, and
+    each is phrased as the question a reader would ask next. A flag is
+    still a question, not a verdict: there are honest reasons for every
+    one of them, and the numbers to answer with are printed alongside.
+    """
+    out = []
+    counts = d.get("counts") or {}
+    bets = d.get("game_bets") or []
+    markets = counts.get("markets_priced")
+    games = counts.get("games_priced")
+
+    # The pricer produced markets and none of them reached the payload.
+    if markets and not bets:
+        out.append(f"COVERAGE {markets} game market(s) priced and 0 on the "
+                   f"board — every one was dropped between the pricer and "
+                   f"the payload")
+    # The feed priced games and the model never built a market from them:
+    # missing lines or missing ratings, upstream of any verdict.
+    if games and not markets:
+        # …and WHICH of the two, when the builder says. `game_census`
+        # counts the games refused before the model ran, so this stops
+        # being a guess between "no lines" and "no ratings" — the second
+        # of which is usually a non-FBS visitor excluded from the ratings
+        # on purpose, and was the likeliest reading of 2026-09-03.
+        why = d.get("game_census") or {}
+        detail = ("; ".join(f"{v} {k}" for k, v in sorted(why.items()))
+                  if why else "lines or team ratings are missing before the "
+                              "model runs")
+        out.append(f"COVERAGE the odds feed priced {games} game(s) and 0 "
+                   f"markets were built — {detail} — so no gate ever ran")
+    # A market measured to RANK, with nothing of it on the board that
+    # ranks. This is the 2026-09-03 shape exactly: college moneylines
+    # measured at 0.752 AUC and not one row on the likelihood board,
+    # because the only thing feeding it was the edge board's survivors.
+    if bets:
+        try:
+            from .likely import GAME_MARKETS, MIN_RANK_AUC, measured_auc
+            ranked = {m for m in GAME_MARKETS
+                      if (measured_auc(sport, m) or 0) >= MIN_RANK_AUC}
+            have = {(b.get("bet_type") or b.get("market") or "") for b in bets}
+            shown = [r for r in (d.get("most_likely") or [])
+                     if r.get("kind") == "game"]
+            if ranked & have and not shown:
+                which = ", ".join(sorted(ranked & have))
+                out.append(f"COVERAGE {which} is measured to rank and no game "
+                           f"row reached the likelihood board — check what "
+                           f"refused them before believing the board is quiet")
+        except Exception:                                    # noqa: BLE001
+            pass          # a lint that cannot import must not stop linting
+    return out
+
+
 def render(report: dict, show_all: bool = False) -> str:
     lines = [f"Board lint — {report['sport']} · {report['file']} · built {report.get('built_at') or '?'}",
              f"injuries page: {report['injury_rows']} listed not-active"]
+    for flag in report.get("board") or []:
+        lines.append(f"  ! {flag}")
     for title, key, fmt in (("MOST LIKELY", "likely", _likely_line),
                             ("RECOMMENDED PROPS", "props", _prop_line),
                             ("GAME BETS", "game_bets", _gb_line)):
@@ -455,11 +520,17 @@ def lint_payload(d: dict, sport: str, file: str = "", injuries: dict | None = No
                  now: _dt.datetime | None = None) -> dict:
     injuries = injuries if injuries is not None else {}
     return {
-        "sport": sport, "file": file, "built_at": d.get("built_at"),
+        "sport": sport, "file": file,
+        # NFL and MLB stamp `built_at`; cfb_build stamps `generated_at`
+        # and never the other, so the college header has always read
+        # "built ?" — a lint that cannot say how old the board is,
+        # on the sport whose board went stale for three weeks.
+        "built_at": d.get("built_at") or d.get("generated_at"),
         "injury_rows": len(injuries),
         "likely": lint_likely(d.get("most_likely") or [], injuries, now),
         "props": lint_props(d.get("recommendations") or [], injuries, now),
         "game_bets": lint_game_bets(d.get("game_bets") or [], now),
+        "board": lint_board(d, sport),
         "likely_census": d.get("likely_census") or {},
     }
 
@@ -473,9 +544,7 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     path = a.file or os.path.join(ROOT, "web", "data", FILES[a.sport])
-    if not os.path.exists(path):
-        print(f"no board at {path}", file=sys.stderr)
-        return 2
+    asked = path
     # THE PRIVATE COPY, AND THIS TOOL IS THE FIFTH TO LEARN IT.
     #
     # `gate.publish` writes the full board to data/built/ and a REDACTED
@@ -511,6 +580,19 @@ def main(argv=None) -> int:
                 path = str(src)
         except Exception:                                    # noqa: BLE001
             pass      # a gate hiccup must not stop the lint reading SOMETHING
+    # THE EXISTENCE CHECK COMES AFTER THE REDIRECT, and it used to come
+    # before. A checkout that has a private board and no public copy —
+    # the paywall never switched on, or web/data never populated — was
+    # told "no board at web/data/cfb.json" and exited 2, with
+    # data/built/cfb.json sitting right there and never looked at. The
+    # redirect two lines above exists precisely because the public path
+    # is the wrong file to read; gating it on that file being present
+    # made the fix conditional on the problem.
+    if not os.path.exists(path):
+        where = (f"no board at {asked} (nor at {path})" if path != asked
+                 else f"no board at {path}")
+        print(where, file=sys.stderr)
+        return 2
     with open(path, encoding="utf-8") as fh:
         d = json.load(fh)
     # AND SAY SO IF THE ROWS ARE STILL MISSING. A locked board with no

@@ -316,6 +316,52 @@ from 2,902 to 1,324 (the 65% of bets that were low-attention games), and
 what remains still loses at the close (−4.1%). Pinned in
 `tests/test_cfb_group_of_five.py`.
 
+*Which four, and how far the rule reaches.* `POWER_CONFERENCES` is
+**SEC, Big Ten, Big 12, ACC** — four of the eleven conferences the feed
+can name. The seven it leaves out are American, Conference USA, **FBS
+Independents**, MAC, Mountain West, **Pac-12** and Sun Belt, which is
+why the replay loses 65% of its bets to one line of set membership. The
+two in bold are the ones the rule's name does not predict: FBS
+Independents is Notre Dame's conference (deliberate, and stated above),
+and the Pac-12 is a judgement about what that league is after the 2024
+realignment rather than a fact about its name. Both are pinned so that
+moving either is a deliberate change to a betting rule. The sentence a
+reader sees says what was tested — "Neither side is in a power
+conference (SEC, Big Ten, Big 12, ACC)" — rather than "Group of Five
+game", which would be wrong over Notre Dame at Navy; it lives once, as
+`model.NOT_A_POWER_GAME`, because the game board and the touchdown board
+both show it.
+
+*Open for Ethan — and now answerable.* The Pac-12 call has never
+actually been asked. It was inherited from a set literal written before
+the realignment settled, and nobody has decided whether a 2026 Pac-12
+game should be bettable. It is still not decided here.
+
+What changed is that it CAN be. One set was doing two jobs: the money
+gate (`is_group_of_five`) and the attention dial (`attention_tier`) both
+read `POWER_CONFERENCES`, so adding "Pac-12" to it did two opposite
+things at once — opened the money gate, and moved those games LOW →
+STANDARD, taking the haircut 25% → 35% and the bar 2.5% → 3.0%. The
+games it made bettable became harder to bet in the same stroke, and no
+replay of "should we bet the Pac-12" could mean anything. The rule's own
+note had promised the two were separate; both read one set, so they were
+not.
+
+They are two sets now — `POWER_CONFERENCES` (attention) and
+`BETTABLE_CONFERENCES` (money) — with identical membership, so today's
+board is unchanged. To answer the question: add `"Pac-12"` to
+`BETTABLE_CONFERENCES` and nothing else, replay, and read the bet count
+and the ROI at the close the way Phase 8 read them for the Group of
+Five (2,902 → 1,324, −4.1%). Bettable if it clears; left out if it does
+not.
+
+*What the 2026 feed says about the league itself,* since the answer used
+to be "two schools": the rebuilt Pac-12 is real and in the feed — **46
+games** of 888, alongside 138 FBS programs across 11 conferences (the
+table at the top of this document). The premise in
+`assets.probe_conference_table` that called it "two schools rather than
+a conference" was true of 2024-25 and is corrected.
+
 **2. Sit out September? — "no."** Nothing changes: the board publishes
 in September as it does in November. Recorded so the evidence is next to
 the decision: weeks 1–4 replayed at −5.1% (adjusted, 692 bets) against

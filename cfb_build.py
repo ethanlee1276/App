@@ -35,7 +35,7 @@ from engine.cfb import context as cfbcontext
 from engine.cfb import ratings as cfbratings
 from engine.cfb import status as cfbstatus
 from engine.cfb.model import LOW, MARQUEE, STANDARD, attention_tier
-from engine.cfb.pipeline import run_cfb_slate
+from engine.cfb.pipeline import run_cfb_slate, store_key as _store_key
 from engine.db import connect, upsert_games
 from engine.odds import expected_value
 from engine.sources import cfbdata
@@ -473,16 +473,55 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
 
 
 def build_plays(games: list[dict], priced: dict, ratings: dict,
-                fit, prev: dict, nxt: dict) -> list[dict]:
-    """Every game with a price → the plays the CFB pipeline will judge."""
+                fit, prev: dict, nxt: dict,
+                census: dict | None = None) -> list[dict]:
+    """Every game with a price → the plays the CFB pipeline will judge.
+
+    ``census`` counts the games this REFUSES TO PRICE AT ALL, by reason.
+    Both refusals below are correct and both were silent, which is the
+    problem: they happen BEFORE `evaluate_play`, so a game dropped here
+    never reaches a gate, never lands in the pass list, and never appears
+    in `gate_census`. The build log then prints "11 game(s), 9 priced →
+    0 play(s)" — the same sentence it prints when every market WAS priced
+    and every gate refused it. Opposite diagnoses, one sentence, and no
+    way to tell them apart from the board.
+
+    THE ONE THAT ACTUALLY BITES IS THE SECOND, and it bites hardest in
+    the first weeks of a season. `teamrates.compute_team_ratings` is
+    called with `exclude_prefix="espn:"`, which leaves out every game
+    whose visitor has no FBS abbreviation — the FCS buy games, correctly,
+    because a 70-0 result was owning the host's rating for a fortnight.
+    The consequence nobody wrote down is that the FCS side then appears
+    in no ratings map at all, so the guard below drops the WHOLE GAME,
+    priced and all. In week one or two, when buy games are most of the
+    card, that can be the majority of a slate leaving without a word.
+
+    Reproduced: five priced games, three of them FBS-vs-FCS → six markets
+    built, three games gone, nothing anywhere saying so.
+    """
+    def _skip(why: str) -> None:
+        if census is not None:
+            census[why] = census.get(why, 0) + 1
+
     plays: list[dict] = []
     for g in games:
         lines = priced.get(g["game_id"])
         if not lines:
+            _skip("with no book lines")
             continue
         hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
         if not hr or not ar:
-            continue                     # no rating = no opinion, not a guess
+            # no rating = no opinion, not a guess. A `TeamRating` is a
+            # plain dataclass and always truthy, so this only ever means
+            # the team is ABSENT from the map — almost always a non-FBS
+            # side excluded from the ratings by `exclude_prefix`.
+            # Phrased to read after a count ("2 with a side that has
+            # no team rating"), which is how every census in this repo
+            # is rendered.
+            _skip("with neither side rated" if not hr and not ar else
+                  "with a side that has no team rating "
+                  "(usually a non-FBS visitor)")
+            continue
 
         tier = attention_tier(g)
         tags = cfbcontext.situational_tags(g, prev, nxt)
@@ -557,7 +596,13 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
     return plays
 
 
-BET_TYPES = {"side": "spread", "total": "total", "moneyline": "moneyline"}
+# A card's market names are the SHARED vocabulary, not the CFB
+# pipeline's — "side" becomes "spread" because that is what the ledger,
+# the journal fit, the loss-pattern miner and every renderer call it.
+# That mapping lived here as `BET_TYPES`, a second copy of a dict the
+# pipeline also needed and did not have; see `pipeline.STORE_MARKET` for
+# what its absence cost the calibration and closure gates. One of them
+# had to be the source, and it is the one the gates read.
 
 
 def to_game_bet(card: dict, play: dict, game: dict) -> dict:
@@ -567,9 +612,19 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
     moneyline; what it does not know is attention tier or conditionals, so
     those ride along as extra keys and as reasons — nothing about the
     existing NFL/MLB rendering has to change.
+
+    A REFUSED CARD COMES THROUGH HERE TOO, and `recommended` is what says
+    so. `engine.cfb.model` promises a Group of Five game is "priced,
+    shown with its number and its edge, never a play"; that promise is
+    kept by turning the pass into a card like any other and flagging it,
+    not by dropping it. So the flag is read off the verdict — a play is
+    recommended, a hold and a pass are not — where it used to be `not
+    conditional`, which called every pass a recommendation the moment
+    one was allowed onto the board.
     """
     shared = dict(play.get("shared") or {})
     conditional = card["kind"] == "hold"
+    refused = card["kind"] == "pass"
     stake_fraction = card.get("stake_fraction") or 0.0
     reasons = list(shared.get("reasons") or [])
     from engine.cfb.model import HAIRCUT
@@ -581,11 +636,18 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
     reasons.append(f"Volatility {card['volatility']} · grade {card['grade']}/100")
     if conditional:
         reasons.append("CONDITIONAL — " + card["why"])
+    elif refused:
+        # WHY IT IS NOT A PLAY, on the card rather than only in a census
+        # bucket. `evaluate_play` writes one sentence per refusal — the
+        # Group of Five rule, the tier's edge bar, the grade floor — and
+        # until now that sentence died with the pass list. It is the only
+        # thing on a refused card a reader actually wants.
+        reasons.append("NOT A PLAY — " + str(card.get("why") or "refused"))
 
     return {
         **shared,
-        "bet_type": BET_TYPES.get(card["market"], card["market"]),
-        "market": BET_TYPES.get(card["market"], card["market"]),
+        "bet_type": _store_key(card["market"]),
+        "market": _store_key(card["market"]),
         "market_label": card["market_label"],
         "home": game["home"], "away": game["away"],
         "matchup": f"{game['away']} @ {game['home']}",
@@ -599,6 +661,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "live": (game.get("live") or {}).get("state") == "live",
         "win_prob": card["p_model"], "fair_prob": card["p_market"],
         "edge": card["edge"], "odds": card["odds"],
+        # THE BAR THIS EDGE WAS MEASURED AGAINST, as a number rather than
+        # only as English inside a reason string. CFB's bar moves by
+        # attention tier (2.5% / 3% / 4%), so "which of these came
+        # closest" cannot be answered by sorting on edge alone — and that
+        # question is the whole of §11's near-miss list, which the page
+        # has never been able to compute for itself.
+        "required_edge": card.get("required_edge"),
         "ev_per_unit": round(expected_value(card["p_model"], card["odds"]), 4),
         "confidence": round(card["grade"] / 10.0, 1),
         # A conditional is NOT sized. The number it would be sized at rides
@@ -622,7 +691,7 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "conditions_pending": card.get("conditions_pending", []),
         "situational_tags": card.get("situational_tags", []),
         "book": play.get("book", ""),
-        "recommended": not conditional,
+        "recommended": card["kind"] == "play",
         "reasons": reasons,
     }
 
@@ -1115,7 +1184,20 @@ def main() -> None:
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  live line tracking unavailable: {_exc}")
 
-    plays = build_plays(games, priced, ratings, fit, prev, nxt)
+    # WHY A PRICED GAME PRODUCED NO MARKET, counted. `build_plays`
+    # refuses before the model runs — no lines, or a side with no team
+    # rating — and both refusals were invisible: the game never reaches
+    # a gate, so it never lands in the pass list or `gate_census`, and
+    # the log line reads the same as a slate the model priced and turned
+    # down. Opposite diagnoses, one sentence.
+    game_census: dict = {}
+    plays = build_plays(games, priced, ratings, fit, prev, nxt,
+                        census=game_census)
+    # Published as its own key rather than folded into `gate_census`,
+    # which counts what the MODEL refused. These are games the model was
+    # never asked about, and merging the two would let a slate with no
+    # ratings read as a slate with no edges.
+    out["game_census"] = game_census
     by_id = {g["game_id"]: g for g in games}
     result = run_cfb_slate(plays, meta={
         "games": len(games), "priced": len(priced), "odds": odds_note,
@@ -1152,9 +1234,47 @@ def main() -> None:
 
     bets = [b for b in (_shared(c) for c in result["plays"]) if b]
     conditionals = [b for b in (_shared(c) for c in result["holds"]) if b]
+    # AND THE REFUSALS, which is what `game_bets` has meant everywhere
+    # else in this codebase since the day it was written. `_game_bets` in
+    # engine/pipeline (NFL) and engine/mlb/pipeline both append EVERY
+    # priced market and let `recommended` be a field on the row —
+    # nfl_build's own log line prints "64 bet(s) → 13 recommended". The
+    # front end agrees: `passesGameBet` in web/js/app.js filters
+    # `grade !== "Pass"` at render time, which is only meaningful if Pass
+    # rows are expected to be in the payload. College was the one
+    # producer that shipped the survivors instead, and three things broke
+    # because of it:
+    #
+    #   * `engine.cfb.model` says a Group of Five game is "priced, SHOWN
+    #     with its number and its edge, never a play". The decision
+    #     (Ethan, 2026-09-02) was about whether the money follows; the
+    #     gate is the first return in `evaluate_play`, so shipping only
+    #     survivors turned a rule about MONEY into a rule about
+    #     VISIBILITY and the games vanished off every surface.
+    #   * `likely.from_game_bet` reads this key and nothing else, so
+    #     college moneylines — the best-ranked game market in the system
+    #     at 0.752 AUC — could never reach the Most Likely board on a
+    #     slate where the edge board published nothing. A ranking board
+    #     was being emptied by an EDGE verdict, which is not what it
+    #     ranks on. Reproduced on a synthetic nine-game Group of Five
+    #     card built through this same chain: 0 game rows before, 20
+    #     after, the moneylines ranked and the rest labelled leans.
+    #   * `pricedButQuiet()` in web/js/app.js opens with
+    #     `const priced = (d.game_bets || []).length; if (!priced)
+    #     return null;`, so the one branch written to say "the card is
+    #     priced and the model turned it all down" was dead on exactly
+    #     the board it exists for, and the page fell through to "waiting
+    #     on real sportsbook prices" — false on a night with 9 of 11
+    #     games priced. It asks `filter(passesGameBet).length` next,
+    #     which is the question it actually wants and which still works.
+    #
+    # Unstaked and unrecommended by construction: a pass never carried a
+    # `stake_fraction`, and `to_game_bet` now reads `recommended` off the
+    # verdict rather than off `not conditional`.
+    refused = [b for b in (_shared(c) for c in result["pass_list"]) if b]
     # Conditionals ride on the same board, flagged and unstaked, because a
     # separate page for them is a page nobody opens.
-    out["game_bets"] = bets + conditionals
+    out["game_bets"] = bets + conditionals + refused
     # THE CHART EVERY ONE OF THOSE BETS OPENS ONTO. Same gap the NFL's
     # games-only fallback had (fixed 2026-08-26, Ethan: "on nfl im not
     # able to click on the game props and it show me the bar graph"):
@@ -1196,17 +1316,33 @@ def main() -> None:
         _tlc.close()
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  team logs skipped: {exc}")
-    # The pass list on a 60-game Saturday is ~180 markets; shipping all of
-    # it would make the payload the slowest thing on a phone. The near
-    # misses are the part that says something.
+    # THE ROWS ARE GONE FROM HERE, and what is left is the arithmetic.
+    #
+    # `pass_list` was a 20-row copy of the refusals and `near_misses` the
+    # top three of them, published since before either could be drawn:
+    # nothing in web/js/app.js has ever read `d.cfb` at all. They were
+    # duplication with no reader, and duplication of the one thing this
+    # payload has to be careful with — `gate.PAID_KEYS` names both, and
+    # both shipped through the paywall in full because `redact` only
+    # walked the top level. Fixing the stripper was the urgent half;
+    # deleting the second copy is the half that stops it happening again.
+    #
+    # Nothing is lost. Every refusal now rides in `game_bets` with its
+    # price, its edge, the bar it missed and the gate's own sentence
+    # (`to_game_bet`), which is a superset of what was trimmed to 20
+    # here — and the page computes the near-miss list from those rows
+    # (`nearestMisses`), so §11's "closest misses" is finally drawn
+    # rather than merely published.
+    #
+    # The counts stay. They are cheap, they carry no priced row, and
+    # `counts` is what tells a reader whether a market was refused or
+    # never built at all — the one question this board could not answer
+    # about itself on 2026-09-03.
     out["cfb"] = {
-        "near_misses": result["near_misses"],
         "no_qualifying": result["no_qualifying"],
         "exposure": result["exposure"],
         "counts": result["counts"],
         "by_tier": result["by_tier"],
-        "pass_list": sorted(result["pass_list"],
-                            key=lambda p: -(p.get("edge") or 0))[:20],
     }
 
     # THE PLAYER BOARD (Ethan, twice on 2026-09-02: "make sure everything
@@ -1350,6 +1486,17 @@ def main() -> None:
                      # lets the page stop special-casing college to tell
                      # them apart.
                      "markets_priced": len(plays),
+                     # …AND HOW MANY GAMES THE ODDS FEED PRICED, which is
+                     # a different number and the one that separates the
+                     # two ways this board comes out empty. `build_plays`
+                     # refuses before the model runs when a game has no
+                     # lines or no ratings, so "9 priced, 0 markets" and
+                     # "9 priced, 27 markets all refused" are opposite
+                     # diagnoses — upstream data against a model verdict
+                     # — and the log line prints the same sentence for
+                     # both. Only this pair can tell them apart, and on
+                     # 2026-09-03 neither was on the board.
+                     "games_priced": len(priced),
                      **result["counts"]}
 
     # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
@@ -1545,8 +1692,16 @@ def main() -> None:
     _write(out, args.out)
     conn.close()
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "
-          f"{len(bets)} play(s), {len(conditionals)} conditional(s). "
-          f"Wrote {args.out}")
+          f"{len(plays)} market(s) → {len(bets)} play(s), "
+          f"{len(conditionals)} conditional(s). Wrote {args.out}")
+    # THE MISSING MIDDLE NUMBER, and the reason it is missing. Between
+    # "priced" and "play(s)" sits `build_plays`, which can refuse a
+    # priced game outright; without the market count the same sentence
+    # described a slate nothing was built from and a slate every gate
+    # turned down.
+    if game_census:
+        print("  Not priced by the model: "
+              + "; ".join(f"{v} {k}" for k, v in sorted(game_census.items())))
     if not fit.fitted:
         print("  ⚠️  Variance is a prior, not a fit — this board is journaled "
               "and graded, not staked.")

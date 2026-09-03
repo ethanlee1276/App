@@ -227,6 +227,111 @@ def test_a_published_play_carries_its_conditions_and_tier():
     assert p["conditions"]["qb_confirmed"] is True
 
 
+def test_the_shared_stores_are_asked_about_spread_not_side():
+    """Two self-tuning gates were dead for the CFB spread, under a comment
+    saying they were "in parity with every engine".
+
+    This module calls the market "side" (§3's word). Everything it shares
+    a store with calls it "spread": `ledger.log_recommendations` writes
+    that for a game bet, so `journalfit` fits `cfb:spread`,
+    `losspatterns` mines closures keyed "spread", and `gamecal` measures
+    the haircut under it. Asking `calibrate` and `losspatterns` about
+    "side" therefore looked up a key nothing writes — a fitted correction
+    written and never read, and a boundary fit that could never close the
+    market it was fitted on. Both failed open, which is why it looked
+    fine. "total" and "moneyline" are spelled the same both sides, so
+    this is the spread and only the spread.
+    """
+    from engine.cfb import pipeline as P
+
+    assert P.store_key("side") == "spread"
+    for same in ("total", "moneyline", "team_total", "prop"):
+        assert P.store_key(same) == same, same
+
+    import inspect
+    src = inspect.getsource(P.evaluate_play)
+    for call in ('calibrated("cfb", store_key(market)',
+                 'is_reliable("cfb", store_key(market))',
+                 'lp_veto("cfb", store_key(market)'):
+        assert call in src, f"{call} is not asking the store's own name"
+    assert 'calibrated("cfb", market' not in src
+    assert 'is_reliable("cfb", market)' not in src
+
+
+def test_the_card_and_the_ledger_agree_on_the_market_name():
+    """One map, and it is the one the gates read. `cfb_build` kept its own
+    `BET_TYPES` copy of it while the pipeline had none."""
+    import cfb_build
+
+    assert not hasattr(cfb_build, "BET_TYPES"), \
+        "the second copy of the market map is back"
+    assert cfb_build._store_key("side") == "spread"
+
+
+def test_a_priced_game_the_model_never_saw_says_so():
+    """`build_plays` refuses BEFORE `evaluate_play`, so a game dropped
+    there reaches no gate, lands in no pass list, and appears in no
+    `gate_census`. The build log then prints "11 game(s), 9 priced ->
+    0 play(s)" — the same sentence it prints when every market was priced
+    and every gate refused it. Opposite diagnoses, one sentence.
+
+    THE ONE THAT BITES is the ratings guard, in the first weeks of a
+    season. `compute_team_ratings` is called with `exclude_prefix="espn:"`
+    so an FCS buy game cannot own its host's rating — correct, and its
+    unwritten consequence is that the FCS side is then in no ratings map
+    at all, so the whole priced game is dropped. In week one or two that
+    can be most of the card.
+    """
+    import cfb_build as CB
+    from engine.cfb import ratings as CR
+    from engine.teamrates import TeamRating
+
+    def _game(i, home, away):
+        return {"game_id": f"g{i}", "home": home, "away": away,
+                "home_conference": "MAC", "away_conference": "MAC",
+                "home_rank": None, "away_rank": None, "weekday": "Thursday",
+                "kickoff": "2026-09-03T23:00Z", "date": "2026-09-03",
+                "neutral_site": False, "label": f"{away} @ {home}",
+                "state": "scheduled", "qb_confirmed": False,
+                "participation_verified": False, "weather_checked": False,
+                "indoor": False}
+
+    lines = {"moneyline": (-160, 140), "spread": (-3.5, -110, -110),
+             "total": (52.5, -110, -110), "books": {}}
+    # One FBS-vs-FBS game, two buy games, one game the book never priced.
+    card = [("TOL", "BGSU"), ("KSU", "espn:2678"), ("USF", "espn:2413"),
+            ("NEB", "IOWA")]
+    games = [_game(i, h, a) for i, (h, a) in enumerate(card)]
+    priced = {f"g{i}": dict(lines) for i in range(3)}
+    ratings = {}
+    for h, a in card:
+        ratings[h] = TeamRating(net=3.0, off=2.0, def_=-1.0, games=13)
+        if not a.startswith("espn:"):
+            ratings[a] = TeamRating(net=0.0, off=0.5, def_=0.5, games=13)
+
+    census: dict = {}
+    plays = CB.build_plays(games, priced, ratings, CR.PRIOR, {}, {},
+                           census=census)
+    assert len(plays) == 3, "only the FBS-vs-FBS game should price"
+    assert census == {
+        "with a side that has no team rating (usually a non-FBS visitor)": 2,
+        "with no book lines": 1}, census
+    # Every game on the card is accounted for: priced into markets, or
+    # counted with a reason.
+    assert len({p["game"]["game_id"] for p in plays}) + sum(census.values()) \
+        == len(games)
+
+
+def test_the_census_is_optional_so_every_caller_still_works():
+    """It is an out-parameter, not a return-shape change — the same idiom
+    `likely.build` uses, and the reason no existing caller had to move."""
+    import inspect
+    import cfb_build as CB
+
+    sig = inspect.signature(CB.build_plays)
+    assert sig.parameters["census"].default is None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
