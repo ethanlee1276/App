@@ -146,9 +146,18 @@ def test_a_total_is_never_reported_as_a_reason():
 
 
 def test_the_build_side_keys_have_readable_names():
-    assert "no_history:" in JS
+    """The two the hoops build drops before the model ever runs. They are
+    in the SHARED map now (CENSUS_GATE_NAMES) rather than in a private
+    copy inside biggestCensusBucket, because that copy held only these
+    two and printed every other gate as its raw key in the headline
+    sentence — see tests/test_census.py."""
+    i = JS.index("const CENSUS_GATE_NAMES = {")
+    names = JS[i:JS.index("function censusBuckets()", i)]
+    assert "no_history:" in names
+    assert "no real book price yet" in names
     fn = JS[JS.index("function biggestCensusBucket()"):]
-    assert "no real book price yet" in fn[:600]
+    assert "CENSUS_GATE_NAMES[" in fn[:400], \
+        "the headline sentence stopped reading the shared names"
 
 
 if __name__ == "__main__":

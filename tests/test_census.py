@@ -138,12 +138,37 @@ def test_the_hoops_board_shares_the_bucketing_instead_of_copying_it():
 
 def test_the_page_can_name_every_gate_the_rules_can_fail():
     """Each key the football rules can fail has words on the board. A
-    missing one renders as its raw key, which is honest but ugly."""
+    missing one renders as its raw key, which is honest but ugly.
+
+    Read from CENSUS_GATE_NAMES rather than from inside the funnel: the
+    map used to live in the funnel and a two-entry copy of it fed the
+    headline sentence, so "every gate has words" was true of the table
+    and false of the one line above it."""
     app = _read("web", "js", "app.js")
-    i = app.index("function censusFunnelHTML()")
-    body = app[i:i + 3000]
-    for key in ("grade", "pregame", "confidence", "edge", "juice", "health"):
+    i = app.index("const CENSUS_GATE_NAMES = {")
+    body = app[i:app.index("function censusBuckets()", i)]
+    for key in ("grade", "pregame", "confidence", "edge", "juice", "health",
+                "calibration", "no_real_price", "no_history"):
         assert f"{key}:" in body, f"the funnel cannot name {key}"
+
+
+def test_the_headline_and_the_table_read_the_same_names():
+    """THE SECOND MAP. `biggestCensusBucket` carried its own two-entry
+    copy — no_real_price and no_history — and it feeds the ONE sentence a
+    reader gets before the table on an empty board. Every other gate
+    printed as its raw key there while the full English sat in the
+    funnel's map a few lines below.
+
+    NFL on the droplet, 2026-09-03: 64 unpriced, 169 closed by
+    calibration, 44 graded Pass. The largest bucket was `calibration`, so
+    the sentence read "The largest reason is calibration (169)"."""
+    app = _read("web", "js", "app.js")
+    for fn in ("biggestCensusBucket", "censusFunnelHTML"):
+        i = app.index(f"function {fn}()")
+        body = app[i:i + 1500]
+        assert "CENSUS_GATE_NAMES" in body, f"{fn} does not read the shared map"
+        assert 'no_real_price: "' not in body, \
+            f"{fn} carries its own copy of the gate names again"
 
 
 def test_the_unpriced_note_uses_the_right_sports_noun():
