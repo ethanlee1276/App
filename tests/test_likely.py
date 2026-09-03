@@ -646,6 +646,85 @@ def test_a_row_with_no_designation_field_is_unaffected():
     assert K.admissible(K.from_prop(_prop(), _always, fits=FITS)) == ""
 
 
+# --- the half of the funnel that was never counted ---------------------------
+def test_a_maker_that_refuses_a_row_says_so_in_the_census():
+    """`build`'s census filled from `keep`, which only sees rows a maker
+    has already agreed to build. Everything the makers turned away —
+    an unmeasured market, a proxy price, a conditional, a live game —
+    returned a bare None and left no trace.
+
+    On the college board of 2026-09-03 that was 440 prop rows refused
+    before the counter could see one of them, next to a census that
+    reported {}. The census is the answer to "why is this board short
+    tonight" and it could only answer for the rows that got far enough
+    to be asked.
+    """
+    census: dict = {}
+    # A market with no measured ranking for this sport (college yardage).
+    assert K.from_prop(_prop(market="rush_yds"), _always, sport="cfb",
+                       census=census) is None
+    assert census == {"no measured ranking for this market yet": 1}, census
+
+    census = {}
+    assert K.from_prop(_prop(prob=0.10), _always, census=census) is None
+    assert census == {"under the likelihood floor": 1}, census
+
+    census = {}
+    row = _prop()
+    row["has_market"] = False
+    assert K.from_prop(row, _always, census=census) is None
+    assert census == {"no real book price": 1}, census
+
+
+def test_a_game_card_refused_by_its_maker_is_counted_too():
+    census: dict = {}
+    card = {"bet_type": "moneyline", "matchup": "A @ B", "home": "B",
+            "away": "A", "team": "B", "win_prob": 0.62, "fair_prob": 0.60,
+            "odds": -150, "has_market": True}
+    assert K.from_game_bet({**card, "conditional": True}, sport="cfb",
+                           census=census) is None
+    assert K.from_game_bet({**card, "live": True}, sport="cfb",
+                           census=census) is None
+    assert K.from_game_bet({**card, "bet_type": "wincast"}, sport="cfb",
+                           census=census) is None
+    assert census == {
+        "a conditional, which is a hold and not a pick": 1,
+        "the game is already under way": 1,
+        "not a game market this board carries": 1}, census
+
+
+def test_an_empty_board_now_accounts_for_every_row_it_dropped():
+    """The 2026-09-03 shape end to end: college yardage props with no
+    measured ranking, a conditional and a live game card. The board is
+    empty either way; the difference is whether it can say why."""
+    props = [_prop(market=m, player=f"P{i}") for i, m in
+             enumerate(["pass_yds", "rush_yds", "rec_yds", "receptions"])]
+    card = {"bet_type": "moneyline", "matchup": "A @ B", "home": "B",
+            "away": "A", "team": "B", "win_prob": 0.62, "fair_prob": 0.60,
+            "odds": -150, "has_market": True}
+    census: dict = {}
+    board = K.build(props, [], [], sport="cfb", census=census,
+                    game_bets=[{**card, "conditional": True},
+                               {**card, "live": True}])
+    assert board == []
+    assert census == {"no measured ranking for this market yet": 4,
+                      "a conditional, which is a hold and not a pick": 1,
+                      "the game is already under way": 1}, census
+    assert sum(census.values()) == 6, "every dropped row is accounted for"
+
+
+def test_the_one_bar_docstring_no_longer_claims_college_passes_no_props():
+    """It said "cfb_build calls build([], rows, watch) with no props at
+    all". True when written, false since college's props were wired in —
+    and it is the sentence explaining why this function exists, so it is
+    corrected in place rather than deleted."""
+    import inspect
+    doc = inspect.getdoc(K.admissible) or ""
+    assert "with no props at all" in doc, "the history is worth keeping"
+    assert "no longer true" in doc.lower(), \
+        "the docstring still asserts a thing that stopped being true"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

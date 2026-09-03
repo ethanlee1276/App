@@ -329,13 +329,19 @@ def admissible(row: dict) -> str:
     codebase's most-repeated bug: a rule announced in prose and enforced
     in one place.
 
-    IT MATTERED MOST WHERE IT WAS CHECKED LEAST. College football's
-    entire likelihood board is watch rows — `cfb_build` calls
-    `build([], rows, watch)` with no props at all — so every refusal
-    added to this module protected the NFL prop board and left the whole
-    college board ungated. Measured 2026-08-30, all of these published:
-    an 8% row on a board whose floor is 30%, a -97 price no book can
-    post, and a `proxy` quote the model invented.
+    IT MATTERED MOST WHERE IT WAS CHECKED LEAST. When this was written,
+    college football's entire likelihood board was watch rows — cfb_build
+    called `build([], rows, watch)` with no props at all — so every
+    refusal added to this module protected the NFL prop board and left
+    the whole college board ungated. Measured 2026-08-30, all of these
+    published: an 8% row on a board whose floor is 30%, a -97 price no
+    book can post, and a `proxy` quote the model invented.
+
+    THAT SENTENCE IS NO LONGER TRUE, and it is left standing above with
+    its tense corrected rather than deleted, because it is the reason
+    this function exists. cfb_build passes its props and its game cards
+    now, so college answers to all three makers. What has not changed is
+    the lesson: a bar applied on one of several paths is not a bar.
 
     THE FLOOR IS ABOUT THE WORD, NOT THE SPORT. MIN_PROB says a
     probability below it "is not likely by any reading" — that is a claim
@@ -396,23 +402,48 @@ def admissible(row: dict) -> str:
     return ""
 
 
+def _refuse(census, why: str):
+    """Count a maker's refusal and return None.
+
+    THE HALF OF THE FUNNEL THAT WAS NEVER COUNTED. `build`'s census fills
+    from `keep`, which only sees rows a maker has already agreed to
+    build. Everything the makers themselves turn away — an unmeasured
+    market, a proxy price, a conditional, a live game — returned a bare
+    None and left no trace, so a board that came out empty because its
+    makers refused every row looked exactly like a board with nothing to
+    say. On the college card of 2026-09-03 that was 440 prop rows
+    refused before the counter could see one of them, and a census that
+    reported {}.
+
+    The census is the answer to "why is this board short tonight", and it
+    could only ever answer for the rows that got far enough to be asked.
+    """
+    if census is not None:
+        census[why] = census.get(why, 0) + 1
+    return None
+
+
 def from_prop(row: dict, bettable, fits=None,
-              sport: str = "nfl") -> dict | None:
+              sport: str = "nfl", census: dict | None = None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
     prop, recommended or not — the likelihood board is a different cut of
     the same evaluation, not a second model. Building it any other way
     would let the two pages disagree about the same player.
+
+    ``census`` counts each refusal by reason — see `_refuse`.
     """
     market = row.get("market") or ""
     if not rankable(market, sport):
-        return None
+        return _refuse(census, "no measured ranking for this market yet")
     prob = row.get("hit_prob")
     if prob is None or float(prob) < MIN_PROB:
-        return None
-    if not row.get("has_market") or not _sane(row.get("odds")):
-        return None
+        return _refuse(census, "under the likelihood floor")
+    if not row.get("has_market"):
+        return _refuse(census, "no real book price")
+    if not _sane(row.get("odds")):
+        return _refuse(census, "not a price a book could post")
     # CALIBRATED FOR DISPLAY, and this is the fix for a real defect.
     # `calibrate.correction_for` DISCARDS a boundary fit rather than
     # applying it — right for betting, since a capped temperature is the
@@ -540,7 +571,8 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
     }
 
 
-def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
+def from_game_bet(row: dict, sport: str = "nfl",
+                  census: dict | None = None) -> dict | None:
     """One likelihood row from a priced game bet, or None.
 
     `row` is the card the edge board already built — `gamebets._game_bet`,
@@ -584,19 +616,23 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
     from .gamebets import expected_value
     market = row.get("bet_type") or row.get("market") or ""
     if market not in GAME_MARKETS:
-        return None
+        return _refuse(census, "not a game market this board carries")
     # MEASURED IS THE BAR FOR A GAME MARKET, not ranked (see
     # GAME_RANK_MEASURED). A market with a figure is shown with it; a
     # market with none is not shown at all.
     auc = measured_auc(sport, market)
     if auc is None:
-        return None
+        return _refuse(census, "this game market has never been measured")
     ranked = float(auc) >= MIN_RANK_AUC
-    if row.get("has_market") is False or row.get("live") or row.get("conditional"):
-        return None
+    if row.get("has_market") is False:
+        return _refuse(census, "no real book price")
+    if row.get("live"):
+        return _refuse(census, "the game is already under way")
+    if row.get("conditional"):
+        return _refuse(census, "a conditional, which is a hold and not a pick")
     prob = row.get("win_prob")
     if prob is None:
-        return None
+        return _refuse(census, "no probability")
     prob, fair = float(prob), row.get("fair_prob")
     home, away = row.get("home", "") or "", row.get("away", "") or ""
     team = row.get("team") or ""
@@ -634,9 +670,9 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
             label = (f"{side} {line:g}" if market == "total"
                      else f"{team} {side} {line:g}") if line is not None else side
         if not team and market != "total":
-            return None
+            return _refuse(census, "the likely side has no team on the card")
         if other_odds is None or fair is None:
-            return None
+            return _refuse(census, "the other side's price is missing")
         odds, prob, fair, flipped = other_odds, 1.0 - prob, 1.0 - float(fair), True
         # THE PRE-SHRINK CLAIM FLIPS WITH THE SIDE. Every market here is
         # two-way, so the model's raw number for the other side is
@@ -646,7 +682,7 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         if raw_claim is not None:
             raw_claim = 1.0 - raw_claim
     if prob < MIN_PROB:
-        return None
+        return _refuse(census, "under the likelihood floor")
     edge = None if fair is None else round(prob - float(fair), 4)
     try:
         ev = round(expected_value(prob, int(odds)), 4)
@@ -770,10 +806,13 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         seen.add(key)
         out.append(got)
     for row in props or []:
-        got = from_prop(row, bettable, fits=fits, sport=sport)
+        got = from_prop(row, bettable, fits=fits, sport=sport,
+                        census=refused)
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
-        # below it is not cheap. `keep` is what actually decides.
+        # below it is not cheap. `keep` is what actually decides — but
+        # the pre-filter now counts what it turned away into the same
+        # census, so the funnel adds up whichever of the two said no.
         if got is None:
             continue
         key = (got["player"], got["team"], got["market"])
@@ -787,7 +826,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # rank never leaves `from_game_bet`, and everything that does answers
     # to `keep` like every other row.
     for row in game_bets or []:
-        got = from_game_bet(row, sport=sport)
+        got = from_game_bet(row, sport=sport, census=refused)
         if got is None:
             continue
         key = ("game", got["matchup"], got["market"], got["team"], got["side"])
