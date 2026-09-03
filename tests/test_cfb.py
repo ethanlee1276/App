@@ -227,6 +227,47 @@ def test_a_published_play_carries_its_conditions_and_tier():
     assert p["conditions"]["qb_confirmed"] is True
 
 
+def test_the_shared_stores_are_asked_about_spread_not_side():
+    """Two self-tuning gates were dead for the CFB spread, under a comment
+    saying they were "in parity with every engine".
+
+    This module calls the market "side" (§3's word). Everything it shares
+    a store with calls it "spread": `ledger.log_recommendations` writes
+    that for a game bet, so `journalfit` fits `cfb:spread`,
+    `losspatterns` mines closures keyed "spread", and `gamecal` measures
+    the haircut under it. Asking `calibrate` and `losspatterns` about
+    "side" therefore looked up a key nothing writes — a fitted correction
+    written and never read, and a boundary fit that could never close the
+    market it was fitted on. Both failed open, which is why it looked
+    fine. "total" and "moneyline" are spelled the same both sides, so
+    this is the spread and only the spread.
+    """
+    from engine.cfb import pipeline as P
+
+    assert P.store_key("side") == "spread"
+    for same in ("total", "moneyline", "team_total", "prop"):
+        assert P.store_key(same) == same, same
+
+    import inspect
+    src = inspect.getsource(P.evaluate_play)
+    for call in ('calibrated("cfb", store_key(market)',
+                 'is_reliable("cfb", store_key(market))',
+                 'lp_veto("cfb", store_key(market)'):
+        assert call in src, f"{call} is not asking the store's own name"
+    assert 'calibrated("cfb", market' not in src
+    assert 'is_reliable("cfb", market)' not in src
+
+
+def test_the_card_and_the_ledger_agree_on_the_market_name():
+    """One map, and it is the one the gates read. `cfb_build` kept its own
+    `BET_TYPES` copy of it while the pipeline had none."""
+    import cfb_build
+
+    assert not hasattr(cfb_build, "BET_TYPES"), \
+        "the second copy of the market map is back"
+    assert cfb_build._store_key("side") == "spread"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

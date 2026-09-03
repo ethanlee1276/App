@@ -35,7 +35,7 @@ from engine.cfb import context as cfbcontext
 from engine.cfb import ratings as cfbratings
 from engine.cfb import status as cfbstatus
 from engine.cfb.model import LOW, MARQUEE, STANDARD, attention_tier
-from engine.cfb.pipeline import run_cfb_slate
+from engine.cfb.pipeline import run_cfb_slate, store_key as _store_key
 from engine.db import connect, upsert_games
 from engine.odds import expected_value
 from engine.sources import cfbdata
@@ -557,7 +557,13 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
     return plays
 
 
-BET_TYPES = {"side": "spread", "total": "total", "moneyline": "moneyline"}
+# A card's market names are the SHARED vocabulary, not the CFB
+# pipeline's — "side" becomes "spread" because that is what the ledger,
+# the journal fit, the loss-pattern miner and every renderer call it.
+# That mapping lived here as `BET_TYPES`, a second copy of a dict the
+# pipeline also needed and did not have; see `pipeline.STORE_MARKET` for
+# what its absence cost the calibration and closure gates. One of them
+# had to be the source, and it is the one the gates read.
 
 
 def to_game_bet(card: dict, play: dict, game: dict) -> dict:
@@ -601,8 +607,8 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
 
     return {
         **shared,
-        "bet_type": BET_TYPES.get(card["market"], card["market"]),
-        "market": BET_TYPES.get(card["market"], card["market"]),
+        "bet_type": _store_key(card["market"]),
+        "market": _store_key(card["market"]),
         "market_label": card["market_label"],
         "home": game["home"], "away": game["away"],
         "matchup": f"{game['away']} @ {game['home']}",

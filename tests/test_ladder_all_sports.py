@@ -156,6 +156,17 @@ def test_the_hoops_projection_carries_player_memory():
 
 # --- the college gate --------------------------------------------------------
 def test_the_cfb_gate_consults_all_three_verdicts():
+    """UNDER THE NAME THE STORES USE, which is "spread", not "side".
+
+    This test used to write its own fixtures at `cfb:side` and
+    `market: "side"` — the name `evaluate_play` asked for — and passed.
+    It could not have failed: it was checking the gate against a key only
+    it and the gate believed in. Nothing that WRITES those stores spells
+    it that way. `ledger.log_recommendations` journals a CFB spread bet
+    as market "spread", so `journalfit` fits `cfb:spread` and
+    `losspatterns` mines its closures keyed "spread", and both of those
+    were invisible to the gate. See `pipeline.STORE_MARKET`.
+    """
     from engine.cfb.pipeline import evaluate_play
     keep_lp, keep_cal = lp.DEFAULT_PATH, cal.DEFAULT_PATH
     play = {"market": "side", "odds": -160, "opposing_odds": 140,
@@ -165,18 +176,32 @@ def test_the_cfb_gate_consults_all_three_verdicts():
         lp.DEFAULT_PATH = tempfile.mktemp(suffix=".json")
         cal.DEFAULT_PATH = tempfile.mktemp(suffix=".json")
         cal.reset_cache()
-        lp.save({"closed": [{"sport": "cfb", "market": "side", "dim": "odds",
+        lp.save({"closed": [{"sport": "cfb", "market": "spread", "dim": "odds",
                              "value": lp.odds_band(-160),
                              "reading": "test closure"}]})
         r = evaluate_play(dict(play))
         assert r["kind"] == "pass" and "blind spot" in r["why"]
 
         lp.save({"closed": []})
-        json.dump({"cfb:side": {"temperature": cal.GRID_MAX, "intercept": 0.0}},
+        json.dump({"cfb:spread": {"temperature": cal.GRID_MAX,
+                                  "intercept": 0.0}},
                   open(cal.DEFAULT_PATH, "w"))
         cal.reset_cache()
         r2 = evaluate_play(dict(play))
         assert r2["kind"] == "pass" and "search range" in r2["why"]
+
+        # …and the key nothing writes is not consulted any more, or the
+        # gate is still reading a store of its own invention.
+        lp.save({"closed": [{"sport": "cfb", "market": "side", "dim": "odds",
+                             "value": lp.odds_band(-160),
+                             "reading": "test closure"}]})
+        json.dump({"cfb:side": {"temperature": cal.GRID_MAX,
+                                "intercept": 0.0}},
+                  open(cal.DEFAULT_PATH, "w"))
+        cal.reset_cache()
+        r3 = evaluate_play(dict(play))
+        assert "blind spot" not in (r3.get("why") or "")
+        assert "search range" not in (r3.get("why") or "")
     finally:
         lp.DEFAULT_PATH, cal.DEFAULT_PATH = keep_lp, keep_cal
         cal.reset_cache()
