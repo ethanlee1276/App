@@ -755,8 +755,8 @@ def main() -> None:
             # and on MLB it is vetoing on a still-unmeasured signal (#80).
             try:
                 from engine.linemoves import (analyze, annotate_recommendations,
-                                              load_history, todays_rows)
-                _mv = analyze(todays_rows(load_history()))
+                                              stream_history, todays_rows)
+                _mv = analyze(todays_rows(stream_history()))
                 _n_mv = annotate_recommendations(recs, _mv, price=False)
                 if _n_mv:
                     print(f"Line movement: stamped on {_n_mv} pick(s), "

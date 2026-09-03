@@ -201,19 +201,50 @@ def _pregame_only(items: list[dict]) -> list[dict]:
     return pre
 
 
-def load_history(path: str | Path | None = None) -> list[dict]:
+def stream_history(path: str | Path | None = None):
+    """Every snapshot, one at a time, without holding the file in memory.
+
+    THE GIGABYTE. `load_history` below reads the whole file with
+    `read_text()` — one string — then `.splitlines()` for a second full
+    copy, then parses every line into a dict and keeps all of them. That is
+    the right shape for the callers that genuinely need the whole list
+    (`closing_lines_by_date`, `booksharp.report`), and it is a catastrophe
+    for the ones that immediately throw almost all of it away.
+
+    `nfl_build` was the worst case: `todays_rows(load_history())` twice per
+    run, materialising every sport's entire snapshot history to keep the
+    handful of rows recorded since local midnight. Measured on the droplet
+    2026-09-03 with `--memtrace`, on a machine with 1 GB:
+
+        odds        75    1324    +1147   <-- the biggest peak
+        pipeline    73    1602     +278
+
+    1,425 MB of a 1,602 MB peak, in two stages whose resident size went
+    DOWN. The tell was in the log all along: an NFL build printing ten
+    lines of MLB line movement, because the history it loaded was every
+    sport's and the filter came afterwards.
+
+    `todays_rows` and the other filters take any iterable, so this drops
+    straight in and only the KEPT rows are ever held.
+    """
     path = Path(path) if path else HISTORY_PATH
     if not path.exists():
-        return []
-    rows = []
-    for raw in path.read_text().splitlines():
-        raw = raw.strip()
-        if raw:
+        return
+    with path.open(encoding="utf-8") as fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
             try:
-                rows.append(json.loads(raw))
+                yield json.loads(raw)
             except json.JSONDecodeError:
                 continue
-    return rows
+
+
+def load_history(path: str | Path | None = None) -> list[dict]:
+    """Every snapshot, as a list. Prefer `stream_history` where the caller
+    filters it down — see the note there about a gigabyte."""
+    return list(stream_history(path))
 
 
 def closing_lines_by_date(rows: list[dict]) -> dict:

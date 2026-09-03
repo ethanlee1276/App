@@ -617,8 +617,8 @@ def main() -> None:
             print(f"\n⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
 
         if real_odds:
-            from engine.linemoves import load_history, analyze, summary_lines, todays_rows
-            moves = analyze(todays_rows(load_history()))
+            from engine.linemoves import stream_history, analyze, summary_lines, todays_rows
+            moves = analyze(todays_rows(stream_history()))
             if moves:
                 print("\nLine movement (open → current):")
                 for line in summary_lines(moves):
@@ -820,10 +820,10 @@ def main() -> None:
     # movement against can reject the pick (see engine/quality.py).
     if real_odds:
         try:
-            from engine.linemoves import (load_history, analyze, todays_rows,
+            from engine.linemoves import (stream_history, analyze, todays_rows,
                                           annotate_recommendations)
             annotate_recommendations(result["recommendations"],
-                                     analyze(todays_rows(load_history())))
+                                     analyze(todays_rows(stream_history())))
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 
