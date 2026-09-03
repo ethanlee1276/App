@@ -425,6 +425,32 @@ def test_what_the_closed_gate_costs_is_written_down_too():
                  "0   would have been a pick"):
         assert line in src, f"the live measurement lost: {line}"
     assert "COSTS NOTHING" in src
+
+
+def test_the_market_that_refutes_the_zero_spike_is_not_quietly_dropped():
+    """PASSING YARDS, 2026-09-03. The zero-rate ordering this module
+    argues for holds on three of the four markets and fails on the
+    fourth: pass_yds has 2.3% zeroes — fewer than receptions — and still
+    misses the book by more than ten points on 16 of 25 priced props.
+
+    A module that records the three confirmations and not the refutation
+    is a module that reads as settled when it is not, and pass_yds is
+    the market where that costs something: rush_yds and rec_yds are shut
+    and free, and passing yards is open and on the board.
+
+    The rates are pinned as their table rows, and the caveat with them —
+    Week 1 projections and an unverified prop de-vig (#66) can produce
+    this table without the model being wrong, and nothing here has ruled
+    that out."""
+    import inspect
+    src = inspect.getsource(Y)
+    for row in ("27/32    84%", "29/48    60%", "16/25    64%",
+                "4/19    21%", "76/124   61%"):
+        assert row in src, f"the board-wide table lost {row}"
+    assert "PASSING YARDS REFUTES IT" in src
+    assert "WHAT IS NOT KNOWN" in src, \
+        "the table is recorded without the reason it is not yet actionable"
+    assert "#66" in src, "the open de-vig question is no longer named"
     assert "WHAT WOULD CHANGE THE ANSWER" in src
     # And the reason it was declined must not be misremembered as "it
     # lost" — that is a different, wrong lesson.
