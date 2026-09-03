@@ -142,6 +142,27 @@ CFB_OUT = "web/data/cfb.json"
 # fewer games when the month cannot carry twelve.
 CFB_ODDS_COST = 3 + 12 * 5
 
+#: What one board-level game-lines pull costs: three markets (h2h, spreads,
+#: totals) across one region, and the meter bills markets x regions. The
+#: whole slate, for less than half of what ONE game's prop payload costs.
+#:
+#: This is the cheap tier under the prop pull, not a replacement for it.
+#: Player markets only exist per event, so nothing at this price can
+#: refresh a prop — what it buys is the moneyline, spread and total on
+#: every game, which is what the Most Likely and game-lines boards are
+#: made of and what Ethan was reading when the prices behind them were
+#: fifty-five minutes old (2026-09-03).
+BOARD_ODDS_COST = 3
+
+#: The cheap pull paces on its OWN clock. Sharing "nfl" would have the two
+#: tiers starve each other in both directions: a three-credit lines pull
+#: would reset the clock the 136-credit prop pull waits on, and MIN_REFRESH
+#: _GAP after a prop pull the lines could not refresh either. The credit
+#: BUDGET stays shared — it is one API plan, and `should_refresh` reads the
+#: same day's spend for both — only the cadence splits, exactly as the
+#: per-sport clocks split for the same reason (oddsbudget.BudgetState).
+LINES_CLOCK = "nfl_lines"
+
 
 def _slate_games(path: str) -> int:
     """Real game count on a built board (0 when missing/unreadable)."""
@@ -265,7 +286,8 @@ def _narrow_pull(out_path: str) -> bool:
 
 
 def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
-                     cost: int | None = None) -> bool:
+                     cost: int | None = None,
+                     credits: int | None = None) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
@@ -282,10 +304,19 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     # A sport that pulls its whole board in one call passes its real cost
     # instead — charging CFB sixty credits for a three-credit request would
     # mean the pacer never authorised a single Saturday.
+    #
+    # `credits` is the same question asked in the unambiguous unit. The
+    # parameter above is an EVENT COUNT that the pacer multiplies by
+    # CREDITS_PER_EVENT, so a caller whose pull is not billed per event has
+    # no honest number to put in it: the board pull costs three credits
+    # total, and three events would meter it at twenty-four. Callers that
+    # know their real credit price say it directly (oddsbudget.
+    # refresh_credits).
     ok, reason = should_refresh(cost if cost is not None
                                 else _games_on_slate(out_path) + 1,
                                 kickoffs=_slate_kickoffs(out_path),
-                                sport=sport, share=_budget_share())
+                                sport=sport, share=_budget_share(),
+                                credits=credits)
     if not quiet:
         print(f"       {reason}")
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
@@ -484,12 +515,35 @@ def refresh_nfl(quiet: bool = False) -> bool:
             "--injuries", "--depth", "--carry"]
     spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
     before_seen = _paid_pull_baseline() if spend else ""
+    # THE CHEAP TIER, when the expensive one is declined.
+    #
+    # Until now this was a two-state decision: pay 8 credits a game for the
+    # prop pull, or pay nothing and keep prices that age with the cycle.
+    # The daily cap (2026-09-03) makes the second state the common one, and
+    # the board Ethan was reading that morning was eight minutes old
+    # carrying prices fifty-five minutes old — "these lines along with more
+    # are completely wrong."
+    #
+    # There is a third state and it costs three credits: the board endpoint
+    # returns h2h, spreads and totals for the WHOLE slate in one request.
+    # It cannot refresh a prop — player markets exist only per event — so
+    # it rides on top of --cached-odds rather than replacing anything, and
+    # it is only reached when the full pull was already declined. Its own
+    # pacing clock, its own authorization, and the build stamps it
+    # separately so the page never claims props are as fresh as the lines.
+    lines_spend = False
+    lines_before = ""
     if spend:
         args.append("--odds")
         if quiet and _narrow_pull(out):
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
+        if _slate_games(out) > 0 and _odds_affordable(
+                out, quiet, sport=LINES_CLOCK, credits=BOARD_ODDS_COST):
+            args.append("--board-odds")
+            lines_spend = True
+            lines_before = _paid_pull_baseline()
     # 600s, the same ceiling MLB and CFB carry — not the 180s default,
     # which is for the small fast builds. With --injuries --depth --carry
     # and an odds pull this is a model board, and on 2026-09-01 the
@@ -500,6 +554,8 @@ def refresh_nfl(quiet: bool = False) -> bool:
     # showing props, then not showing props."
     ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "NFL game lines",
+                      sport=LINES_CLOCK)
     if not ok and _slate_props(out) > 0:
         # NEVER DOWNGRADE A BOARD THAT HAS PROPS. The fallback below
         # exists for the week BEFORE a season's first stats, when the

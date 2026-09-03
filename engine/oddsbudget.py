@@ -478,22 +478,47 @@ def daily_allowance(state: BudgetState | None = None,
     return int(spendable / days_left_in_month(today))
 
 
+def refresh_credits(requests_per_refresh: int,
+                    credits: int | None = None) -> int:
+    """What one refresh costs, in credits.
+
+    TWO UNITS MEET HERE AND ONLY ONE OF THEM IS OBVIOUS.
+    ``requests_per_refresh`` is an EVENT count — games + 1 — and the credit
+    cost is that times ``CREDITS_PER_EVENT``, because a per-event pull is
+    billed per market and our event payload asks for eight. That is the
+    right arithmetic for the pull it was written for and the wrong
+    arithmetic for any pull billed some other way.
+
+    A board-level pull is billed some other way: one request, three
+    markets, three credits for the WHOLE slate however many games are on
+    it. Passing that 3 through the event-count parameter would meter it at
+    24 — an eightfold over-estimate of a pull that exists precisely
+    because it is cheap, which is how a cheap tier gets declined for being
+    expensive. Such callers pass ``credits`` and say the number outright.
+    """
+    if credits is not None:
+        return max(1, int(credits))
+    return max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+
+
 def min_seconds_between(requests_per_refresh: int,
                         state: BudgetState | None = None,
                         today: _dt.date | None = None,
                         active_hours: float = 14.0,
-                        share: float = 1.0) -> float:
+                        share: float = 1.0,
+                        credits: int | None = None) -> float:
     """Smallest safe gap between odds refreshes, in seconds.
 
     ``requests_per_refresh`` is an EVENT count (games + 1); the credit cost is
     that times ``CREDITS_PER_EVENT``, because the meter bills per market.
-    The daily allowance is spread over the hours a slate is actually live
-    rather than the full 24, and the gap never drops below
-    ``MIN_REFRESH_GAP`` — cached prices carry the board between pulls.
-    Returns ``float('inf')`` when there is nothing left to spend.
+    A caller whose pull is NOT billed that way passes ``credits`` instead
+    (see `refresh_credits`). The daily allowance is spread over the hours a
+    slate is actually live rather than the full 24, and the gap never drops
+    below ``MIN_REFRESH_GAP`` — cached prices carry the board between
+    pulls. Returns ``float('inf')`` when there is nothing left to spend.
     """
     state = state or load()
-    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+    per_refresh = refresh_credits(requests_per_refresh, credits)
     # ``share`` is this sport's slice of the day's allowance — 0.5 when two
     # slates are live at once (Sep/Oct), so the sports can't jointly spend
     # double what the month can afford.
@@ -740,7 +765,8 @@ def _window_hours_left(kickoffs, now: float) -> float:
 def should_refresh(requests_per_refresh: int, now: float | None = None,
                    path: Path | str = STATE_PATH,
                    kickoffs=None, sport: str | None = None,
-                   share: float = 1.0, **kw) -> tuple[bool, str]:
+                   share: float = 1.0, credits: int | None = None,
+                   **kw) -> tuple[bool, str]:
     """Is an odds refresh affordable right now? Returns ``(ok, reason)``.
 
     ``sport`` selects that sport's own pacing clock (each slate holds its
@@ -783,14 +809,15 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     if window is True:
         kw.setdefault("active_hours", max(1.0, _window_hours_left(kickoffs, now)))
         share = share * PRIME_BURST
-    gap = min_seconds_between(requests_per_refresh, state, share=share, **kw)
+    gap = min_seconds_between(requests_per_refresh, state, share=share,
+                              credits=credits, **kw)
     waited = now - state.sport_ts(sport)
     if gap == float("inf"):
         # Starvation mode: the daily allowance can't cover even one refresh,
         # but the month's spendable balance can. Allow a sparse pull so the
         # cache still gets seeded with today's real prices — cached re-reads
         # carry the board the rest of the day for free.
-        per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+        per_refresh = refresh_credits(requests_per_refresh, credits)
         if state.remaining - RESERVE >= per_refresh and waited >= SPARSE_INTERVAL:
             if window is False:
                 # The day's one affordable pull is too precious to fire at
@@ -843,7 +870,7 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # second, third and fortieth. The month's own RESERVE is still the
     # backstop above, and the starvation branch already applies the same
     # rule ("one paid pull if the month can afford it") one level up.
-    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+    per_refresh = refresh_credits(requests_per_refresh, credits)
     budget = max(int(daily_allowance(state, kw.get("today")) * base_share),
                  per_refresh)
     already = spent_today(now)

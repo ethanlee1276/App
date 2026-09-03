@@ -182,6 +182,12 @@ def main() -> None:
     ap.add_argument("--cached-odds", action="store_true",
                     help="Attach the LAST PAID pull's prices from cache — zero "
                          "API spend between budgeted pulls.")
+    ap.add_argument("--board-odds", action="store_true",
+                    help="Refresh only the GAME markets (moneyline, spread, "
+                         "total) for the whole slate in ONE request — three "
+                         "credits, versus eight per game for the prop pull. "
+                         "Layers over --cached-odds: props keep the last paid "
+                         "prices, the game lines get current ones.")
     ap.add_argument("--books", default=None,
                     help="Comma-separated Odds API bookmaker keys (default: all supported).")
     ap.add_argument("--model", default=None,
@@ -428,7 +434,8 @@ def main() -> None:
             print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
 
     real_odds = False
-    odds_status = {"checked": bool(args.odds or args.cached_odds), "matched": 0,
+    odds_status = {"checked": bool(args.odds or args.cached_odds
+                                   or args.board_odds), "matched": 0,
                    "events": 0, "moneylines": 0, "error": None,
                    "quota_remaining": None, "source": None}
     if args.odds or args.cached_odds:
@@ -490,6 +497,57 @@ def main() -> None:
                 print("\nLine movement (open → current):")
                 for line in summary_lines(moves):
                     print(line)
+
+    # THE CHEAP TIER, RUN AFTER the block above so it overwrites the cached
+    # game prices with current ones. Three credits for the whole slate,
+    # against eight PER GAME for the pull that carries props — so when the
+    # pacer declines the expensive one, this is what stands between the
+    # page and hour-old moneylines. Ethan, 2026-09-03: "Getting the wrong
+    # numbers can fuck our picks bad."
+    #
+    # It touches the GAME markets only. Player props stay exactly as the
+    # cached pull left them, which is why `lines_priced_at` below is a
+    # SECOND stamp rather than an overwrite of the first: a board whose
+    # spread is four minutes old and whose props are two hours old must
+    # not report one number for both.
+    if args.board_odds:
+        try:
+            books = args.books.split(",") if args.books else None
+            bres = oddsapi.apply_board_lines_to_slate(slate, books=books)
+            odds_status.update(
+                board_games=bres.games_priced,
+                board_moneylines=bres.moneylines,
+                board_totals=bres.totals,
+                board_spreads=bres.spreads)
+            if bres.quota.remaining is not None:
+                odds_status["quota_remaining"] = bres.quota.remaining
+            print(f"\nGame lines: refreshed {bres.games_priced} of "
+                  f"{len(slate.games)} game(s) from 1 request — "
+                  f"{bres.moneylines} moneyline, {bres.spreads} spread, "
+                  f"{bres.totals} total (quota remaining "
+                  f"{bres.quota.remaining}).")
+            for d in bres.dropped_events[:4]:
+                print(f"  ⚠️  {d.get('away', '')} @ {d.get('home', '')}: "
+                      f"{d.get('reason', '')}")
+            if bres.games_priced:
+                real_odds = True
+                import datetime as _bdt
+                odds_status["lines_at"] = _bdt.datetime.now().isoformat(
+                    timespec="seconds")
+                # Same keep as the prop path: both sides were parsed and
+                # attached, and dropping them is why the spread/total model
+                # has never had a stored close to be graded on.
+                try:
+                    from engine import lineledger, db as _bdb
+                    _bc = _bdb.connect()
+                    lineledger.record(_bc, "nfl", slate.games)
+                    _bc.close()
+                except Exception:                            # noqa: BLE001
+                    pass
+        except oddsapi.OddsAPIError as exc:
+            odds_status["board_error"] = str(exc)
+            print(f"\n⚠️  Game-lines refresh unavailable — keeping the "
+                  f"prices already attached.\n   {exc}")
 
     if args.live:
         from engine.sources.livescores import attach_live
@@ -730,6 +788,19 @@ def main() -> None:
             _st = _ob.load()
             odds_status["priced_at"] = (_st.sport_ts("nfl")
                                         or _st.last_refresh_ts or None)
+            # TWO CLOCKS, BECAUSE THERE ARE TWO PULLS. The game-lines
+            # refresh (--board-odds) buys h2h/spreads/totals for the whole
+            # slate for three credits and touches no prop; the prop pull
+            # buys eight credits PER GAME. On any cycle where the pacer
+            # authorised only the cheap one, `priced_at` above is hours old
+            # and the moneyline on the page is minutes old, and reporting
+            # one number for both would be a freshness claim the board
+            # cannot support — for the props if we took the newer stamp,
+            # for the lines if we took the older. So the lines carry their
+            # own, and the page can say which half is which.
+            _lts = _st.sport_ts("nfl_lines")
+            if _lts:
+                odds_status["lines_priced_at"] = _lts
         except Exception:                                 # noqa: BLE001
             pass                   # never cost the board a freshness note
         result["odds_status"] = odds_status

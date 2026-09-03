@@ -23,6 +23,7 @@ of confident nonsense with nothing objecting.
 
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -306,11 +307,25 @@ def test_a_later_days_game_is_not_reported_as_a_drop():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
         encoding="utf-8").read()
-    i = src.index("def _other_day(ev)")
-    assert "commence_time" in src[i:i + 200]
-    # And the drop report must consult it before recording a fault.
-    j = src.index('"mapped, but that pair is not on our slate"')
-    assert "_other_day(ev)" in src[j - 400:j]
+    i = src.index("def _other_day(ev")
+    body = src[i:src.index("\n@dataclass", i)]
+    assert "commence_time" in body, \
+        "_other_day no longer reads the event's start time"
+    # And EVERY drop report must consult it before recording a fault.
+    #
+    # There are two paths now — the per-event prop pull and the cheap
+    # board-level game-lines pull — and both match against a date-filterless
+    # event list, so both can report another day's game as a fault. This
+    # counted only the first occurrence of the phrase and so stopped
+    # covering the prop path the moment a second path was added above it
+    # (2026-09-03). Count them instead.
+    sites = [m.start() for m in re.finditer(
+        r'"mapped, but that pair is not on our slate"', src)]
+    assert len(sites) >= 2, "a drop path disappeared — re-check this rule"
+    for j in sites:
+        assert "_other_day(ev, slate_days)" in src[j - 500:j], (
+            f"a drop report at offset {j} records a fault without asking "
+            f"whether the game is simply on another day")
 
 
 def test_the_slate_day_window_spans_the_utc_rollover():
@@ -320,8 +335,15 @@ def test_the_slate_day_window_spans_the_utc_rollover():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
         encoding="utf-8").read()
-    i = src.index("slate_days: set[str] = set()")
-    assert "(-1, 0, 1)" in src[i:i + 500]
+    # The window now lives in `_slate_days`, shared by both odds paths
+    # (2026-09-03) rather than built inline in each — so this reads the one
+    # definition, and would catch a caller that stopped using it.
+    i = src.index("def _slate_days(games)")
+    body = src[i:src.index("\ndef _other_day(", i)]
+    assert "(-1, 0, 1)" in body, "the day-either-side window is gone"
+    assert body.count("timedelta(days=n)") == 1
+    assert src.count("_slate_days(slate.games)") == 2, (
+        "one of the two odds paths builds its own day window again")
 
 
 def test_a_cached_rebuild_says_when_it_had_no_prices_to_read():

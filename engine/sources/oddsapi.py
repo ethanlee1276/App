@@ -1110,6 +1110,228 @@ def _is_active(game, window_hours: float) -> bool:
         return True
 
 
+def _slate_days(games) -> set[str]:
+    """The calendar days this slate covers, a day either side.
+
+    Both odds paths match against a list the endpoint returns with NO date
+    filter — every upcoming fixture for the sport — so a four-game slate is
+    matched against tomorrow's and Thursday's games too. Those are not on
+    our slate and are not supposed to be.
+
+    A day either side because kickoffs are UTC and a 7pm Eastern tip is
+    already tomorrow there.
+    """
+    import datetime as _dt
+    out: set[str] = set()
+    for g in games:
+        k = str(getattr(g, "kickoff", "") or "")[:10]
+        if len(k) != 10:
+            continue
+        try:
+            d = _dt.date.fromisoformat(k)
+        except ValueError:
+            continue
+        out |= {(d + _dt.timedelta(days=n)).isoformat() for n in (-1, 0, 1)}
+    return out
+
+
+def _other_day(ev, slate_days: set[str]) -> bool:
+    """Is this event for a day our slate does not cover?
+
+    ONE DEFINITION, TWO CALLERS. Reporting another day's game as a drop
+    turns a correct result into three alarming lines, which is how a
+    diagnostic stops being read — and a second copy of that rule is a
+    second place for it to be got wrong. The board-lines path started life
+    with its own inline copy and this is that copy, pulled up.
+    """
+    c = str(ev.get("commence_time") or "")[:10]
+    return bool(slate_days) and len(c) == 10 and c not in slate_days
+
+
+@dataclass
+class BoardLinesResult:
+    """What one board-level game-lines pull attached, and what it missed."""
+    games_priced: int = 0        # games that got at least one market
+    moneylines: int = 0
+    totals: int = 0
+    spreads: int = 0
+    events_seen: int = 0         # events the endpoint returned
+    quota: Quota = field(default_factory=Quota)
+    from_cache: bool = False
+    # Same two failure modes apply_odds_to_slate names separately, for the
+    # same reason: an unmapped NAME is a stale team table, and a mapped pair
+    # that is not on our slate is a wiring bug. A board that quietly prices
+    # 9 of 16 games looks exactly like a light week.
+    dropped_events: list = field(default_factory=list)
+    other_day_events: int = 0
+
+
+def apply_board_lines_to_slate(slate, api_key: str | None = None,
+                               books: list[str] | None = None,
+                               ttl: int = 300, sport: str = "nfl",
+                               cache_only: bool = False) -> BoardLinesResult:
+    """Refresh the GAME markets for a whole slate in ONE request.
+
+    THE PRICE OF A MONEYLINE. `apply_odds_to_slate` above gets h2h, spreads
+    and totals for free, in the sense that they ride along inside the
+    event-scoped payload it is already buying for player props. But that
+    payload is billed per market per region — CREDITS_PER_EVENT is 8 — and
+    it is billed PER EVENT. So when the pacer declines the prop pull, as
+    the daily cap now regularly makes it, there is no cheaper tier: the
+    board keeps the last paid prices and the moneylines on the page age
+    with the cycle. Ethan, 2026-09-03, looking at a board eight minutes old
+    carrying prices fifty-five minutes old: "Getting the wrong numbers can
+    fuck our picks bad."
+
+    Refreshing one moneyline through that door costs 8 x every game on the
+    slate — 136 credits for a sixteen-game Sunday, measured. This
+    endpoint returns the same three markets for the ENTIRE board for three
+    (three markets, one region, `_classify` bills markets x regions), which
+    is the difference between a refresh the pacer will authorise several
+    times a day and one it authorises never.
+
+    WHAT IT DELIBERATELY DOES NOT DO is touch props. Player markets only
+    exist per event, so nothing here can refresh them; a caller wanting
+    fresh props still has to pay for the event pull. That split is the
+    whole point, and it is why the two pulls stamp two different clocks
+    upstream — a board whose lines are four minutes old and whose props are
+    two hours old must not report one number for both.
+
+    `cache_tag` is passed because it must be: `fetch_sport_odds` keys its
+    cache by sport alone, and livelines already pulls a one-market h2h
+    payload under that key. Without a tag the two would overwrite each
+    other and this would read back a payload with no spreads or totals in
+    it, and conclude the books had stopped posting them.
+    """
+    key = get_api_key(api_key)
+    cfg = SPORT_CONFIG[sport]
+    result = BoardLinesResult()
+    result.from_cache = cache_only
+
+    pair_games: dict[frozenset, list] = {}
+    for g in slate.games:
+        pair_games.setdefault(frozenset((g.home, g.away)), []).append(g)
+
+    # THE SLATE'S OWN NAMES BEAT THE STATIC TABLE, for the reason spelled
+    # out at length in apply_odds_to_slate: a hand-written {full name:
+    # abbreviation} table has to agree with whatever the schedule feed
+    # calls the same teams, and for the WNBA it did not — all five games
+    # dropped. Same join here, so the two paths cannot disagree about who
+    # is playing.
+    slate_names: dict[str, str] = {}
+    for g in slate.games:
+        for nm, ab in ((getattr(g, "home_name", ""), g.home),
+                       (getattr(g, "away_name", ""), g.away)):
+            if nm and ab:
+                slate_names[_team_key(nm)] = ab
+
+    def _abbr(name: str) -> str | None:
+        return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
+
+    slate_days = _slate_days(slate.games)
+
+    try:
+        events, quota = fetch_sport_odds(
+            sport, api_key=key, markets=["h2h", "spreads", "totals"],
+            books=books, ttl=ttl, cache_only=cache_only,
+            cache_tag="lines")
+    except OddsAPIError:
+        if cache_only:
+            return result          # never paid for; nothing on disk
+        raise
+    result.quota = quota
+    result.events_seen = len(events)
+
+    for ev in events:
+        home = _abbr(ev.get("home_team", ""))
+        away = _abbr(ev.get("away_team", ""))
+        if not home or not away:
+            result.dropped_events.append(
+                {"reason": "team name not in the map",
+                 "home": ev.get("home_team", ""), "away": ev.get("away_team", ""),
+                 "unmapped": [n for n, m in ((ev.get("home_team", ""), home),
+                                             (ev.get("away_team", ""), away))
+                              if not m]})
+            continue
+        pair = frozenset((home, away))
+        legs = pair_games.get(pair) or []
+        if not legs:
+            if _other_day(ev, slate_days):
+                result.other_day_events += 1
+            else:
+                result.dropped_events.append(
+                    {"reason": "mapped, but that pair is not on our slate",
+                     "home": ev.get("home_team", ""),
+                     "away": ev.get("away_team", ""),
+                     "mapped_to": [away, home]})
+            continue
+        # A pair can hold two games (a doubleheader); the event's start time
+        # picks the leg, exactly as the prop path does. Football has none,
+        # but this function is sport-agnostic and a silently merged
+        # doubleheader is a wrong price rather than a missing one.
+        game = _leg_by_commence(legs, ev.get("commence_time") or "")
+        if game is None:
+            continue
+
+        # The parsers key on the exact strings THIS payload uses, so the map
+        # comes off the event rather than out of a table (cfb_build reached
+        # the same conclusion about 134 schools that rot on reshuffle).
+        team_map = {ev.get("home_team", ""): home, ev.get("away_team", ""): away}
+        touched = False
+        mls = parse_event_h2h(ev, team_map)
+        if mls.get(home) is not None and mls.get(away) is not None:
+            game.home_ml = mls[home]
+            game.away_ml = mls[away]
+            result.moneylines += 1
+            touched = True
+        for bk, prices in parse_event_h2h_by_book(ev, team_map).items():
+            if bk == BOOK_TITLES.get("pinnacle") and home in prices and away in prices:
+                game.sharp_home_ml = prices[home]
+                game.sharp_away_ml = prices[away]
+        tot = parse_event_totals(ev)
+        if tot:
+            game.total, game.total_over_odds, game.total_under_odds = tot
+            game.total_measured = True         # a book posted it
+            result.totals += 1
+            touched = True
+        sp = parse_event_spreads(ev, team_map, home, away)
+        if sp:
+            game.spread, game.spread_home_odds, game.spread_away_odds = sp
+            game.spread_measured = True        # a book posted it
+            result.spreads += 1
+            touched = True
+        stot = parse_event_totals(ev, only_books=SHARP_BOOKS)
+        if stot:
+            game.sharp_total, game.sharp_total_over_odds, \
+                game.sharp_total_under_odds = stot
+        ssp = parse_event_spreads(ev, team_map, home, away,
+                                  only_books=SHARP_BOOKS)
+        if ssp:
+            game.sharp_spread, game.sharp_spread_home_odds, \
+                game.sharp_spread_away_odds = ssp
+        if touched:
+            result.games_priced += 1
+
+    return result
+
+
+def _leg_by_commence(legs: list, commence: str):
+    """Which leg of a doubleheader an event belongs to, by start time."""
+    if len(legs) <= 1:
+        return legs[0] if legs else None
+    import datetime as _dt
+
+    def _dist(g):
+        try:
+            a = commence.replace("Z", "+00:00")
+            b = (g.kickoff or "").replace("Z", "+00:00")
+            return abs((_dt.datetime.fromisoformat(a)
+                        - _dt.datetime.fromisoformat(b)).total_seconds())
+        except Exception:                                    # noqa: BLE001
+            return float("inf")
+    return min(legs, key=_dist)
+
+
 def apply_odds_to_slate(slate, api_key: str | None = None,
                         books: list[str] | None = None,
                         ttl: int = 300, sport: str = "nfl",
@@ -1211,30 +1433,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     def _abbr(name: str) -> str | None:
         return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
 
-    # WHICH DAYS THIS SLATE COVERS. list_events returns every UPCOMING event
-    # for the sport with no date filter, so a four-game slate is matched
-    # against a list that also holds tomorrow's and Thursday's games. Those
-    # are not on our slate and are not supposed to be — reporting them as
-    # dropped turns a correct result into three alarming lines, which is how
-    # a diagnostic stops being read.
-    #
-    # A day either side, because kickoffs are UTC and a 7pm Eastern tip is
-    # already tomorrow there.
-    import datetime as _dt
-    slate_days: set[str] = set()
-    for g in slate.games:
-        k = str(getattr(g, "kickoff", "") or "")[:10]
-        if len(k) == 10:
-            try:
-                d = _dt.date.fromisoformat(k)
-            except ValueError:
-                continue
-            slate_days |= {(d + _dt.timedelta(days=n)).isoformat()
-                           for n in (-1, 0, 1)}
-
-    def _other_day(ev) -> bool:
-        c = str(ev.get("commence_time") or "")[:10]
-        return bool(slate_days) and len(c) == 10 and c not in slate_days
+    # WHICH DAYS THIS SLATE COVERS — `_slate_days` / `_other_day` above,
+    # shared with the board-lines path so the rule has one definition.
+    slate_days = _slate_days(slate.games)
 
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
@@ -1264,7 +1465,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         if frozenset((home, away)) not in slate_pairs:
             # A later date's game is not a fault, so it is not reported as
             # one. Only a pair that should be on THIS slate and is not.
-            if not _other_day(ev):
+            if not _other_day(ev, slate_days):
                 result.dropped_events.append(
                     {"reason": "mapped, but that pair is not on our slate",
                      "home": ev.get("home_team", ""),

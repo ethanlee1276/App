@@ -2828,6 +2828,16 @@ function oddsClockHTML() {
   const waiting = opens && Date.now() < opens;
   const bits = [];
   if (os.priced_at) bits.push(`last pulled <b>${clock(os.priced_at)}</b>`);
+  /* TWO PULLS, TWO CLOCKS. Player props cost eight credits a game and the
+     game lines cost three for the whole board, so on most cycles only the
+     cheap one is authorised and the moneyline on this page is far fresher
+     than the prop beside it. One timestamp for both would be a freshness
+     claim the board cannot support in either direction. Shown only when it
+     is actually NEWER — when the two pulls landed together, one line is
+     the honest answer and two is noise. */
+  if (os.lines_priced_at && os.lines_priced_at > (os.priced_at || 0)) {
+    bits.push(`game lines <b>${clock(os.lines_priced_at)}</b>`);
+  }
   if (opens) {
     bits.push(waiting
       ? `today’s pricing starts <b>${clock(os.window_opens_at)}</b>`
