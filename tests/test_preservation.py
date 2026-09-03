@@ -278,14 +278,18 @@ def test_the_per_league_nav_configuration_is_intact():
         assert line and '"parlays"' in line[0], (
             f"{sport}'s Parlay Zone exclusion is gone")
     # "players" and "rosters" LEFT on 2026-08-24, "longshots" on
-    # 2026-08-25 — each deliberately, with an engine behind it (box
-    # scores → player_game_logs; engine/cfb/tds pricing anytime-TD
-    # quotes off those logs). This test preserves exclusions that still
-    # have reasons, and only trending's reason still stands: it ranks
-    # per-player projections, which CFB does not build.
+    # 2026-08-25, "trending" on 2026-09-03 — each deliberately, with an
+    # engine behind it: box scores → player_game_logs; engine/cfb/tds
+    # pricing anytime-TD quotes off those logs; engine/cfb/props turning
+    # the same logs into yardage props that `pipeline.price_props`
+    # projects, which is what Trending ranks movers off.
+    #
+    # This test preserves exclusions that still have REASONS, and
+    # college has none left. The list being empty is the assertion:
+    # anything re-appearing on that line is a page being hidden from a
+    # sport that has an engine for it.
     cfb_line = block.split("cfb:")[1].split("]")[0]
-    assert '"trending"' in cfb_line, "CFB's trending exclusion is gone"
-    for v in ("players", "rosters", "weather", "longshots"):
+    for v in ("players", "rosters", "weather", "longshots", "trending"):
         assert f'"{v}"' not in cfb_line, \
             f"CFB's {v} page was re-hidden — it has an engine behind it"
 

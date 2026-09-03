@@ -396,24 +396,29 @@ def test_the_page_is_wired_end_to_end():
     assert "window.ACTIVE_TEAMS = teamsForSport(state.sport);" in app
 
 
-def test_pages_with_no_cfb_engine_behind_them_hide():
+def test_no_cfb_page_is_hidden_any_more():
     """"players" LEFT THIS LIST on 2026-08-24 (ESPN box scores feed CFB
-    player_game_logs), and "longshots" left on 2026-08-25: engine/cfb/tds
-    prices anytime-TD quotes off usage shares, the script, the opponent's
-    scoring and kickoff weather, and cfb_build journals the board — the
-    old reason ("the college model prices games, not players") is no
-    longer true of this page. Trending alone stays: it ranks the board's
-    per-player PROJECTIONS, and CFB still builds none. Checked on CFB's
-    own line rather than anywhere in the block, which is what let this
-    pass on other sports' entries."""
+    player_game_logs), "longshots" left on 2026-08-25 (engine/cfb/tds
+    prices anytime-TD quotes off usage shares, the script, the
+    opponent's scoring and kickoff weather), and TRENDING LEFT ON
+    2026-09-03 — the last one, and the last thing the old reason
+    covered. It ranks movers off the board's per-player PROJECTIONS,
+    which college genuinely did not build until `engine/cfb/props.py`
+    turned the ingested logs into props and `pipeline.price_props`
+    projected them through the same chain the NFL's run through.
+
+    The list is now EMPTY for college, which is the claim worth pinning:
+    every page has an engine behind it, so the sidebar needs no college
+    branch at all. Checked on CFB's own line rather than anywhere in the
+    block, which is what let the first version of this pass on other
+    sports' entries."""
     app = _read("web", "js", "app.js")
     assert "HIDDEN_VIEWS" in app
     block = app[app.index("const HIDDEN_VIEWS"):]
     block = block[:block.index("};")]
     cfb = block[block.index("cfb:"):]
     cfb = cfb[:cfb.index("]")]
-    assert '"trending"' in cfb, "trending would render empty for CFB"
-    for view in ("players", "rosters", "longshots"):
+    for view in ("players", "rosters", "longshots", "trending", "weather"):
         assert f'"{view}"' not in cfb, \
             f"{view} is hidden again — its CFB engine shipped"
 
@@ -467,9 +472,26 @@ def test_a_withholding_reason_does_not_wear_a_green_check():
         assert phrase in block
 
 
-def test_the_stats_tiles_do_not_claim_props_this_sport_has_none_of():
+def test_the_stats_tiles_count_college_props_like_every_other_sport():
+    """THE PREMISE THIS TEST WAS WRITTEN UNDER IS GONE. It pinned a
+    `cfb ? "Markets priced" : "Props analyzed"` branch, correctly, for
+    as long as college had no player model: "18 props analyzed" on a
+    board with no props is just wrong.
+
+    College has props now (`engine/cfb/props.py`), and the branch would
+    have gone on hiding them — the tile that exists to say how many
+    players were considered would have kept saying how many GAMES were.
+    So the branch is gone and both numbers are published under their own
+    names instead: `props_built` / `props_analyzed` the way every other
+    board names them, and `markets_priced` for the game markets the
+    college engine prices."""
     app = _read("web", "js", "app.js")
-    assert '"Markets priced" : "Props analyzed"' in app.replace("? ", "? ")
+    assert '"Markets priced"' not in app, \
+        "the college tile is branching on sport again"
+    assert '{ k: "Props analyzed", to: d.counts.props_analyzed' in app
+    build = _read("cfb_build.py")
+    assert '"props_built": len(_built)' in build
+    assert '"markets_priced": len(plays)' in build
 
 
 def test_every_league_with_a_board_is_deep_linkable():

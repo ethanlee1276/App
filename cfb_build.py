@@ -1118,9 +1118,87 @@ def main() -> None:
         "pass_list": sorted(result["pass_list"],
                             key=lambda p: -(p.get("edge") or 0))[:20],
     }
-    out["counts"] = {"props_analyzed": len(plays),
+
+    # THE PLAYER BOARD (Ethan, twice on 2026-09-02: "make sure everything
+    # I'm telling you to do for NFL is also being implemented for college
+    # football because I'm still not seeing any props for college
+    # football"). College had four seasons of ingested player production
+    # and no way to turn it into a prop, so `recommendations` was a
+    # literal `[]` from the top of this function to the journal at the
+    # bottom — the Best Bets page, the every-market box and the Most
+    # Likely shelves all read that key and all had nothing to read.
+    #
+    # THROUGH THE SAME EVALUATION THE NFL USES, not a college copy of it.
+    # `pipeline.price_props` is the shared step; `engine.cfb.props` only
+    # supplies the slate. That is what stops the two boards drifting into
+    # different arithmetic about the same kind of bet, and it is why the
+    # front end needs no college branch to render these rows.
+    #
+    # WITHOUT ODDS THEY ARE ANALYSIS, NOT BETS. Every prop carries a
+    # proxy line until a book price replaces it, and `evaluate_prop`
+    # refuses to call a proxy-priced row a market at all (`has_market`),
+    # which the ledger's own skip rule and the likelihood board's gate
+    # both check. So this runs on every cycle — it costs nothing but the
+    # database — and produces a board that says how many players it
+    # looked at rather than a page that says college has no players.
+    prop_census: dict = {}
+    try:
+        from engine.cfb import props as _cfbprops
+        from engine.pipeline import price_props as _price_props
+        from engine.seasons import season_of as _prop_season_of
+        _prop_games = [{**g, "spread": gd.get("spread"),
+                        "total": gd.get("total"), "live": gd.get("live")}
+                       for g, gd in zip(games, out["games"])]
+        _prop_slate = _cfbprops.build_slate(
+            conn, _prop_games, args.date,
+            _prop_season_of("cfb", args.date), census=prop_census)
+        out["recommendations"] = _price_props(_prop_slate, sport="cfb")
+        if prop_census.get("candidates"):
+            print(f"  Player props: {prop_census['props']} market(s) across "
+                  f"{prop_census['candidates']} placed player(s) "
+                  f"({prop_census['transfers']} found under a former school, "
+                  f"{prop_census['thin_history']} with too little history, "
+                  f"{prop_census['below_volume']} below the volume floor; "
+                  f"usage from {prop_census.get('usage_season')})")
+        else:
+            print("  Player props: no college player logs joined tonight's "
+                  "teams — run `python3 ingest.py cfb --seasons 2022-2026`.")
+    except Exception as _pexc:                               # noqa: BLE001
+        print(f"  ⚠️  player props unavailable: {_pexc}")
+    out["prop_census"] = prop_census
+
+    # EVERY INGESTED MARKET FOR TONIGHT'S PLAYERS, the same key the NFL
+    # and MLB boards publish for the Players page's market chips. Empty
+    # on a box with no history database, which is a fresh clone.
+    try:
+        from engine import statlogs as _statlogs
+        out["player_stats"] = _statlogs.for_board(
+            out.get("recommendations") or [], "cfb")
+    except Exception:                                        # noqa: BLE001
+        out["player_stats"] = {}
+
+    # THE TWO NUMBERS THE TILE NEEDS, named the way every other board
+    # names them. `props_built` is how many the model projected from
+    # history; `props_analyzed` is how many of those a book has actually
+    # priced. The gap between them IS the diagnosis, and the page prints
+    # it as one — "of 214 built from history — the rest have no book
+    # price yet" — which is the honest answer to "why am I not seeing
+    # any props for college football" on a cycle that has not bought
+    # player odds. (The same shape `nba_build` publishes.)
+    _built = list(out.get("recommendations") or [])
+    out["counts"] = {"props_built": len(_built),
+                     "props_analyzed": sum(1 for r in _built
+                                           if r.get("has_market")),
                      "recommended": len(bets),
                      "conditional": len(conditionals),
+                     # The GAME markets this board priced, which is what
+                     # `props_analyzed` used to hold and what the CFB
+                     # page's second tile used to relabel itself to
+                     # show. Both numbers are real and they are
+                     # different numbers; naming them separately is what
+                     # lets the page stop special-casing college to tell
+                     # them apart.
+                     "markets_priced": len(plays),
                      **result["counts"]}
 
     # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
@@ -1161,7 +1239,15 @@ def main() -> None:
             # at 0.752 over 2,729 replayed games; spreads and totals ride
             # as labelled leans — and refuses the conditionals, which are
             # holds and not picks.
-            out["most_likely"] = _likely([], rows, watch, sport="cfb",
+            # THE PROP ROWS RIDE ALONG NOW. `likely.from_prop` gates
+            # each one on `rankable(market, "cfb")` — college's own
+            # measured AUC from `engine.rankfit`, never the NFL's
+            # constants — and on `has_market`, so a proxy-priced row
+            # cannot reach a shelf either. Passing them is therefore
+            # safe before the measurement exists: the board shows what
+            # it can defend and nothing else.
+            out["most_likely"] = _likely(out.get("recommendations") or [],
+                                         rows, watch, sport="cfb",
                                          census=_ml_census,
                                          game_bets=out.get("game_bets") or [])
             out["likely_census"] = _ml_census
@@ -1252,10 +1338,15 @@ def main() -> None:
     try:
         from engine import ledger
         lconn = ledger.connect()
-        n = ledger.log_recommendations(lconn, {"sport": "cfb",
-                                               "date": args.date,
-                                               "recommendations": [],
-                                               "game_bets": bets})
+        n = ledger.log_recommendations(lconn, {
+            "sport": "cfb", "date": args.date,
+            # NO LONGER A LITERAL EMPTY LIST. `journal_skip_reason`
+            # still refuses everything without a real book price, so on
+            # a cycle that did not buy player odds this journals exactly
+            # what it journalled before — the game bets — and starts
+            # recording props the moment there is a price behind them.
+            "recommendations": out.get("recommendations") or [],
+            "game_bets": bets})
         # TD long shots journal to their own measured bucket, exactly as
         # MLB's home runs do — the board is only honest if the record
         # grades it. They settle against the `anytime_td` rows the box

@@ -44,7 +44,7 @@ def _injury_status(decision) -> str:
     return ""
 
 
-def _rec_to_dict(rec, prop, decision, proj) -> dict:
+def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
     vals = [g.value for g in prop.logs]
     return {
         "player": rec.player,
@@ -118,7 +118,7 @@ def _rec_to_dict(rec, prop, decision, proj) -> dict:
         ],
         # Per-player history for the Players & Trending pages.
         "logs": [
-            {**_log_wind(prop, g),
+            {**_log_wind(prop, g, sport),
              "week": g.week, "opponent": g.opponent,
              "value": g.value, "home": g.home}
             for g in prop.logs
@@ -190,7 +190,7 @@ def _wind_index(season: int | None = None) -> dict[str, float]:
     return cache[season]
 
 
-def _log_wind(prop, log) -> dict:
+def _log_wind(prop, log, sport: str = "nfl") -> dict:
     """Wind for one past game, or {} if it is not known.
 
     The player feed does not say which side was home — nflverse weekly rows
@@ -198,7 +198,16 @@ def _log_wind(prop, log) -> dict:
     trust that, try BOTH orderings of the matchup. Only one of "A@B" and
     "B@A" is a real game, so the ambiguity resolves itself and the column
     stops depending on a field that is not actually populated.
+
+    NFL ONLY, and the guard is not hypothetical. `nfl_game_winds` keys a
+    game "AWAY@HOME" on abbreviations, and college football shares
+    several of them with the NFL — Miami, Cincinnati, Houston, Buffalo.
+    A college log whose matchup happens to spell an NFL game would
+    otherwise be stamped with that Sunday's wind and journaled as a
+    measured condition of a Saturday.
     """
+    if sport != "nfl":
+        return {}
     team = (getattr(prop, "team", "") or "").upper()
     opp = (getattr(log, "opponent", "") or "").upper()
     if not team or not opp:
@@ -606,19 +615,33 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
     return out
 
 
-def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
-              model=None, allow_synthetic_line: bool = False,
-              nfl_usage: dict | None = None, team_context: dict | None = None,
-              team_notes: dict | None = None) -> dict:
-    """``allow_synthetic_line`` is for the backtest harness, which prices
+def price_props(slate: Slate, config: RuleConfig | None = None,
+                model=None, allow_synthetic_line: bool = False,
+                nfl_usage: dict | None = None, team_context: dict | None = None,
+                team_notes: dict | None = None, sport: str = "nfl") -> list[dict]:
+    """Every prop on a slate, evaluated and serialised — the shared step.
+
+    THIS IS THE SEAM COLLEGE FOOTBALL ARRIVED THROUGH (2026-09-03). It
+    was the body of `run_slate`, which is otherwise NFL furniture: it
+    builds game bets, the long-shot board and a `board_guide` college
+    already builds its own copies of. Lifting the prop loop out lets
+    `cfb_build` price college players through the SAME evaluation
+    instead of a parallel one — which is the only way the two boards can
+    be prevented from disagreeing about the same arithmetic, and the
+    reason `_rec_to_dict` is called here rather than in either caller.
+
+    ``sport`` keys every self-tuning store, exactly as it does in
+    `betting.evaluate_prop` — where it was once hardcoded "nfl" and was
+    "a silent cross-sport leak the day either stopped being true". It
+    stopped being true here.
+
+    ``allow_synthetic_line`` is for the backtest harness, which prices
     against a naive baseline line on purpose (see engine.betting.temper_edge).
     ``nfl_usage`` carries measured red-zone/snap/volume roles
     (engine.nflusage); the volume map feeds each prop's usage bridge.
     ``team_notes`` maps team → a one-line QB-dependency warning
     (engine.sources.depthcharts.qb_dependency), stamped on that team's
     pass-catcher props — a warning the human weighs, never a gate."""
-    if not isinstance(slate, Slate):
-        slate = load_slate(slate)
     config = config or RuleConfig()
     # Set before the prop rows are built: _log_wind needs the season, a game
     # log carries a week but not a year, and January belongs to last season.
@@ -644,11 +667,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
                                              (nfl_usage or {}).get("team_of")))
             u = (role or {}).get(prop.market)
         proj = build_projection(prop, game, opponent, model=model,
-                                context=team_context, usage=u)
+                                context=team_context, usage=u, sport=sport)
         rec = evaluate_prop(prop, proj, allow_synthetic_line=allow_synthetic_line,
-                            game=game)
+                            game=game, sport=sport)
         decision = apply_rules(rec, prop, game, config)
-        d = _rec_to_dict(rec, prop, decision, proj)
+        d = _rec_to_dict(rec, prop, decision, proj, sport)
         if team_notes and prop.market in (PASS_YDS, REC_YDS, RECEPTIONS):
             note = team_notes.get(prop.team)
             if note:
@@ -712,6 +735,24 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     # Rank: recommended bets first, then by confidence, then by edge.
     results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    return results
+
+
+def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
+              model=None, allow_synthetic_line: bool = False,
+              nfl_usage: dict | None = None, team_context: dict | None = None,
+              team_notes: dict | None = None) -> dict:
+    """The NFL board: `price_props` plus the furniture around it — game
+    bets, the long-shot board, the likelihood board and the shelves they
+    sit on. Sports that build their own furniture (college football)
+    call `price_props` directly and keep theirs."""
+    if not isinstance(slate, Slate):
+        slate = load_slate(slate)
+    config = config or RuleConfig()
+    results = price_props(slate, config, model=model,
+                          allow_synthetic_line=allow_synthetic_line,
+                          nfl_usage=nfl_usage, team_context=team_context,
+                          team_notes=team_notes, sport="nfl")
 
     game_bets = _game_bets(slate.games, config)
 

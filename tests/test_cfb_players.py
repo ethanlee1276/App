@@ -231,10 +231,11 @@ def test_the_sidebar_hides_only_what_still_has_a_reason():
     for gone in ("players", "rosters"):
         assert f'"{gone}"' not in line, \
             f"{gone} is still hidden for CFB after the layer shipped"
-    # Trending STAYS hidden — but for the board's reason (the college
-    # model prices games, not players; there are no player projections
-    # to rank movers from), not the stale no-feed one.
-    assert '"trending"' in line
+    # Trending LEFT 2026-09-03, the last one out. Its reason was the
+    # board's rather than the feed's — the college model priced games and
+    # not players, so there were no per-player projections to rank movers
+    # from — and `engine/cfb/props.py` builds them off these very logs.
+    assert '"trending"' not in line
     # longshots LEFT 2026-08-25: engine/cfb/tds prices anytime-TD quotes
     # off these very logs, so the page has an engine behind it now.
     assert '"longshots"' not in line

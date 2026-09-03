@@ -338,16 +338,19 @@ const HIDDEN_VIEWS = {
   // Players and Rosters OPENED 2026-08-24: the "no free player-level
   // feed" claim was stale — ESPN's keyless box scores (the same API
   // family the CFB scoreboard reads) now feed player_game_logs, so both
-  // pages work exactly as they do for the NFL. Trending stays hidden
-  // for a DIFFERENT reason than the one it used to wear: it ranks
-  // movers off the board's player projections, and the CFB model prices
-  // games, not players — there is nothing to rank until that layer
-  // exists. Each remaining reason is spelled out below.
+  // pages work exactly as they do for the NFL.
   // Weather LEFT this list 2026-08-24 too: CFBD's /venues has every
   // college stadium's coordinates (the key the talent prior already
   // needs), Open-Meteo answers the kickoff hour keylessly, and ESPN
   // names each game's venue — neutral sites included.
-  cfb: ["trending"],
+  // And Trending LEFT it 2026-09-03. It ranked movers off the board's
+  // player projections and the college model priced games and not
+  // players, so there was nothing to rank; `engine/cfb/props.py` builds
+  // college props off the ingested logs and `pipeline.price_props`
+  // projects them through the same chain the NFL's run through. The
+  // page needs no college branch because there is no longer a college
+  // difference for it to branch on.
+  cfb: [],
 };
 
 /* College football's 134 identities ride in the payload rather than a
@@ -495,8 +498,11 @@ const HIDDEN_WHY = {
   // stale when engine/cfb/tds.py shipped — anytime-TD quotes are pulled
   // for the board's best games and priced off usage shares, the script,
   // the opponent's scoring and our own kickoff forecasts.
-  cfb: { trending: "movers are ranked off the board’s player projections, "
-                   + "and the college model prices games, not players" },
+  // Trending LEFT this list 2026-09-03 for the same reason Long Shots
+  // did: "the college model prices games, not players" went stale when
+  // engine/cfb/props.py shipped. College has nothing left to explain
+  // away here.
+  cfb: {},
 };
 
 const SPORT_LABEL = { nfl: "the NFL", mlb: "MLB", nba: "the NBA",
@@ -3870,10 +3876,16 @@ function renderStats() {
   const exposure = staked.reduce((s, r) => s + (r.stake_units || 0), 0);
   const ud = unitDollars();
   const nb = sig.sharpBets.length + sig.modelBets.length;
-  // College football prices full-game markets, not props — "18 props
-  // analyzed" on a board with no player model is just wrong.
-  const cfb = state.sport === "cfb";
+  // A GAME BET HELD BACK ON A STARTER, in whatever sport has them.
+  // College football is the only board that publishes conditionals
+  // today, and this used to be reachable only down a `sport === "cfb"`
+  // branch that ALSO swapped the prop count out for a game-market one —
+  // so the day college gained props (2026-09-03) the branch would have
+  // gone on hiding them. The clause is driven by the data instead: a
+  // board with no conditionals renders nothing, which is every other
+  // sport, today.
   const waiting = (d.game_bets || []).filter((b) => b.conditional).length;
+  const held = waiting ? ` · ${waiting} conditional, waiting on a starter` : "";
   // ONE OF THESE IS THE ANSWER, AND IT LEADS.
   //
   // Four tiles at one size meant none of them was: measured at 1.000
@@ -3916,10 +3928,8 @@ function renderStats() {
       sub: riding.length
         ? `${staked.length} new · ${plural(riding.length, "riding")} at the `
           + `price we took — those ride as placed, don’t add at tonight’s number`
-        : cfb
-          ? `${plural(nb, "game bet")} journaled`
-            + (waiting ? ` · ${waiting} conditional, waiting on a starter` : "")
-          : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")} — all journaled` },
+        : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")}`
+          + ` — all journaled${held}` },
     /* THE SUBTITLE CARRIES WHAT THE NUMBER CANNOT. `props_analyzed`
        counts rows that got a REAL BOOK PRICE, so on a thin menu it
        always reads as though the model considered almost nothing —
@@ -3927,11 +3937,10 @@ function renderStats() {
        and is usually a book that has not posted yet. `props_built` is
        how many the model actually projected from history, and the gap
        between them is the whole diagnosis. */
-    { k: cfb ? "Markets priced" : "Props analyzed", to: d.counts.props_analyzed, dec: 0,
-      sub: cfb ? `spreads, totals and moneylines across ${(d.games || []).length} game(s)`
-        : (d.counts.props_built > d.counts.props_analyzed
-           ? `of ${d.counts.props_built} built from history — the rest have no book price yet`
-           : "") },
+    { k: "Props analyzed", to: d.counts.props_analyzed, dec: 0,
+      sub: d.counts.props_built > d.counts.props_analyzed
+        ? `of ${d.counts.props_built} built from history — the rest have no book price yet`
+        : "" },
     { k: "Avg edge", to: staked.length ? avgEdge * 100 : 0, dec: 1, suf: "%", pre: avgEdge >= 0 ? "+" : "", cls: "pos" },
     // A reader who set stakes to units asked not to be shown money, and
     // the tile that leads with a dollar figure is the one that would say

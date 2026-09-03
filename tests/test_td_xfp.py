@@ -396,10 +396,15 @@ def test_the_index_is_keyed_on_the_full_name_because_initials_collide():
 
 def test_the_yardage_board_resolves_the_same_way():
     """The volume role had the identical problem and would have kept it
-    if only the touchdown path were fixed."""
+    if only the touchdown path were fixed.
+
+    The loop moved out of `run_slate` into `price_props` on 2026-09-03,
+    when college football started pricing through the same step — the
+    resolution is unchanged and this asks the shared loop for it."""
     import inspect
     from engine import pipeline
-    assert "_from_maps(vol_map" in inspect.getsource(pipeline.run_slate)
+    assert "_from_maps(vol_map" in inspect.getsource(pipeline.price_props)
+    assert "price_props(" in inspect.getsource(pipeline.run_slate)
 
 
 if __name__ == "__main__":

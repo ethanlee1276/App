@@ -100,12 +100,22 @@ def test_it_says_nothing_extra_when_the_two_agree():
     assert ': ""' in tail, tail
 
 
-def test_the_football_board_keeps_its_own_subtitle():
-    """CFB counts priced markets, not props, and its subtitle is a
-    different sentence — the branch must not swallow it."""
+def test_the_college_board_now_shares_the_subtitle():
+    """IT USED TO KEEP ITS OWN, and the reason expired on 2026-09-03.
+    CFB counted priced game markets rather than props because it had no
+    player model; `engine/cfb/props.py` gave it one, and the branch that
+    protected the old sentence would have gone on hiding the new rows.
+
+    The gap the shared subtitle names is exactly college's question —
+    "of N built from history — the rest have no book price yet" is the
+    honest answer to a Saturday with props built and no player odds
+    bought — so cfb_build publishes both halves of it."""
     src = _src("web", "js", "app.js")
-    at = src.index('cfb ? "Markets priced" : "Props analyzed"')
-    assert "spreads, totals and moneylines" in src[at:at + 400]
+    assert '"Markets priced"' not in src
+    assert "spreads, totals and moneylines" not in src
+    build = _src("cfb_build.py")
+    assert '"props_built": len(_built)' in build
+    assert '"props_analyzed": sum(1 for r in _built' in build
 
 
 # --- the census this restores was already argued for ----------------------
