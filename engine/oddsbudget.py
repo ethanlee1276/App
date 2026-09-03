@@ -198,6 +198,53 @@ def read_spend(path: Path | str | None = None) -> list[dict]:
     return rows
 
 
+_TODAY_CACHE: dict = {}
+
+
+def spent_today(now: float | None = None,
+                path: Path | str | None = None) -> int:
+    """Credits already spent today, from the ledger every paid call writes.
+
+    THE CEILING THE PACER NEVER HAD. `daily_allowance` only ever derived a
+    CADENCE — `should_refresh` compared elapsed time against a gap and
+    nothing anywhere compared the day's spend against the day's budget. So
+    the three things that shorten the gap all spent ON TOP of the
+    allowance rather than within it:
+
+        PRIME_BURST = 3.0        x3 share inside the pre-game window
+        active_hours compressed  14h -> hours-left-in-window, up to ~7x
+        guaranteed touchpoints   bypass the gap entirely
+
+    Measured on the droplet 2026-09-03: an authorised 1,280 credits/day
+    against 6,859 actually spent, and a 72,225 balance projecting to run
+    out on 13 September — Week 1 Sunday, the largest slate of the year,
+    with the failure mode being hours-stale prices on the games people
+    bet. Ethan's call, same day: a hard daily cap.
+
+    Cached on (mtime, size) so a cycle that asks six times reads once.
+    """
+    now = now if now is not None else time.time()
+    day = _dt.date.fromtimestamp(now).isoformat()
+    f = Path(path or SPEND_LOG)
+    try:
+        stamp = (f.stat().st_mtime, f.stat().st_size)
+    except OSError:
+        return 0                      # no ledger yet: nothing spent
+    hit = _TODAY_CACHE.get(day)
+    if hit and hit[0] == stamp:
+        return hit[1]
+    total = 0
+    for r in read_spend(f):
+        if str(r.get("iso", ""))[:10] == day:
+            try:
+                total += int(r.get("credits", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+    _TODAY_CACHE.clear()              # one day's answer is all we ever need
+    _TODAY_CACHE[day] = (stamp, total)
+    return total
+
+
 def spend_by_day(rows: list[dict] | None = None,
                  path: Path | str | None = None) -> dict:
     """{date: {kind: [calls, credits]}} — the answer to "what spent it"."""
@@ -706,6 +753,10 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         return False, (f"last paid pull never reached the odds API — "
                        f"retrying ~{_fmt_clock(state.retry_after_ts)}")
     window = prime_window(kickoffs, now)
+    # THE DAY'S BUDGET IS SET BEFORE THE BURST, and that is the whole
+    # point of the cap: PRIME_BURST and the touchpoints redistribute the
+    # day's credits toward the window, they do not add to them.
+    base_share = share
     if state.remaining <= RESERVE:
         if now - state.last_refresh_ts >= PROBE_INTERVAL:
             return True, ("odds quota looked exhausted — probing once in case the "
@@ -765,6 +816,41 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                           f"cached prices in between")
         return False, (f"odds budget spent for today ({state.remaining} credits "
                        f"left this month; cached prices keep the board filled)")
+    # THE HARD DAILY CEILING. Everything below this line — the ordinary
+    # cadence, the burst, and the guaranteed touchpoint override — spends
+    # inside the day's budget or does not spend. See `spent_today` for
+    # what this cost before it existed.
+    #
+    # DELIBERATELY BELOW THE STARVATION BRANCH. That path is the one
+    # affordable pull on a day too poor for the ordinary cadence, held for
+    # the pre-game window; capping it would take away the safety net that
+    # keeps a board from going a whole day without a real price, which is
+    # the opposite of what this is for.
+    #
+    # `base_share`, not `share`: inside the window `share` has already been
+    # multiplied by PRIME_BURST, and metering the day against a bursted
+    # budget would reintroduce the bug one level down.
+    # FLOORED AT ONE PULL, and this is not a loophole — it is the case
+    # the burst exists for. On a thin month the flat allowance can be
+    # smaller than a single refresh (5,000 credits left over 31 days is
+    # 72, against a 15-game pull at 128), and the pre-game burst is what
+    # made that day's one pull affordable. Metering against the unfloored
+    # allowance refused it and left the board on yesterday's numbers
+    # through first pitch — which is the failure
+    # tests/test_prime_window_pacing.py was written about.
+    #
+    # So the ceiling never blocks the day's FIRST pull; it stops the
+    # second, third and fortieth. The month's own RESERVE is still the
+    # backstop above, and the starvation branch already applies the same
+    # rule ("one paid pull if the month can afford it") one level up.
+    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+    budget = max(int(daily_allowance(state, kw.get("today")) * base_share),
+                 per_refresh)
+    already = spent_today(now)
+    if already + per_refresh > budget:
+        return False, (f"today's odds budget is spent for this slate "
+                       f"({already} of {budget} credits; a pull costs "
+                       f"{per_refresh}) — cached prices keep the board filled")
     if window is False:
         # Ordinary pacing, off-peak: stretch the gap so most of the day's
         # refreshes land where the prices are.
