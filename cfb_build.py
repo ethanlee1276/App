@@ -1284,7 +1284,29 @@ def main() -> None:
             print("  Player props: no college player logs joined tonight's "
                   "teams — run `python3 ingest.py cfb --seasons 2022-2026`.")
     except Exception as _pexc:                               # noqa: BLE001
-        print(f"  ⚠️  player props unavailable: {_pexc}")
+        # ON THE BOARD, NOT ONLY IN A LOG LINE NOBODY IS TAILING.
+        #
+        # This block fills the census and THEN prices, in that order, so a
+        # raise in `price_props` leaves a census reporting hundreds of
+        # markets and a `recommendations` list still holding the empty one
+        # it was initialised with. From outside that is indistinguishable
+        # from an honest "no edge anywhere tonight" — and it is not the
+        # same fact at all. Measured on the droplet, 2026-09-03: 612
+        # markets built, 70 carrying a real book line, and a Best Bets
+        # page with nothing on it. Ethan: "there isnt even any best bets,
+        # we should have best bets for cfb."
+        #
+        # The traceback's last frame rides along because "which line"
+        # is the whole question and the message alone rarely answers it.
+        import traceback as _tb
+        _frames = _tb.extract_tb(_pexc.__traceback__)
+        _where = ""
+        if _frames:
+            _f = _frames[-1]
+            _where = f" at {Path(_f.filename).name}:{_f.lineno} in {_f.name}()"
+        prop_census["error"] = f"{type(_pexc).__name__}: {_pexc}{_where}"
+        print(f"  ⚠️  player props unavailable: {prop_census['error']}")
+        _tb.print_exc()
     prop_census["quotes_note"] = quotes_note
     out["prop_census"] = prop_census
     # WHAT THE PULL COVERED, ON THE BOARD RATHER THAN IN THE LOG. The

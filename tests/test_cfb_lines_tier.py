@@ -166,6 +166,37 @@ def test_a_lines_pull_that_never_landed_does_not_burn_its_clock():
     assert "lines_before = _paid_pull_baseline()" in seg
 
 
+def test_a_raise_in_the_prop_block_reaches_the_board():
+    """THE SILENT FAILURE. The block fills `prop_census` and THEN prices,
+    in that order, so a raise inside `price_props` leaves a census
+    reporting hundreds of markets and `recommendations` still holding the
+    empty list it was initialised with.
+
+    From outside that is indistinguishable from an honest "no edge
+    anywhere tonight" — and those are not the same fact. Measured on the
+    droplet 2026-09-03: 612 markets built, 70 carrying a real book line,
+    and a Best Bets page with nothing on it. Ethan: "there isnt even any
+    best bets, we should have best bets for cfb."
+
+    The reason has to travel with the BOARD, because the board is what
+    anyone looks at. A log line is what nobody is tailing."""
+    i = BUILD.index("player props unavailable")
+    seg = BUILD[max(0, i - 1600):i + 300]
+    assert 'prop_census["error"]' in seg, \
+        "a raise in the prop block still leaves no trace on the board"
+    assert "extract_tb" in seg, \
+        "the message travels without the line that raised it"
+
+
+def test_the_census_error_is_not_written_on_a_good_build():
+    """A census carrying an error and a census carrying zero picks are
+    different states, and this field is the only thing separating them."""
+    i = BUILD.index('out["recommendations"] = _price_props')
+    j = BUILD.index("except Exception as _pexc", i)
+    assert 'prop_census["error"]' not in BUILD[i:j], \
+        "the error field is set on a successful build too"
+
+
 # --- the build --------------------------------------------------------------
 def test_the_build_takes_the_flag():
     assert '"--lines-odds"' in BUILD, "the flag is gone"
