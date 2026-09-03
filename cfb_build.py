@@ -622,6 +622,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "live": (game.get("live") or {}).get("state") == "live",
         "win_prob": card["p_model"], "fair_prob": card["p_market"],
         "edge": card["edge"], "odds": card["odds"],
+        # THE BAR THIS EDGE WAS MEASURED AGAINST, as a number rather than
+        # only as English inside a reason string. CFB's bar moves by
+        # attention tier (2.5% / 3% / 4%), so "which of these came
+        # closest" cannot be answered by sorting on edge alone — and that
+        # question is the whole of §11's near-miss list, which the page
+        # has never been able to compute for itself.
+        "required_edge": card.get("required_edge"),
         "ev_per_unit": round(expected_value(card["p_model"], card["odds"]), 4),
         "confidence": round(card["grade"] / 10.0, 1),
         # A conditional is NOT sized. The number it would be sized at rides
@@ -1257,17 +1264,33 @@ def main() -> None:
         _tlc.close()
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  team logs skipped: {exc}")
-    # The pass list on a 60-game Saturday is ~180 markets; shipping all of
-    # it would make the payload the slowest thing on a phone. The near
-    # misses are the part that says something.
+    # THE ROWS ARE GONE FROM HERE, and what is left is the arithmetic.
+    #
+    # `pass_list` was a 20-row copy of the refusals and `near_misses` the
+    # top three of them, published since before either could be drawn:
+    # nothing in web/js/app.js has ever read `d.cfb` at all. They were
+    # duplication with no reader, and duplication of the one thing this
+    # payload has to be careful with — `gate.PAID_KEYS` names both, and
+    # both shipped through the paywall in full because `redact` only
+    # walked the top level. Fixing the stripper was the urgent half;
+    # deleting the second copy is the half that stops it happening again.
+    #
+    # Nothing is lost. Every refusal now rides in `game_bets` with its
+    # price, its edge, the bar it missed and the gate's own sentence
+    # (`to_game_bet`), which is a superset of what was trimmed to 20
+    # here — and the page computes the near-miss list from those rows
+    # (`nearestMisses`), so §11's "closest misses" is finally drawn
+    # rather than merely published.
+    #
+    # The counts stay. They are cheap, they carry no priced row, and
+    # `counts` is what tells a reader whether a market was refused or
+    # never built at all — the one question this board could not answer
+    # about itself on 2026-09-03.
     out["cfb"] = {
-        "near_misses": result["near_misses"],
         "no_qualifying": result["no_qualifying"],
         "exposure": result["exposure"],
         "counts": result["counts"],
         "by_tier": result["by_tier"],
-        "pass_list": sorted(result["pass_list"],
-                            key=lambda p: -(p.get("edge") or 0))[:20],
     }
 
     # THE PLAYER BOARD (Ethan, twice on 2026-09-02: "make sure everything

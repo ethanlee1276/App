@@ -12184,13 +12184,59 @@ function pricedButQuiet() {
   if ((d.game_bets || []).filter(passesGameBet).length) return null;
   const notes = Object.values(d.line_calibration || {})
     .filter(Boolean).map(escapeHtml);
+  // HOW BIG THE CARD WAS, so "recommended none" is a proportion rather
+  // than a mood. The builds publish this twice already — `counts
+  // .markets_priced` and `cfb.counts` — and nothing has ever read
+  // either, so it is counted here off the rows themselves and works for
+  // every sport instead of the one that happens to publish the key.
+  const games = new Set((d.game_bets || []).map((b) => b.matchup || "")).size;
+  const scale = `All ${priced} priced game market${priced === 1 ? "" : "s"}` +
+    (games > 1 ? ` across ${games} games` : "") + ".";
   const head = `The card is priced — the model read every game on it and
-    recommended none. That is a verdict, not a missing feed.`;
-  if (!notes.length) return head;
-  return `${head} What the record says about this board:
-    <ul style="margin:8px 0 0 18px;padding:0">
-      ${notes.map((n) => `<li style="margin-bottom:4px">${n}</li>`).join("")}
-    </ul>`;
+    recommended none. ${scale} That is a verdict, not a missing feed.`;
+  const near = nearestMisses(d.game_bets || []);
+  const body = [
+    notes.length ? `What the record says about this board:
+      <ul style="margin:8px 0 0 18px;padding:0">
+        ${notes.map((n) => `<li style="margin-bottom:4px">${n}</li>`).join("")}
+      </ul>` : "",
+    near.length ? `How close it came:
+      <ul style="margin:8px 0 0 18px;padding:0">${near.map((b) => `
+        <li style="margin-bottom:4px">${escapeHtml(b.pick_label || b.headline
+          || "")} — ${escapeHtml(b.matchup || "")}, edge
+          ${((b.edge || 0) * 100).toFixed(1)}%${b.required_edge != null
+            ? ` against a ${(b.required_edge * 100).toFixed(1)}% bar` : ""}
+        </li>`).join("")}</ul>` : "",
+  ].filter(Boolean).join(" ");
+  return body ? `${head} ${body}` : head;
+}
+
+/* §11 — "the closest misses, so a no-play slate still says something".
+   The builds compute this (`cfb.near_misses`) and no renderer has ever
+   read it, so the page works it out from the rows it already has.
+
+   MEASURED AGAINST THE BAR WHERE THERE IS ONE. College's bar moves by
+   attention tier — 2.5% in a Tuesday MAC game, 4% in a marquee one — so
+   the biggest edge on the card is not necessarily the one that came
+   closest, and sorting on edge alone would name the wrong game. Cards
+   that carry no `required_edge` (NFL, MLB) fall back to edge, which is
+   the right answer when one bar applies to everything.
+
+   POSITIVE EDGES ONLY. A market the model likes less than the book did
+   not "nearly" qualify, and listing it under that heading would be
+   flattery. An empty list is the honest output when nothing was close,
+   and the caller drops the section rather than printing a heading over
+   nothing. */
+function nearestMisses(rows, limit = 3) {
+  const missed = rows.filter((b) => !b.recommended && (b.edge || 0) > 0);
+  // A board is one sport, so these are all measured the same way or none
+  // of them are. Ranking by the gap where the bar is known and by edge
+  // where it is not keeps both honest without inventing a scale that
+  // would let the two be compared.
+  const barred = missed.filter((b) => b.required_edge != null);
+  const pool = barred.length ? barred : missed;
+  const key = barred.length ? (b) => b.edge - b.required_edge : (b) => b.edge;
+  return pool.slice().sort((x, y) => key(y) - key(x)).slice(0, limit);
 }
 
 function noMarketExplainer() {
