@@ -377,7 +377,15 @@ def test_the_whole_board_is_priced_in_one_request():
     assert 'f"{ODDS_BASE}/sports/{cfg[\'sport_key\']}/odds"' in src
     launch = _read("launch.py")
     assert "CFB_ODDS_COST = 3 + 12 * 5" in launch
-    assert "cost=CFB_ODDS_COST" in launch
+    # IN CREDITS, AND THIS TEST PINNED THE FORM THAT GOT IT WRONG.
+    # `cost=` feeds `should_refresh`'s FIRST parameter, which is an EVENT
+    # COUNT that the pacer multiplies by CREDITS_PER_EVENT — so 63 credits
+    # were authorised against 504, eight times college's real price, and
+    # the pull the estimate exists to make affordable was never affordable
+    # (2026-09-03). `credits=` states the number in the unit it is in.
+    assert "credits=CFB_ODDS_COST" in launch, \
+        "the college estimate is being metered as an event count again"
+    assert "cost=CFB_ODDS_COST" not in launch
     build = _read("cfb_build.py")
     assert "PLAYER_EVENT_CAP = 12" in build
     assert "cands[:cap]" in build, \

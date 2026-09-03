@@ -142,6 +142,27 @@ CFB_OUT = "web/data/cfb.json"
 # fewer games when the month cannot carry twelve.
 CFB_ODDS_COST = 3 + 12 * 5
 
+#: The cheap half of that sum, on its own. `cfb_build.attach_odds` buys
+#: full-game markets for the ENTIRE board in one request — three credits
+#: however many games are on it — and `attach_player_quotes` buys the other
+#: sixty, one call per game.
+#:
+#: They were authorised together, so a budget that could not carry the
+#: player pull bought no game lines either, and college published a board
+#: with no moneyline, no spread and no total — and therefore no game bets
+#: and nothing on Best Bets. Ethan, 2026-09-03: "we still do not show any
+#: cfb props or best bets or anything and there is games today."
+#:
+#: Measured on his plan that morning: with three slates live the day's
+#: college allowance is 26 credits, so the 63-credit pull starves and the
+#: 3-credit one fits nine times over.
+CFB_LINES_COST = 3
+
+#: Its own pacing clock, for the reason LINES_CLOCK carries above: a
+#: three-credit pull must not reset the clock the sixty-three-credit one
+#: is waiting on.
+CFB_LINES_CLOCK = "cfb_lines"
+
 #: What one board-level game-lines pull costs: three markets (h2h, spreads,
 #: totals) across one region, and the meter bills markets x regions. The
 #: whole slate, for less than half of what ONE game's prop payload costs.
@@ -789,13 +810,31 @@ def refresh_cfb(quiet: bool = False) -> bool:
     why this passes an explicit cost instead of the games-on-slate default.
     """
     args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT]
+    # IN CREDITS, NOT IN EVENTS. `should_refresh`'s first parameter is an
+    # event count it multiplies by CREDITS_PER_EVENT, so passing 63 through
+    # it authorised college against 504 — eight times its real price, on a
+    # pull whose whole argument is that it is cheap. It erred toward
+    # under-spending, so nothing was lost but the board.
     spend = _slate_games(CFB_OUT) > 0 and _odds_affordable(
-        CFB_OUT, quiet, sport="cfb", cost=CFB_ODDS_COST)
+        CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST)
     before_seen = _paid_pull_baseline() if spend else ""
+    lines_spend = False
+    lines_before = ""
     if spend:
         args.append("--odds")
     elif _with_odds():
         args.append("--cached-odds")
+        # THE MIDDLE TIER. The full pull is the game lines plus a player
+        # call per game; when only the first half is affordable, buy it.
+        # Same shape as refresh_nfl's --board-odds and for the same reason:
+        # the alternative was a college board whose prices aged with the
+        # cycle and whose every board read empty.
+        if _slate_games(CFB_OUT) > 0 and _odds_affordable(
+                CFB_OUT, quiet, sport=CFB_LINES_CLOCK,
+                credits=CFB_LINES_COST):
+            args.append("--lines-odds")
+            lines_spend = True
+            lines_before = _paid_pull_baseline()
     # 600s, NOT THE DEFAULT 180. The same ceiling refresh_mlb carries and
     # for the same measured reason: a 1 vCPU box building a full college
     # Saturday runs the touchdown model over sixty games, and MLB already
@@ -810,6 +849,8 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # journal will say so instead of the board simply stopping.
     ok, tail = _run_build(args, timeout=600)
     _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb")
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "CFB game lines",
+                      sport=CFB_LINES_CLOCK)
     # An unreachable schedule now KEEPS the last board rather than
     # publishing an empty one (see cfb_build.py), which exits 0 — a
     # success by the only signal a subprocess has. Reporting that as

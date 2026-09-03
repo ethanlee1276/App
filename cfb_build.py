@@ -633,6 +633,11 @@ def main() -> None:
                     default=datetime.date.today().isoformat())
     ap.add_argument("--odds", action="store_true")
     ap.add_argument("--cached-odds", action="store_true")
+    ap.add_argument("--lines-odds", action="store_true",
+                    help="Buy the GAME markets only — one request for the "
+                         "whole board, three credits — and read player "
+                         "quotes from cache. The middle tier between a full "
+                         "pull nobody can afford and no pull at all.")
     ap.add_argument("--out", default="web/data/cfb.json")
     ap.add_argument("--backfill", metavar="START:END",
                     help="ingest completed games across a date span, then exit")
@@ -1016,9 +1021,25 @@ def main() -> None:
 
     priced, odds_note = ({}, "no odds requested — engine ran with no "
                              "bettable prices")
-    if args.odds or args.cached_odds:
+    if args.odds or args.cached_odds or args.lines_odds:
+        # TWO PULLS, TWO PRICES, AND THEY USED TO SHARE ONE PERMISSION.
+        #
+        # This one is the cheap half: full-game markets for the ENTIRE
+        # board in a single request, three credits however many games are
+        # on it. The player-quote pull below is the dear half — one call
+        # per game, five markets each, sixty credits for a twelve-game
+        # queue — and `CFB_ODDS_COST` authorises the SUM of the two.
+        #
+        # So a budget that could not carry the player pull did not buy the
+        # game lines either, and college published a board with no
+        # moneyline, no spread, no total, and therefore no game bets and
+        # nothing on Best Bets. Ethan, 2026-09-03: "we still do not show
+        # any cfb props or best bets or anything and there is games
+        # today." The two halves are separately authorised now, and
+        # --lines-odds is the launcher saying it could afford this one.
         priced, odds_note = attach_odds(
-            games, lookup, cache_only=args.cached_odds and not args.odds)
+            games, lookup,
+            cache_only=args.cached_odds and not (args.odds or args.lines_odds))
     for gd, g in zip(out["games"], games):
         lines = priced.get(g["game_id"]) or {}
         gd["spread"] = (lines.get("spread") or [None])[0]
@@ -1221,10 +1242,14 @@ def main() -> None:
     quotes_note = ("no odds pulled on this cycle — player prices are "
                    "metered per event, so they arrive on the cycles that "
                    "can afford them rather than every minute")
-    if args.odds or args.cached_odds:
+    if args.odds or args.cached_odds or args.lines_odds:
         try:
+            # NOT bought by --lines-odds. Player markets are event-scoped
+            # and cost five credits a game; the cheap tier exists because
+            # it does not buy them. Cached quotes still attach — the last
+            # paid pull's prices are better than none.
             td_quotes, prop_lines, quotes_note = attach_player_quotes(
-                games, priced, cache_only=args.cached_odds and not args.odds)
+                games, priced, cache_only=not args.odds)
             print(f"  {quotes_note}")
         except Exception as _qexc:                           # noqa: BLE001
             quotes_note = f"player quotes unavailable: {_qexc}"
@@ -1311,8 +1336,12 @@ def main() -> None:
     # player's share of team volume, the script, the opponent's scoring
     # generosity and our own kickoff forecast. Only with odds in play:
     # a scorer market has no proxy price worth modelling against.
-    if args.odds or args.cached_odds:
+    if args.odds or args.cached_odds or args.lines_odds:
         try:
+            # --lines-odds bought no scorer quotes, but the LAST paid pull's
+            # are on disk and `attach_player_quotes` read them back. A board
+            # that has them and does not draw them is the same silence this
+            # tier exists to break.
             from engine.cfb import tds as _tds
             quotes, td_note = td_quotes, quotes_note
             rows, census, watch = _tds.build_cfb_td_longshots(
