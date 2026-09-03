@@ -150,6 +150,23 @@ class MoneylineRec:
     #: favourite's price (Ethan, 2026-09-02: "we have no money lines").
     home_odds: int | None = None
     away_odds: int | None = None
+    #: THE MODEL'S OWN CLAIM, BEFORE THE MARKET HAIRCUT.
+    #:
+    #: Ethan, 2026-09-03, on a MIN ML -220 card: "These lines along with
+    #: more are completely wrong, none of these teams are favored to win
+    #: on any sports book."
+    #:
+    #: `temper` publishes `fair + shrink x (raw - fair)`, and NFL's
+    #: moneyline shrink is measured at no information — so `win_prob`
+    #: IS the book's de-vigged number and the card printed it under the
+    #: word MODEL. Its own power-rating line said the opposite (GB +1.1
+    #: vs MIN +0.5) and the raw claim behind it was nowhere on the row.
+    #:
+    #: Carried for the same reason `from_prop` carries it since the
+    #: Gelof card: `likely.engine_credible` asks the engine's question of
+    #: the engine's number, and with this absent it answered True for
+    #: every game row and admitted them all.
+    raw_win_prob: float | None = None
 
 
 #: Post-haircut edge that saturates the confidence scale. It is half of the
@@ -382,6 +399,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
         stake_units=round(stake, 2), grade=grade, reasons=reasons,
         quality=quality, cal_temp=shrink_in_force(sport, "moneyline"),
         home_odds=home_ml, away_odds=away_ml,
+        raw_win_prob=round(raw, 4),
     )
 
 
@@ -423,6 +441,9 @@ def moneyline_to_dict(rec: MoneylineRec) -> dict:
         # Both sides' prices — see MoneylineRec.home_odds.
         "home_odds": rec.home_odds,
         "away_odds": rec.away_odds,
+        # The pre-shrink claim — see MoneylineRec.raw_win_prob. The
+        # likelihood board's credibility bar reads this and `fair_prob`.
+        "engine_raw_prob": rec.raw_win_prob,
     }
 
 
@@ -554,7 +575,8 @@ def _real_price(*odds) -> bool:
 
 def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
               pick_label, reasons, team="", side="", line=0.0, headline="",
-              credible=True, has_market=True, cal_temp=None, other_odds=None):
+              credible=True, has_market=True, cal_temp=None, other_odds=None,
+              raw_win=None):
     ev = expected_value(win, odds)
     quality = game_bet_score(edge, bet_type) if credible else 0
     confidence = round(quality / 10.0, 1)
@@ -592,6 +614,12 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
         "pick_label": pick_label,
         "matchup": f"{away} @ {home}",
         "win_prob": round(win, 4),
+        # THE MODEL'S CLAIM BEFORE THE HAIRCUT — see
+        # MoneylineRec.raw_win_prob for what this is for. `win_prob`
+        # above is `fair + shrink x (raw - fair)`, so on a market
+        # measured at no information the two are the same number and the
+        # card prints the book's under the word MODEL.
+        "engine_raw_prob": None if raw_win is None else round(raw_win, 4),
         "fair_prob": round(fair, 4),
         "edge": round(edge, 4),
         "odds": odds,
@@ -632,7 +660,7 @@ def price_total(sport: str, home: str, away: str, proj_total: float,
                      credible=credible,
                      has_market=_real_price(over_odds, under_odds),
                      cal_temp=shrink_in_force(sport, "total"),
-                     other_odds=(under_odds if side == "Over" else over_odds))
+                     other_odds=(under_odds if side == "Over" else over_odds), raw_win=raw)
 
 
 def price_team_total(sport: str, team: str, home: str, away: str,
@@ -663,7 +691,7 @@ def price_team_total(sport: str, team: str, home: str, away: str,
                      credible=credible,
                      has_market=_real_price(over_odds, under_odds),
                      cal_temp=shrink_in_force(sport, "total"),
-                     other_odds=(under_odds if side == "Over" else over_odds))
+                     other_odds=(under_odds if side == "Over" else over_odds), raw_win=raw)
 
 
 def price_spread(sport: str, home: str, away: str, proj_margin: float,
@@ -697,4 +725,4 @@ def price_spread(sport: str, home: str, away: str, proj_margin: float,
                      credible=credible,
                      has_market=_real_price(home_odds, away_odds),
                      cal_temp=shrink_in_force(sport, "spread"),
-                     other_odds=(away_odds if team == home else home_odds))
+                     other_odds=(away_odds if team == home else home_odds), raw_win=raw)

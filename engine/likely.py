@@ -604,6 +604,13 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
     line = row.get("line")
     odds = row.get("odds")
     label = row.get("pick_label") or row.get("headline") or ""
+    # The model's own claim before the market haircut, when the maker
+    # carries one. See MoneylineRec.raw_win_prob.
+    raw_claim = row.get("engine_raw_prob")
+    try:
+        raw_claim = None if raw_claim is None else float(raw_claim)
+    except (TypeError, ValueError):
+        raw_claim = None
     flipped, backed, backed_odds = False, label, odds
     if prob < 0.5:
         # THE LIKELY SIDE. Every game market here is two-way, so the
@@ -631,6 +638,13 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         if other_odds is None or fair is None:
             return None
         odds, prob, fair, flipped = other_odds, 1.0 - prob, 1.0 - float(fair), True
+        # THE PRE-SHRINK CLAIM FLIPS WITH THE SIDE. Every market here is
+        # two-way, so the model's raw number for the other side is
+        # 1 - raw. Left unflipped it would be compared against the OTHER
+        # side's fair by `engine_credible`, which is a guard reading two
+        # numbers about different teams.
+        if raw_claim is not None:
+            raw_claim = 1.0 - raw_claim
     if prob < MIN_PROB:
         return None
     edge = None if fair is None else round(prob - float(fair), 4)
@@ -672,6 +686,21 @@ def from_game_bet(row: dict, sport: str = "nfl") -> dict | None:
         "headline": label,
         "bet_type": market, "market": market,
         "market_label": row.get("market_label", market),
+        # THE ENGINE'S OWN NUMBER, for the engine's own question. Without
+        # it `engine_credible` answered True for every game row — the
+        # Gelof guard was blind to this whole board (Ethan, 2026-09-03:
+        # "none of these teams are favored to win on any sports book").
+        #
+        # ONLY ON A MARKET THAT CLAIMS A RANKING, and that is a product
+        # decision, not a technicality. The bar exists to stop a row
+        # being presented as a LIKELIHOOD RANKING while the engine does
+        # not credit its own number. An unranked spread or total makes
+        # no such claim — it ships labelled "the model's lean at this
+        # number" because Ethan asked to see those (2026-09-02), and the
+        # model there disagrees with the close by 30 points as a matter
+        # of course. Feeding those to this bar would empty both shelves
+        # and silently reverse his call.
+        "engine_raw_prob": raw_claim if ranked else None,
         "side": side, "line": line,
         # A game card carries no book name on the NFL path; the journal
         # has always written these as the shopped-best price.
