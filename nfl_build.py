@@ -246,23 +246,39 @@ def _mem_report() -> None:
     """What each stage cost, worst first, beside the running total."""
     if not _MEM:
         return
-    print("\nMemory by stage (MB) — resident after, peak so far, and the "
-          "rise this stage caused")
-    prev = 0.0
+    print("\nMemory by stage (MB) — resident after, peak so far, what the "
+          "stage LEFT resident, and what it PUSHED THE PEAK to")
+    prev_rss = prev_peak = 0.0
     rows = []
     for stage, rss, peak in _MEM:
-        rows.append((stage, rss, peak, rss - prev))
-        prev = rss
-    # THE LARGEST RISER, not a fixed threshold. A build where every stage
-    # costs 300 MB would flag all six and say nothing; one whose worst
-    # stage is 80 MB would flag none and still be the thing to fix. The
-    # question is always "which stage is worst", so mark that one.
-    worst = max(rows, key=lambda r: r[3])
-    for stage, rss, peak, delta in rows:
-        mark = "   <-- the biggest single jump" if stage == worst[0] else ""
-        print(f"  {stage:<28} {rss:8.0f} {peak:8.0f} {delta:+9.0f}{mark}")
-    print(f"\n  peak {rows[-1][2]:.0f} MB; the largest rise was "
-          f"{worst[0]} at +{worst[3]:.0f} MB")
+        rows.append((stage, rss, peak, rss - prev_rss, peak - prev_peak))
+        prev_rss, prev_peak = rss, peak
+    # RANKED BY THE PEAK IT PUSHED, NOT BY WHAT IT LEFT RESIDENT — and
+    # the first version of this got that exactly backwards, on the very
+    # metric its own docstring says is the wrong one.
+    #
+    # Its first real run, 2026-09-03:
+    #
+    #     build_slate      86     148      +60   <-- the biggest single jump
+    #     odds             75    1324      -19
+    #     pipeline         73    1602       -2
+    #
+    # It named build_slate, at 60 MB. `odds` had just allocated and freed
+    # ELEVEN HUNDRED. Ranking on the resident delta rewards exactly the
+    # stage that cleans up after itself and hides exactly the one that
+    # spikes — which is the stage the OOM killer acts on, and the whole
+    # reason the peak column exists.
+    worst = max(rows, key=lambda r: r[4])
+    for stage, rss, peak, delta, rise in rows:
+        mark = "   <-- the biggest peak" if stage == worst[0] else ""
+        print(f"  {stage:<28} {rss:8.0f} {peak:8.0f} {delta:+9.0f} "
+              f"{rise:+9.0f}{mark}")
+    print(f"\n  peak {rows[-1][2]:.0f} MB; the largest was {worst[0]}, "
+          f"which pushed it up {worst[4]:.0f} MB")
+    held = max(rows, key=lambda r: r[3])
+    if held[0] != worst[0] and held[3] > 0:
+        print(f"  ({held[0]} holds the most afterwards, +{held[3]:.0f} MB "
+              f"resident — a smaller problem than a spike, but a lasting one)")
 
 
 def main() -> None:

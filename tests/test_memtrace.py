@@ -98,23 +98,60 @@ def test_a_stage_that_frees_is_still_counted():
 
 
 # --- the report -------------------------------------------------------------
-def test_the_report_names_the_biggest_riser():
-    """The one line anybody reads. A table of six numbers with no verdict is
-    another thing to interpret on a box that is already in trouble."""
+def _report_for(readings):
+    """The report for a fixed set of (stage, rss, peak) readings."""
     _fresh()
-    NB._mem("start")
-    keep = [dict(a=i, b="y" * 200) for i in range(250000)]
-    NB._mem("the expensive one")
-    NB._mem("something cheap")
+    NB._MEM.extend(readings)
     buf = io.StringIO()
     with redirect_stdout(buf):
         NB._mem_report()
-    out = buf.getvalue()
-    del keep
-    assert "the largest rise was the expensive one" in out, out
-    assert "the biggest single jump" in out, out
+    return buf.getvalue()
+
+
+def test_the_report_ranks_by_the_peak_not_by_what_is_left_resident():
+    """THE BUG THIS TOOL SHIPPED WITH, on the very metric its own docstring
+    calls the wrong one. These are the real readings from the droplet,
+    2026-09-03:
+
+        build_slate      86     148      +60
+        odds             75    1324      -19
+        pipeline         73    1602       -2
+
+    The first version ranked on the RESIDENT delta and announced
+    build_slate at 60 MB. `odds` had just allocated and freed ELEVEN
+    HUNDRED. Ranking on what a stage leaves behind rewards exactly the
+    stage that cleans up after itself and hides exactly the one that
+    spikes — and the spike is what the OOM killer acts on.
+    """
+    out = _report_for([("start", 26, 26), ("build_slate", 86, 148),
+                       ("injuries + resets", 87, 148), ("depth charts", 94, 177),
+                       ("odds", 75, 1324), ("pipeline", 73, 1602),
+                       ("write + journal", 96, 1602)])
+    assert "the largest was odds, which pushed it up 1147 MB" in out, out
+    assert "build_slate" not in out.split("peak 1602")[1].split("(")[0], \
+        "build_slate is still being named as the worst stage"
+    # The stage that HOLDS the most is worth a line, but a secondary one.
+    assert "build_slate holds the most afterwards" in out, out
+
+
+def test_the_report_names_every_stage_and_the_worst_one():
+    """The one line anybody reads. A table of numbers with no verdict is
+    another thing to interpret on a box already in trouble."""
+    out = _report_for([("start", 20, 20), ("the expensive one", 30, 500),
+                       ("something cheap", 31, 505)])
+    assert "the largest was the expensive one" in out, out
+    assert "the biggest peak" in out, out
     for stage in ("start", "the expensive one", "something cheap"):
         assert stage in out, f"{stage} is missing from the table"
+
+
+def test_a_stage_that_frees_everything_is_still_ranked_worst():
+    """The exact shape of `odds`: resident goes DOWN, peak goes up by a
+    gigabyte. If ranking ever returns to the resident delta this stage
+    scores best in the table and the build stays broken."""
+    out = _report_for([("start", 50, 50), ("frees it all", 40, 1200),
+                       ("keeps a little", 60, 1200)])
+    assert "the largest was frees it all" in out, out
 
 
 def test_the_report_is_silent_when_nothing_was_traced():
