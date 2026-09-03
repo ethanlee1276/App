@@ -27,6 +27,7 @@ always comes up. Player props and live scores need no key; the game-level bets
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -1033,8 +1034,68 @@ def _note_board(name: str, ok) -> bool:
 _STEP_S: dict = {}
 
 
+#: Why the LAST cycle's steps failed, if any — cleared at the top of every
+#: refresh_all so it can never describe a cycle that has already recovered.
+_STEP_FAIL: dict = {}
+
+
+@contextlib.contextmanager
+def _isolated(step: str, board: bool = True):
+    """Contain one step's failure to that step.
+
+    Ethan, 2026-09-03: "All pages keep going stale. It causes all the
+    live games and bets to freeze as well. it was stale almost 3 hours
+    till just now."
+
+    `refresh_all` runs thirteen boards in sequence. Each `refresh_*`
+    handles its OWN build failing — a subprocess that dies returns False
+    and the board keeps its last good copy — but nothing caught an
+    exception RAISED around one: a helper reading a corrupt board, a
+    schedule lookup on a feed that has gone away, anything before or
+    after the subprocess. One of those and this function unwinds, so
+    every board after the one that raised never runs at all.
+
+    The refresher above catches it, prints one line, sleeps, and tries
+    again — with the same input, so a fault that lasts three hours keeps
+    the WHOLE site frozen for three hours and then everything comes back
+    at once. That is the shape of the report, and it is also
+    tests/test_cfb_silent_saturday.py's finding one layer up: no rebuild
+    means no picks AND no live games, because CFB has no fast scoreboard
+    and reads its live games out of the model board.
+
+    NFL IS FIRST IN THE ORDER, which is the worst place for this: it is
+    the sport he ranks first, and everything else is downstream of it.
+
+    Ordering is still meaningful — the boards run in SPORT_PRIORITY
+    order and the tail steps genuinely depend on the boards having been
+    written — so this contains a failure rather than reordering around
+    it. A step that fails is recorded as failed and the sweep moves on,
+    which is what every `refresh_*` already does with its own build.
+    """
+    try:
+        yield
+    except Exception as exc:                              # noqa: BLE001
+        note = f"{type(exc).__name__}: {exc}"
+        _STEP_FAIL[step] = note
+        if board:
+            # The same record a failed BUILD leaves, so `--boards` and
+            # the heartbeat cannot tell the two apart by accident: both
+            # mean "this board did not rebuild this cycle, and here is
+            # why".
+            _BOARD_RUNS[step] = {
+                "ok": False,
+                "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "at_epoch": round(time.time()),
+                "note": note,
+            }
+        # Loud regardless of `quiet`: the quiet flag is for the routine
+        # cycle, and this is the failure that used to be invisible.
+        print(f"  ⚠️  {step}: {note} — isolated; the rest of the cycle continues.")
+
+
 def refresh_all(quiet: bool = False) -> None:
     _lap = [time.time()]
+    _STEP_FAIL.clear()
 
     def lap(step: str) -> None:
         _STEP_S[step] = round(time.time() - _lap[0], 1)
@@ -1042,24 +1103,46 @@ def refresh_all(quiet: bool = False) -> None:
 
     # In SPORT_PRIORITY order — the leagues first, as he ranks them,
     # then the tool boards. See the tuple's own comment.
-    _note_board("nfl", refresh_nfl(quiet=quiet)); lap("nfl")
-    _note_board("cfb", refresh_cfb(quiet=quiet)); lap("cfb")
-    _note_board("mlb", refresh_mlb(quiet=quiet)); lap("mlb")
-    _note_board("nba", refresh_nba(quiet=quiet)); lap("nba")
-    _note_board("wnba", refresh_wnba(quiet=quiet)); lap("wnba")
-    _note_board("ufc", refresh_ufc(quiet=quiet)); lap("ufc")
-    _note_board("predmarkets", refresh_predmarkets(quiet=quiet)); lap("predmarkets")
-    _note_board("memes", refresh_memes(quiet=quiet)); lap("memes")
-    _note_board("fantasy", refresh_fantasy(quiet=quiet)); lap("fantasy")
-    refresh_sport_rosters(quiet=quiet); lap("rosters")
-    refresh_injuries(quiet=quiet); lap("injuries")
-    refresh_news(quiet=quiet); lap("news")
-    refresh_standings(quiet=quiet); lap("standings")
-    _arbitrate_parlays(quiet=quiet); lap("parlays")
-    _journal_parlays(quiet=quiet); lap("parlay-journal")
-    _seal_forecasts(quiet=quiet); lap("forecast-seal")
-    _run_futures(quiet=quiet); lap("futures")
-    _publish_feed(quiet=quiet); lap("feed")
+    with _isolated("nfl"): _note_board("nfl", refresh_nfl(quiet=quiet))
+    lap("nfl")
+    with _isolated("cfb"): _note_board("cfb", refresh_cfb(quiet=quiet))
+    lap("cfb")
+    with _isolated("mlb"): _note_board("mlb", refresh_mlb(quiet=quiet))
+    lap("mlb")
+    with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
+    lap("nba")
+    with _isolated("wnba"): _note_board("wnba", refresh_wnba(quiet=quiet))
+    lap("wnba")
+    with _isolated("ufc"): _note_board("ufc", refresh_ufc(quiet=quiet))
+    lap("ufc")
+    with _isolated("predmarkets"):
+        _note_board("predmarkets", refresh_predmarkets(quiet=quiet))
+    lap("predmarkets")
+    with _isolated("memes"): _note_board("memes", refresh_memes(quiet=quiet))
+    lap("memes")
+    with _isolated("fantasy"):
+        _note_board("fantasy", refresh_fantasy(quiet=quiet))
+    lap("fantasy")
+    # The tail steps are not boards, so a failure here is recorded
+    # against the step rather than against a league nobody would find.
+    with _isolated("rosters", board=False): refresh_sport_rosters(quiet=quiet)
+    lap("rosters")
+    with _isolated("injuries", board=False): refresh_injuries(quiet=quiet)
+    lap("injuries")
+    with _isolated("news", board=False): refresh_news(quiet=quiet)
+    lap("news")
+    with _isolated("standings", board=False): refresh_standings(quiet=quiet)
+    lap("standings")
+    with _isolated("parlays", board=False): _arbitrate_parlays(quiet=quiet)
+    lap("parlays")
+    with _isolated("parlay-journal", board=False): _journal_parlays(quiet=quiet)
+    lap("parlay-journal")
+    with _isolated("forecast-seal", board=False): _seal_forecasts(quiet=quiet)
+    lap("forecast-seal")
+    with _isolated("futures", board=False): _run_futures(quiet=quiet)
+    lap("futures")
+    with _isolated("feed", board=False): _publish_feed(quiet=quiet)
+    lap("feed")
 
 
 def _publish_feed(quiet: bool = False) -> None:
@@ -2347,6 +2430,12 @@ def _write_heartbeat(interval: int) -> None:
             # answer to "why are all the pages stale 45 minutes" as a
             # paste instead of a profiling session. See _STEP_S.
             "step_s": dict(_STEP_S),
+            # WHICH STEP RAISED, and what it said. Empty on a healthy
+            # cycle. Before this existed a raise took every later board
+            # down with it and left nothing behind but one line in a log
+            # nobody was tailing — "why is the whole site three hours
+            # old" had no answer on the box.
+            "step_fail": dict(_STEP_FAIL),
             # Which code is SERVING and whether it updates itself — read
             # by --boards, so "did my push land" stops being a journal
             # question asked over SSH from a phone.

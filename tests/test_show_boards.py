@@ -310,7 +310,18 @@ def test_every_cycle_step_is_clocked_and_the_bill_is_printed():
     body = src[at:src.index("\ndef ", at + 10)]
     # Every _note_board'ed build laps, and so does every tail chore —
     # counted, so a new step added without a lap goes red here.
-    assert body.count('; lap("') == body.count("_note_board(") + 9, body
+    #
+    # COUNTED ON THE CALL, NOT ON THE SEMICOLON. This read `'; lap("'`,
+    # which also pinned the one-line `step(); lap("x")` layout. On
+    # 2026-09-03 each step gained a `with _isolated(...)` wrapper — one
+    # bad feed was unwinding refresh_all and taking every later board
+    # with it — so the laps moved onto their own lines and this went red
+    # while every step was still being clocked. The guarantee is that
+    # each step laps; the punctuation between them is not the guarantee.
+    assert body.count('lap("') == body.count("_note_board(") + 9, body
+    # And each one is isolated, so a step that raises cannot cost the
+    # rest of the cycle — the same count, from the other end.
+    assert body.count("_isolated(") == body.count('lap("'), body
     for chore in ("maintenance", "autosettle", "doctor"):
         assert f'_STEP_S["{chore}"]' in src, f"{chore} is not clocked"
     assert '"step_s": dict(_STEP_S),' in src, "the heartbeat lost the bill"
