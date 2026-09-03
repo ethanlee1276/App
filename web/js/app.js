@@ -1153,6 +1153,23 @@ const _boardTags = {};
    always trying to say. */
 let _boardFor = null;
 
+/* Would swapping `next` in for `held` take the paid product off the page?
+
+   The redacted board says so about itself: `gate.redact` stamps every
+   stripped copy with `locked_reason`, and empties the paid keys rather
+   than dropping them, so "is this the public copy?" is one field and not
+   a guess about which keys ought to be there.
+
+   ASYMMETRIC ON PURPOSE. A locked board replacing a locked board is
+   ordinary (a signed-out reader polling all day). An UNLOCKED board
+   replacing anything is ordinary. Only locked-over-unlocked is the
+   downgrade, and only on a path that reached for the static file because
+   the API would not answer — an API that returns a locked board is
+   telling us the subscription lapsed, which is the truth and renders. */
+function locksAwayWhatWeHold(next, held) {
+  return !!(next && next.locked_reason) && !!(held && !held.locked_reason);
+}
+
 async function load(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
@@ -1225,20 +1242,66 @@ async function load(quiet = false) {
     // The fallback file can be missing too (a sport that has never been
     // built). An honest empty slate beats an unhandled rejection that
     // strands the old sport's page on screen.
+    //
+    /* BUT NEITHER EXIT MAY TAKE THE PRODUCT OFF THE SCREEN.
+       Ethan, 2026-09-03: "ill be staring at the live page at the open
+       bets and ill scroll and shit then the open bets will just
+       dissapear."
+
+       `live_picks` is a PAID key, so `meta.fallback` — the static file
+       Caddy serves off disk — is the REDACTED copy of this board: open
+       bets, recommendations and the likelihood board all stripped out.
+       It is the honest answer for a signed-out reader and for a static
+       host with no API. It is the wrong answer for a subscriber who has
+       the real board on screen already, and every route into this
+       `catch` hands it to them anyway:
+
+         * a thrown fetch — offline, a phone changing cell, abort, DNS,
+           a server that is restarting and refusing connections;
+         * any non-ok status, which the branch above throws "api" on: a
+           502 from the proxy mid-deploy, a 503 while the box is busy.
+
+       Thirty seconds later the next poll succeeds and the board comes
+       back, which is why it reads as a flicker rather than a fault.
+
+       NOT the "unasked 304" above it, though that also throws into
+       here. It is guarded on `holding` being false, so when it fires we
+       are not holding this board at all and there is nothing on screen
+       to take away — checked by running it, after the first draft of
+       this comment claimed otherwise.
+
+       So a failed fetch may not downgrade a board we are already
+       holding FOR THIS SPORT. `_boardFor === meta.api` is the same test
+       the revalidation guard uses, and it is load-bearing here for the
+       same reason: after a league switch the slate in hand is the one
+       being left, and leaving it up under the new league's name is the
+       bug tests/test_board_identity.py exists for. Nothing is faked —
+       we keep the board we already fetched, `state.builtAt` is left
+       alone, and the freshness chip goes on ageing it honestly. */
     try {
       const res = await fetch(`${meta.fallback}?_=${Date.now()}`,
                               { cache: "no-store" });
       if (!res.ok) throw new Error("fallback");
-      stampFrom(res);
-      state.data = normalizeSlate(await res.json());
-      _boardFor = meta.api;
+      const slate = normalizeSlate(await res.json());
+      if (!(_boardFor === meta.api && locksAwayWhatWeHold(slate, state.data))) {
+        stampFrom(res);
+        state.data = slate;
+        _boardFor = meta.api;
+      }
     } catch (e2) {
-      state.builtAt = null;
-      state.data = normalizeSlate({ date: "", status: "not built" });
-      // An empty slate still BELONGS to this sport. Leaving _boardFor
-      // pointing at the previous league would make the next visit here
-      // revalidate against a slate that is not this board's.
-      _boardFor = meta.api;
+      // Both copies unreachable. Holding this sport's board, the truth
+      // is "we could not ask", and "not built" is a claim about the
+      // MODEL — the exact substitution tests/test_wiredown.py was
+      // written about. Holding nothing, or holding another league's
+      // board, the empty slate is the honest thing on screen.
+      if (!(_boardFor === meta.api && state.data)) {
+        state.builtAt = null;
+        state.data = normalizeSlate({ date: "", status: "not built" });
+        // An empty slate still BELONGS to this sport. Leaving _boardFor
+        // pointing at the previous league would make the next visit here
+        // revalidate against a slate that is not this board's.
+        _boardFor = meta.api;
+      }
     }
   }
   renderAll();
