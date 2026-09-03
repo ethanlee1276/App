@@ -820,7 +820,8 @@ def test_a_two_way_price_makes_no_shopping_claim():
 def _td_candidates(hold=None, share=0.11, odds=150):
     """Two identical mid-priced scorers in one game."""
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
-             spread=-7.0, total=52.0)
+             spread=-7.0, total=52.0,
+             total_measured=True, spread_measured=True)
     opp = Team(abbr="BUF", name="Bills",
                defense=DefenseProfile(team="BUF", vs_rb_rush=1.2))
     out = []
@@ -925,8 +926,10 @@ def test_the_watchlist_alone_would_have_missed_the_hold():
 # --- the pipeline ---------------------------------------------------------
 def test_the_pipeline_keys_a_game_the_same_way_from_either_side():
     from engine.pipeline import _game_key
-    a = Game(home="KC", away="BUF", weather=Weather(dome=True), spread=-7.0, total=52.0)
-    b = Game(home="BUF", away="KC", weather=Weather(dome=True), spread=+7.0, total=52.0)
+    a = Game(home="KC", away="BUF", weather=Weather(dome=True), spread=-7.0,
+         total=52.0, total_measured=True, spread_measured=True)
+    b = Game(home="BUF", away="KC", weather=Weather(dome=True), spread=+7.0,
+         total=52.0, total_measured=True, spread_measured=True)
     assert _game_key(a) == _game_key(b)
     assert _game_key(None) is None
 
@@ -962,7 +965,8 @@ def test_the_pipeline_measures_the_hold_off_the_board_it_is_pricing():
     6% the pricing path had been assuming."""
     from engine.pipeline import _td_board_fairs, _game_key
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
-             spread=-7.0, total=52.0)
+             spread=-7.0, total=52.0,
+             total_measured=True, spread_measured=True)
     fairs = _td_board_fairs(_slate_candidates(g, {"dk": DK}), slate=None)
     assert fairs
     q = fairs[(_game_key(g), "P0")]
@@ -986,7 +990,8 @@ def test_shopping_across_books_must_not_erase_the_margin():
     makes the book look fairer and the edge look bigger."""
     from engine.pipeline import _td_board_fairs, _game_key
     g = Game(home="KC", away="BUF", weather=Weather(dome=True),
-             spread=-7.0, total=52.0)
+             spread=-7.0, total=52.0,
+             total_measured=True, spread_measured=True)
     one = _td_board_fairs(_slate_candidates(g, {"dk": DK}), slate=None)
     two = _td_board_fairs(_slate_candidates(g, {"dk": DK, "fd": FD}), slate=None)
     key = (_game_key(g), "P0")
@@ -1044,10 +1049,18 @@ def test_a_game_with_no_total_is_left_unpriced():
 
 def test_a_thin_game_on_a_real_board_falls_back_rather_than_guessing():
     from engine.pipeline import _td_board_fairs, _game_key
+    # POSTED, SAID OUT LOUD. These fixtures always meant "a game whose
+    # total a book has put up" — the sibling test above uses total=0.0
+    # for the other case. `Game.total` defaults to 44.0, so until
+    # 2026-09-03 there was no way to write the difference down and the
+    # thin game's 44.0 was indistinguishable from a game with no total
+    # at all. It is now.
     thick = Game(home="KC", away="BUF", weather=Weather(dome=True),
-                 spread=-7.0, total=52.0)
+                 spread=-7.0, total=52.0,
+                 total_measured=True, spread_measured=True)
     thin = Game(home="SF", away="LA", weather=Weather(dome=False),
-                spread=-3.0, total=44.0)
+                spread=-3.0, total=44.0,
+                total_measured=True, spread_measured=True)
     cands = _slate_candidates(thick, {"dk": DK})
     cands += _slate_candidates(thin, {"dk": [200, 200, 200]})
     fairs = _td_board_fairs(cands, slate=None)

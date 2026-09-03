@@ -308,7 +308,14 @@ def _td_board_fairs(candidates: list, slate, census: dict | None = None) -> dict
     for k, books in by_game.items():
         note["games"] += 1
         g = games.get(k)
-        if g is None or not getattr(g, "total", None):
+        # MEASURED, NOT MERELY NON-ZERO. This read `not g.total`, and
+        # `Game.total` defaults to 44.0 — truthy — so this branch could
+        # never fire and the census bucket it feeds always read zero.
+        # Every game without a posted total was priced here off an
+        # implied 22.0 points a side, which is what `team_implied_total`
+        # returns from the 44.0/0.0 defaults, and the touchdown board
+        # could not tell that from a real 44.
+        if g is None or not getattr(g, "total_is_posted", False):
             note["no_line"] += 1
             continue
         try:
@@ -597,15 +604,27 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             # THE SAME PRICE GATE, because the line itself is derived from
             # the total and the spread: without a posted total there is no
             # number to split.
-            ph = project_team_points("nfl", g.home_off, g.away_def)
-            pa = project_team_points("nfl", g.away_off, g.home_def)
-            hl, al = _half((g.total - g.spread) / 2), _half((g.total + g.spread) / 2)
-            out.append(_finish_bet(price_team_total("nfl", g.home, g.home, g.away, ph, hl,
-                                                    units="points"), g, config))
-            out.append(_finish_bet(price_team_total("nfl", g.away, g.home, g.away, pa, al,
-                                                    units="points"), g, config))
+            #
+            # AND THE SPREAD HAS TO BE POSTED TOO, which this did not
+            # check. The split is `(total -+ spread) / 2`, so an unposted
+            # spread means `Game.spread`'s 0.0 default and both teams get
+            # exactly half the total — a symmetric line on a game where
+            # one side may be a touchdown favourite, published as a bet.
+            # The old gate read the TOTAL's two prices only; its own
+            # comment says "the total and the spread" and it tested one.
+            if g.spread_is_posted:
+                ph = project_team_points("nfl", g.home_off, g.away_def)
+                pa = project_team_points("nfl", g.away_off, g.home_def)
+                hl, al = _half((g.total - g.spread) / 2), _half((g.total + g.spread) / 2)
+                out.append(_finish_bet(price_team_total("nfl", g.home, g.home, g.away, ph, hl,
+                                                        units="points"), g, config))
+                out.append(_finish_bet(price_team_total("nfl", g.away, g.home, g.away, pa, al,
+                                                        units="points"), g, config))
         if has_rating:
-            if g.spread and g.spread_home_odds and g.spread_away_odds:
+            # MEASURED, not truthy: `g.spread` of 0.0 is a pick'em, which
+            # is an ordinary NFL line and was being skipped here along
+            # with the games that have no spread at all.
+            if g.spread_is_posted and g.spread_home_odds and g.spread_away_odds:
                 margin = game_margin("nfl", g.home_rating, g.away_rating)
                 sctx = [f"Projected margin {margin:+.1f} pts (home)"]
                 spread = price_spread("nfl", g.home, g.away, margin, g.spread,

@@ -223,6 +223,53 @@ class Game:
     kickoff: str = ""            # kickoff time (nflverse "HH:MM" ET, or ISO)
     spread: float = 0.0          # home spread; negative = home favored
     total: float = 44.0
+    #: WHETHER THE TWO NUMBERS ABOVE ARE FACTS OR PLACEHOLDERS, and this
+    #: is the `Weather.measured` lesson on the game lines.
+    #:
+    #: nflverse fills `total_line` and `spread_line` only AFTER a game is
+    #: played, exactly as it does temp and wind — so every game on a
+    #: FORWARD board arrives without them and takes the defaults above.
+    #: 44.0 is a plausible NFL total and 0.0 is a legitimate pick'em, so
+    #: neither is a sentinel: nothing downstream could tell a real 44
+    #: from a missing one.
+    #:
+    #: Two guards were written to ask exactly that question and could not:
+    #:
+    #:   pipeline._td_board   `if not g.total` — 44.0 is truthy, so the
+    #:                        "no line" branch never fired and the
+    #:                        touchdown board priced every unposted game
+    #:                        off an implied 22.0 points a side
+    #:   matchup             `if coef and game.total` — same, and with
+    #:                        TOTAL_BASELINE at 44.6 the fabricated 44.0
+    #:                        is not even neutral: it applied a silent
+    #:                        +0.6% to every rushing projection, under
+    #:                        the 2% threshold that would have printed a
+    #:                        reason saying so
+    #:
+    #: Ethan, 2026-09-03: "make sure we are using real numbers and lines
+    #: for the sports books. Getting the wrong numbers can fuck our picks
+    #: bad."
+    #:
+    #: The defaults stay, because the arithmetic paths need a number and
+    #: a mid-range total is the right prior. Everything that treats the
+    #: number as the MARKET's opinion checks this first.
+    total_measured: bool = False
+    spread_measured: bool = False
+
+    #: THE ONE QUESTION, asked in one place. A number is the market's if
+    #: the source said so OR if a book's two prices are sitting on it —
+    #: attached odds ARE the evidence, and requiring the flag on top of
+    #: them would refuse every path that builds a priced game directly
+    #: (the backtests and half the fixtures do exactly that).
+    @property
+    def total_is_posted(self) -> bool:
+        return bool(self.total_measured
+                    or (self.total_over_odds and self.total_under_odds))
+
+    @property
+    def spread_is_posted(self) -> bool:
+        return bool(self.spread_measured
+                    or (self.spread_home_odds and self.spread_away_odds))
     roof: str = ""               # dome | closed | outdoors | open (raw nflverse)
     surface: str = "grass"       # grass | fieldturf | ... (drives stadium color)
     live: Optional[LiveStatus] = None

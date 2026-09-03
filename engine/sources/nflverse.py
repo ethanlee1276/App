@@ -77,6 +77,25 @@ def _f(row: dict, *keys, default=0.0) -> float:
     return default
 
 
+def _has(row: dict, *keys) -> bool:
+    """Did the row actually carry one of these fields?
+
+    The same emptiness test `_f` uses, asked as a question instead of
+    swallowed into a default — because for a spread and a total the
+    default is indistinguishable from a real value.
+    """
+    for k in keys:
+        v = row.get(k)
+        if v in (None, "", "NA"):
+            continue
+        try:
+            float(v)
+            return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def _s(row: dict, *keys, default="") -> str:
     for k in keys:
         v = row.get(k)
@@ -139,6 +158,13 @@ def build_games(season: int, week: int) -> list[Game]:
             kickoff=_s(r, "gametime"),
             spread=-_f(r, "spread_line"),
             total=_f(r, "total_line", default=44.0),
+            # PRESENT, NOT MERELY NON-ZERO. nflverse fills these after
+            # the game is played (same as temp and wind), so a forward
+            # board has neither and takes the defaults above — and 44.0
+            # and 0.0 are both values a real market can hold. See
+            # Game.total_measured.
+            total_measured=_has(r, "total_line"),
+            spread_measured=_has(r, "spread_line"),
             roof=_s(r, "roof"),
             surface=_s(r, "surface", default="grass"),
             # Rest days come precomputed in the feed, which is better than

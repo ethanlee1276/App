@@ -103,7 +103,16 @@ def test_the_board_skips_a_total_no_book_posted():
     src = inspect.getsource(pipeline._game_bets)
     assert "priced_total = bool(g.total_over_odds and g.total_under_odds)" in src
     assert "if has_rating and priced_total:" in src
-    assert "g.spread and g.spread_home_odds and g.spread_away_odds" in src
+    # RE-ANCHORED 2026-09-03, same guarantee, better spelling. This read
+    # `g.spread and g.spread_home_odds and g.spread_away_odds`, and the
+    # leading `g.spread` dropped every PICK'EM along with every missing
+    # spread — 0.0 is an ordinary NFL line, not an absence. It also could
+    # not gate the team totals, whose line is split by the spread: the
+    # docstring above says "the total and the spread" and the code tested
+    # the total alone. Both now ask `Game.spread_is_posted`.
+    assert "g.spread_is_posted and g.spread_home_odds and g.spread_away_odds" in src
+    assert "if g.spread_is_posted:" in src, \
+        "team totals are no longer gated on the spread they are split by"
 
 
 def test_a_slate_with_no_posted_lines_produces_no_game_bets():

@@ -215,7 +215,11 @@ def evaluate_matchup(prop: Prop, defense: DefenseProfile, game: Game,
     # 2.5 is not a finding at that width, and a counter-intuitive sign is
     # exactly where a marginal number should be trusted least.
     coef = TOTAL_COEF.get(prop.market, 0.0)
-    if coef and game.total:
+    # MEASURED, NOT TRUTHY. `Game.total` defaults to 44.0 and
+    # TOTAL_BASELINE is 44.6, so an unposted game did not fall through
+    # neutral — it applied a silent x1.006 to every rushing projection,
+    # under the 2% bar that would have printed a reason admitting it.
+    if coef and getattr(game, "total_is_posted", False):
         pace = clamp(1.0 + coef * (game.total - TOTAL_BASELINE), *TOTAL_CLAMP)
         mult *= pace
         if abs(pace - 1.0) >= 0.02:

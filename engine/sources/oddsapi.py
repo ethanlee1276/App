@@ -1320,9 +1320,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             tot = parse_event_totals(payload)
             if tot:
                 game.total, game.total_over_odds, game.total_under_odds = tot
+                game.total_measured = True     # a book posted it
             sp = parse_event_spreads(payload, cfg["teams"], home, away)
             if sp:
                 game.spread, game.spread_home_odds, game.spread_away_odds = sp
+                game.spread_measured = True    # a book posted it
             stot = parse_event_totals(payload, only_books=SHARP_BOOKS)
             if stot:
                 game.sharp_total, game.sharp_total_over_odds, \
