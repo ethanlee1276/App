@@ -117,11 +117,10 @@ def evaluate_play(play: dict) -> dict:
     }
 
     # The other two self-tuning gates, in parity with every engine.
-    from .model import BET_GROUP_OF_FIVE, is_group_of_five
+    from .model import BET_GROUP_OF_FIVE, is_group_of_five, NOT_A_POWER_GAME
     if not BET_GROUP_OF_FIVE and is_group_of_five(game):
         return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
-                "why": ("Group of Five game — priced and shown, not bet "
-                        "(Ethan, 2026-09-02: \"No\")")}
+                "why": NOT_A_POWER_GAME}
     from ..calibrate import is_reliable
     from ..losspatterns import veto as lp_veto
     if not is_reliable("cfb", market):

@@ -1052,13 +1052,12 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                 # all. The pick is still built and explained — it lands
                 # on the watch with the rest — but it never grades as a
                 # bet in a game where neither side is a power program.
-                from .model import BET_GROUP_OF_FIVE, is_group_of_five
+                from .model import (BET_GROUP_OF_FIVE, is_group_of_five,
+                                    NOT_A_POWER_GAME)
                 if not BET_GROUP_OF_FIVE and is_group_of_five(g):
                     pick.grade = "Pass"
                     pick.stake_units = 0.0
-                    pick.caveats = list(pick.caveats) + [
-                        "Group of Five game — priced and shown, not bet "
-                        "(Ethan, 2026-09-02: \"No\")"]
+                    pick.caveats = list(pick.caveats) + [NOT_A_POWER_GAME]
                     census["group_of_five"] = census.get("group_of_five", 0) + 1
                 picks.append(pick)
     chosen = select(picks, per_key_cap=per_game,

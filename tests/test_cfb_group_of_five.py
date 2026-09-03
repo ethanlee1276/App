@@ -35,16 +35,17 @@ def test_the_rule_is_recorded_as_off():
 def test_a_group_of_five_game_is_priced_and_not_bet():
     out = CP.evaluate_play(_play("Sun Belt", "MAC"))
     assert out["kind"] == "pass" and out["grade_label"] == "Pass"
-    assert "Group of Five" in out["why"] and "No" in out["why"]
+    assert out["why"] == M.NOT_A_POWER_GAME
+    assert "No" in out["why"], "the decision stays attributed on the card"
     # the number is still on the card
     assert out["edge_raw"] > 0 and out["p_market"] > 0
 
 
 def test_a_power_opponent_lifts_a_game_out_of_the_rule():
     out = CP.evaluate_play(_play("SEC", "Sun Belt"))
-    assert "Group of Five" not in (out.get("why") or "")
+    assert out.get("why") != M.NOT_A_POWER_GAME
     out = CP.evaluate_play(_play("Mountain West", "Big 12"))
-    assert "Group of Five" not in (out.get("why") or "")
+    assert out.get("why") != M.NOT_A_POWER_GAME
 
 
 def test_unknown_conferences_do_not_trigger_the_rule():
@@ -52,6 +53,56 @@ def test_unknown_conferences_do_not_trigger_the_rule():
     assert M.is_group_of_five({"home_conference": "MAC", "away_conference": "Sun Belt"}) is True
     assert M.is_group_of_five({"home_conference": "FBS Independents", "away_conference": "American"}) is True
     assert M.is_group_of_five({"home_conference": "ACC", "away_conference": "American"}) is False
+
+
+def test_the_rule_reaches_further_than_its_name(  ):
+    """Seven of the eleven conferences the feed can name fail this test,
+    and two of them are not Group of Five by any ordinary reading.
+
+    The Pac-12 is a judgement about what the league is after the 2024
+    realignment; FBS Independents is Notre Dame's conference, and
+    CFB_READINESS.md's Phase 8 says so on purpose. Both are pinned here
+    so that changing either is a deliberate act on a betting rule rather
+    than a tidy-up of a set literal.
+    """
+    from engine.sources.cfbdata import CONFERENCE_IDS, conference_name
+
+    named = {conference_name(v) for v in CONFERENCE_IDS.values()}
+    refused = sorted(named - M.POWER_CONFERENCES)
+    assert M.POWER_CONFERENCES == {"SEC", "Big Ten", "Big 12", "ACC"}
+    assert refused == ["American", "Conference USA", "FBS Independents",
+                       "MAC", "Mountain West", "Pac-12", "Sun Belt"], refused
+    # The two a reader would not predict from the rule's name.
+    for conf in ("Pac-12", "FBS Independents"):
+        assert M.is_group_of_five({"home_conference": conf,
+                                   "away_conference": "MAC"}) is True, conf
+        assert M.is_group_of_five({"home_conference": conf,
+                                   "away_conference": "SEC"}) is False, conf
+
+
+def test_the_sentence_on_the_card_says_what_was_tested():
+    """"Group of Five game" over Notre Dame at Navy is a sentence a reader
+    would call wrong. Now that the refusal rides on the card rather than
+    dying in an unrendered pass list, it names the four instead."""
+    why = M.NOT_A_POWER_GAME
+    assert "power conference" in why
+    for conf in sorted(M.POWER_CONFERENCES):
+        assert conf in why, conf
+    assert "Group of Five" not in why
+
+
+def test_both_boards_show_the_same_sentence():
+    """One copy, two producers. `pipeline.evaluate_play` prices the game
+    markets and `tds` the touchdown board; a sentence written out twice
+    is this codebase's most-repeated bug."""
+    import inspect
+    from engine.cfb import tds
+
+    assert "NOT_A_POWER_GAME" in inspect.getsource(CP.evaluate_play)
+    assert "NOT_A_POWER_GAME" in inspect.getsource(tds.build_cfb_td_longshots)
+    for src in (inspect.getsource(CP), inspect.getsource(tds)):
+        assert "Group of Five game — priced" not in src, \
+            "a second copy of the sentence has come back"
 
 
 def test_the_touchdown_board_follows_the_same_rule():

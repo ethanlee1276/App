@@ -372,8 +372,8 @@ def test_a_group_of_five_game_is_priced_and_shown_never_a_play():
         assert r["recommended"] is False, r["market"]
         assert r["grade"] == "Pass", r["market"]
         assert r["stake_units"] == 0.0, r["market"]
-        assert any(x.startswith("NOT A PLAY — Group of Five")
-                   for x in r["reasons"]), \
+        from engine.cfb.model import NOT_A_POWER_GAME
+        assert f"NOT A PLAY — {NOT_A_POWER_GAME}" in r["reasons"], \
             f"{r['market']} does not say why it is not a play"
         assert r["odds"] and r["win_prob"] and r["fair_prob"], \
             f"{r['market']} arrived without the number it was promised"

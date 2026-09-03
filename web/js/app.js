@@ -7810,7 +7810,7 @@ function renderGamePage() {
       ${plural(bets.length - betsShown.length, "priced game market",
                "priced game markets")} in this game
       ${bets.length - betsShown.length === 1 ? "was" : "were"} turned down
-      (Group of Five, edge under the tier’s bar, or graded a Pass). The
+      (no power-conference side, edge under the tier’s bar, or a Pass grade). The
       number and the price are on ${bets.length - betsShown.length === 1
         ? "it" : "them"}; the money is not.
       <button class="btn-quiet" id="gp-showbets" type="button"
