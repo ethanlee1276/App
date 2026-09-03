@@ -411,6 +411,73 @@ def test_the_boards_screen_reads_the_load_average_first():
         "the flag keys off sustained load per core, not a one-second spike"
 
 
+def test_the_load_flag_no_longer_names_a_culprit_it_cannot_see():
+    """Ethan, 2026-09-03: "The oversubscription warning is misattributed.
+    It says something outside the loop is eating the core, but the culprit
+    is the loop's own NFL build."
+
+    Three earlier hunts DID end outside the loop, and the screen turned
+    that history into an assertion it makes on its own authority. A full
+    cycle is thirteen builds; during one, high load is the loop working.
+    `--boards` is its own process and cannot tell from inside which it
+    is, so it must offer both and hand over the command that settles it."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def show_boards")
+    body = src[at:src.index("\ndef ", at + 10)]
+    flag = body[body.index("OVERSUBSCRIBED"):][:220]
+    assert "outside the loop is" not in flag, \
+        f"the screen still asserts a cause it cannot observe: {flag!r}"
+    assert "ps aux" in flag, "it no longer says how to settle it"
+
+
+def test_the_screen_reports_memory_against_the_units_own_cap():
+    """Load recovers on its own; memory does not. 2026-09-02 was an OOM
+    crash loop, and the number that predicts it — one child holding most
+    of the unit's cap — was the one thing this screen could not say."""
+    import io as _io
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def _memory_headroom"); j = src.index("\ndef ", i + 10)
+    ns = {}
+    exec(src[i:j], ns)                                    # noqa: S102
+
+    def _open(path, *a, **k):
+        if path == "/sys/fs/cgroup/memory.max":
+            return _io.StringIO("1600000000")             # the droplet's cap
+        if path == "/proc/4242/status":
+            return _io.StringIO("Name:\tpython3\nVmRSS:\t1318359 kB\n")
+        if path.endswith("/status"):
+            return _io.StringIO("Name:\tsh\nVmRSS:\t2048 kB\n")
+        raise OSError
+    ns["open"] = _open
+    ns["os"] = type("O", (), {"listdir": staticmethod(lambda p: ["4242", "9"])})()
+    out = ns["_memory_headroom"]()
+    assert "1350 MB" in out and "1600 MB" in out and "84%" in out, out
+    assert "OOM" in out, "84% of the cap passes without a word of warning"
+
+
+def test_no_cap_means_no_line_rather_than_an_invented_percentage():
+    """A laptop has no cgroup ceiling. A share of an unlimited budget is
+    not a number, and printing one would be the fabrication this repo
+    refuses everywhere else."""
+    import io as _io
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    i = src.index("def _memory_headroom"); j = src.index("\ndef ", i + 10)
+    ns = {}
+    exec(src[i:j], ns)                                    # noqa: S102
+    ns["open"] = lambda p, *a, **k: _io.StringIO("max")
+    assert ns["_memory_headroom"]() == ""
+
+
+def test_a_broken_memory_probe_cannot_take_the_screen_down():
+    """It is a diagnostic. The one thing it must never be is the fault."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    at = src.index("def show_boards")
+    body = src[at:src.index("\ndef ", at + 10)]
+    call = body[body.index("_memory_headroom()"):][:200]
+    assert "except Exception" in call, \
+        "the memory probe is not wrapped where it is called"
+
+
 def test_slow_moving_boards_get_a_floor_between_rebuilds():
     """The cycle bill, first cycle after the rogue fitters died
     (2026-09-01): predmarkets 72s and fantasy 13s of 524s — a sixth of

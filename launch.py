@@ -3843,6 +3843,65 @@ def show_desk_probe() -> None:
             "events", nested=True)
 
 
+def _memory_headroom() -> str:
+    """The hungriest process on this box against the unit's own cap.
+
+    Reads the cgroup the process is actually in — v2 `memory.max` first,
+    then v1 `memory.limit_in_bytes` — so the ceiling quoted is the one
+    systemd will kill against, not the machine's total RAM. Returns ""
+    when there is no cap to measure against (a laptop, a container with
+    none), because a percentage of an unlimited budget means nothing.
+    """
+    def _cap() -> int:
+        for path in ("/sys/fs/cgroup/memory.max",
+                     "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+            try:
+                raw = open(path).read().strip()
+            except OSError:
+                continue
+            if raw in ("max", ""):
+                return 0
+            try:
+                v = int(raw)
+            except ValueError:
+                continue
+            # v1 writes a sentinel near 2**63 for "no limit"; anything
+            # past a terabyte is that, not a real cap.
+            return 0 if v <= 0 or v > (1 << 40) else v
+        return 0
+
+    cap = _cap()
+    if not cap:
+        return ""
+    biggest, name = 0, ""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/status") as fh:
+                rss, nm = 0, ""
+                for line in fh:
+                    if line.startswith("Name:"):
+                        nm = line.split(":", 1)[1].strip()
+                    elif line.startswith("VmRSS:"):
+                        rss = int(line.split()[1]) * 1024
+                        break
+        except (OSError, ValueError, IndexError):
+            continue
+        if rss > biggest:
+            biggest, name = rss, nm
+    if not biggest:
+        return ""
+    mb, cap_mb = biggest / 1e6, cap / 1e6
+    share = biggest / cap
+    flag = ""
+    if share >= 0.75:
+        flag = ("   <-- one process is most of the unit's memory; this is "
+                "how the 2026-09-02 OOM loop started")
+    return (f"  memory: largest process {name or '?'} at {mb:.0f} MB of the "
+            f"unit's {cap_mb:.0f} MB cap ({share:.0%}){flag}")
+
+
 def show_boards() -> None:
     """Every slate board: how old, how big, and what it last said.
 
@@ -3939,13 +3998,38 @@ def show_boards() -> None:
     try:
         l1, l5, l15 = os.getloadavg()
         cores = os.cpu_count() or 1
-        flag = ("   <-- OVERSUBSCRIBED: something outside the loop is "
-                "eating the core — ps aux --sort=-%cpu names it"
+        # IT NO LONGER NAMES A CULPRIT IT CANNOT SEE. This read "something
+        # OUTSIDE the loop is eating the core", which was the finding of
+        # three staleness hunts and became a fourth assertion the screen
+        # made on its own authority. Ethan, 2026-09-03: "The
+        # oversubscription warning is misattributed. It says something
+        # outside the loop is eating the core, but the culprit is the
+        # loop's own NFL build, running with odds, injuries and depth
+        # flags." A full cycle is thirteen builds; during one, high load
+        # is the loop WORKING. This command is its own process and cannot
+        # tell from in here which it is, so it names both and hands over
+        # the one command that settles it.
+        flag = ("   <-- OVERSUBSCRIBED: a build in this loop, or something "
+                "outside it — ps aux --sort=-%cpu names which"
                 if l5 > cores * 1.5 else "")
         print(f"\n  load average: {l1:.2f} {l5:.2f} {l15:.2f} on "
               f"{cores} core{'s' if cores != 1 else ''}{flag}")
     except (AttributeError, OSError):
         pass
+
+    # THE NUMBER THAT ACTUALLY PREDICTS THE OUTAGE, beside the one that
+    # does not. Load recovers on its own; memory does not — 2026-09-02 was
+    # an OOM crash loop, and Ethan's read of this cycle was "that single
+    # child is holding 1.35 GB resident, which is 84% of the unit's
+    # 1600 MB cap on its own. That is the memory pressure from earlier, in
+    # one number." It was nowhere on this screen, so the thing that takes
+    # the site down was the one thing it could not report.
+    try:
+        note = _memory_headroom()
+        if note:
+            print(note)
+    except Exception:                                     # noqa: BLE001
+        pass                       # a diagnostic must never be the fault
 
     # WHAT THE LOOP THINKS, beside what the files say. The two
     # disagreeing is itself the finding: a refresh that reports ok while
