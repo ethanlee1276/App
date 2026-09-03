@@ -71,6 +71,7 @@ import datetime as _dt
 import json
 import os
 import sys
+from pathlib import Path
 
 from .betting import MAX_CREDIBLE_EDGE, REFUSAL_REASONS
 from .quality import GRADE_BANDS, MARKET_TIER, TIER_MIN_EDGE
@@ -475,8 +476,56 @@ def main(argv=None) -> int:
     if not os.path.exists(path):
         print(f"no board at {path}", file=sys.stderr)
         return 2
+    # THE PRIVATE COPY, AND THIS TOOL IS THE FIFTH TO LEARN IT.
+    #
+    # `gate.publish` writes the full board to data/built/ and a REDACTED
+    # copy to web/data/ — `recommendations`, `most_likely`,
+    # `board_shelves` and `game_bets` are all paid keys and all stripped.
+    # This linted the public path, so with the paywall on it read a board
+    # with no rows in it, found nothing wrong, and said so.
+    #
+    # A lint that reports CLEAN because it was handed an empty board is
+    # worse than no lint: it is the one tool whose whole job is to say a
+    # board is wrong, and it was answering about a different file. Every
+    # sport in FILES — nfl, cfb, mlb — was affected, which is exactly the
+    # question Ethan asked (2026-09-03: "make sure that redaction doesnt
+    # affect any other sports too").
+    #
+    # ONLY FOR A PATH ACTUALLY IN A web/data TREE, and that scoping is
+    # not fussiness. `board_source` resolves by FILE NAME, not by
+    # location: hand it /tmp/cfbprobe.json and it returns
+    # data/built/cfb.json, because the name matches. So an unscoped
+    # resolve would silently lint a different file than the one asked
+    # for — worst of all for `--file`, which exists precisely to point
+    # this at a board somewhere else. `show_boards` learned the same
+    # thing the same way (launch.py, 2026-09-03).
+    note = ""
+    parts = Path(path).resolve().parts
+    in_web_data = len(parts) >= 2 and parts[-3:-1] == ("web", "data")
+    if in_web_data:
+        try:
+            from . import gate
+            src = gate.board_source(Path(path))
+            if str(src) != str(path):
+                note = " (via gate.board_source, not the stripped public copy)"
+                path = str(src)
+        except Exception:                                    # noqa: BLE001
+            pass      # a gate hiccup must not stop the lint reading SOMETHING
     with open(path, encoding="utf-8") as fh:
         d = json.load(fh)
+    # AND SAY SO IF THE ROWS ARE STILL MISSING. A locked board with no
+    # private copy behind it carries no priced rows at all and would lint
+    # as a clean empty board — the same false all-clear, arriving by a
+    # different route (engine/devigcheck.py reached this conclusion first).
+    if d.get("locked") and not any(d.get(k) for k in
+                                   ("recommendations", "most_likely", "game_bets")):
+        print(f"⚠️  {path} is the LOCKED public copy and no private board was "
+              f"found beside it — every priced row has been stripped, so a "
+              f"clean result here means nothing. Run against "
+              f"data/built/{os.path.basename(path)}.", file=sys.stderr)
+        return 2
+    if note:
+        print(f"reading {os.path.relpath(path, ROOT)}{note}")
     inj = injury_index(a.injuries, a.sport)
     now = _dt.datetime.now(_dt.timezone.utc)
     rep = lint_payload(d, a.sport, os.path.relpath(path, ROOT), inj, now)

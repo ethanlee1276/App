@@ -295,6 +295,99 @@ def test_the_whole_payload_renders_and_the_cli_is_read_only():
         assert verb not in src, verb
 
 
+
+# --- it must not lint the paywall ------------------------------------------
+def test_the_lint_follows_a_public_board_to_its_private_copy():
+    """THE FALSE ALL-CLEAR. `gate.publish` strips `recommendations`,
+    `most_likely`, `board_shelves` and `game_bets` from the public copy, so
+    linting web/data/ with the paywall on read a board with no rows in it,
+    found nothing wrong, and said so.
+
+    A lint that reports CLEAN because it was handed an empty board is worse
+    than no lint — it is the one tool whose entire job is to say a board is
+    wrong. Every sport in FILES was affected: nfl, cfb and mlb. Ethan,
+    2026-09-03: "make sure that redaction doesnt affect any other sports
+    too."
+    """
+    import json as _j
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    import tempfile as _tf
+
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    d = _tf.mkdtemp()
+    web = _os.path.join(d, "web", "data")
+    built = _os.path.join(d, "data", "built")
+    _os.makedirs(web)
+    _os.makedirs(built)
+    row = {"player": "Private Row", "team": "UGA", "market": "rush_yds",
+           "side": "over", "line": 80.5, "odds": -110, "hit_prob": 0.55}
+    with open(_os.path.join(web, "cfb.json"), "w") as fh:
+        _j.dump({"locked": True, "sport": "cfb", "games": []}, fh)
+    with open(_os.path.join(built, "cfb.json"), "w") as fh:
+        _j.dump({"sport": "cfb", "games": [], "most_likely": [row],
+                 "recommendations": []}, fh)
+    r = _sp.run([_sys.executable, "-m", "engine.boardlint", "--sport", "cfb",
+                 "--file", _os.path.join(web, "cfb.json")],
+                cwd=root, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    assert "gate.board_source" in out, \
+        "the lint read the stripped public copy and said nothing about it"
+    assert "MOST LIKELY: 1 rows" in out, \
+        f"the private board's row never reached the lint:\n{out[:400]}"
+
+
+def test_a_locked_board_with_nothing_behind_it_is_refused():
+    """The same false all-clear by the other route: a locked public copy
+    and no private board beside it carries no priced rows, so a clean
+    result means nothing. Say so and exit non-zero rather than print an
+    all-clear (engine/devigcheck.py reached this first)."""
+    import json as _j
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    import tempfile as _tf
+
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    d = _tf.mkdtemp()
+    web = _os.path.join(d, "web", "data")
+    _os.makedirs(web)
+    with open(_os.path.join(web, "recommendations.json"), "w") as fh:
+        _j.dump({"locked": True, "sport": "nfl", "games": []}, fh)
+    r = _sp.run([_sys.executable, "-m", "engine.boardlint", "--sport", "nfl",
+                 "--file", _os.path.join(web, "recommendations.json")],
+                cwd=root, capture_output=True, text=True)
+    assert r.returncode == 2, "a stripped board linted as if it were clean"
+    assert "LOCKED public copy" in (r.stdout + r.stderr)
+
+
+def test_an_explicit_path_outside_web_data_is_read_as_given():
+    """`board_source` resolves by FILE NAME, not by location — hand it
+    /tmp/cfbprobe.json and it returns data/built/cfb.json because the name
+    matches. Resolving unscoped would silently lint a DIFFERENT file than
+    the one asked for, which is worst of all for `--file`, whose whole
+    purpose is pointing this at a board somewhere else."""
+    import json as _j
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    import tempfile as _tf
+
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    p = _os.path.join(_tf.mkdtemp(), "cfb.json")   # the name that would match
+    row = {"player": "Probe Row", "team": "UGA", "market": "rush_yds",
+           "side": "over", "line": 80.5, "odds": -110, "hit_prob": 0.55}
+    with open(p, "w") as fh:
+        _j.dump({"sport": "cfb", "games": [], "most_likely": [row],
+                 "recommendations": []}, fh)
+    r = _sp.run([_sys.executable, "-m", "engine.boardlint", "--sport", "cfb",
+                 "--file", p], cwd=root, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    assert "gate.board_source" not in out, \
+        "an explicit path was silently swapped for the repo's own board"
+    assert "MOST LIKELY: 1 rows" in out, out[:400]
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
