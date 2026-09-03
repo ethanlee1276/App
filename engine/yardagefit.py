@@ -88,6 +88,39 @@ on a live board — receptions is the market with the measured edge — buys
 a better-looking number and no demonstrated gain, and the live path is
 not where you find out.
 
+AND THE GATE THAT REFUSES THESE MARKETS COSTS NOTHING, measured on the
+live NFL board 2026-09-03. `calibrate.is_reliable` shuts rush_yds and
+rec_yds outright, which reads on the page as a door with picks behind
+it. Ethan asked whether that was the reason the board recommended none:
+
+    "NFL's 169 props dying at calibration — the rushing/receiving fits
+     are at their search boundary. That's the single biggest reason NFL
+     shows zero picks."
+
+277 props built, 124 carrying a real book price, 153 never quoted by
+anybody — books post lines for a subset of the skill players we project,
+and 277 - 124 is exactly the 153. Of the 124 priced, 80 sat in the two
+shut markets. Replaying every OTHER gate on those 80 from the published
+row — credibility, the tier bar, break-even plus the favourite
+surcharge, the quality floor, and every rule check but the grade:
+
+    56   model disagrees with the book by more than 10 points
+    24   edge under the tier bar
+     0   would have been a pick
+
+Not one reached the price gate, let alone the quality floor or the
+rules. The calibration gate refused eighty props and every one of them
+dies one gate later on its own merits. So the refusal is honest AND
+free: reopening these markets — by widening the search grid, by wiring
+the mixture below, by any route — buys zero picks on this board.
+
+That 56 is the same defect as the rest of this module, seen from the
+live path instead of the harness. A model whose P(over) is built on the
+wrong distribution does not miss the market by a little; it misses by
+more than ten points on seven of every ten props the books actually
+quote, which is what AUC 0.47 looks like when you stand on the board and
+read it off the cards.
+
 WHAT WOULD CHANGE THE ANSWER, in order:
   * More closes. rush_yds (838 joined) and pass_yds (266) are still too
     thin to ask, and rush_yds is one of the two shut markets this was

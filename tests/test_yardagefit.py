@@ -398,6 +398,33 @@ def test_the_verdict_is_written_down_with_the_numbers_that_produced_it():
                    "-6.9%", "+4.5%", "+4.2%"):
         assert number in src, f"the verdict lost {number}"
     assert "NOT WIRED IN" in src
+
+
+def test_what_the_closed_gate_costs_is_written_down_too():
+    """MEASURED ON A LIVE BOARD, 2026-09-03. Ethan read the NFL funnel's
+    "calibration 169" as the single biggest reason the board recommended
+    nothing. Eighty-nine of those had no book price at all; of the eighty
+    that did, replaying every other gate from the published row put 56
+    past the ten-point credibility bar and 24 under the tier bar, and
+    left NONE that would have been a pick.
+
+    The gate is honest and it is free, and that is the fact most likely
+    to be re-derived by the next person who sees two whole markets shut
+    on a Sunday board — so it lives in the module beside the reason they
+    are shut, not in a terminal somebody has closed."""
+    import inspect
+    src = inspect.getsource(Y)
+    # 56 and 24 appear elsewhere in the module for unrelated reasons, so
+    # they are pinned as the SENTENCES that carry them rather than as
+    # bare digits — a substring test that another line already satisfies
+    # proves nothing about the line it was written for.
+    for number in ("277", "124", "153"):
+        assert number in src, f"the live measurement lost {number}"
+    for line in ("56   model disagrees with the book by more than 10 points",
+                 "24   edge under the tier bar",
+                 "0   would have been a pick"):
+        assert line in src, f"the live measurement lost: {line}"
+    assert "COSTS NOTHING" in src
     assert "WHAT WOULD CHANGE THE ANSWER" in src
     # And the reason it was declined must not be misremembered as "it
     # lost" — that is a different, wrong lesson.
