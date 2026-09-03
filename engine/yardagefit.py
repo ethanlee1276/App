@@ -88,6 +88,75 @@ on a live board — receptions is the market with the measured edge — buys
 a better-looking number and no demonstrated gain, and the live path is
 not where you find out.
 
+AND THE GATE THAT REFUSES THESE MARKETS COSTS NOTHING, measured on the
+live NFL board 2026-09-03. `calibrate.is_reliable` shuts rush_yds and
+rec_yds outright, which reads on the page as a door with picks behind
+it. Ethan asked whether that was the reason the board recommended none:
+
+    "NFL's 169 props dying at calibration — the rushing/receiving fits
+     are at their search boundary. That's the single biggest reason NFL
+     shows zero picks."
+
+277 props built, 124 carrying a real book price, 153 never quoted by
+anybody — books post lines for a subset of the skill players we project,
+and 277 - 124 is exactly the 153. Of the 124 priced, 80 sat in the two
+shut markets. Replaying every OTHER gate on those 80 from the published
+row — credibility, the tier bar, break-even plus the favourite
+surcharge, the quality floor, and every rule check but the grade:
+
+    56   model disagrees with the book by more than 10 points
+    24   edge under the tier bar
+     0   would have been a pick
+
+Not one reached the price gate, let alone the quality floor or the
+rules. The calibration gate refused eighty props and every one of them
+dies one gate later on its own merits. So the refusal is honest AND
+free: reopening these markets — by widening the search grid, by wiring
+the mixture below, by any route — buys zero picks on this board.
+
+That 56 is the rest of this module seen from the live path instead of
+the harness — but only three quarters of it is. The same replay across
+ALL 124 priced props, not just the eighty in the shut markets:
+
+    market        over 10 points off      95% CI        P(zero)
+    rush_yds           27/32    84%     [68%, 93%]       29.0%
+    rec_yds            29/48    60%     [46%, 73%]       21.2%
+    pass_yds           16/25    64%     [45%, 80%]        2.3%
+    receptions          4/19    21%     [ 9%, 43%]       12.4%
+    -----------------------------------------------------------
+    all                76/124   61%     [53%, 69%]
+
+Three of the four fall in the order the zero rates predict — rushing
+worst, receiving next, receptions best, against 29.0 > 21.2 > 12.4.
+That is this module's argument confirmed on a live board against real
+book prices rather than in a harness.
+
+PASSING YARDS REFUTES IT. 2.3% zeroes, by far the most normal-shaped of
+the four, and it misses the market by more than ten points on two thirds
+of the props books quote — indistinguishable from receiving yards and
+clearly worse than receptions, whose intervals do not overlap it. A
+spike at zero cannot explain a market that has no spike at zero. There
+is a SECOND defect in the football prop chain and this module does not
+know what it is.
+
+Which matters more than the yardage finding, because pass_yds is NOT
+shut. rush_yds and rec_yds are refused wholesale and cost nothing;
+passing yards is open, priced, and on the board.
+
+And 61% of the whole priced board failing is a statement about the model
+rather than about 76 separate bad quotes. `MAX_CREDIBLE_EDGE`'s own
+comment calls a gap this size "a data error, not alpha". When three
+props in five trip a bad-data detector, the data being detected is ours.
+
+WHAT IS NOT KNOWN, and has to be before anyone acts on the table above:
+whether the gap is the model's number or the market's. `fair` comes out
+of the two-way de-vig, and task #66 — verify the NFL de-vig once Week 1
+prop menus post — is open for exactly this reason. This board IS Week 1:
+every projection is built on last season's logs across a summer of
+roster churn, which is the widest this model will ever be. A signed,
+side-normalised gap per market separates a biased model from a merely
+wide one from a broken de-vig, and none of that is measured yet.
+
 WHAT WOULD CHANGE THE ANSWER, in order:
   * More closes. rush_yds (838 joined) and pass_yds (266) are still too
     thin to ask, and rush_yds is one of the two shut markets this was

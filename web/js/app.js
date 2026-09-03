@@ -2871,6 +2871,39 @@ function oddsClockHTML() {
     lineups, live tracking) refreshes every minute regardless.</div>`;
 }
 
+/* WHAT EACH GATE IS CALLED, in one place. There were two of these maps:
+   this one, complete, inside censusFunnelHTML, and a two-entry copy
+   inside biggestCensusBucket. The short copy fed the HEADLINE sentence
+   on an empty board — the one line a reader gets before the table — so
+   any gate missing from it was printed as its raw key. On the NFL board
+   of 2026-09-03 the largest bucket was `calibration`, and the sentence
+   read "The largest reason is calibration (169)" with the full English
+   for that exact key sitting in the other map. A key with no entry still
+   falls back to itself, so a new gate appears the day it is added. */
+const CENSUS_GATE_NAMES = { no_real_price: "no real book price yet",
+  longshot_board: "home runs — live on the Long Shots board by design",
+  credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
+  calibration: "market’s calibration unreliable — closed until refit",
+  tier_edge_bar: "edge under the tier’s minimum",
+  price_net: "price doesn’t clear break-even",
+  quality_under_70: "quality grade under 70",
+  awaiting_lineup: "cleared every gate — waiting on the lineup card (shown as On deck)",
+  held_by_rules: "held by rules (IL, live game, juice)",
+  // The football boards' funnel names its gates by KEY, straight off
+  // the rule decision that made them (engine/census), rather than
+  // re-deriving thresholds the way the MLB census has to.
+  grade: "model graded it a Pass",
+  pregame: "game already started — this model prices pre-game only",
+  confidence: "confidence under the threshold",
+  edge: "edge under the minimum",
+  juice: "priced too rich to be worth laying",
+  health: "an injury designation on him",
+  kelly: "the price already matches our number — no stake",
+  lineup: "waiting on the lineup card",
+  // Hoops: the two the build drops before the model ever sees them.
+  no_history: "no stored game log for this player yet",
+  props_built: "props built from history" };
+
 /* The census keys that are counts of props, as opposed to bookkeeping — so
    "biggest reason" never reports a total as if it were a cause. */
 function censusBuckets() {
@@ -2887,39 +2920,13 @@ function censusTotal() {
 function biggestCensusBucket() {
   const rows = censusBuckets().sort((a, b) => b[1] - a[1]);
   if (!rows.length) return ["", 0];
-  const names = { no_real_price: "no real book price yet",
-                  no_history: "no stored game log for that player" };
-  return [names[rows[0][0]] || rows[0][0], rows[0][1]];
+  return [CENSUS_GATE_NAMES[rows[0][0]] || rows[0][0], rows[0][1]];
 }
 
 function censusFunnelHTML() {
   const gc = (state.data || {}).gate_census;
   if (!gc) return "";
-  const names = { no_real_price: "no real book price yet",
-    longshot_board: "home runs — live on the Long Shots board by design",
-    credibility: "model-vs-market gap too big to trust (>10% raw = bad data)",
-    calibration: "market’s calibration unreliable — closed until refit",
-    tier_edge_bar: "edge under the tier’s minimum",
-    price_net: "price doesn’t clear break-even",
-    quality_under_70: "quality grade under 70",
-    awaiting_lineup: "cleared every gate — waiting on the lineup card (shown as On deck)",
-    held_by_rules: "held by rules (IL, live game, juice)",
-    // The football boards' funnel names its gates by KEY, straight off
-    // the rule decision that made them (engine/census), rather than
-    // re-deriving thresholds the way the MLB census has to. A key with
-    // no entry here still renders — as itself — so a new gate shows up
-    // in the funnel the day it is added instead of vanishing.
-    grade: "model graded it a Pass",
-    pregame: "game already started — this model prices pre-game only",
-    confidence: "confidence under the threshold",
-    edge: "edge under the minimum",
-    juice: "priced too rich to be worth laying",
-    health: "an injury designation on him",
-    kelly: "the price already matches our number — no stake",
-    lineup: "waiting on the lineup card",
-    // Hoops: the two the build drops before the model ever sees them.
-    no_history: "no stored game log for this player yet",
-    props_built: "props built from history" };
+  const names = CENSUS_GATE_NAMES;
   // TWO STAGES, not one list. The first two buckets are dropped by the BUILD
   // before the model runs; everything else is a prop the model priced and
   // then rejected. Merged into one column they read as contradictory — a
