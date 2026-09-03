@@ -297,6 +297,71 @@ def test_the_note_is_written_on_failure_and_cleared_on_success():
     body = src[at:src.index("\ndef ", at + 10)]
     assert '_BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]' in body
 
+def test_the_pick_column_counts_what_cleared_not_what_was_evaluated():
+    """Ethan, 2026-09-03: "The 612 rows in the array are candidates, not
+    picks."
+
+    `recommendations` holds every prop the board EVALUATED. The per-row
+    `recommended` flag — set in engine/pipeline from the grade — is what
+    actually cleared. Printing the array's length called college's 612
+    candidates 612 picks, and made a real zero unreadable next to it."""
+    recs = [{"recommended": i < 10} for i in range(285)]
+    _board("clearing", {"games": [1], "recommendations": recs})
+    out = _run()
+    line = [l for l in out.splitlines() if "CLEARING" in l.upper()]
+    assert line, out
+    assert "10 of 285" in line[0], line[0]
+
+
+def test_the_report_reads_the_private_copy_not_the_stripped_one():
+    """THE THIRD TOOL TO MAKE THIS MISTAKE. Ethan, 2026-09-03: "The zero
+    in the recs column is the paywall again."
+
+    BOARD_FILES points at web/data — the copies `gate.redact` empties —
+    so with the wall up this screen called every board 0 picks, in the
+    one place somebody looks when they suspect a build is broken. Board
+    lint and the empty-board explainer both learned it before this, and
+    `gate.board_source`'s own docstring names three tools before those."""
+    import json as _json
+    import tempfile as _tf
+    root = _tf.mkdtemp()
+    pub = os.path.join(root, "web", "data", "walled.json")
+    priv = os.path.join(root, "data", "built", "walled.json")
+    os.makedirs(os.path.dirname(pub)); os.makedirs(os.path.dirname(priv))
+    # what a stranger is served, and what the subscriber's copy holds
+    _json.dump({"games": [1], "recommendations": [],
+                "locked": {"recommendations": 7},
+                "locked_reason": "subscription"}, open(pub, "w"))
+    _json.dump({"games": [1],
+                "recommendations": [{"recommended": True}] * 7}, open(priv, "w"))
+    launch.BOARD_FILES["walled"] = pub
+    out = _run()
+    line = [l for l in out.splitlines() if "WALLED" in l.upper()]
+    assert line, out
+    assert "7 of 7" in line[0], \
+        f"the report is still measuring the redacted board: {line[0]}"
+
+
+def test_a_board_pointed_outside_web_data_is_read_where_it_points():
+    """`board_source` falls back to the module-global data/built for a
+    path it cannot place — right for its own callers, wrong for a
+    CONFIGURABLE map, which would then be answered with this checkout's
+    private copy of the same basename. Same shadowing as the gate fixture
+    leak, arriving from the other side."""
+    import json as _json
+    import tempfile as _tf
+    # deliberately named for a real board, somewhere that is not web/data
+    p = os.path.join(_tf.mkdtemp(), "cfb.json")
+    _json.dump({"games": [1, 2], "recommendations": [{"recommended": True}],
+                "status": "elsewhere"}, open(p, "w"))
+    launch.BOARD_FILES["cfb"] = p
+    out = _run()
+    line = [l for l in out.splitlines() if l.strip().startswith("CFB")]
+    assert line, out
+    assert "1 of 1" in line[0] and "elsewhere" in line[0], \
+        f"the report read a board it was not pointed at: {line[0]}"
+
+
 def test_every_cycle_step_is_clocked_and_the_bill_is_printed():
     """Ethan, 2026-09-01: "im noticing all the pages are stale 45 mins.
     we gotta stop that issue." Every page's age is the cycle length, the

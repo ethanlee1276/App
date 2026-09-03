@@ -3863,35 +3863,70 @@ def show_boards() -> None:
     the loop.
     """
     import datetime as _dt
+    from engine import gate as _gate
     print("\nBOARDS — from the files on disk, not from this process\n")
-    print(f"  {'board':<6} {'age':>8}  {'games':>5}  {'recs':>4}  status")
+    print(f"  {'board':<6} {'age':>8}  {'games':>5}  {'picks':>11}  status")
     rows = []
     for name, path in BOARD_FILES.items():
-        full = ROOT / path if not os.path.isabs(path) else Path(path)
+        pub = ROOT / path if not os.path.isabs(path) else Path(path)
+        # THROUGH gate.board_source, AND THIS IS THE THIRD TOOL TO LEARN IT.
+        # Ethan, 2026-09-03: "The zero in the recs column is the paywall
+        # again." BOARD_FILES points at web/data — the copies with the
+        # picks stripped out — so with the wall up this screen reported
+        # every board as 0 recommendations and did it in the one place
+        # somebody checks when they suspect a build is broken. Board lint
+        # and the empty-board explainer both made this mistake before it;
+        # `board_source`'s own docstring names three tools before those.
+        # The private copy is the truth, the public one is derived.
+        # ONLY WHEN THE PATH IS ACTUALLY IN A web/data TREE. `board_source`
+        # falls back to the module-global data/built for any path it cannot
+        # place, which is right for its own callers and wrong here: this
+        # map is configurable, and a board pointed somewhere else would
+        # have been answered with THIS checkout's private copy of the same
+        # basename. That is the shadowing fixed in gate.seal this morning,
+        # arriving from the other side — a tool reading a board the
+        # operator did not point it at.
+        full = pub
+        if pub.parent.parts[-2:] == ("web", "data"):
+            full = Path(_gate.board_source(pub))
         if not full.exists():
-            rows.append((name, None, None, None, "FILE MISSING", ""))
+            rows.append((name, None, None, None, None, "FILE MISSING", ""))
             continue
+        # The build time comes off the same file. `seal` rewrites only the
+        # public copy, so the private one's mtime is the last real BUILD —
+        # which is what "how old is this board" is asking.
         age = (time.time() - full.stat().st_mtime) / 3600.0
         try:
             with open(full) as fh:
                 d = json.load(fh)
         except Exception as exc:                          # noqa: BLE001
-            rows.append((name, age, None, None, f"UNREADABLE — {exc}", ""))
+            rows.append((name, age, None, None, None, f"UNREADABLE — {exc}", ""))
             continue
         feed = d.get("feed") or {}
         note = ""
         if feed:
             note = f"feed listed {feed.get('listed')}, kept {feed.get('kept')}"
+        # CLEARED OVER EVALUATED, because the array is not the answer.
+        # `recommendations` holds every prop the board EVALUATED; the
+        # per-row `recommended` flag (engine/pipeline: grade not Pass or
+        # Lean) is what actually cleared. Printing the array's length
+        # called college's 612 candidate rows 612 picks, and Ethan had to
+        # work the real number out by hand: "The 612 rows in the array are
+        # candidates, not picks."
+        _recs = [r for r in (d.get("recommendations") or [])
+                 if isinstance(r, dict)]
+        _cleared = sum(1 for r in _recs if r.get("recommended"))
         rows.append((name, age, len(d.get("games") or []),
-                     len(d.get("recommendations") or []),
+                     _cleared, len(_recs),
                      d.get("status") or "—", note))
-    for name, age, games, recs, status, note in rows:
+    for name, age, games, cleared, seen, status, note in rows:
         age_s = "—" if age is None else f"{age:.1f}h"
         flag = "  <-- STALE" if age is not None and \
             age * 3600 > STALE_BOARD_SECONDS else ""
+        picks = "—" if cleared is None else f"{cleared} of {seen}"
         print(f"  {name.upper():<6} {age_s:>8}  "
               f"{'—' if games is None else games:>5}  "
-              f"{'—' if recs is None else recs:>4}  {status}{flag}")
+              f"{picks:>11}  {status}{flag}")
         if note:
             print(f"         {note}")
     # THE BOX ITSELF, before blaming any build. Three staleness hunts
