@@ -210,16 +210,60 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
             chain.cap_step(raw_mult, total_mult, 0.85, 1.18),
         ]
 
-    # Recency shade: a sustained hot/cold streak pulls the projection toward
-    # recent form (bounded in form.py), so the model stops leaning on stale
-    # early-season numbers for a player who has cooled off.
+    # THE RECENCY SHADE IS OBSERVED AND NO LONGER APPLIED — MEASURED
+    # 2026-09-03, engine/formcheck, walked forward over 2021-2025.
+    #
+    # `form.trend_mult` shaded the projection toward recent form, bounded
+    # in form.py to [0.90, 1.0]: asymmetric on purpose, since books price
+    # hot streaks fast and chasing them is a bettor trap. Sound
+    # reasoning, never once checked — `formcheck.predictors` scored the
+    # blend WITHOUT the shade, so the one hand-set factor between the
+    # measured window curve and the number on the card had never been
+    # scored against an outcome in any configuration.
+    #
+    # Scored now, as its own candidate, on every eligible player-week:
+    #
+    #     market        rank form   rank shaded    weeks form wins
+    #     pass_yds        0.3261       0.3113            68%
+    #     receptions      0.5518       0.5460            83%
+    #     rush_yds        0.6491       0.6430            73%
+    #     rec_yds         0.5501       0.5456            73%
+    #
+    # It loses the ORDERING in all four, loses RMSE in all four, and the
+    # paired per-week margins run t = 2.7 to 6.4. MAE is the only place
+    # it ever wins and it wins there by hundredths — the exact signature
+    # `_mean_week_rank`'s docstring warns about: "a predictor that shades
+    # every player toward the league mean wins on average error while
+    # ordering nobody, and ordering is the whole job".
+    #
+    # On passing yards it is worse than that. The shaded blend ranks
+    # 0.3113 against a plain season average's 0.3114 — the shade spends
+    # the entire measured advantage of the fitted window curve.
+    #
+    # WHAT MADE IT VISIBLE was the live board of 2026-09-03: 152 of 277
+    # props shaded down and NONE up, the only asymmetric factor on the
+    # board, and passing yards 14.1 yards under the book on average. A
+    # mean shift moves P(over) in proportion to 1/std, and pass_yds has
+    # the tightest distribution here by a factor of three (CV_FLOOR 0.16
+    # against rec_yds' 0.48), so the same 4% shade that washes out in
+    # receiving yards showed up there as a systematic bias.
+    #
+    # The OBSERVATION is kept — `form.trend` still labels a player hot or
+    # cold, the card still says so, and `betting._trend_alignment` still
+    # earns a confidence bonus from it. What is retired is multiplying
+    # the projection by an unmeasured constant that lost every time it
+    # was finally asked.
+    #
+    # MLB IS UNTOUCHED. engine/mlb/projection.py applies its own
+    # `trend_mult` and this measurement is NFL logs only; baseball needs
+    # the same run against its own history before anyone moves it.
     #
     # Player memory (engine/playerfit.py): the record's earned correction
     # for players the blend persistently misreads.
     if player_mult is None:
         from .playerfit import mult_for
         player_mult = mult_for(sport, prop.market, prop.player)
-    mean = mean_base * total_mult * form.trend_mult * ctx_mult * player_mult
+    mean = mean_base * total_mult * ctx_mult * player_mult
 
     # Uncertainty: never below the market-typical variance floor, and it grows
     # as we push further from the player's own baseline.
@@ -239,14 +283,14 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
     reasons += weather.reasons
     reasons += injury.reasons
 
-    # Recent-form narrative — the cool-off case is tied to the actual shade.
+    # Recent-form narrative. Both directions read the same way now: a
+    # note about the player, not a claim about the number. The cool-off
+    # line used to end "(projection shaded -7%)" and that sentence would
+    # be a lie the moment the shade stopped being applied above.
     if form.trend == "up":
         reasons.append(f"Trending up — last 3 games {form.trend_delta:+.0f} vs prior form")
     elif form.trend == "down":
-        reasons.append(
-            f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form "
-            f"(projection shaded {form.trend_mult - 1:+.0%})"
-        )
+        reasons.append(f"Cooling off — last 3 games {form.trend_delta:+.0f} vs prior form")
 
     # THE CHAIN, in the order the code multiplied it. The usage bridge is
     # recorded as a step rather than folded into the base so the reader can
@@ -266,8 +310,16 @@ def build_projection(prop: Prop, game: Game, opponent_team: Team, model=None,
         base_src = "usage" if mean_base != form.mean else "form"
     steps += mult_steps
     steps += [
-        chain.step("trend", form.trend_mult,
-                   f"Last 3 games {form.trend_delta:+.1f} against prior form."
+        # KEPT AT 1.0, not deleted. A flat step is a real finding (see
+        # engine/chain's docstring) and this one says something the
+        # reader should see: the model looked at his recent form, and
+        # recent form does not move the projection because measuring it
+        # said it should not.
+        chain.step("trend", 1.0,
+                   f"Last 3 games {form.trend_delta:+.1f} against prior "
+                   f"form — noted, and not applied to the number: "
+                   f"shading for it measured worse at ordering players "
+                   f"in all four markets."
                    if form.trend != "flat" else
                    "Recent games sit where the longer sample does."),
         chain.step("context", ctx_mult, "; ".join(ctx_reasons)),

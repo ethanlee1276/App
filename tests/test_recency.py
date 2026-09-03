@@ -1,9 +1,17 @@
 """Recency + two-sided betting behavior.
 
-Covers the model's ability to (a) shade a cooling player's projection down,
-(b) recommend the UNDER when that's where the value is, and (c) dock confidence
-for betting against a player's trend. Shared helpers are exercised directly
+Covers the model's ability to (a) MEASURE a cooling player, (b) recommend
+the UNDER when that's where the value is, and (c) dock confidence for
+betting against a player's trend. Shared helpers are exercised directly
 since both the NFL and MLB betting layers route through them.
+
+(a) USED TO SAY "shade a cooling player's projection down", and football
+no longer does. `compute_form` still reports `trend_mult`; NFL stopped
+multiplying by it on 2026-09-03 after engine/formcheck scored it for the
+first time and it lost the within-week ordering in all four markets. The
+observation is kept and the correction is retired — see
+engine/projection.py, which carries the table. MLB still applies its own
+and is deliberately untouched: that measurement is NFL logs only.
 
 Run directly: `python3 tests/test_recency.py`
 """
@@ -76,12 +84,72 @@ def test_hot_streak_is_not_inflated():
     assert form.trend_mult == 1.0
 
 
-def test_cold_streak_shades_projection_down():
+def test_a_cold_streak_is_still_measured_even_though_it_no_longer_shades():
+    """`compute_form` is unchanged: it still spots the cool-off and still
+    computes the shade. What changed is that football stopped multiplying
+    by it. Keeping the measurement is the point — the card says "cooling
+    off", `betting._trend_alignment` still docks confidence for fighting
+    it, and the number itself is left alone."""
     form = compute_form(_logs([30, 28, 33, 90, 92, 88, 95, 91, 89, 93]),
                         career_avg=70.0, vs_opponent_avg=None)
     assert form.trend == "down"
     assert form.trend_mult < 1.0
     assert form.trend_mult >= 0.90        # bounded
+
+
+def test_the_football_projection_does_not_apply_the_shade():
+    """THE CHANGE, measured 2026-09-03. A cold player's projection is his
+    form blend times the factors that were measured — matchup, weather,
+    usage, the record's own player correction — and NOT times a recency
+    multiplier that lost at ordering in every market it was scored on.
+
+    Asserted through the CHAIN rather than the source line, because the
+    chain is what has to multiply back out to the number that ships: a
+    trend step of anything but 1.0 would mean the projection moved."""
+    logs = _logs([30, 28, 33, 90, 92, 88, 95, 91, 89, 93])
+    prop = Prop(player="Cold Wideout", team="AAA", opponent="BBB",
+                position="WR", market=REC_YDS, logs=logs, career_avg=70.0,
+                vs_opponent_avg=None,
+                lines=[SportsbookLine("DK", 60.5, -110, -110)])
+    game = Game(home="AAA", away="BBB", weather=Weather(dome=True))
+    opp = Team(abbr="BBB", name="B Team", defense=DefenseProfile(team="BBB"))
+    proj = build_projection(prop, game, opp)
+
+    assert proj.form.trend == "down", "the fixture is not actually cooling"
+    assert proj.form.trend_mult < 1.0, "so the shade would have bitten"
+    steps = {s["key"]: s["mult"] for s in (proj.chain or {}).get("steps") or []}
+    assert steps.get("trend") == 1.0, \
+        f"the recency shade is being applied again (x{steps.get('trend')})"
+    from engine import chain as _chain
+    assert _chain.closes(proj.chain), "the chain stopped reaching its own answer"
+
+
+def test_the_shade_is_still_applied_in_baseball():
+    """NOT AN OVERSIGHT. The measurement that retired it ran on NFL game
+    logs; baseball's own history has never been asked the same question,
+    and removing a factor from a sport on another sport's evidence is
+    exactly the kind of thing this repo does not do. When MLB is
+    measured, this test is the one to come back to."""
+    import inspect
+    from engine.mlb import projection as mlb_projection
+    src = inspect.getsource(mlb_projection)
+    assert "trend_mult = form.trend_mult" in src
+    assert "* trend_mult *" in src, \
+        "MLB stopped applying its recency shade without its own measurement"
+
+
+def test_the_measurement_that_retired_the_shade_is_written_down():
+    """A live multiplier removed on the strength of a number keeps that
+    number where the next person will look for it, or the next person
+    puts it back."""
+    import inspect
+    from engine import projection as nfl_projection
+    src = inspect.getsource(nfl_projection)
+    for row in ("0.3261", "0.3113", "0.5518", "0.5460",
+                "0.6491", "0.6430", "0.5501", "0.5456"):
+        assert row in src, f"the formcheck table lost {row}"
+    assert "MLB IS UNTOUCHED" in src, \
+        "the scope of the measurement is no longer recorded beside it"
 
 
 # --- trend-aware confidence ------------------------------------------------
@@ -114,7 +182,10 @@ def test_fading_player_flips_to_under():
 
     assert proj.form.trend == "down"
     assert proj.form.trend_mult < 1.0
-    assert rec.projection < proj.form.mean            # shaded down
+    # NOT "shaded down" any more — the recency multiplier is retired (see
+    # above). The point of this test was always the SIDE: a player whose
+    # recent games sit far below a stale line is an under, and the blend
+    # gets there on its own weighting without a correction on top.
     assert rec.side == "UNDER"                        # value is on the under
     assert rec.edge > 0
     assert "UNDER" in headline(rec)                   # headline reflects the side

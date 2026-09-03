@@ -183,6 +183,23 @@ def predictors(history: list, career: list, vs_opp: list,
     form = compute_form(logs, _mean(career) or _mean(history),
                         _mean(vs_opp), weights=weights)
     out["form"] = form.mean
+    # THE SHADE NOBODY HAD EVER SCORED. `compute_form` returns a
+    # `trend_mult` and `projection.build_projection` multiplies every
+    # football projection on the site by it — and this harness, which
+    # exists to say whether the blend beats a season average, scored the
+    # blend WITHOUT it. So the one hand-set factor between the measured
+    # window curve and the number on the card had never been measured
+    # against an outcome, in any configuration.
+    #
+    # It is asymmetric by construction: clamp(..., 0.90, 1.0) can never
+    # exceed 1.0, so it only ever subtracts. On the NFL board of
+    # 2026-09-03 it shaded 152 of 277 props down and none up — the only
+    # asymmetric factor on the board, every other step symmetric or
+    # inert — and passing yards, whose CV floor (0.16) is a third of
+    # receiving yards' (0.48), turned that into a 14-yard mean bias
+    # against the book because a mean shift moves P(over) in proportion
+    # to 1/std.
+    out["form_trend"] = form.mean * form.trend_mult
     # The same blend under the GENTLE curve, as a control. receptions and
     # pass_yds were fitted to something close to this and beat their
     # baselines; rush_yds was fitted to a hard recency tilt and rec_yds

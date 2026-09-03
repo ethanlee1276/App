@@ -98,6 +98,35 @@ def test_the_form_candidate_is_the_engine_s_own_blend():
     assert 'out["form"] = form.mean' in src
 
 
+def test_the_recency_shade_is_a_scored_candidate():
+    """IT WAS NOT, AND IT WAS LIVE. `compute_form` returns `trend_mult`
+    and `projection.build_projection` multiplied every football
+    projection by it, while this harness — whose job is saying whether
+    the blend beats a season average — scored the blend WITHOUT it. The
+    one hand-set factor between the measured window curve and the number
+    on the card had never been scored against an outcome.
+
+    Scored, it lost the within-week ordering in all four NFL markets and
+    was retired from the football projection on 2026-09-03. The candidate
+    stays here so the verdict is reproducible and so a future proposal to
+    bring it back has to beat the same bar everything else does."""
+    import inspect
+    src = inspect.getsource(formcheck.predictors)
+    assert 'out["form_trend"] = form.mean * form.trend_mult' in src, \
+        "the shade is unscored again"
+
+
+def test_a_new_candidate_is_scored_without_being_named_anywhere_else():
+    """`run` collects candidate names from the predictions themselves, so
+    adding one is enough to have it scored on MAE, RMSE and ordering. If
+    that ever became a hard-coded list, `form_trend` would silently stop
+    being measured while still appearing to be."""
+    import inspect
+    src = inspect.getsource(formcheck.run)
+    assert "names = sorted({n for _s, _w, preds, _a in rows_kept for n in preds})" \
+        in src, "the candidate list is no longer derived from the predictions"
+
+
 def test_the_gentle_control_is_a_long_window_curve():
     """It exists to isolate the recency curve from everything else, so it
     has to actually be gentle."""
