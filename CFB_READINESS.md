@@ -349,11 +349,40 @@ not.
 
 They are two sets now — `POWER_CONFERENCES` (attention) and
 `BETTABLE_CONFERENCES` (money) — with identical membership, so today's
-board is unchanged. To answer the question: add `"Pac-12"` to
-`BETTABLE_CONFERENCES` and nothing else, replay, and read the bet count
-and the ROI at the close the way Phase 8 read them for the Group of
-Five (2,902 → 1,324, −4.1%). Bettable if it clears; left out if it does
-not.
+board is unchanged. The switch is `"Pac-12"` into `BETTABLE_CONFERENCES`
+and nothing else.
+
+**But only half the measurement is available, and an earlier version of
+this paragraph got that wrong.** It said to "replay, and read the bet
+count and the ROI at the close the way Phase 8 read them". The bet
+count, yes. The ROI, no: college football's stored closes come off the
+cfbfastR mirror, which publishes every book's *number* and none of their
+prices. `gamebacktest.schedule_closes` says it outright — "that is fatal
+for a backtest, which has to price a bet" — and `backtest_game_lines`
+refuses to default them to −110, because "defaulting them to −110 would
+publish an ROI computed against a price no book ever offered, which is
+the one thing this replay exists to avoid".
+
+What a replay can answer today, with no invented price:
+
+- how many games the switch newly admits, and
+- how far the model's number sits from the market's on them — which is
+  `engine.gamecal`'s question and never reads a price.
+
+What it cannot answer is whether those bets would have **made money**.
+That needs priced closes, and the only priced CFB closes are harvested
+rows in `odds_history` (`game_line_closes` skips any row missing either
+price). The line ledger has been writing them at game-market scale since
+late August; a paid `harvest_odds.py` backfill is the other route.
+
+*And this casts a shadow backwards.* Phase 8's own CFB figures quote an
+ROI at the close (−4.1%), and `engine/cfb/model.py`'s §3.6 note quotes
+41-30-2 and +10.2% on totals. Both need prices the mirror does not
+carry. Whether they came from harvested rows or from an assumed −110 is
+not written down anywhere. `SELECT COUNT(*) FROM odds_history WHERE
+sport='cfb' AND over_odds IS NOT NULL` on the droplet settles it. Until
+it does, a college ROI-at-the-close in this document is unprovenanced —
+including the one two paragraphs above.
 
 *What the 2026 feed says about the league itself,* since the answer used
 to be "two schools": the rebuilt Pac-12 is real and in the feed — **46

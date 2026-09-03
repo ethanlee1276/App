@@ -133,9 +133,39 @@ POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 #: the Pac-12" could mean anything while one edit did both.
 #:
 #: Split, the question is one dial: put "Pac-12" in the set below and
-#: nowhere else, replay, and read the bet count and the ROI at the close
-#: the way Phase 8 read them for the Group of Five. Whether it belongs
-#: there is a money decision and is not made here.
+#: nowhere else. Whether it belongs there is a money decision and is not
+#: made here.
+#:
+#: AND THE MEASUREMENT THAT WOULD DECIDE IT IS HALF-AVAILABLE, which an
+#: earlier draft of this comment got wrong by telling the next reader to
+#: "read the bet count and the ROI at the close the way Phase 8 read
+#: them". The bet count, yes. The ROI, not from the stored college
+#: history: those closes come off the cfbfastR mirror, which publishes
+#: every book's NUMBER and none of their prices.
+#: `gamebacktest.schedule_closes` says so in as many words — "that is
+#: fatal for a backtest, which has to price a bet" — and
+#: `backtest_game_lines` refuses to substitute -110, because "defaulting
+#: them to -110 would publish an ROI computed against a price no book
+#: ever offered, which is the one thing this replay exists to avoid".
+#:
+#: So what a replay can answer today without inventing a price:
+#:   * how many games the switch newly admits, and
+#:   * how far this model's number sits from the market's on them —
+#:     `engine.gamecal`'s question, which never reads a price.
+#: What it cannot answer is whether those bets would have MADE money.
+#: That needs priced closes, and the only priced CFB closes are
+#: harvested ones in `odds_history` (`gamebacktest.game_line_closes`
+#: skips any row missing either price). The line ledger has been
+#: accumulating them at game-market scale since late August; a paid
+#: `harvest_odds.py` backfill is the other route.
+#:
+#: Worth resolving before anyone leans on the Phase 8 figures for this:
+#: those quote a CFB ROI at the close, and this file's own §3.6 note
+#: quotes 41-30-2 and +10.2% on totals. Both need prices the mirror does
+#: not carry. Whether they came from harvested rows or from an assumed
+#: -110 is not recorded, and `SELECT COUNT(*) FROM odds_history WHERE
+#: sport='cfb' AND over_odds IS NOT NULL` on the droplet is what settles
+#: it. Until it does, treat a college ROI-at-the-close as unprovenanced.
 BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
 
 #: The sentence both boards show when the rule below refuses a game.
