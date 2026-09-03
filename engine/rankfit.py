@@ -47,10 +47,34 @@ MIN_PAIRS = 2_000
 
 #: The markets each sport's likelihood board would rank, if measurement
 #: allows. Matching `calibrate.SPORT_MARKETS` where both exist.
+#:
+#: COLLEGE FOOTBALL JOINED 2026-09-03, and it is the reason this table is
+#: worth reading twice. Ethan, twice on 2026-09-02: "make sure everything
+#: I'm telling you to do for NFL is also being implemented for college
+#: football because I'm still not seeing any props for college football."
+#: College had no yardage market at all — not a broken one, an absent one.
+#:
+#: The question that had to be answered before adding a line here was
+#: whether college needs its OWN projection or can walk the shared one.
+#: It can walk the shared one, and the reason is structural rather than
+#: hopeful: `logwalk.walk` hands every non-MLB sport to the same generic
+#: chain, `projection.build_projection` takes `sport` only to KEY its
+#: self-tuning stores (formfit/playerfit), and `betting.evaluate_prop`
+#: already reads "cfb" as football for weather and fatigue. Nothing in
+#: that path is nflverse-shaped. So college gets the NFL's MODEL and its
+#: own MEASUREMENT — which is the entire point, and the opposite of what
+#: happened to the touchdown board, where `likely.CFB_TD_AUC` had to be
+#: un-borrowed from the NFL's 0.721 after the college board wore a number
+#: measured on somebody else's football.
+#:
+#: NFL is deliberately NOT here: its five markets are hand-measured
+#: constants in `likely.RANK_AUC`, and a store entry would silently
+#: override them. That is a separate decision from this one.
 MARKETS = {
     "mlb": ("hits", "total_bases", "home_runs", "strikeouts"),
     "nba": ("pts", "reb", "ast", "fg3m", "pra"),
     "wnba": ("pts", "reb", "ast", "fg3m", "pra"),
+    "cfb": ("pass_yds", "rush_yds", "rec_yds", "receptions"),
 }
 
 

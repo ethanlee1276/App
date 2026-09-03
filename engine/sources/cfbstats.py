@@ -139,6 +139,39 @@ INSIDE_5 = 5.0
 #: carries" is not evidence anybody reads.
 ALWAYS = ("anytime_td",)
 
+#: …AND THE ZERO THAT IS EVIDENCE, which the rule above was throwing
+#: away. A back who carried four times for a net of nothing writes a
+#: ``carries`` row and NO ``rush_yds`` row, because 0.0 is falsy. The
+#: log that comes back out of the database is therefore "games in which
+#: he gained yards", not "games he played" — every blank filed under a
+#: market the walk never sees.
+#:
+#: That is survivorship, and it lands on exactly the number a yardage
+#: model is built to answer. `engine.yardagefit` measured the NFL's
+#: rushing distribution as 29% exact zeros and concluded the whole
+#: market misprices because a normal's negative tail is standing in for
+#: that spike; a college log that DELETES the spike cannot even be
+#: asked the question. It also biases the ordinary path: the trailing
+#: average the projection is built from, and the naive line the walk
+#: prices against, are both computed over survivors only.
+#:
+#: So a zero is written wherever the OPPORTUNITY is on the record —
+#: carries prove a rushing line existed, receptions prove a receiving
+#: one did. It costs one row per genuinely blank phase, not a row per
+#: market per player per game, which is the explosion the rule above
+#: exists to prevent.
+#:
+#: WHAT THIS STILL CANNOT SEE, said plainly rather than left implied:
+#: a zero with no opportunity column behind it. ``receptions`` would
+#: need targets and this feed has no target column, so a receiver who
+#: was thrown at four times and caught none is absent, not zero.
+#: ``pass_yds`` accumulates from completions with no attempts column,
+#: so a quarterback's blank is likewise invisible — vanishingly rare at
+#: a game level, unlike the receiving case. Neither gap is closable
+#: from this feed, and both are the reason a college receptions AUC
+#: should be read as measured on players who caught something.
+ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions"}
+
 #: Emitted in this order so an ingest log reads the way a box score does.
 MARKETS = ("anytime_td", "carries", "rush_yds", "receptions", "rec_yds",
            "pass_yds", "rush_td", "rec_td", "pass_td",
@@ -408,7 +441,8 @@ def parse_player_stats(rows, season: int, games: dict,
         }
         for market in MARKETS:
             value = s.get(market, 0.0)
-            if value or market in ALWAYS:
+            if value or market in ALWAYS \
+                    or s.get(ZERO_WHEN.get(market) or "", 0.0):
                 out.append({**base, "market": market, "value": float(value)})
     return {"rows": out, "assets": list(assets.values()),
             "games": len(seen_games), "players": len(bag), "skipped": skipped}
@@ -586,6 +620,7 @@ def load_season(path, season: int, games: dict,
 
 
 __all__ = ["STATS_URL", "ROSTER_URL", "RED_ZONE", "INSIDE_5", "MARKETS",
+           "ZERO_WHEN",
            "QB_COLUMNS", "DataUnavailable", "fetch_season", "fetch_rosters",
            "load_season", "parse_player_stats", "parse_rosters",
            "scored_geometrically", "split_pass"]

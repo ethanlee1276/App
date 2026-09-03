@@ -1157,6 +1157,25 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                     from .deepfit import refit_cfb_touchdowns
                     for line in refit_cfb_touchdowns():
                         log(f"  {line}")
+                # AND RANK THE YARDAGE MARKETS ON THE SAME LOGS, for the
+                # same reason and on the same schedule. College's four
+                # yardage/reception markets have a model (the shared
+                # football chain) and, until this box walks them, no
+                # measurement — so `likely.rank_auc("cfb", "rush_yds")`
+                # is None and the shelf stays shut. That is correct and
+                # it is also not a state to leave a season sitting in:
+                # the logs that answer the question have just landed on
+                # this disk. `rankfit.measure` is idempotent and writes
+                # only what MIN_PAIRS supports, so running it beside the
+                # backfill costs one walk and can only ever turn a shelf
+                # on with evidence behind it.
+                if res["rows"]:
+                    try:
+                        from .rankfit import measure as _cfb_rank
+                        for line in _cfb_rank(_pconn, "cfb", log=lambda _s: None):
+                            log(f"  {line}")
+                    except Exception as _rexc:  # noqa: BLE001
+                        log(f"  ⚠️  cfb rank fit skipped: {_rexc}")
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  cfb player backfill failed: {exc}")
 
@@ -1274,18 +1293,26 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 _vc.close()
         except Exception as exc:  # noqa: BLE001
             log(f"  ⚠️  devig band check skipped: {exc}")
-        # The ranking fitter behind every non-football likelihood board:
-        # measures each market's walk-forward AUC on this box's own logs
-        # and stores what the sample supports. likely.rank_auc reads the
-        # store, so an MLB shelf turns on HERE, where the logs are — the
-        # dev box has no MLB logs at all and can never claim one.
+        # The ranking fitter behind every likelihood board that is not
+        # running on a hand-measured constant: measures each market's
+        # walk-forward AUC on this box's own logs and stores what the
+        # sample supports. likely.rank_auc reads the store, so an MLB
+        # shelf turns on HERE, where the logs are — the dev box has no
+        # MLB logs at all and can never claim one.
+        #
+        # CFB joined the list on 2026-09-03. Its four yardage markets
+        # walk the SHARED football chain and are measured on COLLEGE
+        # logs, which is the whole discipline: the touchdown board once
+        # wore the NFL's 0.721 because nobody had measured college, and
+        # a yardage board shipped on the NFL's 0.761 would be the same
+        # mistake with a different number.
         try:
             from . import db as _rkdb
             from .rankfit import context_report as _rank_ctx
             from .rankfit import measure as _rank_measure
             _rkc = _rkdb.connect()
             try:
-                for _sp in ("mlb", "wnba", "nba"):
+                for _sp in ("mlb", "wnba", "nba", "cfb"):
                     _rank_measure(_rkc, _sp, log=log)
                 # THE PARK A/B, ANSWERED WHERE THE LOGS ARE. The standing
                 # finding (2026-08-31): the walk replays history in a

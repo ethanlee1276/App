@@ -357,6 +357,51 @@ def test_the_three_modes_are_the_only_three():
     assert {C.NAMES, C.FIELD, C.DROP} == {"names", "field", "drop"}
 
 
+# --- the zero that is evidence ----------------------------------------
+#
+# `if value or market in ALWAYS` filed a four-carry, no-gain game as
+# "no rushing row", so the log that comes back out of the database is
+# games in which he GAINED yards. That is survivorship landing on
+# exactly the number a yardage model answers: engine.yardagefit measured
+# the NFL's rushing distribution as 29% exact zeros and concluded the
+# whole market misprices because a normal's negative tail stands in for
+# that spike. A college log with the spike deleted cannot be asked.
+def test_a_carry_for_no_gain_is_a_rushing_zero_not_a_missing_game():
+    out = _parse([_play(rush_player="Nate Frazier", rush_yds="0")])
+    assert _value(out, "Nate Frazier", "carries") == 1.0
+    assert _value(out, "Nate Frazier", "rush_yds") == 0.0
+
+
+def test_a_catch_for_no_gain_is_a_receiving_zero():
+    out = _parse([_play(completion_player="Carson Beck",
+                        reception_player="Arian Smith",
+                        completion_yds="0", reception_yds="0")])
+    assert _value(out, "Arian Smith", "receptions") == 1.0
+    assert _value(out, "Arian Smith", "rec_yds") == 0.0
+
+
+def test_the_zero_needs_the_opportunity_behind_it():
+    """A receiver who never carried the ball writes no rushing row —
+    the fix records blanks that HAPPENED, it does not invent games."""
+    out = _parse([_play(completion_player="Carson Beck",
+                        reception_player="Arian Smith",
+                        completion_yds="14", reception_yds="14")])
+    assert _value(out, "Arian Smith", "rush_yds") is None
+    assert _value(out, "Arian Smith", "carries") is None
+
+
+def test_the_opportunity_columns_are_named_rather_than_inferred():
+    assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions"}
+
+
+def test_the_markets_with_no_opportunity_column_are_left_alone():
+    """`receptions` would need targets and this feed has none, so a
+    receiver thrown at four times and catching none is ABSENT rather
+    than zero. Pinned so nobody later reads a college receptions AUC as
+    if it covered those player-games."""
+    assert "receptions" not in C.ZERO_WHEN and "pass_yds" not in C.ZERO_WHEN
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
