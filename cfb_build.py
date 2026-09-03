@@ -567,9 +567,19 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
     moneyline; what it does not know is attention tier or conditionals, so
     those ride along as extra keys and as reasons — nothing about the
     existing NFL/MLB rendering has to change.
+
+    A REFUSED CARD COMES THROUGH HERE TOO, and `recommended` is what says
+    so. `engine.cfb.model` promises a Group of Five game is "priced,
+    shown with its number and its edge, never a play"; that promise is
+    kept by turning the pass into a card like any other and flagging it,
+    not by dropping it. So the flag is read off the verdict — a play is
+    recommended, a hold and a pass are not — where it used to be `not
+    conditional`, which called every pass a recommendation the moment
+    one was allowed onto the board.
     """
     shared = dict(play.get("shared") or {})
     conditional = card["kind"] == "hold"
+    refused = card["kind"] == "pass"
     stake_fraction = card.get("stake_fraction") or 0.0
     reasons = list(shared.get("reasons") or [])
     from engine.cfb.model import HAIRCUT
@@ -581,6 +591,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
     reasons.append(f"Volatility {card['volatility']} · grade {card['grade']}/100")
     if conditional:
         reasons.append("CONDITIONAL — " + card["why"])
+    elif refused:
+        # WHY IT IS NOT A PLAY, on the card rather than only in a census
+        # bucket. `evaluate_play` writes one sentence per refusal — the
+        # Group of Five rule, the tier's edge bar, the grade floor — and
+        # until now that sentence died with the pass list. It is the only
+        # thing on a refused card a reader actually wants.
+        reasons.append("NOT A PLAY — " + str(card.get("why") or "refused"))
 
     return {
         **shared,
@@ -622,7 +639,7 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "conditions_pending": card.get("conditions_pending", []),
         "situational_tags": card.get("situational_tags", []),
         "book": play.get("book", ""),
-        "recommended": not conditional,
+        "recommended": card["kind"] == "play",
         "reasons": reasons,
     }
 
@@ -1152,9 +1169,47 @@ def main() -> None:
 
     bets = [b for b in (_shared(c) for c in result["plays"]) if b]
     conditionals = [b for b in (_shared(c) for c in result["holds"]) if b]
+    # AND THE REFUSALS, which is what `game_bets` has meant everywhere
+    # else in this codebase since the day it was written. `_game_bets` in
+    # engine/pipeline (NFL) and engine/mlb/pipeline both append EVERY
+    # priced market and let `recommended` be a field on the row —
+    # nfl_build's own log line prints "64 bet(s) → 13 recommended". The
+    # front end agrees: `passesGameBet` in web/js/app.js filters
+    # `grade !== "Pass"` at render time, which is only meaningful if Pass
+    # rows are expected to be in the payload. College was the one
+    # producer that shipped the survivors instead, and three things broke
+    # because of it:
+    #
+    #   * `engine.cfb.model` says a Group of Five game is "priced, SHOWN
+    #     with its number and its edge, never a play". The decision
+    #     (Ethan, 2026-09-02) was about whether the money follows; the
+    #     gate is the first return in `evaluate_play`, so shipping only
+    #     survivors turned a rule about MONEY into a rule about
+    #     VISIBILITY and the games vanished off every surface.
+    #   * `likely.from_game_bet` reads this key and nothing else, so
+    #     college moneylines — the best-ranked game market in the system
+    #     at 0.752 AUC — could never reach the Most Likely board on a
+    #     slate where the edge board published nothing. A ranking board
+    #     was being emptied by an EDGE verdict, which is not what it
+    #     ranks on. Reproduced on a synthetic nine-game Group of Five
+    #     card built through this same chain: 0 game rows before, 20
+    #     after, the moneylines ranked and the rest labelled leans.
+    #   * `pricedButQuiet()` in web/js/app.js opens with
+    #     `const priced = (d.game_bets || []).length; if (!priced)
+    #     return null;`, so the one branch written to say "the card is
+    #     priced and the model turned it all down" was dead on exactly
+    #     the board it exists for, and the page fell through to "waiting
+    #     on real sportsbook prices" — false on a night with 9 of 11
+    #     games priced. It asks `filter(passesGameBet).length` next,
+    #     which is the question it actually wants and which still works.
+    #
+    # Unstaked and unrecommended by construction: a pass never carried a
+    # `stake_fraction`, and `to_game_bet` now reads `recommended` off the
+    # verdict rather than off `not conditional`.
+    refused = [b for b in (_shared(c) for c in result["pass_list"]) if b]
     # Conditionals ride on the same board, flagged and unstaked, because a
     # separate page for them is a page nobody opens.
-    out["game_bets"] = bets + conditionals
+    out["game_bets"] = bets + conditionals + refused
     # THE CHART EVERY ONE OF THOSE BETS OPENS ONTO. Same gap the NFL's
     # games-only fallback had (fixed 2026-08-26, Ethan: "on nfl im not
     # able to click on the game props and it show me the bar graph"):

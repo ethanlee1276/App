@@ -86,6 +86,46 @@ def test_the_page_has_a_branch_for_a_priced_card_with_nothing_on_it():
     assert "line_calibration" in app
 
 
+def test_the_quiet_branch_measures_priced_not_recommended():
+    """`pricedButQuiet` opens `const priced = (d.game_bets || []).length`.
+
+    That is the right question — "did we price this card?" — and it only
+    answers it if the producer ships what it priced. College shipped the
+    SURVIVORS, so on the one board this branch exists for (2026-09-03:
+    nine games priced, every market refused) `priced` was 0, the branch
+    returned null, and the page fell through to the waiting-on-prices
+    sentence it was written to prevent. NFL never hit it because
+    `pipeline._game_bets` appends every priced market.
+    """
+    app = _app()
+    at = app.index("function pricedButQuiet()")
+    body = app[at:app.index("\nfunction ", at + 1)]
+    assert "(d.game_bets || []).length" in body
+    assert "filter(passesGameBet).length" in body, \
+        "the branch must ask whether any priced row SURVIVED, separately"
+    cfb = _read("cfb_build.py")
+    line = cfb[cfb.index('out["game_bets"] = '):]
+    assert "refused" in line[:line.index("\n")], \
+        ("cfb_build must ship its refusals or this branch is dead on the "
+         "board it exists for")
+
+
+def test_a_fully_refused_college_card_still_reaches_the_quiet_branch():
+    """The Python half of the same contract, run rather than grepped: a
+    Group of Five card produces game_bets that are non-empty and contain
+    nothing a reader would call a bet — which is exactly the state
+    `pricedButQuiet` renders for."""
+    from tests.test_likely_gamelines import _cfb_g5_slate
+
+    _result, rows = _cfb_g5_slate()
+    assert rows, "priced markets must reach the payload"
+    # `passesGameBet` in web/js/app.js, restated: a bet is not a Pass and
+    # not a conditional.
+    survivors = [r for r in rows
+                 if r["grade"] != "Pass" and not r["conditional"]]
+    assert survivors == [], survivors
+
+
 def test_the_quiet_branch_runs_before_the_waiting_on_prices_copy():
     """Order is the whole fix. The fallback sentence is about a missing
     feed; reaching it on a priced card is what this exists to stop."""

@@ -314,6 +314,139 @@ def test_game_rows_sit_beside_player_rows_ordered_by_probability():
     assert got[0]["model_prob"] == 0.70 and got[1]["model_prob"] == 0.62
 
 
+# --- the college refusal is a card, not a silence ---------------------------
+def _cfb_g5_slate():
+    """One Group of Five game, priced three ways, through the real chain.
+
+    `cfb_build.build_plays` → `cfb.pipeline.run_cfb_slate` →
+    `cfb_build.to_game_bet`, with no network and no database — the same
+    path a Thursday card takes on the droplet. The Group of Five gate is
+    the FIRST return in `evaluate_play`, so this refusal is deterministic
+    whatever the calibration stores on the box happen to hold.
+    """
+    import cfb_build as CB
+    from engine.cfb import pipeline as CP, ratings as CR
+    from engine.teamrates import TeamRating
+
+    game = {"game_id": "g1", "home": "TOL", "away": "BGSU",
+            "home_conference": "MAC", "away_conference": "MAC",
+            "home_rank": None, "away_rank": None, "label": "BGSU @ TOL",
+            "kickoff": "2026-09-03T23:00:00+00:00", "date": "2026-09-03",
+            "weekday": "Thursday", "neutral_site": False, "state": "scheduled",
+            "qb_confirmed": False, "participation_verified": False,
+            "weather_checked": False, "indoor": False}
+    ratings = {"TOL": TeamRating(net=3.0, off=2.0, def_=-1.0, games=13),
+               "BGSU": TeamRating(net=0.0, off=0.5, def_=0.5, games=13)}
+    priced = {"g1": {"moneyline": (-160, 140), "spread": (-3.5, -110, -110),
+                     "total": (52.5, -110, -110),
+                     "books": {"moneyline": "dk", "spread": "dk",
+                               "total": "dk"}}}
+    plays = CB.build_plays([game], priced, ratings, CR.PRIOR, {}, {})
+    result = CP.run_cfb_slate(plays, meta={"ratings": {"fitted": False,
+                                                       "games": 0}})
+    by_key = {(p["market"], p["game"]["game_id"], p["selection"]): p
+              for p in plays}
+    cards = result["plays"] + result["holds"] + result["pass_list"]
+    rows = [CB.to_game_bet(c, by_key[(c["market"], c["game_id"],
+                                      c["selection"])], game) for c in cards]
+    return result, rows
+
+
+def test_a_group_of_five_game_is_priced_and_shown_never_a_play():
+    """`engine.cfb.model` promises it in those words: "priced, shown with
+    its number and its edge, never a play".
+
+    The decision (Ethan, 2026-09-02, closing the readiness audit's first
+    Ask) was about whether the MONEY follows. The gate that implements it
+    is the first return in `evaluate_play` and returns kind="pass", so
+    while `game_bets` carried only the survivors the rule about money
+    silently became a rule about visibility and the games left every
+    surface — the card, the Most Likely board and the empty-state copy.
+    """
+    result, rows = _cfb_g5_slate()
+    assert (len(result["plays"]), len(result["holds"])) == (0, 0), \
+        "a Group of Five game is never a play and never a conditional"
+    assert {r["market"] for r in rows} == {"spread", "total", "moneyline"}, \
+        "all three priced markets ride along, not just the survivors"
+    for r in rows:
+        assert r["recommended"] is False, r["market"]
+        assert r["grade"] == "Pass", r["market"]
+        assert r["stake_units"] == 0.0, r["market"]
+        assert any(x.startswith("NOT A PLAY — Group of Five")
+                   for x in r["reasons"]), \
+            f"{r['market']} does not say why it is not a play"
+        assert r["odds"] and r["win_prob"] and r["fair_prob"], \
+            f"{r['market']} arrived without the number it was promised"
+
+
+def test_the_college_moneyline_reaches_the_likely_board_from_a_refusal():
+    """0.752 is the best-measured game-market ranking in the system, and
+    it could not put one row on the board.
+
+    `from_game_bet` reads `game_bets` and nothing else, so an EDGE
+    verdict was deciding a board that does not rank on edge. On the
+    2026-09-03 college card — nine games priced, every market refused —
+    the game half of Most Likely came out at zero with no refusal even
+    counted, because `build`'s loop is a no-op on an empty list.
+    """
+    _result, rows = _cfb_g5_slate()
+    board = K.build([], [], [], sport="cfb", game_bets=rows)
+    kinds = {r["market"]: r for r in board}
+    assert kinds["moneyline"]["ranked"] is True, \
+        "the college moneyline ranks at 0.752 and must say so"
+    assert kinds["moneyline"]["rank_auc"] == 0.752
+    for market in ("spread", "total"):
+        assert kinds[market]["ranked"] is False, market
+        assert "lean" in kinds[market]["rank_note"], \
+            f"{market} must ship labelled as a lean, not as a ranking"
+    assert all(r["stake_units"] == 0.0 and r["recommended"] is False
+               for r in board), "this board ranks and never sizes"
+
+
+def test_the_game_page_says_when_it_turned_a_priced_market_down():
+    """Shipping the refusal is half of "priced, shown with its number and
+    its edge"; drawing it is the other half.
+
+    The game page filters game bets through `passesGameBet` before
+    rendering, so a Group of Five game — priced three ways, refused three
+    times — drew no game section at all and read exactly like a game no
+    book had posted. The props beside it have carried a held-count line
+    for as long as they have had one; the game markets never did.
+    """
+    app = _src("web", "js", "app.js")
+    at = app.index("function renderGamePage(")
+    body = app[at:app.index("\nfunction ", at + 1)]
+    assert "bets.length > betsShown.length" in body, \
+        "the page never counts the game markets it is hiding"
+    assert "priced game market" in body
+    assert 'id="gp-showbets"' in body, "no way to reveal them"
+    # …and the reveal has to be wired, or the button is a decoration.
+    assert '"#gp-showall, #gp-showbets"' in body, \
+        "the show-all handler does not cover the game-market button"
+
+
+def test_cfb_ships_every_priced_game_market_the_way_nfl_and_mlb_do():
+    """One key, one meaning. `engine/pipeline._game_bets` (NFL) and
+    `engine/mlb/pipeline._game_bets` both append EVERY priced market and
+    let `recommended` be a field — nfl_build's own log prints "64 bet(s)
+    → 13 recommended" — and `passesGameBet` in the front end filters
+    `grade !== "Pass"` at render time, which only means anything if Pass
+    rows are in the payload. College was the one producer that shipped
+    the survivors instead."""
+    src = _src("cfb_build.py")
+    at = src.index('out["game_bets"] = ')
+    line = src[at:src.index("\n", at)]
+    assert "refused" in line, \
+        f"cfb_build still ships only the survivors: {line}"
+    assert 'for c in result["pass_list"]' in src, \
+        "the refusals are never converted into cards"
+    body = src[src.index("def to_game_bet("):src.index("\ndef ", src.index(
+        "def to_game_bet(") + 10)]
+    assert '"recommended": card["kind"] == "play"' in body, \
+        ("`recommended` must be read off the verdict — `not conditional` "
+         "calls every refusal a recommendation once one is on the board")
+
+
 # --- the shelf --------------------------------------------------------------
 def test_the_game_lines_shelf_exists_for_football_and_baseball():
     for sport in ("nfl", "cfb", "mlb"):

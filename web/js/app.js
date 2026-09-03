@@ -7797,6 +7797,25 @@ function renderGamePage() {
         <span class="sub">— moneyline, spread and totals from the team model</span></div>
       <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div>` : ""}
 
+    ${/* THE PRICED GAME MARKETS THIS GAME WAS TURNED DOWN ON. The props
+          below have carried this line since they had one; the game
+          markets never did, so a game the model priced three ways and
+          refused three times rendered as a page with no game section at
+          all — indistinguishable from a game no book had posted.
+          It matters most on the college board, where `engine.cfb.model`
+          promises a Group of Five game is "priced, shown with its number
+          and its edge, never a play" and this page is where that promise
+          is kept or broken. */""}
+    ${bets.length > betsShown.length ? `<p class="list-note" style="margin-top:10px">
+      ${plural(bets.length - betsShown.length, "priced game market",
+               "priced game markets")} in this game
+      ${bets.length - betsShown.length === 1 ? "was" : "were"} turned down
+      (Group of Five, edge under the tier’s bar, or graded a Pass). The
+      number and the price are on ${bets.length - betsShown.length === 1
+        ? "it" : "them"}; the money is not.
+      <button class="btn-quiet" id="gp-showbets" type="button"
+        >Show ${bets.length - betsShown.length} anyway</button></p>` : ""}
+
     ${shown.length ? [...byMarket.keys()].map((k) => `
         <div class="section-title">${escapeHtml(k)}
           <span class="sub">— ${plural(byMarket.get(k).length, "prop", "props")}</span></div>
@@ -7821,13 +7840,15 @@ function renderGamePage() {
   if (back) back.addEventListener("click", () => switchView("recommended"));
   // "Go back to the board, find the toggle, come back" was three steps for
   // one intention. The button flips the same global toggle in place.
-  const showAll = document.getElementById("gp-showall");
-  if (showAll) showAll.addEventListener("click", () => {
-    state.showAll = true;
-    const c = document.getElementById("show-all");
-    if (c) c.checked = true;
-    renderGamePage();
-  });
+  // Two buttons, one intention: the props empty-slate's and the game
+  // markets' held-note. Both flip the same global toggle in place.
+  host.querySelectorAll("#gp-showall, #gp-showbets").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.showAll = true;
+      const c = document.getElementById("show-all");
+      if (c) c.checked = true;
+      renderGamePage();
+    }));
   fillMeters(host);
   host.querySelectorAll(".cards").forEach(revealChildren);
   // The replay panel's gauge + histogram upgrade in place when the
