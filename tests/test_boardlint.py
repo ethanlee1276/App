@@ -295,7 +295,6 @@ def test_the_whole_payload_renders_and_the_cli_is_read_only():
         assert verb not in src, verb
 
 
-
 # --- it must not lint the paywall ------------------------------------------
 def test_the_lint_follows_a_public_board_to_its_private_copy():
     """THE FALSE ALL-CLEAR. `gate.publish` strips `recommendations`,
@@ -388,8 +387,90 @@ def test_an_explicit_path_outside_web_data_is_read_as_given():
         "an explicit path was silently swapped for the repo's own board"
     assert "MOST LIKELY: 1 rows" in out, out[:400]
 
+# --- the board as a whole ----------------------------------------------------
+def test_an_empty_board_is_the_one_thing_a_row_reader_cannot_flag():
+    """Every other check here reads a row and asks whether it is sound,
+    which cannot see what shipped on 2026-09-03: nine of eleven college
+    games priced, thirty game-line rows in the ledger, ZERO game markets
+    published — and this lint reporting nothing, because a board with no
+    rows has no bad rows."""
+    assert L.lint_board({"counts": {"games_priced": 9, "markets_priced": 24},
+                         "game_bets": []}, "cfb") == [
+        "COVERAGE 24 game market(s) priced and 0 on the board — every one "
+        "was dropped between the pricer and the payload"]
+
+
+def test_priced_games_with_no_markets_built_is_a_different_diagnosis():
+    """`build_plays` refuses before the model runs when a game has no
+    lines or no ratings, so "9 priced, 0 markets" and "9 priced, 24
+    markets all refused" are opposite findings — upstream data against a
+    model verdict — and the build log prints the same sentence for both."""
+    flags = L.lint_board({"counts": {"games_priced": 9, "markets_priced": 0},
+                          "game_bets": []}, "cfb")
+    assert len(flags) == 1 and "0 markets were built" in flags[0]
+    assert "no gate ever ran" in flags[0]
+
+
+def test_a_ranked_market_with_nothing_on_the_likelihood_board_is_asked_about():
+    """College moneylines are measured at 0.752 AUC — the best game-market
+    ranking in the system — and on 2026-09-03 not one row reached the
+    board, because the only thing feeding it was the edge board's
+    survivors. An edge verdict emptying a board that does not rank on
+    edge is exactly the question this asks."""
+    flags = L.lint_board(
+        {"counts": {"games_priced": 9, "markets_priced": 24},
+         "game_bets": [{"bet_type": "moneyline"}, {"bet_type": "spread"}],
+         "most_likely": [{"kind": "prop"}]}, "cfb")
+    assert len(flags) == 1 and "moneyline is measured to rank" in flags[0]
+
+
+def test_the_board_checks_stay_quiet_when_there_is_nothing_to_ask():
+    """A flag a reader learns to ignore is worse than no flag."""
+    healthy = {"counts": {"games_priced": 9, "markets_priced": 24},
+               "game_bets": [{"bet_type": "moneyline"}],
+               "most_likely": [{"kind": "game"}, {"kind": "prop"}]}
+    offseason = {"counts": {"games_priced": 0, "markets_priced": 0},
+                 "game_bets": []}
+    # A market measured BELOW the ranking floor makes no ranking claim,
+    # so its absence from the likelihood board is not a defect.
+    leans_only = {"counts": {"games_priced": 4, "markets_priced": 4},
+                  "game_bets": [{"bet_type": "spread"}], "most_likely": []}
+    for name, d in (("healthy", healthy), ("offseason", offseason),
+                    ("leans only", leans_only)):
+        assert L.lint_board(d, "cfb") == [], name
+
+
+def test_the_header_reads_whichever_stamp_the_builder_wrote():
+    """NFL and MLB stamp `built_at`; cfb_build stamps `generated_at` and
+    never the other, so the college header read "built ?" — a lint that
+    cannot say how old the board is, on the sport whose board went stale
+    for three weeks."""
+    rep = L.lint_payload({"generated_at": "2026-09-03T22:59:23"}, "cfb")
+    assert rep["built_at"] == "2026-09-03T22:59:23"
+    rep = L.lint_payload({"built_at": "2026-09-03T10:00:00"}, "nfl")
+    assert rep["built_at"] == "2026-09-03T10:00:00"
+
+
+def test_the_private_copy_is_found_when_no_public_copy_exists():
+    """The redirect to data/built/ used to sit BELOW the existence check
+    on web/data/, so a checkout with a private board and no public copy
+    was told "no board" while the file it wanted sat right there. Gating
+    the fix on the presence of the wrong file."""
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "web", "data"))
+    os.makedirs(os.path.join(root, "data", "built"))
+    private = os.path.join(root, "data", "built", "cfb.json")
+    with open(private, "w") as fh:
+        json.dump({"generated_at": "2026-09-03T22:59:23", "game_bets": []}, fh)
+    public = os.path.join(root, "web", "data", "cfb.json")
+    assert not os.path.exists(public)
+    from engine import gate
+    assert str(gate.board_source(__import__("pathlib").Path(public))) == private
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} tests passed.")
+

@@ -1434,6 +1434,17 @@ def main() -> None:
                      # lets the page stop special-casing college to tell
                      # them apart.
                      "markets_priced": len(plays),
+                     # …AND HOW MANY GAMES THE ODDS FEED PRICED, which is
+                     # a different number and the one that separates the
+                     # two ways this board comes out empty. `build_plays`
+                     # refuses before the model runs when a game has no
+                     # lines or no ratings, so "9 priced, 0 markets" and
+                     # "9 priced, 27 markets all refused" are opposite
+                     # diagnoses — upstream data against a model verdict
+                     # — and the log line prints the same sentence for
+                     # both. Only this pair can tell them apart, and on
+                     # 2026-09-03 neither was on the board.
+                     "games_priced": len(priced),
                      **result["counts"]}
 
     # THE LONG-SHOT BOARD (Ethan, 2026-08-25: "fix the odds range for
