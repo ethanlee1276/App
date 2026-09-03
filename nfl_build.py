@@ -163,6 +163,108 @@ def _journal_game_bets(payload: dict) -> None:
     except Exception as exc:                                   # noqa: BLE001
         print(f"⚠️  Bet journal skipped: {exc}")
 
+#: PEAK MEMORY, PER STAGE, ON THE BOX THAT HAS TO RUN IT.
+#:
+#: Measured 2026-09-03 on the droplet with deploy/peakrss.py:
+#:
+#:     exit=0 elapsed=305s peak_rss_mb=1692
+#:
+#: On a machine with 1 GB. The build only finishes by swapping ~700 MB to
+#: disk, which is why a cycle that used to take 270 seconds was still
+#: running 32 minutes later, why the load average sat at 2.15 on one core,
+#: why MLB was never reached, and — on 2026-09-02 — why the box OOMed into
+#: a crash loop.
+#:
+#: `peakrss.py` gives ONE number for the whole run, which says a build is
+#: too big and nothing about which part. `--memtrace` prints the high-water
+#: mark after each stage, so the answer arrives as a paste instead of a
+#: profiling session — the same thing `_STEP_S` already does for the
+#: refresh loop's seconds. Off by default; it costs two file reads a stage
+#: and nobody needs it on a healthy box.
+_MEM: list = []
+
+
+def _rss_mb() -> float:
+    """This process's CURRENT resident size, in MB. 0.0 where unavailable."""
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024.0
+    except OSError:
+        pass
+    try:                       # macOS and anywhere without /proc
+        import resource
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return peak / (1024.0 * 1024.0) if sys.platform == "darwin" else peak / 1024.0
+    except Exception:                                        # noqa: BLE001
+        return 0.0
+
+
+_PEAK = [0.0]
+
+
+def _peak_mb() -> float:
+    """The HIGH-WATER mark, which is what the OOM killer acts on. A stage
+    that allocates a gigabyte and frees it reads as harmless in VmRSS and
+    is exactly what kills a 1 GB box.
+
+    THE MAXIMUM IS HELD HERE, not just read from the kernel. VmHWM is
+    documented as a peak and is not reliably monotonic across reads inside
+    a container — measured 2026-09-03 in this repo's own sandbox, 92,739 kB
+    followed by 92,636 kB with nothing but a `del` in between. A hundred
+    kilobytes is nothing; a peak that can fall is not a peak, and it is
+    wrong in the dangerous direction for a number whose whole job is to
+    say how close this build came to the ceiling.
+    """
+    now = 0.0
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmHWM:"):
+                    now = int(line.split()[1]) / 1024.0
+                    break
+    except OSError:
+        now = 0.0
+    if not now:
+        now = _rss_mb()
+    _PEAK[0] = max(_PEAK[0], now)
+    return _PEAK[0]
+
+
+def _mem(stage: str, on: bool = True) -> None:
+    """Record where memory stands after one stage. Never fatal."""
+    if not on:
+        return
+    try:
+        _MEM.append((stage, _rss_mb(), _peak_mb()))
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
+def _mem_report() -> None:
+    """What each stage cost, worst first, beside the running total."""
+    if not _MEM:
+        return
+    print("\nMemory by stage (MB) — resident after, peak so far, and the "
+          "rise this stage caused")
+    prev = 0.0
+    rows = []
+    for stage, rss, peak in _MEM:
+        rows.append((stage, rss, peak, rss - prev))
+        prev = rss
+    # THE LARGEST RISER, not a fixed threshold. A build where every stage
+    # costs 300 MB would flag all six and say nothing; one whose worst
+    # stage is 80 MB would flag none and still be the thing to fix. The
+    # question is always "which stage is worst", so mark that one.
+    worst = max(rows, key=lambda r: r[3])
+    for stage, rss, peak, delta in rows:
+        mark = "   <-- the biggest single jump" if stage == worst[0] else ""
+        print(f"  {stage:<28} {rss:8.0f} {peak:8.0f} {delta:+9.0f}{mark}")
+    print(f"\n  peak {rows[-1][2]:.0f} MB; the largest rise was "
+          f"{worst[0]} at +{worst[3]:.0f} MB")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build an nflverse slate and run the model.")
     ap.add_argument("season", type=int)
@@ -182,6 +284,10 @@ def main() -> None:
     ap.add_argument("--cached-odds", action="store_true",
                     help="Attach the LAST PAID pull's prices from cache — zero "
                          "API spend between budgeted pulls.")
+    ap.add_argument("--memtrace", action="store_true",
+                    help="print resident and peak memory after each stage. "
+                         "The build peaks at 1,692 MB on a 1 GB droplet; "
+                         "this says WHICH stage spends it.")
     ap.add_argument("--board-odds", action="store_true",
                     help="Refresh only the GAME markets (moneyline, spread, "
                          "total) for the whole slate in ONE request — three "
@@ -199,6 +305,7 @@ def main() -> None:
                     help="top thin logs up from last season, so weeks 1-3 "
                          "have a board at all (see engine/carry.py)")
     args = ap.parse_args()
+    _mem("start", args.memtrace)
 
     games = show_games(args.season, args.week)
     if args.games_only:
@@ -335,6 +442,7 @@ def main() -> None:
     try:
         slate = build_slate(args.season, args.week, carry=args.carry,
                             report=carry_report)
+        _mem("build_slate", args.memtrace)
     except DataUnavailable as exc:
         print("\n⚠️  Full projections need weekly player stats.\n")
         print(exc)
@@ -410,6 +518,7 @@ def main() -> None:
     except Exception as exc:                       # noqa: BLE001
         print(f"\n⚠️  Reset rule skipped — projecting on full samples.\n   {exc}")
 
+    _mem("injuries + resets", args.memtrace)
     qb_notes = None
     if args.depth:
         try:
@@ -433,6 +542,7 @@ def main() -> None:
         except DataUnavailable as exc:
             print(f"\n⚠️  Depth charts unavailable — keeping report-derived roles.\n   {exc}")
 
+    _mem("depth charts", args.memtrace)
     real_odds = False
     odds_status = {"checked": bool(args.odds or args.cached_odds
                                    or args.board_odds), "matched": 0,
@@ -549,6 +659,7 @@ def main() -> None:
             print(f"\n⚠️  Game-lines refresh unavailable — keeping the "
                   f"prices already attached.\n   {exc}")
 
+    _mem("odds", args.memtrace)
     if args.live:
         from engine.sources.livescores import attach_live
         n = attach_live(slate)
@@ -770,6 +881,7 @@ def main() -> None:
         print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
               f"edge {r['edge']:+.1%}  {r['headline']}{held}")
 
+    _mem("pipeline", args.memtrace)
     if args.out:
         import datetime as _dt
         from pathlib import Path
@@ -929,6 +1041,13 @@ def main() -> None:
                       f"tab or `python3 ledger.py report`")
         except Exception as exc:
             print(f"⚠️  Bet journal skipped: {exc}")
+
+    # LAST, so the numbers cover the whole run including the write and the
+    # journal — the stages that finished after `pipeline` and are just as
+    # able to spend a hundred megabytes as the ones before it.
+    _mem("write + journal", args.memtrace)
+    if args.memtrace:
+        _mem_report()
 
 
 if __name__ == "__main__":
