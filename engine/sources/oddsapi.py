@@ -17,6 +17,7 @@ allowed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -180,11 +181,32 @@ SPORT_CONFIG = {
     # MMA events are one bout each; "teams" are fighter names, so the map is
     # identity (ufc_build reads the h2h payload directly).
     "ufc": {"sport_key": "mma_mixed_martial_arts", "markets": {}, "teams": {}},
-    # College football is full-game markets only, and its team map is BUILT
-    # at run time from the ESPN feed rather than listed here — 134 schools
-    # is the kind of table that rots the moment a conference reshuffles.
-    # cfb_build passes the map it derived into the parsers.
-    "cfb": {"sport_key": "americanfootball_ncaaf", "markets": {}, "teams": {}},
+    # COLLEGE FOOTBALL PRICES THE SAME FOUR PLAYER MARKETS THE NFL DOES,
+    # under the same Odds API keys, because it is the same sport. It was
+    # "full-game markets only" here until 2026-09-03 — which is not a bug
+    # anyone introduced, it is a layer nobody had built: no college
+    # yardage projection existed to price a quote against, so buying one
+    # would have been paying for a number with nothing to compare it to.
+    # `engine/cfb/props.py` and `engine/rankfit`'s college walk closed
+    # that, and this is the feed catching up.
+    #
+    # BILLING, WHICH IS THE WHOLE REASON THIS IS NOT SIMPLY THE NFL'S
+    # ENTRY: the meter charges per market per region on every event call,
+    # and a college Saturday is sixty games where an NFL Sunday is
+    # sixteen. Listing the markets here does NOT authorise a slate-wide
+    # pull — nothing in this module walks a whole board of events for
+    # player props; `cfb_build.attach_player_quotes` picks the games and
+    # `oddsbudget.affordable_events` sets how many it may pick.
+    #
+    # The team map stays EMPTY on purpose. It is built at run time from
+    # the ESPN feed instead — 134 schools is the kind of table that rots
+    # the moment a conference reshuffles — and `apply_odds_to_slate`
+    # prefers a slate's own team names over this table for exactly that
+    # reason (see the WNBA note below). cfb_build passes the map it
+    # derived into the parsers.
+    "cfb": {"sport_key": "americanfootball_ncaaf",
+            "markets": ODDS_TO_MARKET, "teams": {},
+            "scorers": SCORER_ODDS_TO_MARKET},
 }
 
 
@@ -682,7 +704,30 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     }
     url = (f"{ODDS_BASE}/sports/{cfg['sport_key']}/events/{event_id}/odds"
            f"?{urllib.parse.urlencode(params)}")
-    return _request(url, f"odds_event_{event_id}.json", ttl=ttl,
+    # THE CACHE NAME CARRIES WHAT THE REQUEST ASKED FOR, and it did not.
+    # Two failures shared one filename:
+    #
+    #   * A NARROWED MARKET LIST cached under the same key as a full one
+    #     serves the narrow payload back to the full request for the rest
+    #     of the TTL — a board reading it concludes the books stopped
+    #     posting the markets it never asked for. `fetch_sport_odds` has
+    #     guarded this with `cache_tag` since the live pull and the board
+    #     pull started disagreeing, and `oddshistory` with an md5; this
+    #     endpoint never did, because until college football pulled TWO
+    #     different market sets per event no caller made two different
+    #     requests for the same event.
+    #
+    #   * THE SPORT WAS MISSING, so `_classify`'s attribution loop — it
+    #     scans the cache name for a league token — found none and
+    #     journalled every event-scoped call ever made under sport "".
+    #     Every credit spent on player props, in any league, unattributed.
+    #
+    # A stable digest rather than the market list itself: the list is
+    # long, the filename is not, and the request is what has to be
+    # distinguished rather than described.
+    spec = ",".join(sorted(markets)) + "|" + ",".join(sorted(books))
+    tag = hashlib.md5(spec.encode()).hexdigest()[:8]
+    return _request(url, f"odds_event_{sport}_{event_id}_{tag}.json", ttl=ttl,
                     cache_only=cache_only)
 
 

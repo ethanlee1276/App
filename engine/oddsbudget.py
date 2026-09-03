@@ -628,6 +628,38 @@ def wide_pull_affordable(requests_per_refresh: int,
     return allowance >= per_refresh * WIDE_PULL_MARGIN
 
 
+def affordable_events(credits_per_event: int, share: float = 1.0,
+                      state: "BudgetState | None" = None,
+                      today: _dt.date | None = None,
+                      pulls_per_day: int | None = None) -> int:
+    """How many EVENT-SCOPED calls ONE pull may make, at a known price.
+
+    THE QUESTION `wide_pull_affordable` CANNOT ANSWER. That one is a
+    yes/no about a whole slate charged at the flat `CREDITS_PER_EVENT`;
+    this is a HOW MANY, at the caller's real per-event price, and it
+    exists because a college Saturday is the case where the answer is
+    neither "all of them" nor "none".
+
+    Sixty games times five player markets is three hundred credits a
+    pull against a plan measured in thousands a month — so the honest
+    move is not to skip the board and not to drain it, it is to buy the
+    games most worth buying and SAY SO. `cfb_build.attach_player_quotes`
+    orders by attention tier and takes this many.
+
+    ``pulls_per_day`` defaults to the number of TOUCHPOINTS, which is
+    the pacer's own answer to "how many paid pulls does a sport get in a
+    day" — four, at 7/12/15/18 Eastern, and configurable by the same
+    env var. Dividing the day's slice by them is what stops the first
+    pull of the morning spending the whole day.
+    """
+    state = state or load()
+    per_event = max(1, int(credits_per_event))
+    pulls = pulls_per_day if pulls_per_day is not None else len(_touchpoints())
+    pulls = max(1, int(pulls))
+    slice_ = int(daily_allowance(state, today) * max(0.0, float(share)))
+    return max(0, slice_ // pulls // per_event)
+
+
 def prime_window(kickoffs, now: float):
     """Where ``now`` sits relative to the slate's high-value window.
 

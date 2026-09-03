@@ -64,18 +64,24 @@ def test_game_markets_are_never_counted_as_props():
         _led.DEFAULT_DB = saved
 
 
-def test_a_yes_only_board_counts_even_with_an_empty_buy_config():
-    """CFB's `SPORT_CONFIG` markets map is empty and its touchdown board
-    publishes every Saturday. Reading the config alone would report that
-    college has no props to price, which is the opposite of the truth."""
+def test_a_yes_only_board_counts_even_though_no_config_can_name_it():
+    """THE PREMISE MOVED AND THE POINT DID NOT. This used to read "CFB's
+    markets map is empty", which was the sharpest available example: the
+    college touchdown board published every Saturday and the buy config
+    knew nothing about it. College gained a buy config on 2026-09-03
+    (four yardage markets), so the example is now the narrower and more
+    permanent one — anytime TD is Yes-only, has no over/under to buy,
+    and can therefore NEVER appear in a markets map however complete it
+    gets. `HOLD_MARKETS` is the only source that knows it."""
     from engine import ledger as _led
     from engine.sources.oddsapi import SPORT_CONFIG
     saved = _led.DEFAULT_DB
     try:
         _led.DEFAULT_DB = os.path.join(tempfile.mkdtemp(), "l.db")
-        assert not SPORT_CONFIG["cfb"]["markets"], \
-            "CFB gained a buy config — this test's premise needs rewriting"
-        assert C._prop_markets("cfb") == {"anytime_td"}
+        assert "anytime_td" not in SPORT_CONFIG["cfb"]["markets"].values()
+        assert "anytime_td" in C._prop_markets("cfb")
+        assert C._prop_markets("cfb") == {
+            "anytime_td", "pass_yds", "rush_yds", "rec_yds", "receptions"}
     finally:
         _led.DEFAULT_DB = saved
 
@@ -214,15 +220,36 @@ def test_a_partly_harvested_sport_says_which_half_is_missing():
 
 
 def test_a_fully_harvested_sport_is_ok_and_prints_no_command():
+    """EVERY market the sport is on the hook for, which for college is
+    five since the prop board shipped — a store holding only touchdowns
+    is now correctly reported as incomplete, so this seeds all five."""
+    conn = db.connect(":memory:")
+    rows = []
+    for market in sorted(C._prop_markets("cfb")):
+        for i in range(3):
+            r = _snap("cfb", market, f"p{i}")
+            r["taken_at"] = f"2025-09-0{i + 1}T23:00:00Z"
+            rows.append(r)
+    db.upsert_odds_history(conn, rows)
+    layer = _layer(conn, "cfb")
+    assert layer.state == C.OK, layer.detail
+    assert "price row(s)" in layer.detail
+    assert layer.fix == ""
+
+
+def test_a_college_board_missing_its_yardage_closes_says_so():
+    """The half of that which is now reachable: touchdowns harvested,
+    the four yardage markets not. A college prop journaled with no close
+    can never be graded for CLV, which is the whole point of the layer."""
     conn = db.connect(":memory:")
     rows = [_snap("cfb", "anytime_td", f"p{i}") for i in range(3)]
     for i, r in enumerate(rows):
         r["taken_at"] = f"2025-09-0{i + 1}T23:00:00Z"
     db.upsert_odds_history(conn, rows)
     layer = _layer(conn, "cfb")
-    assert layer.state == C.OK
-    assert "3 price row(s)" in layer.detail
-    assert layer.fix == ""
+    assert layer.state != C.OK
+    assert "rec_yds" in layer.detail
+    assert layer.fix.startswith("python3 harvest_odds.py cfb")
 
 
 def test_the_forward_record_reports_how_many_bets_carry_a_close():
@@ -256,9 +283,18 @@ def test_the_fix_never_buys_a_market_this_sport_cannot_read_back():
 
 
 def test_a_market_the_parser_cannot_read_gets_an_explanation_not_a_command():
-    fix = C._harvest_fix("cfb", ["rec_yds", "rush_yds"])
+    """College yardage was this test's example until 2026-09-03, when it
+    became buyable; the guard is asked about a market no parser knows
+    instead, which is what it was always really about."""
+    fix = C._harvest_fix("cfb", ["kicking_points"])
     assert not fix.startswith("python3")
     assert "SPORT_CONFIG" in fix and "store nothing" in fix
+
+
+def test_college_yardage_is_a_command_now_that_it_can_be_read_back():
+    fix = C._harvest_fix("cfb", ["rec_yds", "rush_yds"])
+    assert fix.startswith("python3 harvest_odds.py cfb")
+    assert "rec_yds,rush_yds" in fix
 
 
 def test_no_markets_left_to_buy_prints_nothing_at_all():

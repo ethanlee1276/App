@@ -346,4 +346,31 @@ def build_slate(conn, games: list[dict], date: str, season: int,
     return Slate(date=str(date), teams=teams, games=game_objs, props=props)
 
 
-__all__ = ["MARKETS", "MIN_LOGS", "LOG_LIMIT", "build_props", "build_slate"]
+def attach_lines(slate, lines: dict) -> tuple[int, int]:
+    """Replace each prop's proxy line with the book's. ``(matched, total)``.
+
+    ``lines`` is `oddsapi.parse_event_lines`' own shape — keyed
+    ``(normalised player, market)`` — so the join is the same one
+    `apply_odds_to_slate` performs for every other league. It is done
+    here rather than there because the college pull is CAPPED: the
+    orchestrator prices every event it can match, which on a sixty-game
+    Saturday is a bill the pacer would refuse, so `cfb_build` picks the
+    games and this attaches what came back.
+
+    A prop with no book line KEEPS ITS PROXY and is reported, never
+    dropped — `evaluate_prop` reads the proxy book name and refuses to
+    call the row a market, so the board can show the projection while
+    staking nothing on it.
+    """
+    from ..sources.oddsapi import normalize_name
+    matched = 0
+    for prop in getattr(slate, "props", []):
+        got = lines.get((normalize_name(prop.player), prop.market))
+        if got:
+            prop.lines = list(got)
+            matched += 1
+    return matched, len(getattr(slate, "props", []))
+
+
+__all__ = ["MARKETS", "MIN_LOGS", "LOG_LIMIT", "attach_lines",
+           "build_props", "build_slate"]

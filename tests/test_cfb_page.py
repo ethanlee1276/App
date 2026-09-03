@@ -360,22 +360,33 @@ def test_the_odds_adapter_knows_the_league():
 def test_the_whole_board_is_priced_in_one_request():
     """Per-event pricing of the GAME markets would cost ~60 credits a
     Saturday, which the budget pacer would never authorise — so the game
-    board stays one bulk call. The TD long-shot pull (2026-08-25) is the
-    priced-in exception: player markets are only served per event, so it
-    pays a credit a game and is CAPPED at TD_EVENT_CAP of the best
-    games. The authorization estimate covers both — the bulk call plus
-    the worst-case cap — so light days cost less than authorized, never
-    more."""
+    board stays one bulk call. The PLAYER pull is the priced-in
+    exception: player markets are only served per event, so it pays
+    CREDITS_PER_EVENT a game and is CAPPED at PLAYER_EVENT_CAP of the
+    best games. The authorization estimate covers both — the bulk call
+    plus the worst-case cap — so light days cost less than authorized,
+    never more.
+
+    THE COST ROSE FOUR-FOLD ON 2026-09-03 and the estimate has to rise
+    with it: that call bought one market (anytime TD) and now buys five,
+    because college gained the four yardage markets. A pacer authorising
+    a fifth of what gets spent is the exact failure `CREDITS_PER_EVENT`
+    was introduced to end."""
     src = _read("engine", "sources", "oddsapi.py")
     assert "def fetch_sport_odds(" in src
     assert 'f"{ODDS_BASE}/sports/{cfg[\'sport_key\']}/odds"' in src
     launch = _read("launch.py")
-    assert "CFB_ODDS_COST = 15" in launch
+    assert "CFB_ODDS_COST = 3 + 12 * 5" in launch
     assert "cost=CFB_ODDS_COST" in launch
     build = _read("cfb_build.py")
-    assert "TD_EVENT_CAP = 12" in build
-    assert "cands[:TD_EVENT_CAP]" in build, \
-        "the TD pull lost its cap — an uncapped Saturday is 60 credits"
+    assert "PLAYER_EVENT_CAP = 12" in build
+    assert "cands[:cap]" in build, \
+        "the player pull lost its cap — an uncapped Saturday is 300 credits"
+    assert "affordable_events" in build, \
+        "the cap is board policy alone again — the budget gets no say"
+    import launch as L
+    import cfb_build as B
+    assert L.CFB_ODDS_COST == 3 + B.PLAYER_EVENT_CAP * B.CREDITS_PER_EVENT
 
 
 def test_the_server_serves_the_league():

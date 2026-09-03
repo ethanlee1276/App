@@ -34,7 +34,7 @@ from engine.staking import to_units
 from engine.cfb import context as cfbcontext
 from engine.cfb import ratings as cfbratings
 from engine.cfb import status as cfbstatus
-from engine.cfb.model import attention_tier
+from engine.cfb.model import LOW, MARQUEE, STANDARD, attention_tier
 from engine.cfb.pipeline import run_cfb_slate
 from engine.db import connect, upsert_games
 from engine.odds import expected_value
@@ -137,29 +137,73 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     return priced, note
 
 
-#: How many games a TD-quote pull may touch. Player markets are
-#: event-scoped — one credit per game per pull — where the whole game
-#: board above is three credits flat, so an uncapped Saturday would cost
-#: sixty credits a cycle. Capped to the games most worth a longshot
-#: card, chosen by attention tier then kickoff.
-TD_EVENT_CAP = 12
+#: The player markets ONE college event call buys. The meter bills per
+#: market per region, so asking for all five in one request costs exactly
+#: what five separate requests would — and saves four round trips, four
+#: cache entries and any chance of the five disagreeing about a game.
+#:
+#: Anytime TD feeds the long-shot board (engine/cfb/tds); the other four
+#: are the prop board's, and they are the same Odds API keys the NFL
+#: buys because it is the same sport.
+PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
+                  "player_rush_yds", "player_reception_yds",
+                  "player_receptions"]
 
-#: Only games kicking off inside this window get a TD pull. A quote for
-#: Thursday bought on Monday is four days of line movement we would be
-#: pricing against.
-TD_WINDOW_HOURS = 36
+#: What one game costs, by the API's own rule — one credit per market per
+#: region, and every request this file makes is one region.
+CREDITS_PER_EVENT = len(PLAYER_MARKETS)
+
+#: The most games a player pull will EVER touch, before the budget gets a
+#: say. Player markets are event-scoped where the whole game board above
+#: is three credits flat, so an uncapped Saturday would be sixty games ×
+#: five markets = three hundred credits a cycle. This is the "worth it"
+#: ceiling — the games most worth a card — and `oddsbudget.
+#: affordable_events` is the "can we" one; the pull takes the lower.
+PLAYER_EVENT_CAP = 12
+
+#: Only games kicking off inside this window get a player pull. A quote
+#: for Thursday bought on Monday is four days of line movement we would
+#: be pricing against.
+PLAYER_WINDOW_HOURS = 36
+
+#: Attention tier, as a sort key. WRITTEN DOWN BECAUSE THE OBVIOUS
+#: VERSION IS WRONG: the tiers are the strings "marquee", "standard" and
+#: "low", and sorting a game board by that string ascending puts LOW
+#: first — l < m < s. The cap has therefore been spending its twelve
+#: credits on the Tuesday MAC games and skipping the ranked Saturday
+#: ones, which is the exact opposite of what the cap was written to do
+#: ("chosen by attention tier then kickoff") and is invisible from the
+#: outside: the board fills up either way.
+_TIER_ORDER = {MARQUEE: 0, STANDARD: 1, LOW: 2}
 
 
-def attach_td_quotes(games: list[dict], priced: dict, cache_only: bool,
-                     api_key: str | None = None,
-                     now=None) -> tuple[dict, str]:
-    """Anytime-TD quotes for the board's best games.
+def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
+                         api_key: str | None = None,
+                         now=None, cap: int | None = None
+                         ) -> tuple[dict, dict, str]:
+    """Player quotes for the board's best games — one call per game.
 
-    Returns ``({game_index: {norm_name: [quotes]}}, note)`` keyed by each
-    game's INDEX in ``games`` — the payload's own order — plus a spend
-    note. Games qualify with a real spread AND total (the TD model needs
-    both for the implied total and the script) and a kickoff inside the
-    window; the cap keeps a fresh Saturday pull at TD_EVENT_CAP credits.
+    Returns ``(scorers, lines, note)``:
+
+      * ``scorers`` — ``{game_index: {norm_name: [quotes]}}`` keyed by
+        each game's INDEX in ``games``, which is what
+        `engine.cfb.tds.build_cfb_td_longshots` reads;
+      * ``lines`` — ``{(norm_name, market): [SportsbookLine]}`` for the
+        yardage/reception props, which is what `engine.cfb.props.
+        attach_lines` reads;
+      * ``note`` — what was pulled, what it cost, and what was left out,
+        for the board to say out loud.
+
+    ``cap`` is the number of games this pull may buy; None asks the
+    budget pacer. Games are ordered by attention tier, then by whether
+    the game board has a spread and a total on them, then by kickoff.
+
+    THE SPREAD/TOTAL CHECK IS A PREFERENCE HERE AND USED TO BE A FILTER.
+    It was the touchdown model's requirement — no implied total, no
+    script, no scorer price — and it was applied to the whole pull
+    because the whole pull was touchdowns. A yardage prop needs neither,
+    so a game whose full-game markets nobody posted is now merely LAST
+    in the queue rather than struck from it.
     """
     import datetime as _dt
 
@@ -169,8 +213,7 @@ def attach_td_quotes(games: list[dict], priced: dict, cache_only: bool,
     cands = []
     for i, g in enumerate(games):
         entry = priced.get(g["game_id"]) or {}
-        if not entry.get("event_id") or "spread" not in entry \
-                or "total" not in entry:
+        if not entry.get("event_id"):
             continue
         kick = str(g.get("kickoff") or "").replace("Z", "+00:00")
         try:
@@ -178,16 +221,29 @@ def attach_td_quotes(games: list[dict], priced: dict, cache_only: bool,
         except ValueError:
             continue
         if ko.tzinfo is None or ko <= t \
-                or ko > t + _dt.timedelta(hours=TD_WINDOW_HOURS):
+                or ko > t + _dt.timedelta(hours=PLAYER_WINDOW_HOURS):
             continue
-        cands.append((attention_tier(g), ko, i, entry["event_id"]))
-    cands.sort(key=lambda c: (c[0], c[1]))
-    out: dict = {}
+        priceable = "spread" in entry and "total" in entry
+        cands.append((_TIER_ORDER.get(attention_tier(g), 9),
+                      0 if priceable else 1, ko, i, entry["event_id"]))
+    cands.sort(key=lambda c: (c[0], c[1], c[2]))
+
+    if cap is None:
+        cap = PLAYER_EVENT_CAP
+        try:
+            from engine.oddsbudget import affordable_events
+            cap = min(cap, affordable_events(CREDITS_PER_EVENT))
+        except Exception:                                    # noqa: BLE001
+            pass                       # a pacing hiccup never costs a board
+    cap = max(0, int(cap))
+
+    scorers: dict = {}
+    lines: dict = {}
     pulled = 0
-    for _tier, _ko, i, event_id in cands[:TD_EVENT_CAP]:
+    for _tier, _pri, _ko, i, event_id in cands[:cap]:
         try:
             payload, _quota = oddsapi.fetch_event_odds(
-                event_id, api_key, markets=["player_anytime_td"],
+                event_id, api_key, markets=PLAYER_MARKETS,
                 sport="cfb", ttl=1800, cache_only=cache_only)
         except oddsapi.OddsAPIError:
             if cache_only:
@@ -198,10 +254,23 @@ def attach_td_quotes(games: list[dict], priced: dict, cache_only: bool,
         for (norm, _mkt), qs in oddsapi.parse_event_scorers(payload).items():
             quotes.setdefault(norm, []).extend(qs)
         if quotes:
-            out[i] = quotes
-    note = (f"TD quotes: {pulled} of {len(cands)} eligible game(s) pulled"
+            scorers[i] = quotes
+        for key, got in oddsapi.parse_event_lines(
+                payload, oddsapi.SPORT_CONFIG["cfb"]["markets"]).items():
+            lines.setdefault(key, []).extend(got)
+
+    note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
+            f"pulled at {CREDITS_PER_EVENT} credit(s) each"
             + (" (cached)" if cache_only else ""))
-    return out, note
+    if cap < len(cands):
+        # SAID ON THE BOARD, NOT ONLY IN THE LOG. A college Saturday the
+        # budget can only half-buy looks exactly like a college Saturday
+        # the books did not price, and the difference is the whole
+        # question a reader is asking.
+        note += (f" · {len(cands) - cap} left unpriced — the pull is capped "
+                 f"at {cap} game(s) by attention tier "
+                 f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})")
+    return scorers, lines, note
 
 
 def _books_for(ev: dict, entry: dict, home: str, away: str,
@@ -1142,6 +1211,25 @@ def main() -> None:
     # database — and produces a board that says how many players it
     # looked at rather than a page that says college has no players.
     prop_census: dict = {}
+    # ONE PULL FOR BOTH PLAYER BOARDS. Anytime TD (the long-shot board)
+    # and the four yardage markets (this one) come back in a single
+    # event call per game — the meter bills per market, so two requests
+    # for the same event cost exactly what one asking for both costs,
+    # and one request cannot disagree with itself about a game.
+    td_quotes: dict = {}
+    prop_lines: dict = {}
+    quotes_note = ("no odds pulled on this cycle — player prices are "
+                   "metered per event, so they arrive on the cycles that "
+                   "can afford them rather than every minute")
+    if args.odds or args.cached_odds:
+        try:
+            td_quotes, prop_lines, quotes_note = attach_player_quotes(
+                games, priced, cache_only=args.cached_odds and not args.odds)
+            print(f"  {quotes_note}")
+        except Exception as _qexc:                           # noqa: BLE001
+            quotes_note = f"player quotes unavailable: {_qexc}"
+            print(f"  ⚠️  {quotes_note}")
+
     try:
         from engine.cfb import props as _cfbprops
         from engine.pipeline import price_props as _price_props
@@ -1152,10 +1240,17 @@ def main() -> None:
         _prop_slate = _cfbprops.build_slate(
             conn, _prop_games, args.date,
             _prop_season_of("cfb", args.date), census=prop_census)
+        # The book's number replaces the proxy wherever this pull bought
+        # one. A prop with no line keeps its proxy, is analysed and
+        # shown, and is never staked or journaled — `evaluate_prop`
+        # reads the book name and refuses to call it a market.
+        _matched, _total = _cfbprops.attach_lines(_prop_slate, prop_lines)
+        prop_census["priced"] = _matched
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         if prop_census.get("candidates"):
             print(f"  Player props: {prop_census['props']} market(s) across "
-                  f"{prop_census['candidates']} placed player(s) "
+                  f"{prop_census['candidates']} placed player(s), "
+                  f"{_matched} with a real book line "
                   f"({prop_census['transfers']} found under a former school, "
                   f"{prop_census['thin_history']} with too little history, "
                   f"{prop_census['below_volume']} below the volume floor; "
@@ -1165,7 +1260,16 @@ def main() -> None:
                   "teams — run `python3 ingest.py cfb --seasons 2022-2026`.")
     except Exception as _pexc:                               # noqa: BLE001
         print(f"  ⚠️  player props unavailable: {_pexc}")
+    prop_census["quotes_note"] = quotes_note
     out["prop_census"] = prop_census
+    # WHAT THE PULL COVERED, ON THE BOARD RATHER THAN IN THE LOG. The
+    # shape NFL and MLB publish and the page already renders
+    # (`oddsClockHTML`); college published none, so a Saturday the budget
+    # could only half-buy read exactly like a Saturday the books had not
+    # priced. Those are different facts and a reader is asking which.
+    out["odds_status"] = {"at": out["generated_at"], "note": quotes_note,
+                          "games_quoted": len(td_quotes),
+                          "props_priced": prop_census.get("priced", 0)}
 
     # EVERY INGESTED MARKET FOR TONIGHT'S PLAYERS, the same key the NFL
     # and MLB boards publish for the Players page's market chips. Empty
@@ -1210,8 +1314,7 @@ def main() -> None:
     if args.odds or args.cached_odds:
         try:
             from engine.cfb import tds as _tds
-            quotes, td_note = attach_td_quotes(
-                games, priced, cache_only=args.cached_odds and not args.odds)
+            quotes, td_note = td_quotes, quotes_note
             rows, census, watch = _tds.build_cfb_td_longshots(
                 conn, out["games"], quotes, day.year)
             out["long_shots"] = rows
@@ -1250,6 +1353,25 @@ def main() -> None:
                                          rows, watch, sport="cfb",
                                          census=_ml_census,
                                          game_bets=out.get("game_bets") or [])
+            # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
+            # yardage markets have a model and, until the box holding
+            # the logs walks them, no measurement — so `from_prop`
+            # refuses every one of them before the census sees a row and
+            # the shelf is silently absent. Silence is the wrong answer
+            # here: "we have not measured this yet" and "nobody hit the
+            # bar tonight" look identical on a page and are completely
+            # different facts. The same sentence MLB and NBA publish,
+            # counted per market so the funnel adds up.
+            try:
+                from engine.cfb.props import MARKETS as _pm
+                from engine.likely import rankable as _rankable
+                _unmeasured = [m for m in _pm if not _rankable(m, "cfb")]
+                if _unmeasured and out.get("recommendations"):
+                    _ml_census["no market measured to rank yet"] = \
+                        _ml_census.get("no market measured to rank yet", 0) \
+                        + len(_unmeasured)
+            except Exception:                                # noqa: BLE001
+                pass
             out["likely_census"] = _ml_census
             # THE SAME FURNITURE THE NFL BOARD CARRIES, and college had
             # none of it. `boardGuide` and the shelves both read the
@@ -1291,7 +1413,6 @@ def main() -> None:
                           f"for the hold measurement.")
             except Exception as _hexc:                       # noqa: BLE001
                 print(f"  ⚠️  quote journal skipped: {_hexc}")
-            print(f"  {td_note}")
             if census["quoted_players"]:
                 print(f"  TD board: {len(rows)} pick(s) + {len(watch)} "
                       f"most-likely from {census['quoted_players']} quoted "
@@ -1313,10 +1434,11 @@ def main() -> None:
         # zero because nothing was asked, and the note says so.
         out["td_census"] = {
             "quoted_players": 0, "no_usage": 0, "outside_window": 0,
-            "quotes_note": "no odds pulled on this cycle — touchdown "
-                           "prices are metered per event, so they arrive "
-                           "on the cycles that can afford them rather "
-                           "than every minute",
+            # One sentence, written once, wherever it is said. It used
+            # to be typed here a second time and the two copies were
+            # already drifting — this one still said "touchdown prices"
+            # after the same call started buying yardage as well.
+            "quotes_note": quotes_note,
             "games_quoted": 0,
         }
     out["status"] = "slate"

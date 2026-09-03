@@ -197,9 +197,10 @@ def _prop_markets(sport: str) -> set:
     """The player-prop markets this sport's board actually quotes.
 
     Three sources, because no one of them is honest alone. The harvest
-    CONFIG says what can be bought — but CFB's is empty while its
-    touchdown board publishes picks every Saturday, so the config alone
-    would report that college has no props to price. `HOLD_MARKETS` names
+    CONFIG says what can be bought — but a Yes-only board is never in it
+    (anytime TD has no over/under to buy), so the config alone reported
+    that college had no props to price for as long as the touchdown
+    board was college's only one. `HOLD_MARKETS` names
     the Yes-only boards each sport quotes — but only those. The JOURNAL
     says what was actually bet — but a market added before its first pick
     is invisible there, and so is a whole board in its own offseason. The

@@ -77,11 +77,27 @@ def test_every_key_the_nfl_bets_resolves_can_be_read_back():
     assert oh.unreadable_markets("nfl", keys) == []
 
 
-def test_a_college_yardage_prop_is_flagged_rather_than_bought():
-    """CFB's market map is empty, so this resolves to nothing the parser
-    knows and would be paid for and dropped."""
-    keys = oh.resolve_market_keys("cfb", ["rec_yds"])
-    assert oh.unreadable_markets("cfb", keys) == keys
+def test_a_college_yardage_prop_is_now_bought_and_read_back():
+    """IT USED TO BE FLAGGED, and correctly: CFB's market map was empty,
+    so a college yardage key resolved to nothing the parser knew and
+    would have been paid for and dropped. The map is populated as of
+    2026-09-03 (the college prop board), and the guard's answer flips
+    with it — which is the guard working, not the guard going away.
+
+    It matters beyond the live board: a college prop journaled with no
+    closing line can never be graded for CLV, which is the hole the NFL
+    scorer markets sat in until `resolve_market_keys` learned them."""
+    keys = oh.resolve_market_keys(
+        "cfb", ["pass_yds", "rush_yds", "rec_yds", "receptions"])
+    assert keys == ["player_pass_yds", "player_rush_yds",
+                    "player_reception_yds", "player_receptions"]
+    assert oh.unreadable_markets("cfb", keys) == []
+
+
+def test_a_market_no_parser_knows_is_still_flagged():
+    """The guard itself, asked about a key that really is unreadable."""
+    assert oh.unreadable_markets("cfb", ["player_kicking_points"]) == \
+        ["player_kicking_points"]
 
 
 def test_the_college_scorer_board_is_readable():

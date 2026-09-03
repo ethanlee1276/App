@@ -126,11 +126,21 @@ CFB_OUT = "web/data/cfb.json"
 # One bulk request covers h2h + spreads + totals for the whole
 # board, so the cost is per-market, not per-game.
 # The CFB board itself is one bulk call (3 credits, whole slate); the
-# anytime-TD long-shot pull adds up to TD_EVENT_CAP event-scoped calls
-# at a credit each (cfb_build.attach_td_quotes) — so the authorization
-# estimate covers the worst Saturday, and light days cost less than
-# authorized rather than more.
-CFB_ODDS_COST = 15
+# player pull adds up to PLAYER_EVENT_CAP event-scoped calls at
+# CREDITS_PER_EVENT each (cfb_build.attach_player_quotes) — so the
+# authorization estimate covers the worst Saturday, and light days cost
+# less than authorized rather than more.
+#
+# 15 -> 63 on 2026-09-03, and the four-fold rise is the point rather
+# than a regression: that call bought ONE market (anytime TD) and now
+# buys five, because college gained the four yardage markets the NFL
+# has always had. The meter bills per market, so the number here has to
+# move with them or the pacer authorises a fifth of what gets spent —
+# which is the exact failure `CREDITS_PER_EVENT` was introduced to end
+# ("an invisible 4-8x overspend that burned 19k of a 20k plan in a
+# day"). The pull itself asks `oddsbudget.affordable_events` and buys
+# fewer games when the month cannot carry twelve.
+CFB_ODDS_COST = 3 + 12 * 5
 
 
 def _slate_games(path: str) -> int:

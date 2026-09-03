@@ -560,45 +560,120 @@ def test_cfb_no_quotes_no_usage_no_picks():
 
 # --- the capped CFB quote pull ----------------------------------------------
 
-def test_attach_td_quotes_filters_caps_and_survives_cache_misses():
+def _quote_pull(games, priced, now, cap=None, calls=None):
+    """Run `attach_player_quotes` against a stubbed fetch."""
     sys.path.insert(0, ROOT)
     import cfb_build as B
-    now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
-    games, priced = [], {}
-    for i in range(16):
-        gid = f"g{i}"
-        games.append({"game_id": gid, "home": f"H{i}", "away": f"A{i}",
-                      "kickoff": f"2026-08-29T{16 + (i % 8):02d}:00Z",
-                      "home_rank": 1 if i < 4 else None})
-        entry = {"event_id": f"e{i}", "spread": (-7.0, -110, -110),
-                 "total": (55.5, -110, -110)}
-        if i == 15:
-            entry.pop("total")         # no total → no implied → not eligible
-        priced[gid] = entry
-    # One game already kicked, one with no event id.
-    games[14]["kickoff"] = "2026-08-29T10:00Z"
-    priced["g13"].pop("event_id")
-    calls = []
+    seen = calls if calls is not None else []
 
     def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport="nfl",
                    cache_only=False):
-        calls.append(eid)
+        seen.append((eid, tuple(markets or ()), sport))
         if eid == "e2":
             raise oa.OddsAPIError("no cached copy")
         return SCORER_EVENT, oa.Quota("491", "9")
     real = oa.fetch_event_odds
     oa.fetch_event_odds = fake_fetch
     try:
-        out, note = B.attach_td_quotes(games, priced, cache_only=True, now=now)
+        return B.attach_player_quotes(games, priced, cache_only=True,
+                                      now=now, cap=cap)
     finally:
         oa.fetch_event_odds = real
-    # 16 games − started − missing id − missing total = 13 eligible,
-    # capped at TD_EVENT_CAP attempts.
-    assert len(calls) == B.TD_EVENT_CAP, calls
+
+
+def _slate_of(n=16):
+    games, priced = [], {}
+    for i in range(n):
+        gid = f"g{i}"
+        games.append({"game_id": gid, "home": f"H{i}", "away": f"A{i}",
+                      "kickoff": f"2026-08-29T{16 + (i % 8):02d}:00Z",
+                      "home_rank": 1 if i < 4 else None})
+        entry = {"event_id": f"e{i}", "spread": (-7.0, -110, -110),
+                 "total": (55.5, -110, -110)}
+        if i == n - 1:
+            entry.pop("total")
+        priced[gid] = entry
+    # One game already kicked, one with no event id.
+    games[n - 2]["kickoff"] = "2026-08-29T10:00Z"
+    priced[f"g{n - 3}"].pop("event_id")
+    return games, priced
+
+
+def test_attach_player_quotes_filters_caps_and_survives_cache_misses():
+    sys.path.insert(0, ROOT)
+    import cfb_build as B
+    now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
+    games, priced = _slate_of()
+    calls = []
+    out, _lines, note = _quote_pull(games, priced, now,
+                                    cap=B.PLAYER_EVENT_CAP, calls=calls)
+    # 16 games − started − missing id = 14 eligible. A game with no
+    # total is no longer struck out: it cannot carry a TOUCHDOWN price
+    # (no implied total, no script) but a yardage prop needs neither, so
+    # it goes last in the queue instead of off it.
+    assert len(calls) == B.PLAYER_EVENT_CAP, calls
     # The cache miss was skipped, not fatal; everything else parsed —
     # and `pulled` counts what actually answered.
-    assert len(out) == B.TD_EVENT_CAP - 1, sorted(out)
-    assert f"{B.TD_EVENT_CAP - 1} of 13 eligible" in note, note
+    assert len(out) == B.PLAYER_EVENT_CAP - 1, sorted(out)
+    assert f"{B.PLAYER_EVENT_CAP - 1} of 14 eligible" in note, note
+
+
+def test_one_call_buys_every_player_market_for_that_game():
+    """The meter bills per market, so five markets in one request cost
+    what five requests cost — and one request cannot disagree with
+    itself about a game."""
+    sys.path.insert(0, ROOT)
+    import cfb_build as B
+    now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
+    calls = []
+    _quote_pull(*_slate_of(), now=now, cap=2, calls=calls)
+    assert len(calls) == 2
+    for _eid, markets, sport in calls:
+        assert sport == "cfb"
+        assert list(markets) == B.PLAYER_MARKETS
+        assert "player_anytime_td" in markets and "player_rush_yds" in markets
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 5
+
+
+def test_the_ranked_games_are_bought_first():
+    """THE BUG THIS PINS. The queue sorted on the attention tier STRING,
+    and "low" < "marquee" < "standard" alphabetically — so a cap written
+    to buy "the games most worth a longshot card" spent every credit on
+    the Tuesday MAC games and skipped the ranked Saturday ones. Nothing
+    downstream could see it: the board filled up either way."""
+    sys.path.insert(0, ROOT)
+    import cfb_build as B
+    now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
+    games, priced = _slate_of()
+    # g0-g3 carry a home rank AND two power conferences → marquee.
+    for i in range(4):
+        games[i]["home_conference"] = games[i]["away_conference"] = "SEC"
+        games[i]["weekday"] = "saturday"
+    for i in range(4, 16):
+        games[i]["weekday"] = "tuesday"          # → low
+    calls = []
+    _quote_pull(games, priced, now, cap=4, calls=calls)
+    assert B._TIER_ORDER["marquee"] < B._TIER_ORDER["low"]
+    assert sorted(e for e, _m, _s in calls) == ["e0", "e1", "e2", "e3"], calls
+
+
+def test_a_capped_pull_says_what_it_left_unpriced():
+    """A Saturday the budget can only half-buy looks exactly like a
+    Saturday the books did not price, and the difference is the whole
+    question a reader is asking."""
+    now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
+    _out, _lines, note = _quote_pull(*_slate_of(), now=now, cap=3)
+    assert "11 left unpriced" in note, note
+    assert "budget pacing" in note, note
+
+
+def test_the_pacer_is_what_lowers_the_cap():
+    """Twelve games times five markets is sixty credits a cycle. The
+    ceiling is board policy; whether the month can carry it is not."""
+    from engine.oddsbudget import BudgetState, affordable_events
+    rich = affordable_events(5, state=BudgetState(remaining=20000))
+    broke = affordable_events(5, state=BudgetState(remaining=520))
+    assert rich > 0 and broke == 0, (rich, broke)
 
 
 # --- the most-likely-scorers watch ------------------------------------------
