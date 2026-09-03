@@ -61,6 +61,31 @@ def census(rows: list[dict], skip=None, sport: str = "") -> dict:
     this way, and the printout said only "0 recommended". MLB's own
     census has named these since its thin nights; this is that idea, in
     the module both boards share.
+
+    THE PRICE COMES FIRST, and this counter had it the other way round.
+    A prop in a closed market that no book ever quoted is BOTH unpriced
+    and closed, and the order decides which fact gets reported. Counting
+    calibration first charged the model for props it was never asked
+    about: `NO_PRICE`'s own comment three lines above the loop says
+    "counted before any gate, because the model never got a say", MLB's
+    census has always taken them in that order, and the front end sorts
+    `no_real_price` into "never reached the model" while every other
+    bucket sits under "priced and rejected — N props reached the model".
+    So an unpriced rushing prop counted here was displayed as one the
+    model had priced and refused. It had not been priced by anybody.
+
+    That matters because this number is the one being read. NFL, on the
+    droplet 2026-09-03: no real price 64 · calibration 169 · grade 44,
+    and Ethan reading it as "the rushing/receiving fits are the single
+    biggest reason NFL shows zero picks". Any part of the 169 that never
+    carried a book line belongs in the 64, and moving it does not change
+    a single bet — it changes which explanation the board offers for
+    having none.
+
+    The NAMES are gathered from every row in a closed market, priced or
+    not. The count says how many props the closure actually killed
+    tonight; the list says which markets are shut, which stays true on a
+    night when nothing in them was quoted anyway.
     """
     out: dict = {"recommended": 0, NO_PRICE: 0}
     closed: set = set()
@@ -74,11 +99,10 @@ def census(rows: list[dict], skip=None, sport: str = "") -> dict:
         if r.get("recommended"):
             out["recommended"] += 1
             continue
-        if is_reliable is not None and r.get("market") \
-                and not is_reliable(sport, r["market"]):
-            out["calibration"] = out.get("calibration", 0) + 1
+        shut = (is_reliable is not None and r.get("market")
+                and not is_reliable(sport, r["market"]))
+        if shut:
             closed.add(r.get("market_label") or r.get("market"))
-            continue
         if r.get("has_market") is False:
             # WHICH markets go unpriced matters: books post a line for
             # most starters but scorer markets for a handful, so a big
@@ -88,6 +112,9 @@ def census(rows: list[dict], skip=None, sport: str = "") -> dict:
             by = out.setdefault("no_price_markets", {})
             label = r.get("market_label") or r.get("market") or "?"
             by[label] = by.get(label, 0) + 1
+            continue
+        if shut:
+            out["calibration"] = out.get("calibration", 0) + 1
             continue
         failed = next((c.get("key") for c in (r.get("checks") or [])
                        if not c.get("passed")), None)

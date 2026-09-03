@@ -88,6 +88,85 @@ def test_the_closed_markets_are_named_not_just_totalled():
         _restore()
 
 
+# --- the order --------------------------------------------------------------
+def test_a_prop_no_book_ever_quoted_is_unpriced_first_and_closed_second():
+    """THE ORDER THIS COUNTER HAD BACKWARDS. A rushing prop on a night no
+    book posted a rushing line is both unpriced and in a shut market, and
+    whichever test runs first is the one the board reports. Counting
+    calibration first charged the model for props nobody ever asked it
+    about — and the front end files `no_real_price` under "never reached
+    the model" while filing every other bucket under "priced and rejected
+    — N props reached the model", so the page then claimed to have priced
+    a prop that carried no price.
+
+    Live shape, NFL on the droplet 2026-09-03: no real price 64 ·
+    calibration 169 · grade 44, read as "the rushing/receiving fits are
+    the single biggest reason NFL shows zero picks". Any part of the 169
+    that never carried a line belongs in the 64."""
+    _boundary_store()
+    try:
+        rows = [{"recommended": False, "market": "rush_yds",
+                 "market_label": "Rushing Yards", "has_market": False}]
+        got = census(rows, sport="nfl")
+        assert got["no_real_price"] == 1, got
+        assert got.get("calibration", 0) == 0, \
+            "an unpriced prop is counted as one the calibration refused"
+        assert got["no_price_markets"] == {"Rushing Yards": 1}, got
+    finally:
+        _restore()
+
+
+def test_a_priced_prop_in_a_shut_market_still_dies_at_calibration():
+    """The reorder must not empty the bucket it reorders. A prop with a
+    real book line in a closed market is exactly what the gate refuses,
+    and it is the only kind of prop the closure actually costs us."""
+    _boundary_store()
+    try:
+        rows = [{"recommended": False, "market": "rush_yds",
+                 "market_label": "Rushing Yards", "has_market": True}]
+        got = census(rows, sport="nfl")
+        assert got["calibration"] == 1, got
+        assert got["no_real_price"] == 0, got
+    finally:
+        _restore()
+
+
+def test_the_market_is_named_shut_even_when_nothing_in_it_was_quoted():
+    """The COUNT says how many props the closure killed tonight; the LIST
+    says which markets are shut. On a night when no book quoted a rushing
+    line the count is rightly zero — and the market is still shut, and
+    the terminal warning and the page's "Closed by calibration" line both
+    render off the list, so dropping the name would quietly retire the
+    warning on exactly the thinnest nights."""
+    _boundary_store()
+    try:
+        rows = [{"recommended": False, "market": "rush_yds",
+                 "market_label": "Rushing Yards", "has_market": False}]
+        got = census(rows, sport="nfl")
+        assert got["calibration_markets"] == ["Rushing Yards"], got
+        assert "calibration" not in got, got
+    finally:
+        _restore()
+
+
+def test_the_two_football_censuses_agree_on_which_comes_first():
+    """MLB's private census has always taken the price first; this is the
+    counter NFL and CFB share. Two funnels that order the same two facts
+    differently give the same board two explanations."""
+    import inspect
+    from engine.mlb import pipeline as mlb_pipeline
+    src = inspect.getsource(mlb_pipeline.gate_census)
+    assert src.index('census["no_real_price"] += 1') \
+        < src.index('census["calibration"] += 1'), \
+        "MLB now counts calibration before the price; re-check both"
+    from engine import census as census_mod
+    ours = inspect.getsource(census_mod.census)
+    body = ours.split('"""')[-1]
+    assert body.index("out[NO_PRICE] += 1") \
+        < body.index('out["calibration"] ='), \
+        "the shared counter is back to charging the model for unpriced props"
+
+
 def test_a_recommended_prop_is_never_counted_as_closed():
     """Order matters: recommended is checked first, so a market that is
     open cannot be reported shut."""
