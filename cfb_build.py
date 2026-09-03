@@ -1378,6 +1378,33 @@ def _write(out: dict, path: str) -> None:
     out["comps"] = _attach_comps(out.get("recommendations") or [], "cfb")
     from engine.parlays import attach
     attach(out, "cfb")
+    # WHEN THESE PRICES WERE PULLED, which this board has never said.
+    #
+    # Ethan, 2026-09-03: "The lines on the most likely best bet page ...
+    # are completely wrong so we are giving bad bets. A lot of the money
+    # lines and shit are wrong." The moneyline arithmetic checks out end
+    # to end — the card's side, its price and the flip to the likely
+    # side all agree with the book. What the board could not say is how
+    # OLD the price beside a pick is, and on a board that had not
+    # rebuilt for three hours every one of them was three hours stale.
+    # A price that cannot be dated cannot be told apart from a wrong one.
+    #
+    # MLB has stamped this since the pacing telemetry went in and the
+    # page already renders it (`oddsClockHTML`, "last pulled 3:32 PM
+    # yesterday"); college published no `odds_status` at all, so the
+    # clock had nothing to draw. Same field, same source, same units.
+    #
+    # HERE RATHER THAN AT THE ODDS BLOCK, because this function is the
+    # one door every board goes out of — six call sites, several of them
+    # early returns — and the furniture that lived inside `if args.odds`
+    # is exactly what went missing from every cycle that did not spend.
+    try:
+        from engine import oddsbudget
+        _st = oddsbudget.load()
+        out.setdefault("odds_status", {})["priced_at"] = (
+            _st.sport_ts("cfb") or _st.last_refresh_ts or None)
+    except Exception:                                     # noqa: BLE001
+        pass                       # never cost the board a freshness note
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)

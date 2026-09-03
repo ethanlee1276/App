@@ -717,6 +717,21 @@ def main() -> None:
         from pathlib import Path
         result["generated_from"] = "live-odds" if real_odds else "live"
         odds_status["at"] = _dt.datetime.now().strftime("%H:%M")
+        # `at` IS THE BUILD'S CLOCK, NOT THE PRICE'S, and beside a price
+        # it reads like the price's. On a board that rebuilds every cycle
+        # off a paid pull that does NOT — `--cached-odds` keeps the last
+        # paid prices on purpose — those are hours apart, and only one of
+        # them answers "is this line still live". MLB has stamped the
+        # real one since the pacing telemetry went in and the page draws
+        # it already (`oddsClockHTML`); NFL never did. Ethan, 2026-09-03:
+        # "A lot of the money lines and shit are wrong."
+        try:
+            from engine import oddsbudget as _ob
+            _st = _ob.load()
+            odds_status["priced_at"] = (_st.sport_ts("nfl")
+                                        or _st.last_refresh_ts or None)
+        except Exception:                                 # noqa: BLE001
+            pass                   # never cost the board a freshness note
         result["odds_status"] = odds_status
         result["injury_status"] = injury_status
         # The measured market haircut, on the BOARD and not only on the
