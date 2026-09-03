@@ -328,9 +328,19 @@ def game_scripts(conn) -> list[dict]:
     spread — a 7+ favorite is a genuine script prediction, a 2-point spread
     is a coin flip and says so."""
     from .teamprofiles import season_profiles
+    from .teamcontext import league_means
     out = []
     proe = team_proe(conn)
     profs = season_profiles(conn)
+    # THE ZERO POINT, shipped with the numbers it makes readable.
+    # `def_epa` is the EPA a defence ALLOWS — the same offensive value
+    # bucketed under the defending team (engine/sources/nflpbp.py) — so
+    # positive is a leaky defence, not a good one, and offence and defence
+    # sit on one scale with one mean. Crossing them is therefore
+    # (off - mean) + (opp_def - mean), and without the mean that sum is
+    # not a number anybody can read. None when the season has no profiles
+    # yet, and the page draws nothing rather than assuming 0.0.
+    epa_mean = league_means(profs).get("off_epa")
     for g in conn.execute(
             "SELECT season, period, home, away, spread, total FROM games "
             "WHERE sport='nfl' AND total IS NOT NULL AND spread IS NOT NULL "
@@ -343,6 +353,15 @@ def game_scripts(conn) -> list[dict]:
             continue
         home_imp, away_imp = d["home_implied"], d["away_implied"]
         conf, name, desc = d["confidence"], d["archetype"], d["read"]
+        # EACH SIDELINE'S OWN READ, from `gamescript.for_team` rather than
+        # a second copy of the same if-tree on the page. The card shows
+        # the game's archetype; the detail under it has to say what that
+        # archetype means for THIS club, and those two sentences drifting
+        # apart is exactly the failure `engine/gamescript.py` was pulled
+        # out to prevent (one game script, said one way, 2026-09-02).
+        from .gamescript import for_team
+        _h = for_team(spread, total, g["home"], g["away"], g["home"]) or {}
+        _a = for_team(spread, total, g["home"], g["away"], g["away"]) or {}
         out.append({
             "season": g["season"], "week": g["period"],
             "home": g["home"], "away": g["away"],
@@ -360,6 +379,9 @@ def game_scripts(conn) -> list[dict]:
             "away_pace": (profs.get(g["away"]) or {}).get("pace"),
             "favorite": g["home"] if spread < 0 else g["away"],
             "confidence": conf, "archetype": name, "read": desc,
+            "home_role": _h.get("role"), "away_role": _a.get("role"),
+            "home_lean": _h.get("lean"), "away_lean": _a.get("lean"),
+            "epa_mean": round(epa_mean, 4) if epa_mean is not None else None,
         })
     return out
 

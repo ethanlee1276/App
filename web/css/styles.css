@@ -9036,3 +9036,35 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .dk-assist-hit { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: var(--hairline) solid var(--border); }
 .dk-assist-hit:first-child { border-top: none; }
 .dk-assist-log { margin-top: 8px; }
+
+/* ---- Game script detail (Fantasy › Game scripts) --------------------
+   The card summarises; this is the read underneath it. Sits inside the
+   card so the comparison between games survives one of them opening. */
+.gs-card .card-head:hover .gs-match { color: var(--text); }
+.gs-more { color: var(--text-mute); font-size: var(--fs-xs); white-space: nowrap; }
+.gs-detail { margin-top: 10px; padding-top: 10px;
+  border-top: var(--hairline) solid var(--border-soft); }
+.gs-sub { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-mute); margin-bottom: 4px; }
+.gs-note { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text-body); }
+.gs-note.gs-mute { color: var(--text-mute); font-size: var(--fs-xs); margin-top: 10px; }
+.gs-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.gs-side { background: var(--panel-2); border-radius: var(--radius-sm); padding: 8px 10px; }
+.gs-side-h { display: flex; align-items: center; gap: 6px; }
+.gs-role { font-size: var(--fs-xs); color: var(--text-mute); text-transform: uppercase;
+  letter-spacing: .06em; }
+.gs-vs { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-top: 6px; font-size: var(--fs-sm); }
+.gs-vs-k { color: var(--text-mute); }
+.gs-edge { font-weight: 700; }
+.gs-edge-k { font-weight: 400; color: var(--text-mute); font-size: var(--fs-xs); }
+.gs-who { margin-top: 12px; }
+.gs-who-r { display: flex; align-items: baseline; gap: 8px; padding: 3px 0;
+  font-size: var(--fs-sm); }
+.gs-who-r span { color: var(--text-mute); }
+.gs-who-n { margin-left: auto; color: var(--text-body); }
+@media (max-width: 900px) {
+  /* One column: two EPA crossings side by side at 360px is four numbers
+     in 150px, which is where this stops being readable. */
+  .gs-sides { grid-template-columns: 1fr; }
+}

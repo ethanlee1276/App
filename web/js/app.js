@@ -6310,6 +6310,40 @@ function watchlistHTML(watch, mlb) {
     <div class="card" style="padding:0">${rows}</div></div>`;
 }
 
+/* A game script opens its own detail in place.
+
+   Ethan, 2026-09-03: "we should be able too click on the games and see a
+   deeper dive into the game with more information and shit."
+
+   In place rather than a route, for two reasons. The cards are a
+   comparison — the point of the page is reading eight games against each
+   other — and a route throws that away to answer one question. And the
+   detail is drawn from the SAME row the card is: there is no second
+   fetch to justify a page, and a page implies there is.
+
+   Same shape as the watch row's disclosure below, keyboard included,
+   because two disclosures on one site behaving differently is its own
+   small bug. */
+document.addEventListener("click", (e) => {
+  const head = e.target.closest && e.target.closest("[data-gs-toggle]");
+  if (!head) return;
+  const card = head.closest(".gs-card");
+  const box = card && card.querySelector(".gs-detail");
+  if (!box) return;
+  box.hidden = !box.hidden;
+  head.setAttribute("aria-expanded", box.hidden ? "false" : "true");
+  const more = card.querySelector(".gs-more");
+  if (more) more.textContent = box.hidden
+    ? "— tap for the full read \u25be" : "— tap to close \u25b4";
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const head = e.target.closest && e.target.closest("[data-gs-toggle]");
+  if (!head) return;
+  e.preventDefault();
+  head.click();
+});
+
 /* A watch row opens its own reasoning in place. It is not a pick, so it
    has no prop page to open — the chain has to live on the row itself. */
 document.addEventListener("click", (e) => {
@@ -16104,9 +16138,112 @@ async function renderFantasy() {
         <span class="num">${proe != null ? `${proe >= 0 ? "+" : ""}${(proe * 100).toFixed(1)}%` : "—"}</span>
         <span class="num">${epa != null ? `${epa >= 0 ? "+" : ""}${epa.toFixed(2)}` : "—"}</span>
         <span class="num">${pace != null ? pace.toFixed(1) + "s" : "—"}</span>`;
+  /* THE DEEPER DIVE, under the card that summarises it.
+
+     Ethan, 2026-09-03: "on the game script page, we should be able too
+     click on the games and see a deeper dive into the game with more
+     information and shit."
+
+     Everything here is already in the payload and most of it was never
+     drawn. `home_def_epa` / `away_def_epa` in particular have been built
+     by `fantasy.game_scripts` all along and shown nowhere — which is the
+     half that decides a start/sit, because a good offence into a good
+     defence is not the same bet as a good offence into a bad one.
+
+     Nothing is invented. A field the build could not fill (pbp not
+     ingested yet, a team with no profile) prints as a dash rather than a
+     zero, because a 0.00 EPA reads as "league average" and an absent one
+     is not that. */
+  const gsNum = (v, dp, sign) => (v === null || v === undefined || v === "")
+    ? "—" : `${sign && Number(v) > 0 ? "+" : ""}${Number(v).toFixed(dp)}`;
+
+  /* Offence against the defence it actually faces.
+
+     `def_epa` is the EPA a defence ALLOWS — the identical play value,
+     bucketed under the defending team — so a POSITIVE def_epa is a leaky
+     defence and the two numbers ADD. The first cut of this subtracted
+     them, which had a good offence looking WORSE the softer the defence
+     it played, exactly inverted.
+
+     They add around the league mean, not around zero: EPA/play has no
+     natural zero and `teamcontext.league_means` is the codebase's own
+     answer to "+0.06 means nothing on its own". So the matchup edge is
+     (offence − mean) + (defence allowed − mean). No mean on the row means
+     no number here — a guessed zero point is a made-up number. */
+  const gsEdge = (off, def, mean) => (off === null || off === undefined
+      || def === null || def === undefined
+      || mean === null || mean === undefined) ? "" :
+    `<div class="gs-edge">${gsNum((Number(off) - Number(mean))
+        + (Number(def) - Number(mean)), 2, true)}
+       <span class="gs-edge-k">matchup vs league</span></div>`;
+
+  /* Seconds per snap into plays, over the ~54 minutes a game spends in
+     the balance. A rough number and labelled as one — it is here to say
+     "this is a 130-play game, not a 118-play game", which is the part
+     that moves volume. */
+  const gsPlays = (a, b) => {
+    if (a === null || a === undefined || b === null || b === undefined) return "";
+    const pace = (Number(a) + Number(b)) / 2;
+    if (!(pace > 0)) return "";
+    return `<p class="gs-note">About <b>${Math.round(3240 / pace)}</b> plays at this
+      pace — the volume every projection on this page divides up.</p>`;
+  };
+
+  /* Who on THIS page the script actually moves. The usage board is the
+     reason somebody is reading Fantasy at all, so a game's detail that
+     does not reach it is trivia. */
+  const gsPlayers = (home, away) => {
+    const rows = (d.usage || [])
+      .filter((u) => u.team === home || u.team === away).slice(0, 6);
+    if (!rows.length) return "";
+    /* The same three fields the usage table above prints for these
+       players — `last`, `metric`, `position` — read off the same rows,
+       so a share here and a share there can never disagree. */
+    return `<div class="gs-who"><div class="gs-sub">On the usage board from this game</div>
+      ${rows.map((u) => `<div class="gs-who-r"><b>${escapeHtml(u.player || "")}</b>
+        <span>${escapeHtml(u.position || "")}${u.position && u.team ? " · " : ""}${
+          escapeHtml(u.team || "")}</span>
+        <span class="gs-who-n">${u.last === null || u.last === undefined
+          ? "—" : `${pct(u.last)} ${escapeHtml(u.metric || "share")}`}</span></div>`).join("")}
+    </div>`;
+  };
+
+  const gsDetail = (s) => `
+    <div class="gs-detail" hidden>
+      <div class="gs-sub">Where the implied totals come from</div>
+      <p class="gs-note">Total ${s.total} split by the spread: each side gets
+        half the total, and the favourite takes half the margin.
+        <b>${escapeHtml(s.away)} ${s.away_implied}</b> ·
+        <b>${escapeHtml(s.home)} ${s.home_implied}</b>.</p>
+      <div class="gs-sides">
+        ${[[s.away, s.away_role, s.away_lean, s.away_epa, s.home_def_epa],
+           [s.home, s.home_role, s.home_lean, s.home_epa, s.away_def_epa]]
+          .map(([t, role, lean, off, oppDef]) => `
+          <div class="gs-side">
+            <div class="gs-side-h">${teamMark(t, 18, nflMap(), "nfl")}
+              <b>${escapeHtml(t)}</b>${role
+                ? ` <span class="gs-role">${escapeHtml(role)}</span>` : ""}</div>
+            ${lean ? `<p class="gs-note">${escapeHtml(lean)}</p>` : ""}
+            <div class="gs-vs"><span>offence ${gsNum(off, 2, true)}</span>
+              <span class="gs-vs-k">into a defence allowing ${gsNum(oppDef, 2, true)}</span>
+              ${gsEdge(off, oppDef, s.epa_mean)}</div>
+          </div>`).join("")}
+      </div>
+      ${gsPlays(s.home_pace, s.away_pace)}
+      ${gsPlayers(s.home, s.away)}
+      <p class="gs-note gs-mute">EPA/play is measured from every snap of the
+        ingested season. A defence’s number is what it ALLOWS, so higher is
+        softer, and the matchup line adds both against the league mean${
+          s.epa_mean === null || s.epa_mean === undefined
+            ? "" : ` (${gsNum(s.epa_mean, 2, true)})`} — positive favours the
+        offence. Pass rate over expectation and pace are last season’s
+        tendencies unless the card says a coach changed.</p>
+    </div>`;
+
   const scriptCards = (d.scripts || []).slice(0, 16).map((s) => `
-    <article class="card">
-      <div class="card-head">
+    <article class="card gs-card">
+      <div class="card-head" data-gs-toggle role="button" tabindex="0"
+        aria-expanded="false" style="cursor:pointer">
         <div><div class="gs-match">${teamMark(s.away, 22, nflMap(), "nfl")}<b>${escapeHtml(s.away)}</b>
             <span class="gs-at">@</span>
             ${teamMark(s.home, 22, nflMap(), "nfl")}<b>${escapeHtml(s.home)}</b></div>
@@ -16126,7 +16263,9 @@ async function renderFantasy() {
         ${gsRow(s.away, s.away_implied, s.away_proe, s.away_epa, s.away_pace)}
         ${gsRow(s.home, s.home_implied, s.home_proe, s.home_epa, s.home_pace)}
       </div>
-      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">${escapeHtml(s.read)}</div>
+      <div style="margin-top:8px;color:var(--text-body);font-size:var(--fs-sm)">${escapeHtml(s.read)}
+        <span class="gs-more">— tap for the full read ▾</span></div>
+      ${gsDetail(s)}
     </article>`).join("");
 
   const bsCount = (bs.buy_low || []).length + (bs.sell_high || []).length;
