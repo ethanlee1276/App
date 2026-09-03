@@ -60,11 +60,37 @@ def _call(url, payload=None, cookie=None):
         return exc.code, exc.read().decode(), exc.headers.get("Set-Cookie")
 
 
+def _not_the_real_boards(directory, names):
+    """copytree filter: take all of web/ except its data directory.
+
+    Only the top-level web/data is skipped — a `data` folder nested
+    deeper is a real asset and gets copied. The same filter
+    tests/test_paywall_live.py uses, and for a narrower reason here.
+
+    NOTHING IN THIS FILE READS A BOARD: every assertion below is about
+    what `/api/billing/status` says. So unlike that file, the verdict was
+    never a reading of the disk. What the copy did do was hand the server
+    a duplicate of whatever boards this machine had built, which it then
+    SEALS at startup — four times, once per `Site`, inside a 40-second
+    boot timeout, on a directory whose size is a property of the laptop
+    rather than of the code. A test that gets slower as its author builds
+    more boards eventually goes red for a reason nobody can read off the
+    failure.
+
+    It also stopped the server writing full copies of Ethan's real boards
+    into a temp tree at all, which no test needs to do."""
+    web = os.path.abspath(os.path.join(ROOT, "web"))
+    if os.path.abspath(directory) == web:
+        return {"data"} & set(names)
+    return set()
+
+
 class Site:
     def __init__(self, comp=COMP):
         self.dir = tempfile.mkdtemp(prefix="qb-ent-")
         self.web = os.path.join(self.dir, "web")
-        shutil.copytree(os.path.join(ROOT, "web"), self.web)
+        shutil.copytree(os.path.join(ROOT, "web"), self.web,
+                        ignore=_not_the_real_boards)
         self.port = _free_port()
         env = dict(os.environ)
         env.update({
