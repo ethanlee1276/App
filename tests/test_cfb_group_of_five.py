@@ -85,10 +85,13 @@ def test_the_sentence_on_the_card_says_what_was_tested():
     would call wrong. Now that the refusal rides on the card rather than
     dying in an unrendered pass list, it names the four instead."""
     why = M.NOT_A_POWER_GAME
-    assert "power conference" in why
-    for conf in sorted(M.POWER_CONFERENCES):
+    assert "this board bets" in why
+    for conf in sorted(M.BETTABLE_CONFERENCES):
         assert conf in why, conf
     assert "Group of Five" not in why
+    # Derived from the set, not typed beside it: the names in the
+    # sentence ARE the set, so it cannot outlive a change to membership.
+    assert ", ".join(sorted(M.BETTABLE_CONFERENCES)) in why
 
 
 def test_both_boards_show_the_same_sentence():
@@ -110,6 +113,54 @@ def test_the_touchdown_board_follows_the_same_rule():
     from engine.cfb import tds
     src = inspect.getsource(tds.build_cfb_td_longshots)
     assert "is_group_of_five(g)" in src and 'pick.grade = "Pass"' in src
+
+
+def test_attention_and_money_are_two_sets_so_one_can_move():
+    """`BET_GROUP_OF_FIVE`'s note promises "the attention dial is
+    unchanged: it decides how much of an edge to believe, this decides
+    whether the money follows" — a real distinction that was written down
+    and not kept, because both read POWER_CONFERENCES.
+
+    That made the Pac-12 question unanswerable. Adding it to the one set
+    opened the money gate AND moved those games LOW -> STANDARD, taking
+    the haircut 25% -> 35% and the bar 2.5% -> 3.0%: the games it just
+    made bettable became harder to bet in the same stroke. No replay of
+    "should we bet the Pac-12" can mean anything while one edit does
+    both.
+    """
+    saved = set(M.BETTABLE_CONFERENCES)
+    try:
+        # Default: same membership, so nothing about today's board moves.
+        assert M.BETTABLE_CONFERENCES == M.POWER_CONFERENCES
+
+        pac_mwc = {"home_conference": "Pac-12",
+                   "away_conference": "Mountain West", "weekday": "Saturday"}
+        assert M.is_group_of_five(pac_mwc) is True
+        assert M.attention_tier(pac_mwc) == M.LOW
+
+        # The money dial alone.
+        M.BETTABLE_CONFERENCES.add("Pac-12")
+        assert M.is_group_of_five(pac_mwc) is False, "the money gate opened"
+        assert M.attention_tier(pac_mwc) == M.LOW, \
+            "…and the attention dial did NOT move with it"
+    finally:
+        M.BETTABLE_CONFERENCES.clear()
+        M.BETTABLE_CONFERENCES.update(saved)
+
+
+def test_the_money_gate_reads_the_money_set():
+    """The membership test itself, not the prose around it — the
+    docstring and the comment beside it name POWER_CONFERENCES on
+    purpose, to say which set this is NOT."""
+    import inspect
+    src = inspect.getsource(M.is_group_of_five)
+    ret = src[src.rindex("    return "):]
+    assert "BETTABLE_CONFERENCES" in ret
+    assert "POWER_CONFERENCES" not in ret, \
+        "the money gate is reading the attention set again"
+    # …and the attention dial still reads its own.
+    tier = inspect.getsource(M.attention_tier)
+    assert "POWER_CONFERENCES" in tier and "BETTABLE" not in tier
 
 
 if __name__ == "__main__":

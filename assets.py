@@ -523,8 +523,16 @@ def probe_conference_table(date: str) -> int:
     no conference names, that twelve-row table checked into cfbdata.py is
     the ONLY source for a game's conference — and conference feeds
     ``attention_tier``, which scales how much of an edge the CFB model
-    believes. It still lists Pac-12, which after realignment is two schools
-    rather than a conference.
+    believes.
+
+    IT LISTS PAC-12, AND THAT ROW IS NOW RIGHT. This paragraph used to
+    say the Pac-12 "after realignment is two schools rather than a
+    conference", which was true of 2024-25 and is the reason the row
+    looked suspect. The 2026 feed settles it the other way and
+    CFB_READINESS.md records the count: 46 Pac-12 games across 888, in a
+    universe of 138 FBS programs and 11 conferences — a rebuilt league,
+    present, and correctly named. What is worth probing is the mapping
+    itself, not that one row.
 
     THE JOIN, because neither source can answer alone. CFBD knows which
     conference each school is in and does not know ESPN's numeric ids; the

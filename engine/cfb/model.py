@@ -105,7 +105,38 @@ KELLY_FRACTION_MAX = 0.50      # half Kelly: A+ in a Tier 1 (low-attention) spot
 # likely to be surprised by. Recorded here so that if the read stops
 # being true the set is changed deliberately, by someone who knows they
 # are changing a betting rule, rather than left to age quietly.
+#
+# THIS SET IS THE ATTENTION AXIS AND NOTHING ELSE. It answers "how hard
+# is the market looking at this game", which is what `attention_tier`
+# needs and the only question a conference name can honestly answer.
 POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
+
+#: …and this one answers whether the MONEY follows. Same membership, so
+#: nothing about today's board changes; a different question, so the two
+#: can move apart.
+#:
+#: THEY WERE ONE SET, AND THAT MADE THE PAC-12 QUESTION UNANSWERABLE.
+#: `BET_GROUP_OF_FIVE`'s own note promises "the attention dial is
+#: unchanged: it decides how much of an edge to believe, this decides
+#: whether the money follows" — a real distinction, written down, and
+#: not kept, because both read POWER_CONFERENCES. Measured on the three
+#: shapes a Pac-12 card comes in, adding "Pac-12" to that one set did
+#: two opposite things at once:
+#:
+#:     Pac-12 vs Mountain West   not bet, LOW   ->  bet, STANDARD
+#:     Pac-12 vs Pac-12          not bet, LOW   ->  bet, STANDARD
+#:
+#: It opens the money gate AND tightens the model in the same stroke:
+#: LOW to STANDARD moves the haircut 25% -> 35% and the bar 2.5% -> 3.0%,
+#: so the games it just made bettable are simultaneously harder to bet.
+#: Nobody would ask for those together, and no replay of "should we bet
+#: the Pac-12" could mean anything while one edit did both.
+#:
+#: Split, the question is one dial: put "Pac-12" in the set below and
+#: nowhere else, replay, and read the bet count and the ROI at the close
+#: the way Phase 8 read them for the Group of Five. Whether it belongs
+#: there is a money decision and is not made here.
+BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
 
 #: The sentence both boards show when the rule below refuses a game.
 #:
@@ -126,8 +157,16 @@ POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 #:
 #: Until 2026-09-03 the sentence only ever reached a pass list nothing
 #: rendered, so being loosely worded cost nothing. It is on the card now.
+#: DERIVED FROM THE SET, not typed out beside it. The names were a
+#: literal here, which is the same defect one layer down: add "Pac-12" to
+#: BETTABLE_CONFERENCES and the card would go on refusing games in the
+#: name of a list that no longer matched the rule. "Power" is dropped
+#: from the wording for the same reason it was dropped from "Group of
+#: Five" — the set is whatever this board bets, and calling its members
+#: power conferences is a claim the set does not make.
 NOT_A_POWER_GAME = (
-    "Neither side is in a power conference (SEC, Big Ten, Big 12, ACC) — "
+    "Neither side is in a conference this board bets ("
+    + ", ".join(sorted(BETTABLE_CONFERENCES)) + ") — "
     "priced and shown, not bet (Ethan, 2026-09-02: \"No\")")
 
 #: Ethan, 2026-09-02, closing the CFB readiness audit's first Ask ("Bet
@@ -159,7 +198,10 @@ def is_group_of_five(game: dict) -> bool:
     away_conf = (game.get("away_conference") or "").strip()
     if not home_conf or not away_conf:
         return False
-    return not (home_conf in POWER_CONFERENCES or away_conf in POWER_CONFERENCES)
+    # BETTABLE_CONFERENCES, not POWER_CONFERENCES — this is the money
+    # question, and the two sets exist so it can be asked on its own.
+    return not (home_conf in BETTABLE_CONFERENCES
+                or away_conf in BETTABLE_CONFERENCES)
 
 # §7 — situational tags. Named because the spec is explicit that these are
 # priced deliberately rather than narrated after the fact.
