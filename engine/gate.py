@@ -421,22 +421,87 @@ def redact(payload: dict, name: str = "") -> dict:
         kept["locked_reason"] = "subscription"
         return kept
 
-    out, locked = {}, {}
-    paid = paid_keys_for(name)
-    for key, value in payload.items():
-        if key in paid:
-            n = _size(value)
-            if n:
-                locked[key] = n
-            # An empty list stays an empty list rather than becoming
-            # locked: "0 picks tonight" is true and is not a paywall.
-            out[key] = [] if isinstance(value, (list, tuple)) else {}
-        else:
-            out[key] = value
+    locked: dict = {}
+    out = _strip(payload, paid_keys_for(name), locked)
     if locked:
         out["locked"] = locked
         out["locked_reason"] = "subscription"
     return out
+
+
+def _strip(node: dict, paid, locked: dict, path: str = "") -> dict:
+    """One level of the board, paid keys emptied — then the same again
+    for every dict inside it.
+
+    AT EVERY DEPTH, NOT JUST THE TOP, and that is the repair. This walk
+    used to be a single `for key, value in payload.items()` loop, so a
+    paid board tucked inside a non-paid container was not a paid key as
+    far as it was concerned — it was a value of a free one, copied
+    across whole.
+
+    Measured 2026-09-03 on the college board: `cfb_build` publishes
+    `out["cfb"] = {"near_misses": …, "pass_list": …}`, and both of those
+    names ARE in PAID_KEYS. Stripped at the top, shipped in full one
+    level down — twenty refused game markets with the price, the edge,
+    the book and the model's number on each, sitting in the public
+    `web/data/cfb.json` that every phone polls. The same keys at the top
+    of the same file were correctly emptied, which is what made it
+    invisible: the board looked locked.
+
+    This is the fourth time this module has been taught the same lesson
+    (predmarkets, UFC's `picks`/`pass_list`, `board_shelves`, now a
+    nested container), and the comment above PAID_KEYS has named the
+    cause each time — "key-stripping only protects boards whose keys
+    were anticipated". Anticipating a KEY is still required; anticipating
+    WHERE IN THE TREE it sits no longer is.
+
+    DICTS ONLY, deliberately. Recursing into lists would descend into the
+    rows of free keys — `games`, `team_recent`, `player_stats` — and
+    empty any field that happened to share a name with a paid board,
+    which is over-reach dressed as safety. A paid board is a named
+    container, and named containers are dicts.
+
+    Nested strips are reported in `locked` under a dotted path
+    ("cfb.pass_list") so the honest count of what is behind the paywall
+    stays honest. Top-level keys keep their bare names, which is what
+    every reader of that map already expects — and every one of them
+    only tests it for truthiness.
+    """
+    out: dict = {}
+    for key, value in node.items():
+        where = f"{path}.{key}" if path else key
+        if key in paid:
+            n = _size(value)
+            if n:
+                locked[where] = n
+            # An empty list stays an empty list rather than becoming
+            # locked: "0 picks tonight" is true and is not a paywall.
+            out[key] = [] if isinstance(value, (list, tuple)) else {}
+        elif isinstance(value, dict) and not _is_disclosure(key, path):
+            out[key] = _strip(value, paid, locked, where)
+        else:
+            out[key] = value
+    return out
+
+
+def _is_disclosure(key: str, path: str) -> bool:
+    """The `locked` block at the top of a sealed board.
+
+    NOT BOARD CONTENT — bookkeeping ABOUT the board, `{"game_bets": 2}`,
+    whose keys are deliberately the paid key names. `seal()` promises it
+    is "safe at any time, safe twice", so a sealed board goes back
+    through here; walking into this block would read those names as paid
+    keys and empty a disclosure that is the whole point of the file, then
+    re-report it as `locked.game_bets`.
+
+    `_paid_rows` learned the same thing the hard way and its docstring
+    records the hour it cost on 2026-08-20 — counted from the paid keys
+    themselves and never from `locked`, "so a correctly sealed file reads
+    as still leaking". Recursion is a new way to walk into it, so the
+    rule is written down here rather than left implicit in a loop that
+    happened not to descend.
+    """
+    return not path and key == "locked"
 
 
 def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
@@ -490,8 +555,30 @@ def _paid_rows(payload: dict, name: str) -> int:
     if is_wholly_paid(name):
         # Sealed copies keep only the stamps plus the locked block.
         return 0 if payload.get("locked_reason") else _size(payload)
-    paid = paid_keys_for(name)
-    return sum(_size(v) for k, v in payload.items() if k in paid)
+    return _count_paid(payload, paid_keys_for(name))
+
+
+def _count_paid(node: dict, paid, path: str = "") -> int:
+    """Paid rows at every depth — the same tree `_strip` walks.
+
+    IT HAS TO MATCH THE STRIPPER OR IT IS WORSE THAN NOTHING. This is the
+    detector behind `unsealed()`, whose docstring says "with the paywall
+    on this must be empty. If it is not, the product is public and nobody
+    has noticed." It counted the top level only, so the nested college
+    pass list `_strip` now catches was invisible to it too: the board
+    leaked twenty priced rows and this said zero.
+
+    That is the same shape as the board lint reading the stripped public
+    copy and reporting it clean (2026-09-03) — a tool whose whole job is
+    to say something is wrong, answering about a different thing.
+    """
+    n = 0
+    for key, value in node.items():
+        if key in paid:
+            n += _size(value)
+        elif isinstance(value, dict) and not _is_disclosure(key, path):
+            n += _count_paid(value, paid, f"{path}.{key}" if path else key)
+    return n
 
 
 def seal(web_data=None, verbose=True) -> dict:
