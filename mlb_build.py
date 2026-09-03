@@ -509,9 +509,9 @@ def main() -> None:
     _tk = _stg.start("line movement")
     if real_odds:
         try:
-            from engine.linemoves import (load_history, analyze, summary_lines,
+            from engine.linemoves import (stream_history, analyze, summary_lines,
                                           todays_rows, annotate_recommendations)
-            moves = analyze(todays_rows(load_history()))
+            moves = analyze(todays_rows(stream_history()))
             n_mv = annotate_recommendations(result["recommendations"], moves)
             if moves:
                 print(f"Line movement: {len(moves)} prop(s) re-priced since "

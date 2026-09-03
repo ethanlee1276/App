@@ -1734,8 +1734,24 @@ def _snapshot_closes() -> dict:
     closes cost credits and only exist for backtested dates, while these
     snapshots accrue on every paid live pull anyway."""
     try:
-        from .linemoves import load_history, closing_lines_by_date
-        return closing_lines_by_date(load_history())
+        # STREAMED, AND HONESTLY WORTH ABOUT 3 MB. This runs inside
+        # `settle_from_history`, which every board build calls at the end
+        # of every cycle, so it looked like a twin of the `todays_rows`
+        # case that took the NFL build to 1.6 GB. It is not, and the
+        # measurement said so: 536 MB against 533 on a 400,000-row file.
+        #
+        # `closing_lines_by_date` groups with `grouped.setdefault(key,
+        # []).append(r)` — it RETAINS every row — so the peak is set while
+        # grouping, and removing the file-as-a-string underneath it does
+        # not lower a maximum reached later. Streaming still drops two
+        # full copies of the file and cannot be worse, so it stays; the
+        # number is small and saying otherwise would be inventing one.
+        #
+        # The real saving here would be to stop holding whole rows in
+        # `grouped` and keep only the fields the reduce needs. That is a
+        # change to the settling path and wants its own measurement.
+        from .linemoves import stream_history, closing_lines_by_date
+        return closing_lines_by_date(stream_history())
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 
@@ -1796,8 +1812,10 @@ def _snapshot_close_odds() -> dict:
     `linemoves.closing_odds_by_date` for how that surfaced.
     """
     try:
-        from .linemoves import load_history, closing_odds_by_date
-        return closing_odds_by_date(load_history())
+        # Streamed, with the same small honest saving `_snapshot_closes`
+        # above measures — `closing_odds_by_date` groups the same way.
+        from .linemoves import stream_history, closing_odds_by_date
+        return closing_odds_by_date(stream_history())
     except Exception:            # never let CLV bookkeeping block settling
         return {}
 

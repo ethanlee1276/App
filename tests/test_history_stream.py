@@ -159,8 +159,17 @@ def test_streaming_costs_a_fraction_of_the_peak():
 # --- the callers ------------------------------------------------------------
 def test_the_filtering_callers_stream():
     """These are the ones that load everything and keep almost none of it.
-    nfl_build did it twice a run, which is where the gigabyte went."""
-    for name, expected in (("nfl_build.py", 2), ("nba_build.py", 1)):
+    nfl_build did it twice a run, which is where the gigabyte went.
+
+    MLB WAS MISSED ON THE FIRST PASS and it is the worst case of the
+    three: the sport with the most history — 494,453 harvested odds rows
+    on the droplet — and the only one that plays every day, so it rebuilds
+    every cycle all year. It was missed because the sweep that found the
+    others was piped through `head` and cut at ten lines. Ethan, 2026-09-03:
+    "figure out if that issue plauges any other sport and fix it."
+    """
+    for name, expected in (("nfl_build.py", 2), ("mlb_build.py", 1),
+                           ("nba_build.py", 1)):
         src = open(os.path.join(ROOT, name), encoding="utf-8").read()
         assert src.count("todays_rows(stream_history())") == expected, \
             f"{name} no longer streams its history"
@@ -168,13 +177,39 @@ def test_the_filtering_callers_stream():
             f"{name} materialises the whole history again"
 
 
-def test_the_callers_that_need_the_whole_list_still_get_it():
-    """`load_history` was kept, not replaced — closing lines and the book
-    report genuinely read every row, and turning those into generators
-    would be a different and unasked-for change."""
-    for name in ("engine/ledger.py", "engine/booksharp.py", "stakecheck.py"):
+def test_the_callers_that_need_the_whole_list_still_have_it():
+    """`load_history` was kept, not replaced. These read every row and are
+    NOT on the per-cycle path — a one-off report or a CLI — so there is no
+    case for changing them and every reason not to."""
+    for name in ("engine/booksharp.py", "stakecheck.py", "bookcheck.py",
+                 "movecheck.py"):
         src = open(os.path.join(ROOT, name), encoding="utf-8").read()
         assert "load_history()" in src, f"{name} lost its full-history read"
+
+
+def test_the_settle_path_streams_even_though_it_keeps_everything():
+    """`engine/ledger.py`'s two snapshot readers run inside
+    `settle_from_history`, which every board build calls at the end of
+    every cycle — so they ARE on the per-cycle path even though their
+    aggregate needs every row.
+
+    Worth about 3 MB, and that is the honest figure: 536 against 533 on a
+    400,000-row file. `closing_lines_by_date` groups with
+    `grouped.setdefault(key, []).append(r)`, retaining every row, so the
+    peak is set while grouping and removing the file-as-a-string
+    underneath it does not lower a maximum reached later. Streaming drops
+    two full copies and cannot be worse, so it stays — but the number is
+    small and this test exists partly to stop anyone reading the change as
+    a big one."""
+    src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
+    assert src.count("closing_lines_by_date(stream_history())") == 1
+    assert src.count("closing_odds_by_date(stream_history())") == 1
+    assert "closing_lines_by_date(load_history())" not in src
+    # And the reason the saving is small is recorded where the change is,
+    # so nobody re-measures it from scratch to find out.
+    i = src.index("closing_lines_by_date(stream_history())")
+    assert "3 MB" in src[max(0, i - 1400):i], \
+        "the measured saving is no longer written down beside the change"
 
 
 if __name__ == "__main__":
