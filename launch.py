@@ -255,13 +255,85 @@ def _games_on_slate(path: str) -> int:
         return 10
 
 
-def _budget_share() -> float:
-    """This sport's slice of the daily odds allowance: one share per LIVE
-    slate. October runs three at once (MLB playoffs, NFL, NBA) — without
-    the split they'd jointly plan to spend the month several times over."""
-    live = sum(1 for p in (MLB_OUT, NFL_OUT, NBA_OUT, WNBA_OUT, CFB_OUT)
-               if _slate_games(p) > 0)
-    return 1.0 / max(1, live)
+#: WHAT EACH LEAGUE IS WORTH OF THE DAY'S ODDS BUDGET.
+#:
+#: Ethan, 2026-09-03: "I don't care about ufc or nba or wnba, I want NFL,
+#: CFB, MLB as the main focus." This is that instruction, written down
+#: where the money is decided instead of applied by hand.
+#:
+#: The share used to be one-per-live-slate, flat. In September that is
+#: MLB, NFL, college and whatever else has a fixture — and a WNBA night
+#: took the same slice of a thin plan as college football's Saturday. The
+#: three leagues the product is about now split the budget between them
+#: and the rest draw on a token share: enough that their boards still
+#: refresh a game line, not enough to compete for a Saturday.
+#:
+#: A weight of 0 would be a different decision — it would stop those
+#: boards pricing at all — and that is not what was asked for, so it is
+#: not what this does.
+SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 1.0,
+                "nba": 0.15, "wnba": 0.15, "ufc": 0.15}
+DEFAULT_WEIGHT = 0.15
+
+#: How many days a week each league actually plays.
+#:
+#: THE WEEKLY-SPORT BUG. `daily_allowance` spreads the month's credits
+#: evenly over every remaining day, which is right for baseball and wrong
+#: for football. College plays on Saturday. Giving it a flat 1/28th of the
+#: month on each of 28 days means it accrues 26 days of budget it can
+#: never spend and then starves on the one day it has games — measured on
+#: 2026-09-03 as a 26-credit college day against a 63-credit pull.
+#:
+#: Scaling a game day by 7/days-per-week hands a league its WEEK on the
+#: days it plays. The month's total is unchanged: college spending 3.5x on
+#: two days a week is the same seven days of allowance it was entitled to
+#: and could not reach. It is also self-limiting — every refresh requires
+#: games on the slate, so a league cannot claim a game-day share on a day
+#: it is not playing.
+PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0,
+                      "nfl": 3.0, "cfb": 2.0, "ufc": 1.0}
+
+
+def _live_sports() -> list[str]:
+    """Which leagues have a slate on the board right now."""
+    return [name for name, path in (("mlb", MLB_OUT), ("nfl", NFL_OUT),
+                                    ("nba", NBA_OUT), ("wnba", WNBA_OUT),
+                                    ("cfb", CFB_OUT))
+            if _slate_games(path) > 0]
+
+
+def _budget_share(sport: str | None = None) -> float:
+    """This league's slice of the daily odds allowance.
+
+    Weighted by SPORT_WEIGHT across the leagues that are actually live, and
+    then by how rarely this one plays (PLAY_DAYS_PER_WEEK) — see both
+    tables above. Called without a sport it keeps the old flat behaviour,
+    which is what the callers that have no league still want.
+    """
+    from engine.oddsbudget import budget_sport
+    live = _live_sports()
+    if sport is None:
+        return 1.0 / max(1, len(live))
+    key = budget_sport(sport)
+    # A league pulling before its first board exists is not in `live` yet;
+    # count it, or the bootstrap cycle divides by a set it is missing from.
+    names = set(live) | {key}
+
+    def claim(n: str) -> float:
+        return (SPORT_WEIGHT.get(n, DEFAULT_WEIGHT)
+                * (7.0 / PLAY_DAYS_PER_WEEK.get(n, 7.0)))
+
+    # NORMALISED OVER THE CLAIMS, SO THE DAY IS ALLOCATED ONCE.
+    #
+    # The first cut multiplied each league's share by 7/days-per-week and
+    # stopped there. On a Saturday that summed to 2.2 — the leagues jointly
+    # planning to spend the day's pot twice over, which is precisely the
+    # arithmetic that emptied the plan in the first place and the reason
+    # `daily_allowance` holds back LIVE_SHARE at all. Dividing by the total
+    # claim keeps the concentration (college still outweighs baseball three
+    # to one on a Saturday) while the shares sum to exactly 1.0.
+    total = sum(claim(n) for n in names)
+    return claim(key) / (total or 1.0)
 
 
 def _slate_kickoffs(path: str) -> list:
@@ -286,7 +358,7 @@ def _slate_kickoffs(path: str) -> list:
     return out
 
 
-def _narrow_pull(out_path: str) -> bool:
+def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
     """Should this background pull price only the six-hour window?
 
     Only when the day cannot afford the whole slate. See
@@ -301,7 +373,7 @@ def _narrow_pull(out_path: str) -> bool:
     try:
         from engine.oddsbudget import wide_pull_affordable
         return not wide_pull_affordable(_games_on_slate(out_path) + 1,
-                                        share=_budget_share())
+                                        share=_budget_share(sport))
     except Exception:                                        # noqa: BLE001
         return True
 
@@ -336,7 +408,7 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     ok, reason = should_refresh(cost if cost is not None
                                 else _games_on_slate(out_path) + 1,
                                 kickoffs=_slate_kickoffs(out_path),
-                                sport=sport, share=_budget_share(),
+                                sport=sport, share=_budget_share(sport),
                                 credits=credits)
     if not quiet:
         print(f"       {reason}")
@@ -410,7 +482,7 @@ def refresh_mlb(quiet: bool = False) -> bool:
     before_seen = _paid_pull_baseline() if spend else ""
     if spend:
         args.append("--odds")
-        if quiet and _narrow_pull(out):
+        if quiet and _narrow_pull(out, "mlb"):
             # Background cycle on a budget that cannot cover the whole
             # slate: re-price only what is live or starting soon.
             args.append("--active-odds")
@@ -556,7 +628,7 @@ def refresh_nfl(quiet: bool = False) -> bool:
     lines_before = ""
     if spend:
         args.append("--odds")
-        if quiet and _narrow_pull(out):
+        if quiet and _narrow_pull(out, "nfl"):
             args.append("--active-odds")
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
@@ -2277,7 +2349,7 @@ def odds_doctor() -> None:
                   f"opens {ago(min(kicks) - oddsbudget.PRIME_BEFORE_S)}")
         ok3, why = oddsbudget.should_refresh(
             _games_on_slate(str(path)) + 1, kickoffs=kicks, sport="mlb",
-            share=_budget_share())
+            share=_budget_share("mlb"))
         print(f"\n  right now {'WOULD pull' if ok3 else 'would NOT pull'}: {why}")
     except Exception as exc:                       # noqa: BLE001
         print(f"\n  budget    unreadable: {exc}")

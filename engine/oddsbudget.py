@@ -201,9 +201,37 @@ def read_spend(path: Path | str | None = None) -> list[dict]:
 _TODAY_CACHE: dict = {}
 
 
+def budget_sport(sport: str | None) -> str:
+    """The sport whose MONEY a pacing lane spends.
+
+    A lane is not always a sport. The cheap game-lines tiers pace on their
+    own clocks ("nfl_lines", "cfb_lines") so a three-credit pull cannot
+    reset the clock a hundred-credit one is waiting on — but they spend the
+    same sport's budget, and the ledger records them under the sport,
+    because that is whose money it is.
+    """
+    s = str(sport or "")
+    return s.split("_", 1)[0] if s.endswith("_lines") else s
+
+
 def spent_today(now: float | None = None,
-                path: Path | str | None = None) -> int:
+                path: Path | str | None = None,
+                sport: str | None = None) -> int:
     """Credits already spent today, from the ledger every paid call writes.
+
+    ``sport`` NARROWS IT TO ONE LEAGUE'S SPEND, and omitting it where a
+    per-sport budget is being checked is a bug with a name.
+
+    The cap compares this against `daily_allowance` times the sport's
+    SHARE — one league's slice of the day. Summing every league's spend
+    against one league's slice meant the first sport to pull each morning
+    ate the whole board's ceiling: the launcher runs MLB first, MLB spends
+    ~128 credits, and NFL and college were then metered at 128-against-26
+    and declined for the rest of the day, every day. Ethan, 2026-09-03:
+    "we still do not show any cfb props or best bets or anything and there
+    is games today."
+
+    The numerator and the denominator have to describe the same thing.
 
     THE CEILING THE PACER NEVER HAD. `daily_allowance` only ever derived a
     CADENCE — `should_refresh` compared elapsed time against a gap and
@@ -225,23 +253,32 @@ def spent_today(now: float | None = None,
     """
     now = now if now is not None else time.time()
     day = _dt.date.fromtimestamp(now).isoformat()
+    want = budget_sport(sport)
     f = Path(path or SPEND_LOG)
     try:
         stamp = (f.stat().st_mtime, f.stat().st_size)
     except OSError:
         return 0                      # no ledger yet: nothing spent
-    hit = _TODAY_CACHE.get(day)
+    key = (day, want)
+    hit = _TODAY_CACHE.get(key)
     if hit and hit[0] == stamp:
         return hit[1]
     total = 0
     for r in read_spend(f):
-        if str(r.get("iso", ""))[:10] == day:
-            try:
-                total += int(r.get("credits", 0) or 0)
-            except (TypeError, ValueError):
-                continue
-    _TODAY_CACHE.clear()              # one day's answer is all we ever need
-    _TODAY_CACHE[day] = (stamp, total)
+        if str(r.get("iso", ""))[:10] != day:
+            continue
+        if want and str(r.get("sport", "")) != want:
+            continue
+        try:
+            total += int(r.get("credits", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+    # Keyed by (day, sport): the same cycle asks for several leagues and
+    # each needs its own answer. Only today's keys are ever wanted, so the
+    # map is cleared whenever the day moves on.
+    for k in [k for k in _TODAY_CACHE if k[0] != day]:
+        _TODAY_CACHE.pop(k, None)
+    _TODAY_CACHE[key] = (stamp, total)
     return total
 
 
@@ -873,7 +910,7 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     per_refresh = refresh_credits(requests_per_refresh, credits)
     budget = max(int(daily_allowance(state, kw.get("today")) * base_share),
                  per_refresh)
-    already = spent_today(now)
+    already = spent_today(now, sport=sport)
     if already + per_refresh > budget:
         return False, (f"today's odds budget is spent for this slate "
                        f"({already} of {budget} credits; a pull costs "
