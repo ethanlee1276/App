@@ -192,11 +192,28 @@ is working.
 logs in the sandbox. On the box:
 
 ```bash
-cd /srv/qellys && python3 -c "
-from engine import formcheck
-for m in ('hits', 'total_bases', 'strikeouts'):
-    print(m, formcheck.run(market=m, sport='mlb'))"
+cd /srv/qellys && python3 - <<'PY3'
+from engine import db, formcheck
+conn = db.connect()                 # data/history.db — the graded logs
+for m in ("hits", "total_bases", "strikeouts"):
+    out = formcheck.run(conn, m, sport="mlb")
+    n = out.get("n") or 0
+    if not n:
+        print(f"{m}: no eligible player-weeks "
+              f"({out.get('unreadable', 0)} unreadable rows)")
+        continue
+    print(f"{m}: n={n}")
+    for name, v in sorted(out.items()):
+        if name not in ("market", "n", "unreadable"):
+            print(f"    {name}: {v}")
+PY3
 ```
+
+`run` takes the history connection as its FIRST POSITIONAL argument —
+the version of this command I first wrote omitted it and would have
+failed on the box before printing anything, which is the same shape as
+telling you to run `nfl_build.py --odds` when it needs two positional
+arguments. Checked against the signature this time.
 
 NFL's shade was retired after measurement showed it hurt ordering in all
 four markets. MLB was deliberately left alone until its own history says
