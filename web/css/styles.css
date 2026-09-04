@@ -6649,6 +6649,26 @@ body.has-rail .shell {
 .lb-table b { text-align: right; font-family: var(--font-mono);
   font-size: var(--fs-sm); }
 
+/* The last few at-bats on a live card. Newest LAST, the way a
+   play-by-play reads. A scoring play is marked rather than coloured
+   loudly — the whole strip sits under the score and must not compete
+   with it. */
+.lb-plays { margin-top: 10px; padding-top: 9px;
+  border-top: var(--hairline) solid var(--border);
+  display: flex; flex-direction: column; gap: 3px; }
+.lb-play { display: grid; grid-template-columns: 2.4em 1fr auto;
+  gap: 8px; align-items: baseline; font-size: var(--fs-sm);
+  color: var(--text-mute); }
+.lb-play .lb-inn { font-family: var(--font-mono);
+  font-size: var(--fs-xs); letter-spacing: 0; }
+.lb-play .lb-what { color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.lb-play .lb-pscore { font-family: var(--font-mono);
+  font-size: var(--fs-xs); letter-spacing: 0; }
+.lb-play .lb-rbi { color: var(--good); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .06em; }
+.lb-play.scoring .lb-inn { color: var(--good); }
+
 /* Live line track — how the market has moved since first pitch. The chart
    is a plain sparkline; everything here is the frame around it. */
 .lb-track { margin-top: 10px; padding-top: 9px;

@@ -40,6 +40,79 @@ def fetch_playbyplay(game_pk, ttl: int = FINAL_TTL) -> dict:
                      f"mlb_pbp_{game_pk}.json", ttl=ttl)
 
 
+#: How long a live game's plays may sit. The scoreboard runs on a
+#: twelve-second clock; a half-minute-old at-bat is still the current
+#: at-bat, and 640 KB a game is not something to re-fetch every twelve
+#: seconds on a one-vCPU box.
+LIVE_TTL = 30
+
+
+def fetch_live_playbyplay(game_pk, ttl: int = LIVE_TTL) -> dict:
+    """The same endpoint for a game IN PROGRESS, under its own cache name.
+
+    A DIFFERENT FILE, AND THAT IS THE WHOLE POINT. `fetch_playbyplay`
+    caches under `mlb_pbp_{pk}.json` for SEVEN DAYS, because "a completed
+    game's pitches never change". Reading a live game through it would
+    write a HALF-PLAYED payload to that name — and then the velocity,
+    times-through-order and pitch-count parsers, which have no way to
+    tell a partial payload from a finished one, would model tonight's
+    starter off four innings for the next week.
+
+    So the live read is a separate name that the same `mlb_pbp_` prune
+    prefix still covers. The cost is one duplicate fetch per game, once,
+    the first time the finished game is asked for.
+    """
+    return _get_json(f"{STATS_BASE}/game/{game_pk}/playByPlay",
+                     f"mlb_pbp_live_{game_pk}.json", ttl=ttl)
+
+
+#: Half-inning codes, so the front end never has to parse prose.
+_HALF = {"top": "T", "bottom": "B"}
+
+
+def recent_plays(payload: dict, limit: int = 6) -> list[dict]:
+    """The last completed at-bats, newest last, as STRUCTURED rows.
+
+    WRITTEN FROM THE FIELDS, NOT FROM THEIR SENTENCE. Every play carries
+    `result.description` — MLB's own prose — and this deliberately does
+    not read it. The repo already took this position once, for the same
+    reason, when the injuries page grew a news section: a public fact
+    (who batted, what happened, the score) is ours to state; somebody
+    else's written account of it is theirs. The caller composes "Judge —
+    Home Run (2 RBI)" from `event`, `batter` and `rbi`.
+
+    A play with no `result.event` is NOT finished — it is the at-bat in
+    progress, and the feed carries it in the same list. Emitting it would
+    put an empty row at the top of the card every time somebody steps in.
+
+    Newest LAST because that is the order a play-by-play reads on a page
+    and the order the caller would otherwise have to reverse.
+    """
+    plays = []
+    for p in (payload or {}).get("allPlays") or []:
+        result = p.get("result") or {}
+        event = (result.get("event") or "").strip()
+        if not event:
+            continue                   # the at-bat still being played
+        about = p.get("about") or {}
+        matchup = p.get("matchup") or {}
+        inning = about.get("inning")
+        rbi = result.get("rbi")
+        plays.append({
+            "inning": int(inning) if isinstance(inning, int) else None,
+            "half": _HALF.get(str(about.get("halfInning") or "").lower(), ""),
+            "batter": ((matchup.get("batter") or {}).get("fullName") or ""),
+            "pitcher": ((matchup.get("pitcher") or {}).get("fullName") or ""),
+            "event": event,
+            "event_type": (result.get("eventType") or ""),
+            "rbi": int(rbi) if isinstance(rbi, int) and rbi else 0,
+            "scoring": bool(about.get("isScoringPlay")),
+            "away_score": result.get("awayScore"),
+            "home_score": result.get("homeScore"),
+        })
+    return plays[-limit:] if limit and limit > 0 else plays
+
+
 def _num(v):
     try:
         return float(v)

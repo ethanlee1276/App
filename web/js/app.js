@@ -30672,8 +30672,43 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
     ${linesGrid}
+    ${playsHTML(g)}
     ${lineTrackHTML(g)}
   </div>`;
+}
+
+/* The last few at-bats, on the card, from the same fast file as the score.
+
+   Ethan, 2026-09-04: "if for the games we display live, are we able to
+   get live play by plays for all sports". MLB is where that starts,
+   because `engine/mlb/sources/pbp.py` has fetched this endpoint since
+   the pitch-level work went in — it was on a seven-day cache, for
+   modelling, and the page never saw it.
+
+   COMPOSED HERE, NOT COPIED. The feed carries `result.description` —
+   MLB's own written account of the play — and the parser deliberately
+   does not read it. What arrives is the fields: who batted, what the
+   event was, how many it drove in, the score after. The sentence on the
+   card is ours, the same position the injuries page's news section
+   settled on: a public fact is ours to state, somebody else's prose is
+   theirs.
+
+   Newest LAST, because that is how a play-by-play reads. */
+function playsHTML(g) {
+  const plays = (g.plays || []).filter((p) => p && p.event);
+  if (!plays.length) return "";
+  const row = (p) => {
+    const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
+    const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
+      <span class="lb-inn">${escapeHtml(half)}</span>
+      <span class="lb-what">${escapeHtml(p.batter || "")}${
+        p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
+      ${at}</div>`;
+  };
+  return `<div class="lb-plays">${plays.map(row).join("")}</div>`;
 }
 
 /* How the market has moved since first pitch.
