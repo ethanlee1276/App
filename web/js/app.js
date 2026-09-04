@@ -1747,6 +1747,34 @@ function updateAgo() {
     : "How long ago the server last rebuilt this board.") + cadence;
 }
 
+/* A RECOMMENDED PROP THIS BOARD DELIBERATELY DOES NOT DRAW.
+   ============================================================
+   `engine/mlb/pipeline.py` stamps `hr_featured` on every home-run prop:
+   true for the three that lead the Long Shots page, false for the rest.
+   "The Long Shots page and the Recommended page show the SAME three, and
+   there is no fourth."
+
+   That is a display rule, not a verdict — a non-featured home run still
+   passed every gate, still carries a stake, and is still journaled. So
+   TWO different chains grew around it and nobody reconciled them:
+
+     tonightSignals().props   passesFilters only  → the "Recommended
+                              bets" tile, the Best Bets picks box
+     renderRecommended        + hr_featured       → the card grid
+     renderTonight            + hr_featured       → the Tonight tab
+
+   On an MLB night whose recommended set is mostly home runs, the tile
+   and the grid sit one above the other on the same page saying different
+   numbers. Ethan, 2026-09-04: "mlb best bets is only showing 2 bets but
+   then it says it has 20 but only showing 2."
+
+   NEITHER NUMBER IS WRONG — twenty were recommended and two belong on
+   this board — and this is the predicate that lets the page say so
+   instead of leaving a reader to find the contradiction. */
+function heldForLongShots(r) {
+  return r.hr_featured === false;
+}
+
 function passesFilters(r) {
   // High Confidence Mode: the sidebar switch narrows the whole board to
   // A-grades (quality >= 80 — the same band the journal grades under).
@@ -4630,7 +4658,7 @@ function renderTonight() {
   const d = state.data || {};
   const props = (d.recommendations || [])
     .map((r) => ({ ...r, _ok: passesFilters(r) }))
-    .filter((r) => r._ok && r.hr_featured !== false);
+    .filter((r) => r._ok && !heldForLongShots(r));
   const bets = (d.game_bets || [])
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b._ok);
@@ -4979,7 +5007,19 @@ function renderRecommended() {
   // three (hr_featured, stamped by the pipeline) — the same three that lead
   // the Long Shots page, where the FULL home-run board lives.
   const visible = recs.filter((r) => (state.showAll ? true : r._ok))
-    .filter((r) => r.hr_featured !== false);
+    .filter((r) => !heldForLongShots(r));
+  // RECOMMENDED, AND ON PURPOSE NOT DRAWN HERE. Counted separately so
+  // the page can say where they went — the tile above this grid counts
+  // them and this grid does not, and a reader deserves that sentence
+  // rather than the arithmetic.
+  const elsewhere = recs.filter((r) => r._ok && heldForLongShots(r));
+  const elsewhereNote = elsewhere.length ? `
+    <p class="list-note" style="grid-column:1/-1;margin-top:14px">
+      ${elsewhere.length} more recommended ${elsewhere.length === 1
+        ? "pick is a home-run dart" : "picks are home-run darts"} — the
+      board above counts ${elsewhere.length === 1 ? "it" : "them"}, this
+      grid features only the top three, and the full home-run board is on
+      <a href="#longshots" data-view="longshots">Long Shots</a>.</p>` : "";
   if (!visible.length) {
     // Say WHY the board is empty. "Loosen the sliders" is bad advice when
     // the real reason is upstream of every slider: no real book price yet,
@@ -5030,6 +5070,20 @@ function renderRecommended() {
         games have been played — so no prop has been built, and the sliders
         have nothing to filter. Props appear on their own once the season
         starts.`;
+    } else if (elsewhere.length) {
+      /* EVERY RECOMMENDED PICK IS A NON-FEATURED HOME RUN, so the grid
+         is empty while the tile above it reads a real number. "No props
+         clear your filters" is false here — they all did — and it sends
+         a reader to sliders that cannot change the answer, which is the
+         same wrong advice the census and schedule-only branches above
+         were written to stop giving. */
+      msgTitle = elsewhere.length === 1
+        ? "Tonight’s pick is a home-run dart"
+        : `All ${elsewhere.length} of tonight’s picks are home-run darts`;
+      msg = `They cleared every gate and are journaled at their real
+        prices. This board features only the top three home runs; the full
+        board is on <a href="#longshots" data-view="longshots">Long
+        Shots</a>, where they lead.`;
     } else {
       msgTitle = "No props clear your filters";
       msg = `Loosen the sliders, or enable “show non-recommended”.`;
@@ -5077,12 +5131,18 @@ function renderRecommended() {
   // "Analyzed 1030 → showing 3" is alarming unless the page says where the
   // rest went: most are analyzed-but-held (lineups not confirmed, edge too
   // small, or no real price) and non-featured home runs live on Long Shots.
-  const hidden = recs.length - visible.length;
+  // THE RECOMMENDED ONES GET THEIR OWN SENTENCE, ABOVE. This line is
+  // about the analyzed-but-held majority, and lumping the two together
+  // is what let "20 recommended, 2 drawn" hide inside "1030 analyzed" —
+  // a reader chasing two missing picks was handed a number about a
+  // thousand rows they never asked about.
+  host.innerHTML += elsewhereNote;
+  const hidden = recs.length - visible.length - elsewhere.length;
   if (hidden > 0) {
     host.innerHTML += `<p class="list-note" style="grid-column:1/-1;margin-top:14px">
       ${hidden} more analyzed prop(s) not shown — ${state.showAll
-        ? "non-featured home runs live on the Long Shots page"
-        : "held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything"}.</p>`;
+        ? "held upstream of the sliders"
+        : "held (unconfirmed lineup, edge below the bar, or no real price yet). Toggle “show non-recommended” to browse everything"}.</p>`;
   }
   fillMeters(host);
   revealChildren(host);
