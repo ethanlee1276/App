@@ -631,11 +631,11 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         return (roster.get(player) or {}).get("team", "")
 
     # Official headshot URLs. THREE sources, in the order a face is most
-    # likely to be current: this season's stats, then the roster, then last
-    # season's stats — a face does not go stale over one offseason, so an
-    # older one beats none.
+    # likely to be current: this season's stats, then THIS SEASON'S ROSTER,
+    # then last season's stats — a face does not go stale over one
+    # offseason, so an older one beats none.
     #
-    # The roster is the load-bearing addition and the reason this was thin.
+    # The roster is the load-bearing middle and the reason this was thin.
     # Weekly stats do not exist until games have been played, so on a Week 1
     # board the first source is empty and everything fell through to last
     # season — which has no row at all for a rookie or a practice-squad
@@ -643,15 +643,31 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
     # of those players appear in no 2025 stat row. They were drawing the
     # initials avatar with a real photograph sitting in a file already on
     # disk.
+    #
+    # THAT MIDDLE SOURCE USED TO BE `roster`, WHICH IS FILTERED TO ACT.
+    # Ethan, 2026-09-04: "I see some players on nfl don't have any and a
+    # lot are last year headshots." `roster_index` exists to decide who
+    # gets a prop BUILT — "a player on reserve or already cut should not
+    # have a prop built for him off last season's numbers" — so it drops
+    # every status but ACT. Reading faces out of it inherited that filter
+    # for free, and a man on IR, PUP, the practice squad or suspended
+    # therefore had no current-season face at all and fell through to last
+    # season's photograph. `headshot_map` reads the SAME roster file
+    # without the status filter, and its docstring has said why since it
+    # was written: "a face on the usage board does not stop being his face
+    # because he moved to IR". It was only ever wired to the fantasy pages.
+    #
+    # It is also unconditional, where `roster` is populated only under
+    # `carry`. A build without that flag had no middle source whatsoever
+    # and sent EVERY face to last season's file.
     headshots: dict[str, str] = {}
     for r in list(stats):
         url = _s(r, "headshot_url", "headshot")
         if url:
             headshots.setdefault(
                 _s(r, "player_display_name", "player_name", "full_name"), url)
-    for name, row in roster.items():
-        if row.get("headshot"):
-            headshots.setdefault(name, row["headshot"])
+    for name, url in headshot_map(season).items():
+        headshots.setdefault(name, url)
     for r in list(prior_stats):
         url = _s(r, "headshot_url", "headshot")
         if url:
