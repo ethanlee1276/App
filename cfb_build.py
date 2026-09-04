@@ -659,6 +659,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         # being played — was reading a key that was simply absent here
         # and admitting the row.
         "live": (game.get("live") or {}).get("state") == "live",
+        # …AND STARTED, which is live OR final. The key above answers
+        # "is it being played"; a game that has FINISHED answers False to
+        # it and is just as unpriceable by a pre-game model. See
+        # `rules.game_has_started`, whose own words are "once a pre-game
+        # projection is stale". Every sport stamped `live` and none
+        # stamped this, so `likely.from_game_bet` admitted settled games.
+        "started": (game.get("live") or {}).get("state") in ("live", "final"),
         "win_prob": card["p_model"], "fair_prob": card["p_market"],
         "edge": card["edge"], "odds": card["odds"],
         # THE BAR THIS EDGE WAS MEASURED AGAINST, as a number rather than

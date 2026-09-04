@@ -314,6 +314,52 @@ def test_game_rows_sit_beside_player_rows_ordered_by_probability():
     assert got[0]["model_prob"] == 0.70 and got[1]["model_prob"] == 0.62
 
 
+def test_a_game_that_has_already_been_played_is_not_likely_to_hit():
+    """`live` is `state == "live"` in every producer, so a FINAL game
+    answers False to it — and `from_game_bet` refused only `live`. A
+    settled result therefore sailed onto a board called Most Likely To
+    Hit, carrying the pre-game probability of something already decided.
+
+    Found on the droplet 2026-09-03: 13 of 23 rows flagged STARTED by
+    `boardlint`, which had been asking the wider question all along.
+    `rules.game_has_started` is that wider fact — live OR final, "once a
+    pre-game projection is stale" — and every `_finish_bet` computed it,
+    used it for `recommended` and a warning, and threw it away.
+    """
+    for sport in ("nfl", "cfb"):
+        assert K.from_game_bet(_ml(started=True), sport=sport) is None, sport
+        assert K.from_game_bet(_ml(live=True, started=True),
+                               sport=sport) is None, sport
+        assert K.from_game_bet(_ml(started=False), sport=sport) is not None, sport
+
+
+def test_under_way_and_already_over_are_counted_apart():
+    """Two different answers to "why is this not on the board", so the
+    census does not merge them."""
+    census: dict = {}
+    K.build([], game_bets=[_ml(live=True), _ml(started=True)], census=census)
+    assert census == {"the game is already under way": 1,
+                      "the game has already been played": 1}, census
+
+
+def test_every_producer_stamps_started_on_its_game_cards():
+    """One consumer, three producers. `from_game_bet` can only refuse
+    what the card carries, and this fact was computed in all three and
+    written by none."""
+    import inspect
+    from engine import pipeline as nfl_pipeline
+    from engine.mlb import pipeline as mlb_pipeline
+
+    for mod, name in ((nfl_pipeline, "engine/pipeline.py"),
+                      (mlb_pipeline, "engine/mlb/pipeline.py")):
+        src = inspect.getsource(mod._finish_bet)
+        assert 'd["started"] = started' in src, name
+    cfb = _src("cfb_build.py")
+    body = cfb[cfb.index("def to_game_bet("):]
+    body = body[:body.index("\ndef ", 10)]
+    assert '"started":' in body, "cfb game cards do not say whether the game began"
+
+
 # --- the college refusal is a card, not a silence ---------------------------
 def _cfb_g5_slate():
     """One Group of Five game, priced three ways, through the real chain.

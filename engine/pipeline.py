@@ -469,6 +469,15 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
         d.setdefault("warnings", []).append(
             "Game already started — pre-game model cannot price an in-play market")
     d["live"] = bool(g.live and g.live.state == "live")
+    # …AND WHETHER IT HAS STARTED AT ALL, which is the wider fact and the
+    # one a downstream reader actually needs. `game_has_started` is True
+    # for live OR final — "once a pre-game projection is stale and the
+    # book is pricing something our model isn't modelling" — and until
+    # now that fact died here, used for `recommended` and a warning and
+    # never written onto the card. `likely.from_game_bet` refuses `live`
+    # and so admitted every FINISHED game: a settled result, ranked on a
+    # board called Most Likely To Hit.
+    d["started"] = started
     d["date"] = g.date
     d["kickoff"] = g.kickoff
     # Schedule fatigue, for the side the bet is actually about. A short week
