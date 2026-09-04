@@ -149,6 +149,87 @@ def test_no_teams_asks_for_nothing():
         assert cfbdata.fetch_headshots([None, ""]) == {}
 
 
+# --- the two sources, layered -------------------------------------------------
+def test_the_stored_table_is_read_first_and_the_roster_only_fills_gaps():
+    """THE SOURCE I MISSED, and the correction to my own first cut.
+
+    Ingest has been writing college faces into `player_assets` from every
+    box score it stores — 5,736 distinct normalised names in this
+    checkout, all carrying a portrait — while the first version of this
+    read the ESPN roster instead. That gave college TWO independent
+    sources for one fact, which is the exact "two readers of one feed"
+    the same commit warned about.
+
+    Order matters and is not arbitrary. The stored URL is built from a
+    stable ESPN athlete id, it costs a local SELECT rather than a
+    request, and it knows every player ever ingested rather than only
+    tonight's twenty-odd teams. The roster is still not redundant: it is
+    the ONLY source for a true freshman who has never appeared in a
+    stored box score, which is the same week-one gap `rosters_for`
+    exists to fill."""
+    from engine.cfb import props as cfbprops
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""CREATE TABLE player_assets (sport TEXT, player TEXT,
+                    espn_id TEXT, headshot TEXT, seen TEXT)""")
+    conn.executemany("INSERT INTO player_assets VALUES (?,?,?,?,?)", [
+        ("cfb", "Both Guy", "2", "https://stored/2.png", "2025-10-01"),
+    ])
+    conn.commit()
+    stored = cfbprops.stored_headshots(conn)
+    assert stored == {"both guy": "https://stored/2.png"}, stored
+
+    with _Stub(lambda team_id, ttl=0: {"athletes": [{"items": [
+            {"fullName": "Both Guy", "headshot": "https://roster/2-NEW.png"},
+            {"fullName": "Fresh Guy", "headshot": "https://roster/9.png"}]}]}):
+        merged = dict(stored)
+        for norm, url in cfbdata.fetch_headshots(["espn:1"]).items():
+            merged.setdefault(norm, url)
+    assert merged["both guy"] == "https://stored/2.png", \
+        "the roster overwrote a face the table already had"
+    assert merged["fresh guy"] == "https://roster/9.png", \
+        "the freshman the table cannot know got no face"
+
+
+def test_the_stored_read_is_scoped_and_refuses_a_blank():
+    from engine.cfb import props as cfbprops
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""CREATE TABLE player_assets (sport TEXT, player TEXT,
+                    espn_id TEXT, headshot TEXT, seen TEXT)""")
+    conn.executemany("INSERT INTO player_assets VALUES (?,?,?,?,?)", [
+        ("cfb", "Blank Guy", "3", "", "2025-10-01"),
+        ("nfl", "Wrong Sport", "4", "https://x/4.png", "2025-10-01"),
+    ])
+    conn.commit()
+    assert cfbprops.stored_headshots(conn) == {}, \
+        "an empty url or another sport's row reached the college map"
+
+
+def test_a_missing_table_is_an_empty_map_not_a_broken_build():
+    """A fresh clone has no `player_assets` at all, and the board must
+    still build — the roster then answers alone."""
+    from engine.cfb import props as cfbprops
+    assert cfbprops.stored_headshots(sqlite3.connect(":memory:")) == {}
+
+
+def test_the_builder_asks_the_table_before_the_network():
+    import inspect
+    from engine.cfb import props as cfbprops
+    src = inspect.getsource(cfbprops.build_props)
+    # PRESENCE BEFORE ORDER. `str.index` raises ValueError when an anchor
+    # VANISHES, and a bare `.index(...) < .index(...)` therefore reports
+    # a deleted source as a crash rather than a failure — which killed
+    # this file's runner mid-way and left a mutation looking uncaught.
+    assert "stored_headshots(conn)" in src, \
+        "the builder no longer reads the stored faces at all"
+    assert "fetch_headshots(slate)" in src, \
+        "the builder no longer consults the roster"
+    assert src.index("stored_headshots(conn)") < src.index("fetch_headshots(slate)"), \
+        "the network source is consulted before the local one"
+    i = src.index("fetch_headshots(slate)")
+    assert "setdefault" in src[i - 200:i + 200], \
+        "the roster overwrites the stored faces instead of filling gaps"
+
+
 # --- it reaches a prop -------------------------------------------------------
 def _db():
     """A slate's worth of college logs, enough for one real prop."""
@@ -223,5 +304,11 @@ if __name__ == "__main__":
             except AssertionError as exc:
                 fails += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:              # noqa: BLE001
+                # A vanished source anchor raises out of str.index, not
+                # AssertionError. Reported rather than fatal, or one
+                # missing anchor hides every test after it.
+                fails += 1
+                print(f"  FAIL {name}: {type(exc).__name__}: {exc}")
     print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
     sys.exit(1 if fails else 0)

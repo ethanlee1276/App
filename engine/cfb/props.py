@@ -154,6 +154,34 @@ def _game_objects(games: list[dict]) -> tuple[dict, list]:
     return teams, out
 
 
+def stored_headshots(conn) -> dict:
+    """``{normalised name: url}`` from `player_assets`, for college.
+
+    Ingest writes a row per player it sees in a box score, carrying the
+    ESPN athlete id and a portrait built from it — 5,766 of them in this
+    checkout, every one with a face. Nothing on the prop path had ever
+    read them.
+
+    Keyed on the NORMALISED name because that is what every join in this
+    module uses; the table stores the raw one. An empty or missing table
+    is an empty map, never an error — the card falls back to the drawn
+    helmet, which is what it did before any of this.
+    """
+    from ..sources.oddsapi import normalize_name
+    out: dict = {}
+    try:
+        rows = conn.execute(
+            "SELECT player, headshot FROM player_assets "
+            "WHERE sport='cfb' AND COALESCE(headshot,'') != ''")
+    except Exception:                                         # noqa: BLE001
+        return out
+    for r in rows:
+        name, url = r[0], r[1]
+        if name and url:
+            out.setdefault(normalize_name(str(name)), str(url))
+    return out
+
+
 def _log_rows(conn, seasons: list[int]) -> dict:
     """``{team: {norm: {"player", "position", market: [rows newest first]}}}``.
 
@@ -287,18 +315,43 @@ def build_props(conn, games: list[dict], season: int,
         current = teams_by_name(conn, int(season))
         for norm, team in rosters_for(slate, int(season)).items():
             current.setdefault(norm, set()).add(team)
-    # THE FACES. Ethan, 2026-09-04: "can we make sure we get the head
-    # shots for college football for the players." No new request: this
-    # reads the SAME cached ESPN roster the transfer lookup above pulls
-    # once per slate team, where the portrait was being parsed away with
-    # every other athlete field. Never fatal — no faces is the drawn
-    # helmet, which is what every college card shows today.
+    # THE FACES, from the two sources college actually has, in the order
+    # that reaches the most players for the least work.
+    #
+    # Ethan, 2026-09-04: "can we make sure we get the head shots for
+    # college football for the players."
+    #
+    # `player_assets` FIRST, and it is the one I missed. Ingest has been
+    # writing college faces there from every box score it stores
+    # (sources/cfbdata, `arows`) — 5,766 players in this checkout, all of
+    # them carrying a portrait — while the first cut of this read the
+    # ESPN roster instead. That gave college two independent sources for
+    # one fact, which is the exact "two readers of one feed" this module
+    # warns about a few lines up. It is a local SELECT: no network, no
+    # cache, and it covers every player ever ingested rather than only
+    # the twenty-odd teams on tonight's card.
+    #
+    # THE ROSTER SECOND, because it is not redundant. `player_assets` can
+    # only know a player who has appeared in a stored box score, so a
+    # true freshman in week one is in it nowhere — which is the same gap
+    # `rosters_for` exists to fill, one field over. The roster fills only
+    # what the table did not already answer.
+    #
+    # Neither is a superset and the order is not arbitrary: the stored
+    # URL is built from a stable ESPN athlete id, so it does not go stale
+    # the way a cached document would, and preferring it means a normal
+    # build asks the network for nothing at all.
     headshots: dict = {}
     try:
-        from ..sources.cfbdata import fetch_headshots
-        headshots = fetch_headshots(slate)
+        headshots = stored_headshots(conn)
     except Exception:                                         # noqa: BLE001
         headshots = {}
+    try:
+        from ..sources.cfbdata import fetch_headshots
+        for norm, url in fetch_headshots(slate).items():
+            headshots.setdefault(norm, url)
+    except Exception:                                         # noqa: BLE001
+        pass
 
     cands = _candidates(games, filed, current)
     census["candidates"] = len(cands)
