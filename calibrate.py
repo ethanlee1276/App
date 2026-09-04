@@ -34,6 +34,11 @@ MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
 SPORT_MARKETS = {
     "mlb": ["total_bases", "hits", "home_runs", "strikeouts"],
     "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    # College, added 2026-09-04 — 237,242 ingested player-log rows and a
+    # board that prices these four through the shared engine. See
+    # formfit.SPORT_MARKETS for the premise this corrects and what it
+    # cost. UFC stays out: no game logs to walk.
+    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
     # Hoops props go through their own pricing machinery but land in the
     # SAME history table, keyed (sport, market) — so the deep fit works
     # here the moment game logs are ingested. It was never wired up, which

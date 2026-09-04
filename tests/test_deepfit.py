@@ -54,10 +54,37 @@ def test_only_sports_with_real_history_are_attempted():
 
 
 def test_a_sport_the_fitters_do_not_support_is_never_attempted():
-    """CFB and UFC price through their own machinery and have no deep
-    harness. Handing them to these CLIs would be an argparse error every
-    week, forever."""
-    path = _db({"cfb": 500_000, "ufc": 500_000})
+    """UFC prices through its own machinery and has no game logs at all,
+    so handing it to these CLIs would be an argparse error every week,
+    forever.
+
+    THIS TEST USED TO SAY "CFB AND UFC" and it was right when written.
+    College has since gained 237,242 ingested player-log rows and a board
+    that prices four player markets through the same
+    `pipeline.price_props` the NFL uses — so the premise expired, and the
+    dict it defended kept college out of the recency dial, the player
+    memory and the probability temperatures long after there was
+    something to fit. Fitted the day it was listed, three of its four
+    markets turned out to be claiming six to seven points too much.
+
+    The half about UFC is untouched and still load-bearing."""
+    path = _db({"ufc": 500_000})
+    assert D.sports_with_history(path) == []
+
+
+def test_college_is_attempted_now_that_it_has_the_history():
+    """The other side of the same gate. `sports_with_history` counts rows
+    only for sports in SPORT_MARKETS, which made the exclusion
+    self-concealing: college could never appear however much history it
+    accumulated, so nothing ever reported a gap."""
+    path = _db({"cfb": D.MIN_LOG_ROWS + 10})
+    assert D.sports_with_history(path) == ["cfb"]
+
+
+def test_a_listed_sport_below_the_floor_is_still_skipped():
+    """Listing college asks the question; it does not answer it. A sport
+    with a handful of rows must not spend minutes of a one-core night."""
+    path = _db({"cfb": 5})
     assert D.sports_with_history(path) == []
 
 
