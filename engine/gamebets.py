@@ -504,15 +504,45 @@ def temper(raw_win: float, fair: float, sport: str = "",
 
     Returns ``(tempered_win, edge_vs_fair, credible)``.
     """
-    shrink = None
-    if sport and market:
-        try:
-            from .gamecal import shrink_for
-            shrink = shrink_for(sport, market)
-        except Exception:                                 # noqa: BLE001
-            shrink = None            # never let a calibration cost a board
+    shrink, _err = measured_shrink(sport, market)
     return temper_edge(raw_win, fair, book="", allow_synthetic_line=True,
                        shrink=shrink)
+
+
+def measured_shrink(sport: str, market: str) -> tuple:
+    """``(haircut or None, error or None)`` — and the pair is the point.
+
+    THE TWO WAYS TO GET NONE ARE NOT THE SAME FACT, and this returned
+    only the None. `gamecal.shrink_for` answers None when nothing has
+    been MEASURED for a market yet, which is ordinary and expected: the
+    caller falls back to `betting.MARKET_SHRINK`, 0.5, and that is the
+    designed behaviour. It RAISES when the store cannot be read at all —
+    a corrupt file, a missing column, a bad migration. Both arrived here
+    as `shrink = None`, both fell back to 0.5, and nothing anywhere could
+    tell them apart.
+
+    THAT FALLBACK HAS ALREADY COST REAL MONEY. Twelve NFL game bets sat
+    open from August 8-12 2026 with 7.64 units staked, priced on the 0.5
+    guess before gamecal had measured anything; it took three separate
+    investigations to establish that, and the rows were voided
+    (`shrink_in_force`'s own docstring, and tasks #73/#74). A board that
+    reverts to that guess because a FILE would not open, and says
+    nothing, is the same outage with a cause nobody can see.
+
+    So the error travels. Pricing is unchanged — a fault still falls back
+    to 0.5, because refusing to price the board would be worse — but
+    `_calibration_note` now puts the failure on the card, where every
+    other piece of evidence goes.
+    """
+    if not (sport and market):
+        return None, None
+    try:
+        from .gamecal import shrink_for
+        return shrink_for(sport, market), None
+    except Exception as exc:                              # noqa: BLE001
+        # Never let a calibration cost a board — but never let it cost
+        # the board SILENTLY either.
+        return None, exc
 
 
 def _calibration_note(sport: str, market: str) -> list[str]:
@@ -525,11 +555,23 @@ def _calibration_note(sport: str, market: str) -> list[str]:
     """
     if not (sport and market):
         return []
+    out: list[str] = []
+    _shrink, err = measured_shrink(sport, market)
+    if err is not None:
+        # THE FAULT, ON THE CARD. Not "no haircut measured yet", which is
+        # ordinary — the store itself would not answer, so this row was
+        # priced on the 0.5 fallback for a reason that is a bug rather
+        # than a stage of the season.
+        out.append(
+            f"⚠️ The measured market haircut could not be read "
+            f"({type(err).__name__}) — this card was priced on the 0.5 "
+            f"fallback, which is the guess the measurement replaced")
     try:
         from .gamecal import note_for
-        return [n for n in (note_for(sport, market),) if n]
+        out += [n for n in (note_for(sport, market),) if n]
     except Exception:                                     # noqa: BLE001
-        return []
+        pass
+    return out
 
 
 def shrink_in_force(sport: str, market: str):
@@ -552,13 +594,7 @@ def shrink_in_force(sport: str, market: str):
     0.05 and none is reachable at a fitted shrink — they were priced
     before `gamecal` had measured anything, on the guess it replaced.
     """
-    if not (sport and market):
-        return None
-    try:
-        from .gamecal import shrink_for
-        return shrink_for(sport, market)
-    except Exception:                                     # noqa: BLE001
-        return None
+    return measured_shrink(sport, market)[0]
 
 
 def _real_price(*odds) -> bool:
