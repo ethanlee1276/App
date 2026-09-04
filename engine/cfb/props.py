@@ -277,12 +277,28 @@ def build_props(conn, games: list[dict], season: int,
     filed = _log_rows(conn, seasons)
     if not filed:
         return []
+    # THE SLATE'S TEAMS, in the identifiers `fetch_team_roster` already
+    # takes. Built once and used twice: for the transfer lookup below and
+    # for the faces. Reconstructing this list anywhere else would be a
+    # second opinion about which teams are playing.
+    slate = [t for g in (games or [])
+             for t in (g.get("home"), g.get("away")) if t]
     if current is None:
         current = teams_by_name(conn, int(season))
-        slate = [t for g in (games or [])
-                 for t in (g.get("home"), g.get("away")) if t]
         for norm, team in rosters_for(slate, int(season)).items():
             current.setdefault(norm, set()).add(team)
+    # THE FACES. Ethan, 2026-09-04: "can we make sure we get the head
+    # shots for college football for the players." No new request: this
+    # reads the SAME cached ESPN roster the transfer lookup above pulls
+    # once per slate team, where the portrait was being parsed away with
+    # every other athlete field. Never fatal — no faces is the drawn
+    # helmet, which is what every college card shows today.
+    headshots: dict = {}
+    try:
+        from ..sources.cfbdata import fetch_headshots
+        headshots = fetch_headshots(slate)
+    except Exception:                                         # noqa: BLE001
+        headshots = {}
 
     cands = _candidates(games, filed, current)
     census["candidates"] = len(cands)
@@ -328,8 +344,23 @@ def build_props(conn, games: list[dict], season: int,
                 lines=[SportsbookLine(book="proxy", line=_proxy_line(values),
                                       over_odds=-110, under_odds=-110)],
                 usage_role="starter",
+                # THE FACE, where ESPN publishes one. Keyed on the same
+                # normalised name the usage and roster lookups already
+                # join on, so a player found by one is found by all
+                # three. An empty string is the dataclass default and
+                # `visuals.playerAvatar` draws the team helmet for it —
+                # so a missing portrait is the finished design, not a
+                # gap to fill with a placeholder image.
+                headshot=(headshots or {}).get(norm, ""),
             ))
     census["props"] = len(props)
+    # WHAT THE JOIN FOUND, not just that it ran. A feed that stopped
+    # publishing portraits and a join that stopped matching names look
+    # identical on the page — every card wearing its helmet — and want
+    # opposite fixes. Two numbers separate them: how many faces the
+    # rosters carried, and how many landed on a prop.
+    census["headshots"] = sum(1 for p in props if p.headshot)
+    census["headshot_pool"] = len(headshots)
     return props
 
 

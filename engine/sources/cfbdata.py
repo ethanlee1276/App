@@ -559,8 +559,25 @@ def parse_team_roster(payload: dict) -> dict:
     because a payload that changes shape should cost a coarser position,
     not an empty roster.
     """
-    from .oddsapi import normalize_name
     out: dict = {}
+    for norm, a, fallback in _athletes(payload):
+        pos = a.get("position")
+        if isinstance(pos, dict):
+            pos = pos.get("abbreviation") or pos.get("name") or ""
+        out[norm] = str(pos or fallback).upper()
+    return out
+
+
+def _athletes(payload: dict):
+    """``(normalised name, athlete, group label)`` for one roster payload.
+
+    Extracted so `parse_team_roster` and `parse_team_headshots` walk the
+    SAME payload by the same rule rather than each carrying a copy of it.
+    Two readers of one feed that disagree about which athletes exist is a
+    bug waiting for a payload change to expose it — and this repo made
+    exactly that mistake with the odds slate's day filter on 2026-09-03.
+    """
+    from .oddsapi import normalize_name
     for group in (payload or {}).get("athletes") or []:
         if not isinstance(group, dict):
             continue
@@ -573,10 +590,44 @@ def parse_team_roster(payload: dict) -> dict:
                                          a.get("lastName")) if x))
             if not str(name).strip():
                 continue
-            pos = a.get("position")
-            if isinstance(pos, dict):
-                pos = pos.get("abbreviation") or pos.get("name") or ""
-            out[normalize_name(str(name))] = str(pos or fallback).upper()
+            yield normalize_name(str(name)), a, fallback
+
+
+def parse_team_headshots(payload: dict) -> dict:
+    """``{normalised name: headshot url}`` for everyone who has a face.
+
+    Ethan, 2026-09-04: "can we make sure we get the head shots for
+    college football for the players".
+
+    THE FEED WAS ALREADY BEING FETCHED AND THE FACE THROWN AWAY.
+    `fetch_team_roster` pulls this payload once per slate team on a
+    day's cache — it is how a week-one transfer gets placed at all — and
+    `parse_team_roster` kept the position and discarded every other
+    field on the athlete. So the picture was arriving and nothing read
+    it, which costs one dictionary rather than one request.
+
+    TWO SHAPES, BECAUSE ESPN PUBLISHES BOTH. Site-API athletes carry the
+    portrait either as a bare URL string or as ``{"href": ..., "alt":
+    ...}``. Anything else — a missing key, a null, a dict with no href —
+    yields NO entry rather than a guess: `visuals.playerAvatar` draws
+    the team helmet when a row has no headshot, so an absent face is a
+    finished design and a wrong URL is a broken image.
+
+    COVERAGE IS PARTIAL AND THAT IS EXPECTED. Walk-ons and true
+    freshmen frequently have no portrait; the NFL feed has the same gap
+    (nflverse carries one for 2,816 roster players, not all of them).
+    `cfb_build` prints the share it matched so a FEED that stops
+    carrying faces is distinguishable from a JOIN that stopped finding
+    them — the two look identical on the page and want opposite fixes.
+    """
+    out: dict = {}
+    for norm, a, _fallback in _athletes(payload):
+        shot = a.get("headshot")
+        if isinstance(shot, dict):
+            shot = shot.get("href")
+        url = str(shot or "").strip()
+        if url.startswith("http"):
+            out[norm] = url
     return out
 
 
@@ -587,6 +638,34 @@ def fetch_team_roster(team_id: str, ttl: int = 24 * 3600) -> dict:
     return fetch_json(ROSTER.format(team_id=ident),
                       f"espn_cfb_roster_{ident}.json", ttl=ttl,
                       user_agent=DEFAULT_AGENT)
+
+
+def fetch_headshots(teams, ttl: int = 24 * 3600) -> dict:
+    """``{normalised name: url}`` across every team on the slate.
+
+    Rides the SAME cached roster fetch `tds.rosters_for` already makes
+    once per slate team, so a full college Saturday adds no requests at
+    all on any cycle where the transfer lookup has already run.
+
+    Never raises and never blocks a board — a team whose roster will not
+    load contributes no faces, and those players fall back to the drawn
+    helmet, which is what every college card shows today.
+
+    A name on two rosters keeps the first URL rather than flapping
+    between them. `rosters_for` drops such a name because putting a back
+    on the wrong side of a spread changes a bet; a portrait does not, and
+    dropping the face of anyone who shares a name with a player at
+    another school would cost more than the ambiguity does.
+    """
+    out: dict = {}
+    for team in dict.fromkeys(t for t in teams if t):
+        try:
+            got = parse_team_headshots(fetch_team_roster(team, ttl=ttl))
+        except Exception:                                     # noqa: BLE001
+            continue
+        for norm, url in got.items():
+            out.setdefault(norm, url)
+    return out
 
 
 def fetch_teams(ttl: int = 7 * 24 * 3600) -> dict:

@@ -1416,6 +1416,14 @@ def main() -> None:
                   f"{prop_census['thin_history']} with too little history, "
                   f"{prop_census['below_volume']} below the volume floor; "
                   f"usage from {prop_census.get('usage_season')})")
+            # The faces, and the two numbers that tell a dead feed from a
+            # dead join. Printed only when props were built, because on a
+            # board with no players it is noise.
+            _faces = prop_census.get("headshots")
+            if _faces is not None:
+                print(f"  Headshots: {_faces} of {prop_census['props']} "
+                      f"prop(s) carry one, from a roster pool of "
+                      f"{prop_census.get('headshot_pool', 0)}")
         else:
             print("  Player props: no college player logs joined tonight's "
                   "teams — run `python3 ingest.py cfb --seasons 2022-2026`.")
