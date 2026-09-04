@@ -336,6 +336,14 @@ PRUNABLE_CACHE_PREFIXES = (
     "standings_mlb_",
     "nba_box_", "wnba_box_", "wnba_schedule_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
+    # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
+    # league, overwritten every poll, so these do not grow in COUNT the
+    # way `mlb_pbp_{pk}` does — but `test_cacheclass._classified` passed
+    # them on a prefix match against `espn_nfl_` while `prune_cache`
+    # matches whole prefixes and would never have touched them. A rule
+    # that says a file is classified and a pruner that skips it is the
+    # gap the classification test exists to close.
+    "espn_nba_", "espn_wnba_",
     "mma_scoreboard_", "mma_live_", "mma_ev_", "mma_comp_", "mma_cptr_",
     "pm_evt_", "pm_mkt_", "pm_wtrades_", "pm_pnl_", "pm_leaderboard_",
     "nws_pt_", "nws_fc_", "sol_holders_", "sleeper_trend_",

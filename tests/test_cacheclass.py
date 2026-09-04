@@ -89,6 +89,22 @@ def test_the_play_by_play_cache_is_prunable_now():
         "mlb_pbp_ still grows forever"
 
 
+def test_a_prefix_match_is_not_a_pruning_promise():
+    """THE LOOPHOLE IN `_classified`, closed for the case that walked
+    into it. That helper accepts a prefix when a LISTED one starts with
+    it — so `espn_` counts as classified because `espn_nfl_` is listed.
+    `prune_cache` is stricter: it matches the whole prefix, so
+    `espn_nba_scoreboard.json` was "classified" and unprunable at the
+    same time. Every file a source actually writes has to satisfy the
+    PRUNER, not only the audit.
+    """
+    for name in ("espn_nfl_scoreboard.json", "espn_cfb_scoreboard.json",
+                 "espn_nba_scoreboard.json", "espn_wnba_scoreboard.json"):
+        assert name.startswith(PRUNABLE_CACHE_PREFIXES) or any(
+            name.startswith(k) for k in KEEP_CACHE_PREFIXES), \
+            f"{name} is classified by the audit and skipped by the pruner"
+
+
 def test_the_audit_found_more_than_the_one_name():
     """`nba_box_` was in the list and `wnba_box_` was not — the tell that
     the list was assembled by hand rather than derived."""
