@@ -54,10 +54,29 @@ def test_only_sports_with_real_history_are_attempted():
 
 
 def test_a_sport_the_fitters_do_not_support_is_never_attempted():
-    """CFB and UFC price through their own machinery and have no deep
-    harness. Handing them to these CLIs would be an argparse error every
-    week, forever."""
-    path = _db({"cfb": 500_000, "ufc": 500_000})
+    """UFC prices through its own machinery and has no deep harness:
+    it has no game logs at all, so handing it to these CLIs would be an
+    argparse error every week, forever.
+
+    CFB LEFT THIS TEST ON 2026-09-04, and the reason it was here is the
+    reason it is gone. `--sport` validates against each fitter's own
+    SPORT_MARKETS, college was in none of them, so cfb was not a legal
+    value to type — and `correction_for("cfb", …)` therefore returned
+    the neutral (1.0, 0.0) on every college prop the board priced. Now
+    that `engine/cfb/props.py` builds props off the ingested logs, the
+    walk runs and the fit is one the CLIs can do."""
+    path = _db({"ufc": 500_000})
+    assert D.sports_with_history(path) == []
+
+
+def test_college_is_attempted_once_it_has_the_logs():
+    path = _db({"cfb": 500_000})
+    assert D.sports_with_history(path) == ["cfb"]
+
+
+def test_college_still_needs_the_logs_before_it_is_attempted():
+    """MIN_LOG_ROWS is what stops a 1-vCPU box walking an empty table."""
+    path = _db({"cfb": 5})
     assert D.sports_with_history(path) == []
 
 
