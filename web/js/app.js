@@ -1026,6 +1026,47 @@ function whenChip(dateStr, kick) {
   return w ? `<span class="chip when">${escapeHtml(w)}</span>` : "";
 }
 
+/* HAS THIS ROW'S GAME KICKED OFF? The likelihood board had no idea.
+
+   `showableLikelyRow` filters shrink artefacts and the -250 price cap
+   and never looked at kickoff, so a Most Likely row stayed on the page
+   after its game started and until the next rebuild — a pre-game
+   ranking presented as live. The edge board refuses a started game at
+   the rules layer ("this is a pre-game model and cannot price an
+   in-play market"); this board had no equivalent anywhere.
+
+   LABELLED, NOT HIDDEN. Dropping the row would make cards vanish under
+   a reader on the sixty-second refresh, which is Ethan's own complaint
+   from 2026-08-31: "ill be staring at the live page at the open bets
+   and ill scroll and shit then the open bets will just dissapear." A
+   row that changes what it SAYS is honest; a row that disappears while
+   you are reading it is the bug one board over.
+
+   Same rule as `boardlint._started`, deliberately: `live` first, then a
+   timezone-aware kickoff in the past. A naive or unparseable timestamp
+   answers false — an unknown kickoff is not a started game. */
+function likelyStarted(r) {
+  if (!r) return false;
+  if (r.live) return true;
+  const k = String(r.kickoff || r.game_kickoff || "");
+  if (!k) return false;
+  // A bare local timestamp cannot be compared against a clock in another
+  // zone, and guessing the reader's is how a 1pm kickoff reads as
+  // started in London. No offset, no verdict.
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(k)) return false;
+  const t = Date.parse(k);
+  return Number.isFinite(t) && t <= Date.now();
+}
+
+function startedChip(r) {
+  return likelyStarted(r)
+    ? `<span class="chip warn" title="This game is under way. The board ranks
+        pre-game and does not re-price in play — this row is what we thought
+        before kickoff, kept so it does not vanish while you read it.">under
+        way</span>`
+    : "";
+}
+
 /* ---------------- motion ---------------- */
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -5536,7 +5577,7 @@ function likelyCard(r) {
         <div>
           <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}</div>
+          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}</div>
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span></div>
         </div>
@@ -5849,7 +5890,8 @@ function likelyRow(r) {
   const label = (game ? `${r.market_label || r.market} · ${r.matchup || ""}`
     : r.line == null ? (r.market_label || r.market)
     : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`)
-    + (r.ranked === false ? " · lean" : "");
+    + (r.ranked === false ? " · lean" : "")
+    + (likelyStarted(r) ? " · under way" : "");
   const mark = game ? likelyGameMark(r, 30)
     : playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
                                        headshot: r.headshot });
