@@ -163,6 +163,36 @@ def test_a_readable_sport_scores_and_names_its_candidates():
         assert name in got["candidates"], f"{name} was not scored"
 
 
+def test_the_college_ranking_measurement_is_written_down():
+    """THE FIRST THING THIS FIX MADE ASKABLE, kept where a person
+    deciding about college props will look — `engine/cfb/props`, the
+    module that builds the slate.
+
+    College ranks its own skill markets materially worse than the NFL
+    ranks its own and BETTER on passing yards. Nothing shuts the college
+    yardage markets today, while the NFL's two worst are refused
+    wholesale, and that asymmetry is the absence of a measurement rather
+    than a decision.
+
+    The CAVEATS are pinned alongside the numbers on purpose. A table this
+    suggestive, without them, is how a ranking metric gets mistaken for
+    a betting verdict — and this repo already owns the counter-example,
+    `nfl:rush_yds`, which ranks 0.65 and is shut."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "cfb", "props.py"),
+               encoding="utf-8").read()
+    for row in ("0.6512   0.4714", "0.5483   0.4555",
+                "0.5613   0.4491", "0.3040   0.3959"):
+        assert row in src, f"the college ranking table lost {row}"
+    assert "RANKING IS NOT BEATING A LINE" in src, \
+        "the caveat that stops a rank being read as a verdict is gone"
+    assert "compared_on" in src, \
+        "the different-populations caveat is gone"
+    assert "NOTHING SHUTS THESE MARKETS TODAY" in src, \
+        "the open-while-the-NFL-is-shut asymmetry is no longer recorded"
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

@@ -18,6 +18,52 @@ the way `engine.sources.nflverse` does, and hands the slate on. Every
 judgement about whether the resulting number is worth betting is made
 downstream, by the same code that judges the NFL's.
 
+HOW WELL THESE PROJECTIONS RANK, measured 2026-09-04, the first time it
+could be asked. `engine.formcheck` had `sport='nfl'` hardcoded in its
+SQL and keyed the week with `int(period)`, which discards a date — so
+college could not be scored here at all until that was fixed. Walked
+forward over 2023-25, mean within-week Spearman for the shipped blend:
+
+    market          nfl      cfb
+    rush_yds      0.6512   0.4714
+    rec_yds       0.5483   0.4555
+    receptions    0.5613   0.4491
+    pass_yds      0.3040   0.3959
+
+College ranks its own skill markets materially worse than the NFL ranks
+its own — eighteen points of correlation on rushing — and BETTER on
+passing yards, which is the market the NFL is weakest at. Both halves
+are plausible for the same reason: college has enormous spread in
+quarterback quality, which makes passers easy to order, and a quarter of
+its skill players change schools over the summer, which makes usage hard
+to carry.
+
+THREE CAVEATS, AND THEY MATTER MORE THAN THE TABLE.
+
+Each sport is scored on ITS OWN comparable rows — `compared_on` was
+8,503 of 9,424 for college rushing against 4,418 of 13,565 for the NFL,
+because the candidates that need opportunity data cover the two feeds
+differently. So this is each sport's rankability on the rows it can be
+asked about, not a controlled head-to-head.
+
+RANKING IS NOT BEATING A LINE, and this codebase already has the
+counter-example. `nfl:rush_yds` ranks 0.65 here and still measured AUC
+0.47 against a real book, saturated its isotonic curve, and is SHUT
+(engine/calibrate.one_sided, engine/yardagefit). A good ordering with no
+ability to price the over is exactly the state that module documents. So
+a weaker college ranking is a warning about the projection, not a
+verdict on the bet.
+
+AND NOTHING SHUTS THESE MARKETS TODAY. There is no fitted calibration
+for cfb rush_yds, rec_yds, receptions or pass_yds, so `is_reliable`
+answers True by default and the edge board prices all four — while the
+NFL's two worst are refused wholesale. That asymmetry is not a decision
+anyone made; it is the absence of a measurement.
+
+WHAT WOULD SETTLE IT is the same thing that settled the NFL's: college
+closing lines against the model, the walk that #68 and #72 ran. Until
+then this is a lead, and it is written here rather than acted on.
+
 THE COLLEGE-SHAPED PART IS WHO IS ON WHICH TEAM. A quarter of the players
 a book quotes in college football changed schools over the summer
 (`engine.cfb.tds.teams_by_name` measured 19.9% and 25.2% across the last
