@@ -65,9 +65,44 @@ def _stamp(d, name, payload, age_seconds):
 
 
 def _get(name):
-    """Read through `_get` with no network available: whatever comes
-    back came from the cache, and a raise means the cache was refused."""
-    return C._get("/talent", {}, name, api_key="test-key")
+    """Read through `_get` with the network SIMULATED as unreachable, so
+    each test takes the branch it is named for.
+
+    IT USED TO RELY ON THE HOST HAVING NO ROUTE TO CFBD, and that is the
+    difference between a sandbox and a CI runner. `cfbd._get` has two
+    failure branches and the environment picks which one runs:
+
+      * no network  -> `urlopen` raises a connection error -> `except
+        Exception` -> falls back to a cache that holds content. This is
+        the branch `test_the_network_failure_fallback_keeps_a_cache_with
+        _content` asserts.
+      * network up  -> CFBD answers 401 to `Bearer test-key` -> `except
+        urllib.error.HTTPError` -> raises `CFBDUnavailable` and never
+        reaches the stale-cache fallback below it.
+
+    So the file was green in the sandbox it was written in and red on
+    every GitHub runner, which is why `tests.yml` failed on this repo's
+    working branch for eight consecutive commits while every session's
+    log reported a green suite. The nightly health Routine cannot catch
+    it either: it runs in the same blocked sandbox, and its own charter
+    names this class — "check whether the TEST is: a test that reads a
+    real store, a real database, or the network... If a test's verdict
+    depends on machine state, isolate it."
+
+    Simulating the failure isolates it: the branch under test is now the
+    branch that runs, on any host.
+    """
+    import urllib.request
+
+    def _down(req, timeout=None):
+        raise OSError("network unavailable (simulated)")
+
+    saved = urllib.request.urlopen
+    urllib.request.urlopen = _down
+    try:
+        return C._get("/talent", {}, name, api_key="test-key")
+    finally:
+        urllib.request.urlopen = saved
 
 
 # --- the two lifetimes ----------------------------------------------------
@@ -164,6 +199,42 @@ def test_a_corrupt_cache_file_is_ignored_rather_than_fatal():
     except C.CFBDUnavailable:
         return
     raise AssertionError("a corrupt cache should not be served")
+
+
+def test_the_helper_simulates_the_outage_rather_than_relying_on_one():
+    """The pin that would have caught this in the sandbox.
+
+    Every other test here passes whether the helper stubs the network or
+    merely assumes it is down — that is exactly why the bug survived
+    eight CI runs while every local suite reported green. Reverting the
+    helper has to fail SOMEWHERE a session actually looks, so it fails
+    here.
+    """
+    import inspect
+
+    src = inspect.getsource(_get)
+    assert "urllib.request.urlopen = _down" in src, \
+        "the helper is relying on the host having no network again"
+    assert "finally" in src and "urlopen = saved" in src, \
+        "a stub left installed would leak into every later test"
+
+
+def test_the_two_failure_branches_are_still_distinct():
+    """`cfbd._get` treats a refused key and a dead network differently —
+    401 raises immediately, a connection error consults the cache first.
+    The bug was a test that could only ever reach the second; this pins
+    that they remain two branches, so simulating one is meaningful."""
+    import inspect
+
+    src = inspect.getsource(C._get)
+    assert "except urllib.error.HTTPError" in src
+    assert "except Exception" in src
+    http_at = src.index("except urllib.error.HTTPError")
+    generic_at = src.index("except Exception")
+    assert http_at < generic_at, "the HTTPError branch must come first"
+    # …and only the generic branch reaches the stale-cache fallback.
+    assert "path_c.exists()" in src[generic_at:]
+    assert "path_c.exists()" not in src[http_at:generic_at]
 
 
 if __name__ == "__main__":
