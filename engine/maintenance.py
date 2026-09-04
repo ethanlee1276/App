@@ -1468,6 +1468,53 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  book report skipped: {exc}")
 
+    # PLAYER FACES, EVERY SPORT. Ethan, 2026-09-04: "I see some players
+    # on nfl don't have any."
+    #
+    # `facesfill` has existed since 2026-08-18 and had NEVER RUN ON A
+    # SCHEDULE — no caller in launch.py, no line in any deploy script,
+    # only a human typing it. Its own docstring explains why nothing else
+    # can do this job: the photo URL is captured DURING ingest, and
+    # ingest skips days it has already stored, so a player whose days
+    # were all stored before faces existed can never pick one up. That is
+    # a one-way ratchet, and the only thing that releases it is this,
+    # running.
+    #
+    # Measured in this checkout: `player_assets` held 5,766 college rows
+    # and NOT ONE for nfl, mlb, nba or wnba — which is exactly what the
+    # facesfill header predicts ("NOTHING has ever written NFL rows to
+    # that table"). The fantasy player profile reads that table for its
+    # face, so those cards drew initials while the identifiers to build a
+    # URL sat in the same database.
+    #
+    # HERE RATHER THAN IN THE NIGHTLY, because this function is the
+    # once-a-day hook BOTH paths call — `nightly_run`'s first step and
+    # the server's own `_startup_chores`/`_background_refresher`. Wiring
+    # it to the nightly alone would leave it unrun on any box where the
+    # nightly is the thing that broke, which is the failure mode this
+    # module's docstring is about.
+    #
+    # Never fatal and safe to repeat: `upsert_player_assets` keys on
+    # (sport, player) and an empty value never clobbers a stored one, so
+    # the worst case of a bad day is the faces it already had.
+    try:
+        import facesfill
+        from . import db as _fdb
+        _fconn = _fdb.connect()
+        _filled = []
+        for _sport in ("nfl", "mlb", "nba", "wnba"):
+            try:
+                _n, _before, _after = facesfill.fill(_fconn, _sport)
+            except Exception as exc:                          # noqa: BLE001
+                log(f"  ⚠️  faces ({_sport}) skipped: {exc}")
+                continue
+            if _after > _before:
+                _filled.append(f"{_sport} {_before}->{_after}")
+        log("  faces: " + (", ".join(_filled) if _filled
+                           else "nothing new to fill"))
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  faces backfill skipped: {exc}")
+
     if harvest:
         _maybe_harvest(yesterday, log)
 
