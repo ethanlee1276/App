@@ -239,8 +239,24 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     if cap is None:
         cap = PLAYER_EVENT_CAP
         try:
-            from engine.oddsbudget import affordable_events
-            cap = min(cap, affordable_events(CREDITS_PER_EVENT))
+            from engine.oddsbudget import affordable_events, prime_window
+            # ONE PULL, NOT FOUR THIN ONES. `affordable_events` divides
+            # the day's slice by the pacer's four touchpoints, which is
+            # right for a sport that plays every evening and wrong for
+            # one that plays on Saturday: college's measured allowance
+            # is about 26 credits a day, so a quarter of it buys ONE
+            # game of player props at five credits each, four times,
+            # three of them hours before anybody could use them.
+            #
+            # Inside the pre-kickoff window the whole day's college
+            # slice goes on one pull instead — five games at once rather
+            # than one game four times, for the same money. Outside it
+            # the default split stands, so an early cycle cannot spend
+            # the afternoon's board.
+            kicks = [k.timestamp() for _t, _p, k, _i, _e in cands]
+            hot = prime_window(kicks, t.timestamp())
+            cap = min(cap, affordable_events(
+                CREDITS_PER_EVENT, pulls_per_day=1 if hot else None))
         except Exception:                                    # noqa: BLE001
             pass                       # a pacing hiccup never costs a board
     cap = max(0, int(cap))
@@ -1529,7 +1545,20 @@ def main() -> None:
     out["counts"] = {"props_built": len(_built),
                      "props_analyzed": sum(1 for r in _built
                                            if r.get("has_market")),
-                     "recommended": len(bets),
+                     # THE PROPS THIS BOARD RECOMMENDS, which is what
+                     # every other sport puts under this key
+                     # (`pipeline.run_slate` counts recommended PROPS).
+                     # College had the game-bet count here, so the one
+                     # number named the same thing on five boards meant
+                     # something different on the sixth — and it read low
+                     # the moment college gained props to recommend.
+                     "recommended": sum(1 for r in _built
+                                        if r.get("recommended")),
+                     # The game bets keep their own name rather than
+                     # borrowing that one. `published` from the college
+                     # slate result says the same thing; this is the key
+                     # the payload already spoke.
+                     "game_bets": len(bets),
                      "conditional": len(conditionals),
                      # The GAME markets this board priced, which is what
                      # `props_analyzed` used to hold and what the CFB

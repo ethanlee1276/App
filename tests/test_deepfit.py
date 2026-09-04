@@ -67,6 +67,13 @@ def test_a_sport_the_fitters_do_not_support_is_never_attempted():
     something to fit. Fitted the day it was listed, three of its four
     markets turned out to be claiming six to seven points too much.
 
+    THE OTHER SESSION REACHED THE SAME LINE FROM THE OTHER END, and its
+    sentence is worth keeping: `--sport` validates against each fitter's
+    own SPORT_MARKETS, so with college in none of them cfb was not a
+    legal value to type, and `calibrate.correction_for("cfb", ...)`
+    returned the neutral (1.0, 0.0) on every college prop the board ever
+    priced.
+
     The half about UFC is untouched and still load-bearing."""
     path = _db({"ufc": 500_000})
     assert D.sports_with_history(path) == []

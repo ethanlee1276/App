@@ -107,6 +107,28 @@ SPORT_MARKETS = {
     # These figures are from this checkout's history and are NOT
     # committed: the droplet fits its own, from more of it, in the weekly
     # deep refit. They are recorded to say what listing college bought.
+    #
+    # TWO SESSIONS FOUND THIS INDEPENDENTLY ON THE SAME DAY, and the
+    # merge is where that became visible: `claude/cfb-player-props-q433qn`
+    # added the identical line, for the identical reason, from the other
+    # end of the problem. It reached it from the BOARD — the first live
+    # college prop board priced 22 props and recommended none, every one
+    # graded Pass, the comps saying "model says 63% but 4,852 similar
+    # past spots went 80% to the under". An uncalibrated market does not
+    # merely price badly: the 0.10-0.17 edges it produces sail past
+    # `betting.MAX_CREDIBLE_EDGE`, so it prices itself off the board
+    # entirely. That is the cost of this omission, observed rather than
+    # reasoned, and it belongs here.
+    #
+    # THE TWO SESSIONS DISAGREE ON THE ROW COUNTS and neither should be
+    # taken as settled. That commit reports "62,752 receiving-yard and
+    # 47,926 rushing-yard player-games". Counted against data/history.db
+    # on 2026-09-04 the ingested totals are the ones above: 37,712
+    # rec_yds and 26,072 rush_yds rows of 237,242 college rows. The
+    # source CSVs are play-level (765,288 rows over four seasons) so
+    # neither figure is a raw count of those either. The gap is real and
+    # unexplained; whichever number a later reader needs, MEASURE IT
+    # rather than quoting one of these.
     "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
     # UFC remains deliberately absent: it has no game logs at all, so a
     # fit here could never run. It learns from the journal only.
