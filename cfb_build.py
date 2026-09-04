@@ -153,6 +153,14 @@ PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
 #: region, and every request this file makes is one region.
 CREDITS_PER_EVENT = len(PLAYER_MARKETS)
 
+#: How old a payload has to be before the board says so out loud. Under
+#: half an hour is the ordinary working state — `fetch_event_odds` runs a
+#: 1800s TTL, so a quote that age was current at the last cycle that could
+#: afford it and saying "0.4 hours old" on every board would be noise that
+#: teaches a reader to skip the line. Past it, the number is the answer to
+#: a question the reader is actually asking.
+STALE_QUOTE_S = 1800
+
 #: The most games a player pull will EVER touch, before the budget gets a
 #: say. Player markets are event-scoped where the whole game board above
 #: is three credits flat, so an uncapped Saturday would be sixty games ×
@@ -240,7 +248,11 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     scorers: dict = {}
     lines: dict = {}
     pulled = 0
+    oldest = None                      # seconds; the stalest payload used
     for _tier, _pri, _ko, i, event_id in cands[:cap]:
+        # BEFORE THE CALL, because a paid pull rewrites the file and the
+        # age we want is the age of what this build is about to READ.
+        age = oddsapi.event_cache_age(event_id, PLAYER_MARKETS, sport="cfb")
         try:
             payload, _quota = oddsapi.fetch_event_odds(
                 event_id, api_key, markets=PLAYER_MARKETS,
@@ -249,6 +261,13 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
             if cache_only:
                 continue               # never paid for — nothing on disk
             break                      # a live failure ends the spend, not the build
+        # A LIVE PULL IS ZERO SECONDS OLD whatever was on disk before it.
+        # `_request` only serves the cache under `cache_only` or inside
+        # the 30-minute TTL, and both of those are what `age` measures.
+        if not cache_only and (age is None or age >= 1800):
+            age = 0.0
+        if age is not None:
+            oldest = age if oldest is None else max(oldest, age)
         pulled += 1
         quotes: dict = {}
         for (norm, _mkt), qs in oddsapi.parse_event_scorers(payload).items():
@@ -262,6 +281,22 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
             f"pulled at {CREDITS_PER_EVENT} credit(s) each"
             + (" (cached)" if cache_only else ""))
+    # HOW OLD THE PRICES ARE, not merely that they came from the cache.
+    # `oddsapi._request` under `cache_only` "serves the cached copy at ANY
+    # age", which is the right trade — the last paid pull's real prices
+    # beat proxies — and the cost is that "(cached)" covers a payload
+    # read four minutes ago and one read four days ago with the same
+    # word. Ethan, 2026-09-04: "I'm noticing lines for CFB that's wrong.
+    # Like for example, Cam Edward's ... has a -300 line too score a
+    # touchdown but on our site we are showing -155." A price that cannot
+    # be dated cannot be told apart from a wrong one, and this board's
+    # `priced_at` dates the last PULL rather than the quote beside a row.
+    if oldest is not None and oldest >= STALE_QUOTE_S:
+        hrs = oldest / 3600.0
+        note += (f" · oldest quote on this board is "
+                 + (f"{hrs / 24.0:.1f} day(s)" if hrs >= 24 else f"{hrs:.1f} hour(s)")
+                 + " old — college buys player markets per event, so a game "
+                   "outside the cap keeps the last pull that reached it")
     if cap < len(cands):
         # SAID ON THE BOARD, NOT ONLY IN THE LOG. A college Saturday the
         # budget can only half-buy looks exactly like a college Saturday
@@ -270,7 +305,7 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         note += (f" · {len(cands) - cap} left unpriced — the pull is capped "
                  f"at {cap} game(s) by attention tier "
                  f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})")
-    return scorers, lines, note
+    return scorers, lines, note, oldest
 
 
 def _books_for(ev: dict, entry: dict, home: str, away: str,
@@ -1378,14 +1413,15 @@ def main() -> None:
     quotes_note = ("no odds pulled on this cycle — player prices are "
                    "metered per event, so they arrive on the cycles that "
                    "can afford them rather than every minute")
+    quotes_age = None
     if args.odds or args.cached_odds or args.lines_odds:
         try:
             # NOT bought by --lines-odds. Player markets are event-scoped
             # and cost five credits a game; the cheap tier exists because
             # it does not buy them. Cached quotes still attach — the last
             # paid pull's prices are better than none.
-            td_quotes, prop_lines, quotes_note = attach_player_quotes(
-                games, priced, cache_only=not args.odds)
+            td_quotes, prop_lines, quotes_note, quotes_age = \
+                attach_player_quotes(games, priced, cache_only=not args.odds)
             print(f"  {quotes_note}")
         except Exception as _qexc:                           # noqa: BLE001
             quotes_note = f"player quotes unavailable: {_qexc}"
@@ -1461,6 +1497,15 @@ def main() -> None:
     out["odds_status"] = {"at": out["generated_at"], "note": quotes_note,
                           "games_quoted": len(td_quotes),
                           "props_priced": prop_census.get("priced", 0)}
+    # TWO CLOCKS, BECAUSE THERE ARE TWO PULLS — the same shape NFL
+    # publishes as `lines_priced_at` and for the same reason, one level
+    # down. `priced_at` (stamped further below from the budget state)
+    # dates the last time college SPENT. This dates the stalest payload
+    # any row on this board was actually built from, which is older
+    # whenever the game fell outside the per-cycle cap.
+    if quotes_age is not None:
+        import time as _time
+        out["odds_status"]["player_priced_at"] = round(_time.time() - quotes_age)
 
     # EVERY INGESTED MARKET FOR TONIGHT'S PLAYERS, the same key the NFL
     # and MLB boards publish for the Players page's market chips. Empty

@@ -605,8 +605,8 @@ def test_attach_player_quotes_filters_caps_and_survives_cache_misses():
     now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
     games, priced = _slate_of()
     calls = []
-    out, _lines, note = _quote_pull(games, priced, now,
-                                    cap=B.PLAYER_EVENT_CAP, calls=calls)
+    out, _lines, note, _age = _quote_pull(games, priced, now,
+                                          cap=B.PLAYER_EVENT_CAP, calls=calls)
     # 16 games − started − missing id = 14 eligible. A game with no
     # total is no longer struck out: it cannot carry a TOUCHDOWN price
     # (no implied total, no script) but a yardage prop needs neither, so
@@ -662,7 +662,7 @@ def test_a_capped_pull_says_what_it_left_unpriced():
     Saturday the books did not price, and the difference is the whole
     question a reader is asking."""
     now = dt.datetime(2026, 8, 29, 12, 0, tzinfo=dt.timezone.utc)
-    _out, _lines, note = _quote_pull(*_slate_of(), now=now, cap=3)
+    _out, _lines, note, _age = _quote_pull(*_slate_of(), now=now, cap=3)
     assert "11 left unpriced" in note, note
     assert "budget pacing" in note, note
 

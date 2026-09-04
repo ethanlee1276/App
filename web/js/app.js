@@ -2879,6 +2879,18 @@ function oddsClockHTML() {
   if (os.lines_priced_at && os.lines_priced_at > (os.priced_at || 0)) {
     bits.push(`game lines <b>${clock(os.lines_priced_at)}</b>`);
   }
+  /* AND THE OTHER DIRECTION, which is the one that costs money. College
+     buys player markets one game at a time and only for the games it can
+     afford that cycle; every other game keeps whatever the last pull that
+     reached it left on disk, at any age. So the prop beside a name can be
+     far OLDER than the pull `priced_at` names — the mirror image of the
+     game-lines case above, and the reason Ethan could not tell a wrong
+     price from an old one on 2026-09-04. Shown only when it is actually
+     older, by more than a pull's own cache window, so an ordinary cycle
+     still gets one honest line instead of two. */
+  if (os.player_priced_at && os.player_priced_at < (os.priced_at || 0) - 1800) {
+    bits.push(`player prices <b>${clock(os.player_priced_at)}</b>`);
+  }
   if (opens) {
     bits.push(waiting
       ? `today’s pricing starts <b>${clock(os.window_opens_at)}</b>`

@@ -725,10 +725,61 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     # A stable digest rather than the market list itself: the list is
     # long, the filename is not, and the request is what has to be
     # distinguished rather than described.
+    return _request(url, event_cache_name(event_id, markets, books, sport),
+                    ttl=ttl, cache_only=cache_only)
+
+
+def event_cache_name(event_id: str, markets: list[str] | None = None,
+                     books: list[str] | None = None,
+                     sport: str = "nfl") -> str:
+    """The cache filename one event-odds request writes and reads.
+
+    ONE DEFINITION, because a second reader now needs it.
+    `event_cache_age` below answers "how old is the payload this call
+    would serve", and it can only answer honestly by naming the same
+    file `fetch_event_odds` names. Re-deriving the digest at the call
+    site would work until the day one of the two changed.
+    """
+    markets = markets or list(SPORT_CONFIG[sport]["markets"])
+    books = books or DEFAULT_BOOKS
     spec = ",".join(sorted(markets)) + "|" + ",".join(sorted(books))
     tag = hashlib.md5(spec.encode()).hexdigest()[:8]
-    return _request(url, f"odds_event_{sport}_{event_id}_{tag}.json", ttl=ttl,
-                    cache_only=cache_only)
+    return f"odds_event_{sport}_{event_id}_{tag}.json"
+
+
+def event_cache_age(event_id: str, markets: list[str] | None = None,
+                    books: list[str] | None = None, sport: str = "nfl",
+                    now: float | None = None) -> float | None:
+    """Seconds since this event's cached payload was written, or None.
+
+    `_request` with ``cache_only`` "serves the cached copy at ANY age and
+    never touches the network", which is the whole point of the free tier
+    — the last paid pull's real prices beat proxies. What it costs is the
+    ability to tell a price that is WRONG from a price that is OLD, and
+    Ethan has now hit that twice:
+
+      2026-09-03  "The lines on the most likely best bet page ... are
+                  completely wrong so we are giving bad bets."  The
+                  arithmetic checked out end to end; the board simply
+                  could not say the prices were three hours behind.
+      2026-09-04  "Cam Edward's ... has a -300 line too score a touchdown
+                  but on our site we are showing -155."
+
+    The board-level `priced_at` stamp dates the last PULL. It does not
+    date the quote beside a row: college buys player markets for at most
+    `cfb_build.PLAYER_EVENT_CAP` games a cycle, ordered by attention
+    tier, and every other game keeps whatever the last pull that reached
+    it left on disk. This is how old that actually is.
+
+    None when nothing is cached — an unpriceable game and a stale one are
+    different facts and must not share an answer.
+    """
+    path = CACHE_DIR / event_cache_name(event_id, markets, books, sport)
+    try:
+        return max(0.0, (now if now is not None else time.time())
+                   - path.stat().st_mtime)
+    except OSError:
+        return None
 
 
 # --- parsing (pure; unit-tested without network) ----------------------------
