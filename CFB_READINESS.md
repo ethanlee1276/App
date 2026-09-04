@@ -352,44 +352,42 @@ They are two sets now — `POWER_CONFERENCES` (attention) and
 board is unchanged. The switch is `"Pac-12"` into `BETTABLE_CONFERENCES`
 and nothing else.
 
-**But only half the measurement is available, and an earlier version of
-this paragraph got that wrong.** It said to "replay, and read the bet
-count and the ROI at the close the way Phase 8 read them". The bet
-count, yes. The ROI, no: college football's stored closes come off the
-cfbfastR mirror, which publishes every book's *number* and none of their
-prices. `gamebacktest.schedule_closes` says it outright — "that is fatal
-for a backtest, which has to price a bet" — and `backtest_game_lines`
-refuses to default them to −110, because "defaulting them to −110 would
-publish an ROI computed against a price no book ever offered, which is
-the one thing this replay exists to avoid".
+**The measurement is available — counted on the droplet 2026-09-03.**
+An earlier version of this paragraph said it was not, and before that
+another said to "replay and read the bet count and the ROI at the close
+the way Phase 8 read them" as though a harness existed. Both wrong, and
+both worth recording.
 
-What a replay can answer today, with no invented price:
+| `odds_history` (cfb) | rows | priced |
+|---|---|---|
+| spread | 3,012 | 3,012 |
+| total | 2,987 | 2,987 |
+| moneyline | 4,078 | 4,078 |
 
-- how many games the switch newly admits, and
-- how far the model's number sits from the market's on them — which is
-  `engine.gamecal`'s question and never reads a price.
+The "not available" reading came from `gamebacktest.schedule_closes`:
+college closes off the cfbfastR mirror carry every book's *number* and
+none of their prices, and that docstring calls it "fatal for a backtest,
+which has to price a bet". All true — and it describes the **schedule**
+path only. `backtest_game_lines` unions the schedule with
+`game_line_closes` and lets harvested rows overwrite it, and the
+harvested rows are priced. The mirror is the floor, not the ceiling.
 
-What it cannot answer is whether those bets would have **made money**.
-That needs priced closes, and the only priced CFB closes are harvested
-rows in `odds_history` (`game_line_closes` skips any row missing either
-price). The line ledger has been writing them at game-market scale since
-late August; a paid `harvest_odds.py` backfill is the other route.
+*Moneylines look unpriced to a naive count and are not.* `lineledger`
+writes **one row per team**, that team's price in `over_odds`,
+`under_odds` NULL by design. A query asking for both prices on one row
+reports zero priced moneylines against 4,078 that carry one — which is
+exactly the mistake that produced the paragraph this one replaces. Ask
+for `over_odds IS NOT NULL` alone, or read them through
+`gamebacktest.moneyline_closes`, which is built for that shape.
 
-*And this casts a shadow backwards.* Phase 8's own CFB figures quote an
-ROI at the close (−4.1%), and `engine/cfb/model.py`'s §3.6 note quotes
-41-30-2 and +10.2% on totals. Both need prices the mirror does not
-carry. Whether they came from harvested rows or from an assumed −110 is
-not written down anywhere. `SELECT COUNT(*) FROM odds_history WHERE
-sport='cfb' AND over_odds IS NOT NULL` on the droplet settles it. Until
-it does, a college ROI-at-the-close in this document is unprovenanced —
-including the one two paragraphs above.
-
-*What the 2026 feed says about the league itself,* since the answer used
-to be "two schools": the rebuilt Pac-12 is real and in the feed — **46
-games** of 888, alongside 138 FBS programs across 11 conferences (the
-table at the top of this document). The premise in
-`assets.probe_conference_table` that called it "two schools rather than
-a conference" was true of 2024-25 and is corrected.
+**What is actually missing is the harness, not the data.** Nothing in
+this repo replays history through the CFB gates: `run_cfb_slate` has one
+caller and it is the live build, so Phase 8's 2,902 → 1,324 came from a
+one-off that was never checked in. Answering the Pac-12 question means
+building it — walk the stored games leak-free, price each through
+`build_plays` + `run_cfb_slate`, settle against the result, report bet
+count and ROI at the close with the switch off and on. The data to run
+it against is there.
 
 **2. Sit out September? — "no."** Nothing changes: the board publishes
 in September as it does in November. Recorded so the evidence is next to

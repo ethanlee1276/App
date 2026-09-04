@@ -136,36 +136,42 @@ POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 #: nowhere else. Whether it belongs there is a money decision and is not
 #: made here.
 #:
-#: AND THE MEASUREMENT THAT WOULD DECIDE IT IS HALF-AVAILABLE, which an
-#: earlier draft of this comment got wrong by telling the next reader to
-#: "read the bet count and the ROI at the close the way Phase 8 read
-#: them". The bet count, yes. The ROI, not from the stored college
-#: history: those closes come off the cfbfastR mirror, which publishes
-#: every book's NUMBER and none of their prices.
-#: `gamebacktest.schedule_closes` says so in as many words — "that is
-#: fatal for a backtest, which has to price a bet" — and
-#: `backtest_game_lines` refuses to substitute -110, because "defaulting
-#: them to -110 would publish an ROI computed against a price no book
-#: ever offered, which is the one thing this replay exists to avoid".
+#: AND THE MEASUREMENT IS AVAILABLE. Counted on the droplet
+#: 2026-09-03, `odds_history` for cfb:
 #:
-#: So what a replay can answer today without inventing a price:
-#:   * how many games the switch newly admits, and
-#:   * how far this model's number sits from the market's on them —
-#:     `engine.gamecal`'s question, which never reads a price.
-#: What it cannot answer is whether those bets would have MADE money.
-#: That needs priced closes, and the only priced CFB closes are
-#: harvested ones in `odds_history` (`gamebacktest.game_line_closes`
-#: skips any row missing either price). The line ledger has been
-#: accumulating them at game-market scale since late August; a paid
-#: `harvest_odds.py` backfill is the other route.
+#:     spread      3,012 rows   3,012 priced
+#:     total       2,987 rows   2,987 priced
+#:     moneyline   4,078 rows   4,078 priced
 #:
-#: Worth resolving before anyone leans on the Phase 8 figures for this:
-#: those quote a CFB ROI at the close, and this file's own §3.6 note
-#: quotes 41-30-2 and +10.2% on totals. Both need prices the mirror does
-#: not carry. Whether they came from harvested rows or from an assumed
-#: -110 is not recorded, and `SELECT COUNT(*) FROM odds_history WHERE
-#: sport='cfb' AND over_odds IS NOT NULL` on the droplet is what settles
-#: it. Until it does, treat a college ROI-at-the-close as unprovenanced.
+#: TWO EARLIER DRAFTS OF THIS COMMENT WERE WRONG ABOUT THAT, in opposite
+#: directions, and both errors are worth leaving written down.
+#:
+#: The first said "replay and read the bet count and the ROI at the
+#: close" as though a harness existed. None does: nothing in this repo
+#: replays history through these gates — `run_cfb_slate` has exactly one
+#: caller and it is the live build — so the Phase 8 figure (2,902 ->
+#: 1,324) came from a one-off that was never checked in.
+#:
+#: The second said the ROI could not be measured at all, reasoning from
+#: `gamebacktest.schedule_closes`: college closes come off the cfbfastR
+#: mirror, which publishes every book's NUMBER and none of their prices,
+#: and that docstring calls it "fatal for a backtest, which has to price
+#: a bet". All true, and it describes the SCHEDULE path only.
+#: `backtest_game_lines` unions the schedule with `game_line_closes` and
+#: lets the harvested rows overwrite it, and the harvested rows are
+#: priced. The mirror is the floor, not the ceiling.
+#:
+#: MONEYLINES LOOK UNPRICED TO A NAIVE COUNT and are not. `lineledger`
+#: writes ONE ROW PER TEAM with that team's price in `over_odds` and
+#: `under_odds` NULL by design, so a query asking for both prices on one
+#: row reports 0 priced moneylines against 4,078 that carry one. Ask for
+#: `over_odds IS NOT NULL` alone, or read them through
+#: `gamebacktest.moneyline_closes`, which is built for that shape.
+#:
+#: So the Pac-12 question is answerable and what it needs is the harness
+#: Phase 8 never checked in: walk the stored games leak-free, price each
+#: through `build_plays` + `run_cfb_slate`, settle against the result,
+#: and report bet count and ROI at the close with the switch off and on.
 BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
 
 #: The sentence both boards show when the rule below refuses a game.
