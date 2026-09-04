@@ -547,13 +547,16 @@ def _is_sharp(book: str) -> bool:
     and a strict comparison between the two silently answers False
     forever — the most expensive kind of wrong, because it looks like a
     finding about the market.
+
+    ONE DEFINITION NOW, in `engine.odds.is_sharp_book`. This copy and
+    `booksharp.compare_to_the_list`'s were identical, and the shopping
+    guard that refuses to quote a sharp price needed a third — three
+    copies of a predicate that must agree is a drift waiting to happen,
+    and the drift would show up as a report naming a book the shop had
+    already stopped avoiding.
     """
-    try:
-        from .sources.oddsapi import SHARP_BOOKS
-    except Exception:                                       # noqa: BLE001
-        SHARP_BOOKS = {"pinnacle"}
-    b = (book or "").strip().lower().replace(" ", "")
-    return any(s.lower().replace(" ", "") in b for s in SHARP_BOOKS if s)
+    from .odds import is_sharp_book
+    return is_sharp_book(book)
 
 
 def _implied(odds) -> float | None:

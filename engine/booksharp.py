@@ -190,16 +190,13 @@ def compare_to_the_list(measured: dict) -> dict:
     The point of the whole module. `SHARP_BOOKS` is hand-written; this
     reports which of its members actually price better than the field, and
     which books outside it do.
-    """
-    try:
-        from .sources.oddsapi import SHARP_BOOKS
-    except Exception:                                       # noqa: BLE001
-        SHARP_BOOKS = {"pinnacle"}
-    named = {str(s).lower().replace(" ", "") for s in SHARP_BOOKS if s}
 
-    def is_named(book: str) -> bool:
-        b = str(book).lower().replace(" ", "")
-        return any(s in b for s in named)
+    THE SAME PREDICATE THE SHOP USES. `engine.odds.is_sharp_book` is
+    what `best_over_line` and `best_scorer_price` consult before they
+    refuse to quote a price, so "asserted sharp" here and "not shopped"
+    there cannot mean two different sets of books.
+    """
+    from .odds import is_sharp_book as is_named
 
     ranked = [(b, v) for b, v in measured.items()
               if v.get("weight") is not None]

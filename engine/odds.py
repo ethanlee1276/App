@@ -223,6 +223,34 @@ def shoppable(odds) -> bool:
     return o == 0 or is_quotable(o)
 
 
+#: Books nobody here can bet, matched loosely on purpose.
+#:
+#: THREE COPIES OF THIS PREDICATE EXISTED AND ONE PATH HAD NONE. The
+#: quotes carry display names ("Pinnacle"), `oddsapi.SHARP_BOOKS` carries
+#: API keys ("pinnacle"), and a strict comparison between the two answers
+#: False forever — the most expensive kind of wrong, because it looks
+#: like a finding about the market. `linemoves._is_sharp` and
+#: `booksharp.compare_to_the_list` each carried their own copy of the
+#: loose match and now share this one, so the function that REFUSES to
+#: shop a sharp book and the report that NAMES the sharp books cannot
+#: drift apart about which book is which.
+def is_sharp_book(book: str) -> bool:
+    """Is this the sharp reference rather than a book a user can bet?
+
+    `oddsapi.SHARP_BOOKS` says it in its own comment: "Books a user can
+    actually bet at (Pinnacle doesn't take US action); the sharp
+    reference must never be quoted as the price to take."
+    """
+    try:
+        from .sources.oddsapi import SHARP_BOOKS
+    except Exception:                                       # noqa: BLE001
+        SHARP_BOOKS = {"pinnacle"}
+    b = (book or "").strip().lower().replace(" ", "")
+    if not b:
+        return False
+    return any(s.lower().replace(" ", "") in b for s in SHARP_BOOKS if s)
+
+
 def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 
@@ -234,7 +262,33 @@ def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> Be
     # takes the highest odds, and a dead-zone number is by construction
     # better than any real one on its side of even money.
     clean = [ln for ln in lines if shoppable(ln.over_odds)]
-    for ln in (clean or lines):
+    # AND A PRICE NOBODY HERE CAN TAKE IS NOT SHOPPED EITHER, for the
+    # same reason and with the same shape. Every other price parser in
+    # `sources.oddsapi` drops the sharp reference — `parse_event_lines`,
+    # `parse_event_h2h`, `parse_event_totals`, `parse_event_spreads` —
+    # but `parse_event_scorers` never did, and its quotes become
+    # SportsbookLines at 0.5 for every anytime-touchdown prop in both
+    # football leagues. A sharp book runs a thinner margin, so on a
+    # favourite its price is by construction the highest American number
+    # on the board and wins this `max` outright: the card then prints,
+    # and the likelihood board's -250 chalk cap then measures, a price
+    # at a book that does not take the action.
+    #
+    # THE DE-VIG STILL SEES IT. `devig.board_fair` takes the MEDIAN
+    # de-vigged price across every book that quoted the player, and a
+    # sharp book belongs in that median — dropping it there would make
+    # the consensus worse. The refusal is about which price we tell
+    # someone to TAKE, which is this function and nothing else.
+    #
+    # Falls back to the full field when nothing bettable is left, the
+    # same doctrine as the dead-zone filter above and as
+    # `betting.pick_side`'s implausible-quote filter: a market where
+    # every book looks unusable still returns a line to display, and the
+    # caller's own gate is what refuses to price it. Dropping the player
+    # instead would turn a bad price into an empty board, which is the
+    # failure that reads as an ordinary result.
+    bettable = [ln for ln in clean if not is_sharp_book(ln.book)]
+    for ln in (bettable or clean or lines):
         fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.over_odds, fair_over)
         if best is None:
@@ -254,7 +308,9 @@ def best_under_line(lines: list[SportsbookLine], hold: float | None = None) -> B
     """
     best: BestLine | None = None
     clean = [ln for ln in lines if shoppable(ln.under_odds)]
-    for ln in (clean or lines):
+    # The same refusal as the over side; see `best_over_line`.
+    bettable = [ln for ln in clean if not is_sharp_book(ln.book)]
+    for ln in (bettable or clean or lines):
         _, fair_under = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)
         if best is None:

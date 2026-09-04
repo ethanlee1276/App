@@ -898,12 +898,29 @@ def best_scorer_price(quotes: list[dict]) -> dict | None:
     anytime-touchdown quote in BOTH football leagues — shopping
     unguarded. If nothing survives the filter there is no real market
     here, and the caller's existing `is None` branch is the right answer.
+
+    A PRICE NOBODY HERE CAN TAKE IS NOT SHOPPED EITHER. `parse_event_
+    scorers` — alone among the price parsers in this module — does not
+    drop the sharp reference, because `devig.board_fair` wants it: the
+    fair is the MEDIAN de-vigged price across books, and a sharp book
+    belongs in that median. It does not belong in this `max`. A sharp
+    book runs a thinner margin, so on a favourite its price is by
+    construction the highest American number on the board and wins the
+    shop outright — and then the card prints, and `likely.HEAVIEST_PRICE`
+    measures, a number at a book that does not take US action.
+
+    Falls back to the full field when nothing bettable survives, the
+    same doctrine as the dead-zone filter: a market where every quote is
+    unusable still returns the price to display, and the caller decides
+    what to do with it. Returning None there would drop the player, and
+    a dropped player reads as a market nobody quoted.
     """
-    from ..odds import is_quotable
+    from ..odds import is_quotable, is_sharp_book
     clean = [q for q in (quotes or []) if is_quotable(q.get("yes_odds"))]
     if not clean:
         return None
-    return max(clean, key=lambda q: q["yes_odds"])
+    bettable = [q for q in clean if not is_sharp_book(q.get("book"))]
+    return max(bettable or clean, key=lambda q: q["yes_odds"])
 
 
 def _modal_line(points: list[float]):
