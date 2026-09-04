@@ -352,42 +352,58 @@ They are two sets now — `POWER_CONFERENCES` (attention) and
 board is unchanged. The switch is `"Pac-12"` into `BETTABLE_CONFERENCES`
 and nothing else.
 
-**The measurement is available — counted on the droplet 2026-09-03.**
-An earlier version of this paragraph said it was not, and before that
-another said to "replay and read the bet count and the ROI at the close
-the way Phase 8 read them" as though a harness existed. Both wrong, and
-both worth recording.
+**Answered — no — and without needing the replay.** "Pac-12" does not
+name one league across this data. Counted off the cfbfastR schedules
+(team-games where the side is FBS):
 
-| `odds_history` (cfb) | rows | priced |
+| season | Pac-12 team-games | what it was |
 |---|---|---|
-| spread | 3,012 | 3,012 |
-| total | 2,987 | 2,987 |
-| moneyline | 4,078 | 4,078 |
+| 2022 | 146 | a real power conference, twelve schools |
+| 2024 | 25 | two orphans: Oregon State, Washington State |
+| 2026 | 46 | a rebuilt league of eight |
 
-The "not available" reading came from `gamebacktest.schedule_closes`:
-college closes off the cfbfastR mirror carry every book's *number* and
-none of their prices, and that docstring calls it "fatal for a backtest,
-which has to price a bet". All true — and it describes the **schedule**
-path only. `backtest_game_lines` unions the schedule with
-`game_line_closes` and lets harvested rows overwrite it, and the
-harvested rows are priced. The mirror is the floor, not the ceiling.
+And the eight, with where each one's record actually lives:
 
-*Moneylines look unpriced to a naive count and are not.* `lineledger`
-writes **one row per team**, that team's price in `over_odds`,
-`under_odds` NULL by design. A query asking for both prices on one row
-reports zero priced moneylines against 4,078 that carry one — which is
-exactly the mistake that produced the paragraph this one replaces. Ask
-for `over_odds IS NOT NULL` alone, or read them through
-`gamebacktest.moneyline_closes`, which is built for that shape.
+| school | 2022 | 2024 | 2026 |
+|---|---|---|---|
+| Boise State | Mountain West | Mountain West | Pac-12 |
+| Colorado State | Mountain West | Mountain West | Pac-12 |
+| Fresno State | Mountain West | Mountain West | Pac-12 |
+| San Diego State | Mountain West | Mountain West | Pac-12 |
+| Utah State | Mountain West | Mountain West | Pac-12 |
+| Texas State | Sun Belt | Sun Belt | Pac-12 |
+| Oregon State | Pac-12 | Pac-12 | Pac-12 |
+| Washington State | Pac-12 | Pac-12 | Pac-12 |
 
-**What is actually missing is the harness, not the data.** Nothing in
-this repo replays history through the CFB gates: `run_cfb_slate` has one
-caller and it is the live build, so Phase 8's 2,902 → 1,324 came from a
-one-off that was never checked in. Answering the Pac-12 question means
-building it — walk the stored games leak-free, price each through
-`build_plays` + `run_cfb_slate`, settle against the result, report bet
-count and ROI at the close with the switch off and on. The data to run
-it against is there.
+**Five of the eight are the Mountain West under a new name**, and a
+sixth is Sun Belt. So "should the board bet the 2026 Pac-12" is very
+nearly "should it bet the Mountain West" — which Ask 1 already answered
+on a 2,902-bet replay. The switch stays off, and now for a reason
+somebody can check.
+
+*This is also why the obvious replay would have lied.* Keyed on the
+conference **label** over 2022-25 it would have measured a power
+conference for two seasons and two orphan schools for two more, called
+the answer "the Pac-12", and counted none of the Mountain West history
+six of the eight members carry. If the question is ever reopened it has
+to be asked **per team**, not per label.
+
+*What the earlier drafts of this section got wrong,* kept because the
+mistakes are the reusable part. One said to replay "the way Phase 8 read
+them" as though a harness existed — none does; `run_cfb_slate` has one
+caller and it is the live build. The next said the ROI could not be
+measured at all, reasoning from `schedule_closes` (mirror closes carry
+numbers, not prices) without querying `odds_history`, which holds **3,012
+priced spread closes, 2,987 totals and 4,078 moneylines**. Moneylines
+look unpriced to a naive count and are not: `lineledger` writes one row
+per team with the price in `over_odds` and `under_odds` NULL by design.
+
+*Two things a future harness will need,* both verified here: stored games
+carry **no conference** (`cfbdata.game_rows` keeps `conference_game` as a
+bool, not the names), so it must join the schedule; and the alias map
+handles the feed's spellings correctly across 2022-2026 — `Mid-American`
+→ MAC, `American Athletic` → American, with no unnamed conference in any
+season.
 
 **2. Sit out September? — "no."** Nothing changes: the board publishes
 in September as it does in November. Recorded so the evidence is next to

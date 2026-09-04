@@ -136,42 +136,39 @@ POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 #: nowhere else. Whether it belongs there is a money decision and is not
 #: made here.
 #:
-#: AND THE MEASUREMENT IS AVAILABLE. Counted on the droplet
-#: 2026-09-03, `odds_history` for cfb:
+#: AND THE ANSWER IS NO, on evidence, without a replay — because
+#: "Pac-12" does not name one league. Counted off the cfbfastR schedules
+#: 2022-2026 (team-games where the side is FBS):
 #:
-#:     spread      3,012 rows   3,012 priced
-#:     total       2,987 rows   2,987 priced
-#:     moneyline   4,078 rows   4,078 priced
+#:     2022   146   a real power conference, twelve schools
+#:     2024    25   two orphans — Oregon State and Washington State
+#:     2026    46   a rebuilt league of eight
 #:
-#: TWO EARLIER DRAFTS OF THIS COMMENT WERE WRONG ABOUT THAT, in opposite
-#: directions, and both errors are worth leaving written down.
+#: The eight are Boise State, Colorado State, Fresno State, San Diego
+#: State and Utah State — all Mountain West through 2024 — plus Texas
+#: State from the Sun Belt, and the two legacy schools. So FIVE OF THE
+#: EIGHT are Mountain West under a new name, and "should the board bet
+#: the 2026 Pac-12" is very close to "should it bet the Mountain West",
+#: which the Group of Five decision already answered on a 2,902-bet
+#: replay.
 #:
-#: The first said "replay and read the bet count and the ROI at the
-#: close" as though a harness existed. None does: nothing in this repo
-#: replays history through these gates — `run_cfb_slate` has exactly one
-#: caller and it is the live build — so the Phase 8 figure (2,902 ->
-#: 1,324) came from a one-off that was never checked in.
+#: THAT IS ALSO WHY THE OBVIOUS REPLAY WOULD HAVE LIED. Keyed on the
+#: conference LABEL over 2022-25 it would have measured a power
+#: conference for two seasons and two orphan schools for two more, called
+#: the result "the Pac-12", and counted none of the Mountain West history
+#: that six of the eight members actually carry. A number from that is
+#: worse than no number. If the question is ever reopened it has to be
+#: asked per TEAM, not per label.
 #:
-#: The second said the ROI could not be measured at all, reasoning from
-#: `gamebacktest.schedule_closes`: college closes come off the cfbfastR
-#: mirror, which publishes every book's NUMBER and none of their prices,
-#: and that docstring calls it "fatal for a backtest, which has to price
-#: a bet". All true, and it describes the SCHEDULE path only.
-#: `backtest_game_lines` unions the schedule with `game_line_closes` and
-#: lets the harvested rows overwrite it, and the harvested rows are
-#: priced. The mirror is the floor, not the ceiling.
-#:
-#: MONEYLINES LOOK UNPRICED TO A NAIVE COUNT and are not. `lineledger`
-#: writes ONE ROW PER TEAM with that team's price in `over_odds` and
-#: `under_odds` NULL by design, so a query asking for both prices on one
-#: row reports 0 priced moneylines against 4,078 that carry one. Ask for
-#: `over_odds IS NOT NULL` alone, or read them through
-#: `gamebacktest.moneyline_closes`, which is built for that shape.
-#:
-#: So the Pac-12 question is answerable and what it needs is the harness
-#: Phase 8 never checked in: walk the stored games leak-free, price each
-#: through `build_plays` + `run_cfb_slate`, settle against the result,
-#: and report bet count and ROI at the close with the switch off and on.
+#: The data to run a gate replay does exist, contrary to a previous draft
+#: of this comment: `odds_history` holds 3,012 priced spread closes, 2,987
+#: totals and 4,078 moneylines (one row per team, price in `over_odds`,
+#: `under_odds` NULL by design — a query wanting both on one row reports
+#: zero and is wrong). What does not exist is the harness: nothing here
+#: replays history through these gates, so Phase 8's 2,902 -> 1,324 came
+#: from a one-off that was never checked in. Stored games also carry no
+#: conference — `cfbdata.game_rows` keeps `conference_game` as a bool and
+#: not the names — so any such harness must join the schedule for them.
 BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
 
 #: The sentence both boards show when the rule below refuses a game.
