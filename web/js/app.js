@@ -26131,7 +26131,16 @@ const STATUS_BOARDS = [
   ["feed.json", "The feed"],
   ["injuries.json", "Injury board"],
   ["streak.json", "Streak slate"],
-  ["live_mlb.json", "Live scoreboard"],
+  ["live_mlb.json", "Live scoreboard (MLB)"],
+  /* THE FAST CLOCKS BELONG ON THE STATUS PAGE TOO. These five are the
+     only files on the site whose staleness is measured in seconds, so
+     they are the ones where "the loop died" is both most likely to
+     matter and least likely to be noticed — a frozen scoreboard reads
+     as a quiet night. */
+  ["live_nfl.json", "Live scoreboard (NFL)"],
+  ["live_cfb.json", "Live scoreboard (college football)"],
+  ["live_nba.json", "Live scoreboard (NBA)"],
+  ["live_wnba.json", "Live scoreboard (WNBA)"],
 ];
 
 async function boardStamp(file) {
@@ -30542,7 +30551,21 @@ const LIVE_FEEDS = {
    live_build.py writes this one from a single cached schedule call. The
    BETS still come from the slow board, which is right — a price minutes old
    is defensible, a score minutes old is not. */
-const LIVE_FAST = { mlb: "data/live_mlb.json" };
+/* ...AND THE OTHER FOUR, which the note above stopped one sport short
+   of. `live_build.py` said so itself the day it shipped: "MLB, NFL, NBA,
+   WNBA and CFB never got the same treatment." NFL scores were still
+   being read out of data/recommendations.json and CFB out of
+   data/cfb.json — the model boards — which is the identical bug one
+   league over. livescore_build.py writes these four from one keyless
+   ESPN request each.
+
+   The merge below is what makes this safe to add: fast fields win where
+   both speak, board-only fields (the odds grid, the live win-probability
+   track) survive, and a file that has not been built yet falls through
+   to the board exactly as before. */
+const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
+                    cfb: "data/live_cfb.json", nba: "data/live_nba.json",
+                    wnba: "data/live_wnba.json" };
 let _liveAll = { at: 0, games: [] };
 let _liveChip = "all";
 

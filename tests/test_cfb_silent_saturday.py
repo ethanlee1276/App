@@ -233,13 +233,26 @@ def test_the_recorder_wraps_the_call_rather_than_replacing_it():
     assert "globals()" not in block
 
 
-def test_cfb_has_no_fast_scoreboard_which_is_why_one_failure_took_both():
-    """`LIVE_FAST` is MLB-only, so CFB's live games are read out of the
-    model board. That is the single root cause behind both halves of the
-    report: no rebuild means no picks AND no live games."""
+def test_cfb_now_has_the_fast_scoreboard_it_was_missing():
+    """RE-ANCHORED BECAUSE THE GAP CLOSED, and the old wording is worth
+    keeping: "`LIVE_FAST` is MLB-only, so CFB's live games are read out
+    of the model board. That is the single root cause behind both halves
+    of the report: no rebuild means no picks AND no live games."
+
+    Half of that is now fixed. `livescore_build.py` writes
+    data/live_cfb.json from one keyless ESPN request, so a college
+    Saturday that cannot afford a model rebuild still shows its games in
+    progress — the two failures have been separated, which is the whole
+    point. The board pointer stays asserted below because the MERGE still
+    depends on it: the fast file knows the score, the board knows the
+    lines, and dropping either is how the live win-probability chart
+    went missing on 2026-08-18."""
     src = _app()
-    assert 'const LIVE_FAST = { mlb: "data/live_mlb.json" }' in src
-    assert 'cfb: "data/cfb.json"' in src
+    i = src.index("const LIVE_FAST = {")
+    seg = src[i:i + 400]
+    assert 'cfb: "data/live_cfb.json"' in seg, seg
+    assert 'mlb: "data/live_mlb.json"' in seg, seg
+    assert 'cfb: "data/cfb.json"' in src, "the board pointer the merge needs"
 
 
 if __name__ == "__main__":

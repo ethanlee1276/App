@@ -2695,6 +2695,47 @@ def _live_mlb_refresher() -> None:
         time.sleep(wait)
 
 
+def _live_scores_refresher() -> None:
+    """Poll the four ESPN scoreboards fast while anything is on.
+
+    THE SAME BUG live_build.py FIXED FOR ONE SPORT. Its docstring names
+    the four it left behind: "MLB, NFL, NBA, WNBA and CFB never got the
+    same treatment." `app.js` LIVE_FEEDS reads NFL live scores out of
+    `data/recommendations.json` and CFB out of `data/cfb.json` — the
+    model boards — so a score that changes every play has been waiting on
+    a build that prices a whole slate.
+
+    ONE PROCESS FOR FOUR LEAGUES, not four. This box is one vCPU, it has
+    OOM-crashed once (#103) and had one board freeze twelve (#119), and
+    four python interpreters on a twelve-second clock is a cost with no
+    matching benefit — the four requests are independent and the build
+    already refuses to let one league's failure end the others.
+
+    The wait is chosen from what came back rather than from a clock, so a
+    Tuesday in July costs one request a league a minute and a college
+    Saturday gets the fast cadence — the same shape as the fight poller
+    and the MLB one.
+    """
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["livescore_build.py"])
+            if ok:
+                for lg in ("nfl", "cfb", "nba", "wnba"):
+                    f = ROOT / "web" / "data" / f"live_{lg}.json"
+                    if not f.is_file():
+                        continue
+                    blob = _json.loads(f.read_text())
+                    if any((g.get("live") or {}).get("state") == "live"
+                           for g in blob.get("games", [])):
+                        wait = LIVE_FAST_S
+                        break
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
 def _live_ufc_refresher() -> None:
     """Poll the live fight feed fast while a bout is on, slowly otherwise."""
     import json as _json
@@ -8352,8 +8393,11 @@ def main() -> None:
         # Its own clock: a fight moves in seconds, and this feed is free.
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
         threading.Thread(target=_live_mlb_refresher, daemon=True).start()
+        threading.Thread(target=_live_scores_refresher, daemon=True).start()
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
+        print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
+              f"keyless — no odds credits.")
         # And the meme board's clock — coins move in and out in minutes.
         threading.Thread(target=_live_memes_refresher, daemon=True).start()
         print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "
