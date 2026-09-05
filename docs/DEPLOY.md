@@ -128,9 +128,13 @@ through the official `anthropic` Python package, and the service's
 python is `/usr/bin/python3`, so it is installed for the box, once:
 
 ```bash
+# The droplet image ships without pip (2026-09-05: "No module named pip"),
+# so pip itself comes first.
+sudo apt update && sudo apt install -y python3-pip
 sudo python3 -m pip install anthropic
 # Ubuntu 24.04 refuses to touch the system python without this flag:
 sudo python3 -m pip install --break-system-packages anthropic
+# Must print a version AS THE SERVICE USER, or the service will not see it:
 sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
 ```
 
