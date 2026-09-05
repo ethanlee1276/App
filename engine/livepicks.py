@@ -574,9 +574,102 @@ def open_bets_for(conn, sport: str, date: str) -> tuple[list[dict], list[dict]]:
     return today, near
 
 
+#: The most live games one build will fetch a box score for — the same
+#: budget `livescore_build.PLAYS_MAX_GAMES` keeps for the play feed, for
+#: the same reason: a college Saturday can have thirty in progress and
+#: this box has OOM-killed under less. Past the cap a bet keeps its row
+#: and loses only its live number; the note says so.
+PROGRESS_MAX_GAMES = 8
+
+
+def espn_progress(league: str, games: list[dict]) -> tuple[dict, str]:
+    """``({normalized player: {market: value}}, note)`` for every live
+    game on a football or hoops board, from ESPN's game summary.
+
+    THE SAME SHAPE `engine.mlb.livestats.parse_live_stats` HANDS THE MLB
+    TRACKER, so `assemble_live_picks` reads a Kelce receiving line the
+    way it reads a Judge hit line: `current` fills in, an over past its
+    number reads "cleared", an under past it "busted".
+
+    WHERE THE PAYLOAD COMES FROM, AND UNDER WHICH NAME. The fast
+    scoreboard (`livescores.fetch_rows`, cached 30 s and shared with
+    `livescore_build`) names each live game's ESPN event id in the
+    board's own vocabulary, so a board game joins on `(away, home)`. The
+    summary is then fetched through `espnplays.fetch_summary` — the
+    play feed's fetch, cached 30 s under `espn_{league}_live_{event}`
+    — and NOT through the league's own `fetch_boxscore`/`fetch_summary`,
+    whose caches are a month long because a final never changes. A
+    mid-game snapshot written under one of those names would be read
+    back by the settlement ingest as the final, and grade every bet in
+    that game against the third quarter.
+
+    WHAT READS IT is the parser each league already trusts for its
+    finals: `nflpreseason.parse_boxscore` (labels, not positions),
+    `cfbdata.parse_summary` (which also derives `anytime_td`) and
+    `espnhoops.parse_summary` (names, not positions). Nothing here
+    parses a payload a second way.
+
+    A GAME THAT FAILS COSTS ITS OWN NUMBERS AND NOTHING ELSE; the
+    scoreboard failing costs every number, and the note says which.
+    """
+    from .sources.livescores import ESPN_SCOREBOARD, fetch_rows
+    if league not in ESPN_SCOREBOARD:
+        return {}, ""
+    live = [g for g in games if (g.get("live") or {}).get("state") == "live"]
+    if not live:
+        return {}, ""
+    try:
+        ids = {(r["away"], r["home"]): r["event_id"]
+               for r in fetch_rows(league, ttl=30)}
+    except Exception as exc:                                  # noqa: BLE001
+        return {}, f"live stats: scoreboard unreachable — {exc}"
+    from .sources import espnplays
+    out: dict[str, dict] = {}
+    got = failed = missing = 0
+    for g in live[:PROGRESS_MAX_GAMES]:
+        eid = ids.get((g.get("away"), g.get("home")))
+        if not eid:
+            missing += 1
+            continue
+        try:
+            payload = espnplays.fetch_summary(league, eid)
+            for name, stats in _box_rows(league, payload, g):
+                out.setdefault(normalize_name(name), {}).update(stats)
+            got += 1
+        except Exception:                                     # noqa: BLE001
+            failed += 1
+    skipped = max(0, len(live) - PROGRESS_MAX_GAMES)
+    note = f"live stats: {got} of {len(live)} live game(s)"
+    if failed:
+        note += f", {failed} feed(s) unreachable"
+    if missing:
+        note += f", {missing} not on the scoreboard"
+    if skipped:
+        note += f", {skipped} past the {PROGRESS_MAX_GAMES}-game cap"
+    return out, note
+
+
+def _box_rows(league: str, payload: dict, game: dict):
+    """``(player, {market: value})`` pairs from one summary, by league."""
+    if league == "nfl":
+        from .sources.nflpreseason import parse_boxscore
+        rows = parse_boxscore(payload, {"home": game.get("home"),
+                                        "away": game.get("away")})
+        for r in rows:
+            yield r["player"], {r["market"]: float(r["value"])}
+        return
+    if league == "cfb":
+        from .sources.cfbdata import parse_summary
+    else:
+        from .sources.espnhoops import parse_summary
+    for r in parse_summary(payload):
+        yield r["player"], {k: float(v) for k, v in (r.get("stats") or {}).items()}
+
+
 def attach_tracker(result: dict, sport: str, conn=None,
                    progress: dict | None = None,
-                   identity: dict | None = None) -> str:
+                   identity: dict | None = None,
+                   fetcher=None) -> str:
     """Put the open-bet tracker on a league board: ``live_picks`` and
     ``open_elsewhere``, or ``live_picks_error``. Returns a line for the
     build log, or "" when there was nothing to say.
@@ -593,9 +686,14 @@ def attach_tracker(result: dict, sport: str, conn=None,
     row by the board's recommendations and games — it was never
     baseball-specific, it was only ever called from one place. Team
     markets track from the live score it already reads; player props
-    track from ``progress`` when a caller has a live stat line and show
-    the pre-game number when it does not (`current` stays None, which
-    the page renders as "tracking"). The MLB block is left exactly as it
+    track from ``progress`` — fetched by `espn_progress` when the caller
+    passes None, or handed in — and show the pre-game number when no
+    live line exists (`current` stays None, which the page renders as
+    "tracking"). ``fetcher`` replaces `espn_progress` for a test; it is
+    never what decides whether a live number is shown. A progress fetch
+    that fails costs the live numbers and not the tracker: the rows
+    still ship, with the note saying why they have no `current`. The
+    MLB block is left exactly as it
     is: it carries a boxscore fetch, the pitcher set and the identity
     map that this helper takes as arguments, and moving it would be a
     refactor wearing a fix's clothes.
@@ -621,6 +719,12 @@ def attach_tracker(result: dict, sport: str, conn=None,
             recs = result.get("recommendations") or []
             games = result.get("games") or []
             shots = result.get("long_shots") or []
+            prog_note = ""
+            if progress is None:
+                try:
+                    progress, prog_note = (fetcher or espn_progress)(sport, games)
+                except Exception as exc:                      # noqa: BLE001
+                    progress, prog_note = {}, f"live stats unavailable: {exc}"
             rows = assemble_live_picks(today, recs, games, progress, shots,
                                        identity)
             rows += [r for r in assemble_live_picks(near, recs, games,
@@ -648,4 +752,6 @@ def attach_tracker(result: dict, sport: str, conn=None,
             + (f", {n_likely} likely" if n_likely else "") + ")")
     if result["open_elsewhere"]:
         note += f", {result['open_elsewhere']} open on other boards"
+    if prog_note:
+        note += f"; {prog_note}"
     return note
