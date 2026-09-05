@@ -194,8 +194,11 @@ def evaluate_mlb_prop(prop: MLBProp, proj: MLBProjection,
     # Kept out of `has_market`, which stays "there is a real number on the
     # screen" — this line IS on the screen, and its refusal sentence says
     # otherwise. Skipped on a synthetic line, where pricing against a
-    # deliberately naive baseline is the exercise rather than a fault.
+    # deliberately naive baseline is the exercise rather than a fault —
+    # and on a proxy, which is a placeholder at -110 and not a posted
+    # price at all (see `engine.betting`, the Blackburn card).
     prices_line = (allow_synthetic_line
+                   or (best.book or "").lower() == "proxy"
                    or quote_prices_its_line(side, best, p_over_at))
     if not has_market:
         # No real price to beat — don't report a number that reads as an edge.

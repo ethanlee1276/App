@@ -549,7 +549,17 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # refusal sentence tells the reader, and this line IS on the screen.
     # Skipped on a synthetic line, where pricing against a deliberately naive
     # baseline is the exercise rather than a fault.
+    #
+    # AND SKIPPED ON A PROXY, which is the same thing wearing the live
+    # board's clothes. A proxy is our own trailing-average placeholder at
+    # -110, not a quote a book posted; when it sits far under a receiver
+    # who just went +2 catches a game, the gap is the placeholder being
+    # stale, and the sentence "the price posted beside this number cannot
+    # be a price for it" names a book that posted nothing. Ethan's
+    # Blackburn card, 2026-09-05: a proxy OVER 1.5 receptions refused as a
+    # bad quote. The proxy row's cause is `has_market`, one branch down.
     prices_line = (allow_synthetic_line
+                   or (best.book or "").lower() == "proxy"
                    or quote_prices_its_line(side, best, p_over_at))
     ev = expected_value(hit, best.odds)
     net = net_edge(hit, best.odds)

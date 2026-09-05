@@ -35,7 +35,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine.betting import (
     IMPLAUSIBLE_QUOTE_GAP, MAX_CREDIBLE_EDGE, MISPOSTED_QUOTE_REASON,
-    REFUSAL_REASONS, pick_side, quote_prices_its_line,
+    NO_CREDIBLE_EDGE_REASON, REFUSAL_REASONS, pick_side,
+    quote_prices_its_line,
 )
 from engine.models import SportsbookLine
 from engine.odds import devig_two_way
@@ -161,6 +162,69 @@ def test_the_refusal_names_the_price_not_the_model():
     assert MISPOSTED_QUOTE_REASON in REFUSAL_REASONS
     assert "cannot be a price for it" in MISPOSTED_QUOTE_REASON
     assert "unavailable" not in MISPOSTED_QUOTE_REASON
+
+
+# --- a proxy is not a posted price ------------------------------------------
+def _jacobs_at(book, line):
+    """The sample slate's first prop — Josh Jacobs rushing yards, projected
+    105.9 ± 41.4 — re-lined at ``line`` on one ``book`` at -110/-110.
+    Evaluated end to end, so the reason on the card is the one the
+    engine actually inserts."""
+    import copy
+    from engine.data_loader import load_slate
+    from engine.projection import build_projection
+    from engine.betting import evaluate_prop
+    sl = load_slate(os.path.join(ROOT, "data", "sample_slate.json"))
+    prop = copy.deepcopy(sl.props[0])
+    assert prop.player == "Josh Jacobs" and prop.market == "rush_yds"
+    prop.lines = [SportsbookLine(book=book, line=line,
+                                 over_odds=-110, under_odds=-110)]
+    game, opp = sl.game_for(prop), sl.team(prop.opponent)
+    proj = build_projection(prop, game, opp)
+    return evaluate_prop(prop, proj, game=game), proj
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def test_a_stale_proxy_is_not_called_a_misposted_quote():
+    """Ethan's Blackburn card, 2026-09-05, after kickoff: the player
+    markets are not re-bought once a game starts, so every row sat on a
+    proxy — and one receiver trending +2 catches a game was refused with
+    "The price posted beside this number cannot be a price for it".
+    Nobody posted a price. The placeholder was stale, which is
+    `has_market`'s sentence to say, not this one's."""
+    from engine.betting import prob_over
+    rec, proj = _jacobs_at("proxy", 40.5)   # a 105.9 projection over 40.5
+    assert rec.has_market is False
+    # The RAW model number, not `hit_prob` — that one has been shrunk
+    # toward the -110 fair by the tier haircut and cannot show the gap
+    # the quote check saw.
+    assert prob_over(40.5, proj.mean, proj.std) > 0.5 + IMPLAUSIBLE_QUOTE_GAP, \
+        "the setup must disagree with -110 by more than the quote gap"
+    assert MISPOSTED_QUOTE_REASON not in rec.reasons, rec.reasons
+    assert rec.reasons[0] == NO_CREDIBLE_EDGE_REASON, rec.reasons
+
+
+def test_the_same_number_on_a_real_book_is_still_a_bad_quote():
+    """The negative control. A book that really posts -110 at 40.5 on a
+    106-yard projection is the Gelof card again, and keeps its sentence."""
+    rec, _proj = _jacobs_at("FanDuel", 40.5)
+    assert rec.has_market is True
+    assert rec.reasons[0] == MISPOSTED_QUOTE_REASON, rec.reasons
+
+
+def test_both_engines_skip_the_quote_check_on_a_proxy():
+    """The MLB engine keeps its own copy of the gate, so the fix has to
+    be in both or the two boards would name the same row differently."""
+    import inspect
+    from engine import betting
+    from engine.mlb import betting as mlb
+    for mod in (betting, mlb):
+        src = inspect.getsource(mod)
+        i = src.index("prices_line = (allow_synthetic_line")
+        clause = src[i:i + 200]
+        assert '(best.book or "").lower() == "proxy"' in clause, mod.__name__
 
 
 if __name__ == "__main__":
