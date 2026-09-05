@@ -182,6 +182,39 @@ numbers and booleans. It never prints a play's text — that comes back as
 `--dump /tmp/cfb_summary.json` writes the raw payload (ESPN's content: a
 working note, not something to publish).
 
+### 2b. The MLB play-by-play shapes the render needs
+
+The play-by-play page (2026-09-05) reads three things off statsapi's
+playByPlay that this repo had never read before: the batted-ball data
+the park animation draws (`playEvents[].hitData`), the per-event and
+per-play times (`startTime`/`endTime`), and the count on a pitch event
+(`playEvents[].count`). All three are read tolerantly — absent means no
+arc, no time, no count — and the droplet already caches real games
+under `data/cache/mlb_pbp_*.json`. Print the shape of one:
+
+```bash
+cd /srv/qellys && F=$(ls -t data/cache/mlb_pbp_*.json | head -1) && echo $F && \
+  python3 espnprobe.py --file $F --block allPlays.20 --depth 3 && \
+  python3 -c "
+import json, sys
+d = json.load(open('$F'))
+for p in d.get('allPlays') or []:
+    for e in p.get('playEvents') or []:
+        if e.get('hitData'):
+            hd = e['hitData']; print('hitData keys:', sorted(hd)); print('coordinates:', sorted((hd.get('coordinates') or {}).keys()))
+            print('about keys:', sorted(p.get('about') or {})); print('event keys:', sorted(e)); print('count:', e.get('count'))
+            sys.exit(0)
+print('no hitData in this file')"
+```
+
+Expected: `hitData` with `launchSpeed`, `launchAngle`, `totalDistance`,
+`trajectory`, `coordinates{coordX, coordY}`; `about` with `startTime`
+and `endTime`; the event with `startTime`/`endTime` and `count{balls,
+strikes, outs}`. Anything different is a name to fix in
+`engine/mlb/sources/pbp.py` (`_hit`, `_when`, `game_events`) — the
+readers are tolerant, so a wrong name shows as an arc that never draws
+rather than a crash.
+
 ---
 
 ## 3. MLB says 20 recommended bets and draws 2

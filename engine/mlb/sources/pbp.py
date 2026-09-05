@@ -113,6 +113,180 @@ def recent_plays(payload: dict, limit: int = 6) -> list[dict]:
     return plays[-limit:] if limit and limit > 0 else plays
 
 
+#: The umpire's call codes, to a word. `details.call.code` is the field
+#: this repo has read since the pitch parser shipped; the WORDS are the
+#: public MLB vocabulary for those codes and are kept here rather than
+#: read off `details.description`, which is the feed's sentence. A code
+#: not in the table falls back to `details.call.description` when the
+#: payload carries one, else to the code itself — never to nothing.
+CALLS = {
+    "B": "Ball", "*B": "Ball in dirt", "V": "Automatic ball",
+    "C": "Called strike", "S": "Swinging strike", "W": "Swinging strike",
+    "T": "Foul tip", "F": "Foul", "L": "Foul bunt", "O": "Foul tip out",
+    "M": "Missed bunt", "Q": "Swinging pitchout", "R": "Foul pitchout",
+    "P": "Pitchout", "I": "Intentional ball", "H": "Hit by pitch",
+    "X": "In play, out", "D": "In play, no out", "E": "In play, runs",
+    "J": "In play, out", "Z": "In play, runs",
+}
+
+
+def _hit(ev: dict) -> dict | None:
+    """The batted-ball data on an in-play event, or None.
+
+    `hitData` HAS NOT BEEN READ BY THIS REPO BEFORE. Its keys —
+    `launchSpeed`, `launchAngle`, `totalDistance`, `trajectory`,
+    `coordinates{coordX, coordY}` — are the Stats API's published names
+    and every read is tolerant: a payload without them yields None and
+    the page draws no arc. docs/DROPLET_CHECKS.md §2 carries the probe
+    that prints the real shape off a cached game; until it has run this
+    is the one part of the file built on the documentation rather than
+    on a payload looked at.
+    """
+    hd = ev.get("hitData")
+    if not isinstance(hd, dict):
+        return None
+    co = hd.get("coordinates") or {}
+    out = {
+        "launch_speed": _num(hd.get("launchSpeed")),
+        "launch_angle": _num(hd.get("launchAngle")),
+        "distance": _num(hd.get("totalDistance")),
+        "trajectory": str(hd.get("trajectory") or ""),
+        "x": _num(co.get("coordX")),
+        "y": _num(co.get("coordY")),
+    }
+    return out if any(v not in (None, "") for v in out.values()) else None
+
+
+def _when(d: dict) -> str:
+    """An ISO instant off `about`/an event, or "". Read tolerantly:
+    `startTime`/`endTime` are documented on both and have not been
+    verified here; the page shows a time only when one arrives."""
+    for k in ("endTime", "startTime"):
+        v = (d or {}).get(k)
+        if isinstance(v, str) and v:
+            return v
+    return ""
+
+
+def game_events(payload: dict) -> list[dict]:
+    """Every pitch and every completed at-bat, in game order, as rows.
+
+    THE PLAY-BY-PLAY PAGE'S FEED (Ethan's render, 2026-09-05: "Ball ·
+    Juan Soto takes a ball high", "Called Strike", "Lineout to CF ·
+    102.4 MPH, 379 FT"). Two kinds of row share one list so the rail
+    reads in order:
+
+      kind "pitch"  — one per pitch: the call in words (`CALLS`), the
+                      pitch type's name and its speed, the batter and
+                      the pitcher, the count after it where the payload
+                      says, the same at-bat index the result row has.
+      kind "atbat"  — the completed plate appearance, the SAME row
+                      `recent_plays` builds, plus `hit` (see `_hit`) on
+                      a ball put in play.
+
+    Composed from `event`, `call.code`, `type.description`, `startSpeed`
+    and the batter's name — never from `details.description` or
+    `result.description`, the feed's prose. The at-bat in progress
+    contributes its pitches and no result row; `current_at_bat` says
+    who is up.
+    """
+    out: list[dict] = []
+    for p in (payload or {}).get("allPlays") or []:
+        about = p.get("about") or {}
+        matchup = p.get("matchup") or {}
+        result = p.get("result") or {}
+        inning = about.get("inning")
+        half = _HALF.get(str(about.get("halfInning") or "").lower(), "")
+        ab = about.get("atBatIndex")
+        batter = (matchup.get("batter") or {}).get("fullName") or ""
+        pitcher = (matchup.get("pitcher") or {}).get("fullName") or ""
+        hit = None
+        for ev in p.get("playEvents") or []:
+            details = ev.get("details") or {}
+            is_pitch = ev.get("isPitch")
+            if is_pitch is None:
+                is_pitch = details.get("isPitch")
+            if not is_pitch:
+                continue
+            call = details.get("call") or {}
+            code = str(call.get("code") or "")
+            pd = ev.get("pitchData") or {}
+            cnt = ev.get("count") or {}
+            row = {
+                "kind": "pitch",
+                "inning": int(inning) if isinstance(inning, int) else None,
+                "half": half,
+                "at_bat": ab,
+                "n": ev.get("pitchNumber"),
+                "call": CALLS.get(code) or str(call.get("description") or code or "Pitch"),
+                "code": code,
+                "pitch": str((details.get("type") or {}).get("description") or ""),
+                "speed": _num(pd.get("startSpeed")),
+                "batter": batter,
+                "pitcher": pitcher,
+                "balls": cnt.get("balls") if isinstance(cnt.get("balls"), int) else None,
+                "strikes": cnt.get("strikes") if isinstance(cnt.get("strikes"), int) else None,
+                "in_play": bool(details.get("isInPlay")),
+                "time": _when(ev),
+            }
+            out.append(row)
+            h = _hit(ev)
+            if h:
+                hit = h
+        event = (result.get("event") or "").strip()
+        if not event:
+            continue                   # the at-bat still being played
+        rbi = result.get("rbi")
+        out.append({
+            "kind": "atbat",
+            "inning": int(inning) if isinstance(inning, int) else None,
+            "half": half,
+            "at_bat": ab,
+            "batter": batter,
+            "pitcher": pitcher,
+            "event": event,
+            "event_type": (result.get("eventType") or ""),
+            "rbi": int(rbi) if isinstance(rbi, int) and rbi else 0,
+            "scoring": bool(about.get("isScoringPlay")),
+            "away_score": result.get("awayScore"),
+            "home_score": result.get("homeScore"),
+            "hit": hit,
+            "time": _when(about),
+        })
+    return out
+
+
+def current_at_bat(payload: dict) -> dict | None:
+    """Who is up and who is throwing, from the at-bat in progress.
+
+    The last play with no `result.event` is the one being played — the
+    same rule `recent_plays` uses to skip it. Names come from `matchup`,
+    the fields the row parser has always read; the count and outs come
+    from the fast scoreboard's linescore on the page, which the card
+    already carries, so nothing here guesses at a `count` block.
+    """
+    plays = (payload or {}).get("allPlays") or []
+    if not plays:
+        return None
+    last = plays[-1]
+    if ((last.get("result") or {}).get("event") or "").strip():
+        return None                    # between at-bats, or the game is over
+    matchup = last.get("matchup") or {}
+    about = last.get("about") or {}
+    pitches = [e for e in (last.get("playEvents") or [])
+               if (e.get("isPitch") if e.get("isPitch") is not None
+                   else (e.get("details") or {}).get("isPitch"))]
+    return {
+        "batter": (matchup.get("batter") or {}).get("fullName") or "",
+        "batter_id": (matchup.get("batter") or {}).get("id"),
+        "pitcher": (matchup.get("pitcher") or {}).get("fullName") or "",
+        "pitcher_id": (matchup.get("pitcher") or {}).get("id"),
+        "inning": about.get("inning") if isinstance(about.get("inning"), int) else None,
+        "half": _HALF.get(str(about.get("halfInning") or "").lower(), ""),
+        "pitches": len(pitches),
+    }
+
+
 def _num(v):
     try:
         return float(v)

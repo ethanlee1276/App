@@ -201,12 +201,29 @@ def main() -> None:
                     help="a dotted path to describe on its own, e.g. "
                          "boxscore.players or header.competitions — where "
                          "the ids a basketball play uses get their names")
+    ap.add_argument("--file", default="",
+                    help="describe a payload already on disk instead of "
+                         "fetching — e.g. data/cache/mlb_pbp_live_*.json, "
+                         "where the MLB play-by-play the site already pulls "
+                         "is cached; prints the same shape report")
     args = ap.parse_args()
 
-    event, state = (args.event, "asked for") if args.event \
-        else pick_event(args.league, args.prefer, args.date)
-    print(f"league {args.league}  event {event}  state {state}")
-    payload = _get(f"{SUMMARY[args.league]}?event={event}")
+    if args.file:
+        # A CACHED PAYLOAD, NO NETWORK. The MLB feed's `hitData` and the
+        # per-event times had never been read by this repo when the
+        # play-by-play page was built; the droplet has real games cached
+        # under data/cache/mlb_pbp_*.json, and this prints their shape
+        # the same way the ESPN report does — keys, types, lengths,
+        # never a sentence.
+        with open(args.file, encoding="utf-8") as fh:
+            payload = json.load(fh)
+        print(f"file {args.file}")
+        event = args.file
+    else:
+        event, state = (args.event, "asked for") if args.event \
+            else pick_event(args.league, args.prefer, args.date)
+        print(f"league {args.league}  event {event}  state {state}")
+        payload = _get(f"{SUMMARY[args.league]}?event={event}")
 
     print("\n=== is the play-by-play here at all ===")
     for key in WANTED:

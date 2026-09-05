@@ -194,6 +194,7 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
     and never from a play's `description`, the same posture the card's
     strip takes.
     """
+    from engine.mlb.sources.pbp import current_at_bat, game_events
     pbp_dir = Path(pbp_dir)
     pbp_dir.mkdir(parents=True, exist_ok=True)
     out = pbp_dir / f"mlb_{g['game_pk']}.json"
@@ -205,6 +206,12 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},
         "plays": plays,
+        # THE RENDER'S RAIL (2026-09-05): every pitch and every at-bat in
+        # order, with the batted-ball data the park animation draws from
+        # and the at-bat in progress. `plays` above stays the card's own
+        # at-bat list, so the page can read either.
+        "events": game_events(payload),
+        "current": current_at_bat(payload),
     }
     tmp = out.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc))
