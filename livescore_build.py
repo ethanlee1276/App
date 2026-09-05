@@ -40,6 +40,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import time as _time
 from pathlib import Path
 
 from engine.sources.fetch import DataUnavailable
@@ -65,6 +66,22 @@ PLAYS_PER_GAME = 6
 PLAYS_MAX_GAMES = 8
 
 OUT = Path("web/data")
+
+#: Where one game's WHOLE play-by-play lives: `web/data/pbp/{league}_
+#: {event}.json`, one file per live game, written on the same pass that
+#: puts the last six plays on the card. Ethan, 2026-09-05: "You should be
+#: able to click on each live game and see a deeper play by play." The
+#: card's strip stays six plays because the fast file is polled every
+#: twelve seconds by every open tab; a game's full list — 392 plays on a
+#: finished WNBA game — is fetched only by a reader who opened that game.
+#: Free files, like the scoreboards: scores and plays are public facts,
+#: nothing priced (engine/gate.FREE_DIRS).
+PBP_DIR = OUT / "pbp"
+
+#: A deep file outlives its game by this much and is then pruned. Long
+#: enough that a final can still be read the morning after; short enough
+#: that a season of games does not accumulate under web/.
+PBP_MAX_AGE_S = 36 * 3600
 
 
 def _row(r: dict) -> dict:
@@ -110,7 +127,7 @@ def _row(r: dict) -> dict:
     return out
 
 
-def build(league: str) -> dict:
+def build(league: str, pbp_dir: Path | None = None) -> dict:
     """`{"games": [...], "generated_at": ...}` — or an honest empty board.
 
     A feed that cannot be reached returns NO GAMES rather than raising,
@@ -137,11 +154,12 @@ def build(league: str) -> dict:
     games = [_row(r) for r in rows]
     games.sort(key=lambda g: (g["live"]["start_time"] or "", g["event_id"]))
     out = {"generated_at": now, "league": league, "games": games}
-    out["plays_note"] = attach_plays(games, league)
+    out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir)
     return out
 
 
-def attach_plays(games: list[dict], league: str) -> str:
+def attach_plays(games: list[dict], league: str,
+                 pbp_dir: Path | None = None) -> str:
     """Put the last few plays — and, for football, the current drive —
     on every game IN PROGRESS. Returns a note for the log and the file.
 
@@ -162,6 +180,11 @@ def attach_plays(games: list[dict], league: str) -> str:
     and the failures are counted rather than raised — one unreachable
     play feed must not cost the scoreboard the card, which is the more
     important product of this process.
+
+    ``pbp_dir`` set: the same payload also becomes the game's deep file
+    (`write_pbp`) — every play, football's grouped by drive — so the
+    page a reader opens from the card costs no second fetch. A deep file
+    that fails to write costs nothing but itself.
     """
     from engine.sources import espnplays
     if league in espnplays.FOOTBALL:
@@ -173,10 +196,13 @@ def attach_plays(games: list[dict], league: str) -> str:
     live = [g for g in games if g["live"]["state"] == "live"]
     if not live:
         return f"no games in progress — no {noun} fetched"
-    got = failed = 0
+    got = failed = deep = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = espnplays.fetch_summary(league, g["event_id"])
+            sides = {str(g.get("home_id") or ""): g["home"],
+                     str(g.get("away_id") or ""): g["away"]}
+            sides.pop("", None)
             if noun == "drives":
                 g["plays"] = espnplays.football_plays(payload, league,
                                                       PLAYS_PER_GAME)
@@ -184,14 +210,18 @@ def attach_plays(games: list[dict], league: str) -> str:
                 if drive:
                     g["drive"] = drive
             else:
-                sides = {str(g.get("home_id") or ""): g["home"],
-                         str(g.get("away_id") or ""): g["away"]}
-                sides.pop("", None)
                 g["plays"] = espnplays.hoops_plays(payload, league,
                                                    PLAYS_PER_GAME, sides=sides)
             got += 1
         except Exception:                                    # noqa: BLE001
             failed += 1                # the card keeps its score
+            continue
+        if pbp_dir is not None:
+            try:
+                write_pbp(league, g, payload, pbp_dir, sides=sides)
+                deep += 1
+            except Exception:                                # noqa: BLE001
+                pass                       # the card keeps its plays
     skipped = max(0, len(live) - PLAYS_MAX_GAMES)
     note = f"{noun}: {got} of {len(live)} live game(s)"
     if failed:
@@ -199,11 +229,81 @@ def attach_plays(games: list[dict], league: str) -> str:
     if skipped:
         note += (f", {skipped} past the {PLAYS_MAX_GAMES}-game cap "
                  f"(scores only)")
+    if pbp_dir is not None and got:
+        note += f", {deep} deep file(s)"
     return note
 
 
+def pbp_doc(league: str, g: dict, payload: dict,
+            sides: dict | None = None) -> dict:
+    """One game's whole play-by-play as the page reads it.
+
+    The card's own header fields ride along — sides in the board's
+    vocabulary, names, the live state — so the page needs no second
+    lookup to say whose game it is. Football carries `drives`, each with
+    its plays, and the same plays flattened as `plays`; basketball has
+    no drive and carries `plays` alone. Newest LAST throughout, as a
+    play-by-play reads; the page decides what to show first.
+    """
+    from engine.sources import espnplays
+    doc = {
+        "league": league,
+        "event_id": str(g.get("event_id") or ""),
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "home": g.get("home"), "away": g.get("away"),
+        "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
+        "live": g.get("live") or {},
+    }
+    if league in espnplays.FOOTBALL:
+        drives = espnplays.football_drives(payload, league)
+        doc["drives"] = drives
+        doc["plays"] = [r for d in drives for r in d["plays"]]
+    else:
+        doc["plays"] = espnplays.hoops_plays(payload, league, 0, sides=sides)
+    return doc
+
+
+def write_pbp(league: str, g: dict, payload: dict, pbp_dir: Path,
+              sides: dict | None = None) -> Path:
+    """Write the deep file atomically; returns its path."""
+    pbp_dir = Path(pbp_dir)
+    pbp_dir.mkdir(parents=True, exist_ok=True)
+    out = pbp_dir / f"{league}_{g['event_id']}.json"
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(pbp_doc(league, g, payload, sides=sides)))
+    os.replace(tmp, out)
+    return out
+
+
+def prune_pbp(pbp_dir: Path, max_age_s: int = PBP_MAX_AGE_S,
+              now: float | None = None) -> int:
+    """Remove deep files older than ``max_age_s``; returns how many.
+
+    Runs on the fast clock, so it must be cheap — one directory scan,
+    no parsing — and must never raise into the scoreboard write.
+    """
+    pbp_dir = Path(pbp_dir)
+    if not pbp_dir.is_dir():
+        return 0
+    now = _time.time() if now is None else now
+    gone = 0
+    for path in pbp_dir.glob("*.json"):
+        try:
+            if now - path.stat().st_mtime > max_age_s:
+                path.unlink()
+                gone += 1
+        except OSError:
+            continue
+    return gone
+
+
 def write(league: str, out_dir: Path = OUT) -> dict:
-    payload = build(league)
+    pbp_dir = Path(out_dir) / "pbp"
+    payload = build(league, pbp_dir=pbp_dir)
+    try:
+        prune_pbp(pbp_dir)
+    except Exception:                                        # noqa: BLE001
+        pass                          # the scoreboard write comes first
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"live_{league}.json"
     # Atomic replace — this runs on the launcher's fast clock while the

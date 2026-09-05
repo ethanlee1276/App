@@ -159,27 +159,87 @@ def football_plays(payload: dict, league: str = "cfb",
                 continue
             if pid:
                 seen.add(pid)
-            start = p.get("start") or {}
-            ptype = p.get("type") or {}
-            rows.append({
-                "kind": "football",
-                "id": pid,
-                "period": _int((p.get("period") or {}).get("number")),
-                "clock": str((p.get("clock") or {}).get("displayValue") or ""),
-                "team": team,
-                "event": (ptype.get("text") or ptype.get("abbreviation")
-                          or "Play"),
-                "down": _int(start.get("down")) or None,
-                "distance": _int(start.get("distance")),
-                "yard_line": _int(start.get("yardLine")),
-                "yards": _int(p.get("statYardage")) or 0,
-                "scoring": bool(p.get("scoringPlay")),
-                "turnover": bool(p.get("isTurnover")),
-                "penalty": bool(p.get("isPenalty")),
-                "away_score": _int(p.get("awayScore")),
-                "home_score": _int(p.get("homeScore")),
-            })
+            rows.append(_football_row(p, team))
     return rows[-limit:] if limit and limit > 0 else rows
+
+
+def _football_row(p: dict, team: str) -> dict:
+    """One play as the structured row the card and the page both draw."""
+    pid = str(p.get("id") or "")
+    start = p.get("start") or {}
+    ptype = p.get("type") or {}
+    return {
+        "kind": "football",
+        "id": pid,
+        "period": _int((p.get("period") or {}).get("number")),
+        "clock": str((p.get("clock") or {}).get("displayValue") or ""),
+        "team": team,
+        "event": (ptype.get("text") or ptype.get("abbreviation")
+                  or "Play"),
+        "down": _int(start.get("down")) or None,
+        "distance": _int(start.get("distance")),
+        "yard_line": _int(start.get("yardLine")),
+        "yards": _int(p.get("statYardage")) or 0,
+        "scoring": bool(p.get("scoringPlay")),
+        "turnover": bool(p.get("isTurnover")),
+        "penalty": bool(p.get("isPenalty")),
+        "away_score": _int(p.get("awayScore")),
+        "home_score": _int(p.get("homeScore")),
+    }
+
+
+def football_drives(payload: dict, league: str = "cfb") -> list[dict]:
+    """Every drive so far WITH its plays, oldest first, the one in
+    progress last — the shape a play-by-play page reads.
+
+    THE DRIVE, NOT THE PLAY, IS THE UNIT HERE. `football_plays` flattens
+    for the card's last-six strip; a page that shows a whole game reads
+    better a drive at a time — who had the ball, for how many plays and
+    yards, and what came of it. Composed from the same verified fields
+    (`offensivePlays`, `yards`, `timeElapsed`, `start`) and the same row
+    composer, never from a drive's `description`.
+
+    DE-DUPLICATED BY DRIVE ID, LAST COPY WINS. The probe showed the drive
+    in progress in both `previous` and `current`; whichever the summary
+    lists later is the fresher copy, so it replaces the earlier one
+    rather than the earlier one suppressing it — a drive that gained a
+    play between the two listings keeps the play. Within a drive, plays
+    de-duplicate by their own id. `scoring` is derived from the plays
+    rather than read off a drive flag the probe did not list.
+    """
+    by_id: dict[str, dict] = {}
+    order: list[str] = []
+    for n, drive in enumerate(_drives(payload)):
+        did = str(drive.get("id") or "") or f"drive-{n}"
+        team = _side_key(drive.get("team") or {}, league)
+        rows: list[dict] = []
+        seen: set = set()
+        for p in drive.get("plays") or []:
+            if not isinstance(p, dict):
+                continue
+            pid = str(p.get("id") or "")
+            if pid and pid in seen:
+                continue
+            if pid:
+                seen.add(pid)
+            rows.append(_football_row(p, team))
+        entry = {
+            "id": did,
+            "team": team,
+            "plays": rows,
+            "offensive_plays": _int(drive.get("offensivePlays")) or 0,
+            "yards": _int(drive.get("yards")) or 0,
+            "elapsed": str((drive.get("timeElapsed") or {}).get("displayValue")
+                           or ""),
+            "start_yard_line": _int((drive.get("start") or {}).get("yardLine")),
+            "period": _int(((drive.get("start") or {}).get("period") or {})
+                           .get("number")),
+            "scoring": any(r["scoring"] for r in rows),
+        }
+        if did not in by_id:
+            order.append(did)
+        by_id[did] = entry
+    return [by_id[d] for d in order]
 
 
 def current_drive(payload: dict, league: str = "cfb") -> dict | None:

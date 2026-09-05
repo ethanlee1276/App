@@ -300,7 +300,9 @@ def test_no_games_in_progress_says_so():
 
 def test_the_note_rides_on_the_published_file():
     src = (ROOT / "livescore_build.py").read_text()
-    assert 'out["plays_note"] = attach_plays(games, league)' in src
+    # `pbp_dir=` joined the call on 2026-09-05: the same pass now writes
+    # each live game's deep file (tests/test_pbp_files.py).
+    assert 'out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir)' in src
 
 
 # --- the page ----------------------------------------------------------------

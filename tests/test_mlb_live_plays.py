@@ -209,7 +209,9 @@ def test_past_the_cap_the_games_keep_their_scores_and_the_note_says_why():
 
 def test_the_note_rides_on_the_published_file():
     src = (ROOT / "live_build.py").read_text()
-    assert 'out["plays_note"] = attach_plays(games)' in src, \
+    # `pbp_dir=` joined the call on 2026-09-05: the same pass now writes
+    # each live game's deep file (tests/test_pbp_files.py).
+    assert 'out["plays_note"] = attach_plays(games, pbp_dir=pbp_dir)' in src, \
         "the census is computed and thrown away"
 
 

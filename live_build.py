@@ -83,7 +83,7 @@ def _row(pk: int, st) -> dict:
     }
 
 
-def build(date: str) -> dict:
+def build(date: str, pbp_dir: Path | None = None) -> dict:
     """`{"games": [...], "generated_at": ...}` — or an honest empty board.
 
     A feed that cannot be reached returns NO GAMES rather than raising.
@@ -129,11 +129,11 @@ def build(date: str) -> dict:
             games.append(row)
     games.sort(key=lambda r: (r["live"]["start_time"] or "", r["game_pk"]))
     out = {"generated_at": now, "date": date, "games": games}
-    out["plays_note"] = attach_plays(games)
+    out["plays_note"] = attach_plays(games, pbp_dir=pbp_dir)
     return out
 
 
-def attach_plays(games: list[dict]) -> str:
+def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     """Put the last few at-bats on every game IN PROGRESS. Returns a note.
 
     ONLY LIVE GAMES, which is what keeps this affordable: a scheduled
@@ -152,14 +152,28 @@ def attach_plays(games: list[dict]) -> str:
     if not live:
         return "no games in progress — no plays fetched"
     from engine.mlb.sources.pbp import fetch_live_playbyplay, recent_plays
-    got = failed = 0
+    got = failed = deep = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
-            g["plays"] = recent_plays(fetch_live_playbyplay(g["game_pk"]),
-                                      PLAYS_PER_GAME)
+            payload = fetch_live_playbyplay(g["game_pk"])
+            g["plays"] = recent_plays(payload, PLAYS_PER_GAME)
             got += 1
         except Exception:                                    # noqa: BLE001
             failed += 1                # the card keeps its score
+            continue
+        # THE DEEP FILE, from the payload already in hand (Ethan,
+        # 2026-09-05: "click on each live game and see a deeper play by
+        # play"). Every completed at-bat, newest last, under
+        # `pbp/mlb_{game_pk}.json` beside the scoreboard — the same
+        # shape and directory livescore_build writes for the other four
+        # leagues, so the page reads one layout. A write that fails
+        # costs nothing but itself.
+        if pbp_dir is not None:
+            try:
+                write_pbp(g, payload, recent_plays(payload, 0), pbp_dir)
+                deep += 1
+            except Exception:                                # noqa: BLE001
+                pass
     skipped = max(0, len(live) - PLAYS_MAX_GAMES)
     note = f"plays: {got} of {len(live)} live game(s)"
     if failed:
@@ -167,7 +181,35 @@ def attach_plays(games: list[dict]) -> str:
     if skipped:
         note += (f", {skipped} past the {PLAYS_MAX_GAMES}-game cap "
                  f"(scores only)")
+    if pbp_dir is not None and got:
+        note += f", {deep} deep file(s)"
     return note
+
+
+def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
+    """One MLB game's whole play-by-play, atomically, as the page reads it.
+
+    The header rides along from the fast row — sides, live state — so
+    the page needs no second lookup. Composed from `recent_plays`' rows
+    and never from a play's `description`, the same posture the card's
+    strip takes.
+    """
+    pbp_dir = Path(pbp_dir)
+    pbp_dir.mkdir(parents=True, exist_ok=True)
+    out = pbp_dir / f"mlb_{g['game_pk']}.json"
+    doc = {
+        "league": "mlb",
+        "event_id": str(g["game_pk"]),
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "home": g.get("home"), "away": g.get("away"),
+        "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
+        "live": g.get("live") or {},
+        "plays": plays,
+    }
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc))
+    os.replace(tmp, out)
+    return out
 
 
 def main() -> None:
@@ -176,9 +218,18 @@ def main() -> None:
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
     date = args.date or _dt.date.today().isoformat()
-    payload = build(date)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    # Deep files beside the scoreboard, pruned on the same clock — one
+    # directory for every league (livescore_build.PBP_DIR is the same
+    # `pbp/` under web/data), so the page has one place to look.
+    pbp_dir = out.parent / "pbp"
+    payload = build(date, pbp_dir=pbp_dir)
+    try:
+        from livescore_build import prune_pbp
+        prune_pbp(pbp_dir)
+    except Exception:                                        # noqa: BLE001
+        pass                          # the scoreboard write comes first
     # Atomic replace — this runs on the launcher's fast clock while the
     # Live tab polls the same file; see memes_build for the lesson.
     tmp = out.with_suffix(".json.tmp")

@@ -391,12 +391,28 @@ def comped(email: str) -> bool:
     return who in listed
 
 
+#: DIRECTORIES whose every JSON file is free. One so far: `pbp/`, one
+#: play-by-play file per live game, named by league and event id
+#: (livescore_build.write_pbp, live_build). The names cannot be listed
+#: in FREE_FILES — a new game is a new name every night — and the
+#: contents are what live_*.json already publishes free, in full:
+#: scores and plays, nothing priced. tests/test_pbp_files.py asserts
+#: that the files carry no paid key rather than taking this on trust.
+FREE_DIRS = ("pbp",)
+
+
 def is_free(name: str) -> bool:
     """True for a board that is published whole. Named files only — an
     unknown board is treated as gated, because the failure directions are
     not symmetric: wrongly gating a free board is a visible annoyance, and
-    wrongly publishing a paid one gives the product away silently."""
-    return Path(str(name)).name in FREE_FILES
+    wrongly publishing a paid one gives the product away silently.
+
+    A file inside one of FREE_DIRS is free by its directory: those are
+    per-game files whose names are not knowable in advance."""
+    p = Path(str(name))
+    if p.name in FREE_FILES:
+        return True
+    return p.suffix == ".json" and p.parent.name in FREE_DIRS
 
 
 def is_wholly_paid(name: str) -> bool:
