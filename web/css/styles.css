@@ -6778,6 +6778,16 @@ body.has-rail .shell {
 
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+/* Odds shopping (2026-09-05): the pick's side at every book, best first. */
+.bs-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+.bs-t { margin-right: 2px; }
+.bs-q { padding: 2px 7px; border-radius: var(--radius); background: var(--panel-3); color: var(--text); }
+.bs-q.best { border: var(--hairline) solid var(--brand); }
+.bs-more { color: var(--text-mute); }
+.pp-books { padding: 0; overflow-x: auto; }
+.pp-books tr.best td { color: var(--text); font-weight: 700; }
+.pp-books tr.bs-sep td { color: var(--text-mute); font-size: var(--fs-xs); padding-top: 10px; }
 /* The profit calendar on the Record page (2026-09-05): a Sunday-first
    month grid, a cell per day, green or red by sign and deeper by size. */
 .rc-card { padding: 12px 14px; margin-bottom: 18px; }

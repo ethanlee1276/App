@@ -5271,6 +5271,68 @@ function trendChip(r) {
   if (r.trend === "down") return `<span class="chip down">${icon("falling")} Cooling off</span>`;
   return `<span class="chip">Steady form</span>`;
 }
+/* ---------------- Odds shopping, on the card ----------------
+   Ethan, 2026-09-05: "odds shopping on the card". Every priced row has
+   carried every book's quote since the odds pull (`all_lines`); the card
+   only ever named the best. Now the pick's side is priced at each book,
+   best first, so "don't add more at −110" comes with "FanDuel still has
+   −118". Only real quotes: a proxy is not a book and an unquoted side
+   is not a price. A quote at another line is a different bet and is
+   listed apart, never mixed into the ranking. */
+const payoutOf = (o) => (o > 0 ? o / 100 : 100 / Math.abs(o));
+
+function quotesForSide(r) {
+  const side = String((r || {}).side || "OVER").toUpperCase();
+  const line = Number((r || {}).line);
+  const same = [], other = [];
+  ((r || {}).all_lines || []).forEach((ln) => {
+    if (!ln || !ln.book || String(ln.book).toLowerCase() === "proxy") return;
+    const odds = side === "UNDER" ? ln.under_odds : ln.over_odds;
+    if (odds == null || Number(odds) === 0 || !Number.isFinite(Number(odds))) return;
+    const q = { book: String(ln.book), line: Number(ln.line), odds: Number(odds) };
+    (Number.isFinite(line) && Number(ln.line) === line ? same : other).push(q);
+  });
+  same.sort((x, y) => payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
+  other.sort((x, y) => (side === "UNDER" ? y.line - x.line : x.line - y.line)
+    || payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
+  return { side, line, same, other, best: same[0] || null };
+}
+
+/* The card's strip: the pick's side at every book quoting the pick's
+   line, best first; a count of the books quoting another line. Nothing
+   under two real quotes — one price is the card's own line, not a shop. */
+function booksStripHTML(r) {
+  const q = quotesForSide(r);
+  if (q.same.length + q.other.length < 2) return "";
+  const atLine = q.same.map((x, i) =>
+    `<span class="bs-q${i === 0 ? " best" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}">${
+      escapeHtml(x.book)} <b>${american(x.odds)}</b></span>`).join("");
+  const others = q.other.length
+    ? `<span class="bs-more" title="${escapeAttr(q.other.map((x) => `${x.book} ${x.line} ${american(x.odds)}`).join(" · "))}">+${
+        q.other.length} at other line${q.other.length === 1 ? "" : "s"}</span>` : "";
+  return `<div class="bs-strip" aria-label="The same side at each book">${
+    icon("tag", 11)} <span class="bs-t">${escapeHtml(q.side)} ${q.line} by book</span>${atLine}${others}</div>`;
+}
+
+/* The prop page's table: every book, its line and its price for the
+   pick's side, the best marked, the quotes at another line under a
+   rule; the odds pull's own time, so a reader knows how old the shop is. */
+function booksTableHTML(r) {
+  const q = quotesForSide(r);
+  if (q.same.length + q.other.length < 2) return "";
+  const row = (x, best) => `<tr class="${best ? "best" : ""}"><td>${escapeHtml(x.book)}</td>
+      <td>${escapeHtml(q.side)} ${x.line}</td><td class="num">${american(x.odds)}</td>
+      <td>${best ? "best price" : ""}</td></tr>`;
+  const asOf = ((state.data || {}).odds_status || {}).at;
+  return `<div class="section-title minor">Shop the price
+      <span class="sub">— ${escapeHtml(q.side)} ${q.line} at every book we saw${
+        asOf ? `, from the ${escapeHtml(asOf)} odds pull` : ""}; confirm at the book before betting.</span></div>
+    <div class="card pp-books"><table class="agate"><thead><tr><th>Book</th><th>Bet</th><th class="num">Price</th><th></th></tr></thead>
+      <tbody>${q.same.map((x, i) => row(x, i === 0)).join("")}${
+        q.other.length ? `<tr class="bs-sep"><td colspan="4">At another line — a different bet</td></tr>${
+          q.other.map((x) => row(x, false)).join("")}` : ""}</tbody></table></div>`;
+}
+
 function booksChip(r) {
   const n = (r.all_lines || []).length;
   return n <= 1 ? "" : `<span class="chip books">${icon('tag')} ${n} books · best ${escapeHtml(r.book)}</span>`;
@@ -5580,6 +5642,7 @@ function cardHTML(r) {
       ${confMeter(r)}
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
+      ${booksStripHTML(r)}
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
@@ -7522,6 +7585,8 @@ function renderPropPage() {
       </div>
       ${propAnalysis(r)}
     </article>
+
+    ${booksTableHTML(r)}
 
     ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
       <span class="sub">— every one measured against tonight’s
