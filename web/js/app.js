@@ -30923,21 +30923,34 @@ function liveCardHTML({ sport, g, bets }) {
 
 
 /* ---------------- The play-by-play page ----------------
-   Ethan, 2026-09-05: "You should be able to click on each live game and
-   see a deeper play by play." The card keeps its six-play strip; this
-   page reads the game's whole file — `data/pbp/{league}_{event}.json`,
-   written by the fast builders for every game in progress and kept
-   about 36 hours — and draws it with the SAME row renderer the card
-   uses (`playsHTML`), grouped the way each sport is read: football a
-   drive at a time, basketball by period, baseball by half-inning,
-   newest group first. The file carries no play text and this page reads
-   none; every row is the structured one the parsers composed. It
-   refreshes on the fast clock while the game is live and stops the
-   moment the view changes. */
+   Ethan's render, 2026-09-05: the league's games in a strip across the
+   top (LIVE or first pitch, teams, scores, inning); the matchup hero;
+   the park with the batted ball's arc animated across it and a chip
+   saying what it was ("Line drive · 102.4 mph · 379 ft"); the at-bat,
+   the count and bases, the pitcher; and a rail on the right reading at
+   the pitch — "Ball · 84 mph Slider", "Called strike", then "Lineout ·
+   Aaron Judge · 102.4 mph · 379 ft" — grouped by half-inning, each row
+   with its time; win probability under it.
+
+   WHAT IT READS. `data/pbp/{league}_{event}.json`, the deep file the
+   fast builders write for every game in progress: `events` (every pitch
+   and at-bat, with `hit` on a ball in play) and `current` (who is up)
+   for baseball; drives or plays for the others. The strip reads the
+   league's fast scoreboard. The park art is the game page's own
+   (`ballpark`, `stadium`, `court` in visuals.js); the arc is drawn over
+   it in the same coordinate space. Faces, park facts, weather and the
+   win-probability track come off the league's board when the visitor
+   is standing on that league — a free page never asks the paid board
+   for them. Nothing here reads a play's sentence; every row is the
+   structured one the parsers composed. */
 let _pbpTimer = null;
+let _pbpStrip = { at: 0, league: "", games: [] };
+let _pbpShowAll = false;
 
 function openPbp(league, event) {
-  state.pbp = { league: String(league || ""), event: String(event || "") };
+  const next = { league: String(league || ""), event: String(event || "") };
+  if (!state.pbp || state.pbp.event !== next.event) _pbpShowAll = false;
+  state.pbp = next;
   switchView("pbp", true);
 }
 
@@ -30947,6 +30960,262 @@ function openPbpHash(rest) {
   });
   if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
   openPbp(parts[0], parts[1]);
+}
+
+/* Clock for an ISO instant — "5:14 PM" — or "". Through tzTime, so a
+   pitch in the rail reads in the same zone as first pitch on the card. */
+function pbpTime(iso) {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!isFinite(t)) return "";
+  try { return tzTime(t); } catch (e) { return ""; }
+}
+
+function pbpAgo(stamp) {
+  if (!stamp) return "";
+  const t = Date.parse(stamp.endsWith("Z") ? stamp : stamp + "Z");
+  if (!isFinite(t)) return "";
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
+}
+
+const pbpOrd = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+/* --- the strip: the league's games, live first, then by first pitch --- */
+async function pbpStripGames(league) {
+  const url = LIVE_FAST[league];
+  if (!url) return [];
+  if (_pbpStrip.league === league && Date.now() - _pbpStrip.at < 15000) return _pbpStrip.games;
+  let games = [];
+  try {
+    const r = await boardFetch(url, { cache: "no-store" });
+    if (r.ok) games = ((await r.json()).games || []);
+  } catch (e) { games = []; }
+  const rank = (g) => ({ live: 0, scheduled: 1, final: 2 })[(g.live || {}).state] ?? 1;
+  games = games.slice().sort((a, b) => rank(a) - rank(b)
+    || String((a.live || {}).start_time || "").localeCompare(String((b.live || {}).start_time || "")));
+  _pbpStrip = { at: Date.now(), league, games };
+  return games;
+}
+
+function pbpStripHTML(league, games, current) {
+  if (!games.length) return "";
+  const chip = (g) => {
+    const lv = g.live || {};
+    const id = String(g.event_id || g.game_pk || "");
+    const on = !!id && id === current;
+    const door = !!id && (lv.state === "live" || lv.state === "final");
+    const head = lv.state === "live" ? `<span class="lb-live">${icon("dot", 8)} LIVE</span>`
+      : lv.state === "final" ? `<span class="pbp-chip-final">FINAL</span>`
+      : `<span class="pbp-chip-time">${escapeHtml(pbpTime(lv.start_time) || "TBD")}</span>`;
+    const row = (abbr, score) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
+      escapeHtml(abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
+    return `<button type="button" class="pbp-chip${on ? " active" : ""}${door ? " door" : ""}"${
+      door ? ` data-pbp="${escapeAttr(id)}"` : " disabled"}>
+      <div class="pbp-chip-head">${head}</div>
+      ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
+      <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
+    </button>`;
+  };
+  return `<div class="pbp-strip" role="list">${games.map(chip).join("")}</div>`;
+}
+
+/* --- the park, and the ball in flight ---
+   The art is the game page's ballpark (visuals.js), viewBox 0 0 240 150,
+   its field drawn inside a group scaled 0.76 about (120,100). Home
+   plate sits at (120,128) in field coordinates; the outfield wall is an
+   elliptical arc — centre (120,121.7), radii 116 × 92 — from the left
+   pole (34,60) to the right (206,60), which is ±47.8° off dead centre.
+   A batted ball's landing point is placed by its DIRECTION (the Stats
+   API's coordinates, home plate at (125.42,198.27), y falling toward
+   centre) and its DISTANCE as a fraction of the fence at that angle
+   (the park's own lf/cf/rf feet when the board has them, 330/400/330
+   otherwise). Past the wall is past the wall. The arc's lift reads the
+   trajectory — a ground ball hugs the grass, a popup climbs — since a
+   plan view has no height to draw and the eye still wants the shape. */
+const PBP_POLE_DEG = 47.8;
+function pbpFieldToArt(x, y) { return [120 + 0.76 * (x - 120), 100 + 0.76 * (y - 100)]; }
+function pbpWallPoint(phiDeg) {
+  const phi = Math.max(-PBP_POLE_DEG, Math.min(PBP_POLE_DEG, phiDeg)) * Math.PI / 180;
+  return pbpFieldToArt(120 + 116 * Math.sin(phi), 121.7 - 92 * Math.cos(phi));
+}
+function pbpFenceFt(park, phiDeg) {
+  const lf = Number((park || {}).lf_ft) || 330, cf = Number((park || {}).cf_ft) || 400,
+    rf = Number((park || {}).rf_ft) || 330;
+  const t = Math.min(1, Math.abs(phiDeg) / PBP_POLE_DEG);
+  const pole = phiDeg < 0 ? lf : rf;
+  return cf - (cf - pole) * t * t;
+}
+function pbpFlight(hit, park) {
+  if (!hit || hit.distance == null) return null;
+  let phi = 0;
+  if (hit.x != null && hit.y != null) {
+    phi = Math.atan2(Number(hit.x) - 125.42, 198.27 - Number(hit.y)) * 180 / Math.PI;
+    if (!isFinite(phi)) phi = 0;
+  }
+  const fence = pbpFenceFt(park, phi);
+  const r = Math.max(0.05, Math.min(1.18, Number(hit.distance) / fence));
+  const H = pbpFieldToArt(120, 128), W = pbpWallPoint(phi);
+  const L = [H[0] + r * (W[0] - H[0]), H[1] + r * (W[1] - H[1])];
+  const lift = ({ ground_ball: 4, line_drive: 14, fly_ball: 30, popup: 40 })[hit.trajectory] ?? 18;
+  const C = [(H[0] + L[0]) / 2, (H[1] + L[1]) / 2 - lift * Math.max(0.35, r)];
+  // Length of the quadratic, sampled — for the draw-on animation.
+  let len = 0, px = H[0], py = H[1];
+  for (let i = 1; i <= 24; i++) {
+    const t = i / 24, u = 1 - t;
+    const x = u * u * H[0] + 2 * u * t * C[0] + t * t * L[0];
+    const y = u * u * H[1] + 2 * u * t * C[1] + t * t * L[1];
+    len += Math.hypot(x - px, y - py); px = x; py = y;
+  }
+  return { H, C, L, len, over: r > 1.0, phi, fence };
+}
+const PBP_TRAJ = { ground_ball: "Ground ball", line_drive: "Line drive", fly_ball: "Fly ball", popup: "Popup" };
+function pbpArcSVG(hit, park) {
+  const f = pbpFlight(hit, park);
+  if (!f) return "";
+  const still = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const id = "arc" + Math.random().toString(36).slice(2, 7);
+  const d = `M${f.H[0].toFixed(1)} ${f.H[1].toFixed(1)} Q${f.C[0].toFixed(1)} ${f.C[1].toFixed(1)} ${f.L[0].toFixed(1)} ${f.L[1].toFixed(1)}`;
+  const bits = [PBP_TRAJ[hit.trajectory] || (hit.trajectory ? String(hit.trajectory).replace(/_/g, " ") : ""),
+    hit.launch_speed != null ? `${Number(hit.launch_speed).toFixed(1)} mph` : "",
+    hit.distance != null ? `${Math.round(hit.distance)} ft` : ""].filter(Boolean);
+  const label = bits.join(" · ");
+  const chipX = Math.min(170, Math.max(4, f.C[0] - 34)), chipY = Math.max(4, f.C[1] - 22);
+  return `
+  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <path id="${id}" d="${d}" fill="none" stroke="#ffffff" stroke-width="1.6"
+      stroke-linecap="round" opacity="0.92"${still ? "" : ` stroke-dasharray="${f.len.toFixed(1)}" stroke-dashoffset="${f.len.toFixed(1)}"`}>
+      ${still ? "" : `<animate attributeName="stroke-dashoffset" from="${f.len.toFixed(1)}" to="0" dur="1.2s" fill="freeze"/>`}
+    </path>
+    <circle r="2.4" fill="#ffffff"${still ? ` cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}"` : ""}>
+      ${still ? "" : `<animateMotion dur="1.2s" fill="freeze"><mpath href="#${id}"/></animateMotion>`}
+    </circle>
+    <circle cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}" r="4" fill="none" stroke="${f.over ? "#ffd24a" : "#ffffff"}" stroke-width="1" opacity="0.7"/>
+    ${label ? `<g>
+      <rect x="${chipX}" y="${chipY}" width="${Math.min(120, 8 + label.length * 4.6).toFixed(0)}" height="16" rx="8" fill="#0c1020" opacity="0.82"/>
+      <text x="${chipX + 7}" y="${chipY + 11}" font-size="7.5" font-weight="700" fill="#ffd24a"
+        font-family="system-ui">${escapeHtml(label)}</text></g>` : ""}
+  </svg>`;
+}
+
+/* The park (or field, or court) with the live markers the art already
+   draws, in the league's own colours, and the ball in flight over it. */
+function pbpParkHTML(d, league, boardGame, hitRow) {
+  const game = {
+    home: d.home, away: d.away, live: d.live || {},
+    roof: (boardGame || {}).roof, surface: (boardGame || {}).surface,
+    factors: (boardGame || {}).factors, altitude_ft: (boardGame || {}).altitude_ft,
+  };
+  const keep = window.ACTIVE_TEAMS;
+  window.ACTIVE_TEAMS = teamsForSport(league);          // the art reads it
+  let art = "";
+  try {
+    art = league === "mlb" ? ballpark(game, { w: 640, h: 400 })
+      : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
+      : stadium(game, { w: 640, h: 400 });
+  } catch (e) { art = ""; }
+  window.ACTIVE_TEAMS = keep;
+  const arc = league === "mlb" && hitRow && hitRow.hit
+    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park) : "";
+  const park = (boardGame || {}).park || {};
+  const w = (boardGame || {}).weather || {};
+  const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
+    ? ` · ${Math.round(w.wind_mph)} mph${w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}` : ""}` : "";
+  const chip = (park.name || (boardGame || {}).park_name || wx)
+    ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
+        wx ? `<span>${wx}</span>` : ""}</div>` : "";
+  return `<div class="pbp-park">${art}${arc}${chip}</div>`;
+}
+
+/* --- the situation strip: who is up, the count, the bases, who is throwing --- */
+function pbpFaces(league) {
+  if (state.sport !== league || !state.data) return {};
+  const out = {};
+  [...(state.data.recommendations || []), ...(state.data.long_shots || []),
+   ...(state.data.most_likely || [])].forEach((r) => {
+    if (r && r.player && r.headshot && !out[String(r.player).toLowerCase()])
+      out[String(r.player).toLowerCase()] = r.headshot;
+  });
+  return out;
+}
+function pbpFaceHTML(name, faces) {
+  const src = name ? faces[String(name).toLowerCase()] : "";
+  return src ? `<img class="pbp-face" src="${escapeAttr(src)}" alt="" loading="lazy">`
+    : `<span class="pbp-face pbp-face-blank">${icon("user", 16)}</span>`;
+}
+function pbpSituationHTML(d, league, faces) {
+  if (league !== "mlb") return "";
+  const lv = d.live || {};
+  const cur = d.current || {};
+  const count = (lv.balls != null && lv.strikes != null) ? `${lv.balls}-${lv.strikes}` : "";
+  const outs = lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "";
+  const half = cur.half === "T" ? "Top" : cur.half === "B" ? "Bottom" : "";
+  return `
+    <div class="pbp-sit">
+      <div class="pbp-sit-side">
+        ${pbpFaceHTML(cur.batter, faces)}
+        <div><div class="k">AT BAT</div><b>${escapeHtml(cur.batter || "—")}</b>
+          <div class="mini">${cur.pitches != null && cur.batter ? `${cur.pitches} pitch${cur.pitches === 1 ? "" : "es"} this at-bat` : ""}</div></div>
+      </div>
+      <div class="pbp-sit-mid">
+        ${miniDiamond(lv.bases)}
+        <b class="pbp-count">${escapeHtml(count || "–")}</b>
+        <div class="mini">${escapeHtml([half && cur.inning ? `${half} ${pbpOrd(cur.inning)}` : "", outs].filter(Boolean).join(" · "))}</div>
+      </div>
+      <div class="pbp-sit-side pbp-sit-right">
+        <div><div class="k">PITCHING</div><b>${escapeHtml(cur.pitcher || "—")}</b></div>
+        ${pbpFaceHTML(cur.pitcher, faces)}
+      </div>
+    </div>`;
+}
+
+/* --- the rail --- */
+const PBP_CALL_KIND = (code) => {
+  const c = String(code || "");
+  if (["B", "*B", "V", "I", "P"].includes(c)) return "ball";
+  if (["F", "R", "L", "T", "O"].includes(c)) return "foul";
+  if (["X", "D", "E", "J", "Z", "H"].includes(c)) return "inplay";
+  return "strike";
+};
+function pbpBaseballGroups(d) {
+  const rows = (d.events && d.events.length) ? d.events
+    : (d.plays || []).map((p) => ({ ...p, kind: "atbat" }));
+  const groups = []; const byKey = {};
+  rows.forEach((r) => {
+    const k = `${r.half || ""}${r.inning || ""}`;
+    if (!byKey[k]) {
+      const batting = r.half === "T" ? d.away : r.half === "B" ? d.home : "";
+      const head = r.inning ? `${r.half === "T" ? "Top" : r.half === "B" ? "Bottom" : ""} ${pbpOrd(r.inning)}`.trim() : "—";
+      byKey[k] = { head, sub: batting ? `${batting} batting` : "", tag: "", rows: [], batting };
+      groups.push(byKey[k]);
+    }
+    byKey[k].rows.push(r);
+  });
+  groups.forEach((g) => g.rows.reverse());
+  return groups.reverse();
+}
+function pbpRowHTML(r, league, batting) {
+  const when = pbpTime(r.time);
+  if (r.kind === "pitch") {
+    const kind = PBP_CALL_KIND(r.code);
+    const detail = [r.speed != null ? `${Number(r.speed).toFixed(0)} mph` : "", r.pitch || ""].filter(Boolean).join(" ");
+    const cnt = (r.balls != null && r.strikes != null) ? ` · ${r.balls}-${r.strikes}` : "";
+    return `<div class="pbp-row pitch">
+      <span class="pbp-dot ${kind}"></span>
+      <span class="pbp-what"><b>${escapeHtml(r.call || "Pitch")}</b>${detail ? ` · ${escapeHtml(detail)}` : ""}${cnt}
+        <span class="pbp-who">${escapeHtml(r.batter || "")}</span></span>
+      <span class="pbp-time">${escapeHtml(when)}</span></div>`;
+  }
+  const h = r.hit || null;
+  const hitTxt = h ? [h.launch_speed != null ? `${Number(h.launch_speed).toFixed(1)} mph` : "",
+                      h.distance != null ? `${Math.round(h.distance)} ft` : ""].filter(Boolean).join(" · ") : "";
+  const rbi = r.rbi ? ` <span class="lb-rbi">${r.rbi} RBI</span>` : "";
+  return `<div class="pbp-row atbat${r.scoring ? " scoring" : ""}">
+    <span class="pbp-mark">${teamMarkIn(league, batting, 18)}</span>
+    <span class="pbp-what"><b>${escapeHtml(r.event || "")}</b>${rbi}
+      <span class="pbp-who">${escapeHtml(r.batter || "")}${hitTxt ? ` · ${escapeHtml(hitTxt)}` : ""}</span></span>
+    <span class="pbp-time">${escapeHtml(when)}</span></div>`;
 }
 
 /* The groups a sport is read in, newest first. Rows inside a football
@@ -30986,12 +31255,30 @@ function pbpGroups(d) {
   return groups.reverse();
 }
 
-function pbpAgo(stamp) {
-  if (!stamp) return "";
-  const t = Date.parse(stamp.endsWith("Z") ? stamp : stamp + "Z");
-  if (!isFinite(t)) return "";
-  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
+function pbpRailHTML(d, league) {
+  const PEEK = 40;
+  const mlb = league === "mlb";
+  const groups = mlb ? pbpBaseballGroups(d) : pbpGroups(d);
+  const total = groups.reduce((a, g) => a + g.rows.length, 0);
+  let budget = _pbpShowAll ? Infinity : PEEK;
+  const shown = [];
+  for (const g of groups) {
+    if (budget <= 0) break;
+    const rows = g.rows.slice(0, budget);
+    budget -= rows.length;
+    shown.push({ ...g, rows });
+  }
+  const group = (g) => `
+    <div class="pbp-group">
+      <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
+        g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
+        g.tag ? `<span class="pbp-tag${g.tag === "TURNOVER" ? " turnover" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
+      ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting)).join("")
+            : (playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+    </div>`;
+  const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
+  return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
+    ${more > 0 ? `<button class="btn ghost" type="button" id="pbp-more">View full play by play (${total}) →</button>` : ""}`;
 }
 
 async function renderPbpPage() {
@@ -31000,22 +31287,33 @@ async function renderPbpPage() {
   if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
   const { league, event } = state.pbp || {};
   const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">← Back to Live</button>`;
-  const wireBack = () => {
+  const wire = () => {
     const b = document.getElementById("pbp-back");
     if (b) b.addEventListener("click", () => switchView("live"));
+    host.querySelectorAll(".pbp-chip.door").forEach((el) =>
+      el.addEventListener("click", () => openPbp(league, el.dataset.pbp)));
+    const m = document.getElementById("pbp-more");
+    if (m) m.addEventListener("click", () => { _pbpShowAll = true; renderPbpPage(); });
+    const g = document.getElementById("pbp-game-door");
+    if (g) g.addEventListener("click", () => openGame(g.dataset.gid));
   };
   if (!league || !event) {
     host.innerHTML = `${emptySlate("stadium", "No game selected",
       "Open a game from the Live tab to read its play-by-play.")}${back}`;
-    wireBack();
+    wire();
     return;
   }
   let d = null;
+  let strip = [];
   try {
     // Through boardFetch, like every other board file: a fetch that
     // fails here must count toward the wire-down banner, not vanish.
-    const res = await boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
-                                 { cache: "no-store" });
+    const [res, games] = await Promise.all([
+      boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
+                 { cache: "no-store" }),
+      pbpStripGames(league),
+    ]);
+    strip = games;
     if (res.ok) d = await res.json();
   } catch (e) { d = null; }
   if (state.view !== "pbp") return;                // moved on while fetching
@@ -31025,18 +31323,19 @@ async function renderPbpPage() {
       if (state.view === "pbp") renderPbpPage();
     }, 12000);
   };
+  const stripHTML = pbpStripHTML(league, strip, event);
   if (!d) {
-    host.innerHTML = `${emptySlate("stadium", "No play-by-play on file for this game",
+    host.innerHTML = `${stripHTML}${emptySlate("stadium", "No play-by-play on file for this game",
       "The file is written while a game is in progress — up to eight games at a "
       + "time — and kept for about a day and a half. A game past that cap keeps its "
       + "score and has no play list; one that has just kicked off gets its file on "
       + "the next pass.")}${back}`;
-    wireBack();
+    wire();
     again();                                       // it may appear on the next pass
     return;
   }
   const lv = d.live || {};
-  const mark = (abbr) => teamMarkIn(league, abbr, 34);
+  const mark = (abbr) => teamMarkIn(league, abbr, 44);
   const name = (abbr, full) => escapeHtml(full || teamNameIn(league, abbr) || abbr || "");
   let situation = escapeHtml(lv.period || "");
   if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
@@ -31044,38 +31343,62 @@ async function renderPbpPage() {
   if (lv.detail && league !== "mlb") situation += ` · ${escapeHtml(lv.detail)}`;
   const stateWord = lv.state === "live" ? `${icon("dot", 10)} LIVE`
     : lv.state === "final" ? "FINAL" : "SCHEDULED";
-  const groups = pbpGroups(d);
-  const groupHTML = (g) => `
-    <div class="pbp-group">
-      <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
-        g.sub ? ` · ${escapeHtml(g.sub)}` : ""}</span>${
-        g.tag ? `<span class="pbp-tag${g.tag === "TURNOVER" ? " turnover" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
-      ${playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}
-    </div>`;
+  // The league's board, when the visitor is standing on it: faces, the
+  // park's facts, the weather, the live win-probability track.
+  const boardGame = (state.sport === league && state.data)
+    ? ((state.data.games || []).find((x) => x.home === d.home && x.away === d.away) || null) : null;
+  const faces = pbpFaces(league);
+  const events = d.events || [];
+  const lastHit = events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null;
+  const park = (boardGame || {}).park || {};
+  const wx = (boardGame || {}).weather || {};
+  const infoCards = boardGame ? [
+    park.name ? [icon("stadium", 18), park.name, [park.lf_ft, park.cf_ft, park.rf_ft].every((v) => v)
+      ? `${park.lf_ft} · ${park.cf_ft} · ${park.rf_ft} ft` : ""] : null,
+    park.capacity ? [icon("users", 18), "Capacity", Number(park.capacity).toLocaleString()] : null,
+    wx.temp_f != null ? [icon("sun", 18), `${Math.round(wx.temp_f)}°F`, wx.dome ? "Roof closed" : ""] : null,
+    wx.wind_mph != null && !wx.dome ? [icon("wind", 18), `${Math.round(wx.wind_mph)} mph`, wx.wind_dir || ""] : null,
+    (boardGame.roof || boardGame.surface) ? [icon("field", 18), boardGame.roof ? `Roof: ${boardGame.roof}` : "Field",
+      boardGame.surface || ""] : null,
+  ].filter(Boolean) : [];
+  const infoHTML = infoCards.length ? `
+    <div class="pbp-tabs"><span class="active">Game info</span>${
+      boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>
+    <div class="pbp-info">${infoCards.map(([ic, t, s]) => `
+      <div class="pbp-info-card"><span class="pbp-info-ico">${ic}</span>
+        <div><b>${escapeHtml(t)}</b>${s ? `<div class="mini">${escapeHtml(s)}</div>` : ""}</div></div>`).join("")}
+    </div>` : (boardGame ? `<div class="pbp-tabs"><button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button></div>` : "");
+  const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
   host.innerHTML = `
-    <div class="pbp-head">
-      <span class="lb-league">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</span>
-      <span class="lb-live">${stateWord}</span>
-      <span class="lb-sit">${situation}</span>
-      <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
-    </div>
-    <div class="card">
-      <div class="pbp-score">
-        <span class="lb-team">${mark(d.away)}<em>${name(d.away, d.away_name)}</em></span>
-        <b>${lv.away_score != null ? lv.away_score : "–"}</b>
-        <span class="pbp-at">@</span>
-        <b>${lv.home_score != null ? lv.home_score : "–"}</b>
-        <span class="lb-team pbp-home">${mark(d.home)}<em>${name(d.home, d.home_name)}</em></span>
+    ${stripHTML}
+    <div class="pbp-layout">
+      <div class="pbp-main">
+        <div class="card pbp-hero">
+          <div class="pbp-hero-side">${mark(d.away)}<div><div class="mini">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</div>
+            <b>${name(d.away, d.away_name)}</b></div></div>
+          <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
+          <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>
+            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span></div>
+          <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
+          <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
+            <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>
+        </div>
+        <div class="card pbp-parkcard">
+          ${pbpParkHTML(d, league, boardGame, lastHit)}
+          ${pbpSituationHTML(d, league, faces)}
+        </div>
+        ${infoHTML}
+        ${back}
       </div>
-    </div>
-    <div class="section-title">Play-by-play
-      <span class="sub">— every play on file, newest first · ${(d.plays || []).length} play${
-        (d.plays || []).length === 1 ? "" : "s"}${
-        d.drives ? ` in ${d.drives.length} drive${d.drives.length === 1 ? "" : "s"}` : ""}</span></div>
-    ${groups.length ? groups.map(groupHTML).join("")
-      : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
-    ${back}`;
-  wireBack();
+      <aside class="pbp-rail">
+        <div class="card pbp-railcard">
+          <div class="pbp-rail-head">Play by play <span class="mini">${(events.length || (d.plays || []).length)} on file</span></div>
+          ${pbpRailHTML(d, league)}
+        </div>
+        ${winProb}
+      </aside>
+    </div>`;
+  wire();
   if (lv.state === "live") again();
 }
 

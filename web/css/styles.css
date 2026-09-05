@@ -9115,3 +9115,84 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-tag { color: var(--good); }
 .pbp-tag.turnover { color: var(--warn); }
 @media (max-width: 700px) { .pbp-score { font-size: 1.25rem; gap: 8px; } }
+
+/* The play-by-play page to the render (2026-09-05): a strip of the
+   league's games, the hero, the park with the ball in flight, the
+   situation strip, and the rail. */
+.pbp-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px;
+  scrollbar-width: thin; }
+.pbp-chip { flex: 0 0 auto; min-width: 128px; text-align: left; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 8px 10px;
+  color: var(--text); font: inherit; cursor: default; }
+.pbp-chip.door { cursor: pointer; }
+.pbp-chip.door:hover { border-color: var(--text-mute); }
+.pbp-chip.active { border-color: var(--gold); border-width: 2px; padding: 7px 9px; }
+.pbp-chip-head { font-size: var(--fs-xs); color: var(--text-mute); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px; }
+.pbp-chip-final, .pbp-chip-time { font-family: var(--font-mono); letter-spacing: .04em; }
+.pbp-chip-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: center;
+  font-size: var(--fs-sm); }
+.pbp-chip-row em { font-style: normal; font-weight: 700; }
+.pbp-chip-row b { font-family: var(--font-mono); }
+.pbp-chip-foot { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 3px; min-height: 1em; }
+.pbp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .pbp-layout { grid-template-columns: 1fr; } }
+.pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
+.pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbp-hero-side b { font-size: var(--fs-lg); }
+.pbp-hero-home { justify-content: flex-end; text-align: right; }
+.pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
+.pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
+@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto 1fr; }
+  .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
+  .pbp-hero-score { font-size: 1.6rem; } }
+.pbp-parkcard { padding: 0; overflow: hidden; }
+.pbp-park { position: relative; width: 100%; aspect-ratio: 240 / 150; background: #05060F; }
+.pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pbp-park .pbp-arc { pointer-events: none; }
+.pbp-parkchip { position: absolute; top: 10px; right: 10px; background: rgba(12,16,32,.82);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 6px 9px;
+  font-size: var(--fs-xs); color: #dfe4f5; display: flex; flex-direction: column; gap: 2px; }
+.pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+  padding: 12px 14px; border-top: var(--hairline) solid var(--border); }
+.pbp-sit-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbp-sit-right { justify-content: flex-end; text-align: right; }
+.pbp-sit .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
+.pbp-sit-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pbp-count { font-family: var(--font-mono); font-size: var(--fs-lg); }
+.pbp-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--bg-2);
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.pbp-face-blank { color: var(--text-mute); }
+.pbp-tabs { display: flex; gap: 14px; align-items: center; margin: 12px 0 8px; border-bottom: var(--hairline) solid var(--border); }
+.pbp-tabs .active { padding: 6px 0; border-bottom: 2px solid var(--gold); font-weight: 700; }
+.pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
+.pbp-tab-door:hover { color: var(--text); }
+.pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
+.pbp-info-ico { color: var(--gold); display: inline-flex; }
+.pbp-rail { position: sticky; top: 8px; }
+.pbp-rail-head { display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 800; margin-bottom: 6px; }
+.pbp-group { margin: 8px 0 14px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+.pbp-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start;
+  padding: 6px 0; border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
+.pbp-row:first-of-type { border-top: 0; }
+.pbp-row.atbat { background: var(--bg-2); border-radius: var(--radius); padding: 8px; border-top: 0; margin: 4px 0; }
+.pbp-row.atbat.scoring b { color: var(--good); }
+.pbp-what { min-width: 0; }
+.pbp-who { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.pbp-time { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; }
+.pbp-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; display: inline-block; }
+.pbp-dot.ball { background: var(--good); }
+.pbp-dot.strike { background: var(--bad); }
+.pbp-dot.foul { background: var(--warn); }
+.pbp-dot.inplay { background: var(--brand); }
+.pbp-mark { display: inline-flex; margin-top: 1px; }

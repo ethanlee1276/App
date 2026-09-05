@@ -87,7 +87,11 @@ def test_it_reads_the_deep_file_and_nothing_else():
 
 
 def test_rows_are_drawn_by_the_cards_own_renderer():
-    body = _fn("renderPbpPage")
+    """Football and hoops rows still come from the card's renderer; the
+    rail moved into `pbpRailHTML` when the page went to the render
+    (2026-09-05), and baseball's pitch rows have their own row function
+    there (tests/test_pbp_render.py)."""
+    body = _fn("pbpRailHTML")
     assert "playsHTML({ plays: g.rows })" in body
 
 
@@ -119,7 +123,7 @@ def test_a_missing_file_says_why_and_offers_the_way_back():
 
 def test_the_header_names_the_teams_in_the_leagues_own_vocabulary():
     body = _fn("renderPbpPage")
-    assert "teamMarkIn(league, abbr, 34)" in body
+    assert "teamMarkIn(league, abbr, 44)" in body, "the render's hero wears a bigger mark"
     assert "teamNameIn(league, abbr)" in body
     assert "LEAGUE_LABEL[league]" in body
 
