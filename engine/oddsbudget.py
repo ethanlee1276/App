@@ -158,6 +158,15 @@ def save(state: BudgetState, path: Path | str = STATE_PATH) -> None:
 # and no prices on them. Every paid call appends one line here instead.
 SPEND_LOG = STATE_PATH.parent / "odds_spend.jsonl"
 
+#: Every authorisation verdict the launcher reaches, whether it printed
+#: it or not. Ethan's box, 2026-09-05: college bought 63 board pulls and
+#: zero player-quote pulls on its biggest Saturday, and NOTHING said why
+#: — the refresh loop runs quiet, so the reasons were never printed, and
+#: the journal held only web requests. A budget that can decline all day
+#: has to leave a record a person can read back the next morning.
+DECISIONS_LOG = STATE_PATH.parent / "odds_decisions.jsonl"
+DECISIONS_KEEP = 4000
+
 # What one call costs, by kind. The API bills per market per region, so a live
 # event call asking for eight markets is eight credits. Historical calls are
 # billed at a large multiple — harvest_odds.py's own note says a full-market
@@ -474,9 +483,54 @@ def mark_refreshed(ts: float | None = None, path: Path | str = STATE_PATH,
 FAILED_PULL_RETRY_S = 5 * 60
 
 
+def log_decision(lane: str | None, ok: bool, reason: str, credits: int | None = None,
+                 path: Path | str | None = None, now: float | None = None,
+                 **extra) -> None:
+    """Append one verdict to the decisions ledger. Never raises."""
+    try:
+        f = Path(path or DECISIONS_LOG)
+        t = now if now is not None else time.time()
+        row = {"ts": round(t, 3), "iso": _dt.datetime.fromtimestamp(t).strftime("%Y-%m-%dT%H:%M:%S"),
+               "lane": str(lane or "_all"), "ok": bool(ok), "reason": str(reason)[:300]}
+        if credits is not None:
+            row["credits"] = int(credits)
+        row.update({k: v for k, v in extra.items() if v is not None})
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with open(f, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
+        # Bounded: the loop reaches this several times a minute, all day.
+        if f.stat().st_size > 1_500_000:
+            lines = f.read_text(encoding="utf-8").splitlines()[-DECISIONS_KEEP:]
+            f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception:                                        # noqa: BLE001
+        pass
+
+
+def decisions(path: Path | str | None = None, since: float | None = None,
+              lane: str | None = None) -> list[dict]:
+    """The ledger, oldest first, optionally since a time and for one lane."""
+    f = Path(path or DECISIONS_LOG)
+    out = []
+    try:
+        for line in f.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if since is not None and float(row.get("ts", 0)) < since:
+                continue
+            if lane is not None and row.get("lane") != lane:
+                continue
+            out.append(row)
+    except OSError:
+        pass
+    return out
+
+
 def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
                      now: float | None = None,
-                     sport: str | None = None) -> bool:
+                     sport: str | None = None,
+                     bought_enough: bool = True) -> bool:
     """Called after a paid pull ATTEMPT; returns whether it actually landed.
 
     "Landed" means the API answered — the quota stamp advanced past what it
@@ -493,10 +547,22 @@ def paid_pull_result(before_seen_iso: str, path: Path | str = STATE_PATH,
     state = load(path)
     landed = bool(state.last_seen_iso) and state.last_seen_iso != before_seen_iso
     if landed:
+        state.retry_after_ts = 0.0
+        # A PULL THAT BOUGHT NOTHING DOES NOT RESET THE CLOCK. "Landed"
+        # is the quota stamp moving, and the cheap board request inside
+        # the same build moves it — so college's 6pm "full pull" on
+        # 2026-09-05, which found every game kicked off and bought no
+        # player quotes at all, stamped the clock the next full pull
+        # waits on and claimed the touchpoint. The caller measures what
+        # the build actually spent; below its expectation the sport's
+        # clock and touchpoint are left alone, so the next cycle asks
+        # again.
+        if not bought_enough:
+            save(state, path)
+            return landed
         state.last_refresh_ts = now
         if sport:
             state.sport_last_refresh[sport] = now
-        state.retry_after_ts = 0.0
         # The claim belongs HERE as much as in mark_refreshed: production
         # confirms its pulls through this function, so a touchpoint claimed
         # only there would never be claimed at all in the live app — and an

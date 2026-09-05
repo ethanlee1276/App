@@ -120,9 +120,51 @@ Swap the name in the first line to check anyone else.
 
 ### 1b. Is the college player pull running at all?
 
-The 09-05 board said `props_priced 0, games_quoted 0` on a Saturday
-with 29 cached event payloads 45 hours old. Either the budget refused
-the pull or nothing asked. One line per cycle, from the board:
+**ANSWERED 2026-09-05, in the evening, from the spend ledger.** No. On
+the opening Saturday college made 63 board-line pulls (3 credits each,
+one every fifteen minutes from 00:06) and ZERO player-quote pulls. The
+NFL bought 336 credits of player quotes overnight for games five days
+away. The full college pull was authorised once, at the 6pm
+touchpoint, when every game had kicked off — so it found no candidates,
+bought nothing, and STILL stamped college's clock and claimed the
+touchpoint, because "landed" was the quota stamp moving and the
+3-credit board request in the same build moves it. Why the morning
+cycles never authorised it could not be read back: the refresh loop
+runs quiet, its verdicts were printed nowhere, and the journal holds
+only web requests.
+
+Shipped the same night: every verdict is written to
+`data/cache/odds_decisions.jsonl` whether or not it was printed, the
+odds doctor prints the latest per lane, and a full pull that bought
+less than a board request plus one player call no longer stamps the
+clock (tests/test_odds_decisions.py). Also four schools the books spell
+long ("Appalachian State", "Southern Mississippi", "Citadel", "UT Rio
+Grande Valley") now resolve to ESPN's short names — 4 of 76 events.
+
+**§1c, the check that matters next: Sunday morning for the NFL, next
+Saturday morning for college.** After the deploy, from the box, during
+the pre-game window (from 2.5 hours before the first kickoff):
+
+```bash
+cd /srv/qellys && python3 launch.py --odds-doctor 2>/dev/null | sed -n '/decisions/,$p'
+cd /srv/qellys && python3 -c "
+import json, collections
+rows = [json.loads(l) for l in open('data/cache/odds_decisions.jsonl')]
+for lane in ('cfb', 'cfb_lines', 'nfl', 'nfl_lines'):
+    rs = [r for r in rows if r['lane'] == lane][-12:]
+    print(lane)
+    for r in rs: print('  ', r['iso'][11:16], 'PULL' if r['ok'] else 'hold', r['reason'][:100])"
+grep '"sport": "cfb"' data/cache/odds_spend.jsonl | grep -v live_board | tail -5
+```
+
+* The `cfb` lane must show `PULL … refreshing odds` at least once before
+  the first kickoff, and the spend log must then carry `live_event`
+  rows for cfb. If every morning row is `hold` with the same reason,
+  paste the reason: that is the sentence the whole day was missing.
+* A `bought` row in the ledger names a pull that spent under the
+  minimum; the clock was not stamped and the next cycle asked again.
+
+The original command, kept for the board's own numbers:
 
 ```bash
 cd /srv/qellys && python3 -c "

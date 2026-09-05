@@ -157,6 +157,18 @@ def name_key(name: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+#: Book spellings ESPN does not carry, keyed and valued as `name_key`
+#: output. Read off the droplet's own match on 2026-09-05: 76 events, 13
+#: matched the slate, and these four were the unresolved schools —
+#: every one a book writing the long form of a name ESPN shortens.
+BOOK_SCHOOL_ALIASES = {
+    "appalachian state": "app state",
+    "southern mississippi": "southern miss",
+    "citadel": "the citadel",
+    "ut rio grande valley": "utrgv",
+}
+
+
 def resolve_team(name: str, lookup: dict[str, str]) -> str:
     """Best abbreviation for a team name from another feed, or ''.
 
@@ -174,6 +186,16 @@ def resolve_team(name: str, lookup: dict[str, str]) -> str:
         hit = lookup.get(" ".join(words[:len(words) - cut]))
         if hit:
             return hit
+    # THE BOOK'S LONG FORM OF A NAME ESPN SHORTENS. Tried last, so an
+    # alias can never shadow a school the lookup already knows.
+    for book, espn in BOOK_SCHOOL_ALIASES.items():
+        if key == book or key.startswith(book + " "):
+            swapped = espn + key[len(book):]
+            w = swapped.split()
+            for cut in range(0, min(2, len(w) - 1) + 1):
+                hit = lookup.get(" ".join(w[:len(w) - cut]))
+                if hit:
+                    return hit
     return ""
 
 
