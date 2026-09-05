@@ -384,3 +384,61 @@ arguments. Checked against the signature this time.
 NFL's shade was retired after measurement showed it hurt ordering in all
 four markets. MLB was deliberately left alone until its own history says
 something.
+
+---
+
+## 7. The open-bet tracker on the NFL, CFB, NBA and WNBA Live tabs
+
+Landed 2026-09-05 (`81f6f03`, `5600e0a`). Until then only the MLB board
+wrote `live_picks`, so the Live tab on every other sport said "No open
+bets on today's card" whatever the journal held. Each build now attaches
+the tracker before it writes, and fetches live stat lines for player
+props off ESPN's box score (the play feed's 30-second cache, never the
+ingests' month-long one).
+
+`live_picks` is a paid key, so the PUBLIC file never carries it — read
+the full copy the gate writes first:
+
+```bash
+cd /srv/qellys && python3 - <<'PY7'
+import json
+for f in ("recommendations", "cfb", "nba", "wnba", "mlb_recommendations"):
+    try:
+        d = json.load(open(f"data/built/{f}.json"))
+    except FileNotFoundError:
+        print(f"{f:<20} no built copy yet"); continue
+    rows = d.get("live_picks")
+    print(f"{f:<20} live_picks={'ABSENT' if rows is None else len(rows)} "
+          f"open_elsewhere={d.get('open_elsewhere')} "
+          f"error={d.get('live_picks_error')}")
+    for r in (rows or [])[:8]:
+        print("   ", r.get("category"), "|", r.get("player"), r.get("market"),
+              r.get("side"), r.get("line"), "|", r.get("phase"),
+              r.get("status"), "current=", r.get("current"))
+PY7
+```
+
+What to expect, board by board, after the next refresh cycle:
+
+* `live_picks=ABSENT` on a football or hoops board means that build has
+  not run since the pull — wait a cycle. `ABSENT` on MLB is a real
+  regression (its tracker predates this and was not touched).
+* `error=` names anything the tracker hit; it lands in the JSON on
+  purpose because the launcher swallows build output.
+* A row's `category` is what the Live tab splits on: `main`/`longshot`
+  in the edge panel, `likely` in the Most Likely panel.
+* `current=None` on a player prop during a live game means no live stat
+  line reached it. The build log says why — one line per board:
+
+  ```bash
+  journalctl -u qellys --since "2 hours ago" --no-pager | grep -i "open-bet tracker"
+  ```
+
+  `Open-bet tracker: 5 on this card (5 live, 1 likely); live stats: 1
+  of 1 live game(s)` is the healthy shape. `not on the scoreboard` means
+  the board's `away@home` did not match the fast scoreboard's (the same
+  identity join the Live tab's scores use); `feed(s) unreachable` is
+  ESPN; `past the 8-game cap` is the budget, by design.
+* NFL's card is the week label (`2026-W01`), so its rows are the whole
+  week's open bets; the other three use the slate date and its two
+  neighbours.
