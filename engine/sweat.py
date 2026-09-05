@@ -238,7 +238,7 @@ def build(today: str | None = None, quiet: bool = True,
 
     conn = ledger.connect()
     cols = ("player, market, side, line, odds, stake_units, date, "
-            "category, hit_prob")
+            "category, hit_prob, ts")
     # 'likely' rides the same clock since 2026-09-05 (Ethan: two panels on
     # the Live page, edge and Most Likely). A likely prop finds its
     # projection the way every row does — `assemble_live_picks` keys the

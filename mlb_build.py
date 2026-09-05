@@ -571,7 +571,7 @@ def main() -> None:
         # neighbouring days are shown only if they actually land on a game
         # in tonight's slate — otherwise a widened window becomes clutter.
         _cols = ("player, market, side, line, odds, stake_units, date, "
-                 "category, hit_prob")
+                 "category, hit_prob, ts")
         # 'likely' JOINED THE TRACKER 2026-09-05. Ethan: "the most likley
         # bets should also show in the live page, we need to have two
         # seperate pages in the live page, one for edge bets, and one for

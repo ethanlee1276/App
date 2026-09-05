@@ -344,6 +344,14 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             "live_prob": None, "live_market": None,
             "team": "", "headshot": face, "game": {},
             "category": b.get("category", "main"),
+            # When the bet was placed (the journal's UTC stamp) and the
+            # day it is filed under. Ethan, 2026-09-05, on twenty riding
+            # college bets: "check to see if these picks ... are old or
+            # new" — a row that says when it was placed answers that
+            # itself. Present and empty on a row the journal never
+            # stamped, for the reason live_prob is.
+            "placed_at": b.get("ts") or "",
+            "date": b.get("date") or "",
         }
 
     out = []
@@ -482,6 +490,10 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
             # row, and anything reconciling this list against the journal
             # will silently mismatch without it.
             "category": b.get("category", "main"),
+            # See `_unmapped`: when it was placed, and the day it is
+            # filed under (the game's own date is in `game`).
+            "placed_at": b.get("ts") or "",
+            "date": b.get("date") or "",
             "team": (where or {}).get("team", b.get("player", "")),
             # The face, for the tracker's identity column. Only a prop has
             # one — a team market's `player` field holds an ABBREVIATION,
@@ -512,7 +524,7 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
 #: number a row shows until a live one exists; `category` is what splits
 #: the Live tab's two panels.
 TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
-                "category, hit_prob")
+                "category, hit_prob, ts")
 
 #: 'likely' rides along since 2026-09-05 — Ethan: "the most likley bets
 #: should also show in the live page ... one for edge bets, and one for

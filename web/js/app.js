@@ -1026,6 +1026,36 @@ function whenChip(dateStr, kick) {
   return w ? `<span class="chip when">${escapeHtml(w)}</span>` : "";
 }
 
+/* WHEN A BET WAS PLACED, in the reader's zone — "Thu 5:12 PM". The
+   journal stamps UTC without a zone letter, so one is put back before
+   parsing; without it a browser reads the stamp as local time and the
+   clock lands hours off. The weekday goes through the same chosen zone
+   as the clock, or a bet placed at half past midnight in New York would
+   read as Thursday on a Friday. Ethan, 2026-09-05, on twenty riding
+   college bets: "check to see if these picks ... are old or new" — a
+   row that says when it was placed answers that itself. */
+function placedStamp(ts) {
+  if (!ts) return "";
+  const s = String(ts);
+  const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+  if (isNaN(d)) return "";
+  const day = d.toLocaleDateString(undefined, tzOpts({ weekday: "short" }));
+  return `${day} ${tzTime(d)}`;
+}
+
+/* A riding row's own dates: "placed Thu 5:12 PM · game Sat, Sep 5 ·
+   3:30 PM ET". The game's own date leads when the tracker placed the
+   bet on a game; the journal's filing date stands in when it could not. */
+function ridingWhen(b) {
+  const g = (b || {}).game || {};
+  const placed = placedStamp((b || {}).placed_at);
+  const game = whenLabel(g.date || (b || {}).date, g.kickoff);
+  const bits = [placed ? `placed ${placed}` : "", game ? `game ${game}` : ""].filter(Boolean);
+  if (!bits.length) return "";
+  return `<span style="display:block;color:var(--text-mute);font-size:var(--fs-xs);margin-top:2px">${
+    escapeHtml(bits.join(" · "))}</span>`;
+}
+
 /* HAS THIS ROW'S GAME KICKED OFF? The likelihood board had no idea.
 
    `showableLikelyRow` filters shrink artefacts and the -250 price cap
@@ -2648,6 +2678,7 @@ async function renderBestBets() {
       <span style="flex:1;min-width:0"><strong>${b.market === "moneyline"
           ? `${escapeHtml(teamName(b.player))} Moneyline`
           : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
+        ${ridingWhen(b)}
         <span class="pick-moved">${icon("warn", 12)} ${cur && cur.odds != null
           ? `The price has changed since we took this pick — placed at
              ${american(b.odds)}, now ${american(cur.odds)}${
@@ -3374,7 +3405,7 @@ function renderLivePicks() {
             Nothing new was needed. It is used here rather than
             reimplemented so the next list to grow rows like these has one
             function to reach for instead of a fourth variation. */
-  const rowHTML = (r) => ((door) => `
+  const rowHTML = (r) => ((door, placed) => `
         <div class="${door ? "openable" : ""}"${door}
              style="display:flex;gap:12px;align-items:center;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
@@ -3384,6 +3415,7 @@ function renderLivePicks() {
           <span style="flex:1;min-width:0">
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
+              placed ? ` · ${escapeHtml(placed)}` : ""}${
               r.category !== "likely" && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
@@ -3396,7 +3428,7 @@ function renderLivePicks() {
             ${betTrack(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
-        </div>`)(ridingAttrs(r));
+        </div>`)(ridingAttrs(r), placedStamp(r.placed_at));
   const panel = (list, title, sub, empty, foot) => {
     const n = list.filter((r) => r.phase === "live").length;
     return `
