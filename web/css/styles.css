@@ -6778,6 +6778,12 @@ body.has-rail .shell {
 
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+/* Tonight across every sport (2026-09-05): the Live tab's chip row, the
+   league blocks under it. */
+.tn-chips { margin-bottom: 10px; }
+.tn-league { margin-top: 18px; }
+.tn-block .cards { margin-bottom: 8px; }
+.tn-quiet { margin: 0 0 6px; }
 /* Odds shopping (2026-09-05): the pick's side at every book, best first. */
 .bs-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px;
   font-size: var(--fs-xs); color: var(--text-mute); }

@@ -4785,10 +4785,26 @@ function fillMeters(host) {
    place for the two to drift apart. What is different here is the
    selection — recommended only, props and game bets in one list — and
    the absence of everything else on the board page.  */
-function renderTonight() {
-  const host = document.getElementById("tonight-body");
-  if (!host) return;
-  const d = state.data || {};
+/* ---------------- Tonight, across every sport ----------------
+   Ethan, 2026-09-05: "tonight across every sport on one page". The tab
+   drew the league whose chip was lit and nothing else, so a reader
+   tapped through five leagues to see what was actionable. An "All"
+   chip now draws every league's card on one page — each league's
+   light board (engine/lightboard, the same picks with the heavy halves
+   left out) fetched once and cached, its cards drawn in its own
+   colours, the current league first — and the chip row keeps the
+   single-league view a tap away. Nothing about a single league's page
+   changed: the same picks, the same order, the same cards. */
+let _tonightScope = "sport";          // "sport" | "all"
+let _tonightAll = { at: 0, boards: {} };
+try { _tonightScope = localStorage.getItem("qb.tonight.scope") === "all" ? "all" : "sport"; } catch (e) {}
+
+/* What the tab draws from one board: the likelihood rows that lead,
+   the picks that clear the bar, the game bets, the featured long
+   shots. One reader for both the single-league page and the all-sports
+   page, so the two can never disagree about what is on the card. */
+function tonightPick(d) {
+  d = d || {};
   const props = (d.recommendations || [])
     .map((r) => ({ ...r, _ok: passesFilters(r) }))
     .filter((r) => r._ok && !heldForLongShots(r));
@@ -4796,21 +4812,149 @@ function renderTonight() {
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b._ok);
   const shots = (d.long_shots || []).slice(0, 3);
+  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
+  return { props, bets, shots, ml, n: props.length + bets.length,
+           any: props.length + bets.length + shots.length + ml.length > 0 };
+}
+
+/* The current league first, then the nav's own order. */
+function tonightLeagueOrder(codes, current) {
+  const rest = (codes || []).filter((c) => c !== current);
+  return (codes || []).includes(current) ? [current, ...rest] : rest;
+}
+
+function tonightChipsHTML(scope, sport) {
+  const lg = LEAGUE_LABEL[sport] || String(sport || "").toUpperCase();
+  return `<div class="lb-chips tn-chips">
+    <button type="button" class="lb-chip ${scope === "sport" ? "active" : ""}" data-tn-scope="sport">${escapeHtml(lg)}</button>
+    <button type="button" class="lb-chip ${scope === "all" ? "active" : ""}" data-tn-scope="all">All sports</button>
+  </div>`;
+}
+
+/* Every league's light board, once a minute. A league whose light copy
+   is not on disk yet falls back to its board; a league with neither is
+   left out and said so. */
+async function tonightBoards() {
+  if (Date.now() - _tonightAll.at < 60000) return _tonightAll.boards;
+  const boards = {};
+  await Promise.all(SPORT_CODES.map(async (s) => {
+    const meta = SPORT_META[s];
+    if (!meta) return;
+    try {
+      let r = await paidFetch(lightNameFor(meta));
+      if (!r.ok) r = await paidFetch(String(meta.fallback || "").replace(/^data\//, ""));
+      if (r.ok) boards[s] = normalizeSlate(await r.json());
+    } catch (e) { /* left out, said below */ }
+  }));
+  _tonightAll = { at: Date.now(), boards };
+  return boards;
+}
+
+/* One league's block, drawn in its own colours. `ACTIVE_TEAMS` is the
+   colour and mark table every card reads; it is swapped for the block
+   and put back after, the way the play-by-play page draws a park. */
+function tonightLeagueHTML(s, d) {
+  const t = tonightPick(d);
+  const lg = LEAGUE_LABEL[s] || s.toUpperCase();
+  const logo = (SPORT_META[s] || {}).logo || "";
+  const head = `<div class="section-title tn-league" data-tonight-league="${s}">${logo} ${escapeHtml(lg)}
+      <span class="sub">— ${t.n ? `${t.n} bet${t.n === 1 ? "" : "s"} clear the bar` : "nothing clears the bar"}${
+        t.ml.length ? ` · ${t.ml.length} most likely` : ""}</span></div>`;
+  if (!t.any) return `${head}<p class="rail-quiet tn-quiet">${escapeHtml(noMarketHeading())}</p>`;
+  const was = window.ACTIVE_TEAMS;
+  window.ACTIVE_TEAMS = teamsForSport(s);
+  try {
+    return `${head}<div class="tn-block" data-tonight-league="${s}">
+      ${t.ml.length ? `<div class="ml-rows">${t.ml.map(likelyRow).join("")}</div>` : ""}
+      ${t.props.length ? `<div class="cards">${t.props.map(cardHTML).join("")}</div>` : ""}
+      ${t.bets.length ? `<div class="cards">${t.bets.map(gameBetCard).join("")}</div>` : ""}
+      ${t.shots.length ? `<div class="cards">${t.shots.map(longShotCard).join("")}</div>` : ""}
+    </div>`;
+  } finally {
+    window.ACTIVE_TEAMS = was;
+  }
+}
+
+/* A door inside another league's block: light that league's chip, wait
+   for its board to be the one in hand, then open — the same two steps
+   the Live tab takes for a foreign game, with the wait measured rather
+   than guessed. */
+function afterBoardFor(s, fn, tries = 40) {
+  const meta = SPORT_META[s];
+  if (!meta) return;
+  if (state.sport === s && state.data && _boardFor === meta.api && !state.lightBoard) { fn(); return; }
+  if (tries <= 0) return;
+  setTimeout(() => afterBoardFor(s, fn, tries - 1), 200);
+}
+
+async function renderTonightAll(host) {
+  host.innerHTML = `${tonightChipsHTML("all", state.sport)}
+    <div class="section-title">Tonight, every league
+      <span class="sub">— each league’s card, the one you are on first; tap a card to open it on its own board</span></div>
+    <p class="rail-quiet">Loading every league’s board…</p>`;
+  const boards = await tonightBoards();
+  if (_tonightScope !== "all" || state.view !== "tonight") return;
+  const order = tonightLeagueOrder(SPORT_CODES, state.sport);
+  const blocks = order.map((s) => boards[s] ? tonightLeagueHTML(s, boards[s])
+    : `<div class="section-title tn-league">${(SPORT_META[s] || {}).logo || ""} ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}
+        <span class="sub">— no board built for this league yet</span></div>`);
+  host.innerHTML = `${tonightChipsHTML("all", state.sport)}
+    <div class="section-title">Tonight, every league
+      <span class="sub">— each league’s card, the one you are on first; tap a card to open it on its own board</span></div>
+    ${blocks.join("")}`;
+  bindTonightChips(host);
+  host.querySelectorAll(".tn-block").forEach((block) => {
+    const s = block.dataset.tonightLeague;
+    if (s === state.sport) return;
+    block.addEventListener("click", (e) => {
+      const door = e.target.closest && e.target.closest("[data-prop], [data-open], [data-gid]");
+      if (!door) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
+      if (!chip) return;
+      chip.click();
+      const again = () => {
+        if (door.dataset.open) openFrom(door.dataset.open);
+        else if (door.dataset.prop) openProp(door.dataset.prop);
+        else if (door.dataset.gid) openGame(door.dataset.gid);
+      };
+      afterBoardFor(s, () => { switchView("tonight"); again(); });
+    }, true);
+  });
+  if (typeof fillMeters === "function") fillMeters(host);
+}
+
+function bindTonightChips(host) {
+  host.querySelectorAll("[data-tn-scope]").forEach((b) =>
+    b.addEventListener("click", () => {
+      _tonightScope = b.dataset.tnScope === "all" ? "all" : "sport";
+      try { localStorage.setItem("qb.tonight.scope", _tonightScope); } catch (e) {}
+      renderTonight();
+    }));
+}
+
+function renderTonight() {
+  const host = document.getElementById("tonight-body");
+  if (!host) return;
+  if (_tonightScope === "all") { renderTonightAll(host); return; }
+  const d = state.data || {};
+  const { props, bets, shots, ml, n } = tonightPick(d);
   // MOST LIKELY LEADS THE TAB. Ethan, 2026-08-31: "tonight's bets page
   // should be the most likely to hit bets. Think about how your
   // average better would think this app would be layed out." A bettor
   // tapping "Tonight" is asking who hits tonight — the model's
   // strongest measured ability — and only then what we would stake.
-  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
-  const n = props.length + bets.length;
   if (!n && !shots.length && !ml.length) {
-    host.innerHTML = `<div class="section-title">Tonight’s bets</div>
+    host.innerHTML = `${tonightChipsHTML("sport", state.sport)}<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <h3>${noMarketHeading()}</h3>
       <p>${noMarketExplainer()}</p></div>`;
+    bindTonightChips(host);
     return;
   }
   host.innerHTML = `
+    ${tonightChipsHTML("sport", state.sport)}
     ${ml.length ? `<div class="section-title">Most likely to hit tonight
       <span class="sub">— ranked by probability, not by price · the full board
       is under Top Picks</span></div>
@@ -4827,6 +4971,7 @@ function renderTonight() {
       <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
       ${boardGuide("long_shots")}
       <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
+  bindTonightChips(host);
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
   host.querySelectorAll("[data-open]").forEach((b) =>

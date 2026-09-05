@@ -54,7 +54,9 @@ def test_the_display_rule_has_one_definition():
 
 
 def test_every_surface_that_hides_them_uses_it():
-    for fn in ("renderRecommended", "renderTonight"):
+    # The Tonight tab's reader is `tonightPick` since 2026-09-05 (one
+    # reader for the single-league tab and the all-sports page).
+    for fn in ("renderRecommended", "tonightPick"):
         assert "heldForLongShots(" in _fn(fn), fn
 
 
