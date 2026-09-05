@@ -52,7 +52,7 @@ def test_both_hash_routers_open_it_and_a_bad_hash_falls_back_to_live():
         "the hash is routed in both places game/ is"
     body = _fn("openPbpHash")
     assert 'switchView("live")' in body
-    assert "openPbp(parts[0], parts[1])" in body
+    assert 'openPbp(parts[0], parts[1], "live")' in body, "a hash landing goes back to Live"
 
 
 def test_the_page_is_redrawn_where_the_game_page_is():
@@ -118,7 +118,9 @@ def test_a_missing_file_says_why_and_offers_the_way_back():
     body = _fn("renderPbpPage")
     assert "No play-by-play on file for this game" in body
     assert "up to eight games" in body
-    assert 'switchView("live")' in body
+    # The way back is wherever the reader came from (pinned in
+    # tests/test_pbp_doors.py); here, only that the page offers one.
+    assert "const way = pbpBack();" in body and "switchView(way.view)" in body
 
 
 def test_the_header_names_the_teams_in_the_leagues_own_vocabulary():

@@ -9167,6 +9167,11 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-tabs .active { padding: 6px 0; border-bottom: 2px solid var(--gold); font-weight: 700; }
 .pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
 .pbp-tab-door:hover { color: var(--text); }
+/* The doors between the game page and the play-by-play, and the card's
+   own hint that a live game opens it. */
+.gp-pbp-door { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-weight: 600; }
+.gp-pbp-door:hover { color: var(--text); }
+.status-badge.live .gc-pbp { margin-left: 6px; font-weight: 500; color: var(--text-mute); }
 .pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
   border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }

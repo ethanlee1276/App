@@ -4315,8 +4315,13 @@ function renderGames() {
   revealChildren(host);
   enableTilt(host);
   if (typeof syncStripArrows === "function") syncStripArrows();
+  // A game in progress opens its play-by-play (see openGameOrPlays),
+  // whose id lives in the league's fast scoreboard — asked for now, so
+  // the tap is instant rather than a fetch long.
+  if (games.some((g) => (g.live || {}).state === "live") && LIVE_FAST[state.sport])
+    pbpStripGames(state.sport).catch(() => {});
   host.querySelectorAll(".game-card[data-gid]").forEach((el) => {
-    const open = () => openGame(el.dataset.gid);
+    const open = () => openGameOrPlays(el.dataset.gid);
     el.addEventListener("click", open);
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
@@ -4537,7 +4542,11 @@ function gameCard(g) {
   let badge = "";
   if (isLive) {
     badge = `<div class="status-badge live"><span class="live-dot"></span>LIVE
-      <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span></div>`;
+      <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span>${
+      // The card's door leads to the play-by-play while the game is on
+      // (Ethan, 2026-09-05), and the badge says so rather than leaving
+      // the reader to find out by tapping.
+      LIVE_FAST[state.sport] ? `<span class="gc-pbp">play-by-play →</span>` : ""}</div>`;
   } else if (isFinal) {
     badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
   }
@@ -4594,7 +4603,7 @@ function gameCard(g) {
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
-             aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
+             aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
       <div class="stadium-wrap">${art}${
         // The photo slot (Ethan, 2026-08-11: wants the cards to look
         // exactly like his generated renders). A team-specific
@@ -7922,6 +7931,7 @@ function renderGamePage() {
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="gp-back">← Back to the board</button>
       <span class="pp-nav-right">
+        <span id="gp-pbp-slot"></span>
         ${shareBtn("game", gameSlug(g))}
         ${favBtn(g.away)}${favBtn(g.home)}
       </span>
@@ -8013,6 +8023,20 @@ function renderGamePage() {
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", () => switchView("recommended"));
+  // THE DOOR TO THE PLAY-BY-PLAY, for a game in progress or just over,
+  // drawn only once its id has been found in the league's fast
+  // scoreboard — a button that opens on "no game selected" is the fake
+  // button Ethan's rule is about. The page it opens knows to come back
+  // here.
+  if ((isLive || isFinal) && LIVE_FAST[state.sport]) {
+    const slot = document.getElementById("gp-pbp-slot");
+    pbpIdFor(g, state.sport).then((id) => {
+      if (!id || !slot || !slot.isConnected) return;
+      slot.innerHTML = `<button type="button" class="btn-quiet gp-pbp-door" id="gp-pbp-door">${
+        isLive ? `<span class="live-dot sm"></span>Watch play-by-play` : "Play-by-play"} →</button>`;
+      slot.firstElementChild.addEventListener("click", () => openPbp(state.sport, id, "game"));
+    }).catch(() => {});
+  }
   // "Go back to the board, find the toggle, come back" was three steps for
   // one intention. The button flips the same global toggle in place.
   // Two buttons, one intention: the props empty-slate's and the game
@@ -30947,11 +30971,68 @@ let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
 let _pbpShowAll = false;
 
-function openPbp(league, event) {
+function openPbp(league, event, from) {
   const next = { league: String(league || ""), event: String(event || "") };
   if (!state.pbp || state.pbp.event !== next.event) _pbpShowAll = false;
+  // WHERE THE READER CAME FROM, so Back returns there — the Live tab,
+  // the board, or the game page (Ethan, 2026-09-05: "seamless and easy
+  // and organized"). A chip in the page's own strip keeps the origin;
+  // a hash landing names Live, the page's own tab.
+  state.pbpFrom = from || (state.view !== "pbp" ? state.view : state.pbpFrom) || "live";
   state.pbp = next;
   switchView("pbp", true);
+}
+
+/* Where Back goes from the play-by-play, and what it says. The game
+   page only when there is still a game to go back to. */
+function pbpBack() {
+  const from = state.pbpFrom;
+  if (from === "recommended") return { view: "recommended", label: "← Back to the board" };
+  if (from === "game" && state.gameId) return { view: "game", label: "← Back to the game" };
+  return { view: "live", label: "← Back to Live" };
+}
+
+/* THE BOARD'S OWN DOOR INTO THE PAGE (Ethan, 2026-09-05: "if you click
+   on the live game from the recommended page it will take you to the
+   same play by play"). A game in progress opens its play-by-play — the
+   same page the Live tab opens, park and rail and all, with the game
+   page one tap from there. Anything else opens the game page: before
+   first pitch there is nothing to read, and after the last out the
+   picks and their grades are what the card promised. A live game whose
+   id cannot be found keeps the game page too, rather than opening on
+   "no game selected". */
+async function openGameOrPlays(gid) {
+  const g = findGame(gid);
+  if (g && (g.live || {}).state === "live") {
+    let id = "";
+    try { id = await pbpIdFor(g, state.sport); } catch (e) { id = ""; }
+    if (id) { openPbp(state.sport, id); return; }
+  }
+  openGame(gid);
+}
+
+/* THE PLAY-BY-PLAY ID OF A BOARD GAME. The board's rows do not all carry
+   one — the college build stamps `event_id`, baseball's slate keeps
+   `game_pk` on the object and not in the file, the NFL overlay carries
+   none — and the fast scoreboard already publishes it for every game
+   it lists, so stamping four builders would put the same fact in a
+   fifth place. The fast file is asked instead, matched the way the
+   Live tab matches its own cards: away@home, and on a doubleheader the
+   leg by first pitch, the board's `game_number` naming which. "" when
+   the league has no fast file or the game is not on it. */
+async function pbpIdFor(g, sport) {
+  if (!g) return "";
+  if (g.event_id || g.game_pk) return String(g.event_id || g.game_pk);
+  const rows = (await pbpStripGames(sport || state.sport))
+    .filter((r) => r.away === g.away && r.home === g.home);
+  if (!rows.length) return "";
+  let row = rows[0];
+  if (rows.length > 1) {
+    const byPitch = rows.slice().sort((a, b) =>
+      String((a.live || {}).start_time || "").localeCompare(String((b.live || {}).start_time || "")));
+    row = byPitch[(g.game_number || 1) - 1] || byPitch[0];
+  }
+  return (row.event_id || row.game_pk) ? String(row.event_id || row.game_pk) : "";
 }
 
 function openPbpHash(rest) {
@@ -30959,7 +31040,7 @@ function openPbpHash(rest) {
     try { return decodeURIComponent(x); } catch (e) { return x; }
   });
   if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
-  openPbp(parts[0], parts[1]);
+  openPbp(parts[0], parts[1], "live");
 }
 
 /* Clock for an ISO instant — "5:14 PM" — or "". Through tzTime, so a
@@ -31286,10 +31367,11 @@ async function renderPbpPage() {
   if (!host) return;
   if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
   const { league, event } = state.pbp || {};
-  const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">← Back to Live</button>`;
+  const way = pbpBack();
+  const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">${way.label}</button>`;
   const wire = () => {
     const b = document.getElementById("pbp-back");
-    if (b) b.addEventListener("click", () => switchView("live"));
+    if (b) b.addEventListener("click", () => switchView(way.view));
     host.querySelectorAll(".pbp-chip.door").forEach((el) =>
       el.addEventListener("click", () => openPbp(league, el.dataset.pbp)));
     const m = document.getElementById("pbp-more");
@@ -31299,7 +31381,7 @@ async function renderPbpPage() {
   };
   if (!league || !event) {
     host.innerHTML = `${emptySlate("stadium", "No game selected",
-      "Open a game from the Live tab to read its play-by-play.")}${back}`;
+      "Open a game in progress from the Live tab or the board to read its play-by-play.")}${back}`;
     wire();
     return;
   }
