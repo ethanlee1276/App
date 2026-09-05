@@ -278,6 +278,17 @@ FREE_FILES = (
     # the deploy. A registry is only as good as the discipline of adding to
     # it in the same commit as the thing it registers.
     "live_mlb.json",
+    # THE FOUR THE MLB LINE ABOVE WARNED ABOUT, and its warning came true
+    # word for word: livescore_build.py shipped on 2026-09-04 without
+    # these, the dev container never runs the fast loop so the suite
+    # stayed green, and the droplet — where the loop had already written
+    # all four — refused the deploy with "built but unregistered". Free
+    # for the same reason as live_mlb.json: scores and game state only,
+    # nothing priced (tests/test_live_scoreboards.py asserts that rather
+    # than taking this sentence on trust). The same file now asserts
+    # every league the builder writes is registered HERE, so the next
+    # league added cannot repeat this without the sandbox suite saying so.
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
@@ -322,6 +333,7 @@ KNOWN_BOARDS = (
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
     "streak.json", "bookreport.json", "ufc_live.json", "live_mlb.json",
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",

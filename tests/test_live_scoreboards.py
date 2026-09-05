@@ -206,6 +206,25 @@ def test_no_prices_ever_reach_this_file():
         assert banned not in flat, (banned, flat)
 
 
+# --- the registry ------------------------------------------------------------
+def test_every_scoreboard_the_builder_writes_is_registered_with_the_gate():
+    """THE ONE THAT ONLY THE DROPLET COULD CATCH, until now. engine/gate.py
+    keeps a hand-listed registry of every board the site can build; a
+    file on disk it has never heard of fails `test_gate` — but only on a
+    machine that has BUILT the file, and the dev container never runs the
+    fast loop. live_mlb.json shipped that way once (its registry comment
+    tells the story); live_{nfl,cfb,nba,wnba}.json shipped the same way
+    on 2026-09-04 and cost a three-hour deploy gate. Derived from the
+    builder's own league table so the next league cannot repeat it."""
+    from engine import gate
+    for lg in L.ESPN_SCOREBOARD:
+        name = f"live_{lg}.json"
+        assert name in gate.KNOWN_BOARDS, f"{name} is built and unregistered"
+        # Free, like live_mlb.json: an unknown board is treated as gated,
+        # which would put a public scoreboard behind the paywall.
+        assert name in gate.FREE_FILES, f"{name} is registered but gated"
+
+
 # --- the wiring -------------------------------------------------------------
 def _app():
     return (ROOT / "web" / "js" / "app.js").read_text()

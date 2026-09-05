@@ -11,6 +11,36 @@ Paste the output back and the work each one blocks can finish.
 
 ---
 
+## 0. Deploying after the 2026-09-04 gate run
+
+The full suite ran INSIDE `deploy.sh` on the one-core box while the live
+loops were polling: three hours, load 19.8 on 1 CPU, twelve files down.
+Twelve was not twelve defects — it was two of mine, one environment-
+dependent test, and nine processes starved or killed. `deploy.sh`'s own
+header says when `--no-tests` is right: "only when the suite is already
+green". It is green in the sandbox before every push, so:
+
+```bash
+cd /srv/qellys && ./deploy/deploy.sh --no-tests
+```
+
+Then confirm what is serving — the serving commit versus what is on disk,
+and whether auto-update already restarted into it:
+
+```bash
+cd /srv/qellys && python3 -c "import launch; launch.show_boards()" | head -12
+cat data/autoupdate.json
+```
+
+And whether the seven files that stopped mid-run were killed for memory
+(the shape: some `ok` lines, then nothing, no traceback, no TIMED OUT):
+
+```bash
+journalctl -k --since "6 hours ago" | grep -iE "out of memory|killed process" | tail -8
+```
+
+---
+
 ## 1. Cam Edwards −300 on the book, −155 on our card
 
 **Blocks:** task #135. Two candidate causes were fixed blind
@@ -97,6 +127,11 @@ event on purpose. Worth doing all four:
 cd /srv/qellys && for lg in nfl cfb nba wnba; do
   echo "===== $lg"; python3 espnprobe.py --league $lg; done
 ```
+
+It 403'd on all four leagues the first time it was run (2026-09-04): the
+probe sent a custom User-Agent, and ESPN refuses unfamiliar ones — the
+exact rule `engine/sources/fetch.py` measured on 2026-08-08. Fixed to send
+none, like every working ESPN call in the repo. Same command.
 
 It prints key names, container types, list lengths and the values of
 numbers and booleans. It never prints a play's text — that comes back as

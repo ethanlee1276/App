@@ -139,6 +139,31 @@ def test_an_empty_scoreboard_is_a_named_exit_not_an_index_error():
         P._get = was
 
 
+def test_the_probe_sends_no_custom_user_agent():
+    """403 on all four leagues from the droplet, 2026-09-04. fetch.py
+    measured the same thing a month earlier: a custom string trips ESPN,
+    urllib's own default does not. The probe must do what every working
+    ESPN call here does — send nothing."""
+    import ast
+    import inspect
+    import textwrap
+    # EXECUTABLE STATEMENTS ONLY. The first draft read the raw source and
+    # went red on the docstring that explains why the header is absent —
+    # the fourth self-matching needle this session. A structural claim
+    # about what a function DOES is not answerable by what is written
+    # about it; `ast.unparse` drops comments and the docstring is dropped
+    # by hand, so the words below can only appear by being code.
+    tree = ast.parse(textwrap.dedent(inspect.getsource(P._get)))
+    body = tree.body[0].body
+    if (body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    code = "\n".join(ast.unparse(st) for st in body)
+    assert "headers" not in code, code
+    assert "Request(url)" in code, code
+
+
 def test_no_test_in_this_file_can_reach_the_network():
     """Every test above stubs `_get`. The guard is built from pieces so
     it cannot match its own literal."""

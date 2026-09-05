@@ -33,6 +33,7 @@ Run directly: `python3 tests/test_likely_started.py`
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -83,6 +84,15 @@ for (const [name, row, want] of cases) {
 }
 console.log(bad.length ? "FAIL " + bad.join(", ") : "OK");
 """
+    # THE DROPLET HAS NO NODE. Every other file here that executes
+    # JavaScript checks first and says SKIP; this one raised
+    # FileNotFoundError into the deploy gate on 2026-09-04. Skipped per
+    # test rather than per file, because the five read-only assertions
+    # around it are exactly the ones worth running where node is absent.
+    if not shutil.which("node"):
+        print("  SKIP node is not installed; this test executes "
+              "likelyStarted() rather than reading it. `apt install -y nodejs`")
+        return
     out = subprocess.run(["node", "-e", prog], capture_output=True, text=True,
                          timeout=60)
     assert out.returncode == 0, out.stderr[-400:]

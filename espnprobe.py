@@ -102,9 +102,19 @@ def _scalar(v) -> str:
 
 
 def _get(url: str) -> dict:
+    """GET JSON with NO User-Agent header, and that is the whole point.
+
+    The first cut sent "Mozilla/5.0 (qellys probe)" and ESPN answered 403
+    on all four leagues from the droplet — the exact trap
+    `engine/sources/fetch.py` documents beside DEFAULT_AGENT: "Some hosts
+    reject an unfamiliar User-Agent outright... Measured 2026-08-08:
+    User-Agent: qellys-book/0.1 -> HTTP 403; urllib's default -> 200."
+    Every working ESPN call in this repo sends no header and lets urllib
+    identify itself. Not a disguise; the custom string was simply
+    unfamiliar enough to trip a rule.
+    """
     import urllib.request
-    req = urllib.request.Request(
-        url, headers={"User-Agent": "Mozilla/5.0 (qellys probe)"})
+    req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
