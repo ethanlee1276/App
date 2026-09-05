@@ -7832,8 +7832,11 @@ function renderPropPage() {
         ${shareBtn("pick", pickSlug(r))}
         <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
           >Share card</button>
+        <button class="btn ghost" data-explain aria-controls="pp-explain"
+          >Explain</button>
       </div>
       <div id="fr-send-slot"></div>
+      <div id="pp-explain" class="pp-explain" hidden aria-live="polite"></div>
       <div class="metrics">
         ${proj}
         ${r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
@@ -28836,6 +28839,68 @@ function sendPanelHTML(r) {
         >${escapeHtml(f.name)}</button>`).join("")}</div>
   </div>`;
 }
+
+/* ============================================================
+   Explain this pick — the card read back in plain English
+   ============================================================
+   Ethan, 2026-09-05: "a plain English explainer per pick". Behind a
+   tap on the prop page, never drawn unasked: the answer is written by
+   a language model from the numbers already on the card (engine/
+   explainer) and cached per build on the server, so the second reader
+   of a pick gets it at once. Every state is a sentence — writing,
+   written, needs a subscription, not switched on, could not answer —
+   because a box that stays empty is the failure this site keeps
+   finding (the thirteen silent days of the team-form panel). */
+function boardNameFor(meta) {
+  return String((meta || {}).fallback || "").replace(/^data\//, "");
+}
+
+function explainHTML(text) {
+  const paras = String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return `${paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}
+    <div class="pp-explain-note">Written by an AI from the numbers on this card and
+      nothing else. It is a reading of the card, not a second opinion.</div>`;
+}
+
+async function explainPick() {
+  const host = document.getElementById("pp-explain");
+  if (!host) return;
+  if (!host.hidden && host.dataset.done) { host.hidden = true; return; }   // toggle shut
+  const r = findProp(state.propId);
+  const meta = SPORT_META[state.sport];
+  if (!r || !meta) return;
+  host.hidden = false;
+  host.dataset.done = "";
+  host.innerHTML = `<p class="pp-explain-wait">Writing the explanation…</p>`;
+  const url = `/api/explain?board=${encodeURIComponent(boardNameFor(meta))}&pick=${
+    encodeURIComponent(propId(r))}`;
+  let msg = "The explainer could not answer just now. Try again in a moment.";
+  try {
+    const res = await boardFetch(url, { cache: "no-store" });
+    let body = {};
+    try { body = await res.json(); } catch (e) { body = {}; }
+    if (res.ok && body.text) {
+      if (findProp(state.propId) !== r) return;          // the page moved on
+      host.innerHTML = explainHTML(body.text);
+      host.dataset.done = "1";
+      return;
+    }
+    if (res.status === 401) msg = "Sign in with a subscription to read the explainer.";
+    else if (res.status === 402) msg = "The explainer is part of the subscription.";
+    else if (res.status === 404) msg = "That pick is no longer on tonight’s board.";
+    else if (res.status === 429) msg = "Too many explanations at once — give it a minute.";
+    else if (res.status === 503 && body.configured === false) msg = "The explainer is not switched on for this site yet.";
+  } catch (e) { /* the sentence below is the honest answer */ }
+  host.innerHTML = `<p class="pp-explain-wait">${escapeHtml(msg)}</p>`;
+  host.dataset.done = "1";
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-explain]");
+  if (!b) return;
+  e.preventDefault();
+  explainPick();
+});
 
 document.addEventListener("click", async (e) => {
   const open = e.target.closest && e.target.closest("[data-send-pick]");

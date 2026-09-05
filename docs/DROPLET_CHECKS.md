@@ -509,3 +509,28 @@ for sp in ('cfb', 'nfl'):
 * NFL `ABSENT` before the 10th is correct; the page shows the wait and
   the 2025 model profile instead. After Week 1's finals ingest it fills
   in on its own.
+
+
+## 9. The explainer, once its package and keys are on the box
+
+Ethan, 2026-09-05: "a plain English explainer per pick." Shipped the
+same day; nothing here can exercise it (no key, no package on the
+sandbox's system python). After docs/DEPLOY.md's install step:
+
+```bash
+sudo -u qellys python3 -c "import anthropic; print('sdk', anthropic.__version__)"
+sudo ./deploy/setenv.sh --show | grep -E "QB_EXPLAIN_MODEL|ANTHROPIC_API_KEY"
+# signed in as a subscriber, in the browser: open any prop page, tap
+# Explain. Then on the box:
+python3 -c "
+import json; d = json.load(open('/srv/qellys/data/explain_cache.json'))
+print(len(d), 'cached answers'); k = next(iter(d)); print(k.split(chr(9))[:2]); print(d[k]['text'][:300])"
+```
+
+* "not switched on" on the page with both values set means the service
+  did not get them — `systemctl restart qellys` after setenv.
+* A 503 "explainer unavailable" with a detail naming `AuthenticationError`
+  is the key; `NotFoundError` is the model id; `APIConnectionError` is
+  the box's outbound HTTPS.
+* A second tap on the same pick must come back at once (`cached: true`
+  in the network tab) and the cache file must not grow.

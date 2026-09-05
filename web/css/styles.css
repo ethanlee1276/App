@@ -2934,6 +2934,15 @@ select.calc-in { width: auto; font-weight: 600; }
   padding: 12px 4px 4px; min-height: 44px; white-space: nowrap; }
 .pp-actions .btn + .btn { border-left: var(--hairline) solid var(--border-soft); }
 .pp-actions .btn:hover { color: var(--brand); background: none; }
+/* The explainer, under the action strip: a reading of the card in
+   plain words, drawn only after the tap (2026-09-05). */
+.pp-explain { margin-top: 12px; padding: 12px 14px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); }
+.pp-explain p { margin: 0 0 8px; line-height: var(--lh-body); font-size: var(--fs-md); }
+.pp-explain p:last-of-type { margin-bottom: 0; }
+.pp-explain .pp-explain-wait { color: var(--text-dim); }
+.pp-explain-note { margin-top: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-snug); }
 /* On a player card it rides in the head beside the grade, where there is
    no room for a full-size control. */
 .profile-head .qb-share { align-self: flex-start; font-size: var(--fs-sm); }
