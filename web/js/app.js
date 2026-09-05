@@ -5471,6 +5471,29 @@ function trendChip(r) {
    listed apart, never mixed into the ranking. */
 const payoutOf = (o) => (o > 0 ? o / 100 : 100 / Math.abs(o));
 
+/* The same outlier rule the shops apply (engine/odds.OUTLIER_GAP): a
+   price whose implied probability sits more than ten points under the
+   median of the OTHER books at the same line is off the field — a
+   stale or mis-posted quote — and the strip must not crown it "best".
+   Leave-one-out, three real prices or nothing is flagged. Pure. */
+const OUTLIER_GAP = 0.10;
+function impliedOf(odds) {
+  const o = Number(odds);
+  return o < 0 ? (-o) / ((-o) + 100) : 100 / (o + 100);
+}
+function fieldOutliers(oddsList) {
+  const probs = (oddsList || []).map((o) =>
+    (Number.isFinite(Number(o)) && Number(o) !== 0 && !(Number(o) > -100 && Number(o) < 100)) ? impliedOf(o) : null);
+  if (probs.filter((p) => p != null).length < 3) return probs.map(() => false);
+  return probs.map((p, i) => {
+    if (p == null) return false;
+    const others = probs.filter((q, j) => j !== i && q != null).sort((a, b) => a - b);
+    const m = others.length;
+    const med = m % 2 ? others[(m - 1) / 2] : (others[m / 2 - 1] + others[m / 2]) / 2;
+    return med - p > OUTLIER_GAP;
+  });
+}
+
 function quotesForSide(r) {
   const side = String((r || {}).side || "OVER").toUpperCase();
   const line = Number((r || {}).line);
@@ -5482,10 +5505,14 @@ function quotesForSide(r) {
     const q = { book: String(ln.book), line: Number(ln.line), odds: Number(odds) };
     (Number.isFinite(line) && Number(ln.line) === line ? same : other).push(q);
   });
-  same.sort((x, y) => payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
+  fieldOutliers(same.map((q) => q.odds)).forEach((bad, i) => { same[i].outlier = bad; });
+  // Off-the-field prices sort LAST, so the first quote is the shop's own answer.
+  same.sort((x, y) => (x.outlier ? 1 : 0) - (y.outlier ? 1 : 0)
+    || payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
   other.sort((x, y) => (side === "UNDER" ? y.line - x.line : x.line - y.line)
     || payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
-  return { side, line, same, other, best: same[0] || null };
+  const best = same.find((q) => !q.outlier) || same[0] || null;
+  return { side, line, same, other, best };
 }
 
 /* The card's strip: the pick's side at every book quoting the pick's
@@ -5494,9 +5521,10 @@ function quotesForSide(r) {
 function booksStripHTML(r) {
   const q = quotesForSide(r);
   if (q.same.length + q.other.length < 2) return "";
-  const atLine = q.same.map((x, i) =>
-    `<span class="bs-q${i === 0 ? " best" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}">${
-      escapeHtml(x.book)} <b>${american(x.odds)}</b></span>`).join("");
+  const atLine = q.same.map((x) =>
+    `<span class="bs-q${x === q.best ? " best" : ""}${x.outlier ? " off" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}${
+      x.outlier ? " · off the field: more than ten points under the other books, not shopped" : ""}">${
+      escapeHtml(x.book)} <b>${american(x.odds)}</b>${x.outlier ? " <i>off the field</i>" : ""}</span>`).join("");
   const others = q.other.length
     ? `<span class="bs-more" title="${escapeAttr(q.other.map((x) => `${x.book} ${x.line} ${american(x.odds)}`).join(" · "))}">+${
         q.other.length} at other line${q.other.length === 1 ? "" : "s"}</span>` : "";
@@ -5510,15 +5538,15 @@ function booksStripHTML(r) {
 function booksTableHTML(r) {
   const q = quotesForSide(r);
   if (q.same.length + q.other.length < 2) return "";
-  const row = (x, best) => `<tr class="${best ? "best" : ""}"><td>${escapeHtml(x.book)}</td>
+  const row = (x, best) => `<tr class="${best ? "best" : ""}${x.outlier ? " off" : ""}"><td>${escapeHtml(x.book)}</td>
       <td>${escapeHtml(q.side)} ${x.line}</td><td class="num">${american(x.odds)}</td>
-      <td>${best ? "best price" : ""}</td></tr>`;
+      <td>${best ? "best price" : x.outlier ? "off the field — not shopped" : ""}</td></tr>`;
   const asOf = ((state.data || {}).odds_status || {}).at;
   return `<div class="section-title minor">Shop the price
       <span class="sub">— ${escapeHtml(q.side)} ${q.line} at every book we saw${
         asOf ? `, from the ${escapeHtml(asOf)} odds pull` : ""}; confirm at the book before betting.</span></div>
     <div class="card pp-books"><table class="agate"><thead><tr><th>Book</th><th>Bet</th><th class="num">Price</th><th></th></tr></thead>
-      <tbody>${q.same.map((x, i) => row(x, i === 0)).join("")}${
+      <tbody>${q.same.map((x) => row(x, x === q.best)).join("")}${
         q.other.length ? `<tr class="bs-sep"><td colspan="4">At another line — a different bet</td></tr>${
           q.other.map((x) => row(x, false)).join("")}` : ""}</tbody></table></div>`;
 }

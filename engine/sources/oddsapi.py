@@ -966,12 +966,34 @@ def best_scorer_price(quotes: list[dict]) -> dict | None:
     what to do with it. Returning None there would drop the player, and
     a dropped player reads as a market nobody quoted.
     """
-    from ..odds import is_quotable, is_sharp_book
+    from ..odds import (OUTLIER_GAP, american_to_prob, field_outliers,
+                        is_quotable, is_sharp_book)
     clean = [q for q in (quotes or []) if is_quotable(q.get("yes_odds"))]
     if not clean:
         return None
     bettable = [q for q in clean if not is_sharp_book(q.get("book"))]
-    return max(bettable or clean, key=lambda q: q["yes_odds"])
+    field = bettable or clean
+    # AND A PRICE OFF THE FIELD IS NOT SHOPPED — the third refusal with
+    # the same shape, and the one Ethan's report was actually about
+    # (odds.OUTLIER_GAP: Hard Rock -155 under three books at -260 to
+    # -280). The refused quotes ride along on the winner as `refused`,
+    # with the gap in points, so the card can say which book was left
+    # out and why rather than silently printing a different number.
+    flags = field_outliers([q["yes_odds"] for q in field])
+    kept = [q for q, bad in zip(field, flags) if not bad]
+    refused = []
+    for q, bad in zip(field, flags):
+        if not bad:
+            continue
+        others = sorted(american_to_prob(int(x["yes_odds"])) for x in field if x is not q)
+        m = len(others)
+        med = others[m // 2] if m % 2 else (others[m // 2 - 1] + others[m // 2]) / 2.0
+        refused.append({"book": q.get("book", ""), "yes_odds": int(q["yes_odds"]),
+                        "gap_pts": round(100.0 * (med - american_to_prob(int(q["yes_odds"]))), 1)})
+    best = max(kept or field, key=lambda q: q["yes_odds"])
+    if refused:
+        best = {**best, "refused": refused}
+    return best
 
 
 def _modal_line(points: list[float]):

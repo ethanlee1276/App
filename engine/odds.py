@@ -188,6 +188,53 @@ def consensus_fair(lines: list[SportsbookLine], line: float | None = None
 #: a corrupt price.
 DEAD_ZONE = (-100, 100)
 
+#: How far one book's implied probability may sit BELOW the median of
+#: the OTHER books quoting the same bet before its price is not shopped,
+#: in probability points. Measured, not chosen: Ethan, 2026-09-04, Cam
+#: Edwards to score — Hard Rock -155 (60.8%) against FanDuel -260,
+#: DraftKings -270 and Caesars -280 (the others' median 73.0%), a gap of
+#: 12.2 points, read from the droplet's own cached payload on 09-05. An
+#: ordinary shopping spread between books on a favourite is 2-5 points;
+#: a price this far off the field is a stale or mis-posted quote at one
+#: book, and the shop selected for it exactly the way it selects for a
+#: dead-zone digit: the outlier is, by construction, the best number.
+OUTLIER_GAP = 0.10
+
+#: Fewer books than this is not a field to be an outlier from.
+OUTLIER_MIN_BOOKS = 3
+
+
+def field_outliers(odds_list) -> list[bool]:
+    """One flag per quote: is this price an outlier against the others?
+
+    Leave-one-out: each quote is measured against the MEDIAN implied
+    probability of the other quotable prices, so the outlier itself
+    never drags the field toward it. A quote that is not a real price
+    (``is_quotable`` False, the unquoted-side 0 included) is never an
+    outlier and never part of anyone else's field. With fewer than
+    ``OUTLIER_MIN_BOOKS`` quotable prices nothing is flagged: two books
+    that disagree are a disagreement, not a consensus and a stray.
+    """
+    probs = []
+    for o in odds_list:
+        try:
+            probs.append(american_to_prob(int(o)) if is_quotable(o) else None)
+        except (TypeError, ValueError):
+            probs.append(None)
+    real = [p for p in probs if p is not None]
+    if len(real) < OUTLIER_MIN_BOOKS:
+        return [False] * len(probs)
+    out = []
+    for i, p in enumerate(probs):
+        if p is None:
+            out.append(False)
+            continue
+        others = sorted(q for j, q in enumerate(probs) if j != i and q is not None)
+        m = len(others)
+        med = others[m // 2] if m % 2 else (others[m // 2 - 1] + others[m // 2]) / 2.0
+        out.append(med - p > OUTLIER_GAP)
+    return out
+
 
 def is_quotable(odds) -> bool:
     """Is this a price a book could actually have posted?
@@ -251,6 +298,18 @@ def is_sharp_book(book: str) -> bool:
     return any(s.lower().replace(" ", "") in b for s in SHARP_BOOKS if s)
 
 
+def _without_outliers(lines, price_of):
+    """The lines minus the outliers, judged within each line value."""
+    keep = []
+    by_line: dict = {}
+    for ln in lines:
+        by_line.setdefault(ln.line, []).append(ln)
+    for group in by_line.values():
+        flags = field_outliers([price_of(ln) for ln in group])
+        keep.extend(ln for ln, bad in zip(group, flags) if not bad)
+    return keep
+
+
 def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly OVER line across books.
 
@@ -288,7 +347,15 @@ def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> Be
     # instead would turn a bad price into an empty board, which is the
     # failure that reads as an ordinary result.
     bettable = [ln for ln in clean if not is_sharp_book(ln.book)]
-    for ln in (bettable or clean or lines):
+    # AND A PRICE OFF THE FIELD IS NOT SHOPPED, for the third time with
+    # the same shape (see OUTLIER_GAP): among the books quoting the SAME
+    # line — a lower line carries a worse price on purpose and is not
+    # comparable — a quote sitting further under the others' median than
+    # the gap is left out of the shop. Falls back to the field when the
+    # rule would leave nothing, like the two refusals above it.
+    field = bettable or clean or lines
+    field = _without_outliers(field, lambda ln: ln.over_odds) or field
+    for ln in field:
         fair_over, _ = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.over_odds, fair_over)
         if best is None:
@@ -310,7 +377,9 @@ def best_under_line(lines: list[SportsbookLine], hold: float | None = None) -> B
     clean = [ln for ln in lines if shoppable(ln.under_odds)]
     # The same refusal as the over side; see `best_over_line`.
     bettable = [ln for ln in clean if not is_sharp_book(ln.book)]
-    for ln in (bettable or clean or lines):
+    field = bettable or clean or lines
+    field = _without_outliers(field, lambda ln: ln.under_odds) or field
+    for ln in field:
         _, fair_under = devig_two_way(ln.over_odds, ln.under_odds, hold)
         cand = BestLine(ln.book, ln.line, ln.under_odds, fair_under)
         if best is None:

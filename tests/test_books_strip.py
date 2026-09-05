@@ -44,6 +44,9 @@ def _node(js):
       {_fn("escapeHtml")}
       const escapeAttr = escapeHtml;
       {APP[i:APP.index(chr(10), i)]}
+      const OUTLIER_GAP = 0.10;
+      {_fn("impliedOf")}
+      {_fn("fieldOutliers")}
       {_fn("quotesForSide")}
       {_fn("booksStripHTML")}
       {_fn("booksTableHTML")}

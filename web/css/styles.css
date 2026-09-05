@@ -6796,6 +6796,10 @@ body.has-rail .shell {
 /* Odds shopping (2026-09-05): the pick's side at every book, best first. */
 .bs-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px;
   font-size: var(--fs-xs); color: var(--text-mute); }
+/* A price off the field (engine/odds.OUTLIER_GAP): shown, never crowned. */
+.bs-q.off { opacity: .6; text-decoration: line-through; }
+.bs-q.off i { font-style: normal; text-decoration: none; color: var(--text-mute); }
+.pp-books tr.off td { opacity: .6; }
 .bs-t { margin-right: 2px; }
 .bs-q { padding: 2px 7px; border-radius: var(--radius); background: var(--panel-3); color: var(--text); }
 .bs-q.best { border: var(--hairline) solid var(--brand); }
