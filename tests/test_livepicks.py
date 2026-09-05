@@ -220,7 +220,13 @@ def test_the_page_does_not_call_a_future_bet_older():
     bet(s) awaiting results", which is wrong in the one direction that
     makes someone go looking for a settle that never ran."""
     js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
-    i = js.index("open bet(s) on today\u2019s card")
+    # RE-ANCHORED 2026-09-05: the tracker is two panels now and this
+    # footer belongs to the edge one, so the phrase gained a word. The
+    # needle is asserted before it is used — a bare `.index` on a moved
+    # anchor raises ValueError into a runner that catches nothing.
+    needle = "open edge bet(s) on today\u2019s card"
+    assert needle in js, "the edge panel's footer moved"
+    i = js.index(needle)
     line = js[i:i + 400]
     assert "older open bet" not in line
     assert "other boards" in line

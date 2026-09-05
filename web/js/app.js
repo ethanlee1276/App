@@ -3309,17 +3309,17 @@ function renderLivePicks() {
         market now <b style="color:${better ? "var(--good)" : "var(--bad)"}">${theirs}</b>
         · you have ${mine} · <span style="opacity:.85">live line, no forecast</span></span>`;
   };
-  const nLive = rows.filter((r) => r.phase === "live").length;
-
-  host.innerHTML = `
-    <div class="section-title">${nLive
-        ? `<span style="color:var(--bad)">${icon('dot')}</span>`
-        : `<span style="color:var(--brand)">${icon('dot')}</span>`} Open bets
-      <span class="sub">— every journaled bet on today’s card: live with real-time progress,
-      finished awaiting the official settle, or waiting on first pitch. Never new in-play
-      bets — everything here was placed pre-game.</span></div>
-    <div class="card" style="padding:0;border-left:3px solid ${nLive ? "var(--bad)" : "var(--brand)"}">
-      ${/* ---- AN OPEN BET IS A DOOR TOO -------------------------------
+  /* TWO PANELS, NOT ONE LIST. Ethan, 2026-09-05: "the most likley bets
+     should also show in the live page, we need to have two seperate
+     pages in the live page, one for edge bets, and one for most likley
+     bets." Most Likely rows journal with category='likely' and the
+     tracker now selects them; they are a different product from an
+     edge bet — a read on who hits, flat-staked, no dollar exposure — so
+     mixing the two in one list would make the count on the edge panel
+     wrong and the likelihood rows look like bets we sized. */
+  const edge = rows.filter((r) => r.category !== "likely");
+  const likely = rows.filter((r) => r.category === "likely");
+  /* ---- AN OPEN BET IS A DOOR TOO -------------------------------
             Ethan, 2026-08-23, with the list circled: "I should be able
             too click on these bets and it pulls up the bar graphs of the
             stats and shit just like every other player like cmon man."
@@ -3342,8 +3342,8 @@ function renderLivePicks() {
 
             Nothing new was needed. It is used here rather than
             reimplemented so the next list to grow rows like these has one
-            function to reach for instead of a fourth variation. */""}
-      ${rows.map((r) => ((door) => `
+            function to reach for instead of a fourth variation. */
+  const rowHTML = (r) => ((door) => `
         <div class="${door ? "openable" : ""}"${door}
              style="display:flex;gap:12px;align-items:center;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
@@ -3353,10 +3353,10 @@ function renderLivePicks() {
           <span style="flex:1;min-width:0">
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
-              r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
+              r.category !== "likely" && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
-            ${offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
+            ${r.category !== "likely" && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
@@ -3365,16 +3365,39 @@ function renderLivePicks() {
             ${betTrack(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
-        </div>`)(ridingAttrs(r))).join("")}
-      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
-        ${rows.length} open bet(s) on today’s card${elsewhere
+        </div>`)(ridingAttrs(r));
+  const panel = (list, title, sub, empty, foot) => {
+    const n = list.filter((r) => r.phase === "live").length;
+    return `
+    <div class="section-title">${n
+        ? `<span style="color:var(--bad)">${icon('dot')}</span>`
+        : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title}
+      <span class="sub">— ${sub}</span></div>
+    <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
+      ${list.length ? list.map(rowHTML).join("")
+        : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${empty}</p>`}
+      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">${foot}</p>
+    </div>`;
+  };
+  host.innerHTML = panel(edge, "Open edge bets",
+    `every journaled edge bet on today’s card: live with real-time progress,
+      finished awaiting the official settle, or waiting on first pitch. Never new in-play
+      bets — everything here was placed pre-game.`,
+    "No open edge bets on today’s card.",
+    `${edge.length} open edge bet(s) on today’s card${elsewhere
           ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
             + ` This tab tracks THIS league’s card; the Record page counts them all`
           : ""}. A bet journals the moment it’s recommended and stays here until it
         settles — even if the pick later drops off Tonight’s Picks because prices moved.
         Stat lines update with the board’s refresh cycle; every bet settles
-        officially against ingested final results overnight.</p>
-    </div>`;
+        officially against ingested final results overnight.`)
+  + panel(likely, "Open Most Likely bets",
+    `the likelihood board’s rows, tracked the same way — a read on who hits,
+      journaled at a flat stake with no dollar exposure, graded on its own book.`,
+    "No open Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.",
+    `${likely.length} Most Likely row(s) on today’s card. These are ranked by measured
+        likelihood, not by edge against the price, and settle on the likelihood book
+        the Record page keeps separately.`);
 }
 
 /* ============================================================
@@ -30935,12 +30958,22 @@ async function renderSweatZone() {
       <div class="sw-note">legs joined as a product — the live legs are
         conditioned on their own games, not re-correlated</div>
     </div>`;
+  /* SPLIT THE SAME WAY THE TRACKER BELOW IS (Ethan, 2026-09-05): edge
+     bets and Most Likely rows are different products and get different
+     headers, even though the number that moves is computed identically. */
+  const edgePicks = picks.filter((p) => p.category !== "likely");
+  const likelyPicks = picks.filter((p) => p.category === "likely");
   host.innerHTML = `
     <div class="section-title">The sweat
-      <span class="sub">— every journaled bet with its live win chance, from what’s
+      <span class="sub">— every journaled edge bet with its live win chance, from what’s
       banked against what’s left to bank it in. Updates every few pitches.</span></div>
-    ${picks.length ? `<div class="card sw-list">${picks.map(row).join("")}</div>` : ""}
-    ${parlays.map(ticket).join("")}`;
+    ${edgePicks.length ? `<div class="card sw-list">${edgePicks.map(row).join("")}</div>` : ""}
+    ${parlays.map(ticket).join("")}
+    ${likelyPicks.length ? `
+    <div class="section-title">The sweat — Most Likely
+      <span class="sub">— the likelihood board’s rows with the same live number, tracked
+      separately: flat stake, no dollar exposure, its own book on the Record page.</span></div>
+    <div class="card sw-list">${likelyPicks.map(row).join("")}</div>` : ""}`;
 }
 
 async function renderLiveBoard() {

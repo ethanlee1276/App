@@ -239,8 +239,14 @@ def build(today: str | None = None, quiet: bool = True,
     conn = ledger.connect()
     cols = ("player, market, side, line, odds, stake_units, date, "
             "category, hit_prob")
+    # 'likely' rides the same clock since 2026-09-05 (Ethan: two panels on
+    # the Live page, edge and Most Likely). A likely prop finds its
+    # projection the way every row does — `assemble_live_picks` keys the
+    # recommendation map on player and market, and every analyzed prop is
+    # on that list whether or not it was recommended. The page splits the
+    # two by the `category` every row already carries.
     where = ("status='open' AND sport='mlb' "
-             "AND category IN ('main','longshot')")
+             "AND category IN ('main','longshot','likely')")
     dates = (day,
              (_dt.date.fromisoformat(day) - _dt.timedelta(days=1)).isoformat(),
              (_dt.date.fromisoformat(day) + _dt.timedelta(days=1)).isoformat())

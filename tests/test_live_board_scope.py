@@ -139,7 +139,13 @@ def test_the_leftover_count_is_everything_not_shown():
     """It used to be 'open bets whose date is not today', which double-counts
     the moment a neighbouring day's bet gets shown."""
     b = _tracker_block()
-    assert "_all_open - len(rows)" in b
+    # EDGE ROWS ONLY on the shown side since 2026-09-05, when the tracker
+    # began selecting category='likely' too. `_all_open` counts edge bets
+    # alone, so subtracting every shown row would understate "open on
+    # other boards" by exactly the number of likelihood rows on the card.
+    assert "_all_open - _edge_shown" in b
+    assert 'r.get("category") != "likely"' in b
+    assert "_all_open - len(rows)" not in b, "the likely rows are subtracted again"
     assert "AND date != ?" not in b
 
 
