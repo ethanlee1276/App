@@ -125,6 +125,29 @@ def test_with_nothing_live_it_still_answers_and_says_the_state():
         P._get = was
 
 
+def test_a_finished_game_can_be_asked_for_and_the_date_reaches_the_url():
+    """The WNBA probe ran pre-game three times running; a final keeps its
+    play-by-play, so `--prefer post --date YYYYMMDD` answers the shape
+    question without anyone waiting for a tip-off."""
+    seen = {}
+    board = {"events": [
+        {"id": "1", "status": {"type": {"state": "pre"}}},
+        {"id": "2", "status": {"type": {"state": "post"}}}]}
+
+    def fake(url):
+        seen["url"] = url
+        return board
+    was = P._get
+    P._get = fake
+    try:
+        assert P.pick_event("wnba", "post", "20260904") == ("2", "post")
+        assert seen["url"].endswith("/basketball/wnba/scoreboard?dates=20260904")
+        assert P.pick_event("wnba") == ("1", "pre"), "the default still prefers live, then first"
+        assert P.pick_event("wnba", "any") == ("1", "pre")
+    finally:
+        P._get = was
+
+
 def test_an_empty_scoreboard_is_a_named_exit_not_an_index_error():
     was = P._get
     P._get = lambda url: {"events": []}
@@ -170,6 +193,7 @@ def test_no_test_in_this_file_can_reach_the_network():
     body = Path(__file__).read_text()
     needle = "P." + "_get = lambda"
     assert body.count(needle) == 3, body.count(needle)
+    assert body.count("P." + "_get = fake") == 1
     # BUILT FROM PIECES, BOTH OF THEM. The first draft asserted the
     # opener's name was absent by writing that name out — so the guard
     # matched itself and failed. The SECOND draft split the literal and

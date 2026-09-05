@@ -119,27 +119,39 @@ def _get(url: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def pick_event(league: str) -> tuple[str, str]:
-    """``(event_id, state)`` for a game in progress, else the first one.
+def _state(ev: dict) -> str:
+    return (((ev.get("status") or {}).get("type") or {}).get("state") or "")
 
-    A FINISHED GAME IS NOT THE SAME PAYLOAD. `drives.current` and a live
-    `situation` only exist while the clock is running, so probing a final
-    would answer a question nobody asked.
+
+def pick_event(league: str, prefer: str = "in",
+               date: str = "") -> tuple[str, str]:
+    """``(event_id, state)`` — a game in the preferred state, else the first.
+
+    ``prefer="in"`` is the default and the right one for football:
+    `drives.current` and a live `situation` only exist while the clock is
+    running, so probing a final would answer a question nobody asked.
+
+    ``prefer="post"`` EXISTS BECAUSE THE WNBA PROBE RAN PRE-GAME THREE
+    TIMES IN A ROW (2026-09-04, 2026-09-05 twice) — every attempt landed
+    between games, and the question it was asked ("under what key do
+    basketball plays live") does not need a clock to be running. A final's
+    summary keeps its play-by-play, so yesterday's finished game answers
+    it just as well. ``date`` (YYYYMMDD) asks the scoreboard for that day
+    rather than today, which is where yesterday's finals are.
     """
     from engine.sources.livescores import ESPN_SCOREBOARD
-    data = _get(ESPN_SCOREBOARD[league])
+    url = ESPN_SCOREBOARD[league] + (f"?dates={date}" if date else "")
+    data = _get(url)
     events = data.get("events") or []
     if not events:
-        raise SystemExit(f"{league}: the scoreboard lists no events today")
-    for ev in events:
-        state = (((ev.get("status") or {}).get("type") or {})
-                 .get("state") or "")
-        if state == "in":
-            return str(ev.get("id")), state
+        raise SystemExit(f"{league}: the scoreboard lists no events"
+                         + (f" on {date}" if date else " today"))
+    if prefer != "any":
+        for ev in events:
+            if _state(ev) == prefer:
+                return str(ev.get("id")), prefer
     ev = events[0]
-    state = (((ev.get("status") or {}).get("type") or {})
-             .get("state") or "")
-    return str(ev.get("id")), state
+    return str(ev.get("id")), _state(ev)
 
 
 def main() -> None:
@@ -151,10 +163,16 @@ def main() -> None:
                     help="write the raw payload here (ESPN's content — "
                          "a working note, not something to publish)")
     ap.add_argument("--depth", type=int, default=3)
+    ap.add_argument("--prefer", default="in", choices=("in", "post", "any"),
+                    help="which game state to look for first; 'post' reads a "
+                         "finished game's play-by-play, which basketball keeps")
+    ap.add_argument("--date", default="",
+                    help="YYYYMMDD — probe that day's scoreboard instead of "
+                         "today's (yesterday's finals live there)")
     args = ap.parse_args()
 
     event, state = (args.event, "asked for") if args.event \
-        else pick_event(args.league)
+        else pick_event(args.league, args.prefer, args.date)
     print(f"league {args.league}  event {event}  state {state}")
     payload = _get(f"{SUMMARY[args.league]}?event={event}")
 

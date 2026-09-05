@@ -142,10 +142,16 @@ and CFB cards draw drives from it. Still needed, one live game each:
   the same `sports/football` API, so the parser serves it already, but
   the first live Sunday is the confirmation: `python3 espnprobe.py
   --league nfl` during a game should show `drives dict(2)`.
-* **WNBA** — both basketball probes ran pre-game and showed no `plays`
-  block. Whether it appears live, and under what key, is unknown; the
-  hoops card is not wired until it has been seen. Playoffs are on:
-  `python3 espnprobe.py --league wnba` during a game.
+* **WNBA** — three probes in a row ran pre-game (every attempt landed
+  between games). A FINISHED game keeps its play-by-play, so ask for
+  yesterday's final instead of waiting for a tip-off:
+
+  ```bash
+  cd /srv/qellys && python3 espnprobe.py --league wnba --prefer post --date $(date -d yesterday +%Y%m%d)
+  ```
+
+  If that day had no game, step the date back until the first line says
+  `state post`. Paste the whole output; the hoops feed gets built from it.
 
 It prints key names, container types, list lengths and the values of
 numbers and booleans. It never prints a play's text — that comes back as
@@ -272,6 +278,34 @@ for m in sorted({r.get("market") for r in recs}):
 gb = d.get("game_bets") or []
 print("game bets:", len(gb), dict(collections.Counter(b.get("grade") for b in gb)))
 PY4
+```
+
+**Read on 2026-09-05:** the store HAS college — pass_yds 0.4, rec_yds
+0.7, receptions 0.4, rush_yds 0.4. The search grid runs 0.40 to 6.0, so
+three of the four sit ON the floor: the data wanted a sharper correction
+than the search allows, and `is_reliable` treats a boundary fit as
+"unreliable here, not merely miscalibrated" and shuts the market. Only
+`rec_yds` is open. (The NFL's rec_yds and rush_yds sit on the 6.0
+ceiling — the same verdict from the other end, and the reason the NFL
+board's props die at calibration.) So of the 19 college props that had a
+book price, only the receiving-yard ones could have graded at all. This
+prints each priced prop with the reason it was refused:
+
+```bash
+cd /srv/qellys && python3 - <<'PY5'
+import json
+from engine.calibrate import is_reliable
+d = json.load(open("data/built/cfb.json"))
+rows = [r for r in (d.get("recommendations") or []) if r.get("has_market") is not False and r.get("odds")]
+print(f"{len(rows)} priced college props")
+for r in sorted(rows, key=lambda r: (r.get("market"), -(r.get("edge") or 0))):
+    shut = "" if is_reliable("cfb", r["market"]) else "  [market SHUT: boundary fit]"
+    why = next((x for x in (r.get("reasons") or []) + (r.get("warnings") or [])
+                if any(k in str(x) for k in ("disagree", "bar", "calibrat", "credib", "under", "hold"))), "")
+    print(f"  {r.get('market'):<11} {str(r.get('player'))[:22]:<22} {r.get('side','')} {r.get('line')} @ {r.get('odds')} "
+          f"edge {100*(r.get('edge') or 0):+.1f}pt model {100*(r.get('hit_prob') or 0):.0f}% grade {r.get('grade')}{shut}")
+    if why: print(f"      {str(why)[:110]}")
+PY5
 ```
 
 If `--show` prints nothing for college, the store has no college entry
