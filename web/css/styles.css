@@ -6668,6 +6668,9 @@ body.has-rail .shell {
 .lb-play .lb-rbi { color: var(--good); font-size: var(--fs-xs);
   text-transform: uppercase; letter-spacing: .06em; }
 .lb-play.scoring .lb-inn { color: var(--good); }
+.lb-play.turnover .lb-inn, .lb-play.turnover .lb-rbi { color: var(--warn); }
+.lb-drive { color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 2px; }
 
 /* Live line track — how the market has moved since first pitch. The chart
    is a plain sparkline; everything here is the frame around it. */

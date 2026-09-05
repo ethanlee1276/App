@@ -30757,7 +30757,34 @@ function liveCardHTML({ sport, g, bets }) {
 function playsHTML(g) {
   const plays = (g.plays || []).filter((p) => p && p.event);
   if (!plays.length) return "";
+  /* FOOTBALL ROWS, from the drives block the droplet probe saw on a live
+     college game (2026-09-05). Composed from the numbers — period,
+     clock, down, distance, yards gained, ESPN's type label — and never
+     from the play's `text`, which the parser does not read. The team is
+     the drive's team resolved into the board's own vocabulary, so it is
+     the same string the card's home/away carry. */
+  const ord = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+  const footballRow = (p) => {
+    const q = p.period ? `Q${p.period}` : "";
+    const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
+    const yds = p.yards ? ` ${p.yards > 0 ? "+" : trueMinus("-")}${Math.abs(p.yards)}` : "";
+    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : p.distance}` : "";
+    const flag = p.turnover ? ` <span class="lb-rbi">TO</span>`
+      : p.scoring ? ` <span class="lb-rbi">SCORE</span>` : "";
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
+      <span class="lb-inn">${escapeHtml(when)}</span>
+      <span class="lb-what">${escapeHtml(p.team || "")}${p.team ? " · " : ""}${
+        escapeHtml(p.event)}${escapeHtml(yds)}${escapeHtml(dd)}${flag}</span>
+      ${at}</div>`;
+  };
+  const d = g.drive;
+  const driveLine = d && d.team ? `<div class="lb-drive">${escapeHtml(d.team)} drive
+      · ${d.plays} play${d.plays === 1 ? "" : "s"} · ${d.yards} yd${
+      d.elapsed ? ` · ${escapeHtml(d.elapsed)}` : ""}</div>` : "";
   const row = (p) => {
+    if (p.kind === "football") return footballRow(p);
     const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
     const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
     const at = (p.away_score != null && p.home_score != null)
@@ -30768,7 +30795,7 @@ function playsHTML(g) {
         p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
       ${at}</div>`;
   };
-  return `<div class="lb-plays">${plays.map(row).join("")}</div>`;
+  return `<div class="lb-plays">${driveLine}${plays.map(row).join("")}</div>`;
 }
 
 /* How the market has moved since first pitch.

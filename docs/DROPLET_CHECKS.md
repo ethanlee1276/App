@@ -133,6 +133,20 @@ probe sent a custom User-Agent, and ESPN refuses unfamiliar ones — the
 exact rule `engine/sources/fetch.py` measured on 2026-08-08. Fixed to send
 none, like every working ESPN call in the repo. Same command.
 
+**Run on 2026-09-05.** College, live: the play-by-play is
+`drives.current` + `drives.previous[]`, each drive carrying `plays[]` —
+that shape is now what `engine/sources/espnplays.py` reads, and the NFL
+and CFB cards draw drives from it. Still needed, one live game each:
+
+* **NFL** — its probe ran pre-game and showed no drives (correct). It is
+  the same `sports/football` API, so the parser serves it already, but
+  the first live Sunday is the confirmation: `python3 espnprobe.py
+  --league nfl` during a game should show `drives dict(2)`.
+* **WNBA** — both basketball probes ran pre-game and showed no `plays`
+  block. Whether it appears live, and under what key, is unknown; the
+  hoops card is not wired until it has been seen. Playoffs are on:
+  `python3 espnprobe.py --league wnba` during a game.
+
 It prints key names, container types, list lengths and the values of
 numbers and booleans. It never prints a play's text — that comes back as
 `str(29)`. If the structure alone turns out not to be enough,

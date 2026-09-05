@@ -50,6 +50,20 @@ from engine.sources.livescores import ESPN_SCOREBOARD, fetch_rows
 #: than the clock on the screen.
 TTL = 20
 
+#: Plays on a card: about one drive's worth.
+PLAYS_PER_GAME = 6
+
+#: The most football games one pass will fetch a summary for. A college
+#: Saturday can have thirty in progress at once, a summary is a few
+#: hundred kilobytes, and this box OOM-killed seven test children on
+#: 2026-09-04 with nothing else unusual running. Eight summaries every
+#: thirty seconds is affordable; thirty is not. Past the cap a game keeps
+#: its score and loses only its plays, and the note SAYS SO — an empty
+#: strip because the budget ran out and one because the game has not
+#: kicked off are different facts. Scoreboard order, which is kickoff
+#: order: the earliest games are the ones deepest into their drives.
+PLAYS_MAX_GAMES = 8
+
 OUT = Path("web/data")
 
 
@@ -112,7 +126,52 @@ def build(league: str) -> dict:
                         f"{type(exc).__name__}: {exc}"}
     games = [_row(r) for r in rows]
     games.sort(key=lambda g: (g["live"]["start_time"] or "", g["event_id"]))
-    return {"generated_at": now, "league": league, "games": games}
+    out = {"generated_at": now, "league": league, "games": games}
+    out["plays_note"] = attach_plays(games, league)
+    return out
+
+
+def attach_plays(games: list[dict], league: str) -> str:
+    """Put the last few plays and the current drive on every football
+    game IN PROGRESS. Returns a note for the log and the file.
+
+    ONLY LIVE GAMES, ONLY FOOTBALL. `engine/sources/espnplays` reads the
+    `drives` block the droplet probe saw on a live college game; the
+    basketball summaries have not been probed live and are not touched
+    until they have. A scheduled game has no drives and a final is not
+    what anybody is watching.
+
+    A GAME THAT FAILS KEEPS ITS SCORE. Each summary is guarded on its own
+    and the failures are counted rather than raised — one unreachable
+    drive feed must not cost the scoreboard the card, which is the more
+    important product of this process.
+    """
+    from engine.sources import espnplays
+    if league not in espnplays.FOOTBALL:
+        return f"{league}: no play-by-play source yet"
+    live = [g for g in games if g["live"]["state"] == "live"]
+    if not live:
+        return "no games in progress — no drives fetched"
+    got = failed = 0
+    for g in live[:PLAYS_MAX_GAMES]:
+        try:
+            payload = espnplays.fetch_summary(league, g["event_id"])
+            g["plays"] = espnplays.football_plays(payload, league,
+                                                  PLAYS_PER_GAME)
+            drive = espnplays.current_drive(payload, league)
+            if drive:
+                g["drive"] = drive
+            got += 1
+        except Exception:                                    # noqa: BLE001
+            failed += 1                # the card keeps its score
+    skipped = max(0, len(live) - PLAYS_MAX_GAMES)
+    note = f"drives: {got} of {len(live)} live game(s)"
+    if failed:
+        note += f", {failed} feed(s) unreachable"
+    if skipped:
+        note += (f", {skipped} past the {PLAYS_MAX_GAMES}-game cap "
+                 f"(scores only)")
+    return note
 
 
 def write(league: str, out_dir: Path = OUT) -> dict:
@@ -154,6 +213,8 @@ def main() -> None:
         note = payload.get("note")
         print(f"  {lg}: {n} game(s), {on} in progress"
               + (f" — {note}" if note else ""))
+        if on and payload.get("plays_note"):
+            print(f"      {payload['plays_note']}")
     print(f"live scores: {total} game(s) across {len(leagues)} league(s), "
           f"{live} in progress → {out_dir}/live_*.json")
 
