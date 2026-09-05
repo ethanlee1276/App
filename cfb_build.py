@@ -1771,6 +1771,16 @@ def main() -> None:
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 
+    # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
+    # league's Live tab read "No open bets on today's card" whatever the
+    # journal held — and the tab's two panels (edge bets, Most Likely bets)
+    # were empty here by construction. Same assembly as mlb_build's block,
+    # behind one call (engine/livepicks.attach_tracker); a failure lands in
+    # the JSON as `live_picks_error`, where the page can see it.
+    from engine.livepicks import attach_tracker as _attach_tracker
+    _tn = _attach_tracker(out, "cfb")
+    if _tn:
+        print(f"Open-bet tracker: {_tn}")
     _write(out, args.out)
     conn.close()
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "

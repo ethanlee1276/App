@@ -505,3 +505,147 @@ def assemble_live_picks(open_bets: list[dict], recommendations: list[dict],
              "final_pending": 6, "upcoming": 7, "unmapped": 8}
     out.sort(key=lambda r: (order.get(r["status"], 7), -(r["stake_units"] or 0)))
     return out
+
+
+# --- the tracker for every board, not just baseball's -------------------------
+#: The journal columns the tracker reads. `hit_prob` is the pre-game
+#: number a row shows until a live one exists; `category` is what splits
+#: the Live tab's two panels.
+TRACKER_COLS = ("player, market, side, line, odds, stake_units, date, "
+                "category, hit_prob")
+
+#: 'likely' rides along since 2026-09-05 — Ethan: "the most likley bets
+#: should also show in the live page ... one for edge bets, and one for
+#: most likley bets." The watchlist ('longshot_watch') stays out: it is a
+#: calibration sample, often 100+ names, and would bury the bets placed.
+TRACKER_CATEGORIES = ("main", "longshot", "likely")
+
+
+def shift_day(date: str, days: int) -> str:
+    """An ISO date moved by ``days``; anything else comes back unchanged.
+
+    NFL journals its card as a WEEK LABEL — '2026-W01' — because a slate
+    there is seven days, not one (`ledger._hist_where`). There is no
+    neighbouring day to a week, so the label is returned as it is and the
+    caller asks for no neighbours. Date arithmetic rather than string
+    arithmetic, for the reason `mlb_build._shift_day` was written: the
+    31st plus one is the 1st of the next month.
+
+    THE SHAPE IS CHECKED BEFORE THE PARSE. `date.fromisoformat` accepts
+    an ISO week ('2026-W01' is the Monday of week 1) on Python 3.11+, so
+    the label the NFL journals would have parsed, shifted to a Sunday,
+    and asked the journal for a date no bet carries. The first run of
+    the test caught it.
+    """
+    import datetime as _d
+    import re
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(date or "")):
+        return date
+    try:
+        return (_d.date.fromisoformat(date) + _d.timedelta(days=days)).isoformat()
+    except (TypeError, ValueError):
+        return date
+
+
+def open_bets_for(conn, sport: str, date: str) -> tuple[list[dict], list[dict]]:
+    """``(today, near)`` — this sport's open journaled bets on the card,
+    and on the neighbouring days.
+
+    THE WINDOW IS THE LESSON FROM THE MLB TRACKER. A row is stamped with
+    its GAME's date, so a late first pitch is filed under tomorrow in
+    UTC; a query for today alone never sees it. Today's rows are shown
+    mapped or not, so the section's count reconciles with the Record's;
+    a neighbour's row is shown only if it lands on a game on this card.
+    """
+    where = ("status='open' AND sport=? AND category IN "
+             + "(" + ",".join("?" * len(TRACKER_CATEGORIES)) + ")")
+    args = (sport, *TRACKER_CATEGORIES)
+    today = [dict(r) for r in conn.execute(
+        f"SELECT {TRACKER_COLS} FROM bets WHERE {where} AND date=?",
+        (*args, date))]
+    near_dates = [d for d in (shift_day(date, -1), shift_day(date, 1))
+                  if d != date]
+    near: list[dict] = []
+    if near_dates:
+        marks = ",".join("?" * len(near_dates))
+        near = [dict(r) for r in conn.execute(
+            f"SELECT {TRACKER_COLS} FROM bets WHERE {where} "
+            f"AND date IN ({marks})", (*args, *near_dates))]
+    return today, near
+
+
+def attach_tracker(result: dict, sport: str, conn=None,
+                   progress: dict | None = None,
+                   identity: dict | None = None) -> str:
+    """Put the open-bet tracker on a league board: ``live_picks`` and
+    ``open_elsewhere``, or ``live_picks_error``. Returns a line for the
+    build log, or "" when there was nothing to say.
+
+    WHY THIS EXISTS. `mlb_build.py` has assembled the tracker inline
+    since the Live tab shipped, boxscore progress and all; NFL, CFB, NBA
+    and WNBA never built one, so `renderLivePicks` — which reads the
+    VIEWED sport's board — told a reader "No open bets on today's card"
+    on every football and hoops tab while the journal held open bets in
+    that sport. Ethan asked for the Live tab to carry both the edge bets
+    and the Most Likely bets; on four of five boards it carried neither.
+
+    THE SAME ASSEMBLY, THE SAME ARITHMETIC. `assemble_live_picks` places a
+    row by the board's recommendations and games — it was never
+    baseball-specific, it was only ever called from one place. Team
+    markets track from the live score it already reads; player props
+    track from ``progress`` when a caller has a live stat line and show
+    the pre-game number when it does not (`current` stays None, which
+    the page renders as "tracking"). The MLB block is left exactly as it
+    is: it carries a boxscore fetch, the pitcher set and the identity
+    map that this helper takes as arguments, and moving it would be a
+    refactor wearing a fix's clothes.
+
+    ``open_elsewhere`` is every open EDGE bet across every sport minus
+    the edge rows shown here — the count the masthead prints, so the two
+    reconcile (`mlb_build` learned that on 2026-08-09). Likely rows are
+    on the tracker but not in that count, so they are not subtracted
+    either.
+
+    A FAILURE IS WRITTEN INTO THE BOARD, not only printed: the launcher
+    swallows build output, and a tracker that died silently reads as a
+    night with no bets.
+    """
+    try:
+        from . import ledger as _ledger
+        own = conn is None
+        if own:
+            conn = _ledger.connect()
+        try:
+            date = str(result.get("date") or "")
+            today, near = open_bets_for(conn, sport, date)
+            recs = result.get("recommendations") or []
+            games = result.get("games") or []
+            shots = result.get("long_shots") or []
+            rows = assemble_live_picks(today, recs, games, progress, shots,
+                                       identity)
+            rows += [r for r in assemble_live_picks(near, recs, games,
+                                                    progress, shots, identity)
+                     if r["status"] != "unmapped"]
+            result["live_picks"] = rows
+            all_open = conn.execute(
+                "SELECT COUNT(*) FROM bets WHERE status='open' "
+                "AND category IN ('main','longshot') "
+                "AND stake_units > 0").fetchone()[0]
+            edge_shown = sum(1 for r in rows if r.get("category") != "likely")
+            result["open_elsewhere"] = max(0, all_open - edge_shown)
+        finally:
+            if own:
+                conn.close()
+    except Exception as exc:                                  # noqa: BLE001
+        result["live_picks_error"] = str(exc)
+        return f"tracker error: {exc}"
+    rows = result["live_picks"]
+    if not rows:
+        return ""
+    n_live = sum(1 for r in rows if r["phase"] == "live")
+    n_likely = sum(1 for r in rows if r.get("category") == "likely")
+    note = (f"{len(rows)} on this card ({n_live} live"
+            + (f", {n_likely} likely" if n_likely else "") + ")")
+    if result["open_elsewhere"]:
+        note += f", {result['open_elsewhere']} open on other boards"
+    return note
