@@ -4259,6 +4259,8 @@ body.pk-open { overflow: hidden; }
 /* The render pack's division chips (2026-08-25) — reuses the Alerts
    category chip look so filters read the same everywhere. */
 .std-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.search-recent { align-items: center; margin-top: -6px; }
+.search-recent .sr-label { color: var(--text-mute); font-size: var(--fs-sm); }
 
 /* Since 2026-08-25 the cell holds teamMark — the real crest with the
    coloured-chip monogram underneath as its fallback — instead of a bare

@@ -251,7 +251,9 @@ def test_the_search_reaches_the_league_not_just_the_board():
     market — an unpriced chip would draw the pick block."""
     js = _js()
     body = _fn(js, "async function renderPlayers(")
-    assert body.index("leagueSearch(q)") < body.index("rosterMatches(q)")
+    # The roster is asked with the typed name since 2026-09-05 — the
+    # four-tier match normalises it itself (tests/test_search_forgiving.py).
+    assert body.index("leagueSearch(q)") < body.index("rosterMatches(state.search)")
     assert body.count("!== q) return") >= 2, "the stale-keystroke guard"
     j = js.index("function profileHTML(")
     assert "rows.filter((r) => r.market_label)" in js[j:j + 700]
@@ -283,7 +285,10 @@ def test_searching_still_reaches_every_player():
     # — every market kept, one card per player — but the order contract
     # is the same: the search filter runs over the FULL list before any
     # grouping or display cap touches it.
-    assert body.index("recs = recs.filter") < body.index("_profRows = new Map()")
+    # 2026-09-05: the substring filter became the four-tier `searchPick`
+    # (tests/test_search_forgiving.py); the contract holds — its rows are
+    # taken before any grouping or display cap.
+    assert body.index("recs = picked.rows") < body.index("_profRows = new Map()")
 
 
 def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():

@@ -8219,6 +8219,7 @@ document.addEventListener("click", (e) => {
 async function renderPlayers() {
   const seq = ++_playersSeq;
   renderSearchScope();
+  renderSearchRecent();
   const q = state.search.trim().toLowerCase();
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
@@ -8236,7 +8237,12 @@ async function renderPlayers() {
      the page. */
   const board = state.data || {};
   let recs = board.recommendations || [];
-  if (q) recs = recs.filter((r) => (r.player || "").toLowerCase().includes(q));
+  let boardGuess = false;
+  if (q) {
+    const picked = searchPick(recs, state.search, (r) => r.player);
+    recs = picked.rows;
+    boardGuess = picked.guessed;
+  }
   // One CARD per player, every market kept. The old dedupe ("first
   // market listed") threw the rest of a player's rows away — Ethan,
   // 2026-08-17: "when i search an nfl player it will only display yard
@@ -8342,13 +8348,16 @@ async function renderPlayers() {
     }
     /* The roster directory — the offline fallback, and the only answer
        for a player who has never appeared in a logged game. */
-    const misses = q ? await rosterMatches(q) : [];
+    const found = q ? await rosterMatches(state.search) : { rows: [], guessed: false };
+    const misses = found.rows;
     if (seq !== _playersSeq) return;
     if (misses.length) {
       host.innerHTML = `
         <div class="empty" style="margin-bottom:12px">No prop on tonight’s board for
           “${escapeHtml(state.search)}” — profiles here are prop cards.
-          On the roster${misses.length > 1 ? "s" : ""}:</div>
+          ${found.guessed
+            ? `No roster name is spelled exactly that way; the nearest${misses.length > 1 ? " are" : " is"}:`
+            : `On the roster${misses.length > 1 ? "s" : ""}:`}</div>
         ${misses.map((m) => `
           <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
             ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
@@ -8402,9 +8411,16 @@ async function renderPlayers() {
   const cap = playerBrowseCap();
   const capped = !q && players.length > cap;
   const shown = capped ? players.slice(0, cap) : players;
+  // SAY WHEN THIS IS A GUESS, the way the league search does: a corrected
+  // spelling presented as what was asked for is its own kind of lying.
+  const lgWord = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
   host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
       of ${players.length} players with a prop on tonight’s board —
       type a name to find anyone else.</p>` : "")
+    + (boardGuess ? `<div class="section-title minor">Closest match on tonight’s board
+        <span class="sub">— no priced ${escapeHtml(lgWord)} player is spelled exactly
+        “${escapeHtml(state.search)}”, so ${players.length > 1
+          ? "these are the nearest names" : "this is the nearest name"}</span></div>` : "")
     + shown.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
@@ -8582,17 +8598,162 @@ async function leagueLogs(player, sport) {
   return {};
 }
 
+/* ---------------- A search that forgives ----------------
+   The league search (/api/players/search, engine/playersearch) has
+   forgiven a typo since 2026-08-23. The board and the roster had not:
+   both matched tonight's priced players and the roster directory by an
+   exact substring, so "jamar chase" on the NFL tab found nothing priced
+   for Ja'Marr Chase, fell through to the league search, and drew his
+   history card while his priced card sat on the board. Ethan,
+   2026-09-05: "search that forgives typos and remembers". The same four
+   tiers the server ranks by, on the page, for the two lists the page
+   matches itself. */
+function searchNorm(s) {
+  return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+//: Below this many letters a fuzzy match is a guess, not a correction —
+//: the server's own bar (engine/playersearch.FUZZ_MIN).
+const SEARCH_FUZZ_MIN = 4;
+
+/* Edit distance with a transposition counted once (optimal string
+   alignment), capped: past `max` the answer is only "too far", so the
+   rows stop there. */
+function searchDist(a, b, max) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let pp = null, p = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const c = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      let v = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (pp && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, pp[j - 2] + 1);
+      c.push(v);
+      if (v < best) best = v;
+    }
+    if (best > max) return max + 1;
+    pp = p; p = c;
+  }
+  return p[b.length];
+}
+
+/* A typo, rather than a different person: one edit in a word of four or
+   five letters, two in a longer one — on the whole name or on any word. */
+function searchClose(n, toks, ql, qt) {
+  if (ql.length < SEARCH_FUZZ_MIN) return false;
+  const allow = (w) => (w.length >= 6 ? 2 : 1);
+  if (searchDist(ql, n, allow(ql)) <= allow(ql)) return true;
+  return qt.some((w) => w.length >= SEARCH_FUZZ_MIN
+    && toks.some((t) => searchDist(w, t, allow(w)) <= allow(w)));
+}
+
+/* How well `name` answers `q`: 0 starts with, 1 contains, 2 the words in
+   any order, 3 the closest spelling, null for no. The server's tiers
+   (engine/playersearch.rank), so the board, the roster and the league
+   answer the same question the same way. Tier 3 here is an edit
+   distance where the server's is difflib; both are labelled a guess. */
+function searchRank(name, q) {
+  const n = searchNorm(name), ql = searchNorm(q);
+  if (!n || !ql) return null;
+  const toks = n.split(" "), qt = ql.split(" ");
+  const sqN = n.replace(/ /g, ""), sqQ = ql.replace(/ /g, "");
+  if (n.startsWith(ql) || sqN.startsWith(sqQ) || toks.some((t) => t.startsWith(ql))) return 0;
+  if (n.includes(ql) || sqN.includes(sqQ)) return 1;
+  // Every word typed starts some distinct word of the name, longest first.
+  const used = new Set();
+  const prefixed = qt.slice().sort((x, y) => y.length - x.length).every((w) => {
+    const i = toks.findIndex((t, k) => !used.has(k) && t.startsWith(w));
+    if (i < 0) return false;
+    used.add(i);
+    return true;
+  });
+  if (prefixed) return 2;
+  return searchClose(n, toks, ql, qt) ? 3 : null;
+}
+
+/* Inside the guessing tier, how far the whole name is from what was
+   typed — so "jamar chase" puts Ja'Marr Chase ahead of Chase Young,
+   whose one exact word also qualifies him. Zero for a name that was not
+   guessed at, so the list's own order holds inside the other tiers. */
+function searchFar(name, q, rank) {
+  return rank === 3 ? searchDist(searchNorm(q), searchNorm(name), 8) : 0;
+}
+
+/* The rows of a list that answer the query, best tier first, the closer
+   whole name first inside the guessing tier and the list's own order
+   inside the others; `guessed` when every survivor is a spelling
+   correction, so the page can say so. */
+function searchPick(rows, q, name) {
+  const hits = [];
+  (rows || []).forEach((r) => {
+    const k = searchRank(name(r), q);
+    if (k != null) hits.push({ rank: k, row: r, far: searchFar(name(r), q, k) });
+  });
+  hits.sort((x, y) => x.rank - y.rank || x.far - y.far);
+  return { rows: hits.map((h) => h.row), ranks: hits.map((h) => h.rank),
+           guessed: hits.length > 0 && hits.every((h) => h.rank >= 3) };
+}
+
+/* ---------------- Recent searches, on the page ----------------
+   The site has kept a search history since accounts (`acctSearchLog`,
+   synced to the account) and showed it only on the account page. The
+   search page offers the last five distinct names as chips while the
+   box is empty — one tap to a name looked up yesterday — and hides them
+   the moment a letter is typed. */
+function recentSearchPick(log, n) {
+  const out = [], seen = new Set();
+  for (let i = (log || []).length - 1; i >= 0 && out.length < n; i--) {
+    const q = String((log[i] || {}).q || "").trim();
+    const key = searchNorm(q);
+    if (q.length < 2 || !key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
+function recentSearches(n = 5) {
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(ACCT_SEARCH_KEY) || "[]"); } catch (e) { log = []; }
+  return recentSearchPick(log, n);
+}
+
+function renderSearchRecent() {
+  const host = document.getElementById("search-recent");
+  if (!host) return;
+  const names = state.search.trim() ? [] : recentSearches();
+  host.hidden = !names.length;
+  host.innerHTML = names.length ? `<span class="sr-label">Recent</span>${names.map((q) =>
+    `<button type="button" class="al-cat sr-chip" data-q="${escapeAttr(q)}">${escapeHtml(q)}</button>`).join("")}` : "";
+}
+
+/* A recent chip is a search: the name goes in the box and the log
+   learns it was wanted again. Delegated — renderPlayers redraws the row. */
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest && e.target.closest(".sr-chip");
+  if (!chip) return;
+  acctSearchLog(chip.dataset.q);
+  openPlayer(chip.dataset.q);
+});
+
+/* The roster directory's answer, the same four tiers, best first and
+   most games inside a tier; `guessed` says when the whole list is a
+   spelling correction. */
 async function rosterMatches(q) {
   const d = await loadRosters(state.sport);
-  const out = [];
+  const hits = [];
   for (const t of Object.values(d.teams || {})) {
     for (const p of t.players || []) {
-      if ((p.player || "").toLowerCase().includes(q)) out.push(p);
+      const k = searchRank(p.player, q);
+      if (k != null) hits.push({ rank: k, p, far: searchFar(p.player, q, k) });
     }
   }
-  out.sort((a, b) => (b.games || 0) - (a.games || 0)
-    || a.player.localeCompare(b.player));
-  return out.slice(0, 12);
+  hits.sort((x, y) => x.rank - y.rank || x.far - y.far || (y.p.games || 0) - (x.p.games || 0)
+    || String(x.p.player).localeCompare(String(y.p.player)));
+  return { rows: hits.slice(0, 12).map((h) => h.p),
+           guessed: hits.length > 0 && hits.every((h) => h.rank >= 3) };
 }
 
 function openRoster(team) {
