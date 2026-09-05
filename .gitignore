@@ -1,0 +1,129 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Generated site data — every build writes here (slates, fantasy, NBA,
+# Polymarket, UFC) and `ledger.export_json` writes record.json, which is
+# the operator's own betting journal and bankroll. All of it regenerates
+# from the build scripts, none of it belongs on the remote. Ignoring the
+# directory (not a file list) so a NEW build target can't silently start
+# tracking output again.
+web/data/
+
+# Downloaded / cached data feeds
+data/cache/
+
+# Trained models (regenerate with: python3 train_model.py)
+data/models/
+
+# Local API keys — never commit these
+# Every shape of the secrets file, not just the exact name. An editor's
+# backup holds the same keys as the original: nano writes secrets.local.save
+# on an interrupted edit, vim writes .swp and ~, and a hand-made copy is
+# usually secrets.local.bak. One of those sat untracked-but-visible in this
+# repo with two live API keys in it, one `git add -A` from a public push.
+secrets.local
+secrets.local.*
+secrets.local~
+*.local.save
+# The Yahoo OAuth token. Not an API key but the same class of object and
+# worse to leak: it is scoped to ONE person's fantasy account and grants
+# read access until it is revoked. `data/` is not ignored as a directory
+# here — only named files under it are — so this needs saying explicitly,
+# which is exactly the hole `data/*.pre-rescale-*` below was added for.
+data/yahoo_token.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Historical database (populate with: python3 ingest.py)
+data/history.db
+*.db
+data/ledger.db
+# The auto-update timer's own state (deploy/autoupdate.py). MUST stay
+# ignored: the updater refuses a dirty tree, and `git status --porcelain`
+# lists untracked files — unignored, the state file the updater writes
+# would jam the updater itself on its second run.
+data/autoupdate.json
+# Rocket Radar's own record — the calls, their marks and their
+# paths. Same reasoning as the bet ledger: it is the machine's
+# memory of what it said, not source, and it only means anything
+# on the box that made the calls.
+data/memeledger.db
+data/backups/
+# The sim-joint evidence journal (simjoint.build appends, simrecon.py
+# grades) — per-box measurement data, like the databases above it.
+data/simrecon_log.jsonl
+# The drive sim's forward journal (engine/drivesim.py; nfl_build
+# appends) — same contract, graded by the clock-sport reconciliation.
+data/drivesim_log.jsonl
+# The sweat page's probability history (engine/sweat.py, written on the
+# 12-second live clock). Missing from this file, it sat untracked on
+# the droplet and jammed the auto-update timer for a day — 2026-08-31.
+data/sweatstate.json
+# The FULL boards — every pick, before redaction. These are the product,
+# and they live outside web/ precisely so no web server can reach them;
+# committing them would publish to GitHub what the paywall withholds from
+# the site. `*.db` and the named files above do not cover a .json here.
+data/built/
+# The feed differ's per-sport digests — working state, rolls every cycle
+data/feedstate/
+# backup.sh's default destination is ./backups — a sibling of data/, not a
+# child of it, so the line above never covered it. The files inside are
+# `.db.gz`, which `*.db` does not match either: gzipped copies of the
+# accounts and ledger databases, untracked, one `git add -A` from being
+# published. On the server these live in /var/backups/qellys instead; this
+# is for the laptop, where the script is run from the checkout.
+backups/
+# …and the backups a migration leaves BESIDE the database. `*.db` does not
+# cover them: rescale.py writes `ledger.db.pre-rescale-<date>`, which ends
+# in a date, so it showed up as a perfectly ordinary untracked file. One
+# `git add -A` and the whole bet journal is public. Found on the real
+# machine 2026-08-07 with such a file sitting untracked in data/.
+data/*.pre-rescale-*
+data/*.bak
+data/*.backup
+# …and SQLite's write-ahead log and shared-memory files. `*.db` does NOT
+# match `accounts.db-wal`, and the WAL holds writes that have not been
+# checkpointed yet — for the accounts database that means email addresses
+# and password verifiers sitting in a file git was perfectly willing to
+# track. Exactly the `.pre-rescale-` hole, found the same way: by a test
+# that names the real files rather than trusting the pattern.
+*.db-wal
+*.db-shm
+*.db-journal
+# Runtime state written next to the databases — a spend counter and a
+# failure log, both machine-local and both meaningless in anyone else's
+# clone. Same reasoning as the UFC dossiers below.
+data/llm_spend.json
+data/sim_gate_failures.json
+# Both forms on purpose. A trailing slash matches DIRECTORIES ONLY, and a
+# symlink is not a directory to git — so `node_modules/` alone let a symlink
+# named node_modules be committed, pointing at a scratchpad path that exists
+# on no other machine. That broke `git pull` for everyone else with
+# "Updating the following directories would lose untracked files".
+node_modules
+node_modules/
+
+# Node is only ever used by tools/inventory.mjs, which resolves Playwright
+# from a scratchpad symlink. A package.json in the repo root is a leftover of
+# an npm run in the wrong directory, not a dependency of this project.
+package.json
+package-lock.json
+
+# Generated UFC reference data — ufc_dossiers.py and the card/gym scrapers
+# write these beside the DBs. Same rule as every other data/ artifact: the
+# build regenerates them, so they never belong in the repo.
+data/ufc_cards.json
+data/ufc_dossiers.json
+data/ufc_gyms.json
+
+# Nightly runner: local logs and its overlap lock.
+logs/
+.nightly.lock

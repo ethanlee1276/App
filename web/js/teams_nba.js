@@ -1,0 +1,36 @@
+// NBA team names & colors — the third entry in the cross-league team map
+// system (TEAMS = NFL, MLB_TEAMS, NBA_TEAMS). Abbreviations collide across
+// leagues (MIN, ATL, PHI...), so pages must always resolve through the
+// right dict — app.js points window.ACTIVE_TEAMS here on the NBA tab.
+const NBA_TEAMS = {
+  "ATL": { "name": "Atlanta Hawks", "nick": "Hawks", "loc": "Atlanta", "primary": "#e03a3e", "secondary": "#c1d32f", "tertiary": "#26282a" },
+  "BOS": { "name": "Boston Celtics", "nick": "Celtics", "loc": "Boston", "primary": "#007a33", "secondary": "#ba9653", "tertiary": "#ffffff" },
+  "BKN": { "name": "Brooklyn Nets", "nick": "Nets", "loc": "Brooklyn", "primary": "#1a1a1a", "secondary": "#ffffff", "tertiary": "#707271" },
+  "CHA": { "name": "Charlotte Hornets", "nick": "Hornets", "loc": "Charlotte", "primary": "#1d1160", "secondary": "#00788c", "tertiary": "#a1a1a4" },
+  "CHI": { "name": "Chicago Bulls", "nick": "Bulls", "loc": "Chicago", "primary": "#ce1141", "secondary": "#000000", "tertiary": "#ffffff" },
+  "CLE": { "name": "Cleveland Cavaliers", "nick": "Cavaliers", "loc": "Cleveland", "primary": "#860038", "secondary": "#fdbb30", "tertiary": "#041e42" },
+  "DAL": { "name": "Dallas Mavericks", "nick": "Mavericks", "loc": "Dallas", "primary": "#00538c", "secondary": "#002b5e", "tertiary": "#b8c4ca" },
+  "DEN": { "name": "Denver Nuggets", "nick": "Nuggets", "loc": "Denver", "primary": "#0e2240", "secondary": "#fec524", "tertiary": "#8b2131" },
+  "DET": { "name": "Detroit Pistons", "nick": "Pistons", "loc": "Detroit", "primary": "#c8102e", "secondary": "#1d42ba", "tertiary": "#bec0c2" },
+  "GSW": { "name": "Golden State Warriors", "nick": "Warriors", "loc": "Golden State", "primary": "#1d428a", "secondary": "#ffc72c", "tertiary": "#26282a" },
+  "HOU": { "name": "Houston Rockets", "nick": "Rockets", "loc": "Houston", "primary": "#ce1141", "secondary": "#000000", "tertiary": "#c4ced4" },
+  "IND": { "name": "Indiana Pacers", "nick": "Pacers", "loc": "Indiana", "primary": "#002d62", "secondary": "#fdbb30", "tertiary": "#bec0c2" },
+  "LAC": { "name": "LA Clippers", "nick": "Clippers", "loc": "Los Angeles", "primary": "#c8102e", "secondary": "#1d428a", "tertiary": "#bec0c2" },
+  "LAL": { "name": "Los Angeles Lakers", "nick": "Lakers", "loc": "Los Angeles", "primary": "#552583", "secondary": "#fdb927", "tertiary": "#000000" },
+  "MEM": { "name": "Memphis Grizzlies", "nick": "Grizzlies", "loc": "Memphis", "primary": "#5d76a9", "secondary": "#12173f", "tertiary": "#f5b112" },
+  "MIA": { "name": "Miami Heat", "nick": "Heat", "loc": "Miami", "primary": "#98002e", "secondary": "#f9a01b", "tertiary": "#000000" },
+  "MIL": { "name": "Milwaukee Bucks", "nick": "Bucks", "loc": "Milwaukee", "primary": "#00471b", "secondary": "#eee1c6", "tertiary": "#0077c0" },
+  "MIN": { "name": "Minnesota Timberwolves", "nick": "Timberwolves", "loc": "Minnesota", "primary": "#0c2340", "secondary": "#236192", "tertiary": "#9ea2a2" },
+  "NOP": { "name": "New Orleans Pelicans", "nick": "Pelicans", "loc": "New Orleans", "primary": "#0c2340", "secondary": "#c8102e", "tertiary": "#85714d" },
+  "NYK": { "name": "New York Knicks", "nick": "Knicks", "loc": "New York", "primary": "#006bb6", "secondary": "#f58426", "tertiary": "#bec0c2" },
+  "OKC": { "name": "Oklahoma City Thunder", "nick": "Thunder", "loc": "Oklahoma City", "primary": "#007ac1", "secondary": "#ef3b24", "tertiary": "#002d62" },
+  "ORL": { "name": "Orlando Magic", "nick": "Magic", "loc": "Orlando", "primary": "#0077c0", "secondary": "#c4ced4", "tertiary": "#000000" },
+  "PHI": { "name": "Philadelphia 76ers", "nick": "76ers", "loc": "Philadelphia", "primary": "#006bb6", "secondary": "#ed174c", "tertiary": "#002b5c" },
+  "PHX": { "name": "Phoenix Suns", "nick": "Suns", "loc": "Phoenix", "primary": "#1d1160", "secondary": "#e56020", "tertiary": "#63727a" },
+  "POR": { "name": "Portland Trail Blazers", "nick": "Trail Blazers", "loc": "Portland", "primary": "#e03a3e", "secondary": "#000000", "tertiary": "#ffffff" },
+  "SAC": { "name": "Sacramento Kings", "nick": "Kings", "loc": "Sacramento", "primary": "#5a2d81", "secondary": "#63727a", "tertiary": "#000000" },
+  "SAS": { "name": "San Antonio Spurs", "nick": "Spurs", "loc": "San Antonio", "primary": "#000000", "secondary": "#c4ced4", "tertiary": "#ffffff" },
+  "TOR": { "name": "Toronto Raptors", "nick": "Raptors", "loc": "Toronto", "primary": "#ce1141", "secondary": "#000000", "tertiary": "#a1a1a4" },
+  "UTA": { "name": "Utah Jazz", "nick": "Jazz", "loc": "Utah", "primary": "#002b5c", "secondary": "#00471b", "tertiary": "#f9a01b" },
+  "WAS": { "name": "Washington Wizards", "nick": "Wizards", "loc": "Washington", "primary": "#002b5c", "secondary": "#e31837", "tertiary": "#c4ced4" },
+};

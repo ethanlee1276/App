@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- viewport-fit=cover + the safe-area insets in styles.css are what
+       stop the notch and the home indicator eating the header and the
+       tab bar once this runs WITHOUT Safari's chrome around it. -->
+  <!-- NO PINCH ZOOM. Ethan, 2026-08-22, with a recording of the fantasy
+       page sliding around at four different scales: "you should not be
+       able too zoom in or out like in this video."
+
+       `user-scalable=no` covers Android Chrome, and iOS honours it when
+       the site has been added to the home screen. It does NOT cover iOS
+       Safari in a tab: Apple has ignored this attribute since iOS 10, on
+       purpose, so that a page cannot lock someone out of reading it.
+       That half is done in app.js by refusing the gesture events, and
+       `touch-action: manipulation` in styles.css handles double-tap. All
+       three are needed; any one alone leaves a way in. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- EVERY RELATIVE URL RESOLVES FROM THE ROOT, and this one line is what
+       makes real addresses possible (2026-08-25). This document is now
+       served at /player/juan-soto and /game/ne-sea-0909 as well as at /,
+       and every asset below is written relative — `css/styles.css`. At a
+       two-segment path those resolve to /player/css/styles.css, which is
+       a 404, and the page arrives unstyled with no script. The site is
+       only ever served from the root of its own origin, so declaring that
+       root costs nothing at / and is the whole fix everywhere else.
+
+       It also settles what `history.replaceState(…, "#prop/x")` means on
+       a deep path — relative URLs there resolve against the document
+       BASE, not the current address — which is how the app normalises a
+       clean URL to its own hash route without stitching paths together
+       by hand. -->
+  <base href="/" />
+  <!-- The same crop of Ethan's artwork the header wears, so the tab and
+       the page draw one mark. Still .svg because sw.js precaches that
+       path; the artwork is embedded inside it. -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <!-- iOS ignores SVG icons; this is what "Add to Home Screen" uses. -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="Qellys Book" />
+
+  <!-- INSTALLABLE. Three separate mechanisms, because the two platforms
+       do not agree on any of it:
+         * the manifest is what Android/Chrome reads to offer "Install",
+           and without it there is no prompt at all;
+         * apple-mobile-web-app-capable is what makes iOS launch it
+           standalone. Without it "Add to Home Screen" still works and
+           still uses the icon — it just opens inside Safari, with the
+           address bar, which is the difference between a bookmark and
+           something that feels like an app;
+         * mobile-web-app-capable is the standardised spelling. Both are
+           needed: older iOS reads only the apple- one.
+       All of it requires HTTPS. On plain http:// the manifest is ignored
+       and the service worker cannot register, so none of this does
+       anything until the site is behind TLS. -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <!-- black-translucent lets the page paint under the status bar, which
+       is why theme-color and --bg have to match. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- Matches --bg. It said #0f1420 through the whole Night Form redesign,
+       which is the OLD panel colour — so the phone painted its chrome a
+       different near-black to the page under it. -->
+  <meta name="theme-color" content="#090705" />
+
+  <!-- What a shared link looks like before anyone arrives.
+       ================================================================
+       The card is rendered from og-card.html by the real stylesheet, the
+       real fonts and the real Overhead, so the preview cannot drift from
+       the site. It carries no live numbers on purpose — see the note in
+       that file. Regenerate with tools/ogcard.py.
+
+       THE FILENAME IS VERSIONED, and that is the whole reason it has a
+       suffix. Scrapers cache a preview image by URL and hold it for a
+       long time — iMessage and Discord especially — so writing a redesign
+       back to og-card.png keeps showing the OLD card to everybody who has
+       already shared the link. v2 is the gold card with the QB mark; v1
+       was the amber ellipse this site stopped using. Bump the suffix in
+       tools/ogcard.py and in both tags below whenever the artwork
+       changes.
+
+       The image URL stays RELATIVE and the canonical/og:url are
+       ABSOLUTE, which is not an inconsistency. A relative og:image is
+       resolved by every major scraper against the page it was found on,
+       so it keeps working from localhost, from a tailnet address and
+       from production without three copies of the tag. A canonical URL
+       cannot work that way: its entire job is to name the one address
+       this page should be known by, and a relative one names nothing.
+
+       The origin below was a placeholder-shaped hole until 2026-08-15,
+       when Ethan chose qellysbook.com. It is written here rather than
+       guessed, and `www` is redirected to the bare name in
+       deploy/Caddyfile so only one of the two ever serves content —
+       two hostnames would split session cookies and duplicate every
+       page for search engines.
+
+       THE SENTINELS ARE LOAD-BEARING. Everything between QB:META and
+       /QB:META is what engine/routes.py swaps out when this same
+       document is served at /player/juan-soto or /game/ne-sea-0909, so
+       a shared entity link unfurls as that entity rather than as the
+       site. Marked with comments rather than matched by pattern: a
+       regex over `<meta property=…>` would silently start catching a
+       tag somebody adds later, and the first sign of that is a preview
+       card with the wrong title on it. Keep the title inside; keep the
+       icon, manifest and theme-color tags outside — those are the same
+       on every page and re-emitting them per entity is one more thing
+       to drift. -->
+  <!-- QB:META -->
+  <title>Qellys Book · multi-sport betting model</title>
+  <link rel="canonical" href="https://qellysbook.com/" />
+  <meta property="og:url" content="https://qellysbook.com/" />
+  <meta name="description" content="A multi-sport betting model that shows its work. Every pick is journaled at the real book price it was found at and graded in public — including the losing ones. MLB, NFL, college football, NBA, WNBA, UFC and prediction markets." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Qellys Book" />
+  <meta property="og:title" content="Qellys Book — a betting model that shows its work" />
+  <meta property="og:description" content="Every pick journaled at its real book price and graded in public, including the losing ones. MLB, NFL, CFB, NBA, WNBA, UFC and prediction markets." />
+  <meta property="og:image" content="og-card-v2.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Qellys Book — the QB crown mark beside an overhead plan of Coors Field showing its altitude and home-run factor" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Qellys Book — a betting model that shows its work" />
+  <meta name="twitter:description" content="Every pick journaled at its real book price and graded in public, including the losing ones." />
+  <meta name="twitter:image" content="og-card-v2.png" />
+  <!-- /QB:META -->
+
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Decided BEFORE first paint, or the full masthead renders and then
+       collapses — a 790px jump on every load, which is worse than the
+       problem it fixes. Same reason a theme flag goes here. -->
+  <script>
+    try {
+      if (localStorage.getItem("qb-seen-intro"))
+        document.documentElement.classList.add("intro-seen");
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <!-- NEW LOOK (2026-08-11, Ethan's render): one slim top bar — hamburger
+         (drawer trigger on phones), the wordmark, the six primary
+         destinations, then search / alerts / freshness / theme. The old
+         three-part masthead (switcher row, page row, record strip) moved
+         into the SIDEBAR, which is the render's whole idea: destinations
+         live in a rail, the bar stays a bar.
+
+         Deliberately NOT copied from the render, per Ethan: the balance
+         chip and the bet slip. This site never holds money and never
+         takes a bet — guards in tests/test_newlook.py pin that no
+         "Place Bet" / "Deposit" / balance UI can ship. -->
+    <button class="menu-toggle" id="menu-toggle" aria-label="Open menu"
+            aria-expanded="false" aria-controls="sidebar">
+      <span class="mt-bars" aria-hidden="true"></span>
+      <span class="mt-label" id="menu-label">Menu</span>
+    </button>
+    <a class="brand-home" id="brand-home" href="#recommended"
+       title="Home — tonight’s picks for this sport (also refreshes)">
+      <!-- Ethan's own artwork, 2026-08-23: "i really like the QB logo it
+           has so we should use that for the site logo but take away where
+           it says qellys book below it". Cropped from brand/appicon-1254
+           at the gap under the mark (rows 804-846 are empty), so the crown
+           and the QB come through and the wordmark does not — the words
+           are already beside it in .brand-words and printing them twice
+           is what the crop removes. -->
+      <span class="logo" id="brand-logo" aria-hidden="true">
+        <img class="qmark" src="logo-qb.png" width="152" height="152"
+             alt="" decoding="async" />
+      </span>
+      <!-- THE WORDMARK ALONE. Ethan, 2026-08-23: "Just have it say qellys
+           book there we dont need to siplay the model underneath it, it
+           looks more clean without it." The per-sport model line that sat
+           here ("SCALPY 2.0 — THE MLB PROP MODEL") is gone with it — the
+           phone had already been hiding it since the New Look, so this
+           only makes desktop agree with what a phone has always shown.
+           The model names still travel: the league chips carry them as
+           tooltips and the About page names each one. -->
+      <div class="brand-words">
+        <h1>Qellys <span>Book</span></h1>
+      </div>
+    </a>
+    <!-- The old top-nav row retired 2026-08-11 (Ethan: "repeating tabs
+         … that take you to the same thing") — the SIDEBAR is the one
+         navigation surface on desktop, the tab bar + drawer on phones.
+         The element remains for the machinery that references #nav. -->
+    <nav class="nav" id="nav" aria-hidden="true" hidden>
+      <div class="nav-indicator" id="nav-indicator"></div>
+    </nav>
+    <div class="slate-meta">
+      <!-- SEARCH, BACK ON THE DESKTOP BAR. Ethan, 2026-08-22: "there is
+           no search button or bar on the website now. its on mobile but
+           not the desktop page."
+
+           Mine. His earlier instruction — "put it on the bottom bar
+           where the menu button is" — describes the PHONE, because the
+           bottom bar only exists on the phone. I moved the control there
+           and deleted this one, which left every screen wider than 760px
+           with no way to search at all.
+
+           So both, each where its own layout has room: this icon above
+           760px, the tab bar's Search below it. `.tabbar` is
+           `display:none` on desktop and this is hidden under 760px, so
+           they are never both on screen and the site never shows two
+           search buttons. -->
+      <button class="meta-ico" id="nav-search" title="Player search" aria-label="Player search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      </button>
+      <button class="meta-ico" id="nav-bell" title="Injury report" aria-label="Injury report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+      </button>
+      <!-- The friends inbox. The badge is filled by app.js from the
+           server's unseen count and stays hidden at zero — a red dot
+           with nothing behind it is a lie you can see from across the
+           room. -->
+      <button class="meta-ico" id="nav-msg" title="Messages from friends" aria-label="Messages from friends">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v12H8l-4 4z"/><path d="M8 9.5h8M8 13h5"/></svg>
+        <span class="msg-badge" id="nav-msg-badge" hidden></span>
+      </button>
+      <!-- Instagram and Discord used to sit here (Ethan, 2026-08-22).
+           They moved to the DRAWER's footer on 2026-08-25 — Ethan,
+           circling this row on his phone: "clean up this top row. Maybe
+           put the discord and instagram button at the bottom of the
+           3bar menu page." Outbound social links are destinations, not
+           tools you reach for mid-scroll, and the row had grown to
+           seven icons on a phone. Same ids, same server-fed wiring
+           (igMount/barLink), same hidden-until-configured rule — only
+           the address changed.
+
+           THE ORDER OF WHAT REMAINS, left to right: the things that
+           ping you (bell, messages), then the status stamps (live
+           pill, freshness, date), then you and your display (account,
+           theme) at the far end — the corner every app keeps identity
+           in. -->
+      <span id="data-source" class="data-source" title=""></span>
+      <span id="live-refresh" class="live-refresh" style="display:none"></span>
+      <span id="slate-date">—</span>
+      <!-- The render's avatar chip, minus the balance chip beside it (the
+           site never holds money). Initials when signed in; when signed
+           OUT it says "Sign in" in words.
+           A bare person glyph is not a call to action — it reads as
+           "settings" or as decoration, and the one thing a signed-out
+           visitor most needs to find was behind it. The label is added by
+           app.js rather than sitting here, because the markup is served
+           to signed-in and signed-out alike and only the browser knows
+           which one is reading it. -->
+      <button class="meta-ico nav-acct" id="nav-acct" title="Your account" aria-label="Your account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      </button>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle light / dark" aria-label="Toggle theme"></button>
+    </div>
+    <p class="nav-hint" id="nav-hint" aria-live="polite" hidden></p>
+  </header>
+
+  <div class="shell">
+  <!-- The drawer's scrim. TWO placement decisions, both paid for:
+
+       A REAL ELEMENT, not body::after. It was ::after paint, and taps
+       fell THROUGH to the dimmed page: the browser focused whatever sat
+       under the finger and scrolled it into view before any click could
+       be cancelled (measured: a scrim tap on #futures yanked the page
+       from 600 to 0). A real node owns its hit-testing.
+
+       AND IT SITS BEFORE THE DRAWER IN THE DOM. Ethan's 2026-08-19
+       recording: on iPhone the page dimmed and blurred but NO drawer
+       arrived — three taps, three times. It reproduces on no desktop
+       engine, because on paper the ordering is already correct (drawer
+       z-index 50 over scrim 45). Both elements build their own stacking
+       context — the drawer through `transform`, the scrim through
+       `backdrop-filter` — and a compositor that promotes the blurred
+       layer out of that comparison paints it over a drawer that is
+       genuinely there. Source order is the belt to that brace: last
+       painted wins among equals, so the drawer must come AFTER.
+       Shown only under body.menu-open, ≤900px. -->
+  <div id="scrim" aria-hidden="true"></div>
+
+  <!-- The loud staleness bar. Empty and hidden until the data is older
+       than STALE_LOUD_MS; see renderStaleBar(). It sits ABOVE everything
+       the page says, because when it shows, everything the page says is
+       out of date. -->
+  <div id="stalebar" role="status" hidden></div>
+
+
+  <!-- The rail: every destination, grouped, always one glance away.
+       This replaces the old header switcher AND the hamburger dropdown —
+       the render’s answer to "the menu looks horrible" is that a real
+       product keeps its destinations in a sidebar, not a popover.
+       Same machinery underneath: these are the SAME .sport-btn /
+       .nav-btn classes and data attributes every existing handler binds
+       to, so switching, per-sport hidden tabs, and standalone modes all
+       work unchanged. On phones the whole rail slides in as the drawer
+       behind #menu-toggle. -->
+  <aside class="sidebar" id="sidebar" aria-label="Site navigation">
+    <div class="sb-greet">
+      <span id="sb-hi">Welcome</span>
+      <b id="sb-name">to the Book</b>
+    </div>
+
+    <div class="sb-sec" id="sport-switch">
+      <div class="sb-label" data-head="sport">Leagues</div>
+      <div class="sb-group sb-chips" data-group="leagues">
+        <!-- The titles carry each league's model name — the old Models
+             group's three rows were these same chips wearing different
+             names, so the names moved here when the group dissolved
+             (2026-08-17, the navigation declutter). -->
+        <button class="sport-btn active" data-sport="nfl" data-kind="league" title="NFL — The NFL Book, the pro-bettor spec">NFL</button>
+        <button class="sport-btn" data-sport="cfb" data-kind="league" title="College football — attention is the axis">CFB</button>
+        <button class="sport-btn" data-sport="mlb" data-kind="league" title="MLB — Scalpy 2.0, the model behind the board">MLB</button>
+        <button class="sport-btn" data-sport="nba" data-kind="league" title="NBA — the Scalpy probability engine">NBA</button>
+        <button class="sport-btn" data-sport="wnba" data-kind="league" title="WNBA — the Scalpy engine, on probation">WNBA</button>
+        <button class="sport-btn" data-sport="ufc" data-kind="league" title="UFC — Scalpy MMA, the fight model">UFC</button>
+      </div>
+
+      <!-- Ethan, 2026-08-12: "the Polly market page and fantasy page and
+           meme coin page up here" — the three markets ride the same chip
+           grid instead of hiding at the bottom of the menu. Their own
+           label, because a prediction market is not a league. -->
+      <div class="sb-label" data-head="markets">Markets</div>
+      <div class="sb-group sb-chips" data-group="markets">
+        <!-- Renamed from POLY 2026-08-18 — Ethan: "change the name of the
+             polly market page to 'prediction market'". The page reads two
+             venues, so naming it after one was always a squint. -->
+        <button class="sport-btn" data-sport="intel" data-kind="tool"
+                title="Prediction Market — Kalshi prices + Polymarket informed flow">PREDICT</button>
+        <button class="sport-btn" data-sport="fantasy" data-kind="tool"
+                title="Fantasy football — usage, scripts, buy-low">FNTSY</button>
+        <button class="sport-btn" data-sport="memes" data-kind="tool"
+                title="Rocket Radar — Solana meme-coin momentum and danger">MEMES</button>
+      </div>
+
+      <!-- Ethan's render pack, 2026-08-12: the grouped sidebar —
+           Dashboard up top, then RESEARCH / MODELS / MY TOOLS. Every
+           destination the old groups carried survives (preservation
+           rule); the bet slip and the Upgrade card do not exist here
+           because the site takes no money. Badges only when true:
+           the Live count is real, and nothing wears NEW as decoration. -->
+      <div class="sb-group" data-group="pages">
+        <button class="nav-btn sb-item active" data-view="recommended" data-hint="tonight’s picks">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>
+          Dashboard</button>
+        <button class="nav-btn sb-item" data-view="likely" id="likely-tab" data-hint="most likely to hit — start here">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-4.6-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.4-7 10-7 10z"/></svg>
+          Top Picks</button>
+        <button class="nav-btn sb-item" data-view="longshots" id="longshots-tab" data-hint="plus-money darts, sized like lottery tickets">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l1.8 4.2L18 8l-4.2 1.8L12 14l-1.8-4.2L6 8l4.2-1.8z"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"/></svg>
+          Long Shots</button>
+        <button class="nav-btn sb-item" data-view="live" data-hint="live scores and open bets">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
+          Live Now <span class="sb-badge" id="sb-live-badge" hidden></span></button>
+        <button class="sport-btn sb-item" data-sport="mybets" data-kind="tool" title="Your own sportsbook P&amp;L — synced with your account">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M4 9h16M8 13h5"/></svg>
+          My Bets</button>
+        <button class="sport-btn sb-item" data-sport="record" data-kind="tool"
+                title="Every pick journaled at its real price, graded in public">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
+          Record</button>
+      </div>
+
+      <!-- The declutter, 2026-08-17. Ethan: "theres so much on the site
+           and its hard and confusing to navigate." Measured before: 37
+           rows, 1672px of drawer on a 788px phone. Three cuts, nothing
+           lost:
+             * Top Picks (an anchor to the Dashboard's first section) and
+               Watchlist (a Dashboard sub-tab) left the drawer — both are
+               one visible tap on the Dashboard itself. Game Lines keeps
+               its row: it is the one sub-tab bettors scan a menu for.
+             * The Models group's three rows were the MLB/NFL/UFC chips
+               wearing model names — the names moved into the league
+               chips' titles and the header taglines.
+             * Research (11 flat rows) split into Betting and a foldable
+               Library; the daily surfaces ship open, reference ships
+               folded, and the choice is remembered (qb_sb_folds). -->
+      <button class="sb-label sb-fold" data-head="research" data-fold="research"
+              type="button" aria-expanded="false">Betting
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="sb-group" data-group="research" hidden>
+        <!-- ORDERED BY THE EVIDENCE BEHIND EACH BOARD, which is the order
+             engine/boards.guide() has always used and this menu never did.
+             Ethan, 2026-08-30: "i made the site and im getting confused on
+             it... idk what bets i should and shouldnt be using."
+
+             Most Likely leads because it is the board the measurements
+             support — the model ranks who hits at 0.69-0.77 AUC. Value
+             Bets ranks LAST of the three bet boards because its edge
+             claim tests at 0.468, a coin flip, and it is the only one
+             that stakes money. A menu that led with it was pointing
+             people at the weakest thing on the site. -->
+        <button class="nav-btn sb-item" data-view="edge" data-hint="where we think the price is wrong — the only board we stake">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+          Value Bets</button>
+        <button class="nav-btn sb-item sb-subtab" data-subtab="gamebets" data-hint="moneyline, spread &amp; totals">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1.4"/><circle cx="14" cy="12" r="1.4"/><circle cx="10" cy="18" r="1.4"/></svg>
+          Game Lines</button>
+        <button class="nav-btn sb-item" data-view="scanner" data-hint="stale &amp; arb lines across books">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h5M4 4v5M20 4h-5M20 4v5M4 20h5M4 20v-5M20 20h-5M20 20v-5M7 12h10"/></svg>
+          Line Shopping</button>
+        <button class="nav-btn sb-item" data-view="futures" data-hint="the whole season, simulated">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M5 4h14v3a7 7 0 0 1-14 0z"/><path d="M5 6H3a3 3 0 0 0 3 4M19 6h2a3 3 0 0 1-3 4"/></svg>
+          Futures</button>
+      </div>
+
+      <button class="sb-label sb-fold" data-head="library" data-fold="library"
+              type="button" aria-expanded="false">Library
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <!-- Ships [hidden] so the fold holds before app.js runs — the CSS
+           .sb-group[hidden] rule is what makes it stick (display:flex on
+           .sb-group would beat the UA's [hidden] otherwise). -->
+      <div class="sb-group" data-group="library" hidden>
+        <button class="nav-btn sb-item" data-view="injuries" data-hint="who’s out, league-wide">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 4h6v5h5v6h-5v5H9v-5H4V9h5z"/></svg>
+          Injuries &amp; News</button>
+        <button class="nav-btn sb-item" data-view="weather" data-hint="tonight’s conditions, park by park">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17a5 5 0 1 1 1-9.9A6 6 0 1 1 18 17z"/><path d="M8 21h.1M12 21h.1M16 21h.1"/></svg>
+          Weather</button>
+        <button class="nav-btn sb-item" data-view="trending" data-hint="form movers">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+          Trending</button>
+        <button class="nav-btn sb-item" data-view="rosters" data-hint="every team’s roster">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.6"/><path d="M15.8 14.6a5.5 5.5 0 0 1 5.7 5.4"/></svg>
+          Rosters</button>
+        <button class="nav-btn sb-item" data-view="players" data-hint="search a player">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+          Players</button>
+        <button class="nav-btn sb-item" data-view="standings" data-hint="records &amp; the bracket">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
+          Rankings</button>
+      </div>
+
+      <button class="sb-label sb-fold" data-head="tools" data-fold="tools"
+              type="button" aria-expanded="false">My Book
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="sb-group" data-group="tools" hidden>
+        <button class="nav-btn sb-item" data-view="alerts" data-hint="line moves, injuries, the desk">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+          Alerts <span class="sb-badge" id="sb-alert-badge" hidden></span></button>
+        <button class="nav-btn sb-item" data-view="streak" data-hint="pick 3, keep the streak alive — free">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2.8c3.6 3.9 6.3 6.7 6.3 10.4a6.3 6.3 0 1 1-12.6 0c0-1.9.9-3.6 2.4-5.4.6 1.5 1.5 2.4 2.7 2.9C9.9 8.5 10.5 5.5 12 2.8z"/></svg>
+          Streak</button>
+        <button class="nav-btn sb-item" data-view="bankroll" data-hint="size your units">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.7 2.5 1.7c0 2.6-5 1.6-5 4.2 0 1 1 1.7 2.5 1.7s2.5-.7 2.5-1.7"/></svg>
+          Bankroll</button>
+      </div>
+
+      <!-- The menu's second reorganisation, 2026-08-25. Ethan: "make
+           sure the whole menu is organized professionally and how it
+           should be and would make sense." Before this, Why Us / Method
+           / Status / About were 6-character chips in the drawer's
+           footer — technically present, practically invisible — while
+           Results Tracker and The Lab sat inside My Book, which is
+           supposed to mean YOUR book (your bets, your alerts, your
+           streak, your bankroll). Everything that argues the SITE's
+           case — the public record, the backtests, how the numbers are
+           made, whether the feeds are up — now lives here under one
+           heading, as full named rows. Folded by default like Library:
+           these are pages you visit to decide whether to trust the
+           place, not pages you open every night. Every destination
+           survives (the preservation rule); only the footer chips are
+           gone, replaced by rows a person can actually read. -->
+      <button class="sb-label sb-fold" data-head="proof" data-fold="proof"
+              type="button" aria-expanded="false">Proof
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="sb-group" data-group="proof" hidden>
+        <button class="sport-btn sb-item" data-sport="lab" data-kind="tool" title="The walk-forward backtests">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8 3h8"/></svg>
+          The Lab</button>
+        <button class="sport-btn sb-item" data-sport="methodology" data-kind="tool"
+                title="How every number on the board is made">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+          Methodology</button>
+        <button class="sport-btn sb-item" data-sport="status" data-kind="tool"
+                title="When each board last rebuilt, and what the feeds are doing">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg>
+          Status</button>
+        <button class="sport-btn sb-item" data-sport="why" data-kind="tool"
+                title="Why this beats a picks service">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9a2.8 2.8 0 1 1 3.6 2.7c-.9.3-.8 1-.8 1.8M12 17v.1"/></svg>
+          Why Us</button>
+        <button class="sport-btn sb-item" data-sport="about" data-kind="tool"
+                title="What this site is and isn’t — and the responsible-gambling terms">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v.1M12 11v6"/></svg>
+          About</button>
+      </div>
+    </div>
+
+    <!-- High Confidence Mode — a REAL filter, not a marketing toggle: on,
+         the board and Top Picks show A-grade picks only (quality ≥ 80,
+         the same bands the journal grades by). -->
+    <div class="sb-hcm" id="sb-hcm">
+      <div class="sb-hcm-words">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.2-8 11-4.6-1.8-8-6-8-11V5z"/><path d="M12 8v5M12 16.2v.1"/></svg>
+        <div><b>High Confidence</b><span>A-grade picks only</span></div>
+      </div>
+      <button class="sb-hcm-switch" id="hcm-toggle" role="switch" aria-checked="false">
+        <span class="knob" aria-hidden="true"></span><span class="sb-hcm-state">Off</span>
+      </button>
+    </div>
+
+    <!-- Parlay Mode — the render's second toggle (Ethan, 2026-08-11:
+         "ditch the parlay zone screen but keep the same rules"). The
+         page is gone; the SAME screened tickets — correlation-priced,
+         one per slate, journaled on the Record page — appear on Home
+         while this is on. The rules never moved: renderParlays and the
+         engine's screen are untouched. -->
+    <div class="sb-hcm" id="sb-pz">
+      <div class="sb-hcm-words">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 2v4H4v-4a2 2 0 0 0 0-2z"/><path d="M14 7v10" stroke-dasharray="2 2"/></svg>
+        <div><b>Parlay Mode</b><span>2-leg tickets, screened</span></div>
+      </div>
+      <button class="sb-hcm-switch" id="pz-toggle" role="switch" aria-checked="false">
+        <span class="knob" aria-hidden="true"></span><span class="sb-hcm-state">Off</span>
+      </button>
+    </div>
+
+    <!-- The four footer chips (Why Us / Method / Status / About) moved
+         up into the Proof group as full rows, 2026-08-25 — six
+         characters at the bottom of a drawer is where a page goes to be
+         technically present. The standing record stays: it is the one
+         number the whole site is sold on. -->
+    <div class="sb-foot">
+      <a class="standing" id="standing-record" href="#record"
+         title="Every pick journaled at its real book price and graded in public"></a>
+      <!-- The outbound social links, moved down from the topbar
+           (2026-08-25, Ethan: "put the discord and instagram button at
+           the bottom of the 3bar menu page"). Same ids, so igMount's
+           server-fed wiring holds unchanged: each stays hidden until
+           the server sends its link, and the Discord invite is sent
+           only to an entitled caller — the absence of the string IS the
+           check. <a> and not buttons because they navigate: middle-
+           click, long-press and "copy link address" all keep working. -->
+      <div class="sb-social">
+        <a class="sb-social-link nav-ig" id="nav-ig" href="#" target="_blank"
+           rel="noopener noreferrer" title="Qellys Book on Instagram"
+           aria-label="Qellys Book on Instagram" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>
+          Instagram</a>
+        <a class="sb-social-link nav-dc" id="nav-dc" href="#" target="_blank"
+           rel="noopener noreferrer" title="The members’ Discord"
+           aria-label="The members’ Discord" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.4 17.4c-2.4-.6-4-1.7-4-1.7.4-3.9 1.8-7 1.8-7a12.4 12.4 0 013.4-1.4l.6 1.2a15 15 0 013.6 0l.6-1.2a12.4 12.4 0 013.4 1.4s1.4 3.1 1.8 7c0 0-1.6 1.1-4 1.7l-.9-1.5"/><path d="M7.2 15.9c2.9 1.35 6.7 1.35 9.6 0"/><path d="M9.6 13.1v.01M14.4 13.1v.01"/></svg>
+          Discord</a>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- THE ONLY WAY BACK WHEN THE WALL IS UP.
+         `body.walled` hides the sidebar, the topbar and the tab bar, and
+         two pages stay reachable behind it on purpose: Record, because it
+         is the evidence the subscription is sold on, and Account, because
+         somebody who has already paid has to be able to sign in. Landing
+         on either left the reader with no navigation at all — Ethan:
+         "there is no back button to get back to the paywall page, so you
+         are just stuck there and have to close the app."
+
+         Hidden by default and shown by the router; see _switchViewNow. -->
+    <a class="wall-back" id="wall-back" href="#paywall" hidden>
+      <span aria-hidden="true">←</span> Back to plans</a>
+
+    <!-- Recommended -->
+    <section class="view active" id="view-recommended">
+      <!-- ORDER: the picks come first.
+           Measured on an iPhone 13, the old order put "Tonight's picks" at
+           1030px — 1.6 full screens below the fold — on the page that gets
+           opened first every day. Everything above it was masthead, then
+           753px of stadium diagrams: context, rendered ahead of the
+           product. The complaint was that the site felt cramped; it was
+           not cramped, the thing you came for was buried.
+
+           The ballparks are still here and still worth having. They are
+           what a pick is priced INTO, so they read better as the answer to
+           "why that number" than as the first thing on the page. -->
+      <div id="probation-note"></div>
+      <div id="advisory-note"></div>
+      <!-- The morning card strip: last night's fully-graded line beside
+           tonight's count — the "two dopamine hits in one visit" moment
+           from the daily-rhythm plan. Filled from the feed's
+           settle_recap event; empty div costs nothing. -->
+      <div id="daycard-zone"></div>
+      <div id="talent-note"></div>
+
+      <!-- VENUES FIRST, by Ethan's call (2026-08-08). This block sat below
+           the picks and the reason is still true and worth knowing rather
+           than deleting: measured on an iPhone 13, venues-first put
+           "Tonight's picks" at 1030px — 1.6 screens below the fold, on the
+           page opened first every day. What changed is the judgement, not
+           the arithmetic. The scroller is one row that scrolls sideways
+           rather than 753px of stacked diagrams, so the cost is far
+           smaller than it was when that number was taken; the current
+           figure is in tests/test_board_order.py and is re-measured there
+           rather than remembered. -->
+      <!-- RE-ORDERED 2026-08-11 (Ethan, from his phone: "it should be
+           top bets the stadiums then roi. Feels more organized and
+           serving its function") — the picks lead, the stadiums follow,
+           the performance panel after. One order on every screen. -->
+      <div id="top-picks"></div>
+
+      <!-- Quick Tools — the launcher row. Filled by renderQuickTools();
+           placed at the top of the board room by REC_ROOMS. -->
+      <div id="quick-tools"></div>
+
+      <!-- The render's strip header: title left, working controls right
+           (league, sort, strip/grid layout). The league select mirrors
+           the sidebar chips — one source of truth, two handles. -->
+      <div class="strip-head" id="games-head">
+        <div class="section-title hero-title" id="games-title">Tonight’s ballparks
+          <span class="sub">— real park shapes, roof state, live wind and the home-run
+          factor each one is playing to right now</span>
+        </div>
+        <div class="strip-controls" id="games-controls">
+          <select id="games-sport" aria-label="Switch league"></select>
+          <select id="games-sort" aria-label="Sort games">
+            <option value="start">Sort: Start Time</option>
+            <option value="picks">Sort: Most Picks</option>
+          </select>
+          <button class="meta-ico mode-btn" id="games-mode-strip" title="Scrolling strip"
+                  aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+          <button class="meta-ico mode-btn" id="games-mode-grid" title="Grid"
+                  aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></button>
+        </div>
+      </div>
+      <!-- WHEN the slate above actually is, when that is not now.
+
+           Ethan, 2026-08-14: "there is games tonight yet they are not
+           showing on the website … its displaying the first week of the
+           regular season." He was right, and the title was the lie: the
+           strip says "This week's stadiums" over Week 1 fixtures that
+           are three weeks away, because `_current_nfl_week` reads
+           nflverse's schedule and nflverse has no preseason in it. The
+           board was never wrong about WHAT it was showing, only about
+           WHEN — and a static title cannot say when. -->
+      <div id="slate-horizon"></div>
+      <div class="games-outer" id="games-outer">
+        <!-- HIDDEN UNTIL THERE IS SOMEWHERE TO SCROLL. `syncStripArrows()`
+             reveals these and it is the ONLY thing that draws them, so
+             the default has to be the safe state: on a night with no
+             games renderGames() returns before that function is ever
+             reached, and an arrow that defaults to visible is then two
+             dead buttons on the board — which is what
+             tests/test_deadcontrols.py found on 2026-08-23.
+
+             An inline style rather than the `hidden` attribute: the
+             attribute is `display:none` from the user-agent sheet and
+             `.strip-arrow { display: grid }` outranks it, so `hidden`
+             here would do nothing at all. An inline style is what
+             `style.display = ""` clears. -->
+        <button class="strip-arrow prev" id="games-prev" aria-label="Scroll games back"
+          style="display:none"
+          ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M14.5 5l-7 7 7 7"/></svg></button>
+        <div class="games-scroller hero-games" id="games"></div>
+        <button class="strip-arrow next" id="games-next" aria-label="Scroll games forward"
+          style="display:none"
+          ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9.5 5l7 7-7 7"/></svg></button>
+      </div>
+
+
+      <div id="parlay-mode" hidden>
+        <div class="section-title" id="parlays-title">Parlay tickets
+          <span class="sub" id="parlays-sub">— screened, not built; the old Parlay Zone’s
+          exact rules (correlation-priced, one ticket per slate, journaled on the Record
+          page). Almost always the answer is no.</span>
+        </div>
+        <div id="parlays-body"></div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div id="home-perf"></div>
+
+      <div id="best-bets"></div>
+
+      <!-- MOST LIKELY, ON THE PAGE PEOPLE ACTUALLY LAND ON.
+           Ethan, 2026-08-30: "why are we not showing any of those bets on
+           the main page". The likelihood board is the one the
+           measurements support and it lived entirely behind a menu row,
+           so the landing page's only answer to "what should I bet" was
+           the board with the weakest evidence. Filled by
+           renderLikelyTop(); empty when the slate has no ranked props. -->
+      <div id="likely-top"></div>
+
+      <!-- The preseason fixture block lived here Aug 2026 and was
+           RETIRED 2026-08-25 (Ethan: "get rid of the pre season section
+           for nfl... I'd rather just be prepared for the regular season
+           to start"). The engine behind it (nflpre.py and friends)
+           stays dormant for a future August; only the surface is gone. -->
+      <div id="team-form"></div>
+
+      <div class="empty-slate" id="empty-slate" style="display:none"></div>
+
+
+
+      <div class="section-title" id="gamebets-title" style="display:none">Game bets
+        <span class="sub">— moneyline, spread &amp; total edges from the team model</span>
+      </div>
+      <div class="gamebets-wrap" id="gamebets"></div>
+
+      <!-- NFL only: contract-incentive chases, measured from our own
+           ingested season logs. Filled by renderIncentives(); empty for
+           every other sport. -->
+      <div id="incentive-watch"></div>
+
+      <!-- NFL only: the playoff picture and its usage risks — clinched
+           teams rest, eliminated teams shut down. renderRestWatch(). -->
+      <div id="rest-watch"></div>
+
+      <!-- Every sport: recent injury designations on TONIGHT'S teams,
+           joined from the league-wide board so a fresh Questionable
+           can't sit silently under a pick. renderInjuryWatch(). -->
+      <div id="injury-watch"></div>
+
+      <!-- id so the sub-tab grouping can move it with the board it
+           belongs to; the sliders filter `#cards` and are useless
+           sitting in a room where no card is. -->
+      <div class="controls" id="rec-controls" style="margin-top:20px">
+        <div class="control">
+          <label for="min-conf">Min confidence <b id="conf-val">6.0</b></label>
+          <input type="range" id="min-conf" min="0" max="10" step="0.5" value="6" />
+        </div>
+        <div class="control">
+          <label for="min-edge">Min edge <b id="edge-val">2%</b></label>
+          <input type="range" id="min-edge" min="0" max="15" step="0.5" value="2" />
+        </div>
+        <div class="control">
+          <label for="max-juice">Max juice <b id="juice-val">-350</b></label>
+          <input type="range" id="max-juice" min="-800" max="-100" step="25" value="-350" />
+        </div>
+        <div class="control toggle">
+          <label><input type="checkbox" id="show-all" /> Show non-recommended props</label>
+        </div>
+      </div>
+
+      <div class="cards" id="cards"><p class="loading">Loading model…</p></div>
+    </section>
+
+    <!-- Bankroll — the render's top-nav destination, honestly scoped:
+         sizing YOUR units. No balance is held here and nothing is
+         deposited — the number is yours, kept in your browser and your
+         Qellys account, and every stake suggestion on the site is a
+         percentage of it. -->
+    <section class="view" id="view-bankroll">
+      <div class="section-title">Bankroll
+        <span class="sub">— tell the site your bankroll and unit size, and every stake
+        suggestion is sized to YOUR money. Stored in your browser (and your account when
+        signed in) — this site never holds a balance and never takes a deposit.</span>
+      </div>
+      <div class="card bk-card">
+        <div class="control bankroll">
+          <label>Bankroll <b id="unit-note">enter to size bets</b></label>
+          <div class="bankroll-inputs">
+            <span class="pfx">$</span>
+            <input id="bankroll" type="number" min="0" step="10" placeholder="1000" inputmode="numeric" aria-label="Bankroll in dollars" />
+            <input id="unit-pct" type="number" min="0.1" max="10" step="0.1" value="1" title="% of bankroll per unit" aria-label="Percent of bankroll per unit" />
+            <span class="sfx">% / unit</span>
+          </div>
+        </div>
+        <p class="bk-note">One unit is the percentage above of whatever you enter — the
+        standard is 1&ndash;2%. A Strong Play stakes more units than a Play, and the
+        suggested-exposure tile on Home totals tonight&rsquo;s recommended stakes in
+        your units. Nothing here is a deposit; it&rsquo;s arithmetic on your own number.</p>
+      </div>
+      <!-- The render's goal + balance-over-time (2026-08-11), powered by
+           the user's OWN My Bets log — never a held balance. -->
+      <div id="bk-journal"></div>
+    </section>
+
+    <!-- Live — every open journaled bet, tracked as the games run -->
+    <section class="view" id="view-live">
+      <!-- The render's LIVE NOW board: every game in progress across the
+           sports we model, with the league chips. Below it, what this
+           page always carried — our open journaled bets, tracked. -->
+      <div id="live-board"></div>
+      <!-- The sweat: journaled bets with their LIVE win probability, on
+           live_build's 12-second clock (web/data/sweat.json). The slower
+           tracker below still lists everything and reconciles counts;
+           this is the same set of bets with the number that moves. -->
+      <div id="sweat-zone"></div>
+      <div id="live-picks"></div>
+    </section>
+
+    <!-- TONIGHT — every recommended bet, each with its own chart.
+         Ethan, 2026-08-13: "where it shows the 'props' button on the
+         mobile site, that should be replaced with a page that shows
+         todays reccomended bets with the bar graphs and shit like we
+         have." The phone tab pointed at the Edge Board, which is a
+         wall of prices — a research table, not tonight's card. -->
+    <section class="view" id="view-tonight">
+      <div id="tonight-body"></div>
+    </section>
+
+    <!-- One game — reached by clicking a card in the stadium strip -->
+    <section class="view" id="view-game">
+      <div id="game-body"></div>
+    </section>
+
+    <!-- One game's whole play-by-play — reached by clicking a live card -->
+    <section class="view" id="view-pbp">
+      <div id="pbp-body"></div>
+    </section>
+
+    <!-- One prop — reached by clicking a recommended pick -->
+    <section class="view" id="view-prop">
+      <div id="prop-body"></div>
+    </section>
+
+    <!-- The pricing wall. Shown INSTEAD of the app when the gate is on
+         and this visitor is not entitled. It is a shop, not a lock: the
+         lock is that web/data/*.json is already the redacted board (see
+         engine/gate.py), so nothing here is what stops anyone. -->
+    <section class="view" id="view-paywall"></section>
+
+    <!-- Checkout. The order summary and what you are buying; the card
+         fields are NOT here and never will be — they belong to whichever
+         processor takes over, on their origin, in their iframe. -->
+    <section class="view" id="view-checkout"></section>
+
+    <!-- The members' Discord. Built entirely in JS because what it says
+         depends on the answer to "has this reader paid" — the invite
+         itself is only ever sent to somebody the server has decided is
+         entitled, so it cannot be sitting in this file, which is a
+         static asset served to everybody. -->
+    <section class="view" id="view-discord"></section>
+
+    <!-- Creating an account is its own page. It used to be a second
+         button under the sign-in fields, which meant the same two boxes
+         asked for "the password you have" and "a password you are
+         choosing" depending on which button you pressed — and told the
+         browser it was the former either way. -->
+    <section class="view" id="view-signup"></section>
+
+    <!-- Track Record -->
+    <section class="view" id="view-record">
+      <div class="section-title">Track Record
+        <span class="sub">— every recommended pick, journaled at its real price and graded
+        against the final result. The receipts.</span>
+      </div>
+      <div id="record-body"></div>
+    </section>
+
+    <!-- The Lab — the walk-forward backtests, published. The Book grades
+         what we actually bet going forward; this grades the model itself
+         against stored history, which is the only evidence available
+         while the forward sample is still thin. -->
+    <section class="view" id="view-lab">
+      <div class="section-title">The Lab
+        <span class="sub">— every walk-forward replay of the production model against
+        stored history. Does it forecast better than guessing?</span>
+      </div>
+      <div id="lab-body"></div>
+    </section>
+
+    <!-- Edge Board -->
+    <section class="view" id="view-edge">
+      <div class="section-title">Edge Board
+        <span class="sub">— every bet priced better than the book’s number, sorted by expected value.
+        Wider net than Recommended: smaller edges and longer odds included, honestly labeled.</span>
+      </div>
+      <div class="longshot-note" id="edge-note"></div>
+      <div id="edge-board"></div>
+    </section>
+
+    <!-- Prediction Market Intelligence -->
+    <section class="view" id="view-intel">
+      <div class="section-title">Prediction Market
+        <span class="sub">— two venues, two lenses. Kalshi’s CFTC-regulated order books read
+        as PRICES: an exchange mid is the market’s probability with no vig to strip.
+        Polymarket’s public wallets read as FLOW: who’s moving real money and how anomalous
+        it looks. Public data, statistical flags — probabilities, never verdicts.</span>
+      </div>
+      <div id="intel-body"></div>
+    </section>
+
+    <!-- My Bets — the user's OWN sportsbook bets, tracked locally -->
+    <!-- Account — its own screen, not a card stacked inside My Bets.
+         Ethan, 2026-08-16: "the login page is hidden and should be on the
+         main screen … it needs to look professional." It was reachable
+         only by pressing an unlabelled person glyph that dropped you into
+         a bet log, three cards down. Signing in is the first thing a
+         paying customer does and it had no address of its own. -->
+    <section class="view" id="view-account">
+      <div id="account-body"></div>
+    </section>
+
+    <section class="view" id="view-mybets">
+      <div class="section-title">My Bets
+        <span class="sub">— the bets YOU placed at the sportsbooks, logged by hand and kept
+        in this browser. Your own running P&amp;L by book, separate from the model’s record.
+        Make an account to keep it on every device — it stays on your own
+        computer, and no sportsbook passwords are ever asked for.</span>
+      </div>
+      <!-- You vs the model — tail/fade records (roadmap #5). Its own
+           host above the hand-logged bets: these are calls against the
+           board's picks, not wagers, and the copy says so. -->
+      <div id="tailfade-strip"></div>
+      <div id="mybets-body"></div>
+    </section>
+
+    <!-- Injury report — per sport, league-wide -->
+    <!-- Weather — tonight's conditions park by park, plus the desk's
+         forecast rows when the Kalshi weather markets are priced.
+         (Ethan's Zeno sidebar render, 2026-08-12.) -->
+    <section class="view" id="view-weather">
+      <div class="section-title">Weather
+        <span class="sub">— tonight’s conditions at every outdoor venue, from the same feed
+        the model prices with. Domes say so; wind that moves a total is called out.</span>
+      </div>
+      <div id="weather-body"></div>
+    </section>
+
+    <!-- Alerts — a digest, not a push service: line movement on tonight's
+         picks, the injury watch, and the desk's recommendations, rebuilt
+         on every refresh. -->
+    <section class="view" id="view-alerts">
+      <div class="section-title">Alerts
+        <span class="sub">— what changed: line moves on tonight’s board, the injury watch,
+        and the prediction desk. Rebuilt each refresh while the site is open — nothing
+        here pushes to your phone, and it says so rather than pretending.</span>
+      </div>
+      <div id="alerts-body"></div>
+    </section>
+
+    <!-- Messages — the friends inbox behind the topbar envelope
+         (Ethan, 2026-08-25: "there should be a message button at the
+         top with an inbox with the messages from friends"). Everything
+         here is from people YOU added by invite link; there is no way
+         for a stranger's words to reach this page. -->
+    <section class="view" id="view-messages">
+      <div class="section-title">Messages
+        <span class="sub">— picks and parlays your friends sent you. Opening one shows it
+        under your own account, so what is behind the paywall stays there.</span>
+      </div>
+      <div id="messages-body"></div>
+    </section>
+
+    <!-- The Streak — the free daily game. No money on it anywhere: picks
+         are bragging rights, the slate is published facts (player, line,
+         start time), and the engine's own opinions never appear here. -->
+    <section class="view" id="view-streak">
+      <div class="section-title">The Streak
+        <span class="sub">— free, every day: pick 3 from tonight’s props, win more than
+        you lose, and the streak lives. Miss a day and nothing happens; play and lose
+        and it’s back to zero. No money on it — just the leaderboard.</span>
+      </div>
+      <div id="streak-body"></div>
+    </section>
+
+    <section class="view" id="view-injuries">
+      <div class="section-title">Injury Report
+        <span class="sub">— every current designation in the league, freshest first. A
+        status board, not a diagnosis: what the team filed, when it was filed, and the
+        projected return where one exists.</span>
+      </div>
+      <div id="injuries-body"></div>
+    </section>
+
+    <!-- Rocket Radar (Solana meme coins) -->
+    <section class="view" id="view-memes">
+      <div class="section-title">Rocket Radar
+        <span class="sub">— Solana meme-coin order flow, scored as TWO numbers that are never
+        blended: momentum (is it igniting?) and risk (can you get out?). Risk is a gate, not
+        a discount — a coin over the line never reaches the rocket list however hard it
+        accelerates. A filter for danger, not a crystal ball; nothing here is a bet.</span>
+      </div>
+      <div id="memes-body"></div>
+    </section>
+
+    <!-- UFC (Scalpy MMA) -->
+    <section class="view" id="view-ufc">
+      <div class="section-title">UFC — Scalpy MMA
+        <span class="sub">— distributions of outcomes, never predictions. One event, four-ounce
+        gloves: win probability hard-capped at 88%, method of victory modeled as a joint that
+        must sum to 100%, and every unbet fight goes on the pass list with a reason.</span>
+      </div>
+      <div id="ufc-body"></div>
+    </section>
+
+    <!-- NBA (Scalpy) -->
+
+    <!-- Fantasy Football -->
+    <section class="view" id="view-fantasy">
+      <div class="section-title">Fantasy Football
+        <span class="sub">— volume is predictive, efficiency is noise. Usage shares and
+        their trends, buy-low/sell-high from volume-expected points, and game scripts
+        straight from the Vegas line.</span>
+      </div>
+      <div id="fantasy-body"></div>
+    </section>
+
+    <!-- About — what this site is, and the honest terms it comes with -->
+    <section class="view" id="view-about">
+      <div class="section-title">What this is
+        <span class="sub">— read this first if you’ve just landed here: what the
+        site does, what it deliberately doesn’t do, and the rules that apply
+        to all of it.</span>
+      </div>
+      <div id="about-body"></div>
+    </section>
+
+    <!-- Methodology — how the numbers are made, and the log of when the
+         way they are made changed. Separate from About (what this site
+         is) and from Why Us (why it is worth paying for): this one is
+         mechanics, for the reader who wants to check the work. -->
+    <section class="view" id="view-methodology">
+      <div class="section-title">How the model works
+        <span class="sub">— where every number on the board comes from, what is
+        fitted against results and what is still an assumption, and the
+        haircuts that come off before anything is published.</span>
+      </div>
+      <div id="methodology-body"></div>
+    </section>
+
+    <!-- Status — is it live right now. The one page that answers the
+         question the freshness chip can only answer for the board you
+         happen to be looking at. -->
+    <section class="view" id="view-status">
+      <div class="section-title">Status
+        <span class="sub">— when each board last rebuilt, what the odds and
+        lineup feeds are doing, and how long a full cycle takes on this
+        machine. Measured, not asserted.</span>
+      </div>
+      <div id="status-body"></div>
+    </section>
+
+    <!-- Why Us — positioning + the open math toolbox -->
+    <section class="view" id="view-why">
+      <div class="section-title">Why us
+        <span class="sub">— what makes this different from every picks service,
+        with the receipts linked and the math open for anyone to check.</span>
+      </div>
+      <div id="why-body"></div>
+    </section>
+
+    <!-- Market Scanner -->
+    <section class="view" id="view-scanner">
+      <div class="section-title">Market Scanner
+        <span class="sub">— structural plays from cross-book price comparison: arbitrage,
+        middles, low-hold pairs, and where the sharp money sits. No model required —
+        just the books disagreeing with each other.</span>
+      </div>
+      <div id="scanner-body"></div>
+    </section>
+
+    <!-- Long Shots -->
+    <section class="view" id="view-likely">
+      <div class="section-title" id="likely-title">Most Likely to Hit
+        <span class="sub" id="likely-sub">— grouped by the kind of bet, ranked by how likely it is</span>
+      </div>
+      <div class="longshot-note" id="likely-note"></div>
+      <!-- A plain block, not `.cards`: this host holds SHELVES now, each
+           with its own card grid inside it. Leaving the grid on the host
+           made every shelf a grid cell. -->
+      <div id="likely"></div>
+    </section>
+
+    <section class="view" id="view-longshots">
+      <div class="section-title" id="longshots-title">Long Shots
+        <span class="sub" id="longshots-sub">— anytime touchdowns, priced on opportunity not hype</span>
+      </div>
+      <div class="longshot-note" id="longshots-note"></div>
+      <div class="cards" id="longshots"></div>
+    </section>
+
+    <!-- Parlay Zone. A screen, not a builder: the doctrine is that "no
+         qualifying parlay" is the normal output, so the page is designed
+         around saying that well rather than around a card that rarely
+         exists. The clash ledger below the ticket is the real content —
+         it is the record of which props were fighting each other. -->
+    <!-- Futures. The one page here that is about months rather than tonight,
+         and it has to say so twice: these numbers come from simulating the
+         rest of the season rather than from reading a price, and in the
+         preseason they rest entirely on last year. Both caveats ride in the
+         payload so every surface inherits the same wording. -->
+    <section class="view" id="view-futures">
+      <div class="section-title" id="futures-title">Futures
+        <span class="sub" id="futures-sub">— the rest of the season, played out twenty thousand times.</span>
+      </div>
+      <div id="futures-body"></div>
+    </section>
+
+    <!-- Active rosters -->
+    <section class="view" id="view-rosters">
+      <div class="section-title" id="rosters-title">Active rosters
+        <span class="sub" id="rosters-sub">— every team as it stands today.</span>
+      </div>
+      <div class="search-wrap">
+        <span class="ico"><svg class="ic" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4.3"/><path d="M10.4 10.4L14 14"/></svg></span>
+        <input id="roster-search" type="text" autocomplete="off" aria-label="Search a team or player on the rosters"
+               placeholder="Search a team or a player… (e.g. 49ers, SF, Purdy)" />
+      </div>
+      <div id="rosters-body"></div>
+    </section>
+
+    <!-- Standings + postseason bracket -->
+    <section class="view" id="view-standings">
+      <div class="section-title" id="standings-title">Standings
+        <span class="sub" id="standings-sub">— counted from our own results.</span>
+      </div>
+      <div id="standings-body"></div>
+    </section>
+
+    <!-- Trending -->
+    <section class="view" id="view-trending">
+      <div class="section-title">Trending across the league
+        <span class="sub">— momentum &amp; value from the model, not betting handle</span>
+      </div>
+      <div class="trend-grid" id="trending"></div>
+    </section>
+
+    <!-- Players -->
+    <section class="view" id="view-players">
+      <div class="section-title">Player search <span class="sub">— pull up form, game logs and the active prop</span></div>
+      <!-- The scope, worn on the page: the search looks only at one
+           league, so the page says which — and offers the others. -->
+      <div class="std-chips search-scope" id="search-scope"></div>
+      <!-- The last few names looked up, while the box is empty. -->
+      <div class="std-chips search-recent" id="search-recent" hidden></div>
+      <div class="search-wrap">
+        <span class="ico"><svg class="ic" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4.3"/><path d="M10.4 10.4L14 14"/></svg></span>
+        <input id="player-search" type="text" placeholder="Search a player… (e.g. Amon-Ra, Jacobs)" autocomplete="off" aria-label="Search a player" />
+      </div>
+      <div class="player-grid" id="players"></div>
+    </section>
+  </main>
+
+  <!-- The right rail (Home only): what the model knows tonight, and what
+       is on right now. Filled by renderRail() from the same slate payload
+       the board renders — nothing here is written by hand. -->
+  <aside class="rail" id="rail" aria-label="Tonight at a glance">
+    <!-- Ethan's rail render (2026-08-11): Key insights + the Live Now
+         box, no bet slip ("Obv don't include the betslip thing").
+         The slip's slot goes to the prediction desk instead — the
+         newest thing on the site that can honestly fill it, and only
+         when a rec actually exists. -->
+    <div class="rail-card" id="rail-insights" hidden></div>
+    <div class="rail-card" id="rail-desk" hidden></div>
+    <div class="rail-card" id="rail-live" hidden></div>
+  </aside>
+  </div><!-- /.shell -->
+
+  <footer class="footer">
+    <p>
+      <b>This site publishes a model’s estimates. It is not betting advice.</b>
+      Every number here is a probability, not a promise. Every pick is recorded
+      at the price we found it and graded in public on the Record page, so you
+      can always check for yourself whether the model is winning or losing.
+      No model wins every night — be suspicious of anyone who claims theirs does.
+    </p>
+    <p style="margin-top:6px">
+      You must be 21 or older to bet. Please bet responsibly, and never bet
+      money you cannot afford to lose. If gambling stops being fun, free and
+      confidential help is available 24/7 in the US — call or text
+      <b>1-800-GAMBLER</b>.
+    </p>
+    <!-- THE AFFILIATION LINE BELONGS HERE, not only in Terms §9. Every
+         board on this site prints league, team and sportsbook marks —
+         NFL, FanDuel, DraftKings — and the page a visitor actually reads
+         is this one, not the Terms. Saying it once in a contract nobody
+         opens is the version that protects nothing. -->
+    <p style="margin-top:6px">
+      Team, league and sportsbook names are the trademarks of their owners
+      and are used here descriptively. Qellys Book is not affiliated with,
+      endorsed by or sponsored by any league, team, sportsbook, prediction
+      market or exchange.
+    </p>
+    <p style="margin-top:6px">
+      <a href="terms.html">Terms of Service</a> ·
+      <a href="privacy.html">Privacy Policy</a>
+    </p>
+  </footer>
+
+  <!-- The phone tab bar (Ethan's mobile render, 2026-08-11): Home,
+       Live, My Bets raised in the middle, Props, and Menu — which opens
+       the same drawer, so every other destination stays two taps away.
+       The render's center slot was the bet slip; ours is My Bets, the
+       honest version of that job. Phones only (CSS). -->
+  <!-- The parlay slip's dock — the sportsbook pattern: picks collect in
+       a bar pinned to the bottom of the screen and expand into the
+       ticket. Filled and shown by app.js; empty slip, no bar. -->
+  <div id="qb-slip" hidden></div>
+
+  <nav class="tabbar" id="tabbar" aria-label="Quick navigation">
+    <button class="tb-item nav-btn" data-view="recommended" data-hint="tonight’s picks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+      Home</button>
+    <button class="tb-item nav-btn" data-view="tonight" data-hint="tonight’s bets, with the charts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-7"/></svg>
+      Tonight</button>
+    <button class="tb-item tb-center nav-btn" data-view="live" data-hint="live scores and open bets"
+            title="What’s happening right now">
+      <span class="tb-center-disc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12h4l2.5-6 3.5 12 2.5-6H22"/></svg>
+      <span class="tb-badge" id="tb-live-badge" hidden></span></span>
+      Live</button>
+    <button class="tb-item sport-btn" data-sport="record" data-kind="tool"
+            title="Every pick journaled and graded in public">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h14v16l-3.5-2-3.5 2-3.5-2L5 20z"/><path d="M9 9h6M9 13h4"/></svg>
+      Results</button>
+    <!-- Ethan, 2026-08-22: "The search button is now gone. Maybe we put
+         it on the bottom bar where the menu button is, then move the menu
+         button too be like three bars on the top left."
+
+         It WAS gone, and not hidden — the top bar's icon row had grown
+         past the space it had and the icons were overflowing their
+         container to the left, sliding underneath the wordmark. Search
+         was the first one off the edge.
+
+         So the drawer moves to a hamburger at top left, where a drawer
+         belongs and where nothing has to compete for the space, and its
+         slot down here goes to search — which is a destination, which is
+         what this bar is for. -->
+    <button class="tb-item" id="tb-search" aria-label="Search for a player">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/></svg>
+      Search</button>
+  </nav>
+
+  <script src="js/teams.js"></script>
+  <script src="js/teams_mlb.js"></script>
+  <script src="js/teams_nba.js"></script>
+  <script src="js/teams_wnba.js"></script>
+  <!-- ApexCharts, VENDORED (web/vendor — our own server serves it, no
+       CDN, works offline on the LAN). It upgrades the money charts to
+       animated, tooltip-scrubbing area charts; when the file is missing
+       the hand-drawn SVGs render exactly as before — the library is an
+       enhancement, never a dependency. -->
+  <script src="vendor/apexcharts.min.js"></script>
+  <script src="js/visuals.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/register-sw.js"></script>
+</body>
+</html>

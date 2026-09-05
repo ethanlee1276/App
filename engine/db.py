@@ -1,0 +1,917 @@
+"""Historical database — local SQLite store for both sports.
+
+A single dependency-free (stdlib ``sqlite3``) store that persists the raw
+material for real model training and backtesting:
+
+  * ``games``            — one row per game with context (scores, spread,
+    total, roof/park, surface, weather);
+  * ``player_game_logs`` — one row per (player, game, market) with the stat
+    value, the atomic unit the projection/backtest walk forward over;
+  * ``ingest_log``       — an audit trail of what was ingested and when.
+
+The database grows every season: ingestion is idempotent (``INSERT OR
+REPLACE`` on natural keys), so re-running a season overwrites rather than
+duplicates. Query helpers turn the store back into the ``entries`` shape the
+backtest and ML trainers consume, so training runs off persisted history
+instead of re-hitting the network.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "history.db"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS games (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT,
+    home TEXT, away TEXT, home_score REAL, away_score REAL,
+    spread REAL, total REAL, roof TEXT, surface TEXT, temp REAL, wind REAL,
+    extra TEXT,
+    PRIMARY KEY (sport, season, period, game_id)
+);
+CREATE TABLE IF NOT EXISTS player_game_logs (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT,
+    player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER,
+    market TEXT, value REAL,
+    PRIMARY KEY (sport, season, period, game_id, player, market)
+);
+CREATE TABLE IF NOT EXISTS ingest_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sport TEXT, kind TEXT, detail TEXT, rows INTEGER, ts TEXT
+);
+-- PRESEASON, IN ITS OWN TABLE ON PURPOSE.
+--
+-- Ethan, 2026-08-14, after preseason opened: "we didn't recommend props or
+-- anything like that." Nothing prices August and nothing here changes that
+-- — this is the collection step that has to happen first, because the
+-- reason we cannot model preseason is that we have never stored a snap of
+-- it: `engine/sources/nflverse` keeps season_type REG at ingest, and
+-- nflverse does not publish preseason player stats at all.
+--
+-- THE SEPARATE TABLE IS THE WHOLE SAFETY ARGUMENT. Every consumer of
+-- `player_game_logs` reads it by (sport, season, period) and none of them
+-- filter by season type, because until now none of them had to. Preseason
+-- rows in that table would poison the roster page's "last seen", the
+-- identity map's current club, the team-log charts, the projections and
+-- every form window — silently, and in August, when a starter's series and
+-- a half would land in the same average as a full September game.
+--
+-- Sharing a table and remembering to filter is a rule someone has to keep.
+-- A different table is a rule the schema keeps for them.
+CREATE TABLE IF NOT EXISTS preseason_player_logs (
+    sport TEXT, season INTEGER, week INTEGER, game_id TEXT,
+    player TEXT, team TEXT, opponent TEXT, position TEXT, home INTEGER,
+    market TEXT, value REAL,
+    PRIMARY KEY (sport, season, week, game_id, player, market)
+);
+-- Preseason FINALS, in the same quarantine as the box scores above.
+--
+-- Added 2026-08-14 for one reason: without an outcome column there is
+-- nothing for the usage scan to be fitted AGAINST. `preseason_player_logs`
+-- says a starting quarterback threw nine times; only this table says the
+-- game ended 20-17, and a claim that resting starters moves a total is
+-- untestable until both are on disk.
+--
+-- SAME ARGUMENT AS THE LOGS, one table down. Every consumer of `games`
+-- reads it by (sport, season, period) and none filter by season type, so
+-- an August exhibition landing in there would enter team ratings, the
+-- form windows, the strength-of-schedule work and the moneyline backtest
+-- — all of which would then be quietly averaging a game whose starters
+-- left in the first quarter beside one that decided a division.
+CREATE TABLE IF NOT EXISTS preseason_games (
+    sport TEXT, season INTEGER, week INTEGER, game_id TEXT, date TEXT,
+    home TEXT, away TEXT, home_score REAL, away_score REAL,
+    completed INTEGER, venue TEXT,
+    PRIMARY KEY (sport, season, game_id)
+);
+-- Who a player IS, as opposed to what he did in one game.
+--
+-- A SEPARATE TABLE, not a column on player_game_logs, for two reasons. An
+-- id is a property of a person and would repeat identically across every
+-- row that person ever generates — 306,355 NBA log rows for a few hundred
+-- players. And the feed that knows the id is the box score, which we walk
+-- once per game; writing it per stat row would multiply it by the number
+-- of markets.
+--
+-- `headshot` is stored rather than built. ESPN's box score usually carries
+-- the photo URL beside the athlete, and a URL a feed handed us cannot be
+-- wrong the way a pattern reconstructed from an id can — the failure mode
+-- this session has paid for three times.
+CREATE TABLE IF NOT EXISTS player_assets (
+    sport TEXT, player TEXT, espn_id TEXT, headshot TEXT, seen TEXT,
+    PRIMARY KEY (sport, player)
+);
+-- Point-in-time sportsbook prices. This is what lets a backtest measure the
+-- model against the number a bettor could actually have taken, rather than a
+-- naive baseline. Historical API calls cost extra credits and a past price
+-- never changes, so rows are keyed to be written once and reused forever.
+CREATE TABLE IF NOT EXISTS odds_history (
+    sport TEXT, taken_at TEXT, event_id TEXT, home TEXT, away TEXT,
+    player TEXT, market TEXT, book TEXT,
+    line REAL, over_odds INTEGER, under_odds INTEGER,
+    PRIMARY KEY (sport, taken_at, event_id, player, market, book)
+);
+-- Who started each game. The game-level models are dominated by starting
+-- pitchers in MLB; without this the moneyline backtest replays every game
+-- as bullpen-vs-bullpen (measured: Brier worse than the base rate).
+CREATE TABLE IF NOT EXISTS game_starters (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, team TEXT,
+    pitcher TEXT, throws TEXT,
+    PRIMARY KEY (sport, season, period, game_id, team)
+);
+-- Home-plate umpire per game. Umpire zone size measurably moves strikeouts
+-- and the run environment; profiles are computed from this table joined to
+-- final scores and starter K logs.
+CREATE TABLE IF NOT EXISTS game_umpires (
+    sport TEXT, season INTEGER, period TEXT, game_id TEXT, umpire TEXT,
+    PRIMARY KEY (sport, season, period, game_id)
+);
+-- Team-week aggregates from play-by-play: volume (plays), intent (PROE —
+-- pass rate over expectation), efficiency (EPA per play, offense with
+-- pass/rush splits and defense allowed), and neutral pace (seconds per
+-- snap, game in the balance). The measured coaching/efficiency layer.
+CREATE TABLE IF NOT EXISTS team_weeks (
+    sport TEXT, season INTEGER, period TEXT, team TEXT,
+    plays INTEGER, proe REAL,
+    off_epa REAL, pass_epa REAL, rush_epa REAL, def_epa REAL, pace REAL,
+    PRIMARY KEY (sport, season, period, team)
+);
+-- Every calibration sweep, kept. "Are we getting better?" was
+-- unanswerable: each run printed to a terminal and vanished, so a model
+-- change could be evaluated on the forward bet record (see MODEL_ERAS)
+-- but never on whether the PROBABILITIES improved — which is the thing
+-- the change was actually trying to fix, and the thing that moves years
+-- before a P&L sample gets large enough to say anything.
+--
+-- One row per market per run. `code` is the git SHA, so a jump in ECE
+-- can be tied to a commit instead of a memory.
+CREATE TABLE IF NOT EXISTS calibration_runs (
+    ts TEXT, code TEXT, sport TEXT, market TEXT,
+    n INTEGER, brier REAL, ece REAL,
+    base_rate REAL, skill REAL, hedged REAL,
+    bins TEXT, note TEXT,
+    PRIMARY KEY (ts, sport, market)
+);
+CREATE INDEX IF NOT EXISTS idx_calib_runs
+    ON calibration_runs (sport, market, ts);
+CREATE INDEX IF NOT EXISTS idx_odds_hist_lookup
+    ON odds_history (sport, market, player, taken_at);
+CREATE INDEX IF NOT EXISTS idx_logs_lookup
+    ON player_game_logs (sport, market, player, season, period);
+CREATE INDEX IF NOT EXISTS idx_games_lookup
+    ON games (sport, season, period);
+-- The context joins below key on (sport, period, ...), which is NOT a prefix
+-- of either table's primary key — those lead with season. Without these,
+-- SQLite falls back to matching on sport alone and re-scans the whole
+-- context table once per log row. Measured on a six-season MLB history:
+-- one platoon-split call went from >10 minutes to under two seconds. The
+-- ordinary cost of holding more history is disk; this was the cost of
+-- holding it in a shape the queries could not use.
+CREATE INDEX IF NOT EXISTS idx_starters_team
+    ON game_starters (sport, period, team);
+CREATE INDEX IF NOT EXISTS idx_starters_game
+    ON game_starters (sport, period, game_id);
+CREATE INDEX IF NOT EXISTS idx_umpires_game
+    ON game_umpires (sport, period, game_id);
+CREATE INDEX IF NOT EXISTS idx_logs_period
+    ON player_game_logs (sport, market, period, player);
+-- Joining a player's game log to ANOTHER market's log for the same game —
+-- strikeouts to outs, so a rate and the length it was recorded over come
+-- from one start rather than from two averages that never met. Both
+-- indexes above lead with (sport, market) and then player or period, so
+-- the game_id lookup had nothing to use and the join degraded to a scan
+-- of the whole table per outer row. SQLite sometimes rescues that with an
+-- automatic transient index, which is why it is fast on some databases
+-- and hangs on others; the planner's choice depends on statistics an
+-- un-ANALYZEd file does not have. This makes it deterministic.
+CREATE INDEX IF NOT EXISTS idx_logs_game
+    ON player_game_logs (sport, market, game_id, player);
+-- WHO, without caring WHAT. Every index above leads (sport, market, …),
+-- because the model reads one market at a time. The SITE does not: the
+-- player search, the profile head's team lookup, and the head-to-head
+-- (versus/opponents_of) all ask "everything on this man" — WHERE sport
+-- AND player, no market — and with nothing to use they degraded to
+-- scanning the sport's whole partition per query. Measured on a
+-- 2,030,400-row fixture: an NFL head-to-head 501ms → 111ms, a CFB
+-- name-prefix search 81ms → 5ms — and that is on a dev box with fast
+-- disk; the droplet's one core is where Ethan felt it (2026-09-01:
+-- "the versus button takes a long time to load"). season+period ride
+-- along so "most recent appearance" ordering comes straight off the
+-- index.
+CREATE INDEX IF NOT EXISTS idx_logs_player
+    ON player_game_logs (sport, player, season, period);
+"""
+
+GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
+             "home_score", "away_score", "spread", "total", "roof", "surface",
+             "temp", "wind", "extra"]
+LOG_COLS = ["sport", "season", "period", "game_id", "player", "team",
+            "opponent", "position", "home", "market", "value"]
+ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
+                  "market", "book", "line", "over_odds", "under_odds"]
+
+
+#: Concurrency, and why this is not only a test concern.
+#:
+#: `database is locked` broke two files on the droplet mid-deploy
+#: (test_gamebets, test_hr_engine) and almost certainly starved two more
+#: into their 900s timeout (test_isotonic, test_ledger). The immediate
+#: cause is that a test run on the live box shares these files with the
+#: RUNNING SITE — the refresher journals while the suite reads.
+#:
+#: But the suite only made it visible. The same shape is live traffic:
+#: the refresher writes the ledger while the settler grades and the
+#: server answers /api/record off it. On the default journal mode a
+#: reader and a writer cannot coexist at all, and the default timeout is
+#: zero — so the loser raises instead of waiting.
+#:
+#: WAL lets readers carry on through a write, and a busy timeout makes
+#: two writers queue rather than one of them failing. Thirty seconds is
+#: chosen to ride out a build's write burst while still surfacing a real
+#: deadlock as a failure rather than a hang.
+#:
+#: Both are per-connection PRAGMAs, except journal_mode, which is a
+#: property of the FILE and persists once set — so the first connection
+#: after this ships converts the database and every later one inherits
+#: it. Wrapped because a read-only directory (or :memory:) refuses the
+#: conversion, and that must not take down a caller that only wanted to
+#: read.
+def tune(conn) -> None:
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.DatabaseError:
+        pass
+    conn.execute("PRAGMA busy_timeout=30000")
+
+
+def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
+    path = Path(path)
+    if str(path) != ":memory:":
+        path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    tune(conn)
+    conn.executescript(SCHEMA)
+    # Migrations for columns added after a table shipped (CREATE IF NOT
+    # EXISTS won't touch an existing table).
+    for col in ("off_epa", "pass_epa", "rush_epa", "def_epa", "pace"):
+        try:
+            conn.execute(f"ALTER TABLE team_weeks ADD COLUMN {col} REAL")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass                     # already there
+    try:
+        conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass                              # column already there
+    return conn
+
+
+#: How many rows one write transaction may carry.
+#:
+#: A 115,000-row `executemany` is ONE transaction, and it holds SQLite's
+#: single write lock for as long as it takes. On the droplet — one core,
+#: the refresh loop building boards against the same file — the college
+#: backfill and a board build deadlocked each other past the 30-second
+#: `busy_timeout` and the ingest died on its third season:
+#:
+#:     sqlite3.OperationalError: database is locked
+#:     (ingest.py cfb --seasons 2022-2026, 2026-09-03, after 229,277 rows)
+#:
+#: WAL lets readers run during a write; it does NOT let two writers
+#: overlap, so the only thing that helps is holding the lock in slices.
+#: Committing every few thousand rows means the longest any writer waits
+#: is one slice rather than one season.
+#:
+#: The trade is that a killed ingest leaves part of its rows written.
+#: Every writer here is an upsert keyed on identity, so re-running is
+#: idempotent and lands exactly where it left off — against the current
+#: behaviour, which is that the whole season is lost and the error names
+#: a lock rather than the fix.
+WRITE_CHUNK = 5000
+
+
+def _chunked(conn, sql: str, params: list) -> int:
+    """Run one bulk write in transactions of WRITE_CHUNK rows."""
+    for i in range(0, len(params), WRITE_CHUNK):
+        conn.executemany(sql, params[i:i + WRITE_CHUNK])
+        conn.commit()
+    return len(params)
+
+
+def _upsert(conn, table: str, cols: list[str], rows: list[dict]) -> int:
+    if not rows:
+        return 0
+    placeholders = ", ".join(f":{c}" for c in cols)
+    sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
+    return _chunked(conn, sql, [{c: r.get(c) for c in cols} for r in rows])
+
+
+def upsert_games(conn, rows: list[dict]) -> int:
+    """Merge game rows: a NULL in the new row never erases a known value.
+
+    Two ingest layers write the same (sport, season, period, game_id) keys —
+    ranged results carry final scores but no weather, per-day slates carry
+    park/weather context but NULL scores. A plain INSERT OR REPLACE meant
+    whichever ran second wiped the other's columns; the slate loop runs after
+    results, which silently blanked every final score in the table (and with
+    them team ratings and the moneyline backtest).
+    """
+    if not rows:
+        return 0
+    keys = ("sport", "season", "period", "game_id")
+    placeholders = ", ".join(f":{c}" for c in GAME_COLS)
+    updates = ", ".join(f"{c}=COALESCE(excluded.{c}, games.{c})"
+                        for c in GAME_COLS if c not in keys)
+    sql = (f"INSERT INTO games ({', '.join(GAME_COLS)}) VALUES ({placeholders}) "
+           f"ON CONFLICT({', '.join(keys)}) DO UPDATE SET {updates}")
+    return _chunked(conn, sql, [{c: r.get(c) for c in GAME_COLS} for r in rows])
+
+
+def drop_games(conn, rows: list[dict]) -> int:
+    """Remove game rows that are never going to happen on this date.
+
+    A postponed game keeps its schedule entry, so it lands in the table as
+    a row with no score — indistinguishable from a game still in progress,
+    which is exactly what the settle guard looks for. Every bet on either
+    team that night then waits forever on a game that will not be played.
+
+    Only ever called with games the schedule API positively reports as
+    postponed/cancelled. Scorelessness alone must NOT reach here: a game in
+    progress looks the same, and deleting its row would remove the guard
+    that stops bets grading against a partial line. The game returns to the
+    table on its make-up date, ingested normally, where it belongs.
+    """
+    if not rows:
+        return 0
+    dropped = 0
+    for r in rows:
+        cur = conn.execute(
+            "DELETE FROM games WHERE sport=? AND period=? AND game_id=? "
+            # Never delete something that has a result — if a score is
+            # present the game was played, whatever the schedule says now.
+            "AND home_score IS NULL",
+            (r["sport"], r["period"], r["game_id"]))
+        dropped += cur.rowcount
+    conn.commit()
+    return dropped
+
+
+def upsert_player_logs(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "player_game_logs", LOG_COLS, rows)
+
+
+def upsert_odds_history(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+PRESEASON_COLS = ["sport", "season", "week", "game_id", "player", "team",
+                  "opponent", "position", "home", "market", "value"]
+
+
+def upsert_preseason_logs(conn, rows: list[dict]) -> int:
+    """Store exhibition box-score lines. Same shape as a player log, a
+    different table — see the schema note for why that separation is
+    structural rather than a convention."""
+    if not rows:
+        return 0
+    cols = ",".join(PRESEASON_COLS)
+    marks = ",".join("?" * len(PRESEASON_COLS))
+    return _chunked(
+        conn,
+        f"INSERT OR REPLACE INTO preseason_player_logs ({cols}) VALUES ({marks})",
+        [tuple(r.get(c) for c in PRESEASON_COLS) for r in rows])
+
+
+PRESEASON_GAME_COLS = ["sport", "season", "week", "game_id", "date",
+                       "home", "away", "home_score", "away_score",
+                       "completed", "venue"]
+
+
+def upsert_preseason_games(conn, rows: list[dict]) -> int:
+    """Exhibition finals. A SCHEDULED game never overwrites a played one.
+
+    The scoreboard is re-read every six hours all August, and a fixture
+    that has already finished is still listed — but ESPN sends `score: "0"`
+    for anything unplayed, which `parse_games` correctly nulls out. If a
+    later read of an unchanged row were allowed to write those nulls back
+    the finals would erase themselves the morning after each game, which is
+    the exact failure `drop_unplayed` exists to prevent one table over.
+    """
+    if not rows:
+        return 0
+    cols = ",".join(PRESEASON_GAME_COLS)
+    marks = ",".join("?" * len(PRESEASON_GAME_COLS))
+    n = 0
+    for r in rows:
+        if not r.get("game_id"):
+            continue
+        if r.get("home_score") is None:
+            cur = conn.execute(
+                "SELECT home_score FROM preseason_games "
+                "WHERE sport=? AND season=? AND game_id=?",
+                (r.get("sport", "nfl"), int(r.get("season") or 0),
+                 str(r["game_id"]))).fetchone()
+            if cur is not None and cur[0] is not None:
+                continue                    # a final already stands here
+        conn.execute(
+            f"INSERT OR REPLACE INTO preseason_games ({cols}) VALUES ({marks})",
+            tuple(r.get(c) for c in PRESEASON_GAME_COLS))
+        n += 1
+    conn.commit()
+    return n
+
+
+ASSET_COLS = ["sport", "player", "espn_id", "headshot", "seen"]
+
+
+def upsert_player_assets(conn, rows: list[dict]) -> int:
+    """Player identity rows, where a BLANK never erases a known value.
+
+    A traded player keeps his id and his photo; what changes is the team,
+    and that lives on the game log. So the only thing a re-ingest can do
+    here is re-state the same two facts — with one exception that a plain
+    INSERT OR REPLACE would get wrong.
+
+    Not every box score carries `athlete.headshot`. A player whose photo we
+    already have can appear in a later-written game without one, and last
+    write wins would blank the face we had. Backfills do not run in date
+    order either, so this is not a rare shape. Same fix `upsert_games`
+    uses: keep the old value when the new one is empty. NULLIF, not
+    COALESCE alone, because our blank is the empty string, not NULL.
+    """
+    if not rows:
+        return 0
+    placeholders = ", ".join(f":{c}" for c in ASSET_COLS)
+    updates = ", ".join(
+        f"{c}=COALESCE(NULLIF(excluded.{c}, ''), player_assets.{c})"
+        for c in ASSET_COLS if c not in ("sport", "player"))
+    return _chunked(
+        conn,
+        f"INSERT INTO player_assets ({', '.join(ASSET_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(sport, player) DO UPDATE SET {updates}",
+        [{c: r.get(c) for c in ASSET_COLS} for r in rows])
+
+
+def player_assets(conn, sport: str) -> dict[str, dict]:
+    """``{player: {espn_id, headshot}}`` for one sport."""
+    out: dict[str, dict] = {}
+    try:
+        for r in conn.execute(
+                "SELECT player, espn_id, headshot FROM player_assets "
+                "WHERE sport=?", (sport,)):
+            out[r[0]] = {"espn_id": r[1] or "", "headshot": r[2] or ""}
+    except Exception:                                         # noqa: BLE001
+        pass          # pre-migration database: no faces, not a broken board
+    return out
+
+
+STARTER_COLS = ["sport", "season", "period", "game_id", "team", "pitcher",
+                "throws"]
+UMPIRE_COLS = ["sport", "season", "period", "game_id", "umpire"]
+TEAM_WEEK_COLS = ["sport", "season", "period", "team", "plays", "proe",
+                  "off_epa", "pass_epa", "rush_epa", "def_epa", "pace"]
+
+
+def upsert_team_weeks(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "team_weeks", TEAM_WEEK_COLS, rows)
+
+
+def upsert_game_starters(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "game_starters", STARTER_COLS, rows)
+
+
+def upsert_game_umpires(conn, rows: list[dict]) -> int:
+    return _upsert(conn, "game_umpires", UMPIRE_COLS, rows)
+
+
+def starters_by_game(conn, sport: str) -> dict:
+    """``{(period, game_id): {team: pitcher}}`` for every stored starter."""
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT period, game_id, team, pitcher FROM game_starters "
+            "WHERE sport=?", (sport,)):
+        out.setdefault((r["period"], r["game_id"]), {})[r["team"]] = r["pitcher"]
+    return out
+
+
+def have_odds_snapshot(conn, sport: str, event_id: str, taken_at: str) -> bool:
+    """Has this exact snapshot already been harvested?
+
+    Historical calls are billed at a premium and a past price is immutable, so
+    the harvester checks here before spending a credit re-fetching one.
+
+    ANY row counts, which is why the caller must ALSO know whether the
+    markets it is asking for were part of that earlier harvest — see
+    `markets_at_snapshot`. This question is "have we been here before",
+    not "do we already have what we came for", and answering the second
+    with the first is how a whole market silently fails to be bought.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM odds_history WHERE sport=? AND event_id=? AND taken_at=? LIMIT 1",
+        (sport, event_id, taken_at)).fetchone()
+    return row is not None
+
+
+def markets_at_snapshot(conn, sport: str, taken_at: str) -> set:
+    """Every market stored across ALL events in one snapshot.
+
+    The day, not the event, on purpose. A book quotes receptions on most
+    games and not all of them, so an event with no receptions row may
+    simply never have been offered one — asking per event would re-buy
+    that event on every future run forever. If the DAY holds receptions
+    rows, receptions was harvested that day, and the events already
+    stored can be skipped.
+    """
+    return {str(r[0]) for r in conn.execute(
+        "SELECT DISTINCT market FROM odds_history "
+        "WHERE sport=? AND taken_at=?", (sport, taken_at)) if r[0]}
+
+
+def closing_odds_by_date(conn, sport: str, market: str) -> dict:
+    """Latest harvested price per (player, market) on EACH date.
+
+    ``closing_odds_for`` below keeps only a player's single most-recent
+    snapshot — right for "what's the close right now", but as a backtest join
+    it discards every earlier harvested day: a player with 25 harvested
+    game-days contributes exactly one matchable date, which is how a month of
+    purchased history produced almost no extra coverage.
+
+    Returns ``{(player, YYYY-MM-DD): {"line", "over_odds", "under_odds",
+    "book", "taken_at"}}`` — within each date, the last snapshot wins, which is
+    the closest thing to that day's closing number.
+    """
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
+    out: dict = {}
+    for r in conn.execute(q, (sport, market)):
+        date = str(r["taken_at"])[:10]
+        # Ordered by taken_at, so later same-date rows overwrite earlier ones.
+        out[(r["player"], date)] = {
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        }
+    return out
+
+
+def closing_odds_all_books(conn, sport: str, market: str) -> dict:
+    """``{(player, date): [quote, ...]}`` — EVERY book, not one of them.
+
+    Deliberately a second accessor rather than a wider return from
+    `closing_odds_by_date`, whose one-quote-per-key contract the backtest
+    joins depend on — the same reasoning `calibrate.load_curves` gives.
+
+    WHY THE OTHER ONE IS NOT ENOUGH. It keeps the last row per
+    (player, date), and a single harvest writes every book at ONE
+    `taken_at`, so among those rows the winner is whichever SQLite hands
+    back last. That is an arbitrary book, and books disagree most exactly
+    where the touchdown board lives: a soft +900 and a sharp +650 on the
+    same man are a 4-point gap in implied probability. Measuring "what
+    the market charged" off a coin-flipped book conflates one book's
+    pricing with the market's, and we do not bet an arbitrary book — we
+    bet the best price on the screen.
+
+    Each list is the latest snapshot for that date, one entry per book.
+    """
+    q = ("SELECT player, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=? ORDER BY taken_at")
+    latest: dict = {}
+    out: dict = {}
+    for r in conn.execute(q, (sport, market)):
+        stamp = str(r["taken_at"])
+        key = (r["player"], stamp[:10])
+        seen = latest.get(key)
+        if seen is not None and stamp < seen:
+            continue                       # an older snapshot, already past
+        if seen is None or stamp > seen:
+            # A newer snapshot for this player-date: start the list over,
+            # so a stale book cannot linger beside a fresh one.
+            latest[key] = stamp
+            out[key] = []
+        out[key].append({
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        })
+    return out
+
+
+def closing_odds_for(conn, sport: str, market: str,
+                     player: str | None = None) -> dict:
+    """Latest harvested price per (player, market) — the closing line.
+
+    Returns ``{(player, market): {"line", "over_odds", "under_odds", "book",
+    "taken_at"}}``, taking the most recent snapshot for each.
+    """
+    q = ("SELECT player, market, book, line, over_odds, under_odds, taken_at "
+         "FROM odds_history WHERE sport=? AND market=?")
+    args: list = [sport, market]
+    if player:
+        q += " AND player=?"
+        args.append(player)
+    q += " ORDER BY taken_at"
+
+    out: dict = {}
+    for r in conn.execute(q, args):
+        # Later rows overwrite earlier ones, so the last seen is the close.
+        out[(r["player"], r["market"])] = {
+            "line": r["line"], "over_odds": r["over_odds"],
+            "under_odds": r["under_odds"], "book": r["book"],
+            "taken_at": r["taken_at"],
+        }
+    return out
+
+
+def log_ingest(conn, sport: str, kind: str, detail: str, rows: int) -> None:
+    import datetime
+    conn.execute(
+        "INSERT INTO ingest_log (sport, kind, detail, rows, ts) VALUES (?,?,?,?,?)",
+        (sport, kind, detail, rows, datetime.datetime.utcnow().isoformat(timespec="seconds")))
+    conn.commit()
+
+
+# --- queries ----------------------------------------------------------------
+def seasons_present(conn, sport: str) -> list[int]:
+    cur = conn.execute(
+        "SELECT DISTINCT season FROM player_game_logs WHERE sport=? "
+        "UNION SELECT DISTINCT season FROM games WHERE sport=? ORDER BY season",
+        (sport, sport))
+    return [r[0] for r in cur.fetchall()]
+
+
+def entries_for_market(conn, sport: str, market: str,
+                       min_games: int = 8, seasons: list[int] | None = None) -> list[dict]:
+    """Chronological per-player values for a market, as the backtest's
+    ``entries`` shape: ``[{"name", "values": [...]}, ...]``."""
+    q = ("SELECT player, value, period, team, opponent, home "
+         "FROM player_game_logs WHERE sport=? AND market=?")
+    args: list = [sport, market]
+    if seasons:
+        q += " AND season IN (%s)" % ",".join("?" * len(seasons))
+        args += list(seasons)
+    q += " ORDER BY player, season, period, game_id"
+
+    grouped: dict[str, list[float]] = {}
+    dates: dict[str, list[str]] = {}
+    teams: dict[str, list[str]] = {}
+    opps: dict[str, list[str]] = {}
+    homes: dict[str, list[int]] = {}
+    for row in conn.execute(q, args):
+        grouped.setdefault(row["player"], []).append(float(row["value"]))
+        # ``period`` is the game's real date (see engine.ingest), which is what
+        # lets a backtest line each game up with the price offered that day.
+        dates.setdefault(row["player"], []).append(str(row["period"]))
+        # WHERE each game happened, for the context-aware walk: team +
+        # home flag name the park, so a replay can re-run history with
+        # the venue layer switched on instead of a neutral stadium.
+        teams.setdefault(row["player"], []).append(str(row["team"] or ""))
+        opps.setdefault(row["player"], []).append(str(row["opponent"] or ""))
+        homes.setdefault(row["player"], []).append(int(row["home"] or 0))
+    return [{"name": name, "values": vals, "dates": dates.get(name, []),
+             "teams": teams.get(name, []), "opps": opps.get(name, []),
+             "homes": homes.get(name, [])}
+            for name, vals in grouped.items() if len(vals) >= min_games]
+
+
+def date_ranges(conn) -> dict:
+    """First/last dates present in each store, so coverage gaps are visible.
+
+    The results store (free) and odds store (metered) grow independently; a
+    backtest is only market-relative where they OVERLAP. Seeing the two spans
+    side by side is how you spot purchased odds with no settled games to join
+    to — or vice versa."""
+    out: dict = {}
+    for sport in ("nfl", "mlb"):
+        lo, hi = conn.execute(
+            "SELECT MIN(period), MAX(period) FROM player_game_logs WHERE sport=?",
+            (sport,)).fetchone()
+        out[f"{sport}_logs"] = (lo, hi)
+        lo, hi, n = conn.execute(
+            "SELECT MIN(substr(taken_at,1,10)), MAX(substr(taken_at,1,10)), "
+            "COUNT(*) FROM odds_history WHERE sport=?", (sport,)).fetchone()
+        out[f"{sport}_odds"] = (lo, hi, n)
+    return out
+
+
+#: Reported first, in this order, whether or not they have rows — a board
+#: with an EMPTY history is the single most useful thing this summary can
+#: say, and omitting it makes "no data" and "no such sport" identical.
+CORE_SPORTS = ("nfl", "cfb", "mlb", "nba", "wnba")
+
+
+def sports_present(conn) -> list[str]:
+    """Every sport with rows, core boards first.
+
+    This used to be the literal tuple ("nfl", "mlb"), which meant a two-hour
+    NBA backfill finished by printing a summary that did not mention
+    basketball — leaving no way to tell a completed ingest from a broken
+    one except by opening SQLite.
+    """
+    found = set()
+    for table in ("games", "player_game_logs"):
+        try:
+            found.update(r[0] for r in conn.execute(
+                f"SELECT DISTINCT sport FROM {table}") if r[0])
+        except Exception:                     # table may not exist yet
+            continue
+    rest = sorted(found - set(CORE_SPORTS))
+    return list(CORE_SPORTS) + rest
+
+
+#: Distinct players PER GAME below which a day's log layer clearly stopped
+#: part-way. Per game, not per day: the first version used an absolute 120
+#: and flagged eleven days that were simply small slates — 77 players across
+#: 3 games is 26 a game, which is a complete ingest of a quiet Monday, and
+#: reporting it as a hole sent a repair walk after nothing.
+#:
+#: A real MLB game logs roughly 20-30 distinct players across both sides once
+#: the bullpen and the bench are counted. The floor is set well under that so
+#: only an unambiguous shortfall trips it: the days this catches run at 2 a
+#: game, which is one real fixture logged among a dozen exhibition ones.
+THIN_PLAYERS_PER_GAME = 12
+
+
+#: A day counts as inside the season once its surrounding week is mostly
+#: logged. Baseball is played nearly every day, so a real season is dense;
+#: anything sparser is an island.
+DENSE_WINDOW_DAYS = 7
+DENSE_WINDOW_MIN = 4
+
+
+def _logged_window(conn, where: str, args: list) -> dict:
+    """``{season: (first, last)}`` covering each season's DENSE logged region.
+
+    Min-to-max was the obvious rule and it is wrong for a specific,
+    recurring reason: MLB now opens some seasons ABROAD. The Seoul Series
+    (2024-03-20/21) and the Tokyo Series (2025-03-18/19) are regular-season
+    games played a week before domestic opening day, with spring training
+    still running in between. So the first LOGGED day of 2024 is March 20th,
+    and a plain min-to-max window drags a dozen exhibition fixtures a day
+    into scope behind it — which is precisely the eight days this report was
+    still flagging after two rounds of narrowing.
+
+    The season proper is where logging is DENSE. Walk in from each end until
+    the surrounding week is mostly logged, and the island falls off both
+    times. A genuine mid-season outage does not: the days around it are
+    dense, so it stays in scope and stays reported.
+    """
+    import datetime as _dt
+    by_season: dict[int, list[str]] = {}
+    for s, day in conn.execute(
+            f"SELECT DISTINCT season, period FROM player_game_logs "
+            f"WHERE {where} ORDER BY period", args):
+        by_season.setdefault(int(s or 0), []).append(day)
+
+    out: dict[int, tuple] = {}
+    for season, days in by_season.items():
+        have = set(days)
+
+        def dense(day: str) -> bool:
+            try:
+                d0 = _dt.date.fromisoformat(day)
+            except ValueError:
+                return True
+            n = sum(1 for k in range(-DENSE_WINDOW_DAYS, DENSE_WINDOW_DAYS + 1)
+                    if (d0 + _dt.timedelta(days=k)).isoformat() in have)
+            return n >= DENSE_WINDOW_MIN
+
+        core = [d for d in days if dense(d)]
+        out[season] = (core[0], core[-1]) if core else (days[0], days[-1])
+    return out
+
+
+def coverage_gaps(conn, sport: str = "mlb", start: str | None = None,
+                  end: str | None = None) -> list[dict]:
+    """Days INSIDE the stored span that are incomplete. Read-only, no network.
+
+    ``date_ranges`` reports first and last, which is the wrong shape for the
+    failure that actually happens. A span of 2021 to 2026 is printed with no
+    complaint while three days in the middle of it hold nothing — and those
+    holes are not cosmetic: a bet whose result was never ingested cannot
+    settle, and a day whose finals are missing is exactly the state that let
+    the settler grade props against the wrong game.
+
+    Four kinds of hole, named separately because they need different fixes:
+
+      * ``no_finals``  — games are stored for that day and none has a score.
+        The scores layer ran and came back empty.
+      * ``some_finals`` — some of the day's games have scores and some do not.
+        Usually a genuinely suspended game, occasionally a partial run.
+      * ``no_logs``    — the day's games are final but no player logs exist.
+        The scores layer worked and the log layer did not, which is the
+        expensive one: props have nothing to settle against.
+      * ``thin_logs``  — logs exist but from too few players to be a slate.
+
+    Empty days are NOT reported. Off days, the All-Star break and the
+    offseason all look like an empty day, and a report that cries wolf on
+    every Monday in November stops being read. What is reported is a day the
+    database itself says is half-finished.
+
+    TWO RESTRICTIONS, both learned from the first run against a real DB,
+    which returned 519 days and a five-year repair walk:
+
+    **Only inside each season's own logged window.** Spring training is in
+    the schedule and its games have finals, but the ingest deliberately
+    never stores player logs for them — so every day from March 1st was
+    reported as a hole, 14 games at a time. The window is taken from the
+    data rather than from a calendar: the first and last day of that season
+    that HAS logs. Anything outside it is scope, not absence.
+
+    **Only what a re-ingest can actually fill.** ``parse_results`` returns
+    completed, scored games and nothing else, so a scoreless row on a past
+    date is a postponed, cancelled or suspended game that will never be
+    scored. Running the ingest again cannot fix it, and listing it next to
+    a repairable hole under one heading is how a report sends someone on a
+    five-year walk for nothing. Those days are still returned, flagged
+    ``repairable=False``, so the caller can report them under their own
+    heading with their own remedy.
+    """
+    where = "sport=?"
+    args: list = [sport]
+    if start:
+        where += " AND period>=?"
+        args.append(start)
+    if end:
+        where += " AND period<=?"
+        args.append(end)
+    rows = conn.execute(
+        f"SELECT period, season, COUNT(*) AS n, "
+        f"COALESCE(SUM(home_score IS NOT NULL), 0) AS fin "
+        f"FROM games WHERE {where} GROUP BY period, season ORDER BY period",
+        args).fetchall()
+    logs = {r[0]: (r[1], r[2]) for r in conn.execute(
+        f"SELECT period, COUNT(*), COUNT(DISTINCT player) "
+        f"FROM player_game_logs WHERE {where} GROUP BY period", args)}
+    window = _logged_window(conn, where, args)
+    out: list[dict] = []
+    for r in rows:
+        day, n, fin = r["period"], int(r["n"] or 0), int(r["fin"] or 0)
+        lo, hi = window.get(int(r["season"] or 0), (None, None))
+        if lo and not (lo <= day <= hi):
+            continue                    # outside this season's logged scope
+        n_logs, n_players = logs.get(day, (0, 0))
+        if not fin:
+            kind, detail, ok = ("no_finals",
+                                f"{n} game(s) stored, none with a score", False)
+        elif fin < n:
+            kind, detail, ok = ("some_finals",
+                                f"{fin} of {n} game(s) have a score", False)
+        elif not n_logs:
+            kind, detail, ok = ("no_logs",
+                                f"{n} final game(s), no player logs", True)
+        elif n and n_players / n < THIN_PLAYERS_PER_GAME:
+            kind, detail, ok = ("thin_logs",
+                                f"{n_players} player(s) across {n} game(s) — "
+                                f"{n_players / n:.1f} a game, against the "
+                                f"20-30 a real fixture logs", True)
+        else:
+            continue
+        out.append({"date": day, "kind": kind, "games": n, "finals": fin,
+                    "log_rows": n_logs, "players": n_players,
+                    "repairable": ok, "detail": detail})
+    return out
+
+
+def summary(conn) -> dict:
+    out: dict = {"games": {}, "scored_games": {}, "player_logs": {}, "seasons": {}}
+    for sport in sports_present(conn):
+        out["games"][sport] = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
+        # Games with a final score — what team ratings and the moneyline
+        # backtest actually run on. A big gap vs the raw count means an ingest
+        # layer erased results.
+        out["scored_games"][sport] = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL "
+            "AND away_score IS NOT NULL", (sport,)).fetchone()[0]
+        out["player_logs"][sport] = conn.execute(
+            "SELECT COUNT(*) FROM player_game_logs WHERE sport=?", (sport,)).fetchone()[0]
+        out["seasons"][sport] = seasons_present(conn, sport)
+    return out
+
+
+def nfl_game_winds(conn, season: int) -> dict[str, float]:
+    """``{game_id: wind_mph}`` for one NFL season, game_id being ``AWAY@HOME``.
+
+    This is what fills the conditions column in a player's past-performance
+    table (redesign spec §6.4). The weekly player feed carries no weather at
+    all — it is the `games` table, populated by a separate ingest, that knows
+    the wind — so the table showed a column of em dashes until this join
+    existed.
+
+    Keyed by game_id alone rather than (period, game_id): a matchup happens
+    at most twice a season and the second meeting is at the other venue, so
+    the id already differs. Weeks are therefore not needed to disambiguate,
+    and not requiring them means a log whose week numbering is off by a
+    playoff round still finds its game.
+    """
+    out: dict[str, float] = {}
+    for row in conn.execute(
+            "SELECT game_id, wind FROM games WHERE sport='nfl' AND season=? "
+            "AND wind IS NOT NULL", (season,)):
+        out[str(row["game_id"])] = float(row["wind"])
+    return out

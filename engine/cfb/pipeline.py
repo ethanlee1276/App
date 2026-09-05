@@ -1,0 +1,287 @@
+"""CFB pipeline — the shared spine, with the college-specific dial on top.
+
+Deliberately NOT a new projection engine. §3 says the decision framework is
+the same one every sport here uses, and §5 says the power rating is
+opponent-adjusted efficiency — which is what ``engine.teamrates`` already
+builds from ingested results, and ``engine.gamebets`` already prices into
+moneyline/spread/total. Rebuilding that for college football would be
+copying working code to make it worse.
+
+What this module adds is everything the NFL spine does not know:
+
+* which games the market is actually watching, and therefore how much of
+  the edge to assume is error (§3.5, §8);
+* a per-tier bar to clear rather than one number (§3.6);
+* the two refusals — unconfirmed quarterback, unverified December roster
+  (§2.3, §2.4) — which withhold a play instead of shading it;
+* the 0–100 grade with CFB's weights, information certainty raised to 20%
+  because this sport's reporting is the weakest (§9);
+* the caps that stop a 60-game Saturday turning into eight mediocre bets
+  (§9).
+
+A no-play Saturday is the expected output far more often than not, and
+saying so is the rule (§11).
+"""
+
+from __future__ import annotations
+
+from .model import (attention_tier, haircut_edge, min_edge_for, grade,
+                    grade_label, GradeInput, kelly_stake, apply_caps,
+                    blocking_conditions, MIN_GRADE, LOW, MARQUEE)
+
+MARKET_LABELS = {"side": "Spread", "total": "Total", "moneyline": "Moneyline",
+                 "team_total": "Team total", "prop": "Player prop"}
+
+#: The name each market answers to OUTSIDE this module.
+#:
+#: This file calls the spread "side" — §3's word, and the word
+#: `MARKET_LABELS`, `min_edge_for` and every play dict use. Every SHARED
+#: store calls the same market "spread": that is what
+#: `ledger.log_recommendations` writes for a game bet, what
+#: `engine.journalfit` therefore groups and fits under, what
+#: `engine.losspatterns` mines its closures from, and what
+#: `engine.gamecal` measures its haircut on.
+#:
+#: WHICH MEANT TWO SELF-TUNING GATES WERE DEAD FOR THE CFB SPREAD, under
+#: a comment saying they were "in parity with every engine":
+#:
+#:   * `calibrate.calibrated("cfb", "side", p)` looked up `cfb:side`.
+#:     A temperature or an isotonic curve fitted on our own settled
+#:     spreads is stored at `cfb:spread`, so the correction was written
+#:     and never read — and `is_reliable("cfb", "side")` could not see a
+#:     boundary fit at `cfb:spread` either, so the hard pass on a capped
+#:     calibration never fired on the one market it was fitted for.
+#:   * `losspatterns.veto("cfb", "side", …)` compares against closures
+#:     mined from the same `bets` table, i.e. keyed "spread". A closure
+#:     on the CFB spread matched nothing.
+#:
+#: Both fell back to something harmless-looking — identity, and no veto —
+#: which is why nothing ever looked broken. "total" and "moneyline" are
+#: spelled the same on both sides, so this is the spread and only the
+#: spread. MLB was never exposed to it: `mlb.pipeline` passes the row's
+#: own market, which is already the stored vocabulary.
+STORE_MARKET = {"side": "spread"}
+
+
+def store_key(market: str) -> str:
+    """This module's market name, as the shared stores spell it."""
+    return STORE_MARKET.get(market, market)
+
+
+def _dec(odds: int) -> float:
+    return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
+
+
+def break_even(odds: int) -> float:
+    return round(1.0 / _dec(odds), 4)
+
+
+def devig(odds_a: int, odds_b: int) -> tuple[float, float]:
+    """Multiplicative de-vig — the default the spec names (§3.2)."""
+    qa, qb = 1.0 / _dec(odds_a), 1.0 / _dec(odds_b)
+    return round(qa / (qa + qb), 4), round(qb / (qa + qb), 4)
+
+
+def volatility(game: dict, tier: str, tags: list[str]) -> str:
+    """§8 — CFB baseline volatility runs higher than the NFL at every tier.
+
+    Rivalry chaos, blowout frequency and 19-year-olds widen the
+    distribution; this is what the stake and the simulation have to respect.
+    """
+    score = 1                                    # everything starts MEDIUM-ish
+    if "rivalry" in tags:
+        score += 1
+    if tier == LOW:
+        score += 1                               # thin data, wild talent gaps
+    if abs(float(game.get("spread") or 0)) >= 21:
+        score += 1                               # blowout range
+    if not game.get("qb_confirmed"):
+        score += 1
+    return ["LOW", "MEDIUM", "HIGH", "EXTREME"][min(3, score)]
+
+
+def evaluate_play(play: dict) -> dict:
+    """One priced market → a published play, or a pass with the reason.
+
+    ``play`` carries the market (odds both ways), the model's probability,
+    and the game context. The model probability is an INPUT — produced by
+    the shared ratings/pricing layer — because the college-specific work
+    is deciding whether that number is worth betting, not recomputing it.
+    """
+    game = play.get("game") or {}
+    market = play.get("market", "side")
+    tier = attention_tier(game)
+    odds, opp_odds = int(play["odds"]), int(play["opposing_odds"])
+    # Temperature (engine/calibrate.py): the shared layer produced this
+    # probability; the college record corrects it. Keyed "cfb" so a fit
+    # for this sport's claims never leaks anywhere else.
+    # `calibrated` applies whatever form won this market's bake-off; the
+    # temperature alone silently discards a stored isotonic curve. See
+    # engine/longshots.build_pick for what that cost.
+    from ..calibrate import calibrated
+    p_model = calibrated("cfb", store_key(market), float(play["p_model"]))
+
+    p_market, _ = devig(odds, opp_odds)
+    raw = p_model - p_market
+    cut = haircut_edge(raw, tier)
+    bar = min_edge_for(tier, market)
+    tags = [t for t in (play.get("situational_tags") or [])]
+
+    base = {
+        "game": game.get("label") or f"{game.get('away','?')} @ {game.get('home','?')}",
+        "game_id": game.get("game_id", ""),
+        "market": market, "market_label": MARKET_LABELS.get(market, market),
+        "selection": play.get("selection", ""),
+        "line": play.get("line"), "odds": odds, "book": play.get("book", ""),
+        "attention_tier": tier,
+        "p_market": p_market, "p_model": round(p_model, 4),
+        "edge_raw": round(raw, 4), "edge": cut, "required_edge": bar,
+        "break_even": break_even(odds),
+        "volatility": volatility(game, tier, tags),
+        "situational_tags": tags,
+        "kickoff": game.get("kickoff", ""),
+        "conference": game.get("home_conference", ""),
+        # §11.8 — the conditions, stated with the play rather than assumed.
+        "conditions": {
+            "qb_confirmed": bool(game.get("qb_confirmed")),
+            "participation_verified": bool(game.get("participation_verified")),
+            "weather_checked": bool(game.get("weather_checked")),
+            "as_of": game.get("as_of", ""),
+        },
+        "risks": play.get("risks") or [],
+    }
+
+    # The other two self-tuning gates, in parity with every engine.
+    from .model import BET_GROUP_OF_FIVE, is_group_of_five, NOT_A_POWER_GAME
+    if not BET_GROUP_OF_FIVE and is_group_of_five(game):
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": NOT_A_POWER_GAME}
+    from ..calibrate import is_reliable
+    from ..losspatterns import veto as lp_veto
+    if not is_reliable("cfb", store_key(market)):
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": ("this market's calibration fit hit the edge of its "
+                        "search range — closed by its own fit")}
+    from ..losspatterns import minutes_until
+    _block = lp_veto("cfb", store_key(market), side=play.get("side"), odds=odds,
+                     prob=p_model, book=play.get("book"), horizon_days=0,
+                     lead_min=minutes_until(play.get("kickoff")))
+    if _block:
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": _block}
+
+    if cut < bar:
+        return {**base, "kind": "pass", "grade": 0, "grade_label": "Pass",
+                "why": (f"edge {cut:+.1%} after the {tier} haircut is under "
+                        f"this tier's {bar:.1%} bar")}
+
+    # §2.3 says the refusal PUBLISHES A CONDITIONAL — "IF the starter
+    # plays" — not nothing. So a blocked play is graded on the certainty it
+    # would have once the condition clears, and only then held. Grading it
+    # on today's ignorance instead would bury the very games worth checking:
+    # the unconfirmed quarterback is why the number is soft in the first
+    # place, so penalising the grade for it AND gating on it would mean the
+    # board never surfaces a single game worth a phone call.
+    blocks = blocking_conditions(game, market)
+    certainty = float(play.get("information_certainty", 0.0))
+    if blocks:
+        certainty = float(play.get("information_certainty_confirmed", certainty))
+
+    g = grade(GradeInput(
+        edge_after_haircut=cut, tier=tier,
+        information_certainty=certainty,
+        attention_fit=float(play.get("attention_fit", 0.0)),
+        situational_fit=float(play.get("situational_fit", 0.0)),
+        matchup_fit=float(play.get("matchup_fit", 0.0)),
+        environment_fit=float(play.get("environment_fit", 0.0))))
+    card = {**base, "grade": g, "grade_label": grade_label(g)}
+    if g < MIN_GRADE:
+        return {**card, "kind": "pass",
+                "why": f"grade {g} below the {MIN_GRADE} bar — no bet, no leans"}
+
+    # Kelly runs on the POST-haircut edge (§9), which is the whole point of
+    # haircutting: stake the number you believe, not the one you hoped for.
+    p_staked = min(0.99, break_even(odds) + cut)
+    stake = kelly_stake(p_staked, odds, tier, g,
+                        drawdown=bool(play.get("drawdown")))
+    if blocks:
+        # A conditional carries everything a play does EXCEPT the stake, so
+        # it can be acted on the moment the condition clears — and so that
+        # no renderer can mistake it for a bet that was sized.
+        return {**card, "kind": "hold", "grade_label": "Conditional",
+                "why": "; ".join(blocks),
+                "conditions_pending": blocks,
+                "stake_if_confirmed": stake,
+                "graded_as_if_confirmed": True}
+    card["stake_fraction"] = stake
+    return {**card, "kind": "play"}
+
+
+def run_cfb_slate(plays: list[dict], meta: dict | None = None) -> dict:
+    """A Saturday → the published card, the holds, and the pass list."""
+    evaluated = [evaluate_play(p) for p in plays]
+    published = [c for c in evaluated if c["kind"] == "play"]
+    holds = [c for c in evaluated if c["kind"] == "hold"]
+    passes = [c for c in evaluated if c["kind"] == "pass"]
+
+    holds.sort(key=lambda p: (-p["grade"], -p["edge"]))
+    published = apply_caps(published)
+    # A play the caps trimmed to nothing is not a play.
+    dropped = [p for p in published if p.get("stake_fraction", 0) <= 0]
+    published = [p for p in published if p.get("stake_fraction", 0) > 0]
+    published.sort(key=lambda p: (-p["grade"], -p["edge"]))
+    passes += [{**p, "kind": "pass",
+                "why": p.get("cap_note") or "no room under the slate cap"}
+               for p in dropped]
+
+    # PROBATION, ENFORCED. `engine.cfb.ratings` has always said an
+    # unfitted variance "puts the whole CFB board on probation: journaled
+    # and graded, never staked", and the page has always shown a banner
+    # saying so. Nothing read the flag: this function ran Kelly and wrote
+    # a stake regardless, so an uncalibrated board graded a play A+ and
+    # sized it at 2% of bankroll underneath a banner that said it was not
+    # being bet. A label in four files and an enforcement in none.
+    #
+    # Applied HERE, after the caps and after the zero-stake drop, on
+    # purpose. Gating earlier would make every play look cap-trimmed and
+    # sweep the board into the pass list, which loses the grades — and
+    # the grades are the entire point of a probation board. The plays
+    # stay published and ranked; only the size is withheld, and what it
+    # would have been rides alongside on `stake_if_measured`.
+    from ..probation import reasons as _prob_reasons, unstake as _unstake
+    from ..probation import advisories as _prob_advisories
+    _ratings = (meta or {}).get("ratings") or {}
+    _why = _prob_reasons(fitted=_ratings.get("fitted", True),
+                         games=_ratings.get("games", 0))
+    published = _unstake(published, _why)
+    # The conditionals too. A hold carries `stake_if_confirmed` so its
+    # chip can say "1.40u if confirmed" — and on a probation board that
+    # sentence is false twice over: confirming the starter would not
+    # produce a stake either, because the thing being waited on is a
+    # measurement, not a phone call.
+    holds = _unstake(holds, _why, stake_keys=("stake_if_confirmed",))
+    _advice = _prob_advisories("cfb")
+
+    # §11 — the closest misses, so a no-play slate still says something.
+    near = sorted((p for p in passes if p.get("edge", 0) > 0),
+                  key=lambda p: -(p["edge"] - p.get("required_edge", 0)))[:3]
+
+    return {
+        "sport": "cfb",
+        "plays": published,
+        "holds": holds,
+        "pass_list": passes,
+        "near_misses": near,
+        "no_qualifying": not published,
+        # Zero on a probation board, which is the honest number: nothing
+        # is at risk when nothing is staked.
+        "exposure": round(sum(p["stake_fraction"] for p in published), 5),
+        "probation": bool(_why),
+        "probation_reasons": _why,
+        "advisories": _advice,
+        "counts": {"priced": len(plays), "published": len(published),
+                   "held": len(holds), "passed": len(passes)},
+        "by_tier": {t: sum(1 for p in published if p["attention_tier"] == t)
+                    for t in (MARQUEE, "standard", LOW)},
+        "meta": meta or {},
+    }

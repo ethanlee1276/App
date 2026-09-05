@@ -1,0 +1,239 @@
+"""Live picks: pre-game journal rows tracked while their games run.
+
+The rules under test: only LIVE games qualify (pre-game picks on unstarted
+games stay in Tonight's Picks; finished ones settle overnight); progress
+comes from the live boxscore and can lock an over ("cleared") or kill an
+under ("busted") early; doubleheader legs route by game_number; and the
+boxscore parser turns a raw MLB Stats payload into per-market lines.
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+from engine.livepicks import assemble_live_picks
+from engine.mlb.livestats import parse_live_stats, parse_situation
+
+
+BOX = {"teams": {"home": {"players": {
+    "ID1": {"person": {"fullName": "Freddie Freeman"},
+            "stats": {"batting": {"hits": 2, "doubles": 1, "triples": 0,
+                                  "homeRuns": 0}}},
+    "ID2": {"person": {"fullName": "Ace Arm"},
+            "stats": {"pitching": {"strikeOuts": 5, "inningsPitched": "5.2"},
+                      "batting": {}}},
+}}, "away": {"players": {
+    "ID3": {"person": {"fullName": "Slug Away"},
+            "stats": {"batting": {"hits": 1, "doubles": 0, "triples": 0,
+                                  "homeRuns": 1}}},
+}}}}
+
+
+def test_parse_live_stats_computes_the_journal_markets():
+    p = parse_live_stats(BOX)
+    fred = p["freddie freeman"]
+    assert fred["hits"] == 2 and fred["total_bases"] == 3     # 1B + 2B
+    assert p["ace arm"]["strikeouts"] == 5
+    slug = p["slug away"]
+    assert slug["home_runs"] == 1 and slug["total_bases"] == 4  # 1B + HR
+
+
+def _bet(player, market, side="OVER", line=1.5, odds=-110, stake=0.5):
+    return {"player": player, "market": market, "side": side, "line": line,
+            "odds": odds, "stake_units": stake}
+
+
+def _rec(player, market, team, opp, gn=0):
+    return {"player": player, "market": market, "market_label": market,
+            "team": team, "opponent": opp, "game_number": gn}
+
+
+LIVE_G = {"home": "LAD", "away": "SF", "game_number": 1,
+          "live": {"state": "live", "period": "Top 6th",
+                   "home_score": 3, "away_score": 2}}
+PREGAME_G = {"home": "NYY", "away": "BOS",
+             "live": {"state": "scheduled"}}
+
+
+def test_every_open_bet_gets_a_phase():
+    """Live bets track, not-started bets show as upcoming — the section
+    answers "where are my 5 open bets" in ALL states, not just mid-game."""
+    bets = [_bet("Freddie Freeman", "total_bases"),
+            _bet("Aaron Judge", "total_bases")]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF"),
+            _rec("Aaron Judge", "total_bases", "NYY", "BOS")]
+    rows = assemble_live_picks(bets, recs, [LIVE_G, PREGAME_G],
+                               parse_live_stats(BOX))
+    assert [r["player"] for r in rows] == ["Freddie Freeman", "Aaron Judge"]
+    live, upcoming = rows
+    assert live["status"] == "cleared"         # 3 TB > 1.5 — over locked in
+    assert live["current"] == 3 and live["game"]["period"] == "Top 6th"
+    assert upcoming["status"] == "upcoming" and upcoming["phase"] == "upcoming"
+
+
+def test_final_games_grade_provisionally():
+    """A finished game grades on the spot — prop from the boxscore stat,
+    moneyline from the final score — flagged pending until the official
+    overnight settle."""
+    final_g = {"home": "LAD", "away": "SF", "game_number": 1,
+               "live": {"state": "final", "home_score": 5, "away_score": 2}}
+    bets = [_bet("Freddie Freeman", "total_bases", side="OVER", line=1.5),
+            _bet("Ace Arm", "strikeouts", side="OVER", line=6.5),
+            _bet("LAD", "moneyline", line=0.5),
+            _bet("SF", "moneyline", line=0.5)]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF"),
+            _rec("Ace Arm", "strikeouts", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [final_g], parse_live_stats(BOX))
+    by = {(r["player"], r["market"]): r for r in rows}
+    assert by[("Freddie Freeman", "total_bases")]["status"] == "won_pending"   # 3 > 1.5
+    assert by[("Ace Arm", "strikeouts")]["status"] == "lost_pending"           # 5 < 6.5
+    assert by[("LAD", "moneyline")]["status"] == "won_pending"                 # 5-2
+    assert by[("SF", "moneyline")]["status"] == "lost_pending"
+    # Winners sort ahead of losers, everything ahead of upcoming.
+    assert rows[0]["status"] == "won_pending"
+
+
+def test_under_can_bust_early_and_over_tracks():
+    bets = [_bet("Freddie Freeman", "total_bases", side="UNDER", line=2.5),
+            _bet("Ace Arm", "strikeouts", side="OVER", line=6.5)]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF"),
+            _rec("Ace Arm", "strikeouts", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [LIVE_G], parse_live_stats(BOX))
+    by = {r["player"]: r for r in rows}
+    assert by["Freddie Freeman"]["status"] == "busted"    # 3 TB > under 2.5
+    assert by["Ace Arm"]["status"] == "tracking"          # 5 Ks vs over 6.5
+    # Cleared/busted ordering: good news first, busts last.
+    assert rows[-1]["player"] == "Freddie Freeman"
+
+
+def test_team_bets_and_doubleheaders_route_correctly():
+    g2 = {**LIVE_G, "game_number": 2, "doubleheader": True}
+    g1_final = {"home": "LAD", "away": "SF", "game_number": 1,
+                "doubleheader": True, "live": {"state": "final"}}
+    bets = [_bet("LAD", "moneyline", line=0.5),
+            _bet("Cal Raleigh", "total_bases")]
+    recs = [_rec("Cal Raleigh", "total_bases", "LAD", "SF", gn=2)]
+    rows = assemble_live_picks(bets, recs, [g1_final, g2], {})
+    assert {r["market"] for r in rows} == {"moneyline", "total_bases"}
+    prop = next(r for r in rows if r["market"] == "total_bases")
+    assert prop["game"]["game_number"] == 2       # routed to the live leg
+    assert prop["status"] == "tracking" and prop["current"] is None
+
+
+def test_unmatchable_bets_still_show():
+    """An open bet the current board can't place (lineup changed, prop
+    dropped this cycle) must STILL appear — the section's count has to
+    match the Record's open count, always."""
+    bets = [_bet("Ghost Hitter", "total_bases"),
+            _bet("Freddie Freeman", "total_bases")]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [LIVE_G], parse_live_stats(BOX))
+    assert len(rows) == 2
+    ghost = next(r for r in rows if r["player"] == "Ghost Hitter")
+    assert ghost["status"] == "unmapped" and ghost["phase"] == "upcoming"
+    assert rows[-1] is ghost                     # unmapped sorts last
+
+
+def test_parse_situation_reads_the_at_bat_strip():
+    """Batter, outs, count, and occupied bases from a linescore payload —
+    the sportsbook-style situation strip."""
+    line = {"currentInning": 6, "inningHalf": "Top",
+            "outs": 2, "balls": 1, "strikes": 2,
+            "offense": {"batter": {"fullName": "Austin Wells"},
+                        "onDeck": {"fullName": "Aaron Judge"},
+                        "first": {"fullName": "Speedy Runner"},
+                        "third": {"fullName": "Slow Runner"}},
+            "defense": {"pitcher": {"fullName": "Ace Arm"}}}
+    s = parse_situation(line)
+    assert s["batter"] == "Austin Wells" and s["on_deck"] == "Aaron Judge"
+    assert s["pitcher"] == "Ace Arm"
+    assert (s["outs"], s["balls"], s["strikes"]) == (2, 1, 2)
+    assert s["bases"] == {"first": "Speedy Runner", "second": "",
+                          "third": "Slow Runner"}
+    assert s["half"] == "Top" and s["inning"] == 6
+    # Pre-game / missing payloads degrade to an empty situation, not a crash.
+    empty = parse_situation({})
+    assert empty["batter"] == "" and empty["outs"] == 0
+
+
+def test_situation_rides_along_on_live_rows():
+    g = {**LIVE_G, "live": {**LIVE_G["live"],
+                            "situation": {"batter": "Freddie Freeman",
+                                          "outs": 1, "bases": {}}}}
+    bets = [_bet("Freddie Freeman", "total_bases")]
+    recs = [_rec("Freddie Freeman", "total_bases", "LAD", "SF")]
+    rows = assemble_live_picks(bets, recs, [g], parse_live_stats(BOX))
+    assert rows[0]["game"]["situation"]["batter"] == "Freddie Freeman"
+
+
+def test_team_bets_track_from_the_live_score():
+    """Game totals / team totals / run lines get a live "current" from the
+    scoreboard, sportsbook-style. Runs only go up, so totals can clear or
+    bust early; a spread margin swings, so it only ever tracks; a moneyline
+    has no stat to bar at all."""
+    bets = [_bet("SF@LAD", "total", side="OVER", line=4.5),     # 5 runs in
+            _bet("LAD", "team_total", side="UNDER", line=2.5),  # LAD has 3
+            _bet("LAD", "spread", side="OVER", line=1.5),       # margin +1
+            _bet("LAD", "moneyline", line=0.5)]
+    rows = assemble_live_picks(bets, [], [LIVE_G], {})
+    by = {r["market"]: r for r in rows}
+    assert by["total"]["status"] == "cleared" and by["total"]["current"] == 5.0
+    assert by["team_total"]["status"] == "busted" and by["team_total"]["current"] == 3.0
+    assert by["spread"]["status"] == "tracking" and by["spread"]["current"] == 1.0
+    assert by["moneyline"]["status"] == "tracking" and by["moneyline"]["current"] is None
+
+
+# Runner at the TRUE END — a test defined after it never runs.
+# --- the count the page shows against the count the masthead shows -----------
+def test_open_elsewhere_counts_every_sport_not_just_this_one():
+    """ETHAN, 2026-08-09: "why does this say 7 bets are still open yet the
+    live page only shows two."
+
+    The masthead read `307 settled · 6 open` two inches above a Live tab
+    reading `2 open bet(s) on today's card`, with nothing to connect them.
+    Both numbers were right and they count different things: the Record's
+    `overall.open` is `main` across EVERY sport — those six were NFL Week
+    1, whose games are a month away — while the Live tab shows this
+    league's card. The bridge between them, `open_elsewhere`, was scoped
+    `sport='mlb'`, so the six were invisible to it and the page's own
+    comment promising it "always reconciles with the Record's" was false.
+
+    This pins the query's shape, since the bug was a WHERE clause and the
+    build that runs it needs a live slate."""
+    src = open(os.path.join(ROOT, "mlb_build.py"), encoding="utf-8").read()
+    i = src.index("_all_open = _lpc.execute(")
+    q = src[i:i + 320]
+    assert "sport='mlb'" not in q, (
+        "the cross-sport count must not be scoped to one sport — that is "
+        "the defect")
+    assert "category IN ('main','longshot')" in q
+    # Same population rule as `performance()`, which is what the masthead
+    # renders: a zero-staked row was never a bet.
+    assert "stake_units > 0" in q
+
+
+def test_the_page_does_not_call_a_future_bet_older():
+    """The six were NFL Week 1 — not played yet. The line said "older open
+    bet(s) awaiting results", which is wrong in the one direction that
+    makes someone go looking for a settle that never ran."""
+    js = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    # RE-ANCHORED 2026-09-05: the tracker is two panels now and this
+    # footer belongs to the edge one, so the phrase gained a word. The
+    # needle is asserted before it is used — a bare `.index` on a moved
+    # anchor raises ValueError into a runner that catches nothing.
+    needle = "open edge bet(s) on today\u2019s card"
+    assert needle in js, "the edge panel's footer moved"
+    i = js.index(needle)
+    line = js[i:i + 400]
+    assert "older open bet" not in line
+    assert "other boards" in line
+
+
+if __name__ == "__main__":
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for fn in fns:
+        fn(); print(f"  ok  {fn.__name__}")
+    print(f"\n{len(fns)} tests passed.")
