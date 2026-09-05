@@ -16,6 +16,7 @@ const state = {
     ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
+  lightBoard: false,                 // `data` is the light copy; the full board is still coming
 };
 
 /* ===================== PAYMENT REVIEW MODE =====================
@@ -1243,6 +1244,14 @@ let _boardFor = null;
    downgrade, and only on a path that reached for the static file because
    the API would not answer — an API that returns a locked board is
    telling us the subscription lapsed, which is the truth and renders. */
+/* THE LIGHT COPY'S NAME, from the board's: data/recommendations.json →
+   recommendations_picks.json (engine/lightboard.SUFFIX). Pure. */
+function lightNameFor(meta) {
+  const f = String((meta || {}).fallback || "");
+  if (!/\.json$/.test(f)) return "";
+  return f.replace(/^data\//, "").replace(/\.json$/, "_picks.json");
+}
+
 function locksAwayWhatWeHold(next, held) {
   return !!(next && next.locked_reason) && !!(held && !held.locked_reason);
 }
@@ -1285,7 +1294,37 @@ async function load(quiet = false) {
     state.builtAt = Number.isFinite(t) ? t : null;
   };
   try {
-    // Cache-busted, and no-store. The poll URL was byte-identical on every
+    /* FIRST PAINT FROM THE LIGHT COPY. Ethan, 2026-09-05: "faster first
+       paint on mlb board". A phone parses the whole board before it draws
+       anything on the MLB tab. Each build now publishes a light copy
+       beside the board — the same picks, games and open bets, without the
+       player-stats table and without the halves of each row only the prop
+       page draws (engine/lightboard) — and this draws it while the full
+       board is still on the wire. Only when nothing is held for THIS
+       league (a cold open, a league switch): a 30-second refresh already
+       has a board on screen and a light one would be a step backwards.
+       Same identity guards as the full load — abandoned at every await if
+       the league moved — and the full board replaces it the moment it
+       lands. A missing light file is a build that has not run since it
+       shipped; the full path below is unchanged, so nothing is lost. */
+    const lightName = lightNameFor(meta);
+    if (lightName && !(state.data && _boardFor === meta.api)) {
+      try {
+        const lr = await paidFetch(lightName);
+        if (overtaken()) return;
+        if (lr.ok) {
+          const lite = normalizeSlate(await lr.json());
+          if (overtaken()) return;
+          if (lite.light === true) {
+            stampFrom(lr);
+            state.data = lite;
+            _boardFor = meta.api;
+            state.lightBoard = true;
+            renderAll();
+          }
+        }
+      } catch (e) { /* the full board below is the answer either way */ }
+    }
     // refresh — same sport, same three slider values — so iOS Safari
     // answered from its own cache and the page could sit on a board from
     // twenty minutes ago while the timer fired happily every 30 seconds.
@@ -1306,7 +1345,11 @@ async function load(quiet = false) {
        empty `state.data` would render a blank board. */
     captureFreshBaseline(meta.api);
     const tag = _boardTags[meta.api];
-    const holding = state.data && _boardFor === meta.api;
+    // A LIGHT BOARD IS NOT SOMETHING TO KEEP. With the light copy on
+    // screen and a tag from an earlier full load of this league, a
+    // revalidation would 304 and the light board would stay up — and
+    // stay up on every poll after it. Held means the FULL board.
+    const holding = state.data && _boardFor === meta.api && !state.lightBoard;
     const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
       cache: "no-store",
       headers: (tag && holding) ? { "If-None-Match": tag } : {},
@@ -1331,6 +1374,7 @@ async function load(quiet = false) {
       if (overtaken()) return;           // the body took longer than the switch
       state.data = slate;
       _boardFor = meta.api;
+      state.lightBoard = false;          // the full board is on screen now
     }
   } catch (e) {
     // The fallback file can be missing too (a sport that has never been
@@ -1384,6 +1428,7 @@ async function load(quiet = false) {
         stampFrom(res);
         state.data = slate;
         _boardFor = meta.api;
+        state.lightBoard = false;
       }
     } catch (e2) {
       // Both copies unreachable. Holding this sport's board, the truth

@@ -588,8 +588,8 @@ def test_the_client_handles_304_before_it_checks_ok():
     Checked in the wrong order, every successful revalidation throws and
     falls through to the fallback file, which is the stale board this
     whole mechanism exists to avoid serving."""
-    i = APP.index("const tag = _boardTags[")
-    block = APP[i:i + 900]
+    from _windows import until
+    block = until(APP, "const tag = _boardTags[", "} catch (e) {")
     assert "res.status === 304" in block, "the 304 is not handled at all"
     assert block.index("res.status === 304") < block.index("!res.ok"), \
         "!res.ok is tested first, so every 304 throws"
@@ -597,8 +597,8 @@ def test_the_client_handles_304_before_it_checks_ok():
 
 def test_the_client_only_revalidates_when_it_has_something_to_keep():
     """A 304 against an empty `state.data` renders a blank board."""
-    i = APP.index("const tag = _boardTags[")
-    block = APP[i:i + 500]
+    from _windows import until
+    block = until(APP, "const tag = _boardTags[", "} catch (e) {")
     assert "state.data" in block.split("If-None-Match")[0], \
         "the tag is sent even with nothing cached to fall back on"
 
@@ -616,8 +616,8 @@ def test_the_paid_board_still_never_lands_in_a_disk_cache():
     """The browser's own cache would do this revalidation for free, and
     the price would be a subscriber's paid board sitting on disk in their
     browser. The tag is kept in memory instead; `no-store` stays."""
-    i = APP.index("const tag = _boardTags[")
-    assert 'cache: "no-store"' in APP[i:i + 500], \
+    from _windows import until
+    assert 'cache: "no-store"' in until(APP, "const tag = _boardTags[", "} catch (e) {"), \
         "the board response is now storable by the browser"
     body = SERVER[SERVER.index("def _send_not_modified("):]
     body = body[:body.index("\n    def ", 1)]

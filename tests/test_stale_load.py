@@ -60,9 +60,17 @@ def test_every_await_in_the_load_is_followed_by_the_check():
 
 def test_the_render_is_the_last_thing_gated():
     body = _fn("load")
-    i = body.index("renderAll();")
-    assert "if (overtaken()) return;" in body[i - 60:i], \
-        "an abandoned load must not render the league it was asked for"
+    # EVERY render in the load, not the first: the light copy's first
+    # paint (2026-09-05) renders too, and the rule is the same for it —
+    # the last identity check before a render comes after the last await.
+    at = body.find("renderAll();")
+    assert at != -1
+    while at != -1:
+        before = body[:at]
+        g = before.rfind("if (overtaken()) return;")
+        assert g != -1 and "await" not in body[g:at], \
+            "an abandoned load must not render the league it was asked for"
+        at = body.find("renderAll();", at + 1)
 
 
 def test_render_all_refuses_a_board_that_is_not_this_leagues():
@@ -76,7 +84,9 @@ def test_render_all_refuses_a_board_that_is_not_this_leagues():
 def test_the_identity_guards_are_still_there():
     """This sits ON TOP of the 2026-08-25 fix, not instead of it."""
     body = _fn("load")
-    assert "const holding = state.data && _boardFor === meta.api;" in body
+    # The 2026-09-05 light board added a third clause — a light copy is
+    # not "held" — and left the two this test was written for in place.
+    assert "const holding = state.data && _boardFor === meta.api && !state.lightBoard;" in body
     assert body.count("_boardFor = meta.api;") >= 3
 
 

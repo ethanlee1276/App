@@ -95,6 +95,14 @@ function manageAutoRefresh() {}
 function updateAgo() {}
 const document = { getElementById: () => null };
 
+/* The light copy (2026-09-05) is ABSENT on this wire: that is the shape
+   of every board built before it shipped, and every case in this file
+   is about which FULL payload survives the call. tests/test_light_board.py
+   overrides this to hand the light copy in. */
+async function paidFetch(name) {
+  return { ok: false, status: 404, headers: { get: () => null }, json: async () => ({}) };
+}
+
 /* The scripted wire. `PLAN` is consumed one entry per fetch, in order,
    so a test says exactly what the endpoint and then the static file do.
    "throw" is a network failure (offline, abort, DNS); the others are
@@ -131,6 +139,7 @@ def _run(setup, plan):
     src = (_STUBS
            + _fn("normalizeSlate") + "\n"
            + _fn("locksAwayWhatWeHold") + "\n"
+           + _fn("lightNameFor") + "\n"
            + _fn("load", kind="async function") + "\n"
            + setup + "\n"
            + f"PLAN = {json.dumps(plan)};\n"

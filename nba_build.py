@@ -960,6 +960,14 @@ def main() -> None:
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    # The light copy the Home page draws first (engine/lightboard),
+    # published the same way so the paywall strips the same keys.
+    try:
+        from engine import lightboard
+        _, _lfull = gate.publish(lightboard.light(out, str(out.get("sport") or "")), lightboard.light_path(p))
+        print(lightboard.report(gate.board_source(p), _lfull))
+    except Exception as _lexc:                                # noqa: BLE001
+        print(f"⚠️  Light board skipped: {_lexc}")
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "

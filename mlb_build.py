@@ -804,6 +804,14 @@ def main() -> None:
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
+        # The light copy the Home page draws first (engine/lightboard),
+        # published the same way so the paywall strips the same keys.
+        try:
+            from engine import lightboard
+            _, _lfull = gate.publish(lightboard.light(result, "mlb"), lightboard.light_path(args.out))
+            print(lightboard.report(gate.board_source(args.out), _lfull))
+        except Exception as _lexc:                            # noqa: BLE001
+            print(f"⚠️  Light board skipped: {_lexc}")
     _stg.stop(_tk)
 
     # Learning engine: journal today's real-priced picks and settle any open

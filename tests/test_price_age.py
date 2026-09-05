@@ -90,8 +90,11 @@ def test_it_is_stamped_on_every_path_out():
     src = _src("cfb_build.py")
     body = src[src.index("def _write("):]
     assert "priced_at" in body, "the stamp left the single writer"
-    # and no other exit publishes the board behind its back
-    assert body.count("gate.publish(") == 1
+    # and no other exit publishes the board behind its back. The second
+    # publish in the writer (2026-09-05) is the LIGHT copy of the same
+    # payload, cut beside it — not another door for the board.
+    assert body.count("gate.publish(out, p)") == 1
+    assert body.count("gate.publish(") - 1 == body.count("gate.publish(lightboard.light(")
 
 
 def test_an_unreadable_budget_costs_a_note_and_never_the_board():

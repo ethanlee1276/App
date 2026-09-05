@@ -1919,6 +1919,14 @@ def _write(out: dict, path: str) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    # The light copy the Home page draws first (engine/lightboard),
+    # published the same way so the paywall strips the same keys.
+    try:
+        from engine import lightboard
+        _, _lfull = gate.publish(lightboard.light(out, "cfb"), lightboard.light_path(p))
+        print(lightboard.report(gate.board_source(p), _lfull))
+    except Exception as _lexc:                                # noqa: BLE001
+        print(f"⚠️  Light board skipped: {_lexc}")
 
 
 if __name__ == "__main__":
