@@ -1774,6 +1774,8 @@ main { view-transition-name: page; }
 .control.bankroll label b { color: var(--good); font-weight: 700; }
 
 .tile-sub { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+/* The new/riding split leads the On tonight tile's sub-line (2026-09-05). */
+.tile-sub .tile-split { color: var(--text); font-weight: 700; }
 
 /* Most Likely shelves — one band per KIND of bet.
 

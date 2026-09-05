@@ -2431,7 +2431,7 @@ function betMark(r, size = 30) {
    vanishing into the Live tab.
 
    ONE DEFINITION, because two surfaces count these now: the picks box
-   lists them and the "Recommended bets" tile counts them. Two copies of
+   lists them and the "On tonight" tile counts them. Two copies of
    this filter would drift, and the failure mode is a headline that
    disagrees with the list directly underneath it. */
 function ridingBets(sig) {
@@ -2610,7 +2610,7 @@ async function renderBestBets() {
   const sig = tonightSignals();
 
   // ============ SPACE 1: TONIGHT'S PICKS — the actual bets ============
-  // Exactly the bets the "Recommended bets" tile counts — the actionable
+  // Exactly the bets the "On tonight" tile counts — the actionable
   // picks AND the riding ones, which the tile started counting on
   // 2026-08-22. Nothing else is allowed in this box, so it can never
   // contradict the tile again; both sides read `ridingBets()`.
@@ -4146,9 +4146,16 @@ function renderStats() {
   const live = staked.length + riding.length;
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const tiles = [
-    { k: "Recommended bets", to: live, dec: 0, lead: true,
+    /* "ON TONIGHT", NOT "RECOMMENDED BETS". Ethan, 2026-09-05: the tile
+       said 20 over a grid drawing 2, and the word was the confusion —
+       the 20 is the new picks PLUS the open bets still riding, which is
+       the question this page is opened with (his 2026-09-03 call), and
+       "Recommended" reads as the grid's own count. The number stays; the
+       label says what it counts, and the split leads the sub-line in
+       bold rather than trailing a sentence. */
+    { k: "On tonight", to: live, dec: 0, lead: true,
       sub: riding.length
-        ? `${staked.length} new · ${plural(riding.length, "riding")} at the `
+        ? `<b class="tile-split">${staked.length} new · ${plural(riding.length, "riding")}</b> at the `
           + `price we took — those ride as placed, don’t add at tonight’s number`
         : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")}`
           + ` — all journaled${held}` },
@@ -12707,8 +12714,9 @@ async function renderRecord() {
       <div class="rec-process-side">
         ${recEpochHTML(d)}
         ${recDisclosure("What counts as a tracked bet", `Journals every
-      <strong>Recommended</strong> bet — the same count the "Recommended bets"
-      tile shows on each sport’s board: player props plus game bets (moneyline,
+      <strong>Recommended</strong> bet — the new picks the "On tonight"
+      tile counts on each sport’s board (its riding bets were journaled
+      the day they were placed): player props plus game bets (moneyline,
       spread &amp; totals, sharp-anchor and model alike) — at the real book price
       shown when it was recommended. One entry per player &amp; market per day.
       Long Shots and stale-line flags are tracked in their own buckets at a flat
