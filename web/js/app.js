@@ -5333,6 +5333,78 @@ function booksTableHTML(r) {
           q.other.map((x) => row(x, false)).join("")}` : ""}</tbody></table></div>`;
 }
 
+/* ---------------- Line movement, on the prop page ----------------
+   Ethan, 2026-09-05: "line movement on prop page". Every real odds pull
+   writes a snapshot of each prop at each book (engine/linemoves), and
+   the card has stamped "Market with / against pick" off them since
+   August; nothing drew the line itself. `line_series` is today's tape
+   for the pick's side — the consensus line and the best price at each
+   pull — and this draws it: opened at, now at, the price then and now,
+   the line as a picture, and which way that cut for our side. */
+function lineMoveHeadline(r) {
+  const s = ((r || {}).line_series || []).filter((p) => p && Number.isFinite(Number(p.line)));
+  if (s.length < 2) return null;
+  const side = String(r.side || "OVER").toUpperCase();
+  const a = s[0], b = s[s.length - 1];
+  const lineMoved = Number(a.line) !== Number(b.line);
+  const priceMoved = a.odds != null && b.odds != null && Number(a.odds) !== Number(b.odds);
+  // "Toward us" means the market came round to our side: the number we
+  // took beats today's. An UNDER's line falling, an OVER's rising, or
+  // our side's price getting shorter, all say the same thing.
+  const lineToward = !lineMoved ? null : (side === "UNDER" ? Number(b.line) < Number(a.line) : Number(b.line) > Number(a.line));
+  const priceToward = !priceMoved ? null : payoutOf(Number(b.odds)) < payoutOf(Number(a.odds));
+  return { side, open: a, now: b, n: s.length, lineMoved, priceMoved, lineToward, priceToward,
+           hours: Math.max(0, (Number(b.ts) - Number(a.ts)) / 3600) };
+}
+
+/* The sentence under the picture, derived and nothing else. */
+function lineMoveSentence(h) {
+  if (!h) return "";
+  const votes = [h.lineToward, h.priceToward].filter((v) => v !== null);
+  if (!votes.length) return "The number has not moved today.";
+  if (votes.every((v) => v === true)) return "The market has moved toward our side since the open — the number we took beats today’s.";
+  if (votes.every((v) => v === false)) return "The market has moved away from our side since the open — today’s number is better than the one we took. The bet rides as placed.";
+  return h.lineToward
+    ? "The line moved toward our side and the price away from it — the market is splitting the difference."
+    : "The price moved toward our side and the line away from it — the market is splitting the difference.";
+}
+
+/* The line as a picture: the consensus number at each pull, the open
+   dashed, the now dotted. Flat reads as flat. */
+function lineSeriesSVG(s, w, h) {
+  const ys = s.map((p) => Number(p.line));
+  const lo0 = Math.min(...ys), hi0 = Math.max(...ys);
+  const span = (hi0 - lo0) || 1, pad = span * 0.18;
+  const y = (v) => h - 3 - ((v - (lo0 - pad)) / (span + pad * 2)) * (h - 6);
+  const x = (i) => 1 + (i / Math.max(1, s.length - 1)) * (w - 2);
+  const d = ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  return `<svg class="lt-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
+      aria-label="the line at each odds pull today">
+    <line x1="0" y1="${y(ys[0]).toFixed(1)}" x2="${w}" y2="${y(ys[0]).toFixed(1)}"
+      stroke="var(--text-mute)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>
+    <path d="${d}" fill="none" stroke="var(--brand-2)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(ys[ys.length - 1]).toFixed(1)}" r="3" fill="var(--brand-2)"/>
+  </svg>`;
+}
+
+function lineMoveHTML(r) {
+  const h = lineMoveHeadline(r);
+  if (!h) return "";
+  const when = (ts) => placedStamp(new Date(Number(ts) * 1000).toISOString());
+  const px = (o) => o == null ? "no quote" : american(o);
+  const win = h.hours >= 1.5 ? `${Math.round(h.hours)}h` : `${Math.max(1, Math.round(h.hours * 60))}m`;
+  return `<div class="section-title minor">How the line moved today
+      <span class="sub">— the consensus ${escapeHtml(h.side)} number at each odds pull, best price at it; ${h.n} pulls over ${win}.</span></div>
+    <div class="card lm-card">
+      <div class="lm-row"><span class="lm-k">Opened</span><b>${h.open.line}</b> <span class="lm-px">${px(h.open.odds)}</span>
+        <span class="lm-when">${escapeHtml(when(h.open.ts))}</span></div>
+      <div class="lm-row"><span class="lm-k">Now</span><b>${h.now.line}</b> <span class="lm-px">${px(h.now.odds)}</span>
+        <span class="lm-when">${escapeHtml(when(h.now.ts))}</span></div>
+      ${lineSeriesSVG((r.line_series || []).filter((p) => p && Number.isFinite(Number(p.line))), 300, 62)}
+      <p class="lt-cap">${lineMoveSentence(h)} The dashed line is the open.${moveChip(r) ? ` ${moveChip(r)}` : ""}</p>
+    </div>`;
+}
+
 function booksChip(r) {
   const n = (r.all_lines || []).length;
   return n <= 1 ? "" : `<span class="chip books">${icon('tag')} ${n} books · best ${escapeHtml(r.book)}</span>`;
@@ -7587,6 +7659,7 @@ function renderPropPage() {
     </article>
 
     ${booksTableHTML(r)}
+    ${lineMoveHTML(r)}
 
     ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
       <span class="sub">— every one measured against tonight’s

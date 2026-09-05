@@ -821,9 +821,14 @@ def main() -> None:
     if real_odds:
         try:
             from engine.linemoves import (stream_history, analyze, todays_rows,
-                                          annotate_recommendations)
-            annotate_recommendations(result["recommendations"],
-                                     analyze(todays_rows(stream_history())))
+                                          annotate_recommendations, attach_series)
+            _today = todays_rows(stream_history())
+            annotate_recommendations(result["recommendations"], analyze(_today))
+            # Today's tape on every priced pick, for the prop page's own
+            # line chart (Ethan, 2026-09-05). Same rows, read once.
+            _ns = attach_series(result["recommendations"], _today)
+            if _ns:
+                print(f"  Line series: {_ns} pick(s) carry today's tape.")
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 

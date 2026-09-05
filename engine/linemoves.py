@@ -394,6 +394,83 @@ def todays_rows(rows: list[dict], now: float | None = None) -> list[dict]:
     return [r for r in rows if float(r.get("ts", 0)) >= midnight]
 
 
+#: Points a prop's own tape keeps. The page draws a sparkline; past this
+#: the picture is the same and the board file is bigger.
+SERIES_MAX = 48
+
+
+def _payout(odds) -> float:
+    o = float(odds)
+    return o / 100.0 if o > 0 else 100.0 / abs(o)
+
+
+def prop_series(rows: list[dict], player: str, market: str,
+                side: str = "OVER", limit: int = SERIES_MAX) -> list[dict]:
+    """``[{ts, line, odds, book, books}]`` — one point per snapshot
+    instant: the consensus (median) line across the books quoting then,
+    and the best price for ``side`` among the books at that line.
+
+    Ethan, 2026-09-05: "line movement on prop page". The snapshots have
+    been written on every real odds pull since the movement engine
+    shipped, and the card has stamped "Market with/against pick" off
+    them since August; nothing drew the line itself. This is the
+    read-back, side-aware for the reason `analyze` is: an UNDER's price
+    is the under price, and reading the over's for it would draw the
+    other bet.
+
+    Oldest first. Past ``limit`` the tape is thinned to an even spread
+    that always keeps the first and the last point — the open and the
+    now are the two a reader asks about. Proxies were never written, so
+    every point is a real book number; a side nobody quoted at that
+    instant leaves the price None rather than a fabricated −110.
+    """
+    want_under = str(side or "OVER").upper() == "UNDER"
+    by_ts: dict = {}
+    for r in rows:
+        if r.get("player") != player or r.get("market") != market:
+            continue
+        try:
+            ts, line = float(r["ts"]), float(r["line"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        px = r.get("under_odds") if want_under else r.get("over_odds")
+        by_ts.setdefault(ts, []).append((line, px, r.get("book")))
+    out: list[dict] = []
+    for ts in sorted(by_ts):
+        snaps = by_ts[ts]
+        lines = sorted(ln for ln, _p, _b in snaps)
+        med = lines[len(lines) // 2]
+        at = [(px, b) for ln, px, b in snaps
+              if ln == med and px is not None and float(px) != 0]
+        best = max(at, key=lambda pb: _payout(pb[0])) if at else (None, None)
+        out.append({"ts": ts, "line": med, "odds": best[0], "book": best[1],
+                    "books": len(snaps)})
+    if len(out) > limit:
+        step = (len(out) - 1) / (limit - 1)
+        keep = sorted({round(i * step) for i in range(limit)} | {0, len(out) - 1})
+        out = [out[i] for i in keep][:limit]
+    return out
+
+
+def attach_series(recs: list[dict], rows: list[dict]) -> int:
+    """Hang today's tape on every priced pick that has one. Returns how
+    many got one, so the build can say so. Two points is the floor for
+    the reason the line tape's is: one point is not a line."""
+    n = 0
+    for rec in recs:
+        if rec.get("has_market") is False:
+            continue
+        side = rec.get("side")
+        if side not in ("OVER", "UNDER"):
+            continue
+        series = prop_series(rows, rec.get("player", ""), rec.get("market", ""), side)
+        if len(series) < 2:
+            continue
+        rec["line_series"] = series
+        n += 1
+    return n
+
+
 def closing_lines(rows: list[dict], before_ts: float | None = None
                   ) -> dict[tuple[str, str], float]:
     """Latest recorded line per ``(player, market)`` — the closing number.

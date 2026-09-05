@@ -6786,6 +6786,12 @@ body.has-rail .shell {
 .bs-q.best { border: var(--hairline) solid var(--brand); }
 .bs-more { color: var(--text-mute); }
 .pp-books { padding: 0; overflow-x: auto; }
+/* Line movement on the prop page (2026-09-05). */
+.lm-card { padding: 12px 14px; }
+.lm-row { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-md); margin-bottom: 4px; }
+.lm-k { color: var(--text-mute); font-size: var(--fs-sm); min-width: 56px; }
+.lm-px { color: var(--text-mute); }
+.lm-when { margin-left: auto; color: var(--text-mute); font-size: var(--fs-xs); }
 .pp-books tr.best td { color: var(--text); font-weight: 700; }
 .pp-books tr.bs-sep td { color: var(--text-mute); font-size: var(--fs-xs); padding-top: 10px; }
 /* The profit calendar on the Record page (2026-09-05): a Sunday-first

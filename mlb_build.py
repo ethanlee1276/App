@@ -510,9 +510,16 @@ def main() -> None:
     if real_odds:
         try:
             from engine.linemoves import (stream_history, analyze, summary_lines,
-                                          todays_rows, annotate_recommendations)
-            moves = analyze(todays_rows(stream_history()))
+                                          todays_rows, annotate_recommendations,
+                                          attach_series)
+            _today = todays_rows(stream_history())
+            moves = analyze(_today)
             n_mv = annotate_recommendations(result["recommendations"], moves)
+            # Today's tape on every priced pick, for the prop page's own
+            # line chart (Ethan, 2026-09-05). Same rows, read once.
+            _ns = attach_series(result["recommendations"], _today)
+            if _ns:
+                print(f"  Line series: {_ns} pick(s) carry today's tape.")
             if moves:
                 print(f"Line movement: {len(moves)} prop(s) re-priced since "
                       f"open; verdict stamped on {n_mv} pick(s).")

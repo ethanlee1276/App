@@ -756,8 +756,15 @@ def main() -> None:
             try:
                 from engine.linemoves import (analyze, annotate_recommendations,
                                               stream_history, todays_rows)
-                _mv = analyze(todays_rows(stream_history()))
+                _today = todays_rows(stream_history())
+                _mv = analyze(_today)
                 _n_mv = annotate_recommendations(recs, _mv, price=False)
+                # Today's tape on every priced pick, for the prop page's
+                # own line chart (Ethan, 2026-09-05). Same rows, read once.
+                from engine.linemoves import attach_series as _attach_series
+                _ns = _attach_series(recs, _today)
+                if _ns:
+                    print(f"  Line series: {_ns} pick(s) carry today's tape.")
                 if _n_mv:
                     print(f"Line movement: stamped on {_n_mv} pick(s), "
                           f"evidence only — nothing re-graded.")
