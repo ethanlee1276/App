@@ -12908,10 +12908,15 @@ function enterStandaloneMode(name) {
   markMoreMenu();          // the tool button just became active
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
   if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
-  // The Book's front door opens on the WHOLE record — the cross-sport
-  // view where the learning ladder reads unscoped. The scope chips still
-  // narrow to a league, and a chip already chosen this session is kept.
-  if (name === "record" && !_recordScope) _recordScope = "all";
+  // THE BOOK OPENS ON THE SPORT YOU ARE LOOKING AT. It used to force
+  // "all" here — "the cross-sport view where the learning ladder reads
+  // unscoped" — and that is what read as one jumbled page. Ethan,
+  // 2026-09-05: "we need to be recording that seperatly for every sport
+  // on there own page." The record was always kept per sport; this is
+  // the landing catching up with it. `_recordScope` left null means
+  // renderRecord follows `state.sport` (its own default, in its own
+  // words: "null = follow the sport you are on"); "All bets" is the
+  // first chip, and a chip chosen this session is still kept.
   switchView(name);
 }
 

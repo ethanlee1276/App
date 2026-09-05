@@ -237,7 +237,13 @@ def test_the_record_is_a_standalone_page_not_a_sport_tab():
         "record is not a standalone mode"
     # The front door opens on the WHOLE record — the cross-sport scope
     # where the learning ladder reads unscoped.
-    assert '_recordScope = "all"' in APP
+    # FLIPPED 2026-09-05 on the owner's call ("recording that seperatly
+    # for every sport on there own page"): the Book now opens on the
+    # sport being viewed, and "All bets" is the first chip. The forced
+    # "all" must stay gone — it is what made the per-sport record read
+    # as one jumbled page.
+    assert 'if (name === "record" && !_recordScope) _recordScope = "all";' not in APP
+    assert "null = follow the sport you are on" in APP
     # And the masthead ROI link routes through the same standalone door.
     assert 'enterStandaloneMode("record")' in APP
 
