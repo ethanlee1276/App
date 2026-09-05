@@ -30677,6 +30677,13 @@ const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
                     wnba: "data/live_wnba.json" };
 let _liveAll = { at: 0, games: [] };
 let _liveChip = "all";
+//: The sport the chip was chosen under. Ethan, 2026-09-05: "the live page
+//: is showing live mlb bets and games on the CFB button, it should be
+//: corilated to the sport you have selected." The chip defaulted to "all"
+//: and outlived every sport switch, so the CFB button's Live tab opened
+//: on baseball. It now follows the sport button — "all" is still one tap
+//: away, and stays chosen until the sport changes again.
+let _liveChipSport = null;
 
 async function fetchAllLive() {
   if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
@@ -30945,6 +30952,12 @@ async function renderSweatZone() {
   }
   if (state.view !== "live") return;
   const d = _sweatCache || {};
+  // ONE SPORT'S FILE, ON THAT SPORT'S TAB. sweat.json is built by
+  // engine/sweat.py from the MLB journal alone and stamps `sport` to say
+  // so; drawn on every league's Live tab it put baseball's open bets
+  // under the CFB button (Ethan, 2026-09-05). A file that names a sport
+  // renders only there; one that does not is left as it was.
+  if (d.sport && d.sport !== state.sport) { host.innerHTML = ""; return; }
   const fresh = d.generated_at
     && (Date.now() - Date.parse(d.generated_at.endsWith("Z")
         ? d.generated_at : d.generated_at + "Z")) < 180000;
@@ -31033,6 +31046,12 @@ async function renderLiveBoard() {
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });
   const chips = ["all", ...Object.keys(LIVE_FEEDS)].filter(
     (s) => s === "all" || bySport[s]);
+  // FOLLOW THE SPORT BUTTON (see `_liveChipSport`). A league without a
+  // live feed (UFC) has no chip of its own, so it lands on "all".
+  if (_liveChipSport !== state.sport) {
+    _liveChipSport = state.sport;
+    _liveChip = LIVE_FEEDS[state.sport] ? state.sport : "all";
+  }
   const shown = games.filter((x) => _liveChip === "all" || x.sport === _liveChip);
   if (!games.length) {
     host.innerHTML = `<div class="section-title">Live now
@@ -31049,6 +31068,14 @@ async function renderLiveBoard() {
      same feed order the chips use, so the leagues always read in the
      same sequence. A single-league filter keeps the flat grid: the
      chip you pressed IS the label. */
+  // THE SELECTED SPORT HAS NOTHING ON, others do. Rendering an empty
+  // grid under a chip row reads as a broken page; say which league is
+  // dark and how many games are live elsewhere.
+  const nothingHere = _liveChip !== "all" && !shown.length
+    ? `<p class="rail-quiet" style="margin:0 0 22px">No ${escapeHtml(
+        LEAGUE_LABEL[_liveChip] || _liveChip.toUpperCase())} games in progress
+        right now — ${games.length} live across the other leagues (choose All).</p>`
+    : "";
   const shelved = _liveChip === "all"
     ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
         <div class="lb-shelf">
@@ -31066,7 +31093,7 @@ async function renderLiveBoard() {
         ${s === "all" ? "All" : s.toUpperCase()}
         <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
     </div>
-    ${shelved}`;
+    ${nothingHere}${shelved}`;
   host.querySelectorAll(".lb-chip").forEach((b) =>
     b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
   if (typeof mountLiveTicks === "function") mountLiveTicks(host);
