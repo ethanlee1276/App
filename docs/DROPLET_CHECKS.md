@@ -235,7 +235,67 @@ is working.
 
 ---
 
-## 5. MLB recency shade, still unmeasured
+## 5. Why college shows Most Likely rows and no edge bets
+
+Ethan, 2026-09-05: "CFB is not showing any edge bets, just the most
+likely bets."
+
+Two different gates, and the second one is a calendar. Every college
+prop goes through `betting.evaluate_prop`, which refuses a Pass when
+`is_reliable("cfb", market)` is false or when the raw read disagrees
+with the market by more than `MAX_CREDIBLE_EDGE` (0.10). Both depend on
+`data/models/calibration.json` having a fitted entry for college — and
+until 2026-09-04 no fitter could even be pointed at college (see the
+merge in `e69a0fd`). The weekly deep refit that writes that store runs
+on **Wednesdays** (engine/maintenance.py, `today.weekday() == 2`). So
+until it has run once for college, `correction_for("cfb", …)` returns the
+neutral (1.0, 0.0), the model over-claims by the 6–7 points the sandbox
+fit measured, every edge lands past 0.10, and every prop is refused as
+not credible. The Most Likely board does not price against the market,
+which is why it still fills.
+
+What the store says now, and what the board refused and why:
+
+```bash
+cd /srv/qellys && python3 calibrate.py --sport cfb --show
+cd /srv/qellys && python3 - <<'PY4'
+import json, collections
+d = json.load(open("data/built/cfb.json"))
+for k in ("prop_census", "gate_census", "game_census", "td_census", "likely_census"):
+    v = d.get(k)
+    if v: print(f"{k}: {json.dumps(v, default=str)[:600]}")
+recs = d.get("recommendations") or []
+print("\nprops by market -> grade:")
+for m in sorted({r.get("market") for r in recs}):
+    g = collections.Counter(r.get("grade") for r in recs if r.get("market") == m)
+    print(f"  {m:<12} {dict(g)}")
+gb = d.get("game_bets") or []
+print("game bets:", len(gb), dict(collections.Counter(b.get("grade") for b in gb)))
+PY4
+```
+
+If `--show` prints nothing for college, the store has no college entry
+and the refusals are the calendar. To fit it now instead of waiting for
+Wednesday — this spawns the three fitters as subprocesses and replays
+every college season, so run it at a quiet hour and expect minutes:
+
+```bash
+cd /srv/qellys && python3 -c "from engine.deepfit import refit_sport; [print(l) for l in refit_sport('cfb')]"
+```
+
+Then a rebuild (`python3 launch.py` refreshes on its own cycle) prices
+the next board against the fitted store. Expect ONE of the four markets
+to stay shut afterwards: the sandbox fit put `receptions` at the edge of
+its search grid, which `is_reliable` treats as "unreliable here, not
+merely miscalibrated". That is the fitter's honest verdict, not a bug.
+
+Game bets are a separate path (`engine/gamebets`), and `game_census`
+above says whether they were refused before the model ran (no lines, no
+rating) or by it (`gate_census`).
+
+---
+
+## 6. MLB recency shade, still unmeasured
 
 **Blocks:** task #127. The harness is unblocked but there are no MLB
 logs in the sandbox. On the box:
