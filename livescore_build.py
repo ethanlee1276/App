@@ -95,9 +95,19 @@ def _row(r: dict) -> dict:
         live["yard_line"] = st.yard_line
     if st.possession:
         live["possession"] = st.possession
-    return {"event_id": r["event_id"], "home": r["home"], "away": r["away"],
-            "home_name": r["home_name"], "away_name": r["away_name"],
-            "live": live}
+    out = {"event_id": r["event_id"], "home": r["home"], "away": r["away"],
+           "home_name": r["home_name"], "away_name": r["away_name"],
+           "live": live}
+    # ESPN's own team ids, when the scoreboard gave them. A basketball
+    # play names its team by id and nothing else, and these are how
+    # `attach_plays` turns that id into the card's own `home`/`away` —
+    # the verified route, since the summary's team dicts have not been
+    # probed. Written only when present, for the reason `yard_line` is.
+    if r.get("home_id"):
+        out["home_id"] = r["home_id"]
+    if r.get("away_id"):
+        out["away_id"] = r["away_id"]
+    return out
 
 
 def build(league: str) -> dict:
@@ -132,40 +142,58 @@ def build(league: str) -> dict:
 
 
 def attach_plays(games: list[dict], league: str) -> str:
-    """Put the last few plays and the current drive on every football
-    game IN PROGRESS. Returns a note for the log and the file.
+    """Put the last few plays — and, for football, the current drive —
+    on every game IN PROGRESS. Returns a note for the log and the file.
 
-    ONLY LIVE GAMES, ONLY FOOTBALL. `engine/sources/espnplays` reads the
-    `drives` block the droplet probe saw on a live college game; the
-    basketball summaries have not been probed live and are not touched
-    until they have. A scheduled game has no drives and a final is not
-    what anybody is watching.
+    ONLY LIVE GAMES. Football reads the `drives` block the droplet probe
+    saw on a live college game; basketball reads the `plays` list it saw
+    on a finished WNBA game (`engine/sources/espnplays` carries both
+    shapes and what each was seen on). A scheduled game has neither and
+    a final is not what anybody is watching. A league in neither tuple
+    is left alone and the note says so.
+
+    THE SIDES OF A BASKETBALL PLAY COME FROM THE SCOREBOARD. A hoops
+    play carries `team{id}` and nothing else; this game's `home_id` and
+    `away_id` were read off the same scoreboard payload as its score, so
+    the play's `team` is the card's own key by the same route rather
+    than by a second reading of ESPN's abbreviations.
 
     A GAME THAT FAILS KEEPS ITS SCORE. Each summary is guarded on its own
     and the failures are counted rather than raised — one unreachable
-    drive feed must not cost the scoreboard the card, which is the more
+    play feed must not cost the scoreboard the card, which is the more
     important product of this process.
     """
     from engine.sources import espnplays
-    if league not in espnplays.FOOTBALL:
+    if league in espnplays.FOOTBALL:
+        noun = "drives"
+    elif league in espnplays.HOOPS:
+        noun = "plays"
+    else:
         return f"{league}: no play-by-play source yet"
     live = [g for g in games if g["live"]["state"] == "live"]
     if not live:
-        return "no games in progress — no drives fetched"
+        return f"no games in progress — no {noun} fetched"
     got = failed = 0
     for g in live[:PLAYS_MAX_GAMES]:
         try:
             payload = espnplays.fetch_summary(league, g["event_id"])
-            g["plays"] = espnplays.football_plays(payload, league,
-                                                  PLAYS_PER_GAME)
-            drive = espnplays.current_drive(payload, league)
-            if drive:
-                g["drive"] = drive
+            if noun == "drives":
+                g["plays"] = espnplays.football_plays(payload, league,
+                                                      PLAYS_PER_GAME)
+                drive = espnplays.current_drive(payload, league)
+                if drive:
+                    g["drive"] = drive
+            else:
+                sides = {str(g.get("home_id") or ""): g["home"],
+                         str(g.get("away_id") or ""): g["away"]}
+                sides.pop("", None)
+                g["plays"] = espnplays.hoops_plays(payload, league,
+                                                   PLAYS_PER_GAME, sides=sides)
             got += 1
         except Exception:                                    # noqa: BLE001
             failed += 1                # the card keeps its score
     skipped = max(0, len(live) - PLAYS_MAX_GAMES)
-    note = f"drives: {got} of {len(live)} live game(s)"
+    note = f"{noun}: {got} of {len(live)} live game(s)"
     if failed:
         note += f", {failed} feed(s) unreachable"
     if skipped:

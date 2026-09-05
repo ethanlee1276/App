@@ -152,6 +152,29 @@ and CFB cards draw drives from it. Still needed, one live game each:
 
   If that day had no game, step the date back until the first line says
   `state post`. Paste the whole output; the hoops feed gets built from it.
+* **WNBA, SEEN** — the Aug 30 final (event 401857186) answered: a
+  top-level `plays list(392)`, no `drives`. The hoops feed is built from
+  that shape (`engine/sources/espnplays.hoops_plays`), and NBA is served
+  off the same inference NFL is — same API one segment over. A play names
+  its team and its players by id only, so the sides come from the
+  scoreboard's competitor ids and the names from the box score. Three
+  things a finished game could not show, to confirm on the first LIVE
+  probe (any evening a game is on):
+
+  ```bash
+  cd /srv/qellys && python3 espnprobe.py --league wnba
+  cd /srv/qellys && python3 espnprobe.py --league wnba --block boxscore.players --depth 5
+  cd /srv/qellys && python3 espnprobe.py --league wnba --block plays.40 --depth 3
+  cd /srv/qellys && python3 livescore_build.py --league wnba
+  ```
+
+  The first should say `plays list(N)` on a game in state `in` — a live
+  payload carrying the block a final does. The second should show
+  `team: dict(...)` with `id` beside `abbreviation`, and
+  `athletes[].athlete{displayName, id}`. The third is a mid-game play
+  rather than the opening jump ball: how many `participants` a shot
+  lists (the parser names the first) and whether `pointsAttempted` is
+  the shot's value. The build should print `plays: N of N live game(s)`.
 
 It prints key names, container types, list lengths and the values of
 numbers and booleans. It never prints a play's text — that comes back as

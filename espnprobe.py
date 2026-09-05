@@ -119,6 +119,34 @@ def _get(url: str) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _walk(payload, path: str):
+    """The block at a dotted path — `boxscore.players`, `header.competitions`.
+
+    A list on the way is entered at its FIRST item (or at the index the
+    segment names, if it is a number), which is what `describe` samples
+    anyway. A segment that is not there answers None, and `describe`
+    prints "None" — a missing block is a finding, not an error.
+
+    WHY THIS EXISTS. The WNBA finished-game probe showed a play names
+    its team as `team{id}` and its players as `participants[{athlete
+    {id}}]` — ids only. The names live in `header` and `boxscore`, which
+    the top-level report lists but the depth-3 walk of `plays` cannot
+    reach. This asks for one block on its own, as deep as `--depth` says.
+    """
+    cur = payload
+    for seg in [s for s in path.split(".") if s]:
+        if isinstance(cur, list):
+            i = int(seg) if seg.isdigit() else 0
+            cur = cur[i] if i < len(cur) else None
+            if seg.isdigit():
+                continue
+        if isinstance(cur, dict):
+            cur = cur.get(seg)
+        else:
+            return None
+    return cur
+
+
 def _state(ev: dict) -> str:
     return (((ev.get("status") or {}).get("type") or {}).get("state") or "")
 
@@ -169,6 +197,10 @@ def main() -> None:
     ap.add_argument("--date", default="",
                     help="YYYYMMDD — probe that day's scoreboard instead of "
                          "today's (yesterday's finals live there)")
+    ap.add_argument("--block", default="",
+                    help="a dotted path to describe on its own, e.g. "
+                         "boxscore.players or header.competitions — where "
+                         "the ids a basketball play uses get their names")
     args = ap.parse_args()
 
     event, state = (args.event, "asked for") if args.event \
@@ -197,6 +229,12 @@ def main() -> None:
         print(f"\n=== {key} ===")
         for line in describe(payload[key], max_depth=args.depth,
                              list_sample=1):
+            print("  " + line)
+
+    if args.block:
+        print(f"\n=== {args.block} ===")
+        for line in describe(_walk(payload, args.block),
+                             max_depth=args.depth, list_sample=1):
             print("  " + line)
 
     if args.dump:

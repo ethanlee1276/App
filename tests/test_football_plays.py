@@ -211,8 +211,11 @@ def test_the_live_cache_name_is_prunable_and_sends_no_agent():
     assert seen["ttl"] == E.LIVE_TTL
 
 
-def test_basketball_is_not_served_until_it_has_been_seen_live():
+def test_the_drives_parser_serves_the_two_footballs():
+    """Basketball has its own tuple and its own parser now (see
+    tests/test_hoops_plays.py); the drives block is football's alone."""
     assert set(E.FOOTBALL) == {"nfl", "cfb"}
+    assert not set(E.FOOTBALL) & set(E.HOOPS)
 
 
 # --- the build ---------------------------------------------------------------
@@ -250,14 +253,16 @@ def test_only_live_football_games_are_fetched():
     assert "2 of 2 live game(s)" in note, note
 
 
-def test_basketball_leagues_are_left_alone_with_a_note():
+def test_a_league_with_no_source_is_left_alone_with_a_note():
+    """Basketball used to be the example here; it is served now. A league
+    in neither tuple still gets the honest note and no fetch."""
     asked = []
 
     def fn(league, eid, ttl=30):
         asked.append(eid)
         return _payload()
     games = _games()
-    note = _with_fetch(fn, games, league="nba")
+    note = _with_fetch(fn, games, league="ufc")
     assert asked == []
     assert "no play-by-play source yet" in note, note
     assert "plays" not in games[0]

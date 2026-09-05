@@ -30807,12 +30807,34 @@ function playsHTML(g) {
         escapeHtml(p.event)}${escapeHtml(yds)}${escapeHtml(dd)}${flag}</span>
       ${at}</div>`;
   };
+  /* BASKETBALL ROWS, from the `plays` list the probe read off a finished
+     WNBA game (event 401857186, 2026-09-05). A play names its team and
+     its players by id alone; the builder resolves them — the sides off
+     the scoreboard, the names off the box score — so `p.team` is the
+     card's own home/away key and `p.player` is a name or "". `p.points`
+     is what the play put on the board and `p.shot` tells a miss from a
+     rebound. Composed from those numbers and the type label, never from
+     the play's written account, which the parser does not read. */
+  const hoopsRow = (p) => {
+    const q = p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
+    const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
+    const tag = p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
+      : p.shot ? ` <span class="lb-miss">miss</span>` : "";
+    const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
+      <span class="lb-inn">${escapeHtml(when)}</span>
+      <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
+      ${at}</div>`;
+  };
   const d = g.drive;
   const driveLine = d && d.team ? `<div class="lb-drive">${escapeHtml(d.team)} drive
       · ${d.plays} play${d.plays === 1 ? "" : "s"} · ${d.yards} yd${
       d.elapsed ? ` · ${escapeHtml(d.elapsed)}` : ""}</div>` : "";
   const row = (p) => {
     if (p.kind === "football") return footballRow(p);
+    if (p.kind === "hoops") return hoopsRow(p);
     const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
     const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
     const at = (p.away_score != null && p.home_score != null)

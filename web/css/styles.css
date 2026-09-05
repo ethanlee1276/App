@@ -6667,6 +6667,7 @@ body.has-rail .shell {
   font-size: var(--fs-xs); letter-spacing: 0; }
 .lb-play .lb-rbi { color: var(--good); font-size: var(--fs-xs);
   text-transform: uppercase; letter-spacing: .06em; }
+.lb-play .lb-miss { color: var(--text-mute); font-size: var(--fs-xs); }
 .lb-play.scoring .lb-inn { color: var(--good); }
 .lb-play.turnover .lb-inn, .lb-play.turnover .lb-rbi { color: var(--warn); }
 .lb-drive { color: var(--text-mute); font-size: var(--fs-xs);

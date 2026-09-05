@@ -144,10 +144,15 @@ def parse_espn_scoreboard(data: dict) -> dict[frozenset, LiveStatus]:
 def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
     """An ESPN scoreboard payload → one row per game, sides named.
 
-    ``{event_id, home, away, home_name, away_name, live}`` where ``live``
-    is a :class:`LiveStatus`. ``event_id`` is ESPN's own, which is the
-    handle every deeper endpoint takes (`summary?event=`), so a row from
-    here is enough to go and ask for more about that game.
+    ``{event_id, home, away, home_name, away_name, home_id, away_id,
+    live}`` where ``live`` is a :class:`LiveStatus`. ``event_id`` is
+    ESPN's own, which is the handle every deeper endpoint takes
+    (`summary?event=`), so a row from here is enough to go and ask for
+    more about that game. ``home_id``/``away_id`` are ESPN's team ids —
+    the same `team.id` the possession lookup below already keys on — kept
+    because a basketball play names its team by that id and nothing else
+    (`espnplays.hoops_plays`), and the summary's own team dicts have not
+    been looked at.
     """
     out: list[dict] = []
     for ev in data.get("events", []):
@@ -155,6 +160,7 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
         competitors = comp.get("competitors", [])
         home = away = None
         home_name = away_name = ""
+        home_id = away_id = ""
         hs = as_ = None
         by_id: dict[str, str] = {}
         for c in competitors:
@@ -168,9 +174,9 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
             score = c.get("score")
             score = int(score) if str(score).lstrip("-").isdigit() else None
             if c.get("homeAway") == "home":
-                home, hs, home_name = ab, score, name
+                home, hs, home_name, home_id = ab, score, name, tid
             else:
-                away, as_, away_name = ab, score, name
+                away, as_, away_name, away_id = ab, score, name, tid
         if not home or not away:
             continue
         status = ev.get("status", {}) or comp.get("status", {})
@@ -203,6 +209,7 @@ def parse_espn_rows(data: dict, league: str = "nfl") -> list[dict]:
         out.append({"event_id": str(ev.get("id", "") or ""),
                     "home": home, "away": away,
                     "home_name": home_name, "away_name": away_name,
+                    "home_id": home_id, "away_id": away_id,
                     "live": live})
     return out
 
