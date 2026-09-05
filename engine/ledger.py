@@ -3718,6 +3718,43 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
     return out
 
 
+def settled_on(conn, date: str, sport: str | None = None,
+               categories: tuple = ("main", "paper")) -> list[dict]:
+    """Every settled pick on one slate date — the profit calendar's tap.
+
+    Ethan, 2026-09-05: "a profit calendar on record page ... tap a day to
+    see its bets."
+
+    THE SAME BOOK THE CURVE DRAWS. `pnl_curve` sums ('main', 'paper') with
+    a stake, and the calendar's cells are its days, so the rows behind a
+    cell come from the same two categories and the same stake rule — or
+    the cell and its list disagree. The Most Likely book keeps its own
+    record and never appears here, for the reason it never shares a
+    headline. Each row carries the side-aware CLV and process grade the
+    receipts carry, so one cell's list reads like the list below it.
+    """
+    marks = ",".join("?" * len(categories))
+    q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
+         "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
+         "why_tag, why_note FROM bets "
+         "WHERE status IN ('won','lost','push') AND date=? "
+         f"AND category IN ({marks}) AND stake_units > 0")
+    args: list = [date, *categories]
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    rows = conn.execute(q + " ORDER BY id", args).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        c = _bet_clv(r)
+        d["clv"] = round(c, 3) if c is not None else None
+        d["process"] = process_grade(r)
+        d["cause"] = d.pop("loss_cause")
+        out.append(d)
+    return out
+
+
 #: A split has to earn its own chart. Below this many graded picks the
 #: confidence band is wider than any miss it could show, so the row would
 #: report noise with the authority of a measurement. The aggregate already

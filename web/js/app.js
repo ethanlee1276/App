@@ -9406,6 +9406,115 @@ function recAnalytics(curve, o, eras) {
     <p class="ra-line">${range}</p>
     ${alltime ? `<p class="ra-line ra-dim">${alltime}</p>` : ""}`;
 }
+/* ---------------- The profit calendar ----------------
+   Ethan, 2026-09-05: "a profit calendar on record page". A month grid
+   with the units won or lost each day — green or red by sign, deeper by
+   size — and a tap on a day for the bets behind it. THE EDGE BOOK ONLY:
+   the cells are the curve's own days (`pnl_curve`: main + paper, with a
+   stake), and the Most Likely book keeps its own record above. The two
+   never share a cell, for the reason they never share a headline. */
+let _recCalMonth = null;     // "YYYY-MM" in view; null = the latest month with a bet
+let _recCalDay = null;       // the day whose bets are open, or null
+let _recCalScope = "all";    // the sport the page is scoped to, for the day's fetch
+window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
+
+/* The months the curve has a settled day in, oldest first. */
+function recCalMonths(curve) {
+  const seen = new Set();
+  (curve || []).forEach((p) => {
+    if (p && /^\d{4}-\d{2}-\d{2}/.test(p.date || "")) seen.add(p.date.slice(0, 7));
+  });
+  return [...seen].sort();
+}
+
+/* Units for a cell: "+0.9", "−1.0", "0.0"; whole numbers past ten. */
+function recCalU(v) {
+  const n = Number(v) || 0, m = Math.abs(n);
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${m >= 10 ? m.toFixed(0) : m.toFixed(1)}`;
+}
+
+/* One month: a Sunday-first grid, a cell per day, the month's line under it. */
+function recCalMonthHTML(curve, ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  const byDay = new Map((curve || []).filter((p) => String(p.date || "").startsWith(ym + "-"))
+    .map((p) => [p.date, p]));
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const lead = first.getDay();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<span class="rc-day blank"></span>`);
+  for (let d = 1; d <= days; d++) {
+    const date = `${ym}-${String(d).padStart(2, "0")}`;
+    const p = byDay.get(date);
+    if (!p) { cells.push(`<span class="rc-day off">${d}</span>`); continue; }
+    const u = Number(p.day_u) || 0;
+    const depth = Math.abs(u) < 0.5 ? 1 : Math.abs(u) < 2 ? 2 : 3;
+    cells.push(`<button type="button" class="rc-day ${toneOf(u) || "flat"} rc-${depth}${
+      date === _recCalDay ? " open" : ""}" data-date="${date}"
+      aria-label="${date}: ${recCalU(u)} units, ${p.w || 0}-${p.l || 0}">${d}<b>${recCalU(u)}</b></button>`);
+  }
+  const rows = [...byDay.values()];
+  const net = rows.reduce((a, p) => a + (Number(p.day_u) || 0), 0);
+  const w = rows.reduce((a, p) => a + (p.w || 0), 0);
+  const l = rows.reduce((a, p) => a + (p.l || 0), 0);
+  const label = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return `<div class="rc-month" data-month="${ym}">
+    <div class="rc-grid">${["S", "M", "T", "W", "T", "F", "S"].map((h) =>
+      `<span class="rc-h">${h}</span>`).join("")}${cells.join("")}</div>
+    <p class="rc-foot"><b>${escapeHtml(label)}</b> · ${rows.length} day${rows.length === 1 ? "" : "s"} bet
+      · <b>${w}-${l}</b> · net <b class="${toneOf(net)}">${recCalU(net)}u</b></p></div>`;
+}
+
+/* The section: the month in view (the latest with a bet unless one was
+   chosen), an arrow only where there is a month to go to, and the day
+   panel the tap fills. Nothing when the curve has no settled day. */
+function recCalendarHTML(curve) {
+  const months = recCalMonths(curve);
+  if (!months.length) return "";
+  const ym = months.includes(_recCalMonth) ? _recCalMonth : months[months.length - 1];
+  const i = months.indexOf(ym);
+  const arrow = (to, glyph, label) => to == null ? "" :
+    `<button class="ra-range" onclick="_recCalSetMonth('${to}')" aria-label="${label}">${glyph}</button>`;
+  const nav = months.length > 1 ? `<span class="ra-ranges">${
+    arrow(i > 0 ? months[i - 1] : null, "‹", "Earlier month")}${
+    arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
+  return `
+    <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
+      <span class="sub">— units by day, edge book only; tap a day for its bets</span>${nav}</div>
+    <div class="card rc-card">${recCalMonthHTML(curve, ym)}<div id="rc-day"></div></div>`;
+}
+
+/* A tapped day: its line from the curve at once, its rows from the
+   record endpoint, scoped the way the page is. If the endpoint cannot be
+   reached (a static host has no /api), the rows this page already holds
+   for that day are shown and the panel says that is what they are. */
+async function recCalDayOpen(date, curve, recent) {
+  _recCalDay = date;
+  const host = document.getElementById("rc-day");
+  if (!host) return;
+  document.querySelectorAll(".rc-day.open").forEach((el) => el.classList.remove("open"));
+  const cell = document.querySelector(`.rc-day[data-date="${date}"]`);
+  if (cell) cell.classList.add("open");
+  const p = (curve || []).find((x) => x.date === date) || {};
+  const extra = (p.n || 0) - (p.w || 0) - (p.l || 0);
+  const head = `<b>${escapeHtml(formatGameDate(date) || date)}</b> · ${p.w || 0}-${p.l || 0}${
+    extra > 0 ? `-${extra}` : ""} · <b class="${toneOf(p.day_u || 0)}">${recCalU(p.day_u || 0)}u</b>`;
+  host.innerHTML = `<p class="rc-dayhead">${head}</p><p class="rail-quiet">Loading the day’s bets…</p>`;
+  let rows = null, note = "";
+  try {
+    const sport = _recCalScope === "all" ? "" : _recCalScope;
+    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}`);
+    if (r.ok) rows = ((await r.json()) || {}).rows || [];
+  } catch (e) { rows = null; }
+  if (_recCalDay !== date) return;                         // another day was tapped
+  if (!rows) {
+    rows = (recent || []).filter((b) => b.date === date);
+    note = `<p class="rail-quiet">The day’s full list could not be fetched — these are the rows this page already holds.</p>`;
+  }
+  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}
+    <div class="rec-list">${rows.map(recSettledRow).join("") || panelEmpty("No settled bets on this day in this scope.")}</div>`;
+}
+
 function raChips(avail, rk) {
   if (avail.length < 2) return "";
   return `<span class="ra-ranges">${avail.map(([k]) =>
@@ -11934,6 +12043,7 @@ async function renderRecord() {
   // quietly keep showing the combined number next to a per-sport one.
   const src = scoped || d;
   const o = src.overall;
+  _recCalScope = scope;                       // the day panel fetches in this scope
   if (scope === "intel") {
     host.innerHTML = scopeBar + (pmv
       ? recPolymarketSection(pmv)
@@ -12103,6 +12213,7 @@ async function renderRecord() {
     ${unstaked}
     ${small}
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
+    ${recCalendarHTML(src.curve)}
     ${recSplitsSection(o)}
     ${recRecentSection(src.recent || [])}
     ${edgePanel}
@@ -12113,6 +12224,12 @@ async function renderRecord() {
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
+  // The calendar's days are doors to their bets; a day left open on the
+  // last render (a range chip, a month arrow) is reopened.
+  host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
+    el.addEventListener("click", () => recCalDayOpen(el.dataset.date, src.curve, src.recent || [])));
+  if (_recCalDay && host.querySelector(`.rc-day[data-date="${_recCalDay}"]`))
+    recCalDayOpen(_recCalDay, src.curve, src.recent || []);
 }
 
 /* The five rooms of the Record page.

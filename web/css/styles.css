@@ -6752,6 +6752,27 @@ body.has-rail .shell {
 
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+/* The profit calendar on the Record page (2026-09-05): a Sunday-first
+   month grid, a cell per day, green or red by sign and deeper by size. */
+.rc-card { padding: 12px 14px; margin-bottom: 18px; }
+.rc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.rc-h { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); padding: 2px 0; }
+.rc-day { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 44px; border-radius: var(--radius); border: var(--hairline) solid transparent;
+  background: var(--panel-3); color: var(--text-mute); font: inherit; font-size: var(--fs-xs); padding: 4px 2px; }
+.rc-day.blank { background: none; }
+.rc-day.off { opacity: .55; }
+button.rc-day { cursor: pointer; color: var(--text); }
+button.rc-day b { font-size: var(--fs-sm); }
+.rc-day.pos.rc-1 { background: color-mix(in srgb, var(--good) 14%, var(--panel-3)); }
+.rc-day.pos.rc-2 { background: color-mix(in srgb, var(--good) 30%, var(--panel-3)); }
+.rc-day.pos.rc-3 { background: color-mix(in srgb, var(--good) 50%, var(--panel-3)); }
+.rc-day.neg.rc-1 { background: color-mix(in srgb, var(--bad) 14%, var(--panel-3)); }
+.rc-day.neg.rc-2 { background: color-mix(in srgb, var(--bad) 30%, var(--panel-3)); }
+.rc-day.neg.rc-3 { background: color-mix(in srgb, var(--bad) 50%, var(--panel-3)); }
+.rc-day.open { border-color: var(--brand-2); }
+.rc-foot { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.rc-dayhead { margin: 12px 0 6px; font-size: var(--fs-sm); color: var(--text-mute); }
 .ra-main .rec-chart { margin-bottom: 0; }
 /* The 2026-08-17 declutter: the tile stacks that repeated the scoreboard
    became two ledger lines — every number once, in a sentence. */

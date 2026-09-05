@@ -793,6 +793,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path in ("/api/record/receipts.csv",):
             return self._receipts_csv()
+        if parsed.path in ("/api/record/day", "/api/record/day/"):
+            return self._record_day(parse_qs(parsed.query))
         if parsed.path in ("/unsubscribe", "/unsubscribe/"):
             return self._unsubscribe(parse_qs(parsed.query))
         if parsed.path.startswith("/api/profile/"):
@@ -3015,6 +3017,38 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         nothing happens.
         """
         return self._unsubscribe(query)
+
+    def _record_day(self, q):
+        """One slate day's settled picks — the profit calendar's tap.
+
+        Ethan, 2026-09-05: "a profit calendar on record page ... tap a day
+        to see its bets." The calendar's cells come from record.json's
+        curve; the rows behind a cell are asked for here, one day at a
+        time, rather than shipping every settled row in the record file.
+
+        NOT GATED, for the reason `_receipts_csv` gives: every row is
+        settled, public, and the evidence the subscription is sold on.
+        `sport` narrows to the page's scope; empty means every league.
+        """
+        import re as _re
+        date = (q.get("date") or [""])[0][:10]
+        sport = (q.get("sport") or [""])[0].lower()[:5]
+        if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            return self._send(400, b'{"error":"date must be YYYY-MM-DD"}', ".json")
+        if sport and not _re.fullmatch(r"[a-z]{2,5}", sport):
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                rows = L.settled_on(conn, date, sport=sport or None)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        net = round(sum((r.get("pnl_units") or 0) for r in rows), 2)
+        out = {"date": date, "sport": sport, "rows": rows, "net_units": net}
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.
