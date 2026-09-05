@@ -6926,8 +6926,11 @@ body.has-rail .shell {
 .openable { cursor: pointer; }
 .card.openable:hover { border-color: var(--brand-2); }
 .openable:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
-/* The list rows are not cards, so they say "clickable" the way rows do. */
-.ls-row.openable:hover, div.openable:not(.card):not(.tp-card):hover {
+/* The list rows are not cards, so they say "clickable" the way rows do.
+   This carried a `:not(.tp-card)` until the nightly sweep found it: the
+   .tp-* strip family retired 2026-08-31 with renderTopPicks (see the note
+   above #home-perf), so the guard was excluding a class no markup emits. */
+.ls-row.openable:hover, div.openable:not(.card):hover {
   background: var(--panel-3); }
 .pp-card { padding: 14px; }
 .pp-log, .pp-form {
@@ -9094,18 +9097,15 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* The play-by-play page (2026-09-05): the card's row language, a game at
-   a time. The score block mirrors the live card's; the groups reuse
-   .lb-plays without its top rule, since each group carries its own head. */
-.pbp-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin: 6px 0 12px; }
-.pbp-score { display: grid; grid-template-columns: 1fr auto auto auto 1fr;
-  align-items: center; gap: 12px; font-size: 1.5rem; font-weight: 800; }
-.pbp-score .lb-team { display: flex; align-items: center; gap: 8px;
-  font-size: var(--fs-md); font-weight: 700; min-width: 0; }
-.pbp-score .lb-team em { font-style: normal; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; }
-.pbp-score .pbp-home { justify-content: flex-end; }
-.pbp-score .pbp-at { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 400; }
+   a time. The groups reuse .lb-plays without its top rule, since each
+   group carries its own head.
+
+   The header this block opened with (.pbp-head, .pbp-score and its four
+   descendants) was retired the same day by the hero below — renderPbpPage
+   stopped emitting those classes and nothing else ever wore them, so the
+   rules were styling nothing. Removed rather than left as a fallback: a
+   selector no markup can match cannot be a fallback, only a decoy for the
+   next person reading this file for the header's styling. */
 .pbp-group { margin: 12px 0 16px; }
 .pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
   gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
@@ -9114,7 +9114,6 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
 .pbp-tag { color: var(--good); }
 .pbp-tag.turnover { color: var(--warn); }
-@media (max-width: 700px) { .pbp-score { font-size: 1.25rem; gap: 8px; } }
 
 /* The play-by-play page to the render (2026-09-05): a strip of the
    league's games, the hero, the park with the ball in flight, the

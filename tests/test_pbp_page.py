@@ -13,6 +13,7 @@ all things no unit renders. The row language is the card's own
 cover this page too.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -131,8 +132,33 @@ def test_the_header_names_the_teams_in_the_leagues_own_vocabulary():
 
 
 def test_the_styles_exist():
-    for cls in (".pbp-head", ".pbp-score", ".pbp-group-head", ".pbp-tag.turnover"):
+    """Every class the page emits has to be a class the stylesheet knows,
+    and the check has to name the classes the page emits TODAY. This test
+    pinned .pbp-head and .pbp-score for a day after the hero replaced them:
+    the rules were still in the stylesheet, so the test stayed green while
+    guarding markup that no longer existed — a test can only pin what it is
+    told to look for, so tell it the header the renderer actually writes."""
+    for cls in (".pbp-hero", ".pbp-hero-side", ".pbp-hero-score",
+                ".pbp-hero-mid", ".pbp-hero-home",
+                ".pbp-group-head", ".pbp-tag.turnover"):
         assert cls in CSS, cls
+
+
+def test_the_retired_header_left_no_rules_behind():
+    """The other half of the same lesson. .pbp-head and .pbp-score styled
+    the header renderPbpPage wrote on 2026-09-05 morning; the hero replaced
+    it that afternoon and the rules stayed. Dead CSS is not inert — it is
+    the first thing somebody edits when the header looks wrong, and it will
+    never change anything on the screen."""
+    body = _fn("renderPbpPage")
+    # Comments stripped first: the note recording the removal names the
+    # classes, and a note is not a rule. Matched as whole class tokens so
+    # a future .pbp-headline is not read as .pbp-head coming back.
+    rules = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    for cls in ("pbp-head", "pbp-score", "pbp-home", "pbp-at"):
+        edge = re.compile(re.escape(cls) + r"(?![\w-])")
+        assert not edge.search(body), f"{cls} is back in the markup; restore its CSS"
+        assert not edge.search(rules), f".{cls} styles nothing"
 
 
 if __name__ == "__main__":
