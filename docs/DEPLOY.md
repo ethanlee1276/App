@@ -131,9 +131,12 @@ python is `/usr/bin/python3`, so it is installed for the box, once:
 # The droplet image ships without pip (2026-09-05: "No module named pip"),
 # so pip itself comes first.
 sudo apt update && sudo apt install -y python3-pip
-sudo python3 -m pip install anthropic
-# Ubuntu 24.04 refuses to touch the system python without this flag:
-sudo python3 -m pip install --break-system-packages anthropic
+# Ubuntu 24.04 refuses to touch the system python without
+# --break-system-packages, and then refuses to REMOVE apt's own copy of
+# typing_extensions ("RECORD file not found ... installed by debian",
+# 2026-09-05 on the box). --ignore-installed lays pip's newer copies
+# under /usr/local, which python reads first, and leaves apt's alone.
+sudo python3 -m pip install --break-system-packages --ignore-installed typing_extensions anthropic
 # Must print a version AS THE SERVICE USER, or the service will not see it:
 sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
 ```

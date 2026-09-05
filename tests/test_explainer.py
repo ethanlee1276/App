@@ -270,7 +270,10 @@ def test_the_board_name_is_the_pages_own_file():
 
 def test_the_deploy_docs_carry_the_one_install_and_the_two_values():
     d = (ROOT / "docs" / "DEPLOY.md").read_text()
-    assert "pip install anthropic" in d and "QB_EXPLAIN_MODEL" in d and "ANTHROPIC_API_KEY" in d
+    # The line that actually worked on the box (2026-09-05): pip must leave
+    # apt's typing_extensions alone or it aborts the whole install.
+    assert "--ignore-installed typing_extensions anthropic" in d and "python3-pip" in d
+    assert "QB_EXPLAIN_MODEL" in d and "ANTHROPIC_API_KEY" in d
     assert "explain_cache.json" in d
     assert "## 9. The explainer" in (ROOT / "docs" / "DROPLET_CHECKS.md").read_text()
 
