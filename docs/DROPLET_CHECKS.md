@@ -43,7 +43,20 @@ journalctl -k --since "6 hours ago" | grep -iE "out of memory|killed process" | 
 
 ## 1. Cam Edwards −300 on the book, −155 on our card
 
-**Blocks:** task #135. Two candidate causes were fixed blind
+**ANSWERED 2026-09-05.** The box's cache said: Hard Rock −155, FanDuel
+−260, DraftKings −270, Caesars −280, all read in the same pull. Book
+selection — one soft book more than a hundred cents off the field, and
+the shop crowned it because a shop is a `max`. Neither blind fix was
+it. Shipped the same day: a price more than ten points of implied
+probability under the median of the other books at the same line is
+not shopped, in both touchdown shops and on the card's strip, and the
+college row names the book left out (engine/odds.OUTLIER_GAP,
+tests/test_shop_outlier.py). Still worth knowing from the box, because
+the cache was 45 hours old: the board's own `odds_status` said "player
+quotes: 0 of 0 eligible game(s) pulled" — the college player pull is
+not running on the 5-credit day. That is §1b.
+
+**Blocks (was):** task #135. Two candidate causes were fixed blind
 (commit `e7930cc`, the sharp-book shop; `a1e121a`, the undated price)
 and NEITHER is proven to be this one. A 145-cent gap is wider than
 either explains.
@@ -105,6 +118,24 @@ Swap the name in the first line to check anyone else.
 | One book at −155, the rest at −300, all read minutes ago | **Book selection.** `e7930cc` covers it if that book was Pinnacle. If it was a soft book genuinely 145 cents off the field, that is a third defect — we shop the outlier and print it, and I would want a cap on how far one book may sit from consensus before it wins the shop. |
 | `NOT IN ANY CACHED PAYLOAD` | The price came from somewhere I have not found. The most interesting of the three. |
 
+### 1b. Is the college player pull running at all?
+
+The 09-05 board said `props_priced 0, games_quoted 0` on a Saturday
+with 29 cached event payloads 45 hours old. Either the budget refused
+the pull or nothing asked. One line per cycle, from the board:
+
+```bash
+cd /srv/qellys && python3 -c "
+import json; d = json.load(open('data/built/cfb.json'))
+print(d.get('generated_at'), json.dumps(d.get('odds_status')))
+print('budget:', json.dumps((d.get('prop_census') or {}), default=str)[:400])"
+cd /srv/qellys && python3 launch.py --odds-doctor 2>/dev/null | head -30
+```
+
+A `note` saying 0 of 0 eligible games on a game day means the
+eligibility filter (kickoff window, credit ceiling) excluded every game;
+the doctor prints the ceiling and what is left. Paste both.
+
 ---
 
 ## 2. What is actually inside an ESPN game summary
@@ -138,6 +169,15 @@ none, like every working ESPN call in the repo. Same command.
 that shape is now what `engine/sources/espnplays.py` reads, and the NFL
 and CFB cards draw drives from it. Still needed, one live game each:
 
+* **CFB, SEEN LIVE 2026-09-05** (event 401856658, state `in`):
+  `drives.current` + `drives.previous[19]`, each with `plays[]` carrying
+  `text`, `clock.displayValue`, `period.number`, `start/end{down,
+  distance, yardLine, yardsToEndzone, team{id}}`, `statYardage`,
+  `scoringPlay`, `type{text, abbreviation}`, `awayScore/homeScore`,
+  `wallclock`; `boxscore.players[2]{team{abbreviation,...},
+  statistics[10]{name, keys, labels, athletes[{athlete{displayName, id},
+  stats[]}]}}`. Every name `engine/sources/espnplays.py` and
+  `cfbdata.parse_summary` read is present. Nothing to change.
 * **NFL** — its probe ran pre-game and showed no drives (correct). It is
   the same `sports/football` API, so the parser serves it already, but
   the first live Sunday is the confirmation: `python3 espnprobe.py
@@ -207,6 +247,12 @@ for p in d.get('allPlays') or []:
 print('no hitData in this file')"
 ```
 
+**SEEN 2026-09-05** on `mlb_pbp_live_823823.json`: `hitData{coordinates
+{coordX, coordY}, hardness, launchAngle, launchSpeed, location,
+totalDistance, trajectory}`, `about{startTime, endTime, halfInning,
+inning, isTopInning, ...}`, the event with `startTime`, `endTime` and
+`count{balls, strikes, outs}`. Exactly the names the park reads.
+
 Expected: `hitData` with `launchSpeed`, `launchAngle`, `totalDistance`,
 `trajectory`, `coordinates{coordX, coordY}`; `about` with `startTime`
 and `endTime`; the event with `startTime`/`endTime` and `count{balls,
@@ -219,7 +265,20 @@ rather than a crash.
 
 ## 3. MLB says 20 recommended bets and draws 2
 
-**Blocks:** task #139. Two filter chains sit one above the other on the
+**ANSWERED 2026-09-05.** The box said `analyzed 870 | recommended 0 |
+drawn 0 | held 0` — the home-run rule was not the cause, and neither
+number on the Dashboard is wrong. The "Recommended bets" tile is
+`staked + riding` (web/js/app.js renderStats, Ethan's 2026-09-03 call:
+"what am I on tonight"): NEW picks that clear the sliders PLUS the
+open bets the tracker is still riding at the price they were taken.
+The grid draws only the new ones. The day he saw 20 and 2 was 2 new
+and 18 riding, and the tile's own sub-line says so ("2 new · 18 riding
+at the price we took"). On the 5th it was 0 new and 11 riding. Product
+call, not a defect: keep the headline as the total with the split
+underneath (today), or make the headline the split itself ("2 new +
+18 riding"). Say which.
+
+**Blocks (was):** task #139. Two filter chains sit one above the other on the
 Dashboard and nothing reconciles them:
 
 | surface | filter | what it feeds |
@@ -467,6 +526,21 @@ What to expect, board by board, after the next refresh cycle:
   journalctl -u qellys --since "2 hours ago" --no-pager | grep -i "open-bet tracker"
   ```
 
+  **SEEN 2026-09-05: that grep prints nothing on the box** — the
+  launcher swallows build output, so neither this line nor the light
+  board's size line reaches the journal. The tracker's own state is in
+  the JSON (`live_picks_error`, `open_elsewhere`), which the script
+  above prints; the light copies' sizes come from the files:
+
+  ```bash
+  cd /srv/qellys && ls -la data/built/*_picks.json data/built/recommendations.json data/built/mlb_recommendations.json data/built/cfb.json
+  ```
+
+  Seen on the 5th, pre-game: NFL 116 open bets for the week, all
+  upcoming; CFB 34 with game rows tracking live scores; MLB 11; NBA and
+  WNBA 0 with `open_elsewhere` 76. Player-prop rows with a live stat
+  line are the one thing still unseen — Sunday.
+
   `Open-bet tracker: 5 on this card (5 live, 1 likely); live stats: 1
   of 1 live game(s)` is the healthy shape. `not on the scoreboard` means
   the board's `away@home` did not match the fast scoreboard's (the same
@@ -509,6 +583,26 @@ for sp in ('cfb', 'nfl'):
 * NFL `ABSENT` before the 10th is correct; the page shows the wait and
   the 2025 model profile instead. After Week 1's finals ingest it fills
   in on its own.
+
+**SEEN 2026-09-05:** CFB `82 teams, offense #1 UCF 73.0`, 43 games,
+`source computed` (the league feed answered with no teams and the
+count from our own finals took over — correct). NFL was WRONG: `49
+games, source league, offense #1 BUF 29.3` five days before Week 1 —
+ESPN's standings feed answered with the PRESEASON table because no
+season type was named. Fixed the same day (the feed asks for
+`seasontype=2`; tests/test_standings_regular_season.py). After the next
+deploy and refresh:
+
+```bash
+cd /srv/qellys && python3 -c "
+import json; d = json.load(open('web/data/standings_nfl.json'))
+print('nfl games_counted', d.get('games_counted'), 'source', d.get('source'), 'rankings', 'ABSENT' if not d.get('unit_rankings') else 'PRESENT')"
+```
+
+must say `games_counted 0` and `rankings ABSENT` until the 10th, then
+climb by 16 a week. A 49 that survives the deploy means ESPN ignored
+the parameter, and the fallback is to read the count off our own
+ingest before the 10th — say so and it is a small change.
 
 
 ## 9. The explainer, once its package and keys are on the box
