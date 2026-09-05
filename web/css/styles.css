@@ -3595,6 +3595,19 @@ body.ffd-open { overflow: hidden; }
 body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%;
   overflow: hidden; }
 body.pk-open { overflow: hidden; }
+/* The first-visit walkthrough (2026-09-05): the peek dialog's own
+   backdrop and card, three steps deep. */
+#tour-overlay { position: fixed; inset: 0; z-index: 80; display: flex;
+  background: rgba(0, 0, 0, .55); align-items: center; justify-content: center; padding: 16px; }
+.tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 22px 20px 18px; }
+.tour-step { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .04em; text-transform: uppercase; }
+.tour-title { margin: 6px 0 8px; font-size: var(--fs-lg); display: flex; align-items: center; gap: 8px; }
+.tour-body { margin: 0 0 16px; color: var(--text-body); font-size: var(--fs-md); line-height: var(--lh-body); }
+.tour-nav { display: flex; align-items: center; gap: 8px; }
+.tour-dots { display: inline-flex; gap: 6px; margin-right: auto; }
+.tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.tour-dots i.on { background: var(--brand); }
 /* A scroll that reaches the end of this card must stop there rather
    than carrying on into the page underneath it. */
 .pk-card { overscroll-behavior: contain;

@@ -19683,6 +19683,12 @@ function settingsHTML() {
         teams up a ranked board would say the model likes them more than
         it does.</span></div>
     </div>
+    <div class="set-row">
+      <div class="set-k">Walkthrough</div>
+      <div class="set-v"><button type="button" class="set-opt" data-set-tour="1">Show me around</button>
+        <span class="set-note wide">The three cards a first visit sees: what a
+        pick card is, what RIDING means, why the Record keeps two books.</span></div>
+    </div>
   </section>`;
 }
 
@@ -19778,6 +19784,8 @@ function bindSettings() {
       favToggle(abbr, sport);
       redraw();
     }));
+  host.querySelectorAll("[data-set-tour]").forEach((b) =>
+    b.addEventListener("click", () => tourOpen(0)));
 }
 
 /* ---- WHERE A LEAGUE GETS LINKED ----------------------------------------
@@ -32147,6 +32155,103 @@ async function renderLiveBoard() {
     }));
 }
 
+/* ---------------- The first-visit walkthrough ----------------
+   Ethan, 2026-09-05: "a first visit walk through". Three cards, once:
+   what a pick card is, what RIDING means, why the Record keeps two
+   books. Not on a deep link — a reader who arrived at a pick or a game
+   came for that, not for a tour — and not on a static host. Remembered
+   per viewer; the account page's Settings can show it again. */
+const TOUR_KEY = "qb.tour";                 // "done" once finished or dismissed
+
+function tourSteps() {
+  return [
+    { icon: "list", title: "A pick card is one bet",
+      body: "Each card on the Home board is a bet the model would make tonight: " +
+        "the player, the side and the line, the real book price we found and " +
+        "where, and the edge — how far the model’s number sits from the " +
+        "market’s. Only picks graded 70 or better make the list. Tap a card " +
+        "for the bar chart, the game logs and every reason." },
+    { icon: "warn", title: "RIDING means we already hold it",
+      body: "A row marked RIDING is a bet placed on an earlier pull that no " +
+        "longer clears the bar at today’s number. It rides as placed and " +
+        "settles like any bet; the note under it says which number moved — " +
+        "the price, the line, or neither — and when it was placed. Don’t add " +
+        "more at the new price." },
+    { icon: "book", title: "Two books, kept apart",
+      body: "The Record keeps the Edge picks and the Most Likely picks in " +
+        "separate books with separate records. Edge picks are the only ones " +
+        "we stake — they are where we think the price is wrong. Most Likely " +
+        "ranks what is likeliest to hit, by likelihood rather than by edge. " +
+        "Neither book’s numbers ever leak into the other’s." },
+  ];
+}
+
+/* Whether the tour shows itself on this visit. Pure, so it can be tested
+   for every combination without a browser. */
+function tourDue({ stored, hash, isStatic, view, standalone }) {
+  if (stored === "done" || isStatic) return false;
+  const h = String(hash || "");
+  if (h && h !== "#" && h !== "#recommended") return false;   // a deep link
+  return !(standalone || []).includes(view);
+}
+
+function tourMaybe() {
+  let stored = "";
+  try { stored = localStorage.getItem(TOUR_KEY) || ""; } catch (e) { stored = ""; }
+  if (!tourDue({ stored, hash: location.hash, isStatic: state.static,
+                 view: state.view, standalone: STANDALONE_MODES })) return;
+  setTimeout(() => tourOpen(0), 900);
+}
+
+function tourClose() {
+  const ov = document.getElementById("tour-overlay");
+  if (ov) ov.remove();
+  document.removeEventListener("keydown", tourKey);
+  lockScroll(false);
+  try { localStorage.setItem(TOUR_KEY, "done"); } catch (e) {}
+}
+
+function tourKey(e) {
+  if (e.key === "Escape") tourClose();
+}
+
+function tourOpen(step) {
+  const steps = tourSteps();
+  const i = Math.max(0, Math.min(steps.length - 1, step || 0));
+  let ov = document.getElementById("tour-overlay");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "tour-overlay";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov || e.target.closest(".tour-close")) tourClose();
+    });
+    document.addEventListener("keydown", tourKey);
+    lockScroll(true);
+  }
+  const s = steps[i];
+  ov.innerHTML = `<div class="tour-card" role="dialog" aria-modal="true" aria-label="${escapeAttr(s.title)}">
+      <button class="pk-close tour-close" type="button" aria-label="Close">×</button>
+      <div class="tour-step">${i + 1} of ${steps.length}</div>
+      <h3 class="tour-title">${icon(s.icon, 18)} ${escapeHtml(s.title)}</h3>
+      <p class="tour-body">${escapeHtml(s.body)}</p>
+      <div class="tour-nav">
+        <span class="tour-dots" aria-hidden="true">${steps.map((_, k) =>
+          `<i class="${k === i ? "on" : ""}"></i>`).join("")}</span>
+        ${i > 0 ? `<button type="button" class="btn ghost" data-tour-step="${i - 1}">Back</button>` : ""}
+        ${i < steps.length - 1
+          ? `<button type="button" class="btn" data-tour-step="${i + 1}">Next</button>`
+          : `<button type="button" class="btn tour-done">Done</button>`}
+      </div>
+    </div>`;
+  ov.querySelectorAll("[data-tour-step]").forEach((b) =>
+    b.addEventListener("click", () => tourOpen(+b.dataset.tourStep)));
+  const done = ov.querySelector(".tour-done");
+  if (done) done.addEventListener("click", tourClose);
+  const first = ov.querySelector(".tour-nav .btn:last-child");
+  if (first) first.focus();
+}
+
 (function initNewLook() {
   renderGreeting();
   initHcm();
@@ -32201,6 +32306,7 @@ async function renderLiveBoard() {
     socFetch(true).then(msgBadge);
   }, 120000);
   slipRender();
+  tourMaybe();
   // The avatar chip: initials for a signed-in account, never a fake name.
   const acctBtn = document.getElementById("nav-acct");
   if (acctBtn) {
