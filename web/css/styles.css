@@ -9092,3 +9092,26 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
      in 150px, which is where this stops being readable. */
   .gs-sides { grid-template-columns: 1fr; }
 }
+
+/* The play-by-play page (2026-09-05): the card's row language, a game at
+   a time. The score block mirrors the live card's; the groups reuse
+   .lb-plays without its top rule, since each group carries its own head. */
+.pbp-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 6px 0 12px; }
+.pbp-score { display: grid; grid-template-columns: 1fr auto auto auto 1fr;
+  align-items: center; gap: 12px; font-size: 1.5rem; font-weight: 800; }
+.pbp-score .lb-team { display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-md); font-weight: 700; min-width: 0; }
+.pbp-score .lb-team em { font-style: normal; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.pbp-score .pbp-home { justify-content: flex-end; }
+.pbp-score .pbp-at { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 400; }
+.pbp-group { margin: 12px 0 16px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+@media (max-width: 700px) { .pbp-score { font-size: 1.25rem; gap: 8px; } }

@@ -1992,6 +1992,7 @@ function renderAll() {
   // view redrawn once the new data is actually here.
   if (state.view === "game") renderGamePage();
   if (state.view === "prop") renderPropPage();
+  if (state.view === "pbp") renderPbpPage();
   // Rosters live in their own per-sport payload rather than the slate, so
   // nothing above redraws them. Switching leagues while sitting on the tab
   // left the previous league's teams on screen under the new league's
@@ -26972,7 +26973,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -27068,7 +27069,7 @@ function wallBlocked(name) {
    "instant" overrides the sheet. */
 let _boardReturn = null;              // { view, y } while inside a detail
 
-const DETAIL_VIEWS = ["prop", "game"];
+const DETAIL_VIEWS = ["prop", "game", "pbp"];
 
 function _landScroll(name, leaving) {
   let y = 0;
@@ -27128,7 +27129,8 @@ function _switchViewNow(name, push, dir) {
   // from, so Recommended stays lit while you're inside a game.
   // Neither the game page nor the prop page has a tab. Both belong to the
   // board they were opened from, so Recommended stays lit inside them.
-  const lit = (name === "game" || name === "prop") ? "recommended" : name;
+  const lit = (name === "game" || name === "prop") ? "recommended"
+    : name === "pbp" ? "live" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   syncNavHint(lit);
   if (name === "prop") {
@@ -27148,6 +27150,14 @@ function _switchViewNow(name, push, dir) {
   if (name === "game") {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
+    moveIndicator();
+    _landScroll(name, leaving);
+    return;
+  }
+  if (name === "pbp") {
+    renderPbpPage();
+    if (state.pbp && state.pbp.league && state.pbp.event)
+      history.replaceState(null, "", `#pbp/${encodeURIComponent(state.pbp.league)}/${encodeURIComponent(state.pbp.event)}`);
     moveIndicator();
     _landScroll(name, leaving);
     return;
@@ -28173,6 +28183,7 @@ document.addEventListener("click", (e) => {
   // — and so does this page, which is wearing the button that changed.
   if (state.data) renderAll();
   if (state.view === "game") renderGamePage();
+  if (state.view === "pbp") renderPbpPage();
 });
 
 /* The static fallback. In production Caddy hands these paths to the app
@@ -28305,6 +28316,7 @@ function initialView() {
     switchView("recommended");
     return;
   }
+  if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
   // #nba used to be handled here on its own, from when NBA was a
@@ -29851,6 +29863,7 @@ function bind() {
       switchView("recommended");
       return;
     }
+    if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
     // An EMPTY hash is a destination, not a no-op: it is the entry the
@@ -30853,7 +30866,11 @@ function liveCardHTML({ sport, g, bets }) {
       <b>${mlOdds(g.home_ml)}</b>
     </div>` : "";
   return `
-  <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}">
+  <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}"${
+    /* A game in progress or just finished has a deep file to open; a
+       scheduled one has nothing to read yet and keeps the game-page door. */
+    (lv.state === "live" || lv.state === "final") && (g.event_id || g.game_pk)
+      ? ` data-pbp="${escapeAttr(String(g.event_id || g.game_pk))}"` : ""}>
     <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
       <span class="lb-sit">${situation}</span>
       <span class="lb-league">${sport.toUpperCase()}</span></div>
@@ -30872,6 +30889,164 @@ function liveCardHTML({ sport, g, bets }) {
     ${playsHTML(g)}
     ${lineTrackHTML(g)}
   </div>`;
+}
+
+
+/* ---------------- The play-by-play page ----------------
+   Ethan, 2026-09-05: "You should be able to click on each live game and
+   see a deeper play by play." The card keeps its six-play strip; this
+   page reads the game's whole file — `data/pbp/{league}_{event}.json`,
+   written by the fast builders for every game in progress and kept
+   about 36 hours — and draws it with the SAME row renderer the card
+   uses (`playsHTML`), grouped the way each sport is read: football a
+   drive at a time, basketball by period, baseball by half-inning,
+   newest group first. The file carries no play text and this page reads
+   none; every row is the structured one the parsers composed. It
+   refreshes on the fast clock while the game is live and stops the
+   moment the view changes. */
+let _pbpTimer = null;
+
+function openPbp(league, event) {
+  state.pbp = { league: String(league || ""), event: String(event || "") };
+  switchView("pbp", true);
+}
+
+function openPbpHash(rest) {
+  const parts = String(rest || "").split("/").map((x) => {
+    try { return decodeURIComponent(x); } catch (e) { return x; }
+  });
+  if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
+  openPbp(parts[0], parts[1]);
+}
+
+/* The groups a sport is read in, newest first. Rows inside a football
+   drive stay in order — a drive is read forwards; rows inside a period or
+   a half-inning are newest first, like a feed. */
+function pbpGroups(d) {
+  const plays = d.plays || [];
+  const live = d.live || {};
+  if (d.league === "nfl" || d.league === "cfb") {
+    return (d.drives || []).slice().reverse().map((dr, i) => {
+      const rows = dr.plays || [];
+      const n = dr.offensive_plays || rows.length;
+      const tag = dr.scoring ? "SCORE"
+        : rows.some((p) => p.turnover) ? "TURNOVER"
+        : (i === 0 && live.state === "live") ? "IN PROGRESS" : "";
+      return {
+        head: `${dr.team || "—"} drive`,
+        sub: `${n} play${n === 1 ? "" : "s"} · ${dr.yards || 0} yd${
+          dr.elapsed ? ` · ${dr.elapsed}` : ""}${dr.period ? ` · Q${dr.period}` : ""}`,
+        tag, rows,
+      };
+    });
+  }
+  // Baseball and basketball: group by the label the card already prints
+  // (T6 / Q3), in the order the plays arrived, then show newest first.
+  const label = d.league === "mlb"
+    ? (p) => `${p.half || ""}${p.inning || ""}`
+    : (p) => (p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "");
+  const groups = [];
+  const byKey = {};
+  plays.forEach((p) => {
+    const k = label(p);
+    if (!byKey[k]) { byKey[k] = { head: k || "—", sub: "", tag: "", rows: [] }; groups.push(byKey[k]); }
+    byKey[k].rows.push(p);
+  });
+  groups.forEach((g) => g.rows.reverse());
+  return groups.reverse();
+}
+
+function pbpAgo(stamp) {
+  if (!stamp) return "";
+  const t = Date.parse(stamp.endsWith("Z") ? stamp : stamp + "Z");
+  if (!isFinite(t)) return "";
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
+}
+
+async function renderPbpPage() {
+  const host = document.getElementById("pbp-body");
+  if (!host) return;
+  if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
+  const { league, event } = state.pbp || {};
+  const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">← Back to Live</button>`;
+  const wireBack = () => {
+    const b = document.getElementById("pbp-back");
+    if (b) b.addEventListener("click", () => switchView("live"));
+  };
+  if (!league || !event) {
+    host.innerHTML = `${emptySlate("stadium", "No game selected",
+      "Open a game from the Live tab to read its play-by-play.")}${back}`;
+    wireBack();
+    return;
+  }
+  let d = null;
+  try {
+    // Through boardFetch, like every other board file: a fetch that
+    // fails here must count toward the wire-down banner, not vanish.
+    const res = await boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
+                                 { cache: "no-store" });
+    if (res.ok) d = await res.json();
+  } catch (e) { d = null; }
+  if (state.view !== "pbp") return;                // moved on while fetching
+  const again = () => {
+    _pbpTimer = setTimeout(() => {
+      _pbpTimer = null;
+      if (state.view === "pbp") renderPbpPage();
+    }, 12000);
+  };
+  if (!d) {
+    host.innerHTML = `${emptySlate("stadium", "No play-by-play on file for this game",
+      "The file is written while a game is in progress — up to eight games at a "
+      + "time — and kept for about a day and a half. A game past that cap keeps its "
+      + "score and has no play list; one that has just kicked off gets its file on "
+      + "the next pass.")}${back}`;
+    wireBack();
+    again();                                       // it may appear on the next pass
+    return;
+  }
+  const lv = d.live || {};
+  const mark = (abbr) => teamMarkIn(league, abbr, 34);
+  const name = (abbr, full) => escapeHtml(full || teamNameIn(league, abbr) || abbr || "");
+  let situation = escapeHtml(lv.period || "");
+  if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
+  if (league === "mlb" && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
+  if (lv.detail && league !== "mlb") situation += ` · ${escapeHtml(lv.detail)}`;
+  const stateWord = lv.state === "live" ? `${icon("dot", 10)} LIVE`
+    : lv.state === "final" ? "FINAL" : "SCHEDULED";
+  const groups = pbpGroups(d);
+  const groupHTML = (g) => `
+    <div class="pbp-group">
+      <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
+        g.sub ? ` · ${escapeHtml(g.sub)}` : ""}</span>${
+        g.tag ? `<span class="pbp-tag${g.tag === "TURNOVER" ? " turnover" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
+      ${playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`}
+    </div>`;
+  host.innerHTML = `
+    <div class="pbp-head">
+      <span class="lb-league">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</span>
+      <span class="lb-live">${stateWord}</span>
+      <span class="lb-sit">${situation}</span>
+      <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span>
+    </div>
+    <div class="card">
+      <div class="pbp-score">
+        <span class="lb-team">${mark(d.away)}<em>${name(d.away, d.away_name)}</em></span>
+        <b>${lv.away_score != null ? lv.away_score : "–"}</b>
+        <span class="pbp-at">@</span>
+        <b>${lv.home_score != null ? lv.home_score : "–"}</b>
+        <span class="lb-team pbp-home">${mark(d.home)}<em>${name(d.home, d.home_name)}</em></span>
+      </div>
+    </div>
+    <div class="section-title">Play-by-play
+      <span class="sub">— every play on file, newest first · ${(d.plays || []).length} play${
+        (d.plays || []).length === 1 ? "" : "s"}${
+        d.drives ? ` in ${d.drives.length} drive${d.drives.length === 1 ? "" : "s"}` : ""}</span></div>
+    ${groups.length ? groups.map(groupHTML).join("")
+      : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
+    ${back}`;
+  wireBack();
+  if (lv.state === "live") again();
 }
 
 /* The last few at-bats, on the card, from the same fast file as the score.
@@ -31180,8 +31355,12 @@ async function renderLiveBoard() {
   if (typeof mountLiveTicks === "function") mountLiveTicks(host);
   host.querySelectorAll(".lb-card").forEach((el) =>
     el.addEventListener("click", () => {
-      // Opening a game only works on its own sport's slate.
       const s = el.dataset.lsport;
+      // A game in progress opens its play-by-play (Ethan, 2026-09-05:
+      // "click on each live game and see a deeper play by play");
+      // anything else opens the game page, which only works on its
+      // own sport's slate.
+      if (el.dataset.pbp) { openPbp(s, el.dataset.pbp); return; }
       if (s !== state.sport) {
         const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
         if (chip) chip.click();
