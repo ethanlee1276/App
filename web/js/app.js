@@ -1230,6 +1230,20 @@ async function load(quiet = false) {
   const refreshBtn = document.getElementById("brand-home");
   if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
+  /* THE LOAD THAT LANDS LATE. Ethan, 2026-09-05: "MLB live tab is
+     showing nfl edge and most likely bets and CFB live bets are showing
+     mlb." Every board's tracker is filtered by sport in SQL and every
+     assignment below is identity-guarded, so the only way the MLB tab
+     can draw NFL rows is an NFL load finishing AFTER the button moved
+     to MLB: the 30-second auto-refresh had one in flight, the league
+     switch started another, and whichever answered last won — writing
+     the league just LEFT into `state.data` under the new league's name,
+     until the next refresh put it right. The 8 MB MLB board is the slow
+     one, which is why CFB wore baseball. A load that was asked for one
+     league and finds another in force when it lands is abandoned at
+     every await; the newer load is the one that renders. */
+  const asked = state.sport;
+  const overtaken = () => state.sport !== asked;
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge, max_juice: state.maxJuice });
   // When the payload came off disk the server stamps Last-Modified with the
   // build time. That, not the fetch time, is what "how fresh is this?"
@@ -1267,6 +1281,7 @@ async function load(quiet = false) {
       cache: "no-store",
       headers: (tag && holding) ? { "If-None-Match": tag } : {},
     });
+    if (overtaken()) return;             // a league switch got here first
     if (res.status === 304 && holding) {
       stampFrom(res);                    // the build time has not moved
     } else if (res.status === 304) {
@@ -1282,7 +1297,9 @@ async function load(quiet = false) {
       const got = res.headers.get("ETag");
       if (got) _boardTags[meta.api] = got; else delete _boardTags[meta.api];
       stampFrom(res);
-      state.data = normalizeSlate(await res.json());
+      const slate = normalizeSlate(await res.json());
+      if (overtaken()) return;           // the body took longer than the switch
+      state.data = slate;
       _boardFor = meta.api;
     }
   } catch (e) {
@@ -1325,11 +1342,14 @@ async function load(quiet = false) {
        bug tests/test_board_identity.py exists for. Nothing is faked —
        we keep the board we already fetched, `state.builtAt` is left
        alone, and the freshness chip goes on ageing it honestly. */
+    if (overtaken()) return;
     try {
       const res = await fetch(`${meta.fallback}?_=${Date.now()}`,
                               { cache: "no-store" });
+      if (overtaken()) return;
       if (!res.ok) throw new Error("fallback");
       const slate = normalizeSlate(await res.json());
+      if (overtaken()) return;
       if (!(_boardFor === meta.api && locksAwayWhatWeHold(slate, state.data))) {
         stampFrom(res);
         state.data = slate;
@@ -1341,6 +1361,7 @@ async function load(quiet = false) {
       // MODEL — the exact substitution tests/test_wiredown.py was
       // written about. Holding nothing, or holding another league's
       // board, the empty slate is the honest thing on screen.
+      if (overtaken()) return;
       if (!(_boardFor === meta.api && state.data)) {
         state.builtAt = null;
         state.data = normalizeSlate({ date: "", status: "not built" });
@@ -1351,6 +1372,7 @@ async function load(quiet = false) {
       }
     }
   }
+  if (overtaken()) return;
   renderAll();
   applyFreshPulses();
   state.lastLoad = Date.now();
@@ -1934,6 +1956,14 @@ function renderTalent() {
 function renderAll() {
   const d = state.data;
   if (!d) return;
+  // A BOARD THAT IS NOT THIS LEAGUE'S IS NOT DRAWN. `load()` abandons a
+  // late answer, but the slate has other readers and this is the one
+  // place every board section is drawn from, so the rule is enforced
+  // here too: if the slate in hand was fetched for another league, wait
+  // for the one that was asked for. `_boardFor` is stamped on every
+  // assignment to `state.data` (tests/test_board_identity.py).
+  const _meta = SPORT_META[state.sport];
+  if (_meta && _boardFor && _boardFor !== _meta.api) return;
   // CFB identities arrive WITH the slate, so they have to be picked up
   // here — applySport runs before the fetch and would leave every college
   // helmet drawing in the fallback brand colour.
