@@ -5072,6 +5072,8 @@ body.pk-open { overflow: hidden; }
 .inj-line + .inj-line { border-top: var(--hairline) solid var(--border); }
 .inj-line-main { flex: 1 1 auto; min-width: 0; display: flex;
   flex-direction: column; gap: 1px; }
+.inj-next { display: block; margin-top: 3px; font-size: var(--fs-xs); color: var(--text-mute); }
+.inj-next b { color: var(--text); font-weight: 600; }
 .inj-line-sub { color: var(--text-mute); font-size: var(--fs-xs);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inj-line-right { flex: none; display: flex; flex-direction: column;

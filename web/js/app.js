@@ -20722,6 +20722,39 @@ function injLineHTML(r) {
     ${escapeHtml(r.status)}${bits ? ` — ${escapeHtml(bits)}` : ""}</div>`;
 }
 
+/* ---------------- Next man up ----------------
+   Ethan, 2026-09-05: "next man up on injurie page". Beside a man who is
+   Out, Doubtful or on IR: who holds his work now, with the share each
+   already holds — the same join the waiver board makes, turned to face
+   the injured man (engine/waivers.next_up), read off fantasy.json's
+   free `waivers` key. NFL only, because the usage shares behind it are
+   measured for the NFL only; a row with no entry draws nothing. */
+let _nextUp = new Map();        // "player|team" → the entry, for the page being drawn
+let _nextUpAt = 0, _nextUpBoard = null;
+
+async function loadNextUp() {
+  if (_nextUpBoard && Date.now() - _nextUpAt < 5 * 60e3) return _nextUpBoard;
+  try {
+    const res = await paidFetch("fantasy.json");
+    if (res.ok) { _nextUpBoard = await res.json(); _nextUpAt = Date.now(); }
+  } catch (e) {}
+  return _nextUpBoard;
+}
+
+const nextUpKey = (r) => `${String((r || {}).player || "").toLowerCase().trim()}|${String((r || {}).team || "").toLowerCase().trim()}`;
+
+/* The line under an injured man: his heirs and the share each holds,
+   most first, three at most. */
+function nextUpLine(entry) {
+  const heirs = ((entry || {}).heirs || []).slice(0, 3);
+  if (!heirs.length) return "";
+  const pct = (v) => v == null ? "—" : `${Math.round(Number(v) * 100)}%`;
+  return `<span class="inj-next" title="Who holds the ${escapeAttr(entry.position || "")} work while ${
+      escapeAttr(entry.hurt || "")} is ${escapeAttr(entry.status || "out")} — the share each already held, from the usage board">${
+      icon("rising", 11)} Next man up: ${heirs.map((h, i) =>
+        `${i ? "<b>" : "<b>"}${escapeHtml(h.player || "")}</b> ${pct(h.share)}`).join(" · ")}</span>`;
+}
+
 function injRow(r, withTeam) {
   const face = r.face && /^https:\/\//.test(r.face)
     ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
@@ -20737,6 +20770,7 @@ function injRow(r, withTeam) {
       <span><b>${escapeHtml(r.player)}</b>${
         r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span>
       <span class="inj-line-sub">${what}</span>
+      ${nextUpLine(_nextUp.get(nextUpKey(r)))}
     </span>
     <span class="inj-line-right">
       <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
@@ -20800,6 +20834,14 @@ async function renderInjuries() {
   const sport = state.sport || "nfl";
   const newsHTML = newsSectionHTML(sport, await loadNews());
   const rows = (((d || {}).sports) || {})[sport] || [];
+  // Who holds each injured man's work (NFL: the only league with usage
+  // shares measured). Keyed the way the injury rows are, so a row finds
+  // its own entry without a second normalisation.
+  _nextUp = new Map();
+  if (sport === "nfl") {
+    const fx = await loadNextUp();
+    (((fx || {}).waivers || {}).next_up || []).forEach((e) => _nextUp.set(nextUpKey({ player: e.hurt, team: e.team }), e));
+  }
   if (!rows.length) {
     const note = sport === "cfb"
       ? `College programs have no duty to report, so this feed runs sparse —
@@ -20882,7 +20924,10 @@ async function renderInjuries() {
     ${teams.map((t) => injTeamBlock(t, byTeam[t], severity[t])).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
-      site on a 30-minute cache, one row per player — his newest filing. The NFL’s
+      site on a 30-minute cache, one row per player — his newest filing.${
+      _nextUp.size ? ` <b>Next man up</b> names who holds an injured man’s work and the
+      share each already held, from the usage board — a measured role, never a
+      claim about who is on your league’s wire.` : ""} The NFL’s
       practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the
       Fantasy page — this board is availability, league-wide.
       ${ageS != null
