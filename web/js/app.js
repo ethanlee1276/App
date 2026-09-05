@@ -2679,15 +2679,7 @@ async function renderBestBets() {
           ? `${escapeHtml(teamName(b.player))} Moneyline`
           : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
         ${ridingWhen(b)}
-        <span class="pick-moved">${icon("warn", 12)} ${cur && cur.odds != null
-          ? `The price has changed since we took this pick — placed at
-             ${american(b.odds)}, now ${american(cur.odds)}${
-             cur.line != null && Number(cur.line) !== Number(b.line)
-               ? ` (line now ${cur.line})` : ""}. It no longer clears the bar
-             at that number: the bet rides as placed, but don’t add more.`
-          : `The price has changed since we took this pick — placed at
-             ${american(b.odds)}, and there is no live quote for this market
-             right now. The bet rides as placed; don’t add more.`}</span>
+        <span class="pick-moved">${icon("warn", 12)} ${ridingMoveCopy(b, cur)}</span>
       </span>
       <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
         ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
@@ -6701,6 +6693,47 @@ function propOpenable(r) {
 function propAttrs(r) {
   return propOpenable(r)
     ? ` data-prop="${escapeAttr(propId(r))}" tabindex="0" role="link"` : "";
+}
+
+/* WHICH NUMBER MOVED. Ethan, 2026-09-05, on Ja'Kyrian Turner's riding
+   row: "placed at −110, now −110 (line now 15.5)" under a sentence that
+   began "The price has changed". The line had moved and the price had
+   not, and the note named the wrong one. Six cases, each saying only
+   what the two quotes show: the board now leans the other way; the
+   price moved; the line moved; both did; neither did (the pick fell
+   off the bar on the model's side, or a gate closed — the market is not
+   the reason); or there is no quote to compare against, which is not
+   evidence of a move at all. A moneyline has no line to print. */
+function ridingMoveCopy(b, cur) {
+  const hasLine = b.market !== "moneyline" && b.line != null && b.line !== "";
+  const on = (l) => hasLine && l != null ? ` on ${l}` : "";
+  const ride = "The bet rides as placed; don’t add more.";
+  if (!cur || cur.odds == null) {
+    return `There is no live quote for this market right now — placed at ${american(b.odds)}${on(b.line)},
+      and nothing to compare it with. ${ride}`;
+  }
+  const bar = "It no longer clears the bar at that number: the bet rides as placed, but don’t add more.";
+  const bSide = String(b.side || "").toUpperCase(), cSide = String(cur.side || "").toUpperCase();
+  if (bSide && cSide && bSide !== cSide) {
+    return `The board now leans the other way — we hold ${bSide}${on(b.line)} at ${american(b.odds)};
+      today’s number is ${cSide}${on(cur.line)} at ${american(cur.odds)}. ${ride}`;
+  }
+  const priceMoved = Number(cur.odds) !== Number(b.odds);
+  const lineMoved = hasLine && cur.line != null && Number(cur.line) !== Number(b.line);
+  if (priceMoved && lineMoved) {
+    return `The price and the line have both moved since we took this pick — placed at
+      ${american(b.odds)}${on(b.line)}, now ${american(cur.odds)}${on(cur.line)}. ${bar}`;
+  }
+  if (priceMoved) {
+    return `The price has changed since we took this pick — placed at ${american(b.odds)},
+      now ${american(cur.odds)}. ${bar}`;
+  }
+  if (lineMoved) {
+    return `The line has moved since we took this pick — placed at ${b.line}, now ${cur.line},
+      ${american(cur.odds)} either way. ${bar}`;
+  }
+  return `Nothing has moved at the book — still ${american(b.odds)}${on(b.line)} — but the pick
+    no longer clears the bar on today’s build. ${ride}`;
 }
 
 /* ---- A RIDING ROW IS A DOOR TOO ----------------------------------------
