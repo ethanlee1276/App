@@ -3595,6 +3595,15 @@ body.ffd-open { overflow: hidden; }
 body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%;
   overflow: hidden; }
 body.pk-open { overflow: hidden; }
+/* Phone feel (2026-09-05): the site's own pull-to-refresh, so the
+   browser's whole-page reload on the same gesture is switched off on
+   touch screens and the two cannot fire together. */
+@media (pointer: coarse) { html { overscroll-behavior-y: contain; } }
+#ptr { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 60;
+  padding: 6px 12px; border-radius: var(--radius-lg); background: var(--panel);
+  border: var(--hairline) solid var(--border); color: var(--text-mute); font-size: var(--fs-sm);
+  pointer-events: none; }
+#ptr.ready, #ptr.busy { color: var(--text); border-color: var(--brand); }
 /* The first-visit walkthrough (2026-09-05): the peek dialog's own
    backdrop and card, three steps deep. */
 #tour-overlay { position: fixed; inset: 0; z-index: 80; display: flex;

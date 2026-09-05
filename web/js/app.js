@@ -3119,6 +3119,7 @@ function censusFunnelHTML() {
 }
 
 function renderLivePicks() {
+  buzzOnSettle(((state.data || {}).live_picks) || []);
   const host = document.getElementById("live-picks");
   if (!host) return;
   const rows = (state.data || {}).live_picks || [];
@@ -28834,6 +28835,7 @@ function slipToggle(r) {
       return false;
     }
     const kind = r.bet_type || r.market || "";
+    buzz("tap");                       // a leg landing, felt as well as seen
     // `book` rides along for the text export: a price is only useful to
     // key in if you know WHICH book was showing it. It is stored, never
     // drawn on the panel — the slip is already dense enough.
@@ -32250,6 +32252,144 @@ function tourOpen(step) {
   if (done) done.addEventListener("click", tourClose);
   const first = ov.querySelector(".tour-nav .btn:last-child");
   if (first) first.focus();
+}
+
+/* ---------------- Phone feel: swipe, pull, buzz ----------------
+   Ethan, 2026-09-05: "the swipe between sports pull to refresh and
+   light buzz". Three small things a native app does that a page does
+   not unless it is told to: a sideways swipe on a board moves to the
+   next league's chip; a pull down at the top of a board asks for it
+   again; a short buzz when a bet settles on the Live tab, when a pick
+   lands in the slip, and when a swipe lands. Every one of them is
+   guarded: no buzz without `navigator.vibrate` (iPhones do not have
+   it) or under reduced motion; no swipe from inside anything that
+   scrolls sideways itself; no pull unless the page is at the very top
+   and the view is a board. */
+const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
+//: The views that follow the sport chips. A detail page, the chat, the
+//: account page and the standalone modes are not boards.
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "edge", "scanner",
+                     "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
+const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
+
+/* A short vibration, or nothing: false whenever the device cannot, or
+   the reader asked for less motion. */
+function buzz(kind) {
+  const pattern = BUZZ[kind];
+  if (!pattern || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return false;
+  try {
+    if (typeof window !== "undefined" && window.matchMedia
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  } catch (e) {}
+  try { return !!navigator.vibrate(pattern); } catch (e) { return false; }
+}
+
+/* Where a sideways swipe goes: the next or previous league in the chip
+   row, or nowhere — never around the end. Pure. */
+function swipeTarget(dx, dy, sports, current) {
+  if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dy) > SWIPE_MAX_Y) return null;
+  const i = (sports || []).indexOf(current);
+  if (i < 0) return null;
+  const j = dx < 0 ? i + 1 : i - 1;
+  return j >= 0 && j < sports.length ? sports[j] : null;
+}
+
+/* A swipe that began inside something that scrolls sideways itself —
+   the games strip, a chip row, a wide table — or inside a dialog or a
+   field, belongs to that thing. */
+function swipeOwned(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sb-chips, .lb-table, table")) return true;
+    if (n.scrollWidth > n.clientWidth + 4) {
+      const o = getComputedStyle(n).overflowX;
+      if (o === "auto" || o === "scroll") return true;
+    }
+  }
+  return false;
+}
+
+function visibleSports() {
+  return [...document.querySelectorAll(".sb-chips .sport-btn[data-sport]")]
+    .filter((b) => !b.hidden && SPORT_CODES.includes(b.dataset.sport))
+    .map((b) => b.dataset.sport);
+}
+
+/* What a pull down has earned: nothing unless the page is at the top,
+   "pull" until the threshold, "ready" past it. Pure. */
+function ptrPhase(dy, atTop) {
+  return !atTop || dy <= 0 ? "idle" : dy < PTR_MIN ? "pull" : "ready";
+}
+
+function ptrShow(phase) {
+  let el = document.getElementById("ptr");
+  if (phase === "idle") { if (el) el.hidden = true; return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "ptr"; el.setAttribute("role", "status");
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+  el.className = phase;
+  el.textContent = phase === "busy" ? "Refreshing…" : phase === "ready" ? "Release to refresh" : "Pull to refresh";
+}
+
+let _touch = null;
+document.addEventListener("touchstart", (e) => {
+  if (!e.touches || e.touches.length !== 1) { _touch = null; return; }
+  const t = e.touches[0];
+  _touch = { x: t.clientX, y: t.clientY, owned: swipeOwned(e.target),
+             atTop: window.scrollY <= 0, phase: "idle" };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!_touch || !_touch.atTop || !SWIPE_VIEWS.includes(state.view)) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  const dy = t.clientY - _touch.y, dx = t.clientX - _touch.x;
+  const phase = Math.abs(dx) > SWIPE_MAX_Y ? "idle" : ptrPhase(dy, true);
+  if (phase !== _touch.phase) { _touch.phase = phase; ptrShow(phase); }
+}, { passive: true });
+document.addEventListener("touchend", async (e) => {
+  const s = _touch; _touch = null;
+  if (!s) return;
+  const t = e.changedTouches && e.changedTouches[0];
+  const onBoard = SWIPE_VIEWS.includes(state.view);
+  if (s.phase === "ready" && onBoard && !state.static) {
+    ptrShow("busy"); buzz("tap");
+    try { await load(true); } catch (err) {}
+    ptrShow("idle");
+    tfToast(`Refreshed · ${tzTime(Date.now())}`);
+    return;
+  }
+  ptrShow("idle");
+  if (s.owned || !t || !onBoard) return;
+  const to = swipeTarget(t.clientX - s.x, t.clientY - s.y, visibleSports(), state.sport);
+  if (!to) return;
+  const btn = document.querySelector(`.sb-chips .sport-btn[data-sport="${to}"]`);
+  if (btn) { btn.click(); buzz("tap"); }
+}, { passive: true });
+document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle"); }, { passive: true });
+
+/* A settled bet, announced once. The tracker redraws every refresh, so
+   the statuses of the last draw are kept and only a CHANGE on a row
+   already being watched earns a buzz — a page opened to a row already
+   won has nothing to announce, and neither does a row that arrives
+   settled. Pure in what it returns. */
+const SETTLE_BUZZ = { cleared: "win", won_pending: "win", busted: "loss", lost_pending: "loss", dead: "loss" };
+let _trackStatus = null;
+function settleChanges(prev, rows) {
+  const next = new Map(), fire = [];
+  (rows || []).forEach((r) => {
+    const key = `${r.player}|${r.market}|${r.category || "main"}`;
+    next.set(key, r.status);
+    const kind = SETTLE_BUZZ[r.status];
+    if (prev && kind && prev.has(key) && prev.get(key) !== r.status) fire.push(kind);
+  });
+  return { next, fire };
+}
+function buzzOnSettle(rows) {
+  const { next, fire } = settleChanges(_trackStatus, rows);
+  _trackStatus = next;
+  if (fire.length) buzz(fire.includes("win") ? "win" : "loss");
 }
 
 (function initNewLook() {
