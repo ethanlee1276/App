@@ -442,3 +442,37 @@ What to expect, board by board, after the next refresh cycle:
 * NFL's card is the week label (`2026-W01`), so its rows are the whole
   week's open bets; the other three use the slate date and its two
   neighbours.
+
+
+---
+
+## 8. Team offense/defense rankings on the NFL and CFB standings pages
+
+Shipped 2026-09-02 (`14ecec0`): scoring offense and defense from the
+standings table's own finished games, `standings.unit_rankings`. Absent
+by design for a season with no finals — which is the NFL until Week 1 —
+and as of 2026-09-05 the section renders anyway on a football page with
+the reason and, on the NFL, the model's profile ranked on last season.
+
+Whether CFB's live file carries the real rankings today (two weeks of
+finals exist; the sandbox copy is stale and cannot say):
+
+```bash
+cd /srv/qellys && python3 -c "
+import json
+for sp in ('cfb', 'nfl'):
+    d = json.load(open(f'web/data/standings_{sp}.json'))
+    ur = d.get('unit_rankings')
+    print(sp, 'season', d.get('season'), 'games_counted', d.get('games_counted'),
+          'source', d.get('source'), 'feed_error', (d.get('feed_error') or '')[:80])
+    print('   rankings:', 'ABSENT' if not ur else
+          f\"{len(ur['offense'])} teams, offense #1 {ur['offense'][0]['team']} {ur['offense'][0]['value']}\")"
+```
+
+* CFB `rankings: ABSENT` with `games_counted` 0 means the standings
+  build is not seeing finals — check `feed_error` (ESPN's standings
+  feed) and whether `ingest.py cfb` has run; the table and the rankings
+  are counted from the same rows.
+* NFL `ABSENT` before the 10th is correct; the page shows the wait and
+  the 2025 model profile instead. After Week 1's finals ingest it fills
+  in on its own.

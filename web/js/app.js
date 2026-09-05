@@ -20531,8 +20531,20 @@ function injTeamBlock(team, rows, sev) {
 let _stdUnitsAll = false;
 window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings(); };
 
-function unitRankingsHTML(ur) {
-  if (!ur || !(ur.offense || []).length) return "";
+function unitRankingsHTML(ur, d) {
+  /* NEVER SILENTLY ABSENT ON A FOOTBALL PAGE. This returned "" whenever
+     the build had no rankings — and for the NFL that is every day until
+     Week 1 has finals, so the section Ethan asked for on 09-02 was
+     invisible when he looked for it on 09-05 and he asked again. The
+     rankings themselves are unchanged (scoring offense and defense from
+     the same finished games as the table); what changes is the empty
+     case, which now says WHY and, on the NFL, shows the model's own
+     measured profile ranked on last season until this one has games. */
+  const isFootball = state.sport === "nfl" || state.sport === "cfb";
+  if (!ur || !(ur.offense || []).length) {
+    if (!isFootball) return "";
+    return unitRankingsWaitHTML(d || {});
+  }
   const meta = (typeof teamsForSport === "function"
     ? teamsForSport(state.sport) : {}) || {};
   const CAP = 25;
@@ -20563,6 +20575,75 @@ function unitRankingsHTML(ur) {
     ${more > 0 ? `<button class="btn ghost" type="button"
       onclick="_stdUnitsToggle()">${_stdUnitsAll
         ? "Show the top 25" : `Show all ${ur.offense.length} teams`}</button>` : ""}`;
+}
+
+/* The football rankings section when the season has no rankings yet.
+
+   Two halves. The REASON, from the standings build's own fields: a
+   season nobody has played (`season_wait`, with the first game date when
+   the build knows it), or a season whose feed was unreachable, or fewer
+   than four teams with a finished game. And, where the board carries
+   it, THE MODEL'S OWN PROFILE: `team_shapes` is measured on the latest
+   season with enough finals (nfl_build attaches it, ranked on last
+   season until this one has games), and its raw offense and defense
+   axes are points scored and points allowed per game — the same two
+   measures the scoring rankings use, so the columns read the same and
+   the caveat the game page already prints applies: last season's roster
+   is not this season's. */
+function unitRankingsWaitHTML(d) {
+  const season = d.season || "";
+  const why = d.season_wait
+    ? `The ${season} season hasn’t kicked off${
+        d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
+        Scoring rankings start with the first finals.`
+    : d.feed_error
+      ? `No ${season} scoring rankings yet — the league feed was unreachable
+         on the last build, and fewer than four teams have a finished game
+         on file.`
+      : `No ${season} scoring rankings yet — fewer than four teams have a
+         finished game on file.`;
+  const shapes = (state.data || {}).team_shapes || {};
+  const shapeSeason = (state.data || {}).team_shapes_season || "";
+  const teams = Object.keys(shapes).filter((t) => shapes[t] && shapes[t].raw);
+  let fallback = "";
+  if (teams.length >= 4) {
+    const meta = (typeof teamsForSport === "function"
+      ? teamsForSport(state.sport) : {}) || {};
+    const col = (title, note, key, ascending) => {
+      const rows = teams.slice().sort((a, b) => {
+        const va = Number(shapes[a].raw[key]), vb = Number(shapes[b].raw[key]);
+        return (ascending ? va - vb : vb - va) || a.localeCompare(b);
+      });
+      return `
+      <div class="rec-bucket">
+        <div class="rb-head">${escapeHtml(title)}
+          <span class="mini" style="opacity:.6"> ${escapeHtml(note)}</span></div>
+        ${rows.map((t, i) => `
+          <div class="std-row std-unit-row">
+            <span class="std-rank">${i + 1}</span>
+            <span class="std-mark">${teamMarkIn(state.sport, t, 22)}</span>
+            <span class="std-name">${escapeHtml((meta[t] || {}).name
+              || (meta[t] || {}).nick || t)}
+              <span class="k" style="opacity:.6">${shapes[t].games || 0} gm</span></span>
+            <span class="std-n">${Number(shapes[t].raw[key]).toFixed(1)}</span>
+          </div>`).join("")}
+      </div>`;
+    };
+    fallback = `
+      <p class="rail-quiet" style="margin:0 0 10px">Until then, the model’s
+        measured profile — points scored and points allowed per game —
+        ranked on the ${escapeHtml(String(shapeSeason))} season. Last season’s
+        roster is not this season’s.</p>
+      <div class="rec-buckets">
+        ${col("Offense", `points scored per game, ${shapeSeason}`, "offense", false)}
+        ${col("Defense", `points allowed per game, ${shapeSeason}`, "defense", true)}
+      </div>`;
+  }
+  return `
+    <div class="section-title">Team rankings
+      <span class="sub">— scoring offense and defense, from finished games</span></div>
+    <p class="rail-quiet" style="margin:0 0 ${fallback ? "6px" : "22px"}">${why}</p>
+    ${fallback}`;
 }
 
 async function renderStandings() {
@@ -20641,7 +20722,7 @@ async function renderStandings() {
           || (g.label || g.conference || "") === _stdGroup)
         .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
-    ${unitRankingsHTML(d.unit_rankings)}
+    ${unitRankingsHTML(d.unit_rankings, d)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
 }
