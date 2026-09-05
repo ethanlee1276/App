@@ -9110,6 +9110,7 @@ window._recSetSplit = (k) => { _recSplit = k; renderRecord(); };
    rather than `first_3_innings` — but that is the safety net, not the
    plan, and the engine names every market the journal actually holds. */
 let _marketWords = {};
+let _recMinGraded = 30;
 
 function marketWord(k) {
   const key = String(k == null ? "" : k);
@@ -9159,8 +9160,13 @@ function recBookSections(br, scope) {
     const b = books[key];
     if (!b || !(b.w + b.l)) return "";
     const roi = b.staked ? b.net_u / b.staked : 0;
+    const n = b.w + b.l;
+    // A 3-1 record is not a 75% win rate. Said beside the number, the
+    // way every other rate on this page is, rather than hidden until
+    // the sample looks good.
+    const thin = n < _recMinGraded ? ` · ${n} settled — thin sample` : "";
     const head = `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
-      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI`;
+      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI${thin}`;
     const pretty = Object.fromEntries(Object.entries(b.markets || {})
       .map(([m, v]) => [marketWord(m), v]));
     return recBucketTable(head, pretty);
@@ -11787,6 +11793,10 @@ async function renderRecord() {
   // before anything renders so a payload without the key falls back to
   // prettifying rather than to a stale map from a previous render.
   _marketWords = d.market_words || {};
+  // The ledger's own bar for "enough graded bets to mean anything",
+  // shipped per sport as `min_graded`; the same constant on every
+  // sport's report, so any one of them says what it is.
+  _recMinGraded = (Object.values(d.by_sport || {})[0] || {}).min_graded || 30;
   // Default to the sport whose board you came from; "all" is a click away.
   const tracked = d.tracked_sports || [];
   let scope = _recordScope
@@ -11873,7 +11883,16 @@ async function renderRecord() {
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  const receipts = verdict + `
+  /* THE BOOK SECTIONS LEAD A SPORT'S RECORD. Ethan, 2026-09-05, asking
+     for the second time: "add to the record page for each sport sections
+     to the records, like the edge bets have a certain section and record
+     spot, the most likely bets have a record spot". They had existed
+     since 09-01 — as the LAST thing on this tab, under the curve, the
+     splits and a dozen settled rows, on a page that lands sport-scoped.
+     A section nobody scrolls to is a section nobody has. On the "all"
+     scope the Most Likely record still leads (08-31) and the pooled book
+     sections still ride after the receipts, so nothing moves there. */
+  const receipts = verdict + (scoped ? recBookSections(d.book_records, scope) : "") + `
     <div class="stat-cards rec-kpis">
       ${statCardHTML("rising", "ROI",
           (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
@@ -12028,7 +12047,9 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // honest under-100-settles refusal explains itself while the
      // sample builds.
      (scoped ? "" : recLikelySection(d.likely)) + receipts
-     + recBookSections(d.book_records, scope)],
+     // Pooled across sports on "all"; a sport's own sections lead its
+     // receipts instead (see renderRecord), so this must not repeat them.
+     + (scoped ? "" : recBookSections(d.book_records, scope))],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
@@ -12164,7 +12185,7 @@ function recSettledRow(b) {
           <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(marketWord(b.market))}</span></span>
           ${procChip}${causeChip}
           <span class="rl-odds">${american(b.odds)}</span>
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>

@@ -93,6 +93,49 @@ def test_the_export_carries_it_and_the_page_renders_it():
     assert "Records by book" in body
 
 
+def _js():
+    with open(os.path.join(ROOT, "web", "js", "app.js"),
+              encoding="utf-8") as f:
+        return f.read()
+
+
+def test_a_sports_record_leads_with_its_book_sections():
+    """Ethan, 2026-09-05, the same sentence as 09-01 — because the
+    sections rendered LAST on a tab whose first screen is the curve. On
+    the sport scope they now sit under the verdict, above the KPI cards."""
+    js = _js()
+    i = js.index("const receipts = verdict +")
+    lead = js[i:js.index('<div class="stat-cards rec-kpis">', i)]
+    assert 'scoped ? recBookSections(d.book_records, scope) : ""' in lead, lead
+
+
+def test_the_all_scope_keeps_them_after_the_receipts_and_does_not_repeat():
+    js = _js()
+    i = js.index("function _recordRooms(")
+    body = js[i:js.index("\nfunction ", i + 10)]
+    assert '(scoped ? "" : recBookSections(d.book_records, scope))' in body
+    assert body.count("recBookSections(") == 1, "rendered twice on one scope"
+
+
+def test_a_thin_book_says_so_by_the_ledgers_own_bar():
+    js = _js()
+    at = js.index("function recBookSections")
+    body = js[at:js.index("\nfunction ", at + 10)]
+    assert "n < _recMinGraded" in body and "thin sample" in body
+    assert "_recMinGraded = (Object.values(d.by_sport || {})[0] || {}).min_graded || 30" in js, \
+        "the bar is the shipped min_graded, not a second hand-kept number"
+
+
+def test_settled_rows_print_the_markets_word_not_its_id():
+    """"label homers and touchdowns and hits and receptions and rebounds
+    and 3 pointers" — the recent-picks list printed `home_runs`."""
+    js = _js()
+    at = js.index("function recSettledRow")
+    body = js[at:js.index("\nfunction ", at + 10)]
+    assert "escapeHtml(marketWord(b.market))" in body
+    assert "escapeHtml(b.market)" not in body
+
+
 def test_market_words_cover_every_journaled_market_name():
     """The words the page will label these sections with exist for the
     markets the boards journal — homers, touchdowns, hits, receptions,

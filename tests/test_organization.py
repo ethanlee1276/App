@@ -135,8 +135,11 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     i = js.index("function _recordRooms(")
     # `receipts` still lands inside the first room; the Records-by-book
     # sections (Ethan, 2026-09-01) ride directly after it in the same
-    # room, so the tail grew.
-    assert "+ recBookSections(d.book_records, scope)]," in js[i:i + 2700]
+    # room on the "all" scope. A sport's own sections LEAD its receipts
+    # instead (2026-09-05, asked a second time because they sat under
+    # everything), so the tail is guarded rather than repeated.
+    assert '+ (scoped ? "" : recBookSections(d.book_records, scope))],' \
+        in js[i:i + 2900]
 
 
 def test_the_receipts_room_opens_on_the_receipts():
