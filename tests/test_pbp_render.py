@@ -191,7 +191,10 @@ def test_win_probability_is_the_boards_track_when_the_board_matches():
     page = _fn("renderPbpPage")
     assert "const boardGame = (state.sport === league && state.data)" in page
     assert "boardGame && boardGame.line_track ? `<div class=\"card\">${lineTrackHTML(boardGame)}</div>` : \"\"" in page
-    assert 'id="pbp-game-door"' in page and "openGame(g.dataset.gid)" in page
+    # The door moved into the tabs row the page draws (pbpTabsHTML,
+    # 2026-09-05, the page's other rooms); the wiring stayed on the page.
+    assert 'id="pbp-game-door"' in _fn("pbpTabsHTML") and "pbpTabsHTML(tab, boardGame)" in page
+    assert "openGame(g.dataset.gid)" in page
 
 
 def test_the_page_still_reads_only_the_deep_file_and_never_prose():

@@ -31696,6 +31696,81 @@ function liveCardHTML({ sport, g, bets }) {
 let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
 let _pbpShowAll = false;
+let _pbpTab = "info";           // info | props | injuries | players
+
+/* ---------------- The page's other rooms ----------------
+   Ethan, 2026-09-05: "the play by plays other rooms". The render's
+   sub-tabs: Game info (the park facts), Live props (the reader's open
+   bets on this game, from the tracker), Injuries (both clubs'
+   designations from the injury board), Player stats (the box score the
+   fast loop now writes into the deep file, from the parsers the tracker
+   trusts). Team stats and Splits are not built: the summary's team
+   block has not been probed, and a room drawn from an unread shape
+   would be the fabricated number this site exists not to print. */
+const PBP_TABS = [["info", "Game info"], ["props", "Live props"], ["injuries", "Injuries"], ["players", "Player stats"]];
+
+/* The open bets on THIS game, from the board's tracker — which is the
+   viewed league's, so another league's page has none to show. */
+function pbpPropRows(rows, d) {
+  return (rows || []).filter((r) => r && r.game && r.game.home === d.home && r.game.away === d.away);
+}
+
+/* Both clubs' designations, matched on the injury feed's own club name
+   — the team table's `name` — never on a nickname. */
+function pbpInjuryRows(rows, league, d) {
+  const teams = teamsForSport(league) || {};
+  const nameOf = (abbr) => ((teams[abbr] || {}).name || "").toLowerCase();
+  const want = new Set([nameOf(d.home), nameOf(d.away)].filter(Boolean));
+  return (rows || []).filter((r) => r && !isReturnRow(r) && want.has(String(r.team || "").toLowerCase()));
+}
+
+//: What leads a player's line, by league; the rest follow in the order the parser gave them.
+const PBP_LEAD_STAT = { nfl: ["pass_yds", "rush_yds", "rec_yds", "receptions"], cfb: ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"] };
+
+function pbpPlayersHTML(d, league) {
+  const rows = d.players || [];
+  if (!rows.length) return `<p class="rail-quiet">No box score on file yet — the fast loop writes one each cycle for a game in progress.</p>`;
+  const lead = PBP_LEAD_STAT[league] || [];
+  const score = (r) => lead.reduce((a, k, i) => a + (Number((r.stats || {})[k]) || 0) * Math.pow(0.5, i), 0);
+  const side = (abbr) => rows.filter((r) => r.team === abbr).sort((x, y) => score(y) - score(x)).slice(0, 14);
+  const line = (r) => Object.entries(r.stats || {}).filter(([, v]) => v !== 0 && v !== "0" && v != null)
+    .map(([k, v]) => `${escapeHtml(marketWord(k))} <b>${escapeHtml(String(v))}</b>`).join(" · ");
+  const block = (abbr) => `<div class="pbp-box"><div class="pbp-box-head">${teamMarkIn(league, abbr, 16)} ${escapeHtml(teamNameIn(league, abbr))}</div>${
+    side(abbr).map((r) => `<div class="pbp-box-row"><span>${escapeHtml(r.player)}${r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</span><span class="pbp-box-line">${line(r) || "—"}</span></div>`).join("")
+    || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}</div>`;
+  return `${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${escapeHtml(pbpAgo(d.generated_at))} — the fields the open-bet tracker reads, nothing more.</p>`;
+}
+
+function pbpPropsHTML(d, league) {
+  if (state.sport !== league) {
+    return `<p class="rail-quiet">Your open bets are tracked on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
+  }
+  const rows = pbpPropRows((state.data || {}).live_picks, d);
+  if (!rows.length) return `<p class="rail-quiet">No open bets on this game.</p>`;
+  const word = (r) => ({ cleared: "CLEARED", busted: "BUSTED", dead: "NO CHANCES LEFT", won_pending: "WON", lost_pending: "LOST",
+                         push_pending: "PUSH", final_pending: "FINAL", tracking: "tracking", upcoming: "upcoming", unmapped: "unplaced" })[r.status] || r.status;
+  const tone = (r) => ["cleared", "won_pending"].includes(r.status) ? "var(--good)" : ["busted", "dead", "lost_pending"].includes(r.status) ? "var(--bad)" : "var(--text-mute)";
+  return rows.map((r) => `<div class="pbp-prop-row">
+      <span class="pick-id">${betMark(r, 24)}</span>
+      <span class="pbp-prop-main"><b>${escapeHtml(r.market === "moneyline" ? `${teamName(r.player)} Moneyline` : `${r.player} ${r.side} ${r.line} ${r.market_label || r.market}`)}</b>
+        <span class="mini">placed ${american(r.odds)}${r.current != null ? ` · now ${escapeHtml(String(r.current))}` : ""}${
+          r.live_prob != null ? ` · ${Math.round(r.live_prob * 100)}% live` : ""}</span></span>
+      <b style="color:${tone(r)}">${escapeHtml(word(r))}</b>
+    </div>`).join("");
+}
+
+function pbpInjuriesHTML(d, league) {
+  const rows = pbpInjuryRows((((_injBoard || {}).sports) || {})[league], league, d);
+  if (!rows.length) return `<p class="rail-quiet">No designations listed for either club on the injury board.</p>`;
+  return `<div class="inj-list">${rows.map((r) => injRow(r, true)).join("")}</div>`;
+}
+
+function pbpTabsHTML(active, boardGame) {
+  return `<div class="pbp-tabs">${PBP_TABS.map(([k, label]) =>
+    `<button type="button" class="pbp-tab${k === active ? " active" : ""}" data-pbp-tab="${k}">${label}</button>`).join("")}${
+    boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>`;
+}
 
 function openPbp(league, event, from) {
   const next = { league: String(league || ""), event: String(event || "") };
@@ -32104,6 +32179,8 @@ async function renderPbpPage() {
     if (m) m.addEventListener("click", () => { _pbpShowAll = true; renderPbpPage(); });
     const g = document.getElementById("pbp-game-door");
     if (g) g.addEventListener("click", () => openGame(g.dataset.gid));
+    host.querySelectorAll("[data-pbp-tab]").forEach((b) =>
+      b.addEventListener("click", () => { _pbpTab = b.dataset.pbpTab; renderPbpPage(); }));
   };
   if (!league || !event) {
     host.innerHTML = `${emptySlate("stadium", "No game selected",
@@ -32169,13 +32246,17 @@ async function renderPbpPage() {
     (boardGame.roof || boardGame.surface) ? [icon("field", 18), boardGame.roof ? `Roof: ${boardGame.roof}` : "Field",
       boardGame.surface || ""] : null,
   ].filter(Boolean) : [];
-  const infoHTML = infoCards.length ? `
-    <div class="pbp-tabs"><span class="active">Game info</span>${
-      boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>
-    <div class="pbp-info">${infoCards.map(([ic, t, s]) => `
+  const infoPanel = infoCards.length ? `<div class="pbp-info">${infoCards.map(([ic, t, s]) => `
       <div class="pbp-info-card"><span class="pbp-info-ico">${ic}</span>
         <div><b>${escapeHtml(t)}</b>${s ? `<div class="mini">${escapeHtml(s)}</div>` : ""}</div></div>`).join("")}
-    </div>` : (boardGame ? `<div class="pbp-tabs"><button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button></div>` : "");
+    </div>` : `<p class="rail-quiet">Park and weather facts come off the league’s board — open the ${
+      escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab for them.</p>`;
+  const tab = PBP_TABS.some(([k]) => k === _pbpTab) ? _pbpTab : "info";
+  const panel = tab === "props" ? pbpPropsHTML(d, league)
+    : tab === "injuries" ? pbpInjuriesHTML(d, league)
+    : tab === "players" ? pbpPlayersHTML(d, league)
+    : infoPanel;
+  const infoHTML = `${pbpTabsHTML(tab, boardGame)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
   const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
   host.innerHTML = `
     ${stripHTML}

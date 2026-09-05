@@ -234,6 +234,49 @@ def attach_plays(games: list[dict], league: str,
     return note
 
 
+def pbp_players(league: str, payload: dict, g: dict) -> list[dict]:
+    """``[{player, team, position, stats}]`` from the summary already in
+    hand — the box score behind the play-by-play page's Player stats
+    tab (Ethan, 2026-09-05: "the play by plays other rooms").
+
+    THE SAME PARSERS THE TRACKER TRUSTS FOR ITS FINALS, and nothing
+    parsed a second way: `nflpreseason.parse_boxscore` (labels, not
+    positions) for the NFL, `cfbdata.parse_summary` for college,
+    `espnhoops.parse_summary` for the hoops leagues. A football row is
+    one market per line, so those are folded into one row per player.
+    A parser that raises — a shape it does not recognise — costs the
+    tab and nothing else: the caller leaves `players` out and the page
+    says there is no box score on file.
+    """
+    if league == "nfl":
+        from engine.sources.nflpreseason import parse_boxscore
+        by: dict = {}
+        for r in parse_boxscore(payload, {"home": g.get("home"), "away": g.get("away")}):
+            key = (r.get("player"), r.get("team"))
+            row = by.setdefault(key, {"player": r.get("player"), "team": r.get("team"),
+                                      "position": "", "stats": {}})
+            try:
+                row["stats"][r["market"]] = float(r["value"])
+            except (KeyError, TypeError, ValueError):
+                continue
+        return list(by.values())
+    if league == "cfb":
+        from engine.sources.cfbdata import parse_summary
+    else:
+        from engine.sources.espnhoops import parse_summary
+    out = []
+    for r in parse_summary(payload):
+        stats = {}
+        for k, v in (r.get("stats") or {}).items():
+            try:
+                stats[k] = float(v)
+            except (TypeError, ValueError):
+                continue
+        out.append({"player": r.get("player"), "team": r.get("team", ""),
+                    "position": r.get("position", ""), "stats": stats})
+    return out
+
+
 def pbp_doc(league: str, g: dict, payload: dict,
             sides: dict | None = None) -> dict:
     """One game's whole play-by-play as the page reads it.
@@ -260,6 +303,12 @@ def pbp_doc(league: str, g: dict, payload: dict,
         doc["plays"] = [r for d in drives for r in d["plays"]]
     else:
         doc["plays"] = espnplays.hoops_plays(payload, league, 0, sides=sides)
+    # The box score, for the Player stats tab. A parser that cannot read
+    # this payload leaves the key out; the page says so.
+    try:
+        doc["players"] = pbp_players(league, payload, g)
+    except Exception:                                        # noqa: BLE001
+        pass
     return doc
 
 

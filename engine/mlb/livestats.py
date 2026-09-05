@@ -39,6 +39,49 @@ def parse_situation(linescore: dict) -> dict:
     }
 
 
+def box_rows(boxscore: dict, home: str = "home", away: str = "away") -> list[dict]:
+    """``[{player, team, position, stats}]`` — the box score as the
+    play-by-play page's Player stats tab draws it, from the same fields
+    `parse_live_stats` below has read for the tracker since August:
+    `teams[side].players[].person.fullName`, `stats.batting.hits /
+    doubles / triples / homeRuns / plateAppearances`,
+    `stats.pitching.strikeOuts / inningsPitched / battersFaced`. Nothing
+    read a second way; a side's players are named for ``home`` and
+    ``away`` so the page's own abbreviations ride along.
+    """
+    out: list[dict] = []
+    for side, team in (("home", home), ("away", away)):
+        players = ((boxscore.get("teams") or {}).get(side) or {}).get("players") or {}
+        for p in players.values():
+            name = ((p.get("person") or {}).get("fullName")) or ""
+            if not name:
+                continue
+            stats = p.get("stats") or {}
+            bat = stats.get("batting") or {}
+            pit = stats.get("pitching") or {}
+            row: dict = {}
+            if bat:
+                h = int(bat.get("hits") or 0)
+                d2 = int(bat.get("doubles") or 0)
+                t3 = int(bat.get("triples") or 0)
+                hr = int(bat.get("homeRuns") or 0)
+                row.update(hits=float(h), home_runs=float(hr),
+                           total_bases=float(h + d2 + 2 * t3 + 3 * hr))
+                if bat.get("plateAppearances") is not None:
+                    row["pa"] = float(bat.get("plateAppearances") or 0)
+            if pit.get("strikeOuts") is not None or pit.get("inningsPitched"):
+                row["strikeouts"] = float(pit.get("strikeOuts") or 0)
+                if pit.get("inningsPitched"):
+                    row["ip"] = str(pit.get("inningsPitched"))
+                if pit.get("battersFaced") is not None:
+                    row["bf"] = float(pit.get("battersFaced") or 0)
+            if row:
+                out.append({"player": name, "team": team,
+                            "position": str(((p.get("position") or {}).get("abbreviation")) or ""),
+                            "stats": row})
+    return out
+
+
 def parse_live_stats(boxscore: dict) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for side in ("home", "away"):

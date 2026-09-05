@@ -213,6 +213,17 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
         "events": game_events(payload),
         "current": current_at_bat(payload),
     }
+    # The box score, for the Player stats tab (Ethan, 2026-09-05: "the
+    # play by plays other rooms"): the same statsapi boxscore the
+    # tracker reads, on its own five-minute cache, through the same
+    # fields. A fetch that fails costs the tab and nothing else.
+    try:
+        from engine.mlb.sources.statslogs import fetch_boxscore
+        from engine.mlb.livestats import box_rows
+        doc["players"] = box_rows(fetch_boxscore(int(g["game_pk"])),
+                                  home=g.get("home") or "home", away=g.get("away") or "away")
+    except Exception:                                        # noqa: BLE001
+        pass
     tmp = out.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc))
     os.replace(tmp, out)
