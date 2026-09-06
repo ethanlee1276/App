@@ -130,13 +130,30 @@ def test_the_arc_animates_and_respects_reduced_motion():
 
 
 def test_the_park_is_the_game_pages_own_art_in_the_leagues_colours():
+    """RE-ANCHORED 2026-09-06. Ethan, with a render of a night ballpark
+    carrying our own scoreboard: "you should be using this render for ALL
+    live mlb games."
+
+    So MLB's park is no longer `ballpark()` on this page — it is that
+    photograph, with the moving parts drawn over it. The vector art did
+    not go away and this still pins it: the other two leagues have no
+    photo and keep the game page's own art in their own colours, which is
+    what the rest of this test was always about.
+
+    The `ACTIVE_TEAMS` swap-and-restore stays required, because `court`
+    and `stadium` still read it and leaving another league's palette
+    installed would repaint the page underneath.
+    """
     body = _fn("pbpParkHTML")
-    assert 'ballpark(game, { w: 640, h: 400 })' in body
+    assert 'const photo = league === "mlb"' in body, "MLB gets the photograph"
+    assert "pbpPhotoHTML(game)" in body
     assert 'court(game, { w: 640, h: 400 })' in body and 'stadium(game, { w: 640, h: 400 })' in body
     assert "window.ACTIVE_TEAMS = teamsForSport(league);" in body
     assert "window.ACTIVE_TEAMS = keep;" in body, "restored for the page underneath"
     assert 'league === "mlb" && hitRow && hitRow.hit' in body, "the arc is baseball's"
-    assert "pbpArcSVG(hitRow.hit, (boardGame || {}).park)" in body, "scaled by the park's fences"
+    assert "pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo })" in body, (
+        "the arc is still scaled by the park's own fences — the photo only "
+        "changes which coordinates it is drawn in, never the arithmetic")
     page = _fn("renderPbpPage")
     assert 'r.kind === "atbat" && r.hit' in page, "the newest ball in play is the one drawn"
 

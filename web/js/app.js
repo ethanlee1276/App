@@ -32280,9 +32280,65 @@ function pbpStripHTML(league, games, current) {
    otherwise). Past the wall is past the wall. The arc's lift reads the
    trajectory — a ground ball hugs the grass, a popup climbs — since a
    plan view has no height to draw and the eye still wants the shape. */
+/* THE PARK PHOTOGRAPH, AND WHERE ITS FIELD IS.
+ *
+ * Ethan, 2026-09-06: "you should be using this render for ALL live mlb
+ * games. It has our Qellys book logo on it and everything."
+ *
+ * That solves the problem the SVG could not. His earlier renders showed
+ * real parks with real signage, which is thirty images and a trademark
+ * question; ONE generic park carrying OUR OWN scoreboard is a single
+ * asset we own outright, and it looks like a ballpark because it is a
+ * picture of one.
+ *
+ * WHAT THE SVG STILL DOES. The photograph is a backdrop and cannot move,
+ * so everything that has to move stays vector on top of it: the ball's
+ * arc, the wall distances, the live markers. That is how Ethan's render
+ * #2 is composed too — a still park with the flight drawn over it.
+ *
+ * THE NUMBERS BELOW ARE MEASURED OFF THE PHOTOGRAPH, not guessed: a
+ * calibration grid in this same 240x150 viewBox was rendered over the
+ * image and read off. They are the picture's own geometry, so an arc
+ * drawn through them lands on the grass that is actually there.
+ *
+ * The park's REAL dimensions still decide how far the ball got — that is
+ * `pbpFenceFt`, unchanged. Only the mapping from "fraction of the way to
+ * the fence" onto pixels belongs to the photograph. A short park's ball
+ * still clears its own short fence; it is simply drawn over one picture.
+ */
+const PBP_PHOTO = {
+  home: [118, 131],
+  cf: [120, 58],
+  lf: [26, 72],
+  rf: [216, 73],
+};
+
+/* Where the photograph's wall is at a bearing off dead centre. Quadratic
+ * between centre and the pole, the same shape `wallFt` uses, so the two
+ * spaces agree about what "halfway to the corner" means. */
+function pbpPhotoWall(phiDeg) {
+  const t = Math.min(1, Math.abs(phiDeg) / PBP_POLE_DEG);
+  const pole = phiDeg < 0 ? PBP_PHOTO.lf : PBP_PHOTO.rf;
+  const k = t * t;
+  return [PBP_PHOTO.cf[0] + (pole[0] - PBP_PHOTO.cf[0]) * k,
+          PBP_PHOTO.cf[1] + (pole[1] - PBP_PHOTO.cf[1]) * k];
+}
+
 const PBP_POLE_DEG = 47.8;
 function pbpFieldToArt(x, y) { return [120 + 0.76 * (x - 120), 100 + 0.76 * (y - 100)]; }
-function pbpWallPoint(phiDeg) {
+/* Where the wall IS, in the art — the same shape `ballpark()` draws.
+ *
+ * This took a park argument nowhere and returned a fixed ellipse, while
+ * `pbpFenceFt` below scaled the ball against the park's real dimensions.
+ * The two disagreed on every asymmetric park: a 320-foot fly to left at
+ * Fenway (wall 310) was flagged gone by the maths and drawn landing where
+ * a 320-foot fly lands at a park with a 347-foot wall. Same shape now, so
+ * a ball drawn clearing the fence is clearing the fence that is drawn. */
+function pbpWallPoint(phiDeg, park) {
+  if (typeof wallShape === "function") {
+    const p = wallShape(park || {}).pt(phiDeg);
+    return pbpFieldToArt(p[0], p[1]);
+  }
   const phi = Math.max(-PBP_POLE_DEG, Math.min(PBP_POLE_DEG, phiDeg)) * Math.PI / 180;
   return pbpFieldToArt(120 + 116 * Math.sin(phi), 121.7 - 92 * Math.cos(phi));
 }
@@ -32293,7 +32349,7 @@ function pbpFenceFt(park, phiDeg) {
   const pole = phiDeg < 0 ? lf : rf;
   return cf - (cf - pole) * t * t;
 }
-function pbpFlight(hit, park) {
+function pbpFlight(hit, park, opts) {
   if (!hit || hit.distance == null) return null;
   let phi = 0;
   if (hit.x != null && hit.y != null) {
@@ -32302,7 +32358,9 @@ function pbpFlight(hit, park) {
   }
   const fence = pbpFenceFt(park, phi);
   const r = Math.max(0.05, Math.min(1.18, Number(hit.distance) / fence));
-  const H = pbpFieldToArt(120, 128), W = pbpWallPoint(phi);
+  const photo = opts && opts.photo;
+  const H = photo ? PBP_PHOTO.home : pbpFieldToArt(120, 128);
+  const W = photo ? pbpPhotoWall(phi) : pbpWallPoint(phi, park);
   const L = [H[0] + r * (W[0] - H[0]), H[1] + r * (W[1] - H[1])];
   const lift = ({ ground_ball: 4, line_drive: 14, fly_ball: 30, popup: 40 })[hit.trajectory] ?? 18;
   const C = [(H[0] + L[0]) / 2, (H[1] + L[1]) / 2 - lift * Math.max(0.35, r)];
@@ -32317,8 +32375,8 @@ function pbpFlight(hit, park) {
   return { H, C, L, len, over: r > 1.0, phi, fence };
 }
 const PBP_TRAJ = { ground_ball: "Ground ball", line_drive: "Line drive", fly_ball: "Fly ball", popup: "Popup" };
-function pbpArcSVG(hit, park) {
-  const f = pbpFlight(hit, park);
+function pbpArcSVG(hit, park, opts) {
+  const f = pbpFlight(hit, park, opts);
   if (!f) return "";
   const still = typeof matchMedia === "function"
     && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -32353,26 +32411,172 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
     home: d.home, away: d.away, live: d.live || {},
     roof: (boardGame || {}).roof, surface: (boardGame || {}).surface,
     factors: (boardGame || {}).factors, altitude_ft: (boardGame || {}).altitude_ft,
+    // THE DIMENSIONS, which the art never received. `ballpark()` has been
+    // able to draw a real wall since this commit; without this line it
+    // would still have drawn the generic one for every park.
+    park: (boardGame || {}).park || {},
   };
+  // MLB gets the PHOTOGRAPH (Ethan's render, ours, with our scoreboard);
+  // the other leagues keep the vector art. The photo is a backdrop, so
+  // everything that moves is drawn over it rather than in it.
+  const photo = league === "mlb";
   const keep = window.ACTIVE_TEAMS;
   window.ACTIVE_TEAMS = teamsForSport(league);          // the art reads it
   let art = "";
   try {
-    art = league === "mlb" ? ballpark(game, { w: 640, h: 400 })
+    art = photo ? pbpPhotoHTML(game)
       : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
   window.ACTIVE_TEAMS = keep;
   const arc = league === "mlb" && hitRow && hitRow.hit
-    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park) : "";
+    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo }) : "";
   const park = (boardGame || {}).park || {};
   const w = (boardGame || {}).weather || {};
   const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
     ? ` · ${Math.round(w.wind_mph)} mph${w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}` : ""}` : "";
-  const chip = (park.name || (boardGame || {}).park_name || wx)
+  // The venue chip moved INTO the card header (pbpParkHeadHTML): on the
+  // art it sat over grass in the same corner the wall numbers now use.
+  // Kept for the leagues that have no header — football and hoops still
+  // want the venue somewhere.
+  const chip = league !== "mlb" && (park.name || (boardGame || {}).park_name || wx)
     ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
         wx ? `<span>${wx}</span>` : ""}</div>` : "";
-  return `<div class="pbp-park">${art}${arc}${chip}</div>`;
+  return `<div class="pbp-park">${art}${arc}${chip}</div>
+    ${pbpBattedHTML(hitRow)}${pbpParkFactsHTML(park, boardGame)}`;
+}
+
+/* The park photograph, with this park's distances marked on its wall.
+ *
+ * `<picture>` so a browser that speaks WebP takes the 157KB file and the
+ * rest take the JPEG, and the 640-wide pair serves a phone rather than
+ * making it download a 1280 it cannot show. `loading="lazy"` is
+ * deliberately NOT set: this is the hero of the page and lazily loading
+ * the thing the reader came to look at is how a card flashes empty.
+ *
+ * The numbers ride in an SVG at the photo's own scale, so they sit on the
+ * wall in the picture rather than on the vector wall that is no longer
+ * drawn here. They are still this park's real figures — a Fenway game
+ * says 310/420/302 over the same photograph a Petco game marks
+ * 336/396/322, which is what "one render for all live MLB games" means
+ * without the render lying about which park it is.
+ */
+function pbpPhotoHTML(game) {
+  const p = game.park || {};
+  const mark = (key, pt, dy) => {
+    const ft = Number(p[key + "_ft"]);
+    if (!ft) return "";
+    // Small on purpose. These sit ON a photograph of a crowd and a wall;
+    // at the size the first pass used they read as three buttons stuck
+    // over the picture rather than as numbers painted on the fence.
+    return `<g transform="translate(${pt[0]},${pt[1] + dy})">
+      <rect x="-8.5" y="-4.5" width="17" height="9" rx="2" fill="#0b0f1c" opacity="0.78"/>
+      <text x="0" y="2" text-anchor="middle" font-size="5.5" font-weight="700"
+        fill="#e9edfb" font-family="system-ui">${ft}</text></g>`;
+  };
+  return `<picture>
+      <source type="image/webp" srcset="img/park/park-night@640.webp 640w, img/park/park-night.webp 1280w"
+        sizes="(max-width: 700px) 100vw, 700px">
+      <img class="pbp-photo" src="img/park/park-night.jpg"
+        srcset="img/park/park-night@640.jpg 640w, img/park/park-night.jpg 1280w"
+        sizes="(max-width: 700px) 100vw, 700px" alt="" decoding="async">
+    </picture>
+    <svg class="pbp-photomarks" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid slice"
+         aria-hidden="true">
+      ${mark("lf", PBP_PHOTO.lf, 0)}${mark("cf", PBP_PHOTO.cf, -2)}${mark("rf", PBP_PHOTO.rf, 0)}
+    </svg>`;
+}
+
+
+/* THE CARD'S OWN HEADER (Ethan's render, 2026-09-06).
+ *
+ * His render leads the block with a title on the left and the venue and
+ * its conditions on the right, and it is a better shape than what was
+ * here: the park name floated as a chip ON the art, over grass, competing
+ * with the wall numbers now drawn beside it. Two labels fighting for the
+ * same corner is how a card starts to look cheap.
+ *
+ * The conditions read as one line — temperature, then wind with its
+ * direction — because that is the order a bettor asks them in. Nothing is
+ * invented: an indoor park with no wind simply shows the temperature, and
+ * a park with neither shows its name alone.
+ */
+function pbpParkHeadHTML(league, boardGame) {
+  if (league !== "mlb") return "";
+  const g = boardGame || {};
+  const park = g.park || {};
+  const w = g.weather || {};
+  const name = park.name || g.park_name || "";
+  const bits = [];
+  if (w.temp_f != null) bits.push(`${Math.round(w.temp_f)}°F`);
+  if (w.wind_mph != null) {
+    bits.push(`${Math.round(w.wind_mph)} mph${w.wind_dir ? " " + w.wind_dir : ""}`);
+  }
+  if (!name && !bits.length) return "";
+  return `<div class="pbp-parkhead">
+    <div class="pbp-parkhead-t"><b>THE PARK</b><span>real data · real plays</span></div>
+    ${name || bits.length ? `<div class="pbp-parkhead-v">
+      ${name ? `<b>${escapeHtml(name)}</b>` : ""}
+      ${bits.length ? `<span>${escapeHtml(bits.join(" · "))}</span>` : ""}
+    </div>` : ""}
+  </div>`;
+}
+
+
+/* THE FOUR NUMBERS UNDER THE BALL (Ethan's render, 2026-09-06).
+ *
+ * Exit velocity, launch angle, distance, batted-ball type — every one of
+ * them already parsed out of the play feed by engine/mlb/sources/pbp.py
+ * and carried on the hit row, and none of them shown anywhere. They were
+ * being used to DRAW the arc and then thrown away.
+ *
+ * Rendered only for a ball actually put in play. A walk has no exit
+ * velocity, and four tiles of "—" is worse than no tiles: it reads as
+ * broken rather than as inapplicable. */
+function pbpBattedHTML(hitRow) {
+  const h = (hitRow || {}).hit;
+  if (!h || (h.launch_speed == null && h.distance == null
+             && h.launch_angle == null && !h.trajectory)) return "";
+  const tile = (k, v, u) => v === "" ? "" : `<div class="pbp-bb-tile">
+      <div class="k">${escapeHtml(k)}</div>
+      <b>${escapeHtml(String(v))}${u ? `<span>${escapeHtml(u)}</span>` : ""}</b></div>`;
+  return `<div class="pbp-bb">
+    ${tile("EXIT VELOCITY", h.launch_speed != null ? Number(h.launch_speed).toFixed(1) : "", " MPH")}
+    ${tile("LAUNCH ANGLE", h.launch_angle != null ? `${Math.round(h.launch_angle)}°` : "", "")}
+    ${tile("DISTANCE", h.distance != null ? Math.round(h.distance) : "", " FT")}
+    ${tile("BATTED BALL", PBP_TRAJ[h.trajectory] || (h.trajectory
+        ? String(h.trajectory).replace(/_/g, " ") : ""), "")}
+  </div>`;
+}
+
+/* THE PARK, AS THE THING THAT CHANGES THE ANSWER.
+ *
+ * Ethan's render puts the dimensions and the park factors on the page,
+ * and they belong there for a reason beyond decoration: the factors are
+ * what the MODEL prices with (engine/mlb/pipeline.py ships hr/run/k), so
+ * showing them is showing the reader an input, not a garnish.
+ *
+ * `k` is the STRIKEOUT factor and is labelled as such. The render called
+ * its third tile "Extra Base Factor" — we do not hold that number, and
+ * putting our strikeout factor under someone else's label would be the
+ * kind of quiet mislabelling this file has been burned by before. */
+function pbpParkFactsHTML(park, boardGame) {
+  const f = (boardGame || {}).factors || {};
+  const dims = [["LF", park.lf_ft], ["CF", park.cf_ft], ["RF", park.rf_ft]]
+    .filter(([, v]) => v);
+  const facs = [["HR", f.hr], ["RUNS", f.run], ["K", f.k]]
+    .filter(([, v]) => v != null);
+  if (!dims.length && !facs.length) return "";
+  const cell = (k, v, note) => `<div class="pbp-pf-cell"><div class="k">${escapeHtml(k)}</div>
+    <b>${escapeHtml(String(v))}</b>${note ? `<div class="mini">${escapeHtml(note)}</div>` : ""}</div>`;
+  return `<div class="pbp-pf">
+    ${facs.length ? `<div class="pbp-pf-box"><div class="pbp-pf-head">PARK FACTORS</div>
+      <div class="pbp-pf-row">${facs.map(([k, v]) =>
+        cell(k, Number(v).toFixed(2), "vs 1.00")).join("")}</div></div>` : ""}
+    ${dims.length ? `<div class="pbp-pf-box"><div class="pbp-pf-head">FIELD DIMENSIONS</div>
+      <div class="pbp-pf-row">${dims.map(([k, v]) =>
+        cell(k, `${v} ft`, "")).join("")}</div></div>` : ""}
+  </div>`;
 }
 
 /* --- the situation strip: who is up, the count, the bases, who is throwing --- */
@@ -32638,6 +32842,7 @@ async function renderPbpPage() {
             <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>
         </div>
         <div class="card pbp-parkcard">
+          ${pbpParkHeadHTML(league, boardGame)}
           ${pbpParkHTML(d, league, boardGame, lastHit)}
           ${pbpSituationHTML(d, league, faces)}
         </div>

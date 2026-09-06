@@ -786,6 +786,78 @@ function runnerOverlay(game) {
 }
 
 
+/* THE OUTFIELD WALL, AT ITS REAL DISTANCE.
+ *
+ * Ethan, 2026-09-06, with three renders: "ours is ass." He is right, and
+ * the reason is not only that the art is flat. Every one of the thirty
+ * parks was drawn as the SAME symmetric arc, while `engine/mlb/parks.py`
+ * has carried real dimensions all along and `pipeline.py` has been
+ * shipping them to the browser in the `park` object.
+ *
+ * Worse than cosmetic, it made two functions disagree. The play-by-play
+ * arc scales the ball against `pbpFenceFt`, which uses the park's REAL
+ * lf/cf/rf — so a 320-foot fly to left at Fenway (wall 310) was correctly
+ * flagged as gone, and then drawn landing at exactly the same spot as a
+ * 320-foot fly at a park whose wall is 347 away. The gold ring was right
+ * and the picture was wrong.
+ *
+ * WALL_FT is the one shape both now read: a distance in feet at a bearing
+ * off dead centre, interpolated from the three numbers we actually have
+ * (the poles and centre) with the same quadratic the physics already
+ * used. Not five points — the data has three. LCF and RCF are real
+ * numbers on a real scoreboard and we do not hold them, so this does not
+ * invent them.
+ */
+const POLE_DEG = 47.8;
+
+function wallFt(park, phiDeg) {
+  const lf = Number((park || {}).lf_ft) || 330;
+  const cf = Number((park || {}).cf_ft) || 400;
+  const rf = Number((park || {}).rf_ft) || 330;
+  const t = Math.min(1, Math.abs(phiDeg) / POLE_DEG);
+  return cf - (cf - (phiDeg < 0 ? lf : rf)) * t * t;
+}
+
+//: A league-average centre field, in feet. The reference every park is
+//: drawn against.
+const REF_CF_FT = 400;
+
+/* Feet -> the art's radius, measured against the LEAGUE, not against the
+ * park itself.
+ *
+ * The first version of this divided by the park's own centre field, which
+ * pinned every centre to the same radius: Fenway's 420 and Petco's 396
+ * drew identically and only the asymmetry moved. Half the shape is the
+ * asymmetry and half is the depth, and dividing by your own centre throws
+ * the second half away.
+ *
+ * Against a fixed reference all three numbers read: a deep park is drawn
+ * deep, a bandbox is drawn small. The clamp is what stops a novelty
+ * dimension bursting the stands the bowl was drawn for — 0.72 to 1.18 is
+ * roughly 288 to 472 feet, which contains every real park with room to
+ * spare and contains a typo without breaking the frame. */
+function wallRadius(park, phiDeg) {
+  return Math.max(0.72, Math.min(1.18, wallFt(park, phiDeg) / REF_CF_FT));
+}
+
+/* The wall as a path through the art's own coordinates, plus the points
+ * the markers hang off. `pt(phi)` is the shared answer to "where is the
+ * wall at this bearing" — the drawing uses it for the fence, the arc uses
+ * it for where a ball lands. */
+function wallShape(park) {
+  const pt = (phiDeg) => {
+    const k = wallRadius(park, phiDeg);
+    const phi = Math.max(-POLE_DEG, Math.min(POLE_DEG, phiDeg)) * Math.PI / 180;
+    return [120 + 116 * k * Math.sin(phi), 121.7 - 92 * k * Math.cos(phi)];
+  };
+  const steps = 24;
+  const pts = Array.from({ length: steps + 1 }, (_, i) =>
+    pt(-POLE_DEG + (2 * POLE_DEG * i) / steps));
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
+  return { pt, d, pts, lf: pt(-POLE_DEG), cf: pt(0), rf: pt(POLE_DEG) };
+}
+
+
 function ballpark(game, opts = {}) {
   const w = opts.w || 240, h = opts.h || 150;
   const home = team(game.home), away = team(game.away);
@@ -796,6 +868,11 @@ function ballpark(game, opts = {}) {
   const grass = turf ? "#0F4A2C" : "#136040";
   const grassDark = turf ? "#0A3A22" : "#0E4A30";
   const dirt = "#7E5533";
+  const park = game.park || {};
+  const WALL = wallShape(park);
+  // Markers earn their place only when the art is big enough to read
+  // them; the 240-wide board cards are not.
+  const dims = (opts.w || 240) >= 300 && (park.lf_ft || park.cf_ft || park.rf_ft);
   const uid = "bp" + Math.random().toString(36).slice(2, 7);
   const nfx = nightFx(uid, home, away);
   // Occupied bases, live only. `live.bases` is [1], [2, 3], … — the same
@@ -869,20 +946,42 @@ function ballpark(game, opts = {}) {
     <ellipse cx="120" cy="92" rx="102" ry="68" fill="${shade(home.primary, -38)}"/>
     <ellipse cx="120" cy="92" rx="102" ry="68" fill="#05060F" opacity="0.35"/>
     <g transform="translate(120,100) scale(0.76) translate(-120,-100)">
-    <!-- field: outfield grass fan -->
-    <path d="M120 132 L34 60 A116 92 0 0 1 206 60 Z" fill="${grass}"/>
+    <!-- field: outfield grass fan, cut to THIS park's wall -->
+    <path d="M120 132 ${WALL.d.replace(/^M/, "L")} Z" fill="${grass}"/>
     ${/* Mow stripes. Classed so the engraving layer can drop them: as FILLED
           wedges at 18% they read as faint stripes, but engraved — outline
           only — each one becomes an arc plus two radii, and five of those
           radiating from the plate is a cat's cradle over the infield. The
           football field's stripes survive the same treatment because they
           are rectangles, which outline into parallel lines. */""}
-    ${Array.from({ length: 5 }, (_, i) =>
-      `<path class="mow" d="M120 132 L${44 + i * 16} ${56 - i * 2} A116 92 0 0 1 ${72 + i * 20} 34 Z"
-         fill="${grassDark}" opacity="0.12"/>`).join("")}
-    <!-- outfield wall -->
-    <path d="M34 60 A116 92 0 0 1 206 60" fill="none"
+    ${Array.from({ length: 5 }, (_, i) => {
+      // Wedges between two bearings, cut to the same wall as the grass —
+      // as fixed arcs they crossed outside a short park's fence.
+      const a = -POLE_DEG + (2 * POLE_DEG * i) / 5;
+      const b = -POLE_DEG + (2 * POLE_DEG * (i + 1)) / 5;
+      const p0 = WALL.pt(a), p1 = WALL.pt((a + b) / 2), p2 = WALL.pt(b);
+      return `<path class="mow" d="M120 132 L${p0[0].toFixed(1)} ${p0[1].toFixed(1)} L${
+        p1[0].toFixed(1)} ${p1[1].toFixed(1)} L${p2[0].toFixed(1)} ${p2[1].toFixed(1)} Z"
+        fill="${grassDark}" opacity="${i % 2 ? 0.16 : 0.06}"/>`;
+    }).join("")}
+    <!-- outfield wall, at its real distance at every bearing -->
+    <path d="${WALL.d}" fill="none"
           stroke="${shade(home.secondary, -10)}" stroke-width="4" opacity="0.9"/>
+    ${/* THE NUMBERS ON THE WALL. Ethan's render #3 pins the distance at
+          each corner, which is how a park announces its own shape — and
+          it is the difference between art that is decorative and art
+          that is data. Only the three we hold: no LCF/RCF invented.
+          Dropped below 300px of drawn width, where they would be
+          illegible rather than informative. */""}
+    ${dims ? ["lf", "cf", "rf"].map((k) => {
+      const p = WALL[k], ft = Number(park[k + "_ft"]);
+      if (!ft) return "";
+      const dy = k === "cf" ? -5 : 2;
+      return `<g class="wallmark" transform="translate(${p[0].toFixed(1)},${(p[1] + dy).toFixed(1)})">
+        <rect x="-11" y="-6" width="22" height="11" rx="3" fill="#0b0f1c" opacity="0.86"/>
+        <text x="0" y="2.5" text-anchor="middle" font-size="7" font-weight="700"
+          fill="#e9edfb" font-family="system-ui">${ft}</text></g>`;
+    }).join("") : ""}
     <!-- infield dirt diamond -->
     <path d="M120 132 L82 96 A54 54 0 0 1 158 96 Z" fill="${dirt}"/>
     <!-- infield grass -->
@@ -891,10 +990,16 @@ function ballpark(game, opts = {}) {
     <g stroke="#f3e5c9" stroke-width="2" fill="none" opacity="0.9">
       <path d="M120 124 L96 100 L120 76 L144 100 Z"/>
     </g>
-    <!-- foul lines to the wall -->
+    ${/* FOUL LINES END AT THE WALL — THIS PARK'S WALL. They were nailed
+          to (40,62) and (200,62), the corners of the fixed arc every park
+          used to be drawn with. The moment the wall started moving they
+          overshot it into the stands on a short park and fell short on a
+          deep one, which is worse than the symmetric version was: a line
+          that visibly misses the corner reads as a broken drawing. */""}
+    <!-- foul lines, to this park's own corners -->
     <g stroke="#f3e5c9" stroke-width="1.6" opacity="0.75">
-      <line x1="120" y1="128" x2="40" y2="62"/>
-      <line x1="120" y1="128" x2="200" y2="62"/>
+      <line x1="120" y1="128" x2="${WALL.lf[0].toFixed(1)}" y2="${WALL.lf[1].toFixed(1)}"/>
+      <line x1="120" y1="128" x2="${WALL.rf[0].toFixed(1)}" y2="${WALL.rf[1].toFixed(1)}"/>
     </g>
     <!-- BASES, LIT WHEN OCCUPIED.
          Ethan, 2026-08-08: "when games are live, can we highlight what

@@ -9267,10 +9267,59 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-parkcard { padding: 0; overflow: hidden; }
 .pbp-park { position: relative; width: 100%; aspect-ratio: 240 / 150; background: #05060F; }
 .pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* THE PARK PHOTOGRAPH (Ethan, 2026-09-06: use this render for all live
+   MLB). `cover` because the card's aspect and the image's are close but
+   not identical, and letterboxing a hero image looks like a mistake. */
+.pbp-park picture, .pbp-photo { position: absolute; inset: 0; display: block;
+  width: 100%; height: 100%; }
+.pbp-photo { object-fit: cover; object-position: center bottom; }
+.pbp-photomarks { position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; }
 .pbp-park .pbp-arc { pointer-events: none; }
 .pbp-parkchip { position: absolute; top: 10px; right: 10px; background: rgba(12,16,32,.82);
   border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 6px 9px;
   font-size: var(--fs-xs); color: #dfe4f5; display: flex; flex-direction: column; gap: 2px; }
+/* THE CARD HEADER (Ethan's render): title left, venue and conditions
+   right, on one row that wraps rather than crushes on a phone. */
+.pbp-parkhead { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; padding: 12px 14px;
+  border-bottom: var(--hairline) solid var(--border); }
+.pbp-parkhead-t b { letter-spacing: .1em; font-size: var(--fs-sm); }
+.pbp-parkhead-t span { display: block; font-size: var(--fs-xs); color: var(--text-mute);
+  letter-spacing: .08em; text-transform: uppercase; }
+.pbp-parkhead-v { text-align: right; min-width: 0; }
+.pbp-parkhead-v b { font-size: var(--fs-sm); display: block; overflow-wrap: anywhere; }
+.pbp-parkhead-v span { font-size: var(--fs-xs); color: var(--text-mute);
+  font-family: var(--font-mono); }
+
+/* THE BATTED-BALL TILES and the park panel (Ethan's render, 2026-09-06).
+   Four numbers the play feed already carried and the page never showed,
+   and the dimensions/factors that make one park a different question
+   from another. Auto-fit rather than a fixed four-up: on a phone these
+   wrap to two rows instead of shrinking to unreadable. */
+.pbp-bb { display: grid; gap: 8px; padding: 12px 14px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  border-top: var(--hairline) solid var(--border); }
+.pbp-bb-tile { background: rgba(255,255,255,.03); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.pbp-bb-tile .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
+.pbp-bb-tile b { font-size: var(--fs-lg); font-family: var(--font-mono); display: block;
+  margin-top: 2px; overflow-wrap: anywhere; }
+.pbp-bb-tile b span { font-size: var(--fs-xs); font-family: inherit; color: var(--text-mute);
+  margin-left: 3px; }
+.pbp-pf { display: grid; gap: 8px; padding: 0 14px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.pbp-pf-box { background: rgba(255,255,255,.03); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.pbp-pf-head { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em;
+  margin-bottom: 6px; }
+.pbp-pf-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.pbp-pf-cell { min-width: 0; }
+.pbp-pf-cell .k { font-size: var(--fs-xs); color: var(--text-mute); }
+.pbp-pf-cell b { font-family: var(--font-mono); display: block; }
+.pbp-pf-cell .mini { font-size: var(--fs-xs); color: var(--text-mute); }
+/* The numbers ON the wall — legible over grass at any theme. */
+.pbp-park .wallmark text { paint-order: stroke; }
 .pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
   padding: 12px 14px; border-top: var(--hairline) solid var(--border); }
 .pbp-sit-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
