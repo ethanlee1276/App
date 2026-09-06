@@ -986,9 +986,20 @@ from engine import ledger
 c = ledger.connect()
 print(ledger.repair_inverted_likely_sides(c))
 "
-sudo -u qellys python3 ingest.py --settle all
+sudo -u qellys python3 -c "
+from engine import ledger
+from engine.db import connect as hist
+c = ledger.connect()
+print('settled', ledger.settle_from_history(c, hist()))
+"
 sudo -u qellys python3 launch.py --likely
 ```
+
+(`ingest.py --settle all` does NOT exist — that was wrong in the first
+version of this section, and the repair leaves the rows OPEN, so without
+a settle they vanish from the scoreboard instead of being counted
+correctly. `python3 ledger.py settle --from-db --sport mlb` is the
+equivalent through the supported CLI.)
 
 * The repair is deliberately narrow: `home_runs`, in the `likely`
   bucket, `side='OVER'`, `hit_prob > 0.5`. Nothing else. A repair that

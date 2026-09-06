@@ -25,6 +25,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import likely as K                               # noqa: E402
+from engine.yardagefit import display_prob            # noqa: E402
 
 
 def _prop(market="rec_yds", prob=0.62, odds=-115, player="A Wideout",
@@ -32,7 +33,23 @@ def _prop(market="rec_yds", prob=0.62, odds=-115, player="A Wideout",
     got = {"player": player, "team": "CIN", "opponent": "CLE",
            "market": market, "market_label": market, "side": "over",
            "line": 45.5, "book": "DK", "odds": odds, "hit_prob": prob,
-           "fair_prob": 0.55, "projection": 52.0, "ev_per_unit": 0.03,
+           # PROJECTION 62 AND A 0.62 FAIR, RE-ANCHORED TOGETHER. Two
+           # bars decide whether a row survives `from_prop`, and they
+           # pull in opposite directions. It recomputes what it shows
+           # from the MIXTURE rather than from `hit_prob`: at the old
+           # projection of 52 that mixture is 0.48, under `MIN_PROB`
+           # since Ethan raised it to 0.55 on 2026-09-06, so every row
+           # built here would be refused and the tests below would pass
+           # on empty boards. But raising the projection alone walks the
+           # mixture away from a fixed 0.55 fair until `_credible`
+           # refuses it instead — and it does so at a DIFFERENT
+           # projection per market, because each has its own mixture:
+           # at 62 this line yields 0.588 for rec_yds, 0.622 for
+           # rush_yds and 0.675 for receptions. No single projection
+           # clears the floor for all three against a 0.55 fair, so the
+           # fair moves with them: 0.62 sits within MAX_CREDIBLE_EDGE of
+           # every one.
+           "fair_prob": 0.62, "projection": 62.0, "ev_per_unit": 0.03,
            "has_market": has_market, "reasons": ["because"],
            "recent_values": [40, 60, 55], "date": "2026-09-14"}
     got.update(kw)
@@ -122,12 +139,16 @@ def test_ranked_by_probability_and_by_nothing_else():
     # different projections one shared `fair_prob` had two of them
     # correctly thrown out — for a reason that has nothing to do with
     # ordering.
-    rows = [_prop(player="Low", prob=0.42, projection=44.0,
-                  fair_prob=0.38, ev_per_unit=0.40),
-            _prop(player="High", prob=0.71, projection=72.0,
-                  fair_prob=0.67, ev_per_unit=-0.10),
-            _prop(player="Mid", prob=0.55, projection=55.0,
-                  fair_prob=0.51, ev_per_unit=0.20)]
+    # ALL THREE ABOVE `MIN_PROB`, re-anchored when it went to 0.55 on
+    # 2026-09-06. The old fixture ran 0.42 / 0.55 / 0.71 and the floor
+    # took the bottom two, leaving a one-row board that would have
+    # asserted nothing about ordering.
+    rows = [_prop(player="Low", prob=0.58, projection=62.0,
+                  fair_prob=0.58, ev_per_unit=0.40),
+            _prop(player="High", prob=0.73, projection=80.0,
+                  fair_prob=0.72, ev_per_unit=-0.10),
+            _prop(player="Mid", prob=0.66, projection=70.0,
+                  fair_prob=0.65, ev_per_unit=0.20)]
     board = K.build(rows, [], [], sport="nfl", fits=FITS)
     assert [r["player"] for r in board] == ["High", "Mid", "Low"], board
     # The juiciest EV on the slate is LAST, which is the whole point.
@@ -165,7 +186,7 @@ def test_a_coin_flip_is_not_likely_however_it_ranks():
     """The page is called Most Likely. A 31% shot at the top of a thin
     slate is still not something to tell somebody is likely."""
     assert K.from_prop(_prop(prob=0.12), _always, fits=FITS) is None
-    assert K.MIN_PROB >= 0.30
+    assert K.MIN_PROB >= 0.55
 
 
 def test_a_missing_probability_never_becomes_a_zero():
@@ -240,17 +261,24 @@ def test_a_boundary_fit_market_reaches_this_page_uncorrected_without_the_mixture
 
 
 def test_the_mixture_pulls_an_overconfident_number_down():
-    """A back with two blanks in six games, projected 58 against a 45.5
-    line: the raw model says 62%, the mixture says the mid-fifties. The
+    """A back with two blanks in six games, projected 72 against a 45.5
+    line: the raw model says 68%, the mixture says the high fifties. The
     difference is the chance he simply does not touch it, which a normal
-    spreads below zero instead of piling at zero."""
-    row = _prop(market="rush_yds", prob=0.62, projection=58.0,
-                recent_values=[70, 0, 52, 61, 0, 44])
+    spreads below zero instead of piling at zero.
+
+    PROJECTED 72 RATHER THAN 58 since `MIN_PROB` went to 0.55. At 58 the
+    mixture lands on 0.542 — which is the pull-down this test is about,
+    working exactly as described, and then refused by the floor before
+    it can be read. The claim needs a case where the number is pulled
+    down and still clears the bar, or the test asserts on a None."""
+    row = _prop(market="rush_yds", prob=0.68, projection=72.0,
+                fair_prob=0.60, recent_values=[70, 0, 52, 61, 0, 44])
     got = K.from_prop(row, _always, fits=FITS)
     if got["prob_source"] == "model":
         return          # no fitted store on this box; nothing to assert
     assert got["model_prob"] < got["raw_prob"], got
-    assert got["raw_prob"] == 0.62
+    assert got["model_prob"] >= K.MIN_PROB, got
+    assert got["raw_prob"] == 0.68
 
 
 def test_the_reader_is_told_which_number_they_are_seeing():
@@ -414,16 +442,38 @@ def test_an_under_shows_its_own_probability_through_the_mixture():
     """The mixture is P(over); an under row shows the complement rather
     than the over's number wearing an under label. The two sides of one
     line sum to one — which is also why the ranking measurement covers
-    both: an AUC is symmetric under the complement."""
-    over = K.from_prop(_prop(market="rec_yds", side="over", prob=0.58,
-                             fair_prob=0.55), _always, fits=FITS)
-    under = K.from_prop(_prop(market="rec_yds", side="under", prob=0.42,
-                              fair_prob=0.45), _always, fits=FITS)
+    both: an AUC is symmetric under the complement.
+
+    THE OLD SHAPE OF THIS TEST BECAME IMPOSSIBLE ON 2026-09-06, and the
+    reason is the property itself. Two sides of one line sum to one, so
+    once `MIN_PROB` is 0.55 at most one of them can be on the board —
+    reading the complement off a pair that both survived cannot be done
+    any more. The claim is unchanged and still worth pinning, so each
+    side is now built at a projection where IT is the likely one, and
+    the complement is checked against the mixture directly rather than
+    against a sibling row that the floor would refuse."""
+    over = K.from_prop(_prop(market="rec_yds", side="over", prob=0.58),
+                       _always, fits=FITS)
+    # `prob` is the UNDER's own claim, and the floor is checked twice —
+    # once on this raw number before the mixture runs, once on the
+    # mixture's output after. Both have to clear 0.55 or the row is
+    # refused as "under the likelihood floor" before the complement is
+    # ever computed.
+    under = K.from_prop(_prop(market="rec_yds", side="under", prob=0.70,
+                              projection=38.0), _always, fits=FITS)
     assert over and under, (over, under)
     assert over["prob_source"] == "mixture" == under["prob_source"]
-    assert abs(over["model_prob"] + under["model_prob"] - 1.0) < 1e-3, \
-        (over["model_prob"], under["model_prob"])
-    assert under["raw_prob"] == 0.42
+    # The over's own number IS the mixture at its projection...
+    p_over = display_prob("rec_yds", 62.0, 45.5, [40, 60, 55], fits=FITS)
+    assert abs(over["model_prob"] - p_over) < 1e-3, over["model_prob"]
+    # ...and the under's is one minus the mixture at ITS projection,
+    # which is the whole claim: the complement, not the over's number
+    # wearing an under label.
+    p_at_under = display_prob("rec_yds", 38.0, 45.5, [40, 60, 55], fits=FITS)
+    assert abs(under["model_prob"] - (1.0 - p_at_under)) < 1e-3, \
+        (under["model_prob"], p_at_under)
+    assert under["model_prob"] > 0.5 > p_at_under, "the under is the likely side here"
+    assert under["raw_prob"] == 0.70
 
 
 def test_chalk_beyond_the_price_cap_is_refused_everywhere():
