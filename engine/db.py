@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS games (
     home TEXT, away TEXT, home_score REAL, away_score REAL,
     spread REAL, total REAL, roof TEXT, surface TEXT, temp REAL, wind REAL,
     extra TEXT,
+    -- KICKOFF DATE (YYYY-MM-DD). Every source already ships it and this
+    -- table has always thrown it away, because `period` was assumed to
+    -- BE the date. That holds for the daily sports and not for football,
+    -- where a period is a week — and a harvest keyed by a calendar date
+    -- then cannot join a bet keyed by a week. `engine/gamecal.py` names
+    -- that exact failure and works around it locally; the ledger's
+    -- closing-line lookup had no such workaround, so no NFL bet could
+    -- ever be given a close (measured 2026-09-06, three days before the
+    -- first Week 1 kickoff). This column is the join both of them
+    -- needed. Nullable: the daily sports do not have to backfill it,
+    -- since for them `period` already is this value.
+    date TEXT,
     PRIMARY KEY (sport, season, period, game_id)
 );
 CREATE TABLE IF NOT EXISTS player_game_logs (
@@ -206,7 +218,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_player
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
              "home_score", "away_score", "spread", "total", "roof", "surface",
-             "temp", "wind", "extra"]
+             "temp", "wind", "extra", "date"]
 LOG_COLS = ["sport", "season", "period", "game_id", "player", "team",
             "opponent", "position", "home", "market", "value"]
 ODDS_HIST_COLS = ["sport", "taken_at", "event_id", "home", "away", "player",
@@ -264,6 +276,11 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
             pass                     # already there
     try:
         conn.execute("ALTER TABLE game_starters ADD COLUMN throws TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass                              # column already there
+    try:
+        conn.execute("ALTER TABLE games ADD COLUMN date TEXT")
         conn.commit()
     except sqlite3.OperationalError:
         pass                              # column already there

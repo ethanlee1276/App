@@ -31,6 +31,13 @@ def nfl_game_rows(schedule_rows: list[dict], seasons: set[int]) -> list[dict]:
         out.append({
             "sport": "nfl", "season": season, "period": f"{int(float(wk)):03d}",
             "game_id": f"{away}@{home}", "home": home, "away": away,
+            # THE KICKOFF DATE, which this row has always received and
+            # thrown away. `period` is a WEEK here, so without this there
+            # is nothing in the database that maps an NFL bet's "2026-W01"
+            # onto the calendar dates a closing-line harvest is filed
+            # under — and every NFL bet went unpriced against its close in
+            # silence. nflverse ships it in the same row we already parse.
+            "date": _s(r, "gameday"),
             "home_score": _f(r, "home_score", default=None),
             "away_score": _f(r, "away_score", default=None),
             "spread": -_f(r, "spread_line", default=0.0),
