@@ -996,11 +996,21 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
             extra = _json.loads(r["extra"] or "{}")
         except (ValueError, TypeError):
             extra = {}
-        games[str(r["game_id"])] = {
+        entry = {
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
             "season": r["season"], "period": r["period"], "extra": extra,
         }
+        # BOTH KEYS, for the reason `cfb_games_for` is aliased the same
+        # way: the row is STORED as away@home (ab20781) and the mirror's
+        # closing-line file keys by the numeric ESPN id, which
+        # `cfblines.parse_lines` looks up here. Keyed one way this joined
+        # zero lines — and it is a SECOND map over the same table, which
+        # is why fixing `cfb_games_for` alone left half the bug standing.
+        games[str(r["game_id"])] = entry
+        espn_id = str(extra.get("espn_game_id") or "").strip()
+        if espn_id:
+            games[espn_id] = entry
     if not games:
         result["skipped"].append(
             "cfb lines: no ingested games to attach closes to — run the "
