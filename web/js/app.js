@@ -8396,6 +8396,7 @@ function renderGamePage() {
     </div>
 
     ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
+    ${pressurePairHTML(state.sport, g)}
     ${simCard}
     ${shapeCard}
 
@@ -21350,6 +21351,183 @@ function injTeamBlock(team, rows, sev) {
 let _stdUnitsAll = false;
 window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings(); };
 
+/* ---------------- Under pressure ----------------
+   Ethan, 2026-09-05: "Add under pressure data for teams, like clutch
+   win % and reliability % and comeback % and choke % and see if we can
+   have that as live data as well like when games are going."
+
+   The numbers ride the standings build (`pressure` on
+   standings_<sport>.json, engine/pressure.py): four rates per team,
+   counted from the same finished games as the table above them —
+   clutch (one-score games won), reliability (won as the favourite),
+   comeback (won as the underdog — the MARKET'S underdog, and the page
+   says so, because we hold no half-time scores yet), choke (one-score
+   games lost as the favourite). Three places read them: a ranked
+   section on the standings page, a two-team table on the game page,
+   and a line on the live card that reads the situation — a one-score
+   game late, a favourite trailing — against the two teams' rates. The
+   live line is the only one that changes during a game; the rates
+   under it are season counts and do not pretend otherwise. */
+const PRESSURE_RATES = [
+  ["clutch", "Clutch", "one-score games won"],
+  ["reliability", "Reliability", "won as the favourite"],
+  ["comeback", "Comeback", "won as the market’s underdog"],
+  ["choke", "Choke", "one-score games lost as the favourite"],
+];
+const PRESSURE_ONE_SCORE = { nfl: 8, cfb: 8, nba: 5, wnba: 5, mlb: 1 };
+let _stdPressureAll = false;
+window._stdPressureToggle = () => { _stdPressureAll = !_stdPressureAll; renderStandings(); };
+
+function pressurePct(v) { return v == null ? "—" : `${Math.round(v)}%`; }
+
+function pressureUnit(pr) {
+  return `${pr.one_score} ${pr.one_score === 1 ? "run" : "points"}`;
+}
+
+function pressureHTML(pr, d) {
+  if (!pr || !pr.ranked) return "";
+  const cols = PRESSURE_RATES.filter(([k]) => (pr.ranked[k] || []).length);
+  if (!cols.length) return "";
+  const meta = (typeof teamsForSport === "function"
+    ? teamsForSport(state.sport) : {}) || {};
+  const CAP = 10;
+  const col = ([key, title, note]) => {
+    const rows = pr.ranked[key];
+    return `
+    <div class="rec-bucket">
+      <div class="rb-head">${escapeHtml(title)}
+        <span class="mini" style="opacity:.6"> ${escapeHtml(note)}</span></div>
+      ${rows.slice(0, _stdPressureAll ? rows.length : CAP).map((r) => `
+        <div class="std-row std-unit-row">
+          <span class="std-rank">${r.rank}</span>
+          <span class="std-mark">${teamMarkIn(state.sport, r.team, 22)}</span>
+          <span class="std-name">${escapeHtml((meta[r.team] || {}).name
+            || (meta[r.team] || {}).nick || r.team)}
+            <span class="k" style="opacity:.6">${r.n} game${r.n === 1 ? "" : "s"}</span></span>
+          <span class="std-n">${pressurePct(r.value)}</span>
+        </div>`).join("")}
+    </div>`;
+  };
+  const most = Math.max(...cols.map(([k]) => pr.ranked[k].length));
+  const lastSeason = pr.season_used !== pr.season;
+  return `
+    <div class="section-title">Under pressure
+      <span class="sub">— clutch, reliability, comeback and choke, from the
+        finished ${escapeHtml(String(pr.season_used))} games${lastSeason
+          ? " — last season’s, until this one has four games a team" : ""}
+        · one-score means within ${escapeHtml(pressureUnit(pr))}
+        · a team needs ${pr.min_games} games, and ${pr.min_rate_n} of the kind
+        counted, to be ranked</span></div>
+    ${pr.note ? `<div class="ls-note">${escapeHtml(pr.note)}</div>` : ""}
+    <div class="rec-buckets pr-buckets">${cols.map(col).join("")}</div>
+    ${most > CAP ? `<button class="btn ghost" type="button"
+      onclick="_stdPressureToggle()">${_stdPressureAll
+        ? `Show the top ${CAP}` : `Show all ${most} teams`}</button>` : ""}`;
+}
+
+/* Is the game in its last period? The live feed's period is a label —
+   "Q4", "4th", "OT", "Top 9th" — so this reads the label, and reads
+   nothing into one it does not recognise. Pure, tested in node. */
+function pressureLate(sport, period) {
+  const p = String(period || "");
+  if (sport === "mlb") {
+    const m = p.match(/(\d+)/);
+    return !!m && +m[1] >= 7;
+  }
+  return /\b(Q4|4th|OT\d*|\d?OT)\b/i.test(p);
+}
+
+/* The market's favourite for a slate game: the slate's own word for it,
+   else the sign of the home-relative spread (negative = home favoured,
+   the games table's convention), else nobody. */
+function pressureFav(g) {
+  if (g.favorite) return g.favorite;
+  if (g.spread == null) return null;
+  return g.spread < 0 ? g.home : g.spread > 0 ? g.away : null;
+}
+
+/* One sentence for a game, read against the two teams' rates. Before
+   the game and after it: the two clutch rates. During it: what the
+   scoreboard is asking — a favourite trailing is asked for its
+   reliability and the underdog for its comeback rate; a one-score game
+   late asks the favourite how often it has let one slip, or, with no
+   favourite on file, both sides how often they win these. Pure. */
+function pressureSituation({ sport, g, pr }) {
+  const teams = (pr && pr.teams) || {};
+  const h = teams[g.home], a = teams[g.away];
+  if (!h || !a) return "";
+  const lv = g.live || {};
+  const pct = pressurePct;
+  if (lv.state !== "live" || lv.home_score == null || lv.away_score == null)
+    return `${g.home} wins ${pct(h.clutch)} of its one-score games · ${g.away} ${pct(a.clutch)}`;
+  const margin = Math.abs(lv.home_score - lv.away_score);
+  const one = margin <= (PRESSURE_ONE_SCORE[sport] || 0);
+  const late = pressureLate(sport, lv.period);
+  const fav = pressureFav(g);
+  const dog = fav === g.home ? g.away : fav === g.away ? g.home : null;
+  const F = fav ? teams[fav] : null, D = dog ? teams[dog] : null;
+  const lead = lv.home_score > lv.away_score ? g.home
+    : lv.away_score > lv.home_score ? g.away : null;
+  if (F && D && lead && lead !== fav && F.reliability != null)
+    return `${fav} trails as the favourite · wins ${pct(F.reliability)} when favoured`
+      + ` · ${dog} wins ${pct(D.comeback)} as the underdog`;
+  if (one && late && F && D && F.choke != null)
+    return `One-score game late · ${fav} has let ${pct(F.choke)} of these slip as the favourite`
+      + ` · ${dog} wins ${pct(D.clutch)} of its one-score games`;
+  if (one && late)
+    return `One-score game late · ${g.home} wins ${pct(h.clutch)} of these · ${g.away} ${pct(a.clutch)}`;
+  return `${g.home} clutch ${pct(h.clutch)} · ${g.away} clutch ${pct(a.clutch)}`;
+}
+
+function pressureLiveHTML(sport, g) {
+  const pr = (_standingsCache[sport] || {}).pressure;
+  const line = pr ? pressureSituation({ sport, g, pr }) : "";
+  if (!line) return "";
+  return `<div class="lb-pressure"><span class="lb-pk">Under pressure</span>${escapeHtml(line)}${
+    pr.season_used !== pr.season
+      ? ` <span class="k">(${escapeHtml(String(pr.season_used))})</span>` : ""}</div>`;
+}
+
+/* The live board draws its cards synchronously; this makes sure every
+   league on it has its standings file in the cache first. Cached after
+   the first read, so it costs one fetch per league per visit. */
+async function pressureWarm(sports) {
+  await Promise.all([...new Set(sports || [])]
+    .filter((s) => PRESSURE_ONE_SCORE[s]).map((s) => loadStandings(s)));
+}
+
+/* The game page's two-team table. Drawn from the cache when the league's
+   standings are already in it; otherwise a placeholder that fills
+   itself in when the file lands, so the page never waits on it. */
+function pressurePairHTML(sport, g) {
+  if (_standingsCache[sport] === undefined) {
+    loadStandings(sport).then(() => {
+      const host = document.getElementById("gp-pressure");
+      if (host) host.outerHTML = pressurePairHTML(sport, g);
+    });
+    return `<div id="gp-pressure" hidden></div>`;
+  }
+  const pr = (_standingsCache[sport] || {}).pressure;
+  if (!pr) return "";
+  const rows = [g.away, g.home].map((t) => [t, pr.teams[t]]).filter(([, r]) => r);
+  if (!rows.length) return "";
+  return `
+    <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure
+        <span class="k">${escapeHtml(String(pr.season_used))} · one-score means within ${
+          escapeHtml(pressureUnit(pr))}</span></div>
+      <div class="pr-table">
+        <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
+          `<span class="lb-th">${t}</span>`).join("")}
+        ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)} ${escapeHtml(t)}
+            <span class="k">${escapeHtml(r.record)}</span></span>${
+          PRESSURE_RATES.map(([k]) => `<b>${pressurePct(r[k])}</b>`).join("")}`).join("")}
+      </div>
+      ${pr.note ? `<div class="pr-defs">${escapeHtml(pr.note)}</div>` : ""}
+      <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
+        `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
+    </div>`;
+}
+
 function unitRankingsHTML(ur, d) {
   /* NEVER SILENTLY ABSENT ON A FOOTBALL PAGE. This returned "" whenever
      the build had no rankings — and for the NFL that is every day until
@@ -21542,6 +21720,7 @@ async function renderStandings() {
         .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
     ${unitRankingsHTML(d.unit_rankings, d)}
+    ${pressureHTML(d.pressure, d)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
 }
@@ -31767,6 +31946,7 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
     ${linesGrid}
+    ${pressureLiveHTML(sport, g)}
     ${playsHTML(g)}
     ${lineTrackHTML(g)}
   </div>`;
@@ -32641,6 +32821,7 @@ async function renderLiveBoard() {
   if (!host) return;
   renderSweatZone();
   const games = await fetchAllLive();
+  await pressureWarm(games.map((x) => x.sport));
   const bySport = {};
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });
   const chips = ["all", ...Object.keys(LIVE_FEEDS)].filter(

@@ -23,7 +23,7 @@ import datetime
 import json
 from pathlib import Path
 
-from engine import playoffs, standings
+from engine import playoffs, pressure, standings
 from engine.db import connect
 from engine.seasons import season_of, window as window_of
 
@@ -131,6 +131,12 @@ def build(sport: str, season: int | None = None,
                                           today=day, conferences=confs)
                 table["feed_error"] = feed_error
         bracket = playoffs.bracket(conn, sport, season=season, today=day)
+        # Ethan, 2026-09-05: "under pressure data for teams, like clutch
+        # win % and reliability % and comeback % and choke %". Counted
+        # from the same finished games as the table, on the same
+        # connection; last season's numbers, said so, until this one
+        # has four games a team (engine/pressure.py).
+        under_pressure = pressure.team_pressure(conn, sport, season)
     finally:
         conn.close()
 
@@ -164,6 +170,8 @@ def build(sport: str, season: int | None = None,
     ur = standings.unit_rankings(table)
     if ur:
         table["unit_rankings"] = ur
+    if under_pressure:
+        table["pressure"] = under_pressure
     return table
 
 

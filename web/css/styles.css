@@ -6769,6 +6769,27 @@ body.has-rail .shell {
 .gp-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
 @media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
 .gp-lines .lb-table { border-top: none; padding-top: 0; }
+
+/* Under pressure (2026-09-05): a ranked section on the standings page,
+   a two-team table on the game page, a situational line on the live
+   card. The section reuses the rankings' buckets and rows; only the
+   four-up grid and the game-page table are its own. */
+.pr-buckets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1100px) { .pr-buckets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pr-table { display: grid; grid-template-columns: 1fr repeat(4, auto); gap: 6px 12px;
+  align-items: center; }
+.pr-table .lb-th { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
+.pr-table .lb-th:first-child { text-align: left; }
+.pr-table .lb-tm { color: var(--text-mute); font-size: var(--fs-sm); display: flex;
+  align-items: center; gap: 6px; min-width: 0; }
+.pr-table b { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+.pr-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
+.pr-defs b { color: var(--text-dim); font-weight: 600; }
+.lb-pressure { margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--border);
+  color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.lb-pressure .lb-pk { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: .04em; margin-right: 6px; }
 .gp-note-list { margin: 0; padding-left: 18px; color: var(--text-body);
   font-size: var(--fs-sm); }
 .gp-note-list li { margin: 4px 0; }

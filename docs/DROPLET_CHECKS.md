@@ -670,3 +670,38 @@ print(len(d), 'cached answers'); k = next(iter(d)); print(k.split(chr(9))[:2]); 
   the box's outbound HTTPS.
 * A second tap on the same pick must come back at once (`cached: true`
   in the network tab) and the cache file must not grow.
+
+## 10. Under pressure: the numbers, the college remap, and the live line
+
+Ethan, 2026-09-05: "Add under pressure data for teams, like clutch win
+% and reliability % and comeback % and choke % and see if we can have
+that as live data as well like when games are going." The rates ride
+`standings_<sport>.json` under `pressure` (engine/pressure.py). Two
+things only the box can confirm: that college rows are keyed by the
+board's abbreviations there (the sandbox still holds `espn:<id>` keys,
+which the module maps through the persisted id file when it has one),
+and that the live card's line appears while a game is going.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 standings_build.py --sport nfl && sudo -u qellys python3 standings_build.py --sport cfb
+python3 -c "
+import json
+for sp in ('nfl','cfb','mlb'):
+    d = json.load(open(f'web/data/standings_{sp}.json')); p = d.get('pressure')
+    if not p: print(sp, 'no pressure block'); continue
+    print(sp, 'season', p['season'], 'used', p['season_used'], 'lined', p['lined'], 'teams', len(p['teams']), p['note'][:60])
+    for k in ('clutch','reliability','comeback','choke'):
+        print('  ', k, [(r['team'], r['value'], r['n']) for r in p['ranked'][k][:3]])"
+```
+
+* NFL and CFB must show `used 2025` until this season has four games
+  a team, and no team key may start with `ESPN:` — if one does, the id
+  map is missing on the box: `python3 -c "from engine import cfbteams;
+  print(len(cfbteams.load_ids()))"` should be in the hundreds.
+* MLB: `lined False` and the note about closing lines is the honest
+  state (we store no baseball spreads); the clutch column still ranks.
+* In the browser during any live NFL or CFB game: the card on the Live
+  tab carries an "UNDER PRESSURE" line under the lines grid, and it
+  changes wording when the favourite trails or a one-score game reaches
+  the fourth quarter. The game page carries the two-team table under
+  the lines card. Both label the season the rates come from.
