@@ -900,6 +900,14 @@ const ICON_PATHS = {
   hot: '<path d="M8 1.8c2.4 2.6 4.2 4.5 4.2 7a4.2 4.2 0 11-8.4 0c0-1.3.6-2.4 1.6-3.6'
        + '.4 1 1 1.6 1.8 1.9C6.6 5.6 7 3.6 8 1.8z"/>',
   cold: '<path d="M8 1.6v12.8M2.4 4.8l11.2 6.4M13.6 4.8L2.4 11.2"/>',
+  // Two for the batted-ball tiles (Ethan's park render, 2026-09-06): how
+  // hard it was hit and at what angle it left. A dial with a needle, and
+  // a ray off a baseline with the angle's own arc between them — both
+  // deliberately literal, for the reason the note above gives.
+  gauge: '<path d="M2.2 12.4a6.5 6.5 0 0111.6 0"/><path d="M8 12.4l3.3-5.6"/>'
+       + '<path d="M8 12.4v.01"/>',
+  angle: '<path d="M2.6 12.6h11"/><path d="M2.6 12.6L11.8 3.9"/>'
+       + '<path d="M8.2 12.6a5.6 5.6 0 00-1.6-3.9"/>',
   // Value: a cut stone, because "biggest edge" is the thing you dig for.
   gem: '<path d="M4.4 2.4h7.2l2.6 3.6L8 13.8 1.8 6z"/><path d="M1.8 6h12.4"/>',
   inbox: '<path d="M1.9 8.4h3.4l1 2h3.4l1-2h3.4"/>'
@@ -32399,6 +32407,28 @@ function pbpFlight(hit, park, opts) {
   return { H, C, L, len, over: r > 1.0, phi, fence };
 }
 const PBP_TRAJ = { ground_ball: "Ground ball", line_drive: "Line drive", fly_ball: "Fly ball", popup: "Popup" };
+/* Where the caption sits, given where the ball came down.
+ *
+ * Its own function so the frame-keeping can be exercised at the extremes.
+ * With today's photo calibration no batted ball lands near enough to an
+ * edge to need the clamp — the flip alone covers every real landing
+ * point. That is a fact about ONE photograph: PBP_PHOTO is measured off
+ * the picture we ship, and re-measuring it moves every landing point at
+ * once. So this is real code the tests drive directly, rather than a
+ * branch inside the renderer that happens to be unreachable this week
+ * and would go unnoticed the day it stopped being.
+ *
+ * Preference order, from Ethan's render: up and to the right of the
+ * mark; flipped to the left when the caption would run off that side;
+ * dropped below when there is no sky above it. */
+function pbpCalloutBox(L, cw, ch) {
+  let x = L[0] + 7;
+  if (x + cw > 236) x = L[0] - cw - 7;
+  let y = L[1] - ch - 6;
+  if (y < 4) y = L[1] + 8;
+  return [Math.min(236 - cw, Math.max(4, x)), Math.min(146 - ch, Math.max(4, y))];
+}
+
 function pbpArcSVG(hit, park, opts) {
   const f = pbpFlight(hit, park, opts);
   if (!f) return "";
@@ -32406,25 +32436,40 @@ function pbpArcSVG(hit, park, opts) {
     && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const id = "arc" + Math.random().toString(36).slice(2, 7);
   const d = `M${f.H[0].toFixed(1)} ${f.H[1].toFixed(1)} Q${f.C[0].toFixed(1)} ${f.C[1].toFixed(1)} ${f.L[0].toFixed(1)} ${f.L[1].toFixed(1)}`;
-  const bits = [PBP_TRAJ[hit.trajectory] || (hit.trajectory ? String(hit.trajectory).replace(/_/g, " ") : ""),
-    hit.launch_speed != null ? `${Number(hit.launch_speed).toFixed(1)} mph` : "",
-    hit.distance != null ? `${Math.round(hit.distance)} ft` : ""].filter(Boolean);
-  const label = bits.join(" · ");
-  const chipX = Math.min(170, Math.max(4, f.C[0] - 34)), chipY = Math.max(4, f.C[1] - 22);
+  // THE CALLOUT LANDS WHERE THE BALL DOES (Ethan's render, 2026-09-06).
+  // It used to sit at the arc's CONTROL point — the apex of the curve —
+  // as one run-on line, which put the caption in open sky with nothing
+  // under it. His render anchors it beside the landing spot, titled by
+  // what the ball was and detailed underneath, so the label and the mark
+  // it describes are read as one thing.
+  const title = PBP_TRAJ[hit.trajectory]
+    || (hit.trajectory ? String(hit.trajectory).replace(/_/g, " ") : "");
+  const detail = [hit.launch_speed != null ? `${Number(hit.launch_speed).toFixed(1)} MPH` : "",
+    hit.distance != null ? `${Math.round(hit.distance)} FT` : ""].filter(Boolean).join(" • ");
+  const cw = Math.max(40, Math.min(104, 11 + Math.max(title.length, detail.length) * 3.5));
+  const ch = title && detail ? 19 : 12;
+  const [chipX, chipY] = pbpCalloutBox(f.L, cw, ch);
   return `
   <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <path id="${id}" d="${d}" fill="none" stroke="#ffffff" stroke-width="1.6"
-      stroke-linecap="round" opacity="0.92"${still ? "" : ` stroke-dasharray="${f.len.toFixed(1)}" stroke-dashoffset="${f.len.toFixed(1)}"`}>
+    <path id="${id}" d="${d}" fill="none" stroke="#ffd24a" stroke-width="1.6"
+      stroke-linecap="round" opacity="0.95"${still ? "" : ` stroke-dasharray="${f.len.toFixed(1)}" stroke-dashoffset="${f.len.toFixed(1)}"`}>
       ${still ? "" : `<animate attributeName="stroke-dashoffset" from="${f.len.toFixed(1)}" to="0" dur="1.2s" fill="freeze"/>`}
     </path>
-    <circle r="2.4" fill="#ffffff"${still ? ` cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}"` : ""}>
+    <circle r="2.4" fill="#fff3cd"${still ? ` cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}"` : ""}>
       ${still ? "" : `<animateMotion dur="1.2s" fill="freeze"><mpath href="#${id}"/></animateMotion>`}
     </circle>
-    <circle cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}" r="4" fill="none" stroke="${f.over ? "#ffd24a" : "#ffffff"}" stroke-width="1" opacity="0.7"/>
-    ${label ? `<g>
-      <rect x="${chipX}" y="${chipY}" width="${Math.min(120, 8 + label.length * 4.6).toFixed(0)}" height="16" rx="8" fill="#0c1020" opacity="0.82"/>
-      <text x="${chipX + 7}" y="${chipY + 11}" font-size="7.5" font-weight="700" fill="#ffd24a"
-        font-family="system-ui">${escapeHtml(label)}</text></g>` : ""}
+    <circle cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}" r="6.4" fill="none"
+      stroke="#ffd24a" stroke-width="0.7" opacity="0.42"/>
+    <circle cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}" r="3.6" fill="none"
+      stroke="${f.over ? "#ffd24a" : "#ffffff"}" stroke-width="1" opacity="0.8"/>
+    <g>
+      <rect x="${chipX.toFixed(1)}" y="${chipY.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch}"
+        rx="3" fill="#0c1020" opacity="0.88" stroke="#ffd24a" stroke-opacity="0.55" stroke-width="0.5"/>
+      ${title ? `<text x="${(chipX + 5).toFixed(1)}" y="${(chipY + 7.6).toFixed(1)}" font-size="5.6"
+        font-weight="700" fill="#ffd24a" font-family="system-ui">${escapeHtml(title)}</text>` : ""}
+      ${detail ? `<text x="${(chipX + 5).toFixed(1)}" y="${(chipY + (title ? 15.2 : 8.2)).toFixed(1)}"
+        font-size="4.9" font-weight="600" fill="#e9edfb"
+        font-family="system-ui">${escapeHtml(detail)}</text>` : ""}</g>
   </svg>`;
 }
 
@@ -32493,10 +32538,21 @@ function pbpPhotoHTML(game) {
     // Small on purpose. These sit ON a photograph of a crowd and a wall;
     // at the size the first pass used they read as three buttons stuck
     // over the picture rather than as numbers painted on the fence.
+    //
+    // THE POSITION UNDER THE NUMBER (Ethan's render, 2026-09-06). His
+    // chips carry "336 / LF", and the label is what makes three numbers
+    // over a wall legible: 336, 396 and 322 mean nothing in a row until
+    // you know which is the line and which is the alley. The label is
+    // derived from the field name that supplied the number, so it cannot
+    // drift off the value it describes.
     return `<g transform="translate(${pt[0]},${pt[1] + dy})">
-      <rect x="-8.5" y="-4.5" width="17" height="9" rx="2" fill="#0b0f1c" opacity="0.78"/>
-      <text x="0" y="2" text-anchor="middle" font-size="5.5" font-weight="700"
-        fill="#e9edfb" font-family="system-ui">${ft}</text></g>`;
+      <rect x="-9" y="-6.4" width="18" height="12.8" rx="2.4" fill="#0b0f1c" opacity="0.84"
+        stroke="rgba(233,237,251,.18)" stroke-width="0.4"/>
+      <text x="0" y="0.5" text-anchor="middle" font-size="5.5" font-weight="700"
+        fill="#e9edfb" font-family="system-ui">${ft}</text>
+      <text x="0" y="4.9" text-anchor="middle" font-size="3.1" font-weight="700"
+        fill="#9aa4c0" letter-spacing="0.35"
+        font-family="system-ui">${key.toUpperCase()}</text></g>`;
   };
   return `<picture>
       <source type="image/webp" srcset="img/park/park-night@640.webp 640w, img/park/park-night.webp 1280w"
@@ -32525,6 +32581,19 @@ function pbpPhotoHTML(game) {
  * invented: an indoor park with no wind simply shows the temperature, and
  * a park with neither shows its name alone.
  */
+/* THE WIND, IN WORDS.
+   ---------------------------------------------------------------------
+   The feed ships `wind_dir` RELATIVE to the park — "out", "in", "cross" —
+   and the header printed the raw token, so a card read "12 mph in",
+   which is either a wind blowing in or a wind of twelve inside. Ethan's
+   render says "Blowing In". Same three facts, spelled the way a person
+   would say them.
+
+   Note what is NOT here: his render also carries "From CF". We hold the
+   wind's relation to the park, not the compass sector it comes from, so
+   that line would have to be invented and it isn't drawn. */
+const PBP_WIND = {out: "blowing out", in: "blowing in", cross: "crosswind"};
+
 function pbpParkHeadHTML(league, boardGame) {
   if (league !== "mlb") return "";
   const g = boardGame || {};
@@ -32534,11 +32603,19 @@ function pbpParkHeadHTML(league, boardGame) {
   const bits = [];
   if (w.temp_f != null) bits.push(`${Math.round(w.temp_f)}°F`);
   if (w.wind_mph != null) {
-    bits.push(`${Math.round(w.wind_mph)} mph${w.wind_dir ? " " + w.wind_dir : ""}`);
+    const rel = PBP_WIND[w.wind_dir] || "";
+    bits.push(`${Math.round(w.wind_mph)} mph${rel ? " " + rel : ""}`);
   }
+  if (w.dome) bits.push("roof closed");
   if (!name && !bits.length) return "";
+  // THE LOCKUP AND THE VENUE PILL (Ethan's render, 2026-09-06). His
+  // header is our mark beside the section name on the left and the venue
+  // boxed on the right — the conditions belong TO the venue, and loose
+  // text beside a heading did not say so. brandMarkHTML is the same file
+  // the masthead uses, so the two can never drift apart.
   return `<div class="pbp-parkhead">
-    <div class="pbp-parkhead-t"><b>THE PARK</b><span>real data · real plays</span></div>
+    <div class="pbp-parkhead-t">${brandMarkHTML(26)}
+      <div><b>THE PARK</b><span>REAL DATA. REAL PLAYS.</span></div></div>
     ${name || bits.length ? `<div class="pbp-parkhead-v">
       ${name ? `<b>${escapeHtml(name)}</b>` : ""}
       ${bits.length ? `<span>${escapeHtml(bits.join(" · "))}</span>` : ""}
@@ -32561,14 +32638,19 @@ function pbpBattedHTML(hitRow) {
   const h = (hitRow || {}).hit;
   if (!h || (h.launch_speed == null && h.distance == null
              && h.launch_angle == null && !h.trajectory)) return "";
-  const tile = (k, v, u) => v === "" ? "" : `<div class="pbp-bb-tile">
-      <div class="k">${escapeHtml(k)}</div>
+  // A MARK PER TILE (Ethan's render, 2026-09-06). Four dark boxes of
+  // numbers read as a table; the render gives each one a glyph so the
+  // eye finds "how hard" and "how far" without reading the labels. Drawn
+  // from the site's own icon set at the same 1.7px stroke — the file's
+  // rule, and the reason there is no icon library here.
+  const tile = (ic, k, v, u) => v === "" ? "" : `<div class="pbp-bb-tile">
+      <div class="k">${icon(ic, 12)}${escapeHtml(k)}</div>
       <b>${escapeHtml(String(v))}${u ? `<span>${escapeHtml(u)}</span>` : ""}</b></div>`;
   return `<div class="pbp-bb">
-    ${tile("EXIT VELOCITY", h.launch_speed != null ? Number(h.launch_speed).toFixed(1) : "", " MPH")}
-    ${tile("LAUNCH ANGLE", h.launch_angle != null ? `${Math.round(h.launch_angle)}°` : "", "")}
-    ${tile("DISTANCE", h.distance != null ? Math.round(h.distance) : "", " FT")}
-    ${tile("BATTED BALL", PBP_TRAJ[h.trajectory] || (h.trajectory
+    ${tile("gauge", "EXIT VELOCITY", h.launch_speed != null ? Number(h.launch_speed).toFixed(1) : "", " MPH")}
+    ${tile("angle", "LAUNCH ANGLE", h.launch_angle != null ? `${Math.round(h.launch_angle)}°` : "", "")}
+    ${tile("rising", "DISTANCE", h.distance != null ? Math.round(h.distance) : "", " FT")}
+    ${tile("glove", "BATTED BALL", PBP_TRAJ[h.trajectory] || (h.trajectory
         ? String(h.trajectory).replace(/_/g, " ") : ""), "")}
   </div>`;
 }
@@ -32588,18 +32670,23 @@ function pbpParkFactsHTML(park, boardGame) {
   const f = (boardGame || {}).factors || {};
   const dims = [["LF", park.lf_ft], ["CF", park.cf_ft], ["RF", park.rf_ft]]
     .filter(([, v]) => v);
-  const facs = [["HR", f.hr], ["RUNS", f.run], ["K", f.k]]
+  // Named the way the render names them — "HR Factor", not "HR" — and the
+  // third one is OURS. His card's third tile reads "Extra Base Factor";
+  // we hold the STRIKEOUT factor and nothing else, so it goes under its
+  // own name. Copying his label onto our number would be the one kind of
+  // lie this page exists to avoid.
+  const facs = [["HR Factor", f.hr], ["Runs Factor", f.run], ["Strikeout Factor", f.k]]
     .filter(([, v]) => v != null);
   if (!dims.length && !facs.length) return "";
-  const cell = (k, v, note) => `<div class="pbp-pf-cell"><div class="k">${escapeHtml(k)}</div>
-    <b>${escapeHtml(String(v))}</b>${note ? `<div class="mini">${escapeHtml(note)}</div>` : ""}</div>`;
   return `<div class="pbp-pf">
     ${facs.length ? `<div class="pbp-pf-box"><div class="pbp-pf-head">PARK FACTORS</div>
-      <div class="pbp-pf-row">${facs.map(([k, v]) =>
-        cell(k, Number(v).toFixed(2), "vs 1.00")).join("")}</div></div>` : ""}
+      <div class="pbp-pf-facs">${facs.map(([k, v]) => `<div class="pbp-pf-fac">
+        <b>${Number(v).toFixed(2)}</b>
+        <div class="k">${escapeHtml(k)}</div>
+        <div class="mini">vs. MLB avg 1.00</div></div>`).join("")}</div></div>` : ""}
     ${dims.length ? `<div class="pbp-pf-box"><div class="pbp-pf-head">FIELD DIMENSIONS</div>
-      <div class="pbp-pf-row">${dims.map(([k, v]) =>
-        cell(k, `${v} ft`, "")).join("")}</div></div>` : ""}
+      <div class="pbp-pf-dims">${dims.map(([k, v]) => `<div class="pbp-pf-dim">
+        <div class="k">${escapeHtml(k)}</div><b>${v} ft</b></div>`).join("")}</div></div>` : ""}
   </div>`;
 }
 

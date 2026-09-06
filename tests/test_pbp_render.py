@@ -125,8 +125,14 @@ def test_the_arc_animates_and_respects_reduced_motion():
     assert '<animateMotion dur="1.2s" fill="freeze"><mpath href="#${id}"/></animateMotion>' in body
     assert 'attributeName="stroke-dashoffset"' in body, "the path draws on"
     assert 'matchMedia("(prefers-reduced-motion: reduce)").matches' in body
-    assert "PBP_TRAJ[hit.trajectory]" in body and "mph" in body and "ft" in body
-    assert "escapeHtml(label)" in body
+    assert "PBP_TRAJ[hit.trajectory]" in body and "MPH" in body and "FT" in body
+    # RE-ANCHORED 2026-09-06 (Ethan: "match our page more to these
+    # renders"). The caption was one run-on `label` pinned at the arc's
+    # apex; his render titles it by what the ball was and puts the
+    # numbers underneath, beside the landing mark. Two escaped strings
+    # now, not one — the pin follows the markup rather than the old name.
+    assert "escapeHtml(title)" in body and "escapeHtml(detail)" in body
+    assert "f.L[0]" in body and "chipX" in body, "the caption is anchored to the landing point"
 
 
 def test_the_park_is_the_game_pages_own_art_in_the_leagues_colours():

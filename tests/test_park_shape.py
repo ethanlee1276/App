@@ -162,7 +162,7 @@ def test_no_dimension_we_do_not_hold_is_invented():
     Drawing LCF and RCF would mean inventing them."""
     assert "lcf" not in VIS.lower().split("wallshape")[1][:2000]
     at = APP.index("function pbpParkFactsHTML")
-    assert "lcf" not in APP[at:at + 1200].lower()
+    assert "lcf" not in APP[at:at + 1900].lower()
 
 
 def test_the_batted_ball_tiles_show_only_a_batted_ball():
@@ -177,11 +177,32 @@ def test_the_batted_ball_tiles_show_only_a_batted_ball():
 def test_the_strikeout_factor_is_not_relabelled():
     """The render's third factor tile says "Extra Base Factor". We do not
     hold that number; we hold the STRIKEOUT factor. Putting ours under
-    their label would be a quiet lie on a page about being honest."""
+    their label would be a quiet lie on a page about being honest.
+
+    RE-ANCHORED 2026-09-06 when the tiles took the render's fuller names
+    ("HR Factor" rather than "HR"). The pin follows the meaning, not the
+    old two-letter string: whatever the third factor is called, it is
+    called strikeout and it reads f.k."""
     at = APP.index("function pbpParkFactsHTML")
-    block = APP[at:at + 1400]
-    assert '["K", f.k]' in block
-    assert "extra base" not in block.lower()
+    block = APP[at:at + 1900]
+    assert "f.k]" in block, "the third factor is still the strikeout one"
+    third = [ln for ln in block.splitlines() if "f.k]" in ln][0]
+    assert "strikeout" in third.lower(), third
+    # Only the CODE is scanned for their label. A comment is allowed to
+    # name it — explaining why we did not adopt it is the whole point of
+    # the note — and an earlier version of this test failed on its own
+    # explanation, which is a test reading the wrong thing.
+    code = "\n".join(ln for ln in block.splitlines()
+                     if not ln.strip().startswith("//"))
+    assert "extra base" not in code.lower()
+
+
+def test_the_factors_name_the_baseline_they_are_measured_against():
+    """0.92 means nothing without the 1.00 it is against, and the render
+    prints that on every tile."""
+    at = APP.index("function pbpParkFactsHTML")
+    block = APP[at:at + 1900]
+    assert "1.00" in block and "avg" in block.lower()
 
 
 # ---------------------------------------------------------------- photo ---
@@ -249,9 +270,13 @@ def test_the_real_fence_still_decides_whether_it_is_gone():
 
 def test_the_marks_on_the_photo_are_this_parks_numbers():
     at = APP.index("function pbpPhotoHTML")
-    block = APP[at:at + 1600]
+    block = APP[at:at + 2400]
     assert 'p[key + "_ft"]' in block
     assert "PBP_PHOTO.lf" in block and "PBP_PHOTO.rf" in block
+    # The chip carries the position too, and it is DERIVED from the field
+    # that supplied the number — so a label can never end up over the
+    # wrong distance.
+    assert "key.toUpperCase()" in block
 
 
 if __name__ == "__main__":
