@@ -32606,7 +32606,15 @@ function pbpParkHeadHTML(league, boardGame) {
     const rel = PBP_WIND[w.wind_dir] || "";
     bits.push(`${Math.round(w.wind_mph)} mph${rel ? " " + rel : ""}`);
   }
-  if (w.dome) bits.push("roof closed");
+  // Adjective first, and not by preference: the OTHER word order is a
+  // reason prefix in engine/knowledge.py. That registry is the site's
+  // single home for classifying a reason, and the browser is forbidden
+  // from carrying its keys so a mirrored classifier can never drift from
+  // it — tests/test_knowledge.py enforces that against this file, which
+  // is how the first spelling of this line was caught. A weather label
+  // is not a reason and has no business colliding with one. The game
+  // page already words the same fact this way round.
+  if (w.dome) bits.push("closed roof");
   if (!name && !bits.length) return "";
   // THE LOCKUP AND THE VENUE PILL (Ethan's render, 2026-09-06). His
   // header is our mark beside the section name on the left and the venue

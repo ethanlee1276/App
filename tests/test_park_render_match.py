@@ -210,7 +210,10 @@ def test_the_wind_is_spelled_the_way_a_person_says_it():
 
 def test_a_closed_roof_is_said_out_loud():
     body = _fn("pbpParkHeadHTML")
-    assert "w.dome" in body and "roof closed" in body
+    assert "w.dome" in body and "closed roof" in body
+    # The other word order is a reason prefix the browser may not carry;
+    # tests/test_knowledge.py owns that rule and caught this in the gate.
+    assert '"roof closed"' not in body
 
 
 # -------------------------------------------------------------- the tiles ---
