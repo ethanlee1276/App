@@ -739,3 +739,26 @@ sudo -u qellys python3 launch.py --why-open | head -40
   is still open after the ingest is a team-key mismatch, not a missing
   result: check `python3 -c "from engine import cfbteams; print(len(cfbteams.load_ids()))"`
   is in the hundreds, and that no `games` row for 2026 is keyed `espn:`.
+
+If the college scope shows **no bets at all** rather than open ones, the
+picks were never journaled, which is a different fault with its own
+answer. A pick is skipped when it is not recommended, has no real book
+price, is a long shot (its own bucket), or is sized at 0.00 units — and
+`engine/probation.unstake` zeroes every college size while the ratings
+are unfitted, which is exactly the state the missing results caused.
+
+```bash
+cd /srv/qellys
+python3 -c "
+import sqlite3; c = sqlite3.connect('data/ledger.db')
+print(c.execute(\"SELECT category, status, COUNT(*) FROM bets \"
+                \"WHERE sport='cfb' GROUP BY 1,2\").fetchall())"
+sudo -u qellys python3 launch.py --why-pick "<a player on tonight's college board>" cfb
+```
+
+* Rows in `main` that are open: the results were missing — §11 above.
+* Rows only in `likely` or `longshot`: the edge board staked nothing, so
+  nothing reached the main book. `--why-pick` names the reason for one
+  pick — "stake is 0.00u" with a probation note is the sport being
+  gated rather than the pick being refused.
+* No rows at all: the board recommended nothing that day.
