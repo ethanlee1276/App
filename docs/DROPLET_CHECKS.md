@@ -825,3 +825,35 @@ sudo -u qellys python3 launch.py --why-open | head -30
   player props, not `total` rows.
 * The college ratings must not move: `python3 launch.py --check` still
   reports the same margin spread and home-field edge it did before.
+
+## 14. Is the claimed edge noise everywhere, or only on average?
+
+Ethan, 2026-09-06: the line every settle pass prints — `edge test:
+n=562 claimed-edge AUC 0.463 [0.414, 0.512] -> edge_is_noise`. That is
+one number over six sports and a dozen markets, and a pooled coin flip
+has three explanations with three different answers: every slice is a
+coin flip, one slice carries the signal and the rest dilute it away, or
+two slices point opposite ways and cancel. `stakecheck --info` now cuts
+it.
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 stakecheck.py --info
+```
+
+* Read the BY SLICE table under the pooled reading. `q` is the
+  Benjamini-Hochberg q-value across every slice tested — a slice is only
+  a finding if it is starred, and a raw p under 0.05 with a q above it
+  means exactly one thing: that slice looked good because several were
+  looked at.
+* A slice under 60 settled bets is listed as too thin and is NOT tested.
+  That is deliberate: adding it to the family would make every other
+  slice harder to call, and its own interval would be wider than any
+  effect worth acting on.
+* If nothing survives, the pooled verdict stands per slice as well, and
+  the honest reading is that selecting on claimed edge is selecting on
+  noise anywhere we have enough bets to check.
+* If something survives, that is where edge selection is doing work.
+  Send it to me before changing any gate — one survivor out of a dozen
+  at FDR 0.05 is still a one-in-twenty story, and the next thing to do
+  is preregister it (`engine/prereg.py`) rather than act on it.

@@ -344,6 +344,30 @@ def info_report(rows: list[dict]) -> None:
         print(f"\n    The market out-ranks the model on our own chosen "
               f"spots. The\n    price knows more about these bets than we "
               f"do.")
+
+    # --- and the same question, sliced ----------------------------------
+    # A pooled coin flip has three explanations with three different
+    # answers: every slice is a coin flip, one slice carries the signal
+    # and the rest dilute it, or two cancel. See engine/edgeslices.py for
+    # why the family is every slice tested and not the best-looking one.
+    from engine.edgeslices import by_slice, reading
+    sl = by_slice(use)
+    print(f"\n  BY SLICE  —  {len(sl['tested'])} tested at {sl['min_n']}+ "
+          f"settled bets, one Benjamini-Hochberg\n  family at FDR "
+          f"{sl['alpha']}. A slice too thin to ask is listed, not tested.")
+    if sl["tested"]:
+        print(f"\n    {'slice':<26}{'n':>5}  {'edge AUC':>9}  "
+              f"{'95% CI':>16}  {'q':>6}")
+        for t in sorted(sl["tested"], key=lambda t: t["p"]):
+            ci = (f"[{t['auc_edge_lo']:.3f}, {t['auc_edge_hi']:.3f}]"
+                  if t["auc_edge_lo"] is not None else "—")
+            mark = "  *" if t.get("survives") else ""
+            print(f"    {t['key'] + ' ' + t['value']:<26}{t['n']:>5}  "
+                  f"{t['auc_edge']:>9.3f}  {ci:>16}  {t.get('q'):>6}{mark}")
+    if sl["thin"]:
+        print("\n    too thin to ask: " + ", ".join(
+            f"{t['key']} {t['value']} (n={t['n']})" for t in sl["thin"][:8]))
+    print(f"\n    {reading(sl)}")
     print(f"\n  read-only; nothing was written.\n")
 
 
