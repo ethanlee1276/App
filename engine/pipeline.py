@@ -778,7 +778,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # §9/§10 — correlation flags, incoherent-pair rejection, exposure caps.
     # Runs AFTER ranking and BEFORE counts, so a rejected pick never counts
     # as recommended and capped stakes are what the page (and journal) see.
-    from .census import census as _census
+    from .census import census as _census, bar_notes as _bar_notes
     from .correlation import flag_correlations, apply_exposure_caps
     corr = flag_correlations(results)
     corr["cap_notes"] = apply_exposure_caps(results, game_bets)
@@ -806,6 +806,14 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # is excluded here — every row counted is a row this board tried
         # to recommend.
         "gate_census": _census(results, sport="nfl"),
+        # …AND WHETHER THE BAR THE FUNNEL BLAMES CAN BE CLEARED AT ALL.
+        # "edge under the minimum" reads as "the model looked and liked
+        # nothing", which is one of two very different facts: the
+        # selection haircut is applied to `edge` before the tier bar, so
+        # a large enough haircut makes the bar unreachable and a shut
+        # market renders exactly like a quiet night. Empty on every
+        # normal board; see engine/census.bar_notes.
+        "bar_status": _bar_notes("nfl", results),
         "config": {
             "min_confidence": config.min_confidence,
             "min_edge": config.min_edge,

@@ -45,6 +45,44 @@ GATE_WORDS = {
 NO_PRICE = "no_real_price"
 
 
+def bar_notes(sport: str, rows: list[dict] | None = None,
+              markets=None) -> list[str]:
+    """One sentence per market that CANNOT clear its own minimum edge.
+
+    THE CASE THIS EXISTS FOR. A funnel that says "edge under the minimum"
+    is telling the reader the model looked and did not like anything.
+    That is one of two very different facts, and the board could not tell
+    them apart: `betting.evaluate_prop` applies the selection haircut to
+    `edge` before comparing it to the tier bar, so a large enough haircut
+    makes the bar unreachable — no read, however good, can clear it — and
+    the board renders that exactly like a quiet night.
+
+    `quality.bar_reachable` computes the best edge a credible prop can
+    still show; when that is under the bar, this says so with both
+    numbers, because the fix is an operator decision about the bar and
+    the operator needs to see the arithmetic.
+
+    Tier 3 is skipped: it is over its own ceiling on purpose (see
+    `quality.TIER_MIN_EDGE`) and would print every cycle forever.
+    """
+    from .quality import bar_reachable, market_tier
+    if markets is None:
+        markets = sorted({str(r.get("market") or "") for r in (rows or [])})
+    out = []
+    for market in markets:
+        if not market or market_tier(market) == 3:
+            continue
+        ok, best, bar = bar_reachable(sport, market)
+        if not ok:
+            out.append(
+                f"{market}: no bet is possible at any price — the best edge a "
+                f"credible read can show is {best * 100:.1f}% against a "
+                f"{bar * 100:.1f}% minimum. The selection haircut is applied "
+                f"before the bar, so the bar is unreachable rather than "
+                f"strict.")
+    return out
+
+
 def census(rows: list[dict], skip=None, sport: str = "") -> dict:
     """``{bucket: count}`` over a board's recommendation rows.
 

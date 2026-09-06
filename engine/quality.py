@@ -56,6 +56,79 @@ TIER_SHRINK = {1: 0.50, 2: 0.45, 3: 0.30}
 # on the Long Shots board with its own measured tier, never main picks.
 TIER_MIN_EDGE = {1: 0.025, 2: 0.030, 3: 0.060}
 
+#: THE WINDOW THE BAR ACTUALLY LEAVES, and why it needs a function rather
+#: than the arithmetic in the comment above.
+#:
+#: That comment computes the largest believable post-haircut edge as
+#: ``MAX_CREDIBLE_EDGE × shrink`` — 5.0% in Tier 1, 4.5% in Tier 2 — and
+#: sets each bar inside it. That was exact on 2026-07-29 and it is not
+#: exact now: `engine.selectionfit` shipped on 2026-08-12 and
+#: `betting.evaluate_prop` applies its haircut to `edge` IMMEDIATELY
+#: AFTER the tier shrink and BEFORE this bar is compared. So the window
+#: the bar has to sit inside is narrower than the comment's arithmetic
+#: by however much the live haircut is worth, and nothing re-derives it.
+#:
+#: Measured against the shipped code (see tests/test_bar_reachable.py):
+#: at a haircut worth 2.5 probability points, Tier 2 — pass_yds, the only
+#: Tier 2 market the NFL still prices — cannot produce a bet at ANY book
+#: price between .30 and .70. At 4.2 points neither tier can, anywhere in
+#: that range. The over-claim that motivated the haircut was measured at
+#: 9-10 points.
+#:
+#: This is the failure the 2026-07-29 re-tune was written to prevent —
+#: "the tier is mathematically closed rather than disciplined" — arriving
+#: by a different door, and it is invisible: a closed tier and a tier
+#: that merely found nothing both render as "no qualifying plays". The
+#: bars are an operator call and this does not change them. It makes the
+#: closure SAYABLE.
+def best_possible_edge(market: str, shift: float = 0.0,
+                       fair: float = 0.50) -> float:
+    """The largest edge a CREDIBLE prop in this market can still show.
+
+    The chain a real row walks, at its most favourable point: a raw
+    disagreement exactly at the credibility ceiling, shrunk by the
+    market's tier, then moved by the live selection haircut.
+    """
+    from .betting import MAX_CREDIBLE_EDGE
+    from .selectionfit import shift_prob
+    hit = fair + tier_shrink(market) * min(MAX_CREDIBLE_EDGE,
+                                           max(0.0, 0.999 - fair))
+    return (hit - fair) + (shift_prob(hit, shift) - hit)
+
+
+def bar_reachable(sport: str, market: str, fair: float = 0.50,
+                  shift: float | None = None) -> tuple[bool, float, float]:
+    """``(reachable, best_possible_edge, the bar)`` for this market.
+
+    ``reachable`` False means no prop in this market can clear its own
+    minimum however good the read is — the board is not being selective,
+    it is shut. Tier 3 answers False BY DESIGN (touchdown and home-run
+    markets are quarantined to the Long Shots board, see TIER_MIN_EDGE);
+    callers that only care about the main board should skip Tier 3.
+    """
+    if shift is None:
+        from .selectionfit import shift_for
+        shift = shift_for(sport)
+    best = best_possible_edge(market, shift, fair)
+    bar = tier_min_edge(market)
+    return best >= bar, best, bar
+
+
+def unreachable_markets(sport: str, markets, fair: float = 0.50) -> list[str]:
+    """Which of these markets cannot clear their own bar right now.
+
+    Tier 3 is excluded: it is shut on purpose and reporting it every
+    cycle would bury the one case worth reading.
+    """
+    out = []
+    for m in markets or ():
+        if market_tier(m) == 3:
+            continue
+        ok, _best, _bar = bar_reachable(sport, m, fair)
+        if not ok:
+            out.append(m)
+    return out
+
 VOLATILITY = {
     "receptions": "LOW",
     "pass_yds": "MEDIUM",          # lowest CV of the yardage family
