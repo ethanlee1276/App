@@ -149,6 +149,18 @@ def test_an_empty_sport_scope_is_the_empty_state_and_nothing_else():
     rooms = _fn("_recordRooms")
     assert "recLossPatternsSection(d.loss_patterns, scoped ? scope : null)" in rooms
 
+
+def test_the_calibration_rooms_second_table_is_folded_under_its_heading():
+    """"Current model only" drew the whole calibration table, chart and
+    scores a second time under the first. The heading stays (it is the
+    minor rank the organization test pins); the rows open on a tap."""
+    c = _fn("recCalibrationSection")
+    assert '<div class="section-title minor">Current model only' in c
+    i = c.index('<details class="rec-epoch rec-fold">')
+    assert "Open the current model’s own buckets, chart and scores" in c[i:i + 200]
+    assert "calBucketRows(era.buckets)" in c[i:] and "calScoreBlock(era)" in c[i:]
+    assert ".rec-fold > .card" in CSS
+
 if __name__ == "__main__":
     import traceback
     fails = 0

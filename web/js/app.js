@@ -11466,13 +11466,20 @@ function recCalibrationSection(cal, era) {
       earned by gates that no longer exist. The current model gets its own chart here once
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
       these misses back into the model’s tempering.</p>`;
+  // FOLDED. The era's table is the whole table again — eight rows, a
+  // chart and three scores, a second time, on a phone (2026-09-06:
+  // "everything seems cluttered"). Its heading stays where it was and
+  // says what is inside; the rows open on a tap.
   const eraBlock = eraN >= 50 ? `
     <div class="section-title minor">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
-    <div class="card" style="padding:0">${calBucketRows(era.buckets)}
-      <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
-        ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>` : "";
+    <details class="rec-epoch rec-fold">
+      <summary>Open the current model’s own buckets, chart and scores</summary>
+      <div class="card" style="padding:0">${calBucketRows(era.buckets)}
+        <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+          ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>
+    </details>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model’s claimed probability.</span></div>
     <div class="card" style="padding:0">${rows}${diagramBlock}${brier}${eraNote}</div>

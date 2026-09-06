@@ -2264,6 +2264,9 @@ select.calc-in { width: auto; font-weight: 600; }
   margin-top: 7px;
 }
 .rec-epoch strong { color: var(--text); }
+/* A folded duplicate (the calibration room's current-model table): the
+   card inside gets the room's normal margin once it is open. */
+.rec-fold > .card { margin-top: 10px; }
 
 /* A MARK ON A SECTION TITLE, from the same render. Used sparingly and
    only where the render asks for it — a page whose every heading wears a
