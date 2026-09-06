@@ -134,6 +134,14 @@ def test_nothing_new_slipped_in_above_the_picks():
                # hidden unless the sidebar switch is on — zero fold cost
                # in the default state.
                "parlay-mode", "parlays-title", "parlays-sub", "parlays-body",
+               # The screen's SECOND pool (2026-09-06), run over the Most
+               # Likely board. Same container, same switch, same zero fold
+               # cost in the default state — `#parlay-mode` is `hidden`
+               # until the sidebar toggle is on, and these two ids live
+               # inside it. Written here rather than waved through
+               # because that is what this list is for: the cost is
+               # nothing, and somebody still had to say so on purpose.
+               "likely-parlays-title", "likely-parlays-body",
                # slate-horizon (2026-08-14): says WHEN the strip above is,
                # when that is not now. Costs ZERO fold in the state this
                # test is measuring — `renderSlateHorizon` returns before

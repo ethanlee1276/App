@@ -2090,6 +2090,12 @@ function renderAll() {
   renderLongShots();
   renderLikely();
   renderParlays();
+  /* THE SECOND POOL. Paper measuring paper — the legs are ranked leans
+     rather than bets — so it is drawn under its own heading and never
+     mixed into the block above it. A reader who cannot tell the two
+     records apart on the page has the same problem the journal would
+     have had without its `source` column. */
+  renderParlays("likely_parlays", "likely-parlays-body");
   renderTrending();
   renderPlayers();
   // A deep link into a game lands before the slate has loaded, and the
@@ -6546,10 +6552,16 @@ function renderLongShots() {
    doing. And it must never show a stake: §13 puts parlays on the same
    probation as CFB and WNBA — graded, never staked, until 100 tickets clear
    ROI, CLV and z, and until the singles board clears its own bar first. */
-function renderParlays() {
-  const host = document.getElementById("parlays-body");
+function renderParlays(key = "parlays", hostId = "parlays-body") {
+  /* PARAMETERISED RATHER THAN COPIED, because the screen learned to run
+     over a second board on 2026-09-06 and the alternative was two
+     renderers drifting apart. Everything below is identical for both
+     pools — the doctrine, the verdict, the probation note, the cards —
+     because the SCREEN is identical; only the legs it was handed differ,
+     and the payload says which. */
+  const host = document.getElementById(hostId);
   if (!host) return;
-  const z = state.data.parlays;
+  const z = state.data[key];
 
   /* A slate built before this module existed, or by a builder that has no
      screen wired in, has no `parlays` key at all. Saying so beats rendering
