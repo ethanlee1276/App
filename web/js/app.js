@@ -28102,7 +28102,7 @@ function _switchViewNow(name, push, dir) {
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
   if (wallBlocked(name)) { name = "paywall"; dir = 0; }
-  if (NO_TOUR_VIEWS.includes(name) && typeof tourHide === "function") tourHide();
+  if (noTourViews().includes(name)) tourHide();
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
@@ -32914,8 +32914,22 @@ async function renderLiveBoard() {
    that comes up while a card is open takes the card down without
    marking anything. */
 const TOUR_KEY = "qb.tour";                 // "done" once finished or dismissed
-const NO_TOUR_VIEWS = ["paywall", "signup", "checkout"];
-let _tourTimer = null;
+// `var`, THE ONLY ONE IN THE FILE, AND FOR THE SAME REASON AS THE FUNCTION
+// BELOW: tourHide runs from the view switch during boot, above this line,
+// and clearTimeout on a `let` still in its dead zone is the same throw
+// as the const was. A `var` is hoisted as undefined, which clearTimeout
+// accepts.
+var _tourTimer = null;
+
+/* The views the tour never opens over. A FUNCTION, NOT A CONST, ON
+   PURPOSE: the view switch reads this, and the view switch runs during
+   boot — from the hash router and the account restore, both of which
+   sit above this block in the file — so a `const` here was in its
+   temporal dead zone when they ran. That took the whole site down on
+   2026-09-06 ("Cannot access 'NO_TOUR_VIEWS' before initialization"
+   on every load). A function declaration is hoisted and has no dead
+   zone. tests/test_tour_never.py pins the shape. */
+function noTourViews() { return ["paywall", "signup", "checkout"]; }
 
 function tourSteps() {
   return [
@@ -32958,11 +32972,11 @@ function tourMaybe() {
   catch (e) {}
   if (!tourDue({ stored, hash: location.hash, isStatic: state.static,
                  view: state.view, standalone: STANDALONE_MODES,
-                 wall: NO_TOUR_VIEWS })) return;
+                 wall: noTourViews() })) return;
   clearTimeout(_tourTimer);
   _tourTimer = setTimeout(() => {
     _tourTimer = null;
-    if (!NO_TOUR_VIEWS.includes(state.view)) tourOpen(0);
+    if (!noTourViews().includes(state.view)) tourOpen(0);
   }, 900);
 }
 

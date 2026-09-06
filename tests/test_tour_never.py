@@ -84,19 +84,21 @@ def test_every_card_carries_never_show_again_and_only_it_or_done_remembers():
     assert 'else {\n    try { sessionStorage.setItem(TOUR_KEY, "later"); }' in cl
     mb = _fn("tourMaybe")
     assert 'if (stored !== "done" && sessionStorage.getItem(TOUR_KEY) === "later") stored = "later";' in mb
-    assert "wall: NO_TOUR_VIEWS" in mb
-    assert 'const NO_TOUR_VIEWS = ["paywall", "signup", "checkout"];' in APP
+    assert "wall: noTourViews()" in mb
+    assert 'function noTourViews() { return ["paywall", "signup", "checkout"]; }' in APP
+    assert "const NO_TOUR_VIEWS" not in APP and "NO_TOUR_VIEWS.includes" not in APP, \
+        "a const here is read by the view switch during boot, before it exists"
 
 
 def test_the_wall_cancels_a_pending_tour_and_takes_an_open_one_down():
     mb = _fn("tourMaybe")
-    assert "if (!NO_TOUR_VIEWS.includes(state.view)) tourOpen(0);" in mb, "checked when the timer fires, not when it was set"
+    assert "if (!noTourViews().includes(state.view)) tourOpen(0);" in mb, "checked when the timer fires, not when it was set"
     assert "clearTimeout(_tourTimer);" in mb
     hd = _fn("tourHide")
     assert "clearTimeout(_tourTimer);" in hd and "ov.remove();" in hd and "lockScroll(false);" in hd
     assert "localStorage" not in hd and "sessionStorage" not in hd, "taking it down decides nothing"
     sw = _fn("_switchViewNow")
-    assert 'if (wallBlocked(name)) { name = "paywall"; dir = 0; }\n  if (NO_TOUR_VIEWS.includes(name) && typeof tourHide === "function") tourHide();' in sw
+    assert 'if (wallBlocked(name)) { name = "paywall"; dir = 0; }\n  if (noTourViews().includes(name)) tourHide();' in sw
     assert ".tour-never {" in CSS and ".tour-never:hover, .tour-never:focus-visible" in CSS
 
 
