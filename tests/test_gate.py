@@ -912,6 +912,14 @@ NOT_A_BOARD_WRITER = {
                         "prediction-market flags are NOT in this P&L",
     "live_build.py": "names the model board in the comment explaining why "
                      "it stopped reading scores out of it",
+    "livescore_build.py": "same reason one league over — it names the four "
+                          "model boards in the comment explaining why it "
+                          "stopped reading NFL/CFB/NBA/WNBA scores out of "
+                          "them. Its only writes are web/data/live_*.json, "
+                          "which carry scores and game state and nothing "
+                          "priced; tests/test_live_scores.py asserts that "
+                          "independently rather than taking this sentence "
+                          "on trust",
     "server.py": "its only write is a user profile",
     "standings_build.py": "reads cfb.json for conferences; writes only the "
                           "free standings boards",

@@ -191,7 +191,7 @@ identifier in a commit or any file.
 `mapcheck.py` is step 3 of the weekly sweep, extracted so it runs whether
 or not a Routine ever fires. It parses every implementation map, pulls the
 backticked files and symbols out of each ✅ row, and checks they still
-exist — 133 rows in about two seconds. It runs in CI on every push and
+exist — 132 rows in about two seconds. It runs in CI on every push and
 every night.
 
 It is deliberately the dumb half. It cannot tell whether `engine/rules.py`

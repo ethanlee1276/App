@@ -195,6 +195,9 @@ SECURITY_HEADERS = (
 #: requests a minute, and a limit that trips on normal use gets raised to
 #: infinity by the first person it annoys.
 RATE_READ_PER_MIN = 300
+#: The explainer costs real money per uncached call, so its own bucket
+#: is tighter than the read ceiling: a page's worth of taps a minute.
+RATE_EXPLAIN_PER_MIN = 20
 #: Auth is different: nobody legitimately signs in twenty times a minute.
 #: This sits ON TOP of the per-email throttle in `engine.accounts` — that
 #: one stops guessing at one account, this one stops spraying across many.
@@ -793,6 +796,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._sleeper(parsed.path[len("/api/sleeper/"):].strip("/"))
         if parsed.path in ("/api/record/receipts.csv",):
             return self._receipts_csv()
+        if parsed.path in ("/api/record/day", "/api/record/day/"):
+            return self._record_day(parse_qs(parsed.query))
+        if parsed.path in ("/api/explain", "/api/explain/"):
+            return self._explain(parse_qs(parsed.query))
         if parsed.path in ("/unsubscribe", "/unsubscribe/"):
             return self._unsubscribe(parse_qs(parsed.query))
         if parsed.path.startswith("/api/profile/"):
@@ -3015,6 +3022,91 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         nothing happens.
         """
         return self._unsubscribe(query)
+
+    def _record_day(self, q):
+        """One slate day's settled picks — the profit calendar's tap.
+
+        Ethan, 2026-09-05: "a profit calendar on record page ... tap a day
+        to see its bets." The calendar's cells come from record.json's
+        curve; the rows behind a cell are asked for here, one day at a
+        time, rather than shipping every settled row in the record file.
+
+        NOT GATED, for the reason `_receipts_csv` gives: every row is
+        settled, public, and the evidence the subscription is sold on.
+        `sport` narrows to the page's scope; empty means every league.
+        """
+        import re as _re
+        date = (q.get("date") or [""])[0][:10]
+        sport = (q.get("sport") or [""])[0].lower()[:5]
+        if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            return self._send(400, b'{"error":"date must be YYYY-MM-DD"}', ".json")
+        if sport and not _re.fullmatch(r"[a-z]{2,5}", sport):
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        try:
+            from engine import ledger as L
+            conn = L.connect()
+            try:
+                rows = L.settled_on(conn, date, sport=sport or None)
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"record unavailable"}', ".json")
+        net = round(sum((r.get("pnl_units") or 0) for r in rows), 2)
+        out = {"date": date, "sport": sport, "rows": rows, "net_units": net}
+        return self._send(200, json.dumps(out).encode(), ".json")
+
+    def _explain(self, q):
+        """One pick in plain English — engine/explainer, behind a tap.
+
+        Ethan, 2026-09-05: "a plain English explainer per pick." GATED
+        like the board it reads from: the answer restates a paid row's
+        numbers, and an uncached call spends money, so a stranger gets
+        401 and a lapsed account 402 before anything is read or spent.
+        The board is named the way the page names it (the public file's
+        name, resolved through `gate.full_board_file` so an unknown or
+        climbing name is a 400 and never a path); the pick is the page's
+        own id. Not configured — no model name or key in the service's
+        environment, or the SDK not installed — is 503 with
+        `configured: false`, which the page turns into a sentence rather
+        than a spinner. The answer is cached per build (engine/explainer),
+        so only the first reader of a pick waits on the model.
+        """
+        if self._rate_limited(RATE_EXPLAIN_PER_MIN, "explain"):
+            return
+        board = (q.get("board") or [""])[0][:80]
+        pick = (q.get("pick") or [""])[0][:240]
+        from engine import gate as GATE_
+        if not pick or GATE_.full_board_file(board) is None:
+            return self._send(400, b'{"error":"board and pick are required"}', ".json")
+        A = _acct()
+        conn = A.connect()
+        try:
+            who = self._account(conn)
+            if not self._entitled(conn, who):
+                locked = {"error": "The explainer needs a subscription.",
+                          "signed_in": bool(who), "locked": True}
+                return self._send(401 if not who else 402,
+                                  json.dumps(locked).encode(), ".json")
+        finally:
+            conn.close()
+        from engine import explainer as EX
+        if not EX.configured():
+            return self._send(503, b'{"error":"explainer not configured","configured":false}',
+                              ".json")
+        payload = GATE_.full_board(board)
+        if payload is None:
+            return self._send(404, b'{"error":"no such board"}', ".json")
+        try:
+            out = EX.explain(board, payload, pick)
+        except KeyError:
+            return self._send(404, b'{"error":"that pick is not on this board"}', ".json")
+        except EX.NotConfigured:
+            return self._send(503, b'{"error":"explainer not configured","configured":false}',
+                              ".json")
+        except EX.Unavailable as exc:
+            body = {"error": "explainer unavailable", "detail": str(exc)[:200]}
+            return self._send(503, json.dumps(body).encode(), ".json")
+        return self._send(200, json.dumps(out).encode(), ".json")
 
     def _receipts_csv(self):
         """Every settled pick, as a file somebody can open in a spreadsheet.

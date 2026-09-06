@@ -303,14 +303,24 @@ def test_the_roster_carries_a_face_for_the_current_season():
 
 def test_the_stats_source_still_wins_over_the_roster():
     """Order matters: this season's stats, then the roster, then last
-    season. A face from a played game is the most current thing available."""
+    season. A face from a played game is the most current thing available.
+
+    THE MIDDLE SOURCE IS `headshot_map` NOW, not `roster`. Same file,
+    same season, no status filter — `roster_index` drops everything but
+    ACT so it can decide who gets a prop BUILT, and reading faces out of
+    it sent every man on IR, PUP, the practice squad or suspended to
+    last season's photograph (Ethan, 2026-09-04: "a lot are last year
+    headshots"). The ORDER this test defends is unchanged and is still
+    the point; only the middle term got wider."""
     import inspect
     from engine.sources import nflverse as nv
     src = inspect.getsource(nv.build_slate)
     i = src.index("headshots: dict[str, str] = {}")
     block = src[i:i + 900]
-    assert block.index("for r in list(stats)") < block.index("for name, row in roster.items()")
-    assert block.index("for name, row in roster.items()") < block.index("prior_stats")
+    assert block.index("for r in list(stats)") < block.index("headshot_map(season)")
+    assert block.index("headshot_map(season)") < block.index("prior_stats")
+    assert "for name, row in roster.items()" not in block, \
+        "the ACT-filtered roster is feeding faces again"
 
 
 # --- which mark a bet wears -------------------------------------------------

@@ -816,6 +816,41 @@ def calibrated(sport: str, market: str, p: float,
     return apply_temperature(p, temp, bias)
 
 
+#: Markets a measurement has SHUT, and the measurement that shut them.
+#:
+#: `is_reliable` below is the board's per-market gate, and it answers from
+#: a fitted store: a market with no stored curve falls through to the
+#: neutral default and is allowed. That makes a finding depend on a file
+#: continuing to exist. These two do not: they were measured against real
+#: harvested closes and cannot rank a hit above a miss, and the fix was
+#: measured and declined, so nothing about a missing file makes them
+#: priceable again. See engine/yardagefit.py for the distribution
+#: analysis and engine/formcheck.py for the AUCs.
+#:
+#: This is a claim about OUR pricing of these markets, not about the
+#: markets themselves. Re-measure and delete the entry the day the
+#: distribution is fixed — a zero-inflated lognormal was specified and
+#: declined on 2026-08-14, and until something replaces it the honest
+#: board does not offer these.
+SHUT_MARKETS = {
+    ("nfl", "rush_yds"): (
+        "rushing yards is shut: AUC 0.479 against real closes (no ability "
+        "to beat a line), the fitted temperature pinned to the edge of its "
+        "grid, and the isotonic curve saturated so hard that every pick "
+        "was an UNDER by construction"),
+    ("nfl", "rec_yds"): (
+        "receiving yards is shut: AUC 0.47 against real closes, the same "
+        "normal-distribution error as rushing yards — the model ranks the "
+        "yardage well and cannot price the line"),
+}
+
+
+def shut_reason(sport: str, market: str) -> str:
+    """Why this market is off the board, or "" if it is on it."""
+    return SHUT_MARKETS.get((str(sport or "").lower(),
+                             str(market or "").lower()), "")
+
+
 def is_reliable(sport: str, market: str,
                 path: Path | str | None = None) -> bool:
     """False when this market's fit ran to the edge of the search range.
@@ -834,6 +869,15 @@ def is_reliable(sport: str, market: str,
     being a calibration and become a constant side, and a market that can
     only ever be bet one way is not a market this model is pricing. See
     `one_sided`, and the NFL rushing-yards curve that found it."""
+    # A MEASURED SHUT DOES NOT DEPEND ON A FILE. Everything below reads a
+    # fitted store, and a market the store has never heard of falls
+    # through to the neutral default and is allowed — so a finding as
+    # settled as the yardage one held only while its curve happened to be
+    # on the box. Checked before `_enabled` for the same reason: a test
+    # or a tool that disables calibration is not a licence to price a
+    # market nothing can price.
+    if shut_reason(sport, market):
+        return False
     if not _enabled:
         return True
     if one_sided(sport, market, path):

@@ -295,8 +295,10 @@ def test_tonight_is_recommended_only():
     """The distinction from the Edge Board is the whole point of the
     page. Showing everything priced would make it the same table with a
     different heading."""
-    i = APP.index("function renderTonight(")
-    block = APP[i:i + 1200]
+    # The filters moved into `tonightPick` (2026-09-05), the one reader
+    # both the single-league tab and the all-sports page draw from.
+    from _windows import function
+    block = function(APP, "function tonightPick(")
     assert "passesFilters(r)" in block and "passesGameBet(b)" in block
     assert "r._ok" in block and "b._ok" in block
 

@@ -150,7 +150,12 @@ def test_the_header_says_waiting_not_regular_season():
     season · 0 games counted (the league's feed was unavailable)" — we
     never asked the feed, and blaming it would send someone to debug a
     working fetcher."""
-    i = APP.index("d.season_wait")
+    # Anchored on the subtitle assignment itself, not on the first
+    # `d.season_wait` in the file: the rankings wait section (2026-09-05,
+    # tests/test_rankings_never_silent.py) reads the same field and is
+    # defined above renderStandings, so "first occurrence" stopped being
+    # this branch.
+    i = APP.index("sub.textContent = d.season_wait")
     seg = APP[i - 200:i + 400]
     assert "waiting on the ${d.season} season" in seg
     assert "first games" in seg

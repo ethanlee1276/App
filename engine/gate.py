@@ -117,6 +117,18 @@ PAID_KEYS = (
     "market_scan",
     "correlation",
     "parlays",
+    # THE PARLAY ZONE'S SECOND POOL, added the day the screen learned to
+    # run over Most Likely as well (2026-09-06). `parlays` above and
+    # `most_likely` twenty lines up are both paid; a screen over one,
+    # published under a key nobody added here, would hand a paid board's
+    # rows back for free in ticket form.
+    #
+    # THE FOURTH TIME THIS FILE HAS BEEN TAUGHT IT — predmarkets, UFC's
+    # picks/pass_list, board_shelves, now this. The lesson each time is
+    # the same one the comment above already states: a new VIEW of a paid
+    # board is a new KEY, and key-stripping only protects the keys
+    # somebody remembered.
+    "likely_parlays",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found
@@ -278,6 +290,17 @@ FREE_FILES = (
     # the deploy. A registry is only as good as the discipline of adding to
     # it in the same commit as the thing it registers.
     "live_mlb.json",
+    # THE FOUR THE MLB LINE ABOVE WARNED ABOUT, and its warning came true
+    # word for word: livescore_build.py shipped on 2026-09-04 without
+    # these, the dev container never runs the fast loop so the suite
+    # stayed green, and the droplet — where the loop had already written
+    # all four — refused the deploy with "built but unregistered". Free
+    # for the same reason as live_mlb.json: scores and game state only,
+    # nothing priced (tests/test_live_scoreboards.py asserts that rather
+    # than taking this sentence on trust). The same file now asserts
+    # every league the builder writes is registered HERE, so the next
+    # league added cannot repeat this without the sandbox suite saying so.
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
@@ -322,6 +345,7 @@ KNOWN_BOARDS = (
     # was published whole anyway. Right answer, reached by accident.
     "memerecord.json", "heartbeat.json", "feed.json", "sweat.json",
     "streak.json", "bookreport.json", "ufc_live.json", "live_mlb.json",
+    "live_nfl.json", "live_cfb.json", "live_nba.json", "live_wnba.json",
     "rosters_cfb.json", "rosters_mlb.json", "rosters_nba.json",
     "rosters_nfl.json", "rosters_ufc.json", "rosters_wnba.json",
     "standings_cfb.json", "standings_mlb.json", "standings_nba.json",
@@ -379,12 +403,28 @@ def comped(email: str) -> bool:
     return who in listed
 
 
+#: DIRECTORIES whose every JSON file is free. One so far: `pbp/`, one
+#: play-by-play file per live game, named by league and event id
+#: (livescore_build.write_pbp, live_build). The names cannot be listed
+#: in FREE_FILES — a new game is a new name every night — and the
+#: contents are what live_*.json already publishes free, in full:
+#: scores and plays, nothing priced. tests/test_pbp_files.py asserts
+#: that the files carry no paid key rather than taking this on trust.
+FREE_DIRS = ("pbp",)
+
+
 def is_free(name: str) -> bool:
     """True for a board that is published whole. Named files only — an
     unknown board is treated as gated, because the failure directions are
     not symmetric: wrongly gating a free board is a visible annoyance, and
-    wrongly publishing a paid one gives the product away silently."""
-    return Path(str(name)).name in FREE_FILES
+    wrongly publishing a paid one gives the product away silently.
+
+    A file inside one of FREE_DIRS is free by its directory: those are
+    per-game files whose names are not knowable in advance."""
+    p = Path(str(name))
+    if p.name in FREE_FILES:
+        return True
+    return p.suffix == ".json" and p.parent.name in FREE_DIRS
 
 
 def is_wholly_paid(name: str) -> bool:

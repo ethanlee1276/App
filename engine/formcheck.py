@@ -80,26 +80,62 @@ OPPORTUNITY = {
 }
 
 
-def _rows(conn, market: str, seasons=None) -> list:
+def _period_key(raw):
+    """The within-season ordering key, for both shapes a period takes.
+
+    NFL files a WEEK NUMBER — '001' — and this read `int(period)` and
+    `continue`d on anything else. College and baseball file a DATE,
+    '2022-09-03', so every one of their rows was skipped silently and
+    `run` answered "no game logs for this market" for a table holding
+    26,072 of them. A harness that cannot read a sport must say so, not
+    report the sport as barren.
+
+    An ISO date sorts lexicographically in date order and a zero-padded
+    week sorts in week order, so the raw string is a correct key for
+    both. The int is kept for NFL because that is what the existing
+    results are keyed on and there is no reason to move them.
+
+    ``None`` means unusable, which is the one case that should still be
+    dropped — and now it is COUNTED where it is dropped.
+    """
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        text = str(raw).strip()
+        return text or None
+
+
+def _rows(conn, market: str, seasons=None, sport: str = "nfl") -> list:
     """``[(season, week, player, opponent, value, opp)]`` in time order.
 
     ``opp`` is that game's opportunity count for the market (carries for
     rushing, targets for receiving), or None where it was not logged.
+
+    ``sport`` was hardcoded to 'nfl' in the SQL, so this harness could
+    not be pointed at college or baseball at all — `run` returned the
+    same "no game logs" it returns for an empty table.
+
+    Returns ``(rows, unreadable)``. The second number is rows the table
+    HELD and this could not key, which is the finding that used to be
+    indistinguishable from an empty table.
     """
     opp_market = OPPORTUNITY.get(market)
     sql = ("SELECT season, period, player, opponent, market, value "
-           "FROM player_game_logs WHERE sport='nfl' AND market IN (?, ?) ")
-    args: list = [market, opp_market or market]
+           "FROM player_game_logs WHERE sport=? AND market IN (?, ?) ")
+    args: list = [sport, market, opp_market or market]
     if seasons:
         sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
         args.extend(seasons)
     sql += "ORDER BY season, period, player"
     merged: dict = {}
     order: list = []
+    unreadable = 0
     for r in conn.execute(sql, args):
-        try:
-            week = int(r["period"])
-        except (TypeError, ValueError):
+        week = _period_key(r["period"])
+        if week is None:
+            unreadable += 1
             continue
         if r["value"] is None:
             continue
@@ -111,7 +147,7 @@ def _rows(conn, market: str, seasons=None) -> list:
                      and market != opp_market) else 0
         merged[key][slot] = float(r["value"])
     return [(k[0], k[1], k[2], k[3], merged[k][0], merged[k][1])
-            for k in order if merged[k][0] is not None]
+            for k in order if merged[k][0] is not None], unreadable
 
 
 def _mean(vals) -> float | None:
@@ -221,12 +257,28 @@ def predictors(history: list, career: list, vs_opp: list,
 
 
 def run(conn, market: str, seasons=None, min_history: int = MIN_HISTORY,
-        log=None) -> dict:
-    """Score every candidate over every eligible player-week."""
+        log=None, sport: str = "nfl") -> dict:
+    """Score every candidate over every eligible player-week.
+
+    ``sport`` selects both the rows and the curve. It was hardcoded to
+    'nfl' in two places — the SQL and `weights_for` — so college and
+    baseball could not be measured here at all, and asking produced the
+    same "no game logs" an empty table produces.
+    """
     from .formfit import weights_for
-    weights = weights_for("nfl", market)
-    rows = _rows(conn, market, seasons)
+    weights = weights_for(sport, market)
+    rows, unreadable = _rows(conn, market, seasons, sport=sport)
     if not rows:
+        # TWO DIFFERENT FINDINGS, and they used to print one sentence.
+        # A table with nothing in it is a data gap; a table full of rows
+        # this could not key is a bug in the harness, and reporting the
+        # second as the first is how `int(period)` silently discarded
+        # every college and baseball row for as long as it has existed.
+        if unreadable:
+            return {"market": market, "n": 0, "unreadable": unreadable,
+                    "skipped": f"{unreadable:,} row(s) present and none "
+                               f"could be keyed by period — this is a "
+                               f"harness fault, not an empty table"}
         return {"market": market, "n": 0,
                 "skipped": "no game logs for this market"}
 

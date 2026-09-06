@@ -16,6 +16,7 @@ const state = {
     ? new URLSearchParams(location.search).get("sport") : "nfl"),
   static: new URLSearchParams(location.search).has("static"),
   bankroll: null, unitPct: 1.0,      // per-user bankroll sizing (localStorage)
+  lightBoard: false,                 // `data` is the light copy; the full board is still coming
 };
 
 /* ===================== PAYMENT REVIEW MODE =====================
@@ -1026,6 +1027,77 @@ function whenChip(dateStr, kick) {
   return w ? `<span class="chip when">${escapeHtml(w)}</span>` : "";
 }
 
+/* WHEN A BET WAS PLACED, in the reader's zone — "Thu 5:12 PM". The
+   journal stamps UTC without a zone letter, so one is put back before
+   parsing; without it a browser reads the stamp as local time and the
+   clock lands hours off. The weekday goes through the same chosen zone
+   as the clock, or a bet placed at half past midnight in New York would
+   read as Thursday on a Friday. Ethan, 2026-09-05, on twenty riding
+   college bets: "check to see if these picks ... are old or new" — a
+   row that says when it was placed answers that itself. */
+function placedStamp(ts) {
+  if (!ts) return "";
+  const s = String(ts);
+  const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+  if (isNaN(d)) return "";
+  const day = d.toLocaleDateString(undefined, tzOpts({ weekday: "short" }));
+  return `${day} ${tzTime(d)}`;
+}
+
+/* A riding row's own dates: "placed Thu 5:12 PM · game Sat, Sep 5 ·
+   3:30 PM ET". The game's own date leads when the tracker placed the
+   bet on a game; the journal's filing date stands in when it could not. */
+function ridingWhen(b) {
+  const g = (b || {}).game || {};
+  const placed = placedStamp((b || {}).placed_at);
+  const game = whenLabel(g.date || (b || {}).date, g.kickoff);
+  const bits = [placed ? `placed ${placed}` : "", game ? `game ${game}` : ""].filter(Boolean);
+  if (!bits.length) return "";
+  return `<span style="display:block;color:var(--text-mute);font-size:var(--fs-xs);margin-top:2px">${
+    escapeHtml(bits.join(" · "))}</span>`;
+}
+
+/* HAS THIS ROW'S GAME KICKED OFF? The likelihood board had no idea.
+
+   `showableLikelyRow` filters shrink artefacts and the -250 price cap
+   and never looked at kickoff, so a Most Likely row stayed on the page
+   after its game started and until the next rebuild — a pre-game
+   ranking presented as live. The edge board refuses a started game at
+   the rules layer ("this is a pre-game model and cannot price an
+   in-play market"); this board had no equivalent anywhere.
+
+   LABELLED, NOT HIDDEN. Dropping the row would make cards vanish under
+   a reader on the sixty-second refresh, which is Ethan's own complaint
+   from 2026-08-31: "ill be staring at the live page at the open bets
+   and ill scroll and shit then the open bets will just dissapear." A
+   row that changes what it SAYS is honest; a row that disappears while
+   you are reading it is the bug one board over.
+
+   Same rule as `boardlint._started`, deliberately: `live` first, then a
+   timezone-aware kickoff in the past. A naive or unparseable timestamp
+   answers false — an unknown kickoff is not a started game. */
+function likelyStarted(r) {
+  if (!r) return false;
+  if (r.live) return true;
+  const k = String(r.kickoff || r.game_kickoff || "");
+  if (!k) return false;
+  // A bare local timestamp cannot be compared against a clock in another
+  // zone, and guessing the reader's is how a 1pm kickoff reads as
+  // started in London. No offset, no verdict.
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(k)) return false;
+  const t = Date.parse(k);
+  return Number.isFinite(t) && t <= Date.now();
+}
+
+function startedChip(r) {
+  return likelyStarted(r)
+    ? `<span class="chip warn" title="This game is under way. The board ranks
+        pre-game and does not re-price in play — this row is what we thought
+        before kickoff, kept so it does not vanish while you read it.">under
+        way</span>`
+    : "";
+}
+
 /* ---------------- motion ---------------- */
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -1172,6 +1244,14 @@ let _boardFor = null;
    downgrade, and only on a path that reached for the static file because
    the API would not answer — an API that returns a locked board is
    telling us the subscription lapsed, which is the truth and renders. */
+/* THE LIGHT COPY'S NAME, from the board's: data/recommendations.json →
+   recommendations_picks.json (engine/lightboard.SUFFIX). Pure. */
+function lightNameFor(meta) {
+  const f = String((meta || {}).fallback || "");
+  if (!/\.json$/.test(f)) return "";
+  return f.replace(/^data\//, "").replace(/\.json$/, "_picks.json");
+}
+
 function locksAwayWhatWeHold(next, held) {
   return !!(next && next.locked_reason) && !!(held && !held.locked_reason);
 }
@@ -1189,6 +1269,20 @@ async function load(quiet = false) {
   const refreshBtn = document.getElementById("brand-home");
   if (refreshBtn && !quiet) refreshBtn.classList.add("loading");
   const meta = SPORT_META[state.sport];
+  /* THE LOAD THAT LANDS LATE. Ethan, 2026-09-05: "MLB live tab is
+     showing nfl edge and most likely bets and CFB live bets are showing
+     mlb." Every board's tracker is filtered by sport in SQL and every
+     assignment below is identity-guarded, so the only way the MLB tab
+     can draw NFL rows is an NFL load finishing AFTER the button moved
+     to MLB: the 30-second auto-refresh had one in flight, the league
+     switch started another, and whichever answered last won — writing
+     the league just LEFT into `state.data` under the new league's name,
+     until the next refresh put it right. The 8 MB MLB board is the slow
+     one, which is why CFB wore baseball. A load that was asked for one
+     league and finds another in force when it lands is abandoned at
+     every await; the newer load is the one that renders. */
+  const asked = state.sport;
+  const overtaken = () => state.sport !== asked;
   const params = new URLSearchParams({ min_confidence: state.minConf, min_edge: state.minEdge, max_juice: state.maxJuice });
   // When the payload came off disk the server stamps Last-Modified with the
   // build time. That, not the fetch time, is what "how fresh is this?"
@@ -1200,7 +1294,37 @@ async function load(quiet = false) {
     state.builtAt = Number.isFinite(t) ? t : null;
   };
   try {
-    // Cache-busted, and no-store. The poll URL was byte-identical on every
+    /* FIRST PAINT FROM THE LIGHT COPY. Ethan, 2026-09-05: "faster first
+       paint on mlb board". A phone parses the whole board before it draws
+       anything on the MLB tab. Each build now publishes a light copy
+       beside the board — the same picks, games and open bets, without the
+       player-stats table and without the halves of each row only the prop
+       page draws (engine/lightboard) — and this draws it while the full
+       board is still on the wire. Only when nothing is held for THIS
+       league (a cold open, a league switch): a 30-second refresh already
+       has a board on screen and a light one would be a step backwards.
+       Same identity guards as the full load — abandoned at every await if
+       the league moved — and the full board replaces it the moment it
+       lands. A missing light file is a build that has not run since it
+       shipped; the full path below is unchanged, so nothing is lost. */
+    const lightName = lightNameFor(meta);
+    if (lightName && !(state.data && _boardFor === meta.api)) {
+      try {
+        const lr = await paidFetch(lightName);
+        if (overtaken()) return;
+        if (lr.ok) {
+          const lite = normalizeSlate(await lr.json());
+          if (overtaken()) return;
+          if (lite.light === true) {
+            stampFrom(lr);
+            state.data = lite;
+            _boardFor = meta.api;
+            state.lightBoard = true;
+            renderAll();
+          }
+        }
+      } catch (e) { /* the full board below is the answer either way */ }
+    }
     // refresh — same sport, same three slider values — so iOS Safari
     // answered from its own cache and the page could sit on a board from
     // twenty minutes ago while the timer fired happily every 30 seconds.
@@ -1221,11 +1345,16 @@ async function load(quiet = false) {
        empty `state.data` would render a blank board. */
     captureFreshBaseline(meta.api);
     const tag = _boardTags[meta.api];
-    const holding = state.data && _boardFor === meta.api;
+    // A LIGHT BOARD IS NOT SOMETHING TO KEEP. With the light copy on
+    // screen and a tag from an earlier full load of this league, a
+    // revalidation would 304 and the light board would stay up — and
+    // stay up on every poll after it. Held means the FULL board.
+    const holding = state.data && _boardFor === meta.api && !state.lightBoard;
     const res = await fetch(`${meta.api}?${params}&_=${Date.now()}`, {
       cache: "no-store",
       headers: (tag && holding) ? { "If-None-Match": tag } : {},
     });
+    if (overtaken()) return;             // a league switch got here first
     if (res.status === 304 && holding) {
       stampFrom(res);                    // the build time has not moved
     } else if (res.status === 304) {
@@ -1241,8 +1370,11 @@ async function load(quiet = false) {
       const got = res.headers.get("ETag");
       if (got) _boardTags[meta.api] = got; else delete _boardTags[meta.api];
       stampFrom(res);
-      state.data = normalizeSlate(await res.json());
+      const slate = normalizeSlate(await res.json());
+      if (overtaken()) return;           // the body took longer than the switch
+      state.data = slate;
       _boardFor = meta.api;
+      state.lightBoard = false;          // the full board is on screen now
     }
   } catch (e) {
     // The fallback file can be missing too (a sport that has never been
@@ -1284,15 +1416,19 @@ async function load(quiet = false) {
        bug tests/test_board_identity.py exists for. Nothing is faked —
        we keep the board we already fetched, `state.builtAt` is left
        alone, and the freshness chip goes on ageing it honestly. */
+    if (overtaken()) return;
     try {
       const res = await fetch(`${meta.fallback}?_=${Date.now()}`,
                               { cache: "no-store" });
+      if (overtaken()) return;
       if (!res.ok) throw new Error("fallback");
       const slate = normalizeSlate(await res.json());
+      if (overtaken()) return;
       if (!(_boardFor === meta.api && locksAwayWhatWeHold(slate, state.data))) {
         stampFrom(res);
         state.data = slate;
         _boardFor = meta.api;
+        state.lightBoard = false;
       }
     } catch (e2) {
       // Both copies unreachable. Holding this sport's board, the truth
@@ -1300,6 +1436,7 @@ async function load(quiet = false) {
       // MODEL — the exact substitution tests/test_wiredown.py was
       // written about. Holding nothing, or holding another league's
       // board, the empty slate is the honest thing on screen.
+      if (overtaken()) return;
       if (!(_boardFor === meta.api && state.data)) {
         state.builtAt = null;
         state.data = normalizeSlate({ date: "", status: "not built" });
@@ -1310,6 +1447,7 @@ async function load(quiet = false) {
       }
     }
   }
+  if (overtaken()) return;
   renderAll();
   applyFreshPulses();
   state.lastLoad = Date.now();
@@ -1706,6 +1844,34 @@ function updateAgo() {
     : "How long ago the server last rebuilt this board.") + cadence;
 }
 
+/* A RECOMMENDED PROP THIS BOARD DELIBERATELY DOES NOT DRAW.
+   ============================================================
+   `engine/mlb/pipeline.py` stamps `hr_featured` on every home-run prop:
+   true for the three that lead the Long Shots page, false for the rest.
+   "The Long Shots page and the Recommended page show the SAME three, and
+   there is no fourth."
+
+   That is a display rule, not a verdict — a non-featured home run still
+   passed every gate, still carries a stake, and is still journaled. So
+   TWO different chains grew around it and nobody reconciled them:
+
+     tonightSignals().props   passesFilters only  → the "Recommended
+                              bets" tile, the Best Bets picks box
+     renderRecommended        + hr_featured       → the card grid
+     renderTonight            + hr_featured       → the Tonight tab
+
+   On an MLB night whose recommended set is mostly home runs, the tile
+   and the grid sit one above the other on the same page saying different
+   numbers. Ethan, 2026-09-04: "mlb best bets is only showing 2 bets but
+   then it says it has 20 but only showing 2."
+
+   NEITHER NUMBER IS WRONG — twenty were recommended and two belong on
+   this board — and this is the predicate that lets the page say so
+   instead of leaving a reader to find the contradiction. */
+function heldForLongShots(r) {
+  return r.hr_featured === false;
+}
+
 function passesFilters(r) {
   // High Confidence Mode: the sidebar switch narrows the whole board to
   // A-grades (quality >= 80 — the same band the journal grades under).
@@ -1865,6 +2031,14 @@ function renderTalent() {
 function renderAll() {
   const d = state.data;
   if (!d) return;
+  // A BOARD THAT IS NOT THIS LEAGUE'S IS NOT DRAWN. `load()` abandons a
+  // late answer, but the slate has other readers and this is the one
+  // place every board section is drawn from, so the rule is enforced
+  // here too: if the slate in hand was fetched for another league, wait
+  // for the one that was asked for. `_boardFor` is stamped on every
+  // assignment to `state.data` (tests/test_board_identity.py).
+  const _meta = SPORT_META[state.sport];
+  if (_meta && _boardFor && _boardFor !== _meta.api) return;
   // CFB identities arrive WITH the slate, so they have to be picked up
   // here — applySport runs before the fetch and would leave every college
   // helmet drawing in the fallback brand colour.
@@ -1916,6 +2090,12 @@ function renderAll() {
   renderLongShots();
   renderLikely();
   renderParlays();
+  /* THE SECOND POOL. Paper measuring paper — the legs are ranked leans
+     rather than bets — so it is drawn under its own heading and never
+     mixed into the block above it. A reader who cannot tell the two
+     records apart on the page has the same problem the journal would
+     have had without its `source` column. */
+  renderParlays("likely_parlays", "likely-parlays-body");
   renderTrending();
   renderPlayers();
   // A deep link into a game lands before the slate has loaded, and the
@@ -1923,6 +2103,7 @@ function renderAll() {
   // view redrawn once the new data is actually here.
   if (state.view === "game") renderGamePage();
   if (state.view === "prop") renderPropPage();
+  if (state.view === "pbp") renderPbpPage();
   // Rosters live in their own per-sport payload rather than the slate, so
   // nothing above redraws them. Switching leagues while sitting on the tab
   // left the previous league's teams on screen under the new league's
@@ -2256,7 +2437,7 @@ function betMark(r, size = 30) {
    vanishing into the Live tab.
 
    ONE DEFINITION, because two surfaces count these now: the picks box
-   lists them and the "Recommended bets" tile counts them. Two copies of
+   lists them and the "On tonight" tile counts them. Two copies of
    this filter would drift, and the failure mode is a headline that
    disagrees with the list directly underneath it. */
 function ridingBets(sig) {
@@ -2435,7 +2616,7 @@ async function renderBestBets() {
   const sig = tonightSignals();
 
   // ============ SPACE 1: TONIGHT'S PICKS — the actual bets ============
-  // Exactly the bets the "Recommended bets" tile counts — the actionable
+  // Exactly the bets the "On tonight" tile counts — the actionable
   // picks AND the riding ones, which the tile started counting on
   // 2026-08-22. Nothing else is allowed in this box, so it can never
   // contradict the tile again; both sides read `ridingBets()`.
@@ -2548,15 +2729,8 @@ async function renderBestBets() {
       <span style="flex:1;min-width:0"><strong>${b.market === "moneyline"
           ? `${escapeHtml(teamName(b.player))} Moneyline`
           : `${escapeHtml(b.player)} ${escapeHtml(b.side)} ${b.line} ${escapeHtml(b.market_label)}`}</strong>
-        <span class="pick-moved">${icon("warn", 12)} ${cur && cur.odds != null
-          ? `The price has changed since we took this pick — placed at
-             ${american(b.odds)}, now ${american(cur.odds)}${
-             cur.line != null && Number(cur.line) !== Number(b.line)
-               ? ` (line now ${cur.line})` : ""}. It no longer clears the bar
-             at that number: the bet rides as placed, but don’t add more.`
-          : `The price has changed since we took this pick — placed at
-             ${american(b.odds)}, and there is no live quote for this market
-             right now. The bet rides as placed; don’t add more.`}</span>
+        ${ridingWhen(b)}
+        <span class="pick-moved">${icon("warn", 12)} ${ridingMoveCopy(b, cur)}</span>
       </span>
       <span style="text-align:right;white-space:nowrap;font-size:var(--fs-sm);color:var(--text-mute)">
         ${b.stake_units > 0 ? `${Number(b.stake_units).toFixed(2)}u<br>` : ""}riding</span>
@@ -2838,6 +3012,18 @@ function oddsClockHTML() {
   if (os.lines_priced_at && os.lines_priced_at > (os.priced_at || 0)) {
     bits.push(`game lines <b>${clock(os.lines_priced_at)}</b>`);
   }
+  /* AND THE OTHER DIRECTION, which is the one that costs money. College
+     buys player markets one game at a time and only for the games it can
+     afford that cycle; every other game keeps whatever the last pull that
+     reached it left on disk, at any age. So the prop beside a name can be
+     far OLDER than the pull `priced_at` names — the mirror image of the
+     game-lines case above, and the reason Ethan could not tell a wrong
+     price from an old one on 2026-09-04. Shown only when it is actually
+     older, by more than a pull's own cache window, so an ordinary cycle
+     still gets one honest line instead of two. */
+  if (os.player_priced_at && os.player_priced_at < (os.priced_at || 0) - 1800) {
+    bits.push(`player prices <b>${clock(os.player_priced_at)}</b>`);
+  }
   if (opens) {
     bits.push(waiting
       ? `today’s pricing starts <b>${clock(os.window_opens_at)}</b>`
@@ -2984,6 +3170,7 @@ function censusFunnelHTML() {
 }
 
 function renderLivePicks() {
+  buzzOnSettle(((state.data || {}).live_picks) || []);
   const host = document.getElementById("live-picks");
   if (!host) return;
   const rows = (state.data || {}).live_picks || [];
@@ -3228,17 +3415,17 @@ function renderLivePicks() {
         market now <b style="color:${better ? "var(--good)" : "var(--bad)"}">${theirs}</b>
         · you have ${mine} · <span style="opacity:.85">live line, no forecast</span></span>`;
   };
-  const nLive = rows.filter((r) => r.phase === "live").length;
-
-  host.innerHTML = `
-    <div class="section-title">${nLive
-        ? `<span style="color:var(--bad)">${icon('dot')}</span>`
-        : `<span style="color:var(--brand)">${icon('dot')}</span>`} Open bets
-      <span class="sub">— every journaled bet on today’s card: live with real-time progress,
-      finished awaiting the official settle, or waiting on first pitch. Never new in-play
-      bets — everything here was placed pre-game.</span></div>
-    <div class="card" style="padding:0;border-left:3px solid ${nLive ? "var(--bad)" : "var(--brand)"}">
-      ${/* ---- AN OPEN BET IS A DOOR TOO -------------------------------
+  /* TWO PANELS, NOT ONE LIST. Ethan, 2026-09-05: "the most likley bets
+     should also show in the live page, we need to have two seperate
+     pages in the live page, one for edge bets, and one for most likley
+     bets." Most Likely rows journal with category='likely' and the
+     tracker now selects them; they are a different product from an
+     edge bet — a read on who hits, flat-staked, no dollar exposure — so
+     mixing the two in one list would make the count on the edge panel
+     wrong and the likelihood rows look like bets we sized. */
+  const edge = rows.filter((r) => r.category !== "likely");
+  const likely = rows.filter((r) => r.category === "likely");
+  /* ---- AN OPEN BET IS A DOOR TOO -------------------------------
             Ethan, 2026-08-23, with the list circled: "I should be able
             too click on these bets and it pulls up the bar graphs of the
             stats and shit just like every other player like cmon man."
@@ -3261,8 +3448,8 @@ function renderLivePicks() {
 
             Nothing new was needed. It is used here rather than
             reimplemented so the next list to grow rows like these has one
-            function to reach for instead of a fourth variation. */""}
-      ${rows.map((r) => ((door) => `
+            function to reach for instead of a fourth variation. */
+  const rowHTML = (r) => ((door, placed) => `
         <div class="${door ? "openable" : ""}"${door}
              style="display:flex;gap:12px;align-items:center;padding:11px 14px;
                     border-bottom:1px solid rgba(255,255,255,.05)${r.phase === "upcoming" ? ";opacity:.75" : ""}">
@@ -3272,10 +3459,11 @@ function renderLivePicks() {
           <span style="flex:1;min-width:0">
             <strong>${betTxt(r)}</strong>
             <span style="color:var(--text-mute)"> · placed ${american(r.odds)}${
-              r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
+              placed ? ` · ${escapeHtml(placed)}` : ""}${
+              r.category !== "likely" && r.stake_units > 0 ? ` · ${Number(r.stake_units).toFixed(2)}u` : ""}</span>
             <span style="display:block;color:var(--text-mute);font-size:var(--fs-sm);margin-top:2px">${gameLine(r.game)}</span>
             ${situationLine(r)}
-            ${offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
+            ${r.category !== "likely" && offBoard(r) ? `<span style="display:block;font-size:var(--fs-xs);color:var(--warn);margin-top:2px">
               ${icon('warn')} the price has moved off the bar since this was journaled — riding at
               ${american(r.odds)} as placed (also listed under Tonight’s Picks).</span>` : ""}
             ${progressBar(r)}
@@ -3284,16 +3472,39 @@ function renderLivePicks() {
             ${betTrack(r)}
           </span>
           <span style="text-align:right;white-space:nowrap">${statusBits(r)}</span>
-        </div>`)(ridingAttrs(r))).join("")}
-      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">
-        ${rows.length} open bet(s) on today’s card${elsewhere
+        </div>`)(ridingAttrs(r), placedStamp(r.placed_at));
+  const panel = (list, title, sub, empty, foot) => {
+    const n = list.filter((r) => r.phase === "live").length;
+    return `
+    <div class="section-title">${n
+        ? `<span style="color:var(--bad)">${icon('dot')}</span>`
+        : `<span style="color:var(--brand)">${icon('dot')}</span>`} ${title}
+      <span class="sub">— ${sub}</span></div>
+    <div class="card" style="padding:0;border-left:3px solid ${n ? "var(--bad)" : "var(--brand)"}">
+      ${list.length ? list.map(rowHTML).join("")
+        : `<p style="padding:12px 14px;margin:0;color:var(--text-mute)">${empty}</p>`}
+      <p style="padding:8px 14px;margin:0;font-size:var(--fs-xs);color:var(--text-mute)">${foot}</p>
+    </div>`;
+  };
+  host.innerHTML = panel(edge, "Open edge bets",
+    `every journaled edge bet on today’s card: live with real-time progress,
+      finished awaiting the official settle, or waiting on first pitch. Never new in-play
+      bets — everything here was placed pre-game.`,
+    "No open edge bets on today’s card.",
+    `${edge.length} open edge bet(s) on today’s card${elsewhere
           ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
             + ` This tab tracks THIS league’s card; the Record page counts them all`
           : ""}. A bet journals the moment it’s recommended and stays here until it
         settles — even if the pick later drops off Tonight’s Picks because prices moved.
         Stat lines update with the board’s refresh cycle; every bet settles
-        officially against ingested final results overnight.</p>
-    </div>`;
+        officially against ingested final results overnight.`)
+  + panel(likely, "Open Most Likely bets",
+    `the likelihood board’s rows, tracked the same way — a read on who hits,
+      journaled at a flat stake with no dollar exposure, graded on its own book.`,
+    "No open Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.",
+    `${likely.length} Most Likely row(s) on today’s card. These are ranked by measured
+        likelihood, not by edge against the price, and settle on the likelihood book
+        the Record page keeps separately.`);
 }
 
 /* ============================================================
@@ -3941,9 +4152,16 @@ function renderStats() {
   const live = staked.length + riding.length;
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const tiles = [
-    { k: "Recommended bets", to: live, dec: 0, lead: true,
+    /* "ON TONIGHT", NOT "RECOMMENDED BETS". Ethan, 2026-09-05: the tile
+       said 20 over a grid drawing 2, and the word was the confusion —
+       the 20 is the new picks PLUS the open bets still riding, which is
+       the question this page is opened with (his 2026-09-03 call), and
+       "Recommended" reads as the grid's own count. The number stays; the
+       label says what it counts, and the split leads the sub-line in
+       bold rather than trailing a sentence. */
+    { k: "On tonight", to: live, dec: 0, lead: true,
       sub: riding.length
-        ? `${staked.length} new · ${plural(riding.length, "riding")} at the `
+        ? `<b class="tile-split">${staked.length} new · ${plural(riding.length, "riding")}</b> at the `
           + `price we took — those ride as placed, don’t add at tonight’s number`
         : `${plural(sig.props.length, "prop")} · ${plural(nb, "game bet")}`
           + ` — all journaled${held}` },
@@ -4180,8 +4398,13 @@ function renderGames() {
   revealChildren(host);
   enableTilt(host);
   if (typeof syncStripArrows === "function") syncStripArrows();
+  // A game in progress opens its play-by-play (see openGameOrPlays),
+  // whose id lives in the league's fast scoreboard — asked for now, so
+  // the tap is instant rather than a fetch long.
+  if (games.some((g) => (g.live || {}).state === "live") && LIVE_FAST[state.sport])
+    pbpStripGames(state.sport).catch(() => {});
   host.querySelectorAll(".game-card[data-gid]").forEach((el) => {
-    const open = () => openGame(el.dataset.gid);
+    const open = () => openGameOrPlays(el.dataset.gid);
     el.addEventListener("click", open);
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
@@ -4402,7 +4625,11 @@ function gameCard(g) {
   let badge = "";
   if (isLive) {
     badge = `<div class="status-badge live"><span class="live-dot"></span>LIVE
-      <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span></div>`;
+      <span class="per">${escapeHtml(live.period)}${live.clock ? " " + escapeHtml(live.clock) : ""}</span>${
+      // The card's door leads to the play-by-play while the game is on
+      // (Ethan, 2026-09-05), and the badge says so rather than leaving
+      // the reader to find out by tapping.
+      LIVE_FAST[state.sport] ? `<span class="gc-pbp">play-by-play →</span>` : ""}</div>`;
   } else if (isFinal) {
     badge = `<div class="status-badge final">FINAL${live.period && live.period !== "Final" ? " · " + escapeHtml(live.period) : ""}</div>`;
   }
@@ -4459,7 +4686,7 @@ function gameCard(g) {
   return `
     <article class="game-card tilt ${isLive ? "is-live" : ""}" data-gid="${escapeHtml(gameId(g))}"
              role="button" tabindex="0"
-             aria-label="Open picks for ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
+             aria-label="${isLive ? "Open the live play-by-play for" : "Open picks for"} ${escapeHtml(teamName(g.away))} at ${escapeHtml(teamName(g.home))}">
       <div class="stadium-wrap">${art}${
         // The photo slot (Ethan, 2026-08-11: wants the cards to look
         // exactly like his generated renders). A team-specific
@@ -4571,32 +4798,176 @@ function fillMeters(host) {
    place for the two to drift apart. What is different here is the
    selection — recommended only, props and game bets in one list — and
    the absence of everything else on the board page.  */
-function renderTonight() {
-  const host = document.getElementById("tonight-body");
-  if (!host) return;
-  const d = state.data || {};
+/* ---------------- Tonight, across every sport ----------------
+   Ethan, 2026-09-05: "tonight across every sport on one page". The tab
+   drew the league whose chip was lit and nothing else, so a reader
+   tapped through five leagues to see what was actionable. An "All"
+   chip now draws every league's card on one page — each league's
+   light board (engine/lightboard, the same picks with the heavy halves
+   left out) fetched once and cached, its cards drawn in its own
+   colours, the current league first — and the chip row keeps the
+   single-league view a tap away. Nothing about a single league's page
+   changed: the same picks, the same order, the same cards. */
+let _tonightScope = "sport";          // "sport" | "all"
+let _tonightAll = { at: 0, boards: {} };
+try { _tonightScope = localStorage.getItem("qb.tonight.scope") === "all" ? "all" : "sport"; } catch (e) {}
+
+/* What the tab draws from one board: the likelihood rows that lead,
+   the picks that clear the bar, the game bets, the featured long
+   shots. One reader for both the single-league page and the all-sports
+   page, so the two can never disagree about what is on the card. */
+function tonightPick(d) {
+  d = d || {};
   const props = (d.recommendations || [])
     .map((r) => ({ ...r, _ok: passesFilters(r) }))
-    .filter((r) => r._ok && r.hr_featured !== false);
+    .filter((r) => r._ok && !heldForLongShots(r));
   const bets = (d.game_bets || [])
     .map((b) => ({ ...b, _ok: passesGameBet(b) }))
     .filter((b) => b._ok);
   const shots = (d.long_shots || []).slice(0, 3);
+  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
+  return { props, bets, shots, ml, n: props.length + bets.length,
+           any: props.length + bets.length + shots.length + ml.length > 0 };
+}
+
+/* The current league first, then the nav's own order. */
+function tonightLeagueOrder(codes, current) {
+  const rest = (codes || []).filter((c) => c !== current);
+  return (codes || []).includes(current) ? [current, ...rest] : rest;
+}
+
+function tonightChipsHTML(scope, sport) {
+  const lg = LEAGUE_LABEL[sport] || String(sport || "").toUpperCase();
+  return `<div class="lb-chips tn-chips">
+    <button type="button" class="lb-chip ${scope === "sport" ? "active" : ""}" data-tn-scope="sport">${escapeHtml(lg)}</button>
+    <button type="button" class="lb-chip ${scope === "all" ? "active" : ""}" data-tn-scope="all">All sports</button>
+  </div>`;
+}
+
+/* Every league's light board, once a minute. A league whose light copy
+   is not on disk yet falls back to its board; a league with neither is
+   left out and said so. */
+async function tonightBoards() {
+  if (Date.now() - _tonightAll.at < 60000) return _tonightAll.boards;
+  const boards = {};
+  await Promise.all(SPORT_CODES.map(async (s) => {
+    const meta = SPORT_META[s];
+    if (!meta) return;
+    try {
+      let r = await paidFetch(lightNameFor(meta));
+      if (!r.ok) r = await paidFetch(String(meta.fallback || "").replace(/^data\//, ""));
+      if (r.ok) boards[s] = normalizeSlate(await r.json());
+    } catch (e) { /* left out, said below */ }
+  }));
+  _tonightAll = { at: Date.now(), boards };
+  return boards;
+}
+
+/* One league's block, drawn in its own colours. `ACTIVE_TEAMS` is the
+   colour and mark table every card reads; it is swapped for the block
+   and put back after, the way the play-by-play page draws a park. */
+function tonightLeagueHTML(s, d) {
+  const t = tonightPick(d);
+  const lg = LEAGUE_LABEL[s] || s.toUpperCase();
+  const logo = (SPORT_META[s] || {}).logo || "";
+  const head = `<div class="section-title tn-league" data-tonight-league="${s}">${logo} ${escapeHtml(lg)}
+      <span class="sub">— ${t.n ? `${t.n} bet${t.n === 1 ? "" : "s"} clear the bar` : "nothing clears the bar"}${
+        t.ml.length ? ` · ${t.ml.length} most likely` : ""}</span></div>`;
+  if (!t.any) return `${head}<p class="rail-quiet tn-quiet">${escapeHtml(noMarketHeading())}</p>`;
+  const was = window.ACTIVE_TEAMS;
+  window.ACTIVE_TEAMS = teamsForSport(s);
+  try {
+    return `${head}<div class="tn-block" data-tonight-league="${s}">
+      ${t.ml.length ? `<div class="ml-rows">${t.ml.map(likelyRow).join("")}</div>` : ""}
+      ${t.props.length ? `<div class="cards">${t.props.map(cardHTML).join("")}</div>` : ""}
+      ${t.bets.length ? `<div class="cards">${t.bets.map(gameBetCard).join("")}</div>` : ""}
+      ${t.shots.length ? `<div class="cards">${t.shots.map(longShotCard).join("")}</div>` : ""}
+    </div>`;
+  } finally {
+    window.ACTIVE_TEAMS = was;
+  }
+}
+
+/* A door inside another league's block: light that league's chip, wait
+   for its board to be the one in hand, then open — the same two steps
+   the Live tab takes for a foreign game, with the wait measured rather
+   than guessed. */
+function afterBoardFor(s, fn, tries = 40) {
+  const meta = SPORT_META[s];
+  if (!meta) return;
+  if (state.sport === s && state.data && _boardFor === meta.api && !state.lightBoard) { fn(); return; }
+  if (tries <= 0) return;
+  setTimeout(() => afterBoardFor(s, fn, tries - 1), 200);
+}
+
+async function renderTonightAll(host) {
+  host.innerHTML = `${tonightChipsHTML("all", state.sport)}
+    <div class="section-title">Tonight, every league
+      <span class="sub">— each league’s card, the one you are on first; tap a card to open it on its own board</span></div>
+    <p class="rail-quiet">Loading every league’s board…</p>`;
+  const boards = await tonightBoards();
+  if (_tonightScope !== "all" || state.view !== "tonight") return;
+  const order = tonightLeagueOrder(SPORT_CODES, state.sport);
+  const blocks = order.map((s) => boards[s] ? tonightLeagueHTML(s, boards[s])
+    : `<div class="section-title tn-league">${(SPORT_META[s] || {}).logo || ""} ${escapeHtml(LEAGUE_LABEL[s] || s.toUpperCase())}
+        <span class="sub">— no board built for this league yet</span></div>`);
+  host.innerHTML = `${tonightChipsHTML("all", state.sport)}
+    <div class="section-title">Tonight, every league
+      <span class="sub">— each league’s card, the one you are on first; tap a card to open it on its own board</span></div>
+    ${blocks.join("")}`;
+  bindTonightChips(host);
+  host.querySelectorAll(".tn-block").forEach((block) => {
+    const s = block.dataset.tonightLeague;
+    if (s === state.sport) return;
+    block.addEventListener("click", (e) => {
+      const door = e.target.closest && e.target.closest("[data-prop], [data-open], [data-gid]");
+      if (!door) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
+      if (!chip) return;
+      chip.click();
+      const again = () => {
+        if (door.dataset.open) openFrom(door.dataset.open);
+        else if (door.dataset.prop) openProp(door.dataset.prop);
+        else if (door.dataset.gid) openGame(door.dataset.gid);
+      };
+      afterBoardFor(s, () => { switchView("tonight"); again(); });
+    }, true);
+  });
+  if (typeof fillMeters === "function") fillMeters(host);
+}
+
+function bindTonightChips(host) {
+  host.querySelectorAll("[data-tn-scope]").forEach((b) =>
+    b.addEventListener("click", () => {
+      _tonightScope = b.dataset.tnScope === "all" ? "all" : "sport";
+      try { localStorage.setItem("qb.tonight.scope", _tonightScope); } catch (e) {}
+      renderTonight();
+    }));
+}
+
+function renderTonight() {
+  const host = document.getElementById("tonight-body");
+  if (!host) return;
+  if (_tonightScope === "all") { renderTonightAll(host); return; }
+  const d = state.data || {};
+  const { props, bets, shots, ml, n } = tonightPick(d);
   // MOST LIKELY LEADS THE TAB. Ethan, 2026-08-31: "tonight's bets page
   // should be the most likely to hit bets. Think about how your
   // average better would think this app would be layed out." A bettor
   // tapping "Tonight" is asking who hits tonight — the model's
   // strongest measured ability — and only then what we would stake.
-  const ml = (d.most_likely || []).filter(showableLikelyRow).slice(0, 10);
-  const n = props.length + bets.length;
   if (!n && !shots.length && !ml.length) {
-    host.innerHTML = `<div class="section-title">Tonight’s bets</div>
+    host.innerHTML = `${tonightChipsHTML("sport", state.sport)}<div class="section-title">Tonight’s bets</div>
       <div class="empty-slate"><div class="es-icon">${icon("target", 30)}</div>
       <h3>${noMarketHeading()}</h3>
       <p>${noMarketExplainer()}</p></div>`;
+    bindTonightChips(host);
     return;
   }
   host.innerHTML = `
+    ${tonightChipsHTML("sport", state.sport)}
     ${ml.length ? `<div class="section-title">Most likely to hit tonight
       <span class="sub">— ranked by probability, not by price · the full board
       is under Top Picks</span></div>
@@ -4613,6 +4984,7 @@ function renderTonight() {
       <span class="sub">— plus-money swings, sized like lottery tickets.</span></div>
       ${boardGuide("long_shots")}
       <div class="cards">${shots.map(longShotCard).join("")}</div>` : ""}`;
+  bindTonightChips(host);
   host.querySelectorAll('[data-goto="likely"]').forEach((b) =>
     b.addEventListener("click", () => switchView("likely", true)));
   host.querySelectorAll("[data-open]").forEach((b) =>
@@ -4926,7 +5298,19 @@ function renderRecommended() {
   // three (hr_featured, stamped by the pipeline) — the same three that lead
   // the Long Shots page, where the FULL home-run board lives.
   const visible = recs.filter((r) => (state.showAll ? true : r._ok))
-    .filter((r) => r.hr_featured !== false);
+    .filter((r) => !heldForLongShots(r));
+  // RECOMMENDED, AND ON PURPOSE NOT DRAWN HERE. Counted separately so
+  // the page can say where they went — the tile above this grid counts
+  // them and this grid does not, and a reader deserves that sentence
+  // rather than the arithmetic.
+  const elsewhere = recs.filter((r) => r._ok && heldForLongShots(r));
+  const elsewhereNote = elsewhere.length ? `
+    <p class="list-note" style="grid-column:1/-1;margin-top:14px">
+      ${elsewhere.length} more recommended ${elsewhere.length === 1
+        ? "pick is a home-run dart" : "picks are home-run darts"} — the
+      board above counts ${elsewhere.length === 1 ? "it" : "them"}, this
+      grid features only the top three, and the full home-run board is on
+      <a href="#longshots" data-view="longshots">Long Shots</a>.</p>` : "";
   if (!visible.length) {
     // Say WHY the board is empty. "Loosen the sliders" is bad advice when
     // the real reason is upstream of every slider: no real book price yet,
@@ -4936,8 +5320,16 @@ function renderRecommended() {
     const real = recs.filter((r) => r.has_market !== false);
     const started = real.filter((r) => r.live
       || (r.warnings || []).some((w) => /already started/i.test(w)));
+    const capped = capWipeoutNote();
     let msg, msgTitle;
-    if (recs.length && !real.length) {
+    if (capped) {
+      /* FIRST, because every other branch below would misread this slate.
+         On a wipeout the picks DID clear the gate and DO carry real
+         prices — they were zeroed one step later — so `real.length` is
+         healthy and the chain would fall through to the sliders. */
+      msgTitle = "The bankroll rule funded nothing tonight";
+      msg = escapeHtml(capped);
+    } else if (recs.length && !real.length) {
       msg = noMarketExplainer();
     } else if (real.length && started.length === real.length) {
       msg = `${real.length} prop(s) carry real prices, but every one is on a
@@ -4977,6 +5369,20 @@ function renderRecommended() {
         games have been played — so no prop has been built, and the sliders
         have nothing to filter. Props appear on their own once the season
         starts.`;
+    } else if (elsewhere.length) {
+      /* EVERY RECOMMENDED PICK IS A NON-FEATURED HOME RUN, so the grid
+         is empty while the tile above it reads a real number. "No props
+         clear your filters" is false here — they all did — and it sends
+         a reader to sliders that cannot change the answer, which is the
+         same wrong advice the census and schedule-only branches above
+         were written to stop giving. */
+      msgTitle = elsewhere.length === 1
+        ? "Tonight’s pick is a home-run dart"
+        : `All ${elsewhere.length} of tonight’s picks are home-run darts`;
+      msg = `They cleared every gate and are journaled at their real
+        prices. This board features only the top three home runs; the full
+        board is on <a href="#longshots" data-view="longshots">Long
+        Shots</a>, where they lead.`;
     } else {
       msgTitle = "No props clear your filters";
       msg = `Loosen the sliders, or enable “show non-recommended”.`;
@@ -5024,12 +5430,18 @@ function renderRecommended() {
   // "Analyzed 1030 → showing 3" is alarming unless the page says where the
   // rest went: most are analyzed-but-held (lineups not confirmed, edge too
   // small, or no real price) and non-featured home runs live on Long Shots.
-  const hidden = recs.length - visible.length;
+  // THE RECOMMENDED ONES GET THEIR OWN SENTENCE, ABOVE. This line is
+  // about the analyzed-but-held majority, and lumping the two together
+  // is what let "20 recommended, 2 drawn" hide inside "1030 analyzed" —
+  // a reader chasing two missing picks was handed a number about a
+  // thousand rows they never asked about.
+  host.innerHTML += elsewhereNote;
+  const hidden = recs.length - visible.length - elsewhere.length;
   if (hidden > 0) {
     host.innerHTML += `<p class="list-note" style="grid-column:1/-1;margin-top:14px">
       ${hidden} more analyzed prop(s) not shown — ${state.showAll
-        ? "non-featured home runs live on the Long Shots page"
-        : "held (unconfirmed lineup, edge below the bar, or no real price yet) or featured elsewhere. Toggle “show non-recommended” to browse everything"}.</p>`;
+        ? "held upstream of the sliders"
+        : "held (unconfirmed lineup, edge below the bar, or no real price yet). Toggle “show non-recommended” to browse everything"}.</p>`;
   }
   fillMeters(host);
   revealChildren(host);
@@ -5070,6 +5482,168 @@ function trendChip(r) {
   if (r.trend === "down") return `<span class="chip down">${icon("falling")} Cooling off</span>`;
   return `<span class="chip">Steady form</span>`;
 }
+/* ---------------- Odds shopping, on the card ----------------
+   Ethan, 2026-09-05: "odds shopping on the card". Every priced row has
+   carried every book's quote since the odds pull (`all_lines`); the card
+   only ever named the best. Now the pick's side is priced at each book,
+   best first, so "don't add more at −110" comes with "FanDuel still has
+   −118". Only real quotes: a proxy is not a book and an unquoted side
+   is not a price. A quote at another line is a different bet and is
+   listed apart, never mixed into the ranking. */
+const payoutOf = (o) => (o > 0 ? o / 100 : 100 / Math.abs(o));
+
+/* The same outlier rule the shops apply (engine/odds.OUTLIER_GAP): a
+   price whose implied probability sits more than ten points under the
+   median of the OTHER books at the same line is off the field — a
+   stale or mis-posted quote — and the strip must not crown it "best".
+   Leave-one-out, three real prices or nothing is flagged. Pure. */
+const OUTLIER_GAP = 0.10;
+function impliedOf(odds) {
+  const o = Number(odds);
+  return o < 0 ? (-o) / ((-o) + 100) : 100 / (o + 100);
+}
+function fieldOutliers(oddsList) {
+  const probs = (oddsList || []).map((o) =>
+    (Number.isFinite(Number(o)) && Number(o) !== 0 && !(Number(o) > -100 && Number(o) < 100)) ? impliedOf(o) : null);
+  if (probs.filter((p) => p != null).length < 3) return probs.map(() => false);
+  return probs.map((p, i) => {
+    if (p == null) return false;
+    const others = probs.filter((q, j) => j !== i && q != null).sort((a, b) => a - b);
+    const m = others.length;
+    const med = m % 2 ? others[(m - 1) / 2] : (others[m / 2 - 1] + others[m / 2]) / 2;
+    return med - p > OUTLIER_GAP;
+  });
+}
+
+function quotesForSide(r) {
+  const side = String((r || {}).side || "OVER").toUpperCase();
+  const line = Number((r || {}).line);
+  const same = [], other = [];
+  ((r || {}).all_lines || []).forEach((ln) => {
+    if (!ln || !ln.book || String(ln.book).toLowerCase() === "proxy") return;
+    const odds = side === "UNDER" ? ln.under_odds : ln.over_odds;
+    if (odds == null || Number(odds) === 0 || !Number.isFinite(Number(odds))) return;
+    const q = { book: String(ln.book), line: Number(ln.line), odds: Number(odds) };
+    (Number.isFinite(line) && Number(ln.line) === line ? same : other).push(q);
+  });
+  fieldOutliers(same.map((q) => q.odds)).forEach((bad, i) => { same[i].outlier = bad; });
+  // Off-the-field prices sort LAST, so the first quote is the shop's own answer.
+  same.sort((x, y) => (x.outlier ? 1 : 0) - (y.outlier ? 1 : 0)
+    || payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
+  other.sort((x, y) => (side === "UNDER" ? y.line - x.line : x.line - y.line)
+    || payoutOf(y.odds) - payoutOf(x.odds) || x.book.localeCompare(y.book));
+  const best = same.find((q) => !q.outlier) || same[0] || null;
+  return { side, line, same, other, best };
+}
+
+/* The card's strip: the pick's side at every book quoting the pick's
+   line, best first; a count of the books quoting another line. Nothing
+   under two real quotes — one price is the card's own line, not a shop. */
+function booksStripHTML(r) {
+  const q = quotesForSide(r);
+  if (q.same.length + q.other.length < 2) return "";
+  const atLine = q.same.map((x) =>
+    `<span class="bs-q${x === q.best ? " best" : ""}${x.outlier ? " off" : ""}" title="${escapeAttr(x.book)} · ${q.side} ${q.line}${
+      x.outlier ? " · off the field: more than ten points under the other books, not shopped" : ""}">${
+      escapeHtml(x.book)} <b>${american(x.odds)}</b>${x.outlier ? " <i>off the field</i>" : ""}</span>`).join("");
+  const others = q.other.length
+    ? `<span class="bs-more" title="${escapeAttr(q.other.map((x) => `${x.book} ${x.line} ${american(x.odds)}`).join(" · "))}">+${
+        q.other.length} at other line${q.other.length === 1 ? "" : "s"}</span>` : "";
+  return `<div class="bs-strip" aria-label="The same side at each book">${
+    icon("tag", 11)} <span class="bs-t">${escapeHtml(q.side)} ${q.line} by book</span>${atLine}${others}</div>`;
+}
+
+/* The prop page's table: every book, its line and its price for the
+   pick's side, the best marked, the quotes at another line under a
+   rule; the odds pull's own time, so a reader knows how old the shop is. */
+function booksTableHTML(r) {
+  const q = quotesForSide(r);
+  if (q.same.length + q.other.length < 2) return "";
+  const row = (x, best) => `<tr class="${best ? "best" : ""}${x.outlier ? " off" : ""}"><td>${escapeHtml(x.book)}</td>
+      <td>${escapeHtml(q.side)} ${x.line}</td><td class="num">${american(x.odds)}</td>
+      <td>${best ? "best price" : x.outlier ? "off the field — not shopped" : ""}</td></tr>`;
+  const asOf = ((state.data || {}).odds_status || {}).at;
+  return `<div class="section-title minor">Shop the price
+      <span class="sub">— ${escapeHtml(q.side)} ${q.line} at every book we saw${
+        asOf ? `, from the ${escapeHtml(asOf)} odds pull` : ""}; confirm at the book before betting.</span></div>
+    <div class="card pp-books"><table class="agate"><thead><tr><th>Book</th><th>Bet</th><th class="num">Price</th><th></th></tr></thead>
+      <tbody>${q.same.map((x) => row(x, x === q.best)).join("")}${
+        q.other.length ? `<tr class="bs-sep"><td colspan="4">At another line — a different bet</td></tr>${
+          q.other.map((x) => row(x, false)).join("")}` : ""}</tbody></table></div>`;
+}
+
+/* ---------------- Line movement, on the prop page ----------------
+   Ethan, 2026-09-05: "line movement on prop page". Every real odds pull
+   writes a snapshot of each prop at each book (engine/linemoves), and
+   the card has stamped "Market with / against pick" off them since
+   August; nothing drew the line itself. `line_series` is today's tape
+   for the pick's side — the consensus line and the best price at each
+   pull — and this draws it: opened at, now at, the price then and now,
+   the line as a picture, and which way that cut for our side. */
+function lineMoveHeadline(r) {
+  const s = ((r || {}).line_series || []).filter((p) => p && Number.isFinite(Number(p.line)));
+  if (s.length < 2) return null;
+  const side = String(r.side || "OVER").toUpperCase();
+  const a = s[0], b = s[s.length - 1];
+  const lineMoved = Number(a.line) !== Number(b.line);
+  const priceMoved = a.odds != null && b.odds != null && Number(a.odds) !== Number(b.odds);
+  // "Toward us" means the market came round to our side: the number we
+  // took beats today's. An UNDER's line falling, an OVER's rising, or
+  // our side's price getting shorter, all say the same thing.
+  const lineToward = !lineMoved ? null : (side === "UNDER" ? Number(b.line) < Number(a.line) : Number(b.line) > Number(a.line));
+  const priceToward = !priceMoved ? null : payoutOf(Number(b.odds)) < payoutOf(Number(a.odds));
+  return { side, open: a, now: b, n: s.length, lineMoved, priceMoved, lineToward, priceToward,
+           hours: Math.max(0, (Number(b.ts) - Number(a.ts)) / 3600) };
+}
+
+/* The sentence under the picture, derived and nothing else. */
+function lineMoveSentence(h) {
+  if (!h) return "";
+  const votes = [h.lineToward, h.priceToward].filter((v) => v !== null);
+  if (!votes.length) return "The number has not moved today.";
+  if (votes.every((v) => v === true)) return "The market has moved toward our side since the open — the number we took beats today’s.";
+  if (votes.every((v) => v === false)) return "The market has moved away from our side since the open — today’s number is better than the one we took. The bet rides as placed.";
+  return h.lineToward
+    ? "The line moved toward our side and the price away from it — the market is splitting the difference."
+    : "The price moved toward our side and the line away from it — the market is splitting the difference.";
+}
+
+/* The line as a picture: the consensus number at each pull, the open
+   dashed, the now dotted. Flat reads as flat. */
+function lineSeriesSVG(s, w, h) {
+  const ys = s.map((p) => Number(p.line));
+  const lo0 = Math.min(...ys), hi0 = Math.max(...ys);
+  const span = (hi0 - lo0) || 1, pad = span * 0.18;
+  const y = (v) => h - 3 - ((v - (lo0 - pad)) / (span + pad * 2)) * (h - 6);
+  const x = (i) => 1 + (i / Math.max(1, s.length - 1)) * (w - 2);
+  const d = ys.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  return `<svg class="lt-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img"
+      aria-label="the line at each odds pull today">
+    <line x1="0" y1="${y(ys[0]).toFixed(1)}" x2="${w}" y2="${y(ys[0]).toFixed(1)}"
+      stroke="var(--text-mute)" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>
+    <path d="${d}" fill="none" stroke="var(--brand-2)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(s.length - 1).toFixed(1)}" cy="${y(ys[ys.length - 1]).toFixed(1)}" r="3" fill="var(--brand-2)"/>
+  </svg>`;
+}
+
+function lineMoveHTML(r) {
+  const h = lineMoveHeadline(r);
+  if (!h) return "";
+  const when = (ts) => placedStamp(new Date(Number(ts) * 1000).toISOString());
+  const px = (o) => o == null ? "no quote" : american(o);
+  const win = h.hours >= 1.5 ? `${Math.round(h.hours)}h` : `${Math.max(1, Math.round(h.hours * 60))}m`;
+  return `<div class="section-title minor">How the line moved today
+      <span class="sub">— the consensus ${escapeHtml(h.side)} number at each odds pull, best price at it; ${h.n} pulls over ${win}.</span></div>
+    <div class="card lm-card">
+      <div class="lm-row"><span class="lm-k">Opened</span><b>${h.open.line}</b> <span class="lm-px">${px(h.open.odds)}</span>
+        <span class="lm-when">${escapeHtml(when(h.open.ts))}</span></div>
+      <div class="lm-row"><span class="lm-k">Now</span><b>${h.now.line}</b> <span class="lm-px">${px(h.now.odds)}</span>
+        <span class="lm-when">${escapeHtml(when(h.now.ts))}</span></div>
+      ${lineSeriesSVG((r.line_series || []).filter((p) => p && Number.isFinite(Number(p.line))), 300, 62)}
+      <p class="lt-cap">${lineMoveSentence(h)} The dashed line is the open.${moveChip(r) ? ` ${moveChip(r)}` : ""}</p>
+    </div>`;
+}
+
 function booksChip(r) {
   const n = (r.all_lines || []).length;
   return n <= 1 ? "" : `<span class="chip books">${icon('tag')} ${n} books · best ${escapeHtml(r.book)}</span>`;
@@ -5379,6 +5953,7 @@ function cardHTML(r) {
       ${confMeter(r)}
       ${propAnalysis(r)}
       <div class="chips">${r.has_market === false ? `<span class="chip">No book line — model projection only</span>` : ""}${r.doubleheader ? `<span class="chip up" title="Two games today — this prop is priced for this specific game only">${iconMark("calendar", 11)}Doubleheader · Game ${r.game_number || 1}</span>` : ""}${whenChip(r.game_date, r.game_kickoff)}${scriptChip(r)}${qualityChip(r)}${tierChip(r)}${trendChip(r)}${moveChip(r)}${firstMoverChip(r)}${veloChip(r)}${envChip(r)}${booksChip(r)}${stakeChip}${slipChip(r)}</div>
+      ${booksStripHTML(r)}
       ${tfRow(r)}${corr}${pickInjuryNote(r)}${warnings}${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
       ${/* THE LINE ITSELF, under the reasons. Below them on purpose: the
             reasons are why we took it, this is what the market did about
@@ -5536,7 +6111,7 @@ function likelyCard(r) {
         <div>
           <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}</div>
+          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}</div>
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span></div>
         </div>
@@ -5688,6 +6263,20 @@ function likelyRefusedNote(census, shown) {
     the same for every row and the board would rather be short than lower it.</div>`;
 }
 
+/* THE BANKROLL RULE EMPTIED THE BOARD — not a filter, not a missing feed.
+   `cap_notes` has ridden in the payload since the exposure caps were wired
+   into both football builds, and nothing has ever drawn it. So the one
+   slate where it matters most — every pick scaled under the 0.1u floor and
+   zeroed — rendered as "No props clear your filters. Loosen the sliders",
+   which is advice that cannot work: no slider funds a bet the 15u cap will
+   not pay for. `engine.correlation` names the state; this is the half that
+   shows it to a reader. Same lesson as the census and schedule-only
+   branches below, one layer further out. */
+function capWipeoutNote() {
+  return ((state.data || {}).cap_notes || [])
+    .find((n) => String(n || "").startsWith("NO BETS FUNDED")) || "";
+}
+
 function likelyEmptyWhy(census) {
   const c = census || {};
   if (c["no market measured to rank yet"]) {
@@ -5764,6 +6353,15 @@ function renderLikely() {
   const host = document.getElementById("likely");
   const note = document.getElementById("likely-note");
   if (!host || !note) return;
+  // A COLD LANDING ON THIS TAB. `#likely` in the address bar makes the
+  // boot block's router switch here before any board has loaded, and
+  // the switch renders the view it lands on — with no board that was a
+  // throw inside the boot block, which then never reached the lines
+  // below the router (the sport buttons, the drawer, the tour). Found
+  // by tests/test_app_loads.py booting every tab, 2026-09-06. Nothing
+  // to draw yet is not an empty board: renderAll draws this view the
+  // moment the board lands.
+  if (!state.data) return;
   const rows = (state.data.most_likely || []).filter(showableLikelyRow);
   if (!rows.length) {
     host.innerHTML = "";
@@ -5849,7 +6447,8 @@ function likelyRow(r) {
   const label = (game ? `${r.market_label || r.market} · ${r.matchup || ""}`
     : r.line == null ? (r.market_label || r.market)
     : `${r.side || "over"} ${r.line} ${r.market_label || r.market}`)
-    + (r.ranked === false ? " · lean" : "");
+    + (r.ranked === false ? " · lean" : "")
+    + (likelyStarted(r) ? " · under way" : "");
   const mark = game ? likelyGameMark(r, 30)
     : playerAvatar(r.player, r.team, { size: 30, map: nflMap(),
                                        headshot: r.headshot });
@@ -5953,10 +6552,16 @@ function renderLongShots() {
    doing. And it must never show a stake: §13 puts parlays on the same
    probation as CFB and WNBA — graded, never staked, until 100 tickets clear
    ROI, CLV and z, and until the singles board clears its own bar first. */
-function renderParlays() {
-  const host = document.getElementById("parlays-body");
+function renderParlays(key = "parlays", hostId = "parlays-body") {
+  /* PARAMETERISED RATHER THAN COPIED, because the screen learned to run
+     over a second board on 2026-09-06 and the alternative was two
+     renderers drifting apart. Everything below is identical for both
+     pools — the doctrine, the verdict, the probation note, the cards —
+     because the SCREEN is identical; only the legs it was handed differ,
+     and the payload says which. */
+  const host = document.getElementById(hostId);
   if (!host) return;
-  const z = state.data.parlays;
+  const z = state.data[key];
 
   /* A slate built before this module existed, or by a builder that has no
      screen wired in, has no `parlays` key at all. Saying so beats rendering
@@ -6492,6 +7097,47 @@ function propOpenable(r) {
 function propAttrs(r) {
   return propOpenable(r)
     ? ` data-prop="${escapeAttr(propId(r))}" tabindex="0" role="link"` : "";
+}
+
+/* WHICH NUMBER MOVED. Ethan, 2026-09-05, on Ja'Kyrian Turner's riding
+   row: "placed at −110, now −110 (line now 15.5)" under a sentence that
+   began "The price has changed". The line had moved and the price had
+   not, and the note named the wrong one. Six cases, each saying only
+   what the two quotes show: the board now leans the other way; the
+   price moved; the line moved; both did; neither did (the pick fell
+   off the bar on the model's side, or a gate closed — the market is not
+   the reason); or there is no quote to compare against, which is not
+   evidence of a move at all. A moneyline has no line to print. */
+function ridingMoveCopy(b, cur) {
+  const hasLine = b.market !== "moneyline" && b.line != null && b.line !== "";
+  const on = (l) => hasLine && l != null ? ` on ${l}` : "";
+  const ride = "The bet rides as placed; don’t add more.";
+  if (!cur || cur.odds == null) {
+    return `There is no live quote for this market right now — placed at ${american(b.odds)}${on(b.line)},
+      and nothing to compare it with. ${ride}`;
+  }
+  const bar = "It no longer clears the bar at that number: the bet rides as placed, but don’t add more.";
+  const bSide = String(b.side || "").toUpperCase(), cSide = String(cur.side || "").toUpperCase();
+  if (bSide && cSide && bSide !== cSide) {
+    return `The board now leans the other way — we hold ${bSide}${on(b.line)} at ${american(b.odds)};
+      today’s number is ${cSide}${on(cur.line)} at ${american(cur.odds)}. ${ride}`;
+  }
+  const priceMoved = Number(cur.odds) !== Number(b.odds);
+  const lineMoved = hasLine && cur.line != null && Number(cur.line) !== Number(b.line);
+  if (priceMoved && lineMoved) {
+    return `The price and the line have both moved since we took this pick — placed at
+      ${american(b.odds)}${on(b.line)}, now ${american(cur.odds)}${on(cur.line)}. ${bar}`;
+  }
+  if (priceMoved) {
+    return `The price has changed since we took this pick — placed at ${american(b.odds)},
+      now ${american(cur.odds)}. ${bar}`;
+  }
+  if (lineMoved) {
+    return `The line has moved since we took this pick — placed at ${b.line}, now ${cur.line},
+      ${american(cur.odds)} either way. ${bar}`;
+  }
+  return `Nothing has moved at the book — still ${american(b.odds)}${on(b.line)} — but the pick
+    no longer clears the bar on today’s build. ${ride}`;
 }
 
 /* ---- A RIDING ROW IS A DOOR TOO ----------------------------------------
@@ -7264,8 +7910,11 @@ function renderPropPage() {
         ${shareBtn("pick", pickSlug(r))}
         <button class="btn ghost qb-share" data-card="${escapeAttr(propId(r))}"
           >Share card</button>
+        <button class="btn ghost" data-explain aria-controls="pp-explain"
+          >Explain</button>
       </div>
       <div id="fr-send-slot"></div>
+      <div id="pp-explain" class="pp-explain" hidden aria-live="polite"></div>
       <div class="metrics">
         ${proj}
         ${r.hit_prob != null ? modelMetric(r, r.hit_prob) : ""}
@@ -7279,6 +7928,9 @@ function renderPropPage() {
       </div>
       ${propAnalysis(r)}
     </article>
+
+    ${booksTableHTML(r)}
+    ${lineMoveHTML(r)}
 
     ${shown ? `<div class="section-title">Last ${shown} game${shown === 1 ? "" : "s"}
       <span class="sub">— every one measured against tonight’s
@@ -7754,6 +8406,7 @@ function renderGamePage() {
     <div class="pp-nav">
       <button class="btn-quiet gp-back" id="gp-back">← Back to the board</button>
       <span class="pp-nav-right">
+        <span id="gp-pbp-slot"></span>
         ${shareBtn("game", gameSlug(g))}
         ${favBtn(g.away)}${favBtn(g.home)}
       </span>
@@ -7786,6 +8439,7 @@ function renderGamePage() {
     </div>
 
     ${linesCard || notesCard ? `<div class="gp-row">${linesCard}${notesCard}</div>` : ""}
+    ${pressurePairHTML(state.sport, g)}
     ${simCard}
     ${shapeCard}
 
@@ -7845,6 +8499,20 @@ function renderGamePage() {
 
   const back = document.getElementById("gp-back");
   if (back) back.addEventListener("click", () => switchView("recommended"));
+  // THE DOOR TO THE PLAY-BY-PLAY, for a game in progress or just over,
+  // drawn only once its id has been found in the league's fast
+  // scoreboard — a button that opens on "no game selected" is the fake
+  // button Ethan's rule is about. The page it opens knows to come back
+  // here.
+  if ((isLive || isFinal) && LIVE_FAST[state.sport]) {
+    const slot = document.getElementById("gp-pbp-slot");
+    pbpIdFor(g, state.sport).then((id) => {
+      if (!id || !slot || !slot.isConnected) return;
+      slot.innerHTML = `<button type="button" class="btn-quiet gp-pbp-door" id="gp-pbp-door">${
+        isLive ? `<span class="live-dot sm"></span>Watch play-by-play` : "Play-by-play"} →</button>`;
+      slot.firstElementChild.addEventListener("click", () => openPbp(state.sport, id, "game"));
+    }).catch(() => {});
+  }
   // "Go back to the board, find the toggle, come back" was three steps for
   // one intention. The button flips the same global toggle in place.
   // Two buttons, one intention: the props empty-slate's and the game
@@ -7962,6 +8630,7 @@ document.addEventListener("click", (e) => {
 async function renderPlayers() {
   const seq = ++_playersSeq;
   renderSearchScope();
+  renderSearchRecent();
   const q = state.search.trim().toLowerCase();
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
@@ -7979,7 +8648,12 @@ async function renderPlayers() {
      the page. */
   const board = state.data || {};
   let recs = board.recommendations || [];
-  if (q) recs = recs.filter((r) => (r.player || "").toLowerCase().includes(q));
+  let boardGuess = false;
+  if (q) {
+    const picked = searchPick(recs, state.search, (r) => r.player);
+    recs = picked.rows;
+    boardGuess = picked.guessed;
+  }
   // One CARD per player, every market kept. The old dedupe ("first
   // market listed") threw the rest of a player's rows away — Ethan,
   // 2026-08-17: "when i search an nfl player it will only display yard
@@ -8085,13 +8759,16 @@ async function renderPlayers() {
     }
     /* The roster directory — the offline fallback, and the only answer
        for a player who has never appeared in a logged game. */
-    const misses = q ? await rosterMatches(q) : [];
+    const found = q ? await rosterMatches(state.search) : { rows: [], guessed: false };
+    const misses = found.rows;
     if (seq !== _playersSeq) return;
     if (misses.length) {
       host.innerHTML = `
         <div class="empty" style="margin-bottom:12px">No prop on tonight’s board for
           “${escapeHtml(state.search)}” — profiles here are prop cards.
-          On the roster${misses.length > 1 ? "s" : ""}:</div>
+          ${found.guessed
+            ? `No roster name is spelled exactly that way; the nearest${misses.length > 1 ? " are" : " is"}:`
+            : `On the roster${misses.length > 1 ? "s" : ""}:`}</div>
         ${misses.map((m) => `
           <div class="card roster-hit" style="display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:8px">
             ${playerAvatar(m.player, m.team, { size: 40, headshot: m.headshot })}
@@ -8145,9 +8822,16 @@ async function renderPlayers() {
   const cap = playerBrowseCap();
   const capped = !q && players.length > cap;
   const shown = capped ? players.slice(0, cap) : players;
+  // SAY WHEN THIS IS A GUESS, the way the league search does: a corrected
+  // spelling presented as what was asked for is its own kind of lying.
+  const lgWord = LEAGUE_LABEL[state.sport] || String(state.sport || "").toUpperCase();
   host.innerHTML = (capped ? `<p class="browse-note">Showing ${shown.length}
       of ${players.length} players with a prop on tonight’s board —
       type a name to find anyone else.</p>` : "")
+    + (boardGuess ? `<div class="section-title minor">Closest match on tonight’s board
+        <span class="sub">— no priced ${escapeHtml(lgWord)} player is spelled exactly
+        “${escapeHtml(state.search)}”, so ${players.length > 1
+          ? "these are the nearest names" : "this is the nearest name"}</span></div>` : "")
     + shown.map(profileHTML).join("");
   fillMeters(host);
   revealChildren(host);
@@ -8325,17 +9009,162 @@ async function leagueLogs(player, sport) {
   return {};
 }
 
+/* ---------------- A search that forgives ----------------
+   The league search (/api/players/search, engine/playersearch) has
+   forgiven a typo since 2026-08-23. The board and the roster had not:
+   both matched tonight's priced players and the roster directory by an
+   exact substring, so "jamar chase" on the NFL tab found nothing priced
+   for Ja'Marr Chase, fell through to the league search, and drew his
+   history card while his priced card sat on the board. Ethan,
+   2026-09-05: "search that forgives typos and remembers". The same four
+   tiers the server ranks by, on the page, for the two lists the page
+   matches itself. */
+function searchNorm(s) {
+  return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+//: Below this many letters a fuzzy match is a guess, not a correction —
+//: the server's own bar (engine/playersearch.FUZZ_MIN).
+const SEARCH_FUZZ_MIN = 4;
+
+/* Edit distance with a transposition counted once (optimal string
+   alignment), capped: past `max` the answer is only "too far", so the
+   rows stop there. */
+function searchDist(a, b, max) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let pp = null, p = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const c = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      let v = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (pp && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, pp[j - 2] + 1);
+      c.push(v);
+      if (v < best) best = v;
+    }
+    if (best > max) return max + 1;
+    pp = p; p = c;
+  }
+  return p[b.length];
+}
+
+/* A typo, rather than a different person: one edit in a word of four or
+   five letters, two in a longer one — on the whole name or on any word. */
+function searchClose(n, toks, ql, qt) {
+  if (ql.length < SEARCH_FUZZ_MIN) return false;
+  const allow = (w) => (w.length >= 6 ? 2 : 1);
+  if (searchDist(ql, n, allow(ql)) <= allow(ql)) return true;
+  return qt.some((w) => w.length >= SEARCH_FUZZ_MIN
+    && toks.some((t) => searchDist(w, t, allow(w)) <= allow(w)));
+}
+
+/* How well `name` answers `q`: 0 starts with, 1 contains, 2 the words in
+   any order, 3 the closest spelling, null for no. The server's tiers
+   (engine/playersearch.rank), so the board, the roster and the league
+   answer the same question the same way. Tier 3 here is an edit
+   distance where the server's is difflib; both are labelled a guess. */
+function searchRank(name, q) {
+  const n = searchNorm(name), ql = searchNorm(q);
+  if (!n || !ql) return null;
+  const toks = n.split(" "), qt = ql.split(" ");
+  const sqN = n.replace(/ /g, ""), sqQ = ql.replace(/ /g, "");
+  if (n.startsWith(ql) || sqN.startsWith(sqQ) || toks.some((t) => t.startsWith(ql))) return 0;
+  if (n.includes(ql) || sqN.includes(sqQ)) return 1;
+  // Every word typed starts some distinct word of the name, longest first.
+  const used = new Set();
+  const prefixed = qt.slice().sort((x, y) => y.length - x.length).every((w) => {
+    const i = toks.findIndex((t, k) => !used.has(k) && t.startsWith(w));
+    if (i < 0) return false;
+    used.add(i);
+    return true;
+  });
+  if (prefixed) return 2;
+  return searchClose(n, toks, ql, qt) ? 3 : null;
+}
+
+/* Inside the guessing tier, how far the whole name is from what was
+   typed — so "jamar chase" puts Ja'Marr Chase ahead of Chase Young,
+   whose one exact word also qualifies him. Zero for a name that was not
+   guessed at, so the list's own order holds inside the other tiers. */
+function searchFar(name, q, rank) {
+  return rank === 3 ? searchDist(searchNorm(q), searchNorm(name), 8) : 0;
+}
+
+/* The rows of a list that answer the query, best tier first, the closer
+   whole name first inside the guessing tier and the list's own order
+   inside the others; `guessed` when every survivor is a spelling
+   correction, so the page can say so. */
+function searchPick(rows, q, name) {
+  const hits = [];
+  (rows || []).forEach((r) => {
+    const k = searchRank(name(r), q);
+    if (k != null) hits.push({ rank: k, row: r, far: searchFar(name(r), q, k) });
+  });
+  hits.sort((x, y) => x.rank - y.rank || x.far - y.far);
+  return { rows: hits.map((h) => h.row), ranks: hits.map((h) => h.rank),
+           guessed: hits.length > 0 && hits.every((h) => h.rank >= 3) };
+}
+
+/* ---------------- Recent searches, on the page ----------------
+   The site has kept a search history since accounts (`acctSearchLog`,
+   synced to the account) and showed it only on the account page. The
+   search page offers the last five distinct names as chips while the
+   box is empty — one tap to a name looked up yesterday — and hides them
+   the moment a letter is typed. */
+function recentSearchPick(log, n) {
+  const out = [], seen = new Set();
+  for (let i = (log || []).length - 1; i >= 0 && out.length < n; i--) {
+    const q = String((log[i] || {}).q || "").trim();
+    const key = searchNorm(q);
+    if (q.length < 2 || !key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
+function recentSearches(n = 5) {
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem(ACCT_SEARCH_KEY) || "[]"); } catch (e) { log = []; }
+  return recentSearchPick(log, n);
+}
+
+function renderSearchRecent() {
+  const host = document.getElementById("search-recent");
+  if (!host) return;
+  const names = state.search.trim() ? [] : recentSearches();
+  host.hidden = !names.length;
+  host.innerHTML = names.length ? `<span class="sr-label">Recent</span>${names.map((q) =>
+    `<button type="button" class="al-cat sr-chip" data-q="${escapeAttr(q)}">${escapeHtml(q)}</button>`).join("")}` : "";
+}
+
+/* A recent chip is a search: the name goes in the box and the log
+   learns it was wanted again. Delegated — renderPlayers redraws the row. */
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest && e.target.closest(".sr-chip");
+  if (!chip) return;
+  acctSearchLog(chip.dataset.q);
+  openPlayer(chip.dataset.q);
+});
+
+/* The roster directory's answer, the same four tiers, best first and
+   most games inside a tier; `guessed` says when the whole list is a
+   spelling correction. */
 async function rosterMatches(q) {
   const d = await loadRosters(state.sport);
-  const out = [];
+  const hits = [];
   for (const t of Object.values(d.teams || {})) {
     for (const p of t.players || []) {
-      if ((p.player || "").toLowerCase().includes(q)) out.push(p);
+      const k = searchRank(p.player, q);
+      if (k != null) hits.push({ rank: k, p, far: searchFar(p.player, q, k) });
     }
   }
-  out.sort((a, b) => (b.games || 0) - (a.games || 0)
-    || a.player.localeCompare(b.player));
-  return out.slice(0, 12);
+  hits.sort((x, y) => x.rank - y.rank || x.far - y.far || (y.p.games || 0) - (x.p.games || 0)
+    || String(x.p.player).localeCompare(String(y.p.player)));
+  return { rows: hits.slice(0, 12).map((h) => h.p),
+           guessed: hits.length > 0 && hits.every((h) => h.rank >= 3) };
 }
 
 function openRoster(team) {
@@ -8752,9 +9581,13 @@ function countUp(el) {
    Nothing to disclose draws nothing: a book with no picks before the
    epoch is not hiding anything, and a permanent notice about zero bets
    would be noise pretending to be candour. */
-function recEpochHTML(d) {
+function recEpochHTML(d, src) {
   const ep = (d || {}).record_epoch;
-  const at = (d || {}).all_time || {};
+  // `src` is the scoped report on a sport scope and the whole payload on
+  // "all"; either way its all_time is the one this note is about. A
+  // scoped report without one (an older export) says nothing rather
+  // than borrowing the whole journal's count.
+  const at = (src || d || {}).all_time || {};
   const o = at.overall || {};
   const hidden = at.hidden_settled || 0;
   if (!ep || !hidden || !o.settled) return "";
@@ -8973,6 +9806,7 @@ window._recSetSplit = (k) => { _recSplit = k; renderRecord(); };
    rather than `first_3_innings` — but that is the safety net, not the
    plan, and the engine names every market the journal actually holds. */
 let _marketWords = {};
+let _recMinGraded = 30;
 
 function marketWord(k) {
   const key = String(k == null ? "" : k);
@@ -9022,8 +9856,16 @@ function recBookSections(br, scope) {
     const b = books[key];
     if (!b || !(b.w + b.l)) return "";
     const roi = b.staked ? b.net_u / b.staked : 0;
+    const n = b.w + b.l;
+    // A 3-1 record is not a 75% win rate. Said beside the number, the
+    // way every other rate on this page is, rather than hidden until
+    // the sample looks good.
+    // GRADED, not settled: n is wins plus losses, and beside a 7-8-1
+    // record "15 settled" contradicted the verdict's "16 settled" one
+    // screen up (2026-09-06). A push settles; it does not grade.
+    const thin = n < _recMinGraded ? ` · ${n} graded — thin sample` : "";
     const head = `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
-      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI`;
+      + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI${thin}`;
     const pretty = Object.fromEntries(Object.entries(b.markets || {})
       .map(([m, v]) => [marketWord(m), v]));
     return recBucketTable(head, pretty);
@@ -9037,8 +9879,12 @@ function recBookSections(br, scope) {
     <div class="rec-buckets">${cards}</div>`;
 }
 
-function recSplitsSection(o) {
-  const SPLITS = [["market", "Market", o.by_market],
+function recSplitsSection(o, booksDrawn) {
+  // On a sport scope "Records by book" has just drawn the edge book by
+  // market — the same rows this table's Market chip drew again, number
+  // for number, one screen later. The chip goes; side, grade and book
+  // are the splits that section does not have.
+  const SPLITS = [["market", "Market", booksDrawn ? null : o.by_market],
                   ["side", "Side", o.by_side],
                   ["grade", "Grade", o.by_grade],
                   ["book", "Book", o.by_book]];
@@ -9067,16 +9913,29 @@ function recSplitsSection(o) {
 let _recAllPicks = false;
 window._recShowPicks = () => { _recAllPicks = true; renderRecord(); };
 
-function recRecentSection(recent) {
+function recRecentSection(recent, settled) {
   const shown = _recAllPicks ? recent : recent.slice(0, 12);
   const more = recent.length - shown.length;
+  /* THE LIST IS CAPPED AND USED TO SAY IT WAS COMPLETE. The export
+     carries the most recent `RECENT_LIMIT` settled picks; the button
+     said "Show all 20 settled picks" under a verdict reading 193
+     settled, which is how Ethan read the page as not showing the bets
+     it had recommended (2026-09-06). The button now offers what it can
+     actually reveal, and the sub-line names the cap against the true
+     count — which is the verdict's own `settled`, so the two can never
+     disagree. Older picks are not hidden, only not shipped in this
+     file: they are in the journal, in every number above, and in the
+     receipts CSV. */
+  const capped = (settled || 0) > recent.length;
   return `
     <div class="section-title"><span class="st-ico">${icon("list", 15)}</span>Recent settled picks
-      <span class="sub">— newest first, at the price we actually got</span></div>
+      <span class="sub">— newest first, at the price we actually got${
+        capped ? ` · the ${recent.length} most recent of ${settled} settled`
+               : ""}</span></div>
     <div class="card rec-list">
       ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
       ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
-        Show all ${recent.length} settled picks</button>` : ""}
+        Show ${more} more</button>` : ""}
     </div>`;
 }
 function recAnalytics(curve, o, eras) {
@@ -9140,9 +9999,122 @@ function recAnalytics(curve, o, eras) {
     <div class="ra-main">
       ${recCurveChart(sliced, { head: false, eras })}
     </div>
-    <p class="ra-line">${range}</p>
+    ${/* On ALL the window is the whole book, and the record, win rate,
+          ROI and net of the whole book are the verdict's tiles at the top
+          of the room. The line earns its place only when a chip has cut
+          a window the tiles do not describe. */
+      rk === "all" ? "" : `<p class="ra-line">${range}</p>`}
     ${alltime ? `<p class="ra-line ra-dim">${alltime}</p>` : ""}`;
 }
+/* ---------------- The profit calendar ----------------
+   Ethan, 2026-09-05: "a profit calendar on record page". A month grid
+   with the units won or lost each day — green or red by sign, deeper by
+   size — and a tap on a day for the bets behind it. THE EDGE BOOK ONLY:
+   the cells are the curve's own days (`pnl_curve`: main + paper, with a
+   stake), and the Most Likely book keeps its own record above. The two
+   never share a cell, for the reason they never share a headline. */
+let _recCalMonth = null;     // "YYYY-MM" in view; null = the latest month with a bet
+let _recCalDay = null;       // the day whose bets are open, or null
+let _recCalScope = "all";    // the sport the page is scoped to, for the day's fetch
+window._recCalSetMonth = (ym) => { _recCalMonth = ym; _recCalDay = null; renderRecord(); };
+
+/* The months the curve has a settled day in, oldest first. */
+function recCalMonths(curve) {
+  const seen = new Set();
+  (curve || []).forEach((p) => {
+    if (p && /^\d{4}-\d{2}-\d{2}/.test(p.date || "")) seen.add(p.date.slice(0, 7));
+  });
+  return [...seen].sort();
+}
+
+/* Units for a cell: "+0.9", "−1.0", "0.0"; whole numbers past ten. */
+function recCalU(v) {
+  const n = Number(v) || 0, m = Math.abs(n);
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${m >= 10 ? m.toFixed(0) : m.toFixed(1)}`;
+}
+
+/* One month: a Sunday-first grid, a cell per day, the month's line under it. */
+function recCalMonthHTML(curve, ym) {
+  const [y, m] = String(ym).split("-").map(Number);
+  const byDay = new Map((curve || []).filter((p) => String(p.date || "").startsWith(ym + "-"))
+    .map((p) => [p.date, p]));
+  const first = new Date(y, m - 1, 1);
+  const days = new Date(y, m, 0).getDate();
+  const lead = first.getDay();
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<span class="rc-day blank"></span>`);
+  for (let d = 1; d <= days; d++) {
+    const date = `${ym}-${String(d).padStart(2, "0")}`;
+    const p = byDay.get(date);
+    if (!p) { cells.push(`<span class="rc-day off">${d}</span>`); continue; }
+    const u = Number(p.day_u) || 0;
+    const depth = Math.abs(u) < 0.5 ? 1 : Math.abs(u) < 2 ? 2 : 3;
+    cells.push(`<button type="button" class="rc-day ${toneOf(u) || "flat"} rc-${depth}${
+      date === _recCalDay ? " open" : ""}" data-date="${date}"
+      aria-label="${date}: ${recCalU(u)} units, ${p.w || 0}-${p.l || 0}">${d}<b>${recCalU(u)}</b></button>`);
+  }
+  const rows = [...byDay.values()];
+  const net = rows.reduce((a, p) => a + (Number(p.day_u) || 0), 0);
+  const w = rows.reduce((a, p) => a + (p.w || 0), 0);
+  const l = rows.reduce((a, p) => a + (p.l || 0), 0);
+  const label = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return `<div class="rc-month" data-month="${ym}">
+    <div class="rc-grid">${["S", "M", "T", "W", "T", "F", "S"].map((h) =>
+      `<span class="rc-h">${h}</span>`).join("")}${cells.join("")}</div>
+    <p class="rc-foot"><b>${escapeHtml(label)}</b> · ${rows.length} day${rows.length === 1 ? "" : "s"} bet
+      · <b>${w}-${l}</b> · net <b class="${toneOf(net)}">${recCalU(net)}u</b></p></div>`;
+}
+
+/* The section: the month in view (the latest with a bet unless one was
+   chosen), an arrow only where there is a month to go to, and the day
+   panel the tap fills. Nothing when the curve has no settled day. */
+function recCalendarHTML(curve) {
+  const months = recCalMonths(curve);
+  if (!months.length) return "";
+  const ym = months.includes(_recCalMonth) ? _recCalMonth : months[months.length - 1];
+  const i = months.indexOf(ym);
+  const arrow = (to, glyph, label) => to == null ? "" :
+    `<button class="ra-range" onclick="_recCalSetMonth('${to}')" aria-label="${label}">${glyph}</button>`;
+  const nav = months.length > 1 ? `<span class="ra-ranges">${
+    arrow(i > 0 ? months[i - 1] : null, "‹", "Earlier month")}${
+    arrow(i < months.length - 1 ? months[i + 1] : null, "›", "Later month")}</span>` : "";
+  return `
+    <div class="section-title"><span class="st-ico">${icon("calendar", 15)}</span>Profit calendar
+      <span class="sub">— units by day, edge book only; tap a day for its bets</span>${nav}</div>
+    <div class="card rc-card">${recCalMonthHTML(curve, ym)}<div id="rc-day"></div></div>`;
+}
+
+/* A tapped day: its line from the curve at once, its rows from the
+   record endpoint, scoped the way the page is. If the endpoint cannot be
+   reached (a static host has no /api), the rows this page already holds
+   for that day are shown and the panel says that is what they are. */
+async function recCalDayOpen(date, curve, recent) {
+  _recCalDay = date;
+  const host = document.getElementById("rc-day");
+  if (!host) return;
+  document.querySelectorAll(".rc-day.open").forEach((el) => el.classList.remove("open"));
+  const cell = document.querySelector(`.rc-day[data-date="${date}"]`);
+  if (cell) cell.classList.add("open");
+  const p = (curve || []).find((x) => x.date === date) || {};
+  const extra = (p.n || 0) - (p.w || 0) - (p.l || 0);
+  const head = `<b>${escapeHtml(formatGameDate(date) || date)}</b> · ${p.w || 0}-${p.l || 0}${
+    extra > 0 ? `-${extra}` : ""} · <b class="${toneOf(p.day_u || 0)}">${recCalU(p.day_u || 0)}u</b>`;
+  host.innerHTML = `<p class="rc-dayhead">${head}</p><p class="rail-quiet">Loading the day’s bets…</p>`;
+  let rows = null, note = "";
+  try {
+    const sport = _recCalScope === "all" ? "" : _recCalScope;
+    const r = await fetch(`/api/record/day?date=${encodeURIComponent(date)}&sport=${encodeURIComponent(sport)}`);
+    if (r.ok) rows = ((await r.json()) || {}).rows || [];
+  } catch (e) { rows = null; }
+  if (_recCalDay !== date) return;                         // another day was tapped
+  if (!rows) {
+    rows = (recent || []).filter((b) => b.date === date);
+    note = `<p class="rail-quiet">The day’s full list could not be fetched — these are the rows this page already holds.</p>`;
+  }
+  host.innerHTML = `<p class="rc-dayhead">${head}</p>${note}
+    <div class="rec-list">${rows.map(recSettledRow).join("") || panelEmpty("No settled bets on this day in this scope.")}</div>`;
+}
+
 function raChips(avail, rk) {
   if (avail.length < 2) return "";
   return `<span class="ra-ranges">${avail.map(([k]) =>
@@ -10544,13 +11516,20 @@ function recCalibrationSection(cal, era) {
       earned by gates that no longer exist. The current model gets its own chart here once
       ~50 of its picks settle (${eraN} so far). The nightly calibration refit already feeds
       these misses back into the model’s tempering.</p>`;
+  // FOLDED. The era's table is the whole table again — eight rows, a
+  // chart and three scores, a second time, on a phone (2026-09-06:
+  // "everything seems cluttered"). Its heading stays where it was and
+  // says what is inside; the rows open on a tap.
   const eraBlock = eraN >= 50 ? `
     <div class="section-title minor">Current model only
       <span class="sub">— the same test, restricted to picks graded since the
       ${escapeHtml((era || {}).since || "")} re-tune (n=${eraN}).</span></div>
-    <div class="card" style="padding:0">${calBucketRows(era.buckets)}
-      <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
-        ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>` : "";
+    <details class="rec-epoch rec-fold">
+      <summary>Open the current model’s own buckets, chart and scores</summary>
+      <div class="card" style="padding:0">${calBucketRows(era.buckets)}
+        <div style="padding:14px 14px 4px;border-top:1px solid rgba(255,255,255,.06)">
+          ${relWrap(era.buckets, reliabilityDiagram(era.buckets))}</div>${calScoreBlock(era)}</div>
+    </details>` : "";
   return `<div class="section-title">Calibration — did "60%" mean 60%?
       <span class="sub">— every settled pick, bucketed by the model’s claimed probability.</span></div>
     <div class="card" style="padding:0">${rows}${diagramBlock}${brier}${eraNote}</div>
@@ -11582,26 +12561,46 @@ function recordVerdictHTML(src, scopeLabel) {
   }
 
   const chart = buckets.length >= 2 ? reliabilityDiagram(cal.buckets) : "";
+  const graded = (o.wins || 0) + (o.losses || 0);
+  /* ONE SUMMARY, NOT THREE. Ethan, 2026-09-06: "everything seems
+     cluttered." Under this card sat a strip of five stat cards — ROI,
+     Avg CLV, Price CLV, Record, Win rate — of which ROI and Avg CLV were
+     these tiles again, word for word. The strip is gone; the record,
+     the win rate against its break-even and the price CLV live here,
+     so a number appears once and the reader meets it once. */
+  const priceClv = o.avg_price_clv == null ? "" : ` · price ${
+    sign(o.avg_price_clv * 100, 2)} pts on ${o.price_clv_n ?? 0} over${
+    o.price_clv_n === 1 ? "" : "s"}`;
 
   return `<section class="card rv-card">
     <div class="section-title">The verdict
       <span class="sub">— ${escapeHtml(scopeLabel)}, everything journaled at
       its real price and graded in public</span></div>
     <div class="rv-tiles">
-      ${tile("settled", String(settled),
-             o.open ? `${o.open} still open` : "graded picks")}
+      ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
+             `${o.open || 0} open · ${settled} settled`)}
+      ${tile("net", sign(o.net_units || 0, 2) + "u",
+             `${sign((o.roi || 0) * 100)}% ROI on ${(o.units_staked || 0).toFixed(1)}u at risk`,
+             (o.net_units || 0) >= 0 ? "good" : "warn")}
+      ${/* The break-even is read off the prices this book ACTUALLY took,
+            not assumed to be -110: a book that buys short prices needs far
+            more than 52.4%. The flat wording survives only when no odds
+            are on file to average. */ ""}
+      ${tile("Win rate", graded ? ((o.win_rate || 0) * 100).toFixed(1) + "%" : "—",
+             o.breakeven == null
+               ? "break-even ≈ 52.4% at −110"
+               : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
+             !graded || o.breakeven == null ? ""
+               : (o.win_rate >= o.breakeven ? "good" : "warn"))}
+      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + ' <span class="unit">pts</span>',
+             o.clv_n ? `line, on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}${priceClv}`
+                     : "accrues as closes are captured",
+             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
       ${tile("claimed", claimed == null ? "—" : (claimed * 100).toFixed(1) + "%",
              "what the model said")}
       ${tile("landed", landed == null ? "—" : (landed * 100).toFixed(1) + "%",
              "what happened",
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
-      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + " pts",
-             o.clv_n ? `on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}`
-                     : "accrues as closes are captured",
-             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
-      ${tile("net", sign(o.net_units || 0, 2) + "u",
-             `${sign((o.roi || 0) * 100)}% on ${(o.units_staked || 0).toFixed(1)}u`,
-             (o.net_units || 0) >= 0 ? "good" : "warn")}
     </div>
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
@@ -11650,6 +12649,10 @@ async function renderRecord() {
   // before anything renders so a payload without the key falls back to
   // prettifying rather than to a stale map from a previous render.
   _marketWords = d.market_words || {};
+  // The ledger's own bar for "enough graded bets to mean anything",
+  // shipped per sport as `min_graded`; the same constant on every
+  // sport's report, so any one of them says what it is.
+  _recMinGraded = (Object.values(d.by_sport || {})[0] || {}).min_graded || 30;
   // Default to the sport whose board you came from; "all" is a click away.
   const tracked = d.tracked_sports || [];
   let scope = _recordScope
@@ -11667,6 +12670,7 @@ async function renderRecord() {
   // quietly keep showing the combined number next to a per-sport one.
   const src = scoped || d;
   const o = src.overall;
+  _recCalScope = scope;                       // the day panel fetches in this scope
   if (scope === "intel") {
     host.innerHTML = scopeBar + (pmv
       ? recPolymarketSection(pmv)
@@ -11679,21 +12683,28 @@ async function renderRecord() {
     return;
   }
   if (scoped && !o.settled && !o.open) {
-    // An empty journal is not an empty MODEL: the ladder can already be
-    // fitted for this sport from walk-forward history (the NFL's dials
-    // adopted before its first journaled bet). Show the learning below
-    // the empty state instead of hiding it behind the journal.
+    // THE EMPTY STATE, AND ONLY WHAT HAS SOMETHING TO SAY ABOUT THIS
+    // SPORT. This used to append the whole learning ladder under the
+    // slate, on the argument that an empty journal is not an empty
+    // model. Rendered for the NBA on 2026-09-06 it read: "Nothing
+    // journaled for NBA yet", "Nothing tuned for NBA yet", a mining
+    // panel counting "461 graded bets, all sports", preregistered tests
+    // about NFL props, and a lab of four zeros — five panels saying
+    // nothing, one of them about another league. Ethan: "everything
+    // seems cluttered." The restated view and the night desk stay: both
+    // draw nothing for a sport they have nothing on, and the desk can
+    // have a brief for a sport before its first pick settles (the NFL,
+    // every August). The ladder still renders in full for every sport
+    // with a journal, and on "All bets".
     host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">Nothing journaled for ${escapeHtml(
         (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
-      the moment it is made, and grades when the games settle.</div></div>`
+      the moment it is made, and grades when the games settle. The whole
+      journal’s learning is under <b>All bets</b>.</div></div>`
       + recRestatedSection(d.restated, scope)
-      + recProseSection(d.prose, scope)
-      + recSelfTuningSection(d.self_tuning, scope)
-      + recLossPatternsSection(d.loss_patterns, scope)
-      + recPrereg(d.prereg) + recHypothesisLab(d.hypothesis_lab, scope);
+      + recProseSection(d.prose, scope);
     bindRecordScopes(host);
     return;
   }
@@ -11702,9 +12713,12 @@ async function renderRecord() {
        are held out of this record: a grading bug sized them at 0.00 units, so they
        were never really bets. They stay out rather than being quietly restaked at a
        size nobody chose.</p>` : "";
-  const small = o.settled < 100
-    ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
-       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
+  // Under the ledger's own bar the verdict already says "too early to
+  // call"; this note said it a second time, and said it about "0 settled
+  // pick(s) for nfl". It speaks only in the band the verdict does not.
+  const small = o.settled >= (src.min_graded || _recMinGraded) && o.settled < 100
+    ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled picks${
+       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
@@ -11736,44 +12750,16 @@ async function renderRecord() {
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  const receipts = verdict + `
-    <div class="stat-cards rec-kpis">
-      ${statCardHTML("rising", "ROI",
-          (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
-          `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
-          toneOf(o.roi))}
-      ${statCardHTML("signal", "Avg CLV",
-          o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
-          o.avg_clv == null ? "accrues as daily closes are captured"
-            : `line movement on ${o.clv_n ?? 0} bet${o.clv_n === 1 ? "" : "s"} — 0.00 where the line cannot move`,
-          o.avg_clv == null ? "" : toneOf(o.avg_clv))}
-      ${/* The price tile, which is the ONLY CLV a fixed-line market has.
-            A home-run prop is quoted OVER 0.5 and closes at 0.5, so the
-            line tile beside this one reads 0.00 for two thirds of the
-            book and says nothing — while the price moved all evening.
-            Kept as its own tile rather than folded in: line points and
-            probability points are different units, and averaging them
-            together would be arithmetic on two different things. */ ""}
-      ${o.avg_price_clv == null ? "" : statCardHTML("chart", "Price CLV",
-          (o.avg_price_clv >= 0 ? "+" : "") + (o.avg_price_clv * 100).toFixed(2) + ' <span class="unit">pts</span>',
-          `how the PRICE moved on ${o.price_clv_n ?? 0} over${o.price_clv_n === 1 ? "" : "s"} — the only CLV a 0.5 line has`,
-          toneOf(o.avg_price_clv))}
-      ${statCardHTML("trophy", "Record",
-          `${o.wins}\u2011${o.losses}\u2011${o.pushes}`,
-          `${o.open} open · ${o.settled} settled`)}
-      ${/* The break-even is read off the prices this book ACTUALLY took,
-            not assumed to be -110. A book that buys short prices needs far
-            more than 52.4%: on the MLB journal the real bar is near 58%,
-            so a 47% win rate read as five points short when it was ten.
-            The flat number flattered the record on the one figure a
-            bettor checks first. Falls back to the -110 wording only when
-            no odds are available to average. */ ""}
-      ${statCardHTML("target", "Win rate", (o.win_rate * 100).toFixed(1) + "%",
-          o.breakeven == null
-            ? "break-even ≈ 52.4% at −110"
-            : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
-          o.breakeven != null && o.win_rate < o.breakeven ? "neg" : "")}
-    </div>
+  /* THE BOOK SECTIONS LEAD A SPORT'S RECORD. Ethan, 2026-09-05, asking
+     for the second time: "add to the record page for each sport sections
+     to the records, like the edge bets have a certain section and record
+     spot, the most likely bets have a record spot". They had existed
+     since 09-01 — as the LAST thing on this tab, under the curve, the
+     splits and a dozen settled rows, on a page that lands sport-scoped.
+     A section nobody scrolls to is a section nobody has. On the "all"
+     scope the Most Likely record still leads (08-31) and the pooled book
+     sections still ride after the receipts, so nothing moves there. */
+  const receipts = verdict + (scoped ? recBookSections(d.book_records, scope) : "") + `
     ${/* PROCESS ON ITS OWN ROW, per Ethan's render (2026-08-24). It was
          the sixth tile in the strip and it is not the same KIND of
          number as the other five: those are the record, this grades the
@@ -11798,10 +12784,11 @@ async function renderRecord() {
               <li class="bad">${pr.unlucky_losses || 0} good-bet loss(es)</li>
             </ul>` : "" })}
       <div class="rec-process-side">
-        ${recEpochHTML(d)}
+        ${recEpochHTML(d, src)}
         ${recDisclosure("What counts as a tracked bet", `Journals every
-      <strong>Recommended</strong> bet — the same count the "Recommended bets"
-      tile shows on each sport’s board: player props plus game bets (moneyline,
+      <strong>Recommended</strong> bet — the new picks the "On tonight"
+      tile counts on each sport’s board (its riding bets were journaled
+      the day they were placed): player props plus game bets (moneyline,
       spread &amp; totals, sharp-anchor and model alike) — at the real book price
       shown when it was recommended. One entry per player &amp; market per day.
       Long Shots and stale-line flags are tracked in their own buckets at a flat
@@ -11827,8 +12814,9 @@ async function renderRecord() {
     ${unstaked}
     ${small}
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
-    ${recSplitsSection(o)}
-    ${recRecentSection(src.recent || [])}
+    ${recCalendarHTML(src.curve)}
+    ${recSplitsSection(o, !!scoped)}
+    ${recRecentSection(src.recent || [], o.settled)}
     ${edgePanel}
   `;
   host.innerHTML = scopeBar
@@ -11837,6 +12825,12 @@ async function renderRecord() {
       · settles automatically as results are ingested each day.</p>`;
   bindRecordScopes(host);
   bindSubtabs(host);
+  // The calendar's days are doors to their bets; a day left open on the
+  // last render (a range chip, a month arrow) is reopened.
+  host.querySelectorAll(".rc-day[data-date]").forEach((el) =>
+    el.addEventListener("click", () => recCalDayOpen(el.dataset.date, src.curve, src.recent || [])));
+  if (_recCalDay && host.querySelector(`.rc-day[data-date="${_recCalDay}"]`))
+    recCalDayOpen(_recCalDay, src.curve, src.recent || []);
 }
 
 /* The five rooms of the Record page.
@@ -11891,7 +12885,9 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // honest under-100-settles refusal explains itself while the
      // sample builds.
      (scoped ? "" : recLikelySection(d.likely)) + receipts
-     + recBookSections(d.book_records, scope)],
+     // Pooled across sports on "all"; a sport's own sections lead its
+     // receipts instead (see renderRecord), so this must not repeat them.
+     + (scoped ? "" : recBookSections(d.book_records, scope))],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
@@ -12014,6 +13010,11 @@ function recSettledRow(b) {
           procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">${iconMark("dot", 10)}lucky</span>`;
         else if (b.process === "good" && b.status === "lost")
           procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">${iconMark("rising", 11)}beat close</span>`;
+        else if (b.clv != null && Math.abs(b.clv) < 0.05)
+          // A close that did not move is the row's default state, not a
+          // fact worth a chip: "+0.0 CLV" on two rows in three was the
+          // noise Ethan was reading around (2026-09-06).
+          procChip = "";
         else if (b.clv != null)
           procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
@@ -12023,12 +13024,19 @@ function recSettledRow(b) {
         const causeChip = (b.status === "lost" && b.cause && !/^variance/.test(b.cause))
           ? `<span class="rl-proc warn" title="Measured at settle from the ingested results — the circumstance, not an excuse">${escapeHtml(b.cause)}</span>`
           : "";
+        // A moneyline has no line to print — "AWAY 0 Moneyline" was the
+        // stored placeholder showing through.
+        const lineTxt = (b.market === "moneyline" || b.line == null) ? "" : `${b.line} `;
+        // ONE grid cell for both chips. As two siblings they were two grid
+        // items: on a phone both took the `proc` area and drew on top of
+        // each other; on the desktop's six-track grid the second one
+        // wrapped onto a row of its own.
         return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
           <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(b.market)}</span></span>
-          ${procChip}${causeChip}
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${lineTxt}${escapeHtml(marketWord(b.market))}</span></span>
+          <span class="rl-chips">${procChip}${causeChip}</span>
           <span class="rl-odds">${american(b.odds)}</span>
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;
@@ -12771,10 +13779,15 @@ function enterStandaloneMode(name) {
   markMoreMenu();          // the tool button just became active
   // Fantasy is NFL — avatars must draw helmets even if MLB was selected.
   if (name === "fantasy") window.ACTIVE_SPORT = "nfl";
-  // The Book's front door opens on the WHOLE record — the cross-sport
-  // view where the learning ladder reads unscoped. The scope chips still
-  // narrow to a league, and a chip already chosen this session is kept.
-  if (name === "record" && !_recordScope) _recordScope = "all";
+  // THE BOOK OPENS ON THE SPORT YOU ARE LOOKING AT. It used to force
+  // "all" here — "the cross-sport view where the learning ladder reads
+  // unscoped" — and that is what read as one jumbled page. Ethan,
+  // 2026-09-05: "we need to be recording that seperatly for every sport
+  // on there own page." The record was always kept per sport; this is
+  // the landing catching up with it. `_recordScope` left null means
+  // renderRecord follows `state.sport` (its own default, in its own
+  // words: "null = follow the sport you are on"); "All bets" is the
+  // first chip, and a chip chosen this session is still kept.
   switchView(name);
 }
 
@@ -19122,6 +20135,12 @@ function settingsHTML() {
         teams up a ranked board would say the model likes them more than
         it does.</span></div>
     </div>
+    <div class="set-row">
+      <div class="set-k">Walkthrough</div>
+      <div class="set-v"><button type="button" class="set-opt" data-set-tour="1">Show me around</button>
+        <span class="set-note wide">The three cards a first visit sees: what a
+        pick card is, what RIDING means, why the Record keeps two books.</span></div>
+    </div>
   </section>`;
 }
 
@@ -19217,6 +20236,8 @@ function bindSettings() {
       favToggle(abbr, sport);
       redraw();
     }));
+  host.querySelectorAll("[data-set-tour]").forEach((b) =>
+    b.addEventListener("click", () => tourOpen(0)));
 }
 
 /* ---- WHERE A LEAGUE GETS LINKED ----------------------------------------
@@ -20152,6 +21173,39 @@ function injLineHTML(r) {
     ${escapeHtml(r.status)}${bits ? ` — ${escapeHtml(bits)}` : ""}</div>`;
 }
 
+/* ---------------- Next man up ----------------
+   Ethan, 2026-09-05: "next man up on injurie page". Beside a man who is
+   Out, Doubtful or on IR: who holds his work now, with the share each
+   already holds — the same join the waiver board makes, turned to face
+   the injured man (engine/waivers.next_up), read off fantasy.json's
+   free `waivers` key. NFL only, because the usage shares behind it are
+   measured for the NFL only; a row with no entry draws nothing. */
+let _nextUp = new Map();        // "player|team" → the entry, for the page being drawn
+let _nextUpAt = 0, _nextUpBoard = null;
+
+async function loadNextUp() {
+  if (_nextUpBoard && Date.now() - _nextUpAt < 5 * 60e3) return _nextUpBoard;
+  try {
+    const res = await paidFetch("fantasy.json");
+    if (res.ok) { _nextUpBoard = await res.json(); _nextUpAt = Date.now(); }
+  } catch (e) {}
+  return _nextUpBoard;
+}
+
+const nextUpKey = (r) => `${String((r || {}).player || "").toLowerCase().trim()}|${String((r || {}).team || "").toLowerCase().trim()}`;
+
+/* The line under an injured man: his heirs and the share each holds,
+   most first, three at most. */
+function nextUpLine(entry) {
+  const heirs = ((entry || {}).heirs || []).slice(0, 3);
+  if (!heirs.length) return "";
+  const pct = (v) => v == null ? "—" : `${Math.round(Number(v) * 100)}%`;
+  return `<span class="inj-next" title="Who holds the ${escapeAttr(entry.position || "")} work while ${
+      escapeAttr(entry.hurt || "")} is ${escapeAttr(entry.status || "out")} — the share each already held, from the usage board">${
+      icon("rising", 11)} Next man up: ${heirs.map((h, i) =>
+        `${i ? "<b>" : "<b>"}${escapeHtml(h.player || "")}</b> ${pct(h.share)}`).join(" · ")}</span>`;
+}
+
 function injRow(r, withTeam) {
   const face = r.face && /^https:\/\//.test(r.face)
     ? `<img class="inj-face" src="${escapeHtml(r.face)}" alt="" loading="lazy"
@@ -20167,6 +21221,7 @@ function injRow(r, withTeam) {
       <span><b>${escapeHtml(r.player)}</b>${
         r.pos ? ` <span class="inj-pos">${escapeHtml(r.pos)}</span>` : ""}</span>
       <span class="inj-line-sub">${what}</span>
+      ${nextUpLine(_nextUp.get(nextUpKey(r)))}
     </span>
     <span class="inj-line-right">
       <b style="color:${injTone(r.status)}">${escapeHtml(r.status)}</b>
@@ -20230,6 +21285,14 @@ async function renderInjuries() {
   const sport = state.sport || "nfl";
   const newsHTML = newsSectionHTML(sport, await loadNews());
   const rows = (((d || {}).sports) || {})[sport] || [];
+  // Who holds each injured man's work (NFL: the only league with usage
+  // shares measured). Keyed the way the injury rows are, so a row finds
+  // its own entry without a second normalisation.
+  _nextUp = new Map();
+  if (sport === "nfl") {
+    const fx = await loadNextUp();
+    (((fx || {}).waivers || {}).next_up || []).forEach((e) => _nextUp.set(nextUpKey({ player: e.hurt, team: e.team }), e));
+  }
   if (!rows.length) {
     const note = sport === "cfb"
       ? `College programs have no duty to report, so this feed runs sparse —
@@ -20312,7 +21375,10 @@ async function renderInjuries() {
     ${teams.map((t) => injTeamBlock(t, byTeam[t], severity[t])).join("")}
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin-top:14px">
       Statuses are the league’s own filings via ESPN’s public feed, refreshed with the
-      site on a 30-minute cache, one row per player — his newest filing. The NFL’s
+      site on a 30-minute cache, one row per player — his newest filing.${
+      _nextUp.size ? ` <b>Next man up</b> names who holds an injured man’s work and the
+      share each already held, from the usage board — a measured role, never a
+      claim about who is on your league’s wire.` : ""} The NFL’s
       practice-level detail (limited/DNP, the usage model’s injury inputs) lives on the
       Fantasy page — this board is availability, league-wide.
       ${ageS != null
@@ -20368,8 +21434,197 @@ function injTeamBlock(team, rows, sev) {
 let _stdUnitsAll = false;
 window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings(); };
 
-function unitRankingsHTML(ur) {
-  if (!ur || !(ur.offense || []).length) return "";
+/* ---------------- Under pressure ----------------
+   Ethan, 2026-09-05: "Add under pressure data for teams, like clutch
+   win % and reliability % and comeback % and choke % and see if we can
+   have that as live data as well like when games are going."
+
+   The numbers ride the standings build (`pressure` on
+   standings_<sport>.json, engine/pressure.py): four rates per team,
+   counted from the same finished games as the table above them —
+   clutch (one-score games won), reliability (won as the favourite),
+   comeback (won as the underdog — the MARKET'S underdog, and the page
+   says so, because we hold no half-time scores yet), choke (one-score
+   games lost as the favourite). Three places read them: a ranked
+   section on the standings page, a two-team table on the game page,
+   and a line on the live card that reads the situation — a one-score
+   game late, a favourite trailing — against the two teams' rates. The
+   live line is the only one that changes during a game; the rates
+   under it are season counts and do not pretend otherwise. */
+const PRESSURE_RATES = [
+  ["clutch", "Clutch", "one-score games won"],
+  ["reliability", "Reliability", "won as the favourite"],
+  ["comeback", "Comeback", "won as the market’s underdog"],
+  ["choke", "Choke", "one-score games lost as the favourite"],
+];
+const PRESSURE_ONE_SCORE = { nfl: 8, cfb: 8, nba: 5, wnba: 5, mlb: 1 };
+let _stdPressureAll = false;
+window._stdPressureToggle = () => { _stdPressureAll = !_stdPressureAll; renderStandings(); };
+
+function pressurePct(v) { return v == null ? "—" : `${Math.round(v)}%`; }
+
+function pressureUnit(pr) {
+  return `${pr.one_score} ${pr.one_score === 1 ? "run" : "points"}`;
+}
+
+function pressureHTML(pr, d) {
+  if (!pr || !pr.ranked) return "";
+  const cols = PRESSURE_RATES.filter(([k]) => (pr.ranked[k] || []).length);
+  if (!cols.length) return "";
+  const meta = (typeof teamsForSport === "function"
+    ? teamsForSport(state.sport) : {}) || {};
+  const CAP = 10;
+  const col = ([key, title, note]) => {
+    const rows = pr.ranked[key];
+    return `
+    <div class="rec-bucket">
+      <div class="rb-head">${escapeHtml(title)}
+        <span class="mini" style="opacity:.6"> ${escapeHtml(note)}</span></div>
+      ${rows.slice(0, _stdPressureAll ? rows.length : CAP).map((r) => `
+        <div class="std-row std-unit-row">
+          <span class="std-rank">${r.rank}</span>
+          <span class="std-mark">${teamMarkIn(state.sport, r.team, 22)}</span>
+          <span class="std-name">${escapeHtml((meta[r.team] || {}).name
+            || (meta[r.team] || {}).nick || r.team)}
+            <span class="k" style="opacity:.6">${r.n} game${r.n === 1 ? "" : "s"}</span></span>
+          <span class="std-n">${pressurePct(r.value)}</span>
+        </div>`).join("")}
+    </div>`;
+  };
+  const most = Math.max(...cols.map(([k]) => pr.ranked[k].length));
+  const lastSeason = pr.season_used !== pr.season;
+  return `
+    <div class="section-title">Under pressure
+      <span class="sub">— clutch, reliability, comeback and choke, from the
+        finished ${escapeHtml(String(pr.season_used))} games${lastSeason
+          ? " — last season’s, until this one has four games a team" : ""}
+        · one-score means within ${escapeHtml(pressureUnit(pr))}
+        · a team needs ${pr.min_games} games, and ${pr.min_rate_n} of the kind
+        counted, to be ranked</span></div>
+    ${pr.note ? `<div class="ls-note">${escapeHtml(pr.note)}</div>` : ""}
+    <div class="rec-buckets pr-buckets">${cols.map(col).join("")}</div>
+    ${most > CAP ? `<button class="btn ghost" type="button"
+      onclick="_stdPressureToggle()">${_stdPressureAll
+        ? `Show the top ${CAP}` : `Show all ${most} teams`}</button>` : ""}`;
+}
+
+/* Is the game in its last period? The live feed's period is a label —
+   "Q4", "4th", "OT", "Top 9th" — so this reads the label, and reads
+   nothing into one it does not recognise. Pure, tested in node. */
+function pressureLate(sport, period) {
+  const p = String(period || "");
+  if (sport === "mlb") {
+    const m = p.match(/(\d+)/);
+    return !!m && +m[1] >= 7;
+  }
+  return /\b(Q4|4th|OT\d*|\d?OT)\b/i.test(p);
+}
+
+/* The market's favourite for a slate game: the slate's own word for it,
+   else the sign of the home-relative spread (negative = home favoured,
+   the games table's convention), else nobody. */
+function pressureFav(g) {
+  if (g.favorite) return g.favorite;
+  if (g.spread == null) return null;
+  return g.spread < 0 ? g.home : g.spread > 0 ? g.away : null;
+}
+
+/* One sentence for a game, read against the two teams' rates. Before
+   the game and after it: the two clutch rates. During it: what the
+   scoreboard is asking — a favourite trailing is asked for its
+   reliability and the underdog for its comeback rate; a one-score game
+   late asks the favourite how often it has let one slip, or, with no
+   favourite on file, both sides how often they win these. Pure. */
+function pressureSituation({ sport, g, pr }) {
+  const teams = (pr && pr.teams) || {};
+  const h = teams[g.home], a = teams[g.away];
+  if (!h || !a) return "";
+  const lv = g.live || {};
+  const pct = pressurePct;
+  if (lv.state !== "live" || lv.home_score == null || lv.away_score == null)
+    return `${g.home} wins ${pct(h.clutch)} of its one-score games · ${g.away} ${pct(a.clutch)}`;
+  const margin = Math.abs(lv.home_score - lv.away_score);
+  const one = margin <= (PRESSURE_ONE_SCORE[sport] || 0);
+  const late = pressureLate(sport, lv.period);
+  const fav = pressureFav(g);
+  const dog = fav === g.home ? g.away : fav === g.away ? g.home : null;
+  const F = fav ? teams[fav] : null, D = dog ? teams[dog] : null;
+  const lead = lv.home_score > lv.away_score ? g.home
+    : lv.away_score > lv.home_score ? g.away : null;
+  if (F && D && lead && lead !== fav && F.reliability != null)
+    return `${fav} trails as the favourite · wins ${pct(F.reliability)} when favoured`
+      + ` · ${dog} wins ${pct(D.comeback)} as the underdog`;
+  if (one && late && F && D && F.choke != null)
+    return `One-score game late · ${fav} has let ${pct(F.choke)} of these slip as the favourite`
+      + ` · ${dog} wins ${pct(D.clutch)} of its one-score games`;
+  if (one && late)
+    return `One-score game late · ${g.home} wins ${pct(h.clutch)} of these · ${g.away} ${pct(a.clutch)}`;
+  return `${g.home} clutch ${pct(h.clutch)} · ${g.away} clutch ${pct(a.clutch)}`;
+}
+
+function pressureLiveHTML(sport, g) {
+  const pr = (_standingsCache[sport] || {}).pressure;
+  const line = pr ? pressureSituation({ sport, g, pr }) : "";
+  if (!line) return "";
+  return `<div class="lb-pressure"><span class="lb-pk">Under pressure</span>${escapeHtml(line)}${
+    pr.season_used !== pr.season
+      ? ` <span class="k">(${escapeHtml(String(pr.season_used))})</span>` : ""}</div>`;
+}
+
+/* The live board draws its cards synchronously; this makes sure every
+   league on it has its standings file in the cache first. Cached after
+   the first read, so it costs one fetch per league per visit. */
+async function pressureWarm(sports) {
+  await Promise.all([...new Set(sports || [])]
+    .filter((s) => PRESSURE_ONE_SCORE[s]).map((s) => loadStandings(s)));
+}
+
+/* The game page's two-team table. Drawn from the cache when the league's
+   standings are already in it; otherwise a placeholder that fills
+   itself in when the file lands, so the page never waits on it. */
+function pressurePairHTML(sport, g) {
+  if (_standingsCache[sport] === undefined) {
+    loadStandings(sport).then(() => {
+      const host = document.getElementById("gp-pressure");
+      if (host) host.outerHTML = pressurePairHTML(sport, g);
+    });
+    return `<div id="gp-pressure" hidden></div>`;
+  }
+  const pr = (_standingsCache[sport] || {}).pressure;
+  if (!pr) return "";
+  const rows = [g.away, g.home].map((t) => [t, pr.teams[t]]).filter(([, r]) => r);
+  if (!rows.length) return "";
+  return `
+    <div class="card gp-pressure" id="gp-pressure"><div class="gp-panel-title">Under pressure
+        <span class="k">${escapeHtml(String(pr.season_used))} · one-score means within ${
+          escapeHtml(pressureUnit(pr))}</span></div>
+      <div class="pr-table">
+        <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
+          `<span class="lb-th">${t}</span>`).join("")}
+        ${rows.map(([t, r]) => `<span class="lb-tm">${teamMark(t, 20)} ${escapeHtml(t)}
+            <span class="k">${escapeHtml(r.record)}</span></span>${
+          PRESSURE_RATES.map(([k]) => `<b>${pressurePct(r[k])}</b>`).join("")}`).join("")}
+      </div>
+      ${pr.note ? `<div class="pr-defs">${escapeHtml(pr.note)}</div>` : ""}
+      <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
+        `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
+    </div>`;
+}
+
+function unitRankingsHTML(ur, d) {
+  /* NEVER SILENTLY ABSENT ON A FOOTBALL PAGE. This returned "" whenever
+     the build had no rankings — and for the NFL that is every day until
+     Week 1 has finals, so the section Ethan asked for on 09-02 was
+     invisible when he looked for it on 09-05 and he asked again. The
+     rankings themselves are unchanged (scoring offense and defense from
+     the same finished games as the table); what changes is the empty
+     case, which now says WHY and, on the NFL, shows the model's own
+     measured profile ranked on last season until this one has games. */
+  const isFootball = state.sport === "nfl" || state.sport === "cfb";
+  if (!ur || !(ur.offense || []).length) {
+    if (!isFootball) return "";
+    return unitRankingsWaitHTML(d || {});
+  }
   const meta = (typeof teamsForSport === "function"
     ? teamsForSport(state.sport) : {}) || {};
   const CAP = 25;
@@ -20400,6 +21655,75 @@ function unitRankingsHTML(ur) {
     ${more > 0 ? `<button class="btn ghost" type="button"
       onclick="_stdUnitsToggle()">${_stdUnitsAll
         ? "Show the top 25" : `Show all ${ur.offense.length} teams`}</button>` : ""}`;
+}
+
+/* The football rankings section when the season has no rankings yet.
+
+   Two halves. The REASON, from the standings build's own fields: a
+   season nobody has played (`season_wait`, with the first game date when
+   the build knows it), or a season whose feed was unreachable, or fewer
+   than four teams with a finished game. And, where the board carries
+   it, THE MODEL'S OWN PROFILE: `team_shapes` is measured on the latest
+   season with enough finals (nfl_build attaches it, ranked on last
+   season until this one has games), and its raw offense and defense
+   axes are points scored and points allowed per game — the same two
+   measures the scoring rankings use, so the columns read the same and
+   the caveat the game page already prints applies: last season's roster
+   is not this season's. */
+function unitRankingsWaitHTML(d) {
+  const season = d.season || "";
+  const why = d.season_wait
+    ? `The ${season} season hasn’t kicked off${
+        d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
+        Scoring rankings start with the first finals.`
+    : d.feed_error
+      ? `No ${season} scoring rankings yet — the league feed was unreachable
+         on the last build, and fewer than four teams have a finished game
+         on file.`
+      : `No ${season} scoring rankings yet — fewer than four teams have a
+         finished game on file.`;
+  const shapes = (state.data || {}).team_shapes || {};
+  const shapeSeason = (state.data || {}).team_shapes_season || "";
+  const teams = Object.keys(shapes).filter((t) => shapes[t] && shapes[t].raw);
+  let fallback = "";
+  if (teams.length >= 4) {
+    const meta = (typeof teamsForSport === "function"
+      ? teamsForSport(state.sport) : {}) || {};
+    const col = (title, note, key, ascending) => {
+      const rows = teams.slice().sort((a, b) => {
+        const va = Number(shapes[a].raw[key]), vb = Number(shapes[b].raw[key]);
+        return (ascending ? va - vb : vb - va) || a.localeCompare(b);
+      });
+      return `
+      <div class="rec-bucket">
+        <div class="rb-head">${escapeHtml(title)}
+          <span class="mini" style="opacity:.6"> ${escapeHtml(note)}</span></div>
+        ${rows.map((t, i) => `
+          <div class="std-row std-unit-row">
+            <span class="std-rank">${i + 1}</span>
+            <span class="std-mark">${teamMarkIn(state.sport, t, 22)}</span>
+            <span class="std-name">${escapeHtml((meta[t] || {}).name
+              || (meta[t] || {}).nick || t)}
+              <span class="k" style="opacity:.6">${shapes[t].games || 0} gm</span></span>
+            <span class="std-n">${Number(shapes[t].raw[key]).toFixed(1)}</span>
+          </div>`).join("")}
+      </div>`;
+    };
+    fallback = `
+      <p class="rail-quiet" style="margin:0 0 10px">Until then, the model’s
+        measured profile — points scored and points allowed per game —
+        ranked on the ${escapeHtml(String(shapeSeason))} season. Last season’s
+        roster is not this season’s.</p>
+      <div class="rec-buckets">
+        ${col("Offense", `points scored per game, ${shapeSeason}`, "offense", false)}
+        ${col("Defense", `points allowed per game, ${shapeSeason}`, "defense", true)}
+      </div>`;
+  }
+  return `
+    <div class="section-title">Team rankings
+      <span class="sub">— scoring offense and defense, from finished games</span></div>
+    <p class="rail-quiet" style="margin:0 0 ${fallback ? "6px" : "22px"}">${why}</p>
+    ${fallback}`;
 }
 
 async function renderStandings() {
@@ -20478,7 +21802,8 @@ async function renderStandings() {
           || (g.label || g.conference || "") === _stdGroup)
         .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
-    ${unitRankingsHTML(d.unit_rankings)}
+    ${unitRankingsHTML(d.unit_rankings, d)}
+    ${pressureHTML(d.pressure, d)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;
 }
@@ -26077,7 +27402,16 @@ const STATUS_BOARDS = [
   ["feed.json", "The feed"],
   ["injuries.json", "Injury board"],
   ["streak.json", "Streak slate"],
-  ["live_mlb.json", "Live scoreboard"],
+  ["live_mlb.json", "Live scoreboard (MLB)"],
+  /* THE FAST CLOCKS BELONG ON THE STATUS PAGE TOO. These five are the
+     only files on the site whose staleness is measured in seconds, so
+     they are the ones where "the loop died" is both most likely to
+     matter and least likely to be noticed — a frozen scoreboard reads
+     as a quiet night. */
+  ["live_nfl.json", "Live scoreboard (NFL)"],
+  ["live_cfb.json", "Live scoreboard (college football)"],
+  ["live_nba.json", "Live scoreboard (NBA)"],
+  ["live_wnba.json", "Live scoreboard (WNBA)"],
 ];
 
 async function boardStamp(file) {
@@ -26719,7 +28053,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -26815,7 +28149,7 @@ function wallBlocked(name) {
    "instant" overrides the sheet. */
 let _boardReturn = null;              // { view, y } while inside a detail
 
-const DETAIL_VIEWS = ["prop", "game"];
+const DETAIL_VIEWS = ["prop", "game", "pbp"];
 
 function _landScroll(name, leaving) {
   let y = 0;
@@ -26851,6 +28185,7 @@ function _switchViewNow(name, push, dir) {
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
   if (wallBlocked(name)) { name = "paywall"; dir = 0; }
+  if (noTourViews().includes(name)) tourHide();
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
@@ -26875,7 +28210,8 @@ function _switchViewNow(name, push, dir) {
   // from, so Recommended stays lit while you're inside a game.
   // Neither the game page nor the prop page has a tab. Both belong to the
   // board they were opened from, so Recommended stays lit inside them.
-  const lit = (name === "game" || name === "prop") ? "recommended" : name;
+  const lit = (name === "game" || name === "prop") ? "recommended"
+    : name === "pbp" ? "live" : name;
   document.querySelectorAll(".nav-btn").forEach((b) => setSelected(b, b.dataset.view === lit));
   syncNavHint(lit);
   if (name === "prop") {
@@ -26895,6 +28231,14 @@ function _switchViewNow(name, push, dir) {
   if (name === "game") {
     renderGamePage();
     if (state.gameId) history.replaceState(null, "", `#game/${encodeURIComponent(state.gameId)}`);
+    moveIndicator();
+    _landScroll(name, leaving);
+    return;
+  }
+  if (name === "pbp") {
+    renderPbpPage();
+    if (state.pbp && state.pbp.league && state.pbp.event)
+      history.replaceState(null, "", `#pbp/${encodeURIComponent(state.pbp.league)}/${encodeURIComponent(state.pbp.event)}`);
     moveIndicator();
     _landScroll(name, leaving);
     return;
@@ -27795,6 +29139,68 @@ function sendPanelHTML(r) {
   </div>`;
 }
 
+/* ============================================================
+   Explain this pick — the card read back in plain English
+   ============================================================
+   Ethan, 2026-09-05: "a plain English explainer per pick". Behind a
+   tap on the prop page, never drawn unasked: the answer is written by
+   a language model from the numbers already on the card (engine/
+   explainer) and cached per build on the server, so the second reader
+   of a pick gets it at once. Every state is a sentence — writing,
+   written, needs a subscription, not switched on, could not answer —
+   because a box that stays empty is the failure this site keeps
+   finding (the thirteen silent days of the team-form panel). */
+function boardNameFor(meta) {
+  return String((meta || {}).fallback || "").replace(/^data\//, "");
+}
+
+function explainHTML(text) {
+  const paras = String(text || "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  return `${paras.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}
+    <div class="pp-explain-note">Written by an AI from the numbers on this card and
+      nothing else. It is a reading of the card, not a second opinion.</div>`;
+}
+
+async function explainPick() {
+  const host = document.getElementById("pp-explain");
+  if (!host) return;
+  if (!host.hidden && host.dataset.done) { host.hidden = true; return; }   // toggle shut
+  const r = findProp(state.propId);
+  const meta = SPORT_META[state.sport];
+  if (!r || !meta) return;
+  host.hidden = false;
+  host.dataset.done = "";
+  host.innerHTML = `<p class="pp-explain-wait">Writing the explanation…</p>`;
+  const url = `/api/explain?board=${encodeURIComponent(boardNameFor(meta))}&pick=${
+    encodeURIComponent(propId(r))}`;
+  let msg = "The explainer could not answer just now. Try again in a moment.";
+  try {
+    const res = await boardFetch(url, { cache: "no-store" });
+    let body = {};
+    try { body = await res.json(); } catch (e) { body = {}; }
+    if (res.ok && body.text) {
+      if (findProp(state.propId) !== r) return;          // the page moved on
+      host.innerHTML = explainHTML(body.text);
+      host.dataset.done = "1";
+      return;
+    }
+    if (res.status === 401) msg = "Sign in with a subscription to read the explainer.";
+    else if (res.status === 402) msg = "The explainer is part of the subscription.";
+    else if (res.status === 404) msg = "That pick is no longer on tonight’s board.";
+    else if (res.status === 429) msg = "Too many explanations at once — give it a minute.";
+    else if (res.status === 503 && body.configured === false) msg = "The explainer is not switched on for this site yet.";
+  } catch (e) { /* the sentence below is the honest answer */ }
+  host.innerHTML = `<p class="pp-explain-wait">${escapeHtml(msg)}</p>`;
+  host.dataset.done = "1";
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-explain]");
+  if (!b) return;
+  e.preventDefault();
+  explainPick();
+});
+
 document.addEventListener("click", async (e) => {
   const open = e.target.closest && e.target.closest("[data-send-pick]");
   if (open) {
@@ -27920,6 +29326,7 @@ document.addEventListener("click", (e) => {
   // — and so does this page, which is wearing the button that changed.
   if (state.data) renderAll();
   if (state.view === "game") renderGamePage();
+  if (state.view === "pbp") renderPbpPage();
 });
 
 /* The static fallback. In production Caddy hands these paths to the app
@@ -28052,6 +29459,7 @@ function initialView() {
     switchView("recommended");
     return;
   }
+  if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
   // #nba used to be handled here on its own, from when NBA was a
@@ -28164,6 +29572,7 @@ function slipToggle(r) {
       return false;
     }
     const kind = r.bet_type || r.market || "";
+    buzz("tap");                       // a leg landing, felt as well as seen
     // `book` rides along for the text export: a price is only useful to
     // key in if you know WHICH book was showing it. It is stored, never
     // drawn on the panel — the slip is already dense enough.
@@ -29598,6 +31007,7 @@ function bind() {
       switchView("recommended");
       return;
     }
+    if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
     // An EMPTY hash is a destination, not a no-op: it is the entry the
@@ -30488,9 +31898,30 @@ const LIVE_FEEDS = {
    live_build.py writes this one from a single cached schedule call. The
    BETS still come from the slow board, which is right — a price minutes old
    is defensible, a score minutes old is not. */
-const LIVE_FAST = { mlb: "data/live_mlb.json" };
+/* ...AND THE OTHER FOUR, which the note above stopped one sport short
+   of. `live_build.py` said so itself the day it shipped: "MLB, NFL, NBA,
+   WNBA and CFB never got the same treatment." NFL scores were still
+   being read out of data/recommendations.json and CFB out of
+   data/cfb.json — the model boards — which is the identical bug one
+   league over. livescore_build.py writes these four from one keyless
+   ESPN request each.
+
+   The merge below is what makes this safe to add: fast fields win where
+   both speak, board-only fields (the odds grid, the live win-probability
+   track) survive, and a file that has not been built yet falls through
+   to the board exactly as before. */
+const LIVE_FAST = { mlb: "data/live_mlb.json", nfl: "data/live_nfl.json",
+                    cfb: "data/live_cfb.json", nba: "data/live_nba.json",
+                    wnba: "data/live_wnba.json" };
 let _liveAll = { at: 0, games: [] };
 let _liveChip = "all";
+//: The sport the chip was chosen under. Ethan, 2026-09-05: "the live page
+//: is showing live mlb bets and games on the CFB button, it should be
+//: corilated to the sport you have selected." The chip defaulted to "all"
+//: and outlived every sport switch, so the CFB button's Live tab opened
+//: on baseball. It now follows the sport button — "all" is still one tap
+//: away, and stays chosen until the sport changes again.
+let _liveChipSport = null;
 
 async function fetchAllLive() {
   if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
@@ -30579,7 +32010,11 @@ function liveCardHTML({ sport, g, bets }) {
       <b>${mlOdds(g.home_ml)}</b>
     </div>` : "";
   return `
-  <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}">
+  <div class="lb-card" data-gid="${escapeHtml(gameId(g))}" data-lsport="${sport}"${
+    /* A game in progress or just finished has a deep file to open; a
+       scheduled one has nothing to read yet and keeps the game-page door. */
+    (lv.state === "live" || lv.state === "final") && (g.event_id || g.game_pk)
+      ? ` data-pbp="${escapeAttr(String(g.event_id || g.game_pk))}"` : ""}>
     <div class="lb-head"><span class="lb-live">${icon("dot", 10)} LIVE</span>
       <span class="lb-sit">${situation}</span>
       <span class="lb-league">${sport.toUpperCase()}</span></div>
@@ -30595,8 +32030,713 @@ function liveCardHTML({ sport, g, bets }) {
       <span class="lb-team">${mark(g.home)}<em>${escapeHtml(g.home)}</em></span>
     </div>
     ${linesGrid}
+    ${pressureLiveHTML(sport, g)}
+    ${playsHTML(g)}
     ${lineTrackHTML(g)}
   </div>`;
+}
+
+
+/* ---------------- The play-by-play page ----------------
+   Ethan's render, 2026-09-05: the league's games in a strip across the
+   top (LIVE or first pitch, teams, scores, inning); the matchup hero;
+   the park with the batted ball's arc animated across it and a chip
+   saying what it was ("Line drive · 102.4 mph · 379 ft"); the at-bat,
+   the count and bases, the pitcher; and a rail on the right reading at
+   the pitch — "Ball · 84 mph Slider", "Called strike", then "Lineout ·
+   Aaron Judge · 102.4 mph · 379 ft" — grouped by half-inning, each row
+   with its time; win probability under it.
+
+   WHAT IT READS. `data/pbp/{league}_{event}.json`, the deep file the
+   fast builders write for every game in progress: `events` (every pitch
+   and at-bat, with `hit` on a ball in play) and `current` (who is up)
+   for baseball; drives or plays for the others. The strip reads the
+   league's fast scoreboard. The park art is the game page's own
+   (`ballpark`, `stadium`, `court` in visuals.js); the arc is drawn over
+   it in the same coordinate space. Faces, park facts, weather and the
+   win-probability track come off the league's board when the visitor
+   is standing on that league — a free page never asks the paid board
+   for them. Nothing here reads a play's sentence; every row is the
+   structured one the parsers composed. */
+let _pbpTimer = null;
+let _pbpStrip = { at: 0, league: "", games: [] };
+let _pbpShowAll = false;
+let _pbpTab = "info";           // info | props | injuries | players
+
+/* ---------------- The page's other rooms ----------------
+   Ethan, 2026-09-05: "the play by plays other rooms". The render's
+   sub-tabs: Game info (the park facts), Live props (the reader's open
+   bets on this game, from the tracker), Injuries (both clubs'
+   designations from the injury board), Player stats (the box score the
+   fast loop now writes into the deep file, from the parsers the tracker
+   trusts). Team stats and Splits are not built: the summary's team
+   block has not been probed, and a room drawn from an unread shape
+   would be the fabricated number this site exists not to print. */
+const PBP_TABS = [["info", "Game info"], ["props", "Live props"], ["injuries", "Injuries"], ["players", "Player stats"]];
+
+/* The open bets on THIS game, from the board's tracker — which is the
+   viewed league's, so another league's page has none to show. */
+function pbpPropRows(rows, d) {
+  return (rows || []).filter((r) => r && r.game && r.game.home === d.home && r.game.away === d.away);
+}
+
+/* Both clubs' designations, matched on the injury feed's own club name
+   — the team table's `name` — never on a nickname. */
+function pbpInjuryRows(rows, league, d) {
+  const teams = teamsForSport(league) || {};
+  const nameOf = (abbr) => ((teams[abbr] || {}).name || "").toLowerCase();
+  const want = new Set([nameOf(d.home), nameOf(d.away)].filter(Boolean));
+  return (rows || []).filter((r) => r && !isReturnRow(r) && want.has(String(r.team || "").toLowerCase()));
+}
+
+//: What leads a player's line, by league; the rest follow in the order the parser gave them.
+const PBP_LEAD_STAT = { nfl: ["pass_yds", "rush_yds", "rec_yds", "receptions"], cfb: ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+                        mlb: ["total_bases", "hits", "home_runs", "strikeouts"], nba: ["points", "rebounds", "assists"], wnba: ["points", "rebounds", "assists"] };
+
+function pbpPlayersHTML(d, league) {
+  const rows = d.players || [];
+  if (!rows.length) return `<p class="rail-quiet">No box score on file yet — the fast loop writes one each cycle for a game in progress.</p>`;
+  const lead = PBP_LEAD_STAT[league] || [];
+  const score = (r) => lead.reduce((a, k, i) => a + (Number((r.stats || {})[k]) || 0) * Math.pow(0.5, i), 0);
+  const side = (abbr) => rows.filter((r) => r.team === abbr).sort((x, y) => score(y) - score(x)).slice(0, 14);
+  const line = (r) => Object.entries(r.stats || {}).filter(([, v]) => v !== 0 && v !== "0" && v != null)
+    .map(([k, v]) => `${escapeHtml(marketWord(k))} <b>${escapeHtml(String(v))}</b>`).join(" · ");
+  const block = (abbr) => `<div class="pbp-box"><div class="pbp-box-head">${teamMarkIn(league, abbr, 16)} ${escapeHtml(teamNameIn(league, abbr))}</div>${
+    side(abbr).map((r) => `<div class="pbp-box-row"><span>${escapeHtml(r.player)}${r.position ? ` <span class="mini">${escapeHtml(r.position)}</span>` : ""}</span><span class="pbp-box-line">${line(r) || "—"}</span></div>`).join("")
+    || `<p class="rail-quiet">Nothing logged for this club yet.</p>`}</div>`;
+  return `${block(d.away)}${block(d.home)}<p class="mini" style="opacity:.6">Box score ${escapeHtml(pbpAgo(d.generated_at))} — the fields the open-bet tracker reads, nothing more.</p>`;
+}
+
+function pbpPropsHTML(d, league) {
+  if (state.sport !== league) {
+    return `<p class="rail-quiet">Your open bets are tracked on each league’s own board — open the ${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab to see them on this game.</p>`;
+  }
+  const rows = pbpPropRows((state.data || {}).live_picks, d);
+  if (!rows.length) return `<p class="rail-quiet">No open bets on this game.</p>`;
+  const word = (r) => ({ cleared: "CLEARED", busted: "BUSTED", dead: "NO CHANCES LEFT", won_pending: "WON", lost_pending: "LOST",
+                         push_pending: "PUSH", final_pending: "FINAL", tracking: "tracking", upcoming: "upcoming", unmapped: "unplaced" })[r.status] || r.status;
+  const tone = (r) => ["cleared", "won_pending"].includes(r.status) ? "var(--good)" : ["busted", "dead", "lost_pending"].includes(r.status) ? "var(--bad)" : "var(--text-mute)";
+  return rows.map((r) => `<div class="pbp-prop-row">
+      <span class="pick-id">${betMark(r, 24)}</span>
+      <span class="pbp-prop-main"><b>${escapeHtml(r.market === "moneyline" ? `${teamName(r.player)} Moneyline` : `${r.player} ${r.side} ${r.line} ${r.market_label || r.market}`)}</b>
+        <span class="mini">placed ${american(r.odds)}${r.current != null ? ` · now ${escapeHtml(String(r.current))}` : ""}${
+          r.live_prob != null ? ` · ${Math.round(r.live_prob * 100)}% live` : ""}</span></span>
+      <b style="color:${tone(r)}">${escapeHtml(word(r))}</b>
+    </div>`).join("");
+}
+
+function pbpInjuriesHTML(d, league) {
+  const rows = pbpInjuryRows((((_injBoard || {}).sports) || {})[league], league, d);
+  if (!rows.length) return `<p class="rail-quiet">No designations listed for either club on the injury board.</p>`;
+  return `<div class="inj-list">${rows.map((r) => injRow(r, true)).join("")}</div>`;
+}
+
+function pbpTabsHTML(active, boardGame) {
+  return `<div class="pbp-tabs">${PBP_TABS.map(([k, label]) =>
+    `<button type="button" class="pbp-tab${k === active ? " active" : ""}" data-pbp-tab="${k}">${label}</button>`).join("")}${
+    boardGame ? `<button type="button" class="pbp-tab-door" id="pbp-game-door" data-gid="${escapeAttr(gameId(boardGame))}">Full game page →</button>` : ""}</div>`;
+}
+
+function openPbp(league, event, from) {
+  const next = { league: String(league || ""), event: String(event || "") };
+  if (!state.pbp || state.pbp.event !== next.event) _pbpShowAll = false;
+  // WHERE THE READER CAME FROM, so Back returns there — the Live tab,
+  // the board, or the game page (Ethan, 2026-09-05: "seamless and easy
+  // and organized"). A chip in the page's own strip keeps the origin;
+  // a hash landing names Live, the page's own tab.
+  state.pbpFrom = from || (state.view !== "pbp" ? state.view : state.pbpFrom) || "live";
+  state.pbp = next;
+  switchView("pbp", true);
+}
+
+/* Where Back goes from the play-by-play, and what it says. The game
+   page only when there is still a game to go back to. */
+function pbpBack() {
+  const from = state.pbpFrom;
+  if (from === "recommended") return { view: "recommended", label: "← Back to the board" };
+  if (from === "game" && state.gameId) return { view: "game", label: "← Back to the game" };
+  return { view: "live", label: "← Back to Live" };
+}
+
+/* THE BOARD'S OWN DOOR INTO THE PAGE (Ethan, 2026-09-05: "if you click
+   on the live game from the recommended page it will take you to the
+   same play by play"). A game in progress opens its play-by-play — the
+   same page the Live tab opens, park and rail and all, with the game
+   page one tap from there. Anything else opens the game page: before
+   first pitch there is nothing to read, and after the last out the
+   picks and their grades are what the card promised. A live game whose
+   id cannot be found keeps the game page too, rather than opening on
+   "no game selected". */
+async function openGameOrPlays(gid) {
+  const g = findGame(gid);
+  if (g && (g.live || {}).state === "live") {
+    let id = "";
+    try { id = await pbpIdFor(g, state.sport); } catch (e) { id = ""; }
+    if (id) { openPbp(state.sport, id); return; }
+  }
+  openGame(gid);
+}
+
+/* THE PLAY-BY-PLAY ID OF A BOARD GAME. The board's rows do not all carry
+   one — the college build stamps `event_id`, baseball's slate keeps
+   `game_pk` on the object and not in the file, the NFL overlay carries
+   none — and the fast scoreboard already publishes it for every game
+   it lists, so stamping four builders would put the same fact in a
+   fifth place. The fast file is asked instead, matched the way the
+   Live tab matches its own cards: away@home, and on a doubleheader the
+   leg by first pitch, the board's `game_number` naming which. "" when
+   the league has no fast file or the game is not on it. */
+async function pbpIdFor(g, sport) {
+  if (!g) return "";
+  if (g.event_id || g.game_pk) return String(g.event_id || g.game_pk);
+  const rows = (await pbpStripGames(sport || state.sport))
+    .filter((r) => r.away === g.away && r.home === g.home);
+  if (!rows.length) return "";
+  let row = rows[0];
+  if (rows.length > 1) {
+    const byPitch = rows.slice().sort((a, b) =>
+      String((a.live || {}).start_time || "").localeCompare(String((b.live || {}).start_time || "")));
+    row = byPitch[(g.game_number || 1) - 1] || byPitch[0];
+  }
+  return (row.event_id || row.game_pk) ? String(row.event_id || row.game_pk) : "";
+}
+
+function openPbpHash(rest) {
+  const parts = String(rest || "").split("/").map((x) => {
+    try { return decodeURIComponent(x); } catch (e) { return x; }
+  });
+  if (parts.length < 2 || !parts[0] || !parts[1]) { switchView("live"); return; }
+  openPbp(parts[0], parts[1], "live");
+}
+
+/* Clock for an ISO instant — "5:14 PM" — or "". Through tzTime, so a
+   pitch in the rail reads in the same zone as first pitch on the card. */
+function pbpTime(iso) {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!isFinite(t)) return "";
+  try { return tzTime(t); } catch (e) { return ""; }
+}
+
+function pbpAgo(stamp) {
+  if (!stamp) return "";
+  const t = Date.parse(stamp.endsWith("Z") ? stamp : stamp + "Z");
+  if (!isFinite(t)) return "";
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
+}
+
+const pbpOrd = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+/* --- the strip: the league's games, live first, then by first pitch --- */
+async function pbpStripGames(league) {
+  const url = LIVE_FAST[league];
+  if (!url) return [];
+  if (_pbpStrip.league === league && Date.now() - _pbpStrip.at < 15000) return _pbpStrip.games;
+  let games = [];
+  try {
+    const r = await boardFetch(url, { cache: "no-store" });
+    if (r.ok) games = ((await r.json()).games || []);
+  } catch (e) { games = []; }
+  const rank = (g) => ({ live: 0, scheduled: 1, final: 2 })[(g.live || {}).state] ?? 1;
+  games = games.slice().sort((a, b) => rank(a) - rank(b)
+    || String((a.live || {}).start_time || "").localeCompare(String((b.live || {}).start_time || "")));
+  _pbpStrip = { at: Date.now(), league, games };
+  return games;
+}
+
+function pbpStripHTML(league, games, current) {
+  if (!games.length) return "";
+  const chip = (g) => {
+    const lv = g.live || {};
+    const id = String(g.event_id || g.game_pk || "");
+    const on = !!id && id === current;
+    const door = !!id && (lv.state === "live" || lv.state === "final");
+    const head = lv.state === "live" ? `<span class="lb-live">${icon("dot", 8)} LIVE</span>`
+      : lv.state === "final" ? `<span class="pbp-chip-final">FINAL</span>`
+      : `<span class="pbp-chip-time">${escapeHtml(pbpTime(lv.start_time) || "TBD")}</span>`;
+    const row = (abbr, score) => `<span class="pbp-chip-row">${teamMarkIn(league, abbr, 16)}<em>${
+      escapeHtml(abbr || "")}</em><b>${score != null ? score : ""}</b></span>`;
+    return `<button type="button" class="pbp-chip${on ? " active" : ""}${door ? " door" : ""}"${
+      door ? ` data-pbp="${escapeAttr(id)}"` : " disabled"}>
+      <div class="pbp-chip-head">${head}</div>
+      ${row(g.away, lv.away_score)}${row(g.home, lv.home_score)}
+      <div class="pbp-chip-foot">${escapeHtml(lv.state === "live" ? (lv.period || "") : "")}</div>
+    </button>`;
+  };
+  return `<div class="pbp-strip" role="list">${games.map(chip).join("")}</div>`;
+}
+
+/* --- the park, and the ball in flight ---
+   The art is the game page's ballpark (visuals.js), viewBox 0 0 240 150,
+   its field drawn inside a group scaled 0.76 about (120,100). Home
+   plate sits at (120,128) in field coordinates; the outfield wall is an
+   elliptical arc — centre (120,121.7), radii 116 × 92 — from the left
+   pole (34,60) to the right (206,60), which is ±47.8° off dead centre.
+   A batted ball's landing point is placed by its DIRECTION (the Stats
+   API's coordinates, home plate at (125.42,198.27), y falling toward
+   centre) and its DISTANCE as a fraction of the fence at that angle
+   (the park's own lf/cf/rf feet when the board has them, 330/400/330
+   otherwise). Past the wall is past the wall. The arc's lift reads the
+   trajectory — a ground ball hugs the grass, a popup climbs — since a
+   plan view has no height to draw and the eye still wants the shape. */
+const PBP_POLE_DEG = 47.8;
+function pbpFieldToArt(x, y) { return [120 + 0.76 * (x - 120), 100 + 0.76 * (y - 100)]; }
+function pbpWallPoint(phiDeg) {
+  const phi = Math.max(-PBP_POLE_DEG, Math.min(PBP_POLE_DEG, phiDeg)) * Math.PI / 180;
+  return pbpFieldToArt(120 + 116 * Math.sin(phi), 121.7 - 92 * Math.cos(phi));
+}
+function pbpFenceFt(park, phiDeg) {
+  const lf = Number((park || {}).lf_ft) || 330, cf = Number((park || {}).cf_ft) || 400,
+    rf = Number((park || {}).rf_ft) || 330;
+  const t = Math.min(1, Math.abs(phiDeg) / PBP_POLE_DEG);
+  const pole = phiDeg < 0 ? lf : rf;
+  return cf - (cf - pole) * t * t;
+}
+function pbpFlight(hit, park) {
+  if (!hit || hit.distance == null) return null;
+  let phi = 0;
+  if (hit.x != null && hit.y != null) {
+    phi = Math.atan2(Number(hit.x) - 125.42, 198.27 - Number(hit.y)) * 180 / Math.PI;
+    if (!isFinite(phi)) phi = 0;
+  }
+  const fence = pbpFenceFt(park, phi);
+  const r = Math.max(0.05, Math.min(1.18, Number(hit.distance) / fence));
+  const H = pbpFieldToArt(120, 128), W = pbpWallPoint(phi);
+  const L = [H[0] + r * (W[0] - H[0]), H[1] + r * (W[1] - H[1])];
+  const lift = ({ ground_ball: 4, line_drive: 14, fly_ball: 30, popup: 40 })[hit.trajectory] ?? 18;
+  const C = [(H[0] + L[0]) / 2, (H[1] + L[1]) / 2 - lift * Math.max(0.35, r)];
+  // Length of the quadratic, sampled — for the draw-on animation.
+  let len = 0, px = H[0], py = H[1];
+  for (let i = 1; i <= 24; i++) {
+    const t = i / 24, u = 1 - t;
+    const x = u * u * H[0] + 2 * u * t * C[0] + t * t * L[0];
+    const y = u * u * H[1] + 2 * u * t * C[1] + t * t * L[1];
+    len += Math.hypot(x - px, y - py); px = x; py = y;
+  }
+  return { H, C, L, len, over: r > 1.0, phi, fence };
+}
+const PBP_TRAJ = { ground_ball: "Ground ball", line_drive: "Line drive", fly_ball: "Fly ball", popup: "Popup" };
+function pbpArcSVG(hit, park) {
+  const f = pbpFlight(hit, park);
+  if (!f) return "";
+  const still = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const id = "arc" + Math.random().toString(36).slice(2, 7);
+  const d = `M${f.H[0].toFixed(1)} ${f.H[1].toFixed(1)} Q${f.C[0].toFixed(1)} ${f.C[1].toFixed(1)} ${f.L[0].toFixed(1)} ${f.L[1].toFixed(1)}`;
+  const bits = [PBP_TRAJ[hit.trajectory] || (hit.trajectory ? String(hit.trajectory).replace(/_/g, " ") : ""),
+    hit.launch_speed != null ? `${Number(hit.launch_speed).toFixed(1)} mph` : "",
+    hit.distance != null ? `${Math.round(hit.distance)} ft` : ""].filter(Boolean);
+  const label = bits.join(" · ");
+  const chipX = Math.min(170, Math.max(4, f.C[0] - 34)), chipY = Math.max(4, f.C[1] - 22);
+  return `
+  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <path id="${id}" d="${d}" fill="none" stroke="#ffffff" stroke-width="1.6"
+      stroke-linecap="round" opacity="0.92"${still ? "" : ` stroke-dasharray="${f.len.toFixed(1)}" stroke-dashoffset="${f.len.toFixed(1)}"`}>
+      ${still ? "" : `<animate attributeName="stroke-dashoffset" from="${f.len.toFixed(1)}" to="0" dur="1.2s" fill="freeze"/>`}
+    </path>
+    <circle r="2.4" fill="#ffffff"${still ? ` cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}"` : ""}>
+      ${still ? "" : `<animateMotion dur="1.2s" fill="freeze"><mpath href="#${id}"/></animateMotion>`}
+    </circle>
+    <circle cx="${f.L[0].toFixed(1)}" cy="${f.L[1].toFixed(1)}" r="4" fill="none" stroke="${f.over ? "#ffd24a" : "#ffffff"}" stroke-width="1" opacity="0.7"/>
+    ${label ? `<g>
+      <rect x="${chipX}" y="${chipY}" width="${Math.min(120, 8 + label.length * 4.6).toFixed(0)}" height="16" rx="8" fill="#0c1020" opacity="0.82"/>
+      <text x="${chipX + 7}" y="${chipY + 11}" font-size="7.5" font-weight="700" fill="#ffd24a"
+        font-family="system-ui">${escapeHtml(label)}</text></g>` : ""}
+  </svg>`;
+}
+
+/* The park (or field, or court) with the live markers the art already
+   draws, in the league's own colours, and the ball in flight over it. */
+function pbpParkHTML(d, league, boardGame, hitRow) {
+  const game = {
+    home: d.home, away: d.away, live: d.live || {},
+    roof: (boardGame || {}).roof, surface: (boardGame || {}).surface,
+    factors: (boardGame || {}).factors, altitude_ft: (boardGame || {}).altitude_ft,
+  };
+  const keep = window.ACTIVE_TEAMS;
+  window.ACTIVE_TEAMS = teamsForSport(league);          // the art reads it
+  let art = "";
+  try {
+    art = league === "mlb" ? ballpark(game, { w: 640, h: 400 })
+      : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
+      : stadium(game, { w: 640, h: 400 });
+  } catch (e) { art = ""; }
+  window.ACTIVE_TEAMS = keep;
+  const arc = league === "mlb" && hitRow && hitRow.hit
+    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park) : "";
+  const park = (boardGame || {}).park || {};
+  const w = (boardGame || {}).weather || {};
+  const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
+    ? ` · ${Math.round(w.wind_mph)} mph${w.wind_dir ? " " + escapeHtml(w.wind_dir) : ""}` : ""}` : "";
+  const chip = (park.name || (boardGame || {}).park_name || wx)
+    ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
+        wx ? `<span>${wx}</span>` : ""}</div>` : "";
+  return `<div class="pbp-park">${art}${arc}${chip}</div>`;
+}
+
+/* --- the situation strip: who is up, the count, the bases, who is throwing --- */
+function pbpFaces(league) {
+  if (state.sport !== league || !state.data) return {};
+  const out = {};
+  [...(state.data.recommendations || []), ...(state.data.long_shots || []),
+   ...(state.data.most_likely || [])].forEach((r) => {
+    if (r && r.player && r.headshot && !out[String(r.player).toLowerCase()])
+      out[String(r.player).toLowerCase()] = r.headshot;
+  });
+  return out;
+}
+function pbpFaceHTML(name, faces) {
+  const src = name ? faces[String(name).toLowerCase()] : "";
+  return src ? `<img class="pbp-face" src="${escapeAttr(src)}" alt="" loading="lazy">`
+    : `<span class="pbp-face pbp-face-blank">${icon("user", 16)}</span>`;
+}
+function pbpSituationHTML(d, league, faces) {
+  if (league !== "mlb") return "";
+  const lv = d.live || {};
+  const cur = d.current || {};
+  const count = (lv.balls != null && lv.strikes != null) ? `${lv.balls}-${lv.strikes}` : "";
+  const outs = lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "";
+  const half = cur.half === "T" ? "Top" : cur.half === "B" ? "Bottom" : "";
+  return `
+    <div class="pbp-sit">
+      <div class="pbp-sit-side">
+        ${pbpFaceHTML(cur.batter, faces)}
+        <div><div class="k">AT BAT</div><b>${escapeHtml(cur.batter || "—")}</b>
+          <div class="mini">${cur.pitches != null && cur.batter ? `${cur.pitches} pitch${cur.pitches === 1 ? "" : "es"} this at-bat` : ""}</div></div>
+      </div>
+      <div class="pbp-sit-mid">
+        ${miniDiamond(lv.bases)}
+        <b class="pbp-count">${escapeHtml(count || "–")}</b>
+        <div class="mini">${escapeHtml([half && cur.inning ? `${half} ${pbpOrd(cur.inning)}` : "", outs].filter(Boolean).join(" · "))}</div>
+      </div>
+      <div class="pbp-sit-side pbp-sit-right">
+        <div><div class="k">PITCHING</div><b>${escapeHtml(cur.pitcher || "—")}</b></div>
+        ${pbpFaceHTML(cur.pitcher, faces)}
+      </div>
+    </div>`;
+}
+
+/* --- the rail --- */
+const PBP_CALL_KIND = (code) => {
+  const c = String(code || "");
+  if (["B", "*B", "V", "I", "P"].includes(c)) return "ball";
+  if (["F", "R", "L", "T", "O"].includes(c)) return "foul";
+  if (["X", "D", "E", "J", "Z", "H"].includes(c)) return "inplay";
+  return "strike";
+};
+function pbpBaseballGroups(d) {
+  const rows = (d.events && d.events.length) ? d.events
+    : (d.plays || []).map((p) => ({ ...p, kind: "atbat" }));
+  const groups = []; const byKey = {};
+  rows.forEach((r) => {
+    const k = `${r.half || ""}${r.inning || ""}`;
+    if (!byKey[k]) {
+      const batting = r.half === "T" ? d.away : r.half === "B" ? d.home : "";
+      const head = r.inning ? `${r.half === "T" ? "Top" : r.half === "B" ? "Bottom" : ""} ${pbpOrd(r.inning)}`.trim() : "—";
+      byKey[k] = { head, sub: batting ? `${batting} batting` : "", tag: "", rows: [], batting };
+      groups.push(byKey[k]);
+    }
+    byKey[k].rows.push(r);
+  });
+  groups.forEach((g) => g.rows.reverse());
+  return groups.reverse();
+}
+function pbpRowHTML(r, league, batting) {
+  const when = pbpTime(r.time);
+  if (r.kind === "pitch") {
+    const kind = PBP_CALL_KIND(r.code);
+    const detail = [r.speed != null ? `${Number(r.speed).toFixed(0)} mph` : "", r.pitch || ""].filter(Boolean).join(" ");
+    const cnt = (r.balls != null && r.strikes != null) ? ` · ${r.balls}-${r.strikes}` : "";
+    return `<div class="pbp-row pitch">
+      <span class="pbp-dot ${kind}"></span>
+      <span class="pbp-what"><b>${escapeHtml(r.call || "Pitch")}</b>${detail ? ` · ${escapeHtml(detail)}` : ""}${cnt}
+        <span class="pbp-who">${escapeHtml(r.batter || "")}</span></span>
+      <span class="pbp-time">${escapeHtml(when)}</span></div>`;
+  }
+  const h = r.hit || null;
+  const hitTxt = h ? [h.launch_speed != null ? `${Number(h.launch_speed).toFixed(1)} mph` : "",
+                      h.distance != null ? `${Math.round(h.distance)} ft` : ""].filter(Boolean).join(" · ") : "";
+  const rbi = r.rbi ? ` <span class="lb-rbi">${r.rbi} RBI</span>` : "";
+  return `<div class="pbp-row atbat${r.scoring ? " scoring" : ""}">
+    <span class="pbp-mark">${teamMarkIn(league, batting, 18)}</span>
+    <span class="pbp-what"><b>${escapeHtml(r.event || "")}</b>${rbi}
+      <span class="pbp-who">${escapeHtml(r.batter || "")}${hitTxt ? ` · ${escapeHtml(hitTxt)}` : ""}</span></span>
+    <span class="pbp-time">${escapeHtml(when)}</span></div>`;
+}
+
+/* The groups a sport is read in, newest first. Rows inside a football
+   drive stay in order — a drive is read forwards; rows inside a period or
+   a half-inning are newest first, like a feed. */
+function pbpGroups(d) {
+  const plays = d.plays || [];
+  const live = d.live || {};
+  if (d.league === "nfl" || d.league === "cfb") {
+    return (d.drives || []).slice().reverse().map((dr, i) => {
+      const rows = dr.plays || [];
+      const n = dr.offensive_plays || rows.length;
+      const tag = dr.scoring ? "SCORE"
+        : rows.some((p) => p.turnover) ? "TURNOVER"
+        : (i === 0 && live.state === "live") ? "IN PROGRESS" : "";
+      return {
+        head: `${dr.team || "—"} drive`,
+        sub: `${n} play${n === 1 ? "" : "s"} · ${dr.yards || 0} yd${
+          dr.elapsed ? ` · ${dr.elapsed}` : ""}${dr.period ? ` · Q${dr.period}` : ""}`,
+        tag, rows,
+      };
+    });
+  }
+  // Baseball and basketball: group by the label the card already prints
+  // (T6 / Q3), in the order the plays arrived, then show newest first.
+  const label = d.league === "mlb"
+    ? (p) => `${p.half || ""}${p.inning || ""}`
+    : (p) => (p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "");
+  const groups = [];
+  const byKey = {};
+  plays.forEach((p) => {
+    const k = label(p);
+    if (!byKey[k]) { byKey[k] = { head: k || "—", sub: "", tag: "", rows: [] }; groups.push(byKey[k]); }
+    byKey[k].rows.push(p);
+  });
+  groups.forEach((g) => g.rows.reverse());
+  return groups.reverse();
+}
+
+function pbpRailHTML(d, league) {
+  const PEEK = 40;
+  const mlb = league === "mlb";
+  const groups = mlb ? pbpBaseballGroups(d) : pbpGroups(d);
+  const total = groups.reduce((a, g) => a + g.rows.length, 0);
+  let budget = _pbpShowAll ? Infinity : PEEK;
+  const shown = [];
+  for (const g of groups) {
+    if (budget <= 0) break;
+    const rows = g.rows.slice(0, budget);
+    budget -= rows.length;
+    shown.push({ ...g, rows });
+  }
+  const group = (g) => `
+    <div class="pbp-group">
+      <div class="pbp-group-head"><span><b>${escapeHtml(g.head)}</b>${
+        g.sub ? ` — ${escapeHtml(g.sub)}` : ""}</span>${
+        g.tag ? `<span class="pbp-tag${g.tag === "TURNOVER" ? " turnover" : ""}">${escapeHtml(g.tag)}</span>` : ""}</div>
+      ${mlb ? g.rows.map((r) => pbpRowHTML(r, league, g.batting)).join("")
+            : (playsHTML({ plays: g.rows }) || `<p class="rail-quiet" style="margin:0 0 8px">No plays yet.</p>`)}
+    </div>`;
+  const more = total - shown.reduce((a, g) => a + g.rows.length, 0);
+  return `${shown.length ? shown.map(group).join("") : `<div class="card">${panelEmpty("Nothing has happened yet.")}</div>`}
+    ${more > 0 ? `<button class="btn ghost" type="button" id="pbp-more">View full play by play (${total}) →</button>` : ""}`;
+}
+
+async function renderPbpPage() {
+  const host = document.getElementById("pbp-body");
+  if (!host) return;
+  if (_pbpTimer) { clearTimeout(_pbpTimer); _pbpTimer = null; }
+  const { league, event } = state.pbp || {};
+  const way = pbpBack();
+  const back = `<button class="btn ghost gp-back" id="pbp-back" style="margin-top:14px">${way.label}</button>`;
+  const wire = () => {
+    const b = document.getElementById("pbp-back");
+    if (b) b.addEventListener("click", () => switchView(way.view));
+    host.querySelectorAll(".pbp-chip.door").forEach((el) =>
+      el.addEventListener("click", () => openPbp(league, el.dataset.pbp)));
+    const m = document.getElementById("pbp-more");
+    if (m) m.addEventListener("click", () => { _pbpShowAll = true; renderPbpPage(); });
+    const g = document.getElementById("pbp-game-door");
+    if (g) g.addEventListener("click", () => openGame(g.dataset.gid));
+    host.querySelectorAll("[data-pbp-tab]").forEach((b) =>
+      b.addEventListener("click", () => { _pbpTab = b.dataset.pbpTab; renderPbpPage(); }));
+  };
+  if (!league || !event) {
+    host.innerHTML = `${emptySlate("stadium", "No game selected",
+      "Open a game in progress from the Live tab or the board to read its play-by-play.")}${back}`;
+    wire();
+    return;
+  }
+  let d = null;
+  let strip = [];
+  try {
+    // Through boardFetch, like every other board file: a fetch that
+    // fails here must count toward the wire-down banner, not vanish.
+    const [res, games] = await Promise.all([
+      boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
+                 { cache: "no-store" }),
+      pbpStripGames(league),
+    ]);
+    strip = games;
+    if (res.ok) d = await res.json();
+  } catch (e) { d = null; }
+  if (state.view !== "pbp") return;                // moved on while fetching
+  const again = () => {
+    _pbpTimer = setTimeout(() => {
+      _pbpTimer = null;
+      if (state.view === "pbp") renderPbpPage();
+    }, 12000);
+  };
+  const stripHTML = pbpStripHTML(league, strip, event);
+  if (!d) {
+    host.innerHTML = `${stripHTML}${emptySlate("stadium", "No play-by-play on file for this game",
+      "The file is written while a game is in progress — up to eight games at a "
+      + "time — and kept for about a day and a half. A game past that cap keeps its "
+      + "score and has no play list; one that has just kicked off gets its file on "
+      + "the next pass.")}${back}`;
+    wire();
+    again();                                       // it may appear on the next pass
+    return;
+  }
+  const lv = d.live || {};
+  const mark = (abbr) => teamMarkIn(league, abbr, 44);
+  const name = (abbr, full) => escapeHtml(full || teamNameIn(league, abbr) || abbr || "");
+  let situation = escapeHtml(lv.period || "");
+  if (lv.clock) situation += ` ${escapeHtml(lv.clock)}`;
+  if (league === "mlb" && lv.outs != null) situation += ` · ${lv.outs} out${lv.outs === 1 ? "" : "s"}`;
+  if (lv.detail && league !== "mlb") situation += ` · ${escapeHtml(lv.detail)}`;
+  const stateWord = lv.state === "live" ? `${icon("dot", 10)} LIVE`
+    : lv.state === "final" ? "FINAL" : "SCHEDULED";
+  // The league's board, when the visitor is standing on it: faces, the
+  // park's facts, the weather, the live win-probability track.
+  const boardGame = (state.sport === league && state.data)
+    ? ((state.data.games || []).find((x) => x.home === d.home && x.away === d.away) || null) : null;
+  const faces = pbpFaces(league);
+  const events = d.events || [];
+  const lastHit = events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null;
+  const park = (boardGame || {}).park || {};
+  const wx = (boardGame || {}).weather || {};
+  const infoCards = boardGame ? [
+    park.name ? [icon("stadium", 18), park.name, [park.lf_ft, park.cf_ft, park.rf_ft].every((v) => v)
+      ? `${park.lf_ft} · ${park.cf_ft} · ${park.rf_ft} ft` : ""] : null,
+    park.capacity ? [icon("users", 18), "Capacity", Number(park.capacity).toLocaleString()] : null,
+    wx.temp_f != null ? [icon("sun", 18), `${Math.round(wx.temp_f)}°F`, wx.dome ? "Roof closed" : ""] : null,
+    wx.wind_mph != null && !wx.dome ? [icon("wind", 18), `${Math.round(wx.wind_mph)} mph`, wx.wind_dir || ""] : null,
+    (boardGame.roof || boardGame.surface) ? [icon("field", 18), boardGame.roof ? `Roof: ${boardGame.roof}` : "Field",
+      boardGame.surface || ""] : null,
+  ].filter(Boolean) : [];
+  const infoPanel = infoCards.length ? `<div class="pbp-info">${infoCards.map(([ic, t, s]) => `
+      <div class="pbp-info-card"><span class="pbp-info-ico">${ic}</span>
+        <div><b>${escapeHtml(t)}</b>${s ? `<div class="mini">${escapeHtml(s)}</div>` : ""}</div></div>`).join("")}
+    </div>` : `<p class="rail-quiet">Park and weather facts come off the league’s board — open the ${
+      escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())} tab for them.</p>`;
+  const tab = PBP_TABS.some(([k]) => k === _pbpTab) ? _pbpTab : "info";
+  const panel = tab === "props" ? pbpPropsHTML(d, league)
+    : tab === "injuries" ? pbpInjuriesHTML(d, league)
+    : tab === "players" ? pbpPlayersHTML(d, league)
+    : infoPanel;
+  const infoHTML = `${pbpTabsHTML(tab, boardGame)}<div class="pbp-panel" data-pbp-panel="${tab}">${panel}</div>`;
+  const winProb = boardGame && boardGame.line_track ? `<div class="card">${lineTrackHTML(boardGame)}</div>` : "";
+  host.innerHTML = `
+    ${stripHTML}
+    <div class="pbp-layout">
+      <div class="pbp-main">
+        <div class="card pbp-hero">
+          <div class="pbp-hero-side">${mark(d.away)}<div><div class="mini">${escapeHtml(LEAGUE_LABEL[league] || league.toUpperCase())}</div>
+            <b>${name(d.away, d.away_name)}</b></div></div>
+          <b class="pbp-hero-score">${lv.away_score != null ? lv.away_score : "–"}</b>
+          <div class="pbp-hero-mid"><span class="lb-live">${stateWord}</span><span class="lb-sit">${situation}</span>
+            <span class="mini" style="opacity:.6">${escapeHtml(pbpAgo(d.generated_at))}</span></div>
+          <b class="pbp-hero-score">${lv.home_score != null ? lv.home_score : "–"}</b>
+          <div class="pbp-hero-side pbp-hero-home"><div><div class="mini">&nbsp;</div>
+            <b>${name(d.home, d.home_name)}</b></div>${mark(d.home)}</div>
+        </div>
+        <div class="card pbp-parkcard">
+          ${pbpParkHTML(d, league, boardGame, lastHit)}
+          ${pbpSituationHTML(d, league, faces)}
+        </div>
+        ${infoHTML}
+        ${back}
+      </div>
+      <aside class="pbp-rail">
+        <div class="card pbp-railcard">
+          <div class="pbp-rail-head">Play by play <span class="mini">${(events.length || (d.plays || []).length)} on file</span></div>
+          ${pbpRailHTML(d, league)}
+        </div>
+        ${winProb}
+      </aside>
+    </div>`;
+  wire();
+  if (lv.state === "live") again();
+}
+
+/* The last few at-bats, on the card, from the same fast file as the score.
+
+   Ethan, 2026-09-04: "if for the games we display live, are we able to
+   get live play by plays for all sports". MLB is where that starts,
+   because `engine/mlb/sources/pbp.py` has fetched this endpoint since
+   the pitch-level work went in — it was on a seven-day cache, for
+   modelling, and the page never saw it.
+
+   COMPOSED HERE, NOT COPIED. The feed carries `result.description` —
+   MLB's own written account of the play — and the parser deliberately
+   does not read it. What arrives is the fields: who batted, what the
+   event was, how many it drove in, the score after. The sentence on the
+   card is ours, the same position the injuries page's news section
+   settled on: a public fact is ours to state, somebody else's prose is
+   theirs.
+
+   Newest LAST, because that is how a play-by-play reads. */
+function playsHTML(g) {
+  const plays = (g.plays || []).filter((p) => p && p.event);
+  if (!plays.length) return "";
+  /* FOOTBALL ROWS, from the drives block the droplet probe saw on a live
+     college game (2026-09-05). Composed from the numbers — period,
+     clock, down, distance, yards gained, ESPN's type label — and never
+     from the play's `text`, which the parser does not read. The team is
+     the drive's team resolved into the board's own vocabulary, so it is
+     the same string the card's home/away carry. */
+  const ord = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+  const footballRow = (p) => {
+    const q = p.period ? `Q${p.period}` : "";
+    const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
+    const yds = p.yards ? ` ${p.yards > 0 ? "+" : trueMinus("-")}${Math.abs(p.yards)}` : "";
+    const dd = p.down ? ` · ${ord(p.down)} & ${p.distance == null ? "?" : p.distance}` : "";
+    const flag = p.turnover ? ` <span class="lb-rbi">TO</span>`
+      : p.scoring ? ` <span class="lb-rbi">SCORE</span>` : "";
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
+      <span class="lb-inn">${escapeHtml(when)}</span>
+      <span class="lb-what">${escapeHtml(p.team || "")}${p.team ? " · " : ""}${
+        escapeHtml(p.event)}${escapeHtml(yds)}${escapeHtml(dd)}${flag}</span>
+      ${at}</div>`;
+  };
+  /* BASKETBALL ROWS, from the `plays` list the probe read off a finished
+     WNBA game (event 401857186, 2026-09-05). A play names its team and
+     its players by id alone; the builder resolves them — the sides off
+     the scoreboard, the names off the box score — so `p.team` is the
+     card's own home/away key and `p.player` is a name or "". `p.points`
+     is what the play put on the board and `p.shot` tells a miss from a
+     rebound. Composed from those numbers and the type label, never from
+     the play's written account, which the parser does not read. */
+  const hoopsRow = (p) => {
+    const q = p.period ? (p.period <= 4 ? `Q${p.period}` : `OT${p.period - 4}`) : "";
+    const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
+    const tag = p.scoring && p.points ? ` <span class="lb-rbi">+${p.points}</span>`
+      : p.shot ? ` <span class="lb-miss">miss</span>` : "";
+    const who = [p.team, p.player].filter(Boolean).map(escapeHtml).join(" · ");
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
+      <span class="lb-inn">${escapeHtml(when)}</span>
+      <span class="lb-what">${who}${who ? " — " : ""}${escapeHtml(p.event)}${tag}</span>
+      ${at}</div>`;
+  };
+  const d = g.drive;
+  const driveLine = d && d.team ? `<div class="lb-drive">${escapeHtml(d.team)} drive
+      · ${d.plays} play${d.plays === 1 ? "" : "s"} · ${d.yards} yd${
+      d.elapsed ? ` · ${escapeHtml(d.elapsed)}` : ""}</div>` : "";
+  const row = (p) => {
+    if (p.kind === "football") return footballRow(p);
+    if (p.kind === "hoops") return hoopsRow(p);
+    const half = p.half && p.inning ? `${p.half}${p.inning}` : "";
+    const rbi = p.rbi ? ` <span class="lb-rbi">${p.rbi} RBI</span>` : "";
+    const at = (p.away_score != null && p.home_score != null)
+      ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    return `<div class="lb-play${p.scoring ? " scoring" : ""}">
+      <span class="lb-inn">${escapeHtml(half)}</span>
+      <span class="lb-what">${escapeHtml(p.batter || "")}${
+        p.batter && p.event ? " — " : ""}${escapeHtml(p.event)}${rbi}</span>
+      ${at}</div>`;
+  };
+  return `<div class="lb-plays">${driveLine}${plays.map(row).join("")}</div>`;
 }
 
 /* How the market has moved since first pitch.
@@ -30675,6 +32815,12 @@ async function renderSweatZone() {
   }
   if (state.view !== "live") return;
   const d = _sweatCache || {};
+  // ONE SPORT'S FILE, ON THAT SPORT'S TAB. sweat.json is built by
+  // engine/sweat.py from the MLB journal alone and stamps `sport` to say
+  // so; drawn on every league's Live tab it put baseball's open bets
+  // under the CFB button (Ethan, 2026-09-05). A file that names a sport
+  // renders only there; one that does not is left as it was.
+  if (d.sport && d.sport !== state.sport) { host.innerHTML = ""; return; }
   const fresh = d.generated_at
     && (Date.now() - Date.parse(d.generated_at.endsWith("Z")
         ? d.generated_at : d.generated_at + "Z")) < 180000;
@@ -30736,12 +32882,22 @@ async function renderSweatZone() {
       <div class="sw-note">legs joined as a product — the live legs are
         conditioned on their own games, not re-correlated</div>
     </div>`;
+  /* SPLIT THE SAME WAY THE TRACKER BELOW IS (Ethan, 2026-09-05): edge
+     bets and Most Likely rows are different products and get different
+     headers, even though the number that moves is computed identically. */
+  const edgePicks = picks.filter((p) => p.category !== "likely");
+  const likelyPicks = picks.filter((p) => p.category === "likely");
   host.innerHTML = `
     <div class="section-title">The sweat
-      <span class="sub">— every journaled bet with its live win chance, from what’s
+      <span class="sub">— every journaled edge bet with its live win chance, from what’s
       banked against what’s left to bank it in. Updates every few pitches.</span></div>
-    ${picks.length ? `<div class="card sw-list">${picks.map(row).join("")}</div>` : ""}
-    ${parlays.map(ticket).join("")}`;
+    ${edgePicks.length ? `<div class="card sw-list">${edgePicks.map(row).join("")}</div>` : ""}
+    ${parlays.map(ticket).join("")}
+    ${likelyPicks.length ? `
+    <div class="section-title">The sweat — Most Likely
+      <span class="sub">— the likelihood board’s rows with the same live number, tracked
+      separately: flat stake, no dollar exposure, its own book on the Record page.</span></div>
+    <div class="card sw-list">${likelyPicks.map(row).join("")}</div>` : ""}`;
 }
 
 async function renderLiveBoard() {
@@ -30749,10 +32905,17 @@ async function renderLiveBoard() {
   if (!host) return;
   renderSweatZone();
   const games = await fetchAllLive();
+  await pressureWarm(games.map((x) => x.sport));
   const bySport = {};
   games.forEach((x) => { bySport[x.sport] = (bySport[x.sport] || 0) + 1; });
   const chips = ["all", ...Object.keys(LIVE_FEEDS)].filter(
     (s) => s === "all" || bySport[s]);
+  // FOLLOW THE SPORT BUTTON (see `_liveChipSport`). A league without a
+  // live feed (UFC) has no chip of its own, so it lands on "all".
+  if (_liveChipSport !== state.sport) {
+    _liveChipSport = state.sport;
+    _liveChip = LIVE_FEEDS[state.sport] ? state.sport : "all";
+  }
   const shown = games.filter((x) => _liveChip === "all" || x.sport === _liveChip);
   if (!games.length) {
     host.innerHTML = `<div class="section-title">Live now
@@ -30769,6 +32932,14 @@ async function renderLiveBoard() {
      same feed order the chips use, so the leagues always read in the
      same sequence. A single-league filter keeps the flat grid: the
      chip you pressed IS the label. */
+  // THE SELECTED SPORT HAS NOTHING ON, others do. Rendering an empty
+  // grid under a chip row reads as a broken page; say which league is
+  // dark and how many games are live elsewhere.
+  const nothingHere = _liveChip !== "all" && !shown.length
+    ? `<p class="rail-quiet" style="margin:0 0 22px">No ${escapeHtml(
+        LEAGUE_LABEL[_liveChip] || _liveChip.toUpperCase())} games in progress
+        right now — ${games.length} live across the other leagues (choose All).</p>`
+    : "";
   const shelved = _liveChip === "all"
     ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
         <div class="lb-shelf">
@@ -30786,20 +32957,313 @@ async function renderLiveBoard() {
         ${s === "all" ? "All" : s.toUpperCase()}
         <b>${s === "all" ? games.length : bySport[s]}</b></button>`).join("")}
     </div>
-    ${shelved}`;
+    ${nothingHere}${shelved}`;
   host.querySelectorAll(".lb-chip").forEach((b) =>
     b.addEventListener("click", () => { _liveChip = b.dataset.chip; renderLiveBoard(); }));
   if (typeof mountLiveTicks === "function") mountLiveTicks(host);
   host.querySelectorAll(".lb-card").forEach((el) =>
     el.addEventListener("click", () => {
-      // Opening a game only works on its own sport's slate.
       const s = el.dataset.lsport;
+      // A game in progress opens its play-by-play (Ethan, 2026-09-05:
+      // "click on each live game and see a deeper play by play");
+      // anything else opens the game page, which only works on its
+      // own sport's slate.
+      if (el.dataset.pbp) { openPbp(s, el.dataset.pbp); return; }
       if (s !== state.sport) {
         const chip = document.querySelector(`.sb-chips .sport-btn[data-sport="${s}"]`);
         if (chip) chip.click();
         setTimeout(() => openGame(el.dataset.gid), 900);
       } else openGame(el.dataset.gid);
     }));
+}
+
+/* ---------------- The first-visit walkthrough ----------------
+   Ethan, 2026-09-05: "a first visit walk through". Three cards, once:
+   what a pick card is, what RIDING means, why the Record keeps two
+   books. Not on a deep link — a reader who arrived at a pick or a game
+   came for that, not for a tour — and not on a static host. Remembered
+   per viewer; the account page's Settings can show it again.
+
+   Ethan, 2026-09-05: "The 3 things that we show on the website first
+   that tells new people what's what, we should put a 'never show again'
+   button, and also don't show it on the paywall screen." So every card
+   carries NEVER SHOW AGAIN, and that button — or finishing the three
+   cards — is what remembers "done" for good. Closing it any other way
+   (×, the backdrop, Escape) is "not now": it stays away for the rest of
+   this visit and comes back on the next one, because a reader who
+   swatted it to look at the board has not said they never want it. And
+   it never opens over the paywall, sign-up or checkout: a wall that
+   comes up while the tour's timer is pending cancels it, and a wall
+   that comes up while a card is open takes the card down without
+   marking anything. */
+const TOUR_KEY = "qb.tour";                 // "done" once finished or dismissed
+// `var`, THE ONLY ONE IN THE FILE, AND FOR THE SAME REASON AS THE FUNCTION
+// BELOW: tourHide runs from the view switch during boot, above this line,
+// and clearTimeout on a `let` still in its dead zone is the same throw
+// as the const was. A `var` is hoisted as undefined, which clearTimeout
+// accepts.
+var _tourTimer = null;
+
+/* The views the tour never opens over. A FUNCTION, NOT A CONST, ON
+   PURPOSE: the view switch reads this, and the view switch runs during
+   boot — from the hash router and the account restore, both of which
+   sit above this block in the file — so a `const` here was in its
+   temporal dead zone when they ran. That took the whole site down on
+   2026-09-06 ("Cannot access 'NO_TOUR_VIEWS' before initialization"
+   on every load). A function declaration is hoisted and has no dead
+   zone. tests/test_tour_never.py pins the shape. */
+function noTourViews() { return ["paywall", "signup", "checkout"]; }
+
+function tourSteps() {
+  return [
+    { icon: "list", title: "A pick card is one bet",
+      body: "Each card on the Home board is a bet the model would make tonight: " +
+        "the player, the side and the line, the real book price we found and " +
+        "where, and the edge — how far the model’s number sits from the " +
+        "market’s. Only picks graded 70 or better make the list. Tap a card " +
+        "for the bar chart, the game logs and every reason." },
+    { icon: "warn", title: "RIDING means we already hold it",
+      body: "A row marked RIDING is a bet placed on an earlier pull that no " +
+        "longer clears the bar at today’s number. It rides as placed and " +
+        "settles like any bet; the note under it says which number moved — " +
+        "the price, the line, or neither — and when it was placed. Don’t add " +
+        "more at the new price." },
+    { icon: "book", title: "Two books, kept apart",
+      body: "The Record keeps the Edge picks and the Most Likely picks in " +
+        "separate books with separate records. Edge picks are the only ones " +
+        "we stake — they are where we think the price is wrong. Most Likely " +
+        "ranks what is likeliest to hit, by likelihood rather than by edge. " +
+        "Neither book’s numbers ever leak into the other’s." },
+  ];
+}
+
+/* Whether the tour shows itself on this visit. Pure, so it can be tested
+   for every combination without a browser. */
+function tourDue({ stored, hash, isStatic, view, standalone, wall }) {
+  if (stored === "done" || stored === "later" || isStatic) return false;
+  const h = String(hash || "");
+  if (h && h !== "#" && h !== "#recommended") return false;   // a deep link
+  if ((wall || []).includes(view)) return false;              // the paywall
+  return !(standalone || []).includes(view);
+}
+
+function tourMaybe() {
+  let stored = "";
+  try { stored = localStorage.getItem(TOUR_KEY) || ""; } catch (e) { stored = ""; }
+  // "Not now" from earlier this visit outranks a clean slate, never "done".
+  try { if (stored !== "done" && sessionStorage.getItem(TOUR_KEY) === "later") stored = "later"; }
+  catch (e) {}
+  if (!tourDue({ stored, hash: location.hash, isStatic: state.static,
+                 view: state.view, standalone: STANDALONE_MODES,
+                 wall: noTourViews() })) return;
+  clearTimeout(_tourTimer);
+  _tourTimer = setTimeout(() => {
+    _tourTimer = null;
+    if (!noTourViews().includes(state.view)) tourOpen(0);
+  }, 900);
+}
+
+/* Take the card down without deciding anything — the wall went up. */
+function tourHide() {
+  clearTimeout(_tourTimer);
+  _tourTimer = null;
+  const ov = document.getElementById("tour-overlay");
+  if (!ov) return;
+  ov.remove();
+  document.removeEventListener("keydown", tourKey);
+  lockScroll(false);
+}
+
+/* `forever` is the reader's word — Done on the last card, or Never show
+   again on any of them. Anything else is "later": this visit only. */
+function tourClose(forever) {
+  tourHide();
+  if (forever) {
+    try { localStorage.setItem(TOUR_KEY, "done"); } catch (e) {}
+  } else {
+    try { sessionStorage.setItem(TOUR_KEY, "later"); } catch (e) {}
+  }
+}
+
+function tourKey(e) {
+  if (e.key === "Escape") tourClose(false);
+}
+
+function tourOpen(step) {
+  const steps = tourSteps();
+  const i = Math.max(0, Math.min(steps.length - 1, step || 0));
+  let ov = document.getElementById("tour-overlay");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "tour-overlay";
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov || e.target.closest(".tour-close")) tourClose(false);
+    });
+    document.addEventListener("keydown", tourKey);
+    lockScroll(true);
+  }
+  const s = steps[i];
+  ov.innerHTML = `<div class="tour-card" role="dialog" aria-modal="true" aria-label="${escapeAttr(s.title)}">
+      <button class="pk-close tour-close" type="button" aria-label="Close">×</button>
+      <div class="tour-step">${i + 1} of ${steps.length}</div>
+      <h3 class="tour-title">${icon(s.icon, 18)} ${escapeHtml(s.title)}</h3>
+      <p class="tour-body">${escapeHtml(s.body)}</p>
+      <div class="tour-nav">
+        <span class="tour-dots" aria-hidden="true">${steps.map((_, k) =>
+          `<i class="${k === i ? "on" : ""}"></i>`).join("")}</span>
+        ${i > 0 ? `<button type="button" class="btn ghost" data-tour-step="${i - 1}">Back</button>` : ""}
+        ${i < steps.length - 1
+          ? `<button type="button" class="btn" data-tour-step="${i + 1}">Next</button>`
+          : `<button type="button" class="btn tour-done">Done</button>`}
+      </div>
+      <button type="button" class="tour-never">Never show again</button>
+    </div>`;
+  ov.querySelectorAll("[data-tour-step]").forEach((b) =>
+    b.addEventListener("click", () => tourOpen(+b.dataset.tourStep)));
+  const done = ov.querySelector(".tour-done");
+  if (done) done.addEventListener("click", () => tourClose(true));
+  ov.querySelector(".tour-never").addEventListener("click", () => tourClose(true));
+  const first = ov.querySelector(".tour-nav .btn:last-child");
+  if (first) first.focus();
+}
+
+/* ---------------- Phone feel: swipe, pull, buzz ----------------
+   Ethan, 2026-09-05: "the swipe between sports pull to refresh and
+   light buzz". Three small things a native app does that a page does
+   not unless it is told to: a sideways swipe on a board moves to the
+   next league's chip; a pull down at the top of a board asks for it
+   again; a short buzz when a bet settles on the Live tab, when a pick
+   lands in the slip, and when a swipe lands. Every one of them is
+   guarded: no buzz without `navigator.vibrate` (iPhones do not have
+   it) or under reduced motion; no swipe from inside anything that
+   scrolls sideways itself; no pull unless the page is at the very top
+   and the view is a board. */
+const SWIPE_MIN_X = 70, SWIPE_MAX_Y = 40, PTR_MIN = 72;
+//: The views that follow the sport chips. A detail page, the chat, the
+//: account page and the standalone modes are not boards.
+const SWIPE_VIEWS = ["recommended", "tonight", "live", "likely", "longshots", "edge", "scanner",
+                     "futures", "injuries", "weather", "trending", "rosters", "players", "standings"];
+const BUZZ = { tap: [12], win: [30, 40, 30], loss: [70] };
+
+/* A short vibration, or nothing: false whenever the device cannot, or
+   the reader asked for less motion. */
+function buzz(kind) {
+  const pattern = BUZZ[kind];
+  if (!pattern || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return false;
+  try {
+    if (typeof window !== "undefined" && window.matchMedia
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  } catch (e) {}
+  try { return !!navigator.vibrate(pattern); } catch (e) { return false; }
+}
+
+/* Where a sideways swipe goes: the next or previous league in the chip
+   row, or nowhere — never around the end. Pure. */
+function swipeTarget(dx, dy, sports, current) {
+  if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dy) > SWIPE_MAX_Y) return null;
+  const i = (sports || []).indexOf(current);
+  if (i < 0) return null;
+  const j = dx < 0 ? i + 1 : i - 1;
+  return j >= 0 && j < sports.length ? sports[j] : null;
+}
+
+/* A swipe that began inside something that scrolls sideways itself —
+   the games strip, a chip row, a wide table — or inside a dialog or a
+   field, belongs to that thing. */
+function swipeOwned(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches && n.matches("input, textarea, select, [data-noswipe], #pk-overlay, #tour-overlay, .games-scroller, .std-chips, .sb-chips, .lb-table, table")) return true;
+    if (n.scrollWidth > n.clientWidth + 4) {
+      const o = getComputedStyle(n).overflowX;
+      if (o === "auto" || o === "scroll") return true;
+    }
+  }
+  return false;
+}
+
+function visibleSports() {
+  return [...document.querySelectorAll(".sb-chips .sport-btn[data-sport]")]
+    .filter((b) => !b.hidden && SPORT_CODES.includes(b.dataset.sport))
+    .map((b) => b.dataset.sport);
+}
+
+/* What a pull down has earned: nothing unless the page is at the top,
+   "pull" until the threshold, "ready" past it. Pure. */
+function ptrPhase(dy, atTop) {
+  return !atTop || dy <= 0 ? "idle" : dy < PTR_MIN ? "pull" : "ready";
+}
+
+function ptrShow(phase) {
+  let el = document.getElementById("ptr");
+  if (phase === "idle") { if (el) el.hidden = true; return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "ptr"; el.setAttribute("role", "status");
+    document.body.appendChild(el);
+  }
+  el.hidden = false;
+  el.className = phase;
+  el.textContent = phase === "busy" ? "Refreshing…" : phase === "ready" ? "Release to refresh" : "Pull to refresh";
+}
+
+let _touch = null;
+document.addEventListener("touchstart", (e) => {
+  if (!e.touches || e.touches.length !== 1) { _touch = null; return; }
+  const t = e.touches[0];
+  _touch = { x: t.clientX, y: t.clientY, owned: swipeOwned(e.target),
+             atTop: window.scrollY <= 0, phase: "idle" };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!_touch || !_touch.atTop || !SWIPE_VIEWS.includes(state.view)) return;
+  const t = e.touches && e.touches[0];
+  if (!t) return;
+  const dy = t.clientY - _touch.y, dx = t.clientX - _touch.x;
+  const phase = Math.abs(dx) > SWIPE_MAX_Y ? "idle" : ptrPhase(dy, true);
+  if (phase !== _touch.phase) { _touch.phase = phase; ptrShow(phase); }
+}, { passive: true });
+document.addEventListener("touchend", async (e) => {
+  const s = _touch; _touch = null;
+  if (!s) return;
+  const t = e.changedTouches && e.changedTouches[0];
+  const onBoard = SWIPE_VIEWS.includes(state.view);
+  if (s.phase === "ready" && onBoard && !state.static) {
+    ptrShow("busy"); buzz("tap");
+    try { await load(true); } catch (err) {}
+    ptrShow("idle");
+    tfToast(`Refreshed · ${tzTime(Date.now())}`);
+    return;
+  }
+  ptrShow("idle");
+  if (s.owned || !t || !onBoard) return;
+  const to = swipeTarget(t.clientX - s.x, t.clientY - s.y, visibleSports(), state.sport);
+  if (!to) return;
+  const btn = document.querySelector(`.sb-chips .sport-btn[data-sport="${to}"]`);
+  if (btn) { btn.click(); buzz("tap"); }
+}, { passive: true });
+document.addEventListener("touchcancel", () => { _touch = null; ptrShow("idle"); }, { passive: true });
+
+/* A settled bet, announced once. The tracker redraws every refresh, so
+   the statuses of the last draw are kept and only a CHANGE on a row
+   already being watched earns a buzz — a page opened to a row already
+   won has nothing to announce, and neither does a row that arrives
+   settled. Pure in what it returns. */
+const SETTLE_BUZZ = { cleared: "win", won_pending: "win", busted: "loss", lost_pending: "loss", dead: "loss" };
+let _trackStatus = null;
+function settleChanges(prev, rows) {
+  const next = new Map(), fire = [];
+  (rows || []).forEach((r) => {
+    const key = `${r.player}|${r.market}|${r.category || "main"}`;
+    next.set(key, r.status);
+    const kind = SETTLE_BUZZ[r.status];
+    if (prev && kind && prev.has(key) && prev.get(key) !== r.status) fire.push(kind);
+  });
+  return { next, fire };
+}
+function buzzOnSettle(rows) {
+  const { next, fire } = settleChanges(_trackStatus, rows);
+  _trackStatus = next;
+  if (fire.length) buzz(fire.includes("win") ? "win" : "loss");
 }
 
 (function initNewLook() {
@@ -30856,6 +33320,7 @@ async function renderLiveBoard() {
     socFetch(true).then(msgBadge);
   }, 120000);
   slipRender();
+  tourMaybe();
   // The avatar chip: initials for a signed-in account, never a fake name.
   const acctBtn = document.getElementById("nav-acct");
   if (acctBtn) {

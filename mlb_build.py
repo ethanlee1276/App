@@ -510,9 +510,16 @@ def main() -> None:
     if real_odds:
         try:
             from engine.linemoves import (stream_history, analyze, summary_lines,
-                                          todays_rows, annotate_recommendations)
-            moves = analyze(todays_rows(stream_history()))
+                                          todays_rows, annotate_recommendations,
+                                          attach_series)
+            _today = todays_rows(stream_history())
+            moves = analyze(_today)
             n_mv = annotate_recommendations(result["recommendations"], moves)
+            # Today's tape on every priced pick, for the prop page's own
+            # line chart (Ethan, 2026-09-05). Same rows, read once.
+            _ns = attach_series(result["recommendations"], _today)
+            if _ns:
+                print(f"  Line series: {_ns} pick(s) carry today's tape.")
             if moves:
                 print(f"Line movement: {len(moves)} prop(s) re-priced since "
                       f"open; verdict stamped on {n_mv} pick(s).")
@@ -571,9 +578,17 @@ def main() -> None:
         # neighbouring days are shown only if they actually land on a game
         # in tonight's slate — otherwise a widened window becomes clutter.
         _cols = ("player, market, side, line, odds, stake_units, date, "
-                 "category, hit_prob")
+                 "category, hit_prob, ts")
+        # 'likely' JOINED THE TRACKER 2026-09-05. Ethan: "the most likley
+        # bets should also show in the live page, we need to have two
+        # seperate pages in the live page, one for edge bets, and one for
+        # most likley bets." Most Likely rows journal with
+        # category='likely' (engine/ledger.log_most_likely — flat stake,
+        # zero dollar exposure) and were never selected here, so the Live
+        # tab could not show them at all. The page splits the two by
+        # category; the cross-sport count below stays edge-only.
         _where = ("status='open' AND sport='mlb' "
-                  "AND category IN ('main','longshot')")
+                  "AND category IN ('main','longshot','likely')")
         open_today = [dict(r) for r in _lpc.execute(
             f"SELECT {_cols} FROM bets WHERE {_where} AND date=?", (args.date,))]
         _near = [_shift_day(args.date, d) for d in (-1, 1)]
@@ -683,7 +698,12 @@ def main() -> None:
             "SELECT COUNT(*) FROM bets WHERE status='open' "
             "AND category IN ('main','longshot') "
             "AND stake_units > 0").fetchone()[0]
-        result["open_elsewhere"] = max(0, _all_open - len(rows))
+        # EDGE ROWS ONLY on this side of the subtraction, because `_all_open`
+        # counts only edge bets: likely rows are on the tracker now, and
+        # subtracting them too would understate "open on other boards" by
+        # exactly their number.
+        _edge_shown = sum(1 for r in rows if r.get("category") != "likely")
+        result["open_elsewhere"] = max(0, _all_open - _edge_shown)
         if result["live_picks"]:
             n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")
             print(f"Open-bet tracker: {len(result['live_picks'])} on today's "
@@ -784,6 +804,14 @@ def main() -> None:
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
+        # The light copy the Home page draws first (engine/lightboard),
+        # published the same way so the paywall strips the same keys.
+        try:
+            from engine import lightboard
+            _, _lfull = gate.publish(lightboard.light(result, "mlb"), lightboard.light_path(args.out))
+            print(lightboard.report(gate.board_source(args.out), _lfull))
+        except Exception as _lexc:                            # noqa: BLE001
+            print(f"⚠️  Light board skipped: {_lexc}")
     _stg.stop(_tk)
 
     # Learning engine: journal today's real-priced picks and settle any open

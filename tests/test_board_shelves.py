@@ -420,7 +420,10 @@ def test_the_tonight_tab_leads_with_most_likely():
     src = _src("web", "js", "app.js")
     i = src.index("function renderTonight()")
     body = src[i:src.index("\nfunction ", i + 10)]
-    assert "d.most_likely" in body
+    # The reader moved into tonightPick (2026-09-05, Tonight across every
+    # sport) — one reader for both pages; the tab's ORDER is still here.
+    j = src.index("function tonightPick(")
+    assert "d.most_likely" in src[j:src.index("\nfunction ", j + 10)]
     assert body.index("Most likely to hit tonight") \
         < body.index("Our edge bets")
     assert 'boardGuide("most_likely")' in body, "the trust line travels"

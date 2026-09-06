@@ -41,6 +41,11 @@ MARKET_LABELS = {**_GEN_LABELS, **_MLB_LABELS}
 SPORT_MARKETS = {
     "mlb": ["total_bases", "hits", "strikeouts", "outs"],
     "nfl": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    # College, added 2026-09-04 — 237,242 ingested player-log rows and a
+    # board that prices these four through the shared engine. See
+    # formfit.SPORT_MARKETS for the premise this corrects and what it
+    # cost. UFC stays out: no game logs to walk.
+    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
     # Hoops props go through their own pricing machinery but land in the
     # SAME history table, keyed (sport, market) — so the deep fit works
     # here the moment game logs are ingested. It was never wired up, which
@@ -48,10 +53,29 @@ SPORT_MARKETS = {
     # against this dict, so nba was not even a legal value to type.
     "nba": ["pts", "reb", "ast", "fg3m", "pra"],
     "wnba": ["pts", "reb", "ast", "fg3m", "pra"],
-    # CFB and UFC are deliberately absent. College is priced at GAME level
-    # (spread / total / moneyline) and has no player-prop logs to walk, and
-    # UFC has no game logs at all. Both learn from the journal only, and
-    # listing them here would offer a fit that can never run.
+    # COLLEGE JOINED 2026-09-04, and the line it replaces was true when
+    # it was written: college was priced at game level only, with no
+    # player props for a fitter to walk. It has both now —
+    # `engine/cfb/props.py` builds the props and the ingest holds 62,752
+    # receiving-yard and 47,926 rushing-yard player-games — so the fit
+    # this table was refusing to offer is one that runs.
+    #
+    # IT WAS NOT A HARMLESS OMISSION. `--sport` validates against this
+    # dict, so cfb was not a legal value to type and no fitter could
+    # reach it; `calibrate.correction_for("cfb", "rush_yds")` therefore
+    # returned the neutral (1.0, 0.0) on every college prop the board
+    # priced. The first live college board showed what that costs: the
+    # model claimed 63% on an under where 4,852 comparable settled spots
+    # went 80%, and the edges that produced (0.10-0.17) sailed past
+    # MAX_CREDIBLE_EDGE, so every one of the 22 priced props was refused
+    # as not credible. An uncalibrated market does not merely price
+    # badly — it prices itself off the board.
+    #
+    # The same shape of gap `engine.rankfit.MARKETS` had, found the same
+    # way, and closed the same way: measured on college's own logs.
+    "cfb": ["pass_yds", "rush_yds", "rec_yds", "receptions"],
+    # UFC stays absent: it has no game logs at all, so it learns from the
+    # journal only and listing it would offer a fit that can never run.
 }
 
 

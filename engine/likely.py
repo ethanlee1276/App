@@ -185,7 +185,42 @@ LIMIT = 40
 
 #: A model probability below this is not "likely" by any reading, whatever
 #: it is ranked against.
-MIN_PROB = 0.30
+#:
+#: RAISED FROM 0.30 ON 2026-09-06, Ethan's call, after the paper book's
+#: first honest scoreboard. 402 settled rows, and the 45-60% band was
+#: 184 of them at -7.68%:
+#:
+#:     band        n    said     hit      roi
+#:     45%-60%    184   53.3%   49.5%   -7.68%
+#:     60%-75%    154   66.1%   71.4%   +3.91%
+#:     75%-101%    64   84.8%   76.6%   -6.00%
+#:
+#: THE ARITHMETIC THAT DOES NOT DEPEND ON THE SAMPLE. A 53.3% pick at
+#: -110 needs 52.4% to break even. The margin is nine tenths of a point,
+#: which is inside every error bar this model has — `selectionfit`
+#: measures a 9-10 point over-claim on the bets we choose. A band that
+#: thin cannot be bet into a vig, and a 45-60% row is not "most likely"
+#: by any reading of the words on the page.
+#:
+#: WHAT THE SAMPLE DOES NOT SAY, recorded because it was nearly quoted as
+#: if it did. Dropping that band takes the settled record to +1.00%, at
+#: +/-9.5%. Cutting the SAME 402 rows by market instead of by band gives
+#: -2.15% for the ranked shelves against -3.90% for the unranked ones.
+#: Two cuts of one sample, disagreeing in sign, both inside noise. The
+#: ROI evidence establishes nothing; the naming argument above is the
+#: whole case.
+#:
+#: WHAT IT COSTS, PUT TO ETHAN BEFORE IT SHIPPED AND ACCEPTED. The
+#: 45-60% band IS the game-lines shelf: spread (84 rows, said 55.0%),
+#: total (71, 55.1%) and team_total (35, 54.7%) are 190 rows against the
+#: band's 184. So this floor removes about half of the shelf he asked
+#: for on 2026-09-02 — "I don't see spread bets, I don't see anything
+#: like that I just asked you to do" — and shipped as labelled leans.
+#: Those three are also exactly the markets `GAME_RANK_MEASURED` puts at
+#: 0.49, a coin flip: the record and the ranking measurement agree about
+#: which shelves these are. He was shown the collision and chose 0.55
+#: everywhere rather than scoping it to props.
+MIN_PROB = 0.55
 
 #: How far the displayed probability may sit from the book's own de-vigged
 #: number before the row is refused — the same bar `engine.betting` uses,

@@ -120,6 +120,42 @@ deploy should land on.
 
 ---
 
+## The explainer: the one thing this project installs
+
+Everything else here is the standard library. The plain-English
+explainer on the prop page (engine/explainer.py) talks to the model
+through the official `anthropic` Python package, and the service's
+python is `/usr/bin/python3`, so it is installed for the box, once:
+
+```bash
+# The droplet image ships without pip (2026-09-05: "No module named pip"),
+# so pip itself comes first.
+sudo apt update && sudo apt install -y python3-pip
+# Ubuntu 24.04 refuses to touch the system python without
+# --break-system-packages, and then refuses to REMOVE apt's own copy of
+# typing_extensions ("RECORD file not found ... installed by debian",
+# 2026-09-05 on the box). --ignore-installed lays pip's newer copies
+# under /usr/local, which python reads first, and leaves apt's alone.
+sudo python3 -m pip install --break-system-packages --ignore-installed typing_extensions anthropic
+# Must print a version AS THE SERVICE USER, or the service will not see it:
+sudo -u qellys python3 -c "import anthropic; print(anthropic.__version__)"
+```
+
+Then the two values it reads, into /etc/qellys/env the usual way (the
+model id is the exact string Claude gave you in chat; the key is from
+console.anthropic.com):
+
+```bash
+sudo ./deploy/setenv.sh QB_EXPLAIN_MODEL <model id>
+sudo ./deploy/setenv.sh ANTHROPIC_API_KEY          # prompts, reads silently
+sudo systemctl restart qellys
+```
+
+Until both are set the button on the prop page says "The explainer is
+not switched on for this site yet" — nothing breaks, nothing spends.
+Answers are cached per build in data/explain_cache.json, so a pick
+costs one call per rebuild however many people tap it.
+
 ## When you are home and want the chores list
 
 ```bash

@@ -81,9 +81,14 @@ def test_every_view_change_sets_a_position():
     dozen views never touch."""
     js = _js()
     body = _fn(js, "_switchViewNow")
-    assert body.count("_landScroll(") == 2, (
-        "the game page returns early, so it needs its own call — and the "
-        "tail needs the one that covers every other view")
+    # Three since 2026-09-05: the play-by-play page returns early for the
+    # same reason the game page does — it writes its own #pbp/… hash and
+    # must not reach the tail's `#${name}` write — so it carries its own
+    # call too (tests/test_pbp_page.py pins the call in that branch).
+    assert body.count("_landScroll(") == 3, (
+        "the game page and the play-by-play page return early, so each "
+        "needs its own call — and the tail needs the one that covers "
+        "every other view")
     # …and the tail call is the LAST thing, after the async renders above
     # it, not buried in the dispatch.
     tail = body[body.rindex("_landScroll("):]
@@ -123,9 +128,12 @@ def test_opening_a_detail_remembers_the_board_and_leaving_gives_it_back():
 
 def test_the_detail_views_are_named_once():
     js = _js()
-    assert 'const DETAIL_VIEWS = ["prop", "game"];' in js, (
-        "prop and game are the two views with no tab of their own; if a "
-        "third is added it belongs in this list, not in a new condition")
+    # The third arrived 2026-09-05: the play-by-play page, opened from a
+    # live card and lit under the Live tab, with no tab of its own. It is
+    # in the list, as this test asked — not in a new condition.
+    assert 'const DETAIL_VIEWS = ["prop", "game", "pbp"];' in js, (
+        "prop, game and pbp are the views with no tab of their own; if a "
+        "fourth is added it belongs in this list, not in a new condition")
 
 
 def test_the_app_takes_the_wheel_from_the_browser():

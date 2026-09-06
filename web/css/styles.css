@@ -1774,6 +1774,8 @@ main { view-transition-name: page; }
 .control.bankroll label b { color: var(--good); font-weight: 700; }
 
 .tile-sub { color: var(--text-mute); font-size: var(--fs-sm); font-weight: 600; margin-top: 2px; }
+/* The new/riding split leads the On tonight tile's sub-line (2026-09-05). */
+.tile-sub .tile-split { color: var(--text); font-weight: 700; }
 
 /* Most Likely shelves — one band per KIND of bet.
 
@@ -2262,6 +2264,9 @@ select.calc-in { width: auto; font-weight: 600; }
   margin-top: 7px;
 }
 .rec-epoch strong { color: var(--text); }
+/* A folded duplicate (the calibration room's current-model table): the
+   card inside gets the room's normal margin once it is open. */
+.rec-fold > .card { margin-top: 10px; }
 
 /* A MARK ON A SECTION TITLE, from the same render. Used sparingly and
    only where the render asks for it — a page whose every heading wears a
@@ -2749,6 +2754,9 @@ select.calc-in { width: auto; font-weight: 600; }
    ellipsis eats. So this one table gets a wider track, taken from the
    1fr column, which has slack the fixed ones do not. */
 .pm-rows .rl-row { grid-template-columns: 20px 86px minmax(0, 1fr) 168px 56px 72px; }
+/* Both chips (the verdict against the close, the measured cause of a
+   loss) in the one 90px cell, so a row with two never breaks the grid. */
+.rl-chips { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; overflow: hidden; }
 .rl-proc.good { color: var(--good); } .rl-proc.bad { color: var(--bad); }
 .rl-proc.warn { color: var(--warn); } .rl-proc.none { color: var(--text-mute); opacity: .55; }
 .rl-odds { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
@@ -2934,6 +2942,15 @@ select.calc-in { width: auto; font-weight: 600; }
   padding: 12px 4px 4px; min-height: 44px; white-space: nowrap; }
 .pp-actions .btn + .btn { border-left: var(--hairline) solid var(--border-soft); }
 .pp-actions .btn:hover { color: var(--brand); background: none; }
+/* The explainer, under the action strip: a reading of the card in
+   plain words, drawn only after the tap (2026-09-05). */
+.pp-explain { margin-top: 12px; padding: 12px 14px;
+  border: var(--hairline) solid var(--border-soft); border-radius: var(--radius); }
+.pp-explain p { margin: 0 0 8px; line-height: var(--lh-body); font-size: var(--fs-md); }
+.pp-explain p:last-of-type { margin-bottom: 0; }
+.pp-explain .pp-explain-wait { color: var(--text-dim); }
+.pp-explain-note { margin-top: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  line-height: var(--lh-snug); }
 /* On a player card it rides in the head beside the grade, where there is
    no room for a full-size control. */
 .profile-head .qb-share { align-self: flex-start; font-size: var(--fs-sm); }
@@ -3595,6 +3612,32 @@ body.ffd-open { overflow: hidden; }
 body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%;
   overflow: hidden; }
 body.pk-open { overflow: hidden; }
+/* Phone feel (2026-09-05): the site's own pull-to-refresh, so the
+   browser's whole-page reload on the same gesture is switched off on
+   touch screens and the two cannot fire together. */
+@media (pointer: coarse) { html { overscroll-behavior-y: contain; } }
+#ptr { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 60;
+  padding: 6px 12px; border-radius: var(--radius-lg); background: var(--panel);
+  border: var(--hairline) solid var(--border); color: var(--text-mute); font-size: var(--fs-sm);
+  pointer-events: none; }
+#ptr.ready, #ptr.busy { color: var(--text); border-color: var(--brand); }
+/* The first-visit walkthrough (2026-09-05): the peek dialog's own
+   backdrop and card, three steps deep. */
+#tour-overlay { position: fixed; inset: 0; z-index: 80; display: flex;
+  background: rgba(0, 0, 0, .55); align-items: center; justify-content: center; padding: 16px; }
+.tour-card { position: relative; width: 100%; max-width: 440px; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 22px 20px 18px; }
+.tour-step { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .04em; text-transform: uppercase; }
+.tour-title { margin: 6px 0 8px; font-size: var(--fs-lg); display: flex; align-items: center; gap: 8px; }
+.tour-body { margin: 0 0 16px; color: var(--text-body); font-size: var(--fs-md); line-height: var(--lh-body); }
+.tour-nav { display: flex; align-items: center; gap: 8px; }
+.tour-dots { display: inline-flex; gap: 6px; margin-right: auto; }
+.tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.tour-dots i.on { background: var(--brand); }
+.tour-never { display: block; margin: 12px 0 0; padding: 0; background: none; border: 0;
+  color: var(--text-mute); font-size: var(--fs-xs); text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; min-height: 24px; }
+.tour-never:hover, .tour-never:focus-visible { color: var(--text); }
 /* A scroll that reaches the end of this card must stop there rather
    than carrying on into the page underneath it. */
 .pk-card { overscroll-behavior: contain;
@@ -3893,6 +3936,8 @@ body.pk-open { overflow: hidden; }
     grid-area: proc; white-space: normal;
     overflow: visible; overflow-wrap: anywhere;
   }
+  .rl-chips { grid-area: proc; justify-content: flex-start; flex-wrap: wrap;
+    gap: 4px 10px; overflow: visible; }
   .rl-odds { grid-area: odds; }
   .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
   .rl-date::after { content: " ·"; opacity: .4; }
@@ -4259,6 +4304,8 @@ body.pk-open { overflow: hidden; }
 /* The render pack's division chips (2026-08-25) — reuses the Alerts
    category chip look so filters read the same everywhere. */
 .std-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.search-recent { align-items: center; margin-top: -6px; }
+.search-recent .sr-label { color: var(--text-mute); font-size: var(--fs-sm); }
 
 /* Since 2026-08-25 the cell holds teamMark — the real crest with the
    coloured-chip monogram underneath as its fallback — instead of a bare
@@ -5048,6 +5095,8 @@ body.pk-open { overflow: hidden; }
 .inj-line + .inj-line { border-top: var(--hairline) solid var(--border); }
 .inj-line-main { flex: 1 1 auto; min-width: 0; display: flex;
   flex-direction: column; gap: 1px; }
+.inj-next { display: block; margin-top: 3px; font-size: var(--fs-xs); color: var(--text-mute); }
+.inj-next b { color: var(--text); font-weight: 600; }
 .inj-line-sub { color: var(--text-mute); font-size: var(--fs-xs);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inj-line-right { flex: none; display: flex; flex-direction: column;
@@ -5791,10 +5840,12 @@ body.has-rail .shell {
    on it pushed the Record page's own KPI row onto a second line once
    already (see test_newlook). This grid is its own. */
 .rv-card { margin-bottom: 22px; }
-.rv-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+.rv-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px; background: var(--border-soft); border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius); overflow: hidden; margin-top: 14px; }
 .rv-tile { background: var(--panel); padding: 15px 14px; }
+/* The unit is not part of the number — same rule the stat tiles keep. */
+.rv-v .unit { font-size: .5em; font-weight: 400; color: var(--text-dim); }
 .rv-v { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 700;
   color: var(--text); line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
 .rv-tile.good .rv-v { color: var(--good); }
@@ -6649,6 +6700,30 @@ body.has-rail .shell {
 .lb-table b { text-align: right; font-family: var(--font-mono);
   font-size: var(--fs-sm); }
 
+/* The last few at-bats on a live card. Newest LAST, the way a
+   play-by-play reads. A scoring play is marked rather than coloured
+   loudly — the whole strip sits under the score and must not compete
+   with it. */
+.lb-plays { margin-top: 10px; padding-top: 9px;
+  border-top: var(--hairline) solid var(--border);
+  display: flex; flex-direction: column; gap: 3px; }
+.lb-play { display: grid; grid-template-columns: 2.4em 1fr auto;
+  gap: 8px; align-items: baseline; font-size: var(--fs-sm);
+  color: var(--text-mute); }
+.lb-play .lb-inn { font-family: var(--font-mono);
+  font-size: var(--fs-xs); letter-spacing: 0; }
+.lb-play .lb-what { color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.lb-play .lb-pscore { font-family: var(--font-mono);
+  font-size: var(--fs-xs); letter-spacing: 0; }
+.lb-play .lb-rbi { color: var(--good); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .06em; }
+.lb-play .lb-miss { color: var(--text-mute); font-size: var(--fs-xs); }
+.lb-play.scoring .lb-inn { color: var(--good); }
+.lb-play.turnover .lb-inn, .lb-play.turnover .lb-rbi { color: var(--warn); }
+.lb-drive { color: var(--text-mute); font-size: var(--fs-xs);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 2px; }
+
 /* Live line track — how the market has moved since first pitch. The chart
    is a plain sparkline; everything here is the frame around it. */
 .lb-track { margin-top: 10px; padding-top: 9px;
@@ -6708,6 +6783,27 @@ body.has-rail .shell {
 .gp-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0; }
 @media (min-width: 900px) { .gp-row { grid-template-columns: 1fr 1fr; } }
 .gp-lines .lb-table { border-top: none; padding-top: 0; }
+
+/* Under pressure (2026-09-05): a ranked section on the standings page,
+   a two-team table on the game page, a situational line on the live
+   card. The section reuses the rankings' buckets and rows; only the
+   four-up grid and the game-page table are its own. */
+.pr-buckets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1100px) { .pr-buckets { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pr-table { display: grid; grid-template-columns: 1fr repeat(4, auto); gap: 6px 12px;
+  align-items: center; }
+.pr-table .lb-th { color: var(--text-mute); font-size: var(--fs-xs); text-align: right; }
+.pr-table .lb-th:first-child { text-align: left; }
+.pr-table .lb-tm { color: var(--text-mute); font-size: var(--fs-sm); display: flex;
+  align-items: center; gap: 6px; min-width: 0; }
+.pr-table b { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+.pr-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px;
+  color: var(--text-mute); font-size: var(--fs-xs); line-height: var(--lh-body); }
+.pr-defs b { color: var(--text-dim); font-weight: 600; }
+.lb-pressure { margin-top: 8px; padding-top: 8px; border-top: var(--hairline) solid var(--border);
+  color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.lb-pressure .lb-pk { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: .04em; margin-right: 6px; }
 .gp-note-list { margin: 0; padding-left: 18px; color: var(--text-body);
   font-size: var(--fs-sm); }
 .gp-note-list li { margin: 4px 0; }
@@ -6728,6 +6824,53 @@ body.has-rail .shell {
 
 /* Analytics on desktop — chart left, the three stats as a right rail. */
 .ra-main { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+/* Tonight across every sport (2026-09-05): the Live tab's chip row, the
+   league blocks under it. */
+.tn-chips { margin-bottom: 10px; }
+.tn-league { margin-top: 18px; }
+.tn-block .cards { margin-bottom: 8px; }
+.tn-quiet { margin: 0 0 6px; }
+/* Odds shopping (2026-09-05): the pick's side at every book, best first. */
+.bs-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px;
+  font-size: var(--fs-xs); color: var(--text-mute); }
+/* A price off the field (engine/odds.OUTLIER_GAP): shown, never crowned. */
+.bs-q.off { opacity: .6; text-decoration: line-through; }
+.bs-q.off i { font-style: normal; text-decoration: none; color: var(--text-mute); }
+.pp-books tr.off td { opacity: .6; }
+.bs-t { margin-right: 2px; }
+.bs-q { padding: 2px 7px; border-radius: var(--radius); background: var(--panel-3); color: var(--text); }
+.bs-q.best { border: var(--hairline) solid var(--brand); }
+.bs-more { color: var(--text-mute); }
+.pp-books { padding: 0; overflow-x: auto; }
+/* Line movement on the prop page (2026-09-05). */
+.lm-card { padding: 12px 14px; }
+.lm-row { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-md); margin-bottom: 4px; }
+.lm-k { color: var(--text-mute); font-size: var(--fs-sm); min-width: 56px; }
+.lm-px { color: var(--text-mute); }
+.lm-when { margin-left: auto; color: var(--text-mute); font-size: var(--fs-xs); }
+.pp-books tr.best td { color: var(--text); font-weight: 700; }
+.pp-books tr.bs-sep td { color: var(--text-mute); font-size: var(--fs-xs); padding-top: 10px; }
+/* The profit calendar on the Record page (2026-09-05): a Sunday-first
+   month grid, a cell per day, green or red by sign and deeper by size. */
+.rc-card { padding: 12px 14px; margin-bottom: 18px; }
+.rc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.rc-h { text-align: center; font-size: var(--fs-xs); color: var(--text-mute); padding: 2px 0; }
+.rc-day { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 44px; border-radius: var(--radius); border: var(--hairline) solid transparent;
+  background: var(--panel-3); color: var(--text-mute); font: inherit; font-size: var(--fs-xs); padding: 4px 2px; }
+.rc-day.blank { background: none; }
+.rc-day.off { opacity: .55; }
+button.rc-day { cursor: pointer; color: var(--text); }
+button.rc-day b { font-size: var(--fs-sm); }
+.rc-day.pos.rc-1 { background: color-mix(in srgb, var(--good) 14%, var(--panel-3)); }
+.rc-day.pos.rc-2 { background: color-mix(in srgb, var(--good) 30%, var(--panel-3)); }
+.rc-day.pos.rc-3 { background: color-mix(in srgb, var(--good) 50%, var(--panel-3)); }
+.rc-day.neg.rc-1 { background: color-mix(in srgb, var(--bad) 14%, var(--panel-3)); }
+.rc-day.neg.rc-2 { background: color-mix(in srgb, var(--bad) 30%, var(--panel-3)); }
+.rc-day.neg.rc-3 { background: color-mix(in srgb, var(--bad) 50%, var(--panel-3)); }
+.rc-day.open { border-color: var(--brand-2); }
+.rc-foot { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-mute); }
+.rc-dayhead { margin: 12px 0 6px; font-size: var(--fs-sm); color: var(--text-mute); }
 .ra-main .rec-chart { margin-bottom: 0; }
 /* The 2026-08-17 declutter: the tile stacks that repeated the scoreboard
    became two ledger lines — every number once, in a sentence. */
@@ -6902,8 +7045,11 @@ body.has-rail .shell {
 .openable { cursor: pointer; }
 .card.openable:hover { border-color: var(--brand-2); }
 .openable:focus-visible { outline: 2px solid var(--brand-2); outline-offset: -2px; }
-/* The list rows are not cards, so they say "clickable" the way rows do. */
-.ls-row.openable:hover, div.openable:not(.card):not(.tp-card):hover {
+/* The list rows are not cards, so they say "clickable" the way rows do.
+   This carried a `:not(.tp-card)` until the nightly sweep found it: the
+   .tp-* strip family retired 2026-08-31 with renderTopPicks (see the note
+   above #home-perf), so the guard was excluding a class no markup emits. */
+.ls-row.openable:hover, div.openable:not(.card):hover {
   background: var(--panel-3); }
 .pp-card { padding: 14px; }
 .pp-log, .pp-form {
@@ -9068,3 +9214,120 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
      in 150px, which is where this stops being readable. */
   .gs-sides { grid-template-columns: 1fr; }
 }
+
+/* The play-by-play page (2026-09-05): the card's row language, a game at
+   a time. The groups reuse .lb-plays without its top rule, since each
+   group carries its own head.
+
+   The header this block opened with (.pbp-head, .pbp-score and its four
+   descendants) was retired the same day by the hero below — renderPbpPage
+   stopped emitting those classes and nothing else ever wore them, so the
+   rules were styling nothing. Removed rather than left as a fallback: a
+   selector no markup can match cannot be a fallback, only a decoy for the
+   next person reading this file for the header's styling. */
+.pbp-group { margin: 12px 0 16px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+
+/* The play-by-play page to the render (2026-09-05): a strip of the
+   league's games, the hero, the park with the ball in flight, the
+   situation strip, and the rail. */
+.pbp-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px;
+  scrollbar-width: thin; }
+.pbp-chip { flex: 0 0 auto; min-width: 128px; text-align: left; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 8px 10px;
+  color: var(--text); font: inherit; cursor: default; }
+.pbp-chip.door { cursor: pointer; }
+.pbp-chip.door:hover { border-color: var(--text-mute); }
+.pbp-chip.active { border-color: var(--gold); border-width: 2px; padding: 7px 9px; }
+.pbp-chip-head { font-size: var(--fs-xs); color: var(--text-mute); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px; }
+.pbp-chip-final, .pbp-chip-time { font-family: var(--font-mono); letter-spacing: .04em; }
+.pbp-chip-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; align-items: center;
+  font-size: var(--fs-sm); }
+.pbp-chip-row em { font-style: normal; font-weight: 700; }
+.pbp-chip-row b { font-family: var(--font-mono); }
+.pbp-chip-foot { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 3px; min-height: 1em; }
+.pbp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+@media (max-width: 980px) { .pbp-layout { grid-template-columns: 1fr; } }
+.pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
+.pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbp-hero-side b { font-size: var(--fs-lg); }
+.pbp-hero-home { justify-content: flex-end; text-align: right; }
+.pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
+.pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
+@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto 1fr; }
+  .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
+  .pbp-hero-score { font-size: 1.6rem; } }
+.pbp-parkcard { padding: 0; overflow: hidden; }
+.pbp-park { position: relative; width: 100%; aspect-ratio: 240 / 150; background: #05060F; }
+.pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pbp-park .pbp-arc { pointer-events: none; }
+.pbp-parkchip { position: absolute; top: 10px; right: 10px; background: rgba(12,16,32,.82);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius); padding: 6px 9px;
+  font-size: var(--fs-xs); color: #dfe4f5; display: flex; flex-direction: column; gap: 2px; }
+.pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+  padding: 12px 14px; border-top: var(--hairline) solid var(--border); }
+.pbp-sit-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pbp-sit-right { justify-content: flex-end; text-align: right; }
+.pbp-sit .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
+.pbp-sit-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pbp-count { font-family: var(--font-mono); font-size: var(--fs-lg); }
+.pbp-face { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--bg-2);
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.pbp-face-blank { color: var(--text-mute); }
+.pbp-tabs { display: flex; gap: 14px; align-items: center; margin: 12px 0 8px; border-bottom: var(--hairline) solid var(--border); }
+.pbp-tabs .active { padding: 6px 0; border-bottom: 2px solid var(--gold); font-weight: 700; }
+.pbp-tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-mute); font: inherit;
+  font-weight: 600; padding: 6px 2px; margin-right: 12px; cursor: pointer; min-height: 44px; }
+.pbp-tab.active { color: var(--text); border-bottom-color: var(--brand); }
+.pbp-panel { margin-top: 8px; }
+.pbp-prop-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: var(--hairline) solid var(--border-soft); }
+.pbp-prop-row:last-child { border-bottom: 0; }
+.pbp-prop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pbp-box { margin-bottom: 10px; }
+.pbp-box-head { display: flex; align-items: center; gap: 6px; font-weight: 700; margin: 6px 0 4px; }
+.pbp-box-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: var(--fs-sm);
+  border-bottom: var(--hairline) solid var(--border-soft); }
+.pbp-box-line { color: var(--text-mute); text-align: right; }
+.pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
+.pbp-tab-door:hover { color: var(--text); }
+/* The doors between the game page and the play-by-play, and the card's
+   own hint that a live game opens it. */
+.gp-pbp-door { display: inline-flex; align-items: center; gap: 6px; color: var(--text-mute); font-weight: 600; }
+.gp-pbp-door:hover { color: var(--text); }
+.status-badge.live .gc-pbp { margin-left: 6px; font-weight: 500; color: var(--text-mute); }
+.pbp-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
+  border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
+.pbp-info-ico { color: var(--gold); display: inline-flex; }
+.pbp-rail { position: sticky; top: 8px; }
+.pbp-rail-head { display: flex; justify-content: space-between; align-items: baseline;
+  font-weight: 800; margin-bottom: 6px; }
+.pbp-group { margin: 8px 0 14px; }
+.pbp-group-head { display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: var(--fs-xs); color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+.pbp-group-head b { color: var(--text); }
+.pbp-group .lb-plays { margin-top: 0; padding-top: 0; border-top: 0; }
+.pbp-tag { color: var(--good); }
+.pbp-tag.turnover { color: var(--warn); }
+.pbp-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start;
+  padding: 6px 0; border-top: var(--hairline) solid var(--border); font-size: var(--fs-sm); }
+.pbp-row:first-of-type { border-top: 0; }
+.pbp-row.atbat { background: var(--bg-2); border-radius: var(--radius); padding: 8px; border-top: 0; margin: 4px 0; }
+.pbp-row.atbat.scoring b { color: var(--good); }
+.pbp-what { min-width: 0; }
+.pbp-who { display: block; color: var(--text-mute); font-size: var(--fs-xs); }
+.pbp-time { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-mute); white-space: nowrap; }
+.pbp-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; display: inline-block; }
+.pbp-dot.ball { background: var(--good); }
+.pbp-dot.strike { background: var(--bad); }
+.pbp-dot.foul { background: var(--warn); }
+.pbp-dot.inplay { background: var(--brand); }
+.pbp-mark { display: inline-flex; margin-top: 1px; }

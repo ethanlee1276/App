@@ -135,8 +135,11 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     i = js.index("function _recordRooms(")
     # `receipts` still lands inside the first room; the Records-by-book
     # sections (Ethan, 2026-09-01) ride directly after it in the same
-    # room, so the tail grew.
-    assert "+ recBookSections(d.book_records, scope)]," in js[i:i + 2700]
+    # room on the "all" scope. A sport's own sections LEAD its receipts
+    # instead (2026-09-05, asked a second time because they sat under
+    # everything), so the tail is guarded rather than repeated.
+    assert '+ (scoped ? "" : recBookSections(d.book_records, scope))],' \
+        in js[i:i + 2900]
 
 
 def test_the_receipts_room_opens_on_the_receipts():
@@ -248,7 +251,9 @@ def test_the_search_reaches_the_league_not_just_the_board():
     market — an unpriced chip would draw the pick block."""
     js = _js()
     body = _fn(js, "async function renderPlayers(")
-    assert body.index("leagueSearch(q)") < body.index("rosterMatches(q)")
+    # The roster is asked with the typed name since 2026-09-05 — the
+    # four-tier match normalises it itself (tests/test_search_forgiving.py).
+    assert body.index("leagueSearch(q)") < body.index("rosterMatches(state.search)")
     assert body.count("!== q) return") >= 2, "the stale-keystroke guard"
     j = js.index("function profileHTML(")
     assert "rows.filter((r) => r.market_label)" in js[j:j + 700]
@@ -280,7 +285,10 @@ def test_searching_still_reaches_every_player():
     # — every market kept, one card per player — but the order contract
     # is the same: the search filter runs over the FULL list before any
     # grouping or display cap touches it.
-    assert body.index("recs = recs.filter") < body.index("_profRows = new Map()")
+    # 2026-09-05: the substring filter became the four-tier `searchPick`
+    # (tests/test_search_forgiving.py); the contract holds — its rows are
+    # taken before any grouping or display cap.
+    assert body.index("recs = picked.rows") < body.index("_profRows = new Map()")
 
 
 def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():

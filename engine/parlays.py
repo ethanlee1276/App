@@ -224,7 +224,38 @@ MEASURED: dict[str, tuple[float, int, str]] = {
 }
 
 
-def rho_meta(name: str) -> tuple[float, int, str] | None:
+#: WHOSE GAMES EACH MEASUREMENT WAS TAKEN ON. Kept beside `MEASURED`
+#: rather than inside it because that table's shape is asserted by
+#: tests/test_corrfit.py and read by simrecon and engine/mlb/gamesim; a
+#: fourth element would touch all of them for a fact that belongs to the
+#: provenance string anyway. `test_every_measurement_names_the_sport_it
+#: _was_taken_on` holds the two in step.
+#:
+#: THE BUG THIS EXISTS TO END. `rho_meta` had no sport in it, so a
+#: COLLEGE quarterback stack was priced on +0.637 measured over NFL
+#: 2021-2026 — and the card said so out loud: "measured at +0.64 on
+#: 2,844 of our own games". Not one of those games was college. It is
+#: the same fault `likely.CFB_TD_AUC` was created to end, where the
+#: college board wore the NFL's 0.721 because `from_watch` read a
+#: shipped constant with no idea whose chain had built the row.
+#:
+#: A SPORT WITH NO MEASUREMENT FALLS BACK TO THE PUBLISHED PRIOR, and
+#: that is the point rather than a shortfall. The prior is an estimate
+#: labelled as an estimate; a foreign measurement is an estimate wearing
+#: a sample size. The second is worse, and it is worse in the direction
+#: that matters — it invites conviction.
+MEASURED_SPORT: dict[str, str] = {
+    "qb_passing_game": "nfl",
+    "possession_pie": "nfl",
+    "run_game_script": "nfl",
+    "qb_td_game": "nfl",
+    "qb_td_wr_td": "nfl",
+    "pitcher_vs_lineup": "mlb",
+    "lineup_stack": "mlb",
+}
+
+
+def rho_meta(name: str, sport: str | None = None) -> tuple[float, int, str] | None:
     """(rho, games, provenance) for the number actually in use, or None.
 
     THE LIVE FIT FIRST. The table above is the last measurement a HUMAN
@@ -239,7 +270,7 @@ def rho_meta(name: str) -> tuple[float, int, str] | None:
     """
     try:
         from . import corrfit
-        live = corrfit.measured(name)
+        live = corrfit.measured(name, sport)
     except Exception:                                        # noqa: BLE001
         live = None
     if live:
@@ -249,20 +280,37 @@ def rho_meta(name: str) -> tuple[float, int, str] | None:
         return (float(live["r"]), int(live["n"]),
                 f"{when} · {live.get('sport', '')} history, refit on the settle")
     hit = MEASURED.get(name)
-    return (hit[0], hit[1], hit[2]) if hit else None
+    if not hit:
+        return None
+    # NOT THIS SPORT'S MEASUREMENT, SO NOT A MEASUREMENT. Returning it
+    # anyway is what put NFL's 2,844 games on a college card. `rho_for`
+    # then falls back to the published prior, which is an estimate that
+    # says it is one.
+    if sport and MEASURED_SPORT.get(name) not in (None, sport):
+        return None
+    return (hit[0], hit[1], hit[2])
 
 
-def rho_for(name: str, prior: float) -> tuple[float, bool]:
-    """(value, measured?) — the measurement when we have one, else the prior."""
-    m = rho_meta(name)
+def rho_for(name: str, prior: float,
+            sport: str | None = None) -> tuple[float, bool]:
+    """(value, measured?) — the measurement when we have one FOR THIS
+    SPORT, else the published prior."""
+    m = rho_meta(name, sport)
     return (m[0], True) if m else (prior, False)
 
 
-def rho_n(name: str) -> int:
+def rho_n(name: str, sport: str | None = None) -> int:
     """How many games the number in use was measured on — for the copy on
     the card, which must never quote the frozen sample beside a live
-    number or the other way round."""
-    m = rho_meta(name)
+    number or the other way round.
+
+    ZERO WHEN THIS SPORT HAS NO MEASUREMENT, and that is the point of
+    passing `sport` here at all. Returning the NFL's 2,844 beside a
+    college ticket priced on the published prior is the false provenance
+    this whole change exists to end — and it is the shape the first cut
+    of that change shipped with, because the `sport` reached the
+    signature and not the body."""
+    m = rho_meta(name, sport)
     return m[1] if m else 0
 
 
@@ -841,12 +889,12 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         # facing held down. §5.1 calls this the cleanest MLB correlation.
         if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
                 and not line_up and line_team == (prop.get("opponent") or "").upper()):
-            r, meas = rho_for("pitcher_vs_lineup", 0.275)
+            r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
             return Relation(r, "strikeouts up and the lineup he is facing held "
                                "down — §5.1's cleanest MLB correlation, and "
                                "§5.2's pitcher stack" + (
                                    f", measured at {r:+.2f} on "
-                                   f"{rho_n('pitcher_vs_lineup'):,} games"
+                                   f"{rho_n('pitcher_vs_lineup', sport):,} games"
                                    if meas else ""), 0, "ok", measured=meas)
         if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
             return Relation(-0.20, "backing a player over while betting the "
@@ -984,12 +1032,12 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                        "side and get hit — §5.1 puts this at "
                                        "-0.25 to -0.40", 7, "kill")
             if facing and _side_up(pitcher) and not _side_up(hitter):
-                r, meas = rho_for("pitcher_vs_lineup", 0.275)
+                r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
                 return Relation(r, "strikeouts up, the bats he is facing "
                                    "down — one mechanism, §5.1's cleanest "
                                    "MLB correlation" + (
                                        f", measured at {r:+.2f} on "
-                                       f"{rho_n('pitcher_vs_lineup'):,} "
+                                       f"{rho_n('pitcher_vs_lineup', sport):,} "
                                        f"of our own games" if meas else ""),
                                 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
@@ -1016,7 +1064,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
             # are: two hitters in one lineup face the same pitcher and the
             # same innings. §5.1 puts this at +0.20 to +0.35 — a permitted
             # construction, not a clash.
-            r, meas = rho_for("lineup_stack", 0.275)
+            r, meas = rho_for("lineup_stack", 0.275, sport)
             # Tonight's own lineup, if the sim reconciled. This is the one
             # place in the whole taxonomy where the dependence can be
             # OBSERVED rather than estimated: both legs come out of the
@@ -1030,10 +1078,10 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                 measured=True)
             return Relation(r, "two bats in one lineup against one starter — "
                                "§5.1 puts this at +0.20 to +0.35" + (
-                                   f", and our own {rho_n('lineup_stack'):,} "
+                                   f", and our own {rho_n('lineup_stack', sport):,} "
                                    f"games put it at {r:+.2f}" if meas else ""),
                             0, "ok", measured=meas)
-        r, meas = rho_for("possession_pie", -0.10)
+        r, meas = rho_for("possession_pie", -0.10, sport)
         return Relation(r, f"two teammates splitting one {fa} pie — §3 Type 3 "
                            f"cannibalisation" + (
                                f", measured at {r:+.2f} once the size of the "
@@ -1052,10 +1100,10 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     # (§1.3 retune — they sat at the bottom until the humility clamp was
     # judged to be carrying that conservatism already).
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
-        r, meas = rho_for("qb_passing_game", 0.425)
+        r, meas = rho_for("qb_passing_game", 0.425, sport)
         return Relation(r, "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation, and measured at "
-                           f"{r:+.2f} on {rho_n('qb_passing_game'):,} of "
+                           f"{r:+.2f} on {rho_n('qb_passing_game', sport):,} of "
                            f"our own games" if meas else
                            "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation", 0, "ok",
@@ -1067,20 +1115,20 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     # 2; Ethan: "measure and price"). Measured on 2,844 team-weeks — see
     # MEASURED and engine/corrfit's role_pair fits.
     if same_team and {fa, fb} == {"passtd", "td"} and ua and ub:
-        r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO)
+        r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO, sport)
         return Relation(r, "his passing touchdown is usually this receiver's "
                            "touchdown — the WR1 scores in half the games his "
                            "quarterback throws one and one in twenty when he "
                            "does not" + (f", measured at {r:+.2f} on "
-                                         f"{rho_n('qb_td_wr_td'):,} team-weeks"
+                                         f"{rho_n('qb_td_wr_td', sport):,} team-weeks"
                                          if meas else ""), 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "td"} and ua and ub:
-        r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO)
+        r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO, sport)
         return Relation(r, "the passing game that reaches the end zone is the "
                            "one that piles up yards — the quarterback's "
                            "yardage against his receiver's touchdown" + (
                                f", measured at {r:+.2f} on "
-                               f"{rho_n('qb_td_game'):,} team-weeks"
+                               f"{rho_n('qb_td_game', sport):,} team-weeks"
                                if meas else ""), 0, "ok", measured=meas)
 
     if ua and ub:
@@ -1106,9 +1154,17 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
     single. What is added here is the set of bans that apply to a leg
     *because* it is going inside a ticket.
     """
-    if not leg.get("recommended"):
+    basis = leg.get("leg_basis") or "edge"
+    if basis == "edge" and not leg.get("recommended"):
         return ("not a recommended single — §0: a leg that would not be a bet "
                 "on its own is never a bet inside a parlay")
+    if basis == "likely" and not leg.get("model_prob"):
+        # The likelihood board's own bar, named rather than assumed: a row
+        # is on that board because it cleared MIN_PROB, HEAVIEST_PRICE,
+        # the credibility check and a MEASURED ranking. A row without the
+        # number those bars were applied to did not come from there.
+        return ("not a Most Likely row — it carries no board probability, so "
+                "there is no bar it can be said to have cleared")
     tier = leg_tier(leg)
     if not rules.tier3_allowed and tier >= 3:
         return (f"{leg.get('market_label') or leg.get('market')} is a Tier 3 "
@@ -1461,8 +1517,72 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     return t, ""
 
 
+#: The two pools `screen` will take legs from, and what each one means.
+#:
+#: "edge"   — the board's recommended singles. §0 is satisfied the way the
+#:            doc intends: every leg is a bet we would place on its own.
+#: "likely" — the Most Likely board. Ethan, 2026-09-06, asked for the
+#:            parlay model to run over this board first, "as those hit
+#:            more often and will return more money". The first half is
+#:            measured and true: it hits 62.2% against the edge board's
+#:            48.1%.
+#:
+#: §0 SAYS A LEG THAT WOULD NOT BE A BET ALONE IS NEVER A BET INSIDE A
+#: PARLAY, AND A LIKELY ROW IS NOT A BET. It carries `recommended` False
+#: and a zero stake by construction — `engine.likely` ranks and never
+#: sizes, and `ledger.likely_report` gates money on an ROI test that has
+#: not passed. So this pool does not satisfy §0 and is not pretending to.
+#:
+#: What makes it honest instead is that the OUTPUT is the same kind of
+#: thing as the input. A likely ticket is paper measuring paper: it is
+#: journaled to its own source, never staked, and can only ever graduate
+#: the way the board under it graduates — on its own settled record. The
+#: rule §0 protects is "do not let a parlay launder a leg into a bet",
+#: and nothing here launders anything, because nothing here is staked.
+#:
+#: The two records are kept apart in the journal for the same reason the
+#: singles books are (`ledger.BOOK` against `category='likely'`): a
+#: blended ROI would answer a question nobody asked.
+POOLS = ("edge", "likely")
+
+#: What a likely row calls the number `screen` reads as `hit_prob`.
+LIKELY_PROB_KEY = "model_prob"
+
+
+def likely_pool(slate: dict, sport: str) -> list[dict]:
+    """Most Likely rows in the leg shape the screen already understands.
+
+    A COPY, ALWAYS. These dicts get `recommended` and `hit_prob` written
+    on them so the shared gates read them, and the board's own rows must
+    not acquire either — a likely row that started reporting itself as
+    recommended would be the paywall of every "is this a bet" check in
+    the repo falling over at once.
+
+    `leg_basis` rides along so `_leg_eligible` can say WHICH bar a leg
+    cleared instead of assuming there was only ever one.
+    """
+    out: list[dict] = []
+    for r in (slate.get("most_likely") or []):
+        p = r.get(LIKELY_PROB_KEY)
+        if p is None:
+            continue
+        leg = dict(r)
+        leg["hit_prob"] = float(p)
+        leg["recommended"] = True
+        leg["leg_basis"] = "likely"
+        # A game row on this board carries its matchup rather than a
+        # team/opponent pair, and `game_key` needs the pair to find the
+        # game. `normalize_game_bet` already does that translation for
+        # the edge board's cards, so it is reused rather than restated.
+        if r.get("kind") == "game" or r.get("bet_type"):
+            leg.setdefault("home", r.get("home") or "")
+            leg.setdefault("away", r.get("away") or "")
+        out.append(leg)
+    return out
+
+
 def screen(slate: dict, sport: str, bankroll_state: str = "normal",
-           joints: dict | None = None) -> dict:
+           joints: dict | None = None, pool: str = "edge") -> dict:
     """Screen a built slate for parlays. Returns the Parlay Zone payload.
 
     `bankroll_state` is the drawdown circuit-breaker: §10.2 says parlays go to
@@ -1515,9 +1635,19 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal",
     # ends on a team total or a side, and CFB has no player props at all —
     # its §6.3 ticket is two sides and a total. Screening one list only left
     # the doc's own permitted constructions unbuildable.
-    recs = [r for r in (slate.get("recommendations") or []) if r.get("recommended")]
-    recs += [normalize_game_bet(b, sport)
-             for b in (slate.get("game_bets") or []) if b.get("recommended")]
+    if pool not in POOLS:
+        raise ValueError(f"unknown pool {pool!r}; expected one of {POOLS}")
+    out["pool"] = pool
+    if pool == "likely":
+        # ONE POOL OR THE OTHER, NEVER BOTH. A ticket with one leg from
+        # each would carry two different bars and one record, and the
+        # record would mean nothing. See POOLS.
+        recs = likely_pool(slate, sport)
+    else:
+        recs = [r for r in (slate.get("recommendations") or [])
+                if r.get("recommended")]
+        recs += [normalize_game_bet(b, sport)
+                 for b in (slate.get("game_bets") or []) if b.get("recommended")]
 
     pool: list[dict] = []
     for r in recs:
@@ -1719,20 +1849,26 @@ def attach(slate: dict, sport: str, state: str | None = None,
     Never raises. A parlay screen failing must not take down a slate that is
     otherwise fine; the page renders the failure instead.
     """
-    try:
-        # §10.2's drawdown rule only bites if something asks. Measured from
-        # the journal rather than passed in, so it cannot be left at
-        # "normal" by a caller that does not know it exists.
-        slate["parlays"] = screen(
-            slate, sport,
-            bankroll_state=state if state is not None else bankroll_state(sport),
-            joints=joints)
-    except Exception as exc:                       # pragma: no cover - guard
-        slate["parlays"] = {
-            "sport": sport, "tickets": [], "probation": True, "killed": [],
-            "considered": 0, "eligible_legs": 0,
-            "verdict": "No qualifying parlay at current numbers.",
-            "notes": [f"The parlay screen did not run for this slate: {exc}"]}
+    # §10.2's drawdown rule only bites if something asks. Measured from
+    # the journal rather than passed in, so it cannot be left at "normal"
+    # by a caller that does not know it exists. Read once and shared, so
+    # the two pools cannot disagree about the bankroll.
+    st = state if state is not None else bankroll_state(sport)
+    for key, pool in (("parlays", "edge"), ("likely_parlays", "likely")):
+        # ONE TRY EACH, AND THAT IS THE POINT. Wrapping both in a single
+        # guard would let a failure in the Most Likely pool blank the
+        # edge board's tickets — a new screen taking down the working one
+        # is precisely the shape this function's "never raises" promise
+        # exists to prevent, one level in.
+        try:
+            slate[key] = screen(slate, sport, bankroll_state=st,
+                                joints=joints, pool=pool)
+        except Exception as exc:                   # pragma: no cover - guard
+            slate[key] = {
+                "sport": sport, "pool": pool, "tickets": [], "probation": True,
+                "killed": [], "considered": 0, "eligible_legs": 0,
+                "verdict": "No qualifying parlay at current numbers.",
+                "notes": [f"The parlay screen did not run for this slate: {exc}"]}
     return slate
 
 

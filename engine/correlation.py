@@ -25,6 +25,18 @@ RUSH_MARKETS = {"rush_yds"}
 GAME_CAP_U = 5.0
 SLATE_CAP_U = 15.0
 
+#: THE MOST BETS A SLATE CAN LEGALLY HOLD. The cap says no more than
+#: 15u of exposure; `staking.MIN_STAKE_UNITS` says no bet under 0.1u.
+#: Together they are an arithmetic ceiling on the COUNT — 150 — and
+#: nothing in this file used to know that number, which is how the
+#: board acquired a cliff: at 150 picks it scales to 0.10u each and
+#: pays out a full slate, at 151 every stake lands at 0.099u, every bet
+#: fails the floor, and the board empties. Not "gets smaller" — empties.
+#: Measured 2026-09-06, exactly at the boundary.
+def max_fundable(cap_u: float = SLATE_CAP_U) -> int:
+    from .staking import MIN_STAKE_UNITS
+    return int(cap_u / MIN_STAKE_UNITS)
+
 
 def _game_key(r: dict) -> tuple:
     return tuple(sorted((r.get("team", ""), r.get("opponent", "")))) + (r.get("game_date", ""),)
@@ -284,11 +296,24 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
     # is the whole reason for this policy — the grade's predictiveness is
     # currently an open question and nothing here depends on the answer.
     dropped = [r for r in live if r["stake_units"] < MIN_STAKE_UNITS]
+    # THE CLIFF, NAMED. When the factor puts EVERY stake under the floor
+    # the loop below empties the board, and the note it used to write
+    # read like an ordinary capped slate — "200 bet(s) dropped" beside a
+    # board showing nothing. That is the failure mode this repo keeps
+    # finding in itself: a refusal that reads as an ordinary empty
+    # result. It is a distinct state and it says so.
+    wipeout = bool(dropped) and len(dropped) == len(live)
+    ceiling = max_fundable()
     for r in dropped:
-        _reject(r, f"Exposure cap — {why}, so every stake was scaled by "
-                   f"{factor:.2f} and this one fell under the "
-                   f"{MIN_STAKE_UNITS}u minimum. A stake that small is a "
-                   f"rounding artefact with a ticket, not a bet.")
+        _reject(r, (f"Exposure cap — {why}. The cap and the "
+                    f"{MIN_STAKE_UNITS}u minimum together fund at most "
+                    f"{ceiling} bets on a slate and this board had "
+                    f"{len(live)}, so the rule funded none of them.")
+                if wipeout else
+                f"Exposure cap — {why}, so every stake was scaled by "
+                f"{factor:.2f} and this one fell under the "
+                f"{MIN_STAKE_UNITS}u minimum. A stake that small is a "
+                f"rounding artefact with a ticket, not a bet.")
     for r in live:
         if r.get("recommended"):
             r["stake_units"] = round(r["stake_units"], 2)
@@ -301,7 +326,18 @@ def apply_exposure_caps(recs: list[dict], game_bets: list[dict]) -> list[str]:
                     (r.get("stake_basis") or "sized")
                     + f", then scaled ×{factor:.2f} to fit the slate cap")
 
-    if factor < 1.0:
+    if wipeout:
+        # Loud, and it leads. A reader looking at an empty board is owed
+        # the arithmetic that emptied it, not a count of what vanished.
+        notes.append(
+            f"NO BETS FUNDED: {len(live)} picks cleared the gate and the "
+            f"bankroll rule funded none of them. {why[0].upper()}{why[1:]}, "
+            f"which scales every stake to {before / len(live) * factor:.3f}u "
+            f"— under the {MIN_STAKE_UNITS}u minimum. The cap and that "
+            f"minimum together fund at most {ceiling} bets on a slate. "
+            f"Nothing here is a data error: the model liked more than the "
+            f"bankroll rule can pay for.")
+    elif factor < 1.0:
         kept = sum(r["stake_units"] for r in live if r.get("recommended"))
         notes.append(f"Exposure cap: {why} — every stake scaled by "
                      f"{factor:.2f} ({before:.1f}u → {kept:.1f}u), "

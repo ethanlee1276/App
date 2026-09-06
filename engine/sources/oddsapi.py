@@ -725,10 +725,61 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
     # A stable digest rather than the market list itself: the list is
     # long, the filename is not, and the request is what has to be
     # distinguished rather than described.
+    return _request(url, event_cache_name(event_id, markets, books, sport),
+                    ttl=ttl, cache_only=cache_only)
+
+
+def event_cache_name(event_id: str, markets: list[str] | None = None,
+                     books: list[str] | None = None,
+                     sport: str = "nfl") -> str:
+    """The cache filename one event-odds request writes and reads.
+
+    ONE DEFINITION, because a second reader now needs it.
+    `event_cache_age` below answers "how old is the payload this call
+    would serve", and it can only answer honestly by naming the same
+    file `fetch_event_odds` names. Re-deriving the digest at the call
+    site would work until the day one of the two changed.
+    """
+    markets = markets or list(SPORT_CONFIG[sport]["markets"])
+    books = books or DEFAULT_BOOKS
     spec = ",".join(sorted(markets)) + "|" + ",".join(sorted(books))
     tag = hashlib.md5(spec.encode()).hexdigest()[:8]
-    return _request(url, f"odds_event_{sport}_{event_id}_{tag}.json", ttl=ttl,
-                    cache_only=cache_only)
+    return f"odds_event_{sport}_{event_id}_{tag}.json"
+
+
+def event_cache_age(event_id: str, markets: list[str] | None = None,
+                    books: list[str] | None = None, sport: str = "nfl",
+                    now: float | None = None) -> float | None:
+    """Seconds since this event's cached payload was written, or None.
+
+    `_request` with ``cache_only`` "serves the cached copy at ANY age and
+    never touches the network", which is the whole point of the free tier
+    — the last paid pull's real prices beat proxies. What it costs is the
+    ability to tell a price that is WRONG from a price that is OLD, and
+    Ethan has now hit that twice:
+
+      2026-09-03  "The lines on the most likely best bet page ... are
+                  completely wrong so we are giving bad bets."  The
+                  arithmetic checked out end to end; the board simply
+                  could not say the prices were three hours behind.
+      2026-09-04  "Cam Edward's ... has a -300 line too score a touchdown
+                  but on our site we are showing -155."
+
+    The board-level `priced_at` stamp dates the last PULL. It does not
+    date the quote beside a row: college buys player markets for at most
+    `cfb_build.PLAYER_EVENT_CAP` games a cycle, ordered by attention
+    tier, and every other game keeps whatever the last pull that reached
+    it left on disk. This is how old that actually is.
+
+    None when nothing is cached — an unpriceable game and a stale one are
+    different facts and must not share an answer.
+    """
+    path = CACHE_DIR / event_cache_name(event_id, markets, books, sport)
+    try:
+        return max(0.0, (now if now is not None else time.time())
+                   - path.stat().st_mtime)
+    except OSError:
+        return None
 
 
 # --- parsing (pure; unit-tested without network) ----------------------------
@@ -898,12 +949,51 @@ def best_scorer_price(quotes: list[dict]) -> dict | None:
     anytime-touchdown quote in BOTH football leagues — shopping
     unguarded. If nothing survives the filter there is no real market
     here, and the caller's existing `is None` branch is the right answer.
+
+    A PRICE NOBODY HERE CAN TAKE IS NOT SHOPPED EITHER. `parse_event_
+    scorers` — alone among the price parsers in this module — does not
+    drop the sharp reference, because `devig.board_fair` wants it: the
+    fair is the MEDIAN de-vigged price across books, and a sharp book
+    belongs in that median. It does not belong in this `max`. A sharp
+    book runs a thinner margin, so on a favourite its price is by
+    construction the highest American number on the board and wins the
+    shop outright — and then the card prints, and `likely.HEAVIEST_PRICE`
+    measures, a number at a book that does not take US action.
+
+    Falls back to the full field when nothing bettable survives, the
+    same doctrine as the dead-zone filter: a market where every quote is
+    unusable still returns the price to display, and the caller decides
+    what to do with it. Returning None there would drop the player, and
+    a dropped player reads as a market nobody quoted.
     """
-    from ..odds import is_quotable
+    from ..odds import (OUTLIER_GAP, american_to_prob, field_outliers,
+                        is_quotable, is_sharp_book)
     clean = [q for q in (quotes or []) if is_quotable(q.get("yes_odds"))]
     if not clean:
         return None
-    return max(clean, key=lambda q: q["yes_odds"])
+    bettable = [q for q in clean if not is_sharp_book(q.get("book"))]
+    field = bettable or clean
+    # AND A PRICE OFF THE FIELD IS NOT SHOPPED — the third refusal with
+    # the same shape, and the one Ethan's report was actually about
+    # (odds.OUTLIER_GAP: Hard Rock -155 under three books at -260 to
+    # -280). The refused quotes ride along on the winner as `refused`,
+    # with the gap in points, so the card can say which book was left
+    # out and why rather than silently printing a different number.
+    flags = field_outliers([q["yes_odds"] for q in field])
+    kept = [q for q, bad in zip(field, flags) if not bad]
+    refused = []
+    for q, bad in zip(field, flags):
+        if not bad:
+            continue
+        others = sorted(american_to_prob(int(x["yes_odds"])) for x in field if x is not q)
+        m = len(others)
+        med = others[m // 2] if m % 2 else (others[m // 2 - 1] + others[m // 2]) / 2.0
+        refused.append({"book": q.get("book", ""), "yes_odds": int(q["yes_odds"]),
+                        "gap_pts": round(100.0 * (med - american_to_prob(int(q["yes_odds"]))), 1)})
+    best = max(kept or field, key=lambda q: q["yes_odds"])
+    if refused:
+        best = {**best, "refused": refused}
+    return best
 
 
 def _modal_line(points: list[float]):

@@ -127,7 +127,14 @@ def test_an_unreachable_feed_is_an_empty_board_not_a_crash():
 
 def test_the_page_reads_scores_from_the_fast_file():
     app = _read("web", "js", "app.js")
-    assert 'LIVE_FAST = { mlb: "data/live_mlb.json" }' in app
+    # THE MAP GREW AND THIS ASSERTION HAD TO. It matched the whole
+    # literal, so the day NFL, CFB, NBA and WNBA got the same treatment
+    # — the four `live_build.py`'s docstring named as left behind — this
+    # went red on a change that only ADDS to what it was guarding.
+    # MLB's entry is the claim; the others are their own file's business
+    # (tests/test_live_scoreboards.py).
+    i = app.index("const LIVE_FAST = {")
+    assert 'mlb: "data/live_mlb.json"' in app[i:i + 400]
     # Window widened 2026-08-18: the merge-not-replace fix (and its
     # comment) grew the function past the old 1800 chars.
     i = app.index("async function fetchAllLive")

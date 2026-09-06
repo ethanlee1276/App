@@ -756,8 +756,15 @@ def main() -> None:
             try:
                 from engine.linemoves import (analyze, annotate_recommendations,
                                               stream_history, todays_rows)
-                _mv = analyze(todays_rows(stream_history()))
+                _today = todays_rows(stream_history())
+                _mv = analyze(_today)
                 _n_mv = annotate_recommendations(recs, _mv, price=False)
+                # Today's tape on every priced pick, for the prop page's
+                # own line chart (Ethan, 2026-09-05). Same rows, read once.
+                from engine.linemoves import attach_series as _attach_series
+                _ns = _attach_series(recs, _today)
+                if _ns:
+                    print(f"  Line series: {_ns} pick(s) carry today's tape.")
                 if _n_mv:
                     print(f"Line movement: stamped on {_n_mv} pick(s), "
                           f"evidence only — nothing re-graded.")
@@ -940,9 +947,27 @@ def main() -> None:
     except Exception as _exc:                                 # noqa: BLE001
         print(f"  ⚠️  live line tracking unavailable: {_exc}")
 
+    # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
+    # league's Live tab read "No open bets on today's card" whatever the
+    # journal held — and the tab's two panels (edge bets, Most Likely bets)
+    # were empty here by construction. Same assembly as mlb_build's block,
+    # behind one call (engine/livepicks.attach_tracker); a failure lands in
+    # the JSON as `live_picks_error`, where the page can see it.
+    from engine.livepicks import attach_tracker as _attach_tracker
+    _tn = _attach_tracker(out, args.league)
+    if _tn:
+        print(f"Open-bet tracker: {_tn}")
     p = Path(args.out)
     p.parent.mkdir(parents=True, exist_ok=True)
     gate.publish(out, p)
+    # The light copy the Home page draws first (engine/lightboard),
+    # published the same way so the paywall strips the same keys.
+    try:
+        from engine import lightboard
+        _, _lfull = gate.publish(lightboard.light(out, str(out.get("sport") or "")), lightboard.light_path(p))
+        print(lightboard.report(gate.board_source(p), _lfull))
+    except Exception as _lexc:                                # noqa: BLE001
+        print(f"⚠️  Light board skipped: {_lexc}")
     if picks_result:
         c = picks_result["counts"]
         print(f"NBA {args.date}: {c['props_analyzed']} props → "

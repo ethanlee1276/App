@@ -741,6 +741,44 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 LIKELY_JOURNAL_DEPTH = 10
 
 
+def repair_inverted_likely_sides(conn) -> dict:
+    """Flip the home-run rows `log_most_likely` journaled on the wrong side.
+
+    THE BUG IS FIXED IN THE WRITER; THIS IS THE ROWS IT ALREADY WROTE.
+    A likelihood board cannot show a home-run OVER — P(a hitter homers)
+    is 0.05-0.15 and `likely.MIN_PROB` refuses anything under 0.30 — so
+    a `home_runs` row in this bucket carrying `side='OVER'` with a
+    probability above a coin flip is not a bet anyone could have made.
+    It is the UNDER's probability wearing the OVER's side, and it was
+    graded as the over.
+
+    THE TEST IS DELIBERATELY NARROW. `hit_prob > 0.5` on `home_runs`
+    alone, in the `likely` bucket alone. It is not "everything that
+    looks wrong" — a repair that guesses is how a data error becomes two
+    data errors, and `anytime_td` is excluded precisely because an OVER
+    above 0.5 is a real bet there (a bell-cow can be 55% to score).
+
+    THE ROW IS RE-OPENED RATHER THAN RE-SCORED HERE. Flipping the stored
+    result by hand would mean a second copy of the settle arithmetic
+    living in a repair function, and the one nobody looks at is the one
+    that drifts. So the side is corrected, the grade is cleared, and the
+    next `settle_from_history` pass grades it through the same path as
+    everything else.
+
+    Idempotent: once flipped, the rows no longer match.
+    """
+    rows = conn.execute(
+        "SELECT id FROM bets WHERE category='likely' AND market='home_runs' "
+        "AND side='OVER' AND hit_prob > 0.5").fetchall()
+    ids = [r["id"] for r in rows]
+    if ids:
+        conn.executemany(
+            "UPDATE bets SET side='UNDER', status='open', pnl_units=NULL, "
+            "pnl_dollars=NULL WHERE id=?", [(i,) for i in ids])
+        conn.commit()
+    return {"flipped": len(ids), "reopened_for_regrade": len(ids)}
+
+
 def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
                     depth: int = LIKELY_JOURNAL_DEPTH) -> int:
     """Journal the top of the likelihood board to its own bucket.
@@ -822,7 +860,33 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             # the same normalisation, not a copy of the display shape.
             side, line = str(r.get("side") or "OVER").upper(), r.get("line")
             if market in LONGSHOT_MARKETS:
-                side, line = "OVER", 0.5
+                # NORMALISE THE LINE, NEVER THE SIDE. The first version
+                # wrote `side, line = "OVER", 0.5`, and the LINE half is
+                # the whole reason this branch exists: a "yes/no" row
+                # carries none and `_grade_side_aware` needs one. The
+                # side half was written when this board showed nothing
+                # but overs, and it silently survived the day the board
+                # began admitting unders (2026-09-02).
+                #
+                # WHAT IT COST, read off `likely_report` on 2026-09-06:
+                # home runs claimed 94.0% and hit 10.0% over 10 settled
+                # rows. Both halves of that are right and they describe
+                # different bets — 94% is P(NO home run), which is why
+                # the row was on a board called Most Likely at all, and
+                # 10% is how often a hitter homers, which is the bet
+                # this line rewrote it into. Those ten rows were 42.8%
+                # of the entire book's losses, and they were the whole
+                # of its "the top band is overconfident" reading: strip
+                # them and the 75%+ band's miss falls inside its own
+                # noise band.
+                #
+                # A home-run OVER cannot reach this board — P(homer) is
+                # 0.05-0.15 and `likely.MIN_PROB` is 0.30 — so EVERY
+                # home-run row here is an under, and every one of them
+                # was inverted. `anytime_td` escaped only because
+                # `from_watch` is its one maker and it always says yes.
+                side = "UNDER" if side in ("UNDER", "NO") else "OVER"
+                line = 0.5
         if line is None:
             # Nothing to grade against. A row that can never settle is
             # the failure `log_longshots` retired the watchlist over —
@@ -2489,6 +2553,31 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
             f"SELECT home, away, home_score, away_score, game_id "
             f"FROM games WHERE {where} AND (game_id=? OR game_id LIKE ?)",
             (*wargs, b["player"], b["player"] + "-G%")).fetchall()
+        if not rows:
+            # THE KEY CAN BE HALF-UNRESOLVABLE, AND THE GAME IS STILL THE
+            # GAME. A college buy game stores its FCS side as `espn:<id>`
+            # because it has no FBS abbreviation, so the row is keyed
+            # `espn:9999@MIZ` while the board — which reads the
+            # scoreboard, where every side has one — bet `UAPB@MIZ`. The
+            # exact key cannot match and the total sat open for ever
+            # (2026-09-06).
+            #
+            # `where` is already scoped to this sport and this DATE, and a
+            # team plays once a day, so naming either side is enough to
+            # find the fixture. Ambiguity is refused rather than guessed:
+            # more than one distinct game matching means the key does not
+            # identify a fixture, and grading against a coin-flip choice
+            # would put a wrong number in the record — which is worse than
+            # an open bet, because nothing downstream can tell it from a
+            # right one.
+            away_tok, _, home_tok = str(b["player"] or "").partition("@")
+            if away_tok and home_tok:
+                near = hist_conn.execute(
+                    f"SELECT home, away, home_score, away_score, game_id "
+                    f"FROM games WHERE {where} AND (home IN (?,?) OR away IN (?,?))",
+                    (*wargs, home_tok, away_tok, home_tok, away_tok)).fetchall()
+                if len({r["game_id"] for r in near}) == 1:
+                    rows = near
         return rows, (lambda r: float(r["home_score"]) + float(r["away_score"]))
     # spread / team_total: player = the team; its own margin or score.
     rows = hist_conn.execute(
@@ -3315,8 +3404,13 @@ def performance(conn, sport: str | None = None,
     #                 A plain mean of American ints is arithmetic on two
     #                 different scales (+150 and −110 do not average to
     #                 +20 of anything); probabilities average cleanly.
-    #   returned_u  — gross units back on wins and pushes (stake + pnl),
-    #                 the "total won" a book's cashier would report.
+    #   returned_u  — gross units back on wins (stake + pnl), the "total
+    #                 won" a book's cashier would report. Wins only, to
+    #                 match `units_staked` (stake at risk, pushes
+    #                 excluded): with pushes counted here and not there,
+    #                 the page's ledger line read "176.3u staked · 249.3u
+    #                 returned · net +60.29u", which does not add up.
+    #                 Now returned = staked + net, always.
     #   best_streak — longest run of consecutive wins in slate order.
     probs = [p for p in (implied_breakeven(b["odds"]) for b in bets
                          if b["odds"] is not None) if p]
@@ -3326,7 +3420,7 @@ def performance(conn, sport: str | None = None,
         avg_price = int(round(-100 * p / (1 - p))) if p >= 0.5 \
             else int(round(100 * (1 - p) / p))
     returned_u = sum((b["stake_units"] or 0) + (b["pnl_units"] or 0)
-                     for b in bets if b["status"] in ("won", "push"))
+                     for b in bets if b["status"] == "won")
     best_streak = run = 0
     for b in sorted(bets, key=lambda b: (b["date"] or "", b["id"])):
         if b["status"] == "won":
@@ -3586,11 +3680,16 @@ def pnl_curve(conn, sport: str | None = None,
     be = ("CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
           "ELSE -odds / (-odds + 100.0) END")
     graded = "status != 'push' AND odds IS NOT NULL AND odds != 0"
+    # `staked` is stake AT RISK — pushes excluded — so the ROI the curve's
+    # footer derives from it (net ÷ staked over the window) is the same
+    # ROI the verdict prints from performance(). It was not: this summed
+    # every stake, the verdict skipped the pushes, and the page carried
+    # both numbers for one book.
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
-         "SUM(stake_units) AS staked, "
+         "SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END) AS staked, "
          "SUM(COALESCE(pnl_dollars, 0)) AS day_d, "
-         "SUM(COALESCE(stake_dollars, 0)) AS staked_d, "
+         "SUM(CASE WHEN status='push' THEN 0 ELSE COALESCE(stake_dollars, 0) END) AS staked_d, "
          f"SUM(CASE WHEN {graded} THEN {be} ELSE 0 END) AS be_sum, "
          f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
          "FROM bets "
@@ -3707,6 +3806,43 @@ def recent_settled(conn, limit: int = 30, category: str = "main",
         args.append(sport)
     rows = conn.execute(q + " ORDER BY date DESC, id DESC LIMIT ?",
                         (*args, limit)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        c = _bet_clv(r)
+        d["clv"] = round(c, 3) if c is not None else None
+        d["process"] = process_grade(r)
+        d["cause"] = d.pop("loss_cause")
+        out.append(d)
+    return out
+
+
+def settled_on(conn, date: str, sport: str | None = None,
+               categories: tuple = ("main", "paper")) -> list[dict]:
+    """Every settled pick on one slate date — the profit calendar's tap.
+
+    Ethan, 2026-09-05: "a profit calendar on record page ... tap a day to
+    see its bets."
+
+    THE SAME BOOK THE CURVE DRAWS. `pnl_curve` sums ('main', 'paper') with
+    a stake, and the calendar's cells are its days, so the rows behind a
+    cell come from the same two categories and the same stake rule — or
+    the cell and its list disagree. The Most Likely book keeps its own
+    record and never appears here, for the reason it never shares a
+    headline. Each row carries the side-aware CLV and process grade the
+    receipts carry, so one cell's list reads like the list below it.
+    """
+    marks = ",".join("?" * len(categories))
+    q = ("SELECT date, sport, player, market, side, line, odds, grade, status, "
+         "pnl_units, hit_prob, closing_line, stake_units, loss_cause, "
+         "why_tag, why_note FROM bets "
+         "WHERE status IN ('won','lost','push') AND date=? "
+         f"AND category IN ({marks}) AND stake_units > 0")
+    args: list = [date, *categories]
+    if sport:
+        q += " AND sport=?"
+        args.append(sport)
+    rows = conn.execute(q + " ORDER BY id", args).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -5065,11 +5201,21 @@ def sport_report(conn, sport: str,
     calibration line nobody should trust.
     """
     perf = performance(conn, sport, since=since)
+    # THE SPORT'S OWN all_time, so the page's "N earlier settled picks
+    # are not in these numbers" note can be true on a sport scope. It
+    # read the whole journal's count: the NFL page said fifteen earlier
+    # picks were held out when the NFL had never journaled one — they
+    # were baseball's (2026-09-06).
+    everything = performance(conn, sport) if since else perf
     return {
         "sport": sport,
         "overall": perf,
+        "all_time": {
+            "overall": everything,
+            "hidden_settled": max(0, everything["settled"] - perf["settled"]),
+        },
         "curve": pnl_curve(conn, sport, since=since),
-        "recent": recent_settled(conn, 20, sport=sport, since=since),
+        "recent": recent_settled(conn, RECENT_LIMIT, sport=sport, since=since),
         "calibration": calibration(conn, sport=sport),
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"],
                                        sport=sport),
@@ -5085,6 +5231,15 @@ def sport_report(conn, sport: str,
 # Not a gate on showing it — hiding your own results is its own dishonesty
 # — but the page says so next to every rate it prints.
 MIN_GRADED_FOR_SIGNAL = 30
+
+#: How many settled picks the Record page's receipts list carries, per
+#: sport and for the whole journal. It was 20 per sport and 30 pooled,
+#: and the page's own button said "Show all 20 settled picks" beside a
+#: verdict reading 193 settled — the list was capped and said it was
+#: complete (2026-09-06). The page now names the cap; this is what it
+#: names. Sixty rows cost about a kilobyte gzipped on the exported file
+#: and are more than a phone scrolls.
+RECENT_LIMIT = 60
 
 
 def _parlay_report(conn) -> dict:
@@ -5226,8 +5381,13 @@ def book_records(conn, since: str | None = None) -> dict:
             "SELECT sport, category, market, COUNT(*) n, "
             "SUM(status='won') w, SUM(status='lost') l, "
             "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
-            "COALESCE(SUM(stake_units),0) s FROM bets "
-            "WHERE status IN ('won','lost','push')" + win
+            # STAKE AT RISK, the same denominator performance() uses: a
+            # pushed bet handed its stake back and risked nothing, so it
+            # is not in the ROI's denominator. Counting it here put two
+            # ROIs for ONE book on one screen — +34.2% on the verdict and
+            # +31.9% on the "Edge bets" header under it (2026-09-06).
+            "COALESCE(SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END),0) s "
+            "FROM bets WHERE status IN ('won','lost','push')" + win
             + " GROUP BY sport, category, market", args):
         sec = cat_to_sec.get(r["category"])
         if not sec or not r["sport"]:
@@ -5301,7 +5461,7 @@ def export_json(conn, path) -> None:
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
-        "recent": recent_settled(conn, since=since),
+        "recent": recent_settled(conn, RECENT_LIMIT, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),
         # THE PAPER BOOK, READ BACK. `log_most_likely` has journaled this

@@ -128,8 +128,19 @@ def test_it_reads_the_loops_view_from_the_heartbeat_file():
 
 def test_a_missing_heartbeat_says_so_rather_than_printing_nothing():
     """Absent output reads as "nothing to report", which is the wrong
-    conclusion when the loop is dead."""
-    assert "cannot say whether the loop is alive" in _run()
+    conclusion when the loop is dead.
+
+    ON A ROOT THAT HAS NO HEARTBEAT, which the real one does whenever the
+    site is up. This ran against the checkout and passed in every dev
+    container — none of them run the loop — and failed inside the deploy
+    gate on the droplet on 2026-09-04, where heartbeat.json is written
+    every cycle by the very process the deploy is about to restart. A
+    test that can only pass where the thing it checks is not running is
+    the same shape `test_gate` names for the board registry."""
+    from pathlib import Path
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "web" / "data").mkdir(parents=True)
+    assert "cannot say whether the loop is alive" in _run_with_root(tmp)
 
 
 def test_a_stale_heartbeat_is_called_out():

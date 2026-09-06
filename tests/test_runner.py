@@ -175,6 +175,41 @@ def test_the_worker_count_can_be_pinned():
         "each worker can spawn a server of its own and the box has 1GB")
 
 
+def test_a_small_box_runs_one_file_at_a_time():
+    """The droplet's kernel log, 2026-09-04: seven test children killed by
+    the OOM killer at 254-807 MB each, three at a time on 1 GB. The gate
+    reported them as failures in files that pass here in seconds."""
+    import run_tests
+    one_gb = 2 ** 30
+    assert run_tests._workers([], ram_bytes=one_gb) == 1
+    assert run_tests._workers([], ram_bytes=run_tests.MIN_RAM_FOR_PARALLEL - 1) == 1
+    assert run_tests._workers([], ram_bytes=run_tests.MIN_RAM_FOR_PARALLEL) >= 2
+    assert run_tests._workers([], ram_bytes=16 * one_gb) >= 2
+
+
+def test_a_pinned_count_still_wins_on_a_small_box():
+    """`-j` is the operator saying they know; the floor is for the
+    default. A box that cannot say its memory keeps the old default."""
+    import run_tests
+    assert run_tests._workers(["-j", "3"], ram_bytes=2 ** 30) == 3
+    assert run_tests._workers(["--serial"], ram_bytes=64 * 2 ** 30) == 1
+    # A box that will not report its memory keeps the old default rather
+    # than being punished for it — unless it reports LESS than the floor.
+    ram = run_tests._ram_bytes()
+    if ram is None or ram >= run_tests.MIN_RAM_FOR_PARALLEL:
+        assert run_tests._workers([], ram_bytes=None) >= 2
+
+
+def test_the_serial_choice_is_explained_on_screen():
+    """A run that used to say "3 at a time" and now says nothing reads as
+    a hang. The reason prints beside the busy-box ceiling notice."""
+    import inspect
+    import run_tests
+    src = inspect.getsource(run_tests._run)
+    assert "one file at a time" in src
+    assert "_pinned(argv) is None" in src, "the notice fires on an explicit -j1 too"
+
+
 def test_the_summary_line_still_carries_the_count_and_the_skips():
     """That sentence is what the nightly quotes. Both numbers in it have
     to come from the run rather than from a constant."""

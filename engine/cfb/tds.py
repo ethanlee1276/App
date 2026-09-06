@@ -862,6 +862,10 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             if best is None:
                 continue
             odds = int(best["yes_odds"])
+            # A book left out of the shop for sitting off the field is
+            # NAMED on the card (odds.OUTLIER_GAP), so a reader holding
+            # the other number knows we saw it and why it is not ours.
+            shop_refused = list(best.get("refused") or [])
             is_home = side == home
             opp = away if is_home else home
             implied = implied_total_for(spread_home, total, is_home)
@@ -962,6 +966,9 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
             said = usage_reason(prov)
             if said:
                 reasons.append(said)
+            for rq in shop_refused:
+                reasons.append(f"{rq['book']} {rq['yes_odds']:+d} not shopped — "
+                               f"{rq['gap_pts']:.0f} points off the other books")
             caveats = ["College feeds carry no red-zone or snap data — "
                        "opportunity is inferred from yardage share alone"]
             if prov and prov[0] == "prior":
@@ -1001,6 +1008,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "player": u["player"], "team": side,
                         "opponent": opp, "book": best.get("book", ""),
                         "odds": odds,
+                        "shop_refused": shop_refused,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),
                         "book_prob": round(american_to_prob(odds), 4),

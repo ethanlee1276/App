@@ -664,6 +664,14 @@
           page). Almost always the answer is no.</span>
         </div>
         <div id="parlays-body"></div>
+
+        <div class="section-title" id="likely-parlays-title">Most Likely parlay tickets
+          <span class="sub">— the same screen, run over the Most Likely board instead of
+          the edge board. Those legs are ranked leans rather than bets, so a ticket here is
+          PAPER: never staked, and kept in its own column of the Record page so the two
+          never blend.</span>
+        </div>
+        <div id="likely-parlays-body"></div>
       </div>
 
       <div class="stats" id="stats"></div>
@@ -793,6 +801,11 @@
     <!-- One game — reached by clicking a card in the stadium strip -->
     <section class="view" id="view-game">
       <div id="game-body"></div>
+    </section>
+
+    <!-- One game's whole play-by-play — reached by clicking a live card -->
+    <section class="view" id="view-pbp">
+      <div id="pbp-body"></div>
     </section>
 
     <!-- One prop — reached by clicking a recommended pick -->
@@ -1109,6 +1122,8 @@
       <!-- The scope, worn on the page: the search looks only at one
            league, so the page says which — and offers the others. -->
       <div class="std-chips search-scope" id="search-scope"></div>
+      <!-- The last few names looked up, while the box is empty. -->
+      <div class="std-chips search-recent" id="search-recent" hidden></div>
       <div class="search-wrap">
         <span class="ico"><svg class="ic" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4.3"/><path d="M10.4 10.4L14 14"/></svg></span>
         <input id="player-search" type="text" placeholder="Search a player… (e.g. Amon-Ra, Jacobs)" autocomplete="off" aria-label="Search a player" />

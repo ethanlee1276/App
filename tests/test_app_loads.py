@@ -30,6 +30,7 @@ error in the browser and exactly like nothing in this suite.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -114,7 +115,14 @@ globalThis.document = {
   readyState: "complete", visibilityState: "visible",
   startViewTransition: undefined,
 };
-globalThis.location = { search: "", hash: "", href: "http://localhost/",
+// THE HASH IS AN ARGUMENT. With no hash the boot block's router returns
+// before it switches a view, and the view switch is exactly the code
+// that runs during boot and nowhere else in this file — so a `const`
+// declared below it and read by it (2026-09-06, NO_TOUR_VIEWS: every
+// load of the live site failed with "before initialization") passed
+// this file's empty-hash boot and took the site down for anyone landing
+// on a tab. A landing on a tab is the common case, not the edge.
+globalThis.location = { search: "", hash: process.argv[5] || "", href: "http://localhost/",
                         pathname: "/", origin: "http://localhost",
                         reload: noop, replace: noop, assign: noop };
 globalThis.history = { replaceState: noop, pushState: noop };
@@ -139,6 +147,14 @@ const fs = require("fs");
 const vm = require("vm");
 const src = fs.readFileSync(process.argv[2], "utf8");
 const out = { ok: false, error: null, missing: [], missingValues: [] };
+// WHAT THE PAGE LOADS FIRST. index.html puts visuals.js ahead of app.js
+// and app.js calls into it (escapeAttr, the venue art) — from the
+// checkout view's render, among others, which a `#checkout` landing runs
+// during boot. Loaded here in the same context so a tab boot fails for
+// a fault on the site and not for a helper the page had all along.
+for (const pre of JSON.parse(process.argv[6] || "[]")) {
+  vm.runInThisContext(fs.readFileSync(pre, "utf8"), { filename: pre });
+}
 try {
   // Same context, so top-level `const` really is top-level — running it
   // inside a function would hoist differently and hide the exact bug
@@ -178,14 +194,19 @@ process.exit(0);
 """
 
 
-def _run():
+#: Scripts index.html loads before app.js that app.js calls into.
+PRELUDE = [os.path.join(ROOT, "web", "js", "visuals.js")]
+
+
+def _run(hash_="", path=None):
     with tempfile.TemporaryDirectory() as tmp:
         harness = os.path.join(tmp, "harness.js")
         with open(harness, "w", encoding="utf-8") as fh:
             fh.write(HARNESS)
         proc = subprocess.run(
-            [NODE, harness, os.path.join(ROOT, "web", "js", "app.js"),
-             json.dumps(REQUIRED), json.dumps(REQUIRED_VALUES)],
+            [NODE, harness, path or os.path.join(ROOT, "web", "js", "app.js"),
+             json.dumps(REQUIRED), json.dumps(REQUIRED_VALUES), hash_,
+             json.dumps([p for p in PRELUDE if os.path.isfile(p)])],
             capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
         raise AssertionError(
@@ -242,6 +263,52 @@ def test_a_constant_used_before_its_declaration_is_caught():
         "the harness accepted a temporal-dead-zone error, so it would " \
         "have accepted the real one"
     assert "before initialization" in str(got["error"]), got["error"]
+
+
+def _view_order():
+    with open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8") as fh:
+        src = fh.read()
+    i = src.index("const VIEW_ORDER = [")
+    body = src[i:src.index("];", i)]
+    return re.findall(r'"([a-z_]+)"', body)
+
+
+def test_a_landing_on_every_tab_boots():
+    """The 2026-09-06 outage, generalised. `#live` in the address bar —
+    the app's own bottom bar puts it there — makes the boot block's
+    router call the view switch before the file has finished
+    evaluating, so everything the switch reads must already exist. Boots
+    once per view in VIEW_ORDER, eight at a time."""
+    from concurrent.futures import ThreadPoolExecutor
+    views = _view_order()
+    assert len(views) >= 10, views
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        got = dict(zip(views, pool.map(lambda v: _run("#" + v), views)))
+    bad = {v: r["error"] for v, r in got.items() if not r["ok"]}
+    assert not bad, "a landing on these tabs throws during boot — a blank site for " \
+        "anyone whose address bar carries the tab:\n  " + "\n  ".join(f"#{v}: {e}" for v, e in bad.items())
+
+
+def test_a_constant_the_view_switch_reads_late_is_caught():
+    """The negative for the tab landing: a `const` declared at the bottom
+    of the file and read inside the view switch — the exact shape of
+    NO_TOUR_VIEWS — must fail the `#live` boot and, because the empty
+    hash never reaches the switch, pass the plain one. Both halves, or
+    the new test is not measuring what the outage was."""
+    with open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8") as fh:
+        src = fh.read()
+    hook = "  state.view = name;\n"
+    assert src.count(hook) == 1, "the view switch moved; re-anchor this probe"
+    broken = src.replace(hook, "  state.view = name; void _tdzLateView;\n") \
+        + "\nconst _tdzLateView = 1;\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        target = os.path.join(tmp, "app.js")
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write(broken)
+        live = _run("#live", target)
+        plain = _run("", target)
+    assert not live["ok"] and "before initialization" in str(live["error"]), live
+    assert plain["ok"], "the plain boot was supposed to miss this — that is the point of the tab boot"
 
 
 def test_visuals_js_evaluates_too():

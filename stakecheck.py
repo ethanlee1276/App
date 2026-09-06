@@ -344,6 +344,141 @@ def info_report(rows: list[dict]) -> None:
         print(f"\n    The market out-ranks the model on our own chosen "
               f"spots. The\n    price knows more about these bets than we "
               f"do.")
+
+    # --- and the same question, sliced ----------------------------------
+    # A pooled coin flip has three explanations with three different
+    # answers: every slice is a coin flip, one slice carries the signal
+    # and the rest dilute it, or two cancel. See engine/edgeslices.py for
+    # why the family is every slice tested and not the best-looking one.
+    from engine.edgeslices import by_slice, reading
+    sl = by_slice(use)
+    print(f"\n  BY SLICE  —  {len(sl['tested'])} tested at {sl['min_n']}+ "
+          f"settled bets, one Benjamini-Hochberg\n  family at FDR "
+          f"{sl['alpha']}. A slice too thin to ask is listed, not tested.")
+    if sl["tested"]:
+        print(f"\n    {'slice':<26}{'n':>5}  {'edge AUC':>9}  "
+              f"{'95% CI':>16}  {'q':>6}")
+        for t in sorted(sl["tested"], key=lambda t: t["p"]):
+            ci = (f"[{t['auc_edge_lo']:.3f}, {t['auc_edge_hi']:.3f}]"
+                  if t["auc_edge_lo"] is not None else "—")
+            mark = "  *" if t.get("survives") else ""
+            print(f"    {t['key'] + ' ' + t['value']:<26}{t['n']:>5}  "
+                  f"{t['auc_edge']:>9.3f}  {ci:>16}  {t.get('q'):>6}{mark}")
+    if sl["thin"]:
+        print("\n    too thin to ask: " + ", ".join(
+            f"{t['key']} {t['value']} (n={t['n']})" for t in sl["thin"][:8]))
+    print(f"\n    {reading(sl)}")
+    print(f"\n  read-only; nothing was written.\n")
+
+
+def price_report(rows: list[dict]) -> None:
+    """HOW MANY BETS SIT AT EACH PRICE — counts only, no outcomes.
+
+    This exists to size a preregistration, and it deliberately shows no
+    ROI. A test registered against a band the book never bets sits at
+    "0 of 80" forever while looking perfectly healthy — `engine.prereg`
+    records that near-miss on TD_EDGE_NFL and calls it "the bug this
+    codebase finds in itself more than any other". Checking a band is
+    reachable is the cheap way not to repeat it.
+
+    NO OUTCOME COLUMN, AND THAT IS THE POINT. Choosing a threshold after
+    seeing which band happened to lose is fitting the test to the sample
+    that suggested it, which is precisely what preregistration is for.
+    Counts carry no outcome information, so sizing on them cannot bias
+    what the test later finds.
+    """
+    from engine.prereg import implied
+    print(f"\n{'='*70}\n  WHERE THE SETTLED BOOK'S PRICES ACTUALLY SIT"
+          f"\n{'='*70}")
+    use = [r for r in rows if r["status"] in ("won", "lost")
+           and r.get("odds") is not None]
+    if not use:
+        print("  No settled bets carry a price.\n")
+        return
+    bands = [("-250 or shorter", implied(-250), 1.01),
+             ("-249 to -150", implied(-150), implied(-250)),
+             ("-149 to +100", implied(100), implied(-150)),
+             ("+101 to +300", implied(300), implied(100)),
+             ("longer than +300", 0.0, implied(300))]
+    print(f"  {len(use)} settled bets with a price. Counts only — no "
+          f"outcomes are shown\n  here, on purpose: a band chosen because "
+          f"it looked bad is a band fitted\n  to the sample that suggested "
+          f"it.\n")
+    print(f"    {'band':<20}{'bets':>6}{'share':>9}   by sport")
+    for label, lo, hi in bands:
+        inb = [r for r in use if lo <= implied(int(r["odds"])) < hi]
+        by: dict = {}
+        for r in inb:
+            by[r.get("sport") or "?"] = by.get(r.get("sport") or "?", 0) + 1
+        spread = ", ".join(f"{k} {v}" for k, v in
+                           sorted(by.items(), key=lambda kv: -kv[1])) or "—"
+        print(f"    {label:<20}{len(inb):>6}{len(inb)/len(use):>8.1%}   "
+              f"{spread}")
+    print(f"\n  read-only; nothing was written.\n")
+
+
+def select_report(rows: list[dict], top_share: float = None,
+                  stakes: str = "flat") -> None:
+    """WHICH ORDERING OF THE SAME POOL SHOULD GET THE MONEY?
+
+    The information test says the claimed edge cannot sort winners from
+    losers. That finding condemns a variable; it does not name a
+    replacement. Ethan's call on 2026-09-06 was to sort and gate on the
+    model's probability instead, and this is that decision scored against
+    the rule it would replace, on the bets we actually placed, before any
+    gate moves.
+
+    Read the overlap row first. See engine/selectorder.py.
+    """
+    from engine.selectorder import (compare, reading, cut_reading, TOP_SHARE,
+                                    ORDERINGS, PROXY_OVERLAP)
+    share = TOP_SHARE if top_share is None else top_share
+    res = compare(rows, top_share=share, stakes=stakes)
+    print(f"\n{'='*70}\n  WHICH ORDERING OF THE SAME POOL SHOULD GET THE "
+          f"MONEY?\n{'='*70}")
+    if not res["enough"]:
+        print(f"  {res['note']}.\n")
+        return
+    pct = int(round(res["top_share"] * 100))
+    print(f"  {res['n']} settled bets. Each rule orders ALL of them and bets "
+          f"its top {pct}%\n  at {'one flat unit' if stakes == 'flat' else 'the size actually recorded'}"
+          f" — same rows, same prices, same vig, so the only\n  difference "
+          f"below is which bets got the money.\n")
+    a = res["all"]
+    print(f"    {'ordering':<10}{'bets':>6}{'won':>6}{'hit':>9}"
+          f"{'staked':>10}{'net':>10}{'ROI':>9}")
+    for o in ORDERINGS:
+        r = res["orderings"][o]
+        hit = f"{r['hit']:.1%}" if r["hit"] is not None else "—"
+        roi = f"{r['roi']:+.1%}" if r["roi"] is not None else "—"
+        print(f"    {o:<10}{r['bets']:>6}{r['wins']:>6}{hit:>9}"
+              f"{r['staked']:>10.1f}{r['net']:>+10.1f}{roi:>9}")
+    hit = f"{a['hit']:.1%}" if a["hit"] is not None else "—"
+    roi = f"{a['roi']:+.1%}" if a["roi"] is not None else "—"
+    print(f"    {'(the lot)':<10}{a['bets']:>6}{a['wins']:>6}{hit:>9}"
+          f"{a['staked']:>10.1f}{a['net']:>+10.1f}{roi:>9}")
+
+    print(f"\n  HOW MUCH OF EACH SLICE IS THE SAME BETS")
+    for k, v in res["overlap"].items():
+        aa, _, bb = k.partition("|")
+        flag = "  <-- the same instruction, different words" if (
+            v is not None and v >= PROXY_OVERLAP and {aa, bb} == {"prob", "market"}
+        ) else ""
+        print(f"    {aa} vs {bb:<8}{'—' if v is None else f'{v:.0%}'}{flag}")
+
+    print(f"\n  DIFFERENCE IN ROI, paired bootstrap over the bets")
+    for k, d in res["diff"].items():
+        if d["point"] is None or d["lo"] is None:
+            print(f"    {k:<16}—")
+            continue
+        print(f"    {k:<16}{d['point']:+.1%}   95% CI "
+              f"[{d['lo']:+.1%}, {d['hi']:+.1%}]")
+    print(f"\n  READ IT LIKE THIS\n    {reading(res)}")
+    print(f"    {cut_reading(res)}")
+    print(f"\n  WHAT THIS CANNOT SAY: whether probability-ranking would "
+          f"have admitted\n  bets the edge gate refused. The journal holds "
+          f"the bets we placed, not\n  the ones we passed on, and a "
+          f"candidate with no outcome cannot be scored.")
     print(f"\n  read-only; nothing was written.\n")
 
 
@@ -1352,6 +1487,20 @@ def main() -> None:
     ap.add_argument("--info", action="store_true",
                     help="does our number know anything the price does not? "
                          "Ranks bets by model, by market, and by claimed edge")
+    ap.add_argument("--prices", action="store_true",
+                    help="how many settled bets sit in each price band. "
+                         "Counts only, no outcomes — for sizing a "
+                         "preregistration without fitting it to the sample")
+    ap.add_argument("--select", action="store_true",
+                    help="which ORDERING of the same pool should get the "
+                         "money? Scores edge-ranking against "
+                         "probability-ranking on the bets already settled")
+    ap.add_argument("--top-share", type=float, default=None,
+                    help="the share of the pool each ordering bets under "
+                         "--select (default 0.25)")
+    ap.add_argument("--as-placed", action="store_true",
+                    help="score --select at the stakes actually recorded "
+                         "instead of one flat unit a bet")
     ap.add_argument("--paper", action="store_true",
                     help="measure the PAPER book instead of the real one — "
                          "same picks, same settling, zero dollars")
@@ -1371,6 +1520,13 @@ def main() -> None:
     rows = _rows(args.db, args.sport, args.since,
                  category="paper" if args.paper else None,
                  measurement=args.include_measurement)
+    if args.prices:
+        price_report(rows)
+        return
+    if args.select:
+        select_report(rows, top_share=args.top_share,
+                      stakes="as_placed" if args.as_placed else "flat")
+        return
     if args.info:
         # Its own trailer is printed inside, since it ends on the reading
         # rather than on a table.

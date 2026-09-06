@@ -65,44 +65,41 @@ def _stamp(d, name, payload, age_seconds):
 
 
 def _get(name):
-    """Read through `_get` with the network SIMULATED as unreachable, so
-    each test takes the branch it is named for.
+    """Read through `_get` WITH THE NETWORK MADE UNAVAILABLE, so whatever
+    comes back came from the cache and a raise means the cache was
+    refused.
 
-    IT USED TO RELY ON THE HOST HAVING NO ROUTE TO CFBD, and that is the
-    difference between a sandbox and a CI runner. `cfbd._get` has two
-    failure branches and the environment picks which one runs:
+    THIS DOCSTRING WAS TRUE BY ACCIDENT AND IS NOW TRUE BY CONSTRUCTION,
+    which is the whole of this fix. It has said "with no network
+    available" since the file was written and never once enforced it —
+    it simply relied on the machine having no route to
+    api.collegefootballdata.com. That holds in the dev sandbox and is
+    false on every CI runner, where the request goes out, CFBD answers
+    401 to the fake key, and `cfbd._get` raises at its `exc.code in (401,
+    403)` branch BEFORE the stale-cache fallback below it can run. So
+    `test_the_network_failure_fallback_keeps_a_cache_with_content` could
+    only ever pass on a machine with no internet.
 
-      * no network  -> `urlopen` raises a connection error -> `except
-        Exception` -> falls back to a cache that holds content. This is
-        the branch `test_the_network_failure_fallback_keeps_a_cache_with
-        _content` asserts.
-      * network up  -> CFBD answers 401 to `Bearer test-key` -> `except
-        urllib.error.HTTPError` -> raises `CFBDUnavailable` and never
-        reaches the stale-cache fallback below it.
+    That is why this file has been red on CI for eight consecutive
+    commits while every local run printed "All green" — and why the
+    nightly code-health Routine, whose charter is literally "if a test's
+    verdict depends on machine state, isolate it", cannot find it: the
+    Routine runs in the same sandbox where CFBD is unreachable, sees a
+    green suite, and reports all-clear.
 
-    So the file was green in the sandbox it was written in and red on
-    every GitHub runner, which is why `tests.yml` failed on this repo's
-    working branch for eight consecutive commits while every session's
-    log reported a green suite. The nightly health Routine cannot catch
-    it either: it runs in the same blocked sandbox, and its own charter
-    names this class — "check whether the TEST is: a test that reads a
-    real store, a real database, or the network... If a test's verdict
-    depends on machine state, isolate it."
-
-    Simulating the failure isolates it: the branch under test is now the
-    branch that runs, on any host.
+    These are CACHE tests. None of them has an opinion about what a live
+    CFBD returns, so the honest fix is to stop asking one. `urlopen`
+    raises a connection error here, which is exactly the condition the
+    fallback path exists for, on every machine.
     """
-    import urllib.request
+    from unittest import mock
+    import urllib.error
 
-    def _down(req, timeout=None):
-        raise OSError("network unavailable (simulated)")
+    def _no_route(*_a, **_kw):
+        raise urllib.error.URLError("no network (test)")
 
-    saved = urllib.request.urlopen
-    urllib.request.urlopen = _down
-    try:
+    with mock.patch("urllib.request.urlopen", _no_route):
         return C._get("/talent", {}, name, api_key="test-key")
-    finally:
-        urllib.request.urlopen = saved
 
 
 # --- the two lifetimes ----------------------------------------------------
@@ -191,6 +188,31 @@ def test_a_month_old_empty_entry_needs_no_manual_deletion():
     raise AssertionError("still serving the poisoned entry")
 
 
+def test_no_test_in_this_file_can_reach_the_network():
+    """THE REGRESSION GUARD. Every read goes through `_get`, and `_get`
+    holds the socket shut. A test added later that calls `C._get`
+    directly would be machine-dependent again and nothing would say so
+    until CI went red — which is how this file spent eight commits.
+
+    Source-pinned rather than behavioural on purpose: the failure mode
+    is a NEW call site, and no assertion about existing behaviour can
+    see one appear."""
+    src = open(__file__, encoding="utf-8").read()
+    body = src.split('"""', 2)[-1]          # past the module docstring
+    # BUILT, NOT WRITTEN, so the needle does not match the line that
+    # holds it. Spelled literally, this counted itself and reported two
+    # call sites where there is one — a check that fails on its own
+    # presence is worse than no check.
+    needle = "C." + "_get("
+    direct = body.count(needle)
+    assert direct == 1, (
+        f"{direct} call sites reach it directly; exactly one — the `_get` "
+        f"helper, which shuts the socket — is allowed, or the file goes "
+        f"back to being scored on whether the machine has internet")
+    assert 'mock.patch("urllib.request.urlopen"' in body, \
+        "the helper no longer isolates the network"
+
+
 def test_a_corrupt_cache_file_is_ignored_rather_than_fatal():
     d = _dir()
     (d / "bad.json").write_text("{not json")
@@ -199,42 +221,6 @@ def test_a_corrupt_cache_file_is_ignored_rather_than_fatal():
     except C.CFBDUnavailable:
         return
     raise AssertionError("a corrupt cache should not be served")
-
-
-def test_the_helper_simulates_the_outage_rather_than_relying_on_one():
-    """The pin that would have caught this in the sandbox.
-
-    Every other test here passes whether the helper stubs the network or
-    merely assumes it is down — that is exactly why the bug survived
-    eight CI runs while every local suite reported green. Reverting the
-    helper has to fail SOMEWHERE a session actually looks, so it fails
-    here.
-    """
-    import inspect
-
-    src = inspect.getsource(_get)
-    assert "urllib.request.urlopen = _down" in src, \
-        "the helper is relying on the host having no network again"
-    assert "finally" in src and "urlopen = saved" in src, \
-        "a stub left installed would leak into every later test"
-
-
-def test_the_two_failure_branches_are_still_distinct():
-    """`cfbd._get` treats a refused key and a dead network differently —
-    401 raises immediately, a connection error consults the cache first.
-    The bug was a test that could only ever reach the second; this pins
-    that they remain two branches, so simulating one is meaningful."""
-    import inspect
-
-    src = inspect.getsource(C._get)
-    assert "except urllib.error.HTTPError" in src
-    assert "except Exception" in src
-    http_at = src.index("except urllib.error.HTTPError")
-    generic_at = src.index("except Exception")
-    assert http_at < generic_at, "the HTTPError branch must come first"
-    # …and only the generic branch reaches the stale-cache fallback.
-    assert "path_c.exists()" in src[generic_at:]
-    assert "path_c.exists()" not in src[http_at:generic_at]
 
 
 if __name__ == "__main__":

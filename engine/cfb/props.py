@@ -18,6 +18,52 @@ the way `engine.sources.nflverse` does, and hands the slate on. Every
 judgement about whether the resulting number is worth betting is made
 downstream, by the same code that judges the NFL's.
 
+HOW WELL THESE PROJECTIONS RANK, measured 2026-09-04, the first time it
+could be asked. `engine.formcheck` had `sport='nfl'` hardcoded in its
+SQL and keyed the week with `int(period)`, which discards a date — so
+college could not be scored here at all until that was fixed. Walked
+forward over 2023-25, mean within-week Spearman for the shipped blend:
+
+    market          nfl      cfb
+    rush_yds      0.6512   0.4714
+    rec_yds       0.5483   0.4555
+    receptions    0.5613   0.4491
+    pass_yds      0.3040   0.3959
+
+College ranks its own skill markets materially worse than the NFL ranks
+its own — eighteen points of correlation on rushing — and BETTER on
+passing yards, which is the market the NFL is weakest at. Both halves
+are plausible for the same reason: college has enormous spread in
+quarterback quality, which makes passers easy to order, and a quarter of
+its skill players change schools over the summer, which makes usage hard
+to carry.
+
+THREE CAVEATS, AND THEY MATTER MORE THAN THE TABLE.
+
+Each sport is scored on ITS OWN comparable rows — `compared_on` was
+8,503 of 9,424 for college rushing against 4,418 of 13,565 for the NFL,
+because the candidates that need opportunity data cover the two feeds
+differently. So this is each sport's rankability on the rows it can be
+asked about, not a controlled head-to-head.
+
+RANKING IS NOT BEATING A LINE, and this codebase already has the
+counter-example. `nfl:rush_yds` ranks 0.65 here and still measured AUC
+0.47 against a real book, saturated its isotonic curve, and is SHUT
+(engine/calibrate.one_sided, engine/yardagefit). A good ordering with no
+ability to price the over is exactly the state that module documents. So
+a weaker college ranking is a warning about the projection, not a
+verdict on the bet.
+
+AND NOTHING SHUTS THESE MARKETS TODAY. There is no fitted calibration
+for cfb rush_yds, rec_yds, receptions or pass_yds, so `is_reliable`
+answers True by default and the edge board prices all four — while the
+NFL's two worst are refused wholesale. That asymmetry is not a decision
+anyone made; it is the absence of a measurement.
+
+WHAT WOULD SETTLE IT is the same thing that settled the NFL's: college
+closing lines against the model, the walk that #68 and #72 ran. Until
+then this is a lead, and it is written here rather than acted on.
+
 THE COLLEGE-SHAPED PART IS WHO IS ON WHICH TEAM. A quarter of the players
 a book quotes in college football changed schools over the summer
 (`engine.cfb.tds.teams_by_name` measured 19.9% and 25.2% across the last
@@ -154,6 +200,34 @@ def _game_objects(games: list[dict]) -> tuple[dict, list]:
     return teams, out
 
 
+def stored_headshots(conn) -> dict:
+    """``{normalised name: url}`` from `player_assets`, for college.
+
+    Ingest writes a row per player it sees in a box score, carrying the
+    ESPN athlete id and a portrait built from it — 5,766 of them in this
+    checkout, every one with a face. Nothing on the prop path had ever
+    read them.
+
+    Keyed on the NORMALISED name because that is what every join in this
+    module uses; the table stores the raw one. An empty or missing table
+    is an empty map, never an error — the card falls back to the drawn
+    helmet, which is what it did before any of this.
+    """
+    from ..sources.oddsapi import normalize_name
+    out: dict = {}
+    try:
+        rows = conn.execute(
+            "SELECT player, headshot FROM player_assets "
+            "WHERE sport='cfb' AND COALESCE(headshot,'') != ''")
+    except Exception:                                         # noqa: BLE001
+        return out
+    for r in rows:
+        name, url = r[0], r[1]
+        if name and url:
+            out.setdefault(normalize_name(str(name)), str(url))
+    return out
+
+
 def _log_rows(conn, seasons: list[int]) -> dict:
     """``{team: {norm: {"player", "position", market: [rows newest first]}}}``.
 
@@ -277,12 +351,53 @@ def build_props(conn, games: list[dict], season: int,
     filed = _log_rows(conn, seasons)
     if not filed:
         return []
+    # THE SLATE'S TEAMS, in the identifiers `fetch_team_roster` already
+    # takes. Built once and used twice: for the transfer lookup below and
+    # for the faces. Reconstructing this list anywhere else would be a
+    # second opinion about which teams are playing.
+    slate = [t for g in (games or [])
+             for t in (g.get("home"), g.get("away")) if t]
     if current is None:
         current = teams_by_name(conn, int(season))
-        slate = [t for g in (games or [])
-                 for t in (g.get("home"), g.get("away")) if t]
         for norm, team in rosters_for(slate, int(season)).items():
             current.setdefault(norm, set()).add(team)
+    # THE FACES, from the two sources college actually has, in the order
+    # that reaches the most players for the least work.
+    #
+    # Ethan, 2026-09-04: "can we make sure we get the head shots for
+    # college football for the players."
+    #
+    # `player_assets` FIRST, and it is the one I missed. Ingest has been
+    # writing college faces there from every box score it stores
+    # (sources/cfbdata, `arows`) — 5,766 players in this checkout, all of
+    # them carrying a portrait — while the first cut of this read the
+    # ESPN roster instead. That gave college two independent sources for
+    # one fact, which is the exact "two readers of one feed" this module
+    # warns about a few lines up. It is a local SELECT: no network, no
+    # cache, and it covers every player ever ingested rather than only
+    # the twenty-odd teams on tonight's card.
+    #
+    # THE ROSTER SECOND, because it is not redundant. `player_assets` can
+    # only know a player who has appeared in a stored box score, so a
+    # true freshman in week one is in it nowhere — which is the same gap
+    # `rosters_for` exists to fill, one field over. The roster fills only
+    # what the table did not already answer.
+    #
+    # Neither is a superset and the order is not arbitrary: the stored
+    # URL is built from a stable ESPN athlete id, so it does not go stale
+    # the way a cached document would, and preferring it means a normal
+    # build asks the network for nothing at all.
+    headshots: dict = {}
+    try:
+        headshots = stored_headshots(conn)
+    except Exception:                                         # noqa: BLE001
+        headshots = {}
+    try:
+        from ..sources.cfbdata import fetch_headshots
+        for norm, url in fetch_headshots(slate).items():
+            headshots.setdefault(norm, url)
+    except Exception:                                         # noqa: BLE001
+        pass
 
     cands = _candidates(games, filed, current)
     census["candidates"] = len(cands)
@@ -328,8 +443,23 @@ def build_props(conn, games: list[dict], season: int,
                 lines=[SportsbookLine(book="proxy", line=_proxy_line(values),
                                       over_odds=-110, under_odds=-110)],
                 usage_role="starter",
+                # THE FACE, where ESPN publishes one. Keyed on the same
+                # normalised name the usage and roster lookups already
+                # join on, so a player found by one is found by all
+                # three. An empty string is the dataclass default and
+                # `visuals.playerAvatar` draws the team helmet for it —
+                # so a missing portrait is the finished design, not a
+                # gap to fill with a placeholder image.
+                headshot=(headshots or {}).get(norm, ""),
             ))
     census["props"] = len(props)
+    # WHAT THE JOIN FOUND, not just that it ran. A feed that stopped
+    # publishing portraits and a join that stopped matching names look
+    # identical on the page — every card wearing its helmet — and want
+    # opposite fixes. Two numbers separate them: how many faces the
+    # rosters carried, and how many landed on a prop.
+    census["headshots"] = sum(1 for p in props if p.headshot)
+    census["headshot_pool"] = len(headshots)
     return props
 
 

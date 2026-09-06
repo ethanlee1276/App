@@ -82,6 +82,11 @@ CFB_MIN_PLAYER_ROWS = 5_000
 #: observations before it will adopt anything at all.
 CFB_MIN_CLOSES = 1_000
 
+#: How stale a cached copy of the season being PLAYED may be before the
+#: nightly re-reads it. The mirror publishes a finished week within a day
+#: or so; the default seven-day TTL is for seasons that are over.
+CFB_RESULTS_TTL = 6 * 3600
+
 BACKUP_DIR = ROOT / "data" / "backups"
 BACKUP_EVERY_DAYS = 7
 BACKUP_KEEP = 6
@@ -336,6 +341,14 @@ PRUNABLE_CACHE_PREFIXES = (
     "standings_mlb_",
     "nba_box_", "wnba_box_", "wnba_schedule_",
     "espn_mma_", "espn_nfl_", "espn_injuries_", "espn_cfb_", "meteo_",
+    # THE TWO BASKETBALL SCOREBOARDS livescore_build ADDED. One file per
+    # league, overwritten every poll, so these do not grow in COUNT the
+    # way `mlb_pbp_{pk}` does — but `test_cacheclass._classified` passed
+    # them on a prefix match against `espn_nfl_` while `prune_cache`
+    # matches whole prefixes and would never have touched them. A rule
+    # that says a file is classified and a pruner that skips it is the
+    # gap the classification test exists to close.
+    "espn_nba_", "espn_wnba_",
     "mma_scoreboard_", "mma_live_", "mma_ev_", "mma_comp_", "mma_cptr_",
     "pm_evt_", "pm_mkt_", "pm_wtrades_", "pm_pnl_", "pm_leaderboard_",
     "nws_pt_", "nws_fc_", "sol_holders_", "sleeper_trend_",
@@ -1073,12 +1086,53 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             have = _cconn.execute(
                 "SELECT COUNT(*) FROM games WHERE sport='cfb' "
                 "AND home_score IS NOT NULL").fetchone()[0]
-            if have < _CFB_MIN:
-                seasons = [today.year - n for n in (4, 3, 2, 1)]
-                res = ingest_cfb_history(_cconn, seasons, quiet=True)
+            # AND THE SEASON BEING PLAYED, EVERY NIGHT. The guard above
+            # was the whole condition until 2026-09-06: once the backfill
+            # had landed its four seasons, `have` sat far above the bar
+            # and this block never ran again — so no 2026 college result
+            # ever reached the games table. Nothing else writes one.
+            #
+            # What that cost, exactly (measured in tests/test_cfb_settles.py):
+            # `settle_from_history` grades a game bet — moneyline, spread,
+            # total, team total — only from a `games` row on the bet's own
+            # date. With none, every college game bet stayed OPEN for ever,
+            # while the props settled on the Monday player-log refresh. So
+            # the record page showed a college book that had recommended
+            # dozens of bets and settled a handful. Ethan, 2026-09-06:
+            # "CFB doesn't seem to have settled its bets."
+            #
+            # Its two siblings below — the closes and the player logs —
+            # already had an in-season refresh; the results, which are what
+            # actually settle money, were the one that did not. Daily
+            # rather than their Monday, because a Saturday bet should
+            # settle on Sunday, and cheap: one cached CSV off the same
+            # mirror. `parse_schedule` writes only games with a final
+            # score and `upsert_games` merges with COALESCE, so a refresh
+            # can neither invent a scoreless row nor erase the closing
+            # lines the lines pass attached.
+            season = today.year if today.month >= 8 else today.year - 1
+            in_season = today.month >= 8 or today.month <= 1
+            backfill = have < _CFB_MIN
+            seasons = ([today.year - n for n in (4, 3, 2, 1)] if backfill
+                       else ([season] if in_season else []))
+            # The stored rows first, or the refresh writes correct keys
+            # beside three thousand unjoinable ones. Idempotent and cheap
+            # once done: the scan finds nothing on the next night.
+            from .ingest import remap_cfb_game_ids
+            _fix = remap_cfb_game_ids(_cconn)
+            if _fix["renamed"] or _fix["merged"]:
+                log(f"  cfb keys: {_fix['renamed']:,} game(s) rekeyed to "
+                    f"away@home, {_fix['merged']:,} duplicate(s) merged — "
+                    f"college totals can be graded now")
+            if seasons:
+                res = ingest_cfb_history(
+                    _cconn, seasons, quiet=True,
+                    ttl=None if backfill else CFB_RESULTS_TTL)
                 log(f"  cfb backfill: {res['games']:,} FBS games ingested "
                     f"across {len(res['seasons'])} season(s) — the model's "
-                    f"variance is now measured, not assumed")
+                    f"variance is now measured, not assumed" if backfill else
+                    f"  cfb results: {res['games']:,} finished {season} game(s) "
+                    f"on file — college game bets settle from these")
                 for s_ in res["skipped"]:
                     log(f"  ⚠️  {s_}")
         except Exception as exc:  # noqa: BLE001
@@ -1467,6 +1521,53 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
                 f" book(s) ranked")
     except Exception as exc:  # noqa: BLE001
         log(f"  ⚠️  book report skipped: {exc}")
+
+    # PLAYER FACES, EVERY SPORT. Ethan, 2026-09-04: "I see some players
+    # on nfl don't have any."
+    #
+    # `facesfill` has existed since 2026-08-18 and had NEVER RUN ON A
+    # SCHEDULE — no caller in launch.py, no line in any deploy script,
+    # only a human typing it. Its own docstring explains why nothing else
+    # can do this job: the photo URL is captured DURING ingest, and
+    # ingest skips days it has already stored, so a player whose days
+    # were all stored before faces existed can never pick one up. That is
+    # a one-way ratchet, and the only thing that releases it is this,
+    # running.
+    #
+    # Measured in this checkout: `player_assets` held 5,766 college rows
+    # and NOT ONE for nfl, mlb, nba or wnba — which is exactly what the
+    # facesfill header predicts ("NOTHING has ever written NFL rows to
+    # that table"). The fantasy player profile reads that table for its
+    # face, so those cards drew initials while the identifiers to build a
+    # URL sat in the same database.
+    #
+    # HERE RATHER THAN IN THE NIGHTLY, because this function is the
+    # once-a-day hook BOTH paths call — `nightly_run`'s first step and
+    # the server's own `_startup_chores`/`_background_refresher`. Wiring
+    # it to the nightly alone would leave it unrun on any box where the
+    # nightly is the thing that broke, which is the failure mode this
+    # module's docstring is about.
+    #
+    # Never fatal and safe to repeat: `upsert_player_assets` keys on
+    # (sport, player) and an empty value never clobbers a stored one, so
+    # the worst case of a bad day is the faces it already had.
+    try:
+        import facesfill
+        from . import db as _fdb
+        _fconn = _fdb.connect()
+        _filled = []
+        for _sport in ("nfl", "mlb", "nba", "wnba"):
+            try:
+                _n, _before, _after = facesfill.fill(_fconn, _sport)
+            except Exception as exc:                          # noqa: BLE001
+                log(f"  ⚠️  faces ({_sport}) skipped: {exc}")
+                continue
+            if _after > _before:
+                _filled.append(f"{_sport} {_before}->{_after}")
+        log("  faces: " + (", ".join(_filled) if _filled
+                           else "nothing new to fill"))
+    except Exception as exc:                                  # noqa: BLE001
+        log(f"  ⚠️  faces backfill skipped: {exc}")
 
     if harvest:
         _maybe_harvest(yesterday, log)

@@ -142,6 +142,12 @@ CFB_OUT = "web/data/cfb.json"
 # fewer games when the month cannot carry twelve.
 CFB_ODDS_COST = 3 + 12 * 5
 
+#: What ONE game's player-quote call costs college — `cfb_build.
+#: CREDITS_PER_EVENT`, pinned equal in tests/test_odds_decisions.py. A
+#: full pull that spent less than the board request plus one of these
+#: bought no player quotes, whatever the quota stamp says.
+CFB_PLAYER_EVENT_COST = 5
+
 #: The cheap half of that sum, on its own. `cfb_build.attach_odds` buys
 #: full-game markets for the ENTIRE board in one request — three credits
 #: however many games are on it — and `attach_player_quotes` buys the other
@@ -405,17 +411,37 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     # total, and three events would meter it at twenty-four. Callers that
     # know their real credit price say it directly (oddsbudget.
     # refresh_credits).
+    kicks = _slate_kickoffs(out_path)
     ok, reason = should_refresh(cost if cost is not None
                                 else _games_on_slate(out_path) + 1,
-                                kickoffs=_slate_kickoffs(out_path),
+                                kickoffs=kicks,
                                 sport=sport, share=_budget_share(sport),
                                 credits=credits)
     if not quiet:
         print(f"       {reason}")
+    # WRITTEN DOWN WHETHER OR NOT IT WAS PRINTED. The loop runs quiet,
+    # and a day of declines left no trace anywhere (2026-09-05).
+    try:
+        from engine.oddsbudget import log_decision
+        log_decision(sport, ok, reason,
+                     credits=credits if credits is not None else None,
+                     cost_events=cost, games=_games_on_slate(out_path),
+                     kickoffs=len(kicks), share=round(_budget_share(sport), 3))
+    except Exception:                                        # noqa: BLE001
+        pass
     # NOTE: the refresh clock is NOT stamped here. Authorization is not a
     # pull — _finish_paid_pull stamps it only once the API actually
     # answered, so a network blip can't burn the day's one sparse pull.
     return ok
+
+
+def _spent_so_far(sport: str) -> int:
+    """This sport's credits spent today, from the ledger; 0 if unreadable."""
+    try:
+        from engine.oddsbudget import spent_today
+        return int(spent_today(sport=sport))
+    except Exception:
+        return 0
 
 
 def _paid_pull_baseline() -> str:
@@ -429,7 +455,8 @@ def _paid_pull_baseline() -> str:
 
 
 def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
-                      label: str, sport: str | None = None) -> None:
+                      label: str, sport: str | None = None,
+                      bought: int | None = None, expect: int | None = None) -> None:
     """Confirm (or defer) an authorized paid pull after the build ran.
 
     Landed → the refresh clock stamps now. Didn't land → a short retry
@@ -438,9 +465,22 @@ def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
     window pull silently stranded the board on stale prices for 12h."""
     if not spend:
         return
+    # ``bought`` is what the ledger says this build spent on the lane and
+    # ``expect`` the least a real pull costs; short of it the clock is
+    # not stamped (oddsbudget.paid_pull_result) and the ledger says so.
+    enough = bought is None or expect is None or bought >= expect
     try:
-        from engine.oddsbudget import paid_pull_result, FAILED_PULL_RETRY_S
-        landed = paid_pull_result(before_seen, sport=sport)
+        from engine.oddsbudget import (paid_pull_result, FAILED_PULL_RETRY_S,
+                                       log_decision)
+        landed = paid_pull_result(before_seen, sport=sport, bought_enough=enough)
+        if landed and not enough:
+            log_decision(sport, False,
+                         f"{label}: authorised pull bought {bought} credit(s), "
+                         f"under the {expect} a real pull costs — clock not stamped",
+                         credits=bought, kind="bought")
+            print(f"  ⚠️  {label}: authorised pull bought {bought} credit(s) "
+                  f"(a real pull costs at least {expect}) — the clock is not "
+                  f"stamped, so the next cycle asks again")
     except Exception:
         return
     if not landed:
@@ -890,6 +930,7 @@ def refresh_cfb(quiet: bool = False) -> bool:
     spend = _slate_games(CFB_OUT) > 0 and _odds_affordable(
         CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST)
     before_seen = _paid_pull_baseline() if spend else ""
+    before_spent = _spent_so_far("cfb") if spend else 0
     lines_spend = False
     lines_before = ""
     if spend:
@@ -920,7 +961,9 @@ def refresh_cfb(quiet: bool = False) -> bool:
     # timeout unconditionally, so if ten minutes is also not enough the
     # journal will say so instead of the board simply stopping.
     ok, tail = _run_build(args, timeout=600)
-    _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb")
+    _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb",
+                      bought=(_spent_so_far("cfb") - before_spent) if spend else None,
+                      expect=CFB_LINES_COST + CFB_PLAYER_EVENT_COST)
     _finish_paid_pull(lines_spend, lines_before, ok, tail, "CFB game lines",
                       sport=CFB_LINES_CLOCK)
     # An unreachable schedule now KEEPS the last board rather than
@@ -2351,6 +2394,24 @@ def odds_doctor() -> None:
             _games_on_slate(str(path)) + 1, kickoffs=kicks, sport="mlb",
             share=_budget_share("mlb"))
         print(f"\n  right now {'WOULD pull' if ok3 else 'would NOT pull'}: {why}")
+        # THE LAST VERDICT PER LANE, from the decisions ledger — what the
+        # quiet loop actually said to each league today, not what this
+        # command would say now.
+        rows = oddsbudget.decisions(since=time.time() - 24 * 3600)
+        if rows:
+            print("\n  decisions (last 24h, latest per lane; the ledger has every one)")
+            last: dict = {}
+            counts: dict = {}
+            for r in rows:
+                last[r.get("lane")] = r
+                c = counts.setdefault(r.get("lane"), [0, 0])
+                c[0 if r.get("ok") else 1] += 1
+            for lane, r in sorted(last.items()):
+                yes, no = counts[lane]
+                print(f"            {lane:<10} {r.get('iso', '')[11:16]} "
+                      f"{'PULL' if r.get('ok') else 'hold'}  {r.get('reason', '')[:90]}"
+                      f"   [{yes} pull / {no} hold]")
+            print(f"            ledger: {oddsbudget.DECISIONS_LOG}")
     except Exception as exc:                       # noqa: BLE001
         print(f"\n  budget    unreadable: {exc}")
 
@@ -2690,6 +2751,47 @@ def _live_mlb_refresher() -> None:
                 if any((g.get("live") or {}).get("state") == "live"
                        for g in blob.get("games", [])):
                     wait = LIVE_FAST_S
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
+def _live_scores_refresher() -> None:
+    """Poll the four ESPN scoreboards fast while anything is on.
+
+    THE SAME BUG live_build.py FIXED FOR ONE SPORT. Its docstring names
+    the four it left behind: "MLB, NFL, NBA, WNBA and CFB never got the
+    same treatment." `app.js` LIVE_FEEDS reads NFL live scores out of
+    `data/recommendations.json` and CFB out of `data/cfb.json` — the
+    model boards — so a score that changes every play has been waiting on
+    a build that prices a whole slate.
+
+    ONE PROCESS FOR FOUR LEAGUES, not four. This box is one vCPU, it has
+    OOM-crashed once (#103) and had one board freeze twelve (#119), and
+    four python interpreters on a twelve-second clock is a cost with no
+    matching benefit — the four requests are independent and the build
+    already refuses to let one league's failure end the others.
+
+    The wait is chosen from what came back rather than from a clock, so a
+    Tuesday in July costs one request a league a minute and a college
+    Saturday gets the fast cadence — the same shape as the fight poller
+    and the MLB one.
+    """
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["livescore_build.py"])
+            if ok:
+                for lg in ("nfl", "cfb", "nba", "wnba"):
+                    f = ROOT / "web" / "data" / f"live_{lg}.json"
+                    if not f.is_file():
+                        continue
+                    blob = _json.loads(f.read_text())
+                    if any((g.get("live") or {}).get("state") == "live"
+                           for g in blob.get("games", [])):
+                        wait = LIVE_FAST_S
+                        break
         except Exception:      # noqa: BLE001 — never let this stop the site
             pass
         time.sleep(wait)
@@ -8352,8 +8454,11 @@ def main() -> None:
         # Its own clock: a fight moves in seconds, and this feed is free.
         threading.Thread(target=_live_ufc_refresher, daemon=True).start()
         threading.Thread(target=_live_mlb_refresher, daemon=True).start()
+        threading.Thread(target=_live_scores_refresher, daemon=True).start()
         print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
               f"{LIVE_IDLE_S}s otherwise.")
+        print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
+              f"keyless — no odds credits.")
         # And the meme board's clock — coins move in and out in minutes.
         threading.Thread(target=_live_memes_refresher, daemon=True).start()
         print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "

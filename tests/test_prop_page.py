@@ -525,7 +525,7 @@ def test_the_bets_tile_counts_the_riding_ones_too():
 def test_the_tile_says_which_are_new_and_which_are_riding():
     """Counting them without separating them would invite somebody to go
     and place seventeen bets at numbers that are gone."""
-    i = APP.index('k: "Recommended bets"')
+    i = APP.index('k: "On tonight"')
     block = APP[i:i + 700]
     assert "new ·" in block and "riding" in block
     assert "don’t add at tonight’s number" in block

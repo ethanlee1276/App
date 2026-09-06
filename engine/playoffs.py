@@ -35,7 +35,15 @@ POSTSEASON = {
     "mlb":  ("date", (9, 30), False),     # Wild Card round, end of September
     "nba":  ("date", (4, 15), True),      # play-in and first round
     "wnba": ("date", (9, 10), False),
-    "cfb":  ("date", (12, 15), True),     # bowls and the playoff
+    # THE SEASON'S OWN DECEMBER, NOT THE NEXT ONE. This read True until
+    # 2026-09-05, which dated the 2025 bowls at 2026-12-15 — so no
+    # college game was ever postseason: bowls and the playoff counted
+    # in the regular-season table (a 13-0 champion read 15-0) and the
+    # bracket page had no college rows to draw. The NBA's True is right
+    # (the 2025 season's playoffs are in April 2026); college's season
+    # label is the autumn it kicked off, and its bowls start that
+    # December.
+    "cfb":  ("date", (12, 15), False),    # bowls and the playoff
 }
 
 ROUND_NAMES = {

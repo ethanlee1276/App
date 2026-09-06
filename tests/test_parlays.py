@@ -1041,7 +1041,7 @@ def test_the_structural_reason_is_flagged_for_the_top_of_the_page():
     assert out["structural"] in out["notes"], \
         "the flagged note must still be one OF the notes, not a second copy"
 
-    i = APP.index("function renderParlays()")
+    i = APP.index("function renderParlays(")
     fn = APP[i:APP.find("\nfunction ", i + 1)]
     assert "z.structural" in fn, "the page never lifts the structural note"
     # Above the ticket list…

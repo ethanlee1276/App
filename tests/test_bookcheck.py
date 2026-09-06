@@ -71,17 +71,43 @@ def _run(paired, **kw):
 
 
 # --- the structure being examined --------------------------------------------
+def _code_of(fn) -> str:
+    """A function's executable source: no docstring, no comments.
+
+    A structural assertion about what a function DOES must not be
+    answerable by what someone wrote about it. `ast.unparse` drops
+    comments outright; the docstring is removed by hand.
+    """
+    import ast
+    import inspect
+    import textwrap
+    tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    node = tree.body[0]
+    body = node.body
+    if (body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    return "\n".join(ast.unparse(st) for st in body)
+
+
 def test_the_fair_really_does_come_from_the_taken_book():
     """The premise. If best_over_line ever starts de-vigging against a
     field, this whole file is measuring a problem that no longer exists."""
-    import inspect
     from engine import odds
-    src = inspect.getsource(odds.best_over_line)
+    src = _code_of(odds.best_over_line)
     # THE CONTRACT, NOT THE ARGUMENT LIST. This matched the call
     # character for character and went red when a `hold` argument was
     # threaded through — a change that leaves the premise untouched. What
     # matters is that the fair comes from THIS line's own two prices.
     assert "devig_two_way(ln.over_odds, ln.under_odds" in src
+    # NOR THE PROSE. This read the raw source and went red a second time
+    # when a comment explaining why the sharp reference is dropped from
+    # the SHOP but kept in `devig.board_fair`'s consensus used the word
+    # — an edit that cannot change where the fair comes from, because a
+    # comment cannot. `_code_of` hands over the executable statements
+    # with the docstring and every comment removed, so the word can only
+    # appear here by being called.
     assert "consensus" not in src
 
 

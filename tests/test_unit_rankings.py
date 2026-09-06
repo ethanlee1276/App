@@ -71,10 +71,14 @@ def test_the_build_attaches_it_and_the_page_draws_it():
     with open(os.path.join(ROOT, "web", "js", "app.js"),
               encoding="utf-8") as f:
         js = f.read()
-    assert "function unitRankingsHTML(ur)" in js
-    assert "unitRankingsHTML(d.unit_rankings)" in js
+    # The page hands the whole table over too (2026-09-05): when there
+    # are no rankings the section still renders on a football page and
+    # needs the build's `season_wait`/`first_games`/`feed_error` to say
+    # why — see tests/test_rankings_never_silent.py.
+    assert "function unitRankingsHTML(ur, d)" in js
+    assert "unitRankingsHTML(d.unit_rankings, d)" in js
     at = js.index("function unitRankingsHTML")
-    body = js[at:js.index("\nasync function renderStandings", at)]
+    body = js[at:js.index("\nfunction unitRankingsWaitHTML", at)]
     assert "scoring offense and defense" in body, \
         "the section says WHICH measure it ranks"
     assert "teamMarkIn(state.sport" in body

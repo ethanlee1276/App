@@ -117,6 +117,10 @@ def vacancies(injuries: list[dict], usage: list[dict],
             out.append({
                 "player": m.get("player"), "team": m.get("team"),
                 "position": pos, "kind": "vacancy",
+                # Who vacated it, by name and status, so a page can group
+                # the heirs under the man who went down (the injuries
+                # page does, since 2026-09-05).
+                "hurt": hurt, "hurt_status": status.title(),
                 "share": m.get("season"), "delta": m.get("delta"),
                 "fp_pg": m.get("fp_pg"), "headshot": m.get("headshot", ""),
                 "why": f"{hurt} is {status.title()} — that {pos} work has to "
@@ -160,6 +164,61 @@ def rising(usage: list[dict], limit: int = LIMIT,
     return out[:limit]
 
 
+#: How many heirs a vacated job names. The third man in line is already
+#: a footnote; a fourth is a roster.
+HEIRS = 3
+
+
+def next_up(injuries: list[dict], usage: list[dict],
+            heirs: int = HEIRS) -> list[dict]:
+    """``[{hurt, team, position, status, heirs: [{player, share, headshot}]}]``
+    — for EVERY skill player whose status vacates his job, who holds
+    his work now.
+
+    Ethan, 2026-09-05: "next man up on injurie page". `vacancies` above
+    answers the waiver question — the best claims league-wide, capped —
+    and cannot serve an injury list, which needs the heirs of one
+    particular man, for every man on it. This is the same join turned
+    the other way: one row per injured player, his heirs under him,
+    ranked by the share each ALREADY holds, the injured man himself
+    never among them. A man with nobody measured behind him is left
+    out rather than shown with an empty list — the page has nothing to
+    say about him and should not pretend otherwise. `team` is the
+    injury feed's own spelling, so the injuries page can join on the
+    row it is drawing without a second normalisation.
+    """
+    out: list[dict] = []
+    by_team: dict = {}
+    for u in usage or []:
+        key = (team_key(u.get("team")), str(u.get("position") or "").upper())
+        by_team.setdefault(key, []).append(u)
+    seen = set()
+    for inj in injuries or []:
+        status = _norm_status(inj.get("status"))
+        pos = str(inj.get("position") or "").upper()
+        if status not in VACATING or pos not in SKILL:
+            continue
+        hurt = str(inj.get("player") or "")
+        team = str(inj.get("team") or "")
+        if not hurt or (hurt, team) in seen:
+            continue
+        seen.add((hurt, team))
+        mates = [m for m in by_team.get((team_key(team), pos), [])
+                 if str(m.get("player") or "") != hurt]
+        mates.sort(key=lambda m: -(m.get("season") or 0))
+        if not mates:
+            continue
+        out.append({
+            "hurt": hurt, "team": team, "position": pos,
+            "status": status.title(),
+            "heirs": [{"player": m.get("player"),
+                       "share": m.get("season"),
+                       "headshot": m.get("headshot", "")}
+                      for m in mates[:heirs]],
+        })
+    return out
+
+
 def board(usage: list[dict], injuries: list[dict] | None = None,
           limit: int = LIMIT) -> dict:
     """Both sections plus the sentence the page leads with.
@@ -174,6 +233,8 @@ def board(usage: list[dict], injuries: list[dict] | None = None,
     return {
         "vacancies": vac,
         "rising": ris,
+        # Every injured skill player and his heirs, for the injuries page.
+        "next_up": next_up(injuries or [], usage or []),
         "note": ("Role changes, not availability — the site cannot see "
                  "your league, so it never guesses who is on your wire. "
                  "Both lists are measured from our own usage data: who "

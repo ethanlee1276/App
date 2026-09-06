@@ -302,14 +302,14 @@ def test_the_note_carries_the_all_time_figures_itself():
 
 def test_the_note_is_drawn_under_the_numbers_it_qualifies():
     body = _fn(_js(), "async function renderRecord(")
-    assert "recEpochHTML(d)" in body
+    assert "recEpochHTML(d, src)" in body, "the scoped report's own all_time, not the journal's"
     # ORDER, NOT DISTANCE. The first draft of this asserted the note sat
     # within 3000 characters of the strip and went red on its own first
     # run — the same fixed-window mistake this suite has made six times
     # now. What matters is that it comes AFTER the numbers and BEFORE the
     # next thing on the page, so a reader meets it while looking at them.
-    kpis = body.index("rec-kpis")
-    note = body.index("recEpochHTML(d)")
+    kpis = body.index("const verdict = recordVerdictHTML(src")
+    note = body.index("recEpochHTML(d, src)")
     nxt = body.index('recDisclosure("What counts as a tracked bet"')
     assert kpis < note < nxt
 
@@ -562,6 +562,31 @@ def test_a_push_is_not_a_missing_probability():
     assert snap["eligible"] == snap["n"],         (f"a push or an unprobed row leaked into the denominator: "
          f"eligible={snap['eligible']} n={snap['n']}")
 
+
+
+def test_a_sport_scope_counts_its_own_hidden_picks_not_the_journals():
+    """The NFL page said "15 earlier settled picks are not in these
+    numbers" when the NFL had never journaled one — the fifteen were
+    baseball's. The scoped report now carries its own all_time, and the
+    note reads the scoped report (2026-09-06)."""
+    import tempfile
+    from engine import ledger
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    rows = [("mlb", "2026-07-01", "A"), ("mlb", "2026-07-02", "B"),
+            ("mlb", "2026-08-20", "C"), ("nfl", "2026-09-04", "D")]
+    conn.executemany(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+        "stake_units, stake_dollars, status, pnl_units, pnl_dollars, category) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [(d + "T12:00:00", sp, d, p, "hits", "OVER", 1.5, "DK", -110, 1.0, 10.0, "won", 0.91, 9.1, "main")
+         for sp, d, p in rows])
+    conn.commit()
+    mlb = ledger.sport_report(conn, "mlb", since="2026-08-06")
+    nfl = ledger.sport_report(conn, "nfl", since="2026-08-06")
+    assert mlb["all_time"]["hidden_settled"] == 2 and mlb["all_time"]["overall"]["settled"] == 3
+    assert nfl["all_time"]["hidden_settled"] == 0 and nfl["all_time"]["overall"]["settled"] == 1
+    body = _fn(_js(), "function recEpochHTML(")
+    assert "const at = (src || d || {}).all_time || {};" in body
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

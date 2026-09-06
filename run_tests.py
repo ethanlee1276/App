@@ -62,7 +62,23 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 FILE_TIMEOUT = 900
 
 
-def _workers(argv) -> int:
+#: Below this much physical memory the suite runs one file at a time.
+#:
+#: MEASURED, NOT GUESSED. deploy.sh ran this runner on the 1 GB droplet on
+#: 2026-09-04 with the default three workers, and the kernel log has the
+#: result: seven python3 test children killed by the OOM killer between
+#: 22:18 and 23:25, at 254 to 807 MB resident each. Three of those at once
+#: is more than the box has. The children showed a few `ok` lines and then
+#: nothing — no traceback, no TIMED OUT — which the gate reported as seven
+#: failures in files that pass here in under five seconds each.
+#:
+#: The comment this replaced said the droplet's 1 GB was there "to spend
+#: on them". It was spent.
+MIN_RAM_FOR_PARALLEL = 2 * 2 ** 30
+
+
+def _pinned(argv):
+    """The worker count the command line asked for, or None."""
     if "--serial" in argv:
         return 1
     for i, a in enumerate(argv):
@@ -70,11 +86,28 @@ def _workers(argv) -> int:
             return max(1, int(argv[i + 1]))
         if a.startswith("-j") and a[2:].isdigit():
             return max(1, int(a[2:]))
+    return None
+
+
+def _ram_bytes():
+    """Physical memory, or None where the box will not say."""
+    try:
+        return os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
+def _workers(argv, ram_bytes=None) -> int:
+    pinned = _pinned(argv)
+    if pinned is not None:
+        return pinned
+    ram = _ram_bytes() if ram_bytes is None else ram_bytes
+    if ram is not None and ram < MIN_RAM_FOR_PARALLEL:
+        return 1
     # MORE THAN THE CORE COUNT, on purpose. The work is dominated by
     # process startup and by waiting on sockets, so a one-vCPU box still
-    # gains from several in flight — that is the box this was written for.
-    # Capped at 8 because each worker can spawn a server of its own, and
-    # the same droplet has 1GB of memory to spend on them.
+    # gains from several in flight — when it has the memory for them. It
+    # is capped at 8 because each worker can spawn a server of its own.
     return min(8, max(2, (os.cpu_count() or 1) * 3))
 
 
@@ -230,6 +263,14 @@ def _run(env, argv) -> int:
     started = time.monotonic()
     if jobs > 1:
         print(f"  {len(files)} files, {jobs} at a time\n")
+    elif _pinned(argv) is None:
+        # SAID ON THE SCREEN, beside the ceiling notice below, for the
+        # same reason: a serial run on a box that used to run three
+        # reads as a hang unless the runner says why it chose to.
+        ram = _ram_bytes() or 0
+        print(f"  {ram / 2 ** 30:.1f} GB of memory — one file at a time, "
+              f"so the gate cannot OOM-kill its own children "
+              f"(seven were, on 2026-09-04)\n")
 
     # Threads, not processes: each one only waits on a subprocess, so the
     # GIL is never the thing holding anything up.

@@ -334,7 +334,7 @@ def test_the_lead_is_the_bets_count_and_it_comes_first():
     considered to get there."""
     i = APP.index("const tiles = [")
     block = APP[i:i + 1600]
-    first = block.index('k: "Recommended bets"')
+    first = block.index('k: "On tonight"')
     assert first < block.index('Props analyzed')
     assert "lead: true" in block[first:first + 120]
 

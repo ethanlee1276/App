@@ -205,8 +205,16 @@ def fetch(sport: str, season: int) -> list[dict]:
     path = ESPN_PATHS.get(sport)
     if not path:
         raise DataUnavailable(f"no standings feed wired for {sport}")
+    # THE REGULAR SEASON, SAID OUT LOUD. Without a season type ESPN
+    # answers with whatever is current, and five days before Week 1 that
+    # was the PRESEASON table: 49 exhibition games counted, Buffalo
+    # "ranked" first on offense at 29.3 a game from August (Ethan's box,
+    # 2026-09-05). `seasontype=2` is the same parameter family
+    # `nflpreseason` reads the preseason scoreboard with (type 1), and
+    # the cache name carries it so a cached preseason table is never
+    # served as the regular one.
     url = (f"https://site.api.espn.com/apis/v2/sports/{path}/standings"
-           f"?season={season}")
-    return parse_espn(fetch_json(url, f"standings_{sport}_{season}.json",
+           f"?season={season}&seasontype=2")
+    return parse_espn(fetch_json(url, f"standings_{sport}_{season}_t2.json",
                                  ttl=STANDINGS_TTL,
                                  user_agent=DEFAULT_AGENT))

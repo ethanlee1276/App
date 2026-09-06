@@ -215,7 +215,13 @@ def test_the_flag_does_not_buy_a_single_player_call():
     """The whole argument for the tier is that it skips the sixty credits.
     A --lines-odds run that reached the per-event endpoint would cost more
     than the full pull it is standing in for."""
-    i = BUILD.index("td_quotes, prop_lines, quotes_note = attach_player_quotes(")
+    # NEEDLE ASSERTED BEFORE IT IS USED. A bare `.index` on a moved
+    # anchor raises ValueError rather than failing, and this file's
+    # runner is what turns that into a diagnosis instead of a stack
+    # trace two hundred lines from the change that caused it.
+    needle = "attach_player_quotes(games, priced, cache_only="
+    assert needle in BUILD, "the player pull's call site moved"
+    i = BUILD.index(needle)
     seg = BUILD[i:i + 300]
     assert "cache_only=not args.odds" in seg, \
         "the player pull is no longer gated on --odds alone"

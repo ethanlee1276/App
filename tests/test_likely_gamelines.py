@@ -232,13 +232,17 @@ def test_a_total_backed_from_the_short_end_flips_to_the_likely_side():
 
 
 def test_a_spread_backed_from_the_short_end_flips_team_and_number():
+    # win_prob 0.44 rather than 0.46: the FLIPPED side is what lands on
+    # the board, and at 0.46 its complement is 0.54 — under `MIN_PROB`
+    # since it went to 0.55 on 2026-09-06, so the row this test is about
+    # would be refused before it could be inspected.
     card = _tot(bet_type="spread", market="spread", market_label="Spread",
                 team="NO", side="", line=3.5, pick_label="NO +3.5",
-                win_prob=0.46, fair_prob=0.48, odds=-105, other_odds=-115)
+                win_prob=0.44, fair_prob=0.48, odds=-105, other_odds=-115)
     row = K.from_game_bet(card, sport="nfl")
     assert row["flipped"] is True and row["team"] == "DET"
     assert row["line"] == -3.5 and row["player"] == "DET -3.5"
-    assert row["odds"] == -115 and row["model_prob"] == 0.54
+    assert row["odds"] == -115 and row["model_prob"] == 0.56
 
 
 def test_a_team_total_flips_its_side_and_keeps_its_team():
@@ -257,13 +261,18 @@ def test_a_short_side_without_the_other_price_is_refused():
 def test_game_rows_are_capped_apart_from_player_rows():
     """A Sunday's five cards a game is eighty leans; they must not push
     the player rows off a forty-row board."""
+    # 0.62 leans against 0.58 props, re-anchored when `MIN_PROB` went to
+    # 0.55 — the old pair (0.55 leans, 0.52 props) put the props under
+    # the floor, so the board they were meant to be crowded off was one
+    # they never reached. The RELATIONSHIP is what matters: the leans
+    # outrank the props and must still not push them off.
     cards = [_tot(home=f"H{i}", away=f"A{i}", matchup=f"A{i} @ H{i}",
-                  win_prob=0.55) for i in range(30)]
-    props = [_prop(player=f"P{i}", prob=0.52) for i in range(5)]
+                  win_prob=0.62) for i in range(30)]
+    props = [_prop(player=f"P{i}", prob=0.58) for i in range(5)]
     got = K.build(props, game_bets=cards)
     assert sum(1 for r in got if r["kind"] == "game") == K.GAME_LIMIT
     assert sum(1 for r in got if r["kind"] == "prop") == 5, \
-        "the 52% props survived beside twenty 55% leans"
+        "the 58% props survived beside twenty 62% leans"
     assert [r["model_prob"] for r in got] == sorted(
         (r["model_prob"] for r in got), reverse=True), "one order"
 
@@ -436,15 +445,26 @@ def test_the_college_moneyline_reaches_the_likely_board_from_a_refusal():
     counted, because `build`'s loop is a no-op on an empty list.
     """
     _result, rows = _cfb_g5_slate()
-    board = K.build([], [], [], sport="cfb", game_bets=rows)
+    census: dict = {}
+    board = K.build([], [], [], sport="cfb", game_bets=rows, census=census)
     kinds = {r["market"]: r for r in board}
     assert kinds["moneyline"]["ranked"] is True, \
         "the college moneyline ranks at 0.752 and must say so"
     assert kinds["moneyline"]["rank_auc"] == 0.752
-    for market in ("spread", "total"):
-        assert kinds[market]["ranked"] is False, market
-        assert "lean" in kinds[market]["rank_note"], \
-            f"{market} must ship labelled as a lean, not as a ranking"
+    # THE SPREAD AND THE TOTAL NO LONGER REACH THE BOARD, and that is the
+    # decision rather than a regression. This card prices them at 0.527
+    # and 0.537 — coin flips, which is what `GAME_RANK_MEASURED` already
+    # says they are — and `MIN_PROB` went to 0.55 on 2026-09-06. Ethan
+    # was shown that the floor would take most of the game-lines shelf he
+    # asked for on 2026-09-02 and chose it anyway.
+    #
+    # The LEAN LABELLING itself is still covered, by
+    # `test_a_spread_or_total_row_is_shown_as_a_lean_with_its_figure`,
+    # whose card clears the floor. What is pinned here is that these two
+    # are turned away by the floor and SAY SO, rather than vanishing into
+    # an uncounted no-op the way the whole game half did on 2026-09-03.
+    assert set(kinds) == {"moneyline"}, sorted(kinds)
+    assert census.get("under the likelihood floor") == 2, census
     assert all(r["stake_units"] == 0.0 and r["recommended"] is False
                for r in board), "this board ranks and never sizes"
 

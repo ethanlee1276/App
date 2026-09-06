@@ -60,7 +60,8 @@ def _terms_hash(t: dict) -> str:
     """A fingerprint of everything that decides the answer."""
     keyed = {k: t[k] for k in sorted(
         ("claim", "sport", "population", "compare_to", "metric",
-         "markets", "min_n", "z_threshold", "registered", "decides"))
+         "markets", "price_band", "compare_price_band",
+         "min_n", "z_threshold", "registered", "decides"))
         if k in t}
     return hashlib.sha256(
         json.dumps(keyed, sort_keys=True).encode()).hexdigest()[:16]
@@ -151,6 +152,45 @@ def _flat_profit(r) -> float:
     return (o / 100.0) if o > 0 else (100.0 / -o)
 
 
+def implied(odds: int) -> float:
+    """American odds as an implied probability, vig and all.
+
+    Exported so a test's band can be written as `implied(-250)` rather
+    than as a decimal somebody rounded. Written as 0.7143 the bound
+    EXCLUDES -250 itself — its true implied is 0.714285… — so the band
+    named "-250 or shorter" would quietly start at -251.
+    """
+    odds = int(odds)
+    return (-odds) / ((-odds) + 100.0) if odds < 0 else 100.0 / (odds + 100.0)
+
+
+def _in_band(r, band) -> bool:
+    """Is this bet's price inside an implied-probability band?
+
+    THE BAND IS IN IMPLIED PROBABILITY, NOT AMERICAN ODDS, and that is
+    not a preference. American odds are not monotone in price: -163 is
+    shorter than +122 and numerically smaller, so `lo <= odds <= hi`
+    silently means something different on either side of the jump. A
+    band written as a probability is monotone everywhere, and the
+    numbers a person reasons about — "-250 needs 71.4% to break even" —
+    are already in that unit.
+
+    Half-open at the top so adjacent bands cannot both claim a bet.
+    """
+    o = r.get("odds")
+    if o is None or not band:
+        return False
+    try:
+        o = int(o)
+    except (TypeError, ValueError):
+        return False
+    if not o:
+        return False
+    p = implied(o)
+    lo, hi = band
+    return lo <= p < hi or (hi >= 1.0 and p >= lo)
+
+
 def _mean_se(vals):
     n = len(vals)
     if n < 2:
@@ -217,6 +257,17 @@ def verdict(test: dict, rows: list[dict]) -> dict:
              if (r.get("category") or "main") in cats]
     pop = [r for r in fresh if r.get("grade") in test["population"]]
     ref = [r for r in fresh if r.get("grade") in test["compare_to"]]
+    # PRICE, when the test names one. Optional and absent from every
+    # test registered before 2026-09-06, so `_terms_hash` keying on it
+    # only when a test carries it leaves their fingerprints untouched —
+    # the same rule `markets` is added under, for the same reason.
+    #
+    # A test that splits on price puts the FULL grade ladder in both
+    # `population` and `compare_to`; the bands are what separate them.
+    if test.get("price_band"):
+        pop = [r for r in pop if _in_band(r, test["price_band"])]
+    if test.get("compare_price_band"):
+        ref = [r for r in ref if _in_band(r, test["compare_price_band"])]
     out["n"] = len(pop)
     out["n_reference"] = len(ref)
 
@@ -524,6 +575,144 @@ TD_EDGE_NFL_XFP = {
 #: path every market-scoped test filtered its entire population away and
 #: reported "0 of 80" forever. A query shape that two places have to
 #: agree on is a query shape that belongs in one.
+#: DRAFTED AND THEN DECLINED, 2026-09-06, and kept rather than deleted
+#: because what we asked and why we did not run it is the record.
+#:
+#: `stakecheck --prices` came back with 26 settled bets at -250 or
+#: shorter — 2.8% of the whole book. `min_n` 80 in a band that thin is
+#: the TD_EDGE_NFL failure exactly: a test that sits at "0 of 80"
+#: forever while looking perfectly healthy. The counts check was built
+#: to catch this and caught it.
+#:
+#: It is also an answer rather than a dead end. The Edge board barely
+#: bets chalk, so a price bar at -250 was never going to decide much.
+#: The price question that DOES have a sample is LONG_PRICE_MLB below.
+#:
+#: DRAFTED 2026-09-06, NOT YET REGISTERED. `ensure_registered` does not
+#: call this, deliberately — that call is what freezes the terms, and
+#: Ethan reads them first. One line there activates it.
+#:
+#: WHERE IT CAME FROM. `stakecheck --select` compared three orderings of
+#: the same 931 settled bets. Backed out of that table, the three arms
+#: are not three ideas — they are three PRICES:
+#:
+#:     ordering   avg winner pays   hit     ROI
+#:     edge            +122        44.6%   -0.9%
+#:     prob            -163        56.2%   -9.3%
+#:     market          -166        54.1%  -13.4%
+#:     the lot         -102        48.1%   -4.5%
+#:
+#: The short-price arms lost most. That is the observation, and it is
+#: NOT evidence, because it is the same 931 rows that produced it.
+#:
+#: WHY THE THRESHOLD IS BORROWED RATHER THAN FITTED. The obvious move is
+#: to read a cut point off that table, and it is exactly the move this
+#: module exists to refuse. So the bar is -250 for one reason only: it
+#: is already `likely.HEAVIEST_PRICE`, chosen by Ethan on 2026-09-01
+#: from the MOST LIKELY board's own settled night — a different board,
+#: a different sample, a different question — with the arithmetic that
+#: at -250 a bet needs 71.4% to break even. A number set on other
+#: evidence is not fitted to this one.
+#:
+#: WHAT IT WOULD CHANGE. `engine.betting`'s gate has no price bar at
+#: all: `favourite_surcharge` adjusts break-even, it does not refuse.
+#: The Most Likely board has had one since 09-01; the Edge board never
+#: got it.
+#:
+#: THE HONEST LIMIT, stated before it collects rather than after. ROI
+#: tests are blunt. At the per-bet spread these prices carry, 80 bets
+#: can only convict a deficit of roughly fifteen points; a real
+#: five-point leak would sit inside the noise and report "not
+#: supported". This can catch a board being eaten by chalk. It cannot
+#: certify that chalk is fine.
+HEAVY_PRICE_EDGE = {
+    "id": "heavy-price-edge-2026-09",
+    "claim": ("Edge-board bets priced at -250 or shorter lose more than "
+              "the rest of the board at the same stake"),
+    "sport": "mlb",
+    "population": ["A+", "A", "B+"],
+    "compare_to": ["A+", "A", "B+"],
+    "price_band": [implied(-250), 1.01],
+    "compare_price_band": [0.0, implied(-250)],
+    "metric": "ROI at a flat 1u, split on the price taken",
+    "min_n": 80,
+    "decides": ("the Edge board gets the price bar the Most Likely board "
+                "has had since 2026-09-01 — engine.betting's gate refuses "
+                "a pick priced shorter than likely.HEAVIEST_PRICE"),
+    "why_now": ("stakecheck --select put the short-price arm at -9.3% "
+                "against -0.9% for the long-price arm over 931 settled "
+                "bets, and the model's probability ordering was 94% the "
+                "same bets as the book's own price ordering. Reading a "
+                "cut point off that table would fit the test to the "
+                "sample that suggested it, so the bar is borrowed from "
+                "likely.HEAVIEST_PRICE, set on a different board's "
+                "evidence, and the question is asked forward."),
+}
+
+
+#: DRAFTED 2026-09-06, NOT YET REGISTERED — one line in
+#: `ensure_registered` starts it collecting.
+#:
+#: WHERE IT CAME FROM, AND WHY THAT SOURCE IS NOT THE OUTCOME DATA.
+#: `stakecheck --clv` on 303 settled bets with a rebuilt close:
+#:
+#:     price band          bets      mean CLV    SE from 0
+#:     shorter than +100    153        1.17%          5.5
+#:     +100 to +119          74        2.14%          3.9
+#:     +120 to +199          72        3.05%          5.0
+#:
+#: Monotone, and every band decisive. We get better prices the longer
+#: the bet is. CLV is computed from the price we took against the price
+#: at close — it does not look at whether the bet WON — so choosing a
+#: band by CLV and then testing ROI is not the same sample answering
+#: twice. `stakecheck --select` pointed the same way on ROI (the long
+#: arm at -0.9% against the short arm's -9.3%), and that one IS outcome
+#: data on these rows, so it is named as corroboration and not as the
+#: reason.
+#:
+#: THE BOUNDARY IS NOT FITTED. +100 is even money — the point where a
+#: dog becomes a favourite. It is where the CLV table already splits and
+#: it is not a number anybody searched over.
+#:
+#: FRAMED AS THE SHORT BAND LOSING, because `verdict` reports
+#: `supported` when the POPULATION is worse than its reference. The
+#: claim is the same claim either way round; this is the direction the
+#: module's arithmetic reads.
+#:
+#: WHAT IT WOULD CHANGE. `engine.betting.favourite_surcharge` already
+#: sits in the gate — `net > favourite_surcharge(best.odds)` — and
+#: already scales with price. If short prices really do lose more, that
+#: surcharge widens. A live lever the gate reads every time it prices a
+#: card, which is the test A_BAND_NFL failed: its remedy named a
+#: constant that had stopped deciding anything.
+#:
+#: THE HONEST LIMIT. 80 bets convicts a deficit of roughly fifteen
+#: points at the spread these prices carry. It can catch a board being
+#: eaten by the short end. It cannot certify that the short end is fine.
+LONG_PRICE_MLB = {
+    "id": "long-price-mlb-2026-09",
+    "claim": ("MLB bets priced +100 or shorter lose more than bets priced "
+              "longer than +100, at the same stake"),
+    "sport": "mlb",
+    "population": ["A+", "A", "B+"],
+    "compare_to": ["A+", "A", "B+"],
+    "price_band": [implied(100), 1.01],
+    "compare_price_band": [0.0, implied(100)],
+    "metric": "ROI at a flat 1u, split on the price taken",
+    "min_n": 80,
+    "decides": ("the favourite surcharge widens — "
+                "engine.betting.favourite_surcharge, which the gate already "
+                "reads on every card it prices"),
+    "why_now": ("closing-line value rises monotonically with price length "
+                "across three bands at 3.9 to 5.5 standard errors, and CLV "
+                "is measured on prices rather than outcomes, so the band it "
+                "picks can be tested on ROI without asking one sample twice. "
+                "The boundary is even money, not a searched number. 534 of "
+                "931 settled bets sit in the short band, so min_n arrives in "
+                "about nine days rather than never."),
+}
+
+
 ROW_SQL = ("SELECT date, sport, grade, market, odds, status, category "
            "FROM bets WHERE status IN ('won','lost') "
            "AND category IN ('main','paper','longshot') "
@@ -542,6 +731,16 @@ def ensure_registered(path=None) -> dict:
     store = register(RECEPTIONS_A_NFL, path)
     store = register(TD_EDGE_NFL, path)
     store = register(TD_EDGE_NFL_XFP, path)
+    # REGISTERED 2026-09-06 ON ETHAN'S WORD, after he read the terms:
+    # "register it and keep going". The clock starts today and only bets
+    # dated strictly after it count — the CLV table that suggested the
+    # band is 303 rows that can never be part of the answer, which is the
+    # point.
+    #
+    # HEAVY_PRICE_EDGE IS DELIBERATELY NOT HERE. Its band holds 26 bets in
+    # the whole book; registering it would be writing a test that cannot
+    # finish. See its own note.
+    store = register(LONG_PRICE_MLB, path)
     # A_BAND_NFL asked "does A beat B+". Slicing by grade AND market
     # answered it — the deficit is one cell, A-graded receptions — and
     # RECEPTIONS_A_NFL asks that sharper question with a remedy that

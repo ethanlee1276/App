@@ -394,7 +394,7 @@ def test_the_panel_does_not_trust_the_payload_shape_either():
     """The producer was fixed, and this is the half that cannot be fixed
     anywhere else: a renderer that trusts a payload's shape will meet a
     payload that lies about it again."""
-    i = APP.index("function renderParlays()")
+    i = APP.index("function renderParlays(")
     body = APP[i:APP.index("\n}", i)]
     assert 'typeof z !== "object"' in body and "Array.isArray(z)" in body, \
         "an empty array is truthy, and this guard is what catches it"

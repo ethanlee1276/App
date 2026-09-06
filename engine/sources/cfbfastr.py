@@ -123,9 +123,24 @@ def parse_schedule(rows: list[dict], season: int,
         skipped[reason] = skipped.get(reason, 0) + 1
 
     for r in rows or []:
-        if (r.get("home_division") or "").strip().lower() != FBS \
-                or (r.get("away_division") or "").strip().lower() != FBS:
-            skip("not FBS vs FBS")
+        # ONE FBS SIDE IS ENOUGH TO STORE THE RESULT. Both sides were
+        # required until 2026-09-06, which is right for the FIT and wrong
+        # for the LEDGER: the board prices every game an FBS team plays,
+        # including the September buy games, and a bet on one of those had
+        # no result row to grade against — ever. Ethan's --why-open that
+        # day was full of them (UAPB@MIZ, BCU@UCF, EIU@MINN, MASS@RUTG).
+        #
+        # The fit is protected by the KEY, not by this filter: an FCS side
+        # has no FBS abbreviation and lands as `espn:<id>`, which is
+        # exactly the marker `teamrates.compute_team_ratings` already
+        # excludes on (its docstring names the 70-0 buy game that was an
+        # FBS team's whole rating for a fortnight) and which
+        # `cfb.ratings.fit_from_history` now excludes on too. A game
+        # neither side of which is FBS is still nothing we price.
+        divisions = [(r.get(f"{s_}_division") or "").strip().lower()
+                     for s_ in ("home", "away")]
+        if FBS not in divisions:
+            skip("no FBS side")
             continue
         hs, as_ = _num(r.get("home_points")), _num(r.get("away_points"))
         if hs is None or as_ is None:
@@ -133,10 +148,15 @@ def parse_schedule(rows: list[dict], season: int,
             # not evidence.
             skip("no final score")
             continue
-        home = team_key(r.get("home_id"), id_to_abbr)
-        away = team_key(r.get("away_id"), id_to_abbr)
+        # An id the FBS map does not carry keys as `espn:<id>` rather
+        # than dropping the game — that is the fallback `team_key`
+        # already uses with no map at all, and the form every fit
+        # excludes. It is how an FCS opponent gets stored at all, and it
+        # also stops one unmapped FBS school taking a real game with it.
+        home = team_key(r.get("home_id"), id_to_abbr) or team_key(r.get("home_id"), None)
+        away = team_key(r.get("away_id"), id_to_abbr) or team_key(r.get("away_id"), None)
         if not home or not away:
-            skip("team id not in the map")
+            skip("no team id")
             continue
         if home == away:
             skip("both sides resolved to one team")
@@ -145,10 +165,19 @@ def parse_schedule(rows: list[dict], season: int,
         if len(date) != 10:
             skip("no usable date")
             continue
-        game_id = str(r.get("game_id") or "").strip()
-        if _blank(game_id):
+        if _blank(str(r.get("game_id") or "")):
             skip("no game id")
             continue
+        # THE KEY EVERY OTHER SPORT USES, and the reason a college total
+        # could never settle. This wrote the mirror's own numeric id
+        # ("401405059") while the NFL and MLB ingests both write
+        # `f"{away}@{home}"` — and a total bet stores that matchup key in
+        # its `player` column, which is what `ledger._game_bet_evidence`
+        # looks the game up by. Three thousand college rows, not one of
+        # them joinable: every college total sat open for ever, in a
+        # bucket the doctor reported as "no stat line" (2026-09-06).
+        # `ingest.remap_cfb_game_ids` rewrites the rows already stored.
+        game_id = f"{away}@{home}"
         games.append({
             "sport": "cfb",
             "season": int(season),

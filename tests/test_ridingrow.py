@@ -92,8 +92,14 @@ def test_the_note_says_the_price_changed_since_we_took_it():
 def test_the_row_shows_both_prices():
     """"The price changed" without the two numbers is a claim the reader
     cannot check, on a page whose whole argument is checkability."""
-    fn = FLAT[FLAT.index("const ridingRow ="):]
-    fn = fn[:fn.index("const pickRow =")]
+    # The sentence moved into `ridingMoveCopy` on 2026-09-05, when it
+    # learned to say WHICH number moved (tests/test_riding_copy.py); the
+    # row itself now only calls it.
+    row = FLAT[FLAT.index("const ridingRow ="):]
+    row = row[:row.index("const pickRow =")]
+    assert "ridingMoveCopy(b, cur)" in row, "the riding row lost its price note"
+    fn = FLAT[FLAT.index("function ridingMoveCopy("):]
+    fn = fn[:fn.index("function ridingDoorProp(")]
     assert "american(b.odds)" in fn and "american(cur.odds)" in fn, \
         "the placed price and the current price are no longer both shown"
     assert "no live quote" in fn, \

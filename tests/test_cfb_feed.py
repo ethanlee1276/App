@@ -181,8 +181,8 @@ def test_the_note_names_the_price_and_the_shortfall():
     real = O.fetch_event_odds
     O.fetch_event_odds = fake_fetch
     try:
-        _s, _l, note = B.attach_player_quotes(games, priced, cache_only=True,
-                                              now=now, cap=2)
+        _s, _l, note, _age = B.attach_player_quotes(
+            games, priced, cache_only=True, now=now, cap=2)
     finally:
         O.fetch_event_odds = real
     assert "2 of 6 eligible" in note
@@ -203,7 +203,7 @@ def test_a_pull_nobody_can_afford_buys_nothing_rather_than_guessing():
     real = O.fetch_event_odds
     O.fetch_event_odds = fake_fetch
     try:
-        scorers, lines, note = B.attach_player_quotes(
+        scorers, lines, note, _age = B.attach_player_quotes(
             games, priced, cache_only=True, now=now, cap=0)
     finally:
         O.fetch_event_odds = real

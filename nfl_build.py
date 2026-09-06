@@ -793,6 +793,36 @@ def main() -> None:
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  team logs skipped: {exc}")
 
+    # §9/§10 — correlation flags and the bankroll caps, in the same place
+    # and the same order baseball runs them: after ranking, before counts
+    # and journaling, so a capped stake is what the page and the ledger
+    # both see.
+    #
+    # THIS IS THE SPORT THE MODULE WAS WRITTEN FOR. engine/correlation.py
+    # calls itself §9 of docs/NFL_MODEL.md and its flags are football
+    # relationships — a quarterback's over and his receiver's over are one
+    # passing game wearing two jerseys. Baseball was its only caller.
+    # Football, which plays a whole week at once, never ran it: Ethan,
+    # 2026-09-06, "we have like 106 open edge bets for NFL", each sized a
+    # full unit, against a rule that says 5u per game and 15u per slate.
+    # A hundred and six units is the bankroll, on one weekend.
+    #
+    # The cap scales uniformly rather than dropping the weakest, and that
+    # choice is measured, not aesthetic: on 888 settled bets a ranked trim
+    # kept the losers, and the grade it would have sorted on is inverted
+    # (A+ −18.3% against A's −7.9%). See `correlation._uniform_factor`.
+    try:
+        from engine.correlation import flag_correlations, apply_exposure_caps
+        result["correlations"] = flag_correlations(result["recommendations"])
+        notes = apply_exposure_caps(result["recommendations"],
+                                    result.get("game_bets") or [])
+        if notes:
+            result.setdefault("cap_notes", []).extend(notes)
+            for _n in notes:
+                print(f"  {_n}")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  exposure caps skipped: {exc}")
+
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
     # Applied before journaling so the ledger records what we'd actually bet.
@@ -821,9 +851,14 @@ def main() -> None:
     if real_odds:
         try:
             from engine.linemoves import (stream_history, analyze, todays_rows,
-                                          annotate_recommendations)
-            annotate_recommendations(result["recommendations"],
-                                     analyze(todays_rows(stream_history())))
+                                          annotate_recommendations, attach_series)
+            _today = todays_rows(stream_history())
+            annotate_recommendations(result["recommendations"], analyze(_today))
+            # Today's tape on every priced pick, for the prop page's own
+            # line chart (Ethan, 2026-09-05). Same rows, read once.
+            _ns = attach_series(result["recommendations"], _today)
+            if _ns:
+                print(f"  Line series: {_ns} pick(s) carry today's tape.")
         except Exception as exc:
             print(f"⚠️  Line-movement stamps skipped: {exc}")
 
@@ -1010,9 +1045,27 @@ def main() -> None:
                       f"ranked on season {_season}.")
         except Exception as _exc:                             # noqa: BLE001
             print(f"  ⚠️  team shapes skipped: {_exc}")
+        # THE OPEN-BET TRACKER. Every board but MLB's lacked one, so this
+        # league's Live tab read "No open bets on today's card" whatever the
+        # journal held — and the tab's two panels (edge bets, Most Likely bets)
+        # were empty here by construction. Same assembly as mlb_build's block,
+        # behind one call (engine/livepicks.attach_tracker); a failure lands in
+        # the JSON as `live_picks_error`, where the page can see it.
+        from engine.livepicks import attach_tracker as _attach_tracker
+        _tn = _attach_tracker(result, "nfl")
+        if _tn:
+            print(f"Open-bet tracker: {_tn}")
         from engine import gate
         gate.publish(result, args.out)
         print(f"\nWrote {args.out}")
+        # The light copy the Home page draws first (engine/lightboard),
+        # published the same way so the paywall strips the same keys.
+        try:
+            from engine import lightboard
+            _, _lfull = gate.publish(lightboard.light(result, "nfl"), lightboard.light_path(args.out))
+            print(lightboard.report(gate.board_source(args.out), _lfull))
+        except Exception as _lexc:                            # noqa: BLE001
+            print(f"⚠️  Light board skipped: {_lexc}")
 
     # Learning engine: journal real-priced picks; settle any whose results
     # have been ingested since. Proxy lines are never journaled.
