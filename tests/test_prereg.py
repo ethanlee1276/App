@@ -329,6 +329,71 @@ def test_the_drafted_terms_borrow_their_bar_instead_of_fitting_it():
     assert "fit the test to the" in prereg.HEAVY_PRICE_EDGE["why_now"]
 
 
+def test_the_long_price_claim_splits_at_even_money():
+    """+100 is where a dog becomes a favourite. Not a number anybody
+    searched over, which is the whole reason the band can be trusted."""
+    L = prereg.LONG_PRICE_MLB
+    assert L["price_band"][0] == prereg.implied(100) == 0.5
+    for odds, short in ((-300, True), (-110, True), (100, True),
+                        (101, False), (400, False)):
+        got = prereg._in_band({"odds": odds}, L["price_band"])
+        assert got is short, odds
+        # And the two bands partition: every price lands in exactly one.
+        other = prereg._in_band({"odds": odds}, L["compare_price_band"])
+        assert got + other == 1, odds
+
+
+def test_the_long_price_claim_is_framed_the_way_verdict_reads():
+    """`verdict` reports `supported` when the POPULATION is worse than
+    its reference. A claim written the other way round would collect for
+    weeks and then report the opposite of what it found."""
+    L = prereg.LONG_PRICE_MLB
+    assert "lose more than" in L["claim"], L["claim"]
+    # population = the SHORT band, which is the side expected to lose.
+    assert L["price_band"][0] == 0.5 and L["price_band"][1] > 1.0
+    assert L["compare_price_band"] == [0.0, 0.5]
+    rows = [{"date": "2026-09-20", "sport": "mlb", "grade": "A",
+             "odds": -150, "status": "lost"} for _ in range(60)]
+    rows += [{"date": "2026-09-20", "sport": "mlb", "grade": "A",
+              "odds": 150, "status": "won"} for _ in range(60)]
+    t = dict(L, registered="2026-09-06", min_n=10, z_threshold=1.96)
+    t["hash"] = prereg._terms_hash(t)
+    got = prereg.verdict(t, rows)
+    assert got["status"] == "decided" and got["supported"] is True, got
+
+
+def test_the_long_price_remedy_names_a_lever_the_gate_reads():
+    """A_BAND_NFL's remedy named a constant that had stopped deciding
+    anything, and would have fired and changed nothing. This one has to
+    point at something live."""
+    import os as _os
+    L = prereg.LONG_PRICE_MLB
+    assert "favourite_surcharge" in L["decides"]
+    src = open(_os.path.join(ROOT, "engine", "betting.py"),
+               encoding="utf-8").read()
+    assert "def favourite_surcharge(" in src
+    assert "net > favourite_surcharge(best.odds)" in src, \
+        "the surcharge is no longer in the gate — the remedy is inert"
+
+
+def test_the_declined_price_bar_is_kept_with_its_reason():
+    """HEAVY_PRICE_EDGE was drafted and then declined on 26 settled bets
+    in its band. Deleting it would erase the question; what it needed and
+    why it could not run is the record."""
+    src = open(os.path.join(ROOT, "engine", "prereg.py"),
+               encoding="utf-8").read()
+    i = src.index("HEAVY_PRICE_EDGE = {")
+    assert "DECLINED" in src[:i], "the decline is not recorded"
+    assert "26 settled bets" in src[:i]
+
+
+def test_neither_price_test_is_registered_without_a_decision():
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    ids = {t["id"] for t in prereg.ensure_registered(path)["tests"]}
+    for t in (prereg.HEAVY_PRICE_EDGE, prereg.LONG_PRICE_MLB):
+        assert t["id"] not in ids, t["id"]
+
+
 def test_the_receptions_remedy_names_a_lever_that_moves():
     """A preregistration whose remedy points at a retired constant fires
     and changes nothing. This one names the 40-point edge component of

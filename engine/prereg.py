@@ -575,6 +575,19 @@ TD_EDGE_NFL_XFP = {
 #: path every market-scoped test filtered its entire population away and
 #: reported "0 of 80" forever. A query shape that two places have to
 #: agree on is a query shape that belongs in one.
+#: DRAFTED AND THEN DECLINED, 2026-09-06, and kept rather than deleted
+#: because what we asked and why we did not run it is the record.
+#:
+#: `stakecheck --prices` came back with 26 settled bets at -250 or
+#: shorter — 2.8% of the whole book. `min_n` 80 in a band that thin is
+#: the TD_EDGE_NFL failure exactly: a test that sits at "0 of 80"
+#: forever while looking perfectly healthy. The counts check was built
+#: to catch this and caught it.
+#:
+#: It is also an answer rather than a dead end. The Edge board barely
+#: bets chalk, so a price bar at -250 was never going to decide much.
+#: The price question that DOES have a sample is LONG_PRICE_MLB below.
+#:
 #: DRAFTED 2026-09-06, NOT YET REGISTERED. `ensure_registered` does not
 #: call this, deliberately — that call is what freezes the terms, and
 #: Ethan reads them first. One line there activates it.
@@ -634,6 +647,69 @@ HEAVY_PRICE_EDGE = {
                 "sample that suggested it, so the bar is borrowed from "
                 "likely.HEAVIEST_PRICE, set on a different board's "
                 "evidence, and the question is asked forward."),
+}
+
+
+#: DRAFTED 2026-09-06, NOT YET REGISTERED — one line in
+#: `ensure_registered` starts it collecting.
+#:
+#: WHERE IT CAME FROM, AND WHY THAT SOURCE IS NOT THE OUTCOME DATA.
+#: `stakecheck --clv` on 303 settled bets with a rebuilt close:
+#:
+#:     price band          bets      mean CLV    SE from 0
+#:     shorter than +100    153        1.17%          5.5
+#:     +100 to +119          74        2.14%          3.9
+#:     +120 to +199          72        3.05%          5.0
+#:
+#: Monotone, and every band decisive. We get better prices the longer
+#: the bet is. CLV is computed from the price we took against the price
+#: at close — it does not look at whether the bet WON — so choosing a
+#: band by CLV and then testing ROI is not the same sample answering
+#: twice. `stakecheck --select` pointed the same way on ROI (the long
+#: arm at -0.9% against the short arm's -9.3%), and that one IS outcome
+#: data on these rows, so it is named as corroboration and not as the
+#: reason.
+#:
+#: THE BOUNDARY IS NOT FITTED. +100 is even money — the point where a
+#: dog becomes a favourite. It is where the CLV table already splits and
+#: it is not a number anybody searched over.
+#:
+#: FRAMED AS THE SHORT BAND LOSING, because `verdict` reports
+#: `supported` when the POPULATION is worse than its reference. The
+#: claim is the same claim either way round; this is the direction the
+#: module's arithmetic reads.
+#:
+#: WHAT IT WOULD CHANGE. `engine.betting.favourite_surcharge` already
+#: sits in the gate — `net > favourite_surcharge(best.odds)` — and
+#: already scales with price. If short prices really do lose more, that
+#: surcharge widens. A live lever the gate reads every time it prices a
+#: card, which is the test A_BAND_NFL failed: its remedy named a
+#: constant that had stopped deciding anything.
+#:
+#: THE HONEST LIMIT. 80 bets convicts a deficit of roughly fifteen
+#: points at the spread these prices carry. It can catch a board being
+#: eaten by the short end. It cannot certify that the short end is fine.
+LONG_PRICE_MLB = {
+    "id": "long-price-mlb-2026-09",
+    "claim": ("MLB bets priced +100 or shorter lose more than bets priced "
+              "longer than +100, at the same stake"),
+    "sport": "mlb",
+    "population": ["A+", "A", "B+"],
+    "compare_to": ["A+", "A", "B+"],
+    "price_band": [implied(100), 1.01],
+    "compare_price_band": [0.0, implied(100)],
+    "metric": "ROI at a flat 1u, split on the price taken",
+    "min_n": 80,
+    "decides": ("the favourite surcharge widens — "
+                "engine.betting.favourite_surcharge, which the gate already "
+                "reads on every card it prices"),
+    "why_now": ("closing-line value rises monotonically with price length "
+                "across three bands at 3.9 to 5.5 standard errors, and CLV "
+                "is measured on prices rather than outcomes, so the band it "
+                "picks can be tested on ROI without asking one sample twice. "
+                "The boundary is even money, not a searched number. 534 of "
+                "931 settled bets sit in the short band, so min_n arrives in "
+                "about nine days rather than never."),
 }
 
 
