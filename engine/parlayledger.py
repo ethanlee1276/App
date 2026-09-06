@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS parlays (
     assumed_dec REAL,
     price_basis TEXT,
     book TEXT,
+    source TEXT DEFAULT 'edge',
     correlation_tax REAL,
     modeled_joint REAL, implied_joint REAL,
     independent_joint REAL,
@@ -112,6 +113,22 @@ def ensure_schema(conn) -> None:
     about parlays and there is no import cycle to unpick later.
     """
     conn.executescript(SCHEMA)
+    # WHICH BOARD THE LEGS CAME FROM, added 2026-09-06 when the screen
+    # learned to run over Most Likely as well as the edge board. `book`
+    # is the SPORTSBOOK and was never this; without a column of its own
+    # the two records would land in one table and every ROI in the
+    # report would answer a question nobody asked — the same failure
+    # `ledger.BOOK` against `category='likely'` exists to prevent on the
+    # singles side.
+    #
+    # DEFAULT 'edge' RATHER THAN NULL: every row written before today
+    # came from the edge board, and calling that unknown would put the
+    # whole existing record into a bucket labelled "we are not sure".
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(parlays)")}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE parlays ADD COLUMN source TEXT "
+                     "DEFAULT 'edge'")
+        conn.execute("UPDATE parlays SET source='edge' WHERE source IS NULL")
     conn.commit()
 
 
@@ -177,8 +194,8 @@ def log_board(conn, board: dict, sport: str | None = None,
         " assumed_dec, price_basis, book, correlation_tax, modeled_joint,"
         " implied_joint, independent_joint, edge_points, threshold_points,"
         " dominance_ratio, singles_alternative_ev, conditional_reasoning,"
-        " clash_screen_result, stake_units, notional_units, status) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'open')",
+        " clash_screen_result, stake_units, notional_units, source, status) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'open')",
         (datetime.datetime.now().isoformat(timespec="seconds"), sport, date,
          key, t.get("parlay_type") or "A", len(legs), t.get("grade") or "short",
          1 if t.get("qualified") else 0, 1 if t.get("slate_play") else 0,
@@ -193,7 +210,12 @@ def log_board(conn, board: dict, sport: str | None = None,
          t.get("edge_at_ceiling_points"), t.get("threshold_points"),
          _dominance(t), t.get("singles_alternative_same_stake"),
          _reasoning(t), t.get("clash_screen"),
-         0.0, NOTIONAL_UNITS))
+         # THE BOARD, READ OFF THE PAYLOAD RATHER THAN PASSED IN. `screen`
+         # stamps `pool` on what it returns, so the journal records which
+         # screen actually produced the ticket instead of trusting a
+         # caller to remember which one it invoked. A payload with no
+         # pool predates the split and is edge by definition.
+         0.0, NOTIONAL_UNITS, board.get("pool") or "edge"))
     pid = cur.lastrowid
     for i, l in enumerate(legs, start=1):
         conn.execute(
@@ -568,11 +590,17 @@ def calibration(conn) -> dict:
 
 
 # --- reporting --------------------------------------------------------------
-def report(conn) -> dict:
-    """The Record page's parlay bucket. Never blended with singles (§13)."""
+def report(conn, source: str = "edge") -> dict:
+    """The Record page's parlay bucket. Never blended with singles (§13),
+    and never blended ACROSS BOARDS either — `source` picks which screen's
+    record is being read. See `ensure_schema` for why the column exists.
+
+    COALESCE'd rather than compared straight, because every row written
+    before the column existed carries NULL and all of them are edge."""
     ensure_schema(conn)
     rows = conn.execute("SELECT * FROM parlays WHERE status IN "
-                        "('won','lost','void') ORDER BY date, id").fetchall()
+                        "('won','lost','void') AND COALESCE(source,'edge')=? "
+                        "ORDER BY date, id", (source,)).fetchall()
     graded = [r for r in rows if r["status"] in ("won", "lost")]
     pnl = [float(r["pnl_units"] or 0.0) for r in graded]
     staked = sum(float(r["notional_units"] or NOTIONAL_UNITS) for r in graded)

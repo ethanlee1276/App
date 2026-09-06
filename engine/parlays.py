@@ -1154,9 +1154,17 @@ def _leg_eligible(sport: str, leg: dict, game: dict | None,
     single. What is added here is the set of bans that apply to a leg
     *because* it is going inside a ticket.
     """
-    if not leg.get("recommended"):
+    basis = leg.get("leg_basis") or "edge"
+    if basis == "edge" and not leg.get("recommended"):
         return ("not a recommended single — §0: a leg that would not be a bet "
                 "on its own is never a bet inside a parlay")
+    if basis == "likely" and not leg.get("model_prob"):
+        # The likelihood board's own bar, named rather than assumed: a row
+        # is on that board because it cleared MIN_PROB, HEAVIEST_PRICE,
+        # the credibility check and a MEASURED ranking. A row without the
+        # number those bars were applied to did not come from there.
+        return ("not a Most Likely row — it carries no board probability, so "
+                "there is no bar it can be said to have cleared")
     tier = leg_tier(leg)
     if not rules.tier3_allowed and tier >= 3:
         return (f"{leg.get('market_label') or leg.get('market')} is a Tier 3 "
@@ -1509,8 +1517,72 @@ def _evaluate(sport: str, legs: list[dict], rules: SportRules,
     return t, ""
 
 
+#: The two pools `screen` will take legs from, and what each one means.
+#:
+#: "edge"   — the board's recommended singles. §0 is satisfied the way the
+#:            doc intends: every leg is a bet we would place on its own.
+#: "likely" — the Most Likely board. Ethan, 2026-09-06, asked for the
+#:            parlay model to run over this board first, "as those hit
+#:            more often and will return more money". The first half is
+#:            measured and true: it hits 62.2% against the edge board's
+#:            48.1%.
+#:
+#: §0 SAYS A LEG THAT WOULD NOT BE A BET ALONE IS NEVER A BET INSIDE A
+#: PARLAY, AND A LIKELY ROW IS NOT A BET. It carries `recommended` False
+#: and a zero stake by construction — `engine.likely` ranks and never
+#: sizes, and `ledger.likely_report` gates money on an ROI test that has
+#: not passed. So this pool does not satisfy §0 and is not pretending to.
+#:
+#: What makes it honest instead is that the OUTPUT is the same kind of
+#: thing as the input. A likely ticket is paper measuring paper: it is
+#: journaled to its own source, never staked, and can only ever graduate
+#: the way the board under it graduates — on its own settled record. The
+#: rule §0 protects is "do not let a parlay launder a leg into a bet",
+#: and nothing here launders anything, because nothing here is staked.
+#:
+#: The two records are kept apart in the journal for the same reason the
+#: singles books are (`ledger.BOOK` against `category='likely'`): a
+#: blended ROI would answer a question nobody asked.
+POOLS = ("edge", "likely")
+
+#: What a likely row calls the number `screen` reads as `hit_prob`.
+LIKELY_PROB_KEY = "model_prob"
+
+
+def likely_pool(slate: dict, sport: str) -> list[dict]:
+    """Most Likely rows in the leg shape the screen already understands.
+
+    A COPY, ALWAYS. These dicts get `recommended` and `hit_prob` written
+    on them so the shared gates read them, and the board's own rows must
+    not acquire either — a likely row that started reporting itself as
+    recommended would be the paywall of every "is this a bet" check in
+    the repo falling over at once.
+
+    `leg_basis` rides along so `_leg_eligible` can say WHICH bar a leg
+    cleared instead of assuming there was only ever one.
+    """
+    out: list[dict] = []
+    for r in (slate.get("most_likely") or []):
+        p = r.get(LIKELY_PROB_KEY)
+        if p is None:
+            continue
+        leg = dict(r)
+        leg["hit_prob"] = float(p)
+        leg["recommended"] = True
+        leg["leg_basis"] = "likely"
+        # A game row on this board carries its matchup rather than a
+        # team/opponent pair, and `game_key` needs the pair to find the
+        # game. `normalize_game_bet` already does that translation for
+        # the edge board's cards, so it is reused rather than restated.
+        if r.get("kind") == "game" or r.get("bet_type"):
+            leg.setdefault("home", r.get("home") or "")
+            leg.setdefault("away", r.get("away") or "")
+        out.append(leg)
+    return out
+
+
 def screen(slate: dict, sport: str, bankroll_state: str = "normal",
-           joints: dict | None = None) -> dict:
+           joints: dict | None = None, pool: str = "edge") -> dict:
     """Screen a built slate for parlays. Returns the Parlay Zone payload.
 
     `bankroll_state` is the drawdown circuit-breaker: §10.2 says parlays go to
@@ -1563,9 +1635,19 @@ def screen(slate: dict, sport: str, bankroll_state: str = "normal",
     # ends on a team total or a side, and CFB has no player props at all —
     # its §6.3 ticket is two sides and a total. Screening one list only left
     # the doc's own permitted constructions unbuildable.
-    recs = [r for r in (slate.get("recommendations") or []) if r.get("recommended")]
-    recs += [normalize_game_bet(b, sport)
-             for b in (slate.get("game_bets") or []) if b.get("recommended")]
+    if pool not in POOLS:
+        raise ValueError(f"unknown pool {pool!r}; expected one of {POOLS}")
+    out["pool"] = pool
+    if pool == "likely":
+        # ONE POOL OR THE OTHER, NEVER BOTH. A ticket with one leg from
+        # each would carry two different bars and one record, and the
+        # record would mean nothing. See POOLS.
+        recs = likely_pool(slate, sport)
+    else:
+        recs = [r for r in (slate.get("recommendations") or [])
+                if r.get("recommended")]
+        recs += [normalize_game_bet(b, sport)
+                 for b in (slate.get("game_bets") or []) if b.get("recommended")]
 
     pool: list[dict] = []
     for r in recs:
