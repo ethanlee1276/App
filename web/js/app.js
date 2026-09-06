@@ -5314,8 +5314,16 @@ function renderRecommended() {
     const real = recs.filter((r) => r.has_market !== false);
     const started = real.filter((r) => r.live
       || (r.warnings || []).some((w) => /already started/i.test(w)));
+    const capped = capWipeoutNote();
     let msg, msgTitle;
-    if (recs.length && !real.length) {
+    if (capped) {
+      /* FIRST, because every other branch below would misread this slate.
+         On a wipeout the picks DID clear the gate and DO carry real
+         prices — they were zeroed one step later — so `real.length` is
+         healthy and the chain would fall through to the sliders. */
+      msgTitle = "The bankroll rule funded nothing tonight";
+      msg = escapeHtml(capped);
+    } else if (recs.length && !real.length) {
       msg = noMarketExplainer();
     } else if (real.length && started.length === real.length) {
       msg = `${real.length} prop(s) carry real prices, but every one is on a
@@ -6247,6 +6255,20 @@ function likelyRefusedNote(census, shown) {
   return `<div class="ls-note" style="opacity:.75">
     <b>${shown} shown, ${total} turned down.</b> ${parts.join(" · ")}. The bar is
     the same for every row and the board would rather be short than lower it.</div>`;
+}
+
+/* THE BANKROLL RULE EMPTIED THE BOARD — not a filter, not a missing feed.
+   `cap_notes` has ridden in the payload since the exposure caps were wired
+   into both football builds, and nothing has ever drawn it. So the one
+   slate where it matters most — every pick scaled under the 0.1u floor and
+   zeroed — rendered as "No props clear your filters. Loosen the sliders",
+   which is advice that cannot work: no slider funds a bet the 15u cap will
+   not pay for. `engine.correlation` names the state; this is the half that
+   shows it to a reader. Same lesson as the census and schedule-only
+   branches below, one layer further out. */
+function capWipeoutNote() {
+  return ((state.data || {}).cap_notes || [])
+    .find((n) => String(n || "").startsWith("NO BETS FUNDED")) || "";
 }
 
 function likelyEmptyWhy(census) {
