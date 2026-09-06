@@ -7782,8 +7782,101 @@ def _lan_ip() -> str | None:
         return None
 
 
+#: Every flag `main` and its helpers understand. Explicit, and checked
+#: against the source by tests/test_known_flags.py so it cannot drift.
+#:
+#: WHY A LIST AND NOT A SCAN. Deriving this at runtime by regexing our
+#: own source looks tidy and is wrong twice: `--since` is consumed inside
+#: a `for flag in (...)` loop that no regex sees, so a scan would refuse
+#: a working command; and a flag named only in a docstring would be
+#: accepted, which is the exact bug this guard exists to catch. The test
+#: reads the source and asserts every flag it CAN see is listed here, so
+#: adding a flag without registering it fails the suite instead of
+#: failing an operator at 1am.
+KNOWN_FLAGS = frozenset({
+    "--alignment", "--apply", "--arsenal", "--auto-update", "--bands",
+    "--bind", "--board-size", "--boards", "--booksharp", "--both-ways",
+    "--card-venue", "--check", "--clean-cache", "--confirm-qb",
+    "--coverage", "--data-audit", "--data-use", "--desk", "--desk-probe",
+    "--doctor", "--epoch", "--gates", "--haircut", "--injuries",
+    "--inspect-pick", "--learning", "--likely", "--matchup", "--memes",
+    "--nfl-baseline", "--nightly", "--odds-audit", "--odds-doctor",
+    "--odds-only", "--onoff", "--out", "--paper", "--parlay-report",
+    "--parlays", "--paywall-audit", "--pbp", "--prefit", "--prereg",
+    "--prescan", "--print-env", "--probe-live", "--probe-weighins",
+    "--promo-new", "--promos", "--promos-setup", "--recreate", "--refit",
+    "--refresh", "--refresh-rosters", "--relearn", "--renders",
+    "--repair-closes", "--repair-journal", "--repair-premature",
+    "--reset-budget", "--resize-unstaked", "--ripple", "--seal",
+    "--settle", "--shape", "--side-bias",
+    # Consumed by `for flag in ("--sport", "--since")` — invisible to any
+    # regex over this file, and the reason this set is written by hand.
+    "--since", "--sport",
+    "--stakes", "--standings", "--starter", "--stripe", "--stripe-setup",
+    "--stripe-webhook", "--stuck", "--title", "--todo", "--unbuilt",
+    "--velo", "--venues", "--void-unplayed", "--weigh-in", "--why-bet",
+    "--why-empty", "--why-live", "--why-many", "--why-open", "--why-pick",
+    "--why-ufc",
+})
+
+
+#: Flags after which the rest of the line belongs to somebody else.
+#: `--renders` hands its whole tail to `rendercheck.main`, which has its
+#: own argparse (`--width`, `--shots`) — so `launch.py --renders --shots
+#: out/` is a working command documented in GUIDE.md, and a guard that
+#: judged every token would have broken it on the day it shipped. Every
+#: OTHER branch that reads trailing arguments filters dash-leading tokens
+#: out first, so it cannot receive a foreign flag and does not belong
+#: here. Add to this only when a branch really forwards argv untouched.
+PASSTHROUGH_FLAGS = frozenset({"--renders"})
+
+
+def unknown_flags(argv: list) -> list:
+    """Flags in `argv` this script does not understand, in order.
+
+    Only long flags in our own shape (`--word-word`) are judged. Values
+    are left alone: a sport, a date or a player name never matches, and
+    guessing at an operator's argument is how a guard starts breaking
+    working commands.
+
+    Judging STOPS at a passthrough flag. What follows one is another
+    program's command line, and refusing it on that program's behalf
+    would be this guard inventing an opinion it has no basis for.
+    """
+    import re as _re
+    seen, out = set(), []
+    for tok in argv:
+        if tok in PASSTHROUGH_FLAGS:
+            break
+        if not _re.fullmatch(r"--[a-z0-9]+(?:-[a-z0-9]+)*", tok):
+            continue
+        if tok not in KNOWN_FLAGS and tok not in seen:
+            seen.add(tok)
+            out.append(tok)
+    return out
+
+
 def main() -> None:
     argv = sys.argv[1:]
+    # AN UNKNOWN FLAG STOPS HERE. Every branch below tests membership in
+    # argv, so a flag nobody recognises matches nothing and falls through
+    # to the bottom of this function — which starts the web server. Ethan typed
+    # `launch.py --resettle` (a command this script's own output told him
+    # to run) and got "Port 8000 is already in use", which is a true
+    # sentence about the wrong question and reads like the box is broken.
+    # Refusing by name, with a suggestion, costs one comparison.
+    if (_bad := unknown_flags(argv)):
+        import difflib
+        print(f"\n  Not a flag I know: {', '.join(_bad)}")
+        for _f in _bad:
+            _near = difflib.get_close_matches(_f, sorted(KNOWN_FLAGS), n=3,
+                                              cutoff=0.6)
+            if _near:
+                print(f"    {_f} → did you mean {', or '.join(_near)}?")
+        print("\n  Nothing ran. `python3 launch.py` with no flags starts "
+              "the site;")
+        print("  `--check` runs preflight.\n")
+        return
     if "--reset-budget" in argv:
         from engine.oddsbudget import reset, summary
         reset()
@@ -8919,8 +9012,26 @@ def _parlay_report_cli() -> None:
                   "when the code")
             print("    fired on any split ticket that priced rho + — which "
                   "on two legs is")
-            print("    just 'one leg missed' under a second name. "
-                  "`--resettle` clears them.")
+            print("    just 'one leg missed' under a second name.")
+            # NO COMMAND IS OFFERED HERE, and that is the honest answer.
+            # This line used to prescribe a re-settle flag. It was wrong
+            # twice over: no such flag existed (typing it fell through to
+            # the server launcher, which answered with a port warning),
+            # and the pass that DOES run under `--settle` would not have
+            # cleared these rows either.
+            # `parlayledger.resettle` skips any ticket whose leg verdicts
+            # have not moved, and `_loss_codes` runs only from
+            # `_grade_ticket`, so a settled ticket is never re-coded.
+            # These rows are stale because the CODE changed, not because
+            # a leg did — and nothing in the module re-codes settled
+            # history. Rather than name a third command that also would
+            # not work, this says what the rows are and stops.
+            print("    They are historical labels, not live verdicts: "
+                  "nothing re-codes a")
+            print("    settled ticket, so they stay until someone "
+                  "decides they should be")
+            print("    rewritten — which is a change to settled history "
+                  "and wants its own call.")
 
     for label, key in (("By sport", "by_sport"), ("By type", "by_type"),
                        ("By grade", "by_grade")):
