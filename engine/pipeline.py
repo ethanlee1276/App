@@ -7,6 +7,7 @@ serialised to JSON for the web UI or an API response.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .data_loader import load_slate, Slate
@@ -456,6 +457,66 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
         return []
 
 
+#: What the Best Bets board sorts its third term on.
+#:
+#: "prob" — the model's own probability that the pick lands.
+#: "edge"  — claimed probability minus the market's fair price.
+#:
+#: WHY THIS MOVED, and what the measurement actually said. `stakecheck
+#: --info` put the claimed edge's AUC at 0.471 over 931 settled bets:
+#: BELOW a coin flip. The model's probability scored 0.589 and the
+#: market's implied probability scored 0.589 — identical to three
+#: decimals. So the board's third sort term was the one number in the row
+#: carrying no information about what wins.
+#:
+#: AND THE HONEST CAVEAT, because ordering by probability is not the
+#: upgrade it sounds like. `stakecheck --select` measured the same pool
+#: under all three orderings and found prob and market agree on 94% of
+#: the top quarter. Sorting by probability IS very nearly sorting by
+#: price: it shortens the average price rather than adding information,
+#: and the P&L consequence follows from that alone. Ethan chose it with
+#: that stated (2026-09-06), and it is switchable so the claim can be
+#: re-measured rather than argued about.
+BOARD_ORDER = os.environ.get("QB_BOARD_ORDER", "prob").strip().lower()
+
+
+def order_key(r: dict, order: str | None = None) -> tuple:
+    """The board's sort key for one row, highest first.
+
+    ONE FUNCTION, FOUR CALLERS — both pipelines, props and game bets —
+    because this tuple was hand-copied into four files and changing the
+    third term in three of them is how the NFL board and the MLB board
+    quietly start disagreeing about what "best" means.
+
+    PROPS AND GAME BETS DO NOT SHARE A PROBABILITY FIELD. A prop card
+    carries `hit_prob`; a moneyline, spread or total carries `win_prob`
+    (engine/gamebets.py). A sort reading only `hit_prob` would hand every
+    game bet a 0.0 and sink the entire Game Lines section to the bottom
+    of the board — not an error anyone would see, just the picks quietly
+    reordered wrongly. Both keys are read here for that reason.
+
+    `confidence` stays ahead of the ranking term (Ethan's call): only the
+    third element moves, so the coarse tiering is untouched and any
+    change in the board is attributable to the key rather than to two
+    things at once.
+    """
+    # `order` is a PARAMETER and not just the module constant so that the
+    # other arm is reachable without reloading this module. It is not a
+    # convenience: reloading `engine.pipeline` rebinds `order_key` to a new
+    # function object while `engine.mlb.pipeline` keeps the old one, which
+    # silently breaks the guarantee that both boards sort by one rule —
+    # and a test written the reload way created exactly that.
+    if order is None:
+        order = BOARD_ORDER
+    prob = r.get("hit_prob")
+    if prob is None:
+        prob = r.get("win_prob")
+    third = float(prob or 0.0) if order == "prob" else float(
+        r.get("edge") or 0.0)
+    return (bool(r.get("recommended")), float(r.get("confidence") or 0.0),
+            third)
+
+
 def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     started = game_has_started(g)
     # No Leans (docs §10): a lean is a bet that failed the filter published
@@ -639,7 +700,7 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 spread = price_spread("nfl", g.home, g.away, margin, g.spread,
                                       g.spread_home_odds, g.spread_away_odds, sctx)
                 out.append(_finish_bet(spread, g, config))
-    out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    out.sort(key=order_key, reverse=True)
     return out
 
 
@@ -762,7 +823,7 @@ def price_props(slate: Slate, config: RuleConfig | None = None,
         results.append(d)
 
     # Rank: recommended bets first, then by confidence, then by edge.
-    results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    results.sort(key=order_key, reverse=True)
     return results
 
 

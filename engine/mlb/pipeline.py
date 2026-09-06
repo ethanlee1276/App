@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..pipeline import order_key as _order_key
 from ..rules import RuleConfig, game_has_started
 from ..models import live_to_dict
 from .. import stagetime as _st
@@ -276,7 +277,7 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                     spread = price_spread("mlb", g.home, g.away, margin, g.spread,
                                           g.spread_home_odds, g.spread_away_odds, sctx)
                     out.append(_info_only(_finish_bet(spread, g, config), _NO_ANCHOR))
-    out.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]), reverse=True)
+    out.sort(key=_order_key, reverse=True)
     return out
 
 
@@ -912,8 +913,7 @@ def run_mlb_slate(slate: MLBSlate | str | Path,
         results.append(d)
     _st.stop(_evaluate)
 
-    results.sort(key=lambda r: (r["recommended"], r["confidence"], r["edge"]),
-                 reverse=True)
+    results.sort(key=_order_key, reverse=True)
 
     with _stage("game bets"):
         game_bets = _game_bets(slate.games, config)
