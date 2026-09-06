@@ -32602,11 +32602,23 @@ function pbpSituationHTML(d, league, faces) {
   const count = (lv.balls != null && lv.strikes != null) ? `${lv.balls}-${lv.strikes}` : "";
   const outs = lv.outs != null ? `${lv.outs} out${lv.outs === 1 ? "" : "s"}` : "";
   const half = cur.half === "T" ? "Top" : cur.half === "B" ? "Bottom" : "";
+  // THE TEAM BADGES (Ethan's render, 2026-09-06): his AT BAT / PITCHING
+  // panels carry the club's mark, which is the fastest way to read who is
+  // hitting on a page where the two names are strangers to most readers.
+  // Derived, never guessed — the batting side is whichever half it is,
+  // and the pitching side is the other one. With no half known, neither
+  // badge draws rather than picking one at random.
+  const batTeam = cur.half === "T" ? d.away : cur.half === "B" ? d.home : "";
+  const pitTeam = cur.half === "T" ? d.home : cur.half === "B" ? d.away : "";
+  const badge = (abbr) => abbr
+    ? `<span class="pbp-sit-badge">${teamMarkIn(league, abbr, 22)}</span>` : "";
   return `
     <div class="pbp-sit">
       <div class="pbp-sit-side">
+        ${badge(batTeam)}
         ${pbpFaceHTML(cur.batter, faces)}
-        <div><div class="k">AT BAT</div><b>${escapeHtml(cur.batter || "—")}</b>
+        <div><div class="k">AT BAT${batTeam ? ` · ${escapeHtml(batTeam)}` : ""}</div>
+          <b>${escapeHtml(cur.batter || "—")}</b>
           <div class="mini">${cur.pitches != null && cur.batter ? `${cur.pitches} pitch${cur.pitches === 1 ? "" : "es"} this at-bat` : ""}</div></div>
       </div>
       <div class="pbp-sit-mid">
@@ -32615,8 +32627,10 @@ function pbpSituationHTML(d, league, faces) {
         <div class="mini">${escapeHtml([half && cur.inning ? `${half} ${pbpOrd(cur.inning)}` : "", outs].filter(Boolean).join(" · "))}</div>
       </div>
       <div class="pbp-sit-side pbp-sit-right">
-        <div><div class="k">PITCHING</div><b>${escapeHtml(cur.pitcher || "—")}</b></div>
+        <div><div class="k">PITCHING${pitTeam ? ` · ${escapeHtml(pitTeam)}` : ""}</div>
+          <b>${escapeHtml(cur.pitcher || "—")}</b></div>
         ${pbpFaceHTML(cur.pitcher, faces)}
+        ${badge(pitTeam)}
       </div>
     </div>`;
 }

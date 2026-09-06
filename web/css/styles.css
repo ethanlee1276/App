@@ -9264,7 +9264,18 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto 1fr; }
   .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
   .pbp-hero-score { font-size: 1.6rem; } }
-.pbp-parkcard { padding: 0; overflow: hidden; }
+/* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
+   ringed in the gold the rest of the site already uses, which is what
+   makes the photograph read as OURS rather than as a stock picture
+   someone dropped in. `--brand` is that gold, so this follows the theme
+   rather than inventing a second one — it re-tints itself in light mode
+   with everything else. A hairline, not a frame: the picture is the
+   subject and a thick border would compete with it. */
+.pbp-parkcard { padding: 0; overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--border)); }
+.pbp-parkcard .pbp-parkhead { border-bottom-color:
+  color-mix(in srgb, var(--brand) 22%, var(--border)); }
+.pbp-parkhead-t b { color: var(--brand); }
 .pbp-park { position: relative; width: 100%; aspect-ratio: 240 / 150; background: #05060F; }
 .pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* THE PARK PHOTOGRAPH (Ethan, 2026-09-06: use this render for all live
@@ -9323,6 +9334,9 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-sit { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
   padding: 12px 14px; border-top: var(--hairline) solid var(--border); }
 .pbp-sit-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* The club badge beside the batter and the pitcher (Ethan's render). */
+.pbp-sit-badge { display: inline-flex; flex: 0 0 auto; align-items: center; }
+.pbp-sit-badge img, .pbp-sit-badge svg { display: block; }
 .pbp-sit-right { justify-content: flex-end; text-align: right; }
 .pbp-sit .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
 .pbp-sit-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
