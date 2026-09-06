@@ -223,6 +223,112 @@ def test_adding_the_market_field_did_not_void_the_older_tests():
         assert v["status"] != "void", v
 
 
+def _priced(n_pop, pop_wins, n_ref, ref_wins, short=-400, long_=+150,
+            date="2026-09-20"):
+    """A pool split purely by PRICE — same grade on both sides, so only
+    the band can be separating them."""
+    out = [{"date": date, "sport": "mlb", "grade": "A", "odds": short,
+            "status": "won" if i < pop_wins else "lost"} for i in range(n_pop)]
+    out += [{"date": date, "sport": "mlb", "grade": "A", "odds": long_,
+             "status": "won" if i < ref_wins else "lost"} for i in range(n_ref)]
+    return out
+
+
+def _price_test(**kw):
+    t = dict(prereg.HEAVY_PRICE_EDGE, registered="2026-09-06",
+             z_threshold=1.96)
+    t.update(kw)
+    t["hash"] = prereg._terms_hash(t)
+    return t
+
+
+def test_the_band_is_written_in_probability_because_odds_are_not_monotone():
+    """-163 is a SHORTER price than +122 and a smaller number. A band
+    written in American odds means something different on either side of
+    the jump at even money; written in implied probability it is
+    monotone everywhere."""
+    assert prereg.implied(-163) > prereg.implied(122)
+    assert prereg.implied(-1200) > prereg.implied(-250) > prereg.implied(-110)
+    assert prereg.implied(-110) > prereg.implied(100) > prereg.implied(500)
+
+
+def test_the_bar_includes_the_price_it_is_named_after():
+    """"-250 or shorter" has to contain -250. Its true implied is
+    0.714285…, so a bound somebody rounded to 0.7143 starts the band at
+    -251 and the test quietly asks a different question."""
+    band = prereg.HEAVY_PRICE_EDGE["price_band"]
+    assert prereg._in_band({"odds": -250}, band), band
+    assert prereg._in_band({"odds": -251}, band)
+    assert not prereg._in_band({"odds": -249}, band)
+    # And the two bands partition: no bet counts twice, none falls out.
+    other = prereg.HEAVY_PRICE_EDGE["compare_price_band"]
+    for odds in (-5000, -400, -250, -249, -110, 100, 250, 900):
+        inb = [prereg._in_band({"odds": odds}, b) for b in (band, other)]
+        assert sum(inb) == 1, (odds, inb)
+
+
+def test_a_price_split_puts_each_side_in_its_own_band():
+    rows = _priced(120, 40, 120, 60)
+    v = prereg.verdict(_price_test(), rows)
+    assert v["n"] == 120 and v["n_reference"] == 120, v
+    # The short side lost badly at -400; the long side won at +150.
+    assert v["status"] == "decided" and v["supported"] is True, v
+
+
+def test_a_bet_outside_both_bands_is_counted_by_neither():
+    """The population filter has to REMOVE, not merely reorder. A band
+    that admitted everything would make the test a comparison of the
+    board against itself and it would never fire."""
+    rows = _priced(90, 30, 90, 45)
+    rows += [{"date": "2026-09-20", "sport": "mlb", "grade": "A",
+              "odds": -110, "status": "won"} for _ in range(50)]
+    v = prereg.verdict(_price_test(min_n=10), rows)
+    assert v["n"] == 90, v            # the -110s are not short-priced
+    assert v["n_reference"] == 140, v  # they ARE on the long side
+
+
+def test_the_price_fields_did_not_void_any_older_test():
+    """Same rule the market filter was added under. A voided
+    preregistration reports nothing, so a new optional field that
+    changed old fingerprints would silently throw the standing tests
+    away."""
+    for test in (prereg.B_MINUS, prereg.A_BAND_NFL, prereg.RECEPTIONS_A_NFL,
+                 prereg.TD_EDGE_NFL):
+        assert "price_band" not in test
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    for v in prereg.report([], path):
+        assert v["status"] != "void", v
+
+
+def test_the_price_band_is_part_of_what_is_frozen():
+    """If the band were outside the fingerprint, the one number that
+    decides which bets the test reads could be moved after seeing them —
+    the exact move this module exists to make visible."""
+    base = _price_test()
+    moved = dict(base, price_band=[prereg.implied(-150), 1.01])
+    assert prereg._terms_hash(moved) != base["hash"]
+    assert prereg.verdict(moved, _priced(120, 40, 120, 60))["status"] == "void"
+
+
+def test_the_drafted_price_test_is_not_registered_until_someone_says_so():
+    """Ethan reads the terms before they are frozen. `ensure_registered`
+    is the call that freezes them, so it must not carry this one yet."""
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    ids = {t["id"] for t in prereg.ensure_registered(path)["tests"]}
+    assert prereg.HEAVY_PRICE_EDGE["id"] not in ids, ids
+
+
+def test_the_drafted_terms_borrow_their_bar_instead_of_fitting_it():
+    """The whole point. A threshold read off the table that suggested
+    the idea is fitted to it; -250 is `likely.HEAVIEST_PRICE`, set on the
+    Most Likely board's evidence on 2026-09-01."""
+    from engine.likely import HEAVIEST_PRICE
+    assert prereg.HEAVY_PRICE_EDGE["price_band"][0] == \
+        prereg.implied(HEAVIEST_PRICE)
+    assert "HEAVIEST_PRICE" in prereg.HEAVY_PRICE_EDGE["decides"]
+    assert "fit the test to the" in prereg.HEAVY_PRICE_EDGE["why_now"]
+
+
 def test_the_receptions_remedy_names_a_lever_that_moves():
     """A preregistration whose remedy points at a retired constant fires
     and changes nothing. This one names the 40-point edge component of

@@ -371,6 +371,52 @@ def info_report(rows: list[dict]) -> None:
     print(f"\n  read-only; nothing was written.\n")
 
 
+def price_report(rows: list[dict]) -> None:
+    """HOW MANY BETS SIT AT EACH PRICE — counts only, no outcomes.
+
+    This exists to size a preregistration, and it deliberately shows no
+    ROI. A test registered against a band the book never bets sits at
+    "0 of 80" forever while looking perfectly healthy — `engine.prereg`
+    records that near-miss on TD_EDGE_NFL and calls it "the bug this
+    codebase finds in itself more than any other". Checking a band is
+    reachable is the cheap way not to repeat it.
+
+    NO OUTCOME COLUMN, AND THAT IS THE POINT. Choosing a threshold after
+    seeing which band happened to lose is fitting the test to the sample
+    that suggested it, which is precisely what preregistration is for.
+    Counts carry no outcome information, so sizing on them cannot bias
+    what the test later finds.
+    """
+    from engine.prereg import implied
+    print(f"\n{'='*70}\n  WHERE THE SETTLED BOOK'S PRICES ACTUALLY SIT"
+          f"\n{'='*70}")
+    use = [r for r in rows if r["status"] in ("won", "lost")
+           and r.get("odds") is not None]
+    if not use:
+        print("  No settled bets carry a price.\n")
+        return
+    bands = [("-250 or shorter", implied(-250), 1.01),
+             ("-249 to -150", implied(-150), implied(-250)),
+             ("-149 to +100", implied(100), implied(-150)),
+             ("+101 to +300", implied(300), implied(100)),
+             ("longer than +300", 0.0, implied(300))]
+    print(f"  {len(use)} settled bets with a price. Counts only — no "
+          f"outcomes are shown\n  here, on purpose: a band chosen because "
+          f"it looked bad is a band fitted\n  to the sample that suggested "
+          f"it.\n")
+    print(f"    {'band':<20}{'bets':>6}{'share':>9}   by sport")
+    for label, lo, hi in bands:
+        inb = [r for r in use if lo <= implied(int(r["odds"])) < hi]
+        by: dict = {}
+        for r in inb:
+            by[r.get("sport") or "?"] = by.get(r.get("sport") or "?", 0) + 1
+        spread = ", ".join(f"{k} {v}" for k, v in
+                           sorted(by.items(), key=lambda kv: -kv[1])) or "—"
+        print(f"    {label:<20}{len(inb):>6}{len(inb)/len(use):>8.1%}   "
+              f"{spread}")
+    print(f"\n  read-only; nothing was written.\n")
+
+
 def select_report(rows: list[dict], top_share: float = None,
                   stakes: str = "flat") -> None:
     """WHICH ORDERING OF THE SAME POOL SHOULD GET THE MONEY?
@@ -1441,6 +1487,10 @@ def main() -> None:
     ap.add_argument("--info", action="store_true",
                     help="does our number know anything the price does not? "
                          "Ranks bets by model, by market, and by claimed edge")
+    ap.add_argument("--prices", action="store_true",
+                    help="how many settled bets sit in each price band. "
+                         "Counts only, no outcomes — for sizing a "
+                         "preregistration without fitting it to the sample")
     ap.add_argument("--select", action="store_true",
                     help="which ORDERING of the same pool should get the "
                          "money? Scores edge-ranking against "
@@ -1470,6 +1520,9 @@ def main() -> None:
     rows = _rows(args.db, args.sport, args.since,
                  category="paper" if args.paper else None,
                  measurement=args.include_measurement)
+    if args.prices:
+        price_report(rows)
+        return
     if args.select:
         select_report(rows, top_share=args.top_share,
                       stakes="as_placed" if args.as_placed else "flat")

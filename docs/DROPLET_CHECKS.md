@@ -904,3 +904,46 @@ on its own for opening the gate wider.
 Send me all three outputs. The `--sport mlb` cut matters because 858 of
 the 931 are baseball and the NFL has *zero* settled bets: whatever this
 says, it is a baseball verdict, and football goes into Week 1 unmeasured.
+
+## 16. Sizing the price test before it is registered
+
+The §15 run came back against the rebuild. Backed out of its own table,
+the three orderings were not three ideas — they were three prices:
+
+    ordering   avg winner pays   hit     ROI
+    edge            +122        44.6%   -0.9%
+    prob            -163        56.2%   -9.3%
+    market          -166        54.1%  -13.4%
+    the lot         -102        48.1%   -4.5%
+
+The short-price arms lost most. That observation cannot convict anything,
+because it is the same 931 rows that produced it — so the question is
+asked forward, through `engine/prereg.py`, and the bar is BORROWED rather
+than fitted: -250, which is `likely.HEAVIEST_PRICE`, chosen on the Most
+Likely board's own evidence on 2026-09-01.
+
+`HEAVY_PRICE_EDGE` is drafted in `engine/prereg.py` and **is not
+registered** — `ensure_registered` does not call it. One line there
+activates it, and that line is not written until the band is known to be
+reachable. A preregistration against a band the book never bets sits at
+"0 of 80" forever while looking perfectly healthy; prereg.py records that
+near-miss on `TD_EDGE_NFL` and calls it "the bug this codebase finds in
+itself more than any other".
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 stakecheck.py --prices
+sudo -u qellys python3 stakecheck.py --prices --sport mlb
+```
+
+* It prints COUNTS ONLY, per band and per sport. No ROI column, on
+  purpose: choosing a threshold after seeing which band happened to lose
+  is fitting the test to the sample that suggested it. Counts carry no
+  outcome information, so sizing on them cannot bias what the test finds.
+* What matters is the first row, `-250 or shorter`. If the settled book
+  has a healthy number there, `min_n: 80` is reachable and the test can
+  be registered. If it is a handful, the Edge board is not betting chalk
+  and the whole question is moot — which is also a real answer, arrived
+  at without spending a preregistration on it.
+* Send me the two outputs. Registering is one line and I will not write
+  it until the counts say the test can finish.
