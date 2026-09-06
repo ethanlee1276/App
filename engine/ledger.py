@@ -1903,6 +1903,68 @@ def _hist_where(b) -> tuple[str, list]:
     return "sport=? AND period=?", [b["sport"], b["date"]]
 
 
+def close_dates(hist_conn, b, team: str | None = None) -> list:
+    """The calendar date(s) a closing price for this bet could be filed under.
+
+    ONE PREDICATE, TWO READERS — `settle_from_history` and
+    `repair_closing_odds` — for the same reason `_hist_where` is one
+    function: they must agree, or a bet gets a close on one pass and loses
+    it on the next.
+
+    THE BUG THIS EXISTS FOR, measured 2026-09-06 with three days to the
+    first Week 1 kickoff. Both closing-line indexes are keyed by CALENDAR
+    date: `closing_odds_by_date` files a harvested price under
+    `taken_at[:10]`, and `closing_lines_by_date` files a free snapshot
+    under the day its timestamp falls in. Both lookups then indexed with
+    `bet["date"]` — which for the daily sports IS a calendar date, and for
+    the NFL is a week label like "2026-W01". Those can never match, so no
+    NFL bet could ever be given a closing line, and the failure reads as
+    the ordinary "no close harvested yet" rather than as a defect.
+
+    It mattered more than it looks: CLV is the one edge this book has
+    actually measured (+2.05% ± 0.27%, t = +7.5, over 931 bets), and the
+    football half of that would have been silently absent all season.
+
+    `games.date` is the bridge, and passing a TEAM narrows it to one
+    fixture. Without a team the whole week is returned, latest first: a
+    close is the last price before kickoff, so when several days in a week
+    carry a snapshot for a player, the later one is the better answer.
+    """
+    date = str(b["date"] or "")
+    m = _NFL_WEEK_DATE.match(date)
+    if not m:
+        # Daily sports: the slate label already IS the calendar date, and
+        # this must stay a pure pass-through — every non-football bet in
+        # the journal grades through here.
+        return [date]
+    q = ("SELECT DISTINCT date FROM games WHERE sport=? AND season=? "
+         "AND period=? AND date IS NOT NULL")
+    args = [b["sport"], int(m.group(1)), f"{int(m.group(2)):03d}"]
+    if team:
+        q += " AND (home=? OR away=?)"
+        args += [team, team]
+    try:
+        return [r[0] for r in hist_conn.execute(q + " ORDER BY date DESC",
+                                                args)]
+    except Exception:                                      # noqa: BLE001
+        # An unreadable or pre-migration history DB means no bridge, which
+        # is the state this code was already in. Never block settling.
+        return []
+
+
+def close_at(index: dict, player: str, dates: list):
+    """First close found for `player` across `dates`, or None.
+
+    The list is ordered by `close_dates`; taking the first hit rather than
+    the last keeps that ordering meaningful.
+    """
+    for d in dates:
+        hit = index.get((player, d))
+        if hit is not None:
+            return hit
+    return None
+
+
 #: A bet older than this whose game is long finished is not "waiting" —
 #: something is stopping it, and the difference matters because one of them
 #: needs patience and the other needs a fix.
@@ -2698,15 +2760,22 @@ def settle_from_history(conn, hist_conn, sport: str | None = None) -> int:
         ck = (b["sport"], b["market"])
         if ck not in closes_cache:
             closes_cache[ck] = hist_db.closing_odds_by_date(hist_conn, *ck)
-        close = closes_cache[ck].get((normalize_name(b["player"]), b["date"]))
+        # `row` is this player's stat line, so its team names the fixture
+        # and narrows an NFL week to the one day he played.
+        _team = row["team"] if "team" in row.keys() else None
+        _dates = close_dates(hist_conn, b, _team)
+        close = close_at(closes_cache[ck], normalize_name(b["player"]), _dates)
         close_line = float(close["line"]) if close else None
         if close_line is None:
             # No harvested close for this date — fall back to our own
             # recorded snapshots, so CLV accrues without spending credits.
             if "_snapshots" not in closes_cache:
                 closes_cache["_snapshots"] = _snapshot_closes()
-            close_line = closes_cache["_snapshots"].get(
-                (normalize_name(b["player"]), b["market"], b["date"]))
+            _snap = closes_cache["_snapshots"]
+            _who = normalize_name(b["player"])
+            close_line = next(
+                (v for v in (_snap.get((_who, b["market"], _d))
+                             for _d in _dates) if v is not None), None)
         # The closing PRICE, which is the only thing that moves on a
         # fixed-line market.
         #
@@ -3099,15 +3168,17 @@ def repair_closing_odds(conn, apply: bool = False, hist_conn=None) -> dict:
     over_sample: list = []  # OVERWRITTEN: had a value, gets another
     clear_sample: list = [] # cleared: had a value, loses it
     for b in rows:
+        _dates = close_dates(hist_conn, b)
         want = _close_odds_from(
-            harvested.get((b["sport"], b["market"]), {}).get(
-                (normalize_name(b["player"]), b["date"])),
+            close_at(harvested.get((b["sport"], b["market"]), {}),
+                     normalize_name(b["player"]), _dates),
             b["line"], b["side"])
         if want is None:
-            sides = snaps.get(
-                (normalize_name(b["player"]), b["market"], b["date"],
-                 round(float(b["line"]), 1) if b["line"] is not None else None)
-            ) or {}
+            _ln = round(float(b["line"]), 1) if b["line"] is not None else None
+            _who = normalize_name(b["player"])
+            sides = next(
+                (v for v in (snaps.get((_who, b["market"], _d, _ln))
+                             for _d in _dates) if v is not None), None) or {}
             want = sides.get(
                 "under" if (b["side"] or "OVER").upper() == "UNDER" else "over")
             if want is not None and abs(float(want)) < 100:
