@@ -793,6 +793,36 @@ def main() -> None:
     except Exception as exc:                                  # noqa: BLE001
         print(f"  ⚠️  team logs skipped: {exc}")
 
+    # §9/§10 — correlation flags and the bankroll caps, in the same place
+    # and the same order baseball runs them: after ranking, before counts
+    # and journaling, so a capped stake is what the page and the ledger
+    # both see.
+    #
+    # THIS IS THE SPORT THE MODULE WAS WRITTEN FOR. engine/correlation.py
+    # calls itself §9 of docs/NFL_MODEL.md and its flags are football
+    # relationships — a quarterback's over and his receiver's over are one
+    # passing game wearing two jerseys. Baseball was its only caller.
+    # Football, which plays a whole week at once, never ran it: Ethan,
+    # 2026-09-06, "we have like 106 open edge bets for NFL", each sized a
+    # full unit, against a rule that says 5u per game and 15u per slate.
+    # A hundred and six units is the bankroll, on one weekend.
+    #
+    # The cap scales uniformly rather than dropping the weakest, and that
+    # choice is measured, not aesthetic: on 888 settled bets a ranked trim
+    # kept the losers, and the grade it would have sorted on is inverted
+    # (A+ −18.3% against A's −7.9%). See `correlation._uniform_factor`.
+    try:
+        from engine.correlation import flag_correlations, apply_exposure_caps
+        result["correlations"] = flag_correlations(result["recommendations"])
+        notes = apply_exposure_caps(result["recommendations"],
+                                    result.get("game_bets") or [])
+        if notes:
+            result.setdefault("cap_notes", []).extend(notes)
+            for _n in notes:
+                print(f"  {_n}")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  exposure caps skipped: {exc}")
+
     # §10 drawdown circuit-breaker: after a 10u peak-to-trough drawdown on
     # the settled journal, every stake is halved until the peak is recovered.
     # Applied before journaling so the ledger records what we'd actually bet.

@@ -1737,6 +1737,21 @@ def main() -> None:
     except Exception:                                        # noqa: BLE001
         pass
 
+    # §9/§10 — the same correlation flags and bankroll caps the NFL build
+    # runs, for the same reason: college plays its whole slate on one
+    # Saturday, so an uncapped board asks for the bankroll in a day. Runs
+    # before the journal so a capped stake is what gets recorded.
+    try:
+        from engine.correlation import flag_correlations, apply_exposure_caps
+        out["correlations"] = flag_correlations(out.get("recommendations") or [])
+        _cap_notes = apply_exposure_caps(out.get("recommendations") or [], bets)
+        if _cap_notes:
+            out.setdefault("cap_notes", []).extend(_cap_notes)
+            for _n in _cap_notes:
+                print(f"  {_n}")
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"  ⚠️  exposure caps skipped: {exc}")
+
     try:
         from engine import ledger
         lconn = ledger.connect()
