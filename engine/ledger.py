@@ -3315,8 +3315,13 @@ def performance(conn, sport: str | None = None,
     #                 A plain mean of American ints is arithmetic on two
     #                 different scales (+150 and −110 do not average to
     #                 +20 of anything); probabilities average cleanly.
-    #   returned_u  — gross units back on wins and pushes (stake + pnl),
-    #                 the "total won" a book's cashier would report.
+    #   returned_u  — gross units back on wins (stake + pnl), the "total
+    #                 won" a book's cashier would report. Wins only, to
+    #                 match `units_staked` (stake at risk, pushes
+    #                 excluded): with pushes counted here and not there,
+    #                 the page's ledger line read "176.3u staked · 249.3u
+    #                 returned · net +60.29u", which does not add up.
+    #                 Now returned = staked + net, always.
     #   best_streak — longest run of consecutive wins in slate order.
     probs = [p for p in (implied_breakeven(b["odds"]) for b in bets
                          if b["odds"] is not None) if p]
@@ -3326,7 +3331,7 @@ def performance(conn, sport: str | None = None,
         avg_price = int(round(-100 * p / (1 - p))) if p >= 0.5 \
             else int(round(100 * (1 - p) / p))
     returned_u = sum((b["stake_units"] or 0) + (b["pnl_units"] or 0)
-                     for b in bets if b["status"] in ("won", "push"))
+                     for b in bets if b["status"] == "won")
     best_streak = run = 0
     for b in sorted(bets, key=lambda b: (b["date"] or "", b["id"])):
         if b["status"] == "won":
@@ -3586,11 +3591,16 @@ def pnl_curve(conn, sport: str | None = None,
     be = ("CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
           "ELSE -odds / (-odds + 100.0) END")
     graded = "status != 'push' AND odds IS NOT NULL AND odds != 0"
+    # `staked` is stake AT RISK — pushes excluded — so the ROI the curve's
+    # footer derives from it (net ÷ staked over the window) is the same
+    # ROI the verdict prints from performance(). It was not: this summed
+    # every stake, the verdict skipped the pushes, and the page carried
+    # both numbers for one book.
     q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
-         "SUM(stake_units) AS staked, "
+         "SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END) AS staked, "
          "SUM(COALESCE(pnl_dollars, 0)) AS day_d, "
-         "SUM(COALESCE(stake_dollars, 0)) AS staked_d, "
+         "SUM(CASE WHEN status='push' THEN 0 ELSE COALESCE(stake_dollars, 0) END) AS staked_d, "
          f"SUM(CASE WHEN {graded} THEN {be} ELSE 0 END) AS be_sum, "
          f"SUM(CASE WHEN {graded} THEN 1 ELSE 0 END) AS be_n "
          "FROM bets "
@@ -5263,8 +5273,13 @@ def book_records(conn, since: str | None = None) -> dict:
             "SELECT sport, category, market, COUNT(*) n, "
             "SUM(status='won') w, SUM(status='lost') l, "
             "SUM(status='push') p, COALESCE(SUM(pnl_units),0) u, "
-            "COALESCE(SUM(stake_units),0) s FROM bets "
-            "WHERE status IN ('won','lost','push')" + win
+            # STAKE AT RISK, the same denominator performance() uses: a
+            # pushed bet handed its stake back and risked nothing, so it
+            # is not in the ROI's denominator. Counting it here put two
+            # ROIs for ONE book on one screen — +34.2% on the verdict and
+            # +31.9% on the "Edge bets" header under it (2026-09-06).
+            "COALESCE(SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END),0) s "
+            "FROM bets WHERE status IN ('won','lost','push')" + win
             + " GROUP BY sport, category, market", args):
         sec = cat_to_sec.get(r["category"])
         if not sec or not r["sport"]:
