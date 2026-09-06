@@ -82,6 +82,11 @@ CFB_MIN_PLAYER_ROWS = 5_000
 #: observations before it will adopt anything at all.
 CFB_MIN_CLOSES = 1_000
 
+#: How stale a cached copy of the season being PLAYED may be before the
+#: nightly re-reads it. The mirror publishes a finished week within a day
+#: or so; the default seven-day TTL is for seasons that are over.
+CFB_RESULTS_TTL = 6 * 3600
+
 BACKUP_DIR = ROOT / "data" / "backups"
 BACKUP_EVERY_DAYS = 7
 BACKUP_KEEP = 6
@@ -1081,12 +1086,44 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             have = _cconn.execute(
                 "SELECT COUNT(*) FROM games WHERE sport='cfb' "
                 "AND home_score IS NOT NULL").fetchone()[0]
-            if have < _CFB_MIN:
-                seasons = [today.year - n for n in (4, 3, 2, 1)]
-                res = ingest_cfb_history(_cconn, seasons, quiet=True)
+            # AND THE SEASON BEING PLAYED, EVERY NIGHT. The guard above
+            # was the whole condition until 2026-09-06: once the backfill
+            # had landed its four seasons, `have` sat far above the bar
+            # and this block never ran again — so no 2026 college result
+            # ever reached the games table. Nothing else writes one.
+            #
+            # What that cost, exactly (measured in tests/test_cfb_settles.py):
+            # `settle_from_history` grades a game bet — moneyline, spread,
+            # total, team total — only from a `games` row on the bet's own
+            # date. With none, every college game bet stayed OPEN for ever,
+            # while the props settled on the Monday player-log refresh. So
+            # the record page showed a college book that had recommended
+            # dozens of bets and settled a handful. Ethan, 2026-09-06:
+            # "CFB doesn't seem to have settled its bets."
+            #
+            # Its two siblings below — the closes and the player logs —
+            # already had an in-season refresh; the results, which are what
+            # actually settle money, were the one that did not. Daily
+            # rather than their Monday, because a Saturday bet should
+            # settle on Sunday, and cheap: one cached CSV off the same
+            # mirror. `parse_schedule` writes only games with a final
+            # score and `upsert_games` merges with COALESCE, so a refresh
+            # can neither invent a scoreless row nor erase the closing
+            # lines the lines pass attached.
+            season = today.year if today.month >= 8 else today.year - 1
+            in_season = today.month >= 8 or today.month <= 1
+            backfill = have < _CFB_MIN
+            seasons = ([today.year - n for n in (4, 3, 2, 1)] if backfill
+                       else ([season] if in_season else []))
+            if seasons:
+                res = ingest_cfb_history(
+                    _cconn, seasons, quiet=True,
+                    ttl=None if backfill else CFB_RESULTS_TTL)
                 log(f"  cfb backfill: {res['games']:,} FBS games ingested "
                     f"across {len(res['seasons'])} season(s) — the model's "
-                    f"variance is now measured, not assumed")
+                    f"variance is now measured, not assumed" if backfill else
+                    f"  cfb results: {res['games']:,} finished {season} game(s) "
+                    f"on file — college game bets settle from these")
                 for s_ in res["skipped"]:
                     log(f"  ⚠️  {s_}")
         except Exception as exc:  # noqa: BLE001

@@ -676,7 +676,7 @@ def ingest_mlb_date(conn, date: str) -> dict:
 
 
 def ingest_cfb_history(conn, seasons: list[int], id_to_abbr: dict | None = None,
-                       quiet: bool = False) -> dict:
+                       quiet: bool = False, ttl: int | None = None) -> dict:
     """Past FBS results, so college football's constants can be MEASURED.
 
     `engine.cfb.ratings` fits the scoring baseline, the home-field edge
@@ -712,7 +712,15 @@ def ingest_cfb_history(conn, seasons: list[int], id_to_abbr: dict | None = None,
     result = {"games": 0, "seasons": [], "skipped": []}
     for season in seasons:
         try:
-            out = cfbfastr.fetch_season(int(season), id_to_abbr=id_to_abbr)
+            # `ttl` is how stale a cached season may be. A finished
+            # season never changes, so the default week is right for a
+            # backfill; the season being PLAYED needs a short one, or a
+            # nightly refresh re-reads last Saturday's copy all week and
+            # nothing new ever settles.
+            out = (cfbfastr.fetch_season(int(season), id_to_abbr=id_to_abbr)
+                   if ttl is None
+                   else cfbfastr.fetch_season(int(season), ttl=ttl,
+                                              id_to_abbr=id_to_abbr))
         except DataUnavailable as exc:
             result["skipped"].append(f"cfb schedules {season}: {exc}")
             continue

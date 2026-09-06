@@ -705,3 +705,37 @@ for sp in ('nfl','cfb','mlb'):
   changes wording when the favourite trails or a one-score game reaches
   the fourth quarter. The game page carries the two-team table under
   the lines card. Both label the season the rates come from.
+
+## 11. College bets that never settled: the 2026 results were never ingested
+
+Ethan, 2026-09-06: "CFB doesn't seem to have settled its bets." The
+nightly ingests three college feeds — closing lines, player logs and
+results — and only the results had no in-season refresh: their guard was
+a count of finished games, so once the four-season backfill landed the
+block never ran again and no 2026 result reached the `games` table.
+`settle_from_history` grades a college game bet (moneyline, spread,
+total, team total) only from a games row on the bet's own date, so every
+one of them stayed open; the props settled on the Monday player refresh.
+
+The fix runs from tonight's nightly. To clear the backlog now:
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 ingest.py cfbhist --seasons 2026
+python3 -c "
+import sqlite3; c = sqlite3.connect('data/history.db')
+print(c.execute(\"SELECT COUNT(*), MIN(period), MAX(period) FROM games \"
+                \"WHERE sport='cfb' AND season=2026 AND home_score IS NOT NULL\").fetchone())"
+sudo -u qellys python3 launch.py --settle all
+sudo -u qellys python3 launch.py --why-open | head -40
+```
+
+* The count must be the number of FBS games played so far this season,
+  not 1. If it is 1, the mirror has not published 2026 yet — the skipped
+  line from the ingest says which URL it tried.
+* `--settle all` walks each day with open picks, oldest first, and the
+  journal export at the end refreshes the Record page.
+* `--why-open` lists what is still open and why. A college game bet that
+  is still open after the ingest is a team-key mismatch, not a missing
+  result: check `python3 -c "from engine import cfbteams; print(len(cfbteams.load_ids()))"`
+  is in the hundreds, and that no `games` row for 2026 is keyed `espn:`.
