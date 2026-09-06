@@ -28102,6 +28102,7 @@ function _switchViewNow(name, push, dir) {
   // Late, because a deferred view transition queued before the wall went
   // up arrives here after it did — see WALL_OPEN above.
   if (wallBlocked(name)) { name = "paywall"; dir = 0; }
+  if (NO_TOUR_VIEWS.includes(name) && typeof tourHide === "function") tourHide();
   if (typeof syncRail === "function") setTimeout(syncRail, 0);
   if (name === "live" && typeof renderLiveBoard === "function")
     setTimeout(renderLiveBoard, 0);
@@ -32898,8 +32899,23 @@ async function renderLiveBoard() {
    what a pick card is, what RIDING means, why the Record keeps two
    books. Not on a deep link — a reader who arrived at a pick or a game
    came for that, not for a tour — and not on a static host. Remembered
-   per viewer; the account page's Settings can show it again. */
+   per viewer; the account page's Settings can show it again.
+
+   Ethan, 2026-09-05: "The 3 things that we show on the website first
+   that tells new people what's what, we should put a 'never show again'
+   button, and also don't show it on the paywall screen." So every card
+   carries NEVER SHOW AGAIN, and that button — or finishing the three
+   cards — is what remembers "done" for good. Closing it any other way
+   (×, the backdrop, Escape) is "not now": it stays away for the rest of
+   this visit and comes back on the next one, because a reader who
+   swatted it to look at the board has not said they never want it. And
+   it never opens over the paywall, sign-up or checkout: a wall that
+   comes up while the tour's timer is pending cancels it, and a wall
+   that comes up while a card is open takes the card down without
+   marking anything. */
 const TOUR_KEY = "qb.tour";                 // "done" once finished or dismissed
+const NO_TOUR_VIEWS = ["paywall", "signup", "checkout"];
+let _tourTimer = null;
 
 function tourSteps() {
   return [
@@ -32926,31 +32942,54 @@ function tourSteps() {
 
 /* Whether the tour shows itself on this visit. Pure, so it can be tested
    for every combination without a browser. */
-function tourDue({ stored, hash, isStatic, view, standalone }) {
-  if (stored === "done" || isStatic) return false;
+function tourDue({ stored, hash, isStatic, view, standalone, wall }) {
+  if (stored === "done" || stored === "later" || isStatic) return false;
   const h = String(hash || "");
   if (h && h !== "#" && h !== "#recommended") return false;   // a deep link
+  if ((wall || []).includes(view)) return false;              // the paywall
   return !(standalone || []).includes(view);
 }
 
 function tourMaybe() {
   let stored = "";
   try { stored = localStorage.getItem(TOUR_KEY) || ""; } catch (e) { stored = ""; }
+  // "Not now" from earlier this visit outranks a clean slate, never "done".
+  try { if (stored !== "done" && sessionStorage.getItem(TOUR_KEY) === "later") stored = "later"; }
+  catch (e) {}
   if (!tourDue({ stored, hash: location.hash, isStatic: state.static,
-                 view: state.view, standalone: STANDALONE_MODES })) return;
-  setTimeout(() => tourOpen(0), 900);
+                 view: state.view, standalone: STANDALONE_MODES,
+                 wall: NO_TOUR_VIEWS })) return;
+  clearTimeout(_tourTimer);
+  _tourTimer = setTimeout(() => {
+    _tourTimer = null;
+    if (!NO_TOUR_VIEWS.includes(state.view)) tourOpen(0);
+  }, 900);
 }
 
-function tourClose() {
+/* Take the card down without deciding anything — the wall went up. */
+function tourHide() {
+  clearTimeout(_tourTimer);
+  _tourTimer = null;
   const ov = document.getElementById("tour-overlay");
-  if (ov) ov.remove();
+  if (!ov) return;
+  ov.remove();
   document.removeEventListener("keydown", tourKey);
   lockScroll(false);
-  try { localStorage.setItem(TOUR_KEY, "done"); } catch (e) {}
+}
+
+/* `forever` is the reader's word — Done on the last card, or Never show
+   again on any of them. Anything else is "later": this visit only. */
+function tourClose(forever) {
+  tourHide();
+  if (forever) {
+    try { localStorage.setItem(TOUR_KEY, "done"); } catch (e) {}
+  } else {
+    try { sessionStorage.setItem(TOUR_KEY, "later"); } catch (e) {}
+  }
 }
 
 function tourKey(e) {
-  if (e.key === "Escape") tourClose();
+  if (e.key === "Escape") tourClose(false);
 }
 
 function tourOpen(step) {
@@ -32962,7 +33001,7 @@ function tourOpen(step) {
     ov.id = "tour-overlay";
     document.body.appendChild(ov);
     ov.addEventListener("click", (e) => {
-      if (e.target === ov || e.target.closest(".tour-close")) tourClose();
+      if (e.target === ov || e.target.closest(".tour-close")) tourClose(false);
     });
     document.addEventListener("keydown", tourKey);
     lockScroll(true);
@@ -32981,11 +33020,13 @@ function tourOpen(step) {
           ? `<button type="button" class="btn" data-tour-step="${i + 1}">Next</button>`
           : `<button type="button" class="btn tour-done">Done</button>`}
       </div>
+      <button type="button" class="tour-never">Never show again</button>
     </div>`;
   ov.querySelectorAll("[data-tour-step]").forEach((b) =>
     b.addEventListener("click", () => tourOpen(+b.dataset.tourStep)));
   const done = ov.querySelector(".tour-done");
-  if (done) done.addEventListener("click", tourClose);
+  if (done) done.addEventListener("click", () => tourClose(true));
+  ov.querySelector(".tour-never").addEventListener("click", () => tourClose(true));
   const first = ov.querySelector(".tour-nav .btn:last-child");
   if (first) first.focus();
 }

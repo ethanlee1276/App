@@ -81,18 +81,19 @@ def test_it_shows_once_on_a_plain_landing_and_never_on_a_deep_link():
 def test_the_dialog_is_a_dialog_that_closes_every_way_and_remembers():
     op = _fn("tourOpen")
     assert 'role="dialog" aria-modal="true"' in op
-    assert 'if (e.target === ov || e.target.closest(".tour-close")) tourClose();' in op, "backdrop and × close it"
+    assert 'if (e.target === ov || e.target.closest(".tour-close")) tourClose(false);' in op, "backdrop and × close it"
     assert 'document.addEventListener("keydown", tourKey);' in op and "lockScroll(true);" in op
     assert 'data-tour-step="${i - 1}">Back' in op and 'data-tour-step="${i + 1}">Next' in op
     assert 'class="btn tour-done">Done' in op
     assert "Math.max(0, Math.min(steps.length - 1, step || 0))" in op, "a step past the end is the last card"
     cl = _fn("tourClose")
-    assert 'localStorage.setItem(TOUR_KEY, "done")' in cl and "lockScroll(false);" in cl
-    assert 'document.removeEventListener("keydown", tourKey);' in cl
-    assert 'if (e.key === "Escape") tourClose();' in _fn("tourKey")
+    assert 'localStorage.setItem(TOUR_KEY, "done")' in cl and cl.startswith("function tourClose(forever) {\n  tourHide();")
+    hd = _fn("tourHide")
+    assert "lockScroll(false);" in hd and 'document.removeEventListener("keydown", tourKey);' in hd
+    assert 'if (e.key === "Escape") tourClose(false);' in _fn("tourKey")
     mb = _fn("tourMaybe")
     assert "tourDue({ stored, hash: location.hash, isStatic: state.static," in mb
-    assert "setTimeout(() => tourOpen(0), 900);" in mb, "after the board has drawn, not over a skeleton"
+    assert "}, 900);" in mb and "tourOpen(0);" in mb, "after the board has drawn, not over a skeleton"
 
 
 def test_it_boots_after_the_slip_and_settings_can_show_it_again():

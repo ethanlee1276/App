@@ -3628,6 +3628,10 @@ body.pk-open { overflow: hidden; }
 .tour-dots { display: inline-flex; gap: 6px; margin-right: auto; }
 .tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
 .tour-dots i.on { background: var(--brand); }
+.tour-never { display: block; margin: 12px 0 0; padding: 0; background: none; border: 0;
+  color: var(--text-mute); font-size: var(--fs-xs); text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer; min-height: 24px; }
+.tour-never:hover, .tour-never:focus-visible { color: var(--text); }
 /* A scroll that reaches the end of this card must stop there rather
    than carrying on into the page underneath it. */
 .pk-card { overscroll-behavior: contain;
