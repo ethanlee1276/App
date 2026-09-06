@@ -947,3 +947,56 @@ sudo -u qellys python3 stakecheck.py --prices --sport mlb
   at without spending a preregistration on it.
 * Send me the two outputs. Registering is one line and I will not write
   it until the counts say the test can finish.
+
+## 17. The home-run rows on the Most Likely board were graded backwards
+
+`launch.py --likely` on 2026-09-06, per market:
+
+    home_runs   10 rows   said 94.0%   hit 10.0%   ROI -89.71%
+
+Both halves of that are correct and they describe **different bets**.
+94% is P(NO home run) — which is the only reason a home-run row is on a
+board called Most Likely at all. 10% is roughly how often a hitter
+actually homers, which is the bet the journal rewrote it into.
+
+`ledger.log_most_likely` normalised every `LONGSHOT_MARKETS` row to
+`side, line = "OVER", 0.5`. The LINE half is why the branch exists: a
+"yes/no" scorer row carries no line and `_grade_side_aware` needs one.
+The SIDE half was written when this board showed nothing but overs, and
+it survived the day the board began admitting unders (2026-09-02).
+
+A home-run OVER cannot reach this board — P(homer) is 0.05-0.15 and
+`likely.MIN_PROB` is 0.30 — so **every** home-run row in this bucket is
+an under, and every one was inverted. `anytime_td` escaped only because
+`from_watch` is its single maker and it always says yes.
+
+WHAT IT WAS WORTH. At the book's flat 0.1u those ten rows are -0.897u of
+a -2.094u book: **42.8% of every loss, from 2.4% of the bets.** Without
+them the board reads -2.98% rather than -5.08%. They were also the whole
+of its worst-looking result — strip them from the 75%+ band and its miss
+falls from 18.5 points to 8.3, inside its own +/-10.6% noise band. The
+board is not overconfident at the top. Ten rows were graded backwards.
+
+The writer is fixed. These are the rows it already wrote:
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 -c "
+from engine import ledger
+c = ledger.connect()
+print(ledger.repair_inverted_likely_sides(c))
+"
+sudo -u qellys python3 ingest.py --settle all
+sudo -u qellys python3 launch.py --likely
+```
+
+* The repair is deliberately narrow: `home_runs`, in the `likely`
+  bucket, `side='OVER'`, `hit_prob > 0.5`. Nothing else. A repair that
+  guesses turns one data error into two, and `anytime_td` is excluded
+  because an OVER above a coin flip is a real bet there.
+* It re-OPENS the rows rather than rewriting their results, so the next
+  settle pass grades them through the same path as everything else. Run
+  the settle immediately after, or they sit open.
+* Expect the flipped count to be about ten, and the second `--likely`
+  to show home_runs near its claimed rate instead of 89 points under it.
+  Send me the before and after.

@@ -741,6 +741,44 @@ def log_longshots(conn, result: dict, flat_stake: float = 0.1) -> int:
 LIKELY_JOURNAL_DEPTH = 10
 
 
+def repair_inverted_likely_sides(conn) -> dict:
+    """Flip the home-run rows `log_most_likely` journaled on the wrong side.
+
+    THE BUG IS FIXED IN THE WRITER; THIS IS THE ROWS IT ALREADY WROTE.
+    A likelihood board cannot show a home-run OVER — P(a hitter homers)
+    is 0.05-0.15 and `likely.MIN_PROB` refuses anything under 0.30 — so
+    a `home_runs` row in this bucket carrying `side='OVER'` with a
+    probability above a coin flip is not a bet anyone could have made.
+    It is the UNDER's probability wearing the OVER's side, and it was
+    graded as the over.
+
+    THE TEST IS DELIBERATELY NARROW. `hit_prob > 0.5` on `home_runs`
+    alone, in the `likely` bucket alone. It is not "everything that
+    looks wrong" — a repair that guesses is how a data error becomes two
+    data errors, and `anytime_td` is excluded precisely because an OVER
+    above 0.5 is a real bet there (a bell-cow can be 55% to score).
+
+    THE ROW IS RE-OPENED RATHER THAN RE-SCORED HERE. Flipping the stored
+    result by hand would mean a second copy of the settle arithmetic
+    living in a repair function, and the one nobody looks at is the one
+    that drifts. So the side is corrected, the grade is cleared, and the
+    next `settle_from_history` pass grades it through the same path as
+    everything else.
+
+    Idempotent: once flipped, the rows no longer match.
+    """
+    rows = conn.execute(
+        "SELECT id FROM bets WHERE category='likely' AND market='home_runs' "
+        "AND side='OVER' AND hit_prob > 0.5").fetchall()
+    ids = [r["id"] for r in rows]
+    if ids:
+        conn.executemany(
+            "UPDATE bets SET side='UNDER', status='open', pnl_units=NULL, "
+            "pnl_dollars=NULL WHERE id=?", [(i,) for i in ids])
+        conn.commit()
+    return {"flipped": len(ids), "reopened_for_regrade": len(ids)}
+
+
 def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
                     depth: int = LIKELY_JOURNAL_DEPTH) -> int:
     """Journal the top of the likelihood board to its own bucket.
@@ -822,7 +860,33 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             # the same normalisation, not a copy of the display shape.
             side, line = str(r.get("side") or "OVER").upper(), r.get("line")
             if market in LONGSHOT_MARKETS:
-                side, line = "OVER", 0.5
+                # NORMALISE THE LINE, NEVER THE SIDE. The first version
+                # wrote `side, line = "OVER", 0.5`, and the LINE half is
+                # the whole reason this branch exists: a "yes/no" row
+                # carries none and `_grade_side_aware` needs one. The
+                # side half was written when this board showed nothing
+                # but overs, and it silently survived the day the board
+                # began admitting unders (2026-09-02).
+                #
+                # WHAT IT COST, read off `likely_report` on 2026-09-06:
+                # home runs claimed 94.0% and hit 10.0% over 10 settled
+                # rows. Both halves of that are right and they describe
+                # different bets — 94% is P(NO home run), which is why
+                # the row was on a board called Most Likely at all, and
+                # 10% is how often a hitter homers, which is the bet
+                # this line rewrote it into. Those ten rows were 42.8%
+                # of the entire book's losses, and they were the whole
+                # of its "the top band is overconfident" reading: strip
+                # them and the 75%+ band's miss falls inside its own
+                # noise band.
+                #
+                # A home-run OVER cannot reach this board — P(homer) is
+                # 0.05-0.15 and `likely.MIN_PROB` is 0.30 — so EVERY
+                # home-run row here is an under, and every one of them
+                # was inverted. `anytime_td` escaped only because
+                # `from_watch` is its one maker and it always says yes.
+                side = "UNDER" if side in ("UNDER", "NO") else "OVER"
+                line = 0.5
         if line is None:
             # Nothing to grade against. A row that can never settle is
             # the failure `log_longshots` retired the watchlist over —

@@ -74,6 +74,113 @@ def _bet(conn, claimed, status, market="anytime_td", odds=-120,
     conn.commit()
 
 
+# --- the side the journal writes ------------------------------------------
+def _likely_row(market, side, prob, line=0.5, odds=-500, player="P"):
+    return {"kind": "prop", "player": player, "market": market, "side": side,
+            "line": line, "book": "dk", "odds": odds, "model_prob": prob,
+            "implied_prob": None, "game_date": "2026-08-20"}
+
+
+def _journal(conn, row, sport="mlb"):
+    ledger.log_most_likely(conn, {"sport": sport, "date": "2026-08-20",
+                                  "most_likely": [row]})
+    return conn.execute("SELECT market, side, line, hit_prob FROM bets "
+                        "WHERE category='likely'").fetchall()
+
+
+def test_a_home_run_row_is_journaled_on_the_side_the_board_showed():
+    """THE BUG, AND IT COST 42.8% OF THE BOOK'S LOSSES. `log_most_likely`
+    normalised LONGSHOT_MARKETS rows to `side, line = "OVER", 0.5`. The
+    line half is why the branch exists — a yes/no row carries none. The
+    side half was written when this board showed only overs and survived
+    the day it began admitting them (2026-09-02).
+
+    A home-run OVER cannot reach this board: P(a hitter homers) is
+    0.05-0.15 and `likely.MIN_PROB` is 0.30. So every home-run row here
+    is an UNDER carrying P(no home run) — and every one was graded as
+    the over. `likely_report` on 2026-09-06: claimed 94.0%, hit 10.0%
+    over ten rows."""
+    conn = _conn()
+    got = _journal(conn, _likely_row("home_runs", "under", 0.94))
+    assert len(got) == 1, got
+    assert got[0]["side"] == "UNDER", tuple(got[0])
+    assert got[0]["hit_prob"] == 0.94
+    # The line half of the normalisation still happens.
+    assert got[0]["line"] == 0.5
+
+
+def test_a_touchdown_yes_row_still_normalises_to_the_over():
+    """The other half must not regress. `likely.from_watch` renders a
+    scorer row as side "yes" with no line, and `_grade_side_aware`
+    compares against "OVER" and needs a number — which is the whole
+    reason this branch exists."""
+    conn = _conn()
+    got = _journal(conn, _likely_row("anytime_td", "yes", 0.55, line=None,
+                                     odds=-120), sport="nfl")
+    assert len(got) == 1, got
+    assert got[0]["side"] == "OVER" and got[0]["line"] == 0.5, tuple(got[0])
+
+
+def test_a_no_row_is_journaled_as_an_under_not_as_a_yes():
+    conn = _conn()
+    got = _journal(conn, _likely_row("anytime_td", "no", 0.68, line=None,
+                                     odds=-180), sport="nfl")
+    assert got[0]["side"] == "UNDER" and got[0]["line"] == 0.5, tuple(got[0])
+
+
+# --- and the rows already written on the wrong side -----------------------
+def _hr(conn, side, prob, category="likely", market="home_runs"):
+    _SEQ[0] += 1
+    conn.execute(
+        "INSERT INTO bets (sport,date,player,market,side,line,odds,book,"
+        "hit_prob,edge,stake_units,stake_dollars,ts,status,category,pnl_units)"
+        " VALUES ('mlb','2026-08-20',?,?,?,0.5,-500,'DK',?,0,0.1,0,'now',"
+        "'lost',?,-0.1)", (f"P{_SEQ[0]}", market, side, prob, category))
+    conn.commit()
+    return f"P{_SEQ[0]}"
+
+
+def test_the_repair_flips_only_the_rows_that_could_not_be_real():
+    """A repair that guesses turns one data error into two. The test is
+    home_runs + likely + side OVER + a probability above a coin flip,
+    and nothing else — anytime_td is excluded on purpose because an OVER
+    above 0.5 is a real bet there."""
+    conn = _conn()
+    bad = _hr(conn, "OVER", 0.94)
+    ok_under = _hr(conn, "UNDER", 0.94)
+    real_over = _hr(conn, "OVER", 0.12)             # a genuine long shot
+    other_book = _hr(conn, "OVER", 0.94, category="main")
+    td = _hr(conn, "OVER", 0.55, market="anytime_td")
+    got = ledger.repair_inverted_likely_sides(conn)
+    assert got["flipped"] == 1, got
+    sides = {r["player"]: (r["side"], r["status"]) for r in
+             conn.execute("SELECT player, side, status FROM bets")}
+    assert sides[bad] == ("UNDER", "open"), sides
+    for p in (ok_under,):
+        assert sides[p][0] == "UNDER" and sides[p][1] == "lost", sides[p]
+    for p in (real_over, other_book, td):
+        assert sides[p] == ("OVER", "lost"), (p, sides[p])
+
+
+def test_the_repair_reopens_rather_than_rescoring_by_hand():
+    """A second copy of the settle arithmetic living in a repair function
+    is one nobody looks at, and the one nobody looks at is the one that
+    drifts. The side is corrected and the row goes back through the same
+    settle pass as everything else."""
+    conn = _conn()
+    _hr(conn, "OVER", 0.94)
+    ledger.repair_inverted_likely_sides(conn)
+    r = conn.execute("SELECT status, pnl_units FROM bets").fetchone()
+    assert r["status"] == "open" and r["pnl_units"] is None, tuple(r)
+
+
+def test_the_repair_is_idempotent():
+    conn = _conn()
+    _hr(conn, "OVER", 0.94)
+    assert ledger.repair_inverted_likely_sides(conn)["flipped"] == 1
+    assert ledger.repair_inverted_likely_sides(conn)["flipped"] == 0
+
+
 # --- the threshold is derived, not picked ---------------------------------
 def test_the_verdict_threshold_comes_from_the_standard_error():
     """n = (2 * 0.5 / 0.10)^2 — two standard errors at the worst-case
