@@ -57,14 +57,27 @@ def test_a_finished_fbs_game_becomes_a_games_row():
     assert g["home_score"] == 30.0 and g["away_score"] == 24.0
 
 
-def test_the_cupcake_games_are_left_out():
-    """An FBS side hosting an FCS opponent is 121 games a season nobody
-    can bet, and including them drags the scoring baseline up and the
-    margin spread wide — the two constants the stake depends on."""
-    out = C.parse_schedule([_row(away_division="fcs"),
-                            _row(home_division="ii", away_division="ii")], 2024)
-    assert out["games"] == []
-    assert out["skipped"]["not FBS vs FBS"] == 2
+def test_the_cupcake_games_are_kept_out_of_the_FIT_not_out_of_the_TABLE():
+    """An FBS side hosting an FCS opponent drags the scoring baseline up
+    and the margin spread wide — the two constants the stake depends on.
+    That was enforced by discarding the game until 2026-09-06, which also
+    meant a bet on it could never be graded: the board prices every game
+    an FBS team plays, and 179 college bets sat open behind exactly this.
+
+    The constants are protected where they are computed instead. The FCS
+    side has no FBS abbreviation, so it keys `espn:<id>`, and both
+    `teamrates.compute_team_ratings` and `cfb.ratings.fit_from_history`
+    exclude every game either of whose sides is keyed that way — proven
+    by the invariance in tests/test_cfb_buy_games.py, where forty 63-3
+    buy games move none of the four fitted numbers. A game with NO FBS
+    side is still nothing we price."""
+    out = C.parse_schedule([_row(away_division="fcs")], 2024)
+    assert len(out["games"]) == 1
+    assert out["games"][0]["home"] == "espn:61", "keyed, not guessed"
+    assert out["games"][0]["away"] == "espn:194"
+    nobody = C.parse_schedule([_row(home_division="ii", away_division="ii")], 2024)
+    assert nobody["games"] == []
+    assert nobody["skipped"]["no FBS side"] == 1
 
 
 def test_an_unplayed_game_is_not_evidence():
@@ -103,10 +116,17 @@ def test_a_supplied_map_keys_rows_the_way_the_board_does():
     assert out["games"][0]["away"] == "OSU"
 
 
-def test_a_team_the_map_does_not_know_is_skipped_not_guessed():
+def test_a_team_the_map_does_not_know_is_never_guessed():
+    """NOT GUESSED remains the rule; DISCARDED stopped being the way it
+    is kept. An id the map has not answered for lands under the
+    non-colliding `espn:<id>` fallback — which every fit excludes — so
+    one unmapped school no longer takes a real game down with it, and
+    `ingest.remap_cfb_team_keys` repairs the key when the feed answers."""
     out = C.parse_schedule([_row()], 2024, id_to_abbr={"61": "UGA"})
-    assert out["games"] == []
-    assert out["skipped"]["team id not in the map"] == 1
+    assert len(out["games"]) == 1
+    assert out["games"][0]["home"] == "UGA"
+    assert out["games"][0]["away"] == "espn:194"
+    assert ":" not in out["games"][0]["home"], "a known side is still named"
 
 
 def test_the_two_namings_can_never_collide():
@@ -120,7 +140,7 @@ def test_the_two_namings_can_never_collide():
 def test_a_row_with_no_team_id_is_skipped():
     out = C.parse_schedule([_row(home_id=""), _row(away_id="NA")], 2024)
     assert out["games"] == []
-    assert out["skipped"]["team id not in the map"] == 2
+    assert out["skipped"]["no team id"] == 2
 
 
 # --- the home-field estimator ------------------------------------------------

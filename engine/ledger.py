@@ -2489,6 +2489,31 @@ def _game_bet_evidence(hist_conn, b, where, wargs):
             f"SELECT home, away, home_score, away_score, game_id "
             f"FROM games WHERE {where} AND (game_id=? OR game_id LIKE ?)",
             (*wargs, b["player"], b["player"] + "-G%")).fetchall()
+        if not rows:
+            # THE KEY CAN BE HALF-UNRESOLVABLE, AND THE GAME IS STILL THE
+            # GAME. A college buy game stores its FCS side as `espn:<id>`
+            # because it has no FBS abbreviation, so the row is keyed
+            # `espn:9999@MIZ` while the board — which reads the
+            # scoreboard, where every side has one — bet `UAPB@MIZ`. The
+            # exact key cannot match and the total sat open for ever
+            # (2026-09-06).
+            #
+            # `where` is already scoped to this sport and this DATE, and a
+            # team plays once a day, so naming either side is enough to
+            # find the fixture. Ambiguity is refused rather than guessed:
+            # more than one distinct game matching means the key does not
+            # identify a fixture, and grading against a coin-flip choice
+            # would put a wrong number in the record — which is worse than
+            # an open bet, because nothing downstream can tell it from a
+            # right one.
+            away_tok, _, home_tok = str(b["player"] or "").partition("@")
+            if away_tok and home_tok:
+                near = hist_conn.execute(
+                    f"SELECT home, away, home_score, away_score, game_id "
+                    f"FROM games WHERE {where} AND (home IN (?,?) OR away IN (?,?))",
+                    (*wargs, home_tok, away_tok, home_tok, away_tok)).fetchall()
+                if len({r["game_id"] for r in near}) == 1:
+                    rows = near
         return rows, (lambda r: float(r["home_score"]) + float(r["away_score"]))
     # spread / team_total: player = the team; its own margin or score.
     rows = hist_conn.execute(

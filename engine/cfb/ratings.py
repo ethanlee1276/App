@@ -222,7 +222,32 @@ def fit_from_history(conn, ratings: dict, seasons: list[int] | None = None,
     if seasons:
         q += " AND season IN (%s)" % ",".join("?" * len(seasons))
         args = list(seasons)
-    rows = conn.execute(q, args).fetchall()
+    # THE BUY GAMES, OUT OF THE FIT AND ONLY OUT OF THE FIT. From
+    # 2026-09-06 the ingest stores an FBS side's game against an FCS
+    # opponent so the ledger can grade a bet on it, and the FCS side
+    # lands keyed `espn:<id>` because it has no FBS abbreviation. A 63-0
+    # September buy game would drag the scoring baseline up and the
+    # margin spread wide — the two constants the college stake depends
+    # on — so they come out here, on the same key prefix
+    # `teamrates.compute_team_ratings` excludes on. Counted out BEFORE
+    # `min_games`, so a table full of buy games reports "not enough to
+    # fit" rather than quietly fitting on them.
+    #
+    # ONE SIDE UNNAMED IS A BUY GAME; BOTH SIDES UNNAMED IS A NAMING
+    # STATE. `espn:<id>` means the teams map had no answer for that side.
+    # An FBS team against something outside the FBS map is exactly a buy
+    # game, and comes out. But on a box whose teams feed has never
+    # answered — the condition teamrates' docstring names, "every key is
+    # a fallback key" — a backfill keys BOTH sides that way, the prefix
+    # distinguishes nothing, and dropping those rows would throw the
+    # entire history away and put college back on the prior, which is the
+    # state this module exists to get off. So the rule is the MIX, not
+    # the prefix.
+    def _unnamed(v):
+        return str(v or "").lower().startswith("espn:")
+
+    rows = [r for r in conn.execute(q, args).fetchall()
+            if _unnamed(r["home"]) == _unnamed(r["away"])]
     if len(rows) < min_games:
         return replace(PRIOR, games=len(rows), note=(
             f"{len(rows)} CFB games in the database, {min_games} needed to fit "

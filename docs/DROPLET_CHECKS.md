@@ -795,3 +795,33 @@ sudo -u qellys python3 launch.py --why-open | head -30
   their bets stay open — that is the next item, and it needs a marker in
   `extra` so `engine/cfb/ratings.py` can keep excluding them from the
   fit while the settle path can see them.
+
+## 13. Buy games: an FBS side against an FCS opponent
+
+The last block of stuck college bets from §11/§12. `parse_schedule`
+stored FBS-vs-FBS only, which is the right rule for the model's fit and
+the wrong one for the ledger: the board prices every game an FBS team
+plays, so a bet on UAPB@MIZ or BCU@UCF had no result row and never
+would. Those games are stored now, with the FCS side keyed `espn:<id>`
+— the same form `teamrates` and `cfb.ratings` exclude from every fit, so
+the scoring baseline and margin spread are untouched.
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 ingest.py cfbhist --seasons 2026
+python3 -c "
+import sqlite3; c = sqlite3.connect('data/history.db')
+q = \"SELECT COUNT(*) FROM games WHERE sport='cfb' AND season=2026 AND home_score IS NOT NULL\"
+print('2026 games', c.execute(q).fetchone()[0])
+print('with an FCS side', c.execute(q + \" AND (home LIKE 'espn:%' OR away LIKE 'espn:%')\").fetchone()[0])"
+sudo -u qellys python3 launch.py --settle all
+sudo -u qellys python3 launch.py --why-open | head -30
+```
+
+* The 2026 count should jump well past the 25 from §11 — a college
+  Saturday is 60-plus FBS games and roughly a fifth of September's are
+  buy games.
+* NO_STATLINE should fall sharply. What remains there should be real
+  player props, not `total` rows.
+* The college ratings must not move: `python3 launch.py --check` still
+  reports the same margin spread and home-field edge it did before.
