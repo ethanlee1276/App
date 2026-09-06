@@ -164,6 +164,15 @@ def test_the_calibration_rooms_second_table_is_folded_under_its_heading():
     assert "calBucketRows(era.buckets)" in c[i:] and "calScoreBlock(era)" in c[i:]
     assert ".rec-fold > .card" in CSS
 
+
+def test_a_thin_book_counts_graded_picks_and_says_so():
+    """Beside a 7-8-1 record the header said "15 settled" while the verdict
+    said "16 settled". The count is wins plus losses; a push settles but
+    does not grade, and the word has to match the count."""
+    b = _fn("recBookSections")
+    assert "` · ${n} graded — thin sample`" in b
+    assert "settled — thin sample" not in b
+
 if __name__ == "__main__":
     import traceback
     fails = 0

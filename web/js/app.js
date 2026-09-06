@@ -9826,7 +9826,10 @@ function recBookSections(br, scope) {
     // A 3-1 record is not a 75% win rate. Said beside the number, the
     // way every other rate on this page is, rather than hidden until
     // the sample looks good.
-    const thin = n < _recMinGraded ? ` · ${n} settled — thin sample` : "";
+    // GRADED, not settled: n is wins plus losses, and beside a 7-8-1
+    // record "15 settled" contradicted the verdict's "16 settled" one
+    // screen up (2026-09-06). A push settles; it does not grade.
+    const thin = n < _recMinGraded ? ` · ${n} graded — thin sample` : "";
     const head = `${label} · ${b.w}-${b.l}${b.push ? `-${b.push}` : ""}`
       + ` · ${roi >= 0 ? "+" : ""}${(roi * 100).toFixed(1)}% ROI${thin}`;
     const pretty = Object.fromEntries(Object.entries(b.markets || {})
