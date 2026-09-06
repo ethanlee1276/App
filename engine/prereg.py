@@ -731,6 +731,16 @@ def ensure_registered(path=None) -> dict:
     store = register(RECEPTIONS_A_NFL, path)
     store = register(TD_EDGE_NFL, path)
     store = register(TD_EDGE_NFL_XFP, path)
+    # REGISTERED 2026-09-06 ON ETHAN'S WORD, after he read the terms:
+    # "register it and keep going". The clock starts today and only bets
+    # dated strictly after it count — the CLV table that suggested the
+    # band is 303 rows that can never be part of the answer, which is the
+    # point.
+    #
+    # HEAVY_PRICE_EDGE IS DELIBERATELY NOT HERE. Its band holds 26 bets in
+    # the whole book; registering it would be writing a test that cannot
+    # finish. See its own note.
+    store = register(LONG_PRICE_MLB, path)
     # A_BAND_NFL asked "does A beat B+". Slicing by grade AND market
     # answered it — the deficit is one cell, A-graded receptions — and
     # RECEPTIONS_A_NFL asks that sharper question with a remedy that

@@ -387,11 +387,32 @@ def test_the_declined_price_bar_is_kept_with_its_reason():
     assert "26 settled bets" in src[:i]
 
 
-def test_neither_price_test_is_registered_without_a_decision():
+def test_the_reachable_price_test_is_registered_and_the_other_is_not():
+    """One of each, and the difference is whether the band has a sample.
+    LONG_PRICE_MLB collects from 534 settled bets' worth of short prices;
+    HEAVY_PRICE_EDGE's band holds 26 in the whole book, so registering it
+    would be writing a test that cannot finish."""
     path = os.path.join(tempfile.mkdtemp(), "prereg.json")
     ids = {t["id"] for t in prereg.ensure_registered(path)["tests"]}
-    for t in (prereg.HEAVY_PRICE_EDGE, prereg.LONG_PRICE_MLB):
-        assert t["id"] not in ids, t["id"]
+    assert prereg.LONG_PRICE_MLB["id"] in ids, ids
+    assert prereg.HEAVY_PRICE_EDGE["id"] not in ids, ids
+
+
+def test_the_rows_that_suggested_the_band_can_never_answer_it():
+    """THE property, for this test specifically. The CLV table that
+    picked +100 is 303 already-settled bets. Registering today puts every
+    one of them outside the window — asking the same sample twice is the
+    move this module exists to make impossible."""
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    store = prereg.ensure_registered(path)
+    t = [x for x in store["tests"]
+         if x["id"] == prereg.LONG_PRICE_MLB["id"]][0]
+    reg = t["registered"]
+    old = [{"date": reg, "sport": "mlb", "grade": "A", "odds": -150,
+            "status": "lost"} for _ in range(300)]
+    got = prereg.verdict(t, old)
+    assert got["n"] == 0, "bets dated on the registration day leaked in"
+    assert got["status"] == "collecting"
 
 
 def test_the_receptions_remedy_names_a_lever_that_moves():
