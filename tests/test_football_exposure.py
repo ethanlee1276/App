@@ -33,7 +33,8 @@ os.environ.setdefault("QB_FEEDSTATE_DIR", tempfile.mkdtemp())
 os.environ.setdefault("QB_MODELS_DIR", tempfile.mkdtemp())
 
 from engine import calibrate
-from engine.correlation import GAME_CAP_U, SLATE_CAP_U, apply_exposure_caps
+from engine.correlation import (GAME_CAP_U, SLATE_CAP_U, apply_exposure_caps,
+                                max_fundable)
 from engine.staking import MIN_STAKE_UNITS
 
 
@@ -109,6 +110,59 @@ def test_a_stake_scaled_under_the_floor_comes_off_the_board():
     assert live == [], "everything fell under the floor and none of it was dropped"
     assert all(r["grade"] == "Pass" and r["stake_units"] == 0.0 for r in props + games)
     assert any("minimum" in w for w in props[0]["warnings"])
+
+
+def test_the_cliff_sits_exactly_where_the_cap_and_the_floor_cross():
+    """THE NUMBER, PINNED. The 15u cap and the 0.1u minimum are an
+    arithmetic ceiling on the COUNT, and until 2026-09-06 nothing in the
+    code knew it: at 150 picks the board pays a full slate at 0.10u each,
+    at 151 every stake lands at 0.099u and the board goes to zero. Not
+    smaller — empty. A boundary that sharp has to be a test, or the next
+    person to move either constant moves the cliff without seeing it."""
+    assert max_fundable() == int(SLATE_CAP_U / MIN_STAKE_UNITS) == 150
+    for n, want in ((max_fundable(), max_fundable()), (max_fundable() + 1, 0)):
+        props, _ = _slate(n, 0)
+        apply_exposure_caps(props, [])
+        live = [r for r in props if r.get("recommended")]
+        assert len(live) == want, f"{n} picks funded {len(live)}, wanted {want}"
+
+
+def test_an_emptied_board_is_a_named_state_not_an_ordinary_capped_slate():
+    """The failure this repo keeps finding in itself: a refusal that
+    reads as an ordinary empty result. The old note said "200 bet(s)
+    dropped" beside a board showing nothing, which is the arithmetic
+    told as a footnote. It has to lead, and it has to say the cause is
+    the bankroll rule rather than a missing feed."""
+    props, _ = _slate(200, 0)
+    notes = apply_exposure_caps(props, [])
+    assert notes, "an emptied board wrote no note at all"
+    say = notes[0]
+    assert say.startswith("NO BETS FUNDED"), say
+    assert "200 picks" in say, say
+    assert f"at most {max_fundable()} bets" in say, say
+    assert "not a data error" in say or "Nothing here is a data error" in say, say
+    # And the per-bet warning names the SAME cause, not the generic one.
+    # The generic text blames the individual stake — "a rounding artefact
+    # with a ticket" — which is true of one bet scaled through the floor
+    # and false of a board where nothing could be funded at all. Reading
+    # it on an emptied board sends you looking at the pick instead of at
+    # the arithmetic that emptied it.
+    warn = props[0]["warnings"]
+    assert any("funded none of them" in w for w in warn), warn
+    assert not any("rounding artefact" in w for w in warn), warn
+
+
+def test_a_slate_that_only_loses_some_bets_keeps_the_ordinary_note():
+    """The named state must not swallow the common case. 160 picks at
+    0.5u asks 80u against the cap, but only the smallest fall through
+    the floor — that is a scaled slate, not an emptied one."""
+    props, _ = _slate(120, 0, stake=1.0)
+    thin, _ = _slate(40, 0, stake=0.05)
+    notes = apply_exposure_caps(props + thin, [])
+    live = [r for r in props + thin if r.get("recommended")]
+    assert live, "this slate should still fund something"
+    assert notes[0].startswith("Exposure cap:"), notes[0]
+    assert "NO BETS FUNDED" not in notes[0], notes[0]
 
 
 def test_a_board_inside_the_caps_is_left_alone():
