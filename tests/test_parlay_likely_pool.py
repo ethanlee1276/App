@@ -161,6 +161,70 @@ def test_the_journal_reads_the_pool_off_the_payload_not_off_a_caller():
     assert "def log_board(conn, board: dict" in src
 
 
+# --- the wiring -----------------------------------------------------------
+def test_attach_hangs_both_pools_on_the_slate():
+    slate = _slate([_row("A Wideout", "receptions", 0.64),
+                    _row("A QB", "pass_yds", 0.61, line=245.5)])
+    slate.update(recommendations=[], game_bets=[])
+    P.attach(slate, "nfl")
+    assert slate["parlays"]["pool"] == "edge"
+    assert slate["likely_parlays"]["pool"] == "likely"
+    assert slate["likely_parlays"]["eligible_legs"] == 2
+    # receptions is Tier 1, so §4's anchor rule is satisfiable here and the
+    # pair actually reaches a ticket rather than dying at the door.
+    assert slate["likely_parlays"]["tickets"], slate["likely_parlays"]["killed"]
+
+
+def test_one_pool_failing_does_not_blank_the_other():
+    """ONE TRY EACH. A single guard around both would let the new screen
+    take down the working one — exactly the shape `attach`'s "never
+    raises" promise exists to prevent, one level in."""
+    slate = _slate()
+    slate.update(recommendations=[], game_bets=[])
+    real = P.screen
+    calls = []
+
+    def boom(sl, sport, **kw):
+        calls.append(kw.get("pool"))
+        if kw.get("pool") == "likely":
+            raise RuntimeError("the likely screen fell over")
+        return real(sl, sport, **kw)
+
+    P.screen = boom
+    try:
+        P.attach(slate, "nfl")
+    finally:
+        P.screen = real
+    assert calls == ["edge", "likely"], calls
+    assert slate["parlays"]["pool"] == "edge", "a working pool was blanked"
+    assert "fell over" in " ".join(slate["likely_parlays"]["notes"])
+    assert slate["likely_parlays"]["tickets"] == []
+
+
+def test_the_new_payload_is_paid_like_the_board_it_screens():
+    """`most_likely` and `parlays` are both paid. A screen over one,
+    published under a key nobody added to the list, hands a paid board's
+    rows back for free in ticket form — the fourth time this file has
+    been taught that a new VIEW of a paid board is a new KEY."""
+    from engine import gate
+    pub = gate.redact({"parlays": {"tickets": [1]},
+                       "likely_parlays": {"tickets": [1]},
+                       "most_likely": [1]}, "recommendations.json")
+    for key in ("parlays", "likely_parlays", "most_likely"):
+        assert not pub.get(key), f"{key} survived the public copy"
+
+
+def test_the_journal_reads_both_keys():
+    """A board built, shown and never graded is the failure the paywall
+    comment in `journal_built_boards` already records once."""
+    src = (ROOT / "engine" / "parlayledger.py").read_text()
+    i = src.index("def journal_built_boards")
+    nxt = src.find("\ndef ", i + 10)
+    body = src[i:] if nxt == -1 else src[i:nxt]   # it is the last function
+    assert 'for key in ("parlays", "likely_parlays")' in body, body[:0]
+    assert 'board.get(key)' in body
+
+
 if __name__ == "__main__":
     import traceback
     fails = 0

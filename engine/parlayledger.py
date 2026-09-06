@@ -908,12 +908,18 @@ def journal_built_boards(conn, root) -> dict:
         except (ValueError, OSError) as exc:
             skipped.append(f"{sport}: {exc}")
             continue
-        pz = board.get("parlays")
-        if not isinstance(pz, dict):
-            continue
-        try:
-            wrote += log_board(conn, pz, sport=sport,
-                               date=pz.get("date") or board.get("date") or "")
-        except sqlite3.Error as exc:
-            skipped.append(f"{sport}: {exc}")
+        # BOTH POOLS. `log_board` reads which screen produced a payload off
+        # the payload itself, so these land in their own `source` rows and
+        # the two records stay apart — see `ensure_schema`. Journaling one
+        # and not the other is how a board gets built, shown and never
+        # graded, which is the failure the paywall comment above records.
+        for key in ("parlays", "likely_parlays"):
+            pz = board.get(key)
+            if not isinstance(pz, dict):
+                continue
+            try:
+                wrote += log_board(conn, pz, sport=sport,
+                                   date=pz.get("date") or board.get("date") or "")
+            except sqlite3.Error as exc:
+                skipped.append(f"{sport}/{key}: {exc}")
     return {"journaled": wrote, "skipped": skipped}

@@ -117,6 +117,18 @@ PAID_KEYS = (
     "market_scan",
     "correlation",
     "parlays",
+    # THE PARLAY ZONE'S SECOND POOL, added the day the screen learned to
+    # run over Most Likely as well (2026-09-06). `parlays` above and
+    # `most_likely` twenty lines up are both paid; a screen over one,
+    # published under a key nobody added here, would hand a paid board's
+    # rows back for free in ticket form.
+    #
+    # THE FOURTH TIME THIS FILE HAS BEEN TAUGHT IT — predmarkets, UFC's
+    # picks/pass_list, board_shelves, now this. The lesson each time is
+    # the same one the comment above already states: a new VIEW of a paid
+    # board is a new KEY, and key-stripping only protects the keys
+    # somebody remembered.
+    "likely_parlays",
     "edge_board",
     "futures",
     # UFC NAMES ITS PICKS DIFFERENTLY, AND THAT WAS A LIVE HOLE. Found

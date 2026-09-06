@@ -1849,20 +1849,26 @@ def attach(slate: dict, sport: str, state: str | None = None,
     Never raises. A parlay screen failing must not take down a slate that is
     otherwise fine; the page renders the failure instead.
     """
-    try:
-        # §10.2's drawdown rule only bites if something asks. Measured from
-        # the journal rather than passed in, so it cannot be left at
-        # "normal" by a caller that does not know it exists.
-        slate["parlays"] = screen(
-            slate, sport,
-            bankroll_state=state if state is not None else bankroll_state(sport),
-            joints=joints)
-    except Exception as exc:                       # pragma: no cover - guard
-        slate["parlays"] = {
-            "sport": sport, "tickets": [], "probation": True, "killed": [],
-            "considered": 0, "eligible_legs": 0,
-            "verdict": "No qualifying parlay at current numbers.",
-            "notes": [f"The parlay screen did not run for this slate: {exc}"]}
+    # §10.2's drawdown rule only bites if something asks. Measured from
+    # the journal rather than passed in, so it cannot be left at "normal"
+    # by a caller that does not know it exists. Read once and shared, so
+    # the two pools cannot disagree about the bankroll.
+    st = state if state is not None else bankroll_state(sport)
+    for key, pool in (("parlays", "edge"), ("likely_parlays", "likely")):
+        # ONE TRY EACH, AND THAT IS THE POINT. Wrapping both in a single
+        # guard would let a failure in the Most Likely pool blank the
+        # edge board's tickets — a new screen taking down the working one
+        # is precisely the shape this function's "never raises" promise
+        # exists to prevent, one level in.
+        try:
+            slate[key] = screen(slate, sport, bankroll_state=st,
+                                joints=joints, pool=pool)
+        except Exception as exc:                   # pragma: no cover - guard
+            slate[key] = {
+                "sport": sport, "pool": pool, "tickets": [], "probation": True,
+                "killed": [], "considered": 0, "eligible_legs": 0,
+                "verdict": "No qualifying parlay at current numbers.",
+                "notes": [f"The parlay screen did not run for this slate: {exc}"]}
     return slate
 
 
