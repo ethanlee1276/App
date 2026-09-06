@@ -758,7 +758,7 @@ def cfb_games_for(conn, season: int) -> dict:
             extra = _json.loads(r["extra"] or "{}")
         except (ValueError, TypeError):
             extra = {}
-        out[str(r["game_id"])] = {
+        entry = {
             "period": r["period"], "home": r["home"], "away": r["away"],
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
@@ -773,6 +773,23 @@ def cfb_games_for(conn, season: int) -> dict:
             "home_points": r["home_score"] or 0,
             "away_points": r["away_score"] or 0,
         }
+        # UNDER BOTH KEYS, because two feeds on the same mirror name the
+        # same game two ways and this dict is the join for both. The row
+        # is STORED as away@home (ab20781, so the ledger can look a
+        # college total up like every other sport's); player_stats and
+        # the closing-line file still carry the numeric ESPN id, which
+        # `cfbfastr._extra` now keeps as `espn_game_id`.
+        #
+        # Keyed one way, `cfbstats.parse_player_stats` looked up
+        # 401628319 in a table keyed 'espn:52@espn:59' and joined ZERO
+        # rows — every season, silently, because a parser that finds no
+        # game just counts a skip. Same for `cfblines.parse_lines`.
+        # Aliasing here rather than teaching each parser both names keeps
+        # the knowledge in the one place that already holds both.
+        out[str(r["game_id"])] = entry
+        espn_id = str(extra.get("espn_game_id") or "").strip()
+        if espn_id:
+            out[espn_id] = entry
     return out
 
 
@@ -986,11 +1003,21 @@ def ingest_cfb_lines(conn, seasons: list[int] | None = None,
             extra = _json.loads(r["extra"] or "{}")
         except (ValueError, TypeError):
             extra = {}
-        games[str(r["game_id"])] = {
+        entry = {
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
             "season": r["season"], "period": r["period"], "extra": extra,
         }
+        # BOTH KEYS, for the reason `cfb_games_for` is aliased the same
+        # way: the row is STORED as away@home (ab20781) and the mirror's
+        # closing-line file keys by the numeric ESPN id, which
+        # `cfblines.parse_lines` looks up here. Keyed one way this joined
+        # zero lines — and it is a SECOND map over the same table, which
+        # is why fixing `cfb_games_for` alone left half the bug standing.
+        games[str(r["game_id"])] = entry
+        espn_id = str(extra.get("espn_game_id") or "").strip()
+        if espn_id:
+            games[espn_id] = entry
     if not games:
         result["skipped"].append(
             "cfb lines: no ingested games to attach closes to — run the "

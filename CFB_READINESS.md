@@ -349,18 +349,61 @@ not.
 
 They are two sets now — `POWER_CONFERENCES` (attention) and
 `BETTABLE_CONFERENCES` (money) — with identical membership, so today's
-board is unchanged. To answer the question: add `"Pac-12"` to
-`BETTABLE_CONFERENCES` and nothing else, replay, and read the bet count
-and the ROI at the close the way Phase 8 read them for the Group of
-Five (2,902 → 1,324, −4.1%). Bettable if it clears; left out if it does
-not.
+board is unchanged. The switch is `"Pac-12"` into `BETTABLE_CONFERENCES`
+and nothing else.
 
-*What the 2026 feed says about the league itself,* since the answer used
-to be "two schools": the rebuilt Pac-12 is real and in the feed — **46
-games** of 888, alongside 138 FBS programs across 11 conferences (the
-table at the top of this document). The premise in
-`assets.probe_conference_table` that called it "two schools rather than
-a conference" was true of 2024-25 and is corrected.
+**Answered — no — and without needing the replay.** "Pac-12" does not
+name one league across this data. Counted off the cfbfastR schedules
+(team-games where the side is FBS):
+
+| season | Pac-12 team-games | what it was |
+|---|---|---|
+| 2022 | 146 | a real power conference, twelve schools |
+| 2024 | 25 | two orphans: Oregon State, Washington State |
+| 2026 | 46 | a rebuilt league of eight |
+
+And the eight, with where each one's record actually lives:
+
+| school | 2022 | 2024 | 2026 |
+|---|---|---|---|
+| Boise State | Mountain West | Mountain West | Pac-12 |
+| Colorado State | Mountain West | Mountain West | Pac-12 |
+| Fresno State | Mountain West | Mountain West | Pac-12 |
+| San Diego State | Mountain West | Mountain West | Pac-12 |
+| Utah State | Mountain West | Mountain West | Pac-12 |
+| Texas State | Sun Belt | Sun Belt | Pac-12 |
+| Oregon State | Pac-12 | Pac-12 | Pac-12 |
+| Washington State | Pac-12 | Pac-12 | Pac-12 |
+
+**Five of the eight are the Mountain West under a new name**, and a
+sixth is Sun Belt. So "should the board bet the 2026 Pac-12" is very
+nearly "should it bet the Mountain West" — which Ask 1 already answered
+on a 2,902-bet replay. The switch stays off, and now for a reason
+somebody can check.
+
+*This is also why the obvious replay would have lied.* Keyed on the
+conference **label** over 2022-25 it would have measured a power
+conference for two seasons and two orphan schools for two more, called
+the answer "the Pac-12", and counted none of the Mountain West history
+six of the eight members carry. If the question is ever reopened it has
+to be asked **per team**, not per label.
+
+*What the earlier drafts of this section got wrong,* kept because the
+mistakes are the reusable part. One said to replay "the way Phase 8 read
+them" as though a harness existed — none does; `run_cfb_slate` has one
+caller and it is the live build. The next said the ROI could not be
+measured at all, reasoning from `schedule_closes` (mirror closes carry
+numbers, not prices) without querying `odds_history`, which holds **3,012
+priced spread closes, 2,987 totals and 4,078 moneylines**. Moneylines
+look unpriced to a naive count and are not: `lineledger` writes one row
+per team with the price in `over_odds` and `under_odds` NULL by design.
+
+*Two things a future harness will need,* both verified here: stored games
+carry **no conference** (`cfbdata.game_rows` keeps `conference_game` as a
+bool, not the names), so it must join the schedule; and the alias map
+handles the feed's spellings correctly across 2022-2026 — `Mid-American`
+→ MAC, `American Athletic` → American, with no unnamed conference in any
+season.
 
 **2. Sit out September? — "no."** Nothing changes: the board publishes
 in September as it does in November. Recorded so the evidence is next to

@@ -402,6 +402,58 @@ def test_the_markets_with_no_opportunity_column_are_left_alone():
     assert "receptions" not in C.ZERO_WHEN and "pass_yds" not in C.ZERO_WHEN
 
 
+# --- the join, which failed to zero rows and said nothing ------------------
+def test_the_schedule_keeps_the_mirror_numeric_id_it_no_longer_stores_under():
+    """`parse_schedule` rewrites game_id to away@home so the ledger can
+    look a college total up like every other sport (ab20781). Every OTHER
+    file on the same mirror still keys by the numeric ESPN id, so dropping
+    it there is what left this parser joining nothing."""
+    from engine.sources import cfbfastr
+    import json as _json
+
+    row = {"game_id": "401628319", "season": 2024, "week": "1",
+           "start_date": "2024-08-31T16:00:00.000Z",
+           "home_id": "52", "away_id": "59",
+           "home_team": "Florida State", "away_team": "Georgia Tech",
+           "home_division": "fbs", "away_division": "fbs",
+           "home_points": "21", "away_points": "24", "neutral_site": "FALSE"}
+    got = cfbfastr.parse_schedule([row], 2024, {})["games"]
+    assert len(got) == 1, got
+    g = got[0]
+    assert g["game_id"] == "espn:59@espn:52", g["game_id"]
+    extra = _json.loads(g["extra"] or "{}")
+    assert extra.get("espn_game_id") == "401628319", extra
+
+
+def test_a_player_row_finds_its_game_by_the_numeric_id():
+    """THE REGRESSION THIS PINS, and why it was invisible: a parser that
+    cannot find a game just counts a skip, so the whole college player
+    ingest joined ZERO rows without raising anything. Measured against
+    the real 2023 mirror files at the time of the fix: 0 rows joined
+    before, 117,415 of 182,694 after (the rest are FCS games the schedule
+    correctly drops)."""
+    from engine.sources import cfbfastr
+    from engine import db, ingest
+
+    row = {"game_id": "401628319", "season": 2024, "week": "1",
+           "start_date": "2024-08-31T16:00:00.000Z",
+           "home_id": "52", "away_id": "59",
+           "home_team": "Florida State", "away_team": "Georgia Tech",
+           "home_division": "fbs", "away_division": "fbs",
+           "home_points": "21", "away_points": "24", "neutral_site": "FALSE"}
+    conn = db.connect(":memory:")
+    db.upsert_games(conn, cfbfastr.parse_schedule([row], 2024, {})["games"])
+    games = ingest.cfb_games_for(conn, 2024)
+
+    # The key the player-stats and closing-line files actually carry…
+    assert "401628319" in games, sorted(games)
+    # …and the key the row is stored under, which the ledger needs.
+    assert "espn:59@espn:52" in games, sorted(games)
+    # Same game, not two.
+    assert games["401628319"] is games["espn:59@espn:52"]
+    assert games["401628319"]["home"] == "espn:52"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

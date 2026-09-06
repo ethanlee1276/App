@@ -663,6 +663,16 @@ def from_game_bet(row: dict, sport: str = "nfl",
         return _refuse(census, "no real book price")
     if row.get("live"):
         return _refuse(census, "the game is already under way")
+    # …AND ONE THAT HAS FINISHED, which `live` says nothing about. Every
+    # producer sets `live` as `state == "live"`, so a FINAL game answers
+    # False to it and sailed onto a board called Most Likely To Hit with
+    # a settled result and a pre-game probability. `rules.game_has_started`
+    # is the wider fact — live OR final, "once a pre-game projection is
+    # stale" — and it was computed in every `_finish_bet` and thrown away.
+    # Counted separately from `live` because "still playing" and "already
+    # over" are different answers to "why is this not on the board".
+    if row.get("started"):
+        return _refuse(census, "the game has already been played")
     if row.get("conditional"):
         return _refuse(census, "a conditional, which is a hold and not a pick")
     prob = row.get("win_prob")

@@ -133,9 +133,42 @@ POWER_CONFERENCES = {"SEC", "Big Ten", "Big 12", "ACC"}
 #: the Pac-12" could mean anything while one edit did both.
 #:
 #: Split, the question is one dial: put "Pac-12" in the set below and
-#: nowhere else, replay, and read the bet count and the ROI at the close
-#: the way Phase 8 read them for the Group of Five. Whether it belongs
-#: there is a money decision and is not made here.
+#: nowhere else. Whether it belongs there is a money decision and is not
+#: made here.
+#:
+#: AND THE ANSWER IS NO, on evidence, without a replay — because
+#: "Pac-12" does not name one league. Counted off the cfbfastR schedules
+#: 2022-2026 (team-games where the side is FBS):
+#:
+#:     2022   146   a real power conference, twelve schools
+#:     2024    25   two orphans — Oregon State and Washington State
+#:     2026    46   a rebuilt league of eight
+#:
+#: The eight are Boise State, Colorado State, Fresno State, San Diego
+#: State and Utah State — all Mountain West through 2024 — plus Texas
+#: State from the Sun Belt, and the two legacy schools. So FIVE OF THE
+#: EIGHT are Mountain West under a new name, and "should the board bet
+#: the 2026 Pac-12" is very close to "should it bet the Mountain West",
+#: which the Group of Five decision already answered on a 2,902-bet
+#: replay.
+#:
+#: THAT IS ALSO WHY THE OBVIOUS REPLAY WOULD HAVE LIED. Keyed on the
+#: conference LABEL over 2022-25 it would have measured a power
+#: conference for two seasons and two orphan schools for two more, called
+#: the result "the Pac-12", and counted none of the Mountain West history
+#: that six of the eight members actually carry. A number from that is
+#: worse than no number. If the question is ever reopened it has to be
+#: asked per TEAM, not per label.
+#:
+#: The data to run a gate replay does exist, contrary to a previous draft
+#: of this comment: `odds_history` holds 3,012 priced spread closes, 2,987
+#: totals and 4,078 moneylines (one row per team, price in `over_odds`,
+#: `under_odds` NULL by design — a query wanting both on one row reports
+#: zero and is wrong). What does not exist is the harness: nothing here
+#: replays history through these gates, so Phase 8's 2,902 -> 1,324 came
+#: from a one-off that was never checked in. Stored games also carry no
+#: conference — `cfbdata.game_rows` keeps `conference_game` as a bool and
+#: not the names — so any such harness must join the schedule for them.
 BETTABLE_CONFERENCES = set(POWER_CONFERENCES)
 
 #: The sentence both boards show when the rule below refuses a game.

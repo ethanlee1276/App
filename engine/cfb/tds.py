@@ -747,7 +747,29 @@ def weather_multiplier(weather: dict | None, pos: str
 #: Watch-list price sanity — same reasoning as the NFL's TD_WATCH_ODDS:
 #: wider than the value window on the juiced side by design.
 CFB_WATCH_ODDS = (-400, 1500)
-CFB_WATCH_LIMIT = 5
+
+#: How many most-likely scorers the board carries. FIVE WAS THE NFL'S
+#: NUMBER (touchdowns.TD_WATCH_LIMIT), copied across, and it is sized for
+#: the NFL's Sunday: sixteen games. College plays sixty-eight on the
+#: Saturday this repo's own readiness audit counted, so the same five rows
+#: were covering a slate four times the size.
+#:
+#: IT MATTERS MORE HERE THAN IT DOES THERE, because these rows are not a
+#: strip under the value picks in college — they are the whole player half
+#: of the Most Likely board. Every college yardage market answers
+#: `likely.rankable` False (no measured AUC), so `anytime_td` at 0.675 is
+#: the only player market college can rank at all. The board holds
+#: `likely.LIMIT` = 40 player rows and college was feeding it five.
+#:
+#: Twenty is the slate ratio, not a measurement, and it is deliberately
+#: short of 40: at AUC 0.675 the ordering is real but weaker than the
+#: NFL's 0.721, so the fortieth row is a much softer claim than the third
+#: and this board should not fill itself just because it can. What sets
+#: the number honestly is how fast precision decays down the ranking —
+#: measurable on the graded record, not yet measured. Until it is, the
+#: caps that follow this one still bite: `likely.admissible` refuses on
+#: price and probability, and LIMIT truncates.
+CFB_WATCH_LIMIT = 20
 
 
 def game_fairs(player_quotes: dict, spread_home, total) -> dict:
