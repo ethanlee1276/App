@@ -141,9 +141,12 @@ def test_an_empty_sport_scope_is_the_empty_state_and_nothing_else():
     i = rr.index("if (scoped && !o.settled && !o.open) {")
     branch = rr[i:rr.index("bindRecordScopes(host);", i)]
     assert "Nothing journaled for" in branch and "All bets" in branch
-    for panel in ("recRestatedSection", "recProseSection", "recSelfTuningSection",
-                  "recLossPatternsSection", "recPrereg", "recHypothesisLab"):
+    for panel in ("recSelfTuningSection", "recLossPatternsSection", "recPrereg", "recHypothesisLab"):
         assert panel not in branch, f"{panel} is back under the empty state"
+    # Two stay, because both draw nothing for a sport they have nothing
+    # on, and the night desk can brief a sport before its first settle.
+    assert "recRestatedSection(d.restated, scope)" in branch
+    assert "recProseSection(d.prose, scope)" in branch
     # The ladder itself is not gone: the learning room still draws it for
     # a sport with a journal.
     rooms = _fn("_recordRooms")

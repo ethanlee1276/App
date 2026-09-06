@@ -12633,22 +12633,28 @@ async function renderRecord() {
     return;
   }
   if (scoped && !o.settled && !o.open) {
-    // THE EMPTY STATE, AND ONLY THE EMPTY STATE. This used to append the
-    // whole learning ladder under the slate, on the argument that an
-    // empty journal is not an empty model. Rendered for the NBA on
-    // 2026-09-06 it read: "Nothing journaled for NBA yet", "Nothing
-    // tuned for NBA yet", a mining panel counting "461 graded bets, all
-    // sports", preregistered tests about NFL props, and a lab of four
-    // zeros — five panels saying nothing, one of them about another
-    // league. Ethan: "everything seems cluttered." The ladder still
-    // renders for every sport that has a journal, and on "All bets".
+    // THE EMPTY STATE, AND ONLY WHAT HAS SOMETHING TO SAY ABOUT THIS
+    // SPORT. This used to append the whole learning ladder under the
+    // slate, on the argument that an empty journal is not an empty
+    // model. Rendered for the NBA on 2026-09-06 it read: "Nothing
+    // journaled for NBA yet", "Nothing tuned for NBA yet", a mining
+    // panel counting "461 graded bets, all sports", preregistered tests
+    // about NFL props, and a lab of four zeros — five panels saying
+    // nothing, one of them about another league. Ethan: "everything
+    // seems cluttered." The restated view and the night desk stay: both
+    // draw nothing for a sport they have nothing on, and the desk can
+    // have a brief for a sport before its first pick settles (the NFL,
+    // every August). The ladder still renders in full for every sport
+    // with a journal, and on "All bets".
     host.innerHTML = scopeBar + `<div class="empty-slate"><div class="es-icon">${icon("book", 30)}</div>
       <div class="es-title">Nothing journaled for ${escapeHtml(
         (SPORT_META[scope] || {}).name || scope.toUpperCase())} yet</div>
       <div class="es-sub">This board has not recommended a bet that reached a
       result. It fills itself in — every pick is journaled at its real price
       the moment it is made, and grades when the games settle. The whole
-      journal’s learning is under <b>All bets</b>.</div></div>`;
+      journal’s learning is under <b>All bets</b>.</div></div>`
+      + recRestatedSection(d.restated, scope)
+      + recProseSection(d.prose, scope);
     bindRecordScopes(host);
     return;
   }
