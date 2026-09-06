@@ -173,6 +173,45 @@ def test_a_thin_book_counts_graded_picks_and_says_so():
     assert "` · ${n} graded — thin sample`" in b
     assert "settled — thin sample" not in b
 
+
+def test_the_receipts_list_names_its_cap_instead_of_claiming_the_lot():
+    """The export carries the most recent RECENT_LIMIT settled picks. The
+    button said "Show all 20 settled picks" beside a verdict reading 193
+    settled, which is a capped list claiming to be complete."""
+    from engine import ledger
+    assert ledger.RECENT_LIMIT >= 60
+    src = (ROOT / "engine" / "ledger.py").read_text()
+    assert '"recent": recent_settled(conn, RECENT_LIMIT, sport=sport, since=since)' in src
+    assert '"recent": recent_settled(conn, RECENT_LIMIT, since=since)' in src
+    assert "recent_settled(conn, 20," not in src, "the per-sport list was capped at 20"
+    rs = _fn("recRecentSection")
+    assert "function recRecentSection(recent, settled)" in rs
+    assert "const capped = (settled || 0) > recent.length;" in rs
+    assert "most recent of ${settled} settled" in rs
+    assert "Show ${more} more" in rs and "Show all ${recent.length}" not in rs
+    rr = _fn("renderRecord")
+    assert "${recRecentSection(src.recent || [], o.settled)}" in rr, \
+        "the count must be the verdict's own, or the two can disagree"
+
+
+def test_the_cap_is_real_and_the_rows_are_the_newest():
+    import tempfile
+    from engine import ledger
+    conn = ledger.connect(os.path.join(tempfile.mkdtemp(), "l.db"))
+    rows = [(f"2026-06-{d:02d}", f"P{d}") for d in range(1, 29)]
+    conn.executemany(
+        "INSERT INTO bets (ts, sport, date, player, market, side, line, book, odds, "
+        "stake_units, stake_dollars, status, pnl_units, pnl_dollars, category) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [(d + "T12:00:00", "mlb", d, p, "hits", "OVER", 1.5, "DK", -110, 1.0, 10.0,
+          "won", 0.91, 9.1, "main") for d, p in rows])
+    conn.commit()
+    got = ledger.recent_settled(conn, 10, sport="mlb")
+    assert len(got) == 10 and got[0]["date"] == "2026-06-28", "newest first"
+    report = ledger.sport_report(conn, "mlb")
+    assert len(report["recent"]) == 28, "under the cap, every settled pick ships"
+    assert report["overall"]["settled"] == 28
+
 if __name__ == "__main__":
     import traceback
     fails = 0

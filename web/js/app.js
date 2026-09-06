@@ -9879,16 +9879,29 @@ function recSplitsSection(o, booksDrawn) {
 let _recAllPicks = false;
 window._recShowPicks = () => { _recAllPicks = true; renderRecord(); };
 
-function recRecentSection(recent) {
+function recRecentSection(recent, settled) {
   const shown = _recAllPicks ? recent : recent.slice(0, 12);
   const more = recent.length - shown.length;
+  /* THE LIST IS CAPPED AND USED TO SAY IT WAS COMPLETE. The export
+     carries the most recent `RECENT_LIMIT` settled picks; the button
+     said "Show all 20 settled picks" under a verdict reading 193
+     settled, which is how Ethan read the page as not showing the bets
+     it had recommended (2026-09-06). The button now offers what it can
+     actually reveal, and the sub-line names the cap against the true
+     count — which is the verdict's own `settled`, so the two can never
+     disagree. Older picks are not hidden, only not shipped in this
+     file: they are in the journal, in every number above, and in the
+     receipts CSV. */
+  const capped = (settled || 0) > recent.length;
   return `
     <div class="section-title"><span class="st-ico">${icon("list", 15)}</span>Recent settled picks
-      <span class="sub">— newest first, at the price we actually got</span></div>
+      <span class="sub">— newest first, at the price we actually got${
+        capped ? ` · the ${recent.length} most recent of ${settled} settled`
+               : ""}</span></div>
     <div class="card rec-list">
       ${shown.map(recSettledRow).join("") || `${panelEmpty("Nothing settled yet.")}`}
       ${more > 0 ? `<button class="rec-more" onclick="_recShowPicks()">
-        Show all ${recent.length} settled picks</button>` : ""}
+        Show ${more} more</button>` : ""}
     </div>`;
 }
 function recAnalytics(curve, o, eras) {
@@ -12769,7 +12782,7 @@ async function renderRecord() {
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recCalendarHTML(src.curve)}
     ${recSplitsSection(o, !!scoped)}
-    ${recRecentSection(src.recent || [])}
+    ${recRecentSection(src.recent || [], o.settled)}
     ${edgePanel}
   `;
   host.innerHTML = scopeBar

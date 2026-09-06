@@ -5126,7 +5126,7 @@ def sport_report(conn, sport: str,
             "hidden_settled": max(0, everything["settled"] - perf["settled"]),
         },
         "curve": pnl_curve(conn, sport, since=since),
-        "recent": recent_settled(conn, 20, sport=sport, since=since),
+        "recent": recent_settled(conn, RECENT_LIMIT, sport=sport, since=since),
         "calibration": calibration(conn, sport=sport),
         "calibration_era": calibration(conn, since=MODEL_ERAS[-1]["start"],
                                        sport=sport),
@@ -5142,6 +5142,15 @@ def sport_report(conn, sport: str,
 # Not a gate on showing it — hiding your own results is its own dishonesty
 # — but the page says so next to every rate it prints.
 MIN_GRADED_FOR_SIGNAL = 30
+
+#: How many settled picks the Record page's receipts list carries, per
+#: sport and for the whole journal. It was 20 per sport and 30 pooled,
+#: and the page's own button said "Show all 20 settled picks" beside a
+#: verdict reading 193 settled — the list was capped and said it was
+#: complete (2026-09-06). The page now names the cap; this is what it
+#: names. Sixty rows cost about a kilobyte gzipped on the exported file
+#: and are more than a phone scrolls.
+RECENT_LIMIT = 60
 
 
 def _parlay_report(conn) -> dict:
@@ -5363,7 +5372,7 @@ def export_json(conn, path) -> None:
         "mlb": performance(conn, "mlb", since=since),
         "nfl": performance(conn, "nfl", since=since),
         "curve": pnl_curve(conn, since=since),
-        "recent": recent_settled(conn, since=since),
+        "recent": recent_settled(conn, RECENT_LIMIT, since=since),
         "model_eras": era_report(conn),
         "longshots": longshot_report(conn, since=since),
         # THE PAPER BOOK, READ BACK. `log_most_likely` has journaled this
