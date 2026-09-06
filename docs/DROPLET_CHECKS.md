@@ -857,3 +857,50 @@ sudo -u qellys python3 stakecheck.py --info
   Send it to me before changing any gate — one survivor out of a dozen
   at FDR 0.05 is still a one-in-twenty story, and the next thing to do
   is preregister it (`engine/prereg.py`) rather than act on it.
+
+## 15. If not the claimed edge, then what?
+
+Ethan, 2026-09-06, reading the §14 run — 931 settled bets, the model at
+AUC 0.589, the market at 0.589, the claimed edge at 0.471, the paired
+difference −0.000 [−0.007, +0.007], and no slice surviving: **"Rebuild
+what it selects on."** Keep the staking rule, stop selecting on claimed
+edge, sort and gate on the model's probability rank instead.
+
+Nothing in the gate has moved. `stakecheck --select` is the backtest
+that has to run first, because the alternative has never been scored
+against the rule it would replace, and shipping it on the argument alone
+would put a second unmeasured claim exactly where the first one stood.
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 stakecheck.py --select
+sudo -u qellys python3 stakecheck.py --select --sport mlb
+sudo -u qellys python3 stakecheck.py --select --as-placed
+```
+
+It orders the same settled pool three ways — by claimed edge, by the
+model's probability, and by the market's implied price as a control —
+bets the top 25% of each at the prices we actually took, and counts the
+money. Same rows, same vig, same settling, so a difference in ROI is a
+difference in *selection* and nothing else.
+
+**Read the overlap block before the ROI table.** If the `prob` slice and
+the `market` slice are 85% the same bets, then "sort by the model's
+probability" and "sort by the shortest price" are the same instruction
+in different words — and `engine/likely.py` already carries what that
+costs, in Ethan's own words from 2026-09-01, after a board built that
+way spent its first settled night on −800, −1200 and −1800 rows and lost
+11.2%. A high overlap does not kill the rebuild; it says the rebuild
+needs a price bar bolted to it before it selects anything.
+
+**What it cannot say**, and the report prints this itself: whether
+probability-ranking would have *admitted* bets the edge gate refused.
+The journal holds the bets we placed, not the ones we passed on, and a
+candidate with no outcome cannot be scored. So every figure is
+conditional on today's gate having already run — which is the right
+evidence for changing the board's sort order and its cap, and not enough
+on its own for opening the gate wider.
+
+Send me all three outputs. The `--sport mlb` cut matters because 858 of
+the 931 are baseball and the NFL has *zero* settled bets: whatever this
+says, it is a baseball verdict, and football goes into Week 1 unmeasured.

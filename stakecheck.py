@@ -371,6 +371,71 @@ def info_report(rows: list[dict]) -> None:
     print(f"\n  read-only; nothing was written.\n")
 
 
+def select_report(rows: list[dict], top_share: float = None,
+                  stakes: str = "flat") -> None:
+    """WHICH ORDERING OF THE SAME POOL SHOULD GET THE MONEY?
+
+    The information test says the claimed edge cannot sort winners from
+    losers. That finding condemns a variable; it does not name a
+    replacement. Ethan's call on 2026-09-06 was to sort and gate on the
+    model's probability instead, and this is that decision scored against
+    the rule it would replace, on the bets we actually placed, before any
+    gate moves.
+
+    Read the overlap row first. See engine/selectorder.py.
+    """
+    from engine.selectorder import (compare, reading, cut_reading, TOP_SHARE,
+                                    ORDERINGS, PROXY_OVERLAP)
+    share = TOP_SHARE if top_share is None else top_share
+    res = compare(rows, top_share=share, stakes=stakes)
+    print(f"\n{'='*70}\n  WHICH ORDERING OF THE SAME POOL SHOULD GET THE "
+          f"MONEY?\n{'='*70}")
+    if not res["enough"]:
+        print(f"  {res['note']}.\n")
+        return
+    pct = int(round(res["top_share"] * 100))
+    print(f"  {res['n']} settled bets. Each rule orders ALL of them and bets "
+          f"its top {pct}%\n  at {'one flat unit' if stakes == 'flat' else 'the size actually recorded'}"
+          f" — same rows, same prices, same vig, so the only\n  difference "
+          f"below is which bets got the money.\n")
+    a = res["all"]
+    print(f"    {'ordering':<10}{'bets':>6}{'won':>6}{'hit':>9}"
+          f"{'staked':>10}{'net':>10}{'ROI':>9}")
+    for o in ORDERINGS:
+        r = res["orderings"][o]
+        hit = f"{r['hit']:.1%}" if r["hit"] is not None else "—"
+        roi = f"{r['roi']:+.1%}" if r["roi"] is not None else "—"
+        print(f"    {o:<10}{r['bets']:>6}{r['wins']:>6}{hit:>9}"
+              f"{r['staked']:>10.1f}{r['net']:>+10.1f}{roi:>9}")
+    hit = f"{a['hit']:.1%}" if a["hit"] is not None else "—"
+    roi = f"{a['roi']:+.1%}" if a["roi"] is not None else "—"
+    print(f"    {'(the lot)':<10}{a['bets']:>6}{a['wins']:>6}{hit:>9}"
+          f"{a['staked']:>10.1f}{a['net']:>+10.1f}{roi:>9}")
+
+    print(f"\n  HOW MUCH OF EACH SLICE IS THE SAME BETS")
+    for k, v in res["overlap"].items():
+        aa, _, bb = k.partition("|")
+        flag = "  <-- the same instruction, different words" if (
+            v is not None and v >= PROXY_OVERLAP and {aa, bb} == {"prob", "market"}
+        ) else ""
+        print(f"    {aa} vs {bb:<8}{'—' if v is None else f'{v:.0%}'}{flag}")
+
+    print(f"\n  DIFFERENCE IN ROI, paired bootstrap over the bets")
+    for k, d in res["diff"].items():
+        if d["point"] is None or d["lo"] is None:
+            print(f"    {k:<16}—")
+            continue
+        print(f"    {k:<16}{d['point']:+.1%}   95% CI "
+              f"[{d['lo']:+.1%}, {d['hi']:+.1%}]")
+    print(f"\n  READ IT LIKE THIS\n    {reading(res)}")
+    print(f"    {cut_reading(res)}")
+    print(f"\n  WHAT THIS CANNOT SAY: whether probability-ranking would "
+          f"have admitted\n  bets the edge gate refused. The journal holds "
+          f"the bets we placed, not\n  the ones we passed on, and a "
+          f"candidate with no outcome cannot be scored.")
+    print(f"\n  read-only; nothing was written.\n")
+
+
 def report(rows: list[dict]) -> None:
     if not rows:
         print("No settled bets match. Nothing to measure.")
@@ -1376,6 +1441,16 @@ def main() -> None:
     ap.add_argument("--info", action="store_true",
                     help="does our number know anything the price does not? "
                          "Ranks bets by model, by market, and by claimed edge")
+    ap.add_argument("--select", action="store_true",
+                    help="which ORDERING of the same pool should get the "
+                         "money? Scores edge-ranking against "
+                         "probability-ranking on the bets already settled")
+    ap.add_argument("--top-share", type=float, default=None,
+                    help="the share of the pool each ordering bets under "
+                         "--select (default 0.25)")
+    ap.add_argument("--as-placed", action="store_true",
+                    help="score --select at the stakes actually recorded "
+                         "instead of one flat unit a bet")
     ap.add_argument("--paper", action="store_true",
                     help="measure the PAPER book instead of the real one — "
                          "same picks, same settling, zero dollars")
@@ -1395,6 +1470,10 @@ def main() -> None:
     rows = _rows(args.db, args.sport, args.since,
                  category="paper" if args.paper else None,
                  measurement=args.include_measurement)
+    if args.select:
+        select_report(rows, top_share=args.top_share,
+                      stakes="as_placed" if args.as_placed else "flat")
+        return
     if args.info:
         # Its own trailer is printed inside, since it ends on the reading
         # rather than on a table.
