@@ -180,10 +180,36 @@ def test_a_recommended_prop_is_never_counted_as_closed():
 
 
 def test_a_healthy_store_produces_no_calibration_bucket_at_all():
-    _store({"nfl:rush_yds": {"temperature": 1.4, "intercept": 0.0}})
+    """The markets here are ones only their STORE can shut — see the test
+    below for the two the store no longer speaks for."""
+    _store({"nfl:receptions": {"temperature": 1.4, "intercept": 0.0},
+            "nfl:pass_yds": {"temperature": 1.2, "intercept": 0.0}})
+    try:
+        rows = [{"recommended": True, "market": "receptions"},
+                {"recommended": False, "market": "pass_yds",
+                 "market_label": "Passing Yards"}]
+        got = census(rows, sport="nfl")
+        assert "calibration" not in got and "calibration_markets" not in got
+    finally:
+        _restore()
+
+
+def test_a_healthy_store_does_not_reopen_a_market_measurement_shut():
+    """The yardage markets fail on the SHAPE of their distribution, not
+    the width of it — engine/yardagefit.py: "a temperature cannot rescue
+    it: a monotone squeeze cannot move mass from one end of a
+    distribution to the other". So a healthy refit is exactly the thing
+    that must not put them back on the board, and after 2026-09-06 the
+    store is not what decides: `calibrate.SHUT_MARKETS` is, and it names
+    the measurement (AUC 0.479 against real closes) and what would
+    re-open them (fix the distribution, re-measure, delete the entry)."""
+    _store({"nfl:rush_yds": {"temperature": 1.4, "intercept": 0.0},
+            "nfl:rec_yds": {"temperature": 1.3, "intercept": 0.0}})
     try:
         got = census(_rows(), sport="nfl")
-        assert "calibration" not in got and "calibration_markets" not in got
+        assert got["calibration"] == 2, got
+        assert got["calibration_markets"] == ["Receiving Yards",
+                                              "Rushing Yards"], got
     finally:
         _restore()
 
