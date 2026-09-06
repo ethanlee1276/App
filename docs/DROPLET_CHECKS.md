@@ -762,3 +762,36 @@ sudo -u qellys python3 launch.py --why-pick "<a player on tonight's college boar
   pick — "stake is 0.00u" with a probation note is the sport being
   gated rather than the pick being refused.
 * No rows at all: the board recommended nothing that day.
+
+## 12. College totals never had a joinable game key
+
+Found from Ethan's §11 run on 2026-09-06: the ingest landed 25 games and
+`--settle all` still graded nothing, with `--why-open` filing college
+TOTALS under "no stat line". That label was wrong and the cause was a
+key: every other ingest writes a game row as `away@home` (`DAL@TB`), and
+a total bet stores exactly that matchup string — the college feed wrote
+the mirror's numeric id instead, so 0 of 3,133 rows were joinable.
+
+The nightly now rekeys before it refreshes. To do it at once:
+
+```bash
+cd /srv/qellys
+python3 -c "
+import sys; sys.path.insert(0, '.')
+from engine import db, ingest
+print(ingest.remap_cfb_game_ids(db.connect()))"
+sudo -u qellys python3 launch.py --settle all
+sudo -u qellys python3 launch.py --why-open | head -30
+```
+
+* `renamed` should be in the thousands on the first run and 0 after —
+  it is idempotent. `merged` counts games that already had a row under
+  the right key; those duplicates would have had `standings.compute`
+  counting one game twice.
+* College totals should start grading. Spreads, moneylines and team
+  totals join on the TEAM columns and were never affected by this.
+* What this does NOT fix: a bet on an FBS-vs-FCS game. `parse_schedule`
+  keeps only FBS-vs-FBS, so those games have no result row at all and
+  their bets stay open — that is the next item, and it needs a marker in
+  `extra` so `engine/cfb/ratings.py` can keep excluding them from the
+  fit while the settle path can see them.

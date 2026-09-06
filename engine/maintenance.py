@@ -1115,6 +1115,15 @@ def run_if_due(force: bool = False, harvest: bool = True, log=print,
             backfill = have < _CFB_MIN
             seasons = ([today.year - n for n in (4, 3, 2, 1)] if backfill
                        else ([season] if in_season else []))
+            # The stored rows first, or the refresh writes correct keys
+            # beside three thousand unjoinable ones. Idempotent and cheap
+            # once done: the scan finds nothing on the next night.
+            from .ingest import remap_cfb_game_ids
+            _fix = remap_cfb_game_ids(_cconn)
+            if _fix["renamed"] or _fix["merged"]:
+                log(f"  cfb keys: {_fix['renamed']:,} game(s) rekeyed to "
+                    f"away@home, {_fix['merged']:,} duplicate(s) merged — "
+                    f"college totals can be graded now")
             if seasons:
                 res = ingest_cfb_history(
                     _cconn, seasons, quiet=True,

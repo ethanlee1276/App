@@ -891,6 +891,61 @@ def remap_cfb_team_keys(conn, id_to_abbr: dict | None = None) -> dict:
     return out
 
 
+def remap_cfb_game_ids(conn) -> dict:
+    """Rewrite college ``game_id`` from the mirror's number to away@home.
+
+    Every other ingest keys a game row `f"{away}@{home}"`, and a TOTAL
+    bet stores exactly that string as its matchup key — so the college
+    feed's numeric id meant `ledger._game_bet_evidence` could never find
+    the game and no college total has ever graded.
+
+    Rewriting the key cannot be a plain UPDATE: game_id is part of the
+    primary key, so a row whose new key already exists would collide, and
+    leaving both would let `standings.compute` count one game twice.
+    Where the destination already holds a scored row the numeric one is
+    deleted; otherwise it is renamed. Returns what it did.
+    """
+    out = {"renamed": 0, "merged": 0, "left": 0}
+    rows = conn.execute(
+        "SELECT season, period, game_id, home, away, home_score "
+        "FROM games WHERE sport='cfb' AND game_id NOT LIKE '%@%'").fetchall()
+    for r in rows:
+        home, away = str(r["home"] or ""), str(r["away"] or "")
+        if not home or not away:
+            out["left"] += 1
+            continue
+        want = f"{away}@{home}"
+        clash = conn.execute(
+            "SELECT home_score FROM games WHERE sport='cfb' AND season=? "
+            "AND period=? AND game_id=?",
+            (r["season"], r["period"], want)).fetchone()
+        if clash is None:
+            conn.execute(
+                "UPDATE games SET game_id=? WHERE sport='cfb' AND season=? "
+                "AND period=? AND game_id=?",
+                (want, r["season"], r["period"], r["game_id"]))
+            out["renamed"] += 1
+            continue
+        # A row already stands under the right key. Keep whichever has a
+        # score and drop the duplicate rather than counting the game twice.
+        if clash["home_score"] is None and r["home_score"] is not None:
+            conn.execute(
+                "UPDATE games SET home_score=?, away_score=? WHERE sport='cfb' "
+                "AND season=? AND period=? AND game_id=?",
+                (r["home_score"],
+                 conn.execute(
+                     "SELECT away_score FROM games WHERE sport='cfb' AND "
+                     "season=? AND period=? AND game_id=?",
+                     (r["season"], r["period"], r["game_id"])).fetchone()[0],
+                 r["season"], r["period"], want))
+        conn.execute(
+            "DELETE FROM games WHERE sport='cfb' AND season=? AND period=? "
+            "AND game_id=?", (r["season"], r["period"], r["game_id"]))
+        out["merged"] += 1
+    conn.commit()
+    return out
+
+
 def ingest_cfb_lines(conn, seasons: list[int] | None = None,
                      quiet: bool = False) -> dict:
     """Closing spreads and totals for college football's ingested games.

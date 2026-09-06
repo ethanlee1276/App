@@ -145,10 +145,19 @@ def parse_schedule(rows: list[dict], season: int,
         if len(date) != 10:
             skip("no usable date")
             continue
-        game_id = str(r.get("game_id") or "").strip()
-        if _blank(game_id):
+        if _blank(str(r.get("game_id") or "")):
             skip("no game id")
             continue
+        # THE KEY EVERY OTHER SPORT USES, and the reason a college total
+        # could never settle. This wrote the mirror's own numeric id
+        # ("401405059") while the NFL and MLB ingests both write
+        # `f"{away}@{home}"` — and a total bet stores that matchup key in
+        # its `player` column, which is what `ledger._game_bet_evidence`
+        # looks the game up by. Three thousand college rows, not one of
+        # them joinable: every college total sat open for ever, in a
+        # bucket the doctor reported as "no stat line" (2026-09-06).
+        # `ingest.remap_cfb_game_ids` rewrites the rows already stored.
+        game_id = f"{away}@{home}"
         games.append({
             "sport": "cfb",
             "season": int(season),
