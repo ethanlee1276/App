@@ -84,6 +84,35 @@ PBP_DIR = OUT / "pbp"
 PBP_MAX_AGE_S = 36 * 3600
 
 
+#: THE STAMP THE BROWSER DOES ARITHMETIC ON, in UTC and saying so.
+#:
+#: Ethan, 2026-09-06, screenshot of a live game: the park card read
+#: "updated 240 min ago" while the rail beside it showed pitches from a
+#: minute earlier and the topbar said "Updated 1m ago". The file was
+#: fine. The label was lying.
+#:
+#: 240 minutes is not a coincidence — it is the America/New_York offset
+#: in September, to the minute. These two lines wrote
+#: `datetime.now().isoformat()`: LOCAL time on a box whose service runs
+#: in Eastern, with nothing to say so. The page's `pbpAgo` appends "Z"
+#: and reads it as UTC, so 18:42 Eastern was read as 18:42 UTC — four
+#: hours in the past, on every live game, for as long as the card has
+#: existed.
+#:
+#: It survived because almost every other reader SLICES this string to
+#: show a clock time (`.slice(11, 16)`) rather than doing date maths on
+#: it, and a sliced local stamp shows the right local time. Exactly one
+#: reader subtracts it from `Date.now()`, and that is the one that broke.
+#:
+#: UTC with an explicit Z, so no reader has to guess. The clock-slicing
+#: readers now show UTC rather than Eastern, which is why `pbpAgo` was
+#: taught to handle both and why this is the only writer changed here:
+#: a stamp a human reads off a page and a stamp a machine subtracts are
+#: different jobs, and this one is the second.
+def _utc_stamp() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _row(r: dict) -> dict:
     """One game in the shape `app.js`'s fetchAllLive merge expects.
 
@@ -141,7 +170,7 @@ def build(league: str, pbp_dir: Path | None = None) -> dict:
     to spell it out — see engine/census.py and the college board that
     "showed nothing on opening Saturday and both logs lied about it".
     """
-    now = _dt.datetime.now().isoformat(timespec="seconds")
+    now = _utc_stamp()
     try:
         rows = fetch_rows(league, ttl=TTL)
     except DataUnavailable as exc:
@@ -292,7 +321,7 @@ def pbp_doc(league: str, g: dict, payload: dict,
     doc = {
         "league": league,
         "event_id": str(g.get("event_id") or ""),
-        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "generated_at": _utc_stamp(),
         "home": g.get("home"), "away": g.get("away"),
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},

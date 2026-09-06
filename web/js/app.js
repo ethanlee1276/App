@@ -32218,9 +32218,33 @@ function pbpTime(iso) {
   try { return tzTime(t); } catch (e) { return ""; }
 }
 
+/* How long ago the deep file was written.
+ *
+ * THE ONLY READER THAT DOES ARITHMETIC on `generated_at` — everything
+ * else slices it for display — which is why this is the only one that
+ * broke when the builder wrote a naive LOCAL stamp. It appended "Z"
+ * unconditionally, so a time written at 18:42 Eastern was read as 18:42
+ * UTC and the card announced "updated 240 min ago" beside a rail of
+ * pitches from a minute earlier (Ethan's screenshot, 2026-09-06). 240
+ * minutes is the September Eastern offset exactly.
+ *
+ * The writer now emits UTC with a Z. This is the belt to that braces:
+ * "Z" goes on only when the stamp carries NO zone at all, so a stamp
+ * that already says +00:00 or -04:00 is parsed as written instead of
+ * being corrupted by a suffix. A naive stamp is still assumed UTC —
+ * that is the convention now, and guessing local would put the bug back
+ * for anyone whose browser is not on the server's clock.
+ *
+ * NEGATIVE AGES ARE CLAMPED TO ZERO and always were. Worth keeping and
+ * worth naming: a file written a second in the future by clock skew
+ * should read "updated 0s ago", not a negative minute count, and the
+ * clamp is what stopped this bug being obvious in the other direction. */
 function pbpAgo(stamp) {
   if (!stamp) return "";
-  const t = Date.parse(stamp.endsWith("Z") ? stamp : stamp + "Z");
+  const raw = String(stamp);
+  // Anything after the time that looks like a zone: Z, +hh:mm, -hh:mm.
+  const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw);
+  const t = Date.parse(zoned ? raw : raw + "Z");
   if (!isFinite(t)) return "";
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
   return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
