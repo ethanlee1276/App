@@ -222,6 +222,18 @@ def _extra(r: dict) -> str | None:
         name = str(r.get(f"{side}_team") or "").strip()
         if name and not _blank(name):
             out[f"{side}_name"] = name
+    # THE MIRROR'S OWN NUMERIC ID, kept because the row is no longer
+    # STORED under it. `parse_schedule` rewrites `game_id` to away@home
+    # so the ledger can join college totals like every other sport
+    # (ab20781) — and every OTHER file on this mirror still keys by the
+    # numeric id: player_stats_{season}.csv carries 401628319, the
+    # closing-line file the same. Dropping it here is what left
+    # `cfbstats.parse_player_stats` and `cfblines.parse_lines` looking up
+    # 'espn:52@espn:59' in a table keyed 401628319 and joining zero rows.
+    # Carried, not re-derived: only this parser still sees both.
+    espn_id = str(r.get("game_id") or "").strip()
+    if espn_id and not _blank(espn_id):
+        out["espn_game_id"] = espn_id
     return _json.dumps(out, separators=(",", ":")) if out else None
 
 

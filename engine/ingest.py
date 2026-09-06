@@ -751,7 +751,7 @@ def cfb_games_for(conn, season: int) -> dict:
             extra = _json.loads(r["extra"] or "{}")
         except (ValueError, TypeError):
             extra = {}
-        out[str(r["game_id"])] = {
+        entry = {
             "period": r["period"], "home": r["home"], "away": r["away"],
             "home_name": extra.get("home_name", ""),
             "away_name": extra.get("away_name", ""),
@@ -766,6 +766,23 @@ def cfb_games_for(conn, season: int) -> dict:
             "home_points": r["home_score"] or 0,
             "away_points": r["away_score"] or 0,
         }
+        # UNDER BOTH KEYS, because two feeds on the same mirror name the
+        # same game two ways and this dict is the join for both. The row
+        # is STORED as away@home (ab20781, so the ledger can look a
+        # college total up like every other sport's); player_stats and
+        # the closing-line file still carry the numeric ESPN id, which
+        # `cfbfastr._extra` now keeps as `espn_game_id`.
+        #
+        # Keyed one way, `cfbstats.parse_player_stats` looked up
+        # 401628319 in a table keyed 'espn:52@espn:59' and joined ZERO
+        # rows — every season, silently, because a parser that finds no
+        # game just counts a skip. Same for `cfblines.parse_lines`.
+        # Aliasing here rather than teaching each parser both names keeps
+        # the knowledge in the one place that already holds both.
+        out[str(r["game_id"])] = entry
+        espn_id = str(extra.get("espn_game_id") or "").strip()
+        if espn_id:
+            out[espn_id] = entry
     return out
 
 

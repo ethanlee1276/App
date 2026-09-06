@@ -972,6 +972,37 @@ def test_the_watch_carries_a_listed_players_designation():
     assert row["injury_status"] == "" and K.build([], [row], sport="nfl")
 
 
+def test_the_college_watch_list_is_sized_for_a_college_saturday():
+    """Five was the NFL's number, copied across, and sized for the NFL's
+    sixteen-game Sunday. College plays sixty-eight on the Saturday this
+    repo's readiness audit counted.
+
+    It matters more here than there. In the NFL the watch list is a strip
+    under the value picks; in college it is the WHOLE player half of the
+    Most Likely board, because every college yardage market answers
+    `likely.rankable` False for want of a measured AUC, leaving
+    `anytime_td` as the only player market college can rank. The board
+    holds `likely.LIMIT` player rows and college was feeding it five.
+    """
+    from engine import likely as K
+    from engine.touchdowns import TD_WATCH_LIMIT
+
+    assert T.CFB_WATCH_LIMIT == 20
+    assert T.CFB_WATCH_LIMIT > TD_WATCH_LIMIT, \
+        "college's slate is four times the NFL's; the limits cannot be equal"
+    # Deliberately short of the board's own cap: at AUC 0.675 the last row
+    # is a much softer claim than the third, and what sets this number
+    # honestly is measured precision decay, which has not been measured.
+    assert T.CFB_WATCH_LIMIT < K.LIMIT, \
+        "the watch list should not fill the board just because it can"
+    # The premise: anytime_td really is the only college player market
+    # that ranks. If a yardage market ever gets a measured AUC this
+    # sizing argument has to be re-made.
+    from engine.cfb.props import MARKETS
+    assert not any(K.rankable(m, "cfb") for m in MARKETS)
+    assert K.rankable("anytime_td", "cfb")
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
