@@ -122,6 +122,63 @@ def test_the_longshot_bucket_grades_at_its_own_price():
     assert abs(b["pnl_units"] - 0.145) < 1e-6, dict(b)
 
 
+def test_the_most_likely_board_grades_on_the_same_pass():
+    """`log_most_likely` promises NO NEW SETTLE PATH — its rows ride the
+    ordinary sweep. That promise had never been tested on football, where
+    the date is a week label rather than a day."""
+    l, h = _books()
+    ledger.log_most_likely(l, {"sport": "nfl", "date": WEEK_LABEL,
+        "most_likely": [
+            {"player": "Ja'Marr Chase", "market": "rec_yds", "side": "OVER",
+             "line": 74.5, "odds": -110, "book": "dk", "model_prob": 0.62,
+             "hit_prob": 0.62},
+            {"player": "Ja'Marr Chase", "market": "receptions", "side": "OVER",
+             "line": 8.5, "odds": -110, "book": "dk", "model_prob": 0.58,
+             "hit_prob": 0.58}]})
+    _ingest(h)
+    ledger.settle_from_history(l, h)
+    got = {(r["market"], r["status"]) for r in l.execute(
+        "SELECT market, status FROM bets WHERE category='likely'")}
+    assert got == {("rec_yds", "won"), ("receptions", "lost")}, got
+    # And it stays in its own bucket: the headline record is the edge book.
+    assert l.execute("SELECT COUNT(*) c FROM bets WHERE category='main'"
+                     ).fetchone()["c"] == 0
+
+
+def test_a_parlay_leg_finds_its_bet_in_the_singles_journal():
+    """`_matching_bet` joins on sport+date+player+market. Both sides carry
+    the week label, so they agree — but only because the ticket and the
+    bet came from the same build, which is worth a test rather than an
+    assumption."""
+    from engine import parlayledger as PL
+    l, h = _books()
+    ledger.log_recommendations(l, {"sport": "nfl", "date": WEEK_LABEL,
+        "recommendations": [
+            _rec(player="Ja'Marr Chase", market="rec_yds", line=74.5),
+            _rec(player="CIN", market="moneyline", line=0.5, odds=-140)]})
+    _ingest(h)
+    ledger.settle_from_history(l, h)
+    PL.ensure_schema(l)
+    l.execute("INSERT INTO parlays (ts,sport,date,legs_key,n_legs,parlay_type,"
+              "grade,naive_product_dec,assumed_dec,correlation_tax,status,"
+              "notional_units,source) VALUES ('t','nfl',?,'k',2,'A','strong',"
+              "3.20,2.60,0.19,'open',1.0,'edge')", (WEEK_LABEL,))
+    pid = l.execute("SELECT id FROM parlays").fetchone()["id"]
+    for i, (who, mk) in enumerate([("Ja'Marr Chase", "rec_yds"),
+                                   ("CIN", "moneyline")], 1):
+        l.execute("INSERT INTO parlay_legs (parlay_id,leg_no,player,market,"
+                  "side,line,odds,status) VALUES (?,?,?,?,'OVER',0,-110,"
+                  "'open')", (pid, i, who, mk))
+    l.commit()
+    ticket = l.execute("SELECT * FROM parlays").fetchone()
+    leg = l.execute("SELECT * FROM parlay_legs WHERE leg_no=1").fetchone()
+    assert PL._matching_bet(l, ticket, leg) is not None, (
+        "a Week 1 leg cannot find the bet it was built from")
+    out = PL.settle(l)
+    assert out["settled"] == 1, out
+    assert l.execute("SELECT status FROM parlays").fetchone()["status"] == "won"
+
+
 def test_the_ingest_carries_the_kickoff_date():
     """`games` threw this away for as long as it existed. Everything below
     depends on it now."""
