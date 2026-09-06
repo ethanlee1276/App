@@ -9547,9 +9547,13 @@ function countUp(el) {
    Nothing to disclose draws nothing: a book with no picks before the
    epoch is not hiding anything, and a permanent notice about zero bets
    would be noise pretending to be candour. */
-function recEpochHTML(d) {
+function recEpochHTML(d, src) {
   const ep = (d || {}).record_epoch;
-  const at = (d || {}).all_time || {};
+  // `src` is the scoped report on a sport scope and the whole payload on
+  // "all"; either way its all_time is the one this note is about. A
+  // scoped report without one (an older export) says nothing rather
+  // than borrowing the whole journal's count.
+  const at = (src || d || {}).all_time || {};
   const o = at.overall || {};
   const hidden = at.hidden_settled || 0;
   if (!ep || !hidden || !o.settled) return "";
@@ -12722,7 +12726,7 @@ async function renderRecord() {
               <li class="bad">${pr.unlucky_losses || 0} good-bet loss(es)</li>
             </ul>` : "" })}
       <div class="rec-process-side">
-        ${recEpochHTML(d)}
+        ${recEpochHTML(d, src)}
         ${recDisclosure("What counts as a tracked bet", `Journals every
       <strong>Recommended</strong> bet — the new picks the "On tonight"
       tile counts on each sport’s board (its riding bets were journaled

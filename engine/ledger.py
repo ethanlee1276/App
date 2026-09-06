@@ -5112,9 +5112,19 @@ def sport_report(conn, sport: str,
     calibration line nobody should trust.
     """
     perf = performance(conn, sport, since=since)
+    # THE SPORT'S OWN all_time, so the page's "N earlier settled picks
+    # are not in these numbers" note can be true on a sport scope. It
+    # read the whole journal's count: the NFL page said fifteen earlier
+    # picks were held out when the NFL had never journaled one — they
+    # were baseball's (2026-09-06).
+    everything = performance(conn, sport) if since else perf
     return {
         "sport": sport,
         "overall": perf,
+        "all_time": {
+            "overall": everything,
+            "hidden_settled": max(0, everything["settled"] - perf["settled"]),
+        },
         "curve": pnl_curve(conn, sport, since=since),
         "recent": recent_settled(conn, 20, sport=sport, since=since),
         "calibration": calibration(conn, sport=sport),
