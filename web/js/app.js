@@ -6325,6 +6325,15 @@ function renderLikely() {
   const host = document.getElementById("likely");
   const note = document.getElementById("likely-note");
   if (!host || !note) return;
+  // A COLD LANDING ON THIS TAB. `#likely` in the address bar makes the
+  // boot block's router switch here before any board has loaded, and
+  // the switch renders the view it lands on — with no board that was a
+  // throw inside the boot block, which then never reached the lines
+  // below the router (the sport buttons, the drawer, the tour). Found
+  // by tests/test_app_loads.py booting every tab, 2026-09-06. Nothing
+  // to draw yet is not an empty board: renderAll draws this view the
+  // moment the board lands.
+  if (!state.data) return;
   const rows = (state.data.most_likely || []).filter(showableLikelyRow);
   if (!rows.length) {
     host.innerHTML = "";
