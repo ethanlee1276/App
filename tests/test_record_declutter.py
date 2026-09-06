@@ -132,6 +132,23 @@ def test_the_chip_cell_is_laid_out_on_both_widths():
     assert "flex-wrap: wrap" in CSS[i:i + 160] and "overflow: visible" in CSS[i:i + 160]
 
 
+
+def test_an_empty_sport_scope_is_the_empty_state_and_nothing_else():
+    """Rendered for the NBA: "Nothing journaled for NBA yet", "Nothing
+    tuned for NBA yet", a mining panel counting 461 graded bets of every
+    sport, preregistered tests about NFL props, a lab of four zeros."""
+    rr = _fn("renderRecord")
+    i = rr.index("if (scoped && !o.settled && !o.open) {")
+    branch = rr[i:rr.index("bindRecordScopes(host);", i)]
+    assert "Nothing journaled for" in branch and "All bets" in branch
+    for panel in ("recRestatedSection", "recProseSection", "recSelfTuningSection",
+                  "recLossPatternsSection", "recPrereg", "recHypothesisLab"):
+        assert panel not in branch, f"{panel} is back under the empty state"
+    # The ladder itself is not gone: the learning room still draws it for
+    # a sport with a journal.
+    rooms = _fn("_recordRooms")
+    assert "recLossPatternsSection(d.loss_patterns, scoped ? scope : null)" in rooms
+
 if __name__ == "__main__":
     import traceback
     fails = 0
