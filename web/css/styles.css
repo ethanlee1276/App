@@ -9276,7 +9276,21 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-parkcard .pbp-parkhead { border-bottom-color:
   color-mix(in srgb, var(--brand) 22%, var(--border)); }
 .pbp-parkhead-t b { color: var(--brand); }
-.pbp-park { position: relative; width: 100%; aspect-ratio: 240 / 150; background: #05060F; }
+/* THE PARK PANEL IS INSET, NOT FULL-BLEED (Ethan, 2026-09-06: "there is
+   no boarder or anything for the render so its just sticking out the
+   sides"). Every other row in this card — the header, the batted-ball
+   tiles, the park facts, the situation — sits inside a 14px gutter, and
+   the photograph was the one child running out to the card's edge, so
+   it read as spilling past the panel rather than sitting in it. Margin
+   rather than a wrapper: `width: auto` lets the box fill what's left
+   after the gutter, which keeps `aspect-ratio` doing the sizing. The
+   border is the same gold hairline the card wears so the picture reads
+   as framed by us, and `overflow: hidden` keeps the photo, the wall
+   marks and the arc all inside that frame. */
+.pbp-park { position: relative; width: auto; margin: 12px 14px;
+  aspect-ratio: 240 / 150; background: #05060F; overflow: hidden;
+  border: var(--hairline) solid color-mix(in srgb, var(--brand) 30%, var(--border));
+  border-radius: var(--radius); }
 .pbp-park > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* THE PARK PHOTOGRAPH (Ethan, 2026-09-06: use this render for all live
    MLB). `cover` because the card's aspect and the image's are close but
@@ -9308,9 +9322,8 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    and the dimensions/factors that make one park a different question
    from another. Auto-fit rather than a fixed four-up: on a phone these
    wrap to two rows instead of shrinking to unreadable. */
-.pbp-bb { display: grid; gap: 8px; padding: 12px 14px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  border-top: var(--hairline) solid var(--border); }
+.pbp-bb { display: grid; gap: 8px; padding: 0 14px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .pbp-bb-tile { background: rgba(255,255,255,.03); border: var(--hairline) solid var(--border);
   border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
 .pbp-bb-tile .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em; }
