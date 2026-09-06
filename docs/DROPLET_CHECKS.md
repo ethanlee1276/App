@@ -1011,3 +1011,59 @@ equivalent through the supported CLI.)
 * Expect the flipped count to be about ten, and the second `--likely`
   to show home_runs near its claimed rate instead of 89 points under it.
   Send me the before and after.
+
+## 18. The one number the parlay ledger has never had
+
+Every parlay ticket in the journal has been graded against `assumed_dec`
+— the naive product of the legs, less the MID-POINT of a 15-to-30 point
+correlation-tax band the doc guesses at. That is not a price. No odds
+feed we ingest carries same-game-parlay quotes, and an SGP price cannot
+be derived from the leg prices: the whole point of the tax is that only
+the book knows it.
+
+Which END of that band a book actually sits on is the entire difference
+between a ticket worth taking and a dead one. A ticket that is +EV at a
+book taxing 18% is dead at one taxing 26%, and nothing in the model
+tells us which book we are at.
+
+So the price has to be typed in by a person. Two commands:
+
+```bash
+cd /srv/qellys
+sudo -u qellys python3 -m engine.parlayledger open
+```
+
+That prints the tickets with no recorded price, newest first — every
+ticket, including the ones the screen refused, because the tax is a fact
+about a BOOK and a refused ticket is priced by the same book on the same
+kind of legs. Then, for any ticket you can see a real SGP price for:
+
+```bash
+sudo -u qellys python3 -m engine.parlayledger quote 412 +290 --book dk
+```
+
+* **The sign is required.** `340` is +340 to a bettor and 340.0 to a
+  parser, and the two differ by a factor of a hundred. A price entered
+  wrong is worse than no price, because nothing downstream can tell it
+  is wrong. A bare number is refused rather than guessed at.
+* **The tax is derived, not asked for.** `1 − quoted/naive`. You type
+  what the book shows; the arithmetic is ours.
+* **A quote above the naive product is recorded and flagged `boosted`.**
+  That is a promo or a typo, never an ordinary SGP price. Recording it
+  keeps a real promo in the book; flagging it stops it averaging into
+  the by-book table and making that book look cheaper than it is on the
+  tickets you would actually take.
+* **An already-graded ticket is REOPENED, not rescored in place.** The
+  settle pass owns that arithmetic. Run the parlay settle afterwards.
+
+What this unlocks: grading runs on money instead of our assumption, and
+the §11 by-book tax table — written months ago and measuring nothing
+since, because it divides by a column that was always NULL — starts
+filling in. That table is the durable edge here; a handful of real
+quotes is worth more to it than any amount of further modelling.
+
+It is a record of tickets somebody went and looked up, not a survey of
+the market, so it is worth exactly as much as that sample is
+representative. Price the tickets you would have taken AND the ones the
+screen refused, or the table measures the tax only where we liked the
+bet.

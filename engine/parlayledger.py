@@ -439,12 +439,25 @@ def _grade_ticket(conn, p, resolved: list) -> dict:
         status, pnl = "lost", -notional
         codes = _loss_codes(conn, p, won, lost, singles_pnl)
     else:
-        price = float(p["assumed_dec"] or 0.0)
+        # A REAL QUOTE BEATS AN ASSUMPTION, ALWAYS. `assumed_dec` is the
+        # naive product less the mid-point of a tax band the doc GUESSES
+        # at — 15 to 30 points, and which end you are on is the whole
+        # difference between a good ticket and a dead one. Once somebody
+        # has recorded what a book actually offered, grading against the
+        # guess would be throwing away the only real number on the row.
+        price = float(p["quoted_dec"] or p["assumed_dec"] or 0.0)
         if void:
-            # Reprice on the surviving legs at the same assumed tax.
+            # Reprice on the surviving legs at the same tax. A quoted
+            # ticket keeps its OWN measured tax rather than the assumed
+            # band — the book already told us what it charges on these
+            # legs, and a leg voiding does not change that.
             naive = math.prod(american_to_decimal(b["odds"] or -110)
                               for b in live)
-            price = naive * (1.0 - float(p["correlation_tax"] or 0.0))
+            tax = float(p["correlation_tax"] or 0.0)
+            if p["quoted_dec"] and p["naive_product_dec"]:
+                tax = 1.0 - (float(p["quoted_dec"])
+                             / float(p["naive_product_dec"]))
+            price = naive * (1.0 - tax)
         status, pnl, codes = "won", notional * (price - 1.0), []
 
     conn.execute(
@@ -789,23 +802,40 @@ def _tax_by_book(conn) -> dict:
     """§11: track the correlation tax by book.
 
     This is the durable, product-level edge the doc rates above any single
-    ticket — and it is unbuildable today, so it says so instead of showing
-    our own assumption back to us. It fills in the moment a real SGP quote
-    is ever recorded against a ticket.
+    ticket: the same ticket is +EV at a book taxing 18% and dead at one
+    taxing 26%, and nothing about our model tells us which book we are at.
+
+    It measured nothing for months, because it divides by `quoted_dec` and
+    no feed we ingest carries SGP prices — an SGP price is not derivable
+    from the leg prices. `record_quote` is the way that column gets filled:
+    somebody reads the price their book is actually offering and types it
+    in. So this table is not a survey of the market, it is a record of the
+    tickets a person went and looked up, and it is worth exactly as much
+    as that sample is representative.
     """
     rows = conn.execute(
         "SELECT book, COUNT(*) n, AVG(1.0 - quoted_dec / naive_product_dec) t "
         "FROM parlays WHERE quoted_dec IS NOT NULL AND naive_product_dec > 0 "
         "GROUP BY book").fetchall()
-    return {
-        "books": [{"book": r["book"] or "?", "n": r["n"],
-                   "avg_tax": round(r["t"], 4)} for r in rows],
-        "note": ("Empty until a real same-game-parlay quote is recorded. No "
-                 "odds feed we ingest carries SGP prices and an SGP price is "
-                 "not derivable from the leg prices, so every ticket here is "
-                 "graded against an assumed tax — averaging that assumption "
-                 "by book would measure nothing but our own table."),
-    }
+    books = [{"book": r["book"] or "?", "n": r["n"],
+              "avg_tax": round(r["t"], 4)} for r in rows]
+    # THE NOTE HAS TO TRACK THE TABLE. It spent months correctly saying
+    # this was empty; the day it stops being empty, the same sentence
+    # becomes a lie sitting under a column of real numbers. Whoever reads
+    # the report should not have to work out which half to believe.
+    if books:
+        note = ("Measured from quotes recorded with `parlayledger quote`. "
+                "Each row is one book's average cut against the naive leg "
+                "product on tickets we actually priced there — not every "
+                "ticket, only the ones somebody went and looked up.")
+    else:
+        note = ("Empty until a real same-game-parlay quote is recorded. No "
+                "odds feed we ingest carries SGP prices and an SGP price is "
+                "not derivable from the leg prices, so every ticket here is "
+                "graded against an assumed tax — averaging that assumption "
+                "by book would measure nothing but our own table. Record one "
+                "with `python3 -m engine.parlayledger quote <id> <odds>`.")
+    return {"books": books, "note": note}
 
 
 def _singles_comparison(graded: list) -> dict:
@@ -867,6 +897,100 @@ def _american(dec) -> int | None:
     return round((dec - 1) * 100) if dec >= 2.0 else round(-100 / (dec - 1))
 
 
+# --- what the book actually offered -----------------------------------------
+def record_quote(conn, parlay_id: int, american: str,
+                 book: str | None = None) -> dict:
+    """Record the same-game-parlay price a book really quoted.
+
+    THE ONE NUMBER THIS MODULE HAS NEVER HAD. No odds feed we ingest
+    carries SGP quotes and an SGP price is not derivable from the leg
+    prices — the whole point of the correlation tax is that only the book
+    knows it. So every ticket has been graded against `assumed_dec`: the
+    naive product less the MID-POINT of a 15-to-30-point band the doc
+    guesses at. Which end of that band a book actually sits on is the
+    entire difference between a ticket worth taking and a dead one, and
+    until now nothing could tell us.
+
+    With real quotes two things start working that cannot work without
+    them. Grading runs on money instead of an assumption. And
+    `_tax_by_book` — written months ago and measuring nothing since,
+    because it divides by a column that was always NULL — starts filling
+    in what each book charges. That table is the parlay edge: the same
+    ticket is +EV at a book taxing 18% and dead at one taxing 26%.
+
+    AMERICAN ODDS WITH AN EXPLICIT SIGN, and a bare number is refused.
+    "340" is +340 to a bettor and 340.0 to a parser, and the two differ
+    by a factor of a hundred. A price entered wrong is worse than no
+    price, because the tax table cannot tell it is wrong.
+
+    A ticket already graded against the assumption is REOPENED rather
+    than rescored here — the settle pass owns that arithmetic, and a
+    second copy of it living in a recorder is the one that drifts.
+    """
+    from .odds import american_to_decimal
+    ensure_schema(conn)
+    txt = str(american).strip()
+    if not txt or txt[0] not in "+-":
+        raise ValueError(
+            f"{american!r}: give the book's price with its sign (+340, -120). "
+            f"A bare number is +340 to a bettor and 340.0 to a parser.")
+    try:
+        odds = int(txt)
+    except ValueError:
+        raise ValueError(f"{american!r} is not American odds") from None
+    if -100 < odds < 100:
+        raise ValueError(f"{odds:+d} is not a price a book can post")
+
+    row = conn.execute("SELECT id, naive_product_dec, status, quoted_dec "
+                       "FROM parlays WHERE id=?", (parlay_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no ticket with id {parlay_id}")
+
+    dec = american_to_decimal(odds)
+    naive = float(row["naive_product_dec"] or 0.0)
+    tax = (1.0 - dec / naive) if naive else None
+    # A QUOTE ABOVE THE NAIVE PRODUCT IS A NEGATIVE TAX, which is a boost
+    # or a typo and never an ordinary SGP price. Recorded either way —
+    # refusing it would lose a real promo — but said out loud, because a
+    # boost averaged into the by-book tax table makes that book look
+    # cheaper than it is on the tickets you would actually take.
+    boosted = tax is not None and tax < 0
+    reopened = row["status"] in ("won", "lost", "void")
+    conn.execute(
+        "UPDATE parlays SET quoted_dec=?, price_basis='quoted', "
+        "correlation_tax=COALESCE(?, correlation_tax)"
+        + (", book=?" if book else "")
+        + (", status='open', pnl_units=NULL, singles_pnl_units=NULL, "
+           "legs_won=NULL, legs_lost=NULL, legs_void=NULL" if reopened else "")
+        + " WHERE id=?",
+        ((round(dec, 4), None if tax is None else round(tax, 4), book,
+          parlay_id) if book else
+         (round(dec, 4), None if tax is None else round(tax, 4), parlay_id)))
+    conn.commit()
+    return {"id": parlay_id, "quoted_dec": round(dec, 4), "american": odds,
+            "naive_product_dec": naive or None,
+            "correlation_tax": None if tax is None else round(tax, 4),
+            "boosted": boosted, "reopened": reopened,
+            "book": book, "replaced": row["quoted_dec"] is not None}
+
+
+def awaiting_quote(conn, limit: int = 40) -> list[dict]:
+    """Tickets with no recorded price, newest first — the work list.
+
+    Every ticket, not just the qualified ones: the by-book tax table is
+    about what a BOOK charges, and a ticket the screen refused is priced
+    by the same book on the same kind of legs. Refusing to record those
+    would measure the tax only where we happened to like the ticket.
+    """
+    ensure_schema(conn)
+    rows = conn.execute(
+        "SELECT id, sport, date, parlay_type, n_legs, grade, qualified, "
+        "naive_product_dec, status, COALESCE(source,'edge') source "
+        "FROM parlays WHERE quoted_dec IS NULL "
+        "ORDER BY date DESC, id DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 # --- board hook -------------------------------------------------------------
 BOARD_FILES = {
     "nfl": "web/data/recommendations.json",
@@ -923,3 +1047,81 @@ def journal_built_boards(conn, root) -> dict:
             except sqlite3.Error as exc:
                 skipped.append(f"{sport}/{key}: {exc}")
     return {"journaled": wrote, "skipped": skipped}
+
+
+# --- the terminal on the box that holds the ledger ---------------------------
+def _cli(argv: list[str]) -> int:
+    """`python3 -m engine.parlayledger quote|open`.
+
+    A COMMAND RATHER THAN A PAGE, and deliberately for now. The person
+    placing these bets is the person who can see the book's SGP price,
+    and that is one person with a terminal. A form on the site is the
+    right answer once more than one reader is entering quotes; building
+    it first would be building the harder half of a feature whose easy
+    half has never once been used.
+    """
+    from . import ledger as _ledger
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__.strip().splitlines()[0])
+        print("\n  python3 -m engine.parlayledger open [--limit N]")
+        print("      tickets with no recorded price, newest first\n")
+        print("  python3 -m engine.parlayledger quote <id> <+340|-120> "
+              "[--book dk]")
+        print("      record what a book actually offered on one ticket\n")
+        return 0
+    cmd, rest = argv[0], argv[1:]
+    conn = _ledger.connect()
+    if cmd == "open":
+        limit = int(rest[rest.index("--limit") + 1]) if "--limit" in rest else 40
+        rows = awaiting_quote(conn, limit)
+        if not rows:
+            print("\n  Every ticket in the journal carries a recorded price.\n")
+            return 0
+        print(f"\n  {len(rows)} ticket(s) with no recorded price\n")
+        print(f"    {'id':>5}  {'date':<11}{'sport':<6}{'src':<7}{'legs':>5}"
+              f"  {'grade':<9}{'naive':>8}  status")
+        for r in rows:
+            naive = r["naive_product_dec"]
+            print(f"    {r['id']:>5}  {r['date'] or '':<11}{r['sport'] or '':<6}"
+                  f"{r['source']:<7}{r['n_legs'] or 0:>5}  "
+                  f"{(r['grade'] or ''):<9}"
+                  f"{(f'{naive:.2f}' if naive else '—'):>8}  {r['status']}")
+        print(f"\n  Record one with:  python3 -m engine.parlayledger quote "
+              f"{rows[0]['id']} +340 --book dk\n")
+        return 0
+    if cmd == "quote":
+        if len(rest) < 2:
+            print("  quote <id> <+340|-120> [--book dk]")
+            return 2
+        book = rest[rest.index("--book") + 1] if "--book" in rest else None
+        try:
+            got = record_quote(conn, int(rest[0]), rest[1], book)
+        except (ValueError, KeyError) as exc:
+            print(f"  {exc}")
+            return 2
+        tax = got["correlation_tax"]
+        print(f"\n  ticket {got['id']}  quoted {got['american']:+d} "
+              f"(decimal {got['quoted_dec']})")
+        if got["naive_product_dec"]:
+            print(f"  naive product {got['naive_product_dec']:.2f}  ->  "
+                  f"correlation tax {tax:+.1%}")
+        if got["boosted"]:
+            print("  ** THE QUOTE IS ABOVE THE NAIVE PRODUCT — a negative tax.")
+            print("  ** That is a boost or a typo, never an ordinary SGP price.")
+            print("  ** Recorded, because a real promo is worth keeping; check")
+            print("  ** it, because a boost averaged into the by-book table")
+            print("  ** makes that book look cheaper than it is.")
+        if got["replaced"]:
+            print("  (a price was already recorded on this ticket; replaced)")
+        if got["reopened"]:
+            print("  It was already graded against the assumed price, so it is")
+            print("  reopened — the next settle pass regrades it on this one.")
+        print()
+        return 0
+    print(f"  unknown command {cmd!r}")
+    return 2
+
+
+if __name__ == "__main__":                                # pragma: no cover
+    import sys as _sys
+    raise SystemExit(_cli(_sys.argv[1:]))
