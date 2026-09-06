@@ -9842,8 +9842,12 @@ function recBookSections(br, scope) {
     <div class="rec-buckets">${cards}</div>`;
 }
 
-function recSplitsSection(o) {
-  const SPLITS = [["market", "Market", o.by_market],
+function recSplitsSection(o, booksDrawn) {
+  // On a sport scope "Records by book" has just drawn the edge book by
+  // market — the same rows this table's Market chip drew again, number
+  // for number, one screen later. The chip goes; side, grade and book
+  // are the splits that section does not have.
+  const SPLITS = [["market", "Market", booksDrawn ? null : o.by_market],
                   ["side", "Side", o.by_side],
                   ["grade", "Grade", o.by_grade],
                   ["book", "Book", o.by_book]];
@@ -9945,7 +9949,11 @@ function recAnalytics(curve, o, eras) {
     <div class="ra-main">
       ${recCurveChart(sliced, { head: false, eras })}
     </div>
-    <p class="ra-line">${range}</p>
+    ${/* On ALL the window is the whole book, and the record, win rate,
+          ROI and net of the whole book are the verdict's tiles at the top
+          of the room. The line earns its place only when a chip has cut
+          a window the tiles do not describe. */
+      rk === "all" ? "" : `<p class="ra-line">${range}</p>`}
     ${alltime ? `<p class="ra-line ra-dim">${alltime}</p>` : ""}`;
 }
 /* ---------------- The profit calendar ----------------
@@ -12496,26 +12504,46 @@ function recordVerdictHTML(src, scopeLabel) {
   }
 
   const chart = buckets.length >= 2 ? reliabilityDiagram(cal.buckets) : "";
+  const graded = (o.wins || 0) + (o.losses || 0);
+  /* ONE SUMMARY, NOT THREE. Ethan, 2026-09-06: "everything seems
+     cluttered." Under this card sat a strip of five stat cards — ROI,
+     Avg CLV, Price CLV, Record, Win rate — of which ROI and Avg CLV were
+     these tiles again, word for word. The strip is gone; the record,
+     the win rate against its break-even and the price CLV live here,
+     so a number appears once and the reader meets it once. */
+  const priceClv = o.avg_price_clv == null ? "" : ` · price ${
+    sign(o.avg_price_clv * 100, 2)} pts on ${o.price_clv_n ?? 0} over${
+    o.price_clv_n === 1 ? "" : "s"}`;
 
   return `<section class="card rv-card">
     <div class="section-title">The verdict
       <span class="sub">— ${escapeHtml(scopeLabel)}, everything journaled at
       its real price and graded in public</span></div>
     <div class="rv-tiles">
-      ${tile("settled", String(settled),
-             o.open ? `${o.open} still open` : "graded picks")}
+      ${tile("record", `${o.wins || 0}\u2011${o.losses || 0}\u2011${o.pushes || 0}`,
+             `${o.open || 0} open · ${settled} settled`)}
+      ${tile("net", sign(o.net_units || 0, 2) + "u",
+             `${sign((o.roi || 0) * 100)}% ROI on ${(o.units_staked || 0).toFixed(1)}u at risk`,
+             (o.net_units || 0) >= 0 ? "good" : "warn")}
+      ${/* The break-even is read off the prices this book ACTUALLY took,
+            not assumed to be -110: a book that buys short prices needs far
+            more than 52.4%. The flat wording survives only when no odds
+            are on file to average. */ ""}
+      ${tile("Win rate", graded ? ((o.win_rate || 0) * 100).toFixed(1) + "%" : "—",
+             o.breakeven == null
+               ? "break-even ≈ 52.4% at −110"
+               : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
+             !graded || o.breakeven == null ? ""
+               : (o.win_rate >= o.breakeven ? "good" : "warn"))}
+      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + ' <span class="unit">pts</span>',
+             o.clv_n ? `line, on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}${priceClv}`
+                     : "accrues as closes are captured",
+             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
       ${tile("claimed", claimed == null ? "—" : (claimed * 100).toFixed(1) + "%",
              "what the model said")}
       ${tile("landed", landed == null ? "—" : (landed * 100).toFixed(1) + "%",
              "what happened",
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
-      ${tile("CLV", o.avg_clv == null ? "—" : sign(o.avg_clv, 2) + " pts",
-             o.clv_n ? `on ${o.clv_n} bet${o.clv_n === 1 ? "" : "s"}`
-                     : "accrues as closes are captured",
-             o.avg_clv == null ? "" : (o.avg_clv >= 0 ? "good" : "warn"))}
-      ${tile("net", sign(o.net_units || 0, 2) + "u",
-             `${sign((o.roi || 0) * 100)}% on ${(o.units_staked || 0).toFixed(1)}u`,
-             (o.net_units || 0) >= 0 ? "good" : "warn")}
     </div>
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
@@ -12621,9 +12649,12 @@ async function renderRecord() {
        are held out of this record: a grading bug sized them at 0.00 units, so they
        were never really bets. They stay out rather than being quietly restaked at a
        size nobody chose.</p>` : "";
-  const small = o.settled < 100
-    ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled pick(s)${
-       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope)}` : ""} —
+  // Under the ledger's own bar the verdict already says "too early to
+  // call"; this note said it a second time, and said it about "0 settled
+  // pick(s) for nfl". It speaks only in the band the verdict does not.
+  const small = o.settled >= (src.min_graded || _recMinGraded) && o.settled < 100
+    ? `<p class="list-note" style="margin-top:10px">${icon('warn')} ${o.settled} settled picks${
+       scoped ? ` for ${escapeHtml((SPORT_META[scope] || {}).name || scope.toUpperCase())}` : ""} —
        results this small are mostly luck. Judge the model after 100+, and judge
        the process by CLV before that.</p>` : "";
   const pr = o.process || {};
@@ -12665,43 +12696,6 @@ async function renderRecord() {
      scope the Most Likely record still leads (08-31) and the pooled book
      sections still ride after the receipts, so nothing moves there. */
   const receipts = verdict + (scoped ? recBookSections(d.book_records, scope) : "") + `
-    <div class="stat-cards rec-kpis">
-      ${statCardHTML("rising", "ROI",
-          (o.roi >= 0 ? "+" : "") + (o.roi * 100).toFixed(1) + "%",
-          `${o.net_units >= 0 ? "+" : ""}${o.net_units.toFixed(2)}u on ${(o.units_staked || 0).toFixed(1)}u staked`,
-          toneOf(o.roi))}
-      ${statCardHTML("signal", "Avg CLV",
-          o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + ' <span class="unit">pts</span>',
-          o.avg_clv == null ? "accrues as daily closes are captured"
-            : `line movement on ${o.clv_n ?? 0} bet${o.clv_n === 1 ? "" : "s"} — 0.00 where the line cannot move`,
-          o.avg_clv == null ? "" : toneOf(o.avg_clv))}
-      ${/* The price tile, which is the ONLY CLV a fixed-line market has.
-            A home-run prop is quoted OVER 0.5 and closes at 0.5, so the
-            line tile beside this one reads 0.00 for two thirds of the
-            book and says nothing — while the price moved all evening.
-            Kept as its own tile rather than folded in: line points and
-            probability points are different units, and averaging them
-            together would be arithmetic on two different things. */ ""}
-      ${o.avg_price_clv == null ? "" : statCardHTML("chart", "Price CLV",
-          (o.avg_price_clv >= 0 ? "+" : "") + (o.avg_price_clv * 100).toFixed(2) + ' <span class="unit">pts</span>',
-          `how the PRICE moved on ${o.price_clv_n ?? 0} over${o.price_clv_n === 1 ? "" : "s"} — the only CLV a 0.5 line has`,
-          toneOf(o.avg_price_clv))}
-      ${statCardHTML("trophy", "Record",
-          `${o.wins}\u2011${o.losses}\u2011${o.pushes}`,
-          `${o.open} open · ${o.settled} settled`)}
-      ${/* The break-even is read off the prices this book ACTUALLY took,
-            not assumed to be -110. A book that buys short prices needs far
-            more than 52.4%: on the MLB journal the real bar is near 58%,
-            so a 47% win rate read as five points short when it was ten.
-            The flat number flattered the record on the one figure a
-            bettor checks first. Falls back to the -110 wording only when
-            no odds are available to average. */ ""}
-      ${statCardHTML("target", "Win rate", (o.win_rate * 100).toFixed(1) + "%",
-          o.breakeven == null
-            ? "break-even ≈ 52.4% at −110"
-            : `break-even ${(o.breakeven * 100).toFixed(1)}% at the prices taken`,
-          o.breakeven != null && o.win_rate < o.breakeven ? "neg" : "")}
-    </div>
     ${/* PROCESS ON ITS OWN ROW, per Ethan's render (2026-08-24). It was
          the sixth tile in the strip and it is not the same KIND of
          number as the other five: those are the record, this grades the
@@ -12757,7 +12751,7 @@ async function renderRecord() {
     ${small}
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
     ${recCalendarHTML(src.curve)}
-    ${recSplitsSection(o)}
+    ${recSplitsSection(o, !!scoped)}
     ${recRecentSection(src.recent || [])}
     ${edgePanel}
   `;
@@ -12952,6 +12946,11 @@ function recSettledRow(b) {
           procChip = `<span class="rl-proc warn" title="Won, but the market closed against us — a bad bet that got lucky">${iconMark("dot", 10)}lucky</span>`;
         else if (b.process === "good" && b.status === "lost")
           procChip = `<span class="rl-proc good" title="Lost, but we beat the closing line — good bet, bad night">${iconMark("rising", 11)}beat close</span>`;
+        else if (b.clv != null && Math.abs(b.clv) < 0.05)
+          // A close that did not move is the row's default state, not a
+          // fact worth a chip: "+0.0 CLV" on two rows in three was the
+          // noise Ethan was reading around (2026-09-06).
+          procChip = "";
         else if (b.clv != null)
           procChip = `<span class="rl-proc ${b.clv >= 0 ? "good" : "bad"}"
             title="Closing-line value — how far the market moved our way after the bet">${b.clv >= 0 ? "+" : ""}${b.clv.toFixed(1)} CLV</span>`;
@@ -12961,12 +12960,19 @@ function recSettledRow(b) {
         const causeChip = (b.status === "lost" && b.cause && !/^variance/.test(b.cause))
           ? `<span class="rl-proc warn" title="Measured at settle from the ingested results — the circumstance, not an excuse">${escapeHtml(b.cause)}</span>`
           : "";
+        // A moneyline has no line to print — "AWAY 0 Moneyline" was the
+        // stored placeholder showing through.
+        const lineTxt = (b.market === "moneyline" || b.line == null) ? "" : `${b.line} `;
+        // ONE grid cell for both chips. As two siblings they were two grid
+        // items: on a phone both took the `proc` area and drew on top of
+        // each other; on the desktop's six-track grid the second one
+        // wrapped onto a row of its own.
         return `<div class="rl-row ${push ? "push" : won ? "won" : "lost"}">
           <span class="rl-icon">${push ? icon('dash') : won ? icon('check') : icon('cross')}</span>
           <span class="rl-date">${escapeHtml(b.date || "")}</span>
           <span class="rl-main"><strong>${escapeHtml(b.player)}</strong>
-            <span class="rl-bet">${escapeHtml(b.side || "")} ${b.line ?? ""} ${escapeHtml(marketWord(b.market))}</span></span>
-          ${procChip}${causeChip}
+            <span class="rl-bet">${escapeHtml(b.side || "")} ${lineTxt}${escapeHtml(marketWord(b.market))}</span></span>
+          <span class="rl-chips">${procChip}${causeChip}</span>
           <span class="rl-odds">${american(b.odds)}</span>
           <span class="rl-pnl ${toneOf(pnl)}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}u</span>
         </div>`;

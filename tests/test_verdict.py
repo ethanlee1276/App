@@ -207,7 +207,7 @@ def test_both_panels_share_one_tile_style():
 def test_the_panels_fold_to_two_columns_on_a_phone():
     """Five tiles across a 390px screen is unreadable."""
     i = CSS.index(".rv-tiles {")
-    assert "repeat(5," in CSS[i:i + 200]
+    assert "repeat(6," in CSS[i:i + 200]
     phone = CSS[CSS.index("@media (max-width: 900px)", i):]
     assert "repeat(2, minmax(0, 1fr))" in phone[:900]
 

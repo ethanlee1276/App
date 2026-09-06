@@ -2751,6 +2751,9 @@ select.calc-in { width: auto; font-weight: 600; }
    ellipsis eats. So this one table gets a wider track, taken from the
    1fr column, which has slack the fixed ones do not. */
 .pm-rows .rl-row { grid-template-columns: 20px 86px minmax(0, 1fr) 168px 56px 72px; }
+/* Both chips (the verdict against the close, the measured cause of a
+   loss) in the one 90px cell, so a row with two never breaks the grid. */
+.rl-chips { display: flex; justify-content: flex-end; gap: 6px; min-width: 0; overflow: hidden; }
 .rl-proc.good { color: var(--good); } .rl-proc.bad { color: var(--bad); }
 .rl-proc.warn { color: var(--warn); } .rl-proc.none { color: var(--text-mute); opacity: .55; }
 .rl-odds { text-align: right; font-size: var(--fs-sm); color: var(--text-dim); font-variant-numeric: tabular-nums; }
@@ -3930,6 +3933,8 @@ body.pk-open { overflow: hidden; }
     grid-area: proc; white-space: normal;
     overflow: visible; overflow-wrap: anywhere;
   }
+  .rl-chips { grid-area: proc; justify-content: flex-start; flex-wrap: wrap;
+    gap: 4px 10px; overflow: visible; }
   .rl-odds { grid-area: odds; }
   .rl-date, .rl-proc, .rl-odds { text-align: left; justify-self: start; }
   .rl-date::after { content: " ·"; opacity: .4; }
@@ -5832,10 +5837,12 @@ body.has-rail .shell {
    on it pushed the Record page's own KPI row onto a second line once
    already (see test_newlook). This grid is its own. */
 .rv-card { margin-bottom: 22px; }
-.rv-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+.rv-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1px; background: var(--border-soft); border: var(--hairline) solid var(--border-soft);
   border-radius: var(--radius); overflow: hidden; margin-top: 14px; }
 .rv-tile { background: var(--panel); padding: 15px 14px; }
+/* The unit is not part of the number — same rule the stat tiles keep. */
+.rv-v .unit { font-size: .5em; font-weight: 400; color: var(--text-dim); }
 .rv-v { font-family: var(--font-mono); font-size: var(--fs-xl); font-weight: 700;
   color: var(--text); line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
 .rv-tile.good .rv-v { color: var(--good); }

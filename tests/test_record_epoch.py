@@ -308,7 +308,7 @@ def test_the_note_is_drawn_under_the_numbers_it_qualifies():
     # run — the same fixed-window mistake this suite has made six times
     # now. What matters is that it comes AFTER the numbers and BEFORE the
     # next thing on the page, so a reader meets it while looking at them.
-    kpis = body.index("rec-kpis")
+    kpis = body.index("const verdict = recordVerdictHTML(src")
     note = body.index("recEpochHTML(d, src)")
     nxt = body.index('recDisclosure("What counts as a tracked bet"')
     assert kpis < note < nxt

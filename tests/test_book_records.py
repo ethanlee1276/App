@@ -105,7 +105,7 @@ def test_a_sports_record_leads_with_its_book_sections():
     the sport scope they now sit under the verdict, above the KPI cards."""
     js = _js()
     i = js.index("const receipts = verdict +")
-    lead = js[i:js.index('<div class="stat-cards rec-kpis">', i)]
+    lead = js[i:js.index('<div class="rec-process-row">', i)]
     assert 'scoped ? recBookSections(d.book_records, scope) : ""' in lead, lead
 
 

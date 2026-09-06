@@ -278,7 +278,7 @@ def test_props_players_and_record_carry_their_charts_and_chips():
     # was rendering `reb`/`ast`/`fg3m`/`pts` raw — the words now ride in
     # the payload. Anchor on the translation, not on its old storage.
     assert "_recSetSplit" in APP and "marketWord(" in APP
-    assert '["market", "Market", o.by_market]' in APP
+    assert '["market", "Market", booksDrawn ? null : o.by_market]' in APP
     rr = APP[APP.index("function recRecentSection("):]
     rr = rr[:rr.index("\n}")]
     assert "slice(0, 12)" in rr and "Show all" in rr
