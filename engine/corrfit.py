@@ -565,15 +565,23 @@ def _write_state(state: dict) -> None:
     os.replace(tmp, STATE_PATH)
 
 
-def measured(name: str) -> dict | None:
+def measured(name: str, sport: str | None = None) -> dict | None:
     """The persisted fit for one parlay pairing, or None.
+
+    SCOPED BY SPORT WHEN THE CALLER NAMES ONE. Every stored entry has
+    carried `sport` since it was first written — `refresh` records
+    `f.prior.sport` — and nothing ever read it back, so a fit taken on
+    NFL games answered a query about a college ticket. See
+    `parlays.MEASURED_SPORT` for what that cost and why the fallback is
+    the published prior rather than a foreign measurement.
 
     Never raises: this is read on the pricing path for every same-game
     ticket, and a half-written state file must cost the refinement, not
     the board.
     """
-    if name in _cache:
-        return _cache[name]
+    key = (name, sport)
+    if key in _cache:
+        return _cache[key]
     entry = _read_state().get(name)
     if entry is not None:
         try:
@@ -581,9 +589,14 @@ def measured(name: str) -> dict | None:
                   and int(entry["n"]) >= MIN_N)
         except (KeyError, TypeError, ValueError):
             ok = False
+        # A fit whose own record says it was taken elsewhere is not this
+        # sport's number. An entry with no sport recorded at all predates
+        # the field and is left alone rather than guessed at.
+        if ok and sport and entry.get("sport") not in (None, "", sport):
+            ok = False
         if not ok:
             entry = None
-    _cache[name] = entry
+    _cache[key] = entry
     return entry
 
 

@@ -224,7 +224,38 @@ MEASURED: dict[str, tuple[float, int, str]] = {
 }
 
 
-def rho_meta(name: str) -> tuple[float, int, str] | None:
+#: WHOSE GAMES EACH MEASUREMENT WAS TAKEN ON. Kept beside `MEASURED`
+#: rather than inside it because that table's shape is asserted by
+#: tests/test_corrfit.py and read by simrecon and engine/mlb/gamesim; a
+#: fourth element would touch all of them for a fact that belongs to the
+#: provenance string anyway. `test_every_measurement_names_the_sport_it
+#: _was_taken_on` holds the two in step.
+#:
+#: THE BUG THIS EXISTS TO END. `rho_meta` had no sport in it, so a
+#: COLLEGE quarterback stack was priced on +0.637 measured over NFL
+#: 2021-2026 — and the card said so out loud: "measured at +0.64 on
+#: 2,844 of our own games". Not one of those games was college. It is
+#: the same fault `likely.CFB_TD_AUC` was created to end, where the
+#: college board wore the NFL's 0.721 because `from_watch` read a
+#: shipped constant with no idea whose chain had built the row.
+#:
+#: A SPORT WITH NO MEASUREMENT FALLS BACK TO THE PUBLISHED PRIOR, and
+#: that is the point rather than a shortfall. The prior is an estimate
+#: labelled as an estimate; a foreign measurement is an estimate wearing
+#: a sample size. The second is worse, and it is worse in the direction
+#: that matters — it invites conviction.
+MEASURED_SPORT: dict[str, str] = {
+    "qb_passing_game": "nfl",
+    "possession_pie": "nfl",
+    "run_game_script": "nfl",
+    "qb_td_game": "nfl",
+    "qb_td_wr_td": "nfl",
+    "pitcher_vs_lineup": "mlb",
+    "lineup_stack": "mlb",
+}
+
+
+def rho_meta(name: str, sport: str | None = None) -> tuple[float, int, str] | None:
     """(rho, games, provenance) for the number actually in use, or None.
 
     THE LIVE FIT FIRST. The table above is the last measurement a HUMAN
@@ -239,7 +270,7 @@ def rho_meta(name: str) -> tuple[float, int, str] | None:
     """
     try:
         from . import corrfit
-        live = corrfit.measured(name)
+        live = corrfit.measured(name, sport)
     except Exception:                                        # noqa: BLE001
         live = None
     if live:
@@ -249,20 +280,37 @@ def rho_meta(name: str) -> tuple[float, int, str] | None:
         return (float(live["r"]), int(live["n"]),
                 f"{when} · {live.get('sport', '')} history, refit on the settle")
     hit = MEASURED.get(name)
-    return (hit[0], hit[1], hit[2]) if hit else None
+    if not hit:
+        return None
+    # NOT THIS SPORT'S MEASUREMENT, SO NOT A MEASUREMENT. Returning it
+    # anyway is what put NFL's 2,844 games on a college card. `rho_for`
+    # then falls back to the published prior, which is an estimate that
+    # says it is one.
+    if sport and MEASURED_SPORT.get(name) not in (None, sport):
+        return None
+    return (hit[0], hit[1], hit[2])
 
 
-def rho_for(name: str, prior: float) -> tuple[float, bool]:
-    """(value, measured?) — the measurement when we have one, else the prior."""
-    m = rho_meta(name)
+def rho_for(name: str, prior: float,
+            sport: str | None = None) -> tuple[float, bool]:
+    """(value, measured?) — the measurement when we have one FOR THIS
+    SPORT, else the published prior."""
+    m = rho_meta(name, sport)
     return (m[0], True) if m else (prior, False)
 
 
-def rho_n(name: str) -> int:
+def rho_n(name: str, sport: str | None = None) -> int:
     """How many games the number in use was measured on — for the copy on
     the card, which must never quote the frozen sample beside a live
-    number or the other way round."""
-    m = rho_meta(name)
+    number or the other way round.
+
+    ZERO WHEN THIS SPORT HAS NO MEASUREMENT, and that is the point of
+    passing `sport` here at all. Returning the NFL's 2,844 beside a
+    college ticket priced on the published prior is the false provenance
+    this whole change exists to end — and it is the shape the first cut
+    of that change shipped with, because the `sport` reached the
+    signature and not the body."""
+    m = rho_meta(name, sport)
     return m[1] if m else 0
 
 
@@ -841,12 +889,12 @@ def _relate_game_leg(sport, a, b, game, fa, fb, ua, ub, same_team) -> Relation |
         # facing held down. §5.1 calls this the cleanest MLB correlation.
         if (sport == "mlb" and pf in PITCHER_FAMILIES and prop_up
                 and not line_up and line_team == (prop.get("opponent") or "").upper()):
-            r, meas = rho_for("pitcher_vs_lineup", 0.275)
+            r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
             return Relation(r, "strikeouts up and the lineup he is facing held "
                                "down — §5.1's cleanest MLB correlation, and "
                                "§5.2's pitcher stack" + (
                                    f", measured at {r:+.2f} on "
-                                   f"{rho_n('pitcher_vs_lineup'):,} games"
+                                   f"{rho_n('pitcher_vs_lineup', sport):,} games"
                                    if meas else ""), 0, "ok", measured=meas)
         if not own and line_up and prop_up and line_team == (prop.get("opponent") or "").upper():
             return Relation(-0.20, "backing a player over while betting the "
@@ -984,12 +1032,12 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                        "side and get hit — §5.1 puts this at "
                                        "-0.25 to -0.40", 7, "kill")
             if facing and _side_up(pitcher) and not _side_up(hitter):
-                r, meas = rho_for("pitcher_vs_lineup", 0.275)
+                r, meas = rho_for("pitcher_vs_lineup", 0.275, sport)
                 return Relation(r, "strikeouts up, the bats he is facing "
                                    "down — one mechanism, §5.1's cleanest "
                                    "MLB correlation" + (
                                        f", measured at {r:+.2f} on "
-                                       f"{rho_n('pitcher_vs_lineup'):,} "
+                                       f"{rho_n('pitcher_vs_lineup', sport):,} "
                                        f"of our own games" if meas else ""),
                                 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "catch"} and ua != ub:
@@ -1016,7 +1064,7 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
             # are: two hitters in one lineup face the same pitcher and the
             # same innings. §5.1 puts this at +0.20 to +0.35 — a permitted
             # construction, not a clash.
-            r, meas = rho_for("lineup_stack", 0.275)
+            r, meas = rho_for("lineup_stack", 0.275, sport)
             # Tonight's own lineup, if the sim reconciled. This is the one
             # place in the whole taxonomy where the dependence can be
             # OBSERVED rather than estimated: both legs come out of the
@@ -1030,10 +1078,10 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
                                 measured=True)
             return Relation(r, "two bats in one lineup against one starter — "
                                "§5.1 puts this at +0.20 to +0.35" + (
-                                   f", and our own {rho_n('lineup_stack'):,} "
+                                   f", and our own {rho_n('lineup_stack', sport):,} "
                                    f"games put it at {r:+.2f}" if meas else ""),
                             0, "ok", measured=meas)
-        r, meas = rho_for("possession_pie", -0.10)
+        r, meas = rho_for("possession_pie", -0.10, sport)
         return Relation(r, f"two teammates splitting one {fa} pie — §3 Type 3 "
                            f"cannibalisation" + (
                                f", measured at {r:+.2f} once the size of the "
@@ -1052,10 +1100,10 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     # (§1.3 retune — they sat at the bottom until the humility clamp was
     # judged to be carrying that conservatism already).
     if same_team and {fa, fb} == {"pass", "catch"} and ua and ub:
-        r, meas = rho_for("qb_passing_game", 0.425)
+        r, meas = rho_for("qb_passing_game", 0.425, sport)
         return Relation(r, "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation, and measured at "
-                           f"{r:+.2f} on {rho_n('qb_passing_game'):,} of "
+                           f"{r:+.2f} on {rho_n('qb_passing_game', sport):,} of "
                            f"our own games" if meas else
                            "one passing game wearing two jerseys — §4.1's "
                            "strongest usable NFL correlation", 0, "ok",
@@ -1067,20 +1115,20 @@ def relate(sport: str, a: dict, b: dict, game: dict | None = None,
     # 2; Ethan: "measure and price"). Measured on 2,844 team-weeks — see
     # MEASURED and engine/corrfit's role_pair fits.
     if same_team and {fa, fb} == {"passtd", "td"} and ua and ub:
-        r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO)
+        r, meas = rho_for("qb_td_wr_td", SAME_GAME_BASELINE_RHO, sport)
         return Relation(r, "his passing touchdown is usually this receiver's "
                            "touchdown — the WR1 scores in half the games his "
                            "quarterback throws one and one in twenty when he "
                            "does not" + (f", measured at {r:+.2f} on "
-                                         f"{rho_n('qb_td_wr_td'):,} team-weeks"
+                                         f"{rho_n('qb_td_wr_td', sport):,} team-weeks"
                                          if meas else ""), 0, "ok", measured=meas)
     if same_team and {fa, fb} == {"pass", "td"} and ua and ub:
-        r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO)
+        r, meas = rho_for("qb_td_game", SAME_GAME_BASELINE_RHO, sport)
         return Relation(r, "the passing game that reaches the end zone is the "
                            "one that piles up yards — the quarterback's "
                            "yardage against his receiver's touchdown" + (
                                f", measured at {r:+.2f} on "
-                               f"{rho_n('qb_td_game'):,} team-weeks"
+                               f"{rho_n('qb_td_game', sport):,} team-weeks"
                                if meas else ""), 0, "ok", measured=meas)
 
     if ua and ub:
