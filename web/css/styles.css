@@ -9427,7 +9427,44 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
   border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
 .pbp-info-ico { color: var(--gold); display: inline-flex; }
-.pbp-rail { position: sticky; top: 8px; }
+/* THE PLAY FEED IS CUT OFF AND SCROLLS ITSELF.
+   ---------------------------------------------------------------------
+   Ethan, 2026-09-06, circling the rail: "we should just make this menu
+   cut off and let people scroll it so you dont have to scroll all the
+   way down the page bc its ugly."
+
+   It was `sticky` with no ceiling, which is sticky in name only — an
+   element taller than the viewport has nowhere to stick to, so the rail
+   simply ran the full length of the feed and the page grew to match it.
+   Every pitch of a nine-inning game, in one column, under a park card
+   that ends after four hundred pixels.
+
+   This is not a new pattern: `.rail` above has done exactly this since
+   it was written — sticky under the topbar, capped at the viewport,
+   scrolling its own overflow, and released back to normal flow when the
+   layout folds to one column. The play feed was the one rail that never
+   picked it up. Same idiom, same breakpoint as .pbp-layout's own fold,
+   so the two cannot disagree about when the page is narrow.
+
+   `overscroll-behavior: contain` so reaching the end of the feed does
+   not then start scrolling the page underneath it. */
+.pbp-rail { position: sticky; top: var(--topbar-h);
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+  overscroll-behavior: contain; scrollbar-width: thin; }
+/* THE CARDS MUST NOT SHRINK TO FIT.
+   `.card` carries `overflow: hidden`, which makes it a legal flex item to
+   compress — so the first version of this rule capped the rail and the
+   CARD swallowed the feed instead, clipping two hundred pitches to
+   nothing with no scrollbar anywhere. Cut off, but not scrollable, which
+   is the half of the request that would have been useless. Measured in
+   Chromium: rail 820px, content 820px, scrolls false. Pinned at their
+   natural height, the content overflows the rail and the rail scrolls,
+   which is the point. */
+.pbp-rail > * { flex: 0 0 auto; }
+@media (max-width: 980px) {
+  .pbp-rail { position: static; max-height: none; overflow: visible; }
+}
 .pbp-rail-head { display: flex; justify-content: space-between; align-items: baseline;
   font-weight: 800; margin-bottom: 6px; }
 .pbp-group { margin: 8px 0 14px; }
