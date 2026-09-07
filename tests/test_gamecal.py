@@ -177,11 +177,13 @@ def test_a_rematch_in_the_same_week_of_another_season_keeps_its_own_close():
 
 
 def test_every_walk_orders_by_season_before_period():
-    """All eleven walk queries, by name, so a new one written the old way
-    fails here rather than in a measurement nobody can see."""
+    """All nine walk queries, by count per module, so a new one written
+    the old way fails here rather than in a measurement nobody can see —
+    and one written the right way has to be counted in, which is the
+    point of a count rather than a floor."""
     import re
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    expect = {"engine/gamerank.py": 2, "engine/gamecal.py": 2,
+    expect = {"engine/gamerank.py": 3, "engine/gamecal.py": 2,
               "engine/gamebacktest.py": 4}
     for rel, n in expect.items():
         src = open(os.path.join(root, rel)).read()

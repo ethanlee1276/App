@@ -45,6 +45,13 @@ closes joined by season (`gamebacktest.close_for`), the same games give:
 Both faults flattered every NFL market and none of them changed side of
 the floor. College was never affected: its period is a date.
 
+AND THEN MEASURED ON THE MODEL THE BUILD SHIPS, the same day. The plain
+walk above rates a team on every game it has ever played; `nfl_build`
+prices from `teamrates.ratings_for_season`. `measure_nfl` walks that —
+the college precedent — and it is the figure the board carries:
+
+    nfl  moneyline 0.6773 (1,356)   spread 0.5036   total 0.4961   team_total 0.5002
+
 Moneylines rank; nothing else does. Shipped as `likely.GAME_RANK_AUC`
 (the ranked ones) and `likely.GAME_RANK_MEASURED` (the whole table —
 the sub-floor markets are on the board as labelled leans since
@@ -390,7 +397,171 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
     return [out[m].finish() for m in ("total", "spread", "team_total", "moneyline")]
 
 
+def _prior_table(mem, rows, before: tuple, seasons) -> None:
+    """Refill the in-memory games table with every game strictly before
+    ``before`` — a ``(season, period)`` pair — from ``seasons``. The
+    production ratings read a connection, so the walk hands them one
+    that only knows the past. Ordered by the pair, never by period
+    alone: an NFL period is a week number that repeats every season."""
+    mem.execute("DELETE FROM games")
+    mem.executemany(
+        "INSERT INTO games VALUES (?,?,?,?,?,?,?,?)",
+        [tuple(r) for r in rows
+         if (r["season"], r["period"]) < before and r["season"] in seasons])
+    mem.commit()
+
+
+def measure_nfl(conn, min_team_games: int = 4,
+                adjusted: bool = False) -> list[GameRank]:
+    """The NFL, with the ratings the build SHIPS rather than the plain
+    cumulative walk — the college precedent (`measure_cfb`), applied.
+
+    WHY THE PLAIN WALK IS THE WRONG MODEL TO GRADE. `measure_moneylines`
+    accumulates every team's games forever, so by 2025 it rates a team
+    on its 2021-25 average. `nfl_build` prices from
+    `teamrates.ratings_for_season`: the current season alone once it
+    averages four games a team, pooled with the prior season until then.
+    Those are different models, and the board's "ranks at" figure was
+    the first one's. This walk rebuilds the second before every week,
+    from games strictly before it, with the same function the build
+    calls, on an in-memory table that holds only the past.
+
+    MEASURED 2026-09-07, both on the same 1,181 quoted games (the
+    fifteen-game cumulative floor, so the two are on identical games),
+    against the schedule's closing moneyline (which ranks the same
+    winners at 0.724):
+
+        cumulative walk (what shipped)     AUC 0.633   Brier 0.235
+        ratings_for_season (what ships)    AUC 0.683   Brier 0.222
+        …opponent-adjusted, H = 1.6        AUC 0.685
+        …opponent-adjusted, H fitted +2.2  AUC 0.684
+
+    Ethan, the same day: "Can we Create arithmetic equations to figure
+    out the outcome nfl moneylines." The last two rows are the answer
+    to what a better equation on the same inputs is worth: the college
+    fix that lifted college from 0.708 to 0.752 moves the NFL by two
+    thousandths, because an NFL schedule is close to balanced and the
+    plain average was never far from the adjusted one. The calibration
+    slope of the shipped model's disagreement with the close is
+    −0.057 ± 0.135 — its opinion against the market carries nothing —
+    and it is −0.08 for both adjusted forms. ``adjusted=True`` re-runs
+    the third row so that refusal stays re-measurable; it is NOT wired
+    into the build, and this docstring is why.
+
+    ``min_team_games`` is four, as college's is, and it counts the
+    SHIPPED rating's own games — this season's, or the pooled pair's —
+    not a cumulative history. The build prices week one on the pooled
+    prior season, and a production rating with four games behind it is
+    what the board actually shows. Measured 2026-09-07 that is 1,356
+    quoted games and a moneyline AUC of 0.6773 (spread 0.5036, total
+    0.4961, team total 0.5002), and that is the figure
+    `likely.GAME_RANK_AUC` carries. Raising the floor here does NOT
+    reproduce the 1,181-game table above: a shipped rating rarely holds
+    fifteen games, so fifteen admits only late-season weeks (478). The
+    table above came from a walk that took the quoted set off the
+    cumulative floor and the probability off these ratings, which is
+    the only way to put the two models on identical games.
+
+    Spreads, totals and team totals are measured on the same ratings by
+    the same pricers, for the same reason: the leans the board prints
+    should be graded on the model that produced them.
+    """
+    import sqlite3
+    from . import teamrates
+    from .gamebets import NFL_HOME_FIELD
+    baseline = _sd(SCORING_BASELINE, "nfl", "scoring baseline")
+    cols = "sport, season, period, home, away, home_score, away_score, extra"
+    rows = conn.execute(
+        f"SELECT {cols} FROM games WHERE sport='nfl' AND home_score IS NOT NULL "
+        f"AND away_score IS NOT NULL ORDER BY season, period").fetchall()
+    sched_s = schedule_closes(conn, "nfl", "spread", require_prices=False)
+    harv_s = game_line_closes(conn, "nfl", "spread")
+    sched_t = schedule_closes(conn, "nfl", "total", require_prices=False)
+    harv_t = game_line_closes(conn, "nfl", "total")
+    harv_ml = moneyline_closes(conn, "nfl")
+    sched_ml = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, "nfl").items()}
+    out = {m: GameRank(sport="nfl", market=m)
+           for m in ("total", "spread", "team_total", "moneyline")}
+    mem = sqlite3.connect(":memory:")
+    mem.row_factory = sqlite3.Row
+    mem.execute(f"CREATE TABLE games ({cols})")
+    by_week: dict = {}
+    for r in rows:
+        by_week.setdefault((r["season"], r["period"]), []).append(r)
+    for week in sorted(by_week):
+        games = by_week[week]
+        season = week[0]
+        _prior_table(mem, rows, week, (season - 1, season))
+        if adjusted:
+            ratings, _used = teamrates.adjusted_ratings_for_season(
+                mem, "nfl", season, home_field=NFL_HOME_FIELD)
+        else:
+            ratings, _used = teamrates.ratings_for_season(mem, "nfl", season)
+        for g in games:
+            for m in out.values():
+                m.games_seen += 1
+            hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
+            if not hr or not ar or hr.games < min_team_games or ar.games < min_team_games:
+                continue
+            date = g["period"]
+            hs, as_ = float(g["home_score"]), float(g["away_score"])
+            margin = game_margin("nfl", hr.net, ar.net)
+            sq = close_for(harv_s, sched_s, season, date, g["home"], g["away"])
+            tq = close_for(harv_t, sched_t, season, date, g["home"], g["away"])
+            if sq:
+                line, oa, ob = sq
+                oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
+                card = price_spread("nfl", g["home"], g["away"], margin, line, oa, ob)
+                won, push = _settle_spread(line, card["team"] == g["home"], hs, as_)
+                out["spread"].games_quoted += 1
+                if push:
+                    out["spread"].pushes += 1
+                else:
+                    out["spread"].pairs.append((float(card["win_prob"]), bool(won)))
+            if tq:
+                line, oa, ob = tq
+                oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
+                proj = project_total("nfl", hr.off, hr.def_, ar.off, ar.def_)
+                card = price_total("nfl", g["home"], g["away"], proj, line, oa, ob)
+                won, push = _settle_total(line, card["side"], hs, as_)
+                out["total"].games_quoted += 1
+                if push:
+                    out["total"].pushes += 1
+                else:
+                    out["total"].pairs.append((float(card["win_prob"]), bool(won)))
+                if sq:
+                    h_line, a_line = (line - sq[0]) / 2.0, (line + sq[0]) / 2.0
+                    out["team_total"].games_quoted += 1
+                    for team, pr, ln, pts in (
+                            (g["home"], project_team_points("nfl", hr.off, ar.def_), h_line, hs),
+                            (g["away"], project_team_points("nfl", ar.off, hr.def_), a_line, as_)):
+                        c = price_team_total("nfl", team, g["home"], g["away"], pr, ln, oa, ob)
+                        won, push = _settle_team_total(ln, c["side"], pts)
+                        if push:
+                            out["team_total"].pushes += 1
+                        else:
+                            out["team_total"].pairs.append((float(c["win_prob"]), bool(won)))
+            q = close_for(harv_ml, sched_ml, season, date, g["home"], g["away"]) or {}
+            if q.get(g["home"]) is not None and q.get(g["away"]) is not None:
+                out["moneyline"].games_quoted += 1
+                if hs != as_:
+                    out["moneyline"].pairs.append(
+                        (float(nfl_win_prob(hr.net, ar.net)), hs > as_))
+                else:
+                    out["moneyline"].pushes += 1
+    mem.close()
+    return [out[m].finish() for m in ("total", "spread", "team_total", "moneyline")]
+
+
 def measure(conn, sport: str) -> list[GameRank]:
+    if sport == "nfl":
+        try:
+            return measure_nfl(conn)
+        except Exception as exc:                          # noqa: BLE001
+            return [GameRank(sport="nfl", market=m,
+                             note=f"could not measure — {exc}")
+                    for m in ("total", "spread", "team_total", "moneyline")]
     if sport == "cfb":
         try:
             return measure_cfb(conn)

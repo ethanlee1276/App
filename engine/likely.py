@@ -26,7 +26,7 @@ by `engine.gamerank` — the ratings-only replay `engine.gamebacktest`
 runs over the stored closes, keeping for EVERY quoted game the
 probability the pricer put on its side and whether that side won:
 
-    who wins the game (moneyline)   AUC 0.633 NFL (1,181 games)
+    who wins the game (moneyline)   AUC 0.677 NFL (1,356 games)
                                     AUC 0.752 CFB (2,729 games)
     who covers the spread           0.491 NFL · 0.496 CFB — a coin flip
     over or under the total         0.497 NFL · 0.503 CFB — a coin flip
@@ -98,7 +98,7 @@ GAME_MARKETS = ("moneyline", "spread", "total", "team_total")
 #: adds them. A sport with no entry ranks no game market until the
 #: store on its own box says so.
 GAME_RANK_AUC = {
-    "nfl": {"moneyline": 0.633},
+    "nfl": {"moneyline": 0.677},
     "cfb": {"moneyline": 0.752},
 }
 
@@ -114,7 +114,7 @@ GAME_RANK_AUC = {
 #: rank. A market with NO figure at all (MLB, until `gamerank --save`
 #: runs on the droplet) still has nothing to say and stays off.
 GAME_RANK_MEASURED = {
-    "nfl": {"moneyline": 0.633, "spread": 0.481, "total": 0.471, "team_total": 0.482},
+    "nfl": {"moneyline": 0.677, "spread": 0.504, "total": 0.496, "team_total": 0.500},
     "cfb": {"moneyline": 0.752, "spread": 0.496, "total": 0.503, "team_total": 0.492},
 }
 

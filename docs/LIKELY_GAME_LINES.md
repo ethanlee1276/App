@@ -52,7 +52,7 @@ Measured 2026-09-02 on this repo's history (NFL 2021–25, CFB 2022–25):
 
 | sport | moneyline | spread | total | team total |
 |---|---|---|---|---|
-| NFL | **0.633** (1,181 games) | 0.481 | 0.471 | 0.482 |
+| NFL | **0.677** (1,356 games) | 0.504 | 0.496 | 0.500 |
 | CFB | **0.752** (2,729 games) | 0.496 | 0.503 | 0.492 |
 
 The floor is `likely.MIN_RANK_AUC` (0.60). The model can say who wins
@@ -69,8 +69,16 @@ it alone, so it priced each season's second week having already seen
 every later season's first; and the schedule closes were keyed by it
 alone, so a same-week rematch a season apart shared a key and 65 games
 were graded against another year's line. Ordered by season and then
-week, and joined by season, the same games give the row above — lower
-on every market, and no market on a different side of the floor.
+week, and joined by season, the same games gave 0.633 / 0.481 / 0.471 /
+0.482 — lower on every market, and no market on a different side of
+the floor.
+
+The row above is one step further: the NFL measured on the ratings the
+build actually ships (`gamerank.measure_nfl`, the college precedent),
+not on the plain cumulative walk, which rates a 2025 team on its
+2021-25 average. The shipped rating ranks winners better than the
+stale one — and its disagreement with the close is still worth nothing
+(docs/NFL_MONEYLINE_ARITHMETIC.md).
 
 The first cut shipped moneylines alone and kept the rest off. Ethan,
 the same day: "I only see money lines in the best bets. I don't see team

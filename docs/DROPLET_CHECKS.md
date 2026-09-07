@@ -1105,8 +1105,10 @@ cd /srv/qellys && sudo -u qellys python3 -m engine.gamerank --sport nfl --save
 ```
 
 Expect the first to print the three slopes above and adopt every shrink
-at zero, and the second to print `nfl:moneyline: AUC 0.6332` with the
-other three under the floor. NFL spread and total edge bets will go
+at zero, and the second to print `nfl:moneyline: AUC 0.6773 on 1,356`
+with the other three under the floor — the second now walks the ratings
+the build ships (`gamerank.measure_nfl`), so the store, and the board's
+"ranks at", describe the model on the site. NFL spread and total edge bets will go
 quiet after the first — that is the measurement doing its job, not a
 fault.
 

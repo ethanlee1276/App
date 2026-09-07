@@ -19,7 +19,7 @@ The founding rule says a market appears only once it has been MEASURED
 to rank, so `engine.gamerank` measured them (2026-09-02, the same
 ratings-only replay the game backtests use, over the stored closes):
 
-    nfl  moneyline 0.633   spread 0.481   total 0.471   team_total 0.482
+    nfl  moneyline 0.677   spread 0.504   total 0.496   team_total 0.500
     cfb  moneyline 0.752   spread 0.496   total 0.503   team_total 0.492
 
 The model can say who wins and cannot say who covers. So moneylines are
@@ -106,13 +106,16 @@ def test_only_the_moneyline_has_been_shown_to_rank():
 def test_the_shipped_figures_are_the_measured_ones():
     """Measured 2026-09-02 by engine.gamerank on this repo's history;
     the NFL re-measured 2026-09-07 once its walk was ordered by season
-    (tests/test_gamecal.py, `test_a_walk_never_sees_next_season…`).
-    Re-measure before moving these; do not tune them."""
-    assert K.GAME_RANK_AUC["nfl"]["moneyline"] == 0.633
+    (tests/test_gamecal.py, `test_a_walk_never_sees_next_season…`) and
+    then measured on the ratings the build ships (`measure_nfl`,
+    tests/test_gamerank_nfl.py). Re-measure before moving these; do not
+    tune them."""
+    assert K.GAME_RANK_AUC["nfl"]["moneyline"] == 0.677
     assert K.GAME_RANK_AUC["cfb"]["moneyline"] == 0.752
     src = _src("engine", "gamerank.py")
-    assert "0.6332" in src and "0.7522" in src, "the measurement log left the module"
-    assert "0.6412" in src, "and the number it corrects stays on the record"
+    assert "0.6773" in src and "0.7522" in src, "the measurement log left the module"
+    assert "0.6412" in src and "0.6332" in src, "and the numbers it corrects stay on the record"
+    assert "def measure_nfl(" in src, "the NFL is measured with the production ratings"
     assert "def measure_cfb(" in src, "college is measured with the production ratings"
 
 
