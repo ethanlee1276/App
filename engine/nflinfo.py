@@ -443,15 +443,26 @@ def _line(name, tr, te):
 
 
 def report(rows: list[Row], train=TRAIN, test=TEST) -> list[str]:
+    return report_for(rows, "NFL", ML_FEATURES, SPREAD_FEATURES, TOTAL_FEATURES,
+                      train=train, test=test)
+
+
+def report_for(rows: list[Row], label: str, ml_features, spread_features,
+               total_features, train, test) -> list[str]:
+    """The whole table for one league. `engine.cfbinfo` calls this with
+    college's feature lists and seasons; the arithmetic — each feature
+    alone on top of the close, all of them together as a bet rule on the
+    held-out seasons — is the same question in both leagues, and one
+    copy of it means one copy to be wrong."""
     out = []
     n_tr = sum(1 for r in rows if r.season in train)
     n_te = sum(1 for r in rows if r.season in test)
-    out.append(f"NFL information test · train {train} ({n_tr} games) · test {test} ({n_te} games)")
+    out.append(f"{label} information test · train {train} ({n_tr} games) · test {test} ({n_te} games)")
     out.append("  ** = beyond two standard errors, * = beyond 1.65; a feature has to hold on TEST to count")
 
     # --- moneyline, each feature alone ---------------------------------
     out.append("\nMONEYLINE — each feature alone, on top of the close's log-odds")
-    for name in ML_FEATURES:
+    for name in ml_features:
         tr = _ml_obs(rows, (name,), train)
         te = _ml_obs(rows, (name,), test)
         ftr = fit_logistic([(xs, off, y) for xs, off, y, _ in tr])
@@ -460,7 +471,7 @@ def report(rows: list[Row], train=TRAIN, test=TEST) -> list[str]:
                          (fte[0][0], fte[1][0]) if fte else None)
                    + f"   n {len(tr)}/{len(te)}")
     # --- moneyline, all together, fitted on train, bet on test ----------
-    feats = [k for k in ML_FEATURES if k != "pts_gap"] + ["pts_gap"]
+    feats = [k for k in ml_features if k != "pts_gap"] + ["pts_gap"]
     tr = _ml_obs(rows, feats, train)
     te = _ml_obs(rows, feats, test)
     joint = fit_logistic([(xs, off, y) for xs, off, y, _ in tr])
@@ -496,7 +507,7 @@ def report(rows: list[Row], train=TRAIN, test=TEST) -> list[str]:
         out.append("  coefficients (train): " + ", ".join(f"{k} {bi:+.3f}" for k, bi in zip(feats, b)))
 
     # --- spread and total ------------------------------------------------
-    for market, feats_all in (("spread", SPREAD_FEATURES), ("total", TOTAL_FEATURES)):
+    for market, feats_all in (("spread", spread_features), ("total", total_features)):
         out.append(f"\n{market.upper()} — each feature alone, least squares of (actual − close)")
         for name in feats_all:
             tr = _pts_obs(rows, (name,), train, market)

@@ -1256,6 +1256,38 @@ for sharp cards too; lifting it for them is one constant
 (`engine.cfb.model.BET_GROUP_OF_FIVE`) and a decision to make with the
 college sharp-anchor replay's numbers in hand.
 
+## The college information test, and the one number it left to re-read (2026-09-07)
+
+`python3 -m engine.cfbinfo` asks college the NFL's question: with the
+closing number as a fixed offset, does any input on disk — the
+rating's gap, the starting quarterback, rest and byes, a neutral site,
+form drift — still predict the outcome? Fitted on 2022-23, judged on
+2024-25: nothing holds, and the table is in the module note. The one
+near miss is a change of starting quarterback (−0.392 ± 0.114 on the
+fit seasons, −0.172 ± 0.114 held out, the same sign). It is
+pre-registered on `engine.cfbinfo.QB_CHANGE_WATCH`. When the 2026
+season has been ingested — the box's `player_game_logs` carry
+college `pass_yds` for the season's dates — run it on the droplet
+with the test seasons extended:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import sqlite3
+from engine import db, cfbinfo
+conn = db.connect(); conn.row_factory = sqlite3.Row
+rows = cfbinfo.build_rows(conn)
+for line in cfbinfo.report(rows, train=(2022, 2023), test=(2024, 2025, 2026)):
+    if "qb_change_diff" in line or "information test" in line:
+        print(line)
+EOF
+```
+
+The `qb_change_diff` moneyline line's TEST cell decides, alone and
+unpooled: beyond two standard errors (the `**`), a fitted qb-change
+term enters the college moneyline pricing; short of it, the watch
+stays a record of a near miss. Nothing is re-fitted on the way to that
+reading, and nothing in the pipeline reads the watch today.
+
 ## The college sharp-anchor replay, and the command that runs it (2026-09-07)
 
 `backtest_sharp_anchor` — the season replayed betting only the shopped

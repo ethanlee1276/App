@@ -287,6 +287,22 @@ The moneyline's 0.752 ranking AUC is untouched by this — ranking who wins
 and beating the price are different abilities, and the Most Likely board
 keeps the first.
 
+**Every input on disk has been tested against the college close
+(2026-09-07).** `engine/cfbinfo.py` is the NFL information test asked of
+college: with the closing number as a fixed offset, does anything computable
+from earlier games — the rating's own gap, the starting quarterback (a
+change, a new starter, his yards per game against the usual man's), rest and
+a bye, a neutral site, form drift — still predict the outcome? Fitted on
+2022-23, judged on 2024-25. Nothing holds at the bar: log-loss with every
+feature is worse than the market alone, the spread rule lands half a
+standard error over break-even, the total rule under it. The one near miss
+is a change of starting quarterback — a team starting someone other than
+its usual passer does worse than the close says, 3.4σ on the fit seasons
+and 1.5σ with the same sign on the held-out ones, the same sign the NFL's
+held-out seasons showed. It is pre-registered on `cfbinfo.QB_CHANGE_WATCH`
+with the number that decides it after the 2026 season, and nothing reads
+it. `python3 -m engine.cfbinfo` prints the table.
+
 **Parked list, in priority order:** play-by-play efficiency for §5's
 success-rate and drive metrics; opener→close line movement and key-number
 shopping; a QB-status feed to replace the manual confirmation.
