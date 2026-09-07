@@ -1256,6 +1256,30 @@ for sharp cards too; lifting it for them is one constant
 (`engine.cfb.model.BET_GROUP_OF_FIVE`) and a decision to make with the
 college sharp-anchor replay's numbers in hand.
 
+## The college sharp-anchor replay, and the command that runs it (2026-09-07)
+
+`backtest_sharp_anchor` — the season replayed betting only the shopped
+soft close against Pinnacle's de-vigged pair — is the retrospective
+grade for the strategy the college edge board now runs on. It never
+needed a college branch: a college `period` is a date, the key every
+harvest is filed under. What was missing was the command:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 moneyline_backtest.py cfb
+```
+
+College prints the sharp-anchor replay alone — its model is measured
+by `python3 -m engine.gamecal --sport cfb` and `gamerank.measure_cfb`,
+which walk the opponent-adjusted ratings the board ships, not by the
+plain walk the pro leagues get here. "0 with both a Pinnacle pair and a
+soft price" means no college moneyline close has been harvested on
+this box yet, not that the join failed. The nightly harvest is driven
+by the journal (`maintenance._harvest_targets`): the first Saturday a
+college sharp card journals a moneyline, the next morning's harvest
+pulls that day's college `h2h` closes across `DEFAULT_BOOKS`, Pinnacle
+included, and the replay starts filling. To backfill a stretch by
+hand, the summary prints the command with the sport already in it.
+
 ## College runs the stale-line scan now (2026-09-07)
 
 `cfb_build` shipped `market_scan` as an empty literal from the day it

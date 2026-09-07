@@ -3,6 +3,8 @@
 
     python3 moneyline_backtest.py mlb
     python3 moneyline_backtest.py mlb --min-games 20
+    python3 moneyline_backtest.py nfl
+    python3 moneyline_backtest.py cfb      # the sharp-anchor replay only
 
 Uses only data already in the local database: completed games (free ingest)
 joined to h2h moneylines harvested by harvest_odds.py. Team ratings are built
@@ -22,7 +24,7 @@ from engine.gamebacktest import backtest_moneylines
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Walk-forward moneyline backtest vs harvested closes.")
-    ap.add_argument("sport", nargs="?", default="mlb", choices=["mlb", "nfl"])
+    ap.add_argument("sport", nargs="?", default="mlb", choices=["mlb", "nfl", "cfb"])
     ap.add_argument("--db", default=str(db.DEFAULT_DB))
     ap.add_argument("--min-games", type=int, default=15,
                     help="both teams need this many completed games before "
@@ -30,8 +32,23 @@ def main() -> None:
     args = ap.parse_args()
 
     conn = db.connect(args.db)
-    report = backtest_moneylines(conn, args.sport, min_team_games=args.min_games)
-    print(report.summary())
+    if args.sport == "cfb":
+        # COLLEGE'S MODEL WALK LIVES ELSEWHERE. `backtest_moneylines`
+        # walks `teamrates.ratings_for_season` — the plain shrunk-margin
+        # rating the pro leagues ship. College ships opponent-adjusted
+        # ratings with a fitted home field and a recruiting prior, and
+        # its measurement against the close is `engine.gamecal --sport
+        # cfb` (the slopes) and `engine.gamerank.measure_cfb` (the
+        # ranking); printing the plain walk here would grade a model the
+        # college board does not run. What college shares with the other
+        # two is the strategy below, which has no model in it at all.
+        print("CFB moneyline backtest · the college model is measured by "
+              "`python3 -m engine.gamecal --sport cfb` and "
+              "`engine.gamerank.measure_cfb`, not by this walk — "
+              "sharp-anchor replay only")
+    else:
+        report = backtest_moneylines(conn, args.sport, min_team_games=args.min_games)
+        print(report.summary())
 
     # A/B: same games, same prices, plus each starter's walk-forward quality.
     if args.sport == "mlb":

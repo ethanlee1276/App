@@ -307,7 +307,7 @@ class SharpAnchorReport:
         ]
         if not self.games_priced:
             lines.append(f"  No games priced — harvest {self.sharp} closes first:")
-            lines.append("    python3 harvest_odds.py mlb --from <start> --to <end> "
+            lines.append(f"    python3 harvest_odds.py {self.sport} --from <start> --to <end> "
                          "--markets h2h --books pinnacle --budget 2500")
             return "\n".join(lines)
         if self.suspicious:
