@@ -66,7 +66,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine.models import LiveStatus, live_to_dict
 from engine.mlb.sources.live import parse_live
-from engine.sources.livescores import parse_espn_scoreboard, spot_to_yard_line
+from engine.sources.livescores import (endzone_to_yard_line,
+                                       parse_espn_scoreboard, spot_to_yard_line)
 
 
 def _read(*parts):
@@ -296,6 +297,61 @@ def test_a_five_letter_school_code_is_still_a_spot():
     assert spot_to_yard_line("2nd & 7 at KC 30", "KC", "BUF") == 30.0
     # Six letters is still not a code.
     assert spot_to_yard_line("at ABCDEF 30", "ABCDEF", "BUF") is None
+
+
+def test_the_two_readings_of_field_position_agree_with_each_other():
+    """The site has two ways to learn where the ball is, because the two
+    feeds do not both carry the same one. The scoreboard writes a prose
+    spot ("BUF 38"); a play in the summary writes `yardsToEndzone`. They
+    must land on the same number for the same physical ball, or the
+    field strip moves when the source changes and nothing else does.
+
+    That is what this asserts — not two hand-computed constants, but the
+    two functions against each other on the same positions. A convention
+    that drifts in one of them fails here even if both stay internally
+    consistent.
+
+    WHY `yardsToEndzone` IS ALLOWED WHERE `yardLine` IS NOT. The standing
+    refusal above is about an undocumented ZERO POINT. This field does
+    not have one to get wrong: it names its reference in its own name —
+    the distance to the end zone the offence is attacking — so the only
+    input is which side is driving, and that is the convention itself.
+    """
+    home, away = "KC", "BUF"
+    # Home on its own 30: thirty from home's goal, seventy still to run.
+    assert (spot_to_yard_line("2nd & 7 at KC 30", home, away)
+            == endzone_to_yard_line(70, home, away, home) == 30.0)
+    # Away on its own 38: sixty-two from home's goal, and sixty-two to
+    # run, because away attacks the end zone the numbering starts at.
+    assert (spot_to_yard_line("2nd & 6 at BUF 38", home, away)
+            == endzone_to_yard_line(62, home, away, away) == 62.0)
+    # The two goal lines, which is where a sign error shows up largest,
+    # and where the two sides must NOT agree.
+    assert endzone_to_yard_line(0, home, away, home) == 100.0
+    assert endzone_to_yard_line(0, home, away, away) == 0.0
+    # Which is to say the team argument is load-bearing on every read.
+    assert (endzone_to_yard_line(70, home, away, home)
+            != endzone_to_yard_line(70, home, away, away))
+
+
+def test_a_side_that_is_neither_team_puts_no_ball_anywhere():
+    """`endzone_to_yard_line` needs to know which way the offence runs,
+    and a team it cannot place is not a direction. Returning None is the
+    same refusal `spot_to_yard_line` makes on a school code it does not
+    map — nothing is drawn, rather than something being drawn wrong."""
+    assert endzone_to_yard_line(30, "KC", "BUF", "OSU") is None
+    assert endzone_to_yard_line(30, "KC", "BUF", "") is None
+    # And a distance that is not one.
+    assert endzone_to_yard_line(None, "KC", "BUF", "KC") is None
+    assert endzone_to_yard_line("", "KC", "BUF", "KC") is None
+    assert endzone_to_yard_line("many", "KC", "BUF", "KC") is None
+    # A football field is a hundred yards; anything else is a bad read,
+    # not a ball behind the end line.
+    assert endzone_to_yard_line(101, "KC", "BUF", "KC") is None
+    assert endzone_to_yard_line(-1, "KC", "BUF", "KC") is None
+    # The ends themselves are on the field: home a hundred yards out is
+    # home's own goal line, which the convention numbers zero.
+    assert endzone_to_yard_line(100, "KC", "BUF", "KC") == 0.0
 
 
 def test_midfield_resolves_without_belonging_to_anyone():

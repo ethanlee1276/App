@@ -238,8 +238,9 @@ def attach_plays(games: list[dict], league: str,
                      str(g.get("away_id") or ""): g["away"]}
             sides.pop("", None)
             if noun == "drives":
-                g["plays"] = espnplays.football_plays(payload, league,
-                                                      PLAYS_PER_GAME)
+                g["plays"] = espnplays.football_plays(
+                    payload, league, PLAYS_PER_GAME,
+                    home=g["home"], away=g["away"])
                 drive = espnplays.current_drive(payload, league)
                 if drive:
                     g["drive"] = drive
@@ -332,7 +333,8 @@ def pbp_doc(league: str, g: dict, payload: dict,
         "live": g.get("live") or {},
     }
     if league in espnplays.FOOTBALL:
-        drives = espnplays.football_drives(payload, league)
+        drives = espnplays.football_drives(
+            payload, league, home=doc["home"] or "", away=doc["away"] or "")
         doc["drives"] = drives
         doc["plays"] = [r for d in drives for r in d["plays"]]
     else:

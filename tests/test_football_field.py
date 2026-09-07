@@ -271,6 +271,112 @@ def _strip(yard, poss="", home="DET", away="CHI"):
       % (home, away, "" if yard is None else f"yard_line: {yard},", poss))
 
 
+def _strip2(js):
+    """Drive the strip and read back what it actually drew: the caption,
+    the ball's x, and which way the arrowhead points."""
+    return _node("""
+      const g = {home: "LOU", away: "MISS"};
+      const read = (s) => {
+        if (s === "") return {empty: true};
+        const dot = Number((s.match(/<circle cx="([\d.]+)"/) || [])[1]);
+        const tip = (s.match(/<path d="M([\d.]+) 16/) || [])[1];
+        return {cap: (s.match(/pbp-fpos-cap">([^<]*)</) || [])[1],
+                x: dot,
+                dir: tip === undefined ? 0 : Math.sign(Number(tip) - dot)};
+      };
+      console.log(JSON.stringify(""" + js + """));""")
+
+
+def test_the_strip_draws_when_only_the_play_knows_where_the_ball_is():
+    """Ethan, 2026-09-07, on a live Louisville card: "I'm not seeing that
+    yard line marker thing to show where the ball is at."
+
+    Nothing was broken in the drawing. `live.yard_line` comes from
+    ESPN's scoreboard `situation` block, college payloads routinely omit
+    that block, and a strip with no number returns "" — correctly, and
+    invisibly. The play alongside it carries the same fact as
+    `yardsToEndzone`, stamped onto the row as `spot`, and that is the
+    second source."""
+    got = _strip2("""{
+      college: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      board: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}}, null)),
+      neither: read(pbpFieldPosHTML({...g, live: {}}, null)),
+      playWithNoSpot: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU"})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["college"]["x"] == 78.4, got          # 16 + .30 * 208
+    assert got["board"]["x"] == 145, got             # 16 + .62 * 208
+    # And with neither source there is still nothing to draw, which is
+    # the honest answer and not a bug to paper over.
+    assert got["neither"] == {"empty": True}, got
+    assert got["playWithNoSpot"] == {"empty": True}, got
+
+
+def test_the_scoreboard_leads_because_the_two_sources_are_different_facts():
+    """`live.yard_line` is where the ball sits for the NEXT snap. A
+    play's `spot` is where THAT play was snapped from. On a long
+    completion they are a long way apart, so the scoreboard — which
+    answers the question the strip asks — wins whenever it has an
+    answer, and the caption always says which one drew. They are never
+    averaged and never silently swapped."""
+    got = _strip2("""{
+      both: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}},
+                                 {team: "LOU", spot: 30})),
+      playOnly: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      homeHalf: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      awayHalf: read(pbpFieldPosHTML({...g, live: {}}, {team: "MISS", spot: 62})),
+      mid: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 50})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    # With both in hand the scoreboard's number is the one drawn.
+    assert got["both"]["x"] == 145, got
+    assert got["both"]["cap"] == "BALL ON MISS 38", got
+    assert got["playOnly"]["cap"] == "SNAP AT LOU 30", got
+    # The caption names the half of the field a person would name: under
+    # fifty is home's, over fifty is away's, and the marker counts back
+    # down from midfield.
+    assert got["homeHalf"]["cap"] == "SNAP AT LOU 30", got
+    assert got["awayHalf"]["cap"] == "SNAP AT MISS 38", got
+    assert got["mid"]["cap"] == "SNAP AT MIDFIELD", got
+
+
+def test_the_spot_and_the_arrow_come_from_the_same_reading():
+    """Home defends 0 and drives toward 100; away drives the other way.
+    Taking the position from one source and the direction from the other
+    is how a strip ends up drawing a team running the wrong way up a
+    field, so whichever source supplied the yard supplies the arrow —
+    and a source that named no team draws no arrow at all rather than
+    borrowing one."""
+    got = _strip2("""{
+      playHome: read(pbpFieldPosHTML({...g, live: {}}, {team: "LOU", spot: 30})),
+      playAway: read(pbpFieldPosHTML({...g, live: {}}, {team: "MISS", spot: 62})),
+      boardHome: read(pbpFieldPosHTML({...g, live: {yard_line: 30, possession: "LOU"}}, null)),
+      boardAway: read(pbpFieldPosHTML({...g, live: {yard_line: 62, possession: "MISS"}}, null)),
+      noBorrow: read(pbpFieldPosHTML({...g, live: {yard_line: 30}},
+                                     {team: "MISS", spot: 62})),
+    }""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["playHome"]["dir"] == 1 and got["playAway"]["dir"] == -1, got
+    assert got["boardHome"]["dir"] == 1 and got["boardAway"]["dir"] == -1, got
+    # The scoreboard gave the spot and named nobody. The play's team is
+    # right there and must NOT be borrowed to point an arrow at a
+    # position it did not measure.
+    assert got["noBorrow"]["dir"] == 0, got
+    # And the spot drawn is still the board's, not the play's.
+    assert got["noBorrow"]["x"] == 78.4, got
+
+
+def test_the_strip_gets_the_play_the_card_is_captioning():
+    """Testing the function alone cannot see this: a call site that
+    drops the second argument leaves every college game with no strip
+    at all, with the strip itself still perfectly correct. The same
+    trap the field photograph fell into an hour earlier."""
+    assert "pbpFieldPosHTML(d, hitRow)" in _fn("pbpParkHTML")
+
+
 def test_the_strip_reads_the_parsed_spot_and_never_the_raw_one():
     """engine/sources/livescores.py refuses to draw with ESPN's numeric
     yardLine: "its zero point is not documented and differs between the

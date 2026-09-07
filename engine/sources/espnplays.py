@@ -78,7 +78,7 @@ from __future__ import annotations
 import json
 
 from .fetch import DEFAULT_AGENT, fetch_text
-from .livescores import ESPN_SCOREBOARD, _side_key
+from .livescores import ESPN_SCOREBOARD, _side_key, endzone_to_yard_line
 
 #: One segment different from the scoreboard, per league.
 ESPN_SUMMARY = {lg: url[:-len("scoreboard")] + "summary"
@@ -133,7 +133,7 @@ def _drives(payload: dict) -> list[dict]:
 
 
 def football_plays(payload: dict, league: str = "cfb",
-                   limit: int = 6) -> list[dict]:
+                   limit: int = 6, home: str = "", away: str = "") -> list[dict]:
     """The last completed plays, newest last, as STRUCTURED rows.
 
     A row is composed from the fields the probe reported and never from
@@ -146,6 +146,10 @@ def football_plays(payload: dict, league: str = "cfb",
     De-duplicated by play `id`: `drives.previous` was observed to include
     the drive in progress, and without this the current drive prints
     twice. Newest LAST because that is how a play-by-play reads.
+
+    ``home`` and ``away`` are the card's own keys, and giving them is
+    what lets a row carry `spot` — see `_football_row`. Without them the
+    rows are exactly what they were, minus that one key.
     """
     rows: list[dict] = []
     seen: set = set()
@@ -159,16 +163,38 @@ def football_plays(payload: dict, league: str = "cfb",
                 continue
             if pid:
                 seen.add(pid)
-            rows.append(_football_row(p, team))
+            rows.append(_football_row(p, team, home, away))
     return rows[-limit:] if limit and limit > 0 else rows
 
 
-def _football_row(p: dict, team: str) -> dict:
-    """One play as the structured row the card and the page both draw."""
+def _football_row(p: dict, team: str, home: str = "",
+                  away: str = "") -> dict:
+    """One play as the structured row the card and the page both draw.
+
+    `spot` IS THE ONE DERIVED FIELD HERE and it is only present when it
+    resolved. Everything else on this row is a value ESPN wrote; `spot`
+    is `start.yardsToEndzone` turned into the site's own 0-100 field
+    position by `endzone_to_yard_line`, which needs to know which side
+    is driving — hence ``home`` and ``away``. Callers that do not pass
+    them get rows without the key, which is the same rule `yard_line`
+    and `possession` follow on the scoreboard: absent, never null, so a
+    reader can tell "not known" from "no such thing".
+
+    NOTE WHAT `spot` MEANS, because it is not the same fact as the
+    scoreboard's `live.yard_line`. This is where the play was SNAPPED
+    FROM. The scoreboard's is where the ball sits ready for the NEXT
+    snap. On a 40-yard completion they are forty yards apart, and a
+    reader that treats them as interchangeable will draw the ball in the
+    wrong half of the field on exactly the plays worth watching.
+
+    The raw `yard_line` stays on the row untouched and unused by any
+    drawing — see the warning in `livescores.spot_to_yard_line` about
+    its zero point.
+    """
     pid = str(p.get("id") or "")
     start = p.get("start") or {}
     ptype = p.get("type") or {}
-    return {
+    row = {
         "kind": "football",
         "id": pid,
         "period": _int((p.get("period") or {}).get("number")),
@@ -186,9 +212,14 @@ def _football_row(p: dict, team: str) -> dict:
         "away_score": _int(p.get("awayScore")),
         "home_score": _int(p.get("homeScore")),
     }
+    spot = endzone_to_yard_line(start.get("yardsToEndzone"), home, away, team)
+    if spot is not None:
+        row["spot"] = spot
+    return row
 
 
-def football_drives(payload: dict, league: str = "cfb") -> list[dict]:
+def football_drives(payload: dict, league: str = "cfb",
+                    home: str = "", away: str = "") -> list[dict]:
     """Every drive so far WITH its plays, oldest first, the one in
     progress last — the shape a play-by-play page reads.
 
@@ -222,7 +253,7 @@ def football_drives(payload: dict, league: str = "cfb") -> list[dict]:
                 continue
             if pid:
                 seen.add(pid)
-            rows.append(_football_row(p, team))
+            rows.append(_football_row(p, team, home, away))
         entry = {
             "id": did,
             "team": team,

@@ -32530,7 +32530,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   // Runners are baseball's, and the coordinates are the photograph's.
   const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";
   return `<div class="pbp-park">${art}${runners}${arc}${chip}</div>
-    ${isFootball ? pbpFieldPosHTML(d) : ""}
+    ${isFootball ? pbpFieldPosHTML(d, hitRow) : ""}
     ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;
 }
@@ -32784,16 +32784,36 @@ function pbpPlaySVG(play) {
  * the side, so its absence is a fact about the feed rather than a gap to
  * paper over — the same rule the wall numbers and the batted-ball tiles
  * follow. */
-function pbpFieldPosHTML(d) {
+function pbpFieldPosHTML(d, play) {
   const lv = (d || {}).live || {};
-  const yard = Number(lv.yard_line);
+  // TWO SOURCES, AND THEY ARE NOT THE SAME FACT.
+  //
+  // `live.yard_line` is the scoreboard's spot for the NEXT snap.
+  // `play.spot` is where the play this card is captioning was SNAPPED
+  // FROM. On a forty-yard completion they are forty yards apart, so
+  // they are never blended and the caption always says which one drew.
+  //
+  // The scoreboard leads because it answers the question the strip
+  // asks — where is the ball NOW. It comes from ESPN's `situation`
+  // block, which college payloads routinely omit entirely; that
+  // absence is why Ethan saw no marker at all on a live Louisville
+  // game, 2026-09-07: "I'm not seeing that yard line marker thing to
+  // show where the ball is at." The play carries its own spot from
+  // `yardsToEndzone` and is what college has.
+  //
+  // The spot and the arrow come from the SAME reading. Taking a
+  // position from one source and a direction from the other is how a
+  // strip ends up drawing a team driving the wrong way.
+  const sb = Number(lv.yard_line);
+  const fromBoard = isFinite(sb) && sb >= 0 && sb <= 100;
+  const yard = fromBoard ? sb : Number((play || {}).spot);
   if (!isFinite(yard) || yard < 0 || yard > 100) return "";
   const W = 240, PAD = 16, span = W - PAD * 2;          // end zones at the ends
   const x = (n) => PAD + (n / 100) * span;
   // Home defends 0, so home's offence drives toward 100 and the away
   // offence drives toward 0. Unknown possession draws no arrow rather
   // than picking a direction.
-  const pos = lv.possession || "";
+  const pos = (fromBoard ? lv.possession : (play || {}).team) || "";
   const dir = pos && pos === d.home ? 1 : pos && pos === d.away ? -1 : 0;
   const ticks = [10, 20, 30, 40, 50, 60, 70, 80, 90].map((n) => `
     <line x1="${x(n).toFixed(1)}" y1="6" x2="${x(n).toFixed(1)}" y2="26"
@@ -32801,6 +32821,15 @@ function pbpFieldPosHTML(d) {
     <text x="${x(n).toFixed(1)}" y="21" text-anchor="middle" font-size="5"
       fill="rgba(233,237,251,.42)" font-family="system-ui">${n > 50 ? 100 - n : n}</text>`).join("");
   const bx = x(yard);
+  // The spot as a person would say it. `yard` counts up from the home
+  // goal line, so under fifty is home's half and over fifty is away's,
+  // and the number on the marker counts back down from midfield —
+  // which is the same arithmetic `spot_to_yard_line` does in reverse.
+  const side = yard < 50 ? (d.home || "") : yard > 50 ? (d.away || "") : "";
+  const mark = Math.round(yard > 50 ? 100 - yard : yard);
+  const where = side ? `${side} ${mark}` : "MIDFIELD";
+  // Named for what it is, because the two sources are different facts.
+  const cap = fromBoard ? `BALL ON ${where}` : `SNAP AT ${where}`;
   return `<div class="pbp-fpos">
     <svg viewBox="0 0 240 32" preserveAspectRatio="none" aria-hidden="true">
       <rect x="${PAD}" y="6" width="${span}" height="20" fill="rgba(46,110,60,.30)"/>
@@ -32817,6 +32846,7 @@ function pbpFieldPosHTML(d) {
         font-weight="700" fill="rgba(233,237,251,.62)"
         font-family="system-ui">${escapeHtml(d.away || "")}</text>
     </svg>
+    <div class="pbp-fpos-cap">${escapeHtml(cap)}</div>
   </div>`;
 }
 

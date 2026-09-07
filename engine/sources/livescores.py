@@ -130,6 +130,49 @@ def spot_to_yard_line(text: str, home: str, away: str):
     return 50.0 if yard == 50 else None
 
 
+def endzone_to_yard_line(to_endzone, home: str, away: str, team: str):
+    """The same absolute field position, from a play's `yardsToEndzone`.
+
+    Same convention as :func:`spot_to_yard_line` — 0 is the HOME goal
+    line, 100 the away end zone — from a different reading of the same
+    fact, because the two feeds do not both carry the same one.
+
+    WHY THIS FIELD IS SAFE WHEN `yardLine` IS NOT. The objection above
+    is about an undocumented ZERO POINT, and `yardsToEndzone` does not
+    have one to get wrong: it names its own reference in its own name.
+    It is the distance from the ball to the end zone the offence is
+    attacking, so the side that is driving is the whole conversion.
+    Home attacks 100, away attacks 0; that is the convention restated,
+    not a new assumption about it.
+
+    SEEN LIVE BEFORE IT WAS READ. `espnprobe.py` printed it on a college
+    game in progress on 2026-09-05 (event 401856658, state "in") inside
+    every play's `start` block — see docs/DROPLET_CHECKS.md and the
+    shape at the top of `espnplays`.
+
+    A team that is neither side, a missing distance, or one outside the
+    hundred yards of a football field returns None, and nothing draws.
+
+    THE ARGUMENT ORDER MIRRORS `spot_to_yard_line` deliberately —
+    reading, then home, then away — with the extra input appended.
+    Writing this signature the other way round cost a wrong test on the
+    day it was added: swapping `team` with `home` does not raise, it
+    silently answers as though the other side had the ball, and every
+    number it returns is a plausible field position.
+    """
+    try:
+        yards = float(to_endzone)
+    except (TypeError, ValueError):
+        return None
+    if not 0 <= yards <= 100:
+        return None
+    if team and team == home:
+        return 100.0 - yards
+    if team and team == away:
+        return yards
+    return None
+
+
 def parse_espn_scoreboard(data: dict) -> dict[frozenset, LiveStatus]:
     """Map an ESPN scoreboard payload to {frozenset({home, away}): LiveStatus}.
 

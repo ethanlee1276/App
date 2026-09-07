@@ -208,6 +208,59 @@ def test_a_live_football_game_gets_its_deep_file_with_drives_and_plays():
     assert "1 deep file(s)" in note, note
 
 
+def test_every_football_play_carries_where_it_was_snapped_from():
+    """Ethan, 2026-09-07, on a live college card: "I'm not seeing that
+    yard line marker thing to show where the ball is at."
+
+    The strip drew from `live.yard_line`, which comes from the
+    scoreboard's `situation` block — and college payloads routinely omit
+    that block entirely, so there was no marker to see. The summary the
+    deep file is already built from carries the same fact per play, as
+    `start.yardsToEndzone`, which the droplet probe saw on a live college
+    game (event 401856658, 2026-09-05).
+
+    `spot` is that turned into the site's own 0-100 convention. It is the
+    only DERIVED field on the row, and it needs to know which side is
+    driving, so this also pins that the builder HANDS THE SIDES OVER —
+    a check the converter's own tests cannot make.
+    """
+    d = Path(tempfile.mkdtemp())
+    games = [_game()]
+    _with_fetch(lambda lg, eid, ttl=30: _fb(), games, "cfb", d)
+    doc = json.loads((d / "cfb_e1.json").read_text())
+    spots = {p["id"]: p.get("spot") for p in doc["plays"]}
+    assert all(v is not None for v in spots.values()), spots
+    # UGA is home and attacks 100, so its 75-to-go is the home 25.
+    assert spots["p2"] == 25.0, spots
+    # BAMA is away and attacks 0, so its 70-to-go is 70 from home's goal
+    # — the OTHER direction from the same number of yards to run. A
+    # converter that ignored the side would put these two together.
+    assert spots["p6"] == 70.0 and spots["p7"] == 46.0, spots
+    # And it is on the card's six-play strip too, not only the deep file.
+    assert all("spot" in p for p in games[0]["plays"])
+
+
+def test_the_snap_spot_is_absent_rather_than_null_when_it_did_not_resolve():
+    """Same rule `live.yard_line` and `possession` follow on the
+    scoreboard, and `yard_line` on a hoops play: a key that is missing
+    says "not known", a key set to null says "known to be nothing", and
+    a reader has to be able to tell those apart. The strip draws nothing
+    either way — but a null would sail through a `"spot" in play` guard
+    and reach the arithmetic as NaN."""
+    # Sides withheld: the converter cannot place any team, so no row
+    # gets the key. Nothing else about the row changes.
+    rows = E.football_plays(_fb(), "cfb", 0)
+    assert rows and not any("spot" in r for r in rows)
+    assert all(r["team"] and r["event"] for r in rows), "the rest is intact"
+    # Sides given but the drive belongs to neither of them — which is
+    # what a team the board could not resolve looks like.
+    rows = E.football_plays(_fb(), "cfb", 0, home="LSU", away="TCU")
+    assert not any("spot" in r for r in rows)
+    # Given properly, every one of them resolves.
+    rows = E.football_plays(_fb(), "cfb", 0, home="UGA", away="BAMA")
+    assert all("spot" in r for r in rows)
+
+
 def test_no_pbp_dir_means_no_deep_file_and_the_old_note():
     games = [_game()]
     note = _with_fetch(lambda lg, eid, ttl=30: _fb(), games, "cfb", None)

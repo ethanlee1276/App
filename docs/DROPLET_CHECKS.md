@@ -224,6 +224,16 @@ and CFB cards draw drives from it. Still needed, one live game each:
   the same `sports/football` API, so the parser serves it already, but
   the first live Sunday is the confirmation: `python3 espnprobe.py
   --league nfl` during a game should show `drives dict(2)`.
+
+  LOOK FOR `yardsToEndzone` INSIDE A PLAY'S `start` WHILE YOU ARE THERE.
+  Since 2026-09-07 the field-position strip on the play-by-play page
+  falls back to it whenever the scoreboard's `situation` block is
+  absent, which is the normal case in college and the reason Ethan saw
+  no ball marker on a live Louisville card. College has been seen
+  carrying it; the NFL is served by the same inference as its drives
+  are, and this is the run that settles it. If it is missing, the strip
+  simply does not draw on games with no `situation` block — the
+  scoreboard path is untouched — so this is a check, not an outage.
 * **WNBA** — three probes in a row ran pre-game (every attempt landed
   between games). A FINISHED game keeps its play-by-play, so ask for
   yesterday's final instead of waiting for a tip-off:

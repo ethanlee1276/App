@@ -9390,6 +9390,11 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    yards always span the card whatever the card is wide. */
 .pbp-fpos { padding: 10px 14px 4px; }
 .pbp-fpos svg { display: block; width: 100%; height: 34px; }
+/* THE STRIP NAMES ITS OWN SOURCE. "BALL ON" is the scoreboard's spot for
+   the next snap; "SNAP AT" is where the play above it was snapped from.
+   They differ by that play's yardage, so the reader is told which. */
+.pbp-fpos-cap { font-size: var(--fs-xs); color: var(--text-mute);
+  letter-spacing: .07em; text-align: center; padding-top: 2px; }
 
 /* FOUR TILES, NEVER THREE AND AN ORPHAN.
    At 120px minimum a phone fits three across and the fourth drops to a
