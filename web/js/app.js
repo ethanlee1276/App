@@ -32528,6 +32528,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
     ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
         wx ? `<span>${wx}</span>` : ""}</div>` : "";
   return `<div class="pbp-park">${art}${arc}${chip}</div>
+    ${isFootball ? pbpFieldPosHTML(d) : ""}
     ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;
 }
@@ -32543,7 +32544,21 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
  * two invented ones.
  *
  * Down and field position earn their place on their own merit anyway: on
- * a betting page they are what moves a live total. */
+ * a betting page they are what moves a live total.
+ *
+ * NOT the play's own `yard_line`, which the first version of this showed
+ * as "YARD LINE 34". That field is ESPN's raw `start.yardLine`, and
+ * engine/sources/livescores.py says of it: "its zero point is not
+ * documented and differs between the endpoints — read wrong it puts the
+ * ball on the opposite forty, which on a drawing is not a rounding
+ * error, it is the other team driving." A bare 34 on a card is the same
+ * ambiguity handed to the reader instead. The team with the ball is
+ * unambiguous, and `team` is the drive's side resolved through
+ * `_side_key`, so it is the same string the card's home/away carry.
+ *
+ * Where the ball IS gets answered properly by the field strip below,
+ * which reads `live.yard_line` — the parsed, side-resolved number whose
+ * convention is stated once in engine/models.py. */
 function pbpPlayTilesHTML(play) {
   const p = play || {};
   if (!p.kind) return "";
@@ -32556,7 +32571,7 @@ function pbpPlayTilesHTML(play) {
     ${tile("football", "PLAY TYPE", p.event || "")}
     ${tile("target", "DOWN", p.down
         ? `${pbpOrd(p.down)} & ${p.distance != null ? p.distance : "?"}` : "")}
-    ${tile("dash", "YARD LINE", p.yard_line != null ? p.yard_line : "")}
+    ${tile("people", "POSSESSION", p.team || "")}
   </div>`;
 }
 
@@ -32720,6 +32735,71 @@ function pbpPlaySVG(play) {
         font-size="4.9" font-weight="600" fill="#e9edfb"
         font-family="system-ui">${escapeHtml(detail)}</text>` : ""}</g>
   </svg>`;
+}
+
+/* WHERE THE BALL IS, ON A HUNDRED YARDS OF FIELD.
+ * ---------------------------------------------------------------------
+ * Ethan, 2026-09-07: "is there a way for both nfl and cfb to move the
+ * players up the field depending on where the ball is on the field. its
+ * a little hard to judge where the ball is on the field since the
+ * players on the render stay in the same spot."
+ *
+ * The players cannot move — they are pixels in a photograph. So the
+ * thing he actually needs, which is field position at a glance, is drawn
+ * as a field instead of implied by one.
+ *
+ * IT READS `live.yard_line` AND NOTHING ELSE. That field exists for
+ * exactly this, and engine/models.py states its convention once because
+ * every consumer depends on it: 0-100 from the HOME team's own goal
+ * line, so 0 is home's end zone, 50 is midfield, 100 is the away end
+ * zone — "the field is drawn left-to-right with the home end zone on
+ * the left, so x is a straight function of this number". This is that
+ * function.
+ *
+ * It is emphatically NOT the play's own `yard_line`, which is ESPN's raw
+ * `start.yardLine`. engine/sources/livescores.py refuses to draw with
+ * that one: "its zero point is not documented and differs between the
+ * endpoints — read wrong it puts the ball on the opposite forty, which
+ * on a drawing is not a rounding error, it is the other team driving."
+ *
+ * No spot, no strip. `yard_line` is written only when the parse resolved
+ * the side, so its absence is a fact about the feed rather than a gap to
+ * paper over — the same rule the wall numbers and the batted-ball tiles
+ * follow. */
+function pbpFieldPosHTML(d) {
+  const lv = (d || {}).live || {};
+  const yard = Number(lv.yard_line);
+  if (!isFinite(yard) || yard < 0 || yard > 100) return "";
+  const W = 240, PAD = 16, span = W - PAD * 2;          // end zones at the ends
+  const x = (n) => PAD + (n / 100) * span;
+  // Home defends 0, so home's offence drives toward 100 and the away
+  // offence drives toward 0. Unknown possession draws no arrow rather
+  // than picking a direction.
+  const pos = lv.possession || "";
+  const dir = pos && pos === d.home ? 1 : pos && pos === d.away ? -1 : 0;
+  const ticks = [10, 20, 30, 40, 50, 60, 70, 80, 90].map((n) => `
+    <line x1="${x(n).toFixed(1)}" y1="6" x2="${x(n).toFixed(1)}" y2="26"
+      stroke="rgba(233,237,251,.18)" stroke-width="${n === 50 ? 0.8 : 0.4}"/>
+    <text x="${x(n).toFixed(1)}" y="21" text-anchor="middle" font-size="5"
+      fill="rgba(233,237,251,.42)" font-family="system-ui">${n > 50 ? 100 - n : n}</text>`).join("");
+  const bx = x(yard);
+  return `<div class="pbp-fpos">
+    <svg viewBox="0 0 240 32" preserveAspectRatio="none" aria-hidden="true">
+      <rect x="${PAD}" y="6" width="${span}" height="20" fill="rgba(46,110,60,.30)"/>
+      <rect x="0" y="6" width="${PAD}" height="20" fill="rgba(233,237,251,.10)"/>
+      <rect x="${W - PAD}" y="6" width="${PAD}" height="20" fill="rgba(233,237,251,.10)"/>
+      ${ticks}
+      <line x1="${bx.toFixed(1)}" y1="4" x2="${bx.toFixed(1)}" y2="28"
+        stroke="var(--brand)" stroke-width="1.6"/>
+      <circle cx="${bx.toFixed(1)}" cy="16" r="2.6" fill="var(--brand)"/>
+      ${dir ? `<path d="M${(bx + dir * 9).toFixed(1)} 16 L${(bx + dir * 4.5).toFixed(1)} 12.6 L${(bx + dir * 4.5).toFixed(1)} 19.4 Z" fill="var(--brand)" opacity="0.9"/>` : ""}
+      <text x="${PAD / 2}" y="19" text-anchor="middle" font-size="5.4" font-weight="700"
+        fill="rgba(233,237,251,.62)" font-family="system-ui">${escapeHtml(d.home || "")}</text>
+      <text x="${(W - PAD / 2).toFixed(1)}" y="19" text-anchor="middle" font-size="5.4"
+        font-weight="700" fill="rgba(233,237,251,.62)"
+        font-family="system-ui">${escapeHtml(d.away || "")}</text>
+    </svg>
+  </div>`;
 }
 
 function pbpPhotoHTML(game) {

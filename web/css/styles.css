@@ -9370,6 +9370,13 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    and the dimensions/factors that make one park a different question
    from another. Auto-fit rather than a fixed four-up: on a phone these
    wrap to two rows instead of shrinking to unreadable. */
+/* THE FIELD-POSITION STRIP. Full bleed inside the card's gutter, short
+   enough to read as a caption rather than a second picture. `height` is
+   fixed and the viewBox does not preserve its aspect, so the hundred
+   yards always span the card whatever the card is wide. */
+.pbp-fpos { padding: 10px 14px 4px; }
+.pbp-fpos svg { display: block; width: 100%; height: 34px; }
+
 /* FOUR TILES, NEVER THREE AND AN ORPHAN.
    At 120px minimum a phone fits three across and the fourth drops to a
    row of its own with two empty cells beside it — which is what football

@@ -72,7 +72,8 @@ def _node(js):
         # test written to catch exactly that.
         _const("PBP_FOOTBALL"),
         _const("pbpOrd"), _const("PBP_FIELD"), _const("PBP_PLAY_HUE"),
-        _fn("pbpFieldY"), _fn("pbpFieldHTML"), _fn("pbpCalloutBox"), _fn("pbpPlaySVG"),
+        _fn("pbpFieldY"), _fn("pbpFieldHTML"), _fn("pbpFieldPosHTML"),
+        _fn("pbpCalloutBox"), _fn("pbpPlaySVG"),
     ])
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src + "\n" + js); path = fh.name
@@ -215,11 +216,91 @@ def test_the_flight_runs_straight_downfield():
     assert " Q" not in body.split("return")[1], "no quadratic — no invented curve"
 
 
+# --------------------------------------------------- where the ball is -----
+#
+# Ethan, 2026-09-07: "is there a way for both nfl and cfb to move the
+# players up the field depending on where the ball is on the field. its a
+# little hard to judge where the ball is on the field since the players
+# on the render stay in the same spot."
+#
+# The players are pixels and cannot move. Field position gets drawn as a
+# field instead.
+
+def _strip(yard, poss="", home="DET", away="CHI"):
+    return _node("""
+      const d = {home: %r, away: %r, live: {%s possession: %r}};
+      const s = pbpFieldPosHTML(d);
+      const ball = (s.match(/<circle cx="([\d.]+)"/) || [])[1];
+      const arrow = (s.match(/<path d="M([\d.]+) 16 L([\d.]+) 12.6/) || []).slice(1);
+      console.log(JSON.stringify({empty: s === "", ball: ball ? +ball : null,
+        arrow: arrow.length ? {tip: +arrow[0], base: +arrow[1]} : null}));"""
+      % (home, away, "" if yard is None else f"yard_line: {yard},", poss))
+
+
+def test_the_strip_reads_the_parsed_spot_and_never_the_raw_one():
+    """engine/sources/livescores.py refuses to draw with ESPN's numeric
+    yardLine: "its zero point is not documented and differs between the
+    endpoints — read wrong it puts the ball on the opposite forty, which
+    on a drawing is not a rounding error, it is the other team driving."
+    """
+    body = _fn("pbpFieldPosHTML")
+    assert "lv.yard_line" in body
+    code = "\n".join(ln for ln in body.splitlines() if not ln.strip().startswith("*")
+                     and not ln.strip().startswith("//"))
+    assert "p.yard_line" not in code and "start.yardLine" not in code
+
+
+def test_the_ball_sits_where_the_convention_says_it_does():
+    """engine/models.py: 0-100 from the HOME team's own goal line, drawn
+    left to right with the home end zone on the left."""
+    got = [(_strip(y, "DET") or {}) for y in (0, 25, 50, 75, 100)]
+    if any(g is None for g in got) or not got[0]:
+        print("  SKIP node not installed"); return
+    xs = [g["ball"] for g in got]
+    assert all(a < b for a, b in zip(xs, xs[1:])), xs
+    # Midfield is the middle of the playing surface, and the two goal
+    # lines sit at the inside edges of the end zones.
+    assert abs(xs[2] - 120) < 0.6, xs
+    assert abs(xs[0] - 16) < 0.6 and abs(xs[4] - 224) < 0.6, xs
+    # Equal spacing: x is a STRAIGHT function of the number, not eased.
+    gaps = [round(b - a, 1) for a, b in zip(xs, xs[1:])]
+    assert len(set(gaps)) == 1, gaps
+
+
+def test_each_side_drives_at_the_other_end_zone():
+    home = _strip(50, "DET")
+    if home is None:
+        print("  SKIP node not installed"); return
+    away = _strip(50, "CHI")
+    blank = _strip(50, "")
+    # Home defends 0, so home's offence drives toward 100 — to the right.
+    assert home["arrow"]["tip"] > home["arrow"]["base"], home
+    assert away["arrow"]["tip"] < away["arrow"]["base"], away
+    # Unknown possession picks no direction rather than guessing one.
+    assert blank["arrow"] is None, blank
+
+
+def test_no_spot_means_no_strip():
+    """`yard_line` is written only when the parse resolved the side, so
+    its absence is a fact about the feed and not a gap to paper over."""
+    got = _strip(None)
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["empty"] is True
+    for bad in (-1, 101):
+        assert _strip(bad, "DET")["empty"] is True, bad
+
+
 # ------------------------------------------------------------- the tiles ---
 def test_the_tiles_carry_only_numbers_football_actually_has():
     body = _fn("pbpPlayTilesHTML")
-    for real in ("p.yards", "p.event", "p.down", "p.distance", "p.yard_line"):
+    for real in ("p.yards", "p.event", "p.down", "p.distance", "p.team"):
         assert real in body, real
+    # NOT the play's own yard_line. It is ESPN's raw start.yardLine, whose
+    # zero point livescore's parser calls undocumented and endpoint-
+    # dependent; a bare "34" on a card hands that ambiguity to the reader.
+    # Where the ball is has its own strip, on the parsed number.
+    assert "p.yard_line" not in body
     code = "\n".join(ln for ln in body.splitlines() if not ln.strip().startswith("//"))
     for invented in ("launch_speed", "launch_angle", "EXIT VELOCITY", "LAUNCH ANGLE"):
         assert invented not in code, invented
