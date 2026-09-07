@@ -1573,3 +1573,45 @@ A sport showing `best` rows and no `Pinnacle` rows means the sharp book
 was not in the payload for those pulls — check `DEFAULT_BOOKS` still
 carries pinnacle and that the pull was not book-filtered. It does NOT
 mean the join is broken.
+
+## The reserve no longer skips the close (2026-09-07)
+
+Ethan, 2026-09-07: "Add an intraday snapshot loop through the betting
+window, and stop letting the 500-credit reserve skip the close."
+
+The intraday loop already exists — `prime_window` opens 2.5 hours before
+the first kickoff and `PRIME_BURST` triples the sport's share inside it,
+so the day's credits already concentrate on the betting window. The
+close did not. Below `RESERVE` the pacer authorised nothing but a
+six-hourly recovery probe, and the daily ceiling refused on its own
+account, so on a thin month the last pull before kickoff was exactly the
+pull that never happened — and every bet that week settled with no
+closing line, which means no closing-line value and no process grade.
+
+`oddsbudget.closing_window` now names the last half hour before the next
+kickoff, and a pull inside it is authorised past both refusals. The
+exemption is deliberately narrow and each bound is load-bearing:
+
+  * only a CHEAP pull (`CLOSE_MAX_CREDITS`, 8). The board endpoint bills
+    three credits for a whole slate; the event endpoint bills eight PER
+    GAME, and letting that through would drain the reserve it is carved
+    out of;
+  * once per window per sport, enforced by the sport's own refresh clock
+    rather than by new state;
+  * never below `CLOSE_FLOOR` (50 credits);
+  * `MIN_REFRESH_GAP` still applies, as it does to the touchpoint
+    override.
+
+A staggered Sunday gets one close per wave, which is right — each wave
+has its own closing number. Cost is three credits a wave.
+
+To see the closes being bought, read the decision log for the phrase:
+
+```bash
+cd /srv/qellys && sudo -u qellys grep -h "closing window" \
+  data/cache/odds_decisions*.jsonl | tail -20
+```
+
+No lines on a day with kickoffs means either the pull was declined for
+another reason earlier in the chain (the log names it) or the cheap tier
+was not the one asking. It does NOT mean the exemption is broken.

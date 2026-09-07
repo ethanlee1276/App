@@ -167,14 +167,28 @@ def test_the_pacer_is_told_the_price_in_credits_not_in_events():
 
 def test_the_credit_override_reaches_the_daily_cap():
     """The cap is the thing that has been declining these pulls, so the
-    honest price has to reach it — not just the cadence above it."""
+    honest price has to reach it — not just the cadence above it.
+
+    THREE COST SITES, and each one has to ask `refresh_credits` rather
+    than multiply an event count by CREDITS_PER_EVENT itself: the
+    starvation branch, the daily ceiling, and (since 2026-09-07) the
+    closing-window exemption, which is bounded by a credit price and so
+    would let an expensive event pull through the reserve if it priced
+    that pull as three credits instead of a hundred and thirty-six.
+    """
     import inspect
     from engine import oddsbudget
     src = inspect.getsource(oddsbudget.should_refresh)
-    assert src.count("refresh_credits(requests_per_refresh, credits)") == 2, (
-        "one of the two per-refresh cost sites still multiplies an event "
+    assert src.count("refresh_credits(requests_per_refresh, credits)") == 3, (
+        "one of the three per-refresh cost sites still multiplies an event "
         "count by hand")
     assert "credits=credits" in src, "the cadence never sees the override"
+    # The closing exemption is one of the three, and it is priced before
+    # it is compared against its ceiling.
+    i = src.index("close_cost = ")
+    assert "refresh_credits(requests_per_refresh, credits)" in src[i:i + 120]
+    assert src.index("close_cost <= oddsbudget_CLOSE_MAX".replace(
+        "oddsbudget_", "")) > i
 
 
 def test_on_the_day_that_prompted_this_the_cheap_pull_is_affordable():

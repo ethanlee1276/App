@@ -674,6 +674,46 @@ PROBE_INTERVAL = 6 * 3600
 # no morning pull at all. On a funded day the ordinary cadence prices the
 # morning (~1.1h between pulls at a healthy balance), which is what
 # "player props all day" needs.
+# --- The close ---------------------------------------------------------
+# THE ONE PRICE THAT CANNOT BE SKIPPED. Every settled bet is graded
+# against the number the market closed at: closing-line value is the only
+# evidence about the PROCESS that arrives before the results do, and a
+# bet with no stored close cannot be graded at all — not by
+# `ledger.clv_coverage`, not by `clvboard`, not by the calibration walk.
+#
+# Ethan, 2026-09-07, setting the data plan: "stop letting the 500-credit
+# reserve skip the close."
+#
+# He is describing a real refusal. Below RESERVE this module authorises
+# nothing but a six-hourly recovery probe, and the daily ceiling refuses
+# on its own account — so at the end of a billing month, or on a thin
+# plan, the last pull before kickoff is exactly the pull that does not
+# happen, and that week's bets settle ungradeable. The reserve is doing
+# its job for ORDINARY pricing and the wrong job for this one pull.
+#
+# So the exemption is deliberately narrow, and each bound is load-bearing:
+#
+#   * only inside CLOSE_WINDOW_S of the next kickoff — a "close" an hour
+#     out is just an ordinary refresh wearing the word;
+#   * only for a CHEAP pull. The board endpoint bills three credits for a
+#     whole slate; the event endpoint bills eight PER GAME (136 for a
+#     sixteen-game Sunday). Letting the expensive one through this door
+#     would drain the reserve it is carved out of, which is the 19k-in-a-
+#     day failure CREDITS_PER_EVENT exists to prevent;
+#   * once per window per sport, enforced by the sport's own refresh clock
+#     rather than by new state: the pull stamps the clock inside the
+#     window, so the second ask no longer qualifies;
+#   * never below CLOSE_FLOOR, so the account can never be spent to zero
+#     by this path;
+#   * and MIN_REFRESH_GAP still applies, exactly as it does to the
+#     touchpoint override.
+#
+# A staggered slate gets one close per wave (1pm, 4pm, 8pm), which is
+# right: each wave has its own closing number.
+CLOSE_WINDOW_S = 30 * 60
+CLOSE_MAX_CREDITS = 8
+CLOSE_FLOOR = 50
+
 PRIME_BEFORE_S = 2.5 * 3600      # window opens this long before first pitch
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
@@ -862,6 +902,23 @@ def prime_window(kickoffs, now: float):
     return min(ks) - PRIME_BEFORE_S <= now <= max(ks) + PRIME_AFTER_LAST_S
 
 
+def closing_window(kickoffs, now: float):
+    """When the closing window for the NEXT kickoff opened, else None.
+
+    The nearest kickoff still ahead of ``now`` is the one whose close is
+    about to be set. A slate whose games have all started has no close
+    left to buy, and a kickoff further out than the window has not
+    reached one yet — both answer None, and the caller then paces
+    exactly as it did before.
+    """
+    ks = [k for k in (kickoffs or [])
+          if isinstance(k, (int, float)) and k >= now]
+    if not ks:
+        return None
+    opened = min(ks) - CLOSE_WINDOW_S
+    return opened if opened <= now else None
+
+
 def _fmt_clock(ts: float) -> str:
     return _dt.datetime.fromtimestamp(ts).strftime("%H:%M")
 
@@ -897,11 +954,31 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         return False, (f"last paid pull never reached the odds API — "
                        f"retrying ~{_fmt_clock(state.retry_after_ts)}")
     window = prime_window(kickoffs, now)
+    # THE CLOSE, and whether this ask is the one pull that buys it. Every
+    # bound is checked here so the three refusals below can each ask one
+    # question. See CLOSE_WINDOW_S for why each bound exists.
+    opened = closing_window(kickoffs, now)
+    close_cost = refresh_credits(requests_per_refresh, credits)
+    closing = bool(opened is not None
+                   and close_cost <= CLOSE_MAX_CREDITS
+                   and state.sport_ts(sport) < opened
+                   and now - state.sport_ts(sport) >= MIN_REFRESH_GAP
+                   and state.remaining - close_cost >= CLOSE_FLOOR)
+    close_why = (f"closing window — buying the last price before "
+                 f"{_fmt_clock(min(k for k in kickoffs if isinstance(k, (int, float)) and k >= now))} "
+                 f"at {close_cost} credit(s), the number every bet on it "
+                 f"is graded against ({state.remaining} left this month)"
+                 if closing else "")
     # THE DAY'S BUDGET IS SET BEFORE THE BURST, and that is the whole
     # point of the cap: PRIME_BURST and the touchpoints redistribute the
     # day's credits toward the window, they do not add to them.
     base_share = share
     if state.remaining <= RESERVE:
+        # …except for the close. A month spent down to its reserve still
+        # has to record the number its open bets are settled against, or
+        # the week grades as "no closing line" and teaches nothing.
+        if closing:
+            return True, close_why
         if now - state.last_refresh_ts >= PROBE_INTERVAL:
             return True, ("odds quota looked exhausted — probing once in case the "
                           "plan reset or the key changed")
@@ -992,6 +1069,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     budget = max(int(daily_allowance(state, kw.get("today")) * base_share),
                  per_refresh)
     already = spent_today(now, sport=sport)
+    # …and the close is not refused by the day's ceiling either: the
+    # ceiling paces ORDINARY refreshes, and this is the one pull whose
+    # value does not come back tomorrow.
+    if already + per_refresh > budget and closing:
+        return True, close_why
     if already + per_refresh > budget:
         return False, (f"today's odds budget is spent for this slate "
                        f"({already} of {budget} credits; a pull costs "
@@ -1009,6 +1091,8 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # still applies, the starvation branch above is reached first when
         # the day cannot afford a pull at all, and the window is claimed by
         # the pull that lands so it fires once.
+        if closing:
+            return True, close_why
         per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
         if (touchpoint_due(state, sport, now)
                 and waited >= MIN_REFRESH_GAP
