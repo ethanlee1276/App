@@ -1242,6 +1242,17 @@ def main() -> None:
         outdoor = sum(1 for g in games if not g.get("indoor"))
         print(f"Weather: {n_wx} of {len(games)} game(s) stamped "
               f"({outdoor} outdoor)")
+        # AND WRITTEN DOWN. Drawing it on a card is not keeping it: the
+        # games table held 3,133 college games and no weather at all,
+        # so the one question college totals have shown a slope on could
+        # not be asked. Free — the forecast is in memory.
+        try:
+            n_stored = upsert_games(conn, cfbdata.weather_rows(games))
+            if n_stored:
+                print(f"  Weather stored: {n_stored} game row(s) — the "
+                      f"forecast the total was priced under.")
+        except Exception as _exc:                        # noqa: BLE001
+            print(f"  ⚠️  Weather not stored: {_exc}")
     except Exception as exc:                              # noqa: BLE001
         print(f"Weather: skipped — {type(exc).__name__}: {exc}")
 

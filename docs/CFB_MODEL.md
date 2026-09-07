@@ -349,3 +349,53 @@ for season, n, tot in c.execute(
 
 A season with `pass_yds` rows and no `pass_att` rows has not been
 re-ingested since this shipped.
+
+## The kickoff forecast is stored, not only drawn (2026-09-07)
+
+Ethan, 2026-09-07: "Weather for totals. College totals were the only
+game line with a positive slope, and it was not significant. A stadium
+weather feed is cheap."
+
+The feed is not merely cheap, it has been running since 2026-08-24.
+`engine/cfb/wx.py` joins ESPN's venue, CollegeFootballData's coordinates
+and Open-Meteo's hourly board to stamp a forecast at the kickoff hour on
+every college game, and every one of them was drawn on a card and thrown
+away: `cfbfastr.parse_schedule` writes `"temp": None, "wind": None`, so
+measured on 2026-09-07 the games table held 3,133 college games with not
+one temperature and not one wind. The question the slope belongs to could
+not be asked, because the column that answers it was empty by
+construction.
+
+`cfbdata.weather_rows` now turns each stamped forecast into a row for
+`db.upsert_games`, and the build writes them straight after the attach.
+Two properties are deliberate:
+
+  * it does NOT write `extra`. A non-NULL value wins the merge and would
+    blank the week, neutral-site and conference flags the results writer
+    stores there — and `engine/cfbinfo.py` reads the neutral flag on
+    every game.
+  * a miss stays a miss. No venue, no forecast, no kickoff, no game id:
+    no row. A dome is answered without asking anybody, at 70°F and no
+    wind, the same numbers `engine/nflwx.py` uses.
+
+WHAT THE NUMBER MEANS, and it is not what the NFL's means. This is the
+FORECAST at the kickoff hour — what we would have known when the total
+was priced. nflverse fills its temp and wind from the box score after the
+game, which is why `engine/nflinfo.py` warns that an NFL
+total-against-recorded-wind backtest flatters itself with weather nobody
+had. College's cannot, because this is the only source those columns have.
+
+Coverage builds forward from the first build after this shipped; it does
+not backfill. To watch it fill:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+print(c.execute(\"SELECT COUNT(*), SUM(temp IS NOT NULL), SUM(wind IS NOT NULL) \"
+                \"FROM games WHERE sport='cfb'\").fetchone()[:])"
+```
+
+Zero on the second column after a Saturday with a built board means the
+forecast attach itself is failing (no CFBD key, or Open-Meteo refusing),
+which the build prints as `Weather: skipped`.

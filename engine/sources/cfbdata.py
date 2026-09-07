@@ -547,6 +547,67 @@ def game_rows(games: list[dict]) -> list[dict]:
     return rows
 
 
+def weather_rows(games: list[dict]) -> list[dict]:
+    """Kickoff weather as rows for ``db.upsert_games`` — one per game the
+    forecast could answer for.
+
+    WHY THIS EXISTS AT ALL. `engine.cfb.wx` has pulled a real hourly
+    forecast at the kickoff hour for every college venue since
+    2026-08-24, and every one of them was drawn on a card and thrown
+    away: `cfbfastr.parse_schedule` writes ``"temp": None, "wind":
+    None``, so measured on 2026-09-07 the games table held 3,133 college
+    games and NOT ONE with a temperature or a wind. The college
+    information test therefore could not ask the one question college
+    game lines have shown any slope on at all — whether weather moves a
+    total — because the column it would read was empty by construction.
+
+    SEPARATE FROM `game_rows`, AND DELIBERATELY SO. That one writes
+    finished games; this one writes the FORWARD slate, where a forecast
+    is the only weather there is. `upsert_games` was built for exactly
+    this pair ("ranged results carry final scores but no weather,
+    per-day slates carry park/weather context but NULL scores") and its
+    merge never lets one erase the other.
+
+    ``extra`` IS NOT WRITTEN. A non-NULL value would win the merge and
+    blank the week / neutral-site / conference flags `game_rows` stores
+    there — and `engine.cfbinfo` reads the neutral flag on every game.
+    Leaving it out is what keeps the two writers from fighting.
+
+    WHAT THE NUMBER MEANS, said once here because the NFL's means
+    something else: this is the FORECAST at the kickoff hour, which is
+    what we would have known when the bet was priced. nflverse fills its
+    temp and wind from the box score AFTER the game, so an NFL
+    total-against-recorded-wind backtest flatters itself with weather
+    nobody had. College's cannot: the only source for these columns is
+    this one.
+    """
+    rows = []
+    for g in games or []:
+        if not g.get("weather_checked"):
+            continue                   # a miss is a miss; nothing invented
+        w = g.get("weather") or {}
+        dome = bool(w.get("dome"))
+        row = {
+            "sport": "cfb", "season": g.get("season") or 0,
+            "period": g.get("date") or "", "game_id": g.get("game_id") or "",
+            "home": g.get("home") or "", "away": g.get("away") or "",
+            "roof": "dome" if dome else "outdoor",
+        }
+        if not row["period"] or not row["game_id"]:
+            continue
+        if dome:
+            # Climate control is a fact about a building, and the same
+            # numbers `engine.nflwx` answers a dome with.
+            row["temp"], row["wind"] = 70.0, 0.0
+        else:
+            if w.get("temp_f") is None or w.get("wind_mph") is None:
+                continue
+            row["temp"] = float(w["temp_f"])
+            row["wind"] = float(w["wind_mph"])
+        rows.append(row)
+    return rows
+
+
 # --- fetch wrappers ---------------------------------------------------------
 def fetch_scoreboard(date: str, ttl: int = 300) -> dict:
     """One day's board. ``date`` is ISO (YYYY-MM-DD).
