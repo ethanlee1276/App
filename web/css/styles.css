@@ -9284,7 +9284,26 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-hero-home { justify-content: flex-end; text-align: right; }
 .pbp-hero-score { font-size: 2.1rem; font-weight: 800; font-family: var(--font-mono); }
 .pbp-hero-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 96px; }
-@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto 1fr; }
+/* FOUR ITEMS NEED FOUR COLUMNS (Ethan, 2026-09-06: "this area on the
+   play by play screen is bugged out").
+   ---------------------------------------------------------------------
+   The hero is five children — away block, away score, the state in the
+   middle, home score, home block — and the desktop rule gives them five
+   columns. This override moved the middle one out to its own full-width
+   row across the top, which leaves FOUR children still to place, and it
+   was handing them THREE columns.
+
+   So the grid did what grids do: away block, away score and home score
+   filled row two, and the home block wrapped onto a row of its own,
+   left-aligned in column one under the away team. `justify-content:
+   flex-end` then right-aligned it inside that first column, which is
+   why it read as floating in the middle of nowhere rather than as an
+   obvious wrap. Measured at 390px: the home block's left edge was 31px,
+   identical to the away block's, when at 900px it sits at 542.
+
+   Four columns, and it is the scoreboard it was always meant to be:
+   away | score | score | home, with the state above it. */
+@media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto auto 1fr; }
   .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
   .pbp-hero-score { font-size: 1.6rem; } }
 /* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
