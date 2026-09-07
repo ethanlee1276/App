@@ -800,3 +800,38 @@ On the 2026 week-1 slate it builds **293 props across all 32 teams**, 105
 of them flagged as offseason movers. Note that without `--odds` every edge
 reads +0.0%: the proxy line is derived from our own baseline, so the model
 is pricing against itself. Real edges need real book lines.
+
+## Target share, air-yards share and WOPR are scanned against the close (2026-09-07)
+
+Ethan, 2026-09-07, on the data a winning model needs: "NFL routes, target
+share and air yards from Next Gen Stats and play-by-play, where the model
+uses snap counts and weekly totals today."
+
+Targets and air yards were already stored per player per week
+(`ingest.NFL_USAGE_MARKETS`) and already scanned by `formbook.signal_scan`
+as raw counts. A count is half a signal: eight targets on a team that
+threw twenty is a featured role and eight on a team that threw forty is
+not, and the book prices the role. The scan now also scores, on the two
+receiving markets, the player's SHARE of his team's week — `target_share`,
+`air_share` — and `wopr` (1.5 × target share + 0.7 × air-yards share).
+Team totals come from the rows' own `team` column, so no name join is
+involved; a week with no denominator on file is None, never zero.
+
+Signals only. Nothing here reaches a price. The rule from the plan is
+that an input earns a place through the information test first; the AUC
+these post on the droplet's harvested closes is that test. Routes are not
+here because no free feed carries them.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db, formbook
+c = db.connect()
+for m in ('rec_yds', 'receptions'):
+    out = formbook.signal_scan(c, m)
+    print(m, {k: v for k, v in out.get('signals', {}).items() if k in ('targets','target_share','air_share','wopr')},
+          'thin:', {k: v for k, v in out.get('thin', {}).items() if k in ('target_share','air_share','wopr')})"
+```
+
+A share reading `z` beyond 2 on the held-out weeks while the raw count
+does not is the finding that would justify pricing the role; a share in
+`thin` means fewer than 400 book-priced pairs carry a denominator yet.

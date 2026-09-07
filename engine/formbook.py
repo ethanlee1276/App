@@ -283,6 +283,30 @@ FEATURES = {
     "pass_yds": ("pass_att",),
 }
 
+#: THE SHARE, NOT THE COUNT. Ethan, 2026-09-07, on the data a winning
+#: model needs: "NFL routes, target share and air yards from Next Gen
+#: Stats and play-by-play, where the model uses snap counts and weekly
+#: totals today." Targets and air yards were already stored per player
+#: per week (`ingest.NFL_USAGE_MARKETS`) and already scanned above as
+#: raw counts. A count is half a signal: eight targets on a team that
+#: threw twenty is a featured role, eight on a team that threw forty is
+#: not, and the book prices the role. So each receiving market also
+#: scores the player's SHARE of his team's week — targets, air yards,
+#: and the weighted blend the fantasy literature calls WOPR (1.5 ×
+#: target share + 0.7 × air-yards share). Routes are not here: no free
+#: feed carries them, and inventing them from snaps would be a fourth
+#: copy of snap_pct wearing a new name.
+#:
+#: Signals only. Nothing here reaches a price; a share that clears the
+#: AUC bar on the held-out weeks is the evidence a pricing change would
+#: be made WITH, which is the plan's rule ("add each new input through
+#: the information test before it earns a place").
+SHARE_SIGNALS = {
+    "rec_yds": ("target_share", "air_share", "wopr"),
+    "receptions": ("target_share", "air_share", "wopr"),
+}
+WOPR_TARGETS, WOPR_AIR = 1.5, 0.7
+
 
 def _feature_logs(conn, markets, seasons=None) -> dict:
     """``{(season, week, short_key): {market: value}}`` for the features.
@@ -326,6 +350,49 @@ def _feature_logs(conn, markets, seasons=None) -> dict:
 def _recent(vals, n=4):
     got = [v for v in vals[:n] if v is not None]
     return sum(got) / len(got) if got else None
+
+
+def _team_totals(conn, markets, seasons=None) -> dict:
+    """``{(season, week, team): {market: team total}}`` — the denominator
+    a share needs, summed over every player the feed lists for the team
+    that week. Keyed by the row's own `team`, which the usage ingest
+    writes on every row, so this needs no name join at all."""
+    if not markets:
+        return {}
+    sql = ("SELECT season, period, team, market, SUM(value) AS total "
+           "FROM player_game_logs WHERE sport='nfl' AND market IN (%s) "
+           "AND team IS NOT NULL AND team != '' "
+           % ",".join("?" * len(markets)))
+    args = list(markets)
+    if seasons:
+        sql += "AND season IN (%s) " % ",".join("?" * len(seasons))
+        args.extend(seasons)
+    sql += "GROUP BY season, period, team, market"
+    out: dict = {}
+    for r in conn.execute(sql, args):
+        try:
+            week = int(r["period"])
+        except (TypeError, ValueError):
+            continue
+        if r["total"] is None:
+            continue
+        out.setdefault((int(r["season"]), week, r["team"]), {})[r["market"]] = float(r["total"])
+    return out
+
+
+def _share_series(fl, totals, skey, season, week, team, market) -> list:
+    """The player's share of his team's `market`, week by week before
+    `week`, newest first — None where either side is missing or the
+    team threw nothing, never a zero standing in for "unknown"."""
+    out = []
+    for w in range(week - 1, 0, -1):
+        mine = (fl.get((season, w, skey)) or {}).get(market)
+        team_total = (totals.get((season, w, team)) or {}).get(market)
+        if mine is None or not team_total:
+            out.append(None)
+        else:
+            out.append(mine / team_total)
+    return out
 
 
 def schedule_context(dates: dict) -> dict:
@@ -392,6 +459,8 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
 
     feats = FEATURES.get(market, ())
     fl = _feature_logs(conn, feats, seasons)
+    shares = SHARE_SIGNALS.get(market, ())
+    totals = _team_totals(conn, ("targets", "air_yards"), seasons) if shares else {}
     rows = pairs_for(conn, market, seasons, dates=dates, keep_key=True)
     if len(rows) < min_pairs:
         return {"market": market, "n": len(rows),
@@ -444,12 +513,19 @@ def signal_scan(conn, market: str, seasons=None, min_pairs: int = MIN_PAIRS,
                 vals[f + "_trend"] = (
                     (vals[f] - older) if (vals[f] is not None
                                           and older is not None) else None)
+        if shares:
+            ts = _recent(_share_series(fl, totals, skey, season, week, team, "targets"))
+            ay = _recent(_share_series(fl, totals, skey, season, week, team, "air_yards"))
+            vals["target_share"] = ts
+            vals["air_share"] = ay
+            vals["wopr"] = ((WOPR_TARGETS * ts + WOPR_AIR * ay)
+                            if (ts is not None and ay is not None) else None)
         for name, v in vals.items():
             if v is not None:
                 cand.setdefault(name, []).append((float(v), over))
 
     out = {"market": market, "n": len(rows), "signals": {}, "thin": {}}
-    for name in sorted(set(cand) | set(feats)):
+    for name in sorted(set(cand) | set(feats) | set(shares)):
         pairs = cand.get(name) or []
         if len(pairs) < min_pairs:
             # NAMED, not skipped. A candidate that quietly vanishes makes
