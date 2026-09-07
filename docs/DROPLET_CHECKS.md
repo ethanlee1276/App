@@ -1799,3 +1799,83 @@ EOF
 odds pull did not carry the sharp book (`sharp_quoted` on the prop rows
 of recommendations.json says whether it was quoted at all), which is a
 different problem from this one.
+
+## The model reads the live injury board now, not just the weekly report (2026-09-07)
+
+Ethan, 2026-09-07: "Confirm all of our models and game scripts and all
+of that are updating to live injuries. An example is RB2 Isiah Pacheco
+is now out till October 11th so RB 1 Jahmyr Gibbs should be seeing a
+lot more usage ... make sure we are adjusting if needed and reading
+this data and adjusting everything live and everything is up to date."
+
+WHAT WAS TRUE BEFORE THIS. The NFL slate's injuries came from one
+source, nflverse's weekly report: the club's filed designation
+(Questionable / Doubtful / Out), re-downloaded at most twice a day
+(`fetch.DEFAULT_TTL`), applied on every NFL build. It holds the
+injured man's own props and applies the knock-on multipliers
+(opposing CB1 / slot CB / DT out, own LT / OT out). It does NOT list
+a man placed on injured reserve — he is off the active roster and
+files nothing — and it cannot list a Saturday move. ESPN's
+current-status board, which the injuries page and the news tape have
+read since August, had the reserve move and the return date; nothing
+carried it to the model. The game script (`engine/gamescript.py`)
+reads no injury feed at all; it moves with the spread and total, which
+the market has already moved for a star's absence.
+
+WHAT CHANGED. `injuries.live_injuries` turns ESPN's NFL board into the
+same `Injury` objects the weekly report produces, `merge_injuries`
+lays it over the weekly report (a man on both keeps the more severe
+designation; Questionable / Doubtful age out after seven days; OUT and
+IR stand), and `nfl_build --injuries` — which the launcher always
+passes — fetches it under its own guard and hands the merged list to
+the slate. The board is cache-served inside `espninjuries.INJURY_TTL`
+(ten minutes), so the model is at most ten minutes plus one build
+behind ESPN. When nflverse's file is a 404 (every week before it
+publishes a season's first) the live board now carries the slate
+alone instead of the slate going out with no injuries at all.
+
+WHAT IS STILL NOT DONE, AND WHY. A back on reserve does not lift the
+next back's projection. `engine/redistribute.py` measures that
+redistribution from the weekly stats (share of the team's carries in
+the games the starter played against the games he missed), and the
+information test (`docs/THE_INFORMATION_TEST.md`) is why it is not
+priced: over 307 settled bets the model's disagreement with the price
+ranked winners at AUC 0.479 — the model contributes nothing beyond the
+price — so a new input into the grade, a share multiplier included, is
+the exact move that finding rules out until a measured input beats the
+close. Feeding a measured share into the projection is that pricing
+change, and it waits. The hold is what protects the board
+today: the man who is out is held, and the man behind him is priced
+on his own logs and the book's line, which already knows.
+
+Confirm on the box after this deploys:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json
+b = json.load(open("web/data/recommendations.json"))
+s = b.get("injury_status") or {}
+print("source:", s.get("source"), "| weekly:", s.get("weekly"), "live:", s.get("live"),
+      "only on the live board:", s.get("live_added"), "| holds:", s.get("holds"))
+print("by status:", s.get("by_status"))
+print("errors:", s.get("error"), "/ live:", s.get("live_error"))
+EOF
+```
+
+`live` at None means the build never asked ESPN (the launcher stopped
+passing `--injuries`); `live` at zero in-season with `live_error` empty
+means the cached board parsed to nothing — run `python3 launch.py
+--injuries` to see the raw board and its age. To ask about one man
+across both feeds and see whether the slate holds him:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 launch.py --injuries "Isiah Pacheco"
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+for r in json.load(open('web/data/recommendations.json'))['recommendations']:
+    if 'Pacheco' in r['player']: print(r['player'], r['market'], r['recommended'], r['injury_status'])"
+```
+
+A man on reserve should print `IR` in the last column on every row he
+still has, and `recommended` False. If the books have pulled his props
+he prints nothing, which is the same fact from the other side.

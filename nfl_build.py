@@ -493,17 +493,41 @@ def main() -> None:
     # board says which of the two states it is in rather than guessing.
     injury_status = {"asked": bool(args.injuries), "applied": False,
                      "total": 0, "holds": 0, "by_status": {},
-                     "source": "nflverse", "error": None}
+                     "source": "nflverse", "error": None,
+                     # THE LIVE BOARD (engine/sources/injuries.py header):
+                     # ESPN's current designations, merged over the weekly
+                     # report so a reserve move or a Saturday scratch
+                     # reaches the model within one build. `live` is how
+                     # many it carried, `live_added` how many the weekly
+                     # report did not have, `live_error` why it was
+                     # missing when it was.
+                     "weekly": 0, "live": None, "live_added": 0,
+                     "live_error": None}
     if args.injuries:
+        live = None
         try:
-            ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week)
+            live = injuries_feed.load_live_injuries()
+        except Exception as exc:  # noqa: BLE001 — a keyless feed's blip costs a note, never the board
+            injury_status["live_error"] = str(exc)
+            print(f"\n⚠️  Live injury board unavailable — weekly report only.\n   {exc}")
+        try:
+            ir = injuries_feed.attach_injuries_to_slate(slate, args.season, args.week,
+                                                        live=live)
             summary = ", ".join(f"{n}×{s}" for s, n in sorted(ir.by_status.items()))
-            print(f"\nInjuries: {ir.total} designations this week ({summary}).")
+            print(f"\nInjuries: {ir.total} designations this week ({summary}) — "
+                  f"{ir.weekly} from the weekly report, "
+                  f"{ir.live} on the live board, {ir.live_added} only there.")
+            if ir.weekly_error:
+                print(f"  Weekly report unavailable — live board only.\n   {ir.weekly_error}")
             if ir.holds:
                 print(f"  Holding {len(ir.holds)} prop(s) on injured players: "
                       f"{', '.join(ir.holds)}")
             injury_status.update(applied=True, total=ir.total,
-                                 holds=len(ir.holds), by_status=dict(ir.by_status))
+                                 holds=len(ir.holds), by_status=dict(ir.by_status),
+                                 weekly=ir.weekly, live=ir.live,
+                                 live_added=ir.live_added,
+                                 source=("nflverse+espn" if live is not None else "nflverse"),
+                                 error=ir.weekly_error)
         except DataUnavailable as exc:
             print(f"\n⚠️  Injury feed unavailable — projecting without it.\n   {exc}")
             injury_status["error"] = str(exc)
