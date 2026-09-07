@@ -1020,7 +1020,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # missing game lines, or a wiring fault. cfb_build already
         # publishes its equivalent; engine/devigcheck reads both.
         "td_census": td_census,
-        "market_scan": _market_scan(results, ls),
+        "market_scan": _market_scan(results, ls, extra=td_scan_rows(slate)),
         "correlation": corr,
     }
     # End-of-year incentive money: a hand-curated table of contract
@@ -1090,7 +1090,49 @@ def _attach_comps(results: list[dict], sport: str) -> dict:
         return {"matched": 0, "diverged": 0, "markets": []}
 
 
-def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:
+def td_scan_rows(slate) -> list[dict]:
+    """The slate's touchdown quotes in the shape `marketscan.stale_quotes`
+    reads — one row per player with every book's Yes/No pair as a line
+    at 0.5.
+
+    THE ONE PROP MARKET THE FOOTBALL EDGE BOARDS STAKE WAS THE ONE THE
+    STALE SCAN NEVER SAW. `price_props` skips anytime_td (the long-shot
+    board prices it), so no touchdown row ever reached `stale_quotes`,
+    and the long-shot rows carry only the shopped best price — one book,
+    which is nothing to compare. The per-book quotes were on
+    `prop.lines` the whole time, exactly where `apply_odds_to_slate`
+    put them. A flag journals as OVER 0.5, category 'stale', and settles
+    from the `anytime_td` game-log rows.
+    """
+    from .models import ANYTIME_TD
+    out = []
+    for prop in getattr(slate, "props", []) or []:
+        if getattr(prop, "market", "") != ANYTIME_TD or not getattr(prop, "lines", None):
+            continue
+        lines = [{"book": ln.book, "line": 0.5, "over_odds": ln.over_odds,
+                  "under_odds": (ln.under_odds or 0)}
+                 for ln in prop.lines if ln.over_odds and (ln.book or "").lower() != "proxy"]
+        if not lines:
+            continue
+        game = None
+        try:
+            game = slate.game_for(prop)
+        except Exception:                                    # noqa: BLE001
+            pass
+        live = getattr(getattr(game, "live", None), "state", "") == "live"
+        out.append({
+            "player": prop.player, "team": prop.team, "market": ANYTIME_TD,
+            "market_label": MARKET_LABELS.get(ANYTIME_TD, "Anytime TD"),
+            "has_market": True, "live": live,
+            "warnings": (["Game already started"] if live else []),
+            "game_date": getattr(game, "date", "") or "",
+            "all_lines": lines,
+        })
+    return out
+
+
+def _market_scan(results: list[dict], long_shots: list[dict] | None = None,
+                 extra: list[dict] | None = None) -> dict:
     """Cross-book arbitrage / middle / low-hold / stale-line scan.
 
     THE SAME SCAN FOR EVERY FOOTBALL BOARD. `run_slate` calls this for
@@ -1103,6 +1145,11 @@ def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> d
     """
     from .marketscan import scan_recommendations, stale_quotes, longshot_warnings
     out = scan_recommendations(results)
+    # `extra` — the touchdown quotes (`td_scan_rows`), which are not in
+    # `results` — joins the STALE scan only, after the arb scan above
+    # has run on the field alone: an arb or a middle needs an over AND
+    # an under, and a Yes/No market has one price.
+    results = list(results) + list(extra or [])
     out["stale"] = stale_quotes(results)
     # Avoidance rule, measured not assumed — see longshot_warnings. The
     # anytime-TD board feeds in alongside the main props: it is exactly

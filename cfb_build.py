@@ -708,6 +708,36 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
     return plays
 
 
+def td_scan_rows(games: list[dict], quotes_by_game: dict) -> list[dict]:
+    """College's touchdown quotes in the shape the stale scan reads —
+    `pipeline.td_scan_rows` for a board that buys its player markets
+    per event. ``quotes_by_game`` is `attach_player_quotes`' scorers:
+    ``{game_index: {norm_name: [{book, yes_odds, no_odds, player}]}}``.
+    One row per player, every book's Yes/No as a line at 0.5, the real
+    name from the quote so the flag can journal and settle."""
+    from engine.models import ANYTIME_TD
+    out: list[dict] = []
+    for gi, players in (quotes_by_game or {}).items():
+        try:
+            g = games[int(gi)]
+        except (IndexError, TypeError, ValueError):
+            continue
+        live = (g.get("live") or {}).get("state") == "live"
+        for _norm, quotes in (players or {}).items():
+            lines = [{"book": q.get("book", ""), "line": 0.5,
+                      "over_odds": int(q["yes_odds"]),
+                      "under_odds": int(q["no_odds"] or 0)}
+                     for q in quotes if q.get("yes_odds")]
+            name = next((q.get("player") for q in quotes if q.get("player")), None)
+            if not lines or not name:
+                continue
+            out.append({"player": name, "team": "", "market": ANYTIME_TD,
+                        "market_label": "Anytime TD", "has_market": True,
+                        "live": live, "warnings": (["Game already started"] if live else []),
+                        "game_date": g.get("date", "") or "", "all_lines": lines})
+    return out
+
+
 def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
     """What `to_game_bet` stamps on a model card, stamped on a sharp one.
 
@@ -1959,7 +1989,8 @@ def main() -> None:
     try:
         from engine.pipeline import market_scan as _market_scan
         out["market_scan"] = _market_scan(out.get("recommendations") or [],
-                                          out.get("long_shots") or [])
+                                          out.get("long_shots") or [],
+                                          extra=td_scan_rows(games, td_quotes))
     except Exception as exc:                                 # noqa: BLE001
         out["market_scan_error"] = str(exc)
         print(f"  ⚠️  market scan skipped: {exc}")

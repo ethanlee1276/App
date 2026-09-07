@@ -952,7 +952,11 @@ def parse_event_scorers(event_json: dict,
                     no[player] = int(price)
             for player, y in yes.items():
                 out.setdefault((normalize_name(player), market), []).append(
-                    {"book": book, "yes_odds": y, "no_odds": no.get(player)})
+                    # The display name rides along: the college build keys
+                    # its quotes by the normalised name and needs the real
+                    # one back to journal and settle a stale flag.
+                    {"book": book, "yes_odds": y, "no_odds": no.get(player),
+                     "player": player})
     return out
 
 

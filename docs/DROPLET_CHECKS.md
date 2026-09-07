@@ -1390,6 +1390,39 @@ pulls that day's college `h2h` closes across `DEFAULT_BOOKS`, Pinnacle
 included, and the replay starts filling. To backfill a stretch by
 hand, the summary prints the command with the sport already in it.
 
+## Touchdown flags are sampled by the stale shadow book now (2026-09-07)
+
+Ethan: "you worked on the NFL and CFB TD Model and made it better."
+The best-measured signal here — a book a point under the field's
+consensus beat the close 64.8% of the time — was sampled at a flat
+0.1u on yardage props and never on the one prop market the football
+edge boards actually stake, the anytime touchdown. Two gaps, both
+closed: `price_props` skips the touchdown market (the long-shot board
+prices it), so no touchdown row ever reached `stale_quotes`, and the
+journal's settleable set had no `anytime_td`. Now every touchdown
+quote on both boards reaches the scan (`pipeline.td_scan_rows`,
+`cfb_build.td_scan_rows` — one row per player, every book's Yes/No as
+a line at 0.5), a flag journals as OVER 0.5, category 'stale', and it
+settles from the same `anytime_td` game-log rows the long-shot book
+grades on. After a Sunday and a Saturday with player odds:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import ledger; c = ledger.connect()
+for sport in ('nfl', 'cfb'):
+    print(sport, c.execute(\"select market, status, count(*) from bets where sport=? and category='stale' group by market, status\", (sport,)).fetchall())
+print(ledger.stale_verdict(c))"
+```
+
+`anytime_td` rows appearing under each sport is the wiring working;
+their settling is the game logs arriving (the NFL's weekly stats, the
+college box scores). The per-sport verdict pools every market's flags
+— when the touchdown rows are a large share of a sport's book, read
+the market split above before trusting the pooled hit rate, because
++300 flags and −110 flags do not share a break-even (the verdict
+averages the break-even of the prices actually taken, so it is
+honest, but a market cut is the next thing to want).
+
 ## College runs the stale-line scan now (2026-09-07)
 
 `cfb_build` shipped `market_scan` as an empty literal from the day it

@@ -1005,7 +1005,15 @@ def _journal_longshot_rows(conn, rows, sport, date, now, category,
 # NBA stat markets from the CDN boxscores it ingests Oct–Jun.
 STALE_SETTLEABLE = {"total_bases", "hits", "home_runs",
                     "pass_yds", "rush_yds", "rec_yds", "receptions",
-                    "pts", "reb", "ast", "fg3m"}
+                    "pts", "reb", "ast", "fg3m",
+                    # Anytime touchdown, since 2026-09-07: it settles from
+                    # the same `anytime_td` game-log rows the long-shot
+                    # book grades on (SETTLEABLE_LONGSHOTS), as OVER 0.5.
+                    # Both football boards feed their touchdown quotes to
+                    # the scan (`pipeline.td_scan_rows`, cfb_build), so
+                    # the stale signal is sampled on the one prop market
+                    # the football edge boards actually stake.
+                    "anytime_td"}
 
 
 # The looser-gates sampler settles from the same ingested logs as the
