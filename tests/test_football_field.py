@@ -66,6 +66,11 @@ def _node(js):
     src = "\n".join([
         "function escapeHtml(s){return String(s);}",
         "function icon(){return '';}",
+        # The REAL list, not a stub: the picker reads it to decide which
+        # league's pair of frames to reach for, so a stub here would let
+        # a college game quietly fall back to the pro field in the one
+        # test written to catch exactly that.
+        _const("PBP_FOOTBALL"),
         _const("pbpOrd"), _const("PBP_FIELD"), _const("PBP_PLAY_HUE"),
         _fn("pbpFieldY"), _fn("pbpFieldHTML"), _fn("pbpCalloutBox"), _fn("pbpPlaySVG"),
     ])
@@ -88,30 +93,46 @@ def test_college_and_pro_are_one_list_not_two_wirings():
     # No league-by-name branch may decide the field art or the tiles.
     art = _fn("pbpParkHTML")
     assert '"nfl"' not in art and '"cfb"' not in art, art
+    # And the call site HANDS THE LEAGUE OVER. Testing the picker
+    # directly cannot see this: a call site that drops the argument
+    # leaves every college game on the pro field, with the picker itself
+    # still perfectly correct.
+    assert "pbpFieldHTML(d, league)" in art, art
 
 
 # -------------------------------------------------------- which photo ------
-def test_the_photo_follows_possession():
+def test_the_photo_follows_the_league_and_then_possession():
+    """Two axes. Ethan, after the first pass put an NFL shield at
+    midfield on a college game: "Good catch on the nfl logos. Here is the
+    correct renders for CFB." A picker that reads possession and forgets
+    the league is exactly how that happened."""
     got = _node("""
-      const away = pbpFieldHTML({home: "DET", away: "CHI", live: {possession: "CHI"}});
-      const home = pbpFieldHTML({home: "DET", away: "CHI", live: {possession: "DET"}});
-      const none = pbpFieldHTML({home: "DET", away: "CHI", live: {}});
-      const pick = (s) => (s.match(/field-(away|home)-ball/) || [])[1];
-      console.log(JSON.stringify({away: pick(away), home: pick(home), none: pick(none)}));""")
+      const g = {home: "DET", away: "CHI"};
+      const pick = (s) => (s.match(/field-(nfl|cfb)-(away|home)-ball/) || []).slice(1).join("-");
+      console.log(JSON.stringify({
+        nflAway: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "nfl")),
+        nflHome: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "nfl")),
+        cfbAway: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb")),
+        cfbHome: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "cfb")),
+        cfbNone: pick(pbpFieldHTML({...g, live: {}}, "cfb")),
+      }));""")
     if got is None:
         print("  SKIP node not installed"); return
-    # Black jerseys are the away team, and that frame draws when the away
-    # team has the ball.
-    assert got["away"] == "away", got
-    assert got["home"] == "home", got
-    # Unknown possession is a real state; it falls back rather than
-    # asserting a side.
-    assert got["none"] == "home", got
+    # Black jerseys are the away team in BOTH sets of renders, and that
+    # frame draws when the away team has the ball.
+    assert got["nflAway"] == "nfl-away", got
+    assert got["nflHome"] == "nfl-home", got
+    assert got["cfbAway"] == "cfb-away", got
+    assert got["cfbHome"] == "cfb-home", got
+    # A college game never reaches for the pro field, whatever else is
+    # unknown — that is the defect this test exists for.
+    assert got["cfbNone"].startswith("cfb"), got
 
 
-def test_both_frames_ship_in_both_formats_and_both_sizes():
+def test_all_four_frames_ship_in_both_formats_and_both_sizes():
     img = ROOT / "web" / "img" / "field"
-    for stem in ("field-away-ball", "field-home-ball"):
+    for stem in ("field-nfl-away-ball", "field-nfl-home-ball",
+                 "field-cfb-away-ball", "field-cfb-home-ball"):
         for suf in (".webp", ".jpg", "@640.webp", "@640.jpg"):
             assert (img / f"{stem}{suf}").exists(), stem + suf
         # The one a phone downloads has to be small, same budget as the park.
@@ -120,6 +141,17 @@ def test_both_frames_ship_in_both_formats_and_both_sizes():
 
 
 # ----------------------------------------------------- the camera model ----
+def test_the_college_frames_are_not_the_pro_ones_renamed():
+    """The whole point of the second pair is a different mark at
+    midfield. Identical bytes would mean the copy went wrong."""
+    img = ROOT / "web" / "img" / "field"
+    pro = (img / "field-nfl-away-ball.webp").read_bytes()
+    college = (img / "field-cfb-away-ball.webp").read_bytes()
+    assert pro != college
+    assert (img / "field-cfb-away-ball.webp").read_bytes() \
+        != (img / "field-cfb-home-ball.webp").read_bytes()
+
+
 def test_the_field_maps_yards_the_way_the_render_was_measured():
     """The three anchors read off the grid: the line the linemen stand
     on, midfield, and the goal line."""

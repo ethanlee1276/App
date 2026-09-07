@@ -32508,7 +32508,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   let art = "";
   try {
     art = league === "mlb" ? pbpPhotoHTML(game)
-      : isFootball ? pbpFieldHTML(d)
+      : isFootball ? pbpFieldHTML(d, league)
       : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
@@ -32618,17 +32618,36 @@ function pbpFieldY(yards) {
   return Math.max(PBP_FIELD.goal - 4, y);
 }
 
-/* The stadium photograph, with the side that has the ball on offence.
+/* The stadium photograph: this league's field, with the side that has
+ * the ball on offence.
+ *
+ * FOUR FRAMES, TWO AXES. Ethan, 2026-09-07, after the first pass put an
+ * NFL shield at midfield on college games: "Good catch on the nfl logos.
+ * Here is the correct renders for CFB. Stick with away wearing black and
+ * home wearing white." So the league picks the pair and possession picks
+ * the frame, and the file name says both — a picker that reads one axis
+ * and forgets the other is exactly how the shield got onto a college
+ * card in the first place.
+ *
+ * The league comes from the CALLER, not from `d.league`: the caller is
+ * already routing on it, and a deep file whose own field disagreed with
+ * the page it is drawn on should not quietly change the picture.
+ *
+ * All four frames share one calibration. That is measured, not assumed —
+ * the three anchors fitted on the pro render land on the linemen, the
+ * midfield mark and the goal line of the college ones too (scratch:
+ * cfb_grid.png).
  *
  * `live.possession` is the abbreviation of the team with the ball, and
  * livescore_build only writes it when ESPN's situation block parsed —
  * so an unknown possession is a real state, not a missing field. With
  * nothing to go on the home-ball frame draws: it is a DEFAULT, not a
  * claim about who has the ball, and nothing else on the page reads it. */
-function pbpFieldHTML(d) {
+function pbpFieldHTML(d, league) {
   const lv = d.live || {};
   const away = lv.possession && lv.possession === d.away;
-  const stem = away ? "field-away-ball" : "field-home-ball";
+  const code = PBP_FOOTBALL.has(league) ? league : "nfl";
+  const stem = `field-${code}-${away ? "away" : "home"}-ball`;
   return `<picture>
       <source type="image/webp" srcset="img/field/${stem}@640.webp 640w, img/field/${stem}.webp 1280w"
         sizes="(max-width: 700px) 100vw, 700px">
