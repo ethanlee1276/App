@@ -9310,7 +9310,16 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    away | score | score | home, with the state above it. */
 @media (max-width: 700px) { .pbp-hero { grid-template-columns: 1fr auto auto 1fr; }
   .pbp-hero-mid { grid-column: 1 / -1; order: -1; flex-direction: row; justify-content: center; gap: 8px; }
-  .pbp-hero-score { font-size: 1.6rem; } }
+  /* THE TWO SCORES SAT A GRID GAP APART (Ethan, 2026-09-07, "2 3" ringed
+     on a phone: "fix how bunched up these number are"). On the desktop the
+     state block sits BETWEEN the scores; lifting it to its own row here
+     left the two numbers as neighbouring auto columns with only the 12px
+     gap between them, reading as one number "23". Each score now has
+     room of its own and the home score carries a hairline on its left,
+     so the pair reads as a scoreboard: 2 | 3. Phone only — on the desktop
+     the state block is the divider. */
+  .pbp-hero-score { font-size: 1.6rem; min-width: 2ch; text-align: center; padding: 0 16px; }
+  .pbp-hero-mid + .pbp-hero-score { border-left: var(--hairline) solid var(--border); } }
 /* THE PARK CARD'S BRAND EDGE (Ethan's render, 2026-09-06): his card is
    ringed in the gold the rest of the site already uses, which is what
    makes the photograph read as OURS rather than as a stock picture

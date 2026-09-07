@@ -88,6 +88,29 @@ def test_the_home_block_still_hugs_its_own_side():
     assert m and "flex-end" in m.group(1), m
 
 
+def _phone_block():
+    i = CSS.index("@media (max-width: 700px) { .pbp-hero {")
+    return CSS[i:CSS.index("} }", i) + 3]
+
+
+def test_the_two_scores_do_not_touch_on_a_phone():
+    """Ethan, 2026-09-07, "2 3" ringed on a phone: "fix how bunched up
+    these number are." With the state block lifted to its own row the
+    two scores are neighbouring auto columns, one grid gap apart — so
+    each gets its own room and the home score a hairline on its left."""
+    block = _phone_block()
+    m = re.search(r"\.pbp-hero-score \{([^}]*)\}", block)
+    assert m, "no phone score rule"
+    pad = re.search(r"padding:\s*0 (\d+)px", m.group(1))
+    assert pad and int(pad.group(1)) >= 12, m.group(1)
+    assert "text-align: center" in m.group(1)
+    div = re.search(r"\.pbp-hero-mid \+ \.pbp-hero-score \{([^}]*)\}", block)
+    assert div and "border-left" in div.group(1), "the home score lost its divider"
+    # Phone only: the desktop hero keeps the state block as the divider.
+    desk = CSS[:CSS.index("@media (max-width: 700px) { .pbp-hero {")]
+    assert ".pbp-hero-mid + .pbp-hero-score" not in desk
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):
