@@ -6602,7 +6602,12 @@ body.has-rail .shell {
 /* The hero's own call to action: the fights are the reason for the page
    and they were below three screens of context on a phone. */
 .ufc-hero { position: relative; margin-bottom: 20px; }
-.ufc-hero .ufc-banner { margin-bottom: 0; }
+/* The branded render (2026-09-07) is 3:2 with the jumbotron at the top
+   and the cage at the bottom; the 3:1 band the banner class uses cut the
+   jumbotron off and the cage in half. 2:1 sat at 45% keeps the boards
+   and the octagon in the same frame — checked against the crops. */
+.ufc-hero .ufc-banner { margin-bottom: 0; aspect-ratio: 2 / 1;
+  object-position: 50% 45%; }
 .ufc-hero-cta {
   position: absolute; right: 16px; bottom: 16px;
   display: inline-flex; align-items: center; gap: 8px;

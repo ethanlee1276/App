@@ -96,9 +96,12 @@ point of the exercise.
 
 ### Base — octagon (`octagon-1` … `octagon-6`)
 
-Six variations rather than six colours — the UFC card hash-picks one from
-the event identity, so they only need to look like the same building on
-six different nights.
+Six variations rather than six colours — the UFC card hash-picked one from
+the event identity, so they only needed to look like the same building on
+six different nights. **Retired from the page on 2026-09-07**: the UFC
+hero is now Ethan's single branded render (`web/img/venues/ufc-hero.jpg`,
+the arena dressed in Qellys Book boards). The slots below stay as the
+ingest tool's contract; nothing shows them.
 
 > Empty mixed martial arts arena at night, the octagon cage lit at centre,
 > photographed from an elevated seat, wide-angle. Dark empty tiered

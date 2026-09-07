@@ -18,9 +18,13 @@ below. No build step, no code change.
 LIVE games always use the drawn scene — it carries the ball spot, the
 bases and the live wind, which a photo cannot.
 
-The UFC page ignores team colours (no home team) and shows one
-`variants/octagon-{1..6}.jpg` banner per card, hash-picked from the
-event identity so a given card always shows the same arena.
+The UFC page ignores team colours (no home team) and shows ONE
+picture for every card: `ufc-hero.jpg`, Ethan's branded arena render
+(2026-09-07, the boards dressed in Qellys Book). The six
+`variants/octagon-{1..6}.jpg` files are the earlier hash-picked rotation;
+the ingest tool still fills those slots, but the page no longer shows
+them. To change the hero, replace `ufc-hero.jpg` (3:2, JPG) and bump
+`VENUE_ART_V` in app.js so phones drop the cached copy.
 
 ## Per-team overrides
 

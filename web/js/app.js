@@ -4488,7 +4488,7 @@ const VENUE_FAMILY = { nfl: "football", cfb: "football", mlb: "baseball",
    misses once and refetches. BUMP IT WHENEVER THE RENDERS ARE REBUILT —
    `tools/venues_ingest.py` writing new bytes under an old name is the
    whole failure mode, and nothing else in the chain can detect it. */
-const VENUE_ART_V = "20260814";
+const VENUE_ART_V = "20260907";
 const venueSrc = (path) => `${path}?v=${VENUE_ART_V}`;
 /* WHICH COLOUR SLOTS HOLD ART THAT MATCHES THE REST.
 //
@@ -26849,16 +26849,17 @@ async function renderUFC() {
   const nModeled = pl.filter((m) => ["gate", "clamp_kill"].includes(m.reason_code)).length
     + (d.picks || []).length;
   const nWaiting = pl.filter((m) => m.reason_code === "no_price").length;
-  // Card banner from Ethan's octagon renders (2026-08-11). UFC has no
-  // home team to key a colour on, so the pick is a stable hash of the
-  // card's identity — the same event always shows the same arena, and
-  // different cards rotate through all six.
-  const octN = ([...((d.event_date || "") + ((d.card_venue || {}).venue || ""))]
-    .reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 6) + 1;
+  // THE HERO IS ETHAN'S BRANDED RENDER (2026-09-07): the arena dressed
+  // in Qellys Book boards, one picture for every card. It replaces the
+  // six-night octagon rotation of 2026-08-11 — he circled the old
+  // banner and said "use exactly to replace this" — so no hash, no
+  // variant, no dependence on the card's identity. The six rotation
+  // files stay in variants/ as the ingest tool's contract and are not
+  // shown here.
   host.innerHTML = `
     <div class="ufc-hero">
       <img class="ufc-banner" alt="" loading="lazy"
-        src="${venueSrc(`img/venues/variants/octagon-${octN}.jpg`)}" onerror="this.remove()"/>
+        src="${venueSrc("img/venues/ufc-hero.jpg")}" onerror="this.remove()"/>
       ${/* The fights are the reason for the page and they sit under three
             screens of context on a phone. A jump rather than a link: they
             are on this page, and pretending otherwise would be a lie about

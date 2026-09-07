@@ -549,9 +549,19 @@ def test_ethans_venue_renders_are_plugged_in():
     assert "!isLive ? (() => {" not in APP, "the photo is gated on live again"
     assert "mlb && isLive ? runnerOverlay(g)" in APP, \
         "photo on live cards without the overlay loses the base runners"
-    # UFC: hash-picked octagon banner, styled.
-    assert "octagon-${octN}" in APP
+    # UFC: ONE BRANDED HERO, not the hash-picked rotation any more.
+    # Ethan, 2026-09-07, circling the banner: "use exactly to replace
+    # this". The render ships at its full 3:2, the page shows a 2:1 band
+    # of it, and nothing about the card's identity chooses the picture.
+    assert 'venueSrc("img/venues/ufc-hero.jpg")' in APP
+    assert "octagon-${octN}" not in APP, "the rotation is back"
+    hero = os.path.join(ROOT, "web/img/venues/ufc-hero.jpg")
+    assert os.path.isfile(hero) and os.path.getsize(hero) > 100_000
+    with open(hero, "rb") as fh:
+        assert fh.read(3) == b"\xff\xd8\xff", "the card requests a JPEG"
     assert ".ufc-banner" in CSS
+    band = CSS[CSS.index(".ufc-hero .ufc-banner"):][:200]
+    assert "aspect-ratio: 2 / 1" in band and "object-position: 50% 45%" in band
 
 
 def test_the_render_sheet_pass_shipped_its_honest_subset():
