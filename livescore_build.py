@@ -106,10 +106,15 @@ PBP_MAX_AGE_S = 36 * 3600
 #:
 #: UTC with an explicit Z, so no reader has to guess. The clock-slicing
 #: readers now show UTC rather than Eastern, which is why `pbpAgo` was
-#: taught to handle both and why this is the only writer changed here:
-#: a stamp a human reads off a page and a stamp a machine subtracts are
-#: different jobs, and this one is the second.
-def _utc_stamp() -> str:
+#: taught to handle both.
+#:
+#: PUBLIC AND SHARED, 2026-09-06, because the first version of this note
+#: claimed this was "the only writer changed here" — and it was wrong.
+#: `live_build.py` writes the deep play-by-play file the game centre
+#: actually reads, with its own naive clock, so the page kept reporting
+#: four hours after this was "fixed". One helper, imported, rather than
+#: two builders each deciding what a timestamp is.
+def utc_stamp() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -170,7 +175,7 @@ def build(league: str, pbp_dir: Path | None = None) -> dict:
     to spell it out — see engine/census.py and the college board that
     "showed nothing on opening Saturday and both logs lied about it".
     """
-    now = _utc_stamp()
+    now = utc_stamp()
     try:
         rows = fetch_rows(league, ttl=TTL)
     except DataUnavailable as exc:
@@ -321,7 +326,7 @@ def pbp_doc(league: str, g: dict, payload: dict,
     doc = {
         "league": league,
         "event_id": str(g.get("event_id") or ""),
-        "generated_at": _utc_stamp(),
+        "generated_at": utc_stamp(),
         "home": g.get("home"), "away": g.get("away"),
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},

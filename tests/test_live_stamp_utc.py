@@ -46,27 +46,75 @@ def _fn(name):
 def test_the_builder_stamps_real_utc_with_the_zone_on_it():
     import livescore_build
 
-    got = livescore_build._utc_stamp()
+    got = livescore_build.utc_stamp()
     assert got.endswith("Z"), got
     when = dt.datetime.strptime(got, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
     drift = abs((dt.datetime.now(dt.timezone.utc) - when).total_seconds())
     assert drift < 120, f"{got} is {drift:.0f}s from now — a local-time stamp wearing a Z"
 
 
+# EVERY builder behind a stamp the browser SUBTRACTS.
+#
+# 2026-09-06: this test named ONE file and passed while the bug was still
+# live on the page. `pbpAgo` reads `d.generated_at` off the deep
+# play-by-play file, and that file is written by live_build.py — a
+# different builder, with its own naive clock, which this test never
+# looked at. The game centre went on reporting four hours after the fix
+# shipped, and the screenshot that proved it also showed the new render,
+# so the deploy was not the excuse.
+#
+# The list is now derived from the READERS rather than typed from memory:
+# find every JS call to pbpAgo, confirm each is passed `generated_at`,
+# and require every builder that writes that field for those files to go
+# through the one UTC helper.
+LIVE_BUILDERS = ("livescore_build.py", "live_build.py")
+
+
+def test_the_reader_that_subtracts_only_ever_reads_generated_at():
+    """If pbpAgo starts reading a second field, the builder list stops
+    covering it — so the assumption is pinned, not assumed."""
+    calls = re.findall(r"pbpAgo\(([^)]*)\)", APP)
+    calls = [c for c in calls if c.strip() != "stamp"]     # its own signature
+    assert calls, "no callers found"
+    for c in calls:
+        assert c.strip() == "d.generated_at", c
+
+
 def test_no_writer_of_generated_at_stamps_a_naive_local_clock():
-    src = (ROOT / "livescore_build.py").read_text()
-    # The builder is allowed exactly one clock, and it is the UTC one.
-    bare = re.findall(r"_dt\.datetime\.now\(\)", src)
-    assert not bare, f"{len(bare)} naive now() left in livescore_build.py"
-    # Every place the field is actually SET carries the UTC stamp — either
-    # directly or through the one `now` the builder computes per league.
-    setters = [ln.strip() for ln in src.splitlines()
-               if re.search(r'"generated_at":\s*[A-Za-z_]', ln)]
-    assert len(setters) == 4, setters
-    for ln in setters:
-        assert re.search(r'"generated_at":\s*(now\b|_utc_stamp\(\))', ln), ln
-    nows = [ln.strip() for ln in src.splitlines() if re.match(r"\s*now = ", ln)]
-    assert "now = _utc_stamp()" in nows, nows
+    for name in LIVE_BUILDERS:
+        src = (ROOT / name).read_text()
+        # A builder is allowed exactly one clock, and it is the UTC one.
+        bare = re.findall(r"_dt\.datetime\.now\(\)", src)
+        assert not bare, f"{len(bare)} naive now() left in {name}"
+        setters = [ln.strip() for ln in src.splitlines()
+                   if re.search(r'"generated_at":\s*[A-Za-z_]', ln)]
+        assert setters, f"{name} writes no generated_at any more"
+        for ln in setters:
+            assert re.search(r'"generated_at":\s*(now\b|_utc\(\)|utc_stamp\(\))', ln), (name, ln)
+        for ln in src.splitlines():
+            if re.match(r"\s*now = ", ln) and "time.time" not in ln:
+                assert "utc_stamp()" in ln, (name, ln.strip())
+
+
+def test_the_deep_play_by_play_file_is_the_one_the_game_centre_reads():
+    """Pinning WHERE the bug was, so the next reader knows which file
+    matters: the page fetches data/pbp/<league>_<id>.json, and
+    live_build.write_pbp is what writes it."""
+    assert "data/pbp/${encodeURIComponent(league)}" in APP
+    src = (ROOT / "live_build.py").read_text()
+    at = src.index("def write_pbp(")
+    assert "pbp_dir / f\"mlb_{g['game_pk']}.json\"" in src[at:at + 900]
+    assert '"generated_at": _utc()' in src[at:at + 1400]
+
+
+def test_both_builders_share_one_helper_rather_than_each_keeping_a_clock():
+    """Two builders each deciding what a timestamp is IS the defect."""
+    import live_build
+    import livescore_build
+
+    assert live_build._utc()[:16] == livescore_build.utc_stamp()[:16]
+    assert live_build._utc().endswith("Z")
+    assert "from livescore_build import utc_stamp" in (ROOT / "live_build.py").read_text()
 
 
 def test_the_reader_only_assumes_utc_when_the_stamp_names_no_zone():

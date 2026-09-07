@@ -100,7 +100,10 @@ def build(date: str, pbp_dir: Path | None = None) -> dict:
     (where `teams.home` and `teams.away` are explicit) is read directly and
     parse_live is used only for the STATE it already knows how to derive.
     """
-    now = _dt.datetime.now().isoformat(timespec="seconds")
+    # UTC with an explicit Z — see livescore_build.utc_stamp. A naive
+    # local stamp here is read four hours old by every browser.
+    from livescore_build import utc_stamp
+    now = utc_stamp()
     try:
         raw = _get_json(
             f"{STATS_BASE}/schedule?sportId=1&date={date}&hydrate=linescore",
@@ -186,6 +189,18 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     return note
 
 
+def _utc() -> str:
+    """The deep file's stamp, in UTC with a Z on it.
+
+    THIS is the file the game centre reads — `data/pbp/mlb_<pk>.json` —
+    and `pbpAgo` subtracts its stamp from the browser's clock. Written
+    with a naive local clock it reported every live game as four hours
+    stale, all day, on a box whose service runs America/New_York.
+    """
+    from livescore_build import utc_stamp
+    return utc_stamp()
+
+
 def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
     """One MLB game's whole play-by-play, atomically, as the page reads it.
 
@@ -201,7 +216,7 @@ def write_pbp(g: dict, payload: dict, plays: list[dict], pbp_dir: Path) -> Path:
     doc = {
         "league": "mlb",
         "event_id": str(g["game_pk"]),
-        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "generated_at": _utc(),
         "home": g.get("home"), "away": g.get("away"),
         "home_name": g.get("home_name", ""), "away_name": g.get("away_name", ""),
         "live": g.get("live") or {},
