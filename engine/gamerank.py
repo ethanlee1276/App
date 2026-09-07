@@ -268,6 +268,49 @@ def measure_moneylines(conn, sport: str, min_team_games: int = 15) -> GameRank:
     return r.finish()
 
 
+def measure_market_moneyline(conn, sport: str) -> GameRank:
+    """THE CLOSE ITSELF, graded the way the model is: the book's de-vigged
+    home probability against whether home won, over the same scored games
+    with a quote, ties excluded.
+
+    This is the number `likely.GAME_RANK_MARKET` carries (NFL 0.722,
+    college 0.7905, measured 2026-09-07) and the reason the Most Likely
+    game rows rank on the market's figure. It lives HERE, beside the
+    model's measurement, and not in the test suite: run_tests.py is
+    explicit that the suite must not read the box it runs on, and the
+    first version of this measurement was a test that opened the real
+    history database — green on a box with closes, a crash on GitHub's
+    clone, which has none. Re-measure on the droplet with the command in
+    docs/DROPLET_CHECKS.md; the test pins the constants and proves this
+    function on a synthetic book.
+    """
+    from .odds import devig_two_way
+    r = GameRank(sport=sport, market="moneyline")
+    harvested = moneyline_closes(conn, sport)
+    schedule = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    for row in _games(conn, sport):
+        date, home, away = row["period"], row["home"], row["away"]
+        hs, as_ = float(row["home_score"]), float(row["away_score"])
+        r.games_seen += 1
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"]) or {}
+        if quote.get(home) is None or quote.get(away) is None:
+            continue
+        r.games_quoted += 1
+        if hs == as_:
+            r.pushes += 1
+            continue
+        fair_home, _ = devig_two_way(int(quote[home]), int(quote[away]))
+        r.pairs.append((float(fair_home), hs > as_))
+    r = r.finish()
+    # Prefixed, not assigned: `finish` writes its own note under MIN_GAMES
+    # and that sample warning must survive beside what this number is.
+    r.note = ("the close itself, de-vigged — the figure GAME_RANK_MARKET carries"
+              + (f" · {r.note}" if r.note else ""))
+    return r
+
+
 def _cfb_prior_table(mem, rows, before: str, seasons) -> None:
     """Refill the in-memory games table with every game strictly before
     `before` from `seasons` — the production solver reads a connection,

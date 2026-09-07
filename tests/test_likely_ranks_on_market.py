@@ -17,6 +17,7 @@ Run directly: `python3 tests/test_likely_ranks_on_market.py`
 """
 
 import inspect
+import json
 import os
 import sqlite3
 import sys
@@ -24,9 +25,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import boards, db, likely as K                    # noqa: E402
-from engine.gamebacktest import schedule_moneylines          # noqa: E402
-from engine.odds import devig_two_way                        # noqa: E402
-from engine.rankfit import auc                               # noqa: E402
 
 
 def _ml(**kw):
@@ -54,25 +52,54 @@ def _tot(**kw):
     return d
 
 
-def test_the_figures_are_the_ones_the_box_measures():
-    """Re-measured here, on the same closes, so the constants cannot
-    drift from what the data says. Ties out; every scored game with a
-    schedule moneyline."""
-    conn = db.connect(); conn.row_factory = sqlite3.Row
+def test_the_market_figure_is_measured_the_way_the_models_is():
+    """`gamerank.measure_market_moneyline` — the close itself, de-vigged,
+    against whether home won — proven on a synthetic book, NOT on this
+    box's database. run_tests.py is explicit that the suite must not
+    read the box it runs on; the first version of this test did, and it
+    was green here and a crash on GitHub's clone, which holds no history
+    (every CI run from 47ec2b7 to fbf4aaf failed on it). The real
+    figures are re-measured on the droplet, docs/DROPLET_CHECKS.md."""
+    from engine.gamerank import measure_market_moneyline
+    conn = db.connect(":memory:")
+    rows = []
+    # Ten games: the book makes the home side −200 in five (home wins
+    # four), +150 in five (home wins one), one tie at −110 which must be
+    # dropped, one game with no quote which must not count.
+    for i in range(5):
+        rows.append(("A%d" % i, "B%d" % i, 24, 17 if i < 4 else 31, (-200, 170)))
+    for i in range(5):
+        rows.append(("C%d" % i, "D%d" % i, 17 if i < 4 else 31, 24, (150, -170)))
+    rows.append(("T", "U", 20, 20, (-110, -110)))
+    rows.append(("X", "Y", 30, 3, None))
+    games = []
+    for n, (h, a, hs, as_, ml) in enumerate(rows):
+        extra = {"ml": list(ml)} if ml else {}
+        games.append({"sport": "nfl", "season": 2025, "period": str(n + 1),
+                      "game_id": f"2025-{n + 1}-{a}@{h}", "home": h, "away": a,
+                      "home_score": hs, "away_score": as_, "date": "2025-09-%02d" % (7 + n),
+                      "extra": json.dumps(extra)})
+    db.upsert_games(conn, games)
+    conn.row_factory = sqlite3.Row
+    r = measure_market_moneyline(conn, "nfl")
+    assert r.games_seen == 12 and r.games_quoted == 11 and r.pushes == 1, (r.games_seen, r.games_quoted, r.pushes)
+    assert len(r.pairs) == 10
+    # Favourites won 4 of 5 and dogs 1 of 5: the close orders them well
+    # but not perfectly — AUC = P(fair of a winner > fair of a loser).
+    from engine.rankfit import auc
+    assert abs(auc(r.pairs) - 0.8) < 1e-9, auc(r.pairs)
+    assert "the close itself" in r.note
+
+
+def test_the_figures_are_the_ones_written_down():
+    """The constants are documented measurements (2026-09-07, this box's
+    schedule closes: NFL 0.722 on 1,420 games, college 0.7905 on 3,011),
+    and the market beats the model on both. Only the moneyline was
+    measured, so only the moneyline ranks on the market."""
+    assert K.GAME_RANK_MARKET == {"nfl": {"moneyline": 0.722},
+                                  "cfb": {"moneyline": 0.7905}}, K.GAME_RANK_MARKET
     for sport, floor in (("nfl", 0.70), ("cfb", 0.77)):
-        mls = schedule_moneylines(conn, sport)
-        pairs = []
-        for r in conn.execute("SELECT season, period, home, away, home_score, away_score "
-                              "FROM games WHERE sport=? AND home_score IS NOT NULL "
-                              "AND away_score IS NOT NULL", (sport,)):
-            q = mls.get((r["season"], str(r["period"]), r["home"], r["away"]))
-            if not q or r["home_score"] == r["away_score"]:
-                continue
-            fh, _ = devig_two_way(int(q[0]), int(q[1]))
-            pairs.append((fh, r["home_score"] > r["away_score"]))
-        got = auc(pairs)
         want = K.GAME_RANK_MARKET[sport]["moneyline"]
-        assert abs(got - want) < 0.005, (sport, got, want, len(pairs))
         assert want > K.GAME_RANK_MEASURED[sport]["moneyline"] >= floor - 0.1
     for sport in K.GAME_RANK_MARKET:
         assert set(K.GAME_RANK_MARKET[sport]) == {"moneyline"}, "only the moneyline was measured"

@@ -1705,3 +1705,42 @@ which is exactly the gap this closes.
 To confirm the two clocks now agree, open the dashboard beside the game
 centre during an inning with a runner on and watch the card's diamond
 change within about sixteen seconds of the game centre's.
+
+## The market's ranking figure is re-measured here, not in the suite (2026-09-07)
+
+Ethan, 2026-09-07, with a screen of failed GitHub runs: "The nightly is
+failing a lot too so idk if it's even doing anything like we think."
+
+Two different "nightlies", and the emails are about the wrong one. The
+GitHub workflow called `nightly` is a repository health check that runs
+the test suite on GitHub's machines; it has no databases and no built
+boards and cannot touch the droplet. The droplet's nightly — the settle,
+the harvest, the backfill — runs inside `launch.py` on this box and
+writes its own log (`grep -h closes data/logs/maintenance*.log`). One
+failing does not mean the other is.
+
+WHAT WAS FAILING, and it was mine. `tests/test_likely_ranks_on_market.py`
+re-measured the 0.722 / 0.7905 market figures by opening the real history
+database. Green on any box with closes; on GitHub's clone, which has
+none, the AUC helper returned None and the file crashed — every `tests`
+and `nightly` run from 47ec2b7 through fbf4aaf failed on exactly that
+line. The suite's own rule (`run_tests.py`, and test_td_xfp.py spells it
+out) is that it must not read the box it runs on. The measurement now
+lives in `gamerank.measure_market_moneyline`, beside the model's, and the
+test proves it on a synthetic book and pins the constants.
+
+Re-measure the real figures here whenever the closes have grown:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db, gamerank, likely
+c = db.connect()
+for sport in ('nfl', 'cfb'):
+    r = gamerank.measure_market_moneyline(c, sport)
+    print(sport, 'market', r.auc, 'on', len(r.pairs), 'games —',
+          'carried', likely.GAME_RANK_MARKET[sport]['moneyline'], '·', r.note)"
+```
+
+If a re-measured figure drifts more than half a point from the carried
+constant, update `likely.GAME_RANK_MARKET` and the test's pinned values
+together, in one commit that quotes this command's output.
