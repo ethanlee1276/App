@@ -9253,8 +9253,31 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-chip-row em { font-style: normal; font-weight: 700; }
 .pbp-chip-row b { font-family: var(--font-mono); }
 .pbp-chip-foot { font-size: var(--fs-xs); color: var(--text-mute); margin-top: 3px; min-height: 1em; }
+/* THE COLUMN CANNOT BE WIDENED BY WHAT IS IN IT.
+   ---------------------------------------------------------------------
+   Ethan, 2026-09-06, from a phone: "it's all like pushed too the right of
+   the screen and not centered." Every card on the page was being drawn
+   wider than the screen — left edges where they belonged, right edges off
+   the side.
+
+   `1fr` is `minmax(auto, 1fr)`, and `auto` as a MINIMUM means the track
+   grows to its widest child's min-content width. One child that cannot
+   shrink — a table of nowrap cells, a long unbroken string — and the
+   whole track is wider than the viewport, taking every card in it along.
+   Measured at 428px with a nowrap table in the column: the sibling card
+   was laid out at 507px and the page scrolled to 526.
+
+   The desktop rule above already clamped it with `minmax(0, 1fr)`. Only
+   the phone — the one width where it matters — was left on bare `1fr`.
+   `min-width: 0` on the children for the same reason: a grid item's own
+   default minimum is `auto` too.
+
+   This is a floor, not a fix for any one child. A wide table still needs
+   its own `overflow-x: auto` to be READABLE; this only stops it dragging
+   the rest of the page sideways with it. */
 .pbp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
-@media (max-width: 980px) { .pbp-layout { grid-template-columns: 1fr; } }
+.pbp-main, .pbp-rail { min-width: 0; }
+@media (max-width: 980px) { .pbp-layout { grid-template-columns: minmax(0, 1fr); } }
 .pbp-hero { display: grid; grid-template-columns: 1fr auto auto auto 1fr; align-items: center; gap: 12px; }
 .pbp-hero-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .pbp-hero-side b { font-size: var(--fs-lg); }
