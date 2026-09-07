@@ -112,8 +112,26 @@ def test_a_journaled_prop_stores_the_dimension():
 
 
 def test_a_journaled_game_bet_stores_the_dimension():
-    """The writer that had no dimension columns at all."""
-    conn = _journal(_run())
+    """The writer that had no dimension columns at all.
+
+    2026-09-07: a model-alone NFL game card is information now, with a
+    zero stake, and the journal refuses a zero stake — so the sample
+    slate on its own puts no game bet on the record. The one kind of NFL
+    game bet that IS staked is a sharp-anchored one, so the first game
+    gets Pinnacle's quote in the window where the soft price is a pick
+    (tests/test_nfl_sharp_first.py has the arithmetic), and THAT row is
+    the one that has to carry the dimension."""
+    from engine.pipeline import load_slate, _game_bets
+    from engine.rules import RuleConfig
+    res = _run()
+    slate = load_slate(SLATE)
+    g = slate.games[0]
+    g.home_ml, g.away_ml = -120, 115
+    g.sharp_home_ml, g.sharp_away_ml = -150, 130
+    res["game_bets"] = _game_bets(slate.games, RuleConfig())
+    staked = [b for b in res["game_bets"] if b["recommended"]]
+    assert staked, "premise: a sharp-anchored game bet is a staked one"
+    conn = _journal(res)
     rows = list(conn.execute(
         "SELECT COUNT(*) FROM bets WHERE market IN "
         "('moneyline','spread','team_total') AND body_clock IS NOT NULL"))

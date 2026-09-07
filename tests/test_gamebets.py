@@ -241,10 +241,11 @@ def test_pipeline_emits_game_bets():
         # All four game-bet types are produced.
         types = {b["bet_type"] for b in result["game_bets"]}
         assert types == {"moneyline", "total", "team_total", "spread"}
-    # NFL still recommends from its (unmeasured) model; MLB game bets only
-    # recommend on sharp-anchor value, and the sample slate carries no sharp
-    # prices — so every MLB game bet must be information only.
-    assert any(b["recommended"] for b in run_slate(NFL_SLATE)["game_bets"])
+    # Game bets recommend on sharp-anchor value ONLY, in both sports now
+    # (the NFL model was measured against the close on 2026-09-07 and
+    # carries nothing — engine/nflinfo.py), and neither sample slate
+    # carries a sharp price. So every game bet is information only.
+    assert not any(b["recommended"] for b in run_slate(NFL_SLATE)["game_bets"])
     assert not any(b["recommended"]
                    for b in run_mlb_slate(MLB_SLATE)["game_bets"])
 

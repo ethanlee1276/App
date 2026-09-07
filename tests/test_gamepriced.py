@@ -140,38 +140,42 @@ def test_a_slate_with_posted_lines_still_produces_them():
     assert all(r["has_market"] for r in got)
 
 
-def test_the_suite_is_green_on_a_board_only_an_uncalibrated_box_produces():
-    """A TRAP FOUND BY TRIPPING IT, and worth leaving lit.
+def test_no_shrink_guess_can_recommend_a_model_game_bet_any_more():
+    """A TRAP FOUND BY TRIPPING IT, and now closed.
 
-    `test_gamebets.test_pipeline_emits_game_bets` asserts that some game
-    bet on the sample slate is RECOMMENDED. On this box, with a fitted
-    `gamecal` store, nothing is — the measured shrink is 0.03 on totals
-    and 0.006 on spreads and the board correctly goes silent. It passes
-    only because `run_tests` points QB_MODELS_DIR at an empty sandbox,
-    where the shrink falls back to the 0.5 guess.
+    `test_gamebets.test_pipeline_emits_game_bets` used to assert that
+    some game bet on the sample slate was RECOMMENDED. On a box with a
+    fitted `gamecal` store nothing was — the measured shrink was 0.03 on
+    totals and 0.006 on spreads and the board correctly went silent. It
+    passed only because `run_tests` points QB_MODELS_DIR at an empty
+    sandbox, where the shrink fell back to the 0.5 guess. So the suite
+    was green on a board that existed only where the calibration had
+    never run — the same condition `nflready.game_shrink` reports as
+    BETTING ON A GUESS.
 
-    So the suite is green on a board that exists only where the
-    calibration has never run. That is the same condition
-    `nflready.game_shrink` reports as BETTING ON A GUESS, and the same
-    one that puts 232 total bets at -7.5% ROI in replay.
-
-    Not a bug in the fixture and not fixed here — the sandbox is what
-    keeps the suite honest about the machine. Recorded so the next person
-    to see a recommended game bet in a test does not read it as evidence
-    the model qualifies one."""
-    from engine.pipeline import run_slate
+    2026-09-07: the NFL model's disagreement with the close was measured
+    worthless every way the database allows (engine/nflinfo.py), and the
+    NFL pipeline took baseball's policy — a model-alone game card is
+    information, never a recommendation, whatever the shrink. So the
+    fallback no longer produces a board of picks anywhere. The cards are
+    still built (the Most Likely board reads them) and each says why it
+    is not a pick."""
+    from engine.pipeline import run_slate, _NFL_NO_ANCHOR
     from engine import gamecal as GC
     real = GC.shrink_for
     try:
         GC.shrink_for = lambda s, m: 0.03          # a fitted box
-        tight = [b for b in run_slate(SLATE)["game_bets"] if b["recommended"]]
+        tight = run_slate(SLATE)["game_bets"]
         GC.shrink_for = lambda s, m: 0.5           # an unfitted one
-        loose = [b for b in run_slate(SLATE)["game_bets"] if b["recommended"]]
+        loose = run_slate(SLATE)["game_bets"]
     finally:
         GC.shrink_for = real
-    assert not tight, \
-        "a measured shrink must not recommend a game bet on this slate"
-    assert loose, "the 0.5 fallback is what produces a game board at all"
+    assert tight and loose, "the cards are still built"
+    for cards in (tight, loose):
+        assert not any(b["recommended"] for b in cards), \
+            "a model-alone NFL game card is never a recommendation"
+        assert all(b["grade"] == "Pass" and b["stake_units"] == 0.0 for b in cards)
+        assert all(_NFL_NO_ANCHOR in b.get("warnings", []) for b in cards)
 
 
 # --- #73, answered ------------------------------------------------------

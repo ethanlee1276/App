@@ -1121,3 +1121,69 @@ populated everywhere, the walks can order and join on the date like
 every other sport does, and the NFL harvest (filed by date) would join
 too. Not done now, because a walk that keyed on a column that is NULL
 here would be silently back to the fault above.
+
+## NFL game markets now price a sharp book's disagreement first (2026-09-07)
+
+`engine/pipeline._game_bets` (NFL) got the policy `engine/mlb/pipeline`
+has had since baseball's model-alone moneylines measured −12.4%: when
+Pinnacle quoted the market, the card prices the soft book's number
+against Pinnacle's de-vigged fair; when it did not, the model card is
+built as before and shown as information — never recommended, never
+staked. The NFL model's own disagreement with the close was measured
+worthless every way the database allows (docs/NFL_MONEYLINE_ARITHMETIC.md).
+
+WHETHER THE SHARP PATH IS LIVE depends on one thing: Pinnacle answering
+NFL `h2h`, `spreads` and `totals` in the odds pull. `DEFAULT_BOOKS`
+requests it. After a build, count it:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json
+b = json.load(open("web/data/nfl_board.json"))
+g = [r for r in b.get("recommendations", []) if r.get("market") in ("moneyline", "spread", "total")]
+rec = [r for r in g if r.get("recommended")]
+print(len(g), "NFL game cards,", len(rec), "recommended (sharp-anchored),",
+      sum(1 for r in g if any("sharp-anchor" in w for w in r.get("warnings", []))), "info-only")
+EOF
+```
+
+Zero recommended with many info-only means Pinnacle is not in the NFL
+payload, and the fix is on the odds side (the book, the region, the
+budget), not in the pipeline. Also worth one look:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db; c = db.connect()
+print(c.execute(\"select book, market, count(*) from odds_history where sport='nfl' and market in ('moneyline','spread','TOTAL') group by book, market\").fetchall())"
+```
+
+THE EDGE BAR ON A SHARP CARD IS THE NEXT LEVER, and the droplet holds
+the measurement. A game card's context is fixed at 35 points, so its
+grade is its edge alone: B+ needs about 3.3 percentage points on a
+moneyline, and at even money that is 7% of EV — exactly where the
+pricer calls a gap suspect. Near a coin flip the sharp path shows and
+never stakes; on a favourite it stakes in a narrow window
+(tests/test_nfl_sharp_first.py has the arithmetic). That bar was set
+for MODEL edges, which are noisy; a price-versus-price edge is not. The
+MLB replay already buckets sharp-anchored bets by EV — `<4%`, `4-8%`,
+`8-15%` — on a season of harvested Pinnacle closes:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 moneyline_backtest.py --sport mlb
+```
+
+If the `<4%` bucket pays over a few hundred bets, the bar on
+sharp-anchored game cards should come down to meet it — a grade band
+is money, so that is a change to make WITH the number, not before it.
+If it does not pay, the narrow window is the right window and nothing
+moves.
+
+THE RETROSPECTIVE GRADE WAITS ON `games.date`. `backtest_sharp_anchor`
+keys the harvest by the date it was taken and the walk by `period`,
+which for the NFL is a week, so the two never join until the walk can
+read a date — the same reason the NFL harvest has never joined
+`gamecal`. Once `games.date` is populated on this box (a re-ingest
+fills it) the walks can be taught to use it and this strategy graded
+over the season it has run. Until then the CLV ledger is the grade:
+every recommended NFL game card is journaled with its price and settled
+against the close.

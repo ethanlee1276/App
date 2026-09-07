@@ -23,6 +23,7 @@ from .gamebets import (
     nfl_win_prob, price_moneyline, moneyline_to_dict,
     project_total, project_team_points, game_margin,
     price_total, price_team_total, price_spread,
+    price_moneyline_sharp, price_total_sharp, price_spread_sharp,
 )
 
 
@@ -643,8 +644,47 @@ def _opp_zone_rate(g, d):
     return rate
 
 
+#: The NFL game-market policy, and the measurement behind it. The model's
+#: disagreement with the close was tested every way the database allows
+#: on 2026-09-07 — a better curve, opponent adjustment, a fitted home
+#: field, then EPA, the starting quarterback, wind, a bye, the division,
+#: form (engine/nflinfo.py, docs/NFL_MONEYLINE_ARITHMETIC.md) — and
+#: carries nothing: the shipped rating's moneyline slope against the
+#: close is −0.06 ± 0.14 and every calibration shrink floors to zero. So
+#: a game card priced from the model alone is market information, shown
+#: and never recommended, exactly the policy baseball adopted when its
+#: model-alone moneylines measured −12.4%. What IS recommendable is a
+#: price disagreement — the sharp book's de-vigged number against the
+#: soft book's — which involves no model opinion at all.
+NFL_MODEL_GAME_RECOMMENDATIONS = False
+_NFL_NO_ANCHOR = ("No sharp-anchor value at current prices, and the model's "
+                  "own number has never beaten the NFL close — info only")
+
+
+def _info_only(d: dict, why: str) -> dict:
+    """Demote a game-bet card to market information: shown, never recommended."""
+    d["recommended"] = False
+    d["grade"] = "Pass"
+    d["stake_units"] = 0.0
+    d.setdefault("warnings", []).append(why)
+    return d
+
+
 def _game_bets(games, config: RuleConfig) -> list[dict]:
-    """Price moneyline, total and spread for every game with team ratings."""
+    """Price moneyline, total and spread for every game with team ratings.
+
+    SHARP FIRST, MODEL SECOND, AS BASEBALL DOES. When Pinnacle quoted the
+    market (`engine.sources.oddsapi` attaches its two-sided price as
+    `sharp_*` on the game), the card prices the soft book's number
+    against that de-vigged fair — a disagreement between books, which is
+    the one NFL game-market edge with a defensible basis. When it did
+    not, the model card is built as before and demoted to information;
+    see `NFL_MODEL_GAME_RECOMMENDATIONS`. Team totals have no sharp
+    reference and are always informational.
+
+    Totals and spreads anchor only when the sharp book quotes the SAME
+    line: fair probabilities at 44.5 say nothing about a bet at 45.
+    """
     out = []
     for g in games:
         has_rating = any((g.home_rating, g.away_rating,
@@ -653,10 +693,20 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             wp_home = nfl_win_prob(g.home_rating, g.away_rating)
             ctx = [f"Power rating: {g.home} {g.home_rating:+.1f} vs {g.away} "
                    f"{g.away_rating:+.1f} net pts/game (incl. home field)"]
-            ml = moneyline_to_dict(price_moneyline(g.home, g.away, wp_home,
-                                                   g.home_ml, g.away_ml, ctx,
-                                                   sport="nfl"))
-            out.append(_finish_bet(ml, g, config))
+            sharp_rec = None
+            if g.sharp_home_ml and g.sharp_away_ml:
+                sharp_rec = price_moneyline_sharp(
+                    g.home, g.away, g.sharp_home_ml, g.sharp_away_ml,
+                    g.home_ml, g.away_ml, win_prob_home=wp_home, context=ctx)
+            if sharp_rec is not None:
+                out.append(_finish_bet(moneyline_to_dict(sharp_rec), g, config))
+            else:
+                ml = _finish_bet(moneyline_to_dict(
+                    price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml,
+                                    ctx, sport="nfl")), g, config)
+                if not NFL_MODEL_GAME_RECOMMENDATIONS:
+                    _info_only(ml, _NFL_NO_ANCHOR)
+                out.append(ml)
         # A PRICE IS REQUIRED, the way the moneyline above has always
         # required one. `g.total_over_odds` is 0 when no book posted the
         # total, and pricing it anyway meant comparing a projection to
@@ -667,9 +717,22 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             pt = project_total("nfl", g.home_off, g.home_def, g.away_off, g.away_def)
             tctx = [f"Scoring form: {g.home} off {g.home_off:+.1f} / def {g.home_def:+.1f}, "
                     f"{g.away} off {g.away_off:+.1f} / def {g.away_def:+.1f} (pts/game vs avg)"]
-            total = price_total("nfl", g.home, g.away, pt, g.total,
-                                g.total_over_odds, g.total_under_odds, "points", tctx)
-            out.append(_finish_bet(total, g, config))
+            sharp_tot = None
+            if (g.sharp_total and g.sharp_total == g.total
+                    and g.sharp_total_over_odds and g.sharp_total_under_odds):
+                sharp_tot = price_total_sharp(
+                    g.home, g.away, g.total, g.total_over_odds, g.total_under_odds,
+                    g.sharp_total_over_odds, g.sharp_total_under_odds,
+                    units="points", context=tctx)
+            if sharp_tot is not None:
+                out.append(_finish_bet(sharp_tot, g, config))
+            else:
+                total = price_total("nfl", g.home, g.away, pt, g.total,
+                                    g.total_over_odds, g.total_under_odds, "points", tctx)
+                total = _finish_bet(total, g, config)
+                if not NFL_MODEL_GAME_RECOMMENDATIONS:
+                    _info_only(total, _NFL_NO_ANCHOR)
+                out.append(total)
             # Team totals — each team's own points, line split from total ± spread.
             # THE SAME PRICE GATE, because the line itself is derived from
             # the total and the spread: without a posted total there is no
@@ -686,10 +749,14 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                 ph = project_team_points("nfl", g.home_off, g.away_def)
                 pa = project_team_points("nfl", g.away_off, g.home_def)
                 hl, al = _half((g.total - g.spread) / 2), _half((g.total + g.spread) / 2)
-                out.append(_finish_bet(price_team_total("nfl", g.home, g.home, g.away, ph, hl,
-                                                        units="points"), g, config))
-                out.append(_finish_bet(price_team_total("nfl", g.away, g.home, g.away, pa, al,
-                                                        units="points"), g, config))
+                for card in (price_team_total("nfl", g.home, g.home, g.away, ph, hl,
+                                              units="points"),
+                             price_team_total("nfl", g.away, g.home, g.away, pa, al,
+                                              units="points")):
+                    card = _finish_bet(card, g, config)
+                    if not NFL_MODEL_GAME_RECOMMENDATIONS:
+                        _info_only(card, _NFL_NO_ANCHOR)   # no sharp reference exists
+                    out.append(card)
         if has_rating:
             # MEASURED, not truthy: `g.spread` of 0.0 is a pick'em, which
             # is an ordinary NFL line and was being skipped here along
@@ -697,9 +764,21 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             if g.spread_is_posted and g.spread_home_odds and g.spread_away_odds:
                 margin = game_margin("nfl", g.home_rating, g.away_rating)
                 sctx = [f"Projected margin {margin:+.1f} pts (home)"]
-                spread = price_spread("nfl", g.home, g.away, margin, g.spread,
-                                      g.spread_home_odds, g.spread_away_odds, sctx)
-                out.append(_finish_bet(spread, g, config))
+                sharp_sp = None
+                if (g.sharp_spread and g.sharp_spread == g.spread
+                        and g.sharp_spread_home_odds and g.sharp_spread_away_odds):
+                    sharp_sp = price_spread_sharp(
+                        g.home, g.away, g.spread, g.spread_home_odds, g.spread_away_odds,
+                        g.sharp_spread_home_odds, g.sharp_spread_away_odds, context=sctx)
+                if sharp_sp is not None:
+                    out.append(_finish_bet(sharp_sp, g, config))
+                else:
+                    spread = price_spread("nfl", g.home, g.away, margin, g.spread,
+                                          g.spread_home_odds, g.spread_away_odds, sctx)
+                    spread = _finish_bet(spread, g, config)
+                    if not NFL_MODEL_GAME_RECOMMENDATIONS:
+                        _info_only(spread, _NFL_NO_ANCHOR)
+                    out.append(spread)
     out.sort(key=order_key, reverse=True)
     return out
 
