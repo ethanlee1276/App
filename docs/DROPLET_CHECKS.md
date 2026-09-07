@@ -1795,6 +1795,13 @@ for r in anch[:6]:
 EOF
 ```
 
+The census now names the two refusals the mixture makes — `under the
+likelihood floor after calibration` (the raw claim cleared 55%, the
+calibrated number did not) and `disagrees with the market by more than
+we credit` (the calibrated number sits more than ten points from the
+book's fair). Until 2026-09-07 both were silent, so an empty board
+under-reported its own refusals by the whole of that count.
+
 `sharp-quoted` at zero on a Sunday menu with Pinnacle posting means the
 odds pull did not carry the sharp book (`sharp_quoted` on the prop rows
 of recommendations.json says whether it was quoted at all), which is a

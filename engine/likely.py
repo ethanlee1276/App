@@ -613,8 +613,17 @@ def from_prop(row: dict, bettable, fits=None,
         under = str(row.get("side") or "").lower() == "under"
         shown = 1.0 - float(fitted) if under else float(fitted)
         source = "mixture"
+    # COUNTED, LIKE EVERY OTHER REFUSAL. These two were bare `return
+    # None`s, and they are the two the mixture creates: a row that
+    # cleared the floor on its raw claim and fell under it once
+    # calibrated, and a row the calibration walked away from the book.
+    # On a night the board came out empty the census said "under the
+    # likelihood floor: 4" and the other hundred refusals were invisible
+    # — the half of the funnel `_refuse` exists to count, uncounted
+    # again one function later. Ethan, 2026-09-07: "so what changed."
+    # The census has to be able to answer that.
     if shown < MIN_PROB:
-        return None
+        return _refuse(census, "under the likelihood floor after calibration")
     # CREDIBILITY, AND THIS BOARD HAD NONE. Every other pick path refuses
     # a probability that disagrees with the market past
     # MAX_CREDIBLE_EDGE — `betting.evaluate_prop`, `longshots`,
@@ -632,7 +641,7 @@ def from_prop(row: dict, bettable, fits=None,
     # REFUSED, NOT SHRUNK: a likelihood board that quietly moves its
     # number toward the market has stopped saying what it believes.
     if not _credible(shown, row.get("fair_prob")):
-        return None
+        return _refuse(census, "disagrees with the market by more than we credit")
     return {
         # WHICH MAKER BUILT IT — "prop", "td" or "game" — so the page,
         # the journal and the lint branch on a flag rather than on the
