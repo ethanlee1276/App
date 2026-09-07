@@ -118,3 +118,63 @@ before it is believed:
 What would NOT be honest is to keep fitting curves to the same two
 columns and call the noise an edge. This document exists so that nobody
 has to re-learn that.
+
+---
+
+## 5. The same day: every other input on disk, tested — 2026-09-07
+
+Ethan: "start working on what u think we should put effort into. I just
+want a wining nfl model for our best bets AND edge models."
+
+So the third candidate was run first, and widened to everything the
+database can compute: `engine/nflinfo.py` walks every game with the
+close as a fixed offset and asks whether a feature computed from earlier
+weeks still predicts the outcome. Fitted on 2021–23 (854 games), judged
+on 2024–25 (570). `**` is beyond two standard errors.
+
+| feature | moneyline, train | moneyline, test |
+|---|---|---|
+| our rating's disagreement | −0.26 ± 0.18 | +0.10 ± 0.18 |
+| EPA/play, offence − defence | −0.97 ± 0.72 | +1.37 ± 0.84 |
+| starting QB is not the usual one | −0.16 ± 0.14 | −0.25 ± 0.16 |
+| starter has under three starts | −0.25 ± 0.16 | −0.14 ± 0.20 |
+| starter's YPA vs the usual man's | +0.08 ± 0.16 | −0.10 ± 0.14 |
+| bye last week | +0.32 ± 0.25 | −0.20 ± 0.28 |
+| division game | −0.00 ± 0.13 | +0.05 ± 0.16 |
+| form drift, last 3 weeks vs season | +0.69 ± 0.49 | +0.77 ± 0.57 |
+
+Nothing clears the bar on the held-out seasons, and EPA flips sign. All
+of them together, fitted on train and applied to test: log-loss **worse**
+than the market alone (0.584 vs 0.573), AUC 0.772 → 0.755, and a rule
+that bets 2% of expected value at the close went 108 for 253, **−13.2%**.
+On the spread the joint rule covers 49.5% (−5.4%); on the total 49.2%
+(−6.1%). A side starting a non-usual passer with under three starts is
+−0.8 ± 0.7 against the close over 382 games and covers exactly half.
+
+**Wind was the one lead**, and it is the instructive one. Each mph of
+wind lowered the actual total against the close by 0.25 ± 0.09 on the
+train seasons (2.9σ) and 0.09 ± 0.11 on test — same sign. So the spec's
+own bands (§7 of `NFL_MODEL.md`) were tested, pooled over five seasons:
+
+| wind | games | actual − close | unders | ROI at −110 | unders by season |
+|---|---|---|---|---|---|
+| 0–8 | 394 | +1.2 ± 0.7 | 47% | −9.7% | |
+| 8–12 | 230 | +0.6 ± 0.9 | 51% | −2.9% | |
+| **12–18** | **166** | **−2.1 ± 0.9** | **59.5%** | **+13.6%** | 27/43 · 21/28 · 21/29 · **16/35 · 12/28** |
+| 18–25 | 33 | −2.1 ± 2.3 | 64% | +21.5% | 10/15 · 2/5 · 2/2 · 2/3 · 5/8 |
+
+Sixty-eight per cent of unders from 2021 to 2023 and **forty-seven** in
+2024–25. Either the market priced wind in, or the first three seasons
+were the fluke; on the seasons that decide, the rule loses, and it is
+not shipped. It would have flattered a backtest regardless: `games.wind`
+is the wind RECORDED at the game, and the close — like our live model —
+only ever knew the forecast.
+
+**Verdict.** For NFL game markets the closing line contains everything
+this database can compute, and more. A winning NFL game model is not a
+model in the sense of a better prediction; it is a better PRICE. The
+engine already has that machine for baseball — a sharp book's number
+priced against a soft book's, with the model card demoted to
+information — and the NFL pipeline had never been given it. That is
+the next change, and the CLV ledger, which grades every pick against
+the close, is what says over this season whether it pays.
