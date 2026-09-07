@@ -114,6 +114,9 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
             entry["total"] = tot
         if entry:
             entry["books"] = _books_for(ev, entry, home, away, team_map)
+            sharp = _sharp_for(ev, team_map, home, away)
+            if sharp:
+                entry["sharp"] = sharp
             # The event's own id rides along so the TD-quote pull below
             # can ask for player markets without a second events call.
             entry["event_id"] = ev.get("id", "")
@@ -364,6 +367,40 @@ def _books_for(ev: dict, entry: dict, home: str, away: str,
     return found
 
 
+def _sharp_for(ev: dict, team_map: dict, home: str, away: str) -> dict:
+    """The sharp reference book's own two-sided prices, per market.
+
+    `_books_for` and the aggregate parsers skip `SHARP_BOOKS` on
+    purpose — the sharp book is the number to price AGAINST, not a
+    window to send anyone to. This reads its pair out separately, the
+    way `oddsapi` attaches `sharp_*` to an NFL `Game`, so
+    `sharp_game_bets` can price a soft book's number against it. Empty
+    when the sharp book was not in the payload, and the board is then
+    exactly what it was.
+
+    Keyed like `entry` itself: ``moneyline`` → (home, away),
+    ``spread`` → (home_spread, home_odds, away_odds), ``total`` →
+    (line, over_odds, under_odds).
+    """
+    from engine.sources.oddsapi import (BOOK_TITLES, SHARP_BOOKS,
+                                        parse_event_h2h_by_book,
+                                        parse_event_spreads, parse_event_totals)
+    out: dict = {}
+    by_book = parse_event_h2h_by_book(ev, team_map)
+    for key in sorted(SHARP_BOOKS):
+        prices = by_book.get(BOOK_TITLES.get(key, key)) or {}
+        if prices.get(home) and prices.get(away):
+            out["moneyline"] = (prices[home], prices[away])
+            break
+    sp = parse_event_spreads(ev, team_map, home, away, only_books=SHARP_BOOKS)
+    if sp:
+        out["spread"] = sp
+    tot = parse_event_totals(ev, only_books=SHARP_BOOKS)
+    if tot:
+        out["total"] = tot
+    return out
+
+
 def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
     """Blend the recruiting-based preseason prior into the team ratings.
 
@@ -525,8 +562,17 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
 
 def build_plays(games: list[dict], priced: dict, ratings: dict,
                 fit, prev: dict, nxt: dict,
-                census: dict | None = None) -> list[dict]:
+                census: dict | None = None,
+                skip: set | None = None) -> list[dict]:
     """Every game with a price → the plays the CFB pipeline will judge.
+
+    ``skip`` is the set of ``(game_id, market)`` pairs — market in this
+    module's vocabulary, so "side" for the spread — that
+    `sharp_game_bets` already priced from the sharp book's pair. A
+    market is priced once: the sharp card where the sharp book quoted
+    it, the model card everywhere else. Two cards for one market would
+    put two rows for one game on the likelihood board, which is exactly
+    what its lint flags as a repeat.
 
     ``census`` counts the games this REFUSES TO PRICE AT ALL, by reason.
     Both refusals below are correct and both were silent, which is the
@@ -555,6 +601,7 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
             census[why] = census.get(why, 0) + 1
 
     plays: list[dict] = []
+    taken = skip or set()
     for g in games:
         lines = priced.get(g["game_id"])
         if not lines:
@@ -599,7 +646,7 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
         for t in tags:
             context.append(f"Situational: {t.replace('_', ' ')}")
 
-        if "spread" in lines:
+        if "spread" in lines and (g["game_id"], "side") not in taken:
             home_spread, home_odds, away_odds = lines["spread"]
             card = gamebets.price_spread("cfb", g["home"], g["away"],
                                          proj_margin, home_spread,
@@ -614,7 +661,7 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                           "environment_fit": cfbcontext.environment_fit(g, "side"),
                           "shared": card})
 
-        if "total" in lines:
+        if "total" in lines and (g["game_id"], "total") not in taken:
             market_total, over_odds, under_odds = lines["total"]
             card = gamebets.price_total("cfb", g["home"], g["away"],
                                         proj_total, market_total,
@@ -629,7 +676,7 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                           "environment_fit": cfbcontext.environment_fit(g, "total"),
                           "shared": card})
 
-        if "moneyline" in lines:
+        if "moneyline" in lines and (g["game_id"], "moneyline") not in taken:
             home_ml, away_ml = lines["moneyline"]
             wp_home = cfbratings.win_prob(proj_margin, fit)
             rec = gamebets.price_moneyline(g["home"], g["away"], wp_home,
@@ -645,6 +692,130 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                           "environment_fit": cfbcontext.environment_fit(g, "moneyline"),
                           "shared": card})
     return plays
+
+
+def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
+    """What `to_game_bet` stamps on a model card, stamped on a sharp one.
+
+    The verdict pipeline never sees a sharp card — there is no model
+    opinion in it to haircut, no tier bar for an edge that is one book
+    disagreeing with a sharper one — so the fields every consumer reads
+    off a college game bet are written here: the dates and the in-play
+    flags `likely.from_game_bet` and the journal refuse on, the book
+    the price came from, and `recommended`, which is the NFL's rule
+    (`pipeline._finish_bet`): a grade that is not a Pass and a stake
+    that is not zero, on a game that has not started.
+
+    THE GROUP OF FIVE RULE STANDS. Ethan, 2026-09-02: a game in which
+    neither side is in a conference this board bets is "priced, shown
+    with its number and its edge, never a play" — that was a decision
+    about whether money follows, and a sharp card is money following.
+    The card keeps its EV and says why it is not a play; lifting the
+    rule for sharp cards is a one-constant change to make with the
+    sharp-anchor replay's college numbers in hand, not before.
+    """
+    from engine.cfb.model import (BET_GROUP_OF_FIVE, NOT_A_POWER_GAME,
+                                  is_group_of_five)
+    live = (g.get("live") or {}).get("state") == "live"
+    started = (g.get("live") or {}).get("state") in ("live", "final")
+    card["game_id"] = g.get("game_id", "")
+    card["home"], card["away"] = g["home"], g["away"]
+    card["matchup"] = f"{g['away']} @ {g['home']}"
+    card["date"] = g.get("date", "")
+    card["kickoff"] = g.get("kickoff", "")
+    card["live"], card["started"] = live, started
+    card["attention_tier"] = attention_tier(g)
+    card["conditional"] = False
+    card["conditions_pending"] = []
+    card["situational_tags"] = []
+    card["book"] = (lines.get("books") or {}).get(card["market"], "")
+    card["sharp_anchored"] = True
+    if not BET_GROUP_OF_FIVE and is_group_of_five(g):
+        card["grade"] = "Pass"
+        card["stake_units"] = 0.0
+        card["reasons"].append("NOT A PLAY — " + NOT_A_POWER_GAME)
+    if started:
+        card.setdefault("warnings", []).append(
+            "Game already started — a pre-game price cannot be taken in play")
+    card["recommended"] = (card["grade"] not in ("Pass", "Lean")
+                           and float(card.get("stake_units") or 0) > 0
+                           and not started)
+    return card
+
+
+def sharp_game_bets(games: list[dict], priced: dict, ratings: dict,
+                    fit) -> list[dict]:
+    """Game cards priced from the sharp book's disagreement with a soft
+    book — the NFL's `_game_bets` sharp path, for college.
+
+    For every game whose entry carries a ``sharp`` pair (`_sharp_for`),
+    each market the sharp book quoted is priced by the shared sharp
+    pricers: the sharp pair de-vigs to a fair, and a soft price paying
+    more than fair is the pick, inside the same EV bands the NFL and
+    MLB boards use (`gamebets.SHARP_MIN_EV` .. `SHARP_SUSPECT_EV`
+    stakes, up to `SHARP_MAX_EV` shows). Totals and spreads anchor only
+    when the sharp book quotes the SAME line: a fair at 52.5 says
+    nothing about a bet at 53. A market the pricer declines — no side
+    clears the floor, or the gap is past the ceiling — is left to the
+    model card, which `build_plays` builds and the policy demotes.
+
+    The model's own number rides along as context on the moneyline
+    when both sides are rated, the way it does on the NFL card, and is
+    not otherwise consulted.
+    """
+    from engine.gamebets import (price_moneyline_sharp, price_spread_sharp,
+                                 price_total_sharp, moneyline_to_dict)
+    out: list[dict] = []
+    for g in games:
+        lines = priced.get(g["game_id"]) or {}
+        sharp = lines.get("sharp") or {}
+        if not sharp:
+            continue
+        hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
+        ctx: list[str] = []
+        wp_home = None
+        if hr and ar:
+            neutral = g.get("neutral_site")
+            margin = (hr.net - ar.net) + (0.0 if neutral else fit.home_field)
+            wp_home = cfbratings.win_prob(margin, fit)
+            ctx.append(f"Ratings: {g['home']} {hr.net:+.1f}, {g['away']} "
+                       f"{ar.net:+.1f} net points/game over "
+                       f"{min(hr.games, ar.games)} graded games")
+        if "moneyline" in sharp and "moneyline" in lines:
+            sh, sa = sharp["moneyline"]
+            home_ml, away_ml = lines["moneyline"]
+            rec = price_moneyline_sharp(g["home"], g["away"], sh, sa,
+                                        home_ml, away_ml,
+                                        win_prob_home=wp_home, context=ctx)
+            if rec is not None:
+                out.append(_finish_sharp(moneyline_to_dict(rec), g, lines))
+        if "total" in sharp and "total" in lines:
+            s_line, s_over, s_under = sharp["total"]
+            line, over_odds, under_odds = lines["total"]
+            if s_line == line and s_over and s_under and over_odds and under_odds:
+                card = price_total_sharp(g["home"], g["away"], line,
+                                         over_odds, under_odds, s_over, s_under,
+                                         units="points", context=ctx)
+                if card is not None:
+                    out.append(_finish_sharp(card, g, lines))
+        if "spread" in sharp and "spread" in lines:
+            s_spread, s_home, s_away = sharp["spread"]
+            home_spread, home_odds, away_odds = lines["spread"]
+            if s_spread == home_spread and s_home and s_away and home_odds and away_odds:
+                card = price_spread_sharp(g["home"], g["away"], home_spread,
+                                          home_odds, away_odds, s_home, s_away,
+                                          context=ctx)
+                if card is not None:
+                    out.append(_finish_sharp(card, g, lines))
+    return out
+
+
+#: `build_plays`' word for each sharp card's market — the one place the
+#: two vocabularies meet, and it reads the mapping the pipeline owns.
+def _taken_by_sharp(cards: list[dict]) -> set:
+    from engine.cfb.pipeline import STORE_MARKET
+    back = {v: k for k, v in STORE_MARKET.items()}
+    return {(c["game_id"], back.get(c["market"], c["market"])) for c in cards}
 
 
 # A card's market names are the SHARED vocabulary, not the CFB
@@ -1249,8 +1420,13 @@ def main() -> None:
     # the log line reads the same as a slate the model priced and turned
     # down. Opposite diagnoses, one sentence.
     game_census: dict = {}
+    # SHARP FIRST, MODEL SECOND — see `engine.cfb.pipeline.
+    # CFB_MODEL_GAME_RECOMMENDATIONS` for the measurement. Where the
+    # sharp book quoted a market, its disagreement with the soft book is
+    # the card; the model prices everything else, as information.
+    sharp_bets = sharp_game_bets(games, priced, ratings, fit)
     plays = build_plays(games, priced, ratings, fit, prev, nxt,
-                        census=game_census)
+                        census=game_census, skip=_taken_by_sharp(sharp_bets))
     # Published as its own key rather than folded into `gate_census`,
     # which counts what the MODEL refused. These are games the model was
     # never asked about, and merging the two would let a slate with no
@@ -1330,9 +1506,17 @@ def main() -> None:
     # `stake_fraction`, and `to_game_bet` now reads `recommended` off the
     # verdict rather than off `not conditional`.
     refused = [b for b in (_shared(c) for c in result["pass_list"]) if b]
+    # THE POLICY, APPLIED. Every card above was priced from the ratings
+    # alone; under `CFB_MODEL_GAME_RECOMMENDATIONS` they are shown and
+    # never staked. The verdict's grade stays on `cfb_grade`.
+    from engine.cfb.pipeline import (CFB_MODEL_GAME_RECOMMENDATIONS,
+                                     demote_model_card)
+    if not CFB_MODEL_GAME_RECOMMENDATIONS:
+        for _card in bets + conditionals + refused:
+            demote_model_card(_card)
     # Conditionals ride on the same board, flagged and unstaked, because a
     # separate page for them is a page nobody opens.
-    out["game_bets"] = bets + conditionals + refused
+    out["game_bets"] = sharp_bets + bets + conditionals + refused
     # THE CHART EVERY ONE OF THOSE BETS OPENS ONTO. Same gap the NFL's
     # games-only fallback had (fixed 2026-08-26, Ethan: "on nfl im not
     # able to click on the game props and it show me the bar graph"):
@@ -1805,9 +1989,12 @@ def main() -> None:
         print(f"Open-bet tracker: {_tn}")
     _write(out, args.out)
     conn.close()
+    _sharp_picks = sum(1 for b in sharp_bets if b.get("recommended"))
     print(f"CFB {args.date}: {len(games)} game(s), {len(priced)} priced → "
-          f"{len(plays)} market(s) → {len(bets)} play(s), "
-          f"{len(conditionals)} conditional(s). Wrote {args.out}")
+          f"{len(sharp_bets)} sharp-anchored card(s), {_sharp_picks} of them "
+          f"picks; {len(plays)} model market(s) → {len(bets)} model play(s) "
+          f"shown as information, {len(conditionals)} conditional(s). "
+          f"Wrote {args.out}")
     # THE MISSING MIDDLE NUMBER, and the reason it is missing. Between
     # "priced" and "play(s)" sits `build_plays`, which can refuse a
     # priced game outright; without the market count the same sentence

@@ -62,6 +62,58 @@ MARKET_LABELS = {"side": "Spread", "total": "Total", "moneyline": "Moneyline",
 #: own market, which is already the stored vocabulary.
 STORE_MARKET = {"side": "spread"}
 
+#: SHARP FIRST, MODEL SECOND — the NFL's policy (engine/pipeline
+#: `NFL_MODEL_GAME_RECOMMENDATIONS`), applied to college on college's
+#: own measurement. Ethan, 2026-09-07: "make sure you do the same exact
+#: work to make CFB just as good."
+#:
+#: Measured 2026-09-07 by `python3 -m engine.gamecal --sport cfb` on
+#: every FBS game with a stored close, 2022-26, the production
+#: opponent-adjusted ratings walked forward: the model's disagreement
+#: with the closing line carries
+#:
+#:     moneyline   slope -0.079 ± 0.067 on 2,016 games
+#:     spread      slope -0.037 ± 0.040 on 2,055 games   48.4% beat the close
+#:     total       slope +0.115 ± 0.060 on 2,055 games   52.4% beat the close
+#:
+#: The moneyline and the spread are the NFL's numbers with more games
+#: behind them: nothing. The total's 1.9σ is the one college market the
+#: model has ever had a word about, and 52.4% of its sides beating the
+#: close is the break-even at -110 to the decimal — a shrink of 0.115
+#: was adopted for the calibration, which is the right use of a number
+#: that size, and a bet is not. So a game card priced from the ratings
+#: alone is market information: shown with its number, never
+#: recommended, never staked. A card priced from the sharp reference
+#: book's de-vigged pair against a soft book's price is a pick — one
+#: book disagreeing with a sharper one, no model opinion in it — exactly
+#: the card the NFL and MLB boards stake. `cfb_build.sharp_game_bets`
+#: builds those; `demote_model_card` applies this constant to the rest.
+#:
+#: Flipping this to True puts the model's college game cards back on the
+#: edge board as recommendations. Nothing measured today says to.
+CFB_MODEL_GAME_RECOMMENDATIONS = False
+CFB_NO_ANCHOR = ("No sharp-anchor value at current prices, and the model's "
+                 "own number has never beaten the college close — info only")
+
+
+def demote_model_card(card: dict, why: str = CFB_NO_ANCHOR) -> dict:
+    """A model-priced game card becomes market information.
+
+    The verdict's grade stays on `cfb_grade` — that is the record of
+    what the ratings would have done, and the loss-pattern miner and the
+    board's own census still want it. What goes is everything that makes
+    it a bet: the recommendation, the stake, and the stake a conditional
+    promised for the moment its starter is confirmed, because under this
+    policy confirming the starter would not produce a bet either.
+    """
+    card["recommended"] = False
+    card["grade"] = "Pass"
+    card["stake_units"] = 0.0
+    card["stake_if_confirmed_units"] = 0.0
+    card["stake_if_measured_units"] = 0.0
+    card.setdefault("warnings", []).append(why)
+    return card
+
 
 def store_key(market: str) -> str:
     """This module's market name, as the shared stores spell it."""

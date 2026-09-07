@@ -268,6 +268,25 @@ degrades to "no prior" and says so on the page, rather than substituting a
 plausible number — which matters most in September, exactly when the spec
 says the prior is carrying the projection.
 
+**Its game cards are market information, and its picks are price against
+price (2026-09-07).** Measured with `python3 -m engine.gamecal --sport cfb`
+on every FBS game with a stored close, 2022-26, the production
+opponent-adjusted ratings walked forward: the model's disagreement with the
+closing line carries a slope of −0.079 ± 0.067 on the moneyline, −0.037 ±
+0.040 on the spread, and +0.115 ± 0.060 on the total — where its sides beat
+the close 52.4% of the time, the break-even at −110 to the decimal. That is
+the NFL's finding with more games behind it, and college now runs on the
+policy the NFL and MLB boards adopted for it (`engine.cfb.pipeline.
+CFB_MODEL_GAME_RECOMMENDATIONS`): a card priced from the ratings alone is
+shown with its number and never recommended; a card priced from the sharp
+reference book's de-vigged pair against a soft book's price is a pick
+(`cfb_build.sharp_game_bets`), inside the same EV bands as every other
+sharp-anchored card here, and at the same line for spreads and totals. The
+Group of Five rule above still decides whether money follows a sharp card.
+The moneyline's 0.752 ranking AUC is untouched by this — ranking who wins
+and beating the price are different abilities, and the Most Likely board
+keeps the first.
+
 **Parked list, in priority order:** play-by-play efficiency for §5's
 success-rate and drive metrics; opener→close line movement and key-number
 shopping; a QB-status feed to replace the manual confirmation.

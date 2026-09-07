@@ -1214,6 +1214,48 @@ never harvested — check the count before harvesting anything. Until it
 prints games, the CLV ledger is the grade: every recommended NFL game
 card is journaled with its price and settled against the close.
 
+## CFB game markets price a sharp book's disagreement first (2026-09-07)
+
+Ethan: "make sure you do the same exact work to make CFB just as good."
+`cfb_build` got the NFL's policy on college's own measurement
+(`engine.cfb.pipeline.CFB_MODEL_GAME_RECOMMENDATIONS` has the table:
+moneyline −0.079 ± 0.067, spread −0.037 ± 0.040, total +0.115 ± 0.060
+with 52.4% of sides beating the close, on 2,016–2,055 games). The
+build reads Pinnacle's own pair out of the same events the soft prices
+come from (`_sharp_for`), prices each market it quoted through the
+shared sharp pricers (`sharp_game_bets`), and demotes every
+ratings-priced card — play, conditional, refusal — to information
+after its verdict. The college build's `_books_for` had been skipping
+`SHARP_BOOKS` for months without anything reading the sharp pair, so
+this is the first time a Pinnacle number reaches a college card.
+
+WHETHER THE SHARP PATH IS LIVE is the same question as the NFL's:
+Pinnacle answering college `h2h`, `spreads` and `totals` in the odds
+pull. After a build with odds:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json
+b = json.load(open("web/data/cfb.json"))
+g = b.get("game_bets", [])
+sharp = [r for r in g if r.get("sharp_anchored")]
+print(len(g), "CFB game cards,", len(sharp), "sharp-anchored,",
+      sum(1 for r in sharp if r.get("recommended")), "recommended,",
+      sum(1 for r in g if any("sharp-anchor" in w for w in r.get("warnings", []))),
+      "model cards shown as information")
+EOF
+```
+
+The build log prints the same split: "N sharp-anchored card(s), M of
+them picks; K model market(s) → J model play(s) shown as information".
+Zero sharp-anchored cards across a full Saturday means Pinnacle is not
+in the college payload — the fix is on the odds side, not in the
+pipeline. A sharp card refused with "Neither side is in a conference
+this board bets" is the Group of Five rule (Ethan, 2026-09-02) holding
+for sharp cards too; lifting it for them is one constant
+(`engine.cfb.model.BET_GROUP_OF_FIVE`) and a decision to make with the
+college sharp-anchor replay's numbers in hand.
+
 ## The three numbers that decide the next NFL moves (2026-09-07)
 
 Everything a model could compute has been measured against the NFL
