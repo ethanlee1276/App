@@ -98,11 +98,11 @@ def test_college_and_pro_are_one_list_not_two_wirings():
     # directly cannot see this: a call site that drops the argument
     # leaves every college game on the pro field, with the picker itself
     # still perfectly correct.
-    assert "pbpFieldHTML(d, league)" in art, art
+    assert "pbpFieldHTML(d, league, hitRow)" in art, art
 
 
 # -------------------------------------------------------- which photo ------
-def test_the_photo_follows_the_league_and_then_possession():
+def test_the_photo_follows_the_league_and_then_who_has_the_ball():
     """Two axes. Ethan, after the first pass put an NFL shield at
     midfield on a college game: "Good catch on the nfl logos. Here is the
     correct renders for CFB." A picker that reads possession and forgets
@@ -128,6 +128,40 @@ def test_the_photo_follows_the_league_and_then_possession():
     # A college game never reaches for the pro field, whatever else is
     # unknown — that is the defect this test exists for.
     assert got["cfbNone"].startswith("cfb"), got
+
+
+def test_the_frame_follows_the_play_the_card_is_captioning():
+    """Ethan's Louisville-Ole Miss card, 2026-09-07: the tiles read
+    POSSESSION LOU — the away side — while the photograph showed white
+    jerseys, which is the HOME frame. Two sources for one fact, and the
+    one the picture used was empty: `live.possession` comes from the
+    scoreboard's `situation` block, which college payloads routinely
+    omit, while the play's `team` comes from its drive and was right.
+
+    So the play wins. The arc, the caption and the tiles all describe one
+    play; the field under them is that play's field."""
+    got = _node("""
+      const g = {home: "DET", away: "CHI"};
+      const pick = (s) => (s.match(/field-(nfl|cfb)-(away|home)-ball/) || [])[2];
+      console.log(JSON.stringify({
+        // The situation block is empty — the college case.
+        playOnly: pick(pbpFieldHTML({...g, live: {}}, "cfb", {team: "CHI"})),
+        // The play wins even when the scoreboard disagrees.
+        playWins: pick(pbpFieldHTML({...g, live: {possession: "DET"}}, "cfb", {team: "CHI"})),
+        // No play yet: the scoreboard is still read.
+        fallsBack: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb", null)),
+        // A play with no team of its own does not blank the scoreboard.
+        teamless: pick(pbpFieldHTML({...g, live: {possession: "CHI"}}, "cfb", {yards: 4})),
+      }));""")
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert got["playOnly"] == "away", got
+    assert got["playWins"] == "away", got
+    assert got["fallsBack"] == "away", got
+    assert got["teamless"] == "away", got
+    # And the call site hands the play over, which testing the picker
+    # alone cannot see.
+    assert "pbpFieldHTML(d, league, hitRow)" in _fn("pbpParkHTML")
 
 
 def test_all_four_frames_ship_in_both_formats_and_both_sizes():

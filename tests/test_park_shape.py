@@ -235,7 +235,7 @@ def test_the_leagues_without_a_photograph_keep_their_vector_art():
     at = APP.index("function pbpParkHTML")
     block = APP[at:at + 1800]
     assert "court(game" in block and "stadium(game" in block
-    assert 'isFootball ? pbpFieldHTML(d, league)' in block
+    assert 'isFootball ? pbpFieldHTML(d, league, hitRow)' in block
     # The vector court is reached only after both photo branches.
     assert block.index("pbpFieldHTML") < block.index("court(game")
 

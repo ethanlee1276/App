@@ -32508,7 +32508,7 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   let art = "";
   try {
     art = league === "mlb" ? pbpPhotoHTML(game)
-      : isFootball ? pbpFieldHTML(d, league)
+      : isFootball ? pbpFieldHTML(d, league, hitRow)
       : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
@@ -32660,9 +32660,25 @@ function pbpFieldY(yards) {
  * so an unknown possession is a real state, not a missing field. With
  * nothing to go on the home-ball frame draws: it is a DEFAULT, not a
  * claim about who has the ball, and nothing else on the page reads it. */
-function pbpFieldHTML(d, league) {
+function pbpFieldHTML(d, league, play) {
   const lv = d.live || {};
-  const away = lv.possession && lv.possession === d.away;
+  // THE PICTURE DEPICTS THE PLAY THE CARD IS CAPTIONING, so it follows
+  // that play's team first and the scoreboard's possession second.
+  //
+  // Ethan's Louisville-Ole Miss screenshot, 2026-09-07: the tiles said
+  // POSSESSION LOU — the away side — while the photograph showed white
+  // jerseys on offence, which is the HOME frame. Two sources, and the
+  // one this read was empty. `live.possession` comes from the
+  // scoreboard's `situation` block, which college payloads routinely
+  // omit; the play's `team` comes from the drive it belongs to, resolved
+  // through `_side_key` into the same vocabulary as `home`/`away`, and
+  // it was right on that card.
+  //
+  // Preferring the play is not just a fallback, it is the more correct
+  // reading: the arc, the caption and the tiles all describe one play,
+  // and the field under them should be that play's field.
+  const who = (play && play.team) || lv.possession || "";
+  const away = who && who === d.away;
   const code = PBP_FOOTBALL.has(league) ? league : "nfl";
   const stem = `field-${code}-${away ? "away" : "home"}-ball`;
   return `<picture>
