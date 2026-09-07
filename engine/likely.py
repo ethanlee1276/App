@@ -28,6 +28,9 @@ probability the pricer put on its side and whether that side won:
 
     who wins the game (moneyline)   AUC 0.677 NFL (1,356 games)
                                     AUC 0.752 CFB (2,729 games)
+    …and the market's own number    AUC 0.722 NFL · 0.791 CFB — better
+                                    in both, so game rows rank on it
+                                    (GAME_RANK_MARKET, 2026-09-07)
     who covers the spread           0.491 NFL · 0.496 CFB — a coin flip
     over or under the total         0.497 NFL · 0.503 CFB — a coin flip
     a team over its own number      0.513 NFL · 0.492 CFB — a coin flip
@@ -117,6 +120,50 @@ GAME_RANK_MEASURED = {
     "nfl": {"moneyline": 0.677, "spread": 0.504, "total": 0.496, "team_total": 0.500},
     "cfb": {"moneyline": 0.752, "spread": 0.496, "total": 0.503, "team_total": 0.492},
 }
+
+#: THE MARKET'S OWN RANKING, and why the board ranks on it where it can.
+#: Ethan, 2026-09-07: "you worked on the NFL and CFB Most Likely model
+#: and made it better." The one thing measured to rank winners better
+#: than the model is the closing market itself. Measured 2026-09-07 on
+#: this box's stored closes — the schedule's de-vigged moneyline against
+#: the result, every scored game with a price, ties out:
+#:
+#:     nfl  market 0.722 on 1,420 games (2021-26)   model 0.677
+#:     cfb  market 0.791 on 3,011 games (2022-26)   model 0.752
+#:
+#: So a game row on the NFL or college board ranks on the book's
+#: de-vigged number for its side — `fair_prob` on the card — rather
+#: than on the model's, whenever the market's measured figure beats the
+#: model's (`ranking_number`). The model's number stays on the row and
+#: on the card; only the ORDER changes, and the row says which number
+#: ordered it (`prob_source`). A sharp-anchored card ranks on its own
+#: `win_prob`, which IS a market number — the sharp book's fair. Spreads,
+#: totals and team totals have no market figure here and rank (or are
+#: shown as leans) exactly as before. A market with no entry ranks on
+#: the model, so nothing changes for a sport that has not been measured.
+GAME_RANK_MARKET = {
+    "nfl": {"moneyline": 0.722},
+    "cfb": {"moneyline": 0.7905},
+}
+
+
+def ranking_number(sport: str, market: str, row: dict, model_auc):
+    """``(probability, source, auc)`` a game row ranks on.
+
+    ``source`` is "sharp" (the card's own probability is the sharp
+    book's fair), "market" (the book's de-vigged number, because it
+    measures better than the model here), or "model".
+    """
+    prob = row.get("win_prob")
+    fair = row.get("fair_prob")
+    market_auc = GAME_RANK_MARKET.get(sport, {}).get(market)
+    if row.get("sharp_anchored") and prob is not None and market_auc is not None:
+        return float(prob), "sharp", float(market_auc)
+    if (market_auc is not None and fair is not None
+            and (model_auc is None or float(market_auc) > float(model_auc))):
+        return float(fair), "market", float(market_auc)
+    return (None if prob is None else float(prob)), "model", model_auc
+
 
 #: Game rows the board carries per sport, beside LIMIT player rows.
 #: Five cards a game across a sixteen-game Sunday is eighty rows of
@@ -416,6 +463,13 @@ def admissible(row: dict) -> str:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
         return "disagrees with the market by more than we credit"
+    # A row that RANKS on a market number still carries the model's own
+    # read as its card, and a model that disagrees with the book by more
+    # than we credit is our error wherever the row is sorted — the
+    # Gelof guard, asked of the number the card prints.
+    if (row.get("prob_source") in ("market", "sharp") and row.get("win_prob") is not None
+            and not _credible(float(row["win_prob"]), row.get("implied_prob"))):
+        return "disagrees with the market by more than we credit"
     # …and the same question asked of the claim BEFORE the shrink, which
     # is the only place a big disagreement is still visible. See
     # `engine_credible`.
@@ -655,10 +709,9 @@ def from_game_bet(row: dict, sport: str = "nfl",
     # MEASURED IS THE BAR FOR A GAME MARKET, not ranked (see
     # GAME_RANK_MEASURED). A market with a figure is shown with it; a
     # market with none is not shown at all.
-    auc = measured_auc(sport, market)
-    if auc is None:
+    model_auc = measured_auc(sport, market)
+    if model_auc is None:
         return _refuse(census, "this game market has never been measured")
-    ranked = float(auc) >= MIN_RANK_AUC
     if row.get("has_market") is False:
         return _refuse(census, "no real book price")
     if row.get("live"):
@@ -675,10 +728,16 @@ def from_game_bet(row: dict, sport: str = "nfl",
         return _refuse(census, "the game has already been played")
     if row.get("conditional"):
         return _refuse(census, "a conditional, which is a hold and not a pick")
-    prob = row.get("win_prob")
+    # WHICH NUMBER ORDERS THE ROW — see `ranking_number`. `prob` is the
+    # ranking number from here on; `prob_model` is the model's own read
+    # for the same side, kept on the row and the card as the model's.
+    prob, source, auc = ranking_number(sport, market, row, model_auc)
     if prob is None:
         return _refuse(census, "no probability")
-    prob, fair = float(prob), row.get("fair_prob")
+    ranked = float(auc) >= MIN_RANK_AUC
+    fair = row.get("fair_prob")
+    prob_model = row.get("win_prob")
+    prob_model = prob if prob_model is None else float(prob_model)
     home, away = row.get("home", "") or "", row.get("away", "") or ""
     team = row.get("team") or ""
     side = row.get("side", "") or ""
@@ -719,6 +778,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         if other_odds is None or fair is None:
             return _refuse(census, "the other side's price is missing")
         odds, prob, fair, flipped = other_odds, 1.0 - prob, 1.0 - float(fair), True
+        prob_model = 1.0 - prob_model
         # THE PRE-SHRINK CLAIM FLIPS WITH THE SIDE. Every market here is
         # two-way, so the model's raw number for the other side is
         # 1 - raw. Left unflipped it would be compared against the OTHER
@@ -728,9 +788,11 @@ def from_game_bet(row: dict, sport: str = "nfl",
             raw_claim = 1.0 - raw_claim
     if prob < MIN_PROB:
         return _refuse(census, "under the likelihood floor")
-    edge = None if fair is None else round(prob - float(fair), 4)
+    # The card's edge and EV are the MODEL's, as on every card: the
+    # ranking number is what orders the board, not what the card claims.
+    edge = None if fair is None else round(prob_model - float(fair), 4)
     try:
-        ev = round(expected_value(prob, int(odds)), 4)
+        ev = round(expected_value(prob_model, int(odds)), 4)
     except (TypeError, ValueError):
         ev = None
     reasons = list(row.get("reasons") or [])
@@ -746,11 +808,24 @@ def from_game_bet(row: dict, sport: str = "nfl",
     # ranking; a measured-below-floor market's number is the model's
     # lean at this line, and the row says which it is rather than
     # letting a shelf header speak for it.
-    rank_note = "" if ranked else (
-        f"Shown as the model’s lean at this number. Sorting "
-        f"{_GAME_WORDS.get(market, market)} across games measured at "
-        f"{float(auc):.2f} against the close — a coin flip — so the "
-        f"percentage is a read on this game, not a ranking.")
+    if not ranked:
+        rank_note = (
+            f"Shown as the model’s lean at this number. Sorting "
+            f"{_GAME_WORDS.get(market, market)} across games measured at "
+            f"{float(auc):.2f} against the close — a coin flip — so the "
+            f"percentage is a read on this game, not a ranking.")
+    elif source == "market":
+        rank_note = (
+            f"Ranked on the market’s number, {prob:.0%}: the book’s de-vigged "
+            f"price sorts {sport.upper()} winners at {float(auc):.2f} measured, "
+            f"against {float(model_auc):.2f} for the model’s own. The model "
+            f"rates this side at {prob_model:.0%}.")
+    elif source == "sharp":
+        rank_note = (
+            f"Ranked on the sharp book’s fair, {prob:.0%} — a market number, "
+            f"which sorts {sport.upper()} winners at {float(auc):.2f} measured.")
+    else:
+        rank_note = ""
     return {
         # WHAT KIND OF ROW THIS IS, said once, so the page, the journal
         # and the lint branch on a flag rather than on the absence of a
@@ -787,7 +862,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # has always written these as the shopped-best price.
         "book": row.get("book") or "best", "odds": odds,
         "model_prob": round(prob, 4),
-        "prob_source": "model",
+        "prob_source": source,
         "raw_prob": round(prob, 4),
         "implied_prob": None if fair is None else round(float(fair), 4),
         "projection": None,
@@ -807,7 +882,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # The card shape, for the game-bet page. NOT a stake: this board
         # ranks and never sizes, and a flipped row is not on the edge
         # board at all.
-        "win_prob": round(prob, 4),
+        "win_prob": round(prob_model, 4),
         "fair_prob": None if fair is None else round(float(fair), 4),
         "edge": edge,
         "has_market": True, "live": False, "credible": True,

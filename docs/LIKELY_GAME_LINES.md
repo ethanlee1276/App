@@ -54,6 +54,22 @@ Measured 2026-09-02 on this repo's history (NFL 2021–25, CFB 2022–25):
 |---|---|---|---|---|
 | NFL | **0.677** (1,356 games) | 0.504 | 0.496 | 0.500 |
 | CFB | **0.752** (2,729 games) | 0.496 | 0.503 | 0.492 |
+| NFL, the market's own de-vigged moneyline | **0.722** (1,420 games) | — | — | — |
+| CFB, the market's own de-vigged moneyline | **0.791** (3,011 games) | — | — | — |
+
+**The moneyline rows rank on the market's number (2026-09-07).** The
+last two rows were measured the same day on this box's stored closes:
+the book's de-vigged moneyline against the result, every scored game
+with a price, ties out. The market ranks winners better than the model
+in both leagues, so `likely.from_game_bet` orders a moneyline row on
+the book's de-vigged number for its side (`prob_source: "market"`),
+keeps the model's number on the card, and says so on the row. A
+sharp-anchored card ranks on its own probability, which is the sharp
+book's fair. Spreads, totals and team totals have no market figure and
+are what they were. The model's credibility bar still refuses a row
+whose model disagrees with the book by more than we credit, because
+the card prints that number. `likely.GAME_RANK_MARKET` holds the
+figures and `tests/test_likely_ranks_on_market.py` re-measures them.
 
 The floor is `likely.MIN_RANK_AUC` (0.60). The model can say who wins
 and cannot say who covers: spreads, totals and team totals test as a

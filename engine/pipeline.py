@@ -707,7 +707,8 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                     g.home, g.away, g.sharp_home_ml, g.sharp_away_ml,
                     g.home_ml, g.away_ml, win_prob_home=wp_home, context=ctx)
             if sharp_rec is not None:
-                out.append(_finish_bet(moneyline_to_dict(sharp_rec), g, config))
+                out.append(_finish_bet({**moneyline_to_dict(sharp_rec),
+                                        "sharp_anchored": True}, g, config))
             else:
                 ml = _finish_bet(moneyline_to_dict(
                     price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml,
@@ -733,6 +734,7 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                     g.sharp_total_over_odds, g.sharp_total_under_odds,
                     units="points", context=tctx)
             if sharp_tot is not None:
+                sharp_tot["sharp_anchored"] = True
                 out.append(_finish_bet(sharp_tot, g, config))
             else:
                 total = price_total("nfl", g.home, g.away, pt, g.total,
@@ -779,6 +781,7 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
                         g.home, g.away, g.spread, g.spread_home_odds, g.spread_away_odds,
                         g.sharp_spread_home_odds, g.sharp_spread_away_odds, context=sctx)
                 if sharp_sp is not None:
+                    sharp_sp["sharp_anchored"] = True
                     out.append(_finish_bet(sharp_sp, g, config))
                 else:
                     spread = price_spread("nfl", g.home, g.away, margin, g.spread,

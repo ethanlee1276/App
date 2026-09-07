@@ -124,11 +124,15 @@ def test_a_moneyline_card_becomes_a_likelihood_row():
     row = K.from_game_bet(_ml(), sport="nfl")
     assert row is not None
     assert row["kind"] == "game" and row["market"] == "moneyline"
-    assert row["model_prob"] == 0.66 and row["implied_prob"] == 0.62
+    # RANKED ON THE MARKET'S NUMBER since 2026-09-07 — the book's
+    # de-vigged 62% sorts NFL winners at 0.72 measured against 0.68 for
+    # the model's own — with the model's 66% kept on the card.
+    assert row["model_prob"] == 0.62 and row["implied_prob"] == 0.62
+    assert row["prob_source"] == "market" and row["win_prob"] == 0.66
     assert row["player"] == "DET ML" and row["team"] == "DET"
     assert row["opponent"] == "NO" and row["matchup"] == "NO @ DET"
     assert row["book"] == "best", "an NFL game card carries no book name"
-    assert row["rank_auc"] == K.GAME_RANK_AUC["nfl"]["moneyline"]
+    assert row["rank_auc"] == K.GAME_RANK_MARKET["nfl"]["moneyline"]
     assert row["bettable"] is True and row["injury_status"] == ""
     # The id the page opens the game page by is built from these.
     for key in ("home", "away", "side", "line", "bet_type"):
@@ -147,7 +151,9 @@ def test_a_dog_card_becomes_the_favourites_row():
     assert row is not None and row["flipped"] is True
     assert row["team"] == "DET" and row["player"] == "DET ML"
     assert row["odds"] == -165, "the favourite's own price"
-    assert row["model_prob"] == 0.63 and row["implied_prob"] == 0.62
+    # The flip is decided on the ranking number (the market's 38% dog
+    # → the 62% favourite); the model's 63% rides along as the card.
+    assert row["model_prob"] == 0.62 and row["implied_prob"] == 0.62
     assert row["opponent"] == "NO" and row["pick_is_home"] is True
     assert row["reasons"][0].startswith("The likely side.")
     assert "NO ML at +140" in row["reasons"][0]
@@ -182,7 +188,9 @@ def test_a_flipped_row_journals_the_favourite():
     conn, n = _book([K.from_game_bet(dog, sport="nfl")])
     assert n == 1
     got = dict(conn.execute("SELECT player, odds, hit_prob FROM bets").fetchone())
-    assert got == {"player": "DET", "odds": -165, "hit_prob": 0.63}, got
+    # The probability journaled is the one the page showed — the ranking
+    # number, which for an NFL moneyline is the market's 62%.
+    assert got == {"player": "DET", "odds": -165, "hit_prob": 0.62}, got
 
 
 def _tot(**kw):
@@ -208,7 +216,7 @@ def test_a_spread_or_total_row_is_shown_as_a_lean_with_its_figure():
         assert row["rank_auc"] == K.GAME_RANK_MEASURED["nfl"][market]
         assert "coin flip" in row["rank_note"] and "not a ranking" in row["rank_note"]
     ml = K.from_game_bet(_ml(), sport="nfl")
-    assert ml["ranked"] is True and ml["rank_note"] == ""
+    assert ml["ranked"] is True and ml["rank_note"].startswith("Ranked on the market")
 
 
 def test_a_market_with_no_figure_at_all_stays_off():
@@ -300,9 +308,13 @@ def test_holds_are_not_picks():
     assert K.from_game_bet(_ml(live=True), sport="nfl") is None
     assert K.from_game_bet(_ml(conditional=True), sport="nfl") is None
     assert K.from_game_bet(_ml(has_market=False), sport="nfl") is None
-    # A 25% pick is not under the floor on a two-way market: its other
-    # side is 75%, and that is the row (see the flip test below).
-    assert K.from_game_bet(_ml(win_prob=0.25), sport="nfl")["model_prob"] == 0.75
+    # A 25% pick is not under the floor on a two-way market: the row is
+    # decided on the ranking number, which for an NFL moneyline is the
+    # market's — 62% on the same side, so no flip and no floor — and
+    # when the market's own number is the short end, its other side is
+    # the row (see the flip test below).
+    assert K.from_game_bet(_ml(win_prob=0.25), sport="nfl")["model_prob"] == 0.62
+    assert K.from_game_bet(_ml(win_prob=0.25, fair_prob=0.30), sport="nfl")["model_prob"] == 0.70
 
 
 def test_the_one_bar_applies_to_game_rows_too():
@@ -326,7 +338,7 @@ def test_game_rows_sit_beside_player_rows_ordered_by_probability():
     nothing about the price or the market kind moves it."""
     got = K.build([_prop(prob=0.62)], game_bets=[_ml(win_prob=0.70, fair_prob=0.66)])
     assert [r["kind"] for r in got] == ["game", "prop"], got
-    assert got[0]["model_prob"] == 0.70 and got[1]["model_prob"] == 0.62
+    assert got[0]["model_prob"] == 0.66 and got[1]["model_prob"] == 0.62
 
 
 def test_a_game_that_has_already_been_played_is_not_likely_to_hit():
@@ -455,8 +467,11 @@ def test_the_college_moneyline_reaches_the_likely_board_from_a_refusal():
     board = K.build([], [], [], sport="cfb", game_bets=rows, census=census)
     kinds = {r["market"]: r for r in board}
     assert kinds["moneyline"]["ranked"] is True, \
-        "the college moneyline ranks at 0.752 and must say so"
-    assert kinds["moneyline"]["rank_auc"] == 0.752
+        "the college moneyline ranks and must say so"
+    # Ranked on the market's own number since 2026-09-07 (0.79 measured
+    # against the model's 0.752), and the row carries that figure.
+    assert kinds["moneyline"]["rank_auc"] == K.GAME_RANK_MARKET["cfb"]["moneyline"]
+    assert kinds["moneyline"]["prob_source"] == "market"
     # THE SPREAD AND THE TOTAL NO LONGER REACH THE BOARD, and that is the
     # decision rather than a regression. This card prices them at 0.527
     # and 0.537 — coin flips, which is what `GAME_RANK_MEASURED` already
@@ -534,7 +549,9 @@ def test_a_game_row_lands_on_its_shelf_with_the_measured_figure():
     out = boards.shelves("nfl", [row])
     assert [s["key"] for s in out] == ["gamelines"]
     assert out[0]["rows"] == [row]
-    assert out[0]["rank_auc"] == K.GAME_RANK_AUC["nfl"]["moneyline"]
+    # The header carries the figure the rows were ordered by — the
+    # market's, since it measures better than the model's here.
+    assert out[0]["rank_auc"] == K.GAME_RANK_MARKET["nfl"]["moneyline"]
 
 
 def test_a_measured_sub_floor_market_does_not_stamp_the_shelf():
@@ -545,7 +562,7 @@ def test_a_measured_sub_floor_market_does_not_stamp_the_shelf():
     try:
         K.GAME_RANK_AUC["nfl"]["spread"] = 0.49
         shelf = [s for s in boards.shelves("nfl") if s["key"] == "gamelines"][0]
-        assert shelf["rank_auc"] == real["moneyline"], shelf["rank_auc"]
+        assert shelf["rank_auc"] == K.GAME_RANK_MARKET["nfl"]["moneyline"], shelf["rank_auc"]
     finally:
         K.GAME_RANK_AUC["nfl"].clear()
         K.GAME_RANK_AUC["nfl"].update(real)
@@ -580,7 +597,9 @@ def test_a_moneyline_row_is_journaled_in_the_shape_the_settler_grades():
     assert got["player"] == "DET" and got["market"] == "moneyline"
     assert got["side"] == "OVER" and got["line"] == 0.5
     assert got["category"] == "likely" and got["stake_dollars"] == 0.0
-    assert got["hit_prob"] == 0.66 and got["book"] == "best"
+    # The journaled probability is the page's ranking number — the
+    # market's 62% on an NFL moneyline — not the model's 66%.
+    assert got["hit_prob"] == 0.62 and got["book"] == "best"
 
 
 def test_a_total_and_a_spread_row_take_their_settle_shapes():
@@ -640,7 +659,7 @@ def test_the_record_cuts_the_game_rows_per_sport_and_market():
     rep = ledger.likely_report(conn)
     got = rep["by_sport_market"]["nfl"]["moneyline"]
     assert got["n"] == 1 and got["w"] == 1 and got["actual"] == 1.0
-    assert got["claimed"] == 0.66
+    assert got["claimed"] == 0.62     # the ranking number the page showed
     src = _src("engine", "maintenance.py")
     assert 'by_sport_market' in src, "the weekly log prints the per-market cut"
 

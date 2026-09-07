@@ -95,14 +95,21 @@ def _game_sentence(sport: str) -> str:
     who sees moneylines and no spreads deserves the reason rather than
     a guess (Ethan, 2026-09-02: "we have no money lines or spreads or
     totals")."""
+    from .likely import GAME_RANK_MARKET
     got = GAME_RANK_AUC.get(sport) or {}
     ml = got.get("moneyline")
     if ml is None:
         return ""
-    return (f" Who wins a game ranks at {ml:.2f}. Spreads and totals "
-            f"tested as a coin flip against the close, so those rows are "
-            f"the model’s lean at the number, each labelled with its own "
-            f"figure.")
+    mkt = GAME_RANK_MARKET.get(sport, {}).get("moneyline")
+    market_note = ""
+    if mkt is not None and mkt > ml:
+        market_note = (f" The market’s own de-vigged price ranks them at "
+                       f"{mkt:.2f}, so moneyline rows are ordered on it and "
+                       f"carry the model’s number beside it.")
+    return (f" Who wins a game ranks at {ml:.2f} on the model.{market_note} "
+            f"Spreads and totals tested as a coin flip against the close, "
+            f"so those rows are the model’s lean at the number, each "
+            f"labelled with its own figure.")
 
 
 def guide(sport: str = "nfl") -> list[dict]:
@@ -334,8 +341,18 @@ def _shelf_auc(markets, sport: str = "nfl") -> float | None:
     likely.rank_auc, so an MLB shelf reads the droplet's own fitted
     store and a CFB touchdown shelf stops borrowing the NFL's figure.
     """
-    from .likely import MIN_RANK_AUC, rank_auc
-    got = [rank_auc(sport, m) for m in markets]
+    from .likely import MIN_RANK_AUC, rank_auc, GAME_MARKETS, GAME_RANK_MARKET
+
+    def _figure(m):
+        # A game market ranks on the better of the model's figure and the
+        # market's own (likely.ranking_number), so the header carries the
+        # figure the rows under it were actually ordered by.
+        model = rank_auc(sport, m)
+        mkt = GAME_RANK_MARKET.get(sport, {}).get(m) if m in GAME_MARKETS else None
+        if mkt is None:
+            return model
+        return mkt if model is None else max(model, mkt)
+    got = [_figure(m) for m in markets]
     # Over the markets that can PUT A ROW on the shelf. A measured
     # sub-floor market (the NFL spread at 0.49, say) never builds a row,
     # so it is not the weakest row under the header — reading it as the
