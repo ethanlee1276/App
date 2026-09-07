@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from .models import Prop, RECEPTIONS
 from .projection import Projection
-from .odds import (best_over_line, best_under_line, consensus_fair,
+from .odds import (BestLine, best_over_line, best_under_line, consensus_fair,
                    devig_two_way, expected_value, is_quotable)
 from .statmath import prob_over, prob_over_discrete, clamp
 from .calibrate import apply_temperature, calibrated, correction_for
@@ -120,6 +120,16 @@ class Recommendation:
     #: snapshots is a different, looser number. See bookcheck.py.
     fair_consensus: float | None = None
     consensus_books: int = 0
+    #: PRICED FROM THE SHARP BOOK'S PAIR, NOT FROM THE MODEL. When the
+    #: sharp reference book quotes this prop two ways at the same line as
+    #: the shopped soft quote, `hit_prob` is the sharp book's de-vigged
+    #: probability for `side`, `fair_prob` is the soft price's implied
+    #: probability, and the edge between them is one book disagreeing
+    #: with a sharper one — the policy every game market on the football
+    #: and baseball boards already stakes on. The model's number rides
+    #: along as context. See `sharp_anchor_for`.
+    sharp_anchored: bool = False
+    sharp_fair: float | None = None
 
 
 #: THE TWO REASONS THAT REFUSE THE BET, named rather than inlined.
@@ -498,6 +508,47 @@ def under_reason(mean: float, line: float, places: int = 1) -> str:
             f"often than the price implies")
 
 
+def sharp_anchor_for(lines, sharp_lines, line: float):
+    """The sharp book's two-sided quote at ``line``, priced against the
+    best soft quote on each side at that same line.
+
+    Returns ``(side, book, odds, sharp_fair, ev)`` for the side that
+    clears `gamebets.SHARP_MIN_EV` (the better of the two when both do),
+    or ``None``: no sharp pair at this line, no soft quote to take, or
+    a gap past `SHARP_MAX_EV`, which at a close is a broken price and not
+    a bet. Everything above `SHARP_SUSPECT_EV` is the caller's to show
+    and refuse. Same bands, same arithmetic, as the game cards
+    (`gamebets.sharp_anchor_two_way`); written out here because a prop
+    market can be quoted one side only, and the two-way helper cannot
+    price a side that has no soft quote.
+
+    THE LINE HAS TO MATCH. A fair at 75.5 says nothing about a bet at
+    76.5 — the same rule the totals and spreads keep — so the sharp pair
+    is looked up at the shopped line and nowhere else.
+    """
+    from .gamebets import SHARP_MIN_EV, SHARP_MAX_EV
+    from .odds import american_to_decimal, devig_two_way, shoppable
+    pair = next((ln for ln in sharp_lines or []
+                 if float(ln.line) == float(line) and ln.over_odds and ln.under_odds), None)
+    if pair is None:
+        return None
+    fair_over, fair_under = devig_two_way(int(pair.over_odds), int(pair.under_odds))
+    at_line = [ln for ln in lines or [] if float(ln.line) == float(line)]
+    overs = [ln for ln in at_line if ln.over_odds and shoppable(ln.over_odds)]
+    unders = [ln for ln in at_line if ln.under_odds and shoppable(ln.under_odds)]
+    best = None
+    for side, fair, quotes, attr in (("OVER", fair_over, overs, "over_odds"),
+                                     ("UNDER", fair_under, unders, "under_odds")):
+        if not quotes:
+            continue
+        ln = max(quotes, key=lambda q: int(getattr(q, attr)))
+        odds = int(getattr(ln, attr))
+        ev = fair * american_to_decimal(odds) - 1.0
+        if SHARP_MIN_EV <= ev <= SHARP_MAX_EV and (best is None or ev > best[4]):
+            best = (side, ln.book, odds, fair, ev)
+    return best
+
+
 def evaluate_prop(prop: Prop, proj: Projection,
                   allow_synthetic_line: bool = False,
                   game=None, sport: str = "nfl") -> Recommendation:
@@ -534,10 +585,35 @@ def evaluate_prop(prop: Prop, proj: Projection,
     _hold, _hold_n = one_sided_hold(sport, prop.market)
     side, best, hit_raw, fair, edge_raw = pick_side(prop.lines, p_over_at,
                                                     hold=_hold)
-    hit, edge, credible = temper_edge(hit_raw, fair, best.book,
-                                      allow_synthetic_line,
-                                      shrink=tier_shrink(prop.market))
-    hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
+    # SHARP FIRST, MODEL SECOND — the policy the game markets run on,
+    # for a prop the sharp book quoted two ways at the shopped line.
+    # The card's probability is then the sharp book's fair and its edge
+    # is the soft price's distance from it; no model opinion is in the
+    # number, so nothing that haircuts or corrects a model opinion
+    # (`temper_edge`, `apply_selection`, the calibration gate, the
+    # mis-posted-quote check against our own distribution) applies.
+    # The model's read is kept as context on the card.
+    from .odds import american_to_prob as _implied
+    _model_side_p = None
+    anchor = (sharp_anchor_for(prop.lines, prop.sharp_lines, best.line)
+              if getattr(prop, "sharp_lines", None) else None)
+    anchored = anchor is not None
+    sharp_ev = 0.0
+    if anchored:
+        side, _abook, _aodds, _afair, sharp_ev = anchor
+        _p = clamp(p_over_at(best.line), 1e-6, 1.0 - 1e-6)
+        _model_side_p = _p if side == "OVER" else 1.0 - _p
+        best = BestLine(book=_abook, line=best.line, odds=_aodds,
+                        fair_prob=_implied(_aodds))
+        hit_raw = hit = _afair
+        fair = best.fair_prob
+        edge = hit - fair
+        credible = True
+    else:
+        hit, edge, credible = temper_edge(hit_raw, fair, best.book,
+                                          allow_synthetic_line,
+                                          shrink=tier_shrink(prop.market))
+        hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
     # A price no book could have posted is not a market, the same way a
     # proxy is not. `is_quotable` also answers False for 0, which is the
     # unquoted-side sentinel: if the side we chose is the side nobody
@@ -560,6 +636,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     # bad quote. The proxy row's cause is `has_market`, one branch down.
     prices_line = (allow_synthetic_line
                    or (best.book or "").lower() == "proxy"
+                   or anchored
                    or quote_prices_its_line(side, best, p_over_at))
     ev = expected_value(hit, best.odds)
     net = net_edge(hit, best.odds)
@@ -618,7 +695,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
     #  calibration — a fit at its search boundary closed this market
     #  pattern     — the loss-pattern miner closed this SLICE (a side, a
     #                price band) under false-discovery control
-    calibration_ok = is_reliable(sport, prop.market)
+    calibration_ok = anchored or is_reliable(sport, prop.market)
     from .losspatterns import minutes_until
     # Football's environment, handed to the veto live: a closed "howling
     # wind" slice must refuse the NEXT windy-night pass-yards over, not
@@ -650,8 +727,14 @@ def evaluate_prop(prop: Prop, proj: Projection,
                             **_env)
     tier = market_tier(prop.market)
     min_edge = tier_min_edge(prop.market)
+    # A sharp gap past the suspect cap is shown and refused, as on a
+    # game card: a disagreement that size at a close is a stale or
+    # broken price, not a bet.
+    from .gamebets import SHARP_SUSPECT_EV, _SUSPECT_NOTE
+    suspect = anchored and sharp_ev > SHARP_SUSPECT_EV
     gate_ok = (credible and has_market and prices_line
                and calibration_ok and pattern_block is None
+               and not suspect
                and edge >= min_edge
                and net > favourite_surcharge(best.odds))
     grade = quality_letter(quality) if gate_ok else "Pass"
@@ -666,6 +749,15 @@ def evaluate_prop(prop: Prop, proj: Projection,
             kelly_fraction(hit, best.odds) * fraction, best.odds)
 
     reasons = list(proj.reasons)
+    if anchored:
+        _lead = (_SUSPECT_NOTE.format(ev=sharp_ev) if suspect else
+                 f"Sharp anchor: this price implies {fair:.0%} but the sharp "
+                 f"book prices the {side.lower()} at {hit:.0%} fair — "
+                 f"{sharp_ev:+.1%} EV on the price alone")
+        reasons.insert(0, _lead)
+        if _model_side_p is not None:
+            reasons.insert(1, f"Model context: rates the {side.lower()} at "
+                              f"{_model_side_p:.0%}")
     # WHAT THE GRADE ABOUT TO GO ON THIS CARD HAS ACTUALLY DONE. The
     # ladder's order is hard-coded; whether it holds up is measured
     # (`engine.ladder`), and until now the measurement reached a terminal
@@ -750,4 +842,6 @@ def evaluate_prop(prop: Prop, proj: Projection,
         quality=quality,
         tier=tier,
         volatility=market_volatility(prop.market),
+        sharp_anchored=anchored,
+        sharp_fair=(round(hit, 4) if anchored else None),
     )

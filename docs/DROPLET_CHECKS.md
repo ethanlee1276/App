@@ -1256,6 +1256,72 @@ for sharp cards too; lifting it for them is one constant
 (`engine.cfb.model.BET_GROUP_OF_FIVE`) and a decision to make with the
 college sharp-anchor replay's numbers in hand.
 
+## Player props price a sharp book's pair first, where one exists (2026-09-07)
+
+Ethan: "I want all of that tuned in exactly how you just did" — props,
+touchdown props, spreads and totals. The game markets got sharp-first
+on 2026-09-07 (both football boards and baseball); the player props
+had no sharp path at all: `oddsapi.parse_event_lines` dropped the
+sharp book on purpose (nobody here can bet it) and nothing read the
+pair it dropped. `parse_event_sharp_lines` reads it now, the pair rides
+on `Prop.sharp_lines`, and `betting.evaluate_prop` prices the shopped
+soft quote against the sharp pair AT THE SAME LINE when there is one
+(`sharp_anchor_for`): the card's probability is the sharp book's fair,
+its edge the soft price's distance from it, the model's read kept as
+context, inside the same EV bands as every sharp game card. Where the
+sharp book quoted nothing — the common case outside the main markets —
+the model card prices exactly as before.
+
+WHETHER THE SHARP BOOK QUOTES NFL PROPS AT ALL is the droplet's
+question, and the board answers it on every row:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json
+b = json.load(open("web/data/nfl_board.json"))
+rows = [r for r in b.get("recommendations", []) if r.get("has_market")]
+print(len(rows), "priced props;", sum(1 for r in rows if r.get("sharp_quoted")),
+      "quoted by the sharp book;", sum(1 for r in rows if r.get("sharp_anchored")),
+      "priced against it;", sum(1 for r in rows if r.get("sharp_anchored") and r.get("recommended")),
+      "recommended")
+EOF
+```
+
+Zero `sharp_quoted` on a full Sunday board means the sharp book is not
+answering player markets in this region or plan, and the fix is on the
+odds side. A prop quoted but not anchored means the sharp pair sat at
+a different line from the shopped one — a fair at 75.5 says nothing
+about a bet at 76.5, so the model card priced it.
+
+THE MODEL PROP CARDS ARE NOT DEMOTED, and the reason is a measurement
+that only this box can make. The game cards went informational because
+`gamecal` and the information tests measured the model's disagreement
+with the close as noise, on this container's schedule closes. The prop
+model's disagreement with a real close has been measured for two
+markets only — `engine/formbook.py`, rush_yds 0.468 and rec_yds 0.477
+against harvested closes, both already shut by their calibration — and
+never for receptions, pass_yds or anytime_td, because the prop closes
+live in this box's `odds_history` and nowhere else. The command that
+decides, per market, once a season of prop closes is in:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db, formbook
+conn = db.connect()
+for m in formbook.MARKETS:
+    out = formbook.scan(conn, m)
+    if out.get('skipped'):
+        print(m, out['n'], 'pairs —', out['skipped']); continue
+    r = out['best_brier_r']; d = out['dial'][r]
+    print(m, out['n'], 'pairs; best dial', r, 'AUC', round(d['auc'] or 0.5, 3), 'z', round(d['z'] or 0, 1))"
+```
+
+A market whose best dial still leaves AUC at a coin flip on four
+hundred or more pairs gets what the game cards got: its model card
+shown and never recommended, with only the sharp path and the stale
+shadow book able to make it a pick. That is a one-constant change per
+market, made WITH the number.
+
 ## The college information test, and the one number it left to re-read (2026-09-07)
 
 `python3 -m engine.cfbinfo` asks college the NFL's question: with the

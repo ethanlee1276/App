@@ -150,6 +150,13 @@ class Prop:
     lines: list[SportsbookLine]
     # role used for injury matchup reasoning (e.g. "wr1", "slot", "rb1")
     usage_role: str = "starter"
+    #: The sharp reference book's own two-sided quotes for this prop, kept
+    #: apart from `lines` (which is shopped, and must never shop a book
+    #: nobody here can bet). `betting.evaluate_prop` prices a soft quote
+    #: against the sharp pair at the same line when one exists — see
+    #: `sources.oddsapi.parse_event_sharp_lines`. Empty means the sharp
+    #: book did not quote it, and the model card prices as it always has.
+    sharp_lines: list = field(default_factory=list)
     # official headshot URL when a data source provides one (nflverse
     # weekly stats carry headshot_url); the UI falls back to an SVG avatar
     headshot: str = ""

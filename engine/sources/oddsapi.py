@@ -789,14 +789,36 @@ def parse_event_lines(event_json: dict,
 
     Only the OVER outcome carries the odds we bet; we pair it with the matching
     UNDER price (same book, line) so the de-vig has both sides. ``market_map``
-    selects the sport's Odds-API market keys (defaults to NFL)."""
+    selects the sport's Odds-API market keys (defaults to NFL).
+
+    Reference-only books are left out: nobody here can bet them, so their
+    lines must never be shopped as "the price to take". Their pair is read
+    out separately by :func:`parse_event_sharp_lines`."""
+    return _parse_lines(event_json, market_map, sharp=False)
+
+
+def parse_event_sharp_lines(event_json: dict,
+                            market_map: dict | None = None) -> dict[tuple[str, str], list[SportsbookLine]]:
+    """The SHARP book's prop pairs, ``{(norm_player, market): [lines]}``.
+
+    The same shape as :func:`parse_event_lines` and the same pairing,
+    from the books that one skips. A sharp two-sided quote at a line is
+    the anchor `betting.evaluate_prop` prices a soft book's number
+    against — one book disagreeing with a sharper one, no model in it —
+    exactly what `oddsapi` attaches to a `Game` as ``sharp_*`` for the
+    game markets and what the football boards stake there. Empty when
+    the sharp book quoted no props in the event, which is the common case
+    outside the main markets: nothing changes, the model card prices."""
+    return _parse_lines(event_json, market_map, sharp=True)
+
+
+def _parse_lines(event_json: dict, market_map: dict | None,
+                 sharp: bool) -> dict[tuple[str, str], list[SportsbookLine]]:
     market_map = market_map or ODDS_TO_MARKET
     out: dict[tuple[str, str], list[SportsbookLine]] = {}
     for bm in event_json.get("bookmakers", []):
         book_key = bm.get("key", "")
-        if book_key in SHARP_BOOKS:
-            # Reference-only books: nobody here can bet them, so their lines
-            # must never be shopped as "the price to take".
+        if (book_key in SHARP_BOOKS) != sharp:
             continue
         book = BOOK_TITLES.get(book_key, book_key)
         for mkt in bm.get("markets", []):
@@ -1492,6 +1514,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     markets = list(cfg["markets"]) + list(scorer_map) + ["h2h", "totals", "spreads"]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
+    sharp_index: dict[tuple[str, str], list[SportsbookLine]] = {}
     menu: dict[tuple[str, str], dict] = {}
     # Yes/No scorer quotes, indexed the same way — parsed by their own
     # parser because the over/under one requires a point and these have
@@ -1590,6 +1613,10 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         if props_ok:
             for k, lines in parse_event_lines(payload, cfg["markets"]).items():
                 index.setdefault(k, []).extend(lines)
+            # The sharp book's own pairs, kept apart from the shopped
+            # field — see `parse_event_sharp_lines`.
+            for k, lines in parse_event_sharp_lines(payload, cfg["markets"]).items():
+                sharp_index.setdefault(k, []).extend(lines)
             for k, disp in parse_event_players(payload, cfg["markets"]).items():
                 menu.setdefault(k, {"player": disp, "home": home, "away": away})
             if scorer_map:
@@ -1674,6 +1701,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         if lines:
             prop.lines = lines
             result.matched += 1
+            prop.sharp_lines = list(sharp_index.get(
+                (normalize_name(prop.player), prop.market)) or [])
         else:
             result.unmatched.append(f"{prop.player} ({prop.market})")
 

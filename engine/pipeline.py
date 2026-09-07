@@ -87,6 +87,14 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
         # to. Evidence only; nothing prices from it yet.
         "fair_consensus": rec.fair_consensus,
         "consensus_books": rec.consensus_books,
+        # Priced from the sharp book's pair at this line — see
+        # `betting.sharp_anchor_for`. `sharp_quoted` says whether the
+        # sharp book quoted the prop at all, which is the droplet's
+        # question about the odds payload, apart from whether it
+        # disagreed with anyone.
+        "sharp_anchored": rec.sharp_anchored,
+        "sharp_fair": rec.sharp_fair,
+        "sharp_quoted": bool(getattr(prop, "sharp_lines", None)),
         "fair_prob": rec.fair_prob,
         "edge": rec.edge,
         # The margin over the PRICE, and the rule that set the stake —
