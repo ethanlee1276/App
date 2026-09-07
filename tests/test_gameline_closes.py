@@ -91,8 +91,8 @@ def test_a_replayable_sport_is_no_longer_reported_as_having_no_closes():
 
 # --- the union ---------------------------------------------------------------
 def _key(i):
-    """The (period, home, away) `_games` gives game ``i`` — the same key
-    both close sources are indexed by."""
+    """The (period, home, away) `_games` gives game ``i`` — the harvest's
+    key; the schedule's carries the season in front (`close_for`)."""
     return ((dt.date(2025, 9, 1) + dt.timedelta(days=i)).isoformat(),
             f"H{i % 6}", f"A{i % 6}")
 
@@ -141,16 +141,15 @@ def test_one_harvested_row_does_not_hide_the_whole_schedule():
 def test_a_harvested_close_outranks_the_schedules_for_the_same_game():
     """A stored book close is a real counter's number; the schedule is a
     consensus. Where both exist the book wins."""
-    from engine.gamebacktest import schedule_closes, game_line_closes
+    from engine.gamebacktest import schedule_closes, game_line_closes, close_for
     conn = db.connect(":memory:")
     _games(conn, "nfl", 120, total=44.0)
     _harvest_one(conn, line=51.5)
     sched = schedule_closes(conn, "nfl", "total", require_prices=False)
     key = _key(QUOTED_GAME)
-    assert sched[key][0] == 44.0
-    merged = dict(sched)
-    merged.update(game_line_closes(conn, "nfl", "total"))
-    assert merged[key][0] == 51.5
+    assert sched[(2025,) + key][0] == 44.0
+    harvested = game_line_closes(conn, "nfl", "total")
+    assert close_for(harvested, sched, 2025, *key)[0] == 51.5
 
 
 def test_the_source_names_both_when_both_contributed():

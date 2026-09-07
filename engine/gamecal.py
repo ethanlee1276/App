@@ -131,7 +131,8 @@ def observations(conn, sport: str, market: str,
     measures the model as it would actually have been run — not a model
     fitted on the games it is being graded against.
     """
-    from .gamebacktest import schedule_closes, game_line_closes, _split
+    from .gamebacktest import (schedule_closes, game_line_closes, close_for,
+                               _split)
     from .gamebets import project_total, game_margin, SCORING_BASELINE, _sd
 
     if market not in ("total", "spread", "moneyline"):
@@ -162,33 +163,36 @@ def observations(conn, sport: str, market: str,
     # which is what lets college football be measured at all: its
     # closing lines arrive without the -110s beside them.
     #
-    # MERGED, NOT PREFERRED, and the difference is a live bug this once
-    # was. `game_line_closes` keys a harvest by DATE; NFL games are
+    # BOTH SOURCES, PER GAME, and the difference is two live bugs this
+    # once was. `game_line_closes` keys a harvest by DATE; NFL games are
     # keyed by WEEK NUMBER ("001"), so an NFL harvest can never join to
     # an NFL schedule row. Written `harvested or schedule`, ONE harvested
     # row made the dict truthy and hid 899 joinable schedule closes
     # behind it — reported on the droplet as "0 graded games with a
     # close" for all three NFL markets while this container, whose
-    # odds_history is empty, measured them fine.
+    # odds_history is empty, measured them fine. Then merged into one
+    # dict keyed `(period, home, away)`, sixty-five NFL games read the
+    # close of another SEASON's same-week rematch — see `close_for`.
     #
-    # The failure is silent and it is one-directional: a sport falls back
-    # to the flat market-shrink guess, which is louder than the measured
-    # number, so the board bets MORE on the market it just stopped being
-    # able to measure.
-    closes = dict(schedule_closes(conn, sport, market, require_prices=False))
-    closes.update(game_line_closes(conn, sport, market))
-    if not closes:
+    # The first failure is silent and it is one-directional: a sport
+    # falls back to the flat market-shrink guess, which is louder than
+    # the measured number, so the board bets MORE on the market it just
+    # stopped being able to measure. The second is silent and it is a
+    # wrong number wearing a real one's clothes.
+    schedule = schedule_closes(conn, sport, market, require_prices=False)
+    harvested = game_line_closes(conn, sport, market)
+    if not schedule and not harvested:
         return []
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
     agg: dict = {}
     out: list[tuple] = []
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
-        quote = closes.get((str(date), home, away))
+        quote = close_for(harvested, schedule, row["season"], date, home, away)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if quote and enough:
@@ -227,7 +231,8 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
     which is the whole point of doing it this way rather than regressing
     points and hoping the mapping holds.
     """
-    from .gamebacktest import moneyline_closes, schedule_moneylines, _rating
+    from .gamebacktest import (moneyline_closes, schedule_moneylines, close_for,
+                               _rating)
     from .gamebets import (SCORING_BASELINE, cfb_win_prob, mlb_win_prob,
                            nfl_win_prob)
     from .odds import devig_two_way
@@ -245,25 +250,26 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
             f"model")
     win_prob = CURVES[sport]
     baseline = SCORING_BASELINE.get(sport, 0.0)
-    # Merged for the same reason, and against the same failure — see
-    # `observations`. A harvest keyed by date cannot join a schedule
-    # keyed by week, and letting it decide whether the schedule is read
-    # at all turns a partial harvest into a total blackout.
-    closes = {k: {k[1]: h, k[2]: a}
-              for k, (h, a) in schedule_moneylines(conn, sport).items()}
-    closes.update(moneyline_closes(conn, sport))
-    if not closes:
+    # Both sources per game, for the same two reasons as `observations`.
+    # A harvest keyed by date cannot join a schedule keyed by week, and
+    # letting it decide whether the schedule is read at all turns a
+    # partial harvest into a total blackout; and a schedule keyed by
+    # week alone hands one season its neighbour's line.
+    schedule = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    harvested = moneyline_closes(conn, sport)
+    if not schedule and not harvested:
         return []
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
     agg: dict = {}
     out: list[tuple] = []
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
-        quote = closes.get((str(date), home, away)) or {}
+        quote = close_for(harvested, schedule, row["season"], date, home, away) or {}
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         h_ml, a_ml = quote.get(home), quote.get(away)

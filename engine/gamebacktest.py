@@ -154,15 +154,21 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
     the same pitcher term the live model uses, so a single run A/Bs the
     ratings-only floor against the pitcher-aware model on identical games.
     """
-    closes = moneyline_closes(conn, sport)
-    # Harvested first, schedule second — see `schedule_closes` for why the
-    # provenance is reported rather than blurred.
-    source = "real harvested closes"
-    if not closes:
-        closes = {k: {k[1]: h, k[2]: a}
-                  for k, (h, a) in schedule_moneylines(conn, sport).items()}
-        if closes:
-            source = "schedule closes · nflverse closing consensus"
+    harvested = moneyline_closes(conn, sport)
+    schedule = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    # Harvested first, schedule second, PER GAME through `close_for`. The
+    # old `if not closes` fell back to the schedule only when the harvest
+    # was completely empty — the shadowing bug `backtest_game_lines` and
+    # `engine.gamecal` had each already fixed. The provenance is reported
+    # rather than blurred — see `schedule_closes`.
+    consensus = "schedule closes · nflverse closing consensus"
+    if harvested and schedule:
+        source = f"real harvested closes, topped up from {consensus}"
+    elif harvested:
+        source = "real harvested closes"
+    else:
+        source = consensus
     baseline = SCORING_BASELINE.get(sport, 0.0)
     # Named, not defaulted. `else nfl_win_prob` meant any sport we had not
     # thought about — college football most obviously — would be replayed
@@ -181,9 +187,9 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
     starters = starters_by_game(conn, sport) if use_pitchers else {}
 
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
 
     r = MoneylineBacktest(sport=sport, use_pitchers=use_pitchers, source=source)
     agg: dict[str, tuple[float, float, int]] = {}
@@ -198,7 +204,7 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
         r.games_seen += 1
         sp = starters.get((date, f"{away}@{home}"), {})
 
-        quote = closes.get((date, home, away))
+        quote = close_for(harvested, schedule, row["season"], date, home, away)
         h_net = _rating(agg, home, baseline)
         a_net = _rating(agg, away, baseline)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
@@ -346,7 +352,7 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
     rows = conn.execute(
         "SELECT period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
 
     r = SharpAnchorReport(sport=sport, sharp=sharp, min_ev=min_ev, max_ev=max_ev)
     for row in rows:
@@ -433,7 +439,21 @@ SCHEDULE_FEED = {"nfl": "nflverse", "cfb": "cfbfastR mirror"}
 
 def schedule_closes(conn, sport: str, market: str,
                     require_prices: bool = True) -> dict:
-    """The same shape as `game_line_closes`, read off the SCHEDULE.
+    """``{(season, period, home, away): (line, odds_a, odds_b)}`` — the
+    shape of `game_line_closes` with the SEASON in front, read off the
+    SCHEDULE.
+
+    THE SEASON IS IN THE KEY BECAUSE AN NFL PERIOD IS NOT UNIQUE. It is
+    a week number — "001" to "022" — that comes round again every year,
+    and this dict was keyed `(period, home, away)` like the harvest's.
+    Two seasons' same-week rematch of the same two teams then shared a
+    key and the later season's close silently overwrote the earlier's:
+    on the real history, 1,359 keys for 1,424 games, sixty-five of them
+    walked against another year's line (found 2026-09-07, with the
+    ordering bug in the same walks). A harvest is filed by calendar
+    date and needs no season; the two are therefore keyed differently
+    and looked up in turn, per game, by `close_for` — never merged into
+    one dict, which is what let this happen.
 
     THE GAP THIS CLOSES, measured 2026-08-27 after ingesting four NFL
     seasons: 1,139 completed games, and the backtest reported "0 with a
@@ -467,7 +487,7 @@ def schedule_closes(conn, sport: str, market: str,
     # and nothing else has its closes dropped before the
     # `require_prices` flag ever gets a say — the exact failure that flag
     # exists to prevent, one query earlier.
-    q = ("SELECT period, home, away, spread, total, extra FROM games "
+    q = ("SELECT season, period, home, away, spread, total, extra FROM games "
          "WHERE sport=? AND home_score IS NOT NULL")
     if require_prices:
         q += " AND extra IS NOT NULL"
@@ -486,20 +506,22 @@ def schedule_closes(conn, sport: str, market: str,
         if not pair or len(pair) != 2:
             if require_prices:
                 continue
-            out[(str(r["period"]), r["home"], r["away"])] = (
+            out[(r["season"], str(r["period"]), r["home"], r["away"])] = (
                 float(line), None, None)
             continue
-        out[(str(r["period"]), r["home"], r["away"])] = (
+        out[(r["season"], str(r["period"]), r["home"], r["away"])] = (
             float(line), int(pair[0]), int(pair[1]))
     return out
 
 
 def schedule_moneylines(conn, sport: str) -> dict:
-    """``{(period, home, away): (home_odds, away_odds)}`` off the schedule."""
+    """``{(season, period, home, away): (home_odds, away_odds)}`` off the
+    schedule — the season in the key for the reason `schedule_closes`
+    gives, and read through `close_for` for the same reason."""
     import json as _json
     out: dict = {}
     for r in conn.execute(
-            "SELECT period, home, away, extra FROM games WHERE sport=? "
+            "SELECT season, period, home, away, extra FROM games WHERE sport=? "
             "AND home_score IS NOT NULL AND extra IS NOT NULL", (sport,)):
         try:
             ml = (_json.loads(r["extra"] or "{}") or {}).get("ml")
@@ -507,8 +529,31 @@ def schedule_moneylines(conn, sport: str) -> dict:
             continue
         if not ml or len(ml) != 2:
             continue
-        out[(str(r["period"]), r["home"], r["away"])] = (int(ml[0]), int(ml[1]))
+        out[(r["season"], str(r["period"]), r["home"], r["away"])] = (
+            int(ml[0]), int(ml[1]))
     return out
+
+
+def close_for(harvested: dict, schedule: dict, season, period, home, away):
+    """One game's close: the harvest's if a book quoted it, else the
+    schedule's consensus. ``None`` when neither did.
+
+    TWO LOOKUPS, NOT ONE MERGED DICT. The harvest is keyed by the date
+    it was taken (`game_line_closes`, `moneyline_closes`); the schedule
+    by season and period (`schedule_closes`, `schedule_moneylines`), and
+    for the NFL it has to be, because a period there is a week number
+    that repeats every season. Merging the two into one dict keyed
+    `(period, home, away)` is exactly how sixty-five NFL games came to
+    be measured against another season's line. Harvest first because a
+    book's close is a counter's number and the schedule is the field's.
+
+    For a sport whose period IS a date (MLB, college) the harvest key and
+    the schedule's period coincide, so this reads the same games the
+    merged dict used to — minus the collision, which those sports never
+    had.
+    """
+    return (harvested.get((str(period), home, away))
+            or schedule.get((season, str(period), home, away)))
 
 
 @dataclass
@@ -636,8 +681,6 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     # a priceless close may NOT do is produce a bet; see below.
     schedule = schedule_closes(conn, sport, market, require_prices=False)
     harvested = game_line_closes(conn, sport, market)
-    closes = dict(schedule)
-    closes.update(harvested)
     # THE PROVENANCE IS NAMED, and the feed with it. A harvested close is
     # one counter's quote; a schedule close is the field's consensus, and
     # a report that blurred them would present an edge over the field as
@@ -645,16 +688,16 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     # header has to say when they did.
     feed = SCHEDULE_FEED.get(sport, "schedule")
     consensus = f"schedule closes · {feed} closing consensus"
-    if harvested and len(closes) > len(harvested):
+    if harvested and schedule:
         source = f"real stored closes, topped up from {consensus}"
     elif harvested:
         source = "real stored closes"
     else:
         source = consensus
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
 
     r = GameLineBacktest(sport=sport, market=market, source=source)
     agg: dict[str, tuple[float, float, int]] = {}
@@ -663,7 +706,7 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = closes.get((date, home, away))
+        quote = close_for(harvested, schedule, row["season"], date, home, away)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
 
@@ -774,15 +817,15 @@ def backtest_team_totals(conn, sport: str = "nfl",
     from .gamebets import SCORING_BASELINE
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
 
-    totals = dict(schedule_closes(conn, sport, "total", require_prices=False))
-    totals.update(game_line_closes(conn, sport, "total"))
-    spreads = dict(schedule_closes(conn, sport, "spread", require_prices=False))
-    spreads.update(game_line_closes(conn, sport, "spread"))
+    sched_t = schedule_closes(conn, sport, "total", require_prices=False)
+    harv_t = game_line_closes(conn, sport, "total")
+    sched_s = schedule_closes(conn, sport, "spread", require_prices=False)
+    harv_s = game_line_closes(conn, sport, "spread")
 
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
 
     r = GameLineBacktest(sport=sport, market="team_total",
                          source="schedule closes · line SPLIT from the "
@@ -794,8 +837,8 @@ def backtest_team_totals(conn, sport: str = "nfl",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        tq = totals.get((date, home, away))
-        sq = spreads.get((date, home, away))
+        tq = close_for(harv_t, sched_t, row["season"], date, home, away)
+        sq = close_for(harv_s, sched_s, row["season"], date, home, away)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
 

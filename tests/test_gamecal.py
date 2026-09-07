@@ -58,18 +58,137 @@ def _db(games):
     """An in-memory history DB. ``games`` is (date, home, away, hs, as, extra)."""
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE games (sport TEXT, period TEXT, home TEXT, "
-                 "away TEXT, home_score INT, away_score INT, spread REAL, "
-                 "total REAL, extra TEXT)")
+    # `season` is here because the walks ORDER BY season, period — see
+    # test_a_walk_never_sees_next_season_in_this_seasons_week_two for why
+    # a fixture without it could not have caught the bug that added it.
+    # Every game here is one season, so the order within it is the date's.
+    conn.execute("CREATE TABLE games (sport TEXT, season INT, period TEXT, "
+                 "home TEXT, away TEXT, home_score INT, away_score INT, "
+                 "spread REAL, total REAL, extra TEXT)")
     conn.execute("CREATE TABLE odds_history (sport TEXT, market TEXT, "
                  "book TEXT, taken_at TEXT, home TEXT, away TEXT, player TEXT, "
                  "line REAL, over_odds INT, under_odds INT)")
     conn.executemany(
-        "INSERT INTO games (sport, period, home, away, home_score, "
-        "away_score, spread, total, extra) VALUES ('nfl',?,?,?,?,?,?,?,?)",
+        "INSERT INTO games (sport, season, period, home, away, home_score, "
+        "away_score, spread, total, extra) VALUES ('nfl',2024,?,?,?,?,?,?,?,?)",
         games)
     conn.commit()
     return conn
+
+
+# --- the walk is a walk -----------------------------------------------------
+def _two_seasons():
+    """Two NFL seasons whose WEEK LABELS REPEAT, which is what an NFL
+    `period` is: '001', '002', … every year. A single-season fixture
+    cannot show the bug this pins, and every walk test in this repo
+    was single-season, which is why it lived for as long as it did."""
+    conn = _db([])
+    rows = [
+        # 2024 week 1: A crushes B at home.
+        (2024, "001", "A", "B", 40, 0, None, None, None),
+        # 2024 week 2: the game under measurement — a pick'em close.
+        (2024, "002", "A", "B", 21, 20, None, None, '{"ml": [-110, -110]}'),
+        # 2025 week 1: B crushes A. NEXT season. Must be invisible above.
+        (2025, "001", "B", "A", 40, 0, None, None, None),
+        # 2025 week 2: the SAME matchup in the SAME week a year on, with a
+        # heavy close. Keyed by week alone it lands on 2024's game.
+        (2025, "002", "A", "B", 10, 30, None, None, '{"ml": [-400, 300]}'),
+    ]
+    conn.executemany(
+        "INSERT INTO games (sport, season, period, home, away, home_score, "
+        "away_score, spread, total, extra) VALUES ('nfl',?,?,?,?,?,?,?,?,?)", rows)
+    conn.commit()
+    return conn
+
+
+def test_a_walk_never_sees_next_season_in_this_seasons_week_two():
+    """Found 2026-09-07 while measuring what a better NFL moneyline
+    equation would be worth. Every walk-forward here — gamecal's three
+    observation walks, gamerank's four, gamebacktest's four — read the
+    games `ORDER BY period`. For college that is a date. For the NFL it
+    is a week number that comes round again every season, so the order
+    the walk actually took was: week 1 of 2021, week 1 of 2022, … week 1
+    of 2025, THEN week 2 of 2021. Pricing 2021's second week, it had
+    already seen 2025's first. Every team cleared the fifteen-game
+    history floor by week four of the FIRST season, on a blend of five
+    seasons, some of them in the future.
+
+    Measured on the real history, this and the join fault beside it
+    (`test_a_rematch_in_the_same_week_of_another_season_keeps_its_own_close`)
+    together flattered every NFL figure: moneyline AUC 0.641 → 0.633,
+    spread 0.491 → 0.481, total 0.497 → 0.471, team total 0.513 →
+    0.482; and they turned the three adopted calibration slopes from
+    small positives (+0.005, +0.056, +0.090) into −0.174, −0.085 and
+    −0.136 — every one of which adopts as a shrink of zero.
+
+    Here, 2024 week 1 says A is a 40-point team. Under the correct order
+    the walk prices 2024 week 2 on that alone and puts A well over the
+    market's coin flip. Under the leaky order it has also seen 2025's
+    opener, where B returned the favour, and the two cancel to nothing.
+    """
+    conn = _two_seasons()
+    obs = G._moneyline_observations(conn, "nfl", min_team_games=1)
+    # Two quoted games: 2024's week two, and 2025's.
+    assert len(obs) == 2, obs
+    gap, market_logodds, home_won = obs[0]
+    # THE CLOSE IS 2024's OWN — a pick'em. Keyed by week alone, 2025's
+    # −400 rematch overwrote it and this read +1.5 log-odds of market.
+    assert market_logodds == 0.0, market_logodds
+    assert home_won == 1.0
+    # A's rating from one 40-0 win, shrunk by 1/(1+6), through the 13.5
+    # margin curve: about 83% — a log-odds gap of about +1.6 from even.
+    # Leaked, the two 40-0 games cancel, the rating is zero, and the gap
+    # is home field alone: +0.19. Anything under one is the leak.
+    assert gap > 1.0, gap
+
+
+def test_the_rank_walk_takes_the_same_order():
+    """The same two seasons through gamerank: the probability the walk
+    records for the week-two game is A's, not a blend with next year."""
+    from engine import gamerank
+    conn = _two_seasons()
+    r = gamerank.measure_moneylines(conn, "nfl", min_team_games=1)
+    assert len(r.pairs) == 2, r.pairs
+    wp_home, won = r.pairs[0]
+    assert won is True and wp_home > 0.8, r.pairs
+
+
+def test_a_rematch_in_the_same_week_of_another_season_keeps_its_own_close():
+    """The second half of the same defect. `schedule_moneylines` and
+    `schedule_closes` were keyed `(period, home, away)` — for the NFL, a
+    week number that repeats — so two seasons' same-week meeting of the
+    same two teams shared a key and the later close overwrote the
+    earlier. On the real history: 1,359 keys for 1,424 games, sixty-five
+    walked against another year's line. The season is in the key now,
+    and the walks read it through `close_for`."""
+    from engine.gamebacktest import schedule_moneylines, close_for
+    conn = _two_seasons()
+    ml = schedule_moneylines(conn, "nfl")
+    assert len(ml) == 2, ml                       # one per quoted game
+    assert ml[(2024, "002", "A", "B")] == (-110, -110)
+    assert ml[(2025, "002", "A", "B")] == (-400, 300)
+    # And the per-game read hands each season its own.
+    sched = {k: {k[2]: h, k[3]: a} for k, (h, a) in ml.items()}
+    assert close_for({}, sched, 2024, "002", "A", "B") == {"A": -110, "B": -110}
+    assert close_for({}, sched, 2025, "002", "A", "B") == {"A": -400, "B": 300}
+    # A harvest, keyed by date, still wins where it exists.
+    harvest = {("2024-09-14", "A", "B"): {"A": -150, "B": 130}}
+    assert close_for(harvest, sched, 2024, "2024-09-14", "A", "B")["A"] == -150
+
+
+def test_every_walk_orders_by_season_before_period():
+    """All eleven walk queries, by name, so a new one written the old way
+    fails here rather than in a measurement nobody can see."""
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    expect = {"engine/gamerank.py": 2, "engine/gamecal.py": 2,
+              "engine/gamebacktest.py": 4}
+    for rel, n in expect.items():
+        src = open(os.path.join(root, rel)).read()
+        assert src.count("ORDER BY season, period") == n, (rel, n)
+        # …and no walk over the games table still sorts on period alone.
+        walks = re.findall(r"FROM games[^;]*?ORDER BY period[\"']", src)
+        assert not walks, (rel, walks)
 
 
 # --- the estimator ----------------------------------------------------------
@@ -452,14 +571,14 @@ def test_a_close_with_no_prices_is_usable_when_the_caller_says_so():
     from engine.gamebacktest import schedule_closes
     conn = _priced_db(None)
     out = schedule_closes(conn, "cfb", "spread", require_prices=False)
-    assert out[("2024-09-14", "UGA", "OSU")] == (-7.5, None, None)
+    assert out[(2024, "2024-09-14", "UGA", "OSU")] == (-7.5, None, None)
 
 
 def test_prices_still_ride_along_when_the_feed_has_them():
     from engine.gamebacktest import schedule_closes
     conn = _priced_db([-110, -110])
     out = schedule_closes(conn, "cfb", "spread", require_prices=False)
-    assert out[("2024-09-14", "UGA", "OSU")] == (-7.5, -110, -110)
+    assert out[(2024, "2024-09-14", "UGA", "OSU")] == (-7.5, -110, -110)
 
 
 def test_the_calibration_asks_for_lines_not_prices():
@@ -515,7 +634,11 @@ def test_one_unjoinable_harvest_row_does_not_hide_the_schedule():
     from engine.gamebacktest import game_line_closes, schedule_closes
     harvested = game_line_closes(conn, "nfl", "total")
     assert harvested                      # non-empty, and therefore truthy
-    assert not (set(harvested) & set(schedule_closes(conn, "nfl", "total")))
+    # The premise, restated for the keys as they now are: a harvest is
+    # filed by date, a schedule week is "001", and no harvested key names
+    # a game the NFL schedule knows by its week.
+    weeks = {(p, h, a) for (_s, p, h, a) in schedule_closes(conn, "nfl", "total")}
+    assert not (set(harvested) & weeks)
     merged = dict(schedule_closes(conn, "nfl", "total", require_prices=False))
     merged.update(harvested)
     assert len(merged) == 21
@@ -530,21 +653,28 @@ def test_a_harvested_close_still_wins_where_it_joins():
         "away, line, over_odds, under_odds) VALUES "
         "('nfl', 'total', 'best', '001', 'KC', 'BUF', 51.5, -105, -115)")
     conn.commit()
-    from engine.gamebacktest import game_line_closes, schedule_closes
-    merged = dict(schedule_closes(conn, "nfl", "total", require_prices=False))
-    merged.update(game_line_closes(conn, "nfl", "total"))
-    assert merged[("001", "KC", "BUF")] == (51.5, -105, -115)
+    from engine.gamebacktest import game_line_closes, schedule_closes, close_for
+    schedule = schedule_closes(conn, "nfl", "total", require_prices=False)
+    harvested = game_line_closes(conn, "nfl", "total")
+    assert schedule[(2024, "001", "KC", "BUF")][0] == 47.5      # the consensus
+    assert close_for(harvested, schedule, 2024, "001", "KC", "BUF") == (51.5, -105, -115)
 
 
-def test_both_observation_paths_merge_rather_than_prefer():
+def test_both_observation_paths_read_both_sources_per_game():
+    """Once `.update(` on one merged dict was the guard against a harvest
+    silencing the schedule. The merged dict then turned out to hand one
+    NFL season its neighbour's close (same week, same teams, one key),
+    so the two sources are now read in turn PER GAME by `close_for` —
+    which keeps the first guarantee and adds the second. This pins the
+    read, and the two shapes that let one source silence the other."""
     import inspect
     from engine import gamecal
     for fn in (gamecal.observations, gamecal._moneyline_observations):
         source = inspect.getsource(fn)
-        assert ".update(" in source, fn.__name__
-        # The two shapes that let one source silence the other. The
-        # bare `if not closes: return []` further down is a different
-        # thing — no closes at all really is nothing to measure.
+        assert "close_for(harvested, schedule, row[\"season\"]" in source, fn.__name__
+        assert ".update(" not in source, fn.__name__       # no merged dict
+        # The bare `if not schedule and not harvested: return []` is a
+        # different thing — no closes at all really is nothing to measure.
         assert " or schedule_closes(" not in source, fn.__name__
         assert "if not closes:\n        closes =" not in source, fn.__name__
 

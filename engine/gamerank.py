@@ -30,6 +30,21 @@ MEASURED 2026-09-02 on this repo's history (NFL 2021-25, CFB 2022-25):
     nfl  moneyline 0.6412 (1,181)   spread 0.4911   total 0.4968   team_total 0.5132
     cfb  moneyline 0.7522 (2,729)   spread 0.4963   total 0.5034   team_total 0.4917
 
+RE-MEASURED 2026-09-07 after the NFL walk was found not to be one. An
+NFL `period` is a week number that repeats every season, and two
+readers assumed it was unique. The walk sorted the games `ORDER BY
+period` — so it took week 1 of every season before week 2 of any, and
+priced 2021's second week having already seen 2025's first. And the
+schedule closes were keyed `(period, home, away)`, so a same-week
+rematch a season apart shared a key and sixty-five games were graded
+against another year's line. Ordered by season then period, and the
+closes joined by season (`gamebacktest.close_for`), the same games give:
+
+    nfl  moneyline 0.6332 (1,181)   spread 0.4807   total 0.4706   team_total 0.4815
+
+Both faults flattered every NFL market and none of them changed side of
+the floor. College was never affected: its period is a date.
+
 Moneylines rank; nothing else does. Shipped as `likely.GAME_RANK_AUC`
 (the ranked ones) and `likely.GAME_RANK_MEASURED` (the whole table —
 the sub-floor markets are on the board as labelled leans since
@@ -53,7 +68,7 @@ from dataclasses import dataclass, field
 
 from .gamebacktest import (SCORING_BASELINE, _rating, _settle_spread,
                            _settle_team_total, _settle_total, _split,
-                           game_line_closes, moneyline_closes,
+                           close_for, game_line_closes, moneyline_closes,
                            schedule_closes, schedule_moneylines)
 from .gamebets import (game_margin, mlb_win_prob, nfl_win_prob,
                        price_spread, price_team_total, price_total,
@@ -113,9 +128,9 @@ class GameRank:
 
 def _games(conn, sport: str):
     return conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
-        "ORDER BY period", (sport,)).fetchall()
+        "ORDER BY season, period", (sport,)).fetchall()
 
 
 def measure_lines(conn, sport: str, market: str,
@@ -124,15 +139,15 @@ def measure_lines(conn, sport: str, market: str,
     if market not in ("total", "spread"):
         raise ValueError(market)
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
-    closes = dict(schedule_closes(conn, sport, market, require_prices=False))
-    closes.update(game_line_closes(conn, sport, market))
+    schedule = schedule_closes(conn, sport, market, require_prices=False)
+    harvested = game_line_closes(conn, sport, market)
     r = GameRank(sport=sport, market=market)
     agg: dict = {}
     for row in _games(conn, sport):
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = closes.get((date, home, away))
+        quote = close_for(harvested, schedule, row["season"], date, home, away)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if quote and enough:
@@ -169,17 +184,18 @@ def measure_team_totals(conn, sport: str, min_team_games: int = 15) -> GameRank:
     game total and spread (see `gamebacktest.backtest_team_totals`),
     priced at the total's odds, two rows a game."""
     baseline = _sd(SCORING_BASELINE, sport, "scoring baseline")
-    totals = dict(schedule_closes(conn, sport, "total", require_prices=False))
-    totals.update(game_line_closes(conn, sport, "total"))
-    spreads = dict(schedule_closes(conn, sport, "spread", require_prices=False))
-    spreads.update(game_line_closes(conn, sport, "spread"))
+    sched_t = schedule_closes(conn, sport, "total", require_prices=False)
+    harv_t = game_line_closes(conn, sport, "total")
+    sched_s = schedule_closes(conn, sport, "spread", require_prices=False)
+    harv_s = game_line_closes(conn, sport, "spread")
     r = GameRank(sport=sport, market="team_total")
     agg: dict = {}
     for row in _games(conn, sport):
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        tq, sq = totals.get((date, home, away)), spreads.get((date, home, away))
+        tq = close_for(harv_t, sched_t, row["season"], date, home, away)
+        sq = close_for(harv_s, sched_s, row["season"], date, home, away)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if tq and sq and enough:
@@ -217,16 +233,15 @@ def measure_moneylines(conn, sport: str, min_team_games: int = 15) -> GameRank:
         return r
     win_prob = CURVES[sport]
     baseline = SCORING_BASELINE.get(sport, 0.0)
-    closes = moneyline_closes(conn, sport)
-    if not closes:
-        closes = {k: {k[1]: h, k[2]: a}
-                  for k, (h, a) in schedule_moneylines(conn, sport).items()}
+    harvested = moneyline_closes(conn, sport)
+    schedule = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, sport).items()}
     agg: dict = {}
     for row in _games(conn, sport):
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = closes.get((date, home, away)) or {}
+        quote = close_for(harvested, schedule, row["season"], date, home, away) or {}
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if enough and quote.get(home) is not None and quote.get(away) is not None:
@@ -291,21 +306,20 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
     cols = "sport, season, period, home, away, home_score, away_score, extra"
     rows = conn.execute(
         f"SELECT {cols} FROM games WHERE sport='cfb' AND home_score IS NOT NULL "
-        f"AND away_score IS NOT NULL ORDER BY period").fetchall()
+        f"AND away_score IS NOT NULL ORDER BY season, period").fetchall()
     # The FCS exclusion only when the map loaded (cfb_build's rule): on a
     # box where every key is the espn: fallback, excluding it would drop
     # the league.
     espn = sum(1 for r in rows if str(r["home"]).startswith("espn:")
                or str(r["away"]).startswith("espn:"))
     exclude = "espn:" if rows and espn / len(rows) < 0.5 else None
-    spreads = dict(schedule_closes(conn, "cfb", "spread", require_prices=False))
-    spreads.update(game_line_closes(conn, "cfb", "spread"))
-    totals = dict(schedule_closes(conn, "cfb", "total", require_prices=False))
-    totals.update(game_line_closes(conn, "cfb", "total"))
-    mls = moneyline_closes(conn, "cfb")
-    if not mls:
-        mls = {k: {k[1]: h, k[2]: a}
-               for k, (h, a) in schedule_moneylines(conn, "cfb").items()}
+    sched_s = schedule_closes(conn, "cfb", "spread", require_prices=False)
+    harv_s = game_line_closes(conn, "cfb", "spread")
+    sched_t = schedule_closes(conn, "cfb", "total", require_prices=False)
+    harv_t = game_line_closes(conn, "cfb", "total")
+    harv_ml = moneyline_closes(conn, "cfb")
+    sched_ml = {k: {k[2]: h, k[3]: a}
+                for k, (h, a) in schedule_moneylines(conn, "cfb").items()}
     out = {m: GameRank(sport="cfb", market=m)
            for m in ("total", "spread", "team_total", "moneyline")}
     mem = sqlite3.connect(":memory:")
@@ -327,10 +341,10 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
             hr, ar = ratings.get(g["home"]), ratings.get(g["away"])
             if not hr or not ar or hr.games < min_team_games or ar.games < min_team_games:
                 continue
-            key = (date, g["home"], g["away"])
             hs, as_ = float(g["home_score"]), float(g["away_score"])
             margin = (hr.net - ar.net) + fit.home_field
-            sq, tq = spreads.get(key), totals.get(key)
+            sq = close_for(harv_s, sched_s, g["season"], date, g["home"], g["away"])
+            tq = close_for(harv_t, sched_t, g["season"], date, g["home"], g["away"])
             if sq:
                 line, oa, ob = sq
                 oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
@@ -364,7 +378,7 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
                             out["team_total"].pushes += 1
                         else:
                             out["team_total"].pairs.append((float(c["win_prob"]), bool(won)))
-            q = mls.get(key) or {}
+            q = close_for(harv_ml, sched_ml, g["season"], date, g["home"], g["away"]) or {}
             if q.get(g["home"]) is not None and q.get(g["away"]) is not None:
                 out["moneyline"].games_quoted += 1
                 if hs != as_:

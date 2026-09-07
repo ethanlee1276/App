@@ -52,14 +52,25 @@ Measured 2026-09-02 on this repo's history (NFL 2021–25, CFB 2022–25):
 
 | sport | moneyline | spread | total | team total |
 |---|---|---|---|---|
-| NFL | **0.641** (1,181 games) | 0.491 | 0.497 | 0.513 |
+| NFL | **0.633** (1,181 games) | 0.481 | 0.471 | 0.482 |
 | CFB | **0.752** (2,729 games) | 0.496 | 0.503 | 0.492 |
 
 The floor is `likely.MIN_RANK_AUC` (0.60). The model can say who wins
 and cannot say who covers: spreads, totals and team totals test as a
 coin flip against the close on both leagues. That is not a surprise (the
 close already contains the ratings, and the market's own de-vigged
-moneyline ranks NFL winners at 0.714), and it decides the board.
+moneyline ranks NFL winners at 0.718 on the same 1,181 games), and it
+decides the board.
+
+The NFL row was re-measured on 2026-09-07. Its first figures came off a
+walk that was not one: an NFL `period` is a week number that repeats
+every season, and two readers assumed it was unique. The walk sorted on
+it alone, so it priced each season's second week having already seen
+every later season's first; and the schedule closes were keyed by it
+alone, so a same-week rematch a season apart shared a key and 65 games
+were graded against another year's line. Ordered by season and then
+week, and joined by season, the same games give the row above — lower
+on every market, and no market on a different side of the floor.
 
 The first cut shipped moneylines alone and kept the rest off. Ethan,
 the same day: "I only see money lines in the best bets. I don't see team

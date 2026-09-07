@@ -224,14 +224,14 @@ def _sched(rows, sport="nfl"):
 def test_schedule_closes_read_the_home_number_and_its_pair():
     conn = _sched([("2026-09-13", "KC", "BUF", 27, 24, -3.0, 47.5)])
     tot = schedule_closes(conn, "nfl", "total")
-    assert tot[("2026-09-13", "KC", "BUF")] == (47.5, -112, -108)
+    assert tot[(2026, "2026-09-13", "KC", "BUF")] == (47.5, -112, -108)
     spr = schedule_closes(conn, "nfl", "spread")
     # The stored spread IS the home team's book number, and the pair is
     # (home, away) — reversed, every spread in the replay backs the wrong
     # side at the wrong price.
-    assert spr[("2026-09-13", "KC", "BUF")] == (-3.0, -110, -108)
+    assert spr[(2026, "2026-09-13", "KC", "BUF")] == (-3.0, -110, -108)
     assert schedule_moneylines(conn, "nfl")[
-        ("2026-09-13", "KC", "BUF")] == (-140, 120)
+        (2026, "2026-09-13", "KC", "BUF")] == (-140, 120)
 
 
 def test_a_game_with_no_stored_prices_is_skipped_not_defaulted():

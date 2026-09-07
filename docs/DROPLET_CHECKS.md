@@ -1077,3 +1077,45 @@ the market, so it is worth exactly as much as that sample is
 representative. Price the tickets you would have taken AND the ones the
 screen refused, or the table measures the tax only where we liked the
 bet.
+
+## The NFL calibration store carries figures from a walk that was not one (2026-09-07)
+
+Every NFL walk-forward — `engine.gamecal`'s three, `engine.gamerank`'s
+four, `engine.gamebacktest`'s four — sorted the games `ORDER BY period`,
+and an NFL period is a WEEK NUMBER that repeats every season. The walk
+took week 1 of 2021, 2022, 2023, 2024 and 2025 before week 2 of anything,
+and rated each season's early games on results from seasons that had not
+happened. And the schedule closes were keyed `(period, home, away)`, so
+a same-week rematch a season apart shared a key: 1,359 keys for 1,424
+games, 65 graded against another year's line. Fixed to `ORDER BY season,
+period` and a season-qualified close key read through
+`gamebacktest.close_for`; college was never affected (its period is a
+date).
+
+The stored NFL shrinks in `data/feedstate/gamecal.json` were fitted on
+the faulty walk and are flattered — moneyline 0.005, spread 0.056, total
+0.090. Refit on the corrected walk the slopes are −0.174 ± 0.108,
+−0.085 ± 0.076 and −0.136 ± 0.111, which all adopt as 0.0: the NFL game
+markets keep NONE of the model's disagreement with the close, which is
+the honest output. The nightly refits on its own; to not wait for it:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamecal --sport nfl --save
+cd /srv/qellys && sudo -u qellys python3 -m engine.gamerank --sport nfl --save
+```
+
+Expect the first to print the three slopes above and adopt every shrink
+at zero, and the second to print `nfl:moneyline: AUC 0.6332` with the
+other three under the floor. NFL spread and total edge bets will go
+quiet after the first — that is the measurement doing its job, not a
+fault.
+
+THE LONGER FIX IS THE `date` COLUMN. Commit 444cbba gave every game a
+kickoff date so an NFL bet could have a closing line; `upsert_games`
+fills it on the next ingest, and on a box that has re-ingested since it
+is populated — this container's copy of the DB predates that commit by
+four minutes and has it NULL on every NFL row. Once it is known to be
+populated everywhere, the walks can order and join on the date like
+every other sport does, and the NFL harvest (filed by date) would join
+too. Not done now, because a walk that keyed on a column that is NULL
+here would be silently back to the fault above.
