@@ -391,15 +391,24 @@ def test_the_zero_needs_the_opportunity_behind_it():
 
 
 def test_the_opportunity_columns_are_named_rather_than_inferred():
-    assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions"}
+    assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions",
+                           "pass_yds": "pass_att"}
 
 
 def test_the_markets_with_no_opportunity_column_are_left_alone():
     """`receptions` would need targets and this feed has none, so a
     receiver thrown at four times and catching none is ABSENT rather
     than zero. Pinned so nobody later reads a college receptions AUC as
-    if it covered those player-games."""
-    assert "receptions" not in C.ZERO_WHEN and "pass_yds" not in C.ZERO_WHEN
+    if it covered those player-games.
+
+    ``pass_yds`` USED TO BE HERE and left on 2026-09-07, which is a
+    gap closing rather than a rule loosening: an attempt is a
+    completion, an incompletion or an interception, and the last two
+    are columns this feed does carry (tests/test_cfb_pass_attempts.py).
+    A quarterback's blank game is now on the record. A receiver's still
+    is not, and that is what this test still guards."""
+    assert "receptions" not in C.ZERO_WHEN
+    assert "targets" not in C.MARKETS, "no target column exists to count"
 
 
 # --- the join, which failed to zero rows and said nothing ------------------

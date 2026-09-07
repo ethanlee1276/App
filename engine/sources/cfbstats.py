@@ -122,6 +122,18 @@ BLANK = ("", "NA", "NULL", "None", "nan")
 QB_COLUMNS = ("incompletion_player", "sack_taken_player",
               "interception_thrown_player")
 
+#: …and the subset of those that is a PASS ATTEMPT. An incompletion is
+#: an attempt and so is an interception; a sack is not, in college
+#: scoring as in the NFL's, which is the whole reason this is a subset
+#: rather than QB_COLUMNS itself.
+#:
+#: WHY ONE ROW COUNTS AT MOST ONE ATTEMPT. Feeds disagree about whether
+#: a picked-off pass also sets `incompletion_player`, and this parser
+#: cannot see which convention it is being handed. Counting per COLUMN
+#: would inflate attempts by the interception count under one of them;
+#: counting per ROW is right under both.
+ATTEMPT_COLUMNS = ("incompletion_player", "interception_thrown_player")
+
 #: Inside-20 and inside-5, the same cuts `engine.sources.nflpbp` buckets
 #: on. Keeping them identical is what lets one touchdown model read both
 #: footballs: `engine.touchdowns` and `engine.nflusage` interpret
@@ -164,17 +176,27 @@ ALWAYS = ("anytime_td",)
 #: WHAT THIS STILL CANNOT SEE, said plainly rather than left implied:
 #: a zero with no opportunity column behind it. ``receptions`` would
 #: need targets and this feed has no target column, so a receiver who
-#: was thrown at four times and caught none is absent, not zero.
-#: ``pass_yds`` accumulates from completions with no attempts column,
-#: so a quarterback's blank is likewise invisible — vanishingly rare at
-#: a game level, unlike the receiving case. Neither gap is closable
-#: from this feed, and both are the reason a college receptions AUC
-#: should be read as measured on players who caught something.
-ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions"}
+#: was thrown at four times and caught none is absent, not zero. That
+#: gap is not closable from this feed, and it is the reason a college
+#: receptions AUC should be read as measured on players who caught
+#: something.
+#:
+#: ``pass_yds`` USED TO BE IN THAT PARAGRAPH and no longer is. It read
+#: "accumulates from completions with no attempts column", which was
+#: true of the parser and not of the feed: an attempt is a completion,
+#: an incompletion or an interception, and the last two are named
+#: columns here (ATTEMPT_COLUMNS) that were already being read for the
+#: passer tiebreak. Counting them gives college the denominator the NFL
+#: bridge has always had — `engine.nflusage.OPP_BY_MARKET` maps
+#: ``pass_yds`` to ``pass_att``, so a college passing projection can now
+#: be built the way every other market's is, as recent volume times
+#: season-long efficiency, rather than from yards alone.
+ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions",
+             "pass_yds": "pass_att"}
 
 #: Emitted in this order so an ingest log reads the way a box score does.
 MARKETS = ("anytime_td", "carries", "rush_yds", "receptions", "rec_yds",
-           "pass_yds", "rush_td", "rec_td", "pass_td",
+           "pass_att", "pass_yds", "rush_td", "rec_td", "pass_td",
            "rz_car", "rz_rec", "i5_car")
 
 #: A touchdown and the kick after it. The unit the coverage audit below
@@ -284,7 +306,7 @@ def _slot(bag: dict, key: tuple) -> dict:
     return bag.setdefault(key, {
         "carries": 0.0, "rush_yds": 0.0, "rush_td": 0.0,
         "receptions": 0.0, "rec_yds": 0.0, "rec_td": 0.0,
-        "pass_yds": 0.0, "pass_td": 0.0,
+        "pass_att": 0.0, "pass_yds": 0.0, "pass_td": 0.0,
         "rz_car": 0.0, "rz_rec": 0.0, "i5_car": 0.0,
     })
 
@@ -363,6 +385,13 @@ def parse_player_stats(rows, season: int, games: dict,
                 ids.setdefault((team, qb),
                                _name(r.get(column.replace("_player",
                                                           "_player_id"))))
+        # The attempt that did not complete. One per ROW, not per column
+        # — see ATTEMPT_COLUMNS. The completed ones are counted below,
+        # where the passer's identity has been resolved.
+        thrown = next((_name(r.get(c)) for c in ATTEMPT_COLUMNS
+                       if _name(r.get(c))), "")
+        if thrown:
+            _slot(bag, base + (thrown,))["pass_att"] += 1
 
         ytg = _ytg(r.get("yards_to_goal"))
         td = _name(r.get("touchdown_player"))
@@ -404,6 +433,7 @@ def parse_player_stats(rows, season: int, games: dict,
         if ytg is not None and ytg <= RED_ZONE:
             s["rz_rec"] += 1
         q = _slot(bag, base + (passer,))
+        q["pass_att"] += 1
         q["pass_yds"] += yds
         if passer != receiver and _credited(modes, week_of, base[0],
                                             by_name, by_field):

@@ -306,3 +306,46 @@ it. `python3 -m engine.cfbinfo` prints the table.
 **Parked list, in priority order:** play-by-play efficiency for §5's
 success-rate and drive metrics; opener→close line movement and key-number
 shopping; a QB-status feed to replace the manual confirmation.
+
+## Passing has a denominator now (2026-09-07)
+
+Ethan, 2026-09-07, listing the data a winning model needs: "College
+target and rush share from play-by-play, where today's logs have passing
+yards but no attempts."
+
+Rush share college already had (`carries`). Attempts it did not, and the
+parser's own note explained why: `pass_yds` accumulated from completions,
+with no attempts column. That was true of the parser and false of the
+feed. An attempt is a completion, an incompletion or an interception, and
+the last two are named columns `engine/sources/cfbstats.py` was already
+reading to settle which of two names threw the ball.
+
+`pass_att` is now counted and stored, one per row — a sack is not an
+attempt, and a picked-off pass counts once whether or not the feed also
+sets the incompletion column. Two things follow:
+
+  * `engine.nflusage.OPP_BY_MARKET` maps `pass_yds` to `pass_att`, so a
+    college passing projection can be built the way every other market's
+    is: recent volume times season-long efficiency, rather than from
+    yards alone.
+  * a quarterback who attempted passes for no net yards writes a
+    `pass_yds` row instead of vanishing, which ends the survivorship on
+    that market. Receiving still has it — this feed has no target column,
+    so a receiver targeted four times with no catch is still absent
+    rather than zero.
+
+The column fills on the next season re-ingest, not retroactively. To
+check it landed:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+for season, n, tot in c.execute(
+    \"SELECT season, COUNT(*), SUM(value) FROM player_game_logs \"
+    \"WHERE sport='cfb' AND market='pass_att' GROUP BY season\"):
+    print(season, n, 'player-games,', tot, 'attempts')"
+```
+
+A season with `pass_yds` rows and no `pass_att` rows has not been
+re-ingested since this shipped.
