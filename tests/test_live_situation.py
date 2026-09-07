@@ -279,6 +279,25 @@ def test_the_away_side_is_measured_from_the_other_goal_line():
     assert spot_to_yard_line("2nd & 6 at BUF 38", "KC", "BUF") == 62.0
 
 
+def test_a_five_letter_school_code_is_still_a_spot():
+    """The pro codes are two or three letters and the regex was written
+    against them at a bound of four. College is where that bites: UMASS,
+    UCONN and their like are five, and at four the pattern does not match
+    AT ALL — so the field position silently never appears for those
+    schools rather than appearing wrong.
+
+    Found 2026-09-07 while working out why a college card had no field
+    strip. It was not the cause of THAT card (Louisville and Ole Miss are
+    both inside four), which is the point: it would have gone on hiding
+    until somebody opened a UMass game and wondered the same thing."""
+    assert spot_to_yard_line("2nd & 7 at UMASS 30", "UMASS", "UCONN") == 30.0
+    assert spot_to_yard_line("1st & 10 at UCONN 45", "UMASS", "UCONN") == 55.0
+    # And the pro cases are unchanged by the wider bound.
+    assert spot_to_yard_line("2nd & 7 at KC 30", "KC", "BUF") == 30.0
+    # Six letters is still not a code.
+    assert spot_to_yard_line("at ABCDEF 30", "ABCDEF", "BUF") is None
+
+
 def test_midfield_resolves_without_belonging_to_anyone():
     """ESPN writes "MID 50" rather than naming a side, and 50 is the one
     yard number that does not need one."""

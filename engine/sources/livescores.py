@@ -89,9 +89,16 @@ def _state(espn_state: str) -> str:
     return {"pre": "scheduled", "in": "live", "post": "final"}.get(espn_state, "scheduled")
 
 
-# "at DEN 45", "DEN 45", "MID 50", "at BUF 3". The side is a 2-4 letter
+# "at DEN 45", "DEN 45", "MID 50", "at BUF 3". The side is a 2-5 letter
 # abbreviation and the yard is 1-50; anything else is not a spot.
-_SPOT_RE = re.compile(r"\b([A-Z]{2,4})\s+(\d{1,2})\s*$")
+#
+# FIVE, NOT FOUR. The pro codes are all two or three letters and the
+# original bound was written against them. College is where it bites:
+# UMASS, UCONN, UMBC and their like are five, and at four the regex does
+# not match AT ALL — not a wrong spot, no spot, so the field position
+# silently never appears for those schools. Found 2026-09-07 while
+# working out why a college card had no field strip.
+_SPOT_RE = re.compile(r"\b([A-Z]{2,5})\s+(\d{1,2})\s*$")
 
 
 def spot_to_yard_line(text: str, home: str, away: str):
