@@ -200,12 +200,17 @@ def test_the_wind_is_spelled_the_way_a_person_says_it():
     """`wind_dir` ships "out" | "in" | "cross". "12 mph in" is not a
     sentence; his render says "Blowing In"."""
     assert "const PBP_WIND = {out:" in APP
+    # RE-ANCHORED 2026-09-07: the lookup moved into pbpWindWord when
+    # football arrived, because the two leagues ship different things in
+    # the same field — a park-relative word for baseball, a compass
+    # bearing for football. The header calls it; the rule lives there.
     body = _fn("pbpParkHeadHTML")
-    assert "PBP_WIND[w.wind_dir]" in body
+    assert "pbpWindWord(w.wind_dir)" in body
+    assert "PBP_WIND[d.toLowerCase()]" in _fn("pbpWindWord")
     for token in ("blowing out", "blowing in", "crosswind"):
         assert token in APP, token
     # An unknown token prints the speed alone rather than the raw word.
-    assert 'rel ? " " + rel : ""' in body
+    assert 'return /^[NSEW]{1,3}$/i.test(d) ? " " + d.toUpperCase() : "";' in _fn("pbpWindWord")
 
 
 def test_a_closed_roof_is_said_out_loud():

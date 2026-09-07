@@ -900,6 +900,11 @@ const ICON_PATHS = {
   hot: '<path d="M8 1.8c2.4 2.6 4.2 4.5 4.2 7a4.2 4.2 0 11-8.4 0c0-1.3.6-2.4 1.6-3.6'
        + '.4 1 1 1.6 1.8 1.9C6.6 5.6 7 3.6 8 1.8z"/>',
   cold: '<path d="M8 1.6v12.8M2.4 4.8l11.2 6.4M13.6 4.8L2.4 11.2"/>',
+  // The ball itself, for the football tiles. An ellipse on the diagonal
+  // with two laces — the shape reads at 12px where a rounder one does
+  // not, and it is the one mark that says which sport this card is.
+  football: '<ellipse cx="8" cy="8" rx="6.6" ry="4" transform="rotate(-30 8 8)"/>'
+          + '<path d="M5.8 10.2l4.4-4.4M6.9 8.4l1.1 1.1M9.1 6.2l1.1 1.1"/>',
   // Two for the batted-ball tiles (Ethan's park render, 2026-09-06): how
   // hard it was hit and at what angle it left. A dial with a needle, and
   // a ray off a baseline with the angle's own arc between them — both
@@ -32080,6 +32085,10 @@ let _pbpTab = "info";           // info | props | injuries | players
    trusts). Team stats and Splits are not built: the summary's team
    block has not been probed, and a room drawn from an unread shape
    would be the fabricated number this site exists not to print. */
+// The two codes that share a play feed, a field and every renderer
+// below. Named once so a change cannot reach one league and miss the
+// other — which is the shape of most of this file's football bugs.
+const PBP_FOOTBALL = new Set(["nfl", "cfb"]);
 const PBP_TABS = [["info", "Game info"], ["props", "Live props"], ["injuries", "Injuries"], ["players", "Player stats"]];
 
 /* The open bets on THIS game, from the board's tracker — which is the
@@ -32488,18 +32497,25 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   // MLB gets the PHOTOGRAPH (Ethan's render, ours, with our scoreboard);
   // the other leagues keep the vector art. The photo is a backdrop, so
   // everything that moves is drawn over it rather than in it.
-  const photo = league === "mlb";
+  // FOOTBALL GETS A PHOTOGRAPH TOO (Ethan, 2026-09-07, with two field
+  // renders; "this is also for cfb as well"). Both codes, because the
+  // college and pro play feeds are the same shape from the same source —
+  // PBP_FOOTBALL is the one list, so neither can be wired up alone.
+  const isFootball = PBP_FOOTBALL.has(league);
+  const photo = league === "mlb" || isFootball;
   const keep = window.ACTIVE_TEAMS;
   window.ACTIVE_TEAMS = teamsForSport(league);          // the art reads it
   let art = "";
   try {
-    art = photo ? pbpPhotoHTML(game)
+    art = league === "mlb" ? pbpPhotoHTML(game)
+      : isFootball ? pbpFieldHTML(d)
       : (league === "nba" || league === "wnba") ? court(game, { w: 640, h: 400 })
       : stadium(game, { w: 640, h: 400 });
   } catch (e) { art = ""; }
   window.ACTIVE_TEAMS = keep;
   const arc = league === "mlb" && hitRow && hitRow.hit
-    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo }) : "";
+    ? pbpArcSVG(hitRow.hit, (boardGame || {}).park, { photo })
+    : isFootball && hitRow ? pbpPlaySVG(hitRow) : "";
   const park = (boardGame || {}).park || {};
   const w = (boardGame || {}).weather || {};
   const wx = w.temp_f != null ? `${Math.round(w.temp_f)}°F${w.wind_mph != null
@@ -32508,11 +32524,40 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   // art it sat over grass in the same corner the wall numbers now use.
   // Kept for the leagues that have no header — football and hoops still
   // want the venue somewhere.
-  const chip = league !== "mlb" && (park.name || (boardGame || {}).park_name || wx)
+  const chip = !photo && (park.name || (boardGame || {}).park_name || wx)
     ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
         wx ? `<span>${wx}</span>` : ""}</div>` : "";
   return `<div class="pbp-park">${art}${arc}${chip}</div>
-    ${pbpBattedHTML(hitRow)}${pbpParkFactsHTML(park, boardGame)}`;
+    ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
+    ${pbpParkFactsHTML(park, boardGame)}`;
+}
+
+/* The four tiles under a football field.
+ *
+ * Ethan's render shows EXIT VELOCITY and LAUNCH ANGLE beside the yards
+ * and the play type. Those are Statcast numbers: baseball has them
+ * because a camera array measures every batted ball, and football does
+ * not have them at all. ESPN's play carries `event`, `yards`, `down`,
+ * `distance` and `yard_line` — so the shape of his four-up is kept and
+ * filled with the four numbers we hold, rather than two real ones beside
+ * two invented ones.
+ *
+ * Down and field position earn their place on their own merit anyway: on
+ * a betting page they are what moves a live total. */
+function pbpPlayTilesHTML(play) {
+  const p = play || {};
+  if (!p.kind) return "";
+  const tile = (ic, k, v, u) => v === "" ? "" : `<div class="pbp-bb-tile">
+      <div class="k">${icon(ic, 12)}${escapeHtml(k)}</div>
+      <b>${escapeHtml(String(v))}${u ? `<span>${escapeHtml(u)}</span>` : ""}</b></div>`;
+  const yards = Number(p.yards);
+  return `<div class="pbp-bb">
+    ${tile("rising", "GAINED", isFinite(yards) ? yards : "", " YDS")}
+    ${tile("football", "PLAY TYPE", p.event || "")}
+    ${tile("target", "DOWN", p.down
+        ? `${pbpOrd(p.down)} & ${p.distance != null ? p.distance : "?"}` : "")}
+    ${tile("dash", "YARD LINE", p.yard_line != null ? p.yard_line : "")}
+  </div>`;
 }
 
 /* The park photograph, with this park's distances marked on its wall.
@@ -32530,6 +32575,134 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
  * 336/396/322, which is what "one render for all live MLB games" means
  * without the render lying about which park it is.
  */
+/* THE FOOTBALL FIELD, AND WHERE A PLAY LANDS ON IT.
+ * ---------------------------------------------------------------------
+ * Ethan, 2026-09-07, with two renders of a field: "The last 2 renders of
+ * just the field and players will the the EXACT renders you will use for
+ * the field on the play by play screens. The black team with represent
+ * the away team and white will represent the home team." Then: "this is
+ * also for cfb as well."
+ *
+ * Two photographs of ONE generic stadium carrying our own branding —
+ * same decision as the ballpark, and for the same two reasons: we do not
+ * hold thirty-two stadium photographs, and we do not want anybody else's
+ * marks on our card. Which of the two draws is decided by POSSESSION,
+ * because that is the whole difference between them: black jerseys on
+ * offence is the away team with the ball, white is the home team.
+ *
+ * MEASURED, NOT GUESSED. The numbers below were read off a 240x150 grid
+ * laid over the render (scratch: field_grid.png), the same method the
+ * ballpark's PBP_PHOTO points came from:
+ *
+ *     y = 108   the line the linemen are standing on   ->   0 yards
+ *     y =  84   midfield, under the shield             ->  20 yards
+ *     y =  62   the goal line at the near end zone     ->  70 yards
+ *
+ * A camera does not space those evenly, so a linear map would put a
+ * five-yard run halfway to midfield. `y = A - B/(d + C)` is the shape a
+ * lens actually produces, fitted through those three points exactly;
+ * 5 yards moves 8 units, 70 reaches the goal line, and everything past
+ * it compresses instead of running off the picture. */
+const PBP_FIELD = {
+  qb: [118, 120],            // where the passer stands, in the same grid
+  los: 108, goal: 62,
+  A: 35.368, B: -2943.490, C: 40.526,
+};
+
+/* How far up the picture a play of `yards` reaches. */
+function pbpFieldY(yards) {
+  const d = Math.max(0, Number(yards) || 0);
+  const y = PBP_FIELD.A - PBP_FIELD.B / (d + PBP_FIELD.C);
+  // Never past the back of the end zone, however long the play was — the
+  // caption carries the real number, the picture only has so much grass.
+  return Math.max(PBP_FIELD.goal - 4, y);
+}
+
+/* The stadium photograph, with the side that has the ball on offence.
+ *
+ * `live.possession` is the abbreviation of the team with the ball, and
+ * livescore_build only writes it when ESPN's situation block parsed —
+ * so an unknown possession is a real state, not a missing field. With
+ * nothing to go on the home-ball frame draws: it is a DEFAULT, not a
+ * claim about who has the ball, and nothing else on the page reads it. */
+function pbpFieldHTML(d) {
+  const lv = d.live || {};
+  const away = lv.possession && lv.possession === d.away;
+  const stem = away ? "field-away-ball" : "field-home-ball";
+  return `<picture>
+      <source type="image/webp" srcset="img/field/${stem}@640.webp 640w, img/field/${stem}.webp 1280w"
+        sizes="(max-width: 700px) 100vw, 700px">
+      <img class="pbp-photo" src="img/field/${stem}.jpg"
+        srcset="img/field/${stem}@640.jpg 640w, img/field/${stem}.jpg 1280w"
+        sizes="(max-width: 700px) 100vw, 700px" alt="" decoding="async">
+    </picture>`;
+}
+
+/* THE PLAY, DRAWN ON THE FIELD.
+ * ---------------------------------------------------------------------
+ * Ethan's render draws the ball's flight curving out to a receiver, with
+ * a callout at the landing spot. We draw the flight and the callout; we
+ * do NOT draw the curve, and that is deliberate.
+ *
+ * A football play from ESPN carries `yards`, `event`, `down`, `distance`
+ * and `yard_line`. It does not carry where across the field the ball
+ * went. Bowing the path to one side would be inventing the one number
+ * we do not have, on a page whose whole claim is that it shows real
+ * data — so the ball travels straight up the field by the distance the
+ * play actually gained, and the caption carries the rest. Same rule as
+ * the ballpark, where the park's real fence decides whether a ball is
+ * gone and the picture only changes what it is drawn on.
+ *
+ * A play that lost yards gets no line at all: the camera model is fitted
+ * downfield and does not describe the backfield, so drawing a loss would
+ * be extrapolating past the anchors. The mark sits at the line and the
+ * caption says "-3 YDS", which is the honest version of that play. */
+const PBP_PLAY_HUE = { score: "#ffd24a", turnover: "#ff8a5c", normal: "#ffd24a" };
+
+function pbpPlaySVG(play) {
+  const p = play || {};
+  const yards = Number(p.yards);
+  if (!isFinite(yards)) return "";
+  const still = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const id = "ply" + Math.random().toString(36).slice(2, 7);
+  const hue = p.scoring ? PBP_PLAY_HUE.score
+    : p.turnover ? PBP_PLAY_HUE.turnover : PBP_PLAY_HUE.normal;
+  const [x0, y0] = PBP_FIELD.qb;
+  const y1 = yards > 0 ? pbpFieldY(yards) : PBP_FIELD.los;
+  const len = Math.abs(y0 - y1);
+  const title = String(p.event || "Play");
+  const detail = [`${yards > 0 ? "" : yards < 0 ? "−" : ""}${Math.abs(Math.round(yards))} YDS`,
+    p.down ? `${pbpOrd(p.down)} & ${p.distance != null ? p.distance : "?"}` : ""]
+    .filter(Boolean).join(" • ");
+  const cw = Math.max(40, Math.min(104, 11 + Math.max(title.length, detail.length) * 3.5));
+  const ch = title && detail ? 19 : 12;
+  const [bx, by] = pbpCalloutBox([x0, y1], cw, ch);
+  return `
+  <svg class="pbp-arc" viewBox="0 0 240 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    ${yards > 0 ? `<path id="${id}" d="M${x0} ${y0.toFixed(1)} L${x0} ${y1.toFixed(1)}"
+      fill="none" stroke="${hue}" stroke-width="1.6" stroke-linecap="round" opacity="0.95"${
+      still ? "" : ` stroke-dasharray="${len.toFixed(1)}" stroke-dashoffset="${len.toFixed(1)}"`}>
+      ${still ? "" : `<animate attributeName="stroke-dashoffset" from="${len.toFixed(1)}" to="0" dur="1.1s" fill="freeze"/>`}
+    </path>
+    <circle r="2.4" fill="#fff3cd"${still ? ` cx="${x0}" cy="${y1.toFixed(1)}"` : ""}>
+      ${still ? "" : `<animateMotion dur="1.1s" fill="freeze"><mpath href="#${id}"/></animateMotion>`}
+    </circle>` : ""}
+    <circle cx="${x0}" cy="${y1.toFixed(1)}" r="6.4" fill="none" stroke="${hue}"
+      stroke-width="0.7" opacity="0.42"/>
+    <circle cx="${x0}" cy="${y1.toFixed(1)}" r="3.6" fill="none" stroke="${hue}"
+      stroke-width="1" opacity="0.85"/>
+    <g>
+      <rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch}"
+        rx="3" fill="#0c1020" opacity="0.88" stroke="${hue}" stroke-opacity="0.55" stroke-width="0.5"/>
+      <text x="${(bx + 5).toFixed(1)}" y="${(by + 7.6).toFixed(1)}" font-size="5.6"
+        font-weight="700" fill="${hue}" font-family="system-ui">${escapeHtml(title)}</text>
+      ${detail ? `<text x="${(bx + 5).toFixed(1)}" y="${(by + 15.2).toFixed(1)}"
+        font-size="4.9" font-weight="600" fill="#e9edfb"
+        font-family="system-ui">${escapeHtml(detail)}</text>` : ""}</g>
+  </svg>`;
+}
+
 function pbpPhotoHTML(game) {
   const p = game.park || {};
   const mark = (key, pt, dy) => {
@@ -32594,17 +32767,39 @@ function pbpPhotoHTML(game) {
    that line would have to be invented and it isn't drawn. */
 const PBP_WIND = {out: "blowing out", in: "blowing in", cross: "crosswind"};
 
+/* The wind's direction as a phrase, or nothing.
+ *
+ * Two leagues ship two different things in the same field. Baseball's is
+ * the wind's relation to the PARK — "out", "in", "cross" — because that
+ * is what changes a home-run price. Football's is a compass bearing,
+ * because a crosswind at Ford Field is not a thing and a 15 mph
+ * northwester in Buffalo is. Both are real; neither is the other.
+ *
+ * Anything that is neither a known relation nor a bearing prints
+ * nothing. That is the rule the raw-token bug taught: a card that says
+ * "12 mph in" because a token went through unread is worse than a card
+ * that says "12 mph". */
+function pbpWindWord(dir) {
+  if (!dir) return "";
+  const d = String(dir).trim();
+  if (PBP_WIND[d.toLowerCase()]) return " " + PBP_WIND[d.toLowerCase()];
+  return /^[NSEW]{1,3}$/i.test(d) ? " " + d.toUpperCase() : "";
+}
+
 function pbpParkHeadHTML(league, boardGame) {
-  if (league !== "mlb") return "";
+  const isFootball = PBP_FOOTBALL.has(league);
+  if (league !== "mlb" && !isFootball) return "";
   const g = boardGame || {};
-  const park = g.park || {};
+  // Baseball's venue is a MODEL INPUT and rides in `park`; football's is
+  // context and rides in `stadium` (engine/stadiums.py says why). Same
+  // header, each league's own field — not one renamed to suit the other.
+  const park = (isFootball ? g.stadium : g.park) || {};
   const w = g.weather || {};
   const name = park.name || g.park_name || "";
   const bits = [];
   if (w.temp_f != null) bits.push(`${Math.round(w.temp_f)}°F`);
   if (w.wind_mph != null) {
-    const rel = PBP_WIND[w.wind_dir] || "";
-    bits.push(`${Math.round(w.wind_mph)} mph${rel ? " " + rel : ""}`);
+    bits.push(`${Math.round(w.wind_mph)} mph${pbpWindWord(w.wind_dir)}`);
   }
   // Adjective first, and not by preference: the OTHER word order is a
   // reason prefix in engine/knowledge.py. That registry is the site's
@@ -32623,7 +32818,7 @@ function pbpParkHeadHTML(league, boardGame) {
   // the masthead uses, so the two can never drift apart.
   return `<div class="pbp-parkhead">
     <div class="pbp-parkhead-t">${brandMarkHTML(26)}
-      <div><b>THE PARK</b><span>REAL DATA. REAL PLAYS.</span></div></div>
+      <div><b>${isFootball ? "THE FIELD" : "THE PARK"}</b><span>REAL DATA. REAL PLAYS.</span></div></div>
     ${name || bits.length ? `<div class="pbp-parkhead-v">
       ${name ? `<b>${escapeHtml(name)}</b>` : ""}
       ${bits.length ? `<span>${escapeHtml(bits.join(" · "))}</span>` : ""}
@@ -32936,7 +33131,15 @@ async function renderPbpPage() {
     ? ((state.data.games || []).find((x) => x.home === d.home && x.away === d.away) || null) : null;
   const faces = pbpFaces(league);
   const events = d.events || [];
-  const lastHit = events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null;
+  // THE PLAY THE ART DRAWS. Baseball wants the newest ball actually hit;
+  // football wants simply the newest play, and reads it from `plays`
+  // rather than `events` because the football deep file has no `events`
+  // — livescore_build writes `drives` and a flattened `plays`, and the
+  // MLB builder is the only one that writes `events`. Renamed from
+  // `lastHit` when football joined: it is not a hit any more.
+  const lastPlay = PBP_FOOTBALL.has(league)
+    ? ((d.plays || []).slice().reverse().find((r) => r && r.kind === "football") || null)
+    : (events.slice().reverse().find((r) => r.kind === "atbat" && r.hit) || null);
   const park = (boardGame || {}).park || {};
   const wx = (boardGame || {}).weather || {};
   const infoCards = boardGame ? [
@@ -32976,7 +33179,7 @@ async function renderPbpPage() {
         </div>
         <div class="card pbp-parkcard">
           ${pbpParkHeadHTML(league, boardGame)}
-          ${pbpParkHTML(d, league, boardGame, lastHit)}
+          ${pbpParkHTML(d, league, boardGame, lastPlay)}
           ${pbpSituationHTML(d, league, faces)}
         </div>
         ${infoHTML}

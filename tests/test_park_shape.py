@@ -216,17 +216,28 @@ def test_the_factors_name_the_baseline_they_are_measured_against():
 # photograph with the moving parts drawn over it.
 
 def test_mlb_gets_the_photograph():
+    """RE-ANCHORED 2026-09-07, when football got a photograph of its own
+    (Ethan's field renders). `photo` is no longer 'this is baseball' — it
+    is 'this league has a picture', which is now MLB or either football
+    code. What still has to be true, and is what this test was ever
+    about, is that BASEBALL's picture is the ballpark."""
     at = APP.index("function pbpParkHTML")
-    block = APP[at:at + 1200]
-    assert "const photo = league === \"mlb\"" in block
-    assert "pbpPhotoHTML(game)" in block
+    block = APP[at:at + 1800]
+    assert 'league === "mlb" ? pbpPhotoHTML(game)' in block
+    assert "const photo = league === \"mlb\" || isFootball;" in block
 
 
-def test_the_other_leagues_keep_their_vector_art():
-    """Football and hoops have no photo, and must not be handed one."""
+def test_the_leagues_without_a_photograph_keep_their_vector_art():
+    """RE-ANCHORED 2026-09-07. This said "football and hoops"; football
+    now has two field photographs of its own, so the leagues without a
+    picture are the basketball ones — and they must still get the drawn
+    court rather than somebody else's sport."""
     at = APP.index("function pbpParkHTML")
-    block = APP[at:at + 1200]
+    block = APP[at:at + 1800]
     assert "court(game" in block and "stadium(game" in block
+    assert 'isFootball ? pbpFieldHTML(d)' in block
+    # The vector court is reached only after both photo branches.
+    assert block.index("pbpFieldHTML") < block.index("court(game")
 
 
 def test_the_photo_ships_in_both_formats_and_both_sizes():

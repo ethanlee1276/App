@@ -9370,8 +9370,15 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    and the dimensions/factors that make one park a different question
    from another. Auto-fit rather than a fixed four-up: on a phone these
    wrap to two rows instead of shrinking to unreadable. */
+/* FOUR TILES, NEVER THREE AND AN ORPHAN.
+   At 120px minimum a phone fits three across and the fourth drops to a
+   row of its own with two empty cells beside it — which is what football
+   showed the moment its labels ("PLAY TYPE", "YARD LINE") arrived beside
+   longer values than baseball's. 140px gives two-by-two on a phone and
+   all four across from about 700px up, which is the shape both renders
+   draw. */
 .pbp-bb { display: grid; gap: 8px; padding: 0 14px 12px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .pbp-bb-tile { background: rgba(255,255,255,.03); border: var(--hairline) solid var(--border);
   border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
 .pbp-bb-tile .k { font-size: var(--fs-xs); color: var(--text-mute); letter-spacing: .07em;
