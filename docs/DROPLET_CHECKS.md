@@ -1390,6 +1390,39 @@ pulls that day's college `h2h` closes across `DEFAULT_BOOKS`, Pinnacle
 included, and the replay starts filling. To backfill a stretch by
 hand, the summary prints the command with the sport already in it.
 
+## The Most Likely board showed only tight ends for receiving (2026-09-07)
+
+Ethan: "for some reason its only displaying tight ends for reciving
+props and thats it." The cause in the code: the board kept the forty
+highest probabilities across every player market in ONE list, and the
+highest probabilities belong to the lowest lines — a tight end or a
+back over 2.5 receptions at 68% — so the forty filled with those and a
+receiver's honest 58% on 64.5 yards never reached the receiving shelf.
+`likely.build` now cuts in two passes (`likely.PER_MARKET`, eight per
+market, then the best of the rest to forty). The floor Ethan chose on
+2026-09-06 (55%), the −250 price cap and the credibility bar are
+untouched, so a market whose every row sits under 55% still shows
+nothing — and receiver yardage lines are set at the median, so many of
+those rows DO sit under it. Read the census before concluding the
+board is wrong:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json, collections
+b = json.load(open("web/data/nfl_board.json"))
+rows = b.get("most_likely") or []
+print("rows by market and position:")
+for (m, pos), n in sorted(collections.Counter((r.get("market"), r.get("position") or "?") for r in rows).items()):
+    print(f"  {m:12s} {pos:4s} {n}")
+print("refused:", b.get("likely_census"))
+EOF
+```
+
+`under the likelihood floor` counting most of the refusals is the
+floor doing what it was asked to; a receiving shelf with no receivers
+after this change means their rows were under it, not that they were
+cut for a tight end's.
+
 ## Touchdown flags are sampled by the stale shadow book now (2026-09-07)
 
 Ethan: "you worked on the NFL and CFB TD Model and made it better."

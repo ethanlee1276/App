@@ -165,6 +165,42 @@ def ranking_number(sport: str, market: str, row: dict, model_auc):
     return (None if prob is None else float(prob)), "model", model_auc
 
 
+#: EVERY MARKET KEEPS ITS BEST ROWS. Ethan, 2026-09-07: "for some reason
+#: its only displaying tight ends for reciving props and thats it. that
+#: seems strang and wrong." The board kept the forty highest
+#: probabilities across every player market in one list, and the
+#: highest probabilities belong to the lowest lines — a tight end or a
+#: back over 2.5 receptions at 68% — so the forty filled with those and
+#: a receiver's 58% over on 64.5 yards, ranked just as honestly, never
+#: reached the receiving shelf. A shelf that shows one position is a
+#: shelf that shows one kind of line.
+#:
+#: So the cut is in two passes: first up to PER_MARKET rows from each
+#: player market in probability order, then the remaining seats filled
+#: from whatever is left, by probability. The floor, the price cap and
+#: the credibility bar are untouched — a market whose every row sits
+#: under 55% still shows nothing, and the census says so.
+PER_MARKET = 8
+
+
+def _cut_players(rows: list, limit: int, per_market: int = PER_MARKET) -> list:
+    """The player rows the board keeps: each market's best `per_market`
+    first, then the best of the rest, `limit` in all, probability order."""
+    rows = sorted(rows, key=lambda r: -float(r.get("model_prob") or 0.0))
+    kept, taken = [], {}
+    for r in rows:
+        m = r.get("market") or ""
+        if taken.get(m, 0) < per_market:
+            taken[m] = taken.get(m, 0) + 1
+            kept.append(r)
+    if len(kept) > limit:
+        kept = kept[:limit]
+    if len(kept) < limit:
+        chosen = {id(r) for r in kept}
+        kept += [r for r in rows if id(r) not in chosen][:limit - len(kept)]
+    return sorted(kept, key=lambda r: -float(r.get("model_prob") or 0.0))
+
+
 #: Game rows the board carries per sport, beside LIMIT player rows.
 #: Five cards a game across a sixteen-game Sunday is eighty rows of
 #: 50-60% leans, which would push every player row off a board capped
@@ -959,7 +995,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # GAME_LIMIT; the survivors are one list in probability order, so a
     # 63% favourite still sits above a 55% catch and a Sunday's eighty
     # game leans cannot push the player rows off (see GAME_LIMIT).
-    players = [r for r in out if r.get("kind") != "game"][:limit]
+    players = _cut_players([r for r in out if r.get("kind") != "game"], limit)
     games = [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]
     out = sorted(players + games, key=lambda r: -float(r["model_prob"] or 0.0))
     # WHY THE BOARD IS THE SIZE IT IS, handed back to a caller that asked
