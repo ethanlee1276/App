@@ -46,11 +46,19 @@ CATCH_UP_DAYS = 7
 # start from the DB heals any gap; the cap keeps a machine that was off for
 # a whole off-season from grinding through months of slates on first boot.
 MAX_CATCH_UP_DAYS = 45
-# Never auto-harvest below this measured remaining quota — daily closes are a
-# nice-to-have; live odds for today's picks always come first.
-HARVEST_MIN_REMAINING = 3000
-# Hard per-day cap on what an auto-harvest may spend.
+# Never auto-harvest below this measured remaining quota — live odds for
+# today's picks always come first. Was 3000; Ethan, 2026-09-07, setting the
+# credit budget the data plan asked him for: "set the harvest floor to 1000
+# and day budget 400". A thinner floor buys more weeks of prop closes on a
+# lean month; the day cap below is what keeps one night from spending it.
+HARVEST_MIN_REMAINING = 1000
+# Hard per-day cap on what an auto-harvest may spend — ACROSS every day it
+# reaches back to, not per harvest run (see _maybe_harvest).
 HARVEST_DAY_BUDGET = 400
+# How far back the nightly walks for days that bet and never got a close.
+# Thirty days covers a month of outages, declined harvests and thin-quota
+# nights; a bet older than that has long since settled on a schedule close.
+HARVEST_BACKFILL_DAYS = 30
 
 
 def _load_state(path: Path) -> dict:
@@ -241,13 +249,79 @@ def _harvest_targets(day: _dt.date) -> list[tuple[str, str]]:
     return out
 
 
-def _maybe_harvest(day: _dt.date, log) -> None:
-    """Harvest yesterday's closing odds — only when clearly affordable."""
+def _day_has_closes(hconn, sport: str, day: _dt.date) -> bool:
+    """Did a harvest ever land on this sport and calendar day?
+
+    The harvest stamps its snapshot on the day it was asked for (23:00
+    UTC by default), so the calendar prefix is the join. One row is
+    enough: the CLI dedupes per event and per market on its own, so the
+    question here is only "has this day been visited", never "is it
+    complete" — a day the harvest reached and ran out of budget on is
+    revisited by the CLI's own skip logic, not by this test.
+    """
+    try:
+        return hconn.execute(
+            "SELECT 1 FROM odds_history WHERE sport=? AND taken_at LIKE ? LIMIT 1",
+            (sport, f"{day.isoformat()}%")).fetchone() is not None
+    except Exception:                                        # noqa: BLE001
+        return True                     # unreadable: spend nothing on it
+
+
+def _backfill_days(yesterday: _dt.date, hconn,
+                   days: int = HARVEST_BACKFILL_DAYS) -> list:
+    """``[(day, sport, markets)]`` for every earlier day that bet and
+    holds no close, newest first — the order a grader wants them in."""
+    out = []
+    for back in range(1, days + 1):
+        d = yesterday - _dt.timedelta(days=back)
+        for sport, markets in _harvest_targets(d):
+            if not _day_has_closes(hconn, sport, d):
+                out.append((d, sport, markets))
+    return out
+
+
+def _run_harvest(sport: str, day: _dt.date, markets: str, budget: int, log) -> None:
+    cmd = [sys.executable, "harvest_odds.py", sport,
+           "--from", day.isoformat(), "--to", day.isoformat(),
+           "--markets", markets, "--budget", str(int(budget)), "--yes"]
+    try:
+        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                              text=True, timeout=600)
+        lines = (proc.stdout + proc.stderr).strip().splitlines()
+        harvested = next(
+            (l.strip() for l in lines if l.strip().startswith("Harvested")),
+            lines[-1].strip() if lines else "")
+        log(f"  closes ({sport} {day}): {harvested}")
+    except Exception as exc:  # noqa: BLE001 — must never crash the site
+        log(f"  ⚠️  closes ({sport} {day}): auto-harvest failed ({exc})")
+
+
+def _maybe_harvest(day: _dt.date, log, budget_path=None, hconn=None) -> None:
+    """Harvest yesterday's closing odds, then walk back through earlier
+    days that bet and never got one — all of it inside one day's budget.
+
+    THE BUDGET IS THE DAY'S, NOT THE RUN'S. The old loop handed every
+    harvest run its own HARVEST_DAY_BUDGET, which was fine while there
+    was one run a night and would be N × 400 the moment there were N.
+    Spend is now metered from the API's own remaining count, read from
+    the budget state the CLI updates on every response: each run is told
+    only what is left of the day, and the walk stops when the day is
+    spent or the balance reaches the floor.
+
+    WHY WALK BACK AT ALL. A night the harvest was declined — quota under
+    the floor, the API down, the box off — left that day's bets settling
+    with no close, for good: nothing ever came back for them, and a bet
+    with no close cannot be graded on closing-line value. Ethan,
+    2026-09-07: "build the price history ... grade every card on closing
+    line value first". Newest first, because the most recent ungraded
+    week is the one the scoreboard is missing.
+    """
     if not os.environ.get("ODDS_API_KEY"):
         return
     try:
         from .oddsbudget import load, is_measured
-        st = load()
+        kw = {"path": budget_path} if budget_path else {}
+        st = load(**kw)
         if not is_measured(st) or st.remaining < HARVEST_MIN_REMAINING:
             have = st.remaining if is_measured(st) else "unknown"
             log(f"  closes: auto-harvest skipped (quota {have}, reserve "
@@ -256,24 +330,33 @@ def _maybe_harvest(day: _dt.date, log) -> None:
             return
     except Exception:
         return
-    targets = _harvest_targets(day)
-    if not targets:
-        return                            # nothing journaled, nothing owed
-    for sport, markets in targets:
-        cmd = [sys.executable, "harvest_odds.py", sport,
-               "--from", day.isoformat(), "--to", day.isoformat(),
-               "--markets", markets,
-               "--budget", str(HARVEST_DAY_BUDGET), "--yes"]
+    start = st.remaining
+
+    def left() -> int:
+        """Credits still spendable today, and never past the floor."""
         try:
-            proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
-                                  text=True, timeout=600)
-            lines = (proc.stdout + proc.stderr).strip().splitlines()
-            harvested = next(
-                (l.strip() for l in lines if l.strip().startswith("Harvested")),
-                lines[-1].strip() if lines else "")
-            log(f"  closes ({sport}): {harvested}")
-        except Exception as exc:  # noqa: BLE001 — must never crash the site
-            log(f"  ⚠️  closes ({sport}): auto-harvest failed ({exc})")
+            cur = load(**kw).remaining
+        except Exception:                                    # noqa: BLE001
+            return 0
+        return max(0, min(HARVEST_DAY_BUDGET - (start - cur),
+                          cur - HARVEST_MIN_REMAINING))
+
+    if hconn is None:
+        try:
+            from . import db as _hdb
+            hconn = _hdb.connect()
+        except Exception:                                    # noqa: BLE001
+            hconn = None
+    queue = [(day, s, m) for s, m in _harvest_targets(day)]
+    if hconn is not None:
+        queue += _backfill_days(day, hconn)
+    for d, sport, markets in queue:
+        budget = left()
+        if budget <= 0:
+            log(f"  closes: day budget spent ({HARVEST_DAY_BUDGET}) or at the "
+                f"floor — {sport} {d} waits for tomorrow's walk")
+            break
+        _run_harvest(sport, d, markets, budget, log)
 
 
 # --- Intraday settle --------------------------------------------------------

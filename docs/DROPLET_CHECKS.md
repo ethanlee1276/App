@@ -1653,3 +1653,28 @@ for r in c.execute('SELECT sport, status, COUNT(*), MIN(first_seen), MAX(first_s
 
 An empty table after a day means `injuries_build` could not open the
 history DB — its printed notes will say `news timing not recorded`.
+
+## The nightly harvest walks back for missing closes, inside one day's budget (2026-09-07)
+
+Ethan, 2026-09-07: "set the harvest floor to 1000 and day budget 400 and
+lets keep going."
+
+`HARVEST_MIN_REMAINING` is 1000 (was 3000) and `HARVEST_DAY_BUDGET`
+stays 400. The nightly now harvests yesterday first, then walks back up
+to thirty days for any day that journaled bets and holds no close in
+`odds_history`, newest first. Spend is metered from the API's own
+remaining count: each run is told only what is left of the day's 400,
+and the walk stops when the day is spent or the balance would drop under
+the floor. It never hands a run a fresh 400.
+
+To see what it did last night:
+
+```bash
+cd /srv/qellys && sudo -u qellys grep -h "closes" data/logs/maintenance*.log | tail -20
+```
+
+`closes (nfl 2026-09-06): Harvested …` lines are the walk. A line
+ending `waits for tomorrow's walk` means the day's budget ran out with
+days still owed — the next night continues from the newest owed day. A
+line reading `auto-harvest skipped (quota N, reserve 1000)` means the
+month is under the floor and nothing was spent.
