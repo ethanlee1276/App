@@ -563,6 +563,20 @@ def from_prop(row: dict, bettable, fits=None,
     if not rankable(market, sport):
         return _refuse(census, "no measured ranking for this market yet")
     prob = row.get("hit_prob")
+    # A SHARP-ANCHORED CARD'S `hit_prob` IS THE SHARP BOOK'S FAIR, and
+    # a sharp line is hung where that book thinks the coin is fair, so
+    # the number sits at 50-53% for every prop it quotes. Judged on it,
+    # every such prop is "under the likelihood floor" before the model
+    # is consulted, and the board shows only what the sharp book did
+    # not quote. Ethan, 2026-09-07: "it just shows 2 tight end reception
+    # props. there is no rushing props for running backs or any
+    # recieving props for wr." This board asks the MODEL who is likely
+    # to hit — `raw_prob` is the model's own read of the side on an
+    # anchored card (see `betting.Recommendation.raw_prob`) — and the
+    # mixture below recomputes the shown number from the projection
+    # either way. The sharp fair stays on the row as `sharp_fair`.
+    if row.get("sharp_anchored") and row.get("raw_prob") is not None:
+        prob = row.get("raw_prob")
     if prob is None or float(prob) < MIN_PROB:
         return _refuse(census, "under the likelihood floor")
     if not row.get("has_market"):
@@ -641,6 +655,11 @@ def from_prop(row: dict, bettable, fits=None,
         # is a different thing from the engine's pre-shrink claim, so
         # the engine's travels under its own name.
         "engine_raw_prob": row.get("raw_prob"),
+        # THE SHARP BOOK'S OWN NUMBER, beside the model's, when the card
+        # was priced from a sharp pair. The floor above was asked of the
+        # model; a reader deserves to see the number it was not asked of.
+        "sharp_anchored": bool(row.get("sharp_anchored")),
+        "sharp_fair": row.get("sharp_fair"),
         "fair_prob": row.get("fair_prob"),
         "implied_prob": row.get("fair_prob"),
         "projection": row.get("projection"),

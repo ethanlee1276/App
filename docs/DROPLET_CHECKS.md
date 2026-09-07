@@ -1423,6 +1423,12 @@ floor doing what it was asked to; a receiving shelf with no receivers
 after this change means their rows were under it, not that they were
 cut for a tight end's.
 
+**Later the same day this was not the whole story** — see "The Most
+Likely board judged sharp-quoted props on the sharp book's coin flip"
+below. The two-pass cut was real and stays; the reason the census then
+still read almost entirely `under the likelihood floor` was the second
+defect.
+
 ## Touchdown flags are sampled by the stale shadow book now (2026-09-07)
 
 Ethan: "you worked on the NFL and CFB TD Model and made it better."
@@ -1744,3 +1750,52 @@ for sport in ('nfl', 'cfb'):
 If a re-measured figure drifts more than half a point from the carried
 constant, update `likely.GAME_RANK_MARKET` and the test's pinned values
 together, in one commit that quotes this command's output.
+
+## The Most Likely board judged sharp-quoted props on the sharp book's coin flip (2026-09-07)
+
+Ethan, 2026-09-07, evening: "you said you did model work but i dont
+see any changes for nfl in the edge bets or the most likley bets. it
+just shows 2 tight end reception props. there is no rushing props for
+running backs or any recieving props for wr, that makes it feel like
+something is off or irs broken."
+
+It was broken, and the sharp-anchor change for props broke it. When
+the sharp book quotes a prop two ways at the shopped line, the card is
+priced from that pair and its `hit_prob` becomes the sharp book's fair.
+A sharp line is hung where the sharp book thinks the coin is fair, so
+that number is 50–53% for every prop it quotes. `likely.from_prop` read
+`hit_prob` against the 55% floor — so every prop the sharp book quoted
+was refused before the model was consulted, and the board showed only
+what the sharp book did NOT quote. On Week 1's menu that was two
+tight-end receptions rows.
+
+Two fixes. The card's `raw_prob` on an anchored row is now the MODEL's
+read of the side rather than a second copy of the sharp fair (which was
+also feeding the calibration fitter the sharp book's calibration as if
+it were ours). And the board judges an anchored row's floor on that
+number, shows the mixture exactly as before, and carries the sharp fair
+on the row as `sharp_fair` beside it. The Edge board is untouched: a
+pick there still needs the sharp pair and its EV bands.
+
+Confirm on the next NFL build after this deploys — the census's floor
+count should fall and the shelves should hold backs and receivers:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json, collections
+b = json.load(open("web/data/nfl_board.json"))
+rows = b.get("most_likely") or []
+print("refused:", b.get("likely_census"))
+anch = [r for r in rows if r.get("sharp_anchored")]
+print(len(rows), "rows on the board,", len(anch), "of them sharp-quoted")
+for (m, pos), n in sorted(collections.Counter((r.get("market"), r.get("position") or "?") for r in rows).items()):
+    print(f"  {m:12s} {pos:4s} {n}")
+for r in anch[:6]:
+    print(f"  {r['player']:<22} {r['market']:<10} {r['side']:<5} {r['line']}  model {r['model_prob']:.0%}  sharp fair {r['sharp_fair']:.0%}")
+EOF
+```
+
+`sharp-quoted` at zero on a Sunday menu with Pinnacle posting means the
+odds pull did not carry the sharp book (`sharp_quoted` on the prop rows
+of recommendations.json says whether it was quoted at all), which is a
+different problem from this one.

@@ -107,6 +107,11 @@ class Recommendation:
     #: correction is applied to the raw probability inside the evaluator.
     #: Fitting the tempered one and correcting the raw one is fitting a
     #: different quantity than you correct — see engine/backtest.py.
+    #:
+    #: ON A SHARP-ANCHORED CARD this is still the MODEL's number for the
+    #: side, while ``hit_prob`` is the sharp book's fair. It is the only
+    #: model opinion the card carries as a number, and the Most Likely
+    #: board reads it (`likely.from_prop`).
     raw_prob: float = 0.0
     #: The FIELD's de-vigged fair for the over, and how many books it is,
     #: at pick time. Evidence only — nothing prices from it.
@@ -609,11 +614,26 @@ def evaluate_prop(prop: Prop, proj: Projection,
         fair = best.fair_prob
         edge = hit - fair
         credible = True
+        # THE MODEL'S READ TRAVELS AS `raw_prob`, not the sharp fair.
+        # `hit_raw` is the sharp book's number here, and until 2026-09-07
+        # the card wrote it into `raw_prob` too — so the field documented
+        # as "the model's untempered probability" carried no model
+        # opinion at all on an anchored card. Two readers broke on that:
+        # the calibration fitter (engine/backtest.py) learned the sharp
+        # book's calibration as though it were ours, and the Most Likely
+        # board, which asks the MODEL who is likely to hit, read a fair
+        # that sits at ~50% by construction — a sharp line is set where
+        # the sharp book thinks the coin is fair — and refused every prop
+        # the sharp book quoted under its 55% floor. The board then
+        # showed only the props the sharp book did NOT quote, which on
+        # Week 1's menu was two tight-end receptions rows.
+        raw_out = _model_side_p if _model_side_p is not None else hit_raw
     else:
         hit, edge, credible = temper_edge(hit_raw, fair, best.book,
                                           allow_synthetic_line,
                                           shrink=tier_shrink(prop.market))
         hit, edge = apply_selection(hit, edge, sport)      # see apply_selection
+        raw_out = hit_raw
     # A price no book could have posted is not a market, the same way a
     # proxy is not. `is_quotable` also answers False for 0, which is the
     # unquoted-side sentinel: if the side we chose is the side nobody
@@ -825,7 +845,7 @@ def evaluate_prop(prop: Prop, proj: Projection,
         projection=round(proj.mean, 1),
         proj_low=round(proj.mean - proj.std, 1),
         proj_high=round(proj.mean + proj.std, 1),
-        hit_prob=round(hit, 4), raw_prob=round(hit_raw, 6),
+        hit_prob=round(hit, 4), raw_prob=round(raw_out, 6),
         fair_prob=round(fair, 4),
         fair_consensus=(round(_field[0], 4) if _field else None),
         consensus_books=(_field[1] if _field else 0),
