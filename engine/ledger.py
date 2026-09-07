@@ -1352,6 +1352,87 @@ def stale_report(conn, since: str | None = None) -> dict:
     return p
 
 
+#: Settled stale flags a sport needs before its verdict is a claim. Two
+#: hundred at a 52% break-even puts one standard error at 3.5 points —
+#: enough to tell 64% from 52%, which is the gap the CLV measurement
+#: predicts, and not enough to be fooled by a lucky fortnight.
+STALE_PROMOTE_MIN_N = 200
+#: …and the hit rate has to clear the break-even by this many standard
+#: errors. Two, the same bar `engine.gamecal` and `engine.nflinfo` hold
+#: a coefficient to.
+STALE_PROMOTE_Z = 2.0
+
+
+def stale_verdict(conn, since: str | None = None,
+                  min_n: int = STALE_PROMOTE_MIN_N,
+                  min_z: float = STALE_PROMOTE_Z) -> dict:
+    """Per sport: does TAKING the stale price pay, and may it become a pick?
+
+    THE MEASUREMENT THIS DECIDES ON. `marketscan.stale_quotes` flags a
+    book pricing a side at least a point under the field's consensus;
+    on 30,448 harvested quotes that price beat the eventual close 64.8%
+    of the time (+1.49 points of CLV, z = 11.6). Closing-line value is
+    the professional's evidence of an edge, and it is not the same as
+    money: a flag can beat the close and still lose to the vig. So
+    every flag is journaled as a shadow bet — flat 0.1u, category
+    'stale', never in the headline record — and this reads that book.
+
+    THE RULE, so a promotion is arithmetic and not a mood: a sport's
+    flags become a pick when they have ``min_n`` settled results, the
+    hit rate clears the AVERAGE BREAK-EVEN OF THE PRICES ACTUALLY TAKEN
+    by ``min_z`` standard errors, and the flat-stake ROI is positive.
+    Break-even is per bet (−110 needs 52.4%, +120 needs 45.5%) and is
+    averaged over the book's own prices, so a sport whose flags sit on
+    longer prices is not held to a bar that belongs to another.
+
+    PER SPORT, because the books, the markets and the liquidity differ.
+    A baseball verdict says nothing about football's flags, and the
+    NFL's own book only began with the season. Returns
+    ``{sport: {n, wins, hit_rate, break_even, se, z, roi, verdict, why}}``;
+    a sport with no settled flags is absent, and ``verdict`` is either
+    "promote" or "hold" with ``why`` naming the guard that held it.
+    Nothing here promotes anything — the pipeline that would act on a
+    "promote" is a separate change, made with this number in hand.
+    """
+    import math as _math
+    win = " AND date >= ?" if since else ""
+    wargs: tuple = (since,) if since else ()
+    rows = conn.execute(
+        "SELECT sport, "
+        "  COUNT(*) AS n, "
+        "  SUM(status='won') AS w, "
+        "  AVG(CASE WHEN odds > 0 THEN 100.0 / (odds + 100.0) "
+        "           ELSE -odds / (100.0 - odds) END) AS be, "
+        "  SUM(COALESCE(pnl_units, 0)) AS pnl, "
+        "  SUM(COALESCE(stake_units, 0)) AS staked "
+        "FROM bets WHERE category='stale' AND status IN ('won','lost')" + win +
+        " GROUP BY sport", wargs).fetchall()
+    out: dict = {}
+    for r in rows:
+        n, w, be = int(r["n"]), int(r["w"] or 0), float(r["be"] or 0.0)
+        if not n or not 0.0 < be < 1.0:
+            continue
+        hit = w / n
+        se = _math.sqrt(be * (1.0 - be) / n)
+        z = (hit - be) / se if se > 0 else 0.0
+        roi = (float(r["pnl"] or 0.0) / float(r["staked"])) if r["staked"] else 0.0
+        if n < min_n:
+            verdict, why = "hold", f"{n} settled flags, needs {min_n}"
+        elif z < min_z:
+            verdict, why = "hold", (f"hit rate {hit:.1%} is {z:+.1f} standard errors "
+                                    f"from the {be:.1%} break-even, needs {min_z:+.1f}")
+        elif roi <= 0:
+            verdict, why = "hold", f"flat-stake ROI {roi:+.1%} — beats the rate, not the vig"
+        else:
+            verdict, why = "promote", (f"{hit:.1%} over a {be:.1%} break-even on {n} flags, "
+                                       f"z {z:+.1f}, ROI {roi:+.1%}")
+        out[r["sport"]] = {"n": n, "wins": w, "hit_rate": round(hit, 4),
+                           "break_even": round(be, 4), "se": round(se, 4),
+                           "z": round(z, 2), "roi": round(roi, 4),
+                           "verdict": verdict, "why": why}
+    return out
+
+
 def log_form_picks(conn, result: dict, team_form: dict,
                    flat_stake: float = 0.1) -> int:
     """The team-form sampler: for every slate game where a HOT team meets a
@@ -5547,6 +5628,8 @@ def export_json(conn, path) -> None:
         # the page labels via market_words above.
         "book_records": book_records(conn, since=since),
         "stale_flags": stale_report(conn, since=since),
+        # Per sport, with the bar it has to clear — see `stale_verdict`.
+        "stale_verdicts": stale_verdict(conn, since=since),
         "form_sampler": form_report(conn, since=since),
         "loose_sampler": loose_report(conn, since=since),
         # THE PREDICTION DESK — Kalshi paper book (sports cross-model +

@@ -1187,3 +1187,45 @@ fills it) the walks can be taught to use it and this strategy graded
 over the season it has run. Until then the CLV ledger is the grade:
 every recommended NFL game card is journaled with its price and settled
 against the close.
+
+## The three numbers that decide the next NFL moves (2026-09-07)
+
+Everything a model could compute has been measured against the NFL
+close and carries nothing (docs/NFL_MONEYLINE_ARITHMETIC.md). What is
+left is prices, and three price-based measurements live only on this
+box. Each one decides a specific change; none of the changes is made
+until its number is in.
+
+**1. Is the sharp path live for NFL game markets?** (decides nothing in
+code — it says whether Pinnacle is in the payload.) The count under
+"NFL game markets now price a sharp book's disagreement first" above.
+
+**2. Do small sharp-anchored edges pay?** (decides whether the grade
+bar on a sharp card comes down.) `python3 moneyline_backtest.py --sport
+mlb` — the `<4%` EV bucket over a few hundred bets.
+
+**3. Do stale-line flags cash?** (decides whether the best-measured
+signal in the repository becomes a pick.) Every flag has been a 0.1u
+shadow bet since the scanner shipped, the NFL's since its build began
+journaling them; `ledger.stale_verdict` reads that book PER SPORT and
+says, by arithmetic, whether the flags have earned it — 200 settled
+flags, a hit rate two standard errors over the break-even of the prices
+actually taken, positive flat-stake ROI:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json; from engine import ledger
+print(json.dumps(ledger.stale_verdict(ledger.connect()), indent=1))"
+```
+
+It is also in the nightly report as `stale_verdicts`. A sport reading
+`promote` is the go-ahead for the follow-on change: stale flags in that
+sport journaled to the main book at a real stake and shown on the edge
+board as picks — a change to make WITH the verdict, which is why the
+function promotes nothing itself. A sport reading `hold` says which
+guard held it. The NFL's book is a few weeks old and will read "needs
+200" for a while; that is the honest answer and not a fault.
+
+For the NFL-specific closing-line check behind the 64.8% figure (which
+was measured on baseball's harvest): `python3 stale_lines.py --sport
+nfl`, once the NFL harvest holds a few weeks of closes.
