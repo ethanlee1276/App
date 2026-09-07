@@ -32527,7 +32527,9 @@ function pbpParkHTML(d, league, boardGame, hitRow) {
   const chip = !photo && (park.name || (boardGame || {}).park_name || wx)
     ? `<div class="pbp-parkchip">${escapeHtml(park.name || (boardGame || {}).park_name || "")}${
         wx ? `<span>${wx}</span>` : ""}</div>` : "";
-  return `<div class="pbp-park">${art}${arc}${chip}</div>
+  // Runners are baseball's, and the coordinates are the photograph's.
+  const runners = league === "mlb" ? pbpBasesSVG(d.live) : "";
+  return `<div class="pbp-park">${art}${runners}${arc}${chip}</div>
     ${isFootball ? pbpFieldPosHTML(d) : ""}
     ${isFootball ? pbpPlayTilesHTML(hitRow) : pbpBattedHTML(hitRow)}
     ${pbpParkFactsHTML(park, boardGame)}`;
@@ -32800,6 +32802,57 @@ function pbpFieldPosHTML(d) {
         font-family="system-ui">${escapeHtml(d.away || "")}</text>
     </svg>
   </div>`;
+}
+
+/* THE RUNNERS, ON THE BASES THEY ARE ACTUALLY ON.
+ * ---------------------------------------------------------------------
+ * Ethan, 2026-09-07: "i guess i have the same question with mlb on if we
+ * are able to display where a batter is on base for the live play by
+ * play. maybe we highlight the bases batters are on and can display a
+ * little circle or something moving along the baseline when the batter
+ * is running."
+ *
+ * The first half is real data and is drawn. `live.bases` is documented
+ * in engine/models.py as "MLB: occupied bases, e.g. [2] or [1, 3]" — a
+ * list of base NUMBERS, which is the same field the mini diamond in the
+ * situation row has always read. So a bag with a runner on it gets a
+ * gold marker on the photograph, and one without gets nothing: the
+ * photograph already shows an empty base perfectly well.
+ *
+ * THE SECOND HALF IS NOT DRAWN, and this is the honest reason. The feed
+ * gives base STATE at a moment — who is standing where when the payload
+ * was built — and never a runner in motion. A circle sliding along the
+ * base path would be animating something nobody observed, timed to a
+ * poll that is thirty seconds behind the runner. What IS observed is the
+ * state changing, so a base that has just become occupied pops its
+ * marker in; that is a real transition, and it is the whole of what we
+ * know.
+ *
+ * MEASURED. The bag positions were read off the same 240x150 grid the
+ * wall numbers came from, cropped to the infield (scratch: infield.png).
+ * They are photo coordinates, so they are only correct on the
+ * photograph — which is the only thing MLB draws. */
+// Read off the grid at 6x zoom, one bag at a time (scratch: base1.png,
+// base2.png, base3.png). Doing it from the whole-infield view first put
+// first and third FOURTEEN units toward the mound — close enough to look
+// deliberate on the card and wrong enough to sit on the baseline instead
+// of the bag. The midpoint of first and third is 119 against home at
+// 118 and second at 120, which is the symmetry check that says these
+// three were read off the same picture.
+const PBP_BASES = {1: [184, 99], 2: [120, 82.5], 3: [54, 99]};
+
+function pbpBasesSVG(live) {
+  const on = new Set((live || {}).bases || []);
+  const marks = [1, 2, 3].filter((n) => on.has(n)).map((n) => {
+    const [x, y] = PBP_BASES[n];
+    return `<g class="pbp-onbase" transform="translate(${x},${y})">
+      <rect x="-4.6" y="-4.6" width="9.2" height="9.2" rx="1" transform="rotate(45)"
+        fill="var(--brand)" fill-opacity="0.30" stroke="var(--brand)" stroke-width="1.2"/>
+      <circle r="1.9" fill="var(--brand)"/></g>`;
+  }).join("");
+  if (!marks) return "";
+  return `<svg class="pbp-runners" viewBox="0 0 240 150"
+    preserveAspectRatio="xMidYMid meet" aria-hidden="true">${marks}</svg>`;
 }
 
 function pbpPhotoHTML(game) {
