@@ -1615,3 +1615,41 @@ cd /srv/qellys && sudo -u qellys grep -h "closing window" \
 No lines on a day with kickoffs means either the pull was declined for
 another reason earlier in the chain (the log names it) or the cheap tier
 was not the one asking. It does NOT mean the exemption is broken.
+
+## Injury designations get a first-seen stamp (2026-09-07)
+
+Ethan, 2026-09-07, on the data a winning model needs: "News timing.
+Injuries, inactives, quarterback changes, weather, each timestamped. The
+value is not knowing, it is knowing before the soft books move."
+
+The injuries page has read ESPN's keyless league feed since 2026-08-10
+and keeps only the CURRENT board — `espninjuries.current_rows` holds the
+newest filing per player, so a designation four minutes old and one
+standing since Tuesday were the same row and "did the soft books move
+after this filing" could not be asked. `engine/newstape.py` now writes
+one `injury_events` row the first time it sees each (sport, player,
+status, posted_at), stamps `first_seen` with OUR clock, and never
+rewrites it (INSERT OR IGNORE). A player moving Questionable to Out is a
+second row, because that move is the news. Only designations a book
+would reprice on are kept; "Active" is not news.
+
+The stamp is minute-resolution UTC in the same format `engine/lineledger`
+uses for `odds_history`, because the two tables exist to be read against
+each other: the gap between `first_seen` and a price moving is the
+interval an edge could live in. Nothing measures that yet — a
+measurement needs a sample, and a sample needs the timestamps written
+down first.
+
+After a few injury-build cycles on a football week:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+for r in c.execute('SELECT sport, status, COUNT(*), MIN(first_seen), MAX(first_seen) '
+                   'FROM injury_events GROUP BY sport, status ORDER BY sport, 3 DESC'):
+    print(tuple(r))"
+```
+
+An empty table after a day means `injuries_build` could not open the
+history DB — its printed notes will say `news timing not recorded`.

@@ -43,6 +43,15 @@ def main(argv=None) -> int:
     sports: dict = {}
     notes: list[str] = []
     ages: dict = {}
+    stamped: dict = {}
+    # Telemetry never breaks a board: an unreadable history DB costs the
+    # timestamps and nothing else.
+    try:
+        from engine import db as _hdb, newstape
+        hconn = _hdb.connect()
+    except Exception as exc:                                 # noqa: BLE001
+        hconn, newstape = None, None
+        notes.append(f"news timing not recorded: {exc}")
     for league in LEAGUES:
         try:
             rows = parse_injuries(fetch_injuries(league))
@@ -51,6 +60,15 @@ def main(argv=None) -> int:
             # sit next to a live designation. Then the age cut: a stale
             # "Active" is a standing claim of health nobody re-verifies.
             sports[league] = drop_stale_returns(current_rows(rows))
+            # AND WHEN WE LEARNED IT. The page keeps the current board and
+            # drops the rest, so a designation four minutes old and one
+            # standing since Tuesday read identically. `engine.newstape`
+            # writes an event row the first time it sees each one, and
+            # never rewrites the stamp — the interval between that stamp
+            # and a price moving in `odds_history` is the one an edge
+            # could live in. Free: the rows are already parsed.
+            stamped[league] = newstape.record(hconn, league, rows) \
+                if hconn is not None else 0
         except DataUnavailable as exc:
             notes.append(f"{league}: {exc}")
             continue
@@ -87,6 +105,15 @@ def main(argv=None) -> int:
         f"{k} {len(v)}" + (f" [{_age_text(ages[k])} old]"
                            if ages.get(k, 0) > INJURY_TTL * 2 else "")
         for k, v in sports.items()) or "none"
+    if hconn is not None:
+        try:
+            hconn.close()
+        except Exception:                                    # noqa: BLE001
+            pass
+    if sum(stamped.values()):
+        print("Injury timing: "
+              + ", ".join(f"{k} +{v}" for k, v in stamped.items() if v)
+              + " new designation(s) stamped")
     print(f"Injuries: {counts}"
           + (f"  ({len(notes)} note(s))" if notes else ""))
     designations = sum(1 for v in sports.values() for r in v

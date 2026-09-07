@@ -214,6 +214,38 @@ CREATE INDEX IF NOT EXISTS idx_logs_game
 -- index.
 CREATE INDEX IF NOT EXISTS idx_logs_player
     ON player_game_logs (sport, player, season, period);
+-- WHEN WE LEARNED IT, which is a different fact from what we learned.
+--
+-- Ethan, 2026-09-07, on the data a winning model needs: "News timing.
+-- Injuries, inactives, quarterback changes, weather, each timestamped.
+-- The value is not knowing, it is knowing before the soft books move."
+--
+-- The injuries page has read ESPN's keyless league feed since 2026-08-10
+-- and keeps only the CURRENT board: `espninjuries.current_rows` holds the
+-- newest filing per player and the older ones are dropped on the next
+-- pull. That is right for a page and useless for timing. A designation
+-- that appeared at 11:04 and a designation that has stood for three days
+-- are the same row, so "did the soft books move after this filing, and
+-- how long did they take" cannot be asked at all.
+--
+-- One row per (sport, player, status, posted_at), which is one row per
+-- EVENT: a player moving Questionable to Out writes a second row rather
+-- than overwriting the first, because that move is the news.
+-- `first_seen` is OUR clock and is written once — an INSERT OR IGNORE,
+-- never a REPLACE, or every pull would reset the stamp to now and the
+-- column would measure nothing but the last refresh.
+--
+-- `posted_at` is the feed's own stamp and can be empty; the two are kept
+-- apart deliberately. The gap between them is the feed's lag, and the
+-- gap between `first_seen` and a price move in `odds_history` is the
+-- one the edge lives in.
+CREATE TABLE IF NOT EXISTS injury_events (
+    sport TEXT, player TEXT, team TEXT, status TEXT,
+    posted_at TEXT, first_seen TEXT, injury TEXT, pos TEXT,
+    PRIMARY KEY (sport, player, status, posted_at)
+);
+CREATE INDEX IF NOT EXISTS idx_injury_events_seen
+    ON injury_events (sport, first_seen);
 """
 
 GAME_COLS = ["sport", "season", "period", "game_id", "home", "away",
@@ -383,6 +415,30 @@ def upsert_player_logs(conn, rows: list[dict]) -> int:
 
 def upsert_odds_history(conn, rows: list[dict]) -> int:
     return _upsert(conn, "odds_history", ODDS_HIST_COLS, rows)
+
+
+INJURY_EVENT_COLS = ["sport", "player", "team", "status", "posted_at",
+                     "first_seen", "injury", "pos"]
+
+
+def insert_injury_events(conn, rows: list[dict]) -> int:
+    """Record designations we have not seen before. Returns rows written.
+
+    INSERT OR IGNORE, not OR REPLACE, and that is the whole point of the
+    table: `first_seen` is when WE learned it, so a second pull of a
+    filing that has not changed must leave the original stamp alone. A
+    REPLACE here would rewrite every stamp to the time of the last
+    refresh and the column would measure nothing.
+    """
+    if not rows:
+        return 0
+    cols = INJURY_EVENT_COLS
+    placeholders = ", ".join(f":{c}" for c in cols)
+    sql = (f"INSERT OR IGNORE INTO injury_events ({', '.join(cols)}) "
+           f"VALUES ({placeholders})")
+    before = conn.total_changes
+    _chunked(conn, sql, [{c: r.get(c) for c in cols} for r in rows])
+    return conn.total_changes - before
 
 
 PRESEASON_COLS = ["sport", "season", "week", "game_id", "player", "team",
