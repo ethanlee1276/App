@@ -110,7 +110,8 @@ def test_an_empty_book_says_nothing_and_the_report_carries_the_verdicts():
     assert '"stale_verdicts": stale_verdict(conn, since=since)' in src
     # And nothing promotes on its own: no pipeline reads the verdict yet.
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for name in ("engine/pipeline.py", "engine/mlb/pipeline.py", "nfl_build.py", "mlb_build.py"):
+    for name in ("engine/pipeline.py", "engine/mlb/pipeline.py", "nfl_build.py", "mlb_build.py",
+                 "cfb_build.py"):
         assert "stale_verdict" not in open(os.path.join(root, name)).read(), name
 
 

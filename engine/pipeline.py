@@ -1080,7 +1080,16 @@ def _attach_comps(results: list[dict], sport: str) -> dict:
 
 
 def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> dict:
-    """Cross-book arbitrage / middle / low-hold / stale-line scan."""
+    """Cross-book arbitrage / middle / low-hold / stale-line scan.
+
+    THE SAME SCAN FOR EVERY FOOTBALL BOARD. `run_slate` calls this for
+    the NFL; `cfb_build` calls the public name below for college, whose
+    prop rows come through `price_props` and so carry the same
+    `all_lines` — the college build had shipped an empty `market_scan`
+    literal since the day it was written, which is why the stale-line
+    shadow book had no college rows and the per-sport verdict on it
+    could never say anything about college.
+    """
     from .marketscan import scan_recommendations, stale_quotes, longshot_warnings
     out = scan_recommendations(results)
     out["stale"] = stale_quotes(results)
@@ -1098,6 +1107,10 @@ def _market_scan(results: list[dict], long_shots: list[dict] | None = None) -> d
                        "line": r.get("line", 0.5)})
     out["longshots"] = longshot_warnings(quotes)
     return out
+
+
+#: The scan under its public name — see `_market_scan`.
+market_scan = _market_scan
 
 
 def _conditions(g, results: list[dict] | None) -> dict:

@@ -1928,6 +1928,25 @@ def main() -> None:
     except Exception:                                        # noqa: BLE001
         pass
 
+    # THE STALE-LINE SCAN, WHICH COLLEGE NEVER RAN. `market_scan` at the
+    # top of this function is an empty literal so the key is on every
+    # path; the NFL and MLB builds fill theirs from the priced board and
+    # journal the stale flags to the shadow book — the best-measured
+    # signal in this repository (a book a point under the field's
+    # consensus beat the close 64.8% of the time on 30k quotes), sampled
+    # at a flat 0.1u so the ledger's per-sport verdict can say whether
+    # taking the price pays. College's literal meant no college flag was
+    # ever shown, journaled or judged. The rows are the same shape —
+    # `price_props` is the shared step and writes `all_lines` on every
+    # prop — so the scan is the shared one.
+    try:
+        from engine.pipeline import market_scan as _market_scan
+        out["market_scan"] = _market_scan(out.get("recommendations") or [],
+                                          out.get("long_shots") or [])
+    except Exception as exc:                                 # noqa: BLE001
+        out["market_scan_error"] = str(exc)
+        print(f"  ⚠️  market scan skipped: {exc}")
+
     # §9/§10 — the same correlation flags and bankroll caps the NFL build
     # runs, for the same reason: college plays its whole slate on one
     # Saturday, so an uncapped board asks for the bankroll in a day. Runs
@@ -1969,11 +1988,19 @@ def main() -> None:
         ml_n = ledger.log_most_likely(
             lconn, {"sport": "cfb", "date": args.date,
                     "most_likely": out.get("most_likely") or []})
+        # The stale-line flags to the shadow book, as the NFL's and
+        # MLB's go — flat 0.1u, category 'stale', settled from the same
+        # college game logs as the props. This is the sample
+        # the ledger's per-sport verdict reads for college.
+        st_n = ledger.log_stale_flags(
+            lconn, {"sport": "cfb", "date": args.date,
+                    "market_scan": out.get("market_scan") or {}})
         settled = ledger.settle_from_history(lconn, conn, sport="cfb")
-        if n or ls_n or ml_n or settled:
+        if n or ls_n or ml_n or st_n or settled:
             ledger.export_json(lconn, "web/data/record.json")
             print(f"Journal: {n} CFB bet(s) + {ls_n} long shot(s) + "
-                  f"{ml_n} likely row(s) logged, {settled} settled.")
+                  f"{ml_n} likely row(s) + {st_n} stale flag(s) logged, "
+                  f"{settled} settled.")
     except Exception as exc:
         print(f"⚠️  CFB journal skipped: {exc}")
 

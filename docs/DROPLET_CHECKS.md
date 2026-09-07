@@ -1256,6 +1256,42 @@ for sharp cards too; lifting it for them is one constant
 (`engine.cfb.model.BET_GROUP_OF_FIVE`) and a decision to make with the
 college sharp-anchor replay's numbers in hand.
 
+## College runs the stale-line scan now (2026-09-07)
+
+`cfb_build` shipped `market_scan` as an empty literal from the day it
+was written — no college stale flag was ever shown, journaled or
+judged, while the NFL and MLB builds have sampled theirs at a flat 0.1u
+since the signal measured 64.8% against the close. The college board
+now runs the shared scan (`engine.pipeline.market_scan`, the NFL's
+under its public name) over its priced props and long shots, and
+journals the flags to the shadow book, category 'stale', settled from
+the same college game logs as the props. After a Saturday with player
+odds:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json
+b = json.load(open("web/data/cfb.json"))
+st = (b.get("market_scan") or {}).get("stale") or []
+print(len(st), "college stale flag(s) on the board;",
+      sum(1 for r in st if r.get("market") in ("pass_yds", "rush_yds", "rec_yds", "receptions")),
+      "settleable")
+EOF
+sudo -u qellys python3 -c "
+from engine import ledger; c = ledger.connect()
+print(c.execute(\"select status, count(*) from bets where sport='cfb' and category='stale' group by status\").fetchall())
+print(ledger.stale_verdict(c).get('cfb'))"
+```
+
+The build log's journal line now carries the count ("+ N stale
+flag(s)"). Zero flags on a Saturday the board bought player odds means
+fewer than three books quoted the same line on every prop — the scan
+needs a crowd — not that the scan did not run; `market_scan_error` on
+the result is the only way it fails. The verdict's `cfb` key appears
+with the first settled flag and reads "hold" until two hundred of them
+have settled; that is the sample the college promotion decision waits
+on, exactly as the NFL's does.
+
 ## The three numbers that decide the next NFL moves (2026-09-07)
 
 Everything a model could compute has been measured against the NFL
