@@ -1678,3 +1678,30 @@ ending `waits for tomorrow's walk` means the day's budget ran out with
 days still owed — the next night continues from the newest owed day. A
 line reading `auto-harvest skipped (quota N, reserve 1000)` means the
 month is under the floor and nothing was spent.
+
+## The ballpark cards read the fast clock too (2026-09-07)
+
+Ethan, 2026-09-07, two screenshots taken at the same moment: the
+dashboard card showed one runner on, the game centre showed two. "So
+something is delayed."
+
+It was, and by design of two clocks. The board file behind the dashboard
+cards (`data/mlb.json` and its siblings) is rebuilt on the minutes-long
+cycle — the header's "Updated 5m ago" — while the game centre and the
+Live tab read the fast scoreboard (`data/live_mlb.json`, seconds). The
+bases, outs and score on a ballpark card were therefore minutes behind
+the same numbers one tap away. The fast rows were already being fetched
+for the league so the play-by-play door could open instantly; they were
+never merged into the cards. `mergeFastLive` now does that with the same
+merge the Live tab uses (fast fields win, board-only fields survive), and
+`armDashLive` re-reads the scoreboard every sixteen seconds while a game
+is on, redrawing only when a live fact moved.
+
+The phone was never a separate problem. The service worker has never
+cached `/data/`; the phone had loaded the board a few minutes earlier
+than the laptop and was reading an older copy of the same slow file,
+which is exactly the gap this closes.
+
+To confirm the two clocks now agree, open the dashboard beside the game
+centre during an inning with a runner on and watch the card's diamond
+change within about sixteen seconds of the game centre's.

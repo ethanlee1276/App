@@ -4330,7 +4330,18 @@ function renderSlateHorizon() {
 }
 
 function renderGames() {
-  const games = [...(state.data.games || [])];
+  /* THE CARDS READ THE FAST CLOCK TOO (Ethan, 2026-09-07, two screenshots
+     taken at once: the dashboard card showed one runner, the game centre
+     showed two). The board file behind these cards is rebuilt on the
+     minutes-long cycle — "Updated 5m ago" — while the game centre and
+     the Live tab read the fast scoreboard. So the bases, the outs and
+     the score on a ballpark card were minutes behind the same numbers
+     one tap away. The fast rows were already fetched for this league
+     (the play-by-play door asks for them below); they were simply never
+     merged into the cards. Same merge the Live tab uses: fast fields
+     win where both speak, board-only fields survive. */
+  const games = mergeFastLive([...(state.data.games || [])],
+                              _pbpStrip.league === state.sport ? _pbpStrip.games : []);
   const host = document.getElementById("games");
   /* THE BOARD MAY BE SHOWING A FUTURE SLATE. Football is weekly: the
      college build advances past an empty date to the next day the feed
@@ -4416,6 +4427,9 @@ function renderGames() {
   // the tap is instant rather than a fetch long.
   if (games.some((g) => (g.live || {}).state === "live") && LIVE_FAST[state.sport])
     pbpStripGames(state.sport).catch(() => {});
+  // …and while a game is in progress, keep the cards on the fast clock:
+  // re-read the scoreboard and redraw ONLY when the live state moved.
+  armDashLive(fastLiveStamp(games));
   host.querySelectorAll(".game-card[data-gid]").forEach((el) => {
     const open = () => openGameOrPlays(el.dataset.gid);
     el.addEventListener("click", open);
@@ -32073,6 +32087,55 @@ function liveCardHTML({ sport, g, bets }) {
    structured one the parsers composed. */
 let _pbpTimer = null;
 let _pbpStrip = { at: 0, league: "", games: [] };
+
+/* Fast scoreboard rows merged into board games, keyed the way the Live
+   tab keys them — away@home. The fast file knows the score, the clock,
+   the outs and the bases; the BOARD knows the odds grid and the live
+   win-probability track. Fast fields win where both speak; board-only
+   fields survive; a game the fast file has no row for is returned as
+   it was. Pure, so it is testable without a page. */
+function mergeFastLive(boardGames, fastGames) {
+  const byKey = new Map((fastGames || []).map((fg) => [`${fg.away}@${fg.home}`, fg]));
+  return (boardGames || []).map((bg) => {
+    const fg = byKey.get(`${bg.away}@${bg.home}`);
+    if (!fg || !fg.live) return bg;
+    return { ...bg, live: { ...(bg.live || {}), ...fg.live } };
+  });
+}
+
+/* One string that changes when any live fact on the cards changes —
+   score, period, outs, count, bases — and NOT when a board-only field
+   does. The dashboard redraws on this, so a quiet scoreboard costs no
+   redraws and a runner reaching second costs one. */
+function fastLiveStamp(games) {
+  return JSON.stringify((games || []).map((g) => {
+    const lv = g.live || {};
+    return [g.away, g.home, lv.state, lv.home_score, lv.away_score, lv.period,
+            lv.outs, lv.balls, lv.strikes, lv.bases || null];
+  }));
+}
+
+//: The dashboard's own live clock. Sixteen seconds clears
+//: `pbpStripGames`' fifteen-second cache, so every tick is a real read.
+const DASH_LIVE_EVERY_MS = 16000;
+let _dashLiveTimer = null;
+
+function armDashLive(seen) {
+  clearTimeout(_dashLiveTimer);
+  _dashLiveTimer = null;
+  if (state.view !== "recommended" || !LIVE_FAST[state.sport]) return;
+  const games = (state.data || {}).games || [];
+  if (!games.some((g) => (g.live || {}).state === "live")) return;
+  _dashLiveTimer = setTimeout(async () => {
+    _dashLiveTimer = null;
+    if (state.view !== "recommended") return;           // moved on
+    let fast = [];
+    try { fast = await pbpStripGames(state.sport); } catch (e) { fast = []; }
+    const now = fastLiveStamp(mergeFastLive((state.data || {}).games || [], fast));
+    if (now !== seen && document.getElementById("games")) renderGames();   // re-arms
+    else armDashLive(seen);
+  }, DASH_LIVE_EVERY_MS);
+}
 let _pbpShowAll = false;
 let _pbpTab = "info";           // info | props | injuries | players
 
