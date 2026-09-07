@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""Run the hypothesis lab: the LLM proposes, the arithmetic disposes.
+
+    python3 hypotheses.py                # propose (one paid API call) + test
+    python3 hypotheses.py --show         # current hypotheses and verdicts
+    python3 hypotheses.py --retest       # free: re-try everything stored
+    python3 hypotheses.py --dry-run      # print the evidence pack, call nothing
+
+The propose step spends money — one structured-output request to
+claude-opus-5 (the exact token usage and cost print after each call, and
+land on the spend ledger). It also runs itself weekly from the settle
+pass under the monthly LLM cap, so this command is for running it EARLY
+— after a big settle worth reasoning over — not a chore.
+Everything downstream is the same free arithmetic as the rest of the
+ladder: proposals are validated against the miner's own menu, tried by
+the same calibration z + false-discovery tribunal, re-tried every settle
+pass, and enforced only through the veto gate every sport already
+consults.
+
+Setup: add ``ANTHROPIC_API_KEY=sk-ant-...`` to secrets.local (gitignored,
+same file as the odds keys). Optional: ``QELLYS_LLM_MODEL=...`` to
+override the model.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+
+from engine import hypotheses as hyp
+from engine import ledger
+
+
+def _print_store(store: dict) -> None:
+    hyps = store.get("hypotheses") or []
+    if not hyps:
+        print("No hypotheses stored yet — run `python3 hypotheses.py` "
+              "with an ANTHROPIC_API_KEY in secrets.local.")
+    for h in hyps:
+        dims = ", ".join(f"{d}={v}" for d, v in (h.get("dims") or {}).items())
+        scope = f"{h['sport']}:{h.get('market') or 'all markets'}"
+        mark = {"confirmed": "✓", "rejected": "✗",
+                "collecting": "…"}.get(h.get("status"), "?")
+        # Provenance, because the tribunal treats these identically and a
+        # reader should not have to assume every claim here came from the
+        # model. "analysis" means someone read the journal and wrote it
+        # down; it earns exactly the same amount of trust, which is none
+        # until the arithmetic says otherwise.
+        src = " ·analysis" if h.get("origin") == "analysis" else ""
+        print(f"  {mark} [{scope}]{src} {dims}")
+        print(f"     {h.get('claim', '')}")
+        if h.get("reading"):
+            print(f"     {h['reading']}"
+                  + ("  ← VETOING PICKS" if h.get("action") == "close" else ""))
+        elif h.get("status") == "collecting":
+            print(f"     collecting: {h.get('n', 0)}/{hyp.MIN_N} matching "
+                  "graded bets")
+    watch = store.get("watchlist") or []
+    if watch:
+        print("\n  watchlist (not testable in the miner's dimensions):")
+        for w in watch:
+            print(f"   · {w}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="The hypothesis lab.")
+    ap.add_argument("--show", action="store_true")
+    ap.add_argument("--retest", action="store_true")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the evidence pack and exit — no API call")
+    ap.add_argument("--spend", action="store_true",
+                    help="what the lab has actually cost, from the ledger")
+    ap.add_argument("--register", metavar="SPORT:MARKET", nargs="+",
+                    help="enter a hypothesis reached by ANALYSIS rather than "
+                         "by the model — no API call. Give one or more "
+                         "sport:market scopes plus --dim; they face the same "
+                         "tribunal and are marked origin=analysis. Use "
+                         "sport:* for a whole sport.")
+    ap.add_argument("--dim", action="append", metavar="NAME=VALUE",
+                    default=[], help="dimension to slice on, repeatable "
+                                     f"(one of: {', '.join(hyp.DIMS)})")
+    ap.add_argument("--claim", default="", help="what is being asserted")
+    ap.add_argument("--rationale", default="", help="why it is worth testing")
+    args = ap.parse_args()
+
+    if args.spend:
+        r = hyp.llm_spend_report()
+        if not r["runs"]:
+            print("No paid calls logged yet. Every future run of "
+                  "`python3 hypotheses.py` records its tokens and cost to "
+                  f"{hyp.SPEND_PATH}.")
+            return
+        print(f"Anthropic spend (logged at {hyp.SPEND_PATH}):")
+        print(f"  this month: ${r['month_usd']:.2f} across "
+              f"{r['month_runs']} run(s)")
+        print(f"  all time:   ${r['total_usd']:.2f} across {r['runs']} run(s)")
+        last = r["last"]
+        print(f"  last run:   {last['ts']} · {last['model']} · "
+              f"{last['input_tokens']:,}/{last['output_tokens']:,} tokens "
+              f"· ${last['cost_usd']:.3f}")
+        return
+
+    lconn = ledger.connect()
+    if args.register:
+        dims = {}
+        for kv in args.dim:
+            if "=" not in kv:
+                print(f"--dim wants NAME=VALUE (got {kv!r})")
+                return
+            k, _, v = kv.partition("=")
+            if k not in hyp.DIMS:
+                print(f"'{k}' is not a journaled dimension. "
+                      f"One of: {', '.join(hyp.DIMS)}")
+                return
+            dims[k] = v
+        if not dims:
+            print("--register needs at least one --dim; a hypothesis about "
+                  "everything is not testable.")
+            return
+        hyps = []
+        for scope in args.register:
+            sport, _, market = scope.partition(":")
+            hyps.append({"sport": sport,
+                         "market": None if market in ("", "*") else market,
+                         "dims": dims, "claim": args.claim,
+                         "rationale": args.rationale})
+        store = hyp.register(lconn, hyps)
+        print(f"Registered {len(hyps)} hypothesis/es (origin=analysis). "
+              f"They now face the same tribunal as the model's own, and "
+              f"are re-tested free on every settle pass.\n")
+        _print_store(store)
+        return
+    if args.show:
+        _print_store(hyp.load())
+        return
+    if args.retest:
+        store = hyp.retest(lconn)
+        print("Retested against the current journal:\n")
+        _print_store(store)
+        return
+    if args.dry_run:
+        print(json.dumps(hyp.evidence_pack(lconn), indent=1))
+        return
+
+    try:
+        store = hyp.propose(lconn)
+    except hyp.HypothesisUnavailable as e:
+        print(f"hypothesis lab unavailable: {e}")
+        return
+    usage = store.get("usage") or {}
+    print(f"Model: {store.get('model')}  "
+          f"tokens in/out: {usage.get('input_tokens', 0):,}/"
+          f"{usage.get('output_tokens', 0):,}  (~${hyp.cost_usd(usage):.3f})")
+    r = hyp.llm_spend_report()
+    print(f"Spend to date: ${r['month_usd']:.2f} this month across "
+          f"{r['month_runs']} run(s) — `--spend` for the ledger\n")
+    _print_store(store)
+    print("\nEvery stored hypothesis is re-tested free on each settle "
+          "pass; confirmed hot closures veto picks through the same gate "
+          "as the miner.")
+
+
+if __name__ == "__main__":
+    main()

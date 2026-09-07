@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Qellys Book — social card source</title>
+<!--
+  The source for the image every shared link renders — written by
+  tools/ogcard.py to the versioned filename that script names.
+
+  1200x630 is the size every scraper crops to (X, Facebook, LinkedIn,
+  Discord, iMessage). Rendered rather than drawn so it uses the real
+  stylesheet, the real vendored fonts and the real Overhead — a card
+  hand-built in a design tool drifts from the site the first time either
+  one changes, and then the thing people see before they arrive is a
+  version of the brand that no longer exists. That is not hypothetical:
+  this card carried the old amber ellipse mark for two days after the
+  site started wearing the QB crown, which is how Ethan found it — in a
+  group text, next to a promo code he had just sent his friends.
+
+  To regenerate after a design change:
+
+      python3 tools/ogcard.py
+
+  It renders through the real handler, checks the frame is 1200x630,
+  refuses a layout that overflows (a fixed-size card CROPS in silence)
+  and refuses a page that threw. The manual four-step recipe that used to
+  live here is gone with it — steps run twice a year are steps that get
+  run wrong, and the only place the mistake shows up is inside somebody
+  else's text message.
+
+  NOTHING LIVE GOES ON THIS CARD. The running record belongs on the site,
+  where it updates; baked into a static PNG it is a number that starts
+  decaying the moment it is written, and a stale ROI on a shared link is
+  the one mistake this site cannot afford to make. The durable claim —
+  that every pick is journaled at its real price and graded in public — is
+  true on any day, so that is what the card says.
+-->
+<link rel="stylesheet" href="css/styles.css"/>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    display: grid; grid-template-columns: minmax(0, 1fr) 478px;
+    align-items: center; gap: 40px; padding: 0 64px;
+    box-sizing: border-box;
+  }
+  /* THE MARK IS THE SITE'S MARK. It was a drawn amber ellipse, which is
+     the logo this site stopped using — a shared link was showing people a
+     brand that no longer exists, which is the exact drift the note above
+     says this file is built to prevent. */
+  .mark { display: flex; align-items: center; gap: 22px; margin-bottom: 22px; }
+  .mark img { width: 96px; height: 96px; display: block; }
+  /* Set the way the header sets it — uppercase, tracked, display face —
+     because that IS the wordmark now, and a preview that renders it any
+     other way is a second version of the logo. */
+  .name {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 54px; line-height: 1; letter-spacing: .19em;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .name span { color: var(--text-mute); font-weight: 600; }
+  .tag {
+    font-family: var(--font-sans); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .2em;
+    font-size: 21px; color: var(--text-dim); margin-bottom: 32px;
+  }
+  .promise {
+    font-family: var(--font-mono); font-size: 23px; line-height: 1.5;
+    color: var(--text-body); max-width: 30ch;
+  }
+  /* The gold goes on the CLAIM, not on the furniture. It is the one
+     sentence the card is making and the accent should point at it. */
+  .promise b { color: var(--brand-2); font-weight: 500; }
+  /* A hairline in the accent rather than in the border grey: at preview
+     size the grey rule disappeared entirely and the card read as two
+     unrelated blocks. */
+  .rule { height: 2px; margin: 34px 0;
+    background: linear-gradient(90deg, var(--brand) 0%,
+                color-mix(in srgb, var(--brand) 18%, transparent) 62%,
+                transparent 100%); }
+  /* One line, always. Wrapped it reads as a list that ran out of room;
+     on one line it reads as the scope of the thing. */
+  .leagues {
+    font-family: var(--font-mono); font-size: 16px; letter-spacing: .1em;
+    color: var(--text-mute); text-transform: uppercase; white-space: nowrap;
+  }
+  /* The Overhead at card scale. It is the asset — it gets the room.
+     On --bg it was very nearly invisible at the size a chat client draws
+     a preview; on a panel with a warm border it reads as a drawing. */
+  .art { border: 1px solid color-mix(in srgb, var(--brand) 26%, transparent);
+    border-radius: 6px; background: var(--panel); line-height: 0;
+    padding: 10px; box-sizing: border-box; }
+  .art svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="mark">
+      <img src="logo-qb.png" width="96" height="96" alt="" />
+      <span class="name">Qellys <span>Book</span></span>
+    </div>
+    <div class="tag">A betting model that shows its work</div>
+    <div class="promise">Every pick <b>journaled at its real book price</b> and graded in public — including the losing ones.</div>
+    <div class="rule"></div>
+    <div class="leagues">MLB · NFL · CFB · NBA · WNBA · UFC · Prediction mkts</div>
+  </div>
+  <div class="art" id="art"></div>
+
+<script src="js/teams.js"></script>
+<script src="js/teams_mlb.js"></script>
+<script src="js/visuals.js"></script>
+<script>
+  /* Coors: the most legible Overhead in the set — a real outfield arc, a
+     roof state, an altitude plaque and a park factor, so the drawing is
+     visibly carrying data rather than decorating. */
+  window.ACTIVE_SPORT = "mlb";
+  window.ACTIVE_TEAMS = window.MLB_TEAMS;
+  document.getElementById("art").innerHTML = ballpark({
+    home: "COL", away: "NYY", roof: "open", surface: "grass",
+    park_name: "Coors Field", altitude_ft: 5280, factors: { hr: 1.22 },
+  });
+</script>
+</body>
+</html>

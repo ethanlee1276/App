@@ -1,0 +1,252 @@
+# Qellys Book — the public front door.
+#
+# Caddy rather than nginx for one reason: it gets and renews the TLS
+# certificate itself, with no certbot and no cron job to forget. The
+# commonest way a small site goes down is an expired certificate nobody
+# was watching.
+#
+#   sudo apt install caddy
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# The app must be started with `--bind 127.0.0.1` (see qellys.service).
+# Binding all interfaces would leave the plain-HTTP port reachable from
+# outside as well, and a proxy you can walk around protects nothing.
+
+# BOTH NAMES, and the bare one is the canonical site. Caddy issues a
+# certificate for each. The www redirect is at the bottom of this file:
+# serving the same content on two hostnames splits sessions (a cookie set
+# on one is not sent to the other, so signing in at www and then visiting
+# the bare name looks like being signed out) and gives search engines two
+# copies of everything.
+qellysbook.com {
+	encode gzip zstd
+
+	# --- the API: proxied to the app ---------------------------------
+	# X-Forwarded-* is what lets the app see the REAL caller. Without it
+	# every request looks like it came from 127.0.0.1, which would make
+	# `_local_only()` true for the entire internet — and that guard is
+	# what stops strangers creating profiles and posting passwords over
+	# cleartext. Caddy sets these by default; they are written out here
+	# so nobody "tidies them away" later.
+	#
+	# "Unnecessary header_up …" — Caddy logs that warning for all three on
+	# every reload. Leave them. It is quoted here so that grepping the
+	# warning lands on the reason rather than on nothing.
+	# The warning is about forwarding, and the point here is REPLACING:
+	# `{remote_host}` overwrites the header, so the list the app reads has
+	# exactly one entry — the peer Caddy actually saw. The default appends
+	# instead, leaving whatever the client claimed in front of it.
+	# `_client_ip()` reads the last entry and is safe either way; with the
+	# overwrite it is also safe under first-entry parsing, which is the
+	# refactor most likely to happen by accident.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- the service worker: THROUGH THE APP, not off disk -----------
+	# sw.js carries `const VERSION = "..."`, and the cache it names is
+	# wiped by `activate` whenever that string changes. server.py rewrites
+	# the line with a HASH OF THE SHELL on the way out, so any change to
+	# index.html, app.js or styles.css renames the cache by itself and a
+	# stale bundle cannot outlive a deploy.
+	#
+	# Served off disk by the block below, that rewrite never ran. The
+	# literal in the file — "qb-v4" — went out to every phone on every
+	# deploy, unchanged, since the day it was written. `activate` deletes
+	# every cache whose key is not VERSION, so with VERSION frozen it
+	# deleted nothing, ever. Network-first limits the damage on a good
+	# connection; on a phone that drops one request for styles.css, the
+	# fallback is whatever that cache happens to hold.
+	#
+	# Same shape as the paywall seal bug: "the app fixes it on the way
+	# out" is not true of a file the app never sees.
+	handle /sw.js {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- real addresses: THROUGH THE APP, for the preview tags -------
+	# /player/juan-soto, /game/ne-sea-0909, /pick/…, /mlb, /record.
+	#
+	# `try_files … /index.html` in the block below would already serve
+	# the app at these paths and the page would work — the routes are
+	# parsed client-side too. What it CANNOT do is put this player's
+	# name in the <title> and og: tags, and that is the entire reason
+	# these paths exist: a scraper fetching a preview for a text message
+	# runs no JavaScript and sees whatever the server sent. Off disk,
+	# every entity link in every group chat unfurls as the same generic
+	# site card.
+	#
+	# Named one by one rather than as a catch-all: an unknown path has
+	# to keep reaching the static handler and the real 404, and a proxy
+	# that swallowed everything would turn every typo into a soft
+	# landing on the board.
+	# The unsubscribe link, which arrives from an email client with no
+	# cookie and sometimes as a POST (RFC 8058 one-click). It MUST reach
+	# the app: served off disk it would be the SPA, which cannot read the
+	# token, and the reader would press Unsubscribe and stay subscribed.
+	handle /unsubscribe* {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# NAMED MATCHERS, NOT PATH LISTS, and the distinction cost a deploy:
+	# `handle` accepts at most ONE matcher token, so `handle /a /b` is a
+	# parse error — caddy validate refused the whole file (2026-08-25,
+	# "wrong argument count or unexpected line ending after '/game/*'"),
+	# deploy.sh's guard kept the OLD config serving, and every clean URL
+	# quietly stayed dead in production while the repo said otherwise.
+	# `path` matchers take the list; `handle` takes the matcher's name.
+	@entity path /player/* /game/* /pick/*
+	handle @entity {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+	@sections path /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog
+	handle @sections {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- everything else: files straight off disk --------------------
+	# Python is not in the path for static files at all. The app is a
+	# stdlib http.server; Caddy serves assets far better and it keeps the
+	# single-threaded-ish app for the work only it can do.
+	handle {
+		root * /srv/qellys/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	# The app sets its own security headers on every response. These
+	# cover the static files Caddy serves directly, which never pass
+	# through it. HSTS is Caddy's job — it knows TLS is really on.
+	#
+	# THE CSP HAS TO BE HERE TOO, and its absence was a real hole. Look at
+	# the handle block above: index.html is served by `file_server`
+	# straight off disk, so the app never sees that request and the CSP it
+	# sets never reaches the document. The policy would have applied to
+	# /api/* JSON — where it does almost nothing — and not to the one
+	# response that actually executes scripts. In production the page
+	# would have had no CSP at all, and nothing would have looked wrong.
+	#
+	# Duplicated from server.py's SECURITY_HEADERS, which is a real cost:
+	# two copies drift. tests/test_public_server.py compares them
+	# character for character so they cannot.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-src https://dexscreener.com https://www.dexscreener.com https://geckoterminal.com https://www.geckoterminal.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	# THE SERVICE WORKER MUST NOT BE CACHED. It is the one file that can
+	# make every other file stale: a worker cached for a year keeps
+	# serving its own old shell, and the fix — shipping a new worker —
+	# is the exact thing the cache prevents from arriving. `no-cache`
+	# means revalidate every time, not "never store".
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+
+	# THE SHELL REVALIDATES, ALWAYS. index.html, app.js and styles.css
+	# carried no Cache-Control at all, which hands the decision to
+	# browser heuristics — and iOS used them: after the 2026-08-17 nav
+	# deploy, a phone kept its old app.js (heuristically "fresh") under
+	# the freshly-fetched index.html. The Library group ships folded in
+	# the markup and only the new JS can unfold it, so the button was
+	# dead and six pages unreachable. `no-cache` means store but
+	# REVALIDATE: one conditional request, a 304 when nothing changed,
+	# and a deploy is live on the next open instead of whenever a
+	# heuristic expires. The document is matched at / and /index.html —
+	# the app routes with the hash fragment, which never reaches the
+	# server, so / IS the document for every view.
+	@shell path / /index.html /js/* /css/*
+	header @shell Cache-Control "no-cache"
+
+	# THE IDENTITY FILES REVALIDATE TOO, and they were not in the line
+	# above. `@shell` covers the document, the scripts and the styles —
+	# and nothing else, so every image went out with NO Cache-Control at
+	# all and the decision fell to browser heuristics. That is the exact
+	# sentence three paragraphs up about app.js, and iOS acted on it once
+	# already.
+	#
+	# It matters most for these files in particular. On 2026-08-23 the
+	# header logo was cropped, then cut off its background, and the tab
+	# icon changed with it: a phone holding the old copy shows the
+	# retired mark under a deploy that replaced it, which reads as a
+	# deploy that did not work rather than a cache that has not expired.
+	#
+	# `no-cache` is store-and-revalidate, not "do not store": one
+	# conditional request each, a 304 while nothing has changed, and the
+	# new mark on the first open after it does. Named one by one rather
+	# than as `/*.png`, because web/img is 18MB of board art that changes
+	# with the data and has no business revalidating on every visit.
+	@brand path /logo-qb.png /favicon.svg /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /manifest.webmanifest
+	header @brand Cache-Control "no-cache"
+
+	# Caddy's built-in MIME table does not know .webmanifest, so without
+	# this it goes out as text/plain and the install prompt silently never
+	# appears — no error, no console message, just no prompt.
+	@manifest path /manifest.webmanifest
+	header @manifest Content-Type "application/manifest+json"
+
+	# Built JSON changes on a schedule, not per request. A minute of
+	# cache takes the repeat-visit load off the box without anyone ever
+	# seeing a board more than a minute stale.
+	@built path /data/*.json
+	header @built Cache-Control "public, max-age=60"
+
+	log {
+		output file /var/log/caddy/qellys.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
+# One canonical hostname. Anyone who types www gets moved to the bare
+# name before anything is served, so a session cookie only ever exists on
+# one origin. 308 rather than 302: it is permanent and it preserves the
+# method, so a POST that arrives at www is not silently turned into a GET.
+www.qellysbook.com {
+	redir https://qellysbook.com{uri} permanent
+}
+
+# Staging: same box, separate database, separate app process. This is
+# what makes it safe to keep shipping once real people have accounts.
+# stage.qellysbook.com {
+# 	encode gzip zstd
+# 	handle /api/* {
+# 		reverse_proxy 127.0.0.1:8001
+# 	}
+# 	handle {
+# 		root * /srv/qellys-stage/web
+# 		try_files {path} /index.html
+# 		file_server
+# 	}
+# 	# Keep it out of search results and off the public record.
+# 	header X-Robots-Tag "noindex, nofollow"
+# 	basicauth {
+# 		# caddy hash-password --plaintext 'something'
+# 		ethan $2a$14$REPLACE_WITH_A_REAL_HASH
+# 	}
+# }

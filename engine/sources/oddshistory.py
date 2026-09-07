@@ -1,0 +1,325 @@
+"""Historical odds — what the books were actually offering at a past moment.
+
+This is the feed that makes a real edge measurable. Without it, a backtest can
+only score the model against a naive baseline line, which answers "does it beat
+a trailing average?" — a much easier question than the one that matters. With
+point-in-time book prices we can replay a past slate, price every pick against
+the number a bettor could genuinely have taken, and measure ROI and closing-line
+value for real.
+
+The Odds API exposes this under ``/v4/historical/...``. Two things differ from
+the live endpoints and both matter:
+
+* the payload is wrapped in an envelope — ``{"timestamp", "previous_timestamp",
+  "next_timestamp", "data": ...}`` — where ``data`` is the shape the live
+  parsers already understand, so this module unwraps and reuses them rather than
+  duplicating parsing logic;
+* historical requests are billed at a **higher credit cost** than live ones, so
+  harvesting is deliberately cache-first and long-lived: a past price never
+  changes, so it should be fetched at most once, ever.
+
+Snapshots land on whatever timestamps the provider recorded, so the returned
+envelope reports the actual snapshot time — always store that rather than the
+requested time, or a "closing line" may silently be an hour stale.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import hashlib
+import json
+import urllib.parse
+from dataclasses import dataclass, field
+
+from .fetch import CACHE_DIR
+from .oddsapi import (
+    ODDS_BASE, SPORT_CONFIG, SCORER_ODDS_TO_MARKET, OddsAPIError, _request,
+    get_api_key, parse_event_lines, parse_event_h2h, parse_event_h2h_by_book,
+    parse_event_scorers, DEFAULT_BOOKS,
+    parse_event_totals, parse_event_spreads,
+)
+
+# A past price is immutable, so cache it effectively forever.
+FOREVER = 10 * 365 * 24 * 3600
+
+
+def teams_for(sport: str) -> dict:
+    """The book-spelling → canonical map for one sport.
+
+    Every sport but CFB carries a hardcoded table in SPORT_CONFIG. CFB's
+    is learned from our own builds and stored on disk (engine/cfbteams),
+    because 134 schools is the table that rots when hardcoded — so it is
+    read HERE, per call, rather than frozen into SPORT_CONFIG at import.
+    A long-running process (the refresh cycle, the maintenance daemon)
+    would otherwise keep the empty map it started with while every build
+    beside it learned new schools.
+    """
+    cfg = SPORT_CONFIG[sport]
+    if sport != "cfb":
+        return cfg["teams"]
+    try:
+        from ..cfbteams import load as _load_cfb
+        return _load_cfb() or cfg["teams"]
+    except Exception:                                        # noqa: BLE001
+        return cfg["teams"]
+
+
+@dataclass
+class Snapshot:
+    """Odds as they stood at one moment."""
+    requested: str                    # the timestamp we asked for
+    taken: str                        # the timestamp the provider actually has
+    data: object = None               # unwrapped payload (live-endpoint shape)
+    previous: str = ""
+    next: str = ""
+
+    @property
+    def drift_minutes(self) -> float | None:
+        """How far the returned snapshot sits from the one requested."""
+        try:
+            a = _dt.datetime.fromisoformat(self.requested.replace("Z", "+00:00"))
+            b = _dt.datetime.fromisoformat(self.taken.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            return None
+        return abs((b - a).total_seconds()) / 60.0
+
+
+def iso_utc(when) -> str:
+    """Normalise a date/datetime/string to the API's ISO-8601 Z format."""
+    if isinstance(when, str):
+        return when if when.endswith("Z") else when.rstrip("+00:00") + "Z"
+    if isinstance(when, _dt.date) and not isinstance(when, _dt.datetime):
+        when = _dt.datetime(when.year, when.month, when.day, 23, 0)
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _unwrap(payload, requested: str) -> Snapshot:
+    """Pull the live-shaped body out of the historical envelope."""
+    if isinstance(payload, dict) and "data" in payload:
+        return Snapshot(
+            requested=requested,
+            taken=str(payload.get("timestamp") or requested),
+            data=payload.get("data"),
+            previous=str(payload.get("previous_timestamp") or ""),
+            next=str(payload.get("next_timestamp") or ""),
+        )
+    # Some responses may already be bare; treat them as the body itself.
+    return Snapshot(requested=requested, taken=requested, data=payload)
+
+
+def _cache_key(kind: str, sport: str, when: str, extra: str = "") -> str:
+    stamp = when.replace(":", "").replace("-", "")
+    tail = f"_{extra}" if extra else ""
+    return f"odds_hist_{kind}_{sport}_{stamp}{tail}.json"
+
+
+def fetch_historical_events(sport: str, when, api_key: str | None = None) -> Snapshot:
+    """Events that existed at ``when`` (a date, datetime, or ISO string)."""
+    key = get_api_key(api_key)
+    stamp = iso_utc(when)
+    sport_key = SPORT_CONFIG[sport]["sport_key"]
+    params = {"apiKey": key, "date": stamp}
+    url = f"{ODDS_BASE}/historical/sports/{sport_key}/events?{urllib.parse.urlencode(params)}"
+    payload, _ = _request(url, _cache_key("events", sport, stamp), ttl=FOREVER)
+    return _unwrap(payload, stamp)
+
+
+#: Game markets, engine name → Odds API key. THE SECOND COPY OF THIS MAP
+#: WAS THE BUG. `engine.maintenance` kept a private
+#: `_HARVEST_GAME_MARKETS` and translated before calling this function,
+#: so the nightly asked for "spreads"; the CLI called this function
+#: directly and asked for "spread", which the API does not have. One map,
+#: in the module that owns the translation, and both callers get it right.
+GAME_MARKET_KEYS = {"moneyline": "h2h", "spread": "spreads",
+                    "total": "totals", "team_total": "totals"}
+
+
+def parse_map(sport: str) -> dict:
+    """Every API key `parse_snapshot` can actually read back, → engine name.
+
+    The request side and the parse side used different maps.
+    `resolve_market_keys` layers scorer markets on top of the sport's
+    config; `parse_event_lines` reads the config alone. A key that
+    resolves for the request and is missing here is BOUGHT and then
+    silently dropped — which is what CFB's empty market map does to
+    every college prop that is not a scorer.
+    """
+    out = dict(SPORT_CONFIG[sport]["markets"])
+    out.update(SCORER_ODDS_TO_MARKET)
+    # Parsed by their own dedicated parsers, not through a market map.
+    out.update({k: k for k in ("h2h", "totals", "spreads")})
+    return out
+
+
+def unreadable_markets(sport: str, keys: list[str]) -> list[str]:
+    """Requested keys this sport's parsers will throw away.
+
+    Returned rather than raised: a harvest that refuses outright on one
+    bad market is worse than one that buys the rest and says what it
+    could not read.
+    """
+    readable = parse_map(sport)
+    return [k for k in keys if k not in readable]
+
+
+def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
+    """Translate engine market names to Odds API keys.
+
+    Historical credits scale with the number of markets requested, so
+    harvesting only the market being backtested is the difference between an
+    affordable run and one that outspends the plan. Accepts either form —
+    ``total_bases`` becomes ``batter_total_bases``, ``spread`` becomes
+    ``spreads``; keys that are already API keys pass through untouched.
+    """
+    to_api = {v: k for k, v in SPORT_CONFIG[sport]["markets"].items()}
+    # SCORER markets too. They were missing, and the failure was silent
+    # and total: a journal-driven harvest asks for the markets actually
+    # bet, so every night an anytime-TD pick was journaled the harvest
+    # requested a market key named "anytime_td" — which the API does not
+    # have — and the TD board has therefore never had a closing line to
+    # be graded against. Inverted from the same map the live path parses
+    # with, so the two cannot drift.
+    to_api.update({v: k for k, v in SCORER_ODDS_TO_MARKET.items()})
+    # GAME MARKETS TOO, for the reason `GAME_MARKET_KEYS` records: the
+    # docstring above said they "pass through untouched" and expected
+    # every caller to have translated them first. One did and one did
+    # not, and the one that did not spent credits on market names the
+    # API has never had.
+    to_api.update(GAME_MARKET_KEYS)
+    return [to_api.get(n.strip(), n.strip()) for n in names if n.strip()]
+
+
+def fetch_historical_event_odds(event_id: str, sport: str, when,
+                                markets: list[str] | None = None,
+                                books: list[str] | None = None,
+                                api_key: str | None = None) -> Snapshot:
+    """Odds for one event as they stood at ``when``."""
+    key = get_api_key(api_key)
+    stamp = iso_utc(when)
+    cfg = SPORT_CONFIG[sport]
+    # A custom market list gets its own cache entry: a limited payload cached
+    # under the full-request key would silently serve missing data forever.
+    tag = ""
+    if markets is not None or books is not None:
+        spec = ",".join(sorted(markets or [])) + "|" + ",".join(sorted(books or []))
+        digest = hashlib.md5(spec.encode()).hexdigest()[:8]
+        tag = f"{event_id}_{digest}"
+    markets = markets or (list(cfg["markets"]) + ["h2h", "totals", "spreads"])
+    params = {
+        "apiKey": key, "date": stamp, "regions": "us",
+        "markets": ",".join(markets), "oddsFormat": "american",
+        "bookmakers": ",".join(books or DEFAULT_BOOKS),
+    }
+    url = (f"{ODDS_BASE}/historical/sports/{cfg['sport_key']}/events/{event_id}/odds"
+           f"?{urllib.parse.urlencode(params)}")
+    payload, _ = _request(url, _cache_key("event", sport, stamp, tag or event_id),
+                          ttl=FOREVER)
+    return _unwrap(payload, stamp)
+
+
+# --- turning a snapshot into rows -------------------------------------------
+@dataclass
+class HistoricalOdds:
+    """Flattened prices from one snapshot, ready for the DB."""
+    sport: str
+    taken: str
+    event_id: str
+    home: str = ""
+    away: str = ""
+    props: dict = field(default_factory=dict)      # (player, market) -> [SportsbookLine]
+    moneylines: dict = field(default_factory=dict)  # team -> american odds
+    moneylines_by_book: dict = field(default_factory=dict)  # book -> {team: odds}
+    scorers: dict = field(default_factory=dict)     # (player, market) -> [quote dicts]
+    # (line, over/home odds, under/away odds) or None. These were parsed by
+    # the live path and thrown away by the history path, so the database had
+    # six seasons of player props and moneylines and not one stored spread
+    # or total — which meant the spread/total model could never be graded
+    # against a real closing number, only asserted about.
+    total: tuple | None = None
+    spread: tuple | None = None
+
+
+def parse_snapshot(snap: Snapshot, sport: str) -> HistoricalOdds:
+    """Parse a historical event-odds snapshot with the live parsers."""
+    body = snap.data if isinstance(snap.data, dict) else {}
+    cfg = SPORT_CONFIG[sport]
+    teams = teams_for(sport)
+    home = teams.get(body.get("home_team", ""), body.get("home_team", ""))
+    away = teams.get(body.get("away_team", ""), body.get("away_team", ""))
+    return HistoricalOdds(
+        sport=sport, taken=snap.taken, event_id=str(body.get("id", "")),
+        home=home, away=away,
+        props=parse_event_lines(body, cfg["markets"]),
+        moneylines=parse_event_h2h(body, teams),
+        moneylines_by_book=parse_event_h2h_by_book(body, teams),
+        scorers=parse_event_scorers(body, SCORER_ODDS_TO_MARKET),
+        total=parse_event_totals(body),
+        spread=parse_event_spreads(body, teams, home, away),
+    )
+
+
+def to_rows(hist: HistoricalOdds, include_best: bool = True) -> list[dict]:
+    """Flatten parsed history into ``odds_history`` rows.
+
+    Moneylines are stored per book (the sharp-anchor strategy needs the sharp
+    book's price and the soft books' prices separately) plus a shopped "best"
+    aggregate. ``include_best=False`` skips the aggregate — used when a
+    harvest fetched only a subset of books, where a "best" would silently
+    overwrite the real shopped-best already stored for that snapshot."""
+    rows: list[dict] = []
+    for (player, market), lines in hist.props.items():
+        for ln in lines:
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": player, "market": market, "book": ln.book,
+                "line": ln.line, "over_odds": ln.over_odds,
+                "under_odds": ln.under_odds,
+            })
+    for (player, market), quotes in hist.scorers.items():
+        for q in quotes:
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": player, "market": market, "book": q["book"],
+                "line": 0.5, "over_odds": q["yes_odds"],
+                "under_odds": q.get("no_odds"),
+            })
+    if include_best:
+        for team, price in hist.moneylines.items():
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": team, "market": "moneyline", "book": "best",
+                "line": 0.0, "over_odds": price, "under_odds": None,
+            })
+    # Game lines. `player` carries the side's identity the same way the
+    # moneyline rows carry the team, so one table serves every market.
+    # Same `include_best` rule as the moneyline aggregate above: these are
+    # shopped-best numbers, so a subset-of-books harvest must not overwrite
+    # the real best already stored for that snapshot.
+    if include_best and hist.total:
+        line, over, under = hist.total
+        rows.append({
+            "sport": hist.sport, "taken_at": hist.taken,
+            "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+            "player": "TOTAL", "market": "total", "book": "best",
+            "line": line, "over_odds": over, "under_odds": under,
+        })
+    if include_best and hist.spread:
+        line, home_odds, away_odds = hist.spread
+        rows.append({
+            "sport": hist.sport, "taken_at": hist.taken,
+            "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+            "player": hist.home, "market": "spread", "book": "best",
+            "line": line, "over_odds": home_odds, "under_odds": away_odds,
+        })
+    for book, prices in hist.moneylines_by_book.items():
+        for team, price in prices.items():
+            rows.append({
+                "sport": hist.sport, "taken_at": hist.taken,
+                "event_id": hist.event_id, "home": hist.home, "away": hist.away,
+                "player": team, "market": "moneyline", "book": book,
+                "line": 0.0, "over_odds": price, "under_odds": None,
+            })
+    return rows

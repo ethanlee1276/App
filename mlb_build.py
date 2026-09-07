@@ -1,0 +1,877 @@
+#!/usr/bin/env python3
+"""Build a live MLB slate from the free MLB Stats API and run the model.
+
+    python3 mlb_build.py 2024-06-20              # a given date (YYYY-MM-DD)
+    python3 mlb_build.py 2024-06-20 --out web/data/mlb_recommendations.json
+
+Pulls the schedule, probable pitchers and per-park weather (Open-Meteo), plus
+confirmed lineups and per-player game logs. Hitter props come from posted
+lineups (held otherwise); pitcher strikeout props from the probable starters.
+Lines are recent-form proxies — attach an odds feed for real book edges.
+
+Needs statsapi.mlb.com / api.open-meteo.com to be reachable (blocked in some
+sandboxes; see the README).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import sys
+
+from engine.mlb.sources.statslogs import build_live_slate
+from engine.mlb.pipeline import run_mlb_slate
+from engine.sources.fetch import DataUnavailable
+from engine.rules import RuleConfig
+from engine import stagetime as _stg
+
+
+def _shift_day(date: str, days: int) -> str:
+    """YYYY-MM-DD ± n days. String arithmetic on dates is how the --stuck
+    listing once compared "2026-W1" against "2026-08-01" and decided the
+    football bet was older."""
+    d = datetime.date.fromisoformat(date) + datetime.timedelta(days=days)
+    return d.isoformat()
+
+
+def _dt_since(date: str) -> float:
+    """Epoch seconds for the start of the BASEBALL day being built.
+
+    The live-line file is append-only across the whole season, and the
+    same two teams meet each other a dozen times. Without a cut, tonight's
+    chart opens with a price from a game in May. 5 AM matches
+    `launch._slate_date`, which is the day this board belongs to.
+    """
+    try:
+        d = datetime.date.fromisoformat(date)
+    except (TypeError, ValueError):
+        return 0.0
+    return datetime.datetime.combine(
+        d, datetime.time(hour=5)).timestamp()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Build a live MLB slate and run the model.")
+    ap.add_argument("date", help="slate date, YYYY-MM-DD")
+    ap.add_argument("--active-odds", action="store_true",
+                    help="Only re-price live / soon-starting games (saves API quota).")
+    ap.add_argument("--odds", action="store_true",
+                    help="Attach real (live during a game) sportsbook lines via The Odds API.")
+    ap.add_argument("--cached-odds", action="store_true",
+                    help="Attach the LAST PAID pull's prices from cache — zero API "
+                         "spend. What keeps the board priced between budgeted pulls.")
+    ap.add_argument("--min-confidence", type=float, default=6.0)
+    ap.add_argument("--min-edge", type=float, default=0.02)
+    ap.add_argument("--out", default=None, help="write recommendations JSON here")
+    ap.add_argument("--timings", action="store_true",
+                    help="print a per-stage wall-time / peak-RSS table at the "
+                         "end (also on QELLYS_STAGE_TIMES=1). Pair it with "
+                         "`python3 deploy/peakrss.py` for the whole-run peak.")
+    args = ap.parse_args()
+    if args.timings:
+        _stg.enable()
+
+    _tk = _stg.start("live slate (schedule, lineups, logs)")
+    try:
+        slate = build_live_slate(args.date)
+    except DataUnavailable as exc:
+        print("⚠️  Live MLB data unavailable.\n")
+        print(exc)
+        sys.exit(2)
+    _stg.stop(_tk)
+
+    # Overlay live scores / inning state.
+    from engine.mlb.sources.live import attach_live
+    _tk = _stg.start("live scores")
+    live_n = attach_live(slate, args.date)
+    if live_n:
+        live_now = sum(1 for g in slate.games if g.live and g.live.state == "live")
+        print(f"Live scores: {live_n} game(s) matched, {live_now} in progress.")
+    _stg.stop(_tk)
+
+    real_odds = False
+    res = None
+    odds_status = {"checked": bool(args.odds or args.cached_odds), "matched": 0,
+                   "events": 0, "moneylines": 0, "error": None,
+                   "quota_remaining": None, "source": None}
+    _tk = _stg.start("odds api")
+    if args.odds or args.cached_odds:
+        from engine.sources import oddsapi
+        try:
+            res = oddsapi.apply_odds_to_slate(slate, sport="mlb",
+                                              only_active=args.active_odds and not args.cached_odds,
+                                              cache_only=args.cached_odds and not args.odds)
+            real_odds = res.matched > 0 or res.events_used > 0
+            odds_status.update(matched=res.matched, events=res.events_used,
+                               moneylines=res.moneylines,
+                               quota_remaining=res.quota.remaining,
+                               source="cache" if res.from_cache else "fresh")
+            src_note = " (cached — no API spend)" if res.from_cache else ""
+            print(f"Odds API: matched {res.matched} props across {res.events_used} games"
+                  f"{src_note} (quota remaining {res.quota.remaining}).")
+            if res.moneylines:
+                print(f"  Moneylines attached to {res.moneylines} game(s).")
+            # The whole quoted home-run board, journaled so the one-sided
+            # hold can be MEASURED instead of assumed at 6% forever
+            # (engine/holdwatch — the loop NFL touchdowns proved). Books
+            # do not offer "no home run", so there is no pair to de-vig;
+            # settling every quote against who actually went deep is the
+            # only honest way to the number. Best-effort: a journal miss
+            # must never cost the build.
+            try:
+                from engine import db as _hwdb, holdwatch as _hw
+                _hqn = _hw.record_slate(_hwdb.connect(), slate, sport="mlb",
+                                        season=int(str(args.date)[:4]),
+                                        period=str(args.date),
+                                        market="home_runs")
+                if _hqn:
+                    print(f"  Quote journal: {_hqn} home-run quote(s) recorded "
+                          f"for the hold measurement.")
+            except Exception as _hexc:                       # noqa: BLE001
+                print(f"  ⚠️  quote journal skipped: {_hexc}")
+            # Prices we PAID for and failed to join — the only part of the
+            # "no real book price" bucket that is a bug rather than a fact
+            # about what books offer.
+            if res.name_misses:
+                odds_status["name_misses"] = len(res.name_misses)
+                # Keep a few of the actual pairs, not just the count: this
+                # is the one part of "no book price" that IS a bug, and it
+                # is unfixable without knowing which names missed.
+                odds_status["name_miss_examples"] = [
+                    {"prop": m.get("prop"), "book": m.get("book"),
+                     "market": m.get("market")} for m in res.name_misses[:8]]
+                print(f"  ⚠️  {len(res.name_misses)} book price(s) nearly "
+                      f"matched a prop but didn't join — fix the name map:")
+                for m in res.name_misses[:6]:
+                    print(f"       slate '{m['prop']}' vs book '{m['book']}' "
+                          f"({m['market']})")
+        except oddsapi.OddsAPIError as exc:
+            odds_status["error"] = str(exc)
+            print(f"⚠️  Odds API unavailable — keeping proxy lines.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Write down the game lines we just paid for. The build has always asked
+    # the API for h2h, spreads and totals and journaled only h2h, so the
+    # spread and total models had no stored closing number to be graded
+    # against — the reason that layer shipped ungraded. Free: the prices are
+    # already in memory.
+    _tk = _stg.start("line ledger")
+    try:
+        from engine import lineledger, db as _hdb
+        _hc = _hdb.connect()
+        lineledger.record(_hc, "mlb", slate.games)
+        _hc.close()
+    except Exception:
+        pass
+    _stg.stop(_tk)
+
+    # WHEN the book prices on this board were last pulled, and when the
+    # pre-game window opens. Both were only visible in the launcher's
+    # terminal, which is the one place you can't see from a phone at work —
+    # and "753 props with no book price" reads like a broken feed at 9 AM
+    # when it is really just the books not having posted hitter props yet.
+    _tk = _stg.start("odds pacing telemetry")
+    try:
+        from engine import oddsbudget
+        _st = oddsbudget.load()
+        _priced = _st.sport_ts("mlb") or _st.last_refresh_ts
+        odds_status["priced_at"] = _priced or None
+        # Same parse as launch.py's pacer, from the same field, so the time
+        # shown on the page is the time the budgeter actually acts on.
+        kicks = []
+        for g in slate.games:
+            k = getattr(g, "kickoff", "") or ""
+            if "T" not in k:
+                continue
+            try:
+                kicks.append(datetime.datetime.fromisoformat(
+                    k.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                continue
+        odds_status["window_opens_at"] = (
+            min(kicks) - oddsbudget.PRIME_BEFORE_S if kicks else None)
+        # WHEN the next paid pull is allowed. Without it, "629 props with no
+        # book price" an hour before first pitch is unanswerable from the
+        # page: the prices are missing because the pacer is holding, and the
+        # pacer's reasoning lived only in the launcher's terminal.
+        if kicks:
+            import time as _t
+            _now = _t.time()
+            # ESTIMATE IT UNDER THE RULES THAT WILL BE IN FORCE, NOT THE
+            # ONES IN FORCE NOW.
+            #
+            # Ethan, 2026-08-14, at 11:38 with a 2:20 first pitch: "how do
+            # we have 711 no props found when there is games at start in
+            # like 2 hrs". The line above it read "today's pricing starts
+            # 11:50 AM · next paid pull 2:21 PM" — twelve minutes before
+            # the window opened, and a minute AFTER the first game began.
+            # Both numbers came off the same clock and contradicted each
+            # other, and the one a reader acts on says the board will not
+            # be priced until the game is already under way.
+            #
+            # The pacer was never going to behave that way. It re-decides
+            # every cycle, and at 11:50 the window opens: the off-peak
+            # stretch comes off, the burst share goes on, and the gap
+            # collapses. The ESTIMATE was the thing frozen in the past —
+            # computed with off-peak pacing that had minutes left to live.
+            #
+            # So it is computed as the pacer will compute it once the
+            # window is open, and floored at the window opening: no paid
+            # pull happens before then by design, and none is held past it
+            # by arithmetic left over from the morning.
+            _opens = min(kicks) - oddsbudget.PRIME_BEFORE_S
+            _at = max(_now, _opens)          # the moment being predicted
+            _in_window = oddsbudget.prime_window(kicks, _at)
+            _kw = {}
+            if _in_window is True:
+                _kw["active_hours"] = max(
+                    1.0, oddsbudget._window_hours_left(kicks, _at))
+            _share = oddsbudget.PRIME_BURST if _in_window is True else 1.0
+            _gap = oddsbudget.min_seconds_between(
+                len(slate.games) + 1, _st, share=_share, **_kw)
+            if _gap != float("inf"):
+                _next = (_priced + _gap) if _priced else _now
+                # Off-peak the pacer stretches the gap; inside the window it
+                # does not. Predicting a moment inside the window with an
+                # un-stretched gap is what the pacer will actually apply.
+                odds_status["next_pull_at"] = max(_next, _opens)
+    except Exception:      # telemetry must never fail a build
+        pass
+    _stg.stop(_tk)
+
+    # Book-menu props: players the books have priced who aren't on the slate
+    # (lineup not posted, nothing to project). The books' menu says they're
+    # playing — build their props from real prices + our own ingested logs.
+    _tk = _stg.start("book-menu props")
+    if res is not None and res.book_only:
+        try:
+            from engine.db import connect as _bconn
+            from engine.mlb.bookmenu import add_book_listed_props
+            conn_b = _bconn()
+            n_menu = add_book_listed_props(slate, res.book_only, conn_b,
+                                           seasons=[int(args.date[:4])])
+            conn_b.close()
+            if n_menu:
+                print(f"Book menu: built {n_menu} prop(s) for book-priced "
+                      f"players not in a posted lineup yet.")
+        except Exception as exc:
+            print(f"⚠️  Book-menu props skipped: {exc}")
+    _stg.stop(_tk)
+
+    # Team ratings for the moneyline model, from ingested historical scores.
+    _tk = _stg.start("team ratings")
+    try:
+        from engine.db import connect
+        from engine.teamrates import ratings_for_season, attach_ratings
+        season = int(args.date[:4])
+        conn = connect()
+        # Same season-scoping fault nfl_build had: on opening day this
+        # season has no scored games at all. See teamrates.
+        ratings, _seasons = ratings_for_season(conn, "mlb", season)
+        conn.close()
+        nr = attach_ratings(slate.games, ratings)
+        priceable = sum(1 for g in slate.games
+                        if g.home_ml and g.away_ml and (g.home_rating or g.away_rating))
+        if nr:
+            print(f"Team ratings: attached to {nr} game(s); {priceable} moneyline(s) priceable.")
+        else:
+            print("Team ratings: none in the DB yet — run "
+                  "`python3 ingest.py mlb --dates <recent dates>` so the moneyline "
+                  "model has team strength to find an edge.")
+    except Exception as exc:
+        print(f"⚠️  Team ratings unavailable — moneyline shows no edge.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Home-plate umpire profiles (announced hours before first pitch) — a
+    # measured K/run-environment adjustment from our own ingested history.
+    _tk = _stg.start("umpire profiles")
+    try:
+        from engine.db import connect as _uconn
+        from engine.mlb.umpires import umpire_profiles, attach_umpires
+        profs = umpire_profiles(_uconn())
+        announced = sum(1 for g in slate.games if g.plate_umpire)
+        n_ump = attach_umpires(slate.games, profs)
+        if announced:
+            print(f"Umpires: {announced} announced, {n_ump} with a non-neutral "
+                  f"profile ({len(profs)} umps profiled from history).")
+    except Exception as exc:
+        print(f"⚠️  Umpire profiles unavailable — neutral zones assumed.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Bullpen fatigue: measured relief workload per pen over the last two
+    # days (free MLB Stats boxscores) — tired arms give the late innings
+    # back to opposing hitters.
+    _tk = _stg.start("bullpen fatigue")
+    try:
+        from engine.mlb.bullpen import attach_fatigue, TIRED_MIN
+        from engine.mlb.sources.mlbstats import TEAM_ID_ABBR
+        n_fat = attach_fatigue(slate, {ab: tid for tid, ab in TEAM_ID_ABBR.items()})
+        if n_fat:
+            tired = sum(1 for g in slate.games
+                        for s in g.bullpen_fatigue.values() if s >= TIRED_MIN)
+            print(f"Bullpen fatigue: workload measured for {n_fat} pens — "
+                  f"{tired} clearly overworked ({TIRED_MIN:g}+ weighted relief IP).")
+    except Exception as exc:
+        print(f"⚠️  Bullpen fatigue unavailable — rested pens assumed.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Statcast (Baseball Savant): xSLG/xwOBA regression + barrel / hard-hit
+    # power profiles — turns "season home-run rate only" into process-based
+    # contact quality on props and the HR board.
+    _tk = _stg.start("statcast profiles")
+    try:
+        from engine.mlb.sources.savant import attach_statcast
+        n_sc = attach_statcast(slate.props, int(args.date[:4]))
+        hitters = sum(1 for p in slate.props if p.position != "SP")
+        if hitters:
+            print(f"Statcast: contact-quality profiles on {n_sc}/{hitters} "
+                  f"hitter props.")
+    except Exception as exc:
+        print(f"⚠️  Statcast unavailable — season rates only.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Measured platoon splits from our own game logs (each hitter vs the
+    # starter hand he actually faced) — replaces the generic +4% handedness
+    # bump wherever a real split exists.
+    _tk = _stg.start("platoon splits (own logs)")
+    try:
+        from engine.db import connect as _pconn
+        from engine.mlb.platoon import platoon_splits, attach_platoon
+        from engine.mlb.models import TOTAL_BASES, HITS, HOME_RUNS
+        conn_p = _pconn()
+        splits = {m: platoon_splits(conn_p, m)
+                  for m in (TOTAL_BASES, HITS, HOME_RUNS)}
+        conn_p.close()
+        measured = sum(len(v) for v in splits.values())
+        n_pl = attach_platoon(slate, splits)
+        if measured:
+            print(f"Platoon: measured splits on {n_pl} props "
+                  f"({len(splits[TOTAL_BASES])} hitters with 16+ games vs "
+                  f"known-hand starters).")
+        else:
+            print("Platoon: no measured splits yet — starter handedness "
+                  "backfills on the next full ingest; generic bump applies.")
+    except Exception as exc:
+        print(f"⚠️  Platoon splits unavailable — generic bump applies.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Official season splits (vs LHP / vs RHP) from the MLB Stats API —
+    # a few batched, cached-daily requests. The HR model reads the power
+    # split; hitters our own logs can't measure get an official SLG-split
+    # platoon factor instead of the generic bump.
+    _tk = _stg.start("official splits (MLB API)")
+    try:
+        import datetime as _spdt
+        from engine.mlb.sources.mlbstats import fetch_batting_splits
+        from engine.mlb.platoon import attach_official_splits
+        pids = {p.person_id for p in slate.props
+                if getattr(p, "person_id", 0) and p.position != "SP"}
+        if pids:
+            season = _spdt.date.fromisoformat(args.date).year
+            n_off = attach_official_splits(
+                slate, fetch_batting_splits(pids, season))
+            print(f"Official splits: attached to {n_off} props "
+                  f"({len(pids)} hitters queried).")
+    except Exception as exc:
+        print(f"⚠️  Official splits unavailable — flat platoon bump where "
+              f"unmeasured.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Opportunity model: tonight's expected plate appearances (batting slot +
+    # run environment) vs each hitter's OWN measured PA average — volume is
+    # the most predictable half of any counting prop.
+    _tk = _stg.start("opportunity (PA volume)")
+    try:
+        from engine.db import connect as _oconn
+        from engine.mlb.opportunity import avg_pa_by_player, attach_opportunity
+        conn_o = _oconn()
+        pa_hist = avg_pa_by_player(conn_o)
+        conn_o.close()
+        n_pa = attach_opportunity(slate, pa_hist)
+        if pa_hist:
+            print(f"Opportunity: PA volume measured for {len(pa_hist)} hitters "
+                  f"— factor applied to {n_pa} props.")
+        else:
+            print("Opportunity: no PA history yet — accrues from tonight's "
+                  "ingest; static lineup-slot bump applies.")
+    except Exception as exc:
+        print(f"⚠️  Opportunity model unavailable — static slot bump applies.\n   {exc}")
+    _stg.stop(_tk)
+
+    # Streak reversion: measured from our own logs, league-wide — what the
+    # game AFTER a hot/cold 5-game stretch actually looks like. Never a
+    # hunch: if the data shows no reversion, no factor is applied.
+    _tk = _stg.start("streak reversion")
+    try:
+        from engine.db import connect as _sconn
+        from engine.mlb.streaks import (measure_reversion, attach_streaks,
+                                        STREAK_MARKETS)
+        conn_s = _sconn()
+        streak_factors = {m: measure_reversion(conn_s, m) for m in STREAK_MARKETS}
+        conn_s.close()
+        measured_mkts = [m for m, v in streak_factors.items() if v]
+        n_st = attach_streaks(slate, streak_factors)
+        if measured_mkts:
+            print(f"Streaks: reversion measured for {len(measured_mkts)} "
+                  f"market(s) from own history; {n_st} prop(s) in a hot/cold "
+                  f"stretch tonight.")
+        else:
+            print("Streaks: not enough ingested history to measure reversion "
+                  "yet — no streak factors applied.")
+    except Exception as exc:
+        print(f"⚠️  Streak analysis unavailable.\n   {exc}")
+    _stg.stop(_tk)
+
+    if not slate.props:
+        print(f"No props built for {args.date} — lineups may not be posted yet. "
+              f"Pitcher props need probable starters; hitter props need confirmed lineups.")
+
+    config = RuleConfig(min_confidence=args.min_confidence, min_edge=args.min_edge)
+    # IL awareness: one free transactions request marks who's on the
+    # injured list (never a pick) and who just came back (form caveat).
+    # Unreachable wire → None → the board behaves exactly as before.
+    il_map = None
+    _tk = _stg.start("IL wire (transactions)")
+    try:
+        import datetime as _ildt
+        from engine.mlb.sources.mlbstats import fetch_transactions
+        from engine.mlb.transactions import il_status
+        _end = args.date
+        _start = (_ildt.date.fromisoformat(args.date)
+                  - _ildt.timedelta(days=60)).isoformat()
+        il_map = il_status(fetch_transactions(_start, _end), args.date)
+    except Exception:
+        il_map = None
+    _stg.stop(_tk)
+
+    with _stg.stage("model (run_mlb_slate)"):
+        result = run_mlb_slate(slate, config, il_map=il_map)
+
+    # Team form: hot & cold from our own ingested results, plus the season
+    # audit (did hot form predict the next game at all?). Track → measure →
+    # only then adjust; the form SAMPLER below journals the hot side at
+    # real prices so the Record can answer the question that matters.
+    team_form_map = {}
+    _tk = _stg.start("team form + recent games")
+    try:
+        from engine.db import connect as hist_connect
+        from engine.mlb.teamform import team_form, hot_cold, audit
+        hconn = hist_connect()
+        team_form_map = team_form(hconn, args.date)
+        hot, cold = hot_cold(team_form_map)
+        result["team_form"] = {"as_of": args.date, "window_days": 7,
+                               "hot": hot, "cold": cold,
+                               "audit": audit(hconn)}
+        if hot or cold:
+            print(f"Team form (7d): {len(hot)} hot / {len(cold)} cold — "
+                  + ", ".join(f"{r['team']} {r['w']}-{r['l']}" for r in hot[:3]))
+        # The last ten results for every club on tonight's card. This is
+        # what lets a GAME bet open a page with a chart on it: a run line
+        # has no player game log, but it has the team's own margins, and
+        # they are already in the DB we grade ourselves against.
+        from engine.teamlogs import recent_games
+        on_slate = {t for g in slate.games for t in (g.home, g.away) if t}
+        result["team_recent"] = recent_games(hconn, "mlb", on_slate,
+                                             before=args.date)
+    except Exception as exc:
+        print(f"⚠️  team form skipped: {exc}")
+    _stg.stop(_tk)
+
+    # §10 drawdown circuit-breaker (docs/MLB_MODEL.md): after a 10u
+    # peak-to-trough drawdown on the settled journal, every stake is halved
+    # until the peak is recovered. Applied before journaling so the ledger
+    # records what we'd actually bet.
+    _tk = _stg.start("drawdown brake")
+    try:
+        from engine import ledger as _ledger
+        dd = _ledger.drawdown_factor(_ledger.connect(), sport="mlb")
+        if dd < 1.0:
+            # One rule for a scale-down, in one place: halve, and drop
+            # anything that falls under the floor — the same thing
+            # `correlation.apply_exposure_caps` does one step earlier.
+            from engine.staking import apply_drawdown as _dd_apply
+            _sc, _dr = _dd_apply(
+                result["recommendations"] + result.get("game_bets", []), dd)
+            result["staking_note"] = ("Drawdown rule active: stakes halved "
+                                      "until the journal recovers its peak"
+                                      + (f"; {_dr} bet(s) fell under the "
+                                         f"minimum and came off the board"
+                                         if _dr else ""))
+            print("  ⚠️  Drawdown rule active — all stakes halved (10u+ off peak)")
+    except Exception:
+        pass
+    _stg.stop(_tk)
+
+    # Line movement: what the market has done since our first snapshot.
+    # Movement is 10% of the quality grade: with-steam raises it, sharp
+    # movement against can reject the pick (see engine/quality.py).
+    _tk = _stg.start("line movement")
+    if real_odds:
+        try:
+            from engine.linemoves import (stream_history, analyze, summary_lines,
+                                          todays_rows, annotate_recommendations,
+                                          attach_series)
+            _today = todays_rows(stream_history())
+            moves = analyze(_today)
+            n_mv = annotate_recommendations(result["recommendations"], moves)
+            # Today's tape on every priced pick, for the prop page's own
+            # line chart (Ethan, 2026-09-05). Same rows, read once.
+            _ns = attach_series(result["recommendations"], _today)
+            if _ns:
+                print(f"  Line series: {_ns} pick(s) carry today's tape.")
+            if moves:
+                print(f"Line movement: {len(moves)} prop(s) re-priced since "
+                      f"open; verdict stamped on {n_mv} pick(s).")
+                for line in summary_lines(moves, limit=6):
+                    print(line)
+        except Exception as exc:
+            print(f"⚠️  Line-movement stamps skipped: {exc}")
+    _stg.stop(_tk)
+    # THE LINE, AS A PICTURE. Ethan, 2026-08-20: "applying the same tape to
+    # sportsbook lines — open → now, with our pick's entry marked — turns
+    # CLV from a number on a page into something you can see. The data is
+    # already collected." It is: lineledger.record above has been writing a
+    # row per observed minute since it shipped, and nothing read it back.
+    # Costs no API credit and no extra fetch.
+    _tk = _stg.start("line tape")
+    try:
+        from engine import linetape, db as _tdb
+        _tc = _tdb.connect()
+        _n_tape = linetape.attach_tapes(
+            _tc, result["recommendations"] + result.get("game_bets", []), "mlb")
+        _tc.close()
+        if _n_tape:
+            print(f"Line tape: {_n_tape} pick(s) carry their own movement.")
+    except Exception as exc:                                   # noqa: BLE001
+        print(f"⚠️  Line tape skipped: {exc}")
+    _stg.stop(_tk)
+
+    # Live picks: journaled pre-game picks whose games are in progress,
+    # with each player's current stat line from the live boxscore. The
+    # model never bets in-play; this is the tracker for bets already made.
+    _tk = _stg.start("live-pick tracker (boxscores)")
+    try:
+        from engine import ledger as _lp_ledger
+        from engine.livepicks import assemble_live_picks
+        from engine.mlb.livestats import (parse_live_stats, parse_situation,
+                                          current_pitchers)
+        from engine.mlb.sources.statslogs import fetch_boxscore, fetch_linescore
+        _lpc = _lp_ledger.connect()
+        # Two filters used to sit here, and between them they hid most of a
+        # normal night.
+        #
+        # category='main' excluded 'longshot' — the home-run board, which on
+        # an MLB slate is where most of the action is. Those are real picks
+        # at real prices, journaled, graded, and scored on the Record page;
+        # they were simply never eligible to appear on the Live tab.
+        #
+        # date=? excluded any bet whose journal date drifted off the slate's.
+        # That drift is real and we have already fixed it once in the other
+        # direction: a long shot is stamped with its GAME's date, so a 10 PM
+        # first pitch lands on tomorrow in UTC. The bet is live on tonight's
+        # card and was filed under a date this query would not ask for.
+        #
+        # So: ask for a window, and let the game-matching decide. Bets filed
+        # under today are all shown, mapped or not, because the section's
+        # count has to reconcile with the Record's. Bets pulled in from the
+        # neighbouring days are shown only if they actually land on a game
+        # in tonight's slate — otherwise a widened window becomes clutter.
+        _cols = ("player, market, side, line, odds, stake_units, date, "
+                 "category, hit_prob, ts")
+        # 'likely' JOINED THE TRACKER 2026-09-05. Ethan: "the most likley
+        # bets should also show in the live page, we need to have two
+        # seperate pages in the live page, one for edge bets, and one for
+        # most likley bets." Most Likely rows journal with
+        # category='likely' (engine/ledger.log_most_likely — flat stake,
+        # zero dollar exposure) and were never selected here, so the Live
+        # tab could not show them at all. The page splits the two by
+        # category; the cross-sport count below stays edge-only.
+        _where = ("status='open' AND sport='mlb' "
+                  "AND category IN ('main','longshot','likely')")
+        open_today = [dict(r) for r in _lpc.execute(
+            f"SELECT {_cols} FROM bets WHERE {_where} AND date=?", (args.date,))]
+        _near = [_shift_day(args.date, d) for d in (-1, 1)]
+        open_near = [dict(r) for r in _lpc.execute(
+            f"SELECT {_cols} FROM bets WHERE {_where} AND date IN (?,?)",
+            tuple(_near))]
+        progress: dict = {}
+        situations: dict = {}
+        # Who is on the mound right now, across every live game. A starter
+        # missing from this set has finished: his strikeout prop cannot
+        # move again, so the tracker reports a certainty rather than a
+        # forecast. Free — it comes out of the boxscore already fetched.
+        pitching: set = set()
+        for g in slate.games:
+            # Finals too: a finished game's boxscore grades the bet
+            # provisionally on the spot instead of going dark until the
+            # overnight settle.
+            if (g.live and g.live.state in ("live", "final")
+                    and getattr(g, "game_pk", 0)):
+                try:
+                    _box = fetch_boxscore(g.game_pk)
+                    progress.update(parse_live_stats(_box))
+                    if g.live.state == "live":
+                        pitching |= current_pitchers(_box)
+                except Exception:
+                    pass
+                if g.live.state == "live":
+                    # At-bat / outs / runners strip for live games only.
+                    try:
+                        situations[(g.home, g.away, g.game_number or 1)] = \
+                            parse_situation(fetch_linescore(g.game_pk))
+                    except Exception:
+                        pass
+        for gd in result["games"]:
+            sit = situations.get((gd.get("home"), gd.get("away"),
+                                  gd.get("game_number") or 1))
+            if sit and isinstance(gd.get("live"), dict):
+                gd["live"]["situation"] = sit
+
+        # THE LIVE LINE, tracked over the game. Ethan asked for this "only
+        # if it doesn't cost us an arm and a leg" — it costs ONE credit a
+        # pull for the whole slate, because it asks the board endpoint for
+        # one market instead of asking the event endpoint for eight
+        # markets per game. See engine/livelines.py for the arithmetic.
+        #
+        # ATTACHING IS FREE AND ALWAYS HAPPENS: the history is on disk, so
+        # the chart draws on every 60-second rebuild. Only the PULL is
+        # paid for, only when a game is live, and only after the same
+        # budget check that guards the board's own pricing has already
+        # said yes — a live chart must never be the reason tonight's
+        # slate went unpriced.
+        try:
+            from engine import livelines as _ll
+            from engine.sources.oddsapi import MLB_TEAM_ABBR as _mlb_names
+            _live_games = [g for g in result["games"]
+                           if (g.get("live") or {}).get("state") == "live"]
+            if _live_games and args.odds:
+                _n, _note = _ll.pull_and_record("mlb", _mlb_names)
+                if _n:
+                    print(f"  Live line: {_note}")
+            # Midnight of the slate date, so an earlier meeting between the
+            # same two teams cannot open tonight's chart.
+            _since = _dt_since(args.date)
+            _tracked = _ll.attach(result["games"], "mlb", since=_since)
+            if _tracked:
+                print(f"  Live line: charting {_tracked} game(s)")
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  live line tracking unavailable: {_exc}")
+        _ls = result.get("long_shots") or []
+        # Who these players ARE, from the league's roster feed rather than
+        # from tonight's prices. A book pulls its pre-game pitcher markets
+        # the moment the game goes live, so the board — the tracker's only
+        # source until now — stops being able to place exactly the bets
+        # that are in progress. Cached six hours; a failure here is a
+        # missing fallback, never a missing tracker.
+        try:
+            from engine import db as _lp_db
+            from engine.rosters import identity_map
+            _hconn = _lp_db.connect()
+            _ident = identity_map(_hconn, "mlb")
+            _hconn.close()
+        except Exception as _exc:                             # noqa: BLE001
+            print(f"  ⚠️  identity map unavailable: {_exc}")
+            _ident = {}
+        rows = assemble_live_picks(open_today, result["recommendations"],
+                                   result["games"], progress, _ls, _ident,
+                                   pitching)
+        rows += [r for r in assemble_live_picks(open_near,
+                                                result["recommendations"],
+                                                result["games"], progress, _ls,
+                                                _ident)
+                 if r["status"] != "unmapped"]
+        result["live_picks"] = rows
+        # Every other open bet, so the page's count always reconciles with
+        # the Record's. Counted as "all open minus what we are showing"
+        # rather than "not today's date", because the window above now
+        # shows some bets whose journal date is not today.
+        # NOT `sport='mlb'`, and that was the whole defect. This query used
+        # to be MLB-scoped while its own comment promised the page would
+        # reconcile with the Record — and the Record's `overall` counts
+        # `main` across EVERY sport. On 2026-08-09 the masthead read
+        # "6 open" (six NFL Week-1 bets) two inches above a Live tab
+        # saying "2 open bet(s) on today's card" and nothing else, because
+        # the six were invisible to a count that only looked at baseball.
+        # Two populations, one word, no explanation.
+        _all_open = _lpc.execute(
+            "SELECT COUNT(*) FROM bets WHERE status='open' "
+            "AND category IN ('main','longshot') "
+            "AND stake_units > 0").fetchone()[0]
+        # EDGE ROWS ONLY on this side of the subtraction, because `_all_open`
+        # counts only edge bets: likely rows are on the tracker now, and
+        # subtracting them too would understate "open on other boards" by
+        # exactly their number.
+        _edge_shown = sum(1 for r in rows if r.get("category") != "likely")
+        result["open_elsewhere"] = max(0, _all_open - _edge_shown)
+        if result["live_picks"]:
+            n_live = sum(1 for r in result["live_picks"] if r["phase"] == "live")
+            print(f"Open-bet tracker: {len(result['live_picks'])} on today's "
+                  f"card ({n_live} live)"
+                  + (f", {result['open_elsewhere']} open on other boards"
+                     if result["open_elsewhere"] else ""))
+    except Exception as exc:
+        # Into the JSON, not just stdout — the launcher swallows build
+        # output, so a print-only failure is invisible on the site.
+        result["live_picks_error"] = str(exc)
+        print(f"⚠️  live-pick tracker skipped: {exc}")
+    _stg.stop(_tk)
+
+    # HR board funnel — when the Long Shots page is empty, this line says why.
+    dg = result.get("longshot_diag") or {}
+    if dg:
+        print(f"HR board: {dg['hr_props']} HR props → {dg['posted_half']} with a "
+              f"0.5 line → {dg['real_priced']} real-priced → {dg['plus_money']} "
+              f"plus-money in window → {len(result.get('long_shots') or [])} picks, "
+              f"{len(result.get('longshot_watch') or [])} watchlist.")
+
+    # THE LIKELIHOOD BOARD, for baseball at last. Ethan, 2026-08-31:
+    # "We should have a most likely page for every sport… dive deeper
+    # into getting the most likely page for MLB set up." Same maker,
+    # same one bar (likely.admissible), same shelves machinery as the
+    # football boards — and the same founding rule: a market only lands
+    # here once engine.rankfit has measured, on THIS box's own logs,
+    # that the model can rank it. On a box with an empty rank store the
+    # board publishes empty with the census saying exactly that, and
+    # fills by itself after the first measurement pass.
+    _tk = _stg.start("likelihood board")
+    try:
+        from engine.likely import build as _likely_build
+        from engine import boards as _mlboards
+        _ml_census: dict = {}
+        # The game cards too. A baseball moneyline reaches this board
+        # only after `engine.gamerank --save` has measured, on THIS
+        # box's game history, that the run-rating model ranks winners —
+        # the same earned-per-market rule the prop shelves live by.
+        result["most_likely"] = _likely_build(
+            result["recommendations"], sport="mlb", census=_ml_census,
+            game_bets=result.get("game_bets") or [])
+        if not result["most_likely"]:
+            from engine.rankfit import load as _rank_store
+            if not any(k.startswith("mlb:") for k in _rank_store()):
+                _ml_census["no market measured to rank yet"] = 1
+        result["likely_census"] = _ml_census
+        result["board_guide"] = _mlboards.guide("mlb")
+        result["board_shelves"] = _mlboards.shelves(
+            "mlb", result["most_likely"])
+    except Exception as exc:                              # noqa: BLE001
+        print(f"⚠️  likelihood board skipped: {exc}")
+        result.setdefault("most_likely", [])
+        result.setdefault("board_shelves", [])
+    _stg.stop(_tk)
+
+    c = result["counts"]
+    confirmed = sum(1 for g in slate.games if g.lineups_confirmed)
+    print(f"\n{args.date}: {len(slate.games)} games ({confirmed} with confirmed lineups)")
+    print(f"Analyzed {c['props_analyzed']} props → {c['recommended']} recommended")
+    gc = result.get("gate_census") or {}
+    if gc:
+        # The funnel, so a thin board is a diagnosis instead of a mystery.
+        print("  Gate census: "
+              + " · ".join(f"{k.replace('_', ' ')} {v}" for k, v in gc.items()
+                           if v and k != "calibration_markets"))
+        if gc.get("calibration_markets"):
+            print("  ⚠️  Markets closed by calibration (fit at search boundary): "
+                  + ", ".join(gc["calibration_markets"])
+                  + " — refits nightly; comes back when the fit lands inside the range")
+    if real_odds:
+        print("(edges priced against real sportsbook lines)\n")
+    else:
+        print("(lines are recent-form proxies — pass --odds for real book edges)\n")
+    for r in result["recommendations"][:30]:
+        flag = "✅" if r["recommended"] else "  "
+        # A good grade with no tick is confusing unless we say what blocked it.
+        held = ""
+        if not r["recommended"] and r["grade"] != "Pass" and r.get("warnings"):
+            held = f"   ← held: {r['warnings'][0].split('—')[0].strip()}"
+        print(f"  {flag} {r['grade']:>11}  conf {r['confidence']:>4}  "
+              f"edge {r['edge']:+.1%}  {r['headline']}{held}")
+
+    _tk = _stg.start("write JSON")
+    if args.out:
+        import datetime as _dt
+        from pathlib import Path
+        result["generated_from"] = "live-odds" if real_odds else "live"
+        import datetime as _dt2
+        odds_status["at"] = _dt2.datetime.now().strftime("%H:%M")
+        result["odds_status"] = odds_status
+        result["built_at"] = _dt.datetime.now().isoformat(timespec="seconds")
+        # NFL_MODEL §2.3: label the knowledge tier of every reason, so a
+        # post-mortem can tell a stale feed from a bad inference. Reads
+        # the finished strings and prices nothing.
+        from engine.knowledge import stamp as _tier_stamp
+        _tier_stamp(result)
+        from engine import gate
+        gate.publish(result, args.out)
+        print(f"\nWrote {args.out}")
+        # The light copy the Home page draws first (engine/lightboard),
+        # published the same way so the paywall strips the same keys.
+        try:
+            from engine import lightboard
+            _, _lfull = gate.publish(lightboard.light(result, "mlb"), lightboard.light_path(args.out))
+            print(lightboard.report(gate.board_source(args.out), _lfull))
+        except Exception as _lexc:                            # noqa: BLE001
+            print(f"⚠️  Light board skipped: {_lexc}")
+    _stg.stop(_tk)
+
+    # Learning engine: journal today's real-priced picks and settle any open
+    # ones whose results have since been ingested. Only real book prices are
+    # journaled — a proxy line isn't a bet anyone could place. Never let the
+    # journal break a build.
+    _tk = _stg.start("journal + settle")
+    if real_odds:
+        try:
+            from engine import ledger
+            from engine.db import connect as hist_connect
+            lconn = ledger.connect()
+            # One-time repair (no-op once clean): watchlist rows journaled
+            # into the Long Shots RECORD move to their calibration bucket —
+            # the record scores the ≤3 picks, not 200 darts a night.
+            moved = ledger.split_watch_from_longshots(lconn)
+            if moved:
+                print(f"Journal repair: {moved} watchlist row(s) moved out of "
+                      f"the Long Shots record into the calibration bucket.")
+            logged = ledger.log_recommendations(lconn, result)
+            ls_logged = ledger.log_longshots(lconn, result)
+            st_logged = ledger.log_stale_flags(lconn, result)
+            # The likelihood board's paper book, same as NFL/CFB — the
+            # board shipped for baseball on 2026-08-31 and a most-likely
+            # pick that never journals is a claim the ledger can never
+            # grade. Flat stake, zero dollars, never the headline record.
+            ml_logged = ledger.log_most_likely(
+                lconn, {"sport": "mlb", "date": args.date,
+                        "most_likely": result.get("most_likely") or []})
+            if ml_logged:
+                print(f"Most likely: {ml_logged} row(s) journaled.")
+            fm_logged = ledger.log_form_picks(lconn, result, team_form_map)
+            nm_logged = ledger.log_near_misses(lconn, result)
+            if nm_logged:
+                print(f"Looser-gates sampler: {nm_logged} near-miss prop(s) "
+                      f"paper-tracked — the 'should we loosen?' evidence.")
+            po_logged = ledger.log_priced_out(lconn, result)
+            if po_logged:
+                print(f"Priced-out sampler: {po_logged} graded pick(s) Kelly "
+                      f"sized at 0.00u — the read was good and the price was "
+                      f"not.\n  Paper-tracked at a flat stake, never staked: "
+                      f"if this bucket wins at those prices, the sizing is "
+                      f"too strict.")
+            settled = ledger.settle_from_history(lconn, hist_connect(), sport="mlb")
+            ledger.export_json(lconn, "web/data/record.json")
+            if logged or ls_logged or st_logged or fm_logged or settled:
+                print(f"Journal: {logged} new pick(s) + {ls_logged} long shot(s) "
+                      f"+ {st_logged} stale flag(s) + {fm_logged} form sample(s) "
+                      f"logged, {settled} settled — see the Record tab or "
+                      f"`python3 ledger.py report`")
+        except Exception as exc:
+            print(f"⚠️  Bet journal skipped: {exc}")
+    _stg.stop(_tk)
+
+    # WHERE THE BUILD'S TIME AND MEMORY WENT, when asked. The refresh loop
+    # is serial, so the slowest board sets the floor for every board, and
+    # "the MLB build takes 235 seconds" is the absence of a finding rather
+    # than one. `deploy/peakrss.py` wraps this for the whole-run peak.
+    _stg.report("MLB build")
+
+
+if __name__ == "__main__":
+    main()

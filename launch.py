@@ -1,0 +1,9315 @@
+#!/usr/bin/env python3
+"""One-command launcher — refresh live data for both leagues, then serve.
+
+    python3 launch.py                 # → http://localhost:8000
+    python3 launch.py 9000            # custom port
+    python3 launch.py --refresh 0     # refresh once at startup, don't keep polling
+    python3 launch.py --check         # readiness checklist (no server) — run this first
+    python3 launch.py --reset-budget  # after swapping in a new ODDS_API_KEY
+
+On startup this pulls the newest data it can reach for **both NFL and MLB**,
+writes it to ``web/data/``, and then starts the live server. While it runs it
+keeps that data fresh in the background (default every 60s).
+
+Scores and odds refresh on **separate cadences on purpose**. Live scores come
+from free, unlimited feeds, so they update every cycle. Sportsbook odds are
+metered — a full MLB slate costs about one request per game, and the free plan
+allows 500 a *month* — so they only re-pull when the budget in
+``engine.oddsbudget`` says it's affordable. Without that, an evening of live
+tracking would silently exhaust a month's quota in under an hour and the board
+would go stale with no explanation.
+
+Anything unreachable (blocked network, a league in its offseason, no odds key)
+is skipped with a clear message and the last-known data is kept, so the site
+always comes up. Player props and live scores need no key; the game-level bets
+(moneyline / spread / totals) also need team ratings — run ``ingest.py`` once.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import datetime as _dt
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+from http.server import ThreadingHTTPServer
+from pathlib import Path
+
+from server import (Handler, LIVE_FILES, seal_on_boot,  # reuse the --live server
+                    BoundedHTTPServer)
+from engine.secrets import load_local_secrets
+
+ROOT = Path(__file__).parent
+load_local_secrets()  # pull ODDS_API_KEY from secrets.local into the environment
+
+
+#: Lines of a failing build's output to forward. Enough for a traceback's
+#: last frame plus its exception, few enough that a build failing every
+#: cycle does not bury the journal.
+FAIL_LINES = 6
+
+
+def _run_build(args: list[str], timeout: int = 180) -> tuple[bool, str]:
+    """Run a build script as a subprocess. Returns (ok, last_output_line).
+
+    THE TIMEOUT IS A GUILLOTINE AND IT MUST SAY SO WHEN IT FALLS. On
+    2026-08-17 the production MLB board froze for three hours: every loop
+    build exceeded the 180s cap on a busy two-core box, was killed here,
+    and reported nothing anywhere — refresh_mlb's quiet background cycles
+    print only on success. The board's one daily write was the cold-start
+    build, which runs down a different path with no timeout. A kill that
+    leaves no line in the journal turns a config number into a day-long
+    investigation, so failures now print unconditionally: one line, into
+    stdout, which systemd forwards to the journal.
+
+    180s stays the DEFAULT because most callers are small fast builds —
+    the live scoreboards run every few seconds and must never be blocked
+    behind a hung sibling for ten minutes. The big model boards pass
+    their own ceiling.
+    """
+    try:
+        # NICED BELOW THE SERVER, every build, always. The serving
+        # process answers searches and page loads on the same single
+        # core these builds chew for minutes at a stretch — at equal
+        # priority a ten-minute MLB rebuild makes every tap feel broken
+        # while it runs (Ethan, 2026-09-01: "make sure nothing is laggy
+        # … everything is snappy and fast"). The build finishing thirty
+        # seconds later is a price nobody can perceive; the site
+        # hitching for ten minutes is the one everybody does. Same
+        # doctrine as the droplet's background fitters after the
+        # 2026-08-31 CPU-starvation cascade.
+        nicer = (lambda: os.nice(10)) if hasattr(os, "nice") else None
+        proc = subprocess.run([sys.executable, *args], cwd=str(ROOT),
+                              capture_output=True, text=True,
+                              timeout=timeout, preexec_fn=nicer)
+    except Exception as exc:  # noqa: BLE001 — never let a refresh crash the server
+        print(f"  build failed: {' '.join(args[:2])} — {str(exc)[:140]}")
+        _LAST_BUILD_NOTE[0] = str(exc)[:240]
+        return False, str(exc)
+    out = (proc.stdout + proc.stderr).strip().splitlines()
+    tail = out[-1] if out else ""
+    if proc.returncode != 0:
+        # THE LAST LINE ALONE IS NOT THE ERROR. This printed
+        # `tail[:140]`, and for a Python traceback that is the exception
+        # message with the frame that raised it thrown away — so a
+        # failing build reported WHAT went wrong and never WHERE. CFB has
+        # been exiting non-zero every cycle for half a day (found
+        # 2026-08-31 via `--boards`, which recorded the refresh as FAILED
+        # while the file sat 13.5 hours old), and one truncated line is
+        # what there was to go on.
+        #
+        # A few lines, not the whole log: a build that fails every cycle
+        # must not fill the journal, and the last frames are where the
+        # answer lives.
+        for line in out[-FAIL_LINES:] if out else []:
+            print(f"    | {line[:200]}")
+        print(f"  build failed: {' '.join(args[:2])} — exit "
+              f"{proc.returncode}: {tail[:140]}")
+    _LAST_BUILD_NOTE[0] = ("" if proc.returncode == 0
+                           else f"exit {proc.returncode}: {tail[:200]}")
+    return proc.returncode == 0, tail
+
+
+def _with_odds() -> bool:
+    return bool(os.environ.get("ODDS_API_KEY"))
+
+
+MLB_OUT = "web/data/mlb_recommendations.json"
+NFL_OUT = "web/data/recommendations.json"
+NBA_OUT = "web/data/nba.json"
+WNBA_OUT = "web/data/wnba.json"
+UFC_OUT = "web/data/ufc.json"
+CFB_OUT = "web/data/cfb.json"
+# One bulk request covers h2h + spreads + totals for the whole
+# board, so the cost is per-market, not per-game.
+# The CFB board itself is one bulk call (3 credits, whole slate); the
+# player pull adds up to PLAYER_EVENT_CAP event-scoped calls at
+# CREDITS_PER_EVENT each (cfb_build.attach_player_quotes) — so the
+# authorization estimate covers the worst Saturday, and light days cost
+# less than authorized rather than more.
+#
+# 15 -> 63 on 2026-09-03, and the four-fold rise is the point rather
+# than a regression: that call bought ONE market (anytime TD) and now
+# buys five, because college gained the four yardage markets the NFL
+# has always had. The meter bills per market, so the number here has to
+# move with them or the pacer authorises a fifth of what gets spent —
+# which is the exact failure `CREDITS_PER_EVENT` was introduced to end
+# ("an invisible 4-8x overspend that burned 19k of a 20k plan in a
+# day"). The pull itself asks `oddsbudget.affordable_events` and buys
+# fewer games when the month cannot carry twelve.
+CFB_ODDS_COST = 3 + 12 * 5
+
+#: What ONE game's player-quote call costs college — `cfb_build.
+#: CREDITS_PER_EVENT`, pinned equal in tests/test_odds_decisions.py. A
+#: full pull that spent less than the board request plus one of these
+#: bought no player quotes, whatever the quota stamp says.
+CFB_PLAYER_EVENT_COST = 5
+
+#: The cheap half of that sum, on its own. `cfb_build.attach_odds` buys
+#: full-game markets for the ENTIRE board in one request — three credits
+#: however many games are on it — and `attach_player_quotes` buys the other
+#: sixty, one call per game.
+#:
+#: They were authorised together, so a budget that could not carry the
+#: player pull bought no game lines either, and college published a board
+#: with no moneyline, no spread and no total — and therefore no game bets
+#: and nothing on Best Bets. Ethan, 2026-09-03: "we still do not show any
+#: cfb props or best bets or anything and there is games today."
+#:
+#: Measured on his plan that morning: with three slates live the day's
+#: college allowance is 26 credits, so the 63-credit pull starves and the
+#: 3-credit one fits nine times over.
+CFB_LINES_COST = 3
+
+#: Its own pacing clock, for the reason LINES_CLOCK carries above: a
+#: three-credit pull must not reset the clock the sixty-three-credit one
+#: is waiting on.
+CFB_LINES_CLOCK = "cfb_lines"
+
+#: What one board-level game-lines pull costs: three markets (h2h, spreads,
+#: totals) across one region, and the meter bills markets x regions. The
+#: whole slate, for less than half of what ONE game's prop payload costs.
+#:
+#: This is the cheap tier under the prop pull, not a replacement for it.
+#: Player markets only exist per event, so nothing at this price can
+#: refresh a prop — what it buys is the moneyline, spread and total on
+#: every game, which is what the Most Likely and game-lines boards are
+#: made of and what Ethan was reading when the prices behind them were
+#: fifty-five minutes old (2026-09-03).
+BOARD_ODDS_COST = 3
+
+#: The cheap pull paces on its OWN clock. Sharing "nfl" would have the two
+#: tiers starve each other in both directions: a three-credit lines pull
+#: would reset the clock the 136-credit prop pull waits on, and MIN_REFRESH
+#: _GAP after a prop pull the lines could not refresh either. The credit
+#: BUDGET stays shared — it is one API plan, and `should_refresh` reads the
+#: same day's spend for both — only the cadence splits, exactly as the
+#: per-sport clocks split for the same reason (oddsbudget.BudgetState).
+LINES_CLOCK = "nfl_lines"
+
+
+def _slate_games(path: str) -> int:
+    """Real game count on a built board (0 when missing/unreadable)."""
+    try:
+        with open(path) as fh:
+            return len(json.load(fh).get("games", []))
+    except Exception:
+        return 0
+
+
+def _slate_props(path: str) -> int:
+    """Priced player props on a built board (0 when missing/unreadable).
+
+    READ FROM THE FULL COPY. With the paywall on, the public file at
+    ``path`` carries `recommendations: []` by design (engine/gate.py
+    redacts it), so counting there would call every subscriber board
+    propless. gate.publish always writes the full board beside it under
+    data/built/, paywall or not — that is the copy that knows.
+    """
+    try:
+        from engine import gate as _gate
+        src = path
+        full = _gate.full_board_file(os.path.basename(path))
+        # Only a full copy at least as fresh as the public file may
+        # answer for it: a writer that bypassed gate.publish would leave
+        # an older full copy behind, and an old count is a wrong count.
+        if full is not None and full.is_file() and os.path.isfile(path) \
+                and full.stat().st_mtime >= os.stat(path).st_mtime - 1:
+            src = full
+        with open(src) as fh:
+            return len(json.load(fh).get("recommendations") or [])
+    except Exception:                                     # noqa: BLE001
+        return 0
+
+
+def _board_word(path: str, ok: bool) -> str:
+    """What a refresh should actually say about the board it just wrote.
+
+    "refreshed" WAS PRINTED ON AN EMPTY BOARD, for every sport but one.
+    `refresh_cfb` learned in August to tell an unreachable feed and an
+    empty slate apart from a real refresh — and the lesson stopped
+    there. MLB, NFL, NBA and WNBA all printed "refreshed" the moment the
+    build exited 0, whether it wrote a twelve-game slate or nothing at
+    all, so a board that quietly went empty looked identical in the
+    journal to one that worked.
+
+    Reported 2026-08-31: "cfb and wnba are both not showing picks or
+    live games", with nothing in the log to say which of them had a feed
+    problem, an empty schedule, or a build that ran fine and found
+    nothing. This is that question answered before it is asked.
+
+    The game count rides along on every line for the same reason: a bare
+    "refreshed" is compatible with every failure below the fetch.
+    """
+    if not ok:
+        return "unavailable"
+    n = _slate_games(path)
+    if not n:
+        return "EMPTY BOARD — built cleanly and found no games"
+    return f"refreshed · {n} game(s)"
+
+
+def _games_on_slate(path: str) -> int:
+    """How many games the last build found — the per-refresh odds cost."""
+    try:
+        with open(path) as fh:
+            return max(1, len(json.load(fh).get("games", [])))
+    except Exception:
+        return 10
+
+
+#: WHAT EACH LEAGUE IS WORTH OF THE DAY'S ODDS BUDGET.
+#:
+#: Ethan, 2026-09-03: "I don't care about ufc or nba or wnba, I want NFL,
+#: CFB, MLB as the main focus." This is that instruction, written down
+#: where the money is decided instead of applied by hand.
+#:
+#: The share used to be one-per-live-slate, flat. In September that is
+#: MLB, NFL, college and whatever else has a fixture — and a WNBA night
+#: took the same slice of a thin plan as college football's Saturday. The
+#: three leagues the product is about now split the budget between them
+#: and the rest draw on a token share: enough that their boards still
+#: refresh a game line, not enough to compete for a Saturday.
+#:
+#: A weight of 0 would be a different decision — it would stop those
+#: boards pricing at all — and that is not what was asked for, so it is
+#: not what this does.
+SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 1.0,
+                "nba": 0.15, "wnba": 0.15, "ufc": 0.15}
+DEFAULT_WEIGHT = 0.15
+
+#: How many days a week each league actually plays.
+#:
+#: THE WEEKLY-SPORT BUG. `daily_allowance` spreads the month's credits
+#: evenly over every remaining day, which is right for baseball and wrong
+#: for football. College plays on Saturday. Giving it a flat 1/28th of the
+#: month on each of 28 days means it accrues 26 days of budget it can
+#: never spend and then starves on the one day it has games — measured on
+#: 2026-09-03 as a 26-credit college day against a 63-credit pull.
+#:
+#: Scaling a game day by 7/days-per-week hands a league its WEEK on the
+#: days it plays. The month's total is unchanged: college spending 3.5x on
+#: two days a week is the same seven days of allowance it was entitled to
+#: and could not reach. It is also self-limiting — every refresh requires
+#: games on the slate, so a league cannot claim a game-day share on a day
+#: it is not playing.
+PLAY_DAYS_PER_WEEK = {"mlb": 7.0, "nba": 7.0, "wnba": 5.0,
+                      "nfl": 3.0, "cfb": 2.0, "ufc": 1.0}
+
+
+def _live_sports() -> list[str]:
+    """Which leagues have a slate on the board right now."""
+    return [name for name, path in (("mlb", MLB_OUT), ("nfl", NFL_OUT),
+                                    ("nba", NBA_OUT), ("wnba", WNBA_OUT),
+                                    ("cfb", CFB_OUT))
+            if _slate_games(path) > 0]
+
+
+def _budget_share(sport: str | None = None) -> float:
+    """This league's slice of the daily odds allowance.
+
+    Weighted by SPORT_WEIGHT across the leagues that are actually live, and
+    then by how rarely this one plays (PLAY_DAYS_PER_WEEK) — see both
+    tables above. Called without a sport it keeps the old flat behaviour,
+    which is what the callers that have no league still want.
+    """
+    from engine.oddsbudget import budget_sport
+    live = _live_sports()
+    if sport is None:
+        return 1.0 / max(1, len(live))
+    key = budget_sport(sport)
+    # A league pulling before its first board exists is not in `live` yet;
+    # count it, or the bootstrap cycle divides by a set it is missing from.
+    names = set(live) | {key}
+
+    def claim(n: str) -> float:
+        return (SPORT_WEIGHT.get(n, DEFAULT_WEIGHT)
+                * (7.0 / PLAY_DAYS_PER_WEEK.get(n, 7.0)))
+
+    # NORMALISED OVER THE CLAIMS, SO THE DAY IS ALLOCATED ONCE.
+    #
+    # The first cut multiplied each league's share by 7/days-per-week and
+    # stopped there. On a Saturday that summed to 2.2 — the leagues jointly
+    # planning to spend the day's pot twice over, which is precisely the
+    # arithmetic that emptied the plan in the first place and the reason
+    # `daily_allowance` holds back LIVE_SHARE at all. Dividing by the total
+    # claim keeps the concentration (college still outweighs baseball three
+    # to one on a Saturday) while the shares sum to exactly 1.0.
+    total = sum(claim(n) for n in names)
+    return claim(key) / (total or 1.0)
+
+
+def _slate_kickoffs(path: str) -> list:
+    """Kickoff epochs from the last build — what tells the pacer WHEN the
+    day's credits are worth spending. Unparseable or absent times simply
+    drop out; an empty list means the pacer behaves time-blind, as before."""
+    out = []
+    try:
+        with open(path) as fh:
+            games = json.load(fh).get("games", [])
+        for g in games:
+            k = g.get("kickoff") or ""
+            if "T" not in k:
+                continue                     # "HH:MM" NFL style — no date, skip
+            try:
+                out.append(_dt.datetime.fromisoformat(
+                    k.replace("Z", "+00:00")).timestamp())
+            except ValueError:
+                continue
+    except Exception:
+        return []
+    return out
+
+
+def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
+    """Should this background pull price only the six-hour window?
+
+    Only when the day cannot afford the whole slate. See
+    oddsbudget.wide_pull_affordable: the window was a free-plan measure,
+    and on a funded plan it saved ~3% of the day's credits while leaving
+    the evening board with no prices on it at all — which is the thing it
+    was supposed to be protecting.
+
+    Fails to the OLD behaviour if the budget cannot be read: narrowing
+    spends less, and a broken import must not be a way to overspend.
+    """
+    try:
+        from engine.oddsbudget import wide_pull_affordable
+        return not wide_pull_affordable(_games_on_slate(out_path) + 1,
+                                        share=_budget_share(sport))
+    except Exception:                                        # noqa: BLE001
+        return True
+
+
+def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
+                     cost: int | None = None,
+                     credits: int | None = None) -> bool:
+    """Decide whether this refresh can afford to re-pull odds.
+
+    Scores are free and always refresh; odds are metered, so they only ride
+    along when the budget allows. This is what keeps live tracking from
+    silently burning a month's quota in an evening.
+    """
+    if not _with_odds():
+        return False
+    try:
+        from engine.oddsbudget import should_refresh
+    except Exception:
+        return True
+    # Cost is normally one request per game (player props are event-scoped).
+    # A sport that pulls its whole board in one call passes its real cost
+    # instead — charging CFB sixty credits for a three-credit request would
+    # mean the pacer never authorised a single Saturday.
+    #
+    # `credits` is the same question asked in the unambiguous unit. The
+    # parameter above is an EVENT COUNT that the pacer multiplies by
+    # CREDITS_PER_EVENT, so a caller whose pull is not billed per event has
+    # no honest number to put in it: the board pull costs three credits
+    # total, and three events would meter it at twenty-four. Callers that
+    # know their real credit price say it directly (oddsbudget.
+    # refresh_credits).
+    kicks = _slate_kickoffs(out_path)
+    ok, reason = should_refresh(cost if cost is not None
+                                else _games_on_slate(out_path) + 1,
+                                kickoffs=kicks,
+                                sport=sport, share=_budget_share(sport),
+                                credits=credits)
+    if not quiet:
+        print(f"       {reason}")
+    # WRITTEN DOWN WHETHER OR NOT IT WAS PRINTED. The loop runs quiet,
+    # and a day of declines left no trace anywhere (2026-09-05).
+    try:
+        from engine.oddsbudget import log_decision
+        log_decision(sport, ok, reason,
+                     credits=credits if credits is not None else None,
+                     cost_events=cost, games=_games_on_slate(out_path),
+                     kickoffs=len(kicks), share=round(_budget_share(sport), 3))
+    except Exception:                                        # noqa: BLE001
+        pass
+    # NOTE: the refresh clock is NOT stamped here. Authorization is not a
+    # pull — _finish_paid_pull stamps it only once the API actually
+    # answered, so a network blip can't burn the day's one sparse pull.
+    return ok
+
+
+def _spent_so_far(sport: str) -> int:
+    """This sport's credits spent today, from the ledger; 0 if unreadable."""
+    try:
+        from engine.oddsbudget import spent_today
+        return int(spent_today(sport=sport))
+    except Exception:
+        return 0
+
+
+def _paid_pull_baseline() -> str:
+    """The quota timestamp before a paid attempt — advancing past this is
+    the proof the API answered."""
+    try:
+        from engine.oddsbudget import load as _bload
+        return _bload().last_seen_iso
+    except Exception:
+        return ""
+
+
+def _finish_paid_pull(spend: bool, before_seen: str, ok: bool, tail: str,
+                      label: str, sport: str | None = None,
+                      bought: int | None = None, expect: int | None = None) -> None:
+    """Confirm (or defer) an authorized paid pull after the build ran.
+
+    Landed → the refresh clock stamps now. Didn't land → a short retry
+    cooldown, and the failure is printed EVEN IN QUIET MODE: the old flow
+    stamped the clock at authorization time and said nothing, so a failed
+    window pull silently stranded the board on stale prices for 12h."""
+    if not spend:
+        return
+    # ``bought`` is what the ledger says this build spent on the lane and
+    # ``expect`` the least a real pull costs; short of it the clock is
+    # not stamped (oddsbudget.paid_pull_result) and the ledger says so.
+    enough = bought is None or expect is None or bought >= expect
+    try:
+        from engine.oddsbudget import (paid_pull_result, FAILED_PULL_RETRY_S,
+                                       log_decision)
+        landed = paid_pull_result(before_seen, sport=sport, bought_enough=enough)
+        if landed and not enough:
+            log_decision(sport, False,
+                         f"{label}: authorised pull bought {bought} credit(s), "
+                         f"under the {expect} a real pull costs — clock not stamped",
+                         credits=bought, kind="bought")
+            print(f"  ⚠️  {label}: authorised pull bought {bought} credit(s) "
+                  f"(a real pull costs at least {expect}) — the clock is not "
+                  f"stamped, so the next cycle asks again")
+    except Exception:
+        return
+    if not landed:
+        print(f"  ⚠️  {label}: paid odds pull authorized but the API never "
+              f"answered (build {'ok' if ok else 'failed'}"
+              + (f": {tail}" if tail else "")
+              + f") — retrying in ~{FAILED_PULL_RETRY_S // 60} min")
+
+
+def _slate_date() -> str:
+    """The BASEBALL day, which rolls at 5 AM EASTERN — not midnight.
+
+    West-coast games run past 12:00, and flipping the board on the
+    calendar tick yanked still-live bets off the Live tab in the 7th
+    inning. Until 5 AM the slate (board, tracker, journal date) stays on
+    the night being played; results ingest and settling use the real
+    calendar independently.
+
+    EASTERN, SAID OUT LOUD (QA audit, 2026-09-01). This read the
+    process's local clock, and the droplet runs UTC — so the "5 AM" roll
+    was happening at 05:00 UTC, which is 1 AM in New York, exactly when
+    a west-coast night game is in its last innings. Same answer every
+    other clock-sensitive module already gives (engine/streak.py,
+    engine/oddsbudget.py): compute the hour where the games are."""
+    from zoneinfo import ZoneInfo
+    now = _dt.datetime.now(ZoneInfo("America/New_York"))
+    return (now - _dt.timedelta(hours=5)).date().isoformat()
+
+
+def refresh_mlb(quiet: bool = False) -> bool:
+    """Build today's MLB slate into web/data/mlb_recommendations.json."""
+    date = _slate_date()
+    out = MLB_OUT
+    args = ["mlb_build.py", date, "--out", out]
+    # games>0: an empty offseason slate never spends a paid pull. The first
+    # build of a season runs cached, writes the games, and the next cycle
+    # (60s later) is eligible — a one-cycle bootstrap, not a gap.
+    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="mlb")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+        if quiet and _narrow_pull(out, "mlb"):
+            # Background cycle on a budget that cannot cover the whole
+            # slate: re-price only what is live or starting soon.
+            args.append("--active-odds")
+    elif _with_odds():
+        # Budget says don't SPEND — but the last paid pull's prices are cached
+        # and free. Without this, every 60s score refresh rebuilt the slate
+        # with proxy lines, silently wiping real prices off the site for all
+        # but the minute after each paid pull.
+        args.append("--cached-odds")
+    # 600s, not the default 180. The MLB board is the one build that has
+    # never reliably fit under three minutes on the production box: 923
+    # props, and since the sim memoisation it is CPU-bound on two busy
+    # cores. At 180s the loop killed EVERY warm build for three hours and
+    # the board froze at its cold-start write. Ten minutes is twice the
+    # worst measured build — a guillotine for a hang, not for honest work.
+    ok, tail = _run_build(args, timeout=600)
+    _finish_paid_pull(spend, before_seen, ok, tail, "MLB", sport="mlb")
+    if not quiet:
+        print(f"  MLB  {date}: {_board_word(out, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+#: How far ahead of kickoff a week counts as "the current slate".
+#:
+#: 45 days covers the gap from the preseason opener to Week 1 — 32 days on
+#: 2026-08-08 — without reaching so far that the board is built for a month
+#: of fixtures nobody is pricing yet. Only used when there is no game
+#: within a week; in season the nearest-game rule wins and this never
+#: applies.
+SEASON_RUNUP_DAYS = 45
+
+
+def _current_nfl_week():
+    """Best-effort (season, week) for the games nearest today, or None in the
+    offseason / when the schedule can't be reached."""
+    try:
+        from engine.sources.nflverse import load_schedules, _s
+        rows = load_schedules()
+    except Exception:
+        return None
+    today = _dt.date.today()
+    best = None  # (abs_days, season, week)
+    for r in rows:
+        gd = _s(r, "gameday")
+        try:
+            d = _dt.date.fromisoformat(gd[:10])
+            season, week = int(_s(r, "season")), int(_s(r, "week"))
+        except Exception:
+            continue
+        diff = abs((d - today).days)
+        if best is None or diff < best[0]:
+            best = (diff, season, week)
+    # Only treat it as "current" if the nearest game is within a week.
+    if best and best[0] <= 7:
+        return best[1], best[2]
+
+    # THE RUN-UP TO A SEASON IS NOT THE OFFSEASON, and treating them the
+    # same is why the NFL page sat on the sample slate through August.
+    # Week 1 2026 is 32 days out on 2026-08-08, so the rule above returned
+    # None every launch, `refresh_nfl` printed "no current slate — kept
+    # existing data", and the board kept serving the illustrative sample
+    # with its Jan 4 fixtures. It was doing what it was told; nobody had
+    # told it that a buildable week existed.
+    #
+    # It is buildable now: the prior-season carry (engine/carry.py) exists
+    # precisely so weeks 1-3 have projections before this season has
+    # played a snap, and books post Week 1 lines all summer.
+    #
+    # FORWARD ONLY. Widening the window in both directions would, in
+    # March, find last February's Super Bowl nearer than September's opener
+    # and rebuild a board for a game five weeks gone. This looks at
+    # UPCOMING fixtures alone.
+    upcoming = None
+    for r in rows:
+        gd = _s(r, "gameday")
+        try:
+            d = _dt.date.fromisoformat(gd[:10])
+            season, week = int(_s(r, "season")), int(_s(r, "week"))
+        except Exception:                                     # noqa: BLE001
+            continue
+        days = (d - today).days
+        if 0 <= days <= SEASON_RUNUP_DAYS:
+            if upcoming is None or days < upcoming[0]:
+                upcoming = (days, season, week)
+    if upcoming:
+        return upcoming[1], upcoming[2]
+    return None
+
+
+# `refresh_preseason` lived here 2026-08-08 → 2026-08-25 and was RETIRED
+# at Ethan's request: "get rid of the pre season section for nfl. No need
+# too have it anymore, I'd rather just be prepared for the regular season
+# to start." The engine it drove (nflpre.py, engine/sources/nflpreseason,
+# engine/nfl/prestarters + prelines + prefit) stays in the tree, dormant,
+# for a future August; nothing builds or serves nfl_preseason.json now,
+# and maintenance removes the stale copy from web/data (RETIRED_BOARDS).
+
+
+def refresh_nfl(quiet: bool = False) -> bool:
+    """Build the current NFL week into web/data/recommendations.json."""
+    wk = _current_nfl_week()
+    if not wk:
+        if not quiet:
+            print("  NFL  no current slate (offseason / schedule unavailable) — kept existing data")
+        return False
+    season, week = wk
+    out = NFL_OUT
+    # --injuries was never passed here, so §7's ripple model — the layer
+    # that holds a clouded player's props and boosts the beneficiaries —
+    # sat unfetched with the coverage scan promising it "refreshes with
+    # the launcher". It does now. The feed is free and cached, and
+    # nfl_build already degrades to a warning when it cannot be reached,
+    # so this cannot cost a build. --depth rides along on the same terms:
+    # it refines the injury knock-on roles and powers the QB-dependency
+    # watch, and a missing chart feed costs a warning, never the build.
+    # --carry so weeks 1-3 have a board at all. Without it player_game_logs
+    # is single-season and build_slate wants three of them, so the prop
+    # board builds literally nothing until week 4 — measured on 2025: 0, 0,
+    # 0, then 235. It stands itself down as soon as the season has three
+    # real games, so there is nothing to switch off later.
+    args = ["nfl_build.py", str(season), str(week), "--out", out,
+            "--injuries", "--depth", "--carry"]
+    spend = _slate_games(out) > 0 and _odds_affordable(out, quiet, sport="nfl")
+    before_seen = _paid_pull_baseline() if spend else ""
+    # THE CHEAP TIER, when the expensive one is declined.
+    #
+    # Until now this was a two-state decision: pay 8 credits a game for the
+    # prop pull, or pay nothing and keep prices that age with the cycle.
+    # The daily cap (2026-09-03) makes the second state the common one, and
+    # the board Ethan was reading that morning was eight minutes old
+    # carrying prices fifty-five minutes old — "these lines along with more
+    # are completely wrong."
+    #
+    # There is a third state and it costs three credits: the board endpoint
+    # returns h2h, spreads and totals for the WHOLE slate in one request.
+    # It cannot refresh a prop — player markets exist only per event — so
+    # it rides on top of --cached-odds rather than replacing anything, and
+    # it is only reached when the full pull was already declined. Its own
+    # pacing clock, its own authorization, and the build stamps it
+    # separately so the page never claims props are as fresh as the lines.
+    lines_spend = False
+    lines_before = ""
+    if spend:
+        args.append("--odds")
+        if quiet and _narrow_pull(out, "nfl"):
+            args.append("--active-odds")
+    elif _with_odds():
+        args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
+        if _slate_games(out) > 0 and _odds_affordable(
+                out, quiet, sport=LINES_CLOCK, credits=BOARD_ODDS_COST):
+            args.append("--board-odds")
+            lines_spend = True
+            lines_before = _paid_pull_baseline()
+    # 600s, the same ceiling MLB and CFB carry — not the 180s default,
+    # which is for the small fast builds. With --injuries --depth --carry
+    # and an odds pull this is a model board, and on 2026-09-01 the
+    # default guillotine fell on it whenever the droplet's one core was
+    # busy: the full build died mid-run, the fallback below rewrote the
+    # board without props, the next cycle's full build put them back —
+    # Ethan: "nfl keeps showing props, then not showing props, then
+    # showing props, then not showing props."
+    ok, tail = _run_build(args, timeout=600)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NFL", sport="nfl")
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "NFL game lines",
+                      sport=LINES_CLOCK)
+    if not ok and _slate_props(out) > 0:
+        # NEVER DOWNGRADE A BOARD THAT HAS PROPS. The fallback below
+        # exists for the week BEFORE a season's first stats, when the
+        # alternative to a game-lines-only board is no board at all. It
+        # was never meant to replace a props board that is one cycle
+        # old with one that has none — that is the flicker above, and
+        # it reported "ok" while doing it. Keep the last good board,
+        # say why, and let --boards show a FAILED with the reason.
+        n = _slate_props(out)
+        _LAST_BUILD_NOTE[0] = (f"kept last board ({n} props) — full build "
+                               f"failed: {(_LAST_BUILD_NOTE[0] or tail)[:160]}")
+        if not quiet:
+            print(f"  NFL  {season} wk {week}: full build failed — kept the "
+                  f"last board with {n} props rather than publishing game "
+                  f"lines only  ({tail})")
+        return False
+    if not ok:
+        # THE SCHEDULE IS STILL WORTH HAVING.
+        #
+        # Found by the Phase 3 rehearsal, 2026-08-19: the full build exits
+        # 2 when nflverse has no weekly player stats, which is the normal
+        # state of the world until a season's Week 1 has been PLAYED. With
+        # one build and no fallback, every nightly refresh from Sep 2 (the
+        # first day _current_nfl_week() calls Week 1 current) to roughly
+        # Sep 9 would fail and the board would carry nothing — through
+        # exactly the week the season arrives. The games and their lines
+        # are available that entire time.
+        #
+        # The fallback publishes the slate AND its game markets — totals,
+        # team totals and spreads, priced off team ratings against the
+        # schedule's own lines (Ethan, 2026-08-19: "yes I want the 2nd
+        # -9th priced"). The player layer stays absent because it does not
+        # exist yet, and the page says which is which.
+        #
+        # --cached-odds costs nothing: it reads the LAST PAID pull off
+        # disk. It is the only way a moneyline can price here, that being
+        # the one game market that needs a book price rather than a rating.
+        ok2, tail2 = _run_build(["nfl_build.py", str(season), str(week),
+                                 "--games-only", "--cached-odds",
+                                 "--out", out])
+        if ok2:
+            if not quiet:
+                print(f"  NFL  {season} wk {week}: game lines only — no "
+                      f"weekly player stats yet, so no props are priced")
+            return True
+        tail = tail or tail2
+    if not quiet:
+        print(f"  NFL  {season} wk {week}: {_board_word(out, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+#: FLOORS BETWEEN REBUILDS for boards whose answer barely moves inside
+#: a cycle. Measured on the droplet, 2026-09-01, first cycle after the
+#: rogue fitters were killed: predmarkets 72s and fantasy 13s of a 524s
+#: cycle — 16% of every page's age spent re-asking two questions whose
+#: answers change on a clock of minutes, not seconds. Stamped like the
+#: futures boards (.futures_built): the loop skips a board younger than
+#: its floor, a hand-run `launch.py` still rebuilds everything.
+PREDMARKETS_EVERY_S = 600
+FANTASY_EVERY_S = 900
+
+
+def _due(stamp: str, every_s: int) -> bool:
+    """Is web/data/<stamp> older than ``every_s`` seconds, or absent?"""
+    try:
+        return (time.time() - (ROOT / "web" / "data" / stamp).stat().st_mtime) >= every_s
+    except OSError:
+        return True
+
+
+def _stamp(stamp: str) -> None:
+    try:
+        (ROOT / "web" / "data" / stamp).touch()
+    except OSError:
+        pass
+
+
+def refresh_predmarkets(quiet: bool = False) -> bool:
+    """Polymarket markets + trade tape → web/data/predmarkets.json.
+
+    Free keyless endpoints with short-TTL caching, so riding the normal
+    refresh cycle costs nothing metered. Recording runs on every build —
+    the tape cannot be backfilled — so the floor below is the tape's
+    sampling interval, and ten minutes is the cadence it was sampled at
+    anyway on a healthy nine-minute cycle."""
+    if quiet and not _due(".pm_built", PREDMARKETS_EVERY_S):
+        return True                         # fresh enough — see the floors above
+    ok, tail = _run_build(["pm_build.py", "--out", "web/data/predmarkets.json"])
+    if ok:
+        _stamp(".pm_built")
+    if not quiet:
+        print(f"  PM   markets: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_memes(quiet: bool = False) -> bool:
+    """Rocket Radar: Solana meme-coin board → web/data/memecoins.json.
+
+    Free keyless feeds (GeckoTerminal + DexScreener) with short-TTL
+    caching. Runs on every refresh because the board's core signal is
+    ACCELERATION off our own snapshot tape — each pass is a sighting,
+    and three sightings of a coin is when its second derivative exists.
+    Nothing here journals a bet or touches the sports model."""
+    ok, tail = _run_build(["memes_build.py", "--out", "web/data/memecoins.json"])
+    if not quiet:
+        print(f"  MEME rocket radar: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_fantasy(quiet: bool = False) -> bool:
+    """Fantasy usage boards from the local DB — zero network."""
+    if quiet and not _due(".fantasy_built", FANTASY_EVERY_S):
+        return True                         # fresh enough — see the floors above
+    ok, tail = _run_build(["fantasy_build.py", "--out", "web/data/fantasy.json"])
+    if ok:
+        _stamp(".fantasy_built")
+    if not quiet:
+        print(f"  FF   fantasy: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_sport_rosters(quiet: bool = False) -> bool:
+    """Per-sport roster tabs. Zero network — reads our own game logs.
+
+    The NFL's rosters come off the players feed inside `fantasy_build`;
+    everything else is built from who actually appeared for a team, which
+    is a second reading of history the nightly ingest already stores.
+    """
+    ok, tail = _run_build(["rosters_build.py"])
+    if not quiet:
+        print(f"  ROS  rosters: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_injuries(quiet: bool = False) -> bool:
+    """League-wide injury boards (ESPN, keyless) → web/data/injuries.json.
+
+    One cached pull per league on a 30-minute TTL, each league failing
+    independently, so riding the refresh cycle costs nothing metered and
+    a dead feed dims one sport instead of the page."""
+    ok, tail = _run_build(["injuries_build.py", "--out",
+                           "web/data/injuries.json"])
+    if not quiet:
+        print(f"  INJ  injuries: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_news(quiet: bool = False) -> bool:
+    """League headlines (publisher RSS, titles + links only) →
+    web/data/news.json. The 30-minute fetch TTL makes riding the cycle
+    free; see engine/sources/news.py for the display policy."""
+    ok, tail = _run_build(["news_build.py", "--out", "web/data/news.json"])
+    if not quiet:
+        print(f"  NEWS headlines: {'refreshed' if ok else 'unavailable — kept existing data'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_standings(quiet: bool = False) -> bool:
+    """Standings and the postseason bracket. Zero network — both are
+    counted from the same finished games every other board reads, so they
+    cannot disagree with the records shown beside them."""
+    ok, tail = _run_build(["standings_build.py"])
+    if not quiet:
+        print(f"  STD  standings: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_nba(quiet: bool = False) -> bool:
+    """NBA slate (Scalpy) — a full member of the paid-pull rotation.
+
+    It was cached-only for its first season scaffold, which meant the
+    board could never see a real price: nothing ever seeded the cache.
+    Now it paces on its own clock like MLB/NFL, holding its pull for its
+    own pre-game window. The games>0 gate keeps the offseason free."""
+    args = ["nba_build.py", _slate_date(), "--out", NBA_OUT]
+    spend = _slate_games(NBA_OUT) > 0 and _odds_affordable(NBA_OUT, quiet,
+                                                           sport="nba")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "NBA", sport="nba")
+    if not quiet:
+        print(f"  NBA  slate: {_board_word(NBA_OUT, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_wnba(quiet: bool = False) -> bool:
+    """WNBA slate — the same Scalpy build with --league wnba.
+
+    Paced exactly like NBA, including the games>0 gate: the schedule comes
+    from a free keyless CDN, so "is there a slate tonight" is answerable
+    before spending anything. The season runs May-September, so this is the
+    one board that is live while the NBA's is dark."""
+    args = ["nba_build.py", _slate_date(), "--league", "wnba",
+            "--out", WNBA_OUT]
+    spend = _slate_games(WNBA_OUT) > 0 and _odds_affordable(WNBA_OUT, quiet,
+                                                            sport="wnba")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "WNBA", sport="wnba")
+    if not quiet:
+        print(f"  WNBA {_slate_date()}: {_board_word(WNBA_OUT, ok)}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+def refresh_cfb(quiet: bool = False) -> bool:
+    """College football — one bulk odds request for the whole board.
+
+    Everything except the prices is keyless (ESPN), so the schedule,
+    conferences, rankings and results refresh on every cycle for free; only
+    the lines are metered. And they are metered CHEAPLY here: full-game
+    markets come back for the entire slate in a single call, so a 60-game
+    Saturday costs the same three credits as a four-game Tuesday. That is
+    why this passes an explicit cost instead of the games-on-slate default.
+    """
+    args = ["cfb_build.py", _slate_date(), "--out", CFB_OUT]
+    # IN CREDITS, NOT IN EVENTS. `should_refresh`'s first parameter is an
+    # event count it multiplies by CREDITS_PER_EVENT, so passing 63 through
+    # it authorised college against 504 — eight times its real price, on a
+    # pull whose whole argument is that it is cheap. It erred toward
+    # under-spending, so nothing was lost but the board.
+    spend = _slate_games(CFB_OUT) > 0 and _odds_affordable(
+        CFB_OUT, quiet, sport="cfb", credits=CFB_ODDS_COST)
+    before_seen = _paid_pull_baseline() if spend else ""
+    before_spent = _spent_so_far("cfb") if spend else 0
+    lines_spend = False
+    lines_before = ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+        # THE MIDDLE TIER. The full pull is the game lines plus a player
+        # call per game; when only the first half is affordable, buy it.
+        # Same shape as refresh_nfl's --board-odds and for the same reason:
+        # the alternative was a college board whose prices aged with the
+        # cycle and whose every board read empty.
+        if _slate_games(CFB_OUT) > 0 and _odds_affordable(
+                CFB_OUT, quiet, sport=CFB_LINES_CLOCK,
+                credits=CFB_LINES_COST):
+            args.append("--lines-odds")
+            lines_spend = True
+            lines_before = _paid_pull_baseline()
+    # 600s, NOT THE DEFAULT 180. The same ceiling refresh_mlb carries and
+    # for the same measured reason: a 1 vCPU box building a full college
+    # Saturday runs the touchdown model over sixty games, and MLB already
+    # proved that a board which does not fit inside three minutes is
+    # killed EVERY cycle and freezes at its last successful write. That is
+    # the shape #82 has been wearing — a board stuck hours behind while
+    # everything around it is minutes fresh — and this refresh was the one
+    # slate build still on the small ceiling.
+    #
+    # A guillotine for a hang, not for honest work. `_run_build` prints a
+    # timeout unconditionally, so if ten minutes is also not enough the
+    # journal will say so instead of the board simply stopping.
+    ok, tail = _run_build(args, timeout=600)
+    _finish_paid_pull(spend, before_seen, ok, tail, "CFB", sport="cfb",
+                      bought=(_spent_so_far("cfb") - before_spent) if spend else None,
+                      expect=CFB_LINES_COST + CFB_PLAYER_EVENT_COST)
+    _finish_paid_pull(lines_spend, lines_before, ok, tail, "CFB game lines",
+                      sport=CFB_LINES_CLOCK)
+    # An unreachable schedule now KEEPS the last board rather than
+    # publishing an empty one (see cfb_build.py), which exits 0 — a
+    # success by the only signal a subprocess has. Reporting that as
+    # "refreshed" would be the log telling you a board is current when it
+    # is the one from an hour ago, so the build's own last line decides
+    # the word.
+    #
+    # THERE ARE TWO SUCH LINES AND THIS CAUGHT ONE. `cfb_build` keeps the
+    # last board only when there IS one; with no previous board it
+    # publishes an empty payload carrying `status: "unreachable"` and
+    # returns, also on exit 0, and its last line is "No previous board to
+    # keep, so an empty one was published with the reason on it." That
+    # missed the `kept` test and printed "refreshed" — the log saying a
+    # board is current when it is empty and the feed is down. Both
+    # branches are the same failure and neither is a refresh.
+    # Matched on the LAST line, because that is all `_run_build` returns.
+    # Both messages print two lines and "schedule unreachable" is on the
+    # first of them, so testing for it here would never fire.
+    kept = ok and "Keeping the last board" in tail
+    unreachable = ok and "No previous board to keep" in tail
+    # THE THIRD WAY, and the one the log had no word for. The feed
+    # answered with a full Saturday and the parser kept none of it — exit
+    # 0, board written, "refreshed" printed. Every other empty-board
+    # cause on this line was added after it lied once; this one is added
+    # before, because it is the cause 2026-08-29 could not be checked
+    # against.
+    unreadable = ok and "listed, 0 readable" in tail
+    unknown = ok and "schedule unknown" in tail
+    # DEGRADED STATES PRINT EVEN WHEN QUIET. These three are the ones a
+    # reader needs and the loop is always quiet, so gating them behind
+    # `not quiet` reported them to nobody — the whole of why #82 stayed
+    # open. A refresh that actually refreshed still keeps its silence.
+    if not quiet or kept or unreachable or unreadable or unknown:
+        word = ("kept last board (schedule unreachable)" if kept else
+                "EMPTY BOARD — schedule unreachable, nothing to keep"
+                if unreachable else
+                "EMPTY BOARD — feed listed games, parser read none"
+                if unreadable else
+                "EMPTY BOARD — no games and no lookback; season state unknown"
+                if unknown else
+                # The three above are causes CFB can name. Everything
+                # else routes through the shared helper, which is where
+                # the plain "refreshed" over an empty board was caught
+                # for every other sport.
+                _board_word(CFB_OUT, ok))
+        print(f"  CFB  {_slate_date()}: {word}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+# A fighter is ~50 small cached requests, about half a minute cold. The
+# refresh loop runs every 60s, so drafting a few per tick lets a 34-bout
+# card fill itself in over a few minutes instead of stalling one refresh
+# for half an hour. Progress is saved as it goes.
+DOSSIERS_PER_TICK = 4
+
+
+def _auto_dossiers(quiet: bool = False) -> None:
+    """Draft the upcoming card's missing fighter dossiers, unprompted.
+
+    "No dossier, no bet" is the right rule and it was also, in practice,
+    the reason most of a card never got modelled: drafting was a command
+    you had to remember to run. A card the site knows about is a card the
+    site can look up on its own. Hand-written dossiers are never touched.
+    """
+    try:
+        import ufc_dossiers as UD
+        _label, names = UD.card_fighters()
+        if not names:
+            return
+        book = UD.load_book()
+        todo = [n for n in names if UD.needs_draft(book, n)]
+        if not todo:
+            return
+        _b, drafted, _kept, missing = UD.draft(todo,
+                                               limit=DOSSIERS_PER_TICK)
+        left = len(todo) - len(drafted) - len(missing)
+        if not quiet and (drafted or left):
+            note = f"  UFC  dossiers: drafted {len(drafted)}"
+            if left:
+                note += f", {left} still to draft (a few per refresh)"
+            if missing:
+                note += (f", {len(missing)} not on ESPN (debut/spelling) — "
+                         f"skipped for a day so they stop crowding out the "
+                         f"fighters that can be drafted")
+            print(note)
+    except Exception as exc:  # noqa: BLE001 — never let this stop the card
+        if not quiet:
+            print(f"  UFC  dossiers: auto-draft unavailable ({exc})")
+
+
+def _auto_weighins(quiet: bool = False) -> None:
+    """Pull official weigh-in results for the upcoming card, unprompted.
+
+    Recording these by hand was the one place this system still asked a
+    person to type in data, and `--weigh-in` stays available for exactly
+    the case a feed cannot cover: you watched the scale on the broadcast
+    before anyone published it.
+    """
+    try:
+        from engine.ufc import weighin_feed
+        res = weighin_feed.refresh()
+        if not quiet and res.get("recorded"):
+            print(f"  UFC  weigh-ins: recorded {res['recorded']} "
+                  f"({res['made']} made, {res['missed']} missed) "
+                  f"from {res['source']}")
+        elif not quiet and res.get("note"):
+            print(f"  UFC  weigh-ins: {res['note']}")
+    except Exception as exc:  # noqa: BLE001
+        if not quiet:
+            print(f"  UFC  weigh-ins: auto-pull unavailable ({exc})")
+
+
+def refresh_ufc(quiet: bool = False) -> bool:
+    """UFC card (Scalpy MMA) — a real member of the paid-pull rotation.
+
+    It was cached-ONLY, which is precisely the bug NBA had and had fixed:
+    with every call reading cache and nothing ever writing it, the event
+    list came back empty forever, ``select_card`` found no bouts, and the
+    page said "no card" straight through fight night. A card that can only
+    be read from a cache nothing seeds is a card that never appears.
+
+    It now paces on its own clock like the others. There is deliberately
+    no games>0 gate — for UFC the card only EXISTS in the payload once a
+    pull has happened, so gating the pull on the card is circular, which
+    is the same knot in a different rope.
+    """
+    _auto_dossiers(quiet)
+    _auto_weighins(quiet)
+    args = ["ufc_build.py", "--out", UFC_OUT]
+    spend = _odds_affordable(UFC_OUT, quiet, sport="ufc")
+    before_seen = _paid_pull_baseline() if spend else ""
+    if spend:
+        args.append("--odds")
+    elif _with_odds():
+        args.append("--cached-odds")
+    ok, tail = _run_build(args)
+    _finish_paid_pull(spend, before_seen, ok, tail, "UFC", sport="ufc")
+    if not quiet:
+        print(f"  UFC  card: {'refreshed' if ok else 'unavailable'}"
+              + (f"  ({tail})" if not ok and tail else ""))
+    return ok
+
+
+#: What each board's last build did, and when. Written into the
+#: heartbeat every cycle.
+#:
+#: WHY THIS EXISTS. Ethan, 2026-08-30: "cfb is not showing picks or live
+#: games" on the opening Saturday of the college season. The journal
+#: could not answer it, and the reason is structural rather than one
+#: missing print: the background loop calls `refresh_all(quiet=True)`,
+#: every `refresh_*` prints only when NOT quiet, and `_run_build`
+#: captures the subprocess output and surfaces it only on failure. So a
+#: successful quiet build is completely silent, and a whole Saturday of
+#: them is indistinguishable from a loop that never reached CFB — the
+#: only CFB build lines in that day's journal were three non-quiet
+#: startup builds, twenty-one hours apart.
+#:
+#: `heartbeat.json` already answers "is the LOOP alive". It could not
+#: answer "did THIS BOARD rebuild", which is the question a dark sport
+#: actually raises, and it matters most for CFB because its board is
+#: also its live-games feed (`LIVE_FEEDS` maps cfb to cfb.json; there is
+#: no fast scoreboard behind it, so one stale board takes both down).
+_BOARD_RUNS: dict = {}
+#: The last _run_build failure's reason (cleared on success) — read by
+#: _note_board so the heartbeat can carry WHY a board's refresh failed.
+_LAST_BUILD_NOTE = [""]
+
+
+#: The slate boards a stuck build would freeze, by the name
+#: `_note_board` records them under.
+#: THE ORDER OF IMPORTANCE, said once. Ethan, 2026-09-01: "the NFL
+#: needs to be first, then CFB, then MLB, then NBA, then WNBA, then UFC
+#: in the level of importance." Every list that enumerates the leagues
+#: — the rebuild cycle below, the boards screen, the Live tab's shelves,
+#: the search scope chips, the search tie-break — follows this tuple,
+#: so a board's place in the cycle is its place in his priorities. The
+#: cycle is a sequential sum on one core: whoever builds first is
+#: freshest when a cycle is cut short, and does not wait four minutes
+#: behind a league he cares about less.
+SPORT_PRIORITY = ("nfl", "cfb", "mlb", "nba", "wnba", "ufc")
+
+BOARD_FILES = {"nfl": NFL_OUT, "cfb": CFB_OUT, "mlb": MLB_OUT,
+               "nba": NBA_OUT, "wnba": WNBA_OUT}
+
+#: How long a board may go without being rewritten before that is worth
+#: saying out loud. The loop rebuilds every board every cycle, so the
+#: only way to exceed this is a build that keeps returning without
+#: writing — which is exactly the state that hid for three weeks.
+STALE_BOARD_SECONDS = 1800
+
+#: One line per board per this many seconds, so a genuinely stuck board
+#: reports steadily without filling the journal at loop frequency.
+STALE_REPEAT_SECONDS = 1800
+
+_STALE_SAID: dict = {}
+
+
+def _warn_if_frozen(name: str) -> None:
+    """Say when a board has stopped being rewritten. UNCONDITIONALLY.
+
+    THE BUG THIS EXISTS FOR, found 2026-08-31 and open since #82.
+    `cfb.json` was stamped 2026-08-30T15:27:09 and had not moved for
+    twenty hours, and the journal held nothing about it. Every link in
+    that chain worked as designed:
+
+      * `cfb_build` cannot reach the schedule, takes the "keep the last
+        board" branch, WRITES NOTHING (deliberately — rewriting would
+        refresh `generated_at` and hide the very staleness a reader
+        needs) and exits 0.
+      * `_run_build` sees returncode 0 and swallows the subprocess
+        output, because it only forwards it on failure.
+      * `refresh_cfb` detects the kept board correctly, and prints it
+        behind `if not quiet`.
+      * The background loop is `refresh_all(quiet=True)`. Production is
+        always quiet.
+
+    So a degraded state was detected accurately and reported to nobody.
+    `_run_build` already carries this doctrine for failures — "failures
+    now print unconditionally: one line, into stdout, which systemd
+    forwards to the journal" — and a board frozen for a day is not a
+    smaller problem than a build that exited 1.
+
+    Checked on the FILE rather than on any sport's own reporting, so it
+    covers the sports that cannot yet describe themselves, and any sport
+    added later without anyone remembering this exists.
+    """
+    path = BOARD_FILES.get(name)
+    if not path:
+        return
+    try:
+        age = time.time() - os.path.getmtime(path)
+    except OSError:
+        # No board at all is its own alarm, and a louder one.
+        age = None
+    now = time.time()
+    if now - _STALE_SAID.get(name, 0.0) < STALE_REPEAT_SECONDS:
+        return
+    if age is None:
+        _STALE_SAID[name] = now
+        print(f"  {name.upper():<4} BOARD MISSING — {path} does not exist; "
+              f"nothing has published this slate.")
+    elif age > STALE_BOARD_SECONDS:
+        _STALE_SAID[name] = now
+        print(f"  {name.upper():<4} BOARD FROZEN — last written "
+              f"{age / 3600:.1f}h ago. The build is returning without "
+              f"writing (usually a feed it cannot reach, keeping the last "
+              f"board), so the page is serving stale data.")
+
+
+def _note_board(name: str, ok) -> bool:
+    """Record that `name` just rebuilt, and whether it worked.
+
+    Written as a wrapper around the call rather than a loop over a table
+    of names so that `refresh_cfb(quiet=quiet)` stays literally present
+    in this file — `test_cfb_page` and `test_memecoins` both grep for
+    exactly that, guarding against a refresher that is defined and never
+    called, and an indirection through `globals()` would defeat a check
+    worth keeping.
+    """
+    _BOARD_RUNS[name] = {
+        "ok": bool(ok),
+        "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "at_epoch": round(time.time()),
+    }
+    # WHY it failed, carried into the heartbeat so `--boards` can say —
+    # a bare FAILED cost a journal dig over SSH on 2026-08-31 (the MLB
+    # build was timing out under a background fitter's CPU load, and the
+    # reason was captured, printed to a log nobody was reading, and
+    # thrown away by this record). _run_build leaves its last failure in
+    # _LAST_BUILD_NOTE; success clears it, so a stale note can't outlive
+    # the run it described.
+    if not ok and _LAST_BUILD_NOTE[0]:
+        _BOARD_RUNS[name]["note"] = _LAST_BUILD_NOTE[0]
+    # AFTER the run is recorded, so the heartbeat is written even if this
+    # raises, and unconditional because the loop that matters is quiet.
+    _warn_if_frozen(name)
+    return bool(ok)
+
+
+#: Where the LAST refresh cycle's time actually went, step by step, in
+#: seconds. Ethan, 2026-09-01: "im noticing all the pages are stale 45
+#: mins. we gotta stop that issue." Every page's age is the cycle
+#: length, the cycle is a sequential sum of a dozen builds on one core,
+#: and nothing measured the addends — so "which build is eating the 45
+#: minutes" was a profiling session over SSH. Now it is one paste: the
+#: heartbeat publishes this and --boards prints it, worst first.
+_STEP_S: dict = {}
+
+
+#: Why the LAST cycle's steps failed, if any — cleared at the top of every
+#: refresh_all so it can never describe a cycle that has already recovered.
+_STEP_FAIL: dict = {}
+
+
+@contextlib.contextmanager
+def _isolated(step: str, board: bool = True):
+    """Contain one step's failure to that step.
+
+    Ethan, 2026-09-03: "All pages keep going stale. It causes all the
+    live games and bets to freeze as well. it was stale almost 3 hours
+    till just now."
+
+    `refresh_all` runs thirteen boards in sequence. Each `refresh_*`
+    handles its OWN build failing — a subprocess that dies returns False
+    and the board keeps its last good copy — but nothing caught an
+    exception RAISED around one: a helper reading a corrupt board, a
+    schedule lookup on a feed that has gone away, anything before or
+    after the subprocess. One of those and this function unwinds, so
+    every board after the one that raised never runs at all.
+
+    The refresher above catches it, prints one line, sleeps, and tries
+    again — with the same input, so a fault that lasts three hours keeps
+    the WHOLE site frozen for three hours and then everything comes back
+    at once. That is the shape of the report, and it is also
+    tests/test_cfb_silent_saturday.py's finding one layer up: no rebuild
+    means no picks AND no live games, because CFB has no fast scoreboard
+    and reads its live games out of the model board.
+
+    NFL IS FIRST IN THE ORDER, which is the worst place for this: it is
+    the sport he ranks first, and everything else is downstream of it.
+
+    Ordering is still meaningful — the boards run in SPORT_PRIORITY
+    order and the tail steps genuinely depend on the boards having been
+    written — so this contains a failure rather than reordering around
+    it. A step that fails is recorded as failed and the sweep moves on,
+    which is what every `refresh_*` already does with its own build.
+    """
+    try:
+        yield
+    except Exception as exc:                              # noqa: BLE001
+        note = f"{type(exc).__name__}: {exc}"
+        _STEP_FAIL[step] = note
+        if board:
+            # The same record a failed BUILD leaves, so `--boards` and
+            # the heartbeat cannot tell the two apart by accident: both
+            # mean "this board did not rebuild this cycle, and here is
+            # why".
+            _BOARD_RUNS[step] = {
+                "ok": False,
+                "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "at_epoch": round(time.time()),
+                "note": note,
+            }
+        # Loud regardless of `quiet`: the quiet flag is for the routine
+        # cycle, and this is the failure that used to be invisible.
+        print(f"  ⚠️  {step}: {note} — isolated; the rest of the cycle continues.")
+
+
+def refresh_all(quiet: bool = False) -> None:
+    _lap = [time.time()]
+    _STEP_FAIL.clear()
+
+    def lap(step: str) -> None:
+        _STEP_S[step] = round(time.time() - _lap[0], 1)
+        _lap[0] = time.time()
+
+    # In SPORT_PRIORITY order — the leagues first, as he ranks them,
+    # then the tool boards. See the tuple's own comment.
+    with _isolated("nfl"): _note_board("nfl", refresh_nfl(quiet=quiet))
+    lap("nfl")
+    with _isolated("cfb"): _note_board("cfb", refresh_cfb(quiet=quiet))
+    lap("cfb")
+    with _isolated("mlb"): _note_board("mlb", refresh_mlb(quiet=quiet))
+    lap("mlb")
+    with _isolated("nba"): _note_board("nba", refresh_nba(quiet=quiet))
+    lap("nba")
+    with _isolated("wnba"): _note_board("wnba", refresh_wnba(quiet=quiet))
+    lap("wnba")
+    with _isolated("ufc"): _note_board("ufc", refresh_ufc(quiet=quiet))
+    lap("ufc")
+    with _isolated("predmarkets"):
+        _note_board("predmarkets", refresh_predmarkets(quiet=quiet))
+    lap("predmarkets")
+    with _isolated("memes"): _note_board("memes", refresh_memes(quiet=quiet))
+    lap("memes")
+    with _isolated("fantasy"):
+        _note_board("fantasy", refresh_fantasy(quiet=quiet))
+    lap("fantasy")
+    # The tail steps are not boards, so a failure here is recorded
+    # against the step rather than against a league nobody would find.
+    with _isolated("rosters", board=False): refresh_sport_rosters(quiet=quiet)
+    lap("rosters")
+    with _isolated("injuries", board=False): refresh_injuries(quiet=quiet)
+    lap("injuries")
+    with _isolated("news", board=False): refresh_news(quiet=quiet)
+    lap("news")
+    with _isolated("standings", board=False): refresh_standings(quiet=quiet)
+    lap("standings")
+    with _isolated("parlays", board=False): _arbitrate_parlays(quiet=quiet)
+    lap("parlays")
+    with _isolated("parlay-journal", board=False): _journal_parlays(quiet=quiet)
+    lap("parlay-journal")
+    with _isolated("forecast-seal", board=False): _seal_forecasts(quiet=quiet)
+    lap("forecast-seal")
+    with _isolated("futures", board=False): _run_futures(quiet=quiet)
+    lap("futures")
+    with _isolated("feed", board=False): _publish_feed(quiet=quiet)
+    lap("feed")
+
+
+def _publish_feed(quiet: bool = False) -> None:
+    """Diff every board against its previous build; publish the changes
+    as the live feed. LAST, after every board has rewritten, and a sweep
+    for the same reason _seal_forecasts is one: a per-build hook is one
+    somebody forgets the next time a sport ships. See engine/feed.py."""
+    try:
+        from engine import feed as _feed
+        _feed.scan_all({"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+                        "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  feed: skipped — {type(exc).__name__}: {exc}")
+    # The day's anchored moments ride the same sweep and the same feed:
+    # the card standing, last night's grading finishing, the ump crews
+    # posting, first pitch. Each fires once — see engine/moments.py.
+    try:
+        from engine import moments as _moments
+        _moments.run(quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  moments: skipped — {type(exc).__name__}: {exc}")
+    # The streak game's slate freezes off the same sweep: first viable
+    # board of the day supplies the questions, later passes only grade.
+    # NFL is absent from this dict on purpose — its logs are filed by
+    # week, not date, and engine/streak.py says why that matters.
+    try:
+        from engine import streak as _streak
+        _streak.run({"mlb": MLB_OUT, "nba": NBA_OUT,
+                     "wnba": WNBA_OUT, "cfb": CFB_OUT}, quiet=quiet)
+    except Exception as exc:                              # noqa: BLE001
+        if not quiet:
+            print(f"  streak: skipped — {type(exc).__name__}: {exc}")
+
+
+def _seal_forecasts(quiet: bool = False) -> None:
+    """Chain tonight's picks into the forecast log — LAST, after everything
+    that journals a bet has run.
+
+    A sweep rather than a hook on each INSERT. Eight-plus places write a
+    bet and a new one appears every time a sport does; a per-site hook is
+    one somebody forgets, and a forecast log with a hole in it is worse
+    than none, because it still looks complete. This cannot be forgotten
+    and it is idempotent.
+    """
+    try:
+        from engine import ledger as _led
+        conn = _led.connect()
+        n = _led.seal_forecasts(conn)
+        v = _led.verify_forecast_log(conn)
+        conn.close()
+        if not quiet and n:
+            print(f"  forecast log   : +{n} sealed, {v['n']} total, "
+                  f"head {(v['head'] or '')[:12]}")
+        if not v["ok"]:
+            # Loud regardless of quiet: this is the one failure on the site
+            # that means a published claim is no longer provable.
+            print(f"  ⚠️  FORECAST LOG BROKEN at #{v['broken_at']} — "
+                  f"verified through #{v.get('verified_through')}")
+    except Exception as exc:                           # noqa: BLE001
+        if not quiet:
+            print(f"  ⚠️  forecast log seal failed: {exc}")
+
+
+def _journal_parlays(quiet: bool = False) -> None:
+    """§11: log tonight's tickets. Runs after the arbitration, not before.
+
+    The arbitration is what decides which single ticket §10.2 would have
+    allowed, and it can only run once every board exists — so journaling
+    ahead of it would record every night's play as "not the play".
+
+    Re-entrant by design: this fires on every 60s refresh, and log_board
+    keys on the legs themselves, so a ticket journals once per slate no
+    matter how many times the board is rebuilt around it.
+    """
+    try:
+        from engine import ledger as _led, parlayledger
+        conn = _led.connect()
+        r = parlayledger.journal_built_boards(conn, ROOT)
+        conn.close()
+        if not quiet and r["journaled"]:
+            print(f"  Parlay journal: {r['journaled']} new ticket(s) tracked "
+                  f"(graded, never staked).")
+        if not quiet:
+            for s in r["skipped"]:
+                print(f"  ⚠️  parlay journal skipped {s}")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  parlay journal skipped: {exc}")
+
+
+def _arbitrate_parlays(quiet: bool = False) -> None:
+    """§10.2: one parlay per slate ACROSS ALL SPORTS.
+
+    Each league screens its own board and cannot see the others, so six
+    leagues can each publish a play and the operation ends up holding six
+    against a rule that permits one. This runs once all the boards exist and
+    leaves the single best number standing; the rest keep their cards and
+    their ranking and lose only their status as the play.
+    """
+    try:
+        from engine.parlays import arbitrate_slate
+        r = arbitrate_slate(ROOT)
+        if not quiet and r["boards"]:
+            if r["play"]:
+                print(f"  Parlay slate cap: {r['play'].upper()} takes the one "
+                      f"play; {r['demoted']} other(s) demoted.")
+            elif not quiet:
+                print("  Parlay slate cap: nothing qualified on any board.")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  parlay slate cap skipped: {exc}")
+
+
+def _run_maintenance() -> None:
+    """Daily chores (results ingest, journal settle, closing-odds harvest).
+    First call of each day does the work; the rest are no-ops."""
+    try:
+        from engine.maintenance import run_if_due
+        run_if_due()
+    except Exception as exc:  # noqa: BLE001 — chores must never take the site down
+        print(f"  ⚠️  daily maintenance failed: {exc}")
+
+
+#: Futures move over weeks, and a full MLB season at 20,000 trials takes
+#: 3.6 seconds. Four sports on the 60-second loop would burn fourteen
+#: seconds of every minute re-answering a question whose answer barely
+#: changes. Once a day is generous.
+FUTURES_EVERY_HOURS = 24
+
+
+def _run_futures(quiet: bool = False) -> None:
+    """Rebuild the futures boards, at most once a day.
+
+    Free: the simulation reads the history DB and the schedule feeds, all
+    of them keyless. Prices are NOT pulled here — futures_build.py --odds
+    does that, one credit per sport, and its cache TTL is a week. A page
+    rebuild must never be able to spend.
+    """
+    import time
+    stamp = ROOT / "web" / "data" / ".futures_built"
+    try:
+        if stamp.exists() and (time.time() - stamp.stat().st_mtime) < \
+                FUTURES_EVERY_HOURS * 3600:
+            return
+        import futures_build
+        from engine import db as _hdb
+        conn = _hdb.connect()
+        try:
+            for sport in futures_build.SPORTS:
+                try:
+                    data = futures_build.build(sport, conn, live_odds=False)
+                except Exception:                   # noqa: BLE001
+                    continue
+                # Atomic — the Futures page polls while this loop writes.
+                _fp = futures_build.OUT / f"futures_{sport}.json"
+                _ftmp = _fp.with_suffix(".json.tmp")
+                _ftmp.write_text(json.dumps(data, indent=2))
+                os.replace(_ftmp, _fp)
+        finally:
+            conn.close()
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(time.strftime("%Y-%m-%dT%H:%M:%S"))
+        if not quiet:
+            print("  Futures: season projections rebuilt (free).")
+    except Exception as exc:  # noqa: BLE001 — never take the site down
+        if not quiet:
+            print(f"  ⚠️  futures rebuild skipped: {exc}")
+
+
+def _run_autosettle() -> None:
+    """Grade tonight's picks as the games finish, without being asked.
+
+    The daily chores only reach yesterday and only fire once per calendar
+    day, so before this every night's board stayed "open" until the next
+    morning. This throttles itself to every 5 minutes and is a no-op when
+    nothing recent is open, so it is cheap to call on every cycle."""
+    try:
+        from engine.maintenance import settle_open
+        settle_open()
+    except Exception as exc:  # noqa: BLE001 — chores must never take the site down
+        print(f"  ⚠️  auto-settle failed: {exc}")
+
+
+def why_live(sport: str = "mlb") -> None:
+    """Account for every open bet: shown on the Live tab, or why not.
+
+    "we are only showing live longshots and not the actual recommended
+    player props" is a claim about a difference between two sets, and the
+    only way to answer it without guessing is to print both sets and the
+    decision made about each row.
+
+    This reads the board the site is ALREADY serving rather than rebuilding
+    it, so it costs nothing and describes exactly what you are looking at.
+    """
+    import json as _json
+    from engine import ledger as _led
+    from engine.livepicks import assemble_live_picks
+    from engine.sources.oddsapi import normalize_name
+
+    path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        d = _json.loads(Path(path).read_text())
+    except Exception as exc:
+        print(f"can't read {path}: {exc}")
+        return
+
+    date = d.get("date", "")
+    games = d.get("games") or []
+    recs = d.get("recommendations") or []
+    shots = d.get("long_shots") or []
+    live = d.get("live_picks") or []
+    print(f"Live tab — {sport.upper()} slate {date}")
+    print(f"  built with {len(games)} game(s), {len(recs)} analyzed prop(s), "
+          f"{len(shots)} long shot(s)")
+    if d.get("live_picks_error"):
+        print(f"  ⚠️  the tracker errored this build: {d['live_picks_error']}")
+    n_live_games = sum(1 for g in games
+                       if ((g.get("live") or {}).get("state")) == "live")
+    print(f"  {n_live_games} game(s) live right now\n")
+
+    conn = _led.connect()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT player, market, side, line, odds, stake_units, date, category "
+        "FROM bets WHERE status='open' AND sport=? ORDER BY date, category",
+        (sport,))]
+    if not rows:
+        print("  The journal has NO open bets for this sport. Nothing to show "
+              "is the correct output — check the Record page: they may have "
+              "already settled.")
+        return
+
+    # The same index the tracker builds, so this cannot drift from it.
+    idx = {(normalize_name(r.get("player", "")), r.get("market", "")): "main"
+           for r in recs}
+    for r in shots:
+        idx.setdefault((normalize_name(r.get("player", "")), r.get("market", "")),
+                       "long shots")
+    # Keyed on the BUCKET too. The same player can hold a bet in two
+    # buckets at once — a long shot and a stale-line flag on the same
+    # homer — and matching on name+market alone reported the excluded one
+    # as shown, which is the exact kind of confident wrong line this
+    # report exists to prevent.
+    def _key(r):
+        return (normalize_name(r.get("player", "")), r.get("market", ""),
+                r.get("category", "main"))
+    shown = {_key(r) for r in live}
+    # If the payload has no live_picks KEY at all, it was written by a build
+    # that predates the tracker. Every "not shown" below would then be this
+    # one fact wearing five different explanations — so say it once and stop.
+    if "live_picks" not in d:
+        print("  ⚠️  This slate was built before the open-bet tracker ran.\n"
+              "      Nothing below is a verdict about your bets — rebuild "
+              "first (the launcher does it on its next cycle), then re-run "
+              "this.\n")
+
+    by_cat: dict = {}
+    for b in rows:
+        by_cat.setdefault(b["category"], []).append(b)
+    print(f"  {len(rows)} open bet(s) in the journal, by bucket:")
+    for cat, bs in sorted(by_cat.items()):
+        n_shown = sum(1 for b in bs if _key(b) in shown)
+        flag = "" if cat in ("main", "longshot") else \
+            "   ← not eligible for the Live tab by design"
+        print(f"    {cat:<16} {len(bs):>4} open · {n_shown} on the Live tab{flag}")
+
+    print("\n  Every open bet, and what happened to it:")
+    hdr = (f"    {'player':<22} {'market':<13} {'bucket':<15} "
+           f"{'date':<11} verdict")
+    print(hdr)
+    print("    " + "-" * (len(hdr) - 4))
+    for b in rows:
+        key = _key(b)
+        idx_key = key[:2]
+        if key in shown:
+            row = next(r for r in live if _key(r) == key)
+            verdict = f"SHOWN — {row['status']} ({row['phase']})"
+        elif b["category"] not in ("main", "longshot"):
+            verdict = "excluded — bucket is not tracked live"
+        elif b["date"] != date and b["date"] not in _near_dates(date):
+            verdict = f"excluded — journaled {b['date']}, slate is {date}"
+        elif idx_key not in idx:
+            verdict = ("NOT ON EITHER BOARD — the build no longer carries this "
+                       "player+market, so it can't be placed on a game")
+        else:
+            verdict = (f"on the {idx[idx_key]} board but not tracked — no game "
+                       f"matched (team/opponent, or the doubleheader leg)")
+        print(f"    {str(b['player'])[:21]:<22} {b['market'][:12]:<13} "
+              f"{b['category'][:14]:<15} {b['date']:<11} {verdict}")
+
+    main_open = len(by_cat.get("main", []))
+    main_shown = sum(1 for b in by_cat.get("main", []) if _key(b) in shown)
+    print(f"\n  Player props (category 'main'): {main_open} open, "
+          f"{main_shown} on the Live tab.")
+    if main_open == 0:
+        print("  There are none to show. The main board journals a prop only "
+              "when it is RECOMMENDED and staked above zero — on a thin night "
+              "that is one or two picks, and they leave this list the moment "
+              "they settle.")
+
+
+def _live_status(live: list, market: str, rows: list) -> None:
+    """Say why this bet is or is not on the Live tab.
+
+    The first version told a SETTLED bet to "run --why-live for the mapping
+    reason". There is nothing to map: the Live tab shows open bets, the bet
+    had already graded, and it left by design. Sending someone to hunt a
+    mapping bug for a bet that simply won is the same confidently-wrong
+    answer this whole family of reports exists to stop producing.
+    """
+    shown = [x for x in live if x.get("market") == market]
+    if shown:
+        x = shown[0]
+        print(f"     ✓ ON THE LIVE TAB — {x.get('status')} ({x.get('phase')})")
+        return
+    graded = [b for b in rows if b["status"] in ("won", "lost", "push")]
+    if graded and not any(b["status"] == "open" for b in rows):
+        last = graded[-1]
+        print(f"     — SETTLED ({last['status']}) on {last['date']}, so it "
+              f"left the Live tab by design.\n       It is on the Record "
+              f"page. The Live tab only ever holds OPEN bets.")
+        return
+    if any(b["status"] == "open" for b in rows):
+        print("     ✗ open in the journal but NOT on the Live tab — run "
+              "`--why-live` for the\n       mapping reason (team, opponent "
+              "or doubleheader leg).")
+        return
+    print("     ✗ no journal row in any bucket.")
+
+
+def repair_premature_cli(argv: list) -> None:
+    """List — and optionally undo — bets graded before their game ended.
+
+        python3 launch.py --repair-premature            # dry run, lists only
+        python3 launch.py --repair-premature --apply    # actually repairs
+
+    Dry by default and loudly so. This edits a betting record: it reopens
+    bets, reverses the bankroll those bets moved, and deletes the partial
+    stat rows they were graded against. None of that is recoverable from
+    the app, so --apply takes a backup first.
+    """
+    from engine import db as _db, ledger as _led
+    lconn, hconn = _led.connect(), _db.connect()
+    apply = "--apply" in argv
+
+    plan = _led.repair_premature(lconn, hconn, apply=False)
+    rows = plan["suspect"]
+    if not rows:
+        print("\nNo prematurely graded bets found.\n"
+              "  Every settled bet's game has a final score stored for that "
+              "day.\n")
+        return
+
+    print(f"\n{len(rows)} bet(s) graded against a game with no final score "
+          f"that day:\n")
+    hdr = (f"  {'date':<12}{'player':<22}{'market':<13}{'side':<6}"
+           f"{'line':>6}{'graded':>8}{'$':>9}  bucket")
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
+    for r in rows:
+        print(f"  {str(r['date']):<12}{str(r['player'])[:21]:<22}"
+              f"{str(r['market'])[:12]:<13}{str(r['side']):<6}"
+              f"{r['line']:>6}{r['status']:>8}{r['pnl_dollars']:>9.2f}"
+              f"  {r['category']}")
+
+    unders = [r for r in rows if str(r["side"]).upper() == "UNDER"]
+    print(f"\n  {len(unders)} of these are UNDERs — the ones most likely to "
+          f"be flatly WRONG.\n  An over already past its line grades early "
+          f"but correctly; an under graded\n  in the fourth inning is a "
+          f"result that had not happened yet.")
+    print(f"\n  Bankroll now      ${plan['bankroll_before']:,.2f}")
+    print(f"  Would reverse     ${plan['dollars_reversed']:,.2f}")
+    print(f"  Bankroll after    ${plan['bankroll_after']:,.2f}")
+
+    if not apply:
+        print("\n  DRY RUN — nothing was changed.\n"
+              "  Re-run with --apply to reopen these bets, reverse that "
+              "bankroll, and delete\n  the partial stat rows they graded "
+              "against. They will settle normally once\n  the games finish "
+              "and the results are ingested.\n")
+        return
+
+    backup = _backup_before_repair()
+    print(f"\n  Backup written: {backup}" if backup else
+          "\n  ⚠️  Backup FAILED — stopping rather than editing the journal "
+          "with no way back.")
+    if not backup:
+        return
+    done = _led.repair_premature(lconn, hconn, apply=True)
+    print(f"  Reopened {len(done['suspect'])} bet(s), deleted "
+          f"{done['logs_deleted']} partial stat row(s).")
+    print(f"  Bankroll ${done['bankroll_before']:,.2f} → "
+          f"${done['bankroll_after']:,.2f}")
+    print("\n  Re-ingest once tonight's games are final, then settle:\n"
+          "    python3 ingest.py mlb --seasons "
+          f"{_dt.date.today().year}\n"
+          "    python3 launch.py --settle all\n")
+
+
+def _backup_before_repair():
+    """Copy both databases somewhere safe. Returns the directory or None."""
+    import shutil
+    from engine import db as _db, ledger as _led
+    try:
+        stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        dest = ROOT / "data" / "backups" / f"pre-repair-{stamp}"
+        dest.mkdir(parents=True, exist_ok=True)
+        for src in (Path(_led.DEFAULT_DB), Path(_db.DEFAULT_DB)):
+            if src.is_file():
+                shutil.copy2(src, dest / src.name)
+        return dest
+    except Exception as exc:  # noqa: BLE001
+        print(f"  backup failed: {exc}")
+        return None
+
+
+def _goes_nowhere(skip: str) -> bool:
+    """Does this skip mean the pick lands in NO bucket at all?
+
+    Two of the four skips route the bet elsewhere rather than dropping it:
+    a long shot goes to its own journal, and a non-recommended prop may be
+    picked up by the near-miss sampler. Only a zero stake or a proxy price
+    means nothing anywhere will ever hold it — and that is the only case
+    worth shouting about."""
+    return "stake is 0.00u" in skip or "no real book price" in skip
+
+
+def why_pick(name: str, sport: str = "mlb") -> None:
+    """Trace ONE pick from the board to the Live tab, naming every gate.
+
+        python3 launch.py --why-pick "Carter Jensen"
+
+    "we still have props recommended from earlier that are live right now
+    but not showing on the live page" is two different failures wearing one
+    symptom, and --why-live can only see the second:
+
+      * the pick is on the board but never reached the JOURNAL — in which
+        case nothing downstream will ever show it, and the Live tab is
+        behaving correctly
+      * the pick is in the journal but did not map to a game
+
+    Reading the code to guess between those is how the last three rounds
+    went. This walks the actual row.
+    """
+    import json as _json
+    from engine import ledger as _led
+    from engine.ledger import journal_skip_reason
+    from engine.sources.oddsapi import normalize_name
+
+    path = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+            "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        d = _json.loads(Path(path).read_text())
+    except Exception as exc:
+        print(f"can't read {path}: {exc}")
+        return
+
+    want = normalize_name(name)
+    recs = [r for r in (d.get("recommendations") or [])
+            if normalize_name(r.get("player", "")) == want]
+    shots = [r for r in (d.get("long_shots") or [])
+             if normalize_name(r.get("player", "")) == want]
+    live = [r for r in (d.get("live_picks") or [])
+            if normalize_name(r.get("player", "")) == want]
+
+    print(f"\nTracing “{name}” · {sport.upper()} slate {d.get('date', '?')}\n")
+    if not recs and not shots:
+        print(f"  NOT ON THE BUILT BOARD at all ({len(d.get('recommendations') or [])} "
+              f"analyzed prop(s) tonight).\n"
+              f"  Either the name is spelled differently in the feed, or his "
+              f"game is not on\n  this slate, or the board has rebuilt since "
+              f"you saw him. Check the spelling\n  the site shows and try "
+              f"again.")
+        return
+
+    conn = _led.connect()
+    for r in recs + shots:
+        mkt = r.get("market", "?")
+        print(f"  ── {r.get('market_label') or mkt} · "
+              f"{r.get('side', '?')} {r.get('line', '?')} ──")
+        print(f"     grade {r.get('grade', '?')} · confidence "
+              f"{r.get('confidence', 0)} · edge "
+              f"{float(r.get('edge') or 0) * 100:.2f}% · stake "
+              f"{r.get('stake_units', 0)}u · odds {r.get('odds', '?')}")
+        rec_flag = r.get("recommended")
+        print(f"     recommended on the board: {bool(rec_flag)}")
+
+        rows = [dict(x) for x in conn.execute(
+            "SELECT date, category, status, stake_units FROM bets "
+            "WHERE sport=? AND player=? AND market=?",
+            (sport, r.get("player"), mkt))]
+
+        skip = journal_skip_reason(r)
+        if skip:
+            print(f"     ✗ not on the MAIN board's journal — {skip}")
+            # A long shot is not missing; it is filed elsewhere, by
+            # log_longshots. Saying "the journal has no row for it" here
+            # would be a confident wrong answer about a bet sitting in the
+            # journal two lines below.
+            if rows:
+                for b in rows:
+                    print(f"     journal: {b['category']} · {b['date']} · "
+                          f"{b['status']} · {b['stake_units']}u")
+                _live_status(live, mkt, rows)
+            elif rec_flag and _goes_nowhere(skip):
+                print(f"       THIS IS THE GAP: the board shows it as a pick, "
+                      f"no bucket holds it,\n       so it can never appear on "
+                      f"the Live tab or the Record page.")
+            continue
+        print("     ✓ passes every journal gate")
+        if not rows:
+            print("     ✗ but there is NO journal row — the build that "
+                  "recommended it has not\n       journaled yet (journaling "
+                  "runs after the tracker in the same pass,\n       so a "
+                  "brand-new pick appears on the Live tab one cycle later).")
+            continue
+        for b in rows:
+            print(f"     journal: {b['category']} · {b['date']} · "
+                  f"{b['status']} · {b['stake_units']}u")
+        _live_status(live, mkt, rows)
+    print()
+
+
+def _near_dates(date: str) -> set:
+    """The neighbouring days the tracker also considers, so this report and
+    the tracker agree about what 'today' means."""
+    try:
+        d = _dt.date.fromisoformat(date)
+    except ValueError:
+        return set()
+    return {(d + _dt.timedelta(days=n)).isoformat() for n in (-1, 1)}
+
+
+def _run_doctor(force: bool = False) -> int:
+    """Once a day, say out loud whether anything is wrong.
+
+    The health check has to run HERE, on the laptop, and not in a scheduled
+    cloud session — because the databases are gitignored. A fresh clone has
+    no journal and no stats, so a remote check would be reporting on a
+    machine it cannot see. This is the machine with the data.
+
+    Once per calendar day, printed into the terminal that is already open,
+    and silent when everything is fine. A daily line that says "all clear"
+    every morning trains you to stop reading it."""
+    try:
+        import doctor
+        from engine.maintenance import STATE_PATH, _load_state, _save_state
+        today = _dt.date.today().isoformat()
+        state = _load_state(STATE_PATH)
+        if not force and state.get("last_doctor_day") == today:
+            return 0
+        # The suite takes minutes and the refresh loop is on a 60s cycle;
+        # a nightly `run_tests.py` here would stall the site's data.
+        rep = doctor.run(skip_tests=True)
+        state["last_doctor_day"] = today
+        _save_state(STATE_PATH, state)
+        bad = [c for c in rep.checks if c["status"] != "ok"]
+        if bad:
+            mark = {"warn": "⚠️ ", "fail": "❌"}
+            print(f"\n  Health check — {len(bad)} thing(s) need attention:")
+            for c in bad:
+                print(f"    {mark[c['status']]} {c['check']}: {c['detail']}")
+                if c["fix"]:
+                    print(f"       ↳ {c['fix']}")
+            print("    (full report: python3 doctor.py)\n")
+        return rep.verdict
+    except Exception as exc:  # noqa: BLE001 — a check must never stop the site
+        print(f"  ⚠️  health check failed: {exc}")
+        return 0
+
+
+def weigh_in_cli(argv: list) -> None:
+    """Record a weigh-in, or show what the current card is missing.
+
+        python3 launch.py --weigh-in "Fighter Name" 155.5
+        python3 launch.py --weigh-in "Champ Name" 155 --title
+        python3 launch.py --weigh-in                 (just show the card)
+
+    The division comes from the fighter's dossier, so the limit — and the
+    one-pound non-title allowance — are worked out rather than typed.
+    """
+    import json as _json
+    from engine.ufc import weighin
+
+    args = [a for a in argv[argv.index("--weigh-in") + 1:]
+            if not a.startswith("--")]
+    title = "--title" in argv
+    store = weighin.load_store()
+
+    if len(args) >= 2:
+        name, raw = " ".join(args[:-1]), args[-1]
+        try:
+            weight = float(raw)
+        except ValueError:
+            print(f"'{raw}' isn't a weight. Usage: --weigh-in \"Name\" 155.5")
+            return
+        # The division is the dossier's, not something to retype wrong.
+        try:
+            dossiers = _json.loads(Path("data/ufc_dossiers.json").read_text())
+        except (OSError, ValueError):
+            dossiers = {}
+        from engine.sources.oddsapi import normalize_name
+        d = dossiers.get(normalize_name(name)) or {}
+        division = d.get("division", "")
+        if not division:
+            print(f"No dossier for '{name}', so there's no division to check "
+                  f"{weight} against. Add the dossier first — this engine "
+                  f"doesn't bet fighters it has no dossier for anyway.")
+            return
+        res = weighin.record(name, weight, division, title_fight=title)
+        limit = res.get("limit")
+        if res["state"] == "missed":
+            print(f"⛔ {name}: {weight} vs {limit} limit — MISSED by "
+                  f"{res['over']:g} lb ({division}"
+                  f"{', title' if title else ''}).")
+            print("   Recorded as a red flag: every bet on this fight is now "
+                  "gated off the card, which is what `kill_if` always said.")
+        else:
+            print(f"✅ {name}: {weight} vs {limit} limit — made weight "
+                  f"({division}{', title' if title else ''}).")
+
+    # Always finish by showing what the card still needs.
+    path = ROOT / UFC_OUT
+    try:
+        card = _json.loads(path.read_text())
+    except (OSError, ValueError):
+        print("\nNo UFC card built yet — run the launcher once.")
+        return
+    rows = list(card.get("picks") or []) + list(card.get("pass_list") or [])
+    if not rows:
+        print(f"\nNo bouts on the built card ({card.get('status', '?')}).")
+        return
+    print(f"\nCard {card.get('event_date', '')} — weigh-in status:")
+    for row in rows:
+        wi = row.get("weigh_in") or {}
+        bits = []
+        for side in ("a", "b"):
+            st = wi.get(side) or {}
+            nm = st.get("name", "?")
+            s = st.get("state")
+            bits.append(f"{nm}: " + (
+                f"{st.get('weight')} ✅" if s == "made" else
+                f"{st.get('weight')} ⛔ +{st.get('over'):g}" if s == "missed"
+                else "— not recorded"))
+        print(f"  {row.get('fight', '?')}\n      " + "   |   ".join(bits))
+    summary = card.get("weigh_ins") or {}
+    if summary:
+        print(f"\n  {summary.get('made', 0)} made · {summary.get('missed', 0)} "
+              f"missed · {summary.get('unrecorded', 0)} not recorded")
+
+
+def card_venue_cli(argv: list) -> None:
+    """Record where this card is being held, or show what's set.
+
+        python3 launch.py --card-venue "UFC Apex" "Las Vegas"
+        python3 launch.py --card-venue          (show the current card)
+
+    §8 of the MMA spec calls cage size the input almost nobody prices: the
+    promotion's own facility uses a 25-foot cage and arenas use 30, and
+    less space means pressure fighters and wrestlers gain while finishes
+    go up. Altitude is the other half — Mexico City and Denver impose a
+    real cardio tax that pushes finishes later.
+
+    Neither rides in the odds feed, and both are one fact per card rather
+    than one per fight, so they are typed in the same way weigh-ins are.
+    """
+    import json as _json
+    from engine.ufc import environment as env
+
+    args = [a for a in argv[argv.index("--card-venue") + 1:]
+            if not a.startswith("--")]
+    try:
+        board = _json.loads((ROOT / UFC_OUT).read_text())
+    except (OSError, ValueError):
+        board = {}
+    event_date = board.get("event_date") or _slate_date()
+
+    if args:
+        venue = args[0]
+        city = args[1] if len(args) > 1 else ""
+        env.record_card(event_date, venue, city)
+        cage = env.cage_size(venue)
+        alt = env.altitude(city)
+        print(f"✅ {event_date}: {venue}" + (f", {city}" if city else ""))
+        print(f"   cage — {cage['note']}")
+        print(f"   altitude — {alt['note']}")
+        print("   Rebuild to apply it: python3 ufc_build.py --cached-odds")
+        return
+
+    rec = env.card_for(event_date, env.load_cards())
+    if rec.get("venue"):
+        print(f"{event_date}: {rec['venue']}"
+              + (f", {rec['city']}" if rec.get("city") else ""))
+        print(f"  cage — {env.cage_size(rec['venue'])['note']}")
+        print(f"  altitude — {env.altitude(rec.get('city', ''))['note']}")
+    else:
+        print(f"{event_date}: no venue recorded. Cage size and altitude are "
+              f"unchecked, which the grade scores as neutral rather than "
+              f"good.")
+        print('  Set it:  python3 launch.py --card-venue "UFC Apex" "Las Vegas"')
+
+
+def confirm_qb_cli(argv: list) -> None:
+    """Confirm a starting quarterback, or list what the board is waiting on.
+
+        python3 launch.py --confirm-qb "TOL" --starter "Tucker Gleason"
+        python3 launch.py --confirm-qb "TOL" --out          (starter is OUT)
+        python3 launch.py --confirm-qb                      (just show me)
+
+    College football has no league-mandated injury report, so this is the
+    one fact the engine cannot fetch. §2.3 makes it a gate: until both
+    sidelines are confirmed, every play in the game publishes as a
+    conditional with its number and its edge but no stake. This command is
+    how a conditional becomes a bet.
+
+    Confirmations are scoped to the slate date, so last week's answer can
+    never authorise this week's bet.
+    """
+    import json as _json
+    from engine.cfb import status as qb
+
+    args = [a for a in argv[argv.index("--confirm-qb") + 1:]
+            if not a.startswith("--")]
+    try:
+        board = _json.loads((ROOT / CFB_OUT).read_text())
+    except (OSError, ValueError):
+        board = {}
+
+    if args:
+        team = " ".join(args).strip()
+        # Date the confirmation against the game this team is ACTUALLY
+        # playing, not against today. Weeknight college games are on the
+        # board days before Saturday, and a confirmation stamped with the
+        # wrong date is worse than none — it reports success and authorises
+        # nothing.
+        date = next((g.get("date") for g in board.get("games", [])
+                     if team.upper() in (g.get("home", "").upper(),
+                                         g.get("away", "").upper())
+                     and g.get("date")), None)
+        if not date:
+            date = _slate_date()
+            print(f"⚠️  {team.upper()} isn't on the built board — recording "
+                  f"against {date}. If their game is another day, rebuild "
+                  f"first so this lands on the right one.")
+        starter = ""
+        if "--starter" in argv:
+            i = argv.index("--starter")
+            starter = " ".join(a for a in argv[i + 1:]
+                               if not a.startswith("--")).strip()
+        state = qb.BACKUP if "--out" in argv else qb.CONFIRMED
+        qb.record(team, date, state=state, starter=starter)
+        if state == qb.BACKUP:
+            print(f"⚠️  {team.upper()} — starter reported OUT for {date}"
+                  f"{f' (backup: {starter})' if starter else ''}.")
+            print("   That's information, not a hold: the market underprices "
+                  "this more often in college than anywhere else.")
+        else:
+            print(f"✅ {team.upper()} — starter confirmed for {date}"
+                  f"{f' ({starter})' if starter else ''}.")
+        print("   Rebuild the board to promote its conditionals: "
+              "python3 cfb_build.py --cached-odds")
+
+    # Always finish by showing what the board is still waiting on.
+    if not board:
+        print("\nNo CFB board built yet — run the launcher once.")
+        return
+    pending = [g for g in board.get("games", []) if not g.get("qb_confirmed")]
+    conditionals = [b for b in board.get("game_bets", []) if b.get("conditional")]
+    print(f"\nCFB {board.get('date', '')}: {len(board.get('games', []))} game(s), "
+          f"{len(pending)} awaiting a QB confirmation.")
+    if conditionals:
+        print("  Conditionals — these are bets the moment the starter is confirmed:")
+        for b in conditionals[:12]:
+            print(f"    {b.get('matchup', ''):16} {b.get('pick_label', ''):22} "
+                  f"{b.get('odds', 0):+5}  edge {b.get('edge', 0):+.1%}  "
+                  f"{b.get('stake_if_confirmed_units', 0):.2f}u if confirmed")
+    else:
+        print("  Nothing is waiting on a quarterback right now.")
+
+
+def refresh_rosters(name: str | None = None) -> None:
+    """Re-pull the roster feed now, and say what it knows about a player.
+
+    Team moves come from Sleeper's player file, which is cached for hours
+    and — when the fetch fails — falls back to the last good copy for as
+    long as it takes. Either way a trade from yesterday can be invisible
+    with nothing on screen admitting it. This forces the pull and prints
+    the feed's own answer, so "why isn't this trade showing" stops being a
+    guess about caches.
+    """
+    import datetime as _d
+    from engine import offseason
+    from engine.sources.fetch import CACHE_DIR
+
+    cached = Path(CACHE_DIR) / offseason.SLEEPER_CACHE
+    if cached.exists():
+        age_h = (time.time() - cached.stat().st_mtime) / 3600
+        print(f"Cached roster file: {age_h:.1f} h old — deleting it so the "
+              f"next read has to go to the wire.")
+        try:
+            cached.unlink()
+        except OSError as exc:
+            print(f"  ⚠️  couldn't delete it: {exc}")
+
+    blob = offseason.load_sleeper_players(max_age_s=0)
+    if not blob:
+        print("⚠️  Roster feed unreachable and no cached copy — team moves "
+              "cannot update until api.sleeper.app is reachable.")
+        return
+    fresh = cached.exists()
+    print(f"Roster feed: {len(blob):,} players "
+          f"({'fetched just now' if fresh else 'served from cache — the pull failed'})")
+    if fresh:
+        print(f"  synced {_d.datetime.fromtimestamp(cached.stat().st_mtime):%Y-%m-%d %H:%M}")
+
+    if name:
+        from engine.sources.oddsapi import normalize_name
+        want = normalize_name(name)
+        hits = []
+        for p in blob.values():
+            if not isinstance(p, dict):
+                continue
+            full = (p.get("full_name")
+                    or f"{p.get('first_name', '')} {p.get('last_name', '')}").strip()
+            if full and normalize_name(full) == want:
+                hits.append((full, p))
+        if not hits:
+            print(f"\n  '{name}' is not in the roster feed under that name. "
+                  f"The feed's spelling is what the board matches on.")
+        for full, p in hits:
+            print(f"\n  roster feed: {full} — {p.get('position')} · team "
+                  f"{p.get('team') or '(free agent)'} · "
+                  f"{'active' if p.get('active') else 'inactive'}"
+                  f" · depth {p.get('depth_chart_position')}"
+                  f"{p.get('depth_chart_order')}")
+
+        # Knowing the feed is right only gets you halfway. A move is only
+        # ever REPORTED for players who are on one of the fantasy boards —
+        # so a correct feed plus an absent player still looks like a bug,
+        # and the answer is "he was never checked", which nothing on the
+        # page says out loud.
+        _where_on_board(name)
+
+    print("\nRebuild the fantasy page to apply it:  python3 fantasy_build.py")
+
+
+def _where_on_board(name: str) -> None:
+    """Which fantasy boards carry this player, and with what team.
+
+    Team moves are stamped onto board rows; a player on none of them is
+    never examined, which is indistinguishable on screen from a player the
+    feed got wrong."""
+    from engine.sources.oddsapi import normalize_name
+    want = normalize_name(name)
+    path = ROOT / "web" / "data" / "fantasy.json"
+    if not path.is_file():
+        print(f"\n  board: {path.name} not built yet — run python3 fantasy_build.py")
+        return
+    try:
+        d = json.loads(path.read_text())
+    except Exception as exc:
+        print(f"\n  board: unreadable ({exc})")
+        return
+    kit = d.get("draft_kit") or {}
+    groups = {
+        "draft kit board": kit.get("board") or [],
+        "usage movers": d.get("usage") or [],
+        "buy low": (d.get("buy_sell") or {}).get("buy_low") or [],
+        "sell high": (d.get("buy_sell") or {}).get("sell_high") or [],
+    }
+    for pos_rows in (kit.get("tiers") or {}).values():
+        groups.setdefault("draft kit tiers", []).extend(pos_rows)
+
+    found = False
+    print()
+    for label, rows in groups.items():
+        for r in rows:
+            if normalize_name(r.get("player", "")) != want:
+                continue
+            found = True
+            moved = (f" (was {r['moved_from']})" if r.get("moved_from") else "")
+            flag = f" · {r['roster_flag']}" if r.get("roster_flag") else ""
+            print(f"  board: on '{label}' as {r.get('team')}{moved}{flag}")
+            break
+    if not found:
+        print(f"  board: '{name}' is on NONE of the fantasy boards, so a trade "
+              f"for him is never looked for.")
+        print(f"         The boards are built from last season's volume — a "
+              f"player who didn't play, or ranks outside the kit, simply has "
+              f"no row to stamp. That is why he is absent rather than wrong.")
+    moves = ((d.get("offseason") or {}).get("moves") or [])
+    hit = [m for m in moves if normalize_name(m.get("player", "")) == want]
+    if hit:
+        m = hit[0]
+        print(f"  moves list: reported {m['from']} → {m['to']}")
+    elif found:
+        print("  moves list: not reported — the feed's team matches the "
+              "board's, so nothing has changed as far as the data knows.")
+
+
+def odds_doctor() -> None:
+    """Why does the board say N props have no book price?
+
+    Written after guessing wrong about it twice. "753 unpriced" has at
+    least three unrelated causes that look identical on the phone — the
+    board is frozen, the board is fresh but re-applying a stale cached
+    price snapshot, or the books genuinely have not posted those lines —
+    and the difference is entirely in numbers that live on this machine.
+    So print them instead of reasoning about them.
+    """
+    import datetime as _d
+
+    def ago(ts):
+        """A timestamp with its distance from now — in either direction, so
+        the same helper reads correctly for a pull that happened and a first
+        pitch that hasn't."""
+        if not ts:
+            return "never"
+        mins = (time.time() - float(ts)) / 60
+        when = _d.datetime.fromtimestamp(float(ts)).strftime("%a %H:%M")
+        gap = abs(mins)
+        span = f"{gap:.0f} min" if gap < 180 else f"{gap / 60:.1f} h"
+        return f"{when} ({span} {'ago' if mins >= 0 else 'from now'})"
+
+    print("Odds doctor — why the board is priced the way it is\n")
+
+    # 1. Is this machine even running the code I think it is?
+    ok, head = _git("log", "-1", "--format=%h %s")
+    if ok:
+        print(f"  code      {head[:72]}")
+        _git("fetch", "-q", "origin")
+        ok2, behind = _git("rev-list", "--count", "HEAD..@{u}")
+        if ok2 and behind.isdigit() and int(behind):
+            print(f"            ⚠️  {behind} commit(s) BEHIND origin — "
+                  f"you have not pulled. `git pull` first; everything below "
+                  f"is the old code's behaviour.")
+        elif ok2:
+            print("            up to date with origin")
+
+    # 2. The board file itself: how old, and what it says about its prices.
+    path = ROOT / MLB_OUT
+    if not path.is_file():
+        print(f"\n  board     {MLB_OUT} does not exist — nothing has built.")
+        return
+    age_min = (time.time() - path.stat().st_mtime) / 60
+    # THE FULL COPY, NOT THE PUBLIC ONE. web/data/ is what the paywall
+    # redacts: with QB_PAYWALL on, `recommendations` is emptied there, so
+    # this reported "0 prop(s): 0 with a real book price" on a board that
+    # was working perfectly — and that number was then used to diagnose a
+    # bug in the odds pull. gate.publish() writes the unredacted board to
+    # data/built/ first, precisely so something like this can read it.
+    #
+    # Third diagnostic this week caught lying about the system's state,
+    # after backup.sh reading the wrong env and --stripe reading the wrong
+    # environment. A tool that reports a healthy system as broken costs
+    # more than no tool: it sends you looking for a fault that is not
+    # there, and it teaches you to discount the next true alarm.
+    read_from = "public"
+    full = ROOT / "data" / "built" / Path(MLB_OUT).name
+    src = path
+    if full.is_file():
+        src, read_from = full, "data/built (full copy)"
+    try:
+        board = json.loads(src.read_text())
+    except Exception as exc:
+        print(f"\n  board     unreadable: {exc}")
+        return
+    props = board.get("recommendations", []) or []
+    priced = sum(1 for r in props if r.get("has_market"))
+    census = board.get("gate_census", {}) or {}
+    os_ = board.get("odds_status", {}) or {}
+    print(f"\n  board     rebuilt {age_min:.0f} min ago · slate {board.get('date')}"
+          f" · {len(board.get('games', []))} game(s)"
+          f"{'' if read_from == 'public' else '  [read from ' + read_from + ']'}")
+    if census:
+        print(f"            {len(props)} prop(s): {priced} with a real book "
+              f"price, {census.get('no_real_price', 0)} without")
+    else:
+        print(f"            {len(props)} prop(s): {priced} with a real book "
+              f"price (this build recorded no gate census)")
+    if age_min > 5:
+        print(f"            ⚠️  a running launcher rebuilds this every 60s. "
+              f"{age_min:.0f} minutes means it is NOT running (or is failing).")
+
+    # 3. What the last build did about odds. `source` is the key field:
+    #    "cache" means it re-applied the last PAID pull's snapshot, so a
+    #    board can be seconds old and its prices hours old.
+    if not os_:
+        print("\n  odds      the build recorded nothing — it ran without "
+              "--odds/--cached-odds (no ODDS_API_KEY?)")
+    else:
+        src = os_.get("source")
+        print(f"\n  odds      last build used: "
+              f"{'FRESH paid pull' if src == 'fresh' else 'CACHED prices' if src == 'cache' else src}")
+        print(f"            matched {os_.get('matched', 0)} prop price(s) "
+              f"across {os_.get('events', 0)} game(s)")
+        if os_.get("priced_at"):
+            print(f"            those prices were pulled {ago(os_['priced_at'])}")
+        if os_.get("error"):
+            print(f"            ⚠️  {os_['error']}")
+        if os_.get("name_misses"):
+            print(f"            ⚠️  {os_['name_misses']} price(s) nearly matched "
+                  f"a prop but didn't join — that part IS a bug:")
+            for m in os_.get("name_miss_examples", [])[:8]:
+                print(f"                 ours '{m.get('prop')}' vs book "
+                      f"'{m.get('book')}' ({m.get('market')})")
+            if not os_.get("name_miss_examples"):
+                print("                 (rebuild once on the new code to see "
+                      "which names)")
+
+    # 4. The budget's own books, and what the pacer would decide right now.
+    try:
+        from engine import oddsbudget
+        st = oddsbudget.load()
+        print(f"\n  budget    {oddsbudget.summary()}")
+        for line in oddsbudget.key_report():
+            print(f"            {line}")
+        print(f"            last paid MLB pull: "
+              f"{ago(st.sport_ts('mlb') or st.last_refresh_ts)}")
+        kicks = _slate_kickoffs(str(path))
+        if kicks:
+            print(f"            first pitch {ago(min(kicks))} · pre-game window "
+                  f"opens {ago(min(kicks) - oddsbudget.PRIME_BEFORE_S)}")
+        ok3, why = oddsbudget.should_refresh(
+            _games_on_slate(str(path)) + 1, kickoffs=kicks, sport="mlb",
+            share=_budget_share("mlb"))
+        print(f"\n  right now {'WOULD pull' if ok3 else 'would NOT pull'}: {why}")
+        # THE LAST VERDICT PER LANE, from the decisions ledger — what the
+        # quiet loop actually said to each league today, not what this
+        # command would say now.
+        rows = oddsbudget.decisions(since=time.time() - 24 * 3600)
+        if rows:
+            print("\n  decisions (last 24h, latest per lane; the ledger has every one)")
+            last: dict = {}
+            counts: dict = {}
+            for r in rows:
+                last[r.get("lane")] = r
+                c = counts.setdefault(r.get("lane"), [0, 0])
+                c[0 if r.get("ok") else 1] += 1
+            for lane, r in sorted(last.items()):
+                yes, no = counts[lane]
+                print(f"            {lane:<10} {r.get('iso', '')[11:16]} "
+                      f"{'PULL' if r.get('ok') else 'hold'}  {r.get('reason', '')[:90]}"
+                      f"   [{yes} pull / {no} hold]")
+            print(f"            ledger: {oddsbudget.DECISIONS_LOG}")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\n  budget    unreadable: {exc}")
+
+    if not _with_odds():
+        print("\n  ⚠️  ODDS_API_KEY is not set in this shell — every build is "
+              "running on proxy lines. Check secrets.local.")
+
+
+AUTO_UPDATE_EVERY_S = 300
+
+
+def _git(*args, timeout: int = 60):
+    """Run a git command in the repo. Returns (ok, output)."""
+    import subprocess
+    try:
+        p = subprocess.run(("git", "-C", str(ROOT)) + args, capture_output=True,
+                           text=True, timeout=timeout)
+        return p.returncode == 0, (p.stdout + p.stderr).strip()
+    except Exception as exc:                       # git missing, hung, offline
+        return False, str(exc)
+
+
+#: The commit the RUNNING PROCESS came from, resolved once and kept.
+#: Deliberately not re-read each heartbeat: after a pull that failed to
+#: restart, `git rev-parse` names code that is on disk but not in memory
+#: — the exact gap this exists to expose. The auto-updater re-execs on
+#: every pull, so first-read is the truth about what is actually serving.
+_RUNNING_COMMIT: list = []
+#: Flipped on when the auto-update thread starts, so the heartbeat can
+#: say whether this process would ever pull on its own. "Is auto-update
+#: on" was answerable only by grepping the journal for a phrase that —
+#: it turned out — the success path never even printed.
+_UPDATER_ON = [False]
+
+
+def _running_commit() -> str:
+    if not _RUNNING_COMMIT:
+        ok, out = _git("rev-parse", "--short", "HEAD")
+        _RUNNING_COMMIT.append(out if ok else "")
+    return _RUNNING_COMMIT[0]
+
+
+# Resolved AT IMPORT, not at first heartbeat: by heartbeat time a test
+# (or anything else) may have repointed ROOT, and a lazy read under the
+# wrong ROOT caches "" forever. Import is the one moment this process's
+# code and its checkout are guaranteed to be the same thing.
+_running_commit()
+
+
+#: Consecutive failed pull checks, for the escalation above 3.
+_PULL_FAILS = [0]
+
+
+def _auto_update() -> bool:
+    """Fast-forward to whatever has been pushed. True if new code arrived.
+
+    The point is a laptop that is at home while you are not: a fix gets
+    pushed, and the machine picks it up without anyone typing `git pull`.
+
+    Deliberately timid, because this ends in running code:
+
+    * ``--ff-only`` — it will never merge, rebase, or resolve anything. If
+      the branch has diverged it stops and says so.
+    * a dirty working tree is left completely alone. Uncommitted work on
+      the laptop is someone's work in progress, not an obstacle.
+    * it stays on the branch already checked out; it never switches.
+    """
+    ok, dirty = _git("status", "--porcelain")
+    if not ok:
+        return False
+    if dirty:
+        print("  ⚠️  auto-update skipped: uncommitted changes in the working "
+              "tree. Commit or stash them and it resumes on its own.")
+        return False
+    ok, branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    if not ok or not branch or branch == "HEAD":
+        return False
+    ok, before = _git("rev-parse", "HEAD")
+    if not ok:
+        return False
+    ok, out = _git("pull", "--ff-only", "origin", branch)
+    if not ok:
+        if "diverge" in out.lower() or "non-fast-forward" in out.lower():
+            print(f"  ⚠️  auto-update stopped: {branch} has diverged from "
+                  f"origin. Sort it out by hand — nothing was changed.")
+            return False
+        # A PERSISTENT FAILURE MUST NOT LOOK LIKE OFFLINE. This used to
+        # say nothing on any non-divergence failure, on the theory that
+        # offline is common and not worth shouting about — and then ran
+        # for an hour on a box where the pull could never succeed (the
+        # working copy was read-only to the process) without a word. One
+        # failed check IS probably a dead wifi; the third in a row is a
+        # pattern, and the reason has been in `out` the whole time.
+        _PULL_FAILS[0] += 1
+        if _PULL_FAILS[0] == 3 or _PULL_FAILS[0] % 12 == 0:
+            mins = _PULL_FAILS[0] * AUTO_UPDATE_EVERY_S // 60
+            print(f"  ⚠️  auto-update: the pull has failed "
+                  f"{_PULL_FAILS[0]} checks running (~{mins} min) — "
+                  + (out.splitlines() or ["no output"])[-1])
+        return False
+    _PULL_FAILS[0] = 0
+    ok, after = _git("rev-parse", "HEAD")
+    return bool(ok and after != before)
+
+
+def _restart_into_new_code() -> None:
+    """Replace this process with a fresh one running the code just pulled.
+
+    Python has already imported the old modules, so a pull alone changes
+    nothing that matters — the engine in memory is still yesterday's. execv
+    keeps the same PID and terminal, so the launcher simply reappears with
+    the new code and the phone reconnects on its next poll.
+    """
+    import os
+    # "auto-update" appears IN the line on purpose: the one journal grep
+    # anyone reaches for is `grep -i auto-update`, and the success path
+    # was the only path that didn't say it — so a working updater and a
+    # dead one produced the same empty grep (2026-08-31, from a phone).
+    print("  ↻ auto-update: new code pulled — restarting into it…\n")
+    sys.stdout.flush()
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  ⚠️  restart failed ({exc}) — the new code is on disk; "
+              f"Ctrl+C and start it again to pick it up.")
+
+
+def _auto_updater() -> None:
+    """Check for pushed code every few minutes, and restart when it lands."""
+    while True:
+        time.sleep(AUTO_UPDATE_EVERY_S)
+        try:
+            if _auto_update():
+                _restart_into_new_code()
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  ⚠️  auto-update error: {exc}")
+
+
+#: ONE BUILD AT A TIME. The startup build now runs in the background, so
+#: on a slow box it can still be going when the periodic refresher's first
+#: tick lands — two `refresh_all()` runs writing the same files at once.
+#: The writes are atomic individually, but a slate half from one run and
+#: half from another is a board that never existed. This lock is what
+#: makes "the newest complete build wins" true.
+_BUILD_LOCK = threading.Lock()
+#: True until the first full build finishes. The site serves throughout.
+_WARMING = True
+_BOOT_AT = time.time()
+
+
+#: How long the last few full refresh cycles actually took, newest first.
+#: THE SLEEP IS NOT THE CADENCE, and confusing the two is what made the
+#: site call itself stale. `interval` is how long the loop waits BEFORE
+#: doing the work; the work is a maintenance pass, an auto-settle, and a
+#: refresh_all() that rebuilds thirteen boards. On a two-vCPU box that
+#: adds minutes, so a board's real age at any moment is roughly the sleep
+#: plus a whole cycle — and the front end was calling anything past eight
+#: minutes stale on the strength of a comment that said "every 60s".
+#: Measured here so the number the page uses comes from this machine
+#: rather than from an assumption about it.
+_CYCLE_S: list[float] = []
+_CYCLE_KEEP = 20
+
+
+def _note_cycle(seconds: float) -> None:
+    _CYCLE_S.insert(0, round(float(seconds), 1))
+    del _CYCLE_S[_CYCLE_KEEP:]
+
+
+def _cycle_p50() -> float | None:
+    """The typical cycle, or None until a couple have been timed.
+
+    Median, not mean: one pathological cycle (a cold cache, a feed
+    timing out) must not redefine what normal looks like."""
+    if len(_CYCLE_S) < 2:
+        return None
+    xs = sorted(_CYCLE_S)
+    n = len(xs)
+    return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
+
+
+def _background_refresher(interval: int) -> None:
+    """Keep the served data fresh while the server runs (quiet after startup).
+
+    THE GUARD IS THE FEATURE. This thread is the production site's only
+    pulse — builds run as subprocesses, but the settle, the maintenance
+    pass and the journal steps run in-process, and one exception out of
+    any of them used to kill the loop for good. The server keeps serving,
+    so the death is invisible: every board just quietly stops moving
+    until the next deploy restarts the unit (found 2026-08-18 when the
+    injuries page wore a nine-day-old "Active" on a man with a broken
+    wrist). `_auto_updater` above has carried the same guard all along."""
+    while True:
+        time.sleep(interval)
+        _cycle_started = time.time()
+        try:
+            # Catches the date rolling over while the server runs overnight.
+            # Clocked like the builds: the first cycle of the day carries
+            # the daily chores — and on fitter days those chores ARE the
+            # long cycle, which the step ledger must be able to say.
+            _t = time.time()
+            _run_maintenance()
+            _STEP_S["maintenance"] = round(time.time() - _t, 1)
+            # Closes out tonight's games as they end, rather than tomorrow.
+            _t = time.time()
+            _run_autosettle()
+            _STEP_S["autosettle"] = round(time.time() - _t, 1)
+            # Once a day, and only when something is wrong.
+            _t = time.time()
+            _run_doctor()
+            _STEP_S["doctor"] = round(time.time() - _t, 1)
+            # Skips rather than queues when the startup build is still
+            # going: this loop runs on a timer, so the next tick is a
+            # better moment than piling up behind a build that is already
+            # writing the very files this one would write.
+            if _BUILD_LOCK.acquire(blocking=False):
+                try:
+                    refresh_all(quiet=True)
+                finally:
+                    _BUILD_LOCK.release()
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
+        # Timed whether it succeeded or failed: a cycle that dies halfway
+        # still tells us how long this box takes to get that far, and a
+        # run of short failing cycles must not make the page believe the
+        # machine got fast.
+        _note_cycle(time.time() - _cycle_started)
+        # Proof of life, written whether the cycle succeeded or not: the
+        # heartbeat answers "is the LOOP alive", which file mtimes cannot —
+        # a failing build and a dead thread both leave boards old, and only
+        # one of them fixes itself.
+        _write_heartbeat(interval)
+
+
+def _write_heartbeat(interval: int) -> None:
+    """web/data/heartbeat.json — one small fact per cycle, never fatal."""
+    try:
+        p = ROOT / "web" / "data" / "heartbeat.json"
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({
+            "at_epoch": round(time.time()),
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "interval_s": interval,
+            # What a rebuild COSTS on this machine, beside what the timer
+            # was set to. The page reads these to decide what "stale"
+            # means here rather than carrying a constant that was true of
+            # somebody's laptop. None until two cycles have been timed —
+            # absent, the page keeps its own floor.
+            "cycle_s": _CYCLE_S[0] if _CYCLE_S else None,
+            "cycle_p50_s": _cycle_p50(),
+            "cycles_timed": len(_CYCLE_S),
+            # Per board, so "did CFB rebuild, and when" stops being a
+            # question only a journal forensic can answer. See _BOARD_RUNS.
+            "boards": dict(_BOARD_RUNS),
+            # Where the last cycle's seconds went, step by step — the
+            # answer to "why are all the pages stale 45 minutes" as a
+            # paste instead of a profiling session. See _STEP_S.
+            "step_s": dict(_STEP_S),
+            # WHICH STEP RAISED, and what it said. Empty on a healthy
+            # cycle. Before this existed a raise took every later board
+            # down with it and left nothing behind but one line in a log
+            # nobody was tailing — "why is the whole site three hours
+            # old" had no answer on the box.
+            "step_fail": dict(_STEP_FAIL),
+            # Which code is SERVING and whether it updates itself — read
+            # by --boards, so "did my push land" stops being a journal
+            # question asked over SSH from a phone.
+            "commit": _running_commit(),
+            "auto_update": _UPDATER_ON[0],
+        }))
+        os.replace(tmp, p)
+    except OSError:
+        pass
+
+
+# A fight moves in seconds, so the live card cannot ride the 60-second
+# cycle the rest of the site uses. This runs on its own clock, and it
+# BACKS OFF to the slow tick when nothing is in progress — polling a free
+# feed every 12 seconds around the clock to watch an empty octagon is
+# rude and pointless.
+LIVE_FAST_S = 12
+LIVE_IDLE_S = 180
+
+
+#: The meme board's own clock. Ethan: "we need that to check like every
+#: 5 seconds or whatever you think is good bc coins move in and out
+#: quick." 15, not 5, and the number is arithmetic rather than taste:
+#: GeckoTerminal's free tier is ~30 req/min and the coins-moving-in-and-
+#: out feed (new + trending pools) costs two calls per scan — at 5s that
+#: is 24/min on discovery alone, and a rate-limited IP updates NOTHING.
+#: At a 15s tick with DISCOVERY_TTL=25 the fetch layer spends ~4.8/min
+#: on GT and ~8/min on DexScreener's 300/min pair budget, which leaves
+#: room for the holder lookups and for being wrong about the limits.
+#: Every tick also lays a snapshot on the tape, so the ignition signal —
+#: a second derivative — sharpens 4x versus the old 60s ride-along.
+MEMES_LIVE_S = 15
+
+
+def _live_memes_refresher() -> None:
+    """Rebuild the meme-coin board on its own fast clock.
+
+    The UFC pattern: a dedicated thread, because a market that moves in
+    seconds cannot ride the 60-second cycle the rest of the site uses —
+    but unlike a fight card there is no idle state to back off to; the
+    Solana casino never closes. The fetch-layer TTLs are the real
+    throttle (see engine/sources/dexes.py), so a tick that arrives
+    before fresh data is cheap."""
+    while True:
+        try:
+            _run_build(["memes_build.py", "--out", "web/data/memecoins.json"])
+        except Exception:  # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(MEMES_LIVE_S)
+
+
+def _live_mlb_refresher() -> None:
+    """Poll the MLB scoreboard fast while a game is on, slowly otherwise.
+
+    Modelled on the UFC refresher below and added for the same reason,
+    measured on the live droplet 2026-08-16: the scores were being read out
+    of the model board, which takes SEVEN MINUTES THIRTY-NINE SECONDS to
+    build because it prices 923 props. A score that changes every pitch
+    cannot wait on that. `live_build.py` is one cached schedule call.
+
+    The wait is chosen from what came back rather than from a clock, so a
+    quiet afternoon costs one request a minute and a full slate gets the
+    fast cadence — the same shape as the fight poller.
+    """
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["live_build.py"])
+            if ok:
+                blob = _json.loads((ROOT / "web" / "data" /
+                                    "live_mlb.json").read_text())
+                if any((g.get("live") or {}).get("state") == "live"
+                       for g in blob.get("games", [])):
+                    wait = LIVE_FAST_S
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
+def _live_scores_refresher() -> None:
+    """Poll the four ESPN scoreboards fast while anything is on.
+
+    THE SAME BUG live_build.py FIXED FOR ONE SPORT. Its docstring names
+    the four it left behind: "MLB, NFL, NBA, WNBA and CFB never got the
+    same treatment." `app.js` LIVE_FEEDS reads NFL live scores out of
+    `data/recommendations.json` and CFB out of `data/cfb.json` — the
+    model boards — so a score that changes every play has been waiting on
+    a build that prices a whole slate.
+
+    ONE PROCESS FOR FOUR LEAGUES, not four. This box is one vCPU, it has
+    OOM-crashed once (#103) and had one board freeze twelve (#119), and
+    four python interpreters on a twelve-second clock is a cost with no
+    matching benefit — the four requests are independent and the build
+    already refuses to let one league's failure end the others.
+
+    The wait is chosen from what came back rather than from a clock, so a
+    Tuesday in July costs one request a league a minute and a college
+    Saturday gets the fast cadence — the same shape as the fight poller
+    and the MLB one.
+    """
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["livescore_build.py"])
+            if ok:
+                for lg in ("nfl", "cfb", "nba", "wnba"):
+                    f = ROOT / "web" / "data" / f"live_{lg}.json"
+                    if not f.is_file():
+                        continue
+                    blob = _json.loads(f.read_text())
+                    if any((g.get("live") or {}).get("state") == "live"
+                           for g in blob.get("games", [])):
+                        wait = LIVE_FAST_S
+                        break
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
+def _live_ufc_refresher() -> None:
+    """Poll the live fight feed fast while a bout is on, slowly otherwise."""
+    import json as _json
+    while True:
+        wait = LIVE_IDLE_S
+        try:
+            ok, _tail = _run_build(["ufc_live_build.py"])
+            if ok:
+                blob = _json.loads((ROOT / "web" / "data" /
+                                    "ufc_live.json").read_text())
+                if blob.get("status") == "live":
+                    wait = LIVE_FAST_S
+        except Exception:      # noqa: BLE001 — never let this stop the site
+            pass
+        time.sleep(wait)
+
+
+# Every page the site serves, and the container whose text proves it
+# actually rendered. A page can fetch its data fine and still throw while
+# drawing it — the failure that leaves a blank panel and no clue anywhere.
+SWEEP_VIEWS = [
+    ("MLB Recommended", "?sport=mlb#recommended", "#view-recommended"),
+    ("MLB Edge Board", "?sport=mlb#edge", "#edge-board"),
+    ("MLB Scanner", "?sport=mlb#scanner", "#scanner-body"),
+    ("MLB Long Shots", "?sport=mlb#longshots", "#view-longshots"),
+    ("MLB Trending", "?sport=mlb#trending", "#trending"),
+    ("MLB Players", "?sport=mlb#players", "#players"),
+    ("Record", "?sport=mlb#record", "#record-body"),
+    ("NFL Recommended", "?sport=nfl#recommended", "#view-recommended"),
+    ("Polymarket", "?sport=mlb#intel", "#intel-body"),
+    ("Fantasy", "?sport=mlb#fantasy", "#fantasy-body"),
+    ("NBA Recommended", "?sport=nba#recommended", "#view-recommended"),
+    ("NBA Players", "?sport=nba#players", "#players"),
+    ("UFC", "?sport=mlb#ufc", "#ufc-body"),
+    ("Rocket Radar", "?sport=mlb#memes", "#memes-body"),
+    ("Injuries (MLB)", "?sport=mlb#injuries", "#injuries-body"),
+    ("My Bets", "?sport=mlb#mybets", "#mybets-body"),
+    # ADDED 2026-08-16 with the screen itself. A view absent from this
+    # list is a view nobody renders until a user does, and the account
+    # screen is now the destination every locked board points at — the
+    # one page where a silent crash costs a subscription rather than a
+    # glance.
+    ("Account", "?sport=mlb#account", "#account-body"),
+    ("Bankroll", "?sport=mlb#bankroll", "#view-bankroll"),
+    ("Why Us", "?sport=mlb#why", "#why-body"),
+    # ADDED 2026-08-15, AND THIS IS WHY. Weather and Alerts were missing
+    # from this list, and both crashed on load — `_railDeskCache` was a
+    # top-level `let` declared 5,000 lines BELOW the two renderers that
+    # read it, so both threw "cannot access before initialization" and
+    # came up blank below the fold. The whole 4,400-test suite passed the
+    # entire time: the file parses perfectly and the fault only exists at
+    # runtime, in one execution order, on the two pages nothing opened.
+    #
+    # A page absent from this list is a page nobody looks at until a user
+    # does. Everything with a nav entry is here now.
+    ("Weather", "?sport=mlb#weather", "#weather-body"),
+    ("Alerts", "?sport=mlb#alerts", "#alerts-body"),
+    ("Standings", "?sport=mlb#standings", "#standings-body"),
+    ("Rosters", "?sport=mlb#rosters", "#rosters-body"),
+    ("Live", "?sport=mlb#live", "#view-live"),
+    ("About", "?sport=mlb#about", "#about-body"),
+    # The two trust pages, added with them (2026-08-25). Both draw from
+    # data rather than from markup — Methodology reads record.json for
+    # the calibration and the model eras, Status asks every published
+    # board for its Last-Modified — so both can fail on a machine where
+    # those answers are missing, which is exactly the failure this sweep
+    # is for.
+    ("Methodology", "?sport=mlb#methodology", "#methodology-body"),
+    ("Status", "?sport=mlb#status", "#status-body"),
+    ("Futures", "?sport=mlb#futures", "#futures-body"),
+    ("The Lab", "?sport=mlb#lab", "#lab-body"),
+    ("Terms", "terms.html", ".legal"),
+    ("Privacy", "privacy.html", ".legal"),
+]
+
+_SWEEP_JS = r"""
+import { chromium } from 'playwright';
+const VIEWS = %s;
+const PORT = process.argv[2];
+// FINDING THE BROWSER IS PART OF THE CHECK. Playwright's default
+// resolution wants a headless-shell build under its own versioned
+// directory; a machine that has Chromium installed somewhere else — this
+// project's own container puts it at /opt/pw-browsers/chromium — fails
+// with "Executable doesn't exist at …chromium_headless_shell-1234/…",
+// which reads as a Playwright installation problem and is a path lookup.
+// Each candidate is tried in turn and the LAST failure is re-thrown, so
+// the message names the path actually attempted.
+let b = null, lastErr = null;
+for (const path of [process.env.CHROMIUM_PATH, '/opt/pw-browsers/chromium', undefined]) {
+  if (path === null) continue;
+  try { b = await chromium.launch({ executablePath: path || undefined }); break; }
+  catch (e) { lastErr = e; }
+}
+if (!b) throw lastErr;
+for (const [name, hash, sel] of VIEWS) {
+  const p = await b.newPage({ viewport: { width: 1280, height: 1000 } });
+  const errs = [];
+  p.on('pageerror', e => errs.push('crash: ' + e.message));
+  p.on('console', m => { const t = m.text();
+    if (m.type() !== 'error') return;
+    if (/404|Failed to load resource/.test(t)) return;
+    // OUR page's errors, not our EMBEDS'. Playwright reports console
+    // messages from every frame, and the Rocket Radar chart is a
+    // DexScreener iframe that runs their code on their origin. Their
+    // analytics beacon fails CORS against their own API, and that landed
+    // here as "Rocket Radar ❌" — a permanent red for a third party's
+    // telemetry, on a page that was in fact working. A red that cannot
+    // be fixed is one people learn to ignore, which costs the real ones.
+    const loc = m.location() || {};
+    const from = String(loc.url || '');
+    if (from && !from.includes(`127.0.0.1:${PORT}`) && !from.startsWith('http://localhost')) return;
+    errs.push('console: ' + t.slice(0,110)); });
+  let txt = '';
+  try {
+    await p.goto(`http://127.0.0.1:${PORT}/${hash}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await p.waitForTimeout(1200);
+    txt = (await p.locator(sel).first().innerText()).replace(/\s+/g, ' ').trim();
+  } catch (e) { errs.push('render: ' + String(e).slice(0, 90)); }
+  console.log(JSON.stringify({ name, chars: txt.length, errs }));
+  await p.close();
+}
+await b.close();
+"""
+
+
+#: Every fitted store the engine reads, and what running WITHOUT it means.
+#: Not a list of files — a list of behaviours that quietly stop happening.
+LEARNED_STORES = (
+    ("data/models/playerfit.json", "player memory",
+     "every per-player correction is 1.0, and the reason never prints"),
+    ("data/models/formfit.json", "recency dial",
+     "the blend weighs time by its default rather than by what settled"),
+    ("data/models/calibration.json", "probability calibration",
+     "raw model probabilities go out uncorrected"),
+    ("data/models/losspatterns.json", "blind-spot miner",
+     "no pick is gated on a pattern the journal has already lost to"),
+    ("data/models/hypotheses.json", "the hypothesis lab",
+     "nothing proposed, nothing disposed"),
+    ("data/models/postmortems.json", "measured loss causes",
+     "the nightly prose has no evidence layer"),
+    ("data/models/watch.json", "the watch list", "nothing is being watched"),
+)
+
+
+def _learned_model(ok: str, warn: str, bad: str) -> None:
+    """Is this machine running a model that has learned anything?
+
+    THE FAILURE THIS EXISTS FOR IS SILENT AND TOTAL. `data/models/` is
+    gitignored — correctly, they are derived — and `data/history.db` is
+    too, at 65MB. So a fresh clone, which is exactly what a new server is,
+    starts with no fitted models and nothing to refit them from. Every
+    correction returns its neutral default, every backtest is empty, and
+    the site looks completely normal while doing it: the picks still
+    appear, they are simply the uncorrected ones.
+
+    Found on 2026-08-16, after the first deploy, when Ethan noticed player
+    memory was nowhere on the live site. It was not missing from the code.
+    It was missing from the box.
+    """
+    print("\n  The learned model (fitted here, not shipped in git):")
+    missing = []
+    for path, name, consequence in LEARNED_STORES:
+        p = ROOT / path
+        if p.exists() and p.stat().st_size > 2:
+            print(f"{ok} {name}: fitted ({p.stat().st_size:,}B)")
+        else:
+            missing.append(name)
+            print(f"{warn} {name}: NOT FITTED — {consequence}")
+    hist = ROOT / "data" / "history.db"
+    if not hist.exists():
+        print(f"{bad} history.db is absent — backtests, comps, team ratings "
+              f"and player logs all read empty, and nothing above can be "
+              f"refitted without it")
+    elif hist.stat().st_size < 5_000_000:
+        print(f"{warn} history.db is only {hist.stat().st_size // 1024:,}KB — "
+              f"that is a fraction of a full ingest")
+    if missing:
+        print(f"    {len(missing)} of {len(LEARNED_STORES)} learners are "
+              f"unfitted. On a NEW SERVER this is expected and is not")
+        print("    self-healing: see deploy/README.md, 'Seeding a new box'.")
+
+
+def _browser_sweep(ok: str, warn: str, bad: str) -> None:
+    """Render every page in a headless browser and report JS errors.
+
+    Reading the code has repeatedly missed what looking at the page found
+    — a phantom arbitrage on the Scanner, a parlay calculator reporting
+    zero cost. This is optional: it needs Node and Playwright, and skips
+    with instructions when they aren't installed."""
+    import json as _json
+    import tempfile
+    try:
+        have = subprocess.run(
+            ["node", "-e", "import('playwright').then(()=>0,()=>process.exit(1))"],
+            capture_output=True, cwd=str(ROOT), timeout=30)
+        missing = have.returncode != 0
+    except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        # Node isn't installed at all — the common case, and it must not
+        # take the whole checklist down with it.
+        missing = True
+    if missing:
+        print("\n  Page render sweep: skipped (optional).")
+        print("    Catches JavaScript errors no data check can see. To enable:")
+        print("      npm install playwright && npx playwright install chromium")
+        return
+
+    print("\n  Page render sweep (headless browser):")
+    # Port 0 lets the OS pick a free one. A fixed port here meant two
+    # --check runs at once — or one left half-finished — failed on
+    # "address already in use" during a HEALTH CHECK, which is the worst
+    # possible moment to hand somebody an error about our own plumbing.
+    port = 0
+    server = None
+    try:
+        # The sweep's own server must not narrate every asset fetch into
+        # the middle of the checklist.
+        class _Quiet(Handler):
+            def log_message(self, *a, **kw):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", port), _Quiet)
+        port = server.server_address[1]        # whatever the OS handed us
+        server.live_mode = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False,
+                                         dir=str(ROOT)) as fh:
+            fh.write(_SWEEP_JS % _json.dumps(SWEEP_VIEWS))
+            script = fh.name
+        proc = subprocess.run(["node", script, str(port)], cwd=str(ROOT),
+                              capture_output=True, text=True, timeout=180)
+        Path(script).unlink(missing_ok=True)
+        seen = 0
+        for line in proc.stdout.splitlines():
+            try:
+                r = _json.loads(line)
+            except ValueError:
+                continue
+            seen += 1
+            if r["errs"]:
+                print(f"{bad} {r['name']}: {r['errs'][0]}")
+            elif r["chars"] < 25:
+                print(f"{warn} {r['name']}: rendered almost nothing "
+                      f"({r['chars']} chars) — check the page")
+            else:
+                print(f"{ok} {r['name']}: rendered ({r['chars']:,} chars)")
+        if not seen:
+            # THE LAST LINE IS THE LEAST USEFUL ONE. A node crash dump ends
+            # with its own version banner, so `splitlines()[-1:]` reported
+            # "Node.js v22.22.2" and threw away the message above it — the
+            # sweep silently skipped for weeks looking like a Node problem.
+            # A health check that hides why it failed is worse than one
+            # that fails loudly, because it trains you to skip past it.
+            noise = ("at ", "^", "node:internal", "Node.js v", "triggerUncaught")
+            lines = [ln.strip() for ln in (proc.stderr or "").splitlines()
+                     if ln.strip() and not ln.strip().startswith(noise)]
+            said = lines[0] if lines else "(no output on stderr either)"
+            print(f"{warn} sweep produced no output — {said[:160]}")
+            if "Executable doesn't exist" in said or "playwright install" in said:
+                print("    The browser is not where Playwright looked. Either")
+                print("      npx playwright install chromium")
+                print("    or point CHROMIUM_PATH at an existing one.")
+    except Exception as exc:  # noqa: BLE001 — a check must never crash
+        print(f"{warn} Page render sweep failed: {exc}")
+    finally:
+        if server is not None:
+            server.shutdown()
+
+
+def _reachable(url: str, timeout: int = 6, ua: str = "qellys-book/preflight") -> bool:
+    import urllib.error
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
+        urllib.request.urlopen(req, timeout=timeout).read(64)
+        return True
+    except urllib.error.HTTPError:
+        return True   # got an HTTP response (e.g. 401 without a key) = host is reachable
+    except Exception:
+        return False
+
+
+def preflight() -> None:
+    """Print a readiness checklist — what's live-ready and what still needs a step."""
+    ok, warn, bad = "  ✅", "  ⚠️ ", "  ❌"
+    print("Qellys Book — preflight check\n")
+
+    v = sys.version_info
+    print(f"{ok if v >= (3, 9) else warn} Python {v.major}.{v.minor}"
+          + ("" if v >= (3, 9) else "  → need 3.9+"))
+
+    # Team ratings (needed for moneyline / spread / totals to have an edge).
+    try:
+        from engine.db import connect
+        conn = connect()
+        for sport in ("nfl", "mlb", "cfb"):
+            n = conn.execute("SELECT COUNT(*) FROM games WHERE sport=?", (sport,)).fetchone()[0]
+            if n:
+                print(f"{ok} Team ratings ({sport.upper()}): {n} games ingested")
+            else:
+                # College football fills its own table from the ESPN feed;
+                # ingest.py has no cfb mode, so pointing at it would send
+                # you to a command that doesn't exist.
+                how = ("python3 cfb_build.py --backfill 2025-08-24:2026-01-20"
+                       if sport == "cfb" else f"python3 ingest.py {sport}")
+                print(f"{warn} Team ratings ({sport.upper()}): none — run "
+                      f"`{how}` so game bets have an edge")
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} Team ratings: could not read the database ({exc})")
+
+    # Odds key (optional — only needed for real book lines).
+    if os.environ.get("ODDS_API_KEY"):
+        print(f"{ok} ODDS_API_KEY: set — real sportsbook lines will be used")
+    else:
+        print(f"{warn} ODDS_API_KEY: not set — model/proxy lines only "
+              f"(optional; get a free key at the-odds-api.com)")
+
+    # Live data hosts — every feed all six products depend on.
+    print("\n  Live data hosts (need to be reachable from this network):")
+    hosts = [
+        ("MLB scores/lineups", "https://statsapi.mlb.com/api/v1/schedule?sportId=1"),
+        ("MLB Statcast (Savant)", "https://baseballsavant.mlb.com/"),
+        ("NFL live scores (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"),
+        ("NFL schedules (nflverse)", "https://raw.githubusercontent.com/nflverse/nflverse-data/master/README.md"),
+        ("NFL weekly stats/pbp (releases)", "https://github.com/nflverse/nflverse-data/releases"),
+        ("NBA schedule/boxscores (CDN)", "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"),
+        ("College football (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"),
+        ("Polymarket markets (Gamma)", "https://gamma-api.polymarket.com/markets?limit=1"),
+        ("Polymarket tape (Data API)", "https://data-api.polymarket.com/trades?limit=1"),
+        ("Polymarket leaderboard", "https://lb-api.polymarket.com/leaderboard?window=all&limit=1"),
+        ("Sleeper (fantasy sync)", "https://api.sleeper.app/v1/state/nfl"),
+        ("Sportsbook odds (all sports)", "https://api.the-odds-api.com/v4/sports/"),
+        ("Weather (Open-Meteo)", "https://api.open-meteo.com/v1/forecast?latitude=40&longitude=-74&hourly=temperature_2m"),
+        ("UFC fighter data (ESPN MMA)", "https://site.web.api.espn.com/apis/search/v2?query=jones&limit=1"),
+        ("Injury reports (ESPN)", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"),
+        ("Meme coins (DexScreener)", "https://api.dexscreener.com/token-boosts/top/v1"),
+        ("Meme coins (GeckoTerminal)", "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1"),
+        ("Meme coin holders (Solana RPC)", "https://api.mainnet-beta.solana.com"),
+        ("Meme coin safety (RugCheck)", "https://api.rugcheck.xyz/v1/stats/recent"),
+    ]
+    for name, url in hosts:
+        up = _reachable(url)
+        print(f"{ok if up else warn} {name}: {'reachable' if up else 'blocked/unreachable here'}")
+
+    # Per-product data freshness — what each page is actually serving.
+    print("\n  Product data (web/data/*.json — age since last build):")
+    import time as _time
+    # The loop's own pulse first, because it separates the two ways data
+    # goes old: a failing BUILD leaves one board stale while the beat
+    # stays fresh; a dead LOOP silences everything and only a restart
+    # fixes it. File mtimes alone cannot tell those apart.
+    hb_path = ROOT / "web" / "data" / "heartbeat.json"
+    if hb_path.is_file():
+        try:
+            hb = json.loads(hb_path.read_text())
+            hb_age = _time.time() - float(hb.get("at_epoch") or 0)
+            hb_int = int(hb.get("interval_s") or 60)
+            if hb_age > max(10 * hb_int, 600):
+                print(f"{bad} Refresh loop: last heartbeat "
+                      f"{hb_age / 60:.0f} min ago — the loop is NOT "
+                      f"running. Restart the launcher (or the qellys "
+                      f"service); nothing on the site updates until then.")
+            else:
+                print(f"{ok} Refresh loop: alive — last beat "
+                      f"{hb_age:.0f}s ago, every {hb_int}s.")
+        except Exception:  # noqa: BLE001
+            print(f"{warn} Refresh loop: heartbeat.json unreadable — "
+                  f"treat the ages below as the only signal.")
+    else:
+        print(f"{warn} Refresh loop: no heartbeat yet — it appears after "
+              f"the first cycle on a build that writes one.")
+    products = [
+        ("MLB board", "web/data/mlb_recommendations.json"),
+        ("NFL board", "web/data/recommendations.json"),
+        ("Record / journal", "web/data/record.json"),
+        ("Prediction Market intel", "web/data/predmarkets.json"),
+        ("Rocket Radar (meme coins)", "web/data/memecoins.json"),
+        ("Injury reports (all sports)", "web/data/injuries.json"),
+        ("Fantasy football", "web/data/fantasy.json"),
+        ("NBA (Scalpy)", "web/data/nba.json"),
+        ("UFC (Scalpy MMA)", "web/data/ufc.json"),
+    ]
+    # Products that are legitimately dark part of the year — a missing or
+    # old file then is the calendar working, not a fault to chase.
+    import datetime as _dtm
+    _month = _dtm.date.today().month
+    seasonal = {}
+    if 3 <= _month <= 8:
+        seasonal["NFL board"] = "offseason — sample fallback active, live board returns in September"
+    if 7 <= _month <= 9:
+        seasonal["NBA (Scalpy)"] = "offseason — live board returns when the schedule posts in October"
+    for name, rel in products:
+        p = ROOT / rel
+        note = seasonal.get(name)
+        if not p.is_file():
+            if note:
+                print(f"{ok} {name}: not built — {note}")
+            else:
+                print(f"{warn} {name}: never built — appears on the first launch")
+            continue
+        age_min = (_time.time() - p.stat().st_mtime) / 60
+        age = (f"{age_min:.0f} min ago" if age_min < 120
+               else f"{age_min / 60:.1f} h ago")
+        stale = age_min > 180
+        if stale and note:
+            print(f"{ok} {name}: built {age} — {note}")
+        else:
+            print(f"{ok if not stale else warn} {name}: built {age}"
+                  + ("  → stale; is the launcher running?" if stale else ""))
+
+    # Every board the site serves must be parseable and carry the keys the
+    # page reads. A truncated or half-written JSON renders as a blank panel
+    # with no error anywhere — the failure mode hardest to notice by eye.
+    print("\n  Page data contracts:")
+    import json as _json
+    contracts = [
+        ("MLB board", "web/data/mlb_recommendations.json",
+         ("recommendations", "counts")),
+        ("NFL board", "web/data/recommendations.json",
+         ("recommendations", "counts")),
+        ("Record", "web/data/record.json", ("overall", "recent")),
+        ("Prediction Market", "web/data/predmarkets.json", ()),
+        ("Rocket Radar", "web/data/memecoins.json",
+         ("coins", "rocket", "exits")),
+        ("Injuries", "web/data/injuries.json", ("sports",)),
+        ("Fantasy", "web/data/fantasy.json", ()),
+        ("NBA", "web/data/nba.json", ()),
+        ("UFC", "web/data/ufc.json", ()),
+    ]
+    for name, rel, keys in contracts:
+        p = ROOT / rel
+        if not p.is_file():
+            continue                      # freshness section already said so
+        try:
+            data = _json.loads(p.read_text())
+        except Exception as exc:  # noqa: BLE001
+            print(f"{bad} {name}: JSON is corrupt ({exc}) — the page will "
+                  f"render blank. Delete it and let the launcher rebuild.")
+            continue
+        missing = [k for k in keys if k not in data]
+        if missing:
+            print(f"{warn} {name}: missing key(s) {', '.join(missing)} — "
+                  f"the page may render empty")
+        else:
+            extra = ""
+            recs = data.get("recommendations")
+            if isinstance(recs, list):
+                scan = data.get("market_scan") or {}
+                st = scan.get("stale") or []
+                total = (st[0].get("total_found") if st else 0) or len(st)
+                extra = f" · {len(recs)} props"
+                if st:
+                    extra += (f", {len(st)} stale-line flag(s)"
+                              + (f" shown of {total} found" if total > len(st)
+                                 else ""))
+                    if len(st) == total and total > 50:
+                        extra += "  ← rebuild: pre-dedupe board"
+            print(f"{ok} {name}: valid{extra}")
+
+    # Are the knowledge tiers still labelling everything? (NFL_MODEL §2.3)
+    # The registry is a list of reason PREFIXES, so a new module writing a
+    # new opening quietly stops being labelled — the cards keep rendering,
+    # just with one fewer answer to "which tier failed". Measured against
+    # the built boards rather than assumed: 100% of 1,636 reasons on
+    # 2026-08-09.
+    try:
+        from engine.knowledge import tier_of as _tier, unregistered as _unreg
+        _rs = []
+        for _rel in ("web/data/recommendations.json",
+                     "web/data/mlb_recommendations.json"):
+            _p = ROOT / _rel
+            if not _p.is_file():
+                continue
+            for _c in (_json.loads(_p.read_text()).get("recommendations") or []):
+                _rs += (_c.get("reasons") or [])
+        if _rs:
+            _miss = _unreg(_rs)
+            _cov = 100.0 * sum(1 for r in _rs if _tier(r)) / len(_rs)
+            if _miss:
+                # SAY HOW MANY, not just the first four. The truncated
+                # version read as a complete list: Ethan's board showed
+                # four names at 75.7% coverage, and four names is also
+                # what it would have shown at 30% with forty more behind
+                # them. Registering the four you can see and expecting
+                # 100% is then a surprise — so the count comes first and
+                # the sample is labelled as a sample.
+                _more = f" (+{len(_miss) - 4} more)" if len(_miss) > 4 else ""
+                print(f"{warn} Knowledge tiers: {_cov:.1f}% of {len(_rs)} "
+                      f"reasons labelled — {len(_miss)} unregistered "
+                      f"opening(s){_more}, e.g.: "
+                      + ", ".join(_miss[:4])
+                      + " (add to engine/knowledge.py PREFIXES)")
+            else:
+                print(f"{ok} Knowledge tiers: all {len(_rs)} reasons labelled "
+                      f"measured / historical / inference")
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} Knowledge tiers: not checked ({exc})")
+
+    _browser_sweep(ok, warn, bad)
+
+    _learned_model(ok, warn, bad)
+
+    # Database inventory — the raw truth every model reads.
+    print("\n  Databases:")
+    try:
+        from engine.db import connect
+        conn = connect()
+        def _n(sql, args=()):
+            try:
+                return conn.execute(sql, args).fetchone()[0]
+            except Exception:
+                return 0
+        rows = [
+            ("MLB player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='mlb'")),
+            ("MLB plate-appearance logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='mlb' AND market='pa'")),
+            ("NFL player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl'")),
+            ("NFL xFP rows (play-by-play)", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl' AND market='xfp'")),
+            ("NBA player-game logs", _n("SELECT COUNT(*) FROM player_game_logs WHERE sport='nba'")),
+            ("Polymarket trades on tape", _n("SELECT COUNT(*) FROM pm_trades")),
+            ("Polymarket flags stored", _n("SELECT COUNT(*) FROM pm_flags")),
+        ]
+        for name, n in rows:
+            print(f"{ok if n else warn} {name}: {n:,}"
+                  + ("" if n else "  → run the matching ingest (see GUIDE.md)"))
+        conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} history DB unreadable: {exc}")
+    try:
+        import datetime as _dt
+        from engine import ledger
+        lconn = ledger.connect()
+        open_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='open'").fetchone()[0]
+        settled = lconn.execute("SELECT COUNT(*) FROM bets "
+                                "WHERE status IN ('won','lost','push')").fetchone()[0]
+        void_n = lconn.execute("SELECT COUNT(*) FROM bets WHERE status='void'").fetchone()[0]
+        print(f"{ok} Bet journal: {settled:,} settled, {open_n:,} open"
+              + (f", {void_n:,} void (player never appeared — zero P&L)" if void_n else ""))
+        # "70 open" is never the useful sentence. Tonight's picks are
+        # supposed to be open; anything from a finished day is a symptom,
+        # and the two look identical in a single total. Break it down by
+        # slate date, and for each stale day say whether the results are
+        # even in the history DB — that separates "the games were never
+        # ingested" from "they were, but nothing matched", which are
+        # completely different problems with different fixes.
+        today = _dt.date.today().isoformat()
+        hconn = None
+        try:
+            from engine import db as _hdb
+            hconn = _hdb.connect()
+        except Exception:
+            pass
+        def _games(d: str) -> tuple[int, int]:
+            """(final, total) games ingested for a slate date."""
+            if hconn is None:
+                return (0, 0)
+            try:
+                r = hconn.execute(
+                    "SELECT COUNT(*), SUM(CASE WHEN home_score IS NOT NULL "
+                    "THEN 1 ELSE 0 END) FROM games WHERE sport='mlb' AND period=?",
+                    (d,)).fetchone()
+                return (int(r[1] or 0), int(r[0] or 0))
+            except Exception:
+                return (0, 0)
+
+        open_days = ledger.open_by_day(lconn, today)
+        # More than one night stuck is a launcher that was off, not a
+        # one-off — say so once here rather than making someone read eight
+        # lines and run --settle eight times.
+        stale_days = [d for d in open_days
+                      if d["stale"] and "-W" not in (d["date"] or "")]
+        if len(stale_days) > 1:
+            print(f"{warn}   {len(stale_days)} finished days still have picks "
+                  f"open. Settle them all in one go: "
+                  f"python3 launch.py --settle all")
+        for day in open_days[:8]:
+            parts = ", ".join(f"{n} {c}" for c, n in sorted(day["counts"].items()))
+            if "-W" in (day["date"] or ""):
+                # NFL journals under week labels, not ISO days — the MLB
+                # per-date ingest queries below would misread them as
+                # "results never ingested".
+                print(f"{ok}   {day['date']}: {parts} — NFL week; grades "
+                      f"daily in season as the weekly stats post")
+                continue
+            if not day["stale"]:
+                # "Settles as games end" is only reassuring if you know
+                # whether the games have ended. Say it outright, so an
+                # evening with picks still open is obviously normal and a
+                # finished slate with picks still open obviously isn't.
+                fin, tot = _games(day["date"])
+                if tot and fin >= tot:
+                    print(f"{warn}   {day['date']}: {parts} — all {tot} game(s) "
+                          f"are final but these are still open. Run: "
+                          f"python3 launch.py --settle {day['date']}")
+                elif tot:
+                    print(f"{ok}   {day['date']}: {parts} — today's board, "
+                          f"{fin}/{tot} game(s) final so far; the rest settle "
+                          f"as they end")
+                else:
+                    print(f"{ok}   {day['date']}: {parts} — today's board, "
+                          f"settles as games end")
+                continue
+            # A stale day can be in three states, and the first two used to
+            # be conflated: SOME log rows existed (an evening settle caught
+            # the early games), so the check said "ingested, the rest are
+            # harmless scratches" about a night the launcher simply wasn't
+            # up to finish. Count final GAMES, not log rows — partial is
+            # the common case and it is not harmless, just unfinished.
+            logs = 0
+            if hconn is not None:
+                try:
+                    logs = hconn.execute(
+                        "SELECT COUNT(*) FROM player_game_logs WHERE period=?",
+                        (day["date"],)).fetchone()[0]
+                except Exception:
+                    logs = -1
+            fin, tot = _games(day["date"])
+            if logs == 0 and tot == 0:
+                print(f"{warn}   {day['date']}: {parts} — no results ingested "
+                      f"for that date. Run: python3 launch.py --settle {day['date']}")
+            elif not tot or fin < tot:
+                have = f"{fin}/{tot} game(s) final in the DB" if tot else \
+                       f"only {logs:,} log rows stored"
+                print(f"{warn}   {day['date']}: {parts} — results only PARTIALLY "
+                      f"ingested ({have}). Start the launcher (auto-settle "
+                      f"catches up on launch) or run: "
+                      f"python3 launch.py --settle {day['date']}")
+            else:
+                # Desk tickets and UFC picks ride the slate's date but are
+                # not players: the exchange and the card grade those, and
+                # the no-show sweep is barred from touching them — telling
+                # someone they were about to void was this check repeating
+                # the settler's own bug out loud.
+                desk = {c: n for c, n in day["counts"].items()
+                        if c in ("predmarket", "ufc")}
+                players = {c: n for c, n in day["counts"].items()
+                           if c not in ("predmarket", "ufc")}
+                if players:
+                    pp = ", ".join(f"{n} {c}" for c, n in sorted(players.items()))
+                    print(f"{warn}   {day['date']}: {pp} — all {tot} game(s) "
+                          f"are final but these players never appeared "
+                          f"(projected lineup that sat, late scratch). The "
+                          f"next settle pass VOIDS them — the book voids "
+                          f"these bets too.")
+                if desk:
+                    dp = ", ".join(f"{n} {c}" for c, n in sorted(desk.items()))
+                    print(f"{ok}   {day['date']}: {dp} — graded by the "
+                          f"exchange/card when those markets resolve, not by "
+                          f"the game slate; open is the honest state until "
+                          f"then.")
+        if hconn is not None:
+            hconn.close()
+        lconn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"{warn} ledger unreadable: {exc}")
+
+    # Auto-settle heartbeat: proves the loop is actually running.
+    try:
+        import datetime as _dt
+        import json as _json
+        st = _json.loads((ROOT / "data" / "cache" / "maintenance.json").read_text())
+        ts = st.get("last_settle_ts")
+        if ts:
+            mins = (_dt.datetime.now().timestamp() - float(ts)) / 60
+            print(f"{ok} Auto-settle: last ran {mins:.0f} min ago "
+                  f"(every 5 min while the launcher is up)")
+        else:
+            print(f"{warn} Auto-settle: hasn't run yet — it starts the next "
+                  f"time you run `python3 launch.py`")
+    except Exception:
+        print(f"{warn} Auto-settle: no record yet — it starts the next time "
+              f"you run `python3 launch.py`")
+
+    # SCHEDULED AGENTS: did they actually RUN, not merely load.
+    #
+    # `launchctl list` on 2026-08-09 showed all three agents loaded with a
+    # last exit status of 0 — and `logs/nightly-2026-08-09.log` did not
+    # exist, so the nightly had not run that day at all. A job that is
+    # installed, healthy-looking and silent is indistinguishable from one
+    # doing its work, which is how "I have to settle by hand every day"
+    # goes unexplained for a week.
+    #
+    # The LOG is the evidence, because it is written by the script rather
+    # than by launchd: a plist can be loaded and still never fire (the
+    # machine asleep at the hour, an agent installed after today's slot,
+    # TCC refusing the working directory — all three have happened here).
+    print("\n  Scheduled agents (did they run, not just load):")
+    import datetime as _dt2
+    for label, stem, every_h, what in (
+            ("nightly", "nightly", 24, "settles yesterday and prices today"),
+            ("pre-kickoff", "prekick", 24, "07:00 odds refresh, NFL only"),
+            ("lineups", "lineups", 24, "records when lineup cards go up")):
+        logs = sorted((ROOT / "logs").glob(f"{stem}-*.log"))
+        if not logs:
+            print(f"{warn} {label}: no log has ever been written — it is "
+                  f"installed but has not run. `bash tools/install-nightly.sh"
+                  + ("" if stem == "nightly" else
+                     f" --{'pre-kickoff' if stem == 'prekick' else stem}")
+                  + " --now` runs it once so you can read the output.")
+            continue
+        age_h = (_dt2.datetime.now().timestamp()
+                 - logs[-1].stat().st_mtime) / 3600.0
+        mark = ok if age_h <= every_h * 1.5 else warn
+        when = (f"{age_h:.0f}h ago" if age_h >= 1
+                else f"{age_h * 60:.0f} min ago")
+        print(f"{mark} {label}: last wrote {logs[-1].name} {when} — {what}")
+        if mark is warn:
+            print(f"      more than {every_h}h with no run. A laptop asleep "
+                  f"at the hour catches up on wake; one that was powered off "
+                  f"runs at next boot. If neither happened, read "
+                  f"logs/launchd-{stem}.err.")
+
+    # PLAYER FACES, per sport. The photo URL is captured DURING ingest, so
+    # a sport whose season was never re-read shows initials on every card
+    # and nothing anywhere says why — Ethan found WNBA that way on
+    # 2026-08-09, by looking at it. A count is the difference between "we
+    # have no faces for this league" and "this league has no games".
+    try:
+        from engine.db import connect as _fc
+        _fconn = _fc()
+        print("\n  Player faces (captured during ingest, not on a refresh):")
+        for _sp in ("mlb", "nfl", "nba", "wnba"):
+            try:
+                _tot = _fconn.execute(
+                    "SELECT COUNT(*) FROM player_assets WHERE sport=?",
+                    (_sp,)).fetchone()[0]
+                _has = _fconn.execute(
+                    "SELECT COUNT(*) FROM player_assets WHERE sport=? "
+                    "AND COALESCE(headshot,'') != ''", (_sp,)).fetchone()[0]
+            except Exception:                                # noqa: BLE001
+                _tot = _has = 0
+            if _has:
+                print(f"{ok} {_sp.upper()}: {_has} of {_tot} players have a "
+                      f"photo")
+            else:
+                # --refresh matters: without it the backfill skips every
+                # already-stored day (that skip is what makes it resumable)
+                # and captures not one face.
+                print(f"{warn} {_sp.upper()}: no photos stored — cards show "
+                      f"initials. Re-read the season: python3 ingest.py "
+                      f"{_sp}" + (" --seasons 2025-2026 --refresh"
+                                  if _sp in ("nba", "wnba") else ""))
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"{warn} Player faces: not checked ({exc})")
+
+    # UFC dossiers + backups.
+    doss = ROOT / "data" / "ufc_dossiers.json"
+    print(f"{ok if doss.is_file() else warn} UFC dossiers: "
+          + ("present" if doss.is_file()
+             else "not created — copy data/ufc_dossiers.sample.json (no dossier, no bet)"))
+    backups = sorted((ROOT / "data" / "backups").glob("backup_*.zip"))
+    if backups:
+        # AGE, NOT JUST A NAME. This line used to print the filename and a
+        # green tick, so a nine-week-old archive and this morning's looked
+        # identical unless you date-parsed the name in your head. The
+        # weekly backup runs INSIDE the refresh loop, and that loop dying
+        # silently is a thing that has actually happened here (nine days,
+        # 2026-08-10) — when it dies the backups stop with it, which is
+        # the moment this line most needs to be loud.
+        from engine.maintenance import BACKUP_EVERY_DAYS as _every
+        newest = backups[-1]
+        try:
+            made = _dt.date.fromisoformat(newest.stem.replace("backup_", ""))
+            age = (_dt.date.today() - made).days
+        except ValueError:
+            age = None
+        if age is None:
+            print(f"{ok} Backups: {len(backups)} kept, newest {newest.name}")
+        elif age > 2 * _every:
+            print(f"{bad} Backups: newest is {age} DAYS old ({newest.name}) — "
+                  f"they run weekly with maintenance, so this old means the "
+                  f"refresh loop is not running. Check: systemctl status qellys")
+        elif age > _every:
+            print(f"{warn} Backups: newest is {age} days old ({newest.name}) — "
+                  f"one weekly cycle has been missed")
+        else:
+            print(f"{ok} Backups: {len(backups)} kept, newest {age} day(s) old "
+                  f"({newest.name})")
+    else:
+        print(f"{warn} Backups: none yet — the first weekly backup runs with "
+              f"daily maintenance")
+    _check_backup_covers_accounts(backups, ok, warn)
+
+    print("\n  When everything above is ✅ (or intentionally skipped), run:  python3 launch.py")
+
+
+def _check_backup_covers_accounts(backups: list, ok: str, warn: str) -> None:
+    """Does the newest backup actually contain the accounts database?
+
+    Every other file in `data/` costs us time if it burns. accounts.db
+    costs other people their records, and it is the one file that cannot
+    be rebuilt from any feed. It was left out of `BACKUP_FILES` for a day
+    after accounts shipped, purely because the list predated the file —
+    so this check exists to catch the NEXT time something irreplaceable
+    is added and the backup list is not, rather than to guard one name.
+
+    It also catches archives written before the fix: those zips are
+    complete for their date and stay useful, but they do not hold a single
+    account, and a restore drill from one would come back empty.
+    """
+    import sqlite3
+    import zipfile
+    acc = ROOT / "data" / "accounts.db"
+    if not acc.is_file():
+        return                       # No accounts yet, nothing to protect.
+    # Read-only, so a health check can never write to the live account
+    # store — and `with sqlite3.connect(...)` is a transaction, not a
+    # close, so the handle is closed by hand. The path goes through
+    # as_uri() because a hand-built "file:{path}" is not escaped: a "#"
+    # or "?" anywhere in the checkout path truncates the URI, and SQLite
+    # then opens a DIFFERENT, empty database and reports zero accounts
+    # rather than failing. Measured — `/tmp/od#d/accounts.db` answers
+    # "no such table: users" raw and "1 account" through as_uri().
+    try:
+        conn = sqlite3.connect(f"{acc.as_uri()}?mode=ro", uri=True)
+        try:
+            users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        finally:
+            conn.close()
+    except Exception:                                        # noqa: BLE001
+        users = -1
+    who = f"{users} account(s)" if users >= 0 else "unreadable"
+    if not backups:
+        print(f"{warn} Accounts backup: {who} stored and no backup exists yet")
+        return
+    try:
+        covered = "data/accounts.db" in zipfile.ZipFile(backups[-1]).namelist()
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"{warn} Accounts backup: newest archive unreadable ({exc})")
+        return
+    if covered:
+        print(f"{ok} Accounts backup: {who}, included in {backups[-1].name}")
+    else:
+        print(f"{warn} Accounts backup: {who} stored but NOT in "
+              f"{backups[-1].name} — it predates the fix. The next weekly "
+              f"backup includes them; force one now with: python3 -c "
+              f"\"from engine import maintenance as m; m._maybe_backup({{}}, "
+              f"__import__('datetime').date.today(), print)\"")
+
+
+def why_ufc(argv: list | None = None) -> None:
+    """Explain a UFC card with no picks — which gate stopped each fight.
+
+        python3 launch.py --why-ufc
+
+    "No qualifying plays on this card" is a valid and common output for
+    this model, but valid is not the same as understood. This walks the
+    built card and, for every bout, says exactly what stopped it: no
+    dossier, no tracked stats, no posted price, the humility clamp, the
+    edge bar, or the 0-100 grade — and when it is the grade, which of the
+    six components was short and by how much.
+    """
+    import json as _json
+    from engine.ufc import grade as G
+
+    try:
+        card = _json.loads((ROOT / UFC_OUT).read_text())
+    except (OSError, ValueError):
+        print("No UFC card built yet — run the launcher once.")
+        return
+    if card.get("status") != "card":
+        print(f"No card in the window ({card.get('status')}). "
+              f"{card.get('note', '')}")
+        return
+
+    picks = card.get("picks") or []
+    passes = card.get("pass_list") or []
+    print(f"UFC {card.get('event_date', '')}: {len(picks)} pick(s), "
+          f"{len(passes)} pass(es), {card.get('dossiers_loaded', 0)} dossier(s) "
+          f"loaded\n")
+
+    # Weigh-ins first, because that is the usual suspicion — and usually
+    # not the culprit. An UNRECORDED weigh-in is not a red flag; only a
+    # MISSED weight blocks a bet outright.
+    wi = card.get("weigh_ins") or {}
+    if wi:
+        print(f"Weigh-ins: {wi.get('made', 0)} made · {wi.get('missed', 0)} "
+              f"missed · {wi.get('unrecorded', 0)} not recorded")
+        if wi.get("missed"):
+            print("  A missed weight is a hard red flag and blocks that fight.")
+        if wi.get("unrecorded"):
+            print("  Unrecorded does NOT block a bet and no longer costs "
+                  "grade points either. The fight-week component drops out "
+                  "of the scorecard entirely and the remaining components "
+                  "are renormalised, so an un-weighed fight is graded on "
+                  "what we DO know rather than marked down for a Friday "
+                  "that has not happened. Results are pulled automatically "
+                  "once they publish — see --probe-weighins.")
+        print()
+
+    buckets: dict = {}
+    for row in passes:
+        buckets.setdefault(row.get("reason_code", "other"), []).append(row)
+    LABEL = {
+        "no_dossier": "no dossier for a corner — the engine will not bet a "
+                      "fighter it has never measured",
+        "no_data": "no fight-by-fight stats (regional/uncovered record)",
+        "no_price": "no two-sided price posted yet — books open MMA late",
+        "clamp_kill": "model and market disagree too far — treated as our "
+                      "input being wrong, not as a goldmine",
+        "gate": "priced and modelled, but failed the edge bar or the grade",
+        "card_cap": "trimmed by the card exposure cap",
+    }
+    for code, rows in sorted(buckets.items(), key=lambda kv: -len(kv[1])):
+        print(f"{len(rows):>3} × {LABEL.get(code, code)}")
+        for r in rows[:4]:
+            print(f"      {r.get('fight', '')}")
+        if len(rows) > 4:
+            print(f"      … and {len(rows) - 4} more")
+    print()
+
+    # The gated fights are the interesting ones: they had everything and
+    # still did not clear. Show the grade arithmetic.
+    gated = buckets.get("gate", [])
+    if not gated:
+        print("Nothing reached the grade — the blockers above are upstream "
+              "of it. Fix those first.")
+        return
+    print("Fights that were priced and modelled — how close each came:\n")
+    for r in sorted(gated, key=lambda x: -(x.get("grade_score") or 0)):
+        best = r.get("best_market") or {}
+        print(f"  {r.get('fight', '')}")
+        print(f"    would bet: {r.get('selection', r.get('pick', ''))} "
+              f"{best.get('odds', r.get('odds', ''))}  "
+              f"edge {(best.get('edge') or 0):+.1%} vs bar "
+              f"{(r.get('required_edge') or 0):.1%}")
+        print(f"    grade {r.get('grade_score', 0)}/{G.MIN_GRADE} needed"
+              f"  ({r.get('why', '')})")
+        parts = r.get("grade_parts") or {}
+        for key, weight in G.GRADE_WEIGHTS.items():
+            if key == "edge":
+                continue
+            got = (parts.get({"data_quality": "data", "camp_info": "camp",
+                              "style_clarity": "style",
+                              "environment": "env"}.get(key, key)) or {})
+            sc = got.get("score")
+            if sc is None:
+                print(f"      {key:14}  —   no feed: dropped from the "
+                      f"scorecard, not scored against this fight")
+                continue
+            print(f"      {key:14} {sc:.2f} → {sc * weight:4.1f} of {weight}")
+        cov = r.get("grade_coverage")
+        if cov is not None:
+            print(f"      graded on {cov:.0%} of the scorecard"
+                  + ("  (capped — an incomplete scorecard cannot earn top "
+                     "marks)" if r.get("grade_capped") else ""))
+        print()
+    print("Components with no feed score NOTHING rather than a fixed "
+          "neutral: they leave the scorecard and the rest is renormalised, "
+          "so the grade answers 'how good is this bet on what we can "
+          "actually see'. Market movement has no UFC line history yet and "
+          "is always one of them; fight-week info joins it until the scale "
+          "happens. A fight that fails now fails on its own merits.")
+
+
+def odds_audit() -> None:
+    """Where did the credits go?
+
+    Ethan's 20,000-credit plan emptied and the only evidence was a cumulative
+    counter that says how much is gone and nothing about what took it. That is
+    not a question anyone should have to reason about — it should be a
+    receipt.
+
+    Two sources, in order of trust. The spend ledger records every paid call
+    with its own billed cost and is exact from the moment it exists. Before
+    it existed there is only the cache directory: every successful paid call
+    wrote a file there, so the filenames say what KIND of call it was and the
+    modification times say when. That reconstruction cannot see the price, so
+    it prices each class at the documented rate and says it is estimating.
+    """
+    from engine import oddsbudget as ob
+    from engine.sources.fetch import CACHE_DIR
+    import datetime as _dt
+
+    print("\nWHERE THE ODDS CREDITS WENT\n")
+    st = ob.load()
+    ring = []
+    try:
+        from engine.sources.oddsapi import api_keys
+        ring = api_keys()
+    except Exception:
+        pass
+    print(f"  Pool now: {st.remaining:,} credit(s) across "
+          f"{len(ring) or 1} key(s) · {st.used:,} used on the last key seen")
+    if ring:
+        for k in ring:
+            ks = ob.key_state(k)
+            mark = "spent" if ob.key_is_spent(k) else "live "
+            rem = ks.get("remaining")
+            print(f"    {mark}  key {ob.fingerprint(k)}  "
+                  f"{'never called' if rem is None else f'{int(rem):,} left'}")
+
+    ledger = ob.spend_by_day()
+    if ledger:
+        print("\n  From the spend ledger (exact, per call):")
+        for day in sorted(ledger):
+            kinds = ledger[day]
+            total = sum(v[1] for v in kinds.values())
+            print(f"    {day}   {total:>6,} credit(s)")
+            for kind, (n, c) in sorted(kinds.items(), key=lambda t: -t[1][1]):
+                print(f"        {kind:<14} {n:>5} call(s)  {c:>6,} credit(s)")
+    else:
+        print("\n  The spend ledger is empty — it only records calls made "
+              "since it was added, so anything before that is below.")
+
+    # Reconstruction from the cache, for spend the ledger never saw.
+    buckets: dict = {}
+    try:
+        files = list(CACHE_DIR.glob("odds_*.json"))
+    except Exception:
+        files = []
+    for f in files:
+        day = _dt.date.fromtimestamp(f.stat().st_mtime).isoformat()
+        name = f.name
+        if name.startswith("odds_hist_event_"):
+            kind, cost = "hist_event", ob.CREDIT_COST["hist_event"]
+        elif name.startswith("odds_hist_events_"):
+            kind, cost = "hist_events", ob.CREDIT_COST["hist_events"]
+        elif name.startswith("odds_board_"):
+            kind, cost = "live_board", ob.CREDIT_COST["live_board"]
+        elif name.startswith("odds_events_"):
+            kind, cost = "live_events", ob.CREDIT_COST["live_events"]
+        else:
+            kind, cost = "live_event", ob.CREDIT_COST["live_event"]
+        cell = buckets.setdefault(day, {}).setdefault(kind, [0, 0])
+        cell[0] += 1
+        cell[1] += cost
+    if buckets:
+        print(f"\n  Reconstructed from {len(files):,} cache file(s) — a cache "
+              f"file is what a paid call leaves behind, so this counts CALLS\n"
+              f"  exactly and prices them at the documented rate. One cached\n"
+              f"  file can also stand for several re-reads that cost nothing.")
+        grand = 0
+        for day in sorted(buckets):
+            kinds = buckets[day]
+            total = sum(v[1] for v in kinds.values())
+            grand += total
+            print(f"    {day}   ~{total:>6,} credit(s)")
+            for kind, (n, c) in sorted(kinds.items(), key=lambda t: -t[1][1]):
+                print(f"        {kind:<14} {n:>5} call(s)  ~{c:>6,} credit(s)")
+        print(f"\n    Estimated total across the cache: ~{grand:,} credit(s)")
+        hist = sum(v.get("hist_event", [0, 0])[1] + v.get("hist_events", [0, 0])[1]
+                   for v in buckets.values())
+        if hist and grand:
+            print(f"    Historical harvesting accounts for ~{hist:,} of that "
+                  f"({hist / grand:.0%}).")
+            print("    A historical call is billed several times a live one, so "
+                  "a harvest\n    over a long date range empties a plan far "
+                  "faster than a season of\n    nightly builds. Cap it with "
+                  "`--budget N` on harvest_odds.py.")
+    else:
+        print("\n  No odds cache on this machine — nothing to reconstruct.")
+
+
+def why_many(sport: str = "mlb", days: int = 21) -> None:
+    """The inverse of --why-empty: why is tonight's board BIGGER than usual?
+
+    "We normally recommend about four a night" is a memory, and a memory is
+    not a baseline. This measures the nightly count from the journal itself,
+    so tonight's number gets compared against what actually happened rather
+    than against an impression — and then walks the gates to say which one
+    stopped holding.
+
+    The gate that swings an MLB count hardest is the lineup hold: hitter
+    props are blocked until the card is posted, so the board is quiet in the
+    morning and fills in the moment lineups drop. A count taken at 11am and
+    a count taken at 6pm are not the same measurement.
+    """
+    import json as _json
+    from collections import Counter
+    from engine import ledger
+
+    rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
+           else "web/data/recommendations.json")
+    p = ROOT / rel
+    if not p.is_file():
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    board = _json.loads(p.read_text())
+    recs = board.get("recommendations", [])
+    live = [r for r in recs if r.get("recommended")]
+    print(f"\n  TONIGHT ({board.get('date', '?')})")
+    print(f"  {len(recs)} prop(s) priced · {len(live)} recommended\n")
+
+    # --- the baseline, measured ------------------------------------------
+    with ledger.connect() as conn:
+        rows = conn.execute(
+            "SELECT date, COUNT(*) n FROM bets WHERE sport=? AND category='main' "
+            "GROUP BY date ORDER BY date DESC LIMIT ?", (sport, days)).fetchall()
+    if rows:
+        counts = [r["n"] for r in rows]
+        counts_sorted = sorted(counts)
+        med = counts_sorted[len(counts_sorted) // 2]
+        print(f"  JOURNALLED PER NIGHT, last {len(counts)} slate(s) with picks")
+        print(f"  median {med} · min {min(counts)} · max {max(counts)}")
+        for r in rows[:8]:
+            bar = "#" * min(r["n"], 40)
+            print(f"    {r['date']}  {r['n']:>3}  {bar}")
+        if live and med:
+            print(f"\n  tonight is {len(live) / med:.1f}x the median night")
+        print()
+    else:
+        print(f"  No {sport} picks journalled yet — no baseline to compare "
+              f"against, so tonight's count cannot be called unusual.\n")
+
+    # --- what cleared, and what it cleared BY -----------------------------
+    if not live:
+        print("  Nothing recommended — run --why-empty instead.")
+        return
+    edges = sorted(r.get("edge", 0) for r in live)
+    confs = sorted(r.get("confidence", 0) for r in live)
+    stakes = [r.get("stake_units", 0) or 0 for r in live]
+    mid = len(edges) // 2
+    print("  WHAT CLEARED")
+    print(f"  edge        min {edges[0]:+.1%}  median {edges[mid]:+.1%}  max {edges[-1]:+.1%}")
+    print(f"  confidence  min {confs[0]:.1f}   median {confs[mid]:.1f}   max {confs[-1]:.1f}")
+    print(f"  exposure    {sum(stakes):.2f}u across {len(live)} pick(s)")
+    by_market = Counter(r.get("market_label") or r.get("market") for r in live)
+    by_grade = Counter(r.get("grade") for r in live)
+    by_game = Counter(f"{r.get('opponent','?')}" for r in live)
+    print(f"  markets     " + ", ".join(f"{k} {v}" for k, v in by_market.most_common()))
+    print(f"  grades      " + ", ".join(f"{k} {v}" for k, v in by_grade.most_common()))
+    print(f"  spread over {len(by_game)} matchup(s)\n")
+
+    # A board that is big because it is CONCENTRATED is a different problem
+    # from one that is big because the slate is big. Say which.
+    top_game, top_n = by_game.most_common(1)[0]
+    if top_n > max(3, len(live) * 0.4):
+        print(f"  ! {top_n} of {len(live)} picks come from one matchup ({top_game}).")
+        print(f"    Correlated exposure — check the correlation flags before "
+              f"treating these as {top_n} independent bets.\n")
+
+    # --- the gates, and how much room each pick had -----------------------
+    thin = [r for r in live if (r.get("stake_units") or 0) < 0.10]
+    if thin:
+        print(f"  {len(thin)} of {len(live)} size under 0.10u — they cleared "
+              f"the edge bar but Kelly barely wants them.\n")
+    print("  Run --why-pick \"<player>\" for the gate-by-gate on any one of "
+          "them.\n")
+
+
+def show_desk() -> None:
+    """The prediction desk's live status — why there is or isn't a rec.
+
+        python3 launch.py --desk
+
+    Ethan has only ever seen the Kalshi page say "unreachable", never a
+    recommendation, and the difference between "the feed is down", "no
+    game matched", and "no edge cleared the bar" is the difference
+    between a bug and a quiet night. This prints which one it is, plus
+    the paper book's record so promotion stays an evidence question.
+    """
+    import json as _json
+    from engine import ledger
+    p = ROOT / "web" / "data" / "kalshi.json"
+    if not p.exists():
+        print("  no kalshi.json yet — run a refresh (pm_build.py) first")
+        return
+    k = _json.loads(p.read_text())
+    print(f"  Kalshi board  · built {k.get('generated_at', '?')}")
+    if k.get("note"):
+        print(f"  ⚠️  {k['note']}")
+    print(f"  sports markets {k.get('n_markets', 0)} · matched "
+          f"{k.get('n_matched', 0)} · modeled {k.get('n_modeled', 0)} · "
+          f"recommended {k.get('n_rec', 0)}")
+    src = k.get("sources") or {}
+    if src:
+        series = " · ".join(f"{name}: {n}" for name, n
+                            in (src.get("series") or {}).items())
+        print(f"  sources — general page {src.get('page', 0)} market(s)"
+              + (f" · series {series}" if series else ""))
+    else:
+        print("  sources — (built by pre-series code: rebuild with "
+              "`python3 pm_build.py` to fetch the sports series directly)")
+    wx = k.get("weather") or []
+    print(f"  weather rows {len(wx)} · recommended "
+          f"{sum(1 for r in wx if r.get('rec'))}")
+    for r in (k.get("rows") or []):
+        if r.get("rec"):
+            print(f"    {r.get('sport', ''):4} {r.get('title', '')[:52]:52} "
+                  f"{r.get('rec_side')} · market {r.get('prob', 0) * 100:.0f}¢ "
+                  f"model {r.get('model_p', 0) * 100:.0f}% "
+                  f"({r.get('edge_pts'):+.1f} pts)")
+    for r in wx:
+        if r.get("rec"):
+            print(f"    wx   {r.get('city', ''):14} {r.get('subtitle', '')[:37]:37} "
+                  f"{r.get('rec_side')} · NWS {r.get('forecast_f')}° "
+                  f"vs {r.get('prob', 0) * 100:.0f}¢ ({r.get('edge_pts'):+.1f} pts)")
+    conn = ledger.connect()
+    try:
+        rep = ledger.predmarket_report(conn)
+    finally:
+        conn.close()
+    n = rep.get("settled") or 0
+    if n:
+        print(f"  paper book: {rep['wins']}-{rep['losses']} · "
+              f"{rep['net_units']:+.2f}u · ROI {rep['roi'] * 100:+.1f}% "
+              f"on {n} graded — promotion at 100+ graded in profit")
+    else:
+        print("  paper book: nothing graded yet — weather markets settle "
+              "same-day, so this fills fast once the feed reaches")
+
+
+def show_desk_probe() -> None:
+    """Raw Kalshi requests, no cache, errors shown verbatim.
+
+        python3 launch.py --desk-probe
+
+    Built for the second live run (2026-08-11): every endpoint returned
+    EMPTY — page, all sports series, all weather cities — with no error
+    raised, which is the signature of an error body being parsed as
+    "valid JSON, zero markets" or of a poisoned cache being served as
+    truth. This bypasses fetch_text entirely: direct requests, HTTP
+    status printed, body head printed whenever a count is zero, and the
+    kalshi cache files listed then cleared so the next real build
+    fetches fresh.
+    """
+    import json as _json
+    import time as _time
+    import urllib.error
+    import urllib.request
+    from engine.sources.fetch import CACHE_DIR
+    from engine.sources.kalshi import KALSHI
+
+    def hit(label, url):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "qellys-desk-probe"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                code = resp.status
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            print(f"  {label:34} HTTP {exc.code} · {body[:160]}")
+            return
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  {label:34} FAILED · {exc}")
+            return
+        try:
+            j = _json.loads(body)
+            counts = {k: len(v) for k, v in j.items() if isinstance(v, list)}
+            line = " ".join(f"{k}={n}" for k, n in counts.items()) or "no lists"
+            print(f"  {label:34} HTTP {code} · {line}"
+                  + ("" if any(counts.values()) else f" · body: {body[:160]}"))
+        except ValueError:
+            print(f"  {label:34} HTTP {code} · NOT JSON · {body[:160]}")
+
+    hit("markets limit=200 status=open",
+        f"{KALSHI}/markets?limit=200&status=open")
+    hit("markets limit=1000 status=open",
+        f"{KALSHI}/markets?limit=1000&status=open")
+    hit("markets limit=200 (no status)", f"{KALSHI}/markets?limit=200")
+    hit("events KXMLBGAME status=open",
+        f"{KALSHI}/events?series_ticker=KXMLBGAME&status=open&limit=100&with_nested_markets=true")
+    hit("events KXMLBGAME (no status)",
+        f"{KALSHI}/events?series_ticker=KXMLBGAME&limit=100&with_nested_markets=true")
+    hit("events KXHIGHNY status=open",
+        f"{KALSHI}/events?series_ticker=KXHIGHNY&status=open&limit=100&with_nested_markets=true")
+    hit("series KXMLBGAME", f"{KALSHI}/series/KXMLBGAME")
+
+    stale = sorted(CACHE_DIR.glob("kalshi*"))
+    if stale:
+        print("  cache files (cleared now so the next build fetches fresh):")
+        for p in stale:
+            age = int(_time.time() - p.stat().st_mtime)
+            head = p.read_text(encoding="utf-8", errors="replace")[:80]
+            print(f"    {p.name} · {age}s old · {head!r}")
+            p.unlink(missing_ok=True)
+    else:
+        print("  no kalshi cache files present")
+
+    # THE AUTOPSY (third live round, 2026-08-11): the feed returns real
+    # markets and the parser returns zero, so one of them is wrong about
+    # the shape. Fetch a handful raw, run the REAL parser on them, and
+    # print the first object's price-bearing fields plus which gate each
+    # market died at — the next paste names the field, not the vibe.
+    from engine.sources.kalshi import parse_markets
+
+    def autopsy(label, url, key, nested):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "qellys-desk-probe"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                j = _json.loads(resp.read().decode("utf-8", errors="replace"))
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  autopsy {label}: fetch failed · {exc}")
+            return
+        rows = j.get(key) or []
+        markets = []
+        for r in rows:
+            if nested:
+                markets.extend(r.get("markets") or [])
+            else:
+                markets.append(r)
+        parsed = parse_markets(markets)
+        print(f"  autopsy {label}: raw {len(markets)} → parsed {len(parsed)}")
+        for m in markets[:3]:
+            fields = {k: m.get(k) for k in
+                      ("ticker", "status", "yes_bid_dollars",
+                       "yes_ask_dollars", "last_price_dollars",
+                       "volume_24h_fp", "close_time")}
+            # The verdict comes from the REAL parser, one market at a
+            # time, so this line can never drift from what the build does.
+            one = parse_markets([m])
+            gate = one[0]["price_basis"] if one \
+                else "REJECTED — no price the parser recognises"
+            print(f"    {gate:10.10} · {fields}")
+        if markets and not parsed:
+            print(f"    full first object keys: {sorted(markets[0].keys())}")
+
+    autopsy("markets page", f"{KALSHI}/markets?limit=5&status=open",
+            "markets", nested=False)
+    autopsy("KXMLBGAME nested",
+            f"{KALSHI}/events?series_ticker=KXMLBGAME&status=open&limit=3&with_nested_markets=true",
+            "events", nested=True)
+    autopsy("KXHIGHNY nested",
+            f"{KALSHI}/events?series_ticker=KXHIGHNY&status=open&limit=3&with_nested_markets=true",
+            "events", nested=True)
+
+
+def _memory_headroom() -> str:
+    """The hungriest process on this box against the unit's own cap.
+
+    Reads the cgroup the process is actually in — v2 `memory.max` first,
+    then v1 `memory.limit_in_bytes` — so the ceiling quoted is the one
+    systemd will kill against, not the machine's total RAM. Returns ""
+    when there is no cap to measure against (a laptop, a container with
+    none), because a percentage of an unlimited budget means nothing.
+    """
+    def _cap() -> int:
+        for path in ("/sys/fs/cgroup/memory.max",
+                     "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+            try:
+                raw = open(path).read().strip()
+            except OSError:
+                continue
+            if raw in ("max", ""):
+                return 0
+            try:
+                v = int(raw)
+            except ValueError:
+                continue
+            # v1 writes a sentinel near 2**63 for "no limit"; anything
+            # past a terabyte is that, not a real cap.
+            return 0 if v <= 0 or v > (1 << 40) else v
+        return 0
+
+    cap = _cap()
+    if not cap:
+        return ""
+    biggest, name = 0, ""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/status") as fh:
+                rss, nm = 0, ""
+                for line in fh:
+                    if line.startswith("Name:"):
+                        nm = line.split(":", 1)[1].strip()
+                    elif line.startswith("VmRSS:"):
+                        rss = int(line.split()[1]) * 1024
+                        break
+        except (OSError, ValueError, IndexError):
+            continue
+        if rss > biggest:
+            biggest, name = rss, nm
+    if not biggest:
+        return ""
+    mb, cap_mb = biggest / 1e6, cap / 1e6
+    share = biggest / cap
+    flag = ""
+    if share >= 0.75:
+        flag = ("   <-- one process is most of the unit's memory; this is "
+                "how the 2026-09-02 OOM loop started")
+    return (f"  memory: largest process {name or '?'} at {mb:.0f} MB of the "
+            f"unit's {cap_mb:.0f} MB cap ({share:.0%}){flag}")
+
+
+def show_boards() -> None:
+    """Every slate board: how old, how big, and what it last said.
+
+    ONE PLACE THAT ANSWERS "WHY IS THIS PAGE EMPTY", because answering it
+    has taken a different ad-hoc command every time. Over two days the
+    CFB board needed: a journalctl grep (which proved nothing, because
+    the loop is quiet), a python one-liner for `generated_at`, an `ls -l`
+    for WNBA, a curl for the CFBD key, and another one-liner for the
+    talent layer. Each was written fresh, several were wrong, and two of
+    them measured something other than what they were read as.
+
+    The facts are all on disk. This prints them together, so the next
+    time a board is empty the first question is answered before anyone
+    has to invent a way to ask it.
+
+    Deliberately reads FILES, not the running process: a board frozen
+    because the loop died looks exactly like a healthy one from inside
+    the loop.
+    """
+    import datetime as _dt
+    from engine import gate as _gate
+    print("\nBOARDS — from the files on disk, not from this process\n")
+    print(f"  {'board':<6} {'age':>8}  {'games':>5}  {'picks':>11}  status")
+    rows = []
+    for name, path in BOARD_FILES.items():
+        pub = ROOT / path if not os.path.isabs(path) else Path(path)
+        # THROUGH gate.board_source, AND THIS IS THE THIRD TOOL TO LEARN IT.
+        # Ethan, 2026-09-03: "The zero in the recs column is the paywall
+        # again." BOARD_FILES points at web/data — the copies with the
+        # picks stripped out — so with the wall up this screen reported
+        # every board as 0 recommendations and did it in the one place
+        # somebody checks when they suspect a build is broken. Board lint
+        # and the empty-board explainer both made this mistake before it;
+        # `board_source`'s own docstring names three tools before those.
+        # The private copy is the truth, the public one is derived.
+        # ONLY WHEN THE PATH IS ACTUALLY IN A web/data TREE. `board_source`
+        # falls back to the module-global data/built for any path it cannot
+        # place, which is right for its own callers and wrong here: this
+        # map is configurable, and a board pointed somewhere else would
+        # have been answered with THIS checkout's private copy of the same
+        # basename. That is the shadowing fixed in gate.seal this morning,
+        # arriving from the other side — a tool reading a board the
+        # operator did not point it at.
+        full = pub
+        if pub.parent.parts[-2:] == ("web", "data"):
+            full = Path(_gate.board_source(pub))
+        if not full.exists():
+            rows.append((name, None, None, None, None, "FILE MISSING", ""))
+            continue
+        # The build time comes off the same file. `seal` rewrites only the
+        # public copy, so the private one's mtime is the last real BUILD —
+        # which is what "how old is this board" is asking.
+        age = (time.time() - full.stat().st_mtime) / 3600.0
+        try:
+            with open(full) as fh:
+                d = json.load(fh)
+        except Exception as exc:                          # noqa: BLE001
+            rows.append((name, age, None, None, None, f"UNREADABLE — {exc}", ""))
+            continue
+        feed = d.get("feed") or {}
+        note = ""
+        if feed:
+            note = f"feed listed {feed.get('listed')}, kept {feed.get('kept')}"
+        # CLEARED OVER EVALUATED, because the array is not the answer.
+        # `recommendations` holds every prop the board EVALUATED; the
+        # per-row `recommended` flag (engine/pipeline: grade not Pass or
+        # Lean) is what actually cleared. Printing the array's length
+        # called college's 612 candidate rows 612 picks, and Ethan had to
+        # work the real number out by hand: "The 612 rows in the array are
+        # candidates, not picks."
+        _recs = [r for r in (d.get("recommendations") or [])
+                 if isinstance(r, dict)]
+        _cleared = sum(1 for r in _recs if r.get("recommended"))
+        rows.append((name, age, len(d.get("games") or []),
+                     _cleared, len(_recs),
+                     d.get("status") or "—", note))
+    for name, age, games, cleared, seen, status, note in rows:
+        age_s = "—" if age is None else f"{age:.1f}h"
+        flag = "  <-- STALE" if age is not None and \
+            age * 3600 > STALE_BOARD_SECONDS else ""
+        picks = "—" if cleared is None else f"{cleared} of {seen}"
+        print(f"  {name.upper():<6} {age_s:>8}  "
+              f"{'—' if games is None else games:>5}  "
+              f"{picks:>11}  {status}{flag}")
+        if note:
+            print(f"         {note}")
+    # THE BOX ITSELF, before blaming any build. Three staleness hunts
+    # have now ended at a process OUTSIDE the loop eating the core — a
+    # background fitter cascade on 2026-08-31, and two forgotten
+    # terminal-started formfit copies on 2026-09-01 that held load above
+    # 5 on one vCPU while every page aged 45 minutes. The number was
+    # sitting in `uptime` all along; this screen exists so nobody has to
+    # remember to ask.
+    try:
+        l1, l5, l15 = os.getloadavg()
+        cores = os.cpu_count() or 1
+        # IT NO LONGER NAMES A CULPRIT IT CANNOT SEE. This read "something
+        # OUTSIDE the loop is eating the core", which was the finding of
+        # three staleness hunts and became a fourth assertion the screen
+        # made on its own authority. Ethan, 2026-09-03: "The
+        # oversubscription warning is misattributed. It says something
+        # outside the loop is eating the core, but the culprit is the
+        # loop's own NFL build, running with odds, injuries and depth
+        # flags." A full cycle is thirteen builds; during one, high load
+        # is the loop WORKING. This command is its own process and cannot
+        # tell from in here which it is, so it names both and hands over
+        # the one command that settles it.
+        flag = ("   <-- OVERSUBSCRIBED: a build in this loop, or something "
+                "outside it — ps aux --sort=-%cpu names which"
+                if l5 > cores * 1.5 else "")
+        print(f"\n  load average: {l1:.2f} {l5:.2f} {l15:.2f} on "
+              f"{cores} core{'s' if cores != 1 else ''}{flag}")
+    except (AttributeError, OSError):
+        pass
+
+    # THE NUMBER THAT ACTUALLY PREDICTS THE OUTAGE, beside the one that
+    # does not. Load recovers on its own; memory does not — 2026-09-02 was
+    # an OOM crash loop, and Ethan's read of this cycle was "that single
+    # child is holding 1.35 GB resident, which is 84% of the unit's
+    # 1600 MB cap on its own. That is the memory pressure from earlier, in
+    # one number." It was nowhere on this screen, so the thing that takes
+    # the site down was the one thing it could not report.
+    try:
+        note = _memory_headroom()
+        if note:
+            print(note)
+    except Exception:                                     # noqa: BLE001
+        pass                       # a diagnostic must never be the fault
+
+    # WHAT THE LOOP THINKS, beside what the files say. The two
+    # disagreeing is itself the finding: a refresh that reports ok while
+    # its board does not move is the exact failure #82 turned out to be.
+    #
+    # READ FROM heartbeat.json, NOT FROM _BOARD_RUNS. This command runs
+    # as its own process; the server's in-memory record is not in it, so
+    # the first cut printed nothing at all here — the half of the output
+    # that carries the actual finding, silently absent. The heartbeat is
+    # written every cycle for exactly this reason.
+    beat = {}
+    try:
+        with open(ROOT / "web" / "data" / "heartbeat.json") as fh:
+            beat = json.load(fh) or {}
+    except Exception:                                     # noqa: BLE001
+        pass
+    if beat:
+        age = (time.time() - float(beat.get("at_epoch") or 0)) / 60.0
+        print(f"\n  loop heartbeat: {beat.get('at')} ({age:.0f} min ago)"
+              + ("   <-- THE LOOP ITSELF IS NOT TICKING"
+                 if age > 15 else ""))
+        # The commit the LOOP is serving, beside the commit ON DISK. The
+        # same disagreement rule as everything above: matching is fine,
+        # and each mismatch names its own failure — disk ahead means a
+        # pull landed but the restart didn't, which is precisely the
+        # state auto-update can silently die in.
+        served = beat.get("commit")
+        if served:
+            ok, disk = _git("rev-parse", "--short", "HEAD")
+            # THE TIMER'S WORD BEATS THE PROCESS'S FLAG. On the droplet
+            # updates arrive via qellys-update.timer (a root oneshot —
+            # the app's sandbox correctly cannot rewrite its own
+            # checkout), which records every attempt in
+            # data/autoupdate.json precisely so this screen can say
+            # whether pulling WORKS, not merely whether it is wanted.
+            word = ("ON (in-process)" if beat.get("auto_update") else
+                    "off — pushes wait for a manual deploy")
+            extra = ""
+            try:
+                with open(ROOT / "data" / "autoupdate.json") as fh:
+                    au = json.load(fh) or {}
+                mins = (time.time() - float(au.get("at_epoch") or 0)) / 60.0
+                if mins > 20:
+                    word = "timer STALLED"
+                    extra = (f"\n    <-- the update timer has not run for "
+                             f"{mins:.0f} min (last: {au.get('note')})")
+                elif au.get("ok"):
+                    word = f"ON (timer, checked {mins:.0f} min ago)"
+                else:
+                    word = "timer FAILING"
+                    extra = f"\n    <-- {au.get('note')}"
+            except Exception:                             # noqa: BLE001
+                pass                # no state file — not a timer box
+            line = f"  running commit {served} · auto-update {word}" + extra
+            if ok and disk and disk != served:
+                line += (f"\n    <-- {disk} is on disk but not running: "
+                         f"the loop never restarted into it")
+            print(line)
+        runs = beat.get("boards") or {}
+        if runs:
+            print("  last refresh attempt, as the loop recorded it")
+            for name in BOARD_FILES:
+                run = runs.get(name)
+                line = (f"{run['at']}  {'ok' if run.get('ok') else 'FAILED'}"
+                        if run else "no record — the loop never reached it")
+                print(f"    {name.upper():<6} " + line)
+                if run and not run.get("ok") and run.get("note"):
+                    print(f"      <-- {run['note']}")
+        # The cycle's bill, worst first. When every page is stale by the
+        # same ~45 minutes, the cycle IS the staleness, and this names
+        # the builds actually spending it.
+        steps = beat.get("step_s") or {}
+        if steps:
+            total = sum(v for v in steps.values() if isinstance(v, (int, float)))
+            print(f"\n  where the last cycle's time went ({total:.0f}s total)")
+            for k, v in sorted(steps.items(), key=lambda kv: -kv[1]):
+                if v >= 1:
+                    print(f"    {k:<15} {v:>7.0f}s")
+    else:
+        print("\n  no heartbeat.json — cannot say whether the loop is alive.")
+    cyc = beat.get("cycle_p50_s") or _cycle_p50()
+    print(f"\n  typical refresh cycle: "
+          f"{f'{cyc:.0f}s' if cyc else 'not measured yet'}")
+    print("\n  A board older than the cycle is not being written. The usual "
+          "cause is a\n  build that returns without writing — a feed it "
+          "cannot reach, keeping the\n  last board rather than publishing "
+          "an empty one.\n")
+
+
+def show_likely() -> None:
+    """The Most Likely paper record, on the box that holds the ledger.
+
+    Ethan, 2026-08-30: "if it does good then we will attack money and roi
+    and shit to it." This is where "does good" gets read. Two columns,
+    kept apart on purpose: whether the probability we printed was TRUE,
+    and whether betting it at the price shown would have PAID. A
+    calibrated board still loses to the vig, so the first does not imply
+    the second, and money is gated on the second.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        p = ledger.likely_report(conn)
+    finally:
+        conn.close()
+    cal = p.get("calibration") or {}
+    n = cal.get("n") or 0
+    print("\nMOST LIKELY — the paper record (zero dollars at risk)\n")
+    print(f"  {p['verdict']}\n")
+    print(f"  settled {p['wins']}-{p['losses']}   open {p['open']}"
+          f"   paper ROI {p.get('roi', 0):+.2%}"
+          f"   {p.get('net_units', 0):+.2f}u")
+    if n:
+        band = cal.get("noise_band")
+        print(f"  claimed {cal['claimed']:.1%}   actual {cal['actual']:.1%}"
+              f"   gap {cal['gap']:+.1%}"
+              + (f"   (noise band +/-{band:.1%}, "
+                 f"{'REAL' if cal.get('real') else 'inside'})" if band else ""))
+    if p.get("bands"):
+        print("\n  by claimed probability")
+        print("    band        n    said     hit      roi")
+        for b in p["bands"]:
+            print(f"    {b['lo']:.0%}-{b['hi']:.0%}  {b['n']:5d}  "
+                  f"{b['claimed']:6.1%}  {b['actual']:6.1%}  {b['roi']:+7.2%}")
+    if p.get("by_market"):
+        print("\n  by market (the board's shelves)")
+        print("    market            n    said     hit      roi")
+        for m, d in sorted(p["by_market"].items()):
+            print(f"    {m:<15} {d['n']:5d}  {d['claimed']:6.1%}  "
+                  f"{d['actual']:6.1%}  {d['roi']:+7.2%}")
+    # SAID LAST, because it is the sentence that decides what happens
+    # next and a reader who stops early should still have hit it.
+    if not p.get("enough"):
+        print(f"\n  Not enough to act on: {n} of {p['needed']}. Below that a "
+              f"ten-point\n  miss and a run of luck are the same picture.")
+    elif (p.get("roi") or 0) <= 0:
+        print("\n  Calibration is one test and money is the other. The paper "
+              "ROI is not\n  positive, so nothing moves off paper yet.")
+    else:
+        print("\n  Both tests passed at this sample. Sizing this for real "
+              "money is now a\n  decision rather than a guess.")
+    print()
+
+
+def show_gates() -> None:
+    """What the filters cost or saved — measured, not argued.
+
+        python3 launch.py --gates
+
+    "We know for a fact that there are winning MLB bets every night" is
+    true of every night in HINDSIGHT — some bets always won, and finding
+    them afterwards takes no model. The empirical version of the
+    question is: when the gates refuse a pick, does that pick go on to
+    win often enough to beat its price? That experiment has been running
+    nightly without anyone watching it: the props that JUST miss the bar
+    journal as a flat-stake paper book ('loose'), the zero-stake picks
+    are scored as 'unstaked', home runs run their own board — and every
+    bucket settles against real results. This prints the scoreboards
+    side by side with the decision rule attached, so "loosen the gates"
+    becomes a number instead of a feeling.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        main = ledger.performance(conn)
+        loose = ledger.loose_report(conn)
+        shots = ledger.longshot_report(conn)
+        un = ledger.unstaked_scorecard(conn)
+    finally:
+        conn.close()
+
+    def row(name, p):
+        n = p.get("settled") or (p.get("wins", 0) + p.get("losses", 0)
+                                 + p.get("pushes", 0))
+        if not n:
+            return f"  {name:<22} —  nothing settled yet"
+        roi = p.get("roi")
+        roi_s = f"{roi * 100:+.1f}%" if roi is not None else "—"
+        return (f"  {name:<22} {p.get('wins', 0)}-{p.get('losses', 0)}"
+                f"-{p.get('pushes', 0)}"
+                f"  ({n} settled)   ROI {roi_s}"
+                f"   {p.get('net_units', 0):+.2f}u")
+
+    print("The gates, scored against what they refused:\n")
+    print(row("MAIN (the record)", main))
+    print(row("LOOSE (near-misses)", loose))
+    print(row("LONG SHOTS (HR/TD)", shots))
+    if un.get("n"):
+        print(f"  {'UNSTAKED (0.0u picks)':<22} {un.get('wins', 0)}-"
+              f"{un.get('losses', 0)}  ({un['n']} settled)   "
+              f"hit {un.get('hit', 0) * 100:.0f}% vs "
+              f"{un.get('be', 0) * 100:.0f}% break-even   "
+              f"{un.get('net', 0):+.2f} flat-stake units")
+
+    n_loose = loose.get("settled") or 0
+    roi_loose = loose.get("roi")
+    print("\nThe decision rule (written into the journal, not invented "
+          "tonight):")
+    if n_loose < 100:
+        print(f"  → LOOSE has {n_loose} graded of the 100 needed. Until "
+              f"then, loosening the gates is a\n    guess — the bucket "
+              f"accumulates every night on its own.")
+    elif roi_loose is not None and roi_loose > 0:
+        print(f"  → LOOSE is PROFITABLE over {n_loose} graded "
+              f"({roi_loose * 100:+.1f}%). The near-misses are winning:\n"
+              f"    the gates are too tight, and loosening them is now "
+              f"evidence, not opinion.")
+    else:
+        print(f"  → LOOSE is losing over {n_loose} graded "
+              f"({(roi_loose or 0) * 100:+.1f}%). The bets the gates "
+              f"refused went on to lose:\n    the gates are earning "
+              f"their keep, and every one of tonight's 'missing' bets\n"
+              f"    was refused by a rule that is measurably saving money.")
+    print("\n  Long shots NEVER touch the headline record — category "
+          "'longshots', flat 0.1u,\n  quarantined by the journal gate and "
+          "re-swept nightly (move_longshots_out_of_main).")
+    print("  Tonight's binding gate, prop by prop:  python3 launch.py "
+          "--why-empty")
+
+
+def why_empty(sport: str = "mlb", min_conf: float = 6.0,
+              min_edge: float = 0.02, max_juice: int = -350) -> None:
+    """Explain an empty board: which gate is actually filtering everything.
+
+    Reads the board the site is already serving and walks every prop
+    through the four independent gates a recommendation must clear, so
+    "0 recommended" stops being a mystery and becomes a number you can
+    point at."""
+    import json as _json
+    from engine.betting import BASE_THRESHOLDS, favourite_surcharge, net_edge
+    _GRADE_FLOOR = min(net_min for _, _, net_min in BASE_THRESHOLDS)
+    rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
+           else "web/data/recommendations.json")
+    p = ROOT / rel
+    if not p.is_file():
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    blob = _json.loads(p.read_text())
+    recs = blob.get("recommendations", [])
+    if not recs:
+        print(f"{rel} has no analyzed props at all.")
+        # A preseason explainer sat here Aug 2026 ("It is PRESEASON: N of
+        # M exhibition games played...") and retired with the preseason
+        # surface, 2026-08-25 — nothing writes the board it read. The
+        # lesson it taught stands: when the reason an empty board is
+        # empty is the calendar, this probe should say the calendar.
+        if sport == "nfl":
+            import datetime as _dt
+            today = _dt.date.today()
+            if today.month in (7, 8):
+                print("\n  It is the NFL offseason — no regular-season "
+                      "slate exists to price.\n  The board opens with "
+                      "Week 1.")
+        return
+
+    real = [r for r in recs if r.get("has_market") is not False]
+    # Home runs (Tier 3) are quarantined on the Long Shots board BY DESIGN
+    # — engine/mlb/pipeline.py skips them for the main board and counts
+    # them under census["longshot_board"]. Walking them through this funnel
+    # made 15 props that can never be main-board picks appear "in the
+    # recommendable window", and then manufactured a binding gate to
+    # explain why they were not picked. A report about the main board has
+    # to be about the main board.
+    def _is_longshot(r):
+        return r.get("tier") == 3 or r.get("market") in ("home_runs",
+                                                         "anytime_td")
+    shots = [r for r in real if _is_longshot(r)]
+    real = [r for r in real if not _is_longshot(r)]
+    print(f"{sport.upper()} board: {len(recs)} analyzed, "
+          f"{len(real) + len(shots)} with a real price\n")
+    if shots:
+        print(f"🎯 {len(shots)} of those are home runs — the Long Shots board "
+              f"owns those by design, and they are\n   excluded from "
+              f"everything below. See the Long Shots page for that funnel.\n")
+    if not real:
+        print("Every real-priced prop tonight is a long shot. The main board "
+              "has nothing to explain.")
+        return
+
+    rows = []
+    for r in real:
+        odds = int(r.get("odds") or -110)
+        hit = float(r.get("hit_prob") or 0)
+        rows.append({
+            "label": f"{r.get('player','?')} {r.get('side','')} {r.get('line','')} "
+                     f"{r.get('market','')}",
+            "odds": odds, "net": net_edge(hit, odds),
+            # The grader's real floor, not a looser number of this
+            # report's own invention. It was hardcoded at 0.003 while
+            # _grade's lowest threshold ("Play") needs 0.010 — so the
+            # funnel cleared props at a bar the engine would reject, and
+            # then blamed "engine graded it" for killing them. A report
+            # that disagrees with the code it explains sends you hunting
+            # for a bug that is not there.
+            "need": _GRADE_FLOOR + favourite_surcharge(odds),
+            "edge": float(r.get("edge") or 0),
+            "conf": float(r.get("confidence") or 0),
+            "grade": r.get("grade", "Pass"),
+            "stake": float(r.get("stake_units") or 0),
+            # A pre-game model cannot price a game already in progress —
+            # every prop on a started game is blocked no matter how good
+            # the number looks.
+            "started": any("already started" in w
+                           for w in (r.get("warnings") or [])),
+        })
+    started_n = sum(1 for x in rows if x["started"])
+    if started_n:
+        print(f"⏱  {started_n} / {len(rows)} props are on games that have "
+              f"ALREADY STARTED — blocked regardless of edge.\n")
+
+    from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
+    # A prop whose TEMPERED edge exceeds this was, before tempering, a
+    # disagreement bigger than MAX_CREDIBLE_EDGE — treated as bad data,
+    # not alpha, and graded Pass regardless of everything else.
+    ceiling = MAX_CREDIBLE_EDGE * MARKET_SHRINK
+    grades: dict[str, int] = {}
+    for x in rows:
+        grades[x["grade"]] = grades.get(x["grade"], 0) + 1
+    print("Grades the engine actually assigned:")
+    for g, n in sorted(grades.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:>5}  {g}")
+    print(f"\nCredibility ceiling: any edge above {ceiling:.1%} is graded Pass "
+          f"as bad data\n  {sum(1 for x in rows if x['edge'] > ceiling)} / "
+          f"{len(rows)} props exceed it\n")
+
+    gates = [
+        ("game hasn't started yet", lambda x: not x["started"]),
+        ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
+        ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
+        (f"clears the graded bar (net ≥ {_GRADE_FLOOR*100:.1f}pt "
+         f"+ chalk surcharge)", lambda x: x["net"] >= x["need"]),
+        (f"credible (edge ≤ {ceiling:.0%})", lambda x: x["edge"] <= ceiling),
+        (f"confidence ≥ {min_conf}", lambda x: x["conf"] >= min_conf),
+        (f"edge-vs-fair ≥ {min_edge:.0%} (slider)", lambda x: x["edge"] >= min_edge),
+        (f"price ≥ {max_juice} (slider)", lambda x: x["odds"] >= max_juice),
+    ]
+    print("Each gate on its own:")
+    for name, fn in gates:
+        print(f"  {sum(1 for x in rows if fn(x)):>5} / {len(rows)}   {name}")
+    print("\nCumulative (a pick must clear every one):")
+    surviving = rows
+    for name, fn in gates:
+        surviving = [x for x in surviving if fn(x)]
+        print(f"  {len(surviving):>5} left after: {name}")
+
+    if surviving:
+        print(f"\n{len(surviving)} prop(s) SHOULD be recommended — if the board "
+              f"shows none, that's a bug worth reporting.")
+    else:
+        # Name the gate that eliminated the most survivors — the real cause.
+        worst, worst_n = None, -1
+        for name, fn in gates:
+            pool = rows
+            for n2, f2 in gates:
+                if n2 == name:
+                    continue
+                pool = [x for x in pool if f2(x)]
+            killed = len(pool)
+            if killed > worst_n:
+                worst, worst_n = name, killed
+        print(f"\nBinding gate: “{worst}” — {worst_n} prop(s) clear everything "
+              f"else and die there.")
+
+    def show(title, items):
+        print(f"\n{title}")
+        if not items:
+            print("  (none)")
+            return
+        for x in items:
+            short = (x["label"][:44] + "…") if len(x["label"]) > 45 else x["label"]
+            why = "" if x["edge"] <= ceiling else "  ← edge too big to believe"
+            print(f"  {short:<46} {x['odds']:>5}  net {x['net']*100:+6.2f}pt  "
+                  f"need {x['need']*100:5.2f}pt  conf {x['conf']:4.1f}  "
+                  f"edge {x['edge']*100:5.2f}%  {x['grade']}{why}")
+
+    # The band that matters: beats its price AND is believable. If this is
+    # empty the board is empty for a real reason, not a filter accident.
+    window = [x for x in rows if x["net"] >= x["need"] and x["edge"] <= ceiling
+              and not x["started"]]
+    window.sort(key=lambda x: -(x["net"] - x["need"]))
+    show(f"In the recommendable window — beats the price and stays under the "
+         f"{ceiling:.0%} credibility ceiling ({len(window)} total):", window[:10])
+    show("Biggest net edges overall (mostly rejected as bad data):",
+         sorted(rows, key=lambda x: -(x["net"] - x["need"]))[:5])
+    near = [x for x in rows if x["edge"] <= ceiling and x["net"] < x["need"]]
+    show("Just missed the price bar (credible, but not enough edge):",
+         sorted(near, key=lambda x: -(x["net"] - x["need"]))[:5])
+
+
+def side_bias(sport: str = "mlb") -> None:
+    """Is the model's disagreement with the market ONE-SIDED?
+
+    On a 591-prop card every one of the five biggest edges was an UNDER,
+    at 20-25%. Five is not a sample, so this counts the whole board.
+
+    The distinction matters because the two cases need opposite fixes. If
+    OVERs and UNDERs disagree with the market symmetrically, the model is
+    noisy and the credibility ceiling is doing its job catching outliers.
+    If the disagreement is one-sided, the model is BIASED — it is
+    systematically projecting low — and every "edge too big to believe" is
+    the same error appearing hundreds of times. A ceiling cannot fix that;
+    it just hides it, and hides it most on the props where the error is
+    largest.
+
+    Long shots are excluded, as everywhere else: they are their own board
+    with their own model.
+    """
+    import json as _json
+    from engine.betting import MARKET_SHRINK, MAX_CREDIBLE_EDGE
+    rel = {"mlb": MLB_OUT, "nfl": NFL_OUT, "nba": NBA_OUT,
+           "wnba": WNBA_OUT, "cfb": CFB_OUT}.get(sport, MLB_OUT)
+    try:
+        recs = _json.loads((ROOT / rel).read_text()).get("recommendations", [])
+    except (OSError, ValueError):
+        print(f"No board built yet at {rel} — start the launcher first.")
+        return
+    real = [r for r in recs if r.get("has_market") is not False
+            and r.get("tier") != 3
+            and r.get("market") not in ("home_runs", "anytime_td")]
+    if not real:
+        print("No real-priced main-board props on this card.")
+        return
+    ceiling = MAX_CREDIBLE_EDGE * MARKET_SHRINK
+
+    by: dict = {}
+    per_market: dict = {}
+    for r in real:
+        side = (r.get("side") or "?").upper()
+        e = float(r.get("edge") or 0)
+        d = by.setdefault(side, {"n": 0, "sum": 0.0, "over": 0})
+        d["n"] += 1
+        d["sum"] += e
+        if e > ceiling:
+            d["over"] += 1
+        m = per_market.setdefault(r.get("market", "?"),
+                                  {"OVER": 0, "UNDER": 0})
+        if side in m:
+            m[side] += 1
+
+    print(f"{sport.upper()} — model vs market, by side")
+    print(f"  {len(real)} real-priced main-board prop(s) · "
+          f"credibility ceiling {ceiling:.1%}\n")
+    print(f"  {'side':<8}{'n':>6}{'mean edge':>12}{'over ceiling':>15}{'rate':>8}")
+    for side, d in sorted(by.items()):
+        print(f"  {side:<8}{d['n']:>6}{d['sum'] / d['n'] * 100:>11.2f}%"
+              f"{d['over']:>15}{d['over'] / d['n']:>7.0%}")
+
+    o, u = by.get("OVER"), by.get("UNDER")
+    if not (o and u and o["n"] >= 30 and u["n"] >= 30):
+        print("\n  Too few on one side to call. This needs a full slate — "
+              "run it again on a night with a real board.")
+        return
+    ro, ru = o["over"] / o["n"], u["over"] / u["n"]
+    gap = abs(ro - ru)
+    print(f"\n  Unbiased, those two rates would be about equal. "
+          f"They are {ro:.0%} and {ru:.0%}.")
+    if gap < 0.10:
+        print("  → Symmetric. The ceiling is catching noise, which is its "
+              "job. No side bias to chase.")
+    else:
+        heavy = "UNDER" if ru > ro else "OVER"
+        print(f"  → ONE-SIDED, by {gap:.0%}. The model systematically favours "
+              f"{heavy}.\n"
+              f"    That is a projection error, not a market inefficiency, "
+              f"and the credibility\n"
+              f"    ceiling is hiding it — worst on exactly the props where "
+              f"it is largest.\n"
+              f"    Fix the projection; do not loosen the ceiling.")
+        print("\n  By market (where the skew lives):")
+        for m, c in sorted(per_market.items(),
+                           key=lambda kv: -(kv[1]["OVER"] + kv[1]["UNDER"])):
+            tot = c["OVER"] + c["UNDER"]
+            if tot < 10:
+                continue
+            print(f"    {m:<16} {c['OVER']:>4} over · {c['UNDER']:>4} under"
+                  f"   ({c['UNDER'] / tot:.0%} under)")
+
+
+def _settleable_days(open_days) -> list[str]:
+    """Which open-pick dates a per-date settle pass can actually grade.
+
+    NFL journals under week labels ("2026-W1") rather than ISO days, and
+    grades off weekly stats — feeding one to the MLB per-date results
+    ingest looks like a night whose results never arrived. Oldest first,
+    so each pass builds on the history the previous one stored.
+
+    Prediction-market contracts are excluded the same way and for a
+    stronger reason: they grade against the exchange's settlements, so a
+    date's results ingest can never close one. A day holding nothing but
+    Kalshi contracts came back in this list every night and reported
+    `0 game(s)` every night — the exact loop --stuck was written to
+    break, being caused by the tool meant to end it."""
+    return sorted(d["date"] for d in open_days
+                  if d.get("date") and "-W" not in d["date"]
+                  and d.get("gradeable_by_date", True))
+
+
+def show_venues() -> None:
+    """Venue-art probe: is the stadium art one set of pictures?
+
+        python3 launch.py --venues
+
+    Ethan, 2026-08-13: "the stadium issue is not fixed." He was right and
+    the first diagnosis was wrong — the cache-bust fixed a real problem
+    but not his. `variants/` held two GENERATIONS of art, and because
+    `venueVariant` picks a slot from the home team's kit, a neutral club
+    got the sharp render and a colour-kitted club got a soft sheet tile,
+    deterministically. Nothing in the chain could see that; a person had
+    to notice two cards looking wrong beside each other.
+
+    This is the thing that sees it. Every render measured against its own
+    family's reference, and a printed answer to the only question that
+    matters: which colours can `VENUE_MATCHED` safely hold.
+    """
+    from engine import venueart as va
+    d = va.survey()
+    print(f"\nVENUE ART — {d['present']} of {d['expected']} files present\n")
+    for family in va.FAMILIES:
+        blk = d["families"][family]
+        ref = blk["reference"]
+        if not ref:
+            print(f"  {family}: no {va.REFERENCE} reference — nothing to "
+                  f"measure the rest against.\n")
+            continue
+        print(f"  {family}  reference {ref['width']}x{ref['height']}")
+        for colour in va.COLOURS:
+            slot = blk["slots"].get(colour)
+            if slot is None:
+                print(f"    {colour:<8} — missing")
+                continue
+            if colour == va.REFERENCE:
+                mark = "reference"
+            else:
+                mark = "matches" if slot["matches"] else "OFF-GENERATION"
+            print(f"    {colour:<8} {slot['width']}x{slot['height']:<6} {mark}")
+            for issue in slot.get("issues", []):
+                print(f"             · {issue}")
+        print()
+
+    gone = [n for n, v in (d.get("octagon") or {}).items() if v is None]
+    if gone:
+        print(f"  octagon: missing {', '.join(gone)}\n")
+
+    ok = va.matched_colours(d)
+    served = va.served_by_site()
+    print(f"  SERVED BY THE SITE: {', '.join(served) or '(none)'}")
+    print(f"  MEASUREMENT ENDORSES: {', '.join(ok)}")
+    extra = [c for c in served if c not in ok]
+    held = [c for c in ok if c not in served]
+    if extra:
+        # A DELIBERATE OVERRIDE, NOT A FAULT. Ethan restored the colours on
+        # 2026-08-14 knowing the tiles are off-generation, because a board
+        # of white stadiums was the worse of the two problems. Repeating
+        # "you should change this" every run would be nagging him about a
+        # decision he already made with the evidence in front of him.
+        print(f"  Serving {', '.join(extra)} beyond what the measurement "
+              f"endorses — a deliberate choice (see the note above "
+              f"VENUE_MATCHED in web/js/app.js). Colour-kitted clubs show a "
+              f"softer tile than neutral-kitted ones until matched renders "
+              f"land; the list below is what would end that.")
+    if held:
+        print(f"  {', '.join(held)} passes but is not served — paste "
+              f"new Set([{', '.join(chr(34) + c + chr(34) for c in ok)}]) "
+              f"into web/js/app.js.")
+    if d["incoming"]:
+        t = va.incoming_targets(d["incoming"], d)
+        print(f"\n  incoming/ holds {len(d['incoming'])} file(s).")
+        # A SHEET IN incoming/ IS NOT NEW ART. The rejected tiles above
+        # were cut out of these, so re-cutting reproduces them exactly.
+        if t["sheets"]:
+            print(f"    {len(t['sheets'])} sheet(s) — {', '.join(t['sheets'])}")
+            print("      the sources the off-generation tiles above were cut "
+                  "from; re-cutting reproduces them.")
+        if t["noop"]:
+            print(f"    {len(t['noop'])} already installed — "
+                  f"{', '.join(t['noop'])}")
+        if t["useful"]:
+            print(f"    {len(t['useful'])} worth installing — "
+                  f"{', '.join(t['useful'])}")
+            print("      `python3 tools/venues_ingest.py`")
+        else:
+            print("    Nothing here to install. New art has to be generated "
+                  "first — one full render per colour, never a sheet.")
+    todo = va.missing(d)
+    if todo:
+        print(f"\n  STILL WANTED ({len(todo)}):")
+        for line in todo[:20]:
+            print(f"    {line}")
+        print("\n  Prompts and the filename checklist: docs/VENUE_PROMPTS.md")
+        print("  After any ingest, BUMP VENUE_ART_V in web/js/app.js or the "
+              "old bytes stay cached.")
+    print()
+
+
+def show_prescan(season: int | None = None) -> None:
+    """Preseason starter scan: who is likely to play their first team.
+
+        python3 launch.py --prescan
+
+    Ethan, 2026-08-14: "make sure to implement scanning to see which teams
+    will be playing starters and which ones wont."
+
+    A preseason game is a contest between two coaching decisions, and the
+    decision is how long the first string is out there. The starting
+    quarterback's attempt count is the measurement — he is on the field
+    exactly as long as the staff wants the starters there, and he is the
+    one man guaranteed to leave a mark in a box score when he is.
+
+    Needs `python3 ingest.py nflpre --seasons 2021-2026` to have run;
+    without it every team reads "unknown", which is the honest answer
+    rather than a guess.
+    """
+    import datetime as _dt
+    import json as _json
+    from engine import db as _db
+    from engine.nfl import prestarters as _ps
+    season = int(season or _dt.date.today().year)
+    conn = _db.connect()
+    path = ROOT / "web" / "data" / "nfl_preseason.json"
+    try:
+        board = _json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        print("No preseason board on disk. The preseason surface was "
+              "retired 2026-08-25 —\nnothing builds nfl_preseason.json "
+              "any more. This scan remains for a future\nAugust; it "
+              "needs a board file to read.")
+        return
+    today = _dt.date.today().isoformat()
+    # The week lives on the GROUP, not the game, so stamp it down before
+    # the scan reads it — a fixture with no week cannot be matched to a
+    # tendency measured per week.
+    for w in board.get("weeks", []):
+        for g in w.get("games", []):
+            g.setdefault("week", w.get("week"))
+    games = [g for w in board.get("weeks", []) for g in w.get("games", [])
+             if (g.get("date") or "") >= today]
+    out = _ps.scan(conn, games, season)
+    cuts = out["bands"]
+    print(f"\nPRESEASON STARTER SCAN — {season}\n")
+    if not cuts:
+        # TWO DIFFERENT CAUSES, and they need opposite responses. An empty
+        # table means run the ingest. A table full of rows whose attempt
+        # counts are all identical means the ingest ran and did not store
+        # the market — which is what happened when `pass_att` was missing
+        # from the box parser, and which the first message alone would have
+        # sent Ethan to fix by re-running the thing that already worked.
+        stored = 0
+        try:
+            stored = conn.execute(
+                "SELECT COUNT(*) FROM preseason_player_logs "
+                "WHERE sport='nfl' AND market='pass_att'").fetchone()[0]
+        except Exception:                                     # noqa: BLE001
+            stored = 0
+        if stored:
+            print(f"  {stored:,} attempt row(s) are stored and they do not "
+                  "vary — the column is\n  flat, which is a parser fault "
+                  "rather than a quiet league. Every read below\n  will say "
+                  "\"unknown\", which is correct: nothing was measured.\n")
+        else:
+            print("  No ingested preseason attempts to cut bands from. Every "
+                  "read below\n  will say \"unknown\".")
+            print("  Fix: python3 ingest.py nflpre --seasons "
+                  f"{season - 5}-{season}\n")
+    else:
+        print(f"  From {cuts['n']} past starting-QB outings across "
+              f"{cuts['n_team_seasons']} team-seasons: the league sits its "
+              f"starter\n  {cuts['league_rest_rate']:.0%} of the time. "
+              f"\"plays\" is a rest rate at or under "
+              f"{cuts['rest_lo']:.0%}, \"rests\" at or over "
+              f"{cuts['rest_hi']:.0%};\n  when he does play, the median "
+              f"outing is {cuts['play_cut']:.0f} attempts.\n")
+    if not out["games"]:
+        print("  No unplayed preseason fixtures.\n")
+        return
+    for g in out["games"]:
+        print(f"  Week {g['week']}  {g['date']}  "
+              f"{g['sides'].get('away',{}).get('team','?')} @ "
+              f"{g['sides'].get('home',{}).get('team','?')}")
+        for side in ("away", "home"):
+            s = g["sides"].get(side)
+            if not s:
+                continue
+            played, seen = (s.get("played_of") or [0, 0])
+            when = s.get("att_when_played")
+            # THE COUNTS BELONG TO THE TEAM, THE NAME TO THIS SEASON. Each
+            # past August is measured against ITS OWN starter, so "played 2
+            # of 5" is Cleveland's record across five staffs — printing it
+            # immediately after "Shedeur Sanders" said a 2025 rookie had
+            # five past outings. The line now names the club for the
+            # history and brackets the man we expect to see this year.
+            shape = (f"starter played {played} of {seen}"
+                     + (f", {when:.0f} att when he did" if when else ""))
+            print(f"     {s['team']:<4} {s['verdict']:<7} {shape:<44} "
+                  f"(2026: {s['qb'] or '?'})")
+        print()
+    print("  A tendency is a HABIT, not a team sheet. No free feed announces "
+          "who is sitting;\n  this is what the same staff has done before.\n")
+
+
+def show_prefit(seasons: str = "") -> None:
+    """Does starter usage actually move a preseason result? Measure it.
+
+        python3 launch.py --prefit
+        python3 launch.py --prefit 2021-2026
+
+    The step between "we can see who is playing" and "we can price it".
+    The scan describes a coaching decision; this asks whether that decision
+    shows up on the scoreboard by enough to bet, and it asks with the bar
+    written down in engine/nfl/prefit.py BEFORE the answer exists.
+
+    Two questions, and the first can kill the second. Question A uses what
+    actually happened — information no bettor has — purely to falsify: if
+    knowing the attempt counts in advance does not move the final, nothing
+    built on forecasting them can. Question B uses only each team's habit
+    from EARLIER Augusts and is scored out of sample, season forward, which
+    is the only version that was ever bettable.
+
+    Needs the preseason ingest AND its finals:
+        python3 ingest.py nflpre --seasons 2021-2026
+
+    Nothing here prices anything. `prefit.prices_allowed` is hard False —
+    a measured effect is not proof the book missed it.
+    """
+    import datetime as _dt
+    import json as _json
+    from engine import db as _db
+    from engine.nfl import prefit as _pf
+    yrs = None
+    if seasons:
+        from engine.seasons import parse_seasons as _ps2
+        yrs = _ps2(seasons)
+    conn = _db.connect()
+    rep = _pf.fit(conn, yrs)
+    conn.close()
+    span = rep.get("seasons") or []
+    print("\nPRESEASON PRICE FIT — "
+          + (f"{span[0]}-{span[-1]}" if span else "no data") + "\n")
+    print(f"  Bar, set before the answer: at least {_pf.MIN_ROWS} joined "
+          f"games, p <= {_pf.MAX_P},\n  and at least "
+          f"{_pf.MIN_SIGNAL_POINTS} point(s) of out-of-sample adjustment.\n")
+    # WRITTEN BEFORE ANYTHING IS PRINTED, so every terminating branch below
+    # leaves the board reading the same verdict this run reached. An
+    # "unmeasurable" that never reached disk would leave the card saying
+    # "not measured yet", which is the wrong half of the truth: it WAS run,
+    # and it could not answer.
+    out = ROOT / "web" / "data" / "nfl_prefit.json"
+    if rep["n"]:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        _ptmp = out.with_suffix(".json.tmp")
+        _ptmp.write_text(_json.dumps(rep, indent=1), encoding="utf-8")
+        os.replace(_ptmp, out)
+    print(f"  Joined games: {rep['n']}")
+    if not rep["n"]:
+        print("\n  Nothing joined. Either the preseason box scores or the "
+              "finals are missing:\n    python3 ingest.py nflpre --seasons "
+              f"{_dt.date.today().year - 5}-{_dt.date.today().year}\n")
+        return
+    # THE DATA FAULT COMES FIRST, LOUDLY. A predictor that never took a
+    # second value correlates with nothing by construction, and the report
+    # underneath it reads exactly like an honest negative result — which is
+    # how the first real run of this reported "starter usage does not
+    # predict an August result" from a column of two hundred zeros.
+    if rep.get("dead"):
+        print("\n  ⚠  NOTHING WAS MEASURED. These predictors never took a "
+              "second value:")
+        for name in rep["dead"]:
+            v = rep["mechanism"]["pairs"][name]
+            print(f"       {name}  n={v['n']}  distinct values={v['distinct_x']}")
+        print("\n  " + _pf.explain(rep) + "\n")
+        print(f"  Written to {out.relative_to(ROOT)} — the board reads the "
+              f"verdict from there and will say it could not run.\n")
+        return
+    print("\n  A. MECHANISM — what actually happened, against the final:")
+    for name, v in rep["mechanism"]["pairs"].items():
+        p = "—" if v["p"] is None else f"{v['p']:.4f}"
+        r = "—" if v["r"] is None else f"{v['r']:+.3f}"
+        slope = "—" if v["slope"] is None else f"{v['slope']:+.3f}"
+        print(f"     {name:<18} n={v['n']:<5} r={r}  slope={slope}  p={p}")
+    print("\n  B. FORECAST — habit from earlier Augusts only, scored forward:")
+    for name, v in rep["forecast"]["pairs"].items():
+        sp = "—" if v["signal_points"] is None else f"{v['signal_points']:+.2f}"
+        p = "—" if v.get("p") is None else f"{v['p']:.4f}"
+        print(f"     {name:<18} n={v['n']:<5} baseline rmse="
+              f"{v['base_rmse']}  model rmse={v['model_rmse']}")
+        print(f"     {'':<18} signal {sp} point(s)  p={p}  "
+              f"seasons scored: {v['seasons_scored'] or '—'}")
+        # WHICH BAR STOPPED IT, and what it would take. A pair that clears
+        # the effect and misses only significance has not been shown to be
+        # absent — it has been shown to be unresolvable at this sample.
+        lim = v.get("limited_by") or []
+        if lim == ["significance"] and v.get("n_for_p"):
+            print(f"     {'':<18} ↳ cleared the effect bar; too noisy to "
+                  f"confirm. Resolving r={v.get('r')} at p<={_pf.MAX_P}\n"
+                  f"     {'':<18}   needs ~{v['n_for_p']:,} scored games "
+                  f"(~{max(1, round(v['n_for_p'] / 49))} August(s) at 49 a year).")
+    print(f"\n  VERDICT: {rep['verdict'].upper()}")
+    print("  " + _pf.explain(rep) + "\n")
+    print(f"  Written to {out.relative_to(ROOT)} — the board reads the "
+          f"verdict from there.\n")
+
+
+def show_injuries() -> None:
+    """Injury-board probe: pull every league's feed NOW and show counts.
+
+        python3 launch.py --injuries
+
+    The live check for ESPN's per-league /injuries endpoints (unreachable
+    from the sandbox that wrote the parser, like every ESPN feed here).
+    A league at zero in-season is suspicious; every league at zero means
+    the host is unreachable — --check has a row for it.
+    """
+    import json as _json
+    import injuries_build
+    out = ROOT / "web/data/injuries.json"
+    injuries_build.main(["--out", str(out)])
+    try:
+        board = _json.loads(out.read_text())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not read the board back: {exc}")
+        return
+    for note in board.get("notes") or []:
+        print(f"  note: {note}")
+
+    # HOW OLD ARE THE ROWS. `fetch_json` answers a failed request with the
+    # cached copy and raises nothing, so "not updating" looks identical to
+    # "updating fine" from the file alone — this is the line that tells
+    # them apart, and it is the first thing to read when a designation
+    # looks wrong.
+    from engine.sources.espninjuries import INJURY_TTL, is_return
+    ages = board.get("ages_s") or {}
+    if ages:
+        print("\n  Data age per league (the cache's own mtime — a number far"
+              f" over {INJURY_TTL // 60} min means the feed is declining):")
+        for league, age in sorted(ages.items()):
+            n = len((board.get("sports") or {}).get(league) or [])
+            mins = age / 60
+            txt = (f"{round(mins)} min" if mins < 90
+                   else f"{mins / 60:.1f}h" if mins < 2160
+                   else f"{mins / 1440:.1f}d")
+            flag = "  ← STALE" if age > INJURY_TTL * 2 else ""
+            print(f"    {league:<5} {n:>4} players   collected {txt} ago{flag}")
+
+    rows = [r for league_rows in (board.get("sports") or {}).values()
+            for r in league_rows]
+    returns = [r for r in rows if is_return(r)]
+    if returns:
+        print(f"\n  {len(returns)} of {len(rows)} rows are cleared-to-play"
+              " notices (status Active, no injury named) — they are kept on"
+              " the by-team board as news but never counted as designations.")
+    rows.sort(key=lambda r: r.get("date") or "", reverse=True)
+    if rows:
+        print("\n  Freshest filings, league-wide:")
+        for r in rows[:8]:
+            print(f"    {(r.get('date') or '')[:10]}  "
+                  f"{(r.get('player') or ''):<24.24} "
+                  f"{(r.get('status') or ''):<18.18} "
+                  f"{(r.get('injury') or '—'):<20.20} {r.get('team') or ''}")
+    else:
+        print("\n  Zero rows across every league — if the notes above are "
+              "fetch failures the host is unreachable from here.")
+
+
+def show_player_injury(name: str) -> None:
+    """What each feed says about ONE player, side by side.
+
+        python3 launch.py --injuries "Cade Mays"
+
+    Ethan has now reported the same player twice — "Cade mays is injured
+    on lions and he's showing active" (2026-08-13, and again 2026-08-19).
+    The first time cost a debugging session to learn that Sleeper answers
+    "is he hurt" in two fields. This prints both feeds' RAW answer and the
+    verdict the roster page draws from them, so the next one costs a
+    command.
+
+    The distinction that matters and is invisible on the page: a club's
+    injury report and a beat writer's report are different objects. Until
+    the club files a designation or makes a roster move, neither feed
+    carries the news, and the site is not stale — it is repeating the
+    last thing anybody official said. That answer is printed plainly
+    rather than left to be inferred from an empty result.
+    """
+    from engine import rosters as _r
+    from engine.offseason import load_sleeper_players, _canon_team
+    from engine.sources import espninjuries as _ei
+    from engine.sources.oddsapi import normalize_name
+
+    want = normalize_name(name or "")
+    if not want:
+        print("  Give a player name: python3 launch.py --injuries \"Cade Mays\"")
+        return
+    print(f"\n  Asking both feeds about: {name}\n")
+
+    # --- Sleeper: the roster, and the two fields that answer differently.
+    hits = []
+    heard = {"sleeper": False, "espn": False}
+    blob = load_sleeper_players()
+    if blob is None:
+        print("  SLEEPER   feed unreachable, and no cached copy on this "
+              "machine — nothing here is the site's opinion.")
+    else:
+        heard["sleeper"] = True
+        for p in blob.values():
+            if not isinstance(p, dict):
+                continue
+            full = (p.get("full_name")
+                    or f"{p.get('first_name', '')} {p.get('last_name', '')}").strip()
+            if normalize_name(full) == want:
+                hits.append((full, p))
+        if not hits:
+            print(f"  SLEEPER   no player named {name!r} in the players feed.")
+        for full, p in hits:
+            row = _r._player_row(p) or {}
+            print(f"  SLEEPER   {full} — {_canon_team(p.get('team')) or 'free agent'}"
+                  f" {p.get('position') or ''}")
+            print(f"              roster slot     status = {p.get('status') or '—'}")
+            print(f"              weekly filing   injury_status = "
+                  f"{p.get('injury_status') or '—'}")
+            print(f"              body part       {p.get('injury_body_part') or '—'}")
+            print(f"              our row says    unavailable="
+                  f"{bool(row.get('unavailable'))}  questionable="
+                  f"{bool(row.get('questionable'))}  shown as "
+                  f"{row.get('status') or 'Active'!r}")
+
+    # --- ESPN: the injury report, which is often first and always thinner.
+    try:
+        rows = _ei.current_rows(_ei.parse_injuries(_ei.fetch_injuries("nfl")))
+    except Exception as exc:                                   # noqa: BLE001
+        rows = []
+        print(f"\n  ESPN      feed unreachable ({exc}).")
+    else:
+        heard["espn"] = True
+        mine = [r for r in rows if normalize_name(r.get("player") or "") == want]
+        if not mine:
+            print(f"\n  ESPN      {len(rows)} filings league-wide, none of them "
+                  f"{name}.")
+        for r in mine:
+            print(f"\n  ESPN      {r.get('player')} — {r.get('team')}")
+            for k, label in (("status", "status"), ("injury", "injury"),
+                             ("side", "side"), ("return_date", "returns"),
+                             ("date", "filed"), ("comment", "comment")):
+                if r.get(k):
+                    print(f"              {label:<15} {r[k]}")
+
+    # --- THE FILE THE WEBSITE ACTUALLY READS. Everything above is the
+    # live feed and what the builder WOULD derive from it; the page draws
+    # rosters_nfl.json, a built artifact. When those two disagree the
+    # engine is fine and the build is stale, which is a different repair
+    # entirely — and it is invisible from the feed side alone.
+    import json as _json
+    built = ROOT / "web/data/rosters_nfl.json"
+    file_disagrees = False
+    print()
+    if not built.exists():
+        print("  BUILT     web/data/rosters_nfl.json does not exist here — "
+              "run python3 fantasy_build.py")
+    else:
+        age_s = time.time() - built.stat().st_mtime
+        age = (f"{age_s / 60:.0f} min" if age_s < 5400
+               else f"{age_s / 3600:.1f}h" if age_s < 172800
+               else f"{age_s / 86400:.1f}d")
+        try:
+            page = _json.loads(built.read_text())
+        except ValueError:
+            page = {}
+        if (page.get("feed") or "") == "unavailable":
+            print(f"  BUILT     written {age} ago, and it says the roster feed "
+                  "was UNREACHABLE on that build —")
+            print("            the page has no roster to show, not a healthy one.")
+        else:
+            row = None
+            for team in (page.get("teams") or {}).values():
+                for r in (team.get("players") or []):
+                    if normalize_name(r.get("player") or "") == want:
+                        row = r
+                        break
+            print(f"  BUILT     rosters_nfl.json, written {age} ago")
+            if row is None:
+                print(f"            {name} is not in it at all.")
+            else:
+                print(f"            shows status = {row.get('status') or '—'}"
+                      f"   unavailable={bool(row.get('unavailable'))}")
+                live_out = any(
+                    (_r._player_row(p) or {}).get("unavailable") for _f, p in hits)
+                if live_out and not row.get("unavailable"):
+                    file_disagrees = True
+                    print("\n            ⚠️  THE FILE DISAGREES WITH THE FEED. The"
+                          "\n            engine reads him as out (above) and the built"
+                          "\n            file still says otherwise, so the page is"
+                          "\n            serving a stale build — rebuild it:"
+                          "\n"
+                          "\n                python3 fantasy_build.py"
+                          "\n"
+                          "\n            If that fixes it here but the live site still"
+                          "\n            shows Active, the DROPLET's loop is what is"
+                          "\n            stuck, not this repair.")
+
+    # --- The verdict. SILENCE AND DEAFNESS ARE DIFFERENT ANSWERS: a feed
+    # that did not answer tells us nothing about the player, and saying
+    # "no designation" on the back of a failed request would be the most
+    # confident wrong sentence this probe could print.
+    designated = any((p.get("injury_status") or "").strip()
+                     or _r._is_unavailable(p.get("status") or "")
+                     for _f, p in hits)
+    espn_has = [r for r in rows
+                if normalize_name(r.get("player") or "") == want]
+    if not (heard["sleeper"] and heard["espn"]):
+        missing = [k.upper() for k, ok in heard.items() if not ok]
+        print(f"\n  VERDICT   Cannot answer — {' and '.join(missing)} did not"
+              "\n            respond, and a feed that did not answer is not a"
+              "\n            feed saying he is healthy. Re-run this where the"
+              "\n            feeds are reachable (the droplet).")
+    elif not designated and not espn_has:
+        print("\n  VERDICT   Neither feed carries a designation for him, so the"
+              "\n            page says Active because that is the last thing"
+              "\n            anyone official said — not because it is stale."
+              "\n"
+              "\n            Clubs do not file weekly injury reports until the"
+              "\n            regular season, and ESPN's board is thin in August"
+              "\n            outside skill positions. A reported injury reaches"
+              "\n            these feeds when the club transacts (IR / PUP) or"
+              "\n            files a Week-1 report — at which point this flips"
+              "\n            on the next refresh with no action from you.")
+    elif file_disagrees:
+        print("\n  VERDICT   The ENGINE is right and the BUILD is stale. A"
+              "\n            designation exists, the builder reads it correctly,"
+              "\n            and the file the page serves predates it. Rebuild"
+              "\n            (above) — there is nothing to fix in the code.")
+    else:
+        print("\n  VERDICT   A designation exists above, the built file agrees,"
+              "\n            and the page shows the more pessimistic of the two"
+              "\n            feeds. Nothing to repair.")
+
+
+def show_stakes() -> None:
+    """What tonight's board would be staked under each policy.
+
+        python3 launch.py --stakes
+
+    Ethan, 2026-08-12: "idk why we are being pussies with how much we
+    bet ... it feels like we should be doing at least 1 unit a bet."
+
+    Answering that from a screenshot is guessing; this answers it from
+    the board. For every pick it prints the margin over the price we can
+    ACTUALLY GET (not the headline edge, which is measured against the
+    de-vigged fair and is bigger by the juice), then what full, half and
+    quarter Kelly each ask for, and the slate totals against the 15u
+    exposure cap.
+
+    The point is the SHAPE, not the size. Kelly asks for more where the
+    margin is bigger; a flat unit asks for the same on a 1.3-point edge
+    and a 0.2-point one, which is the pick most likely to be noise. Read
+    the two columns side by side and the trade is visible instead of
+    argued.
+    """
+    import json as _json
+    from engine.odds import american_to_decimal
+    from engine.staking import kelly_fraction, price_cap_units
+
+    rows, seen = [], []
+    for name in ("recommendations", "mlb_recommendations", "nba", "wnba", "cfb"):
+        p = ROOT / f"web/data/{name}.json"
+        if not p.exists():
+            continue
+        try:
+            blob = _json.loads(p.read_text())
+        except ValueError:
+            continue
+        for r in (blob.get("recommendations") or []):
+            if r.get("recommended") and (r.get("stake_units") or 0) > 0:
+                rows.append(r)
+        seen.append(name)
+    if not rows:
+        print("  No recommended picks on the built boards yet — run the "
+              "launcher once, then this.")
+        return
+
+    print(f"  {len(rows)} recommended pick(s) across {', '.join(seen)}\n")
+    print(f"  {'pick':<30}{'odds':>6}{'net':>7}{'full':>7}{'1/2':>7}"
+          f"{'1/4':>7}{'now':>7}  what set it")
+    stale = 0
+    tot = {"full": 0.0, "half": 0.0, "quarter": 0.0, "now": 0.0, "flat": 0.0}
+    for r in sorted(rows, key=lambda x: -(x.get("stake_units") or 0))[:25]:
+        odds = int(r.get("odds") or -110)
+        b = american_to_decimal(odds) - 1.0
+        # net_edge is emitted by the model now; older payloads fall back to
+        # deriving it, and say nothing they cannot support.
+        #
+        # The 0.0 case is its own trap and Ethan hit it: MLB computed `net`
+        # and never passed it, so every MLB row published net_edge EXACTLY
+        # 0.0 — not missing, so no fallback fired — and this probe printed
+        # "net 0.0%, Kelly 0.00" on all 26 picks beside stakes of 0.05-0.38u
+        # that Kelly had plainly sized on something. A stored zero that the
+        # row's own hit_prob contradicts is a stale board, not a flat edge.
+        hit = r.get("hit_prob")
+        derived = (hit - 1.0 / (b + 1.0)) if hit is not None else None
+        net = r.get("net_edge")
+        if net is None or (net == 0.0 and derived not in (None, 0.0)):
+            if net == 0.0:
+                stale += 1
+            net = derived
+        if net is None:
+            continue
+        p_model = 1.0 / (b + 1.0) + net
+        full = kelly_fraction(p_model, odds) * 100
+        now = float(r.get("stake_units") or 0)
+        label = f"{r.get('player', '')} {r.get('side', '')} {r.get('line', '')}"
+        tot["full"] += full; tot["half"] += full * .5
+        tot["quarter"] += full * .25; tot["now"] += now; tot["flat"] += 1
+        cap = price_cap_units(odds)
+        why = (r.get("stake_basis")
+               or ("price cap %.1fu" % cap if cap != float("inf") else "Kelly"))
+        print(f"  {label[:30]:<30}{odds:>+6}{net * 100:>6.1f}%{full:>7.2f}"
+              f"{full * .5:>7.2f}{full * .25:>7.2f}{now:>7.2f}  {why[:38]}")
+    print(f"\n  {'SLATE TOTAL':<30}{'':>6}{'':>7}{tot['full']:>7.1f}"
+          f"{tot['half']:>7.1f}{tot['quarter']:>7.1f}{tot['now']:>7.1f}"
+          f"   (flat 1u would be {tot['flat']:.0f}u; cap 15u)")
+    if stale:
+        print(f"\n  ⚠️  {stale} row(s) carried net_edge = 0.0 with a hit_prob"
+              " that disagrees — those\n      boards were built before the MLB"
+              " path passed the field. The net shown is\n      derived from"
+              " hit_prob; rebuild (python3 launch.py) for the stored one.")
+    print("\n  net  = margin over the price you actually get. Kelly sizes on"
+          " THIS.\n  full/half/quarter = what each policy asks for."
+          " now = what shipped.\n"
+          "\n  Size multiplies whatever edge is really there — it does not"
+          " create one.\n  `python3 stakecheck.py` says whether the journal's"
+          " ROI is a sizing\n  problem or a model problem; they have opposite"
+          " fixes.")
+
+
+#: Price bands for --bands. Chosen before looking at any result, and
+#: written down here so they cannot be quietly re-cut until one of them
+#: looks profitable. That is the difference between a measurement and a
+#: search.
+PRICE_BANDS = (
+    ("−250 and shorter", -10000, -250),
+    ("−249 to −150", -249, -150),
+    ("−149 to −111", -149, -111),
+    ("−110 to +100", -110, 100),
+    ("+101 to +199", 101, 199),
+    ("+200 to +399", 200, 399),
+    ("+400 and longer", 400, 100000),
+)
+
+
+def show_bands(sport: str | None = None) -> None:
+    """Where the money actually comes from, by price. Read-only.
+
+    python3 launch.py --bands
+    python3 launch.py --bands mlb
+
+    Ethan, 2026-08-12: "you need to figure out where our roi is best and
+    we are making the most profit."
+
+    THE TRAP THIS TOOL IS BUILT TO AVOID. Cutting a few hundred settled
+    bets into seven buckets and reporting the best one is a maximum of
+    seven draws. On a journal this size each band's ROI carries a
+    standard error of tens of points, so the winner is whichever band got
+    lucky — and it will look convincing, because a table always does. The
+    same mistake is why `barcheck.py` refuses to name a recommended edge
+    bar.
+
+    So every band prints its own error bar, and the verdict at the bottom
+    is computed rather than eyeballed: a band is only called out if its
+    ROI clears the pooled ROI by more than the spread you would expect
+    from the best of seven noisy draws. Usually nothing clears, and the
+    honest headline is "no band is distinguishable yet" — which is a real
+    answer to the question, not a failure to answer it.
+    """
+    import math
+    from engine import ledger
+    from engine.odds import american_to_decimal
+
+    where = "WHERE status IN ('won','lost') AND category = 'main'"
+    args: list = []
+    if sport:
+        where += " AND sport = ?"
+        args.append(sport.lower())
+    with ledger.connect() as conn:
+        rows = conn.execute(
+            f"SELECT sport, market, odds, stake_units, pnl_units, status, grade"
+            f" FROM bets {where}", args).fetchall()
+    if not rows:
+        print("  No settled bets in the main book yet"
+              + (f" for {sport}." if sport else "."))
+        return
+
+    def band_of(o):
+        for name, lo, hi in PRICE_BANDS:
+            if lo <= o <= hi:
+                return name
+        return None
+
+    # Flat one unit per bet, deliberately. The question is which PRICES
+    # are worth betting, and grading them at their historical stakes would
+    # answer a different question — how well the old sizing rule happened
+    # to line up with them.
+    buckets: dict = {}
+    for r in rows:
+        o = int(r["odds"] or 0)
+        b = band_of(o)
+        if b is None:
+            continue
+        e = buckets.setdefault(b, {"n": 0, "won": 0, "net": 0.0, "b": 0.0})
+        e["n"] += 1
+        e["b"] += american_to_decimal(o) - 1.0
+        if r["status"] == "won":
+            e["won"] += 1
+            e["net"] += american_to_decimal(o) - 1.0
+        else:
+            e["net"] -= 1.0
+
+    tot_n = sum(e["n"] for e in buckets.values())
+    tot_net = sum(e["net"] for e in buckets.values())
+    pooled = tot_net / tot_n if tot_n else 0.0
+
+    print(f"  {tot_n} settled bet(s)"
+          + (f" · {sport}" if sport else " · every sport")
+          + "  ·  graded at a flat 1u so the PRICE is the only variable\n")
+    print(f"  {'band':<18}{'n':>5}{'hit':>7}{'net':>9}{'ROI':>8}{'±1se':>8}"
+          f"   what that means")
+    best = None
+    for name, _lo, _hi in PRICE_BANDS:
+        e = buckets.get(name)
+        if not e or not e["n"]:
+            print(f"  {name:<18}{'—':>5}{'':>7}{'':>9}{'':>8}{'':>8}"
+                  f"   no bets at this price")
+            continue
+        n, roi = e["n"], e["net"] / e["n"]
+        hit = e["won"] / n
+        # Per-bet return SE, using the band's own average payout. A
+        # binomial SE on the win rate would understate this badly at long
+        # prices, where a single winner moves the ROI by whole points: a
+        # 1u bet returns +b or -1, so its variance is p(1-p)(1+b)².
+        avg_b = e["b"] / n
+        var = hit * (1 - hit) * (1.0 + avg_b) ** 2
+        se = math.sqrt(max(var, 1e-9) / n)
+        note = ("thin — read the error bar, not the ROI" if n < 30
+                else "" if abs(roi) < se else
+                ("ahead of the pool" if roi > pooled else "behind the pool"))
+        print(f"  {name:<18}{n:>5}{hit * 100:>6.1f}%{e['net']:>+9.2f}"
+              f"{roi * 100:>+7.1f}%{se * 100:>7.1f}%   {note}")
+        if n >= 30 and (best is None or roi > best[1]):
+            best = (name, roi, se, n)
+
+    print(f"\n  {'POOLED':<18}{tot_n:>5}{'':>7}{tot_net:>+9.2f}"
+          f"{pooled * 100:>+7.1f}%")
+
+    # The multiplicity bar. With k bands the best-looking one is the
+    # maximum of k draws, so it has to clear the pool by more than a
+    # single standard error to mean anything. 2.1 SE is the Bonferroni
+    # 5% two-sided bar at k = 7.
+    k = len([1 for name, _l, _h in PRICE_BANDS if (buckets.get(name) or {}).get("n")])
+    bar = 2.1
+    print()
+    if best is None:
+        print("  VERDICT: no band has 30 settled bets yet. Nothing here can"
+              " rank prices;\n  it can only tell you where the sample is"
+              " going.")
+    else:
+        name, roi, se, n = best
+        z = (roi - pooled) / se if se else 0.0
+        if z >= bar:
+            print(f"  VERDICT: {name} is genuinely ahead — {roi * 100:+.1f}%"
+                  f" against the pool's {pooled * 100:+.1f}%,\n  which is"
+                  f" {z:.1f} standard errors clear and survives the"
+                  f" best-of-{k} correction.")
+        else:
+            print(f"  VERDICT: nothing is distinguishable. The best band"
+                  f" ({name}, {roi * 100:+.1f}%)\n  sits {z:.1f} standard"
+                  f" errors above the pool, and picking the best of {k}"
+                  f" bands needs\n  {bar:.1f} to mean anything. On this"
+                  f" journal that is a coin landing heads, not a price"
+                  f" band\n  worth betting more on.")
+    if pooled < 0:
+        print(f"\n  And the number that outranks all of them: the pool is"
+              f" {pooled * 100:+.1f}% at a flat\n  unit. There is no band"
+              f" allocation that turns a negative pool positive — that is"
+              f"\n  a job for the claims (launch.py --haircut), not for the"
+              f" stakes.")
+
+
+def relearn(sport: str) -> None:
+    """Run every deep fitter for ONE sport, in the order that is safe.
+
+        python3 launch.py --relearn nfl
+
+    The three deep fitters each take `--sport` and each DEFAULT TO MLB.
+    That default is why `--learning` shows four fitted markets and all
+    four of them are baseball: nobody was going to type the flag three
+    times per sport, so nobody ever did, and every other model has been
+    pricing with T=1.0 since the day it shipped.
+
+    ORDER MATTERS, AND THE FIRST VERSION HAD IT BACKWARDS. Calibration
+    ran first, on the theory that the other two should fit against a
+    corrected probability. Ethan's NFL run printed the refutation in its
+    own output — formfit, after adopting three dials:
+
+        "Adopted weights change the model — refit its temperature next,
+         on the new model: python3 calibrate.py --from-db data/history.db"
+
+    Which is right. The dial and the memory change what the model SAYS;
+    the temperature corrects what it says. Fit the correction first and
+    then move the model underneath it and the correction is describing a
+    model that no longer exists. NFL shipped that way for one run: three
+    adopted dials sitting under temperatures fitted before them.
+
+    So: dial, then memory, then temperature LAST — and the temperature is
+    refitted unconditionally rather than only when something was adopted,
+    because "adopted" is a per-market verdict and one market moving is
+    enough to make the whole sweep stale.
+
+    It runs the real CLIs rather than reimplementing them, so there is
+    exactly one definition of each fit and this command cannot drift from
+    the thing it invokes.
+    """
+    import subprocess
+    steps = [("recency dial", [sys.executable, "formfit.py",
+                               "--from-db", "data/history.db", "--sport", sport]),
+             ("player memory", [sys.executable, "playerfit.py",
+                                "--from-db", "data/history.db", "--sport", sport]),
+             ("temperatures (last — the two above move the model)",
+              [sys.executable, "calibrate.py",
+               "--from-db", "data/history.db", "--sport", sport])]
+    hist = ROOT / "data" / "history.db"
+    if not hist.is_file():
+        print(f"  No history DB at {hist}. Nothing to fit from — ingest that"
+              f"\n  sport's game logs first, then run this again.")
+        return
+    print(f"  Refitting {sport} from {hist}\n")
+    for label, cmd in steps:
+        print(f"  --- {label} " + "-" * (56 - len(label)))
+        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        out = (r.stdout or "").strip() or (r.stderr or "").strip()
+        for line in out.splitlines()[-14:]:
+            print(f"    {line}")
+        if r.returncode:
+            print(f"    ⚠️  exited {r.returncode} — nothing was stored for this"
+                  f" step")
+        print()
+    print("  Now `python3 launch.py --learning` to see what landed, and"
+          "\n  rebuild the boards so tonight's picks price through it.")
+
+
+def show_prereg() -> None:
+    """Preregistered tests and how far along they are. Read-only.
+
+        python3 launch.py --prereg
+
+    Ethan, 2026-08-13, after gradecheck declined to convict the B+
+    bucket at 2.1 SE: "yeah do that, wire it into the lab." This is the
+    terminal view of the same thing the Lab page renders.
+
+    It prints PROGRESS while a test is collecting and a verdict only at
+    the sample size the terms named. That restraint is the feature — a
+    running total watched daily and called the moment it crosses a line
+    finds significance in noise, which is the exact failure a
+    preregistration is written to avoid.
+    """
+    from engine import ledger, prereg
+    with ledger.connect() as conn:
+        rows = prereg.rows_for(conn)
+    out = prereg.report(rows)
+    if not out:
+        print("\n  No preregistered tests.\n")
+        return
+    print(f"\n  {len(out)} preregistered test(s)\n")
+    for t in out:
+        print(f"  {t['claim']}")
+        print(f"    registered {t['registered']}  ·  status {t['status']}")
+        print(f"    {t['reading']}")
+        print()
+    print("  Registered forward, decided once, on bets that did not exist "
+          "when the\n  idea did. Terms are hashed — changing them voids the "
+          "test rather than\n  quietly rewriting what we said we would "
+          "look for.\n")
+
+
+def show_learning() -> None:
+    """Has any of the self-tuning ever changed a number? Read-only.
+
+        python3 launch.py --learning
+
+    Ethan, 2026-08-16, looking at the Record and Lab pages: "Check to see
+    if the hypothesis lab and the model ai thing we have learn from itself
+    has even been doing anything and bettering the model ... I wanna know
+    if these are even doing anything or helping us."
+
+    Six loops run nightly and every one of them has a page. A page proves
+    the loop RAN; it does not prove the loop DID anything. This asks the
+    only question that separates those: for each loop, is there a number
+    on tonight's board that is different because it exists — and is there
+    evidence the difference helped?
+
+    A loop that runs and declines to adopt is not broken. Declining is the
+    correct output when the evidence is not there, and four of these have
+    been declining for months on samples large enough to mean it. That is
+    worth knowing plainly rather than reading as activity.
+    """
+    import json as _json
+    from engine import ledger
+
+    ROWS: list = []
+
+    def row(name, fired, changed, evidence):
+        ROWS.append((name, fired, changed, evidence))
+
+    # 1. the market temperatures — the only loop that is known to move a
+    #    number the board prices from.
+    try:
+        from engine import calibrate as cal
+        _p = Path(cal.DEFAULT_PATH)
+        stored = _json.loads(_p.read_text()) if _p.is_file() else {}
+        live = {k: v for k, v in stored.items()
+                if isinstance(v, dict)
+                and (v.get("temperature", 1.0) != 1.0
+                     or v.get("intercept", 0.0) != 0.0)}
+        gain = [(v.get("brier_before", 0) - v.get("brier_after", 0))
+                for v in live.values() if v.get("brier_before")]
+        avg = (sum(gain) / len(gain)) if gain else 0.0
+        row("market temperatures", f"{len(stored)} market(s) fitted",
+            f"{len(live)} carry a correction",
+            (f"mean Brier gain {avg:+.4f} per corrected market" if gain
+             else "nothing fitted yet"))
+    except Exception as exc:                          # noqa: BLE001
+        row("market temperatures", "—", "—", f"unreadable: {exc}")
+
+    # 2-3. the projection dial and the player memory, both fitted per
+    #      (sport, market) and both stored with an adoption flag.
+    from engine import formfit as _ff, playerfit as _pf
+    for label, mod in (("projection dial", _ff), ("player memory", _pf)):
+        try:
+            # The fitter's OWN DEFAULT_PATH, read at call time. Rebuilding
+            # the path here would be a second opinion about where the
+            # store lives, and the two would drift the day one moved.
+            p = Path(mod.DEFAULT_PATH)
+            blob = _json.loads(p.read_text()) if p.is_file() else {}
+            entries = [v for v in blob.values() if isinstance(v, dict)]
+            adopted = [v for v in entries if v.get("adopted")]
+            row(label, f"{len(entries)} key(s) fitted",
+                f"{len(adopted)} adopted",
+                "every fit kept the default" if entries and not adopted
+                else ("nothing fitted yet" if not entries else "in force"))
+        except Exception as exc:                      # noqa: BLE001
+            row(label, "—", "—", f"unreadable: {exc}")
+
+    # 4. the loss miner — slices convicted AND enforcing.
+    try:
+        # Key names read off `losspatterns.mine`'s return, not guessed:
+        # n_records / tested / findings / closed, where `closed` is the
+        # subset whose action is "close" and is the only part that vetoes
+        # a pick. A finding that is not closed changes nothing.
+        from engine import losspatterns as lp
+        blob = lp.load()
+        found = blob.get("findings") or []
+        closed = blob.get("closed") or []
+        row("loss miner",
+            f"{blob.get('n_records', 0)} rows, {blob.get('tested', 0)} slices",
+            f"{len(found)} found · {len(closed)} enforcing",
+            "found a pattern but nothing convicted" if found and not closed
+            else ("nothing convicted" if not found else "vetoing picks"))
+    except Exception as exc:                          # noqa: BLE001
+        row("loss miner", "—", "—", f"unreadable: {exc}")
+
+    # 5. the hypothesis lab — the paid one. Worth its own honesty.
+    try:
+        from engine import hypotheses as hyp
+        blob = hyp.load()
+        # `store["hypotheses"]` is a LIST of dicts carrying status
+        # (collecting / tested / confirmed / rejected) and action, where
+        # only action == "close" reaches a pick. See tribunal().
+        hs = blob.get("hypotheses") or []
+        if isinstance(hs, dict):
+            hs = list(hs.values())
+        conf = [h for h in hs if h.get("status") == "confirmed"]
+        enf = [h for h in hs if h.get("action") == "close"]
+        spend = hyp.llm_spend_report()
+        row("hypothesis lab", f"{len(hs)} proposed",
+            f"{len(conf)} confirmed · {len(enf)} enforcing",
+            f"${spend.get('total_usd', 0):.2f} spent"
+            + (" — nothing it proposed is changing a pick"
+               if not enf else ""))
+    except Exception as exc:                          # noqa: BLE001
+        row("hypothesis lab", "—", "—", f"unreadable: {exc}")
+
+    # 6. the selection haircut — the newest, and the one with a hard
+    #    out-of-sample gate, so its evidence is the strongest available.
+    try:
+        from engine import selectionfit as sf
+        blob = sf.load()
+        sports = blob.get("sports") or {}
+        applied = [k for k, v in sports.items() if (v or {}).get("applied")]
+        pooled = blob.get("pooled") or {}
+        if pooled.get("applied"):
+            applied.append("pooled")
+        h = (pooled if pooled.get("applied") else {}).get("holdout") or {}
+        ev = (f"held out: gap {h['gap_before'] * 100:.1f} → "
+              f"{h['gap_after'] * 100:.1f} pts on {h['test_n']} unseen bets"
+              if h.get("ran") else "not validated")
+        row("selection haircut", f"{pooled.get('n', 0)} settled bet(s) read",
+            f"{len(applied)} book(s) corrected", ev)
+    except Exception as exc:                          # noqa: BLE001
+        row("selection haircut", "—", "—", f"unreadable: {exc}")
+
+    print(f"  {'loop':<22}{'it ran':<26}{'it changed':<28}evidence")
+    for name, fired, changed, ev in ROWS:
+        print(f"  {name:<22}{str(fired)[:25]:<26}{str(changed)[:27]:<28}{ev}")
+
+    # --- which SPORTS the learning has actually reached ----------------
+    #
+    # Ethan, 2026-08-16: "i wanna make sure the self learning and all of
+    # that shit is wrapped into nfl too."
+    #
+    # The code paths are sport-agnostic and have been since the ladder was
+    # extended. The DATA is not. Every deep fitter — calibrate.py,
+    # formfit.py, playerfit.py — takes `--sport` and DEFAULTS TO MLB, so
+    # unless someone typed the flag, only baseball has ever been fitted.
+    # The store keys are the receipt, and they are what this table reads.
+    from engine.ledger import TRACKED_SPORTS
+    stores = {}
+    for label, mod_name, fname in (("temps", "calibrate", "calibration.json"),
+                                   ("dial", "formfit", "formfit.json"),
+                                   ("memory", "playerfit", "playerfit.json")):
+        try:
+            mod = __import__(f"engine.{mod_name}", fromlist=["DEFAULT_PATH"])
+            p = Path(mod.DEFAULT_PATH)
+            stores[label] = _json.loads(p.read_text()) if p.is_file() else {}
+        except Exception:                             # noqa: BLE001
+            stores[label] = {}
+    with ledger.connect() as conn:
+        journal = dict(conn.execute(
+            "SELECT sport, COUNT(*) FROM bets WHERE status IN ('won','lost') "
+            "AND category IN ('main','paper') GROUP BY sport").fetchall())
+
+    print(f"\n  {'sport':<8}{'temps':>7}{'dial':>7}{'memory':>8}"
+          f"{'settled':>9}   what it is running on")
+    for sp in TRACKED_SPORTS:
+        n = {k: sum(1 for key in v if key.startswith(f"{sp}:"))
+             for k, v in stores.items()}
+        graded = journal.get(sp, 0)
+        if not any(n.values()) and not graded:
+            note = "nothing fitted and nothing journaled — raw model"
+        elif not any(n.values()):
+            note = f"raw model; {graded} settled bets, no deep fit yet"
+        else:
+            note = "fitted"
+        print(f"  {sp:<8}{n['temps']:>7}{n['dial']:>7}{n['memory']:>8}"
+              f"{graded:>9}   {note}")
+    print("\n  A sport with zeros across the first three columns prices with"
+          "\n  T=1.0, the spec's default recency dial and no player memory —"
+          "\n  the model as written, never corrected by an outcome. Fix it"
+          "\n  with `python3 launch.py --relearn <sport>`, which needs that"
+          "\n  sport's game logs in the history DB first.")
+
+    # --- the paper book -----------------------------------------------
+    with ledger.connect() as conn:
+        on = ledger.paper_mode(conn)
+        counts = dict(conn.execute(
+            "SELECT category, COUNT(*) FROM bets WHERE status IN "
+            "('won','lost') GROUP BY category").fetchall())
+        first_paper = conn.execute(
+            "SELECT MIN(date) FROM bets WHERE category = 'paper'").fetchone()[0]
+        paper = ledger.performance(conn, category="paper")
+        main = ledger.performance(conn)
+
+    # THE DATE BELONGS TO THE BOOK, NOT TO THE STATE. This printed
+    # "PAPER MODE: off since 2026-08-09", which reads as "it has been off
+    # since the 9th" — the exact opposite of the truth. 2026-08-09 is the
+    # date of the FIRST PAPER BET, i.e. when the book opened; the mode has
+    # since been switched back off. Gluing a state to a date that means
+    # something else is how a status line lies while every number under it
+    # is correct. The two facts are printed as two facts now.
+    state = ("ON — new picks journal to the paper book" if on
+             else "off — new picks stake real money")
+    print(f"\n  PAPER MODE: {state}")
+    if first_paper:
+        print(f"  the paper book opened {first_paper} and holds"
+              f" {counts.get('paper', 0)} settled row(s)")
+
+    # WITH ITS ERROR BAR, ALWAYS. Ethan read "+17.8% ROI" off this line
+    # and asked why the site disagreed. The site was right and the line
+    # was underdressed: 74 settled bets carry a standard error near 12
+    # points, so +17.8% and 0% are not distinguishable, and a naked
+    # percentage on a sample that small invites exactly the read it got.
+    import math
+
+    def _book(label, perf):
+        n = (perf.get("wins", 0) or 0) + (perf.get("losses", 0) or 0)
+        roi = perf.get("roi", 0) or 0.0
+        staked = perf.get("units_staked", 0) or 0.0
+        # Per-bet return SD from the realised win rate and average payout,
+        # which is what a mixed-price book actually swings on.
+        hit = (perf.get("wins", 0) or 0) / n if n else 0.0
+        avg_b = ((perf.get("net_units", 0) or 0) / max(perf.get("wins", 1), 1)
+                 / max(staked / n, 1e-9)) if n and perf.get("wins") else 1.0
+        avg_b = min(max(avg_b, 0.5), 5.0)
+        se = (math.sqrt(max(hit * (1 - hit), 1e-9)) * (1 + avg_b)
+              / math.sqrt(n)) if n else 0.0
+        z = (roi / se) if se else 0.0
+        verdict = ("distinguishable from zero" if abs(z) >= 2
+                   else f"{abs(z):.1f} SE from zero — not yet a result")
+        print(f"  {label:<12} {perf.get('wins', 0)}-{perf.get('losses', 0)}"
+              f"  {roi * 100:+.1f}% ± {se * 100:.1f}% on {staked:.1f}u"
+              f"   {verdict}")
+
+    _book("paper book", paper)
+    _book("main book", main)
+    print("  settled rows by book: "
+          + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    print("\n  Paper mode changes exactly two things: the row's category, and"
+          "\n  the dollar column. Picks are still made, journaled, settled and"
+          "\n  measured for CLV identically — so everything IS being recorded."
+          "\n  Every loop above reads the paper book except where noted.")
+
+
+def show_haircut(refit: bool = False) -> None:
+    """What we claimed vs what landed, and the correction it earns.
+
+        python3 launch.py --haircut            # what is live right now
+        python3 launch.py --haircut --refit    # remeasure and store it
+
+    Ethan, 2026-08-12: "we should make it where we get a lower roi then
+    and fix it on the website so it would display the new number."
+
+    This is the number. `stakecheck.py` measured the model claiming 51.5%
+    and landing 42.5% over 113 bets, and 59.7% against 49.7% over the 197
+    before that — a nine-to-ten point over-claim on two different gate
+    configurations, well outside both standard errors. Every edge, EV
+    figure and Kelly stake on the board was computed from a probability
+    that far too high, which is why following our own sizing more closely
+    LOST MORE than flat-staking did.
+
+    engine/selectionfit.py fits one pooled log-odds shift per sport from
+    the journal's own settled bets, shrinks it by its standard error,
+    caps it, and never applies it upward. This prints what it found, what
+    is live, and what it does to a bet at each price band.
+    """
+    from engine import ledger, selectionfit as sf
+
+    if refit:
+        with ledger.connect() as lconn:
+            blob = sf.refresh(lconn)
+        print("  refit and stored.\n")
+    else:
+        blob = sf.load()
+        if not blob:
+            print("  Nothing fitted yet — run `python3 launch.py --haircut "
+                  "--refit`,\n  or just settle tonight (the settle pass does "
+                  "it automatically).")
+            return
+
+    rows = [("all sports", blob.get("pooled") or {})]
+    rows += sorted((blob.get("sports") or {}).items())
+    print(f"  fitted {blob.get('fitted_at') or '—'} · "
+          f"floor {blob.get('min_settled', sf.MIN_SETTLED)} settled bets\n")
+    print(f"  {'':<12}{'n':>5}{'claimed':>9}{'landed':>8}{'gap':>8}{'±se':>7}"
+          f"{'shift':>8}   verdict")
+    for name, e in rows:
+        if not e.get("n"):
+            continue
+        print(f"  {name[:12]:<12}{e['n']:>5}{e['claimed'] * 100:>8.1f}%"
+              f"{e['landed'] * 100:>7.1f}%{e['gap'] * 100:>+7.1f}p"
+              f"{e['se'] * 100:>6.1f}p{e['shift']:>+8.3f}   "
+              f"{'LIVE' if e.get('applied') else 'off'} — {e.get('reason', '')}")
+
+    # A sport can be refused the POOLED fallback even while the pooled row
+    # says LIVE — see selectionfit.POOL_BORROW_MAX_SHARE. Said out loud
+    # here because the table above only has room for "off", and "off" on a
+    # night when the all-sports row is live reads as "so it uses that one".
+    for _sport in sorted(blob.get("sports") or {}):
+        _why = sf.borrow_block(blob, _sport)
+        if _why:
+            print(f"\n  {_sport} does NOT fall back to the pooled cut:"
+                  f"\n    {_why}\n  Its bets price on the model's own numbers.")
+
+    live = [(n, e) for n, e in rows if e.get("applied")]
+    if not live:
+        print("\n  Nothing is being applied. The board runs on the model's own"
+              " numbers.")
+        return
+    # Name whose cut this is. Each sport uses its OWN when it has one and
+    # the pool otherwise, so an unlabelled table would be a number the
+    # reader cannot attach to any particular pick.
+    lead_name, lead = live[0]
+    h = lead.get("holdout") or {}
+    if h.get("ran"):
+        print(f"\n  Held out before it was allowed to price anything: fitted on"
+              f" the first {h['train_n']},\n  scored on the {h['test_n']} it had"
+              f" never seen — gap {h['gap_before'] * 100:.1f} →"
+              f" {h['gap_after'] * 100:.1f} pts,"
+              f"\n  Brier {h['brier_before']:.4f} → {h['brier_after']:.4f}.")
+    print(f"\n  What the {lead_name} cut ({lead['shift']:+.3f} log-odds) does"
+          f" to a claim:")
+    print(f"  {'model says':>12}{'ships as':>11}{'lost':>8}   at −110 (52.4% "
+          f"break-even)")
+    for p in (0.50, 0.55, 0.60, 0.65, 0.70):
+        out = sf.shift_prob(p, lead["shift"])
+        print(f"  {p * 100:>11.1f}%{out * 100:>10.1f}%{(out - p) * 100:>7.1f}p"
+              f"   {'still a bet' if out > 0.5238 else 'no longer clears'}")
+    print("\n  The board gets shorter and the stakes get smaller. That is the"
+          "\n  correction landing, not the model breaking — the picks it drops"
+          "\n  are the ones whose whole edge was the over-claim.")
+    # A live cut earns the next question rather than closing the subject:
+    # one pooled number assumes the error is the same size at every
+    # confidence, and this table cannot tell whether that is true.
+    print("\n  `python3 launch.py --shape` asks the two things this table"
+          "\n  cannot: whether one parameter is the right SHAPE, and whether"
+          "\n  the cut survives more than the single split that passed it.")
+
+    # DOES THE MISS DEPEND ON THE PRICE? Report only — see
+    # `selectionfit.bands` for why nothing is applied per band yet, and
+    # for the winner's-curse reading that makes this the right cut.
+    try:
+        with ledger.connect() as _bc:
+            got = sf.bands(_bc)
+        print()
+        for line in sf.band_lines(got):
+            print("  " + line)
+    except Exception as exc:                                  # noqa: BLE001
+        print(f"\n  ⚠️  band check unavailable: {exc}")
+
+
+def show_standings() -> None:
+    """Rebuild every standings table NOW and say where each came from.
+
+        python3 launch.py --standings
+
+    The one command that answers "are these the real standings?". A sport
+    on `league` is the league's own table; a sport on `computed` fell back
+    to counting our ingested games and prints the reason it had to — which
+    is the state Ethan caught the MLB page in, with clubs carrying ties in
+    a sport that has none. Neither feed is reachable from the sandbox that
+    wrote the parsers, so this command on the laptop is where they meet
+    the real envelopes.
+    """
+    import standings_build
+    print("Rebuilding standings from the leagues' own feeds…\n")
+    for sport in standings_build.SPORTS:
+        try:
+            blob = standings_build.write(sport)
+        except Exception as exc:                    # noqa: BLE001
+            print(f"  {sport.upper():<5} build failed: "
+                  f"{type(exc).__name__}: {exc}")
+            continue
+        src = blob.get("source") or "?"
+        teams = blob.get("team_count") or 0
+        mark = "LIVE" if src == "league" else "ours"
+        print(f"  {sport.upper():<5} {mark:<5} {teams:>3} teams  "
+              f"season {blob.get('season')}")
+        if src != "league":
+            why = blob.get("feed_error") or blob.get("note") or "no reason given"
+            print(f"        └─ fell back to our own count: {why}")
+        else:
+            top = ((blob.get("groups") or [{}])[0].get("teams") or [{}])[0]
+            if top.get("team"):
+                print(f"        └─ e.g. {top.get('team')} "
+                      f"{top.get('record')} ({top.get('pct')})")
+    print("\n  LIVE = the league's own table. ours = counted from ingested "
+          "games,\n  which is a weaker claim and now says so on the page.")
+
+
+def show_memes() -> None:
+    """Rocket Radar probe: pull the free feeds NOW and show the board.
+
+        python3 launch.py --memes
+
+    This is the live-shape check for the two keyless providers
+    (GeckoTerminal pools + DexScreener pairs/boosts). The sandbox that
+    wrote the parsers cannot reach either host — same story as statsapi
+    and Savant — so the first run of this command on the laptop is where
+    the fixtures meet reality. Zero coins with both sources declining
+    means the machine can't reach the feeds; zero coins with clean
+    fetches means the payload shape moved and engine/sources/dexes.py
+    needs a look. The board itself refreshes with the launcher either way.
+    """
+    import json as _json
+    import memes_build
+    out = ROOT / "web/data/memecoins.json"
+    memes_build.main(["--out", str(out)])
+    try:
+        board = _json.loads(out.read_text())
+    except Exception as exc:  # noqa: BLE001
+        print(f"  could not read the board back: {exc}")
+        return
+    for note in board.get("notes") or []:
+        print(f"  note: {note}")
+    coins = {c.get("mint"): c for c in board.get("coins") or []}
+    if not coins:
+        print("\n  Zero coins parsed. If the notes above are fetch failures,"
+              " this machine cannot reach the feeds; if the fetches"
+              " succeeded, the payload shape changed and"
+              " engine/sources/dexes.py needs a look.")
+        return
+
+    def _age_txt(age):
+        # 564,669 minutes is a year-old coin printed like a countdown —
+        # Ethan's first live run made the unit obvious. Minutes only
+        # below two hours, then hours, then days.
+        if age is None:
+            return "—"
+        if age < 120:
+            return f"{age:.0f}m"
+        if age < 48 * 60:
+            return f"{age / 60:.1f}h"
+        return f"{age / 1440:.0f}d"
+
+    def _line(mint):
+        c = coins.get(mint) or {}
+        i = c.get("ind") or {}
+        name = c.get("symbol") or c.get("name") or (mint or "")[:8]
+        liq = c.get("liquidity")
+        return (f"    {name[:14]:<14} momentum {c.get('momentum', 0):>3}"
+                f"  risk {c.get('risk', 0):>3}"
+                f"  liq {'$' + format(liq, ',.0f') if liq else '—':>11}"
+                f"  age {_age_txt(i.get('age_min'))}")
+
+    rocket = board.get("rocket") or []
+    print(f"\n  Rocket list ({len(rocket)} clear the risk gate "
+          f"< {board.get('risk_gate')}):")
+    for m in rocket:
+        print(_line(m))
+    if not rocket:
+        print("    none — with a fresh tape that is expected: acceleration"
+              " needs three sightings, so let the launcher poll a few"
+              " minutes and run this again.")
+    exits = board.get("exits") or []
+    if exits:
+        print(f"\n  Danger channel ({len(exits)} flashing exit):")
+        for m in exits:
+            print(_line(m))
+            for why in (coins.get(m) or {}).get("exit_why") or []:
+                print(f"      ⚠ {why}")
+    print(f"\n  {board.get('n', 0)} coin(s) scored, {board.get('gated', 0)} "
+          f"held behind the risk gate. Not advice; nothing here is journaled.")
+
+
+def show_booksharp() -> None:
+    """Which books are actually sharp, from our own snapshots (§4).
+
+        python3 launch.py --booksharp
+
+    Today the hierarchy is a hand-written LIST (`oddsapi.SHARP_BOOKS`).
+    This measures it: per book, how far its early price sat from the
+    closing consensus, and how often it moved first. Reports only.
+    """
+    from engine import booksharp, linemoves
+    print(booksharp.report(linemoves.load_history()))
+
+
+def show_redistribution(team=None, player=None, kind="targets",
+                        season: int | None = None) -> None:
+    """Where a player's usage goes when he is out (§7).
+
+        python3 launch.py --ripple NE "Rhamondre Stevenson" carries
+
+    engine/injuries.py prices injuries with invented multipliers today —
+    1.09 for an opposing CB1, 1.06 for a DT. This measures the real thing
+    from the weekly stats already on disk. Reports only.
+    """
+    import datetime as _d
+    from engine import redistribute
+    from engine.sources import nflverse
+    if not team or not player:
+        print("\n  usage: python3 launch.py --ripple <TEAM> <\"Player Name\">"
+              " [targets|carries] [season]\n")
+        return
+    season = int(season or (_d.date.today().year - 1))
+    try:
+        rows = nflverse.load_weekly_stats(season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  weekly stats {season} unavailable: {exc}\n")
+        return
+    res = redistribute.redistribution(rows, str(team).upper(), player, kind)
+    print(redistribute.report(res))
+
+
+def show_arsenal(person_id=None, season: int | None = None) -> None:
+    """What a starter throws, how often, and how much gets missed (§6).
+
+        python3 launch.py --arsenal 543037
+
+    MLB_MODEL §6 parked the arsenal matchup behind "needs pitch-mix +
+    per-pitch-type hitter data". The pitch-mix half is a second read of
+    the SAME cached playByPlay payloads `--velo` already loads, so on a
+    night the board priced this pitcher it costs nothing but the parse.
+
+    The hitter half is genuinely absent — see docs/PITCH_LEVEL_SCOPE.md,
+    which now names the two costs instead of saying "needs data".
+
+    Evidence only. Nothing prices from this.
+    """
+    import datetime as _d
+    from engine.mlb import arsenal as _ar
+    if not person_id:
+        print("\n  usage: python3 launch.py --arsenal <mlbPersonId> [season]")
+        print("  e.g.   python3 launch.py --arsenal 543037    # Gerrit Cole\n")
+        return
+    season = int(season or _d.date.today().year)
+    try:
+        hist = _ar.history(int(person_id), season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not read starts: {exc}\n")
+        return
+    if not hist:
+        print(f"\n  No starts parsed for {person_id} in {season}. Either he "
+              f"has not started,\n  or the payloads did not load — "
+              f"`--pbp <gamePk>` says which.\n")
+        return
+    print(f"\n{'='*70}\n  ARSENAL — person {person_id}, {season}\n{'='*70}")
+    for st in hist:
+        bits = ", ".join(f"{t} {sh:.0%}" for t, sh in st["shares"].items())
+        print(f"\n  {st['date']}   {st['n']} pitches   {bits}")
+        for t, w in st["whiff"].items():
+            if w["whiff_rate"] is None:
+                print(f"      {t:<4} {w['swings']:>3} swings   "
+                      f"whiff — (under the floor)")
+            else:
+                print(f"      {t:<4} {w['swings']:>3} swings   "
+                      f"whiff {w['whiff_rate']:.0%}")
+    pooled = _ar.pooled_whiff(hist)
+    if pooled:
+        print(f"\n  WHIFF ACROSS ALL {len(hist)} STARTS  (a secondary pitch "
+              f"gets 6-11 swings a start;")
+        print("  the floor is 10, so per-start it is invisible and pooled "
+              "it is not)")
+        for t, w in pooled.items():
+            if w["whiff_rate"] is None:
+                print(f"    {t:<4} {w['swings']:>4} swings   still under the "
+                      f"floor")
+            else:
+                print(f"    {t:<4} {w['swings']:>4} swings   whiff "
+                      f"{w['whiff_rate']:.0%}")
+    sh = _ar.mix_shift(hist)
+    if sh["enough"]:
+        print(f"\n  MIX AGAINST HIS OWN BASELINE")
+        for t, v in sh["types"].items():
+            if v["dropped"]:
+                print(f"    {t:<4} SHELVED — was {v['baseline']:.0%}, "
+                      f"absent from the latest start")
+            elif v["new"]:
+                print(f"    {t:<4} NEW — {v['latest']:.0%}, no baseline")
+            elif v["delta"] is not None:
+                print(f"    {t:<4} {v['baseline']:.0%} → {v['latest']:.0%}"
+                      f"   ({v['delta']:+.0%})")
+    print("\n  Whiff is per SWING, not per pitch: a pitch nobody offers at")
+    print("  is a ball, and dividing by every pitch would measure how often")
+    print("  he is in the zone rather than how hard the pitch is to hit.")
+    print("\n  Evidence only — nothing prices from this.\n")
+
+
+def why_bet(args: list) -> None:
+    """Tag why a settled bet actually won or lost (§11's human layer).
+
+        python3 launch.py --why-bet                     # recent + menu
+        python3 launch.py --why-bet 1234 ump-zone
+        python3 launch.py --why-bet 1234 ump-zone "squeezed all night"
+        python3 launch.py --why-bet counts              # the readout
+
+    Controlled vocabulary, not freeform — four spellings of "umpire" are
+    four slices of nothing. The note beside the tag is where the detail
+    goes: the note is for reading, the tag is for counting.
+    """
+    from engine import ledger
+    from engine.whytags import menu_for, tag_bet, tag_counts
+    conn = ledger.connect()
+    if args and args[0] == "counts":
+        counts = tag_counts(conn)
+        if not counts:
+            print("\n  No tags yet. `--why-bet` lists recent settled bets "
+                  "to tag.\n")
+            return
+        print(f"\n  {'tag':<28} {'W':>4} {'L':>4} {'push':>5}")
+        for key, d in sorted(counts.items()):
+            print(f"  {key:<28} {d['won']:>4} {d['lost']:>4} "
+                  f"{d['push']:>5}")
+        print()
+        return
+    if len(args) >= 2:
+        try:
+            got = tag_bet(conn, int(args[0]), args[1],
+                          " ".join(args[2:]) if len(args) > 2 else "")
+        except (ValueError, TypeError) as exc:
+            print(f"\n  {exc}\n")
+            return
+        print(f"\n  #{got['id']} {got['player']} {got['market']} "
+              f"({got['sport']}) ← {got['tag']}"
+              + (f' — "{got["note"]}"' if got["note"] else "") + "\n")
+        return
+    rows = conn.execute(
+        "SELECT id, date, sport, player, market, side, status, why_tag "
+        "FROM bets WHERE status IN ('won','lost') AND category='main' "
+        "ORDER BY date DESC, id DESC LIMIT 15").fetchall()
+    print("\n  Recent settled (untagged first):")
+    for r in sorted(rows, key=lambda r: r["why_tag"] is not None):
+        mark = r["why_tag"] or "—"
+        print(f"    #{r['id']:<6} {r['date']}  {r['sport']:<4} "
+              f"{(r['player'] or '')[:22]:<22} {r['market']:<12} "
+              f"{r['status']:<4} {mark}")
+    sports = {r["sport"] for r in rows} or {"mlb"}
+    for sp in sorted(sports):
+        print(f"\n  {sp} menu:")
+        for tag, blurb in sorted(menu_for(sp).items()):
+            print(f"    {tag:<20} {blurb}")
+    print("\n  python3 launch.py --why-bet <id> <tag> [\"note\"]\n")
+
+
+def show_onoff(league=None, team=None, player=None, stat="pts") -> None:
+    """Who inherits a sitting player's share (WNBA/NBA §6).
+
+        python3 launch.py --onoff wnba LVA "A'ja Wilson"
+        python3 launch.py --onoff wnba LVA "A'ja Wilson" min
+
+    Shares of the team's total per game, with her vs without her, from
+    the box scores already ingested. Evidence only — the minutes model
+    still owns redistribution.
+    """
+    from engine.db import connect as _c
+    from engine.nba import onoff as _oo
+    if not league or not team or not player:
+        print("\n  usage: python3 launch.py --onoff <nba|wnba> <TEAM> "
+              "\"<Player>\" [pts|min|reb|ast|fg3m]\n")
+        return
+    conn = _c()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT player, team, period, market, value FROM player_game_logs "
+        "WHERE sport=? AND team=?", (str(league).lower(),
+                                     str(team).upper()))]
+    if not rows:
+        print(f"\n  No {league} logs for {team}. "
+              f"`python3 ingest.py {league}` fills them.\n")
+        return
+    print(_oo.report(_oo.inheritance(rows, str(team).upper(), player,
+                                     stat=stat)))
+
+
+def show_matchup(person_id=None, batter=None, season: int | None = None) -> None:
+    """This hitter against THIS pitcher's mix — MLB_MODEL §6, complete.
+
+        python3 launch.py --matchup 543037 "Aaron Judge"
+
+    The pitcher's arsenal comes from playByPlay payloads the board already
+    caches; the hitter's per-pitch-type line comes from Savant's
+    pitch-arsenal board, one CSV a season. §6 called this "needs data" —
+    both halves are free.
+
+    WHAT IT REPORTS IS THE DIFFERENCE, not the level. A hitter who whiffs
+    at 40% on sliders is not a problem until he faces someone who throws
+    them 45% of the time; the league already prices the weakness, what it
+    may not price is tonight's mix.
+
+    Evidence only. Nothing prices from this.
+    """
+    import datetime as _d
+    from engine.mlb import arsenal as _ar
+    from engine.mlb.sources import savant as _sv
+    from engine.sources.oddsapi import normalize_name as _nn
+    if not person_id or not batter:
+        print("\n  usage: python3 launch.py --matchup <pitcherPersonId> "
+              "\"<Batter Name>\" [season]")
+        print("  e.g.   python3 launch.py --matchup 543037 \"Aaron Judge\"\n")
+        return
+    # TWO HALVES, TWO CLOCKS, and tying them to one parameter was wrong.
+    # `--matchup 543037 "Aaron Judge" 2025` asked for the 2025 Savant board
+    # — reasonable, that is the year known to have data — and dragged the
+    # PITCHER lookup back to 2025 with it, where Cole has no cached starts.
+    # The report then said "No starts parsed", which is true and answers a
+    # question nobody asked.
+    #
+    # His arsenal is inherently a NOW question: what is he throwing lately.
+    # The batter board is a season aggregate and takes the year. So the
+    # season argument governs the board only, and the pitcher is always
+    # read from the current season, falling back a year in April when the
+    # new one has no starts yet.
+    now = _d.date.today().year
+    season = int(season or now)
+    hist, p_season = [], now
+    for yr in (now, now - 1):
+        try:
+            hist = _ar.history(int(person_id), yr)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"\n  could not read the pitcher's starts: {exc}\n")
+            return
+        if hist:
+            p_season = yr
+            break
+    if not hist:
+        print(f"\n  No starts parsed for {person_id} in {now} or {now - 1}.")
+        print(f"  `python3 launch.py --arsenal {person_id}` says whether "
+              f"that is him\n  or the payloads.\n")
+        return
+    # His mix over the whole window, not one start — a matchup is about
+    # what he throws, and one start is a sample of that.
+    shares: dict = {}
+    for st in hist:
+        for t, sh in st["shares"].items():
+            shares[t] = shares.get(t, 0.0) + sh / len(hist)
+    try:
+        board = _sv.load_arsenal(season, "batter")
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  Savant pitch-arsenal board unavailable: {exc}\n")
+        return
+    used = board.pop("_season", season)
+    prof = board.get(_nn(batter))
+    if not prof:
+        # SAY WHICH FAILURE IT IS. "0 hitters" is three different problems
+        # wearing one sentence: the season is not published, the fetch
+        # returned something that was not the CSV, or this hitter is not on
+        # a board that is otherwise full.
+        if not board:
+            print(f"\n  The {used} arsenal board came back EMPTY — not this "
+                  f"hitter, the whole board.")
+            print(f"  Savant publishes this per season; {used} may not be "
+                  f"populated yet.")
+            print(f"  Try a season you know has data: "
+                  f"python3 launch.py --matchup {person_id} "
+                  f"\"{batter}\" 2025\n")
+        else:
+            near = [n for n in board if _nn(batter).split()[-1] in n][:3]
+            print(f"\n  No line for {batter!r} on the {used} board "
+                  f"({len(board)} hitters).")
+            if near:
+                print(f"  Closest names we hold: {', '.join(near)}")
+            print()
+        return
+    if used != season:
+        print(f"\n  ⚠️  {season} is empty on Savant — using the {used} "
+              f"board instead.\n      This is last season's hitter, not "
+              f"this one's.")
+    m = _ar.matchup(shares, prof)
+    print(f"\n{'='*70}\n  {batter.upper()} vs person {person_id}\n{'='*70}")
+    print(f"\n  his last {len(hist)} start(s), {p_season}   ·   "
+          f"hitter board {used}")
+    print(f"\n  his mix: " + ", ".join(f"{t} {sh:.0%}" for t, sh in
+                                        sorted(shares.items(),
+                                               key=lambda kv: -kv[1])))
+    if m["whiff_vs_mix"] is None:
+        print("\n  Nothing measurable: this hitter has no qualifying line "
+              "against\n  any pitch this starter throws.\n")
+        return
+    print(f"\n  whiff   {m['whiff_baseline']:.1%} normally  →  "
+          f"{m['whiff_vs_mix']:.1%} against this mix   "
+          f"({m['whiff_delta']:+.1%})")
+    if m["xwoba_delta"] is not None:
+        print(f"  xwOBA   {m['xwoba_vs_mix']:.3f} against this mix   "
+              f"({m['xwoba_delta']:+.3f})")
+    print(f"\n  by pitch")
+    for t, v in m["types"].items():
+        print(f"    {t:<4} he sees {v['share']:.0%} of it   "
+              f"whiffs {v['whiff_pct']:.0%}   ({v['pa']:.0f} PA)")
+    print(f"\n  coverage {m['coverage']:.0%} of the arsenal"
+          + ("" if m["enough"] else
+             "  ← under two thirds; this is a statement about the part we "
+             "hold,\n  not about tonight"))
+    print("\n  The DIFFERENCE is the read, not the level: the market "
+          "already knows")
+    print("  how he handles a slider. Evidence only — nothing prices from "
+          "this.\n")
+
+
+def show_alignment(team=None, season: int | None = None) -> None:
+    """How a defence covers and how an offence lines up (NFL_MODEL §6).
+
+        python3 launch.py --alignment NE
+        python3 launch.py --alignment NE 2024
+
+    §6 parked alignment matchups and coordinator profiles behind "no data
+    exists". nflverse publishes it: `pbp_participation_{season}.csv`, every
+    season 2016-2025, with man/zone, coverage shell, box count, rushers,
+    formation and personnel. ~49 MB a season, cached after the first pull.
+
+    Evidence only — nothing prices from this. See the last paragraph of
+    `engine/sources/nflpart.py` for why.
+    """
+    import datetime as _d
+    from engine.sources import nflpart
+    season = int(season or (_d.date.today().year - 1))
+    if not team:
+        print("\n  usage: python3 launch.py --alignment <TEAM> [season]")
+        print("  e.g.   python3 launch.py --alignment NE 2024\n")
+        return
+    team = str(team).upper()
+    try:
+        rows = nflpart.load_participation(season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  participation {season} unavailable: {exc}\n")
+        return
+    have = nflpart.teams_in(rows)
+    if team not in have:
+        print(f"\n  {team} is not in the {season} file. It holds: "
+              f"{', '.join(have)}\n")
+        return
+    d = nflpart.coverage_rates(rows, team)
+    o = nflpart.formation_rates(rows, team)
+    p = nflpart.personnel_rates(rows, team)
+    print(f"\n{'='*70}\n  {team} — ALIGNMENT AND COVERAGE, {season}\n{'='*70}")
+    print(f"\n  DEFENCE   ({d['n_labelled']} coverage-labelled snaps, "
+          f"{d['n_dropbacks']} dropbacks faced)")
+    if d["man_rate"] is None:
+        print("    no coverage labels on this team's games")
+    else:
+        print(f"    man {d['man_rate']:.1%}   zone {d['zone_rate']:.1%}"
+              f"   blitz {d['blitz_rate']:.1%}"
+              f"   box {d['box_avg']}   rushers {d['rushers_avg']}")
+    print(f"\n  OFFENCE   ({o['n']} snaps with a formation)")
+    for k, v in list(o["rates"].items())[:5]:
+        print(f"    {k:<14} {v:.1%}")
+    if p["rates"]:
+        print("\n  personnel")
+        for k, v in list(p["rates"].items())[:4]:
+            print(f"    {k:<22} {v:.1%}")
+    print("\n  Rates are over LABELLED plays — coverage is classified on")
+    print("  dropbacks only, so dividing by every snap would describe")
+    print("  run-pass balance rather than coverage.")
+    print("\n  Evidence only. Nothing prices from this until "
+          "`stakecheck --info`")
+    print("  says a new input can earn its place.\n")
+
+
+def show_velocity(person_id=None, season: int | None = None) -> None:
+    """A pitcher's last five starts, by pitch type, against his baseline.
+
+        python3 launch.py --velo 543037        # Gerrit Cole
+
+    MLB_MODEL §5: "Velocity, start over start. A drop of 1+ mph is a red
+    flag — check injury and mechanics reporting before trusting any
+    projection of him."
+
+    Prints the starts rather than only the verdict, because the verdict is
+    one number off five and the shape of the five is what tells you
+    whether to believe it. A steady 97.1/97.3/97.2 followed by 95.9 is a
+    different story from 97.4/96.2/97.1/96.0 with the same delta.
+    """
+    import datetime as _d
+    from engine.mlb import velocity as _v
+    if not person_id:
+        print("\n  usage: python3 launch.py --velo <mlbPersonId>")
+        print("  ids come from the roster feed; 543037 is Gerrit Cole\n")
+        return
+    season = season or _d.date.today().year
+    try:
+        hist = _v.velocity_history(int(person_id), season)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not read that pitcher: {exc}\n")
+        return
+    print(f"\n{'='*70}\n  VELOCITY, START OVER START — {person_id}, {season}"
+          f"\n{'='*70}")
+    if not hist:
+        print("  No starts with enough of any one pitch type to average.")
+        print("  Early season, a reliever, or an id that is not a pitcher.\n")
+        return
+    for h in hist:
+        arsenal = "  ".join(f"{t} {mph}" for t, mph in
+                            sorted(h["by_type"].items(),
+                                   key=lambda kv: -kv[1]))
+        print(f"    {h['date']}   {arsenal}")
+    rows = _v.trend_all(hist)
+    if not rows:
+        print("\n  No comparable baseline — his latest pitch types do not")
+        print("  appear in the earlier starts. That is a real answer, and")
+        print("  common in April.\n")
+        return
+    primary = _v.primary_pitch(hist)
+    print()
+    for t in rows:
+        star = " *" if t["pitch_type"] == primary else "  "
+        if t.get("dropped"):
+            print(f"   {star} {t['pitch_type']:<3}  not thrown  "
+                  f"(was {t['baseline']} over {t['baseline_starts']})"
+                  f"   ← SHELVED")
+            continue
+        mark = "   ← RED FLAG" if t["flag"] else ""
+        print(f"   {star} {t['pitch_type']:<3} {t['latest']:>6} vs "
+              f"{t['baseline']:>6} over {t['baseline_starts']}"
+              f"   {t['delta']:+.2f} mph{mark}")
+    print(f"\n  * his primary pitch, by volume")
+    flagged = [t for t in rows if t["flag"] or t.get("dropped")]
+    if flagged:
+        for t in flagged:
+            print(f"  {t['reading']}")
+    else:
+        print(f"  Nothing over the {abs(_v.DROP_FLAG_MPH):.0f} mph line "
+              f"across {len(rows)} pitch type(s).")
+    # Said every time, not only when something fires: four pitches watched
+    # at a 1 mph threshold is four rolls of the dice, not one.
+    print(f"\n  {len(rows)} pitch type(s) examined — more types watched "
+          f"means more\n  chances for one to cross the line on noise "
+          f"alone. Read the shape,\n  not the flag.")
+    print("\n  Evidence only — nothing prices from this. It is a pointer at")
+    print("  injury reporting, which is what §5 asks it to be.\n")
+
+
+def show_pbp(game_pk=None) -> None:
+    """Parse one real game's pitches and print what came out.
+
+    THE FIXTURE IN tests/test_pbp.py IS MY READ OF THE PAYLOAD, not a
+    capture of one — statsapi is blocked from the sandbox this was
+    written in. So the parsers are proven self-consistent and unproven
+    against reality, and those are different things.
+
+    This closes that gap in one command on a machine with network. If the
+    counts look like a baseball game, the shape is right; if it prints
+    zero pitches, the keys moved and the fixture is fiction.
+
+        python3 launch.py --pbp 775296
+    """
+    from engine.mlb.sources import pbp as _pbp
+    if not game_pk:
+        print("\n  usage: python3 launch.py --pbp <gamePk>")
+        print("  find one: any recent MLB game id, e.g. from the schedule\n")
+        return
+    try:
+        payload = _pbp.fetch_playbyplay(game_pk)
+    except Exception as exc:                                # noqa: BLE001
+        print(f"\n  could not fetch game {game_pk}: {exc}\n")
+        return
+    rows = _pbp.pitches(payload)
+    print(f"\n{'='*70}\n  PITCH-BY-PITCH — game {game_pk}\n{'='*70}")
+    print(f"  {len(payload.get('allPlays') or [])} plays · {len(rows)} pitches")
+    if not rows:
+        print("\n  ** NO PITCHES PARSED. The payload shape is not what the")
+        print("  ** fixture assumes — the keys have moved. Do not build on")
+        print("  ** this until the parser matches a real game.\n")
+        return
+    counts = _pbp.pitch_counts(rows)
+    print(f"  {len(counts)} pitcher(s)\n")
+    # The starter is whoever threw the most; good enough for a probe.
+    for pid, n in sorted(counts.items(), key=lambda kv: -kv[1])[:4]:
+        who = next((r["pitcher"] for r in rows if r["pitcher_id"] == pid), pid)
+        vel = _pbp.velocity_by_type(rows, pitcher_id=pid)
+        tto = _pbp.times_through_order(rows, pid)
+        deepest = max(tto.values()) if tto else 0
+        arsenal = ", ".join(
+            f"{t} {mph} ({k})" for t, (mph, k) in
+            sorted(vel.items(), key=lambda kv: -kv[1][1]))
+        print(f"    {str(who)[:24]:<24} {n:>3} pitches · "
+              f"{deepest}x through the order")
+        print(f"      {arsenal or '(no speeds recorded)'}")
+    miss = sum(1 for r in rows if r["speed"] is None)
+    print(f"\n  {miss} pitch(es) carried no speed — statsapi omits it on "
+          f"some events;\n  a large number here means the tracking feed "
+          f"was down for that game.\n")
+
+
+def show_unbuilt() -> None:
+    """Everything the model specs NAME but do not fully implement.
+
+    Each `docs/*_MODEL.md` ends in an implementation map — one row per
+    spec section, marked implemented / partial / parked. Those maps are
+    the honest part of this repo and they are also spread across six
+    files, so nobody has ever seen the whole list at once. Forty-eight
+    rows, as of 2026-08-09.
+
+    `--coverage` answers a different question and answers it better: it
+    checks the real database and cache for whether a layer's DATA is
+    present today. This reads what the specs SAY is unfinished, which is
+    the backlog rather than the runtime state. Both are worth having and
+    neither substitutes for the other.
+
+    Split by blocker, because that is the only split that decides what
+    happens next. A row waiting on a feed nobody sells is not a task; a
+    row waiting on work is.
+    """
+    import re
+    from pathlib import Path as _P
+    rows = []
+    for f in sorted((ROOT / "docs").glob("*_MODEL.md")):
+        sport = _P(f).stem.replace("_MODEL", "")
+        for line in f.read_text().splitlines():
+            if not line.startswith("|"):
+                continue
+            if "📋" not in line and "🟡" not in line:
+                continue
+            c = [x.strip() for x in line.strip().strip("|").split("|")]
+            if len(c) < 3 or c[0].lower().startswith("section"):
+                continue
+            # THE STATUS CELL DECIDES, not the row. The filter above looks
+            # at the whole line, so a row marked ✅ whose NOTE mentions a
+            # parked sub-item came through as unfinished — NFL §3 Line
+            # shopping is done ("shops every book both sides") and was
+            # listed because its note ends "alt-line ladder 📋". A backlog
+            # that includes finished work is a backlog people stop reading.
+            if "📋" not in c[1] and "🟡" not in c[1]:
+                continue
+            # "📋 by design" is not a gap. NFL §13 says live betting is
+            # refused on purpose, per the spec's own discipline clause —
+            # printing it beside real tasks invites someone to build the
+            # one thing the model deliberately does not do.
+            if "by design" in c[1].lower():
+                rows.append({"sport": sport, "state": "by design",
+                             "section": c[0], "why": c[2]})
+                continue
+            rows.append({"sport": sport,
+                         "state": "parked" if "📋" in c[1] else "partial",
+                         "section": c[0], "why": c[2]})
+    if not rows:
+        print("\n  No implementation maps found — docs/*_MODEL.md missing?")
+        return
+    # A row is data-blocked when its own note says so. Deliberately
+    # keyed on the prose rather than a curated list: the note is what
+    # gets updated when a source appears, so the classification updates
+    # with it instead of drifting behind it.
+    # "No external source exists" and "we have not stored it yet" read
+    # almost identically in prose and mean opposite things. The second is
+    # a task — the store is ours. So `stored`/`storing` wins outright,
+    # and is checked FIRST.
+    ours = re.compile(r"\bstor(ed|ing|es)\b|\bnot stored\b", re.I)
+    blocked = re.compile(
+        r"\bno\s+(?:[\w/+-]+\s+){0,3}(?:source|feed|data|wire|api)\b|"
+        r"\bneeds?\s+(?:[\w/+-]+\s+){0,3}(?:data|feed|source)\b|"
+        r"\bno structured source\b|\bqualitative\b|"
+        r"\bnot (?:available|published)\b|\bunmodellable\b", re.I)
+    design = [r for r in rows if r["state"] == "by design"]
+    rest = [r for r in rows if r["state"] != "by design"]
+    dat = [r for r in rest
+           if blocked.search(r["why"]) and not ours.search(r["why"])]
+    work = [r for r in rest if r not in dat]
+    print(f"\n{'='*70}\n  NAMED IN THE SPECS, NOT FULLY BUILT\n{'='*70}")
+    print(f"  {len(rest)} rows across {len({r['sport'] for r in rows})} "
+          f"model docs — {len(dat)} waiting on a data source, "
+          f"{len(work)} waiting on work"
+          + (f", plus {len(design)} refused on purpose.\n" if design
+             else ".\n"))
+    for title, group in (("WAITING ON WORK — these are tasks", work),
+                         ("WAITING ON A DATA SOURCE — these are not tasks "
+                          "until a feed exists", dat),
+                         ("REFUSED ON PURPOSE — do not build these", design)):
+        if not group:
+            continue
+        print(f"  {title}  ({len(group)})")
+        for r in sorted(group, key=lambda r: (r["sport"], r["section"])):
+            mark = {"parked": "📋", "by design": "⛔"}.get(
+                r["state"], "🟡")
+            print(f"    {mark} {r['sport']:<5} {r['section'][:40]:<40} "
+                  f"{r['why'][:70]}")
+        print()
+    print("  `--coverage` is the companion: what the specs say is unfinished")
+    print("  here, what the live database is actually missing there.\n")
+
+
+#: Which refresh each sport name drives. Used only by --odds-only, so a
+#: pre-kickoff pass can pay for the sport with a kickoff coming rather
+#: than for all six.
+_SPORT_REFRESH = {
+    "mlb": "refresh_mlb", "nfl": "refresh_nfl", "nba": "refresh_nba",
+    "wnba": "refresh_wnba", "cfb": "refresh_cfb", "ufc": "refresh_ufc",
+}
+
+
+def nightly_run(odds_only: bool = False, sports=None) -> None:
+    """The unattended pass: do the work, print, EXIT.
+
+    THE BUG THIS FIXES, found 2026-08-09 while adding a pre-kickoff odds
+    pull. `tools/nightly.sh` ran bare `launch.py`, whose last act is
+    `server.serve_forever()`. So the launchd job never returned:
+
+      * `watch.py` — the tripwire, step 2 of the same script — never ran,
+      * the `.nightly.lock` directory was never removed, because the EXIT
+        trap cannot fire on a process that does not exit,
+      * and every following night hit "another nightly run is still
+        going; skipping".
+
+    One hang silences the automation permanently. That is the exact shape
+    of the 7-27/7-28/7-30 ingest gap (task #43) — three consecutive
+    nights missed, not three separate failures.
+
+    AND IT NEVER SETTLED. nightly.sh's header says launch.py will "ingest
+    last night's finals, settle open bets, rebuild the site, and run
+    doctor.py". Bare `launch.py` calls `refresh_all()`, which does none of
+    those four things: it rebuilds the boards from live data and serves
+    them. Grading has only ever happened when a human typed `--settle`.
+
+    Order is deliberate and is the order that comment always described.
+    Settle first: last night's finals decide the calibration, the miner's
+    slices and the edge test, and tonight's board should be priced by a
+    model that has already learned from them.
+    """
+    rc = 0
+    # Printed in the nightly too, because the log is where a slow drain
+    # is actually visible: one line a day, and the day it reads zero is
+    # findable afterwards.
+    try:
+        from engine.credits import banner
+        b = banner()
+        if b:
+            print(b)
+    except Exception:                                       # noqa: BLE001
+        pass
+    if not odds_only:
+        # DAILY CHORES FIRST, AND WITHOUT THEM THE NIGHTLY IS BASEBALL-ONLY.
+        #
+        # Ethan, 2026-08-09: "is nightly tied into nfl and cfb and nba or
+        # just mlb — we need it tied in with everything."
+        #
+        # Building was already every sport: `refresh_all` covers mlb, nfl,
+        # nba, wnba, cfb and ufc, so picks journal for all of them. SETTLING
+        # was not. `settle_now` ingests through `ingest_for_open_bets`,
+        # which pulls MLB, NBA and WNBA and nothing else — NFL grades off
+        # the nflverse WEEKLY stats file and CFB off its own feed, and both
+        # of those live in `engine.maintenance.run_if_due`.
+        #
+        # That function was called from exactly two places, and both of them
+        # need the SERVER up: `_startup_chores` and `_background_refresher`.
+        # So an unattended machine would journal NFL picks every day of the
+        # season and never grade one — the bets would pile up open while the
+        # record page showed nothing, starting the week of Sep 9.
+        #
+        # It is throttled to once a day internally, so calling it here costs
+        # nothing on a day the server already ran it, and `settle_now` below
+        # then grades against results that actually exist.
+        print("\n[1/4] daily chores (every sport's results) …")
+        try:
+            _run_maintenance()
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  daily chores failed: {exc}")
+            rc = 1
+        print("\n[2/4] settling last night …")
+        try:
+            settle_now(None)
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  settle failed: {exc}")
+            rc = 1
+    print(f"\n[{'1/1' if odds_only else '3/4'}] rebuilding the boards …")
+    try:
+        if odds_only and sports:
+            # ONE SPORT'S CREDITS, NOT SIX. The pre-kickoff pass exists
+            # because a 6am build prices a 9:30am kickoff on stale lines.
+            # That argument is about the sport with a game coming — at
+            # 7am the baseball board is twelve hours out and was already
+            # priced an hour ago, so re-pulling it buys nothing and the
+            # odds API bills per event per market either way.
+            #
+            # Ethan is rationing ~10k credits to a month-end reset; a
+            # second full six-sport pull every morning is the kind of
+            # cost that only shows up as an empty quota in week three.
+            for sp in sports:
+                fn = globals().get(_SPORT_REFRESH.get(sp, ""))
+                if fn is None:
+                    print(f"  ⚠️  unknown sport {sp!r} — skipped")
+                    continue
+                fn()
+        else:
+            refresh_all()
+    except Exception as exc:                                # noqa: BLE001
+        print(f"  ⚠️  refresh failed: {exc}")
+        rc = 1
+    if not odds_only:
+        print("\n[4/4] doctor, against real data …")
+        try:
+            import doctor
+            rc = doctor.main([]) or rc
+        except SystemExit as exc:
+            rc = int(getattr(exc, "code", 0) or 0) or rc
+        except Exception as exc:                            # noqa: BLE001
+            print(f"  ⚠️  doctor failed: {exc}")
+            rc = 1
+    print("\nnightly complete — not serving. `python3 launch.py` for the site.")
+    sys.exit(rc)
+
+
+#: Boards a pick can live on, by the public path their private copy is
+#: resolved from.
+INSPECT_BOARDS = ("recommendations.json", "mlb_recommendations.json",
+                  "cfb.json", "nba.json", "wnba.json", "ufc.json")
+
+
+def _print_prob_check(r: dict) -> None:
+    """Is this row's probability consistent with its own projection?"""
+    try:
+        line, proj = float(r["line"]), float(r["projection"])
+        raw = float(r["raw_prob"])
+    except (KeyError, TypeError, ValueError):
+        return
+    side = str(r.get("side", "OVER")).upper()
+    p_over = (1.0 - raw) if side == "UNDER" else raw
+    sd = r.get("proj_high")
+    try:
+        sigma = float(sd) - proj if sd is not None else None
+    except (TypeError, ValueError):
+        sigma = None
+    from engine.statmath import prob_over as _po
+    expect = _po(line, proj, sigma) if sigma and sigma > 0 else None
+    print(f"\n  CONSISTENCY")
+    print(f"    the row implies P(over {line:g}) = {p_over:.3f}")
+    if expect is not None:
+        print(f"    the projection {proj:g} (sd {sigma:.1f}) says "
+              f"P(over {line:g}) = {expect:.3f}")
+    if (proj > line) != (p_over > 0.5):
+        print(f"    ⚠️  MISMATCH — the projection is "
+              f"{'above' if proj > line else 'below'} the line while the "
+              f"row's own probability says the over is "
+              f"{'likely' if p_over > 0.5 else 'unlikely'}. These two "
+              f"numbers did not come from the same computation.")
+    else:
+        print("    consistent — the projection and the probability agree "
+              "on which side of the line the stat lands.")
+
+
+def inspect_pick(name: str) -> None:
+    """Everything behind one published pick, for when a card looks wrong.
+
+    WHY IT READS THROUGH `gate.board_source`. Ethan's screenshot showed a
+    card siding UNDER 58.5 while the same card's insight said the model
+    "projects 71.6038" — a projection ABOVE the line it was betting
+    below. The obvious first move is to open
+    `web/data/recommendations.json` and look at the row. That file is the
+    PUBLIC copy: `recommendations` is a paid key, so with the paywall on
+    the picks have been stripped out of it and the query returns nothing
+    at all, silently.
+
+    `gate.board_source`'s own docstring lists three tools that learned
+    this the same way — `parlays.arbitrate_slate`, `parlaycheck.py` and
+    `--odds-doctor` — each of which "read an empty list and reported
+    honestly on nothing". A one-liner typed at a prompt was the fourth,
+    which is the argument for this being a command in the repo rather
+    than a one-liner typed again next time.
+
+    THE `lines` ARRAY IS THE POINT. `betting.pick_side` shops the over
+    and the under SEPARATELY, so the side that wins can be priced at a
+    different number from the one a reader assumes. Printing every book's
+    line beside the chosen one is what separates "the model picked the
+    wrong side" from "the card is displaying a different line than the
+    one that was shopped".
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    from engine import gate
+
+    root = _Path(__file__).resolve().parent
+    needle = name.strip().lower()
+    found = 0
+    for board in INSPECT_BOARDS:
+        src = gate.board_source(root / "web" / "data" / board)
+        try:
+            doc = _json.loads(_Path(src).read_text())
+        except (OSError, ValueError):
+            continue
+        rows = []
+        for key in ("recommendations", "picks", "long_shots",
+                    "longshot_watch", "near_misses", "pass_list"):
+            for r in (doc.get(key) or []):
+                if isinstance(r, dict) and needle in str(
+                        r.get("player", "")).lower():
+                    rows.append((key, r))
+        for key, r in rows:
+            found += 1
+            print(f"\n{'='*70}\n  {r.get('player')} · {board} · {key}"
+                  f"\n{'='*70}")
+            for f in ("market", "side", "line", "odds", "book", "projection",
+                      "proj_low", "proj_high", "hit_prob", "raw_prob",
+                      "fair_prob", "edge", "grade", "stake_units",
+                      "recommended"):
+                if f in r:
+                    print(f"  {f:<14} {r[f]}")
+            # THE ARITHMETIC CHECK THAT SETTLES IT. `raw_prob` is
+            # `pick_side`'s `hit_raw` — the probability the CHOSEN side
+            # cashes — and for an UNDER that is `1 - P(over)`. So the
+            # published row already contains P(over), and `prob_over` is
+            # `1 - normal_cdf(line, mu, sigma)`, which is ABOVE 0.5
+            # whenever the mean is above the line, for any positive
+            # sigma. A row whose projection sits above its line while
+            # its implied P(over) sits below 0.5 did not come from one
+            # computation, whatever else is true.
+            _print_prob_check(r)
+            lines = r.get("lines") or []
+            if lines:
+                print(f"\n  every book quoted ({len(lines)}) — the over and "
+                      f"the under are shopped SEPARATELY:")
+                for ln in lines:
+                    print(f"    {str(ln.get('book',''))[:16]:<16} "
+                          f"line {ln.get('line')}   over {ln.get('over_odds')}"
+                          f"   under {ln.get('under_odds')}")
+                chosen, proj = r.get("line"), r.get("projection")
+                if chosen is not None and proj is not None:
+                    try:
+                        rel = ("ABOVE" if float(proj) > float(chosen)
+                               else "below")
+                        print(f"\n  the projection {proj} is {rel} the "
+                              f"{chosen} it is siding {r.get('side')} on")
+                    except (TypeError, ValueError):
+                        pass
+            for why in (r.get("reasons") or [])[:6]:
+                print(f"  · {why}")
+    if not found:
+        print(f"\n  No published pick matches {name!r}. Boards read: "
+              f"{', '.join(INSPECT_BOARDS)}\n  (private copies, via "
+              f"gate.board_source — not the stripped public ones)")
+
+
+def repair_closes(apply: bool = False) -> None:
+    """Rewrite every settled bet's banked closing price from the harvested
+    closes and the raw snapshots, side- and line-aware. Dry run unless
+    --apply.
+
+    The banked column was written at settle time by code that read the
+    OVER price whatever side the bet took and ignored the line. Both are
+    fixed, but a settled bet never settles again, so the wrong values sit
+    there — and `performance` reads them for the site's CLV figure and
+    the nightly prose. `stakecheck --clv` rebuilds from the snapshots
+    every run and ignores the column, which is why its number is right
+    and the site's is not.
+    """
+    from engine import db as hist_db
+    from engine import ledger
+    conn = ledger.connect()
+    # The HARVESTED closes as well as the free snapshots. This ran on
+    # snapshots alone, so it could only recover what our own live pulls
+    # happened to catch — while `odds_history` held tens of thousands of
+    # purchased closing prices and every settled prop bet in the journal
+    # carried none. `repair_closing_odds` takes the connection rather than
+    # opening one, so a suite calling it cannot reach this box's history.
+    r = ledger.repair_closing_odds(conn, apply=apply,
+                                   hist_conn=hist_db.connect())
+    print(f"\n{'='*70}\n  BANKED CLOSING PRICES, REBUILT FROM THE "
+          f"HARVEST AND THE SNAPSHOTS\n{'='*70}")
+    def _rows(label, sample):
+        if not sample:
+            return
+        print(f"\n  {label}")
+        for date, player, side, market, line, had, want in sample:
+            print(f"    {date}  {str(player)[:20]:<20} "
+                  f"{str(side or '')[:5]:<5} {str(market)[:12]:<12} {line}   "
+                  f"{'(none)' if had is None else f'{int(had):+d}'} -> "
+                  f"{'(cleared)' if want is None else f'{int(want):+d}'}")
+
+    print(f"  {r['settled']} settled bets examined")
+    print(f"  {r['agreed']:>5} already correct — left alone")
+    print(f"  {r['filled']:>5} FILLED     had no close, gains one "
+          f"(coverage, nothing overwritten)")
+    print(f"  {r['overwritten']:>5} OVERWRITTEN had a close, gets a "
+          f"different one")
+    print(f"  {r['cleared']:>5} CLEARED    had a close, no legal one exists "
+          f"for that side/line")
+    # The overwrites first and in full, because they are the only rows
+    # where a value that already existed is being replaced.
+    _rows("OVERWRITTEN — check these before applying:",
+          r["overwritten_sample"])
+    _rows("CLEARED — these lose a value and gain nothing:",
+          r["cleared_sample"])
+    _rows("filled (a sample; these are pure coverage):", r["sample"])
+    if r["applied"]:
+        print("\n  written. Re-run `python3 launch.py --settle` to refresh "
+              "the site,")
+        print("  or just let tonight's run do it.\n")
+    else:
+        print("\n  DRY RUN — nothing written. Add --apply to commit it.\n")
+
+
+def set_paper_mode(want: str | None = None) -> None:
+    """Turn real-money staking on or off. `python3 launch.py --paper on`.
+
+    What paper mode is, since the name suggests less than it does: the
+    entire machine keeps running. Picks are made, journaled, settled
+    against real box scores, and measured for CLV exactly as before. The
+    stake each pick would have taken is still computed and stored. The
+    only differences are that the row is filed under 'paper' instead of
+    'main', so it never enters the headline record, and its dollar stake
+    is zero.
+
+    It exists because on 2026-08-09 the CLV measurement — once the side
+    bug, the line bug, the impossible prices and the missing under side
+    were all out of it — came back indistinguishable from zero. No
+    demonstrated edge, and an edge large enough to cover the vig excluded
+    at better than three standard errors. The cheapest way to find out
+    whether that changes is to keep measuring without paying for it.
+
+    Called with no argument it reports the current state and writes
+    nothing, because a toggle that flips when you ask it what it is set
+    to is a trap.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    cur = str(ledger.get_cfg(conn, "paper_mode") or "0") == "1"
+    if want is None:
+        print(f"\n  paper mode is {'ON' if cur else 'OFF'} — "
+              f"picks are being staked "
+              f"{'on paper only, zero dollars' if cur else 'WITH REAL MONEY'}")
+        print("    python3 launch.py --paper on     journal to the paper "
+              "book, no money")
+        print("    python3 launch.py --paper off    resume real staking\n")
+        return
+    on = want.strip().lower() in ("on", "1", "true", "yes")
+    ledger.set_paper_mode(conn, on)
+    print(f"\n  paper mode {'ON' if on else 'OFF'}.")
+    if on:
+        print("    Picks from here journal under 'paper' with zero dollars.")
+        print("    The record page keeps its own separate Paper bucket, and")
+        print("    the headline record stops moving. Everything else — "
+              "settling,")
+        print("    CLV, calibration, the miners — runs unchanged.\n")
+    else:
+        print("    Picks from here journal under 'main' and are staked "
+              "for real money.\n")
+
+
+def show_unplayed(apply: bool = False) -> None:
+    """Bets whose game was never played. Shows first, writes only on --apply.
+
+    A postponed, cancelled or suspended fixture is no-action at every book,
+    but nothing here could say so: the stuck report told these bets to
+    "Ingest the finals", which cannot work, because the results ingest only
+    ever writes completed and scored games — so the scoreless row it is
+    waiting on will never be filled. Seventeen MLB bets sat on that
+    instruction for twelve days.
+
+    A DRY RUN BY DEFAULT, and that is not politeness. This writes a
+    settlement into the journal that the Record page and every learning
+    rung read as fact; the person holding it should see the list before it
+    happens.
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rows = ledger.unplayed_bets(lconn, hconn)
+        if not rows:
+            print("No open bets are waiting on a game that was never played.")
+            return
+        by_day: dict = {}
+        for r in rows:
+            by_day.setdefault((r["date"], r["sport"]), []).append(r)
+        print(f"{len(rows)} open pick(s) whose game was never played "
+              f"(postponed, cancelled or suspended):\n")
+        for (day, sport), group in sorted(by_day.items()):
+            teams = sorted({r["team"] for r in group if r["team"]})
+            g = group[0]
+            print(f"  {day}  {sport:<5} {len(group):>3} pick(s)   "
+                  f"{', '.join(teams)}   "
+                  f"({g['finals']} of {g['games']} game(s) that day scored)")
+            for r in group[:4]:
+                print(f"        {(r['player'] or '')[:28]:<28} {r['market']}")
+            if len(group) > 4:
+                print(f"        … and {len(group) - 4} more")
+        print()
+        if not apply:
+            print("  Nothing was written. These grade as VOID — no action, "
+                  "zero P&L — which\n"
+                  "  is what a book does with a game that was not played. "
+                  "To write it:\n"
+                  "      python3 launch.py --void-unplayed --apply")
+            return
+        n = ledger.void_unplayed(lconn, rows)
+        print(f"  Voided {n} pick(s) — no action, 0.00u each.")
+        # Same export every other write path uses, on the same connection
+        # before it closes: the Record page must not keep showing these as
+        # open after they have been settled.
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        print("  Record page updated.")
+    finally:
+        lconn.close(); hconn.close()
+
+
+def show_epoch() -> None:
+    """What the public record reads from each candidate start date.
+
+        python3 launch.py --epoch
+
+    Read-only. The site shows the record from ledger.RECORD_EPOCH
+    onwards, which is a decision about what the number MEANS — picks made
+    by gates that no longer exist say nothing about the model running
+    tonight. Which date to start from is the owner's call, and it should
+    be made against the actual numbers rather than against a feeling
+    about them.
+
+    The dates offered are not arbitrary: they are MODEL_ERAS, the
+    re-tunes this journal has actually had, plus whatever the epoch is
+    set to now. An era boundary is a date something CHANGED; any other
+    date is just a date, and only the first kind defends itself if a
+    subscriber ever asks why the record starts where it does.
+    """
+    from engine import ledger
+    conn = ledger.connect()
+    try:
+        allp = ledger.performance(conn)
+        cands = [e["start"] for e in ledger.MODEL_ERAS if e["start"]]
+        if ledger.RECORD_EPOCH not in cands:
+            cands.append(ledger.RECORD_EPOCH)
+        cands.sort()
+        print(f"\nAll {allp['settled']} settled picks are in the journal and "
+              f"stay there. This is only what the SITE shows.\n")
+        print(f"  {'from':<13}{'record':>13}{'ROI':>9}{'net':>11}"
+              f"{'not shown':>11}")
+        print("  " + "-" * 55)
+        for d in [None] + cands:
+            p = ledger.performance(conn, since=d)
+            hid = allp["settled"] - p["settled"]
+            rec = f"{p['wins']}-{p['losses']}-{p['pushes']}"
+            print(f"  {(d or 'all time'):<13}{rec:>13}"
+                  f"{p['roi'] * 100:>8.1f}%{p['net_units']:>10.2f}u"
+                  f"{hid:>11}"
+                  + ("   <- live now" if d == ledger.RECORD_EPOCH else ""))
+        print("\n  The re-tunes this model has had:")
+        for e in ledger.MODEL_ERAS:
+            print(f"    {e['start'] or '(the beginning)':<13} {e['label']}")
+        print(f"\n  To move it, edit RECORD_EPOCH in engine/ledger.py and "
+              f"re-run a settle.\n  The page states the date and the count "
+              f"it leaves out either way.\n")
+    finally:
+        conn.close()
+
+
+def show_stuck() -> None:
+    """Which open bets can never settle, and why.
+
+    `--settle all` reaching back weeks is the tell: those dates keep coming
+    back because something on them cannot grade, and the sweep has no way
+    to say which. It re-ingests, matches nothing new, reports zero, and
+    leaves them to be swept again tomorrow — forever.
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rows = ledger.why_open(lconn, hconn, _slate_date())
+    finally:
+        lconn.close(); hconn.close()
+    if not rows:
+        print("Nothing stuck — every open pick is from a day still in play.")
+        return
+
+    by_reason: dict = {}
+    for r in rows:
+        by_reason.setdefault(r["reason"], []).append(r)
+    print(f"{len(rows)} open pick(s) on days that are already over:\n")
+    for reason in sorted(by_reason, key=lambda k: -len(by_reason[k])):
+        group = by_reason[reason]
+        print(f"  {len(group):>4}  {reason}")
+        for r in sorted(group, key=lambda x: x["date"])[:6]:
+            # A Kalshi row's own date is the day the desk recommended it;
+            # showing the ticker's event date beside it is the whole
+            # difference between "overdue" and "a month out".
+            near = (f"  → logged on {r['logged_on']}" if r.get("logged_on")
+                    else f"  ~ feed has {r['closest']!r}" if r.get("closest")
+                    else f"  → event {r['event_date']}" if r.get("event_date")
+                    else "")
+            print(f"          {r['date']}  {r['sport']:<5} "
+                  f"{(r['player'] or '')[:26]:<26} {r['market']} "
+                  f"({r['age_days']}d){near}")
+            # The settler repairs the one-day drift on its own; a bet still
+            # here means a guard refused, and the row must say which.
+            if r.get("repair"):
+                print(f"              ↳ {r['repair']}")
+        if len(group) > 6:
+            print(f"          … and {len(group) - 6} more")
+        # How much of each day IS stored. A date with 30 players in it is a
+        # partial ingest and every "missing" player on it is a symptom of
+        # that, not 30 separate name problems.
+        days = {}
+        for r in group:
+            if r.get("day_players") is not None:
+                days[r["date"]] = (r["day_players"], r.get("day_games", 0))
+        for d, (players, games) in sorted(days.items()):
+            print(f"          {d}: {players} player(s), {games} game(s) "
+                  f"stored for that date")
+        print()
+
+    # What to do about each, in the order they are worth doing.
+    tips = {
+        "no results ingested":
+            "the games were never stored. Ingest that date's results "
+            "(python3 ingest.py <sport> …) and they grade on the next pass.",
+        "waiting on the exchange":
+            "a Kalshi contract whose event is over and which the exchange "
+            "has not settled yet, or has settled since the last desk build. "
+            "These NEVER grade from ingested results — `resolve_predmarket` "
+            "reads the exchange's own settlements — so run `python3 "
+            "pm_build.py` (the desk build) and they close. The date beside "
+            "each one is the day the desk recommended it, not the day the "
+            "event happens; the event date is in the ticker.",
+        "contract has no dated ticker":
+            "a prediction-market row whose ticker carries no readable event "
+            "date, so there is no way to tell whether it is early or "
+            "stranded. Judged on its journal date instead, which is why it "
+            "is listed. Worth a look at the ticker itself.",
+        "gradeable now":
+            "results ARE there and these match — run `python3 launch.py "
+            "--settle all`; if they survive it, tell me.",
+        "player has no log":
+            "that day IS ingested and this player is not in it: a scratch or "
+            "a DNP (correct to void), or the journal spells his name "
+            "differently from the feed (a name-map fix — the line shows the "
+            "closest name the feed has, when there is one).",
+        "logged under the next day":
+            "the player IS in the results, on the date beside this one — a "
+            "late first pitch that is already tomorrow in UTC. The settler "
+            "repairs that drift automatically, so a bet still sitting here "
+            "means one of the repair's guards refused — the ↳ line under "
+            "each bet names which one, and the command that clears it.",
+        "day barely ingested":
+            "the date has far too few players stored to conclude anything "
+            "about one of them — the ingest for that day did not finish. "
+            "Re-run it (python3 ingest.py <sport> --dates <date>) and settle "
+            "again.",
+        "market not ingested":
+            "he played, but this stat was never stored for him — the ingest "
+            "for that sport does not carry this market.",
+        "game not found":
+            "a game-level bet whose game is not in the results: usually a "
+            "postponement, which should be voided rather than graded — "
+            "`python3 launch.py --void-unplayed` lists them, add --apply to "
+            "write it. Settling cannot help: the game was never played, so "
+            "no re-ingest will produce the score the settler waits for.",
+    }
+    print("What each means:")
+    for reason in sorted(by_reason, key=lambda k: -len(by_reason[k])):
+        print(f"  {reason} — {tips.get(reason, 'unknown')}")
+
+
+def why_open() -> None:
+    """Say why every open bet has not settled — and what to do about it.
+
+        python3 launch.py --why-open
+
+    "The bets aren't settling" has three different fixes, and the record
+    page cannot tell them apart. This groups every open bet by its actual
+    blocker (reusing the settler's own lookups, so the answer matches what
+    a settle pass would find) and then names the fix:
+
+      * READY bets still open  → the settle PASS is not running. The
+        auto-settle only fires while `python3 launch.py` is up (on start,
+        then every 5 min) or when the nightly job runs. If neither is
+        happening, `python3 launch.py --settle all` closes them now.
+      * NO-RESULTS bets         → the results ingest has not reached that
+        date. A feeds/reachability issue; `--check` probes the hosts.
+      * NO-STATLINE / NO-SOURCE → cannot grade from what exists (a DNP, a
+        name the feed spells differently, or preseason props with no feed).
+    """
+    from engine import db, ledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        rep = ledger.explain_open(lconn, hconn)
+    finally:
+        lconn.close()
+        hconn.close()
+    if not rep["total"]:
+        print("No open bets — nothing waiting to settle.")
+        return
+    c = rep["counts"]
+    print(f"{rep['total']} open bet(s). Why each has not graded:\n")
+    order = ["ready", "waiting", "exchange", "no_results", "no_statline",
+             "no_grade_source"]
+    for key in order:
+        items = rep["buckets"][key]
+        if not items:
+            continue
+        print(f"  {len(items):>3}  {key.upper():<15} "
+              f"— {ledger.OPEN_REASONS[key]}")
+        for it in sorted(items, key=lambda x: (x["sport"], x["date"] or ""))[:6]:
+            who = it["player"] or ""
+            print(f"         · {it['sport']:<4} {it['date'] or '—':<11} "
+                  f"{it['market']:<10} {who[:28]}"
+                  + ("   (stale — day is over)" if it["stale"] else ""))
+        if len(items) > 6:
+            print(f"         … and {len(items) - 6} more")
+        print()
+    if c["ready"]:
+        print(f"  → {c['ready']} bet(s) are READY. The auto-settle only runs "
+              f"while the server is up or the nightly job fires.\n"
+              f"    Close them now:  python3 launch.py --settle all")
+    if c["no_results"]:
+        print(f"  → {c['no_results']} bet(s) are missing results. Check the "
+              f"feeds:  python3 launch.py --check")
+    if c.get("exchange"):
+        print(f"  → {c['exchange']} prediction-market contract(s) grade off "
+              f"the exchange's settlements, not off ingested results.\n"
+              f"    A desk build closes whatever has settled:  python3 "
+              f"pm_build.py")
+    if c["no_statline"] or c["no_grade_source"]:
+        print(f"  → {c['no_statline'] + c['no_grade_source']} bet(s) cannot "
+              f"grade from available data (DNP, name mismatch, or preseason "
+              f"props). These are expected to sit open.")
+
+
+def _repair_sweep() -> None:
+    """The audit half of --settle, runnable with nothing open by date.
+
+    The doctor's grade-evidence check prescribes `--settle all` when a
+    settled game bet has no final score behind it — but with no ISO day
+    holding an open pick, settle_all returned before the repair pass it
+    was prescribing ever ran. Ethan hit exactly that on the first
+    nightly: two flagged bets, and the recommended command answered
+    "Nothing open to settle." This runs the audit regardless, and also
+    grades any week-labelled bet whose finals have quietly arrived —
+    those live outside the ISO-day sweep by construction.
+    """
+    from engine import db, ledger, parlayledger
+    lconn = ledger.connect()
+    hconn = db.connect()
+    try:
+        n = ledger.settle_from_history(lconn, hconn)
+        if n:
+            print(f"  settled {n} bet(s) straight from stored results")
+        fixed = ledger.resettle_mismatches(lconn, hconn)
+        if fixed:
+            print(f"  ⚠️  re-graded {len(fixed)} bet(s) whose stored result "
+                  "changed: " + "; ".join(
+                      f"{f['player']} {f['market']} {f['was']}→{f['now']}"
+                      for f in fixed[:5]))
+        try:
+            pr = parlayledger.settle(lconn)
+            rp = parlayledger.resettle(lconn)
+            if pr["settled"] or rp["fixed"] or rp["reopened"]:
+                print(f"  parlays: {pr['settled']} graded, "
+                      f"{len(rp['fixed'])} re-graded, "
+                      f"{rp['reopened']} reopened with their legs")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️  parlay audit skipped: {exc}")
+        ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+        if not n and not fixed:
+            print("  repair audit: every settled game bet still matches its "
+                  "stored final — nothing to fix.")
+    finally:
+        lconn.close()
+        hconn.close()
+
+
+def settle_all() -> None:
+    """Grade every day that still has picks open, oldest first.
+
+    "Some bets aren't settled" is usually more than one night — a laptop
+    that slept, a crashed pass, a west-coast game that ended after the
+    launcher was closed. Finding each date by hand off the --check output
+    and running --settle once per day is busywork the machine can do."""
+    from engine import ledger
+    lconn = ledger.connect()
+    try:
+        days = _settleable_days(ledger.open_by_day(lconn, _slate_date()))
+    finally:
+        lconn.close()
+    if not days:
+        print("Nothing open to settle by date — running the repair audit …")
+        _repair_sweep()
+        return
+    print(f"{len(days)} day(s) with open picks: {', '.join(sorted(days))}\n")
+    for day in sorted(days):        # oldest first, so history builds forward
+        settle_now(day)
+        print()
+
+
+def settle_now(day: str | None = None) -> None:
+    """Ingest a day's results and grade the journal against them, now.
+
+    The daily chores only run on the first refresh cycle of a new day, so
+    a night's picks normally grade tomorrow morning. This does it on
+    demand — run it after the games end to see tonight's board settle,
+    and it prints the open/settled counts per bucket either side of the
+    run so nothing has to be taken on faith.
+
+    Pass "all" to sweep every day that still has something open."""
+    import datetime as _dt
+    if day == "all":
+        return settle_all()
+    # _slate_date(), not date.today(): the baseball day rolls at 5 AM, so
+    # between midnight and 5 the picks you are looking at are journaled
+    # under YESTERDAY's date. Defaulting to the calendar date meant that a
+    # bare `--settle` at 4 AM — exactly when you'd reach for it, with the
+    # west-coast games just finished — ingested an empty date and reported
+    # settling nothing, while last night's board sat open.
+    day = day or _slate_date()
+    try:
+        _dt.date.fromisoformat(day)
+    except ValueError:
+        print(f"--settle takes a date like 2026-07-26, or 'all' (got {day!r}).")
+        return
+    from engine import db, ingest, ledger
+
+    def counts(conn):
+        rows = conn.execute(
+            "SELECT category, status, COUNT(*) FROM bets GROUP BY category, status")
+        return {(r[0], r[1]): r[2] for r in rows}
+
+    lconn = ledger.connect()
+    before = counts(lconn)
+    print(f"Settling {day} …")
+    hconn = db.connect()
+    # A hoops bet filed under the wrong league can never meet its results.
+    # Re-file the unambiguous ones FIRST — the ingest below decides which
+    # sports to fetch from the bets' own labels, so relabeling after it
+    # would leave the right league un-ingested for another pass.
+    try:
+        moved = ledger.relabel_cross_league(lconn, hconn)
+        if moved:
+            print(f"  re-filed {moved} hoops bet(s) under the league that "
+                  f"actually played them")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  league relabel skipped: {exc}")
+    # Long-shot markets may never sit in the headline record — re-file any
+    # stray so the main record only describes picks the model stands behind.
+    try:
+        strays = ledger.move_longshots_out_of_main(lconn)
+        if strays:
+            print(f"  re-filed {strays} long-shot bet(s) out of the "
+                  f"headline record into their own bucket")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  long-shot re-file skipped: {exc}")
+    try:
+        # Every sport with an open pick that day, not just baseball. This
+        # ingested MLB alone, so a WNBA or UFC pick had no stat line to be
+        # graded against and stayed open — which is why `--settle all` began
+        # at the same old date every night and reported nothing settled.
+        from engine.maintenance import ingest_for_open_bets
+        res = ingest_for_open_bets(lconn, hconn, [day], print)
+        print(f"  results: {res.get('games', 0)} game(s), "
+              f"{res.get('player_logs', 0):,} player log rows")
+        # A called-off game is the usual reason a night refuses to grade:
+        # it sits in the DB scoreless, looking exactly like a game still in
+        # progress, and holds every pick on both teams open. Name it.
+        for a in res.get("abandoned", []):
+            print(f"  ⛔ {a}")
+        for s in res.get("skipped", []):
+            print(f"  ⚠️  {s}")
+        if not res["games"]:
+            print("  (no finished games ingested for that date yet — if "
+                  "tonight's games are still in progress, run this again "
+                  "after they end)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  results ingest failed: {exc}")
+    n = ledger.settle_from_history(lconn, hconn)
+    # Parlay tickets grade off their legs' verdicts in the singles journal,
+    # so this has to run AFTER the settle above or every ticket would find
+    # its legs still open and wait another day for no reason.
+    try:
+        from engine import parlayledger
+        pr = parlayledger.settle(lconn)
+        if pr["settled"] or pr["waiting"]:
+            print(f"  parlays: graded {pr['settled']}, "
+                  f"{pr['waiting']} waiting on legs")
+        # And the mirror of resettle_mismatches: when a single moved (a
+        # partial-data grade healed, or repair-premature reopened it), any
+        # settled ticket resting on it re-grades or reopens with it.
+        rp = parlayledger.resettle(lconn)
+        if rp["fixed"] or rp["reopened"]:
+            print(f"  ⚠️  parlays re-audited: {len(rp['fixed'])} re-graded, "
+                  f"{rp['reopened']} reopened with their legs")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  parlay settle skipped: {exc}")
+    # The learning step: fresh grades re-mine the journal for loss
+    # patterns, so a slice that just crossed the evidence bar vetoes
+    # picks on the next build.
+    try:
+        from engine import losspatterns
+        lp = losspatterns.refresh(lconn)
+        # ALWAYS REPORTED, including zero. This printed only when
+        # something closed, so the night the main-only check demoted all
+        # four standing closures the line simply vanished — and a mining
+        # step that found nothing looks exactly like one that crashed.
+        # The demotions ARE the news: they are picks that will now be
+        # priced which yesterday were refused.
+        _dem = [f for f in (lp.get("findings") or [])
+                + (lp.get("restatements") or []) if f.get("demoted")]
+        if lp["closed"] or _dem:
+            bits = []
+            if lp["closed"]:
+                bits.append(f"{len(lp['closed'])} enforced")
+            if _dem:
+                thin = sum(1 for f in _dem
+                           if f.get("demoted") == "too thin to check")
+                bits.append(f"{len(_dem)} demoted to watch"
+                            + (f" ({thin} for want of `main` evidence)"
+                               if thin else ""))
+            print(f"  loss patterns: {', '.join(bits)} — see the Record page")
+        else:
+            print(f"  loss patterns: nothing over the bar "
+                  f"({lp.get('tested', 0)} slice(s) tested)")
+        # TASK #78 HAS A DATE NOW. Its instruction was "do not resolve
+        # this by argument — resolve it when there are enough `main` rows
+        # to mine both ways and compare", and a condition nobody is
+        # watching for is a condition nobody notices being met. Announced
+        # once it is crossable, and silent before then: a countdown every
+        # night is a line you stop reading.
+        _mains = sum(1 for r in losspatterns.records_from_ledger(lconn)
+                     if r["category"] == "main")
+        if _mains >= losspatterns.BOTH_WAYS_MIN_MAIN:
+            print(f"  loss patterns: {_mains} `main` rows — the pooled-vs-"
+                  f"main comparison is now runnable (launch.py --both-ways)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  loss-pattern mining skipped: {exc}")
+    try:
+        from engine import journalfit
+        jf = journalfit.refresh(lconn)
+        for f in jf["temperatures"]["fitted"]:
+            print(f"  journal fit: {f['key']} temperature "
+                  f"T={f['temperature']} on {f['n']} settled bets")
+        for f in jf["memory"]["fitted"]:
+            if f["adopted"]:
+                print(f"  journal fit: {f['key']} player memory on "
+                      f"({f['players']} corrected)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  journal fit skipped: {exc}")
+    try:
+        from engine import selectionfit
+        sf = selectionfit.refresh(lconn)
+        for name, e in [("pooled", sf["pooled"])] + sorted(sf["sports"].items()):
+            if e.get("applied"):
+                print(f"  selection haircut ({name}): claimed "
+                      f"{e['claimed'] * 100:.1f}%, landed {e['landed'] * 100:.1f}%"
+                      f" over {e['n']} bets — shift {e['shift']:+.3f} log-odds")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  selection haircut skipped: {exc}")
+    try:
+        from engine import hypotheses
+        hs = hypotheses.retest(lconn)
+        closed_h = [h for h in hs.get("hypotheses") or []
+                    if h.get("action") == "close"]
+        if closed_h:
+            print(f"  hypotheses: {len(closed_h)} confirmed closure(s) "
+                  "enforcing — see the Record page")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  hypothesis retest skipped: {exc}")
+    # The prose lanes (nightly postmortem, weekly brief): pennies per
+    # call, so they guard themselves — no key = silent skip, one entry
+    # per night/week, and they stand down once the monthly cap is spent.
+    try:
+        from engine import prose
+        prose.nightly(lconn, print)
+        prose.weekly(lconn, print)
+        prose.weekly_lab(lconn, print)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️  prose lanes skipped: {exc}")
+    # BANK THE INFORMATION TEST BEFORE EXPORTING, so tonight's settled
+    # bets are in tonight's run rather than tomorrow's. It is the whole
+    # reason the series exists: a number nobody has to remember to take.
+    # OVER THE WINDOW THE SITE SHOWS. Every run banked before 2026-08-23
+    # was measured over the whole journal, which is why the panel read
+    # "558 settled bets" beside a 431-pick record. The stored runs are
+    # left alone — each is what the test said on the night it ran, and
+    # rewriting them would be inventing a history — but from here the
+    # series and the record describe the same bets.
+    _edge = ledger.record_edge_run(lconn, since=ledger.RECORD_EPOCH)
+    if _edge:
+        print(f"  edge test: n={_edge['n']}  claimed-edge AUC "
+              f"{_edge['auc_edge']:.3f} "
+              f"[{_edge['auc_edge_lo']:.3f}, {_edge['auc_edge_hi']:.3f}]  "
+              f"-> {_edge['verdict']}")
+    ledger.export_json(lconn, ROOT / "web" / "data" / "record.json")
+    after = counts(lconn)
+    print(f"  journal: settled {n} pick(s)")
+    # Every bucket that has (or had) something open, not just main/longshot.
+    # Most open picks live in longshot_watch and the samplers; reporting two
+    # buckets made a pass that cleared 40 watch rows look like it did nothing.
+    cats = sorted({c for (c, s) in list(before) + list(after) if s == "open"}
+                  | {"main", "longshot"})
+    for cat in cats:
+        b_open, a_open = before.get((cat, "open"), 0), after.get((cat, "open"), 0)
+        if not (b_open or a_open):
+            continue
+        graded = sum(v for (c, s), v in after.items()
+                     if c == cat and s in ("won", "lost", "push"))
+        moved = "" if b_open == a_open else "  ←"
+        print(f"  {cat:>15}: open {b_open} → {a_open}"
+              f"   ({graded} graded total){moved}")
+    print("Record page updated.")
+
+
+def _tailscale_ip() -> str | None:
+    """The machine's Tailscale address (100.64.0.0/10), when Tailscale is
+    installed and up — the URL a phone on the same tailnet can open from
+    ANYWHERE, not just home Wi-Fi. See docs/PHONE.md for the setup."""
+    import subprocess
+    candidates = (
+        ["tailscale", "ip", "-4"],
+        ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "ip", "-4"],
+    )
+    for cmd in candidates:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=3).stdout.strip().splitlines()
+            if out and out[0].startswith("100."):
+                return out[0].strip()
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return None
+
+
+def nfl_baseline() -> None:
+    """Phase-1 audit: is the ingested base complete enough to price Week 1?
+
+    Checks the layers Week-1 projections stand on — weekly stats, pbp
+    aggregates (xFP / roles / EPA / PROE / pace), final scores, and
+    harvested closing lines — and says which are thin BEFORE the season
+    exposes it. `python3 launch.py --nfl-baseline`.
+    """
+    from engine import db, teamprofiles
+    conn = db.connect()
+    row = conn.execute("SELECT MAX(season) FROM player_game_logs "
+                       "WHERE sport='nfl'").fetchone()
+    season = int(row[0]) if row and row[0] is not None else None
+    if season is None:
+        print("No NFL data ingested at all — run `python3 ingest.py nfl` first.")
+        return
+    print(f"NFL baseline audit — season {season}\n")
+
+    def check(label, n, want, unit=""):
+        mark = "✅" if n >= want else "⚠️ "
+        print(f"  {mark} {label}: {n:,}{unit}" +
+              ("" if n >= want else f"  (want ≥ {want:,} — thin)"))
+
+    def market_n(m):
+        return conn.execute(
+            "SELECT COUNT(*) FROM player_game_logs WHERE sport='nfl' "
+            "AND season=? AND market=?", (season, m)).fetchone()[0]
+
+    # Weekly stat layer — what settles bets and feeds projections.
+    # Wants calibrated against a COMPLETE ingested season (2025 actuals),
+    # set just under observed so "complete" passes and "partial" warns.
+    for m, want in (("pass_yds", 500), ("rush_yds", 1500), ("rec_yds", 2400),
+                    ("receptions", 4000), ("anytime_td", 1500),
+                    ("snap_pct", 6000)):
+        check(f"weekly {m} rows", market_n(m), want)
+    # pbp layer — measured roles and the new efficiency profiles.
+    for m, want in (("xfp", 4000), ("rz_tgt", 4000), ("i5_car", 4000)):
+        check(f"pbp {m} rows", market_n(m), want)
+    games = conn.execute(
+        "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=? "
+        "AND home_score IS NOT NULL", (season,)).fetchone()[0]
+    check("final scores", games, 250)
+    # The UPCOMING season's schedule — game scripts and Week-1 slates
+    # build on it, and openers' lines land here weeks before kickoff.
+    upcoming = conn.execute(
+        "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=?",
+        (season + 1,)).fetchone()[0]
+    if upcoming:
+        check(f"{season + 1} schedule rows", upcoming, 272)
+        lines = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport='nfl' AND season=? "
+            "AND spread IS NOT NULL AND total IS NOT NULL",
+            (season + 1,)).fetchone()[0]
+        print(f"  ·  {lines} upcoming game(s) already carry posted lines — "
+              "the game-scripts panel runs on these")
+    else:
+        print(f"  ⚠️  no {season + 1} schedule ingested — run "
+              "`python3 ingest.py nfl`")
+    closes = conn.execute(
+        "SELECT COUNT(*) FROM odds_history WHERE sport='nfl'").fetchone()[0]
+    if closes:
+        check("harvested odds snapshots", closes, 1000)
+    else:
+        # Not a Week-1 blocker: the closes harvest accrues from September.
+        print("  ·  odds snapshots: none yet — the maintenance harvest "
+              "accrues these once NFL lines go live (CLV layer, not a "
+              "Week-1 blocker)")
+
+    profs = teamprofiles.season_profiles(conn)
+    check("team efficiency profiles (EPA/PROE/pace)", len(profs), 32)
+    if profs:
+        base = teamprofiles.league_baseline(profs)
+        cov = {s: sum(1 for p in profs.values() if p.get(s) is not None)
+               for s in ("off_epa", "def_epa", "proe", "pace")}
+        print(f"\n  League baseline: EPA/play {base.get('off_epa')} · "
+              f"PROE {base.get('proe')} · pace {base.get('pace')}s · "
+              f"{base.get('plays_per_game')} plays/g")
+        print("  Stat coverage: " + ", ".join(
+            f"{s} {n}/{len(profs)}" for s, n in cov.items()))
+        if any(n < len(profs) for n in cov.values()):
+            print("  ⚠️  EPA/pace gaps — rerun `python3 ingest.py nfl` to "
+                  "re-aggregate (the cached pbp file already has the columns).")
+        if base.get("proe") is not None and abs(base["proe"]) > 0.5:
+            print("  ⚠️  PROE stored in percentage points (pre-fix rows) — "
+                  "rerun `python3 ingest.py nfl` to restate as fractions.")
+    else:
+        print("\n  ⚠️  No team profiles yet — run `python3 ingest.py nfl` "
+              "(Tuesday maintenance also refreshes them in season).")
+
+
+def _lan_ip() -> str | None:
+    """This machine's LAN address — the URL a phone on the same Wi-Fi can
+    open. The UDP connect never sends a packet; it just makes the OS pick
+    the outbound interface. None when there's no usable network."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return None if ip.startswith("127.") else ip
+    except OSError:
+        return None
+
+
+#: Every flag `main` and its helpers understand. Explicit, and checked
+#: against the source by tests/test_known_flags.py so it cannot drift.
+#:
+#: WHY A LIST AND NOT A SCAN. Deriving this at runtime by regexing our
+#: own source looks tidy and is wrong twice: `--since` is consumed inside
+#: a `for flag in (...)` loop that no regex sees, so a scan would refuse
+#: a working command; and a flag named only in a docstring would be
+#: accepted, which is the exact bug this guard exists to catch. The test
+#: reads the source and asserts every flag it CAN see is listed here, so
+#: adding a flag without registering it fails the suite instead of
+#: failing an operator at 1am.
+KNOWN_FLAGS = frozenset({
+    "--alignment", "--apply", "--arsenal", "--auto-update", "--bands",
+    "--bind", "--board-size", "--boards", "--booksharp", "--both-ways",
+    "--card-venue", "--check", "--clean-cache", "--confirm-qb",
+    "--coverage", "--data-audit", "--data-use", "--desk", "--desk-probe",
+    "--doctor", "--epoch", "--gates", "--haircut", "--injuries",
+    "--inspect-pick", "--learning", "--likely", "--matchup", "--memes",
+    "--nfl-baseline", "--nightly", "--odds-audit", "--odds-doctor",
+    "--odds-only", "--onoff", "--out", "--paper", "--parlay-report",
+    "--parlays", "--paywall-audit", "--pbp", "--prefit", "--prereg",
+    "--prescan", "--print-env", "--probe-live", "--probe-weighins",
+    "--promo-new", "--promos", "--promos-setup", "--recreate", "--refit",
+    "--refresh", "--refresh-rosters", "--relearn", "--renders",
+    "--repair-closes", "--repair-journal", "--repair-premature",
+    "--reset-budget", "--resize-unstaked", "--ripple", "--seal",
+    "--settle", "--shape", "--side-bias",
+    # Consumed by `for flag in ("--sport", "--since")` — invisible to any
+    # regex over this file, and the reason this set is written by hand.
+    "--since", "--sport",
+    "--stakes", "--standings", "--starter", "--stripe", "--stripe-setup",
+    "--stripe-webhook", "--stuck", "--title", "--todo", "--unbuilt",
+    "--velo", "--venues", "--void-unplayed", "--weigh-in", "--why-bet",
+    "--why-empty", "--why-live", "--why-many", "--why-open", "--why-pick",
+    "--why-ufc",
+})
+
+
+#: Flags after which the rest of the line belongs to somebody else.
+#: `--renders` hands its whole tail to `rendercheck.main`, which has its
+#: own argparse (`--width`, `--shots`) — so `launch.py --renders --shots
+#: out/` is a working command documented in GUIDE.md, and a guard that
+#: judged every token would have broken it on the day it shipped. Every
+#: OTHER branch that reads trailing arguments filters dash-leading tokens
+#: out first, so it cannot receive a foreign flag and does not belong
+#: here. Add to this only when a branch really forwards argv untouched.
+PASSTHROUGH_FLAGS = frozenset({"--renders"})
+
+
+def unknown_flags(argv: list) -> list:
+    """Flags in `argv` this script does not understand, in order.
+
+    Only long flags in our own shape (`--word-word`) are judged. Values
+    are left alone: a sport, a date or a player name never matches, and
+    guessing at an operator's argument is how a guard starts breaking
+    working commands.
+
+    Judging STOPS at a passthrough flag. What follows one is another
+    program's command line, and refusing it on that program's behalf
+    would be this guard inventing an opinion it has no basis for.
+    """
+    import re as _re
+    seen, out = set(), []
+    for tok in argv:
+        if tok in PASSTHROUGH_FLAGS:
+            break
+        if not _re.fullmatch(r"--[a-z0-9]+(?:-[a-z0-9]+)*", tok):
+            continue
+        if tok not in KNOWN_FLAGS and tok not in seen:
+            seen.add(tok)
+            out.append(tok)
+    return out
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    # AN UNKNOWN FLAG STOPS HERE. Every branch below tests membership in
+    # argv, so a flag nobody recognises matches nothing and falls through
+    # to the bottom of this function — which starts the web server. Ethan typed
+    # `launch.py --resettle` (a command this script's own output told him
+    # to run) and got "Port 8000 is already in use", which is a true
+    # sentence about the wrong question and reads like the box is broken.
+    # Refusing by name, with a suggestion, costs one comparison.
+    if (_bad := unknown_flags(argv)):
+        import difflib
+        print(f"\n  Not a flag I know: {', '.join(_bad)}")
+        for _f in _bad:
+            _near = difflib.get_close_matches(_f, sorted(KNOWN_FLAGS), n=3,
+                                              cutoff=0.6)
+            if _near:
+                print(f"    {_f} → did you mean {', or '.join(_near)}?")
+        print("\n  Nothing ran. `python3 launch.py` with no flags starts "
+              "the site;")
+        print("  `--check` runs preflight.\n")
+        return
+    if "--reset-budget" in argv:
+        from engine.oddsbudget import reset, summary
+        reset()
+        print("Odds budget reset — the next call will read the new key's real quota.")
+        print("  " + summary())
+        return
+    if "--check" in argv:
+        preflight()
+        return
+    if "--nightly" in argv:
+        _sp = None
+        if "--sport" in argv:
+            i = argv.index("--sport")
+            if len(argv) > i + 1 and not argv[i + 1].startswith("-"):
+                _sp = [x.strip().lower() for x in argv[i + 1].split(",")
+                       if x.strip()]
+        nightly_run(odds_only="--odds-only" in argv, sports=_sp)
+        return
+    if "--doctor" in argv:
+        import doctor
+        sys.exit(doctor.main([a for a in argv if a != "--doctor"]))
+    if "--weigh-in" in argv:
+        weigh_in_cli(argv)
+        return
+    if "--confirm-qb" in argv:
+        confirm_qb_cli(argv)
+        return
+    if "--card-venue" in argv:
+        card_venue_cli(argv)
+        return
+    if "--refresh-rosters" in argv:
+        i = argv.index("--refresh-rosters")
+        who = " ".join(a for a in argv[i + 1:] if not a.startswith("-")) or None
+        refresh_rosters(who)
+        return
+    if "--odds-doctor" in argv:
+        odds_doctor()
+        return
+    if "--data-use" in argv:
+        from engine.datause import report as _use
+        print(_use())
+        return
+    if "--velo" in argv:
+        i = argv.index("--velo")
+        who = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        show_velocity(who)
+        return
+    if "--pbp" in argv:
+        i = argv.index("--pbp")
+        pk = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        show_pbp(pk)
+        return
+    if "--both-ways" in argv:
+        # Task #78: mine the pooled journal and `main` alone, then compare
+        # the convictions. Reports and stops — choosing a population is a
+        # pricing change, so there is deliberately no --apply here.
+        from engine import ledger as _l
+        from engine import losspatterns as _lp
+        print(_lp.format_both_ways(
+            _lp.both_ways(_lp.records_from_ledger(_l.connect()))))
+        return
+    if "--why-bet" in argv:
+        i = argv.index("--why-bet")
+        why_bet([a for a in argv[i + 1:] if not a.startswith("-")])
+        return
+    if "--onoff" in argv:
+        i = argv.index("--onoff")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_onoff(*(rest[:4] or [None]))
+        return
+    if "--matchup" in argv:
+        i = argv.index("--matchup")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_matchup(*(rest[:3] or [None]))
+        return
+    if "--arsenal" in argv:
+        i = argv.index("--arsenal")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_arsenal(rest[0] if rest else None,
+                     rest[1] if len(rest) > 1 else None)
+        return
+    if "--injuries" in argv:
+        # A name after the flag asks about ONE player across both feeds;
+        # bare --injuries stays the league-wide board probe.
+        rest = [a for a in argv[argv.index("--injuries") + 1:]
+                if not a.startswith("-")]
+        if rest:
+            show_player_injury(" ".join(rest))
+        else:
+            show_injuries()
+        return
+    if "--venues" in argv:
+        show_venues()
+        return
+    if "--prescan" in argv:
+        i = argv.index("--prescan")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_prescan(int(rest[0]) if rest else None)
+        return
+    if "--prefit" in argv:
+        i = argv.index("--prefit")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_prefit(rest[0] if rest else "")
+        return
+    if "--standings" in argv:
+        show_standings()
+        return
+    if "--stakes" in argv:
+        show_stakes()
+        return
+    if "--haircut" in argv:
+        show_haircut("--refit" in argv)
+        return
+    if "--renders" in argv:
+        # Does the site still LOOK like the render pack? RENDER_SPEC.md's
+        # structural claims, measured in a real browser at the widths the
+        # renders were drawn at. Lives in its own module because it needs
+        # Node, and a health check must not depend on one.
+        import rendercheck
+        i = argv.index("--renders")
+        sys.exit(rendercheck.main([a for a in argv[i + 1:]]))
+    if "--shape" in argv:
+        import shapecheck
+        rest = argv[argv.index("--shape") + 1:]
+        args = []
+        for flag in ("--sport", "--since"):
+            if flag in rest:
+                args += [flag, rest[rest.index(flag) + 1]]
+        shapecheck.main(args)
+        return
+    if "--prereg" in argv:
+        show_prereg()
+        return
+    if "--stripe-webhook" in argv:
+        _stripe_webhook_cli(recreate="--recreate" in argv,
+                            print_env="--print-env" in argv)
+        return
+    if "--paywall-audit" in argv:
+        _paywall_audit_cli()
+        return
+    if "--board-size" in argv:
+        _board_size_cli()
+        return
+    if "--parlay-report" in argv or "--parlays" in argv:
+        _parlay_report_cli()
+        return
+    if "--promo-new" in argv:
+        _promo_new_cli(argv)
+        return
+    if "--promos" in argv or "--promos-setup" in argv:
+        # NARROW ON PURPOSE, so the deploy can call it. --stripe-setup
+        # also creates Products and Prices, and a deploy script that
+        # silently mints prices is exactly the thing the --stripe /
+        # --stripe-setup split exists to prevent. A coupon is safe to
+        # create unattended in a way a price is not: it charges nobody,
+        # Stripe enforces one promotion code per name so running it twice
+        # cannot duplicate anything, and a coupon whose terms disagree
+        # with this repo is REPORTED rather than rewritten — somebody may
+        # already be subscribed under it.
+        import os as _os
+        from engine import billing as _BI
+        sk = _os.environ.get(_BI.ENV_SECRET, "").strip()
+        if not sk:
+            print(f"{_BI.ENV_SECRET} is not set — nothing to check.")
+            return
+        _stripe_promos_cli(sk, create="--promos-setup" in argv)
+        return
+    if "--stripe" in argv or "--stripe-setup" in argv:
+        _stripe_cli(create="--stripe-setup" in argv,
+                    print_env="--print-env" in argv)
+        return
+    if "--seal" in argv:
+        # Redact every board already on the public path, now, without
+        # waiting for a rebuild. See engine/gate.seal for why this has to
+        # exist: turning QB_PAYWALL on changes what the NEXT build
+        # writes and touches nothing already written.
+        from engine import gate as _gate
+        if not _gate.enabled():
+            print("QB_PAYWALL is not set in this environment, so there is "
+                  "nothing to seal — the site is meant to be free right now.\n"
+                  "Set it in /etc/qellys/env (with QB_COMP_EMAILS FIRST), "
+                  "restart, then run this.")
+            sys.exit(1)
+        print("Sealing every board on the public path…")
+        res = _gate.seal()
+        left = _gate.unsealed()
+        print(f"\n{len(res['sealed'])} board(s) sealed, "
+              f"{len(res['free'])} left free by design, "
+              f"{len(res['already'])} already sealed.")
+        if left:
+            print("\nSTILL CARRYING PAID ROWS — this is the failure this "
+                  "command exists to prevent:")
+            for row in left:
+                print(f"  {row['board']}: {row['rows']} row(s)")
+            sys.exit(2)
+        print("Nothing on the public path carries a paid row.")
+        sys.exit(0)
+    if "--todo" in argv:
+        from engine import todo as _todo
+        sys.exit(_todo.main(argv))
+    if "--learning" in argv:
+        show_learning()
+        return
+    if "--relearn" in argv:
+        i = argv.index("--relearn")
+        rest = [x for x in argv[i + 1:] if not x.startswith("-")]
+        if not rest:
+            print("  Which sport? e.g. python3 launch.py --relearn nfl")
+            return
+        relearn(rest[0].lower())
+        return
+    if "--bands" in argv:
+        i = argv.index("--bands")
+        rest = [x for x in argv[i + 1:] if not x.startswith("-")]
+        show_bands(rest[0] if rest else None)
+        return
+    if "--memes" in argv:
+        show_memes()
+        return
+    if "--booksharp" in argv:
+        show_booksharp()
+        return
+    if "--ripple" in argv:
+        i = argv.index("--ripple")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_redistribution(*(rest[:4] or [None]))
+        return
+    if "--alignment" in argv:
+        i = argv.index("--alignment")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        show_alignment(rest[0] if rest else None,
+                       rest[1] if len(rest) > 1 else None)
+        return
+    if "--unbuilt" in argv:
+        show_unbuilt()
+        return
+    if "--coverage" in argv:
+        from engine.coverage import report
+        i = argv.index("--coverage")
+        want = [a.lower() for a in argv[i + 1:] if not a.startswith("-")]
+        print(report(want or None))
+        return
+    if "--clean-cache" in argv:
+        # Corrupt/empty cache files are now treated as misses automatically,
+        # but sweeping them keeps the next fetch from paying a needless
+        # round-trip — and proves which file was poisoned.
+        import json as _json
+        from engine.sources.fetch import CACHE_DIR as _CD
+        bad, checked = [], 0
+        for f in sorted(_CD.glob("*.json")):
+            checked += 1
+            try:
+                _json.loads(f.read_text())
+            except Exception:
+                bad.append(f)
+        for f in bad:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        print(f"Cache check: {checked} JSON file(s) scanned, "
+              f"{len(bad)} unreadable removed"
+              + (": " + ", ".join(f.name for f in bad[:8]) if bad else
+                 " — all clean."))
+        import time as _t
+        from engine.maintenance import (prune_cache, CACHE_KEEP_DAYS,
+                                        PRUNABLE_CACHE_PREFIXES)
+        # Where the space actually is, so a big number is explainable
+        # instead of alarming: grouped by file family, with the age of the
+        # oldest member (that's what says when pruning starts helping).
+        fams: dict = {}
+        total = files = 0
+        now = _t.time()
+        for f in _CD.iterdir():
+            if not f.is_file():
+                continue
+            st = f.stat()
+            total += st.st_size
+            files += 1
+            fam = next((p for p in PRUNABLE_CACHE_PREFIXES
+                        if f.name.startswith(p)), None)
+            if fam is None:
+                fam = f.name if st.st_size > 5e6 else "other (kept)"
+            d = fams.setdefault(fam, [0, 0, 0.0])
+            d[0] += 1
+            d[1] += st.st_size
+            d[2] = max(d[2], (now - st.st_mtime) / 86400)
+        print(f"Cache size: {total / 1e6:.1f} MB across {files:,} file(s).")
+        for fam, (n_f, size, age) in sorted(fams.items(),
+                                            key=lambda kv: -kv[1][1])[:10]:
+            prunable = fam in PRUNABLE_CACHE_PREFIXES
+            print(f"  {fam:<26} {n_f:>6,} file(s)  {size / 1e6:>7.1f} MB  "
+                  f"oldest {age:>4.0f}d  "
+                  + ("prunes at 30d" if prunable else "kept always"))
+        n, freed = prune_cache(log=lambda m: print(m.strip()))
+        if not n:
+            print(f"  Nothing older than {CACHE_KEEP_DAYS} days yet — "
+                  f"pruning starts as these age out. History, budget state "
+                  f"and big downloads are never pruned.")
+        return
+    if "--data-audit" in argv:
+        # "Is my data still there?" answered by counting it, not by
+        # promising. Everything below is PERMANENT storage; none of it is
+        # reachable by the cache pruner (asserted at the end).
+        from pathlib import Path as _P
+        from engine import db as _db, ledger as _led, calibrate as _cal
+        from engine.sources.fetch import CACHE_DIR as _CD
+        h = _db.connect()
+        print("PERMANENT DATA — stats, results and journal\n")
+        rows = h.execute(
+            "SELECT sport, COUNT(*) n, COUNT(DISTINCT season) s, "
+            "MIN(period) a, MAX(period) b FROM player_game_logs "
+            "GROUP BY sport ORDER BY n DESC").fetchall()
+        for r in rows:
+            print(f"  {r['sport'].upper():<5} player stats : {r['n']:>9,} rows  "
+                  f"{r['s']} season(s)  {r['a']} → {r['b']}")
+        for r in h.execute(
+                "SELECT sport, COUNT(*) n, SUM(home_score IS NOT NULL) f "
+                "FROM games GROUP BY sport ORDER BY n DESC"):
+            print(f"  {r['sport'].upper():<5} games        : {r['n']:>9,} "
+                  f"({r['f'] or 0:,} with final scores)")
+        for tbl, label in (("team_weeks", "team EPA/PROE/pace"),
+                           ("odds_history", "harvested odds"),
+                           ("game_starters", "starting pitchers"),
+                           ("game_umpires", "umpires")):
+            try:
+                n = h.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                print(f"  {'':<5} {label:<13}: {n:>9,} rows")
+            except Exception:
+                pass
+        c = _led.connect()
+        b = c.execute(
+            "SELECT COUNT(*) n, SUM(status='open') o, "
+            "SUM(status IN ('won','lost','push')) s FROM bets").fetchone()
+        print(f"\n  BET JOURNAL       : {b['n']:,} bet(s) — "
+              f"{b['s'] or 0:,} settled, {b['o'] or 0:,} open")
+        for r in c.execute("SELECT category, COUNT(*) n FROM bets "
+                           "GROUP BY category ORDER BY n DESC"):
+            print(f"     {r['category']:<16} {r['n']:>7,}")
+        print(f"  bankroll          : ${_led.bankroll(c):,.2f}")
+        cal = _P(_cal.DEFAULT_PATH)
+        print(f"  calibration model : "
+              f"{'present' if cal.exists() else 'not fitted yet'}")
+        # The guarantee, checked rather than claimed.
+        print("\nPRUNE SAFETY")
+        cache = _CD.resolve()
+        for label, p in (("history DB", _db.DEFAULT_DB),
+                         ("ledger DB", _led.DEFAULT_DB),
+                         ("calibration", _cal.DEFAULT_PATH)):
+            inside = cache in _P(p).resolve().parents
+            print(f"  {label:<12} {_P(p).resolve()}  "
+                  f"{'⚠️ INSIDE CACHE' if inside else '✅ outside the cache'}")
+        print(f"  The pruner only ever looks in {cache} and only deletes "
+              f"per-game fetch files there.")
+        return
+    if "--nfl-baseline" in argv:
+        nfl_baseline()
+        return
+    if "--why-ufc" in argv:
+        why_ufc(argv)
+        return
+    if "--probe-live" in argv:
+        from engine.ufc import live as _live
+        i = argv.index("--probe-live")
+        day = (argv[i + 1] if len(argv) > i + 1
+               and not argv[i + 1].startswith("-") else None)
+        for line in _live.probe(day):
+            print(line)
+        return
+    if "--probe-weighins" in argv:
+        from engine.ufc import weighin_feed
+        i = argv.index("--probe-weighins")
+        day = (argv[i + 1] if len(argv) > i + 1
+               and not argv[i + 1].startswith("-") else None)
+        for line in weighin_feed.probe(day):
+            print(line)
+        return
+    if "--side-bias" in argv:
+        i = argv.index("--side-bias")
+        who = next((a.lower() for a in argv[i + 1:]
+                    if not a.startswith("-")), "mlb")
+        side_bias(who)
+        return
+    if "--repair-premature" in argv:
+        repair_premature_cli(argv)
+        return
+    if "--why-pick" in argv:
+        i = argv.index("--why-pick")
+        rest = [a for a in argv[i + 1:] if not a.startswith("-")]
+        if not rest:
+            print('usage: python3 launch.py --why-pick "Player Name" [sport]')
+            return
+        sport = rest[-1].lower() if rest[-1].lower() in (
+            "mlb", "nfl", "nba", "wnba", "cfb") else "mlb"
+        who = " ".join(rest[:-1] if sport == rest[-1].lower() else rest)
+        why_pick(who, sport)
+        return
+    if "--why-live" in argv:
+        i = argv.index("--why-live")
+        who = next((a.lower() for a in argv[i + 1:]
+                    if not a.startswith("-")), "mlb")
+        why_live(who)
+        return
+    if "--odds-audit" in argv:
+        odds_audit()
+        raise SystemExit(0)
+    if "--why-many" in argv:
+        i = argv.index("--why-many")
+        sp = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
+        why_many(sp)
+        return
+
+    if "--why-empty" in argv:
+        i = argv.index("--why-empty")
+        sport = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else "mlb"
+        why_empty(sport)
+        return
+    if "--repair-journal" in argv:
+        from engine import ledger
+        conn = ledger.connect()
+        before, before_ls = ledger.performance(conn), ledger.longshot_report(conn)
+        moved = ledger.move_longshots_out_of_main(conn)
+        after, after_ls = ledger.performance(conn), ledger.longshot_report(conn)
+        ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
+        print(f"Moved {moved} long-shot row(s) out of the headline record "
+              f"(markets: {', '.join(sorted(ledger.LONGSHOT_MARKETS))}).\n")
+        print(f"  MAIN record   {before['wins']}-{before['losses']}-{before['pushes']}"
+              f" → {after['wins']}-{after['losses']}-{after['pushes']}")
+        print(f"    net  {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
+              f"    ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
+        print(f"  LONG SHOTS    {before_ls['wins']}-{before_ls['losses']}"
+              f" → {after_ls['wins']}-{after_ls['losses']}")
+        print(f"    net  {before_ls['net_units']:+.2f}u → {after_ls['net_units']:+.2f}u"
+              f"    ROI {before_ls['roi']:+.1%} → {after_ls['roi']:+.1%}")
+        print(f"  bankroll restated to ${ledger.bankroll(conn):,.2f}")
+        print("\nRecord page updated — the two buckets are now fully separate.")
+        return
+    if "--resize-unstaked" in argv:
+        from engine import ledger
+        conn = ledger.connect()
+        before = ledger.performance(conn)
+        card = ledger.unstaked_scorecard(conn)
+        if card.get("n"):
+            print(f"The 0.00-unit picks, graded: {card['wins']}-{card['losses']} "
+                  f"({card['hit_rate']:.1%} hit rate)")
+            print(f"  they needed {card['break_even']:.1%} to break even at the "
+                  f"prices offered → {card['edge_pts']:+.2f} points "
+                  f"{'ABOVE' if card['edge_pts'] > 0 else 'below'} the line")
+            print(f"  flat-stake ROI: {card['roi']:+.1%}"
+                  + ("  ← they were genuinely profitable; tell me and I'll "
+                     "loosen the thresholds" if card["roi"] > 0 else
+                     "  ← they won often but still lost money to the juice"))
+        n = ledger.resize_unstaked(conn)
+        ledger.export_json(conn, ROOT / "web" / "data" / "record.json")
+        after = ledger.performance(conn)
+        print(f"Sized {n} previously-unstaked pick(s) at 0.1u (units only, "
+              f"no dollars).")
+        print(f"  record  {before['wins']}-{before['losses']}-{before['pushes']} "
+              f"→ {after['wins']}-{after['losses']}-{after['pushes']}")
+        print(f"  net     {before['net_units']:+.2f}u → {after['net_units']:+.2f}u"
+              f"   ROI {before['roi']:+.1%} → {after['roi']:+.1%}")
+        print("Record page updated.")
+        return
+    if "--epoch" in argv:
+        show_epoch()
+        return
+    if "--stuck" in argv:
+        show_stuck()
+        return
+    if "--void-unplayed" in argv:
+        show_unplayed(apply="--apply" in argv)
+        return
+    if "--repair-closes" in argv:
+        repair_closes(apply="--apply" in argv)
+        return
+    if "--inspect-pick" in argv:
+        i = argv.index("--inspect-pick")
+        if i + 1 >= len(argv):
+            print('  usage: launch.py --inspect-pick "Player Name"')
+            return
+        inspect_pick(argv[i + 1])
+        return
+    if "--paper" in argv:
+        i = argv.index("--paper")
+        want = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        set_paper_mode(want)
+        return
+    if "--why-open" in argv:
+        why_open()
+        return
+    if "--gates" in argv:
+        show_gates()
+        return
+    if "--boards" in argv:
+        show_boards()
+        return
+    if "--likely" in argv:
+        show_likely()
+        return
+    if "--desk-probe" in argv:
+        show_desk_probe()
+        return
+    if "--desk" in argv:
+        show_desk()
+        return
+    if "--settle" in argv:
+        i = argv.index("--settle")
+        day = argv[i + 1] if len(argv) > i + 1 and not argv[i + 1].startswith("-") else None
+        settle_now(day)
+        return
+    interval = 60      # scores are free; odds are budgeted separately
+    if "--refresh" in argv:
+        i = argv.index("--refresh")
+        try:
+            interval = int(argv[i + 1]); del argv[i:i + 2]
+        except (ValueError, IndexError):
+            print("--refresh needs a number of seconds (0 to disable)."); return
+    # `--bind 127.0.0.1` for a public deployment, same argument as the one
+    # in server.py: behind a reverse proxy that terminates TLS, binding
+    # every interface leaves the plain-HTTP port reachable from outside
+    # too, and a proxy anyone can walk around protects nothing.
+    #
+    # THE REASON THIS FLAG EXISTS HERE AND NOT ONLY THERE: the production
+    # unit used to run `server.py`, which serves the site but rebuilds
+    # nothing — `web/data/*.json` would have frozen at whatever was on
+    # disk the day it was deployed, and a public "live" board showing last
+    # month's slate is worse than one that is honestly down. This file is
+    # the thing with the refresh loop in it, and it already serves the
+    # identical handler (`from server import Handler`), so production runs
+    # this and gets both. It could not, until it could bind to loopback.
+    bind = "0.0.0.0"
+    if "--bind" in argv:
+        i = argv.index("--bind")
+        if len(argv) > i + 1 and not argv[i + 1].startswith("-"):
+            bind = argv[i + 1]
+            del argv[i:i + 2]
+        else:
+            print("--bind needs an address, e.g. --bind 127.0.0.1"); return
+    ports = [a for a in argv if not a.startswith("--")]
+    port = int(ports[0]) if ports else 8000
+
+    print("Qellys Book — grabbing the newest live data for both leagues…")
+    # BEFORE the build, not after: if the ring is spent, the board about
+    # to be built is priced on cached or proxy lines, and that is worth
+    # knowing while it is happening rather than in a post-mortem.
+    try:
+        from engine.credits import banner
+        b = banner()
+        if b:
+            print(b)
+    except Exception:                                       # noqa: BLE001
+        pass                    # a banner must never be why the site fails
+    if not _with_odds():
+        print("  (no ODDS_API_KEY set — using model/proxy lines; live scores still update)")
+    # NOTE: the boards are NOT built here. Binding comes first and the
+    # build runs in `_startup_chores` below — see the comment there for
+    # why, and for what that costs.
+
+    # THE PAYWALL SEAL, BEFORE THE SOCKET OPENS.
+    #
+    # This is the production entrypoint — the systemd unit runs launch.py,
+    # not server.py — so the seal has to be here as well as there. It was
+    # only in `server.main()` for a day, which is the dev path, and that
+    # meant the one machine it was written for never ran it. Same function
+    # in both, so they cannot drift.
+    seal_on_boot()
+
+    try:
+        # THE SAME BOUNDED SERVER server.main() uses. This is the
+        # PRODUCTION entrypoint — the systemd unit runs launch.py — so a
+        # ceiling that existed only in server.main() would be a ceiling on
+        # the one path that never runs on the droplet. Exactly the shape
+        # of the seal_on_boot bug above.
+        server = BoundedHTTPServer((bind, port), Handler)
+    except OSError as exc:
+        # "Address already in use" is not a crash, it is the single most
+        # ordinary thing that can happen: the site is already running in
+        # another window. A traceback for that teaches somebody to be
+        # afraid of their own tool.
+        if getattr(exc, "errno", None) not in (48, 98, 10048):
+            raise
+        print(f"\n  ⚠️  Port {port} is already in use — Qellys Book is almost "
+              f"certainly already running.\n"
+              f"\n  Open it:            http://localhost:{port}\n"
+              f"  Or use another port: python3 launch.py {port + 1}\n"
+              f"\n  If you want to restart it, close the other Terminal "
+              f"window (Ctrl+C in it) and run this again. To find it:\n"
+              f"      lsof -ti :{port}          ← the process id\n"
+              f"      kill $(lsof -ti :{port})  ← stop it\n")
+        return
+    server.live_mode = True
+
+    # THE BOARDS ARE BUILT HERE, AFTER THE SOCKET IS OPEN.
+    #
+    # Ethan, 2026-08-19, watching a deploy: "IT RESTARTED BUT IS NOT
+    # ANSWERING." It was answering nothing because it had not bound yet —
+    # `refresh_all()` used to run BEFORE the bind, so every restart took
+    # the site down for the length of a full rebuild. On a 1 vCPU droplet
+    # that is 5-15 minutes of hard 502, and the deploy script's own
+    # three-minute health check could not tell "still building" from
+    # "dead", so a healthy deploy reported failure and invited a rollback.
+    #
+    # Binding first inverts that: the site is up in under a second serving
+    # THE BOARDS ALREADY ON DISK, and the fresh ones replace them file by
+    # file as each build finishes. That is safe because every build writes
+    # through a temp file and renames (engine/gate.py, live_build,
+    # fantasy_build) — a reader gets the old file or the new one, never a
+    # half-written one.
+    #
+    # What it costs, stated plainly: for the first minutes after a restart
+    # the site serves data as old as the last successful build. That is
+    # strictly better than serving nothing, which is what it did before,
+    # and the freshness chip in the header already tells the reader how
+    # old the slate is.
+    #
+    # The ORDER below is load-bearing and was load-bearing before: the
+    # settle runs after the build because it grades against what the build
+    # just wrote.
+    #
+    # The startup settle ignores the 15-minute throttle on purpose: opening
+    # the site is an explicit "catch me up", and the most common way to
+    # arrive here is the morning after a slate, wanting last night graded.
+    def _startup_chores() -> None:
+        global _WARMING
+        try:
+            with _BUILD_LOCK:
+                refresh_all()
+        except Exception as exc:                          # noqa: BLE001
+            # A failed build must not cost the settle, the maintenance
+            # pass, or the running site. The boards simply stay as they
+            # were, which is the same posture every build extra takes.
+            print(f"  ⚠️  startup build failed: {exc} — serving the boards "
+                  f"already on disk.")
+        finally:
+            _WARMING = False
+            print(f"  Boards built — the site is fully current "
+                  f"({time.time() - _BOOT_AT:.0f}s after start).")
+        _run_maintenance()
+        try:
+            from engine.maintenance import settle_open
+            # settle_open re-exports record.json itself when it grades
+            # anything, and this thread starts strictly AFTER the initial
+            # refresh_all() above — so a morning launch that can grade last
+            # night does grade it, and the served page catches up when this
+            # finishes. If bets still show open afterwards, they could not
+            # be graded from what exists: `--why-open` says which of the
+            # three reasons it is (results not in, DNP, or nothing running).
+            settle_open(force=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️  auto-settle failed: {exc}")
+
+    threading.Thread(target=_startup_chores, daemon=True).start()
+
+    if "--auto-update" in argv:
+        # Opt-in, every run: this pulls code and executes it, so it should
+        # be a thing you asked for this morning, not a setting you forgot.
+        if _auto_update():
+            _restart_into_new_code()
+        _UPDATER_ON[0] = True
+        threading.Thread(target=_auto_updater, daemon=True).start()
+        print(f"Auto-update ON — pulling pushed fixes every "
+              f"{AUTO_UPDATE_EVERY_S // 60} min and restarting into them.")
+
+    if interval > 0:
+        t = threading.Thread(target=_background_refresher, args=(interval,), daemon=True)
+        t.start()
+        print(f"Auto-refresh every {interval}s (scores free; odds budgeted).")
+        # Its own clock: a fight moves in seconds, and this feed is free.
+        threading.Thread(target=_live_ufc_refresher, daemon=True).start()
+        threading.Thread(target=_live_mlb_refresher, daemon=True).start()
+        threading.Thread(target=_live_scores_refresher, daemon=True).start()
+        print(f"  UFC live fights: every {LIVE_FAST_S}s while a bout is on, "
+              f"{LIVE_IDLE_S}s otherwise.")
+        print(f"  NFL/CFB/NBA/WNBA live scores: same clock, one process, "
+              f"keyless — no odds credits.")
+        # And the meme board's clock — coins move in and out in minutes.
+        threading.Thread(target=_live_memes_refresher, daemon=True).start()
+        print(f"  Meme coins: every {MEMES_LIVE_S}s (discovery ~25s — the "
+              f"free tier's honest ceiling).")
+        try:
+            from engine.oddsbudget import summary as _bsum
+            if _with_odds():
+                print("  " + _bsum())
+        except Exception:
+            pass
+
+    print(f"\nQellys Book running (LIVE data) → http://localhost:{port}")
+    if _WARMING:
+        print("  Serving the boards already on disk while tonight's rebuild "
+              "runs behind it —\n  the freshness chip in the header says how "
+              "old the slate is until it lands.")
+    if bind != "0.0.0.0":
+        print(f"  Bound to {bind} only — reachable through a proxy, not "
+              f"directly. The refresh loop below still runs.")
+    # Printed only when they would actually work. Bound to loopback these
+    # addresses resolve fine and simply refuse the connection, and an
+    # address the site prints itself is the last one you suspect.
+    lan = _lan_ip() if bind == "0.0.0.0" else None
+    if lan:
+        print(f"  On your phone (same Wi-Fi):     → http://{lan}:{port}")
+        print("  (If the phone can't connect, macOS may be asking to allow "
+              "incoming connections for Python — click Allow.)")
+    ts = _tailscale_ip() if bind == "0.0.0.0" else None
+    if ts:
+        print(f"  On your phone ANYWHERE (Tailscale): → http://{ts}:{port}")
+        print("  (Type the http:// part — Safari silently upgrades to https "
+              "and fails. Real https:// URL: `tailscale serve --bg "
+              f"{port}`, see docs/PHONE.md.)")
+    elif bind == "0.0.0.0":
+        print("  Away from home? Free setup with Tailscale — see docs/PHONE.md")
+    print("Press Ctrl+C to stop.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
+
+def _stripe_webhook_cli(recreate: bool = False, print_env: bool = False) -> None:
+    """Create the webhook endpoint in Stripe, and print its signing secret.
+
+    THE STEP MOST LIKELY TO BE DONE WRONG BY HAND: a URL pasted with a
+    typo, four events ticked instead of five, or the API key copied where
+    the signing secret belongs — all of which fail later and elsewhere.
+    None of it needs a human.
+
+    `--print-env` emits `STRIPE_WEBHOOK_SECRET=whsec_...` and nothing
+    else, for deploy/golive.sh to write straight into the env file, so
+    the one string nobody should have to handle never appears on screen.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+    BI._env()
+
+    sk = os.environ.get(BI.ENV_SECRET, "").strip()
+    if not sk:
+        print(f"{BI.ENV_SECRET} is not set — do that first.",
+              file=sys.stderr if print_env else sys.stdout)
+        sys.exit(1)
+    site = os.environ.get("QB_SITE_URL", "").strip().rstrip("/")
+    if not site:
+        print("QB_SITE_URL is not set, and the endpoint needs a full URL.",
+              file=sys.stderr if print_env else sys.stdout)
+        sys.exit(1)
+    url = f"{site}/api/billing/webhook"
+
+    out = sys.stderr if print_env else sys.stdout
+    try:
+        got = SS.ensure_webhook(sk, url, recreate=recreate)
+    except BI.BillingUnavailable as exc:
+        print(f"Stripe refused: {exc}", file=out)
+        sys.exit(1)
+
+    if got["secret"]:
+        print(f"Webhook endpoint {got['note']}: {url}", file=out)
+        print(f"  {len(BI.HANDLED)} events subscribed.", file=out)
+        if print_env:
+            print(f"STRIPE_WEBHOOK_SECRET={got['secret']}")
+        else:
+            print("\n  Put this in your config:\n", file=out)
+            print(f"  STRIPE_WEBHOOK_SECRET={got['secret']}", file=out)
+            print("\n  Stripe will not show it again — it is only "
+                  "returned at creation.", file=out)
+        return
+
+    # It exists and we cannot read its secret back.
+    print(f"An endpoint already exists for {url}", file=out)
+    print(f"  {got['note']}", file=out)
+    print("\n  Re-run with --recreate to replace it and get a fresh "
+          "secret. Nothing is lost: an endpoint holds no history, and "
+          "Stripe retries anything it could not deliver.", file=out)
+    sys.exit(3)
+
+
+#: Alphabet for a generated code. No 0/O, no 1/I/L — these get read off
+#: a phone screen and typed by somebody else, and "was that a one or an
+#: ell" is a support message about a code that looks broken.
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _promo_new_cli(argv: list) -> None:
+    """Mint N single-use discount codes and print the line to set.
+
+    ONE CODE PER PERSON, CAPPED AT ONE USE, is the only answer to "how do
+    I stop someone using it twice" that a determined person cannot walk
+    around. Stripe enforces the cap globally: once the code is spent it
+    is dead, and a second account with a second card cannot revive it. A
+    shared code is the opposite — every defence on it is a guess about
+    who is behind an email address.
+
+    It also tells you WHOSE code leaked, because you handed each one to
+    exactly one person.
+
+    Printed ONCE, to a terminal, and never stored by this program. The
+    only copy that persists is the one in /etc/qellys/env, which is the
+    same place the Stripe key lives.
+    """
+    import secrets as _secrets
+    from engine import billing as _BI
+
+    n = 5
+    pct, months, plan = 75, 2, "monthly"
+    for i, a in enumerate(argv):
+        if a == "--promo-new" and i + 1 < len(argv):
+            try:
+                n = max(1, min(200, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--percent" and i + 1 < len(argv):
+            try:
+                pct = max(1, min(99, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--months" and i + 1 < len(argv):
+            try:
+                months = max(1, min(24, int(argv[i + 1])))
+            except ValueError:
+                pass
+        if a == "--plan" and i + 1 < len(argv) and argv[i + 1] in _BI.PLANS:
+            plan = argv[i + 1]
+
+    codes = []
+    while len(codes) < n:
+        got = "".join(_secrets.choice(_CODE_ALPHABET) for _ in range(10))
+        if got not in codes:
+            codes.append(got)
+
+    plan_name = _BI.PLANS[plan]["name"]
+    print(f"\n{n} single-use code(s) — {pct}% off {months} month(s) on "
+          f"{plan_name}\n" + "=" * 62)
+    for c in codes:
+        print(f"  {c}")
+    line = ",".join(f"{c}:{pct}:{months}:{plan}:1" for c in codes)
+    print("\nGive ONE to each person. Each dies after a single use, so a\n"
+          "second account with a second card cannot use it again — and you\n"
+          "know whose code it was if one turns up somewhere public.\n")
+    print("To activate them:\n")
+    print("  sudo ./deploy/setenv.sh QB_PROMOS")
+    print("  (paste this when it prompts — it keeps it out of shell history)\n")
+    print(f"  {line}\n")
+    print("  sudo systemctl restart qellys")
+    print("  python3 launch.py --promos-setup\n")
+    print("SETENV REPLACES THE WHOLE VALUE. To keep codes you already\n"
+          "handed out, run `sudo ./deploy/setenv.sh --show` first and paste\n"
+          "the old ones back alongside these, separated by commas.\n")
+    print("This is the only time these are printed. Nothing here stores them.")
+
+
+def _paywall_audit_cli() -> None:
+    """Every board on this box, checked for the paid product on the open path.
+
+    Ethan's site had QB_PAYWALL=1 and was publishing the whole UFC card —
+    fighters, prices, stakes — because engine/ufc/model.py names its rows
+    `picks` and nothing in PAID_KEYS did. Key-stripping only protects
+    boards whose keys somebody anticipated.
+
+    This asks the question that does not depend on the name: does a list
+    on this board contain rows with a STAKE on them, under a key that is
+    not gated? Run it after adding a board or renaming a key.
+    """
+    import json as _j
+    from engine import gate as _gate
+    if not _gate.enabled():
+        print("\nQB_PAYWALL is off — nothing is redacted, so there is "
+              "nothing to audit. This checks what the paywall LETS "
+              "through, and right now it lets everything through by "
+              "design.")
+        return
+    web = ROOT / "web" / "data"
+    boards = sorted(web.glob("*.json"))
+    if not boards:
+        print("\nNo boards on the public path yet.")
+        return
+    print("\nPaywall audit — the paid product on the open path\n" + "=" * 60)
+    bad = 0
+    for f in boards:
+        try:
+            doc = _j.loads(f.read_text())
+        except Exception:                                    # noqa: BLE001
+            continue
+        if _gate.is_free(f.name):
+            print(f"  free      {f.name}")
+            continue
+        # TWO QUESTIONS, NOT ONE, and the second was missing until
+        # 2026-08-22. `leaks()` finds paid rows under a key NOBODY
+        # ANTICIPATED — it is the net for the next UFC. It says nothing
+        # about a key that IS gated and is still sitting on the public
+        # path, which is what `--seal` fixes and what every board looks
+        # like between the flag going on and the next build. A board
+        # carrying all 42 scored memecoins under the gated key `coins`
+        # printed "sealed" before this, because `coins` rows carry a
+        # momentum score rather than a stake and `_looks_staked` is
+        # looking for a stake.
+        found = _gate.leaks(doc, f.name)
+        still = _gate._paid_rows(doc, f.name)
+        if found:
+            bad += 1
+            rows = sum(len(doc.get(k) or []) for k in found)
+            print(f"  LEAKING   {f.name}  ->  {', '.join(found)} "
+                  f"({rows} staked row(s) readable by anyone)")
+        elif still:
+            bad += 1
+            gated = [k for k in _gate.paid_keys_for(f.name) if doc.get(k)]
+            print(f"  UNSEALED  {f.name}  ->  {', '.join(gated)} "
+                  f"({still} paid row(s) still on the public path)")
+        else:
+            print(f"  sealed    {f.name}")
+    print()
+    if bad:
+        print(f"  {bad} board(s) publishing the paid product.")
+        print("  UNSEALED means the gate knows the key and the file "
+              "predates it:")
+        print("    python3 launch.py --seal")
+        print("  LEAKING means the key is not gated at all. Add it to")
+        print("  engine/gate.PAID_KEYS (or PAID_KEYS_BY_FILE), and give")
+        print("  subscribers a path to it (paidFetch in web/js/app.js) in")
+        print("  the SAME change — gating a key without that fixes the")
+        print("  leak by breaking the page for the people who pay for it.")
+    else:
+        print("  No board is publishing a paid row.")
+
+
+def _parlay_report_cli() -> None:
+    """What the parlay record actually says, and what it means to do.
+
+    Ethan, 2026-08-23: *"we suck at parlays and they are loosing us alot
+    of money so we need a way to fix that and work on the model or
+    something bc its not working"*.
+
+    Everything below is already computed by engine/parlayledger.report()
+    and has never been printed anywhere. That is the gap this closes: you
+    cannot fix a model you cannot see, and "we suck at parlays" is a
+    feeling until it is a number with a cause attached.
+
+    THE FIRST THING IT HAS TO SAY, because it changes what "fix the
+    model" means: this site has never staked a parlay. `stake_units` is
+    0.0 on every ticket ever published, §13 keeps them on probation until
+    100 graded tickets clear ROI, CLV and z, and every card says so in
+    those words. So money lost on parlays is money staked by hand against
+    a card that reads "worth nothing". That is not a modelling failure,
+    and no amount of model work fixes it.
+
+    WHAT WOULD BE a modelling failure is in the numbers below: the
+    singles comparison (would flat singles on the same legs have done
+    better?) and the loss codes (§11.1 — was it one leg, was it the
+    correlation, was it the tax?). Those are the three answers, and they
+    point at three different repairs.
+    """
+    # parlayledger has no connect() of its own on purpose — it reads the
+    # ledger's tables and reuses its CLV, so it is a leaf that takes a
+    # connection rather than owning one.
+    from engine import ledger as _lg
+    from engine import parlayledger as _pl
+
+    conn = _lg.connect()
+    try:
+        r = _pl.report(conn)
+    finally:
+        conn.close()
+
+    print("\nParlay record — graded, never staked\n" + "=" * 62)
+    n = r["graded"]
+    if not n:
+        print("\n  Nothing graded yet.\n")
+        print("  Worth knowing WHY before reading that as 'no parlays were")
+        print("  published': journal_built_boards read each board off the")
+        print("  public path, and `parlays` is a paid key — so from the day")
+        print("  QB_PAYWALL went on until 2026-08-23 it saw an empty zone on")
+        print("  every board and recorded nothing. Tickets published in that")
+        print("  window are not in here and cannot be recovered from the")
+        print("  ledger. From now on they are.")
+        print("\n  Open tickets waiting on results: %d" % r["open"])
+        return
+
+    # THE RECOMMENDED LINE FIRST. The blended total led this report until
+    # 2026-08-23 and it read "19 graded · 1W-18L · -84.1% ROI" — of which
+    # EIGHTEEN were constructions the screen refused. log_board journals
+    # rank 1 off every slate whether or not it qualified, deliberately, so
+    # that the gates' no gets tested too; leading with the blend turned
+    # that into a headline saying the model was failing when it was the
+    # model working. The blend is still printed, below, labelled.
+    q = r.get("by_qualified") or {}
+    rec = q.get("recommended") or {}
+    if rec.get("graded"):
+        print(f"\n  RECOMMENDED — the screen said yes")
+        print(f"    {rec['graded']} graded · {rec['wins']}W-{rec['losses']}L · "
+              f"{rec['net_units']:+.2f}u · flat-stake ROI "
+              f"{rec['roi'] * 100:+.1f}%")
+        if rec["graded"] < 10:
+            print(f"    {rec['graded']} ticket(s) is not a record. The bar is "
+                  f"{r['promotion']['tickets_required']}.")
+    else:
+        print("\n  RECOMMENDED — the screen said yes")
+        print("    Nothing. No ticket the screen put its name to has "
+              "settled yet.")
+
+    roi = r["roi"] * 100
+    print(f"\n  Everything graded, blended: {n} · "
+          f"{r['wins']}W-{r['losses']}L · "
+          f"{r['net_units']:+.2f}u · flat-stake ROI {roi:+.1f}%")
+    z = r["z"]
+    print(f"  z {z:+.2f}" if z is not None else "  z —",
+          " (a t-statistic on per-ticket P&L; §13 wants 2 or more)")
+
+    # WHAT THIS RECORD IS A RECORD OF, because the blend above is usually
+    # not what it looks like.
+    shown = [(lbl, q.get(key) or {}) for lbl, key in (
+        ("the slate play (§10.2)", "play"),
+        ("qualified, not the play", "qualified"),
+        ("NOT qualified — shown, not recommended", "not_qualified"))]
+    if any(b.get("graded") for _, b in shown):
+        print("\n  What this is a record OF\n  " + "-" * 46)
+        for label, b in shown:
+            if not b.get("graded"):
+                continue
+            print(f"    {label:<40} {b['graded']:>3} graded  "
+                  f"{b['wins']:>2}W  {b['net_units']:+7.2f}u  "
+                  f"{b['roi'] * 100:+6.1f}%")
+        rejects = (q.get("not_qualified") or {}).get("graded", 0)
+        if rejects and rejects >= n / 2:
+            print(f"\n    {rejects} of {n} are tickets the screen REFUSED. "
+                  f"They are in here")
+            print("    because the page shows what the night offered, not "
+                  "because the")
+            print("    model put its name to them. Read the top line before "
+                  "the total.")
+
+    # THE DIAGNOSTIC THAT SAYS WHICH HALF IS BROKEN.
+    c = r.get("calibration") or {}
+    legs, tick, pos = c.get("legs") or {}, c.get("tickets") or {}, \
+        c.get("positive_rho") or {}
+    if legs.get("n"):
+        print("\n  Did the model's own numbers come true?\n  " + "-" * 46)
+        print(f"    legs      {legs['won']:>3} won of {legs['n']:>3}   "
+              f"model said {legs['expected']:>6.2f}"
+              + (f"   z {legs['z']:+.2f}" if legs.get("z") is not None else ""))
+        if tick.get("n"):
+            line = (f"    tickets   {tick['won']:>3} won of {tick['n']:>3}   "
+                    f"model said {tick['expected']:>6.2f}")
+            if tick.get("z") is not None:
+                line += f"   z {tick['z']:+.2f}"
+            print(line)
+        short = legs["expected"] - legs["won"]
+        if short > 0 and (legs.get("z") or 0) <= -1.5:
+            print("\n    THE LEGS ARE THE PROBLEM. They came in "
+                  f"{short:.1f} short of what the")
+            print("    prop model said they were worth, which is a "
+                  "miscalibrated")
+            print("    marginal — the singles board is making the same "
+                  "mistake, and")
+            print("    no correlation work touches it.")
+        elif tick.get("z") is not None and tick["z"] <= -1.5:
+            print("\n    THE JOINT IS THE PROBLEM. The legs hit at roughly "
+                  "the rate we")
+            print("    gave them and the TICKETS did not, which is the "
+                  "correlation.")
+        elif legs.get("z") is not None:
+            print("\n    Both are inside their error bars on this sample — "
+                  "so far this")
+            print("    is variance, not a broken model.")
+    if pos.get("n"):
+        # NAMED, not "of those". This is every graded ticket with a
+        # positive priced rho — not the refusals the paragraph above
+        # counted, and not the calibration subset either. "Of those" let
+        # a reader attach it to whichever number printed last.
+        print(f"\n    Of all graded tickets, {pos['n']} priced the legs as "
+              f"MOVING TOGETHER:")
+        print(f"      won {pos['won']}   our joint said {pos['expected']:.2f}"
+              f"   as-if-unrelated {pos['expected_independent']:.2f}")
+        zi = pos.get("z_independent")
+        if zi is not None and pos["won"] < pos["expected_independent"] \
+                and zi <= -1.5:
+            print("      Below even the unrelated number: the legs we said "
+                  "move together")
+            print("      do not, and the prior has the wrong SIGN rather "
+                  "than the wrong size.")
+
+    # THE STRUCTURE VS THE LEGS, weighed rather than ranked.
+    sc = r["singles_comparison"]
+    if sc["n"]:
+        # ACROSS EVERYTHING GRADED, and it says so. With a record that is
+        # mostly refusals, "the legs are where the money went" is a true
+        # sentence about legs the screen declined to wrap — worth knowing,
+        # and not the same claim as one about its recommendations.
+        rn = (r.get("singles_comparison_recommended") or {}).get("n") or 0
+        print(f"\n  Same legs, bet as singles — all {sc['n']} graded"
+              + (f" ({rn} recommended)" if rn and rn < sc["n"] else "")
+              + "\n  " + "-" * 46)
+        print(f"    parlays {sc['parlay_units']:+.2f}u   "
+              f"singles {sc['singles_units']:+.2f}u")
+        cost = sc.get("structure_cost")
+        legs_cost = sc.get("legs_cost") or 0.0
+        if cost is not None and legs_cost > 0 and cost < legs_cost:
+            print(f"    Wrapping them cost {cost:.2f}u. The legs themselves "
+                  f"lost {legs_cost:.2f}u.")
+            print("    A better parlay model recovers the first number and "
+                  "none of the")
+            print("    second. The legs are where the money went.")
+        elif sc["singles_better"]:
+            print("    Singles did better, and they made money: the legs "
+                  "were fine and")
+            print("    wrapping them was the mistake. Bet fewer parlays "
+                  "rather than")
+            print("    building a better one.")
+        else:
+            print("    The tickets beat the same legs bet flat, so the "
+                  "structure is")
+            print("    earning its tax on this sample.")
+
+    clv = r["avg_leg_clv"]
+    if clv is not None:
+        print("\n  Closing line\n  " + "-" * 46)
+        print(f"    leg CLV {clv:+.3f} over {r['leg_clv_n']} leg(s)")
+        if clv < 0:
+            print("    NEGATIVE. The prices we took moved against us before "
+                  "the game —")
+            print("    which is a statement about leg SELECTION and timing, "
+                  "not about")
+            print("    parlays at all. It is the same leg pool the singles "
+                  "board uses.")
+
+    if r["loss_codes"]:
+        print("\n  Why the losses lost (§11.1)\n  " + "-" * 46)
+        WHAT = {
+            "LEG_ONE_KILLED_IT": "one leg away — the near-miss count",
+            "TAX_TOO_HIGH": "singles on the same legs would have paid more",
+            "CORRELATION_ERROR": "RETIRED — see calibration above",
+        }
+        for row in r["loss_codes"]:
+            print(f"    {row['code']:<20} {row['n']:>4}   "
+                  f"{WHAT.get(row['code'], '')}")
+        if any(row["code"] == "CORRELATION_ERROR" for row in r["loss_codes"]):
+            print("\n    CORRELATION_ERROR rows are from before 2026-08-23, "
+                  "when the code")
+            print("    fired on any split ticket that priced rho + — which "
+                  "on two legs is")
+            print("    just 'one leg missed' under a second name.")
+            # NO COMMAND IS OFFERED HERE, and that is the honest answer.
+            # This line used to prescribe a re-settle flag. It was wrong
+            # twice over: no such flag existed (typing it fell through to
+            # the server launcher, which answered with a port warning),
+            # and the pass that DOES run under `--settle` would not have
+            # cleared these rows either.
+            # `parlayledger.resettle` skips any ticket whose leg verdicts
+            # have not moved, and `_loss_codes` runs only from
+            # `_grade_ticket`, so a settled ticket is never re-coded.
+            # These rows are stale because the CODE changed, not because
+            # a leg did — and nothing in the module re-codes settled
+            # history. Rather than name a third command that also would
+            # not work, this says what the rows are and stops.
+            print("    They are historical labels, not live verdicts: "
+                  "nothing re-codes a")
+            print("    settled ticket, so they stay until someone "
+                  "decides they should be")
+            print("    rewritten — which is a change to settled history "
+                  "and wants its own call.")
+
+    for label, key in (("By sport", "by_sport"), ("By type", "by_type"),
+                       ("By grade", "by_grade")):
+        rows = r[key]
+        if not rows:
+            continue
+        print(f"\n  {label}\n  " + "-" * 46)
+        for row in rows:
+            print(f"    {str(row['key']):<12} {row['graded']:>4} graded  "
+                  f"{row['wins']:>3}W  {row['net_units']:+7.2f}u  "
+                  f"{row['roi'] * 100:+6.1f}%")
+
+    pr = r["promotion"]
+    print("\n  Promotion (§13) — every one of these must hold\n  " + "-" * 40)
+    for ok, text in (
+            (pr["tickets_have"] >= pr["tickets_required"],
+             f"{pr['tickets_have']}/{pr['tickets_required']} graded tickets"),
+            (pr["roi_positive"], "positive flat-stake ROI"),
+            (pr["clv_non_negative"], "aggregate leg CLV at or above zero"),
+            (pr["z_clears"], f"z of at least {pr['z_required']}")):
+        print(f"    {'PASS' if ok else 'no  '}  {text}")
+    print("\n  Until all four hold, every ticket is staked at 0.0 units by")
+    print("  the model. Anything risked on one is risked by hand.")
+
+
+def _board_size_cli() -> None:
+    """Where the bytes go, and what they cost at N subscribers.
+
+    THE BOARD IS THE SITE'S LARGEST RECURRING COST and nobody had ever
+    weighed it. Every signed-in page polls /api/board every 30 seconds
+    (120 when nothing is live), the launcher rewrites it every 60, so
+    each subscriber pulls roughly one whole board a minute. CPU for that
+    is solved — the bytes are cached and an unchanged board answers 304 —
+    but a board that genuinely CHANGED has to go down the wire in full,
+    to everyone, once a minute.
+
+    Guessing which key is fat is how you optimise the wrong one, so this
+    weighs them. Run it on the box with the real board.
+    """
+    import json as _j
+    from engine import gate as _gate
+    rows = []
+    for label, path in (("MLB", MLB_OUT), ("NFL", NFL_OUT), ("NBA", NBA_OUT),
+                        ("WNBA", WNBA_OUT), ("CFB", CFB_OUT), ("UFC", UFC_OUT)):
+        full = ROOT / "data" / "built" / Path(path).name
+        src = full if full.is_file() else ROOT / path
+        if not src.is_file():
+            continue
+        try:
+            doc = _j.loads(src.read_text())
+        except Exception:                                    # noqa: BLE001
+            continue
+        total = src.stat().st_size
+        parts = sorted(((k, len(_j.dumps(v))) for k, v in doc.items()),
+                       key=lambda kv: -kv[1])
+        rows.append((label, src, total, parts))
+
+    if not rows:
+        print("\nNo board on disk yet — run the launcher once first.")
+        return
+
+    print("\nBoard payload — what a subscriber downloads\n" + "=" * 66)
+    for label, src, total, parts in rows:
+        where = "data/built" if "built" in str(src) else "web/data"
+        print(f"\n  {label}  {total / 1024:,.0f} KB  ({where})")
+        for k, n in parts[:8]:
+            if n < 1024:
+                continue
+            print(f"      {n / 1024:>7,.0f} KB  {n * 100 // max(1, total):>3}%  {k}")
+        small = sum(n for k, n in parts if n < 1024)
+        if small:
+            print(f"      {small / 1024:>7,.1f} KB       everything else")
+
+    # The number that decides whether this matters.
+    big = max(rows, key=lambda r: r[2])
+    kb = big[2] / 1024
+    print("\n" + "=" * 66)
+    print(f"  At the {big[0]} board's {kb:,.0f} KB, gzipped to roughly "
+          f"{kb * 0.22:,.0f} KB on the wire:\n")
+    print(f"      {'subscribers':>12}   {'per day':>10}   {'per month':>11}")
+    for n in (50, 100, 300, 1000):
+        # One full board each per rebuild; the launcher rebuilds hourly at
+        # worst and every minute at best. Minute is the honest figure —
+        # that is what the page polls for.
+        per_day = n * kb * 0.22 * 60 * 24 / 1_048_576      # GB
+        print(f"      {n:>12}   {per_day:>8,.1f} GB   {per_day * 30:>9,.0f} GB")
+    print("\n  A basic DigitalOcean droplet includes 1,000 GB a month.")
+    print("  If a row above passes that, the fix is to stop sending the")
+    print("  keys nobody reads on every poll — the table above says which.")
+
+
+def _stripe_promos_cli(secret_key: str, create: bool) -> None:
+    """Report (and with `create`, make) the checkout discount codes.
+
+    Folded into --stripe rather than given a flag of its own: a promo is
+    part of the catalogue, and a code that exists in this repo but not at
+    Stripe fails at the one moment it matters — somebody typing it on the
+    payment page after seeing it in a post.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+    configured = BI.promos()
+    if not configured:
+        print(f"\nDiscount codes\n  none configured — set {BI.ENV_PROMOS} to "
+              f"offer one (see docs/BILLING.md). The codes are secrets and "
+              f"this repo is public, so they live in the environment, never "
+              f"in a source file.")
+        return
+    try:
+        res = SS.ensure_promos(secret_key, create=create)
+    except BI.BillingUnavailable as exc:
+        print(f"\n  promos    Stripe would not answer: {exc}")
+        return
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"\n  promos    could not be checked: {exc}")
+        return
+    print("\nDiscount codes")
+    for promo_id, row in res.items():
+        promo = configured[promo_id]
+        plans = ", ".join(BI.PLANS[p]["name"] for p in promo["plans"])
+        cap = int(promo.get("max_redemptions") or 0)
+        if row.get("created"):
+            state = "created"
+        elif row.get("active"):
+            state = "already there"
+        else:
+            state = "MISSING" if not create else "inactive"
+        used = row.get("redeemed")
+        spent = (f", {used}/{cap} used" if cap and used is not None
+                 else f", {used} used" if used else
+                 f", max {cap} use{'s' if cap != 1 else ''}" if cap else
+                 ", UNLIMITED uses")
+        print(f"  {row['code']:<12} {promo['percent_off']}% off "
+              f"{promo['duration_in_months']} months on {plans}{spent}"
+              f"{'' if promo.get('first_time_only', True) else ', any customer'}"
+              f"  ({state})")
+        for problem in row.get("problems") or []:
+            print(f"               ⚠️  {problem}")
+    if not create and any(r.get("problems") for r in res.values()):
+        print("               `python3 launch.py --stripe-setup` creates "
+              "what is missing.")
+
+
+def _stripe_cli(create: bool = False, print_env: bool = False) -> None:
+    """`--stripe` reports; `--stripe-setup` also creates what is missing.
+
+    TWO FLAGS AND NOT ONE, because they need different amounts of trust.
+    Reporting is safe to run anywhere, any number of times, and is what
+    you want when the answer to "is billing on?" is unclear. Creating
+    writes to a live Stripe account, and a command that quietly creates
+    things while you thought you were checking them is how you end up
+    with duplicate prices and no idea which one the site charges.
+
+    Neither one ever prints a key. The report says a key is set and which
+    MODE it is in — that is the fact you need, and the value is the one
+    thing that must not appear in a terminal, a screenshot or a scrollback
+    buffer.
+    """
+    from engine import billing as BI
+    from engine import stripeset as SS
+
+    if print_env:
+        # MACHINE-READABLE MODE, for deploy/golive.sh. Bare KEY=VALUE on
+        # stdout and nothing else, so the wizard can write the three price
+        # ids itself instead of asking somebody to copy them out of a
+        # report — which is the step where a swapped pair comes from, and
+        # a swapped pair charges the wrong amount without failing.
+        #
+        # Everything human goes to stderr, so a caller reading stdout gets
+        # only the lines it can act on.
+        sk = os.environ.get(BI.ENV_SECRET, "").strip()
+        if not sk:
+            print(f"{BI.ENV_SECRET} is not set", file=sys.stderr)
+            sys.exit(1)
+        try:
+            res = SS.ensure_catalogue(sk, create=create)
+        except BI.BillingUnavailable as exc:
+            print(f"Stripe would not answer: {exc}", file=sys.stderr)
+            sys.exit(1)
+        problems = []
+        for plan_id in BI.PLAN_ORDER:
+            got = res["prices"].get(plan_id) or {}
+            for problem in got.get("problems") or []:
+                problems.append(f"{BI.PLANS[plan_id]['name']}: {problem}")
+        if problems:
+            for row in problems:
+                print(f"MISMATCH {row}", file=sys.stderr)
+            sys.exit(2)
+        for line in res["env"]:
+            print(line)
+        return
+
+    print("\nStripe\n" + "=" * 62)
+    checks = SS.preflight()
+    for ok, headline, detail in checks:
+        print(f"  {'ok  ' if ok else 'MISS'}  {headline}")
+        print(f"        {detail}")
+    bad = [h for ok, h, _ in checks if not ok]
+
+    if not create:
+        sk_ro = os.environ.get(BI.ENV_SECRET, "").strip()
+        if sk_ro:
+            _stripe_promos_cli(sk_ro, create=False)
+        print()
+        if bad:
+            print(f"{len(bad)} thing(s) to fix. `python3 launch.py "
+                  "--stripe-setup` creates the Product and Prices; the "
+                  "webhook secret comes from the Stripe dashboard once "
+                  "the endpoint exists.")
+            print("docs/BILLING.md has the order.")
+        else:
+            print("Billing is configured. QB_PAYWALL is what turns the "
+                  "gate on — see `python3 launch.py --todo`.")
+        return
+
+    sk = os.environ.get(BI.ENV_SECRET, "").strip()
+    if not sk:
+        print(f"\nCannot create anything without {BI.ENV_SECRET}. "
+              "Put it in secrets.local first.")
+        sys.exit(1)
+
+    mode = "LIVE" if BI.live_mode(sk) else "TEST"
+    print(f"\nCreating the catalogue in {mode} mode…")
+    if mode == "LIVE":
+        # Not a confirmation prompt — this creates prices, it does not
+        # charge anybody, and prices are free to create and harmless to
+        # leave unused. It is a line of text because somebody who meant
+        # to be in test mode should find out here rather than later.
+        print("  (This is the live account. Creating prices charges "
+              "nobody; it is safe.)")
+    try:
+        res = SS.ensure_catalogue(sk, create=True)
+    except BI.BillingUnavailable as exc:
+        print(f"\nStripe would not answer: {exc}")
+        sys.exit(1)
+
+    print(f"\nProduct: {res['product']}")
+    problems = []
+    for plan_id in BI.PLAN_ORDER:
+        got = res["prices"].get(plan_id) or {}
+        plan = BI.PLANS[plan_id]
+        state = "created" if got.get("created") else "already there"
+        print(f"  {plan['name']:<10} {got.get('id') or '—'}  ({state})")
+        for problem in got.get("problems") or []:
+            problems.append(f"{plan['name']}: {problem}")
+
+    if problems:
+        # An existing price that disagrees with billing.PLANS is NOT
+        # edited — Stripe prices are immutable on purpose, since a price
+        # somebody is subscribed to must not change under them. Say what
+        # is wrong and stop.
+        print("\nA price in Stripe does not match what this repo says:")
+        for row in problems:
+            print(f"  - {row}")
+        print("\nStripe prices cannot be edited — that is deliberate, "
+              "because a price someone is subscribed to must not change "
+              "underneath them. To change a price: archive the old one in "
+              "the dashboard, change billing.PLANS, and run this again. "
+              "Existing subscribers keep the price they signed up at "
+              "until they cancel.")
+        sys.exit(2)
+
+    _stripe_promos_cli(sk, create=True)
+
+    if res["env"]:
+        print("\nPaste these into secrets.local:\n")
+        for line in res["env"]:
+            print(f"  {line}")
+    print("\nThen: add the webhook endpoint in the Stripe dashboard "
+          "(Developers → Webhooks) pointing at")
+    print("  https://<your-domain>/api/billing/webhook")
+    print("with these events:")
+    for ev in BI.HANDLED:
+        print(f"  - {ev}")
+    print("\nand put the signing secret it shows you into "
+          "STRIPE_WEBHOOK_SECRET. Nothing grants access until that is "
+          "set — the endpoint refuses every unsigned event.")
+
+
+if __name__ == "__main__":
+    main()

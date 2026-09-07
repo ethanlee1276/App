@@ -1,0 +1,13 @@
+# The clock for qellys-update.service. Five minutes matches the cadence
+# the in-process updater promised; OnBootSec keeps a freshly rebooted
+# droplet from waiting a full interval to catch up on missed pushes.
+
+[Unit]
+Description=Qellys auto-update clock
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
