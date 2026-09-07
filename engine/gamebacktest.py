@@ -187,7 +187,7 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
     starters = starters_by_game(conn, sport) if use_pitchers else {}
 
     rows = conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
 
@@ -204,7 +204,8 @@ def backtest_moneylines(conn, sport: str = "mlb", min_team_games: int = 15,
         r.games_seen += 1
         sp = starters.get((date, f"{away}@{home}"), {})
 
-        quote = close_for(harvested, schedule, row["season"], date, home, away)
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"])
         h_net = _rating(agg, home, baseline)
         a_net = _rating(agg, away, baseline)
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
@@ -350,7 +351,7 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
     soft_closes = moneyline_closes(conn, sport, book="best")
 
     rows = conn.execute(
-        "SELECT period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
 
@@ -359,8 +360,12 @@ def backtest_sharp_anchor(conn, sport: str = "mlb", sharp: str = "Pinnacle",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        sp = sharp_closes.get((date, home, away)) or {}
-        soft = soft_closes.get((date, home, away)) or {}
+        # Both by the game's own date when it has one — the only key an
+        # NFL harvest can be reached by — see `close_for`.
+        sp = close_for(sharp_closes, {}, row["season"], date, home, away,
+                       date=row["date"]) or {}
+        soft = close_for(soft_closes, {}, row["season"], date, home, away,
+                         date=row["date"]) or {}
         if home not in sp or away not in sp or (home not in soft and away not in soft):
             continue
         r.games_priced += 1
@@ -534,9 +539,19 @@ def schedule_moneylines(conn, sport: str) -> dict:
     return out
 
 
-def close_for(harvested: dict, schedule: dict, season, period, home, away):
+def close_for(harvested: dict, schedule: dict, season, period, home, away,
+              date=None):
     """One game's close: the harvest's if a book quoted it, else the
     schedule's consensus. ``None`` when neither did.
+
+    ``date`` is the game's own kickoff date (`games.date`, filled by the
+    ingest since 444cbba), and when it is known it is tried against the
+    harvest FIRST: a harvest is filed by the calendar date it was taken,
+    and for the NFL that is the only key that can ever reach it — the
+    period is a week. Where the date is NULL (a box that has not
+    re-ingested since the column arrived) the read is exactly what it
+    was: the period against the harvest, which joins for the sports
+    whose period is a date, then the schedule.
 
     TWO LOOKUPS, NOT ONE MERGED DICT. The harvest is keyed by the date
     it was taken (`game_line_closes`, `moneyline_closes`); the schedule
@@ -552,6 +567,10 @@ def close_for(harvested: dict, schedule: dict, season, period, home, away):
     merged dict used to — minus the collision, which those sports never
     had.
     """
+    if date:
+        hit = harvested.get((str(date)[:10], home, away))
+        if hit is not None:
+            return hit
     return (harvested.get((str(period), home, away))
             or schedule.get((season, str(period), home, away)))
 
@@ -695,7 +714,7 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
     else:
         source = consensus
     rows = conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
 
@@ -706,7 +725,8 @@ def backtest_game_lines(conn, sport: str, market: str = "total",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = close_for(harvested, schedule, row["season"], date, home, away)
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"])
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
 
@@ -823,7 +843,7 @@ def backtest_team_totals(conn, sport: str = "nfl",
     harv_s = game_line_closes(conn, sport, "spread")
 
     rows = conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
 
@@ -837,8 +857,8 @@ def backtest_team_totals(conn, sport: str = "nfl",
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        tq = close_for(harv_t, sched_t, row["season"], date, home, away)
-        sq = close_for(harv_s, sched_s, row["season"], date, home, away)
+        tq = close_for(harv_t, sched_t, row["season"], date, home, away, date=row["date"])
+        sq = close_for(harv_s, sched_s, row["season"], date, home, away, date=row["date"])
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
 

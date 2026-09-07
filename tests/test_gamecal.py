@@ -64,7 +64,7 @@ def _db(games):
     # Every game here is one season, so the order within it is the date's.
     conn.execute("CREATE TABLE games (sport TEXT, season INT, period TEXT, "
                  "home TEXT, away TEXT, home_score INT, away_score INT, "
-                 "spread REAL, total REAL, extra TEXT)")
+                 "spread REAL, total REAL, extra TEXT, date TEXT)")
     conn.execute("CREATE TABLE odds_history (sport TEXT, market TEXT, "
                  "book TEXT, taken_at TEXT, home TEXT, away TEXT, player TEXT, "
                  "line REAL, over_odds INT, under_odds INT)")

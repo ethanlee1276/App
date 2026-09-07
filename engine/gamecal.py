@@ -184,7 +184,7 @@ def observations(conn, sport: str, market: str,
     if not schedule and not harvested:
         return []
     rows = conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
     agg: dict = {}
@@ -192,7 +192,8 @@ def observations(conn, sport: str, market: str,
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
-        quote = close_for(harvested, schedule, row["season"], date, home, away)
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"])
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if quote and enough:
@@ -261,7 +262,7 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
     if not schedule and not harvested:
         return []
     rows = conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
     agg: dict = {}
@@ -269,7 +270,8 @@ def _moneyline_observations(conn, sport: str, min_team_games: int) -> list[tuple
     for row in rows:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
-        quote = close_for(harvested, schedule, row["season"], date, home, away) or {}
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"]) or {}
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         h_ml, a_ml = quote.get(home), quote.get(away)

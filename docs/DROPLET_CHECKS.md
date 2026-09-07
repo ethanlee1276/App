@@ -1112,15 +1112,28 @@ the build ships (`gamerank.measure_nfl`), so the store, and the board's
 quiet after the first — that is the measurement doing its job, not a
 fault.
 
-THE LONGER FIX IS THE `date` COLUMN. Commit 444cbba gave every game a
-kickoff date so an NFL bet could have a closing line; `upsert_games`
-fills it on the next ingest, and on a box that has re-ingested since it
-is populated — this container's copy of the DB predates that commit by
-four minutes and has it NULL on every NFL row. Once it is known to be
-populated everywhere, the walks can order and join on the date like
-every other sport does, and the NFL harvest (filed by date) would join
-too. Not done now, because a walk that keyed on a column that is NULL
-here would be silently back to the fault above.
+THE WALKS NOW READ THE `date` COLUMN WHEN IT IS THERE. Commit 444cbba
+gave every game a kickoff date so an NFL bet could have a closing line;
+`upsert_games` fills it on the next ingest. `close_for` tries the
+game's own date against the harvest first and, where the date is NULL
+(this container's copy of the DB predates the column by four minutes),
+reads exactly what it read before — the period, then the schedule — so
+a box that has not re-ingested is not silently back to the fault above,
+it is simply where it was. The walks still ORDER by season and period;
+the date is a join key, not the clock. After the nightly has run once
+on this box:
+
+```
+sudo -u qellys python3 -c "
+import sqlite3; c = sqlite3.connect('/srv/qellys/data/history.db')
+print(c.execute(\"SELECT COUNT(*), SUM(date IS NOT NULL) FROM games WHERE sport='nfl'\").fetchone())"
+sudo -u qellys python3 moneyline_backtest.py nfl
+```
+
+The first prints how many NFL rows carry a date; the second, once
+they do, reads the harvested NFL closes instead of the schedule's
+consensus alone, and its source line says so
+("real harvested closes, topped up from …").
 
 ## NFL game markets now price a sharp book's disagreement first (2026-09-07)
 
@@ -1169,7 +1182,7 @@ MLB replay already buckets sharp-anchored bets by EV — `<4%`, `4-8%`,
 `8-15%` — on a season of harvested Pinnacle closes:
 
 ```bash
-cd /srv/qellys && sudo -u qellys python3 moneyline_backtest.py --sport mlb
+cd /srv/qellys && sudo -u qellys python3 moneyline_backtest.py mlb
 ```
 
 If the `<4%` bucket pays over a few hundred bets, the bar on
@@ -1178,15 +1191,28 @@ is money, so that is a change to make WITH the number, not before it.
 If it does not pay, the narrow window is the right window and nothing
 moves.
 
-THE RETROSPECTIVE GRADE WAITS ON `games.date`. `backtest_sharp_anchor`
-keys the harvest by the date it was taken and the walk by `period`,
-which for the NFL is a week, so the two never join until the walk can
-read a date — the same reason the NFL harvest has never joined
-`gamecal`. Once `games.date` is populated on this box (a re-ingest
-fills it) the walks can be taught to use it and this strategy graded
-over the season it has run. Until then the CLV ledger is the grade:
-every recommended NFL game card is journaled with its price and settled
-against the close.
+THE RETROSPECTIVE GRADE READS `games.date`. `backtest_sharp_anchor`
+keys the harvest by the date it was taken; the walk keyed by `period`,
+which for the NFL is a week, so the two never joined and it priced zero
+NFL games in silence — the same reason the NFL harvest never joined
+`gamecal`. `close_for` now tries the game's own kickoff date first
+(tests/test_harvest_joins_by_date.py), so once the nightly re-ingest
+has filled the column here, this strategy can be graded over the
+season it has run:
+
+```
+sudo -u qellys python3 -c "
+from engine import db; from engine.gamebacktest import backtest_sharp_anchor
+print(backtest_sharp_anchor(db.connect('/srv/qellys/data/history.db'), 'nfl').summary())"
+```
+
+`python3 moneyline_backtest.py nfl` prints the same summary after the
+model walk. "0 with both a Pinnacle pair and a soft price" followed by
+"No games priced — harvest Pinnacle closes first" means the column is
+still NULL on this box (see the count above), not that Pinnacle was
+never harvested — check the count before harvesting anything. Until it
+prints games, the CLV ledger is the grade: every recommended NFL game
+card is journaled with its price and settled against the close.
 
 ## The three numbers that decide the next NFL moves (2026-09-07)
 
@@ -1201,7 +1227,7 @@ code — it says whether Pinnacle is in the payload.) The count under
 "NFL game markets now price a sharp book's disagreement first" above.
 
 **2. Do small sharp-anchored edges pay?** (decides whether the grade
-bar on a sharp card comes down.) `python3 moneyline_backtest.py --sport
+bar on a sharp card comes down.) `python3 moneyline_backtest.py
 mlb` — the `<4%` EV bucket over a few hundred bets.
 
 **3. Do stale-line flags cash?** (decides whether the best-measured

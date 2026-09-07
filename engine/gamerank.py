@@ -135,7 +135,7 @@ class GameRank:
 
 def _games(conn, sport: str):
     return conn.execute(
-        "SELECT season, period, home, away, home_score, away_score FROM games "
+        "SELECT season, period, date, home, away, home_score, away_score FROM games "
         "WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL "
         "ORDER BY season, period", (sport,)).fetchall()
 
@@ -154,7 +154,8 @@ def measure_lines(conn, sport: str, market: str,
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = close_for(harvested, schedule, row["season"], date, home, away)
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"])
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if quote and enough:
@@ -201,8 +202,8 @@ def measure_team_totals(conn, sport: str, min_team_games: int = 15) -> GameRank:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        tq = close_for(harv_t, sched_t, row["season"], date, home, away)
-        sq = close_for(harv_s, sched_s, row["season"], date, home, away)
+        tq = close_for(harv_t, sched_t, row["season"], date, home, away, date=row["date"])
+        sq = close_for(harv_s, sched_s, row["season"], date, home, away, date=row["date"])
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if tq and sq and enough:
@@ -248,7 +249,8 @@ def measure_moneylines(conn, sport: str, min_team_games: int = 15) -> GameRank:
         date, home, away = row["period"], row["home"], row["away"]
         hs, as_ = float(row["home_score"]), float(row["away_score"])
         r.games_seen += 1
-        quote = close_for(harvested, schedule, row["season"], date, home, away) or {}
+        quote = close_for(harvested, schedule, row["season"], date, home, away,
+                          date=row["date"]) or {}
         enough = (agg.get(home, (0, 0, 0))[2] >= min_team_games
                   and agg.get(away, (0, 0, 0))[2] >= min_team_games)
         if enough and quote.get(home) is not None and quote.get(away) is not None:
@@ -273,7 +275,7 @@ def _cfb_prior_table(mem, rows, before: str, seasons) -> None:
     mem.execute("DELETE FROM games")
     mem.executemany(
         "INSERT INTO games VALUES (?,?,?,?,?,?,?,?)",
-        [tuple(r) for r in rows if r["period"] < before and r["season"] in seasons])
+        [tuple(r)[:8] for r in rows if r["period"] < before and r["season"] in seasons])
     mem.commit()
 
 
@@ -312,7 +314,7 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
     fit = cfbratings.fit_from_history(conn, plain)
     cols = "sport, season, period, home, away, home_score, away_score, extra"
     rows = conn.execute(
-        f"SELECT {cols} FROM games WHERE sport='cfb' AND home_score IS NOT NULL "
+        f"SELECT {cols}, date FROM games WHERE sport='cfb' AND home_score IS NOT NULL "
         f"AND away_score IS NOT NULL ORDER BY season, period").fetchall()
     # The FCS exclusion only when the map loaded (cfb_build's rule): on a
     # box where every key is the espn: fallback, excluding it would drop
@@ -350,8 +352,10 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
                 continue
             hs, as_ = float(g["home_score"]), float(g["away_score"])
             margin = (hr.net - ar.net) + fit.home_field
-            sq = close_for(harv_s, sched_s, g["season"], date, g["home"], g["away"])
-            tq = close_for(harv_t, sched_t, g["season"], date, g["home"], g["away"])
+            sq = close_for(harv_s, sched_s, g["season"], date, g["home"], g["away"],
+                           date=g["date"])
+            tq = close_for(harv_t, sched_t, g["season"], date, g["home"], g["away"],
+                           date=g["date"])
             if sq:
                 line, oa, ob = sq
                 oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
@@ -385,7 +389,8 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
                             out["team_total"].pushes += 1
                         else:
                             out["team_total"].pairs.append((float(c["win_prob"]), bool(won)))
-            q = close_for(harv_ml, sched_ml, g["season"], date, g["home"], g["away"]) or {}
+            q = close_for(harv_ml, sched_ml, g["season"], date, g["home"], g["away"],
+                          date=g["date"]) or {}
             if q.get(g["home"]) is not None and q.get(g["away"]) is not None:
                 out["moneyline"].games_quoted += 1
                 if hs != as_:
@@ -406,7 +411,7 @@ def _prior_table(mem, rows, before: tuple, seasons) -> None:
     mem.execute("DELETE FROM games")
     mem.executemany(
         "INSERT INTO games VALUES (?,?,?,?,?,?,?,?)",
-        [tuple(r) for r in rows
+        [tuple(r)[:8] for r in rows            # the eight columns the table has; the date rides beside them
          if (r["season"], r["period"]) < before and r["season"] in seasons])
     mem.commit()
 
@@ -472,7 +477,7 @@ def measure_nfl(conn, min_team_games: int = 4,
     baseline = _sd(SCORING_BASELINE, "nfl", "scoring baseline")
     cols = "sport, season, period, home, away, home_score, away_score, extra"
     rows = conn.execute(
-        f"SELECT {cols} FROM games WHERE sport='nfl' AND home_score IS NOT NULL "
+        f"SELECT {cols}, date FROM games WHERE sport='nfl' AND home_score IS NOT NULL "
         f"AND away_score IS NOT NULL ORDER BY season, period").fetchall()
     sched_s = schedule_closes(conn, "nfl", "spread", require_prices=False)
     harv_s = game_line_closes(conn, "nfl", "spread")
@@ -507,8 +512,10 @@ def measure_nfl(conn, min_team_games: int = 4,
             date = g["period"]
             hs, as_ = float(g["home_score"]), float(g["away_score"])
             margin = game_margin("nfl", hr.net, ar.net)
-            sq = close_for(harv_s, sched_s, season, date, g["home"], g["away"])
-            tq = close_for(harv_t, sched_t, season, date, g["home"], g["away"])
+            sq = close_for(harv_s, sched_s, season, date, g["home"], g["away"],
+                           date=g["date"])
+            tq = close_for(harv_t, sched_t, season, date, g["home"], g["away"],
+                           date=g["date"])
             if sq:
                 line, oa, ob = sq
                 oa, ob = (-110 if oa is None else oa), (-110 if ob is None else ob)
@@ -542,7 +549,8 @@ def measure_nfl(conn, min_team_games: int = 4,
                             out["team_total"].pushes += 1
                         else:
                             out["team_total"].pairs.append((float(c["win_prob"]), bool(won)))
-            q = close_for(harv_ml, sched_ml, season, date, g["home"], g["away"]) or {}
+            q = close_for(harv_ml, sched_ml, season, date, g["home"], g["away"],
+                          date=g["date"]) or {}
             if q.get(g["home"]) is not None and q.get(g["away"]) is not None:
                 out["moneyline"].games_quoted += 1
                 if hs != as_:
