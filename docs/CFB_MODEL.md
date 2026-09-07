@@ -399,3 +399,19 @@ print(c.execute(\"SELECT COUNT(*), SUM(temp IS NOT NULL), SUM(wind IS NOT NULL) 
 Zero on the second column after a Saturday with a built board means the
 forecast attach itself is failing (no CFBD key, or Open-Meteo refusing),
 which the build prints as `Weather: skipped`.
+
+## The information test reads the forecast (2026-09-07)
+
+The stored kickoff forecast (previous section) now reaches
+`engine/cfbinfo.py` as the three inputs the NFL test has always carried —
+`wind`, `cold` and `indoor` — on the total only. A dome answers all three
+without a forecast; an outdoor game with no forecast on file answers
+none, because a missing forecast is not calm weather and a zero there
+would put every unforecast game in the bucket the slope is measured
+against. On a box where the column is empty the rows print `n 0/0`,
+which is an honest zero and not a finding. Run it after a few built
+Saturdays:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -m engine.cfbinfo | sed -n '/^TOTAL/,$p'
+```

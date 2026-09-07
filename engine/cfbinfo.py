@@ -20,7 +20,8 @@ judged on 2024-2025, never the same seasons.
 
 THE CANDIDATES, and where each comes from — what the database holds
 for college, which is less than it holds for the NFL: no play-by-play
-efficiency, no weather, no conference map on disk.
+efficiency, no conference map on disk, and weather only from
+2026-09-07 forward (see below).
 
   * The rating's own disagreement with the close (`pts_gap`), the
     production walk (`teamrates.adjusted_ratings_for_season` rebuilt
@@ -36,6 +37,17 @@ efficiency, no weather, no conference map on disk.
     more) — a college schedule has open dates the NFL's does not.
   * A neutral site, from the schedule.
   * Form drift: the last three margins against the season's.
+  * Weather, on the total only — wind, cold, indoors — read off
+    `games.roof / temp / wind` exactly as the NFL test reads them. For
+    college those columns are the kickoff-hour FORECAST the build
+    stored (`cfbdata.weather_rows`, since 2026-09-07), which is what
+    was known when the total was priced; the NFL's are the box score's
+    after the fact. Measured on 2026-09-07 the columns were empty for
+    all 3,133 college games, so the rows below print n 0/0 — an honest
+    zero, not a finding — and fill in as Saturdays are built. Ethan,
+    same day: "College totals were the only game line with a positive
+    slope, and it was not significant. A stadium weather feed is
+    cheap." This is where that slope gets its first real input.
 
 Each is tested on the moneyline (logistic, market log-odds as offset)
 and on the spread and the total (least squares of actual − close), then
@@ -142,7 +154,42 @@ ML_FEATURES = ("pts_gap", "qb_change_diff", "qb_new_diff", "qb_ypg_diff",
                "bye_diff", "rest_diff", "neutral", "drift_diff")
 SPREAD_FEATURES = ("pts_edge", "qb_change_diff", "qb_new_diff", "qb_ypg_diff",
                    "bye_diff", "rest_diff", "neutral", "drift_diff")
-TOTAL_FEATURES = ("pts_tot_edge", "qb_change_sum", "neutral", "drift_sum")
+TOTAL_FEATURES = ("pts_tot_edge", "qb_change_sum", "neutral", "drift_sum",
+                  "wind", "cold", "indoor")
+
+#: Below this the forecast said cold; the NFL test draws the same line.
+FREEZING_F = 32.0
+
+
+def _weather_map(conn) -> dict:
+    """{(season, period, home, away): (roof, temp, wind)} for every
+    college game. A SEPARATE read on purpose: `COLS` also shapes the
+    in-memory prior table, which `_prior_table` fills with exactly eight
+    values per row, so widening it would break the walk."""
+    out: dict = {}
+    for r in conn.execute(
+            "SELECT season, period, home, away, roof, temp, wind FROM games "
+            "WHERE sport='cfb'"):
+        out[(r["season"], r["period"], r["home"], r["away"])] = (
+            r["roof"], r["temp"], r["wind"])
+    return out
+
+
+def weather_features(roof, temp, wind) -> dict:
+    """The NFL test's three weather inputs, from one game's columns.
+
+    Indoors answers all three without a forecast. Outdoors with no wind
+    on file answers NONE of them — a missing forecast is not calm
+    weather, and a zero written there would put every unforecast game
+    in the "no wind" bucket the slope is being measured against.
+    """
+    indoor = str(roof or "").lower() in ("dome", "closed")
+    if indoor:
+        return {"indoor": 1.0, "wind": 0.0, "cold": 0.0}
+    if wind is None:
+        return {"indoor": 0.0}
+    return {"indoor": 0.0, "wind": float(wind),
+            "cold": 1.0 if (temp is not None and float(temp) < FREEZING_F) else 0.0}
 
 
 def _qb_games(conn) -> dict:
@@ -186,6 +233,7 @@ def build_rows(conn) -> list[Row]:
     sps = schedule_closes(conn, "cfb", "spread", require_prices=False)
     tts = schedule_closes(conn, "cfb", "total", require_prices=False)
     qb = _qb_games(conn)
+    wx = _weather_map(conn)
     mem = sqlite3.connect(":memory:")
     mem.row_factory = sqlite3.Row
     mem.execute(f"CREATE TABLE games ({COLS})")
@@ -224,6 +272,7 @@ def build_rows(conn) -> list[Row]:
                 f["pts_wp"] = cfbratings.win_prob(f["pts_margin"], fit)
                 f["pts_total"] = project_total("cfb", hr.off, hr.def_, ar.off, ar.def_)
             f["neutral"] = 1.0 if neutral else 0.0
+            f.update(weather_features(*wx.get((season, date, h, a), (None, None, None))))
             for side, team in (("h", h), ("a", a)):
                 # Quarterback.
                 this = qb.get((season, date, team))
