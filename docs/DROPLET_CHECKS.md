@@ -1533,3 +1533,43 @@ guard held it. The NFL's book is a few weeks old and will read "needs
 For the NFL-specific closing-line check behind the 64.8% figure (which
 was measured on baseball's harvest): `python3 stale_lines.py --sport
 nfl`, once the NFL harvest holds a few weeks of closes.
+
+## The price tape now stores the sharp book too (2026-09-07)
+
+Ethan, 2026-09-07, setting the data plan: "A price database. Timestamped
+quotes from every book, Pinnacle included, from open to close, for game
+lines and props in both leagues. Every edge we can measure is a
+comparison of prices."
+
+Both measured edges here ARE comparisons of two prices — the sharp
+anchor (+13.5% on the MLB replay) and the stale-line flag (64.8% CLV on
+30,448 quotes) — and until now only one side of the comparison was
+being written down. Every build parses the sharp book's own two-sided
+pair (`apply_odds_to_slate` and `apply_board_lines_to_slate` hang it on
+the game as `sharp_home_ml` / `sharp_total` / `sharp_spread` and their
+prices; `cfb_build._sharp_for` puts the same pair on its entry), prices
+against it, and dropped it. `engine/lineledger` now writes those rows
+under `book = 'Pinnacle'` beside the shopped `book = 'best'`, on all
+three sports. It costs nothing: the numbers were already in memory.
+
+The spelling matters. It is the API's DISPLAY title because that is
+what the historical harvest stores, so a build row and a harvested row
+for the same book join instead of forming two tapes.
+
+After a slate with paid odds, both books should be present:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+from engine import db
+c = db.connect()
+for sport in ('nfl','cfb','mlb'):
+    rows = c.execute('SELECT book, market, COUNT(*) FROM odds_history '
+                     \"WHERE sport=? AND player!='' GROUP BY book, market \"
+                     'ORDER BY book, market', (sport,)).fetchall()
+    print(sport, [tuple(r) for r in rows] or 'no rows yet')"
+```
+
+A sport showing `best` rows and no `Pinnacle` rows means the sharp book
+was not in the payload for those pulls — check `DEFAULT_BOOKS` still
+carries pinnacle and that the pull was not book-filtered. It does NOT
+mean the join is broken.

@@ -1412,6 +1412,19 @@ def main() -> None:
                         row["total_under_odds"] = e["total"]
                 if e.get("moneyline"):
                     row["home_ml"], row["away_ml"] = e["moneyline"]
+                # The sharp book's own pair, parsed by `_sharp_for` on the
+                # same payload and until now used only to price a soft
+                # number against. Storing it is what lets the college tape
+                # be read back as two series (engine/lineledger.SHARP_BOOK).
+                sh = e.get("sharp") or {}
+                if sh.get("spread"):
+                    row["sharp_spread"], row["sharp_spread_home_odds"], \
+                        row["sharp_spread_away_odds"] = sh["spread"]
+                if sh.get("total"):
+                    row["sharp_total"], row["sharp_total_over_odds"], \
+                        row["sharp_total_under_odds"] = sh["total"]
+                if sh.get("moneyline"):
+                    row["sharp_home_ml"], row["sharp_away_ml"] = sh["moneyline"]
                 _rows.append(row)
             _lc = _lhdb.connect()
             _n_lines = lineledger.record(_lc, "cfb", _rows)
