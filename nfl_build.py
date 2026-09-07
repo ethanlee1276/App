@@ -506,7 +506,7 @@ def main() -> None:
     if args.injuries:
         live = None
         try:
-            live = injuries_feed.load_live_injuries()
+            live = injuries_feed.load_live_injuries(slate)
         except Exception as exc:  # noqa: BLE001 — a keyless feed's blip costs a note, never the board
             injury_status["live_error"] = str(exc)
             print(f"\n⚠️  Live injury board unavailable — weekly report only.\n   {exc}")

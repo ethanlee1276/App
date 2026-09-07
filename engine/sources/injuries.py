@@ -156,7 +156,20 @@ LIVE_STATUS_MAP = {
 #: The feed keeps re-filing a current one, so a row older than this is
 #: last week's and is dropped. OUT and IR are standing statuses — a man
 #: on reserve stays listed, correctly, for as long as he is on it.
+#:
+#: SEVEN DAYS IS THE FALLBACK, NOT THE RULE. The first build with the
+#: live board (2026-09-07, a Monday) held 66 props, 56 of them on
+#: Questionable — Friday's designations for games played Sunday, three
+#: days old and inside any flat window, on men who had played. A
+#: designation is stale the moment its game has been played, so the
+#: build hands `live_injuries` the slate's own week: a Questionable filed
+#: before this team's game week began (`WEEK_LEAD_DAYS` before its
+#: kickoff date) is last week's and is dropped. See `week_starts`.
 LIVE_DESIGNATION_DAYS = 7
+#: Clubs file practice reports from Wednesday and designations on Friday
+#: for a Sunday game; five days before kickoff is the Tuesday, the first
+#: day a filing can be about THIS game.
+WEEK_LEAD_DAYS = 5
 
 #: Which designation wins when the weekly report and the live board both
 #: list a man. The hold is conservative by design: it lifts when
@@ -175,20 +188,46 @@ def _map_live_status(raw) -> str:
     return ""
 
 
-def live_injuries(rows: list[dict], now: float | None = None) -> list[Injury]:
+def week_starts(slate) -> dict[str, float]:
+    """For every team on the slate, the epoch second its game week began:
+    `WEEK_LEAD_DAYS` before the date of its game. A game with no date
+    contributes nothing, and a team not on the slate has no props to
+    hold, so it needs no answer."""
+    import datetime as _dt
+    out: dict[str, float] = {}
+    for g in getattr(slate, "games", None) or []:
+        try:
+            d = _dt.date.fromisoformat(str(getattr(g, "date", "") or "")[:10])
+        except ValueError:
+            continue
+        start = _dt.datetime.combine(d - _dt.timedelta(days=WEEK_LEAD_DAYS),
+                                     _dt.time.min, tzinfo=_dt.timezone.utc).timestamp()
+        for team in (g.home, g.away):
+            out[team] = start
+    return out
+
+
+def live_injuries(rows: list[dict], now: float | None = None,
+                  since: dict[str, float] | None = None) -> list[Injury]:
     """ESPN's NFL board (`espninjuries.parse_injuries` rows) as engine
     `Injury` objects, keyed the way the slate keys teams.
 
     Newest filing per player, return notices unmapped, team names folded
     to the slate's abbreviations (a team the table cannot key is dropped
-    rather than guessed), game-week designations aged out after
-    `LIVE_DESIGNATION_DAYS`, and an undated Questionable dropped outright
-    — with no date it can never age out, which is the standing-claim trap
-    the injuries page already closes for return notices.
+    rather than guessed), game-week designations aged out, and an undated
+    Questionable dropped outright — with no date it can never age out,
+    which is the standing-claim trap the injuries page already closes for
+    return notices.
+
+    ``since`` is `week_starts(slate)`: a Questionable or Doubtful filed
+    before its team's week began is about a game already played and is
+    dropped. A team missing from it falls back to the flat
+    `LIVE_DESIGNATION_DAYS` window.
     """
     from .espninjuries import current_rows, _parse_iso_ts
     from .oddsapi import TEAM_ABBR
     cutoff = (now if now is not None else time.time()) - LIVE_DESIGNATION_DAYS * 86400
+    since = since or {}
     out: list[Injury] = []
     for r in current_rows(rows):
         # A cleared-to-play notice carries status "Active", which maps
@@ -203,7 +242,7 @@ def live_injuries(rows: list[dict], now: float | None = None) -> list[Injury]:
             continue
         if status in ("QUESTIONABLE", "DOUBTFUL"):
             stamp = _parse_iso_ts(r.get("date"))
-            if stamp is None or stamp < cutoff:
+            if stamp is None or stamp < since.get(team, cutoff):
                 continue
         position = (r.get("pos") or "").upper()
         out.append(Injury(player=r.get("player") or "", team=team,
@@ -213,13 +252,15 @@ def live_injuries(rows: list[dict], now: float | None = None) -> list[Injury]:
     return [i for i in out if i.player]
 
 
-def load_live_injuries() -> list[Injury]:
+def load_live_injuries(slate=None) -> list[Injury]:
     """Fetch (cache-served inside `espninjuries.INJURY_TTL`) and parse the
-    live NFL board. Raises whatever the fetch raises when there is no
-    cache to fall back on; the caller decides what a missing live board
-    costs, and for the build it costs a note, never the board."""
+    live NFL board, aged against ``slate``'s game week when one is given.
+    Raises whatever the fetch raises when there is no cache to fall back
+    on; the caller decides what a missing live board costs, and for the
+    build it costs a note, never the board."""
     from .espninjuries import fetch_injuries, parse_injuries
-    return live_injuries(parse_injuries(fetch_injuries("nfl")))
+    return live_injuries(parse_injuries(fetch_injuries("nfl")),
+                         since=week_starts(slate) if slate is not None else None)
 
 
 def merge_injuries(weekly: list[Injury], live: list[Injury]) -> tuple[list[Injury], int]:

@@ -213,12 +213,41 @@ def test_the_live_board_carries_the_slate_when_the_weekly_report_is_missing():
             raise AssertionError("no live board and no weekly report must still raise")
 
 
+def test_a_questionable_for_a_game_already_played_is_dropped_by_the_slates_week():
+    """The first live-board build (Monday 2026-09-07) held 66 props, 56
+    on Questionable: Friday's designations for Sunday's games, three
+    days old, on men who had played. The slate's own week is the clock —
+    a Questionable filed before this team's week began is last week's."""
+    slate = _slate()                      # KC at home to BUF
+    slate.games[0].date = "2026-09-10"    # Thursday night, Week 2
+    since = inj.week_starts(slate)
+    assert set(since) == {"KC", "BUF"}
+    start = dt.datetime(2026, 9, 5, tzinfo=dt.timezone.utc).timestamp()
+    assert since["KC"] == start and since["BUF"] == start
+    rows = [_espn("Josh Allen", "Buffalo Bills", "Questionable", 3, pos="QB"),   # Fri 09-04
+            _espn("New Doubt", "Buffalo Bills", "Doubtful", 0.2, pos="WR"),      # this week
+            _espn("Long Out", "Kansas City Chiefs", "Out", 30, pos="WR"),        # stands
+            _espn("Isiah Pacheco", "Kansas City Chiefs", "Injured Reserve", 3)]  # stands
+    got = {i.player: i.status for i in inj.live_injuries(rows, now=NOW, since=since)}
+    assert got == {"New Doubt": "DOUBTFUL", "Long Out": "OUT", "Isiah Pacheco": "IR"}, got
+    # Without the slate's week the flat window keeps Friday's row — the
+    # fallback, and the behaviour this test exists to retire from the build.
+    assert "Josh Allen" in {i.player for i in inj.live_injuries(rows, now=NOW)}
+    # A team not on the slate keeps the flat window.
+    rows.append(_espn("Elsewhere", "Detroit Lions", "Questionable", 3, pos="TE"))
+    got = {i.player for i in inj.live_injuries(rows, now=NOW, since=since)}
+    assert "Elsewhere" in got and "Josh Allen" not in got
+    # A game with no date contributes nothing rather than crashing.
+    slate.games[0].date = ""
+    assert inj.week_starts(slate) == {}
+
+
 def test_the_build_fetches_the_live_board_and_passes_it_through():
     """The wiring, read from the build script: the live board is loaded
     under its own guard (a blip costs a note, never the board), handed to
     the attach step, and the payload says what each source carried."""
     src = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
-    assert "live = injuries_feed.load_live_injuries()" in src
+    assert "live = injuries_feed.load_live_injuries(slate)" in src
     assert "attach_injuries_to_slate(slate, args.season, args.week,\n" \
            "                                                        live=live)" in src
     assert 'injury_status["live_error"] = str(exc)' in src
@@ -228,6 +257,7 @@ def test_the_build_fetches_the_live_board_and_passes_it_through():
     import inspect
     body = inspect.getsource(inj.load_live_injuries)
     assert 'fetch_injuries("nfl")' in body and "parse_injuries(" in body
+    assert "since=week_starts(slate)" in body
 
 
 if __name__ == "__main__":

@@ -1865,8 +1865,23 @@ EOF
 `live` at None means the build never asked ESPN (the launcher stopped
 passing `--injuries`); `live` at zero in-season with `live_error` empty
 means the cached board parsed to nothing — run `python3 launch.py
---injuries` to see the raw board and its age. To ask about one man
-across both feeds and see whether the slate holds him:
+--injuries` to see the raw board and its age.
+
+**What the first run printed (Ethan, 2026-09-07, a Monday):** `weekly:
+0 live: 262 only on the live board: 262 | holds: 66`, with 56 of the
+holds on Questionable. Two things to read in that. `weekly: 0` with no
+error means nflverse's file answered but had no rows for the week the
+build asked for — the model had been pricing with NO injuries until the
+live board arrived. And 56 Questionable on a Monday were Friday's
+designations for games already played; the first cut aged them on a
+flat seven days. They now age by the slate's own week (`week_starts`:
+five days before each team's game date), so the count of Questionable
+holds on a Monday or Tuesday should be near zero and rise from
+Wednesday. If `weekly` stays at 0 into a week nflverse has published,
+check `data/cache/injuries_<season>.csv` has rows for that week.
+
+To ask about one man across both feeds and see whether the slate holds
+him:
 
 ```bash
 cd /srv/qellys && sudo -u qellys python3 launch.py --injuries "Isiah Pacheco"
