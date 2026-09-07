@@ -190,9 +190,19 @@ _TIER_ORDER = {MARQUEE: 0, STANDARD: 1, LOW: 2}
 
 def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          api_key: str | None = None,
-                         now=None, cap: int | None = None
+                         now=None, cap: int | None = None,
+                         sharp: dict | None = None
                          ) -> tuple[dict, dict, str]:
     """Player quotes for the board's best games — one call per game.
+
+    ``sharp`` is an out-parameter (the `census` idiom): when a dict is
+    passed it is filled with the sharp book's own prop pairs, in
+    `oddsapi.parse_event_sharp_lines`' shape, from the same payloads
+    the shopped ``lines`` come from — kept apart from them because the
+    sharp book is the number to price against and never a price to
+    take. `engine.cfb.props.attach_lines` puts them on `Prop.sharp_lines`
+    and the shared evaluator prices sharp first, exactly as it does for
+    the NFL (tests/test_prop_sharp_anchor.py).
 
     Returns ``(scorers, lines, note)``:
 
@@ -296,6 +306,10 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         for key, got in oddsapi.parse_event_lines(
                 payload, oddsapi.SPORT_CONFIG["cfb"]["markets"]).items():
             lines.setdefault(key, []).extend(got)
+        if sharp is not None:
+            for key, got in oddsapi.parse_event_sharp_lines(
+                    payload, oddsapi.SPORT_CONFIG["cfb"]["markets"]).items():
+                sharp.setdefault(key, []).extend(got)
 
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
             f"pulled at {CREDITS_PER_EVENT} credit(s) each"
@@ -1617,6 +1631,7 @@ def main() -> None:
     # and one request cannot disagree with itself about a game.
     td_quotes: dict = {}
     prop_lines: dict = {}
+    sharp_prop_lines: dict = {}          # the sharp book's pairs, apart
     quotes_note = ("no odds pulled on this cycle — player prices are "
                    "metered per event, so they arrive on the cycles that "
                    "can afford them rather than every minute")
@@ -1628,7 +1643,8 @@ def main() -> None:
             # it does not buy them. Cached quotes still attach — the last
             # paid pull's prices are better than none.
             td_quotes, prop_lines, quotes_note, quotes_age = \
-                attach_player_quotes(games, priced, cache_only=not args.odds)
+                attach_player_quotes(games, priced, cache_only=not args.odds,
+                                     sharp=sharp_prop_lines)
             print(f"  {quotes_note}")
         except Exception as _qexc:                           # noqa: BLE001
             quotes_note = f"player quotes unavailable: {_qexc}"
@@ -1648,7 +1664,8 @@ def main() -> None:
         # one. A prop with no line keeps its proxy, is analysed and
         # shown, and is never staked or journaled — `evaluate_prop`
         # reads the book name and refuses to call it a market.
-        _matched, _total = _cfbprops.attach_lines(_prop_slate, prop_lines)
+        _matched, _total = _cfbprops.attach_lines(_prop_slate, prop_lines,
+                                                  sharp=sharp_prop_lines)
         prop_census["priced"] = _matched
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         if prop_census.get("candidates"):

@@ -1293,6 +1293,18 @@ odds side. A prop quoted but not anchored means the sharp pair sat at
 a different line from the shopped one — a fair at 75.5 says nothing
 about a bet at 76.5, so the model card priced it.
 
+COLLEGE TOO. The evaluator is shared, so the same path prices college
+props the moment the pair reaches the prop: `cfb_build.
+attach_player_quotes` fills a `sharp` out-parameter from the same
+per-event payloads and `engine.cfb.props.attach_lines` puts it on each
+matched prop. The same count, on `web/data/cfb.json`, answers whether
+the sharp book quotes college player markets at all — expect fewer
+than the NFL's; a sharp book prices college props thinly. The
+touchdown boards need nothing: their fair has always been the median
+de-vigged price across every book that quoted the player, the sharp
+one included (`engine.devig.board_fair`), so a touchdown pick has been
+price against price since the day the board shipped.
+
 THE MODEL PROP CARDS ARE NOT DEMOTED, and the reason is a measurement
 that only this box can make. The game cards went informational because
 `gamecal` and the information tests measured the model's disagreement

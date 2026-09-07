@@ -476,8 +476,15 @@ def build_slate(conn, games: list[dict], date: str, season: int,
     return Slate(date=str(date), teams=teams, games=game_objs, props=props)
 
 
-def attach_lines(slate, lines: dict) -> tuple[int, int]:
+def attach_lines(slate, lines: dict, sharp: dict | None = None) -> tuple[int, int]:
     """Replace each prop's proxy line with the book's. ``(matched, total)``.
+
+    ``sharp`` is the sharp book's own pairs in the same shape, from the
+    same pull (`cfb_build.attach_player_quotes`' out-parameter); a
+    matched prop gets its pair on `Prop.sharp_lines`, and the shared
+    evaluator prices the soft quote against it at the same line. Only
+    beside a real line — a prop that kept its proxy has nothing to
+    price against the pair.
 
     ``lines`` is `oddsapi.parse_event_lines`' own shape — keyed
     ``(normalised player, market)`` — so the join is the same one
@@ -495,10 +502,12 @@ def attach_lines(slate, lines: dict) -> tuple[int, int]:
     from ..sources.oddsapi import normalize_name
     matched = 0
     for prop in getattr(slate, "props", []):
-        got = lines.get((normalize_name(prop.player), prop.market))
+        key = (normalize_name(prop.player), prop.market)
+        got = lines.get(key)
         if got:
             prop.lines = list(got)
             matched += 1
+            prop.sharp_lines = list((sharp or {}).get(key) or [])
     return matched, len(getattr(slate, "props", []))
 
 
