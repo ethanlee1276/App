@@ -178,6 +178,34 @@ def test_the_backtest_cli_can_print_it():
     assert "def gate_report(" in src
     assert "from engine.selectorder import from_settled, gate_split, gate_reading" in src
     assert "report.settled" in src, "the CLI is not reading the candidate surface"
+    # AND IT CAN FILL THE BOOK-PRICED ARM. Without harvested closes every
+    # row is basis=naive and `--gate` has nothing market-relative to read
+    # — which is what the first live run of this did, silently.
+    assert '"--real-lines"' in src, "the join that makes --gate mean anything is gone"
+    assert "nfl_real_lines" in src
+    # THE VALUE REACHES THE REPLAY, not just the flag reaching argparse.
+    # Written after a mutant that deleted `real_lines=real` from the call
+    # survived every other assertion here: the flag would still parse,
+    # the closes would still be read and counted on screen, and every row
+    # would still come back proxy-priced.
+    assert "real_lines=real)" in src, \
+        "the harvested closes are built and then not passed to the replay"
+
+
+def test_the_header_names_the_basis_it_actually_read():
+    """It said "priced against a real book line" whatever basis was
+    asked for, so the proxy run announced 2,529 book-priced rows it did
+    not have. A false sentence over a true table is the shape of every
+    wrong number this repo has had to chase."""
+    src = open(os.path.join(ROOT, "backtest.py"), encoding="utf-8").read()
+    i = src.index("def gate_report(")
+    body = src[i:src.index("\nif __name__", i)] if "\nif __name__" in src[i:] else src[i:]
+    code = "\n".join(ln for ln in body.splitlines()
+                     if not ln.lstrip().startswith("#"))
+    assert "recent-form proxy at a synthetic -110" in code, code[:300]
+    assert "real harvested book line" in code, code[:300]
+    # The claim must be conditional on the basis, never unconditional.
+    assert 'res["basis"] == "book"' in code, code[:300]
 
 
 if __name__ == "__main__":

@@ -46,6 +46,11 @@ def main() -> None:
                     help="level = tendency vs the league; drift = the team vs "
                          "its OWN season, i.e. only what player form has not "
                          "already absorbed.")
+    ap.add_argument("--real-lines", action="store_true",
+                    help="price against harvested closes from the history DB "
+                         "instead of the recent-form proxy. Without this every "
+                         "row is basis=naive, so --gate has no market-relative "
+                         "arm to read and will say so.")
     ap.add_argument("--gate", action="store_true",
                     help="score the props the gate REFUSED against the ones "
                          "it admitted. The journal cannot answer this — it "
@@ -66,10 +71,24 @@ def main() -> None:
         from engine.ml.model import MultiplierModel
         model = MultiplierModel.load(args.model)
 
+    # THE JOIN THAT MAKES `--gate` MEAN ANYTHING. Without harvested
+    # closes every prop is priced at `build_slate`'s recent-form proxy on
+    # a synthetic -110, and both arms of the refusal audit are the model
+    # scored against itself. `engine.lab.nfl_real_lines` is the same
+    # builder the lab's own replay uses — one implementation, because the
+    # second one is always the one that is wrong.
+    real = None
+    if args.real_lines:
+        from engine import db as _db
+        from engine.lab import nfl_real_lines
+        real = nfl_real_lines(_db.connect())
+        print(f"  harvested closes: {len(real):,} (player, market, date) keys")
+
     try:
         report = backtest_from_stats(args.season, weeks, config, model=model,
                                      use_team_context=args.team_context,
-                                     team_context_mode=args.context_mode)
+                                     team_context_mode=args.context_mode,
+                                     real_lines=real)
     except DataUnavailable as exc:
         print("⚠️  Backtest needs weekly stats.\n")
         print(exc)
@@ -102,10 +121,18 @@ def gate_report(report, basis: str = "book") -> None:
     if not res["enough"]:
         print(f"  {res['note']}.\n")
         return
-    print(f"  {res['n']} settled candidates priced against a real book line, "
-          f"at one flat\n  unit each. Same weeks, same prices, same "
-          f"settling — the only difference\n  is which side of the gate "
-          f"they fell.\n")
+    # THE HEADER SAYS WHICH BASIS IT READ. It said "priced against a
+    # real book line" whatever `--gate-basis` was, so the proxy run
+    # announced 2,529 book-priced rows it did not have — a false
+    # sentence printed above a true table, which is the shape of every
+    # wrong number this repo has had to chase.
+    priced = ("against a real harvested book line" if res["basis"] == "book"
+              else "against the recent-form proxy at a synthetic -110, "
+                   "NOT a book" if res["basis"] == "naive"
+              else "against a mix of book and proxy lines")
+    print(f"  {res['n']} settled candidates priced {priced}, at one flat\n"
+          f"  unit each. Same weeks, same prices, same settling — the only\n"
+          f"  difference is which side of the gate they fell.\n")
     print(f"    {'arm':<12}{'bets':>6}{'won':>6}{'hit':>9}"
           f"{'staked':>10}{'net':>10}{'ROI':>9}")
     for name, key in (("admitted", "admitted"), ("refused", "refused")):
