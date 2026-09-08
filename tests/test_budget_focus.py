@@ -212,9 +212,15 @@ def test_the_day_is_allocated_exactly_once():
 
 
 def test_the_three_focus_leagues_outweigh_the_rest():
-    """Ethan's instruction, in the table where the money is decided."""
-    for s in FOCUS:
+    """Ethan's instruction, in the table where the money is decided.
+    Football first since 2026-09-07 ("prioritize NFL and CFB over
+    anything so if we gotta limit MLB pulls im ok with that"): baseball
+    stays a focus league, behind the two football leagues."""
+    for s in ("nfl", "cfb"):
         assert launch.SPORT_WEIGHT[s] == 1.0, f"{s} is not a focus league"
+    assert 0.4 <= launch.SPORT_WEIGHT["mlb"] < 1.0, launch.SPORT_WEIGHT["mlb"]
+    for s in FOCUS:
+        assert launch.SPORT_WEIGHT[s] > max(launch.SPORT_WEIGHT[r] for r in REST)
     for s in REST:
         w = launch.SPORT_WEIGHT[s]
         assert 0 < w < 1.0, f"{s} weighs {w}"
@@ -252,9 +258,12 @@ def test_the_concentration_does_not_invent_credits_over_a_week():
     # College claims its share on 2 days; baseball on all 7.
     cfb_week = cfb_day * launch.PLAY_DAYS_PER_WEEK["cfb"]
     mlb_week = mlb_day * launch.PLAY_DAYS_PER_WEEK["mlb"]
-    assert abs(cfb_week - mlb_week) < 0.01, (
+    # Each league's week is proportional to its weight — equal weights
+    # drew equally; since 2026-09-07 baseball weighs 0.6 to football's 1.
+    w_cfb, w_mlb = launch.SPORT_WEIGHT["cfb"], launch.SPORT_WEIGHT["mlb"]
+    assert abs(cfb_week * w_mlb - mlb_week * w_cfb) < 0.01, (
         f"over a week college draws {cfb_week:.2f} day-shares and baseball "
-        f"{mlb_week:.2f} — equal weights should draw equally")
+        f"{mlb_week:.2f} — the weeks should stand in the weights' ratio")
     assert cfb_week + mlb_week <= 7.0 + 1e-9, (
         f"the two leagues draw {cfb_week + mlb_week:.2f} day-shares from a "
         f"seven-day week")

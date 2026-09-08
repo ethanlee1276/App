@@ -143,8 +143,11 @@ def test_the_days_ceiling_does_not_refuse_the_close():
     """A funded month whose slate has already spent its daily allowance
     still records the number its open bets settle against."""
     p = _tmp()
-    save(BudgetState(remaining=40000, last_refresh_ts=NOW - 3 * 3600,
-                     sport_last_refresh={"nfl": NOW - 3 * 3600}), p)
+    # The last pull sits INSIDE the readiness window (which opened three
+    # hours before kickoff) so that exemption is already spent and the
+    # ceiling is what answers the second ask below.
+    save(BudgetState(remaining=40000, last_refresh_ts=NOW - 2 * 3600,
+                     sport_last_refresh={"nfl": NOW - 2 * 3600}), p)
     real = ob.spent_today
     ob.spent_today = lambda *a, **k: 10 ** 6      # the day is long gone
     try:

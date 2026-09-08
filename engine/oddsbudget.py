@@ -735,7 +735,29 @@ CLOSE_WINDOW_S = 30 * 60
 CLOSE_MAX_CREDITS = 8
 CLOSE_FLOOR = 50
 
-PRIME_BEFORE_S = 2.5 * 3600      # window opens this long before first pitch
+PRIME_BEFORE_S = 3.5 * 3600      # window opens this long before first pitch
+# 2.5h until 2026-09-07; 3.5h so the burst is already running when the
+# readiness pull below fires at three hours out.
+
+# --- the readiness pull --------------------------------------------------------
+# Ethan, 2026-09-07: "props and picks every single day ready for every
+# game at least 3 hours before ... i want to make sure we are ready for
+# NFL game days and can look any time at nfl and cfb and have up to date
+# information."
+#
+# The pacer spends where a credit buys the most, and on a thin day that
+# can be nowhere in particular: the ordinary cadence stretched past the
+# window, the day's ceiling already reached by a morning pull, and the
+# board going into kickoff on prices from noon. This is the floor under
+# that. Once the next kickoff is within READY_BEFORE_S, a league in
+# READY_SPORTS that has not pulled since the window opened gets one pull
+# through the day's ceiling and the ordinary gap — the same shape as the
+# closing window, and deliberately NOT the same door: this pull is the
+# full event pull, and it never spends the reserve. One per window per
+# sport, enforced by the sport's own clock, so a staggered Sunday gets
+# one per wave (1pm, 4pm, 8pm).
+READY_BEFORE_S = 3 * 3600
+READY_SPORTS = ("nfl", "cfb")
 PRIME_AFTER_LAST_S = 4 * 3600    # and covers the last game into play
 OFFPEAK_STRETCH = 4              # off-peak refresh gaps widen by this factor
 # A flat 1/31st-of-the-balance-per-day is the wrong shape for how this is
@@ -924,6 +946,19 @@ def prime_window(kickoffs, now: float):
     return min(ks) - PRIME_BEFORE_S <= now <= max(ks) + PRIME_AFTER_LAST_S
 
 
+def ready_window(kickoffs, now: float):
+    """When the readiness window for the NEXT kickoff opened, else None.
+
+    Same shape as `closing_window`: the nearest kickoff still ahead is
+    the one to be ready for; a window not yet open answers None."""
+    ks = [k for k in (kickoffs or [])
+          if isinstance(k, (int, float)) and k >= now]
+    if not ks:
+        return None
+    opened = min(ks) - READY_BEFORE_S
+    return opened if opened <= now else None
+
+
 def closing_window(kickoffs, now: float):
     """When the closing window for the NEXT kickoff opened, else None.
 
@@ -991,6 +1026,23 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                  f"at {close_cost} credit(s), the number every bet on it "
                  f"is graded against ({state.remaining} left this month)"
                  if closing else "")
+    # THE READINESS PULL — see READY_BEFORE_S. Once per window per
+    # sport, behind the fifteen-minute floor. It NEVER reaches the
+    # reserve, and not by a term of its own: the two branches it can
+    # open are the day's ceiling and the ordinary gap, and both sit
+    # below the reserve refusal and the starvation rule, which a month
+    # that cannot afford the pull never gets past. A reserve term here
+    # would be a rule announced twice and enforced once.
+    r_opened = (ready_window(kickoffs, now)
+                if budget_sport(sport) in READY_SPORTS else None)
+    ready = bool(r_opened is not None and not closing
+                 and state.sport_ts(sport) < r_opened
+                 and now - state.sport_ts(sport) >= MIN_REFRESH_GAP)
+    ready_why = (f"readiness pull — pricing the slate at least "
+                 f"{READY_BEFORE_S // 3600}h before "
+                 f"{_fmt_clock(min(k for k in kickoffs if isinstance(k, (int, float)) and k >= now))} "
+                 f"at {close_cost} credit(s) ({state.remaining} left this month)"
+                 if ready else "")
     # THE DAY'S BUDGET IS SET BEFORE THE BURST, and that is the whole
     # point of the cap: PRIME_BURST and the touchpoints redistribute the
     # day's credits toward the window, they do not add to them.
@@ -1096,6 +1148,10 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # value does not come back tomorrow.
     if already + per_refresh > budget and closing:
         return True, close_why
+    # …nor is the readiness pull: a day whose ceiling was reached by a
+    # morning pull still has to price the slate before it kicks off.
+    if already + per_refresh > budget and ready:
+        return True, ready_why
     if already + per_refresh > budget:
         return False, (f"today's odds budget is spent for this slate "
                        f"({already} of {budget} credits; a pull costs "
@@ -1115,6 +1171,8 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # the pull that lands so it fires once.
         if closing:
             return True, close_why
+        if ready:
+            return True, ready_why
         # The fourth cost site, priced like the other three: a caller
         # that stated its price in credits was being metered here at the
         # generic per-event price, which for the NFL's twelve-market

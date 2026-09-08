@@ -277,7 +277,12 @@ def _games_on_slate(path: str) -> int:
 #: A weight of 0 would be a different decision — it would stop those
 #: boards pricing at all — and that is not what was asked for, so it is
 #: not what this does.
-SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 1.0,
+#: BASEBALL STEPS BACK (Ethan, 2026-09-07): "i want to prioritize NFL
+#: and CFB over anything so if we gotta limit MLB pulls im ok with that."
+#: Not switched off — a September pennant race still prices — but on a
+#: day the three overlap, football takes the larger slices and baseball
+#: draws behind it.
+SPORT_WEIGHT = {"nfl": 1.0, "cfb": 1.0, "mlb": 0.6,
                 "nba": 0.15, "wnba": 0.15, "ufc": 0.15}
 DEFAULT_WEIGHT = 0.15
 
@@ -342,6 +347,22 @@ def _budget_share(sport: str | None = None) -> float:
     return claim(key) / (total or 1.0)
 
 
+def _eastern_epoch(day: str, hhmm: str):
+    """A "YYYY-MM-DD" date and an "HH:MM" Eastern clock as an epoch, or
+    None when either half is not that shape (an NFL slate's own `date`
+    is "2026-W01", which must not parse)."""
+    try:
+        if len(day) != 10 or day[4] != "-" or day[7] != "-":
+            return None
+        hh, mm = hhmm.strip().split(":")[:2]
+        from zoneinfo import ZoneInfo
+        d = _dt.date.fromisoformat(day)
+        return _dt.datetime(d.year, d.month, d.day, int(hh), int(mm),
+                            tzinfo=ZoneInfo("America/New_York")).timestamp()
+    except Exception:                                        # noqa: BLE001
+        return None
+
+
 def _slate_kickoffs(path: str) -> list:
     """Kickoff epochs from the last build — what tells the pacer WHEN the
     day's credits are worth spending. Unparseable or absent times simply
@@ -353,7 +374,16 @@ def _slate_kickoffs(path: str) -> list:
         for g in games:
             k = g.get("kickoff") or ""
             if "T" not in k:
-                continue                     # "HH:MM" NFL style — no date, skip
+                # THE NFL'S SHAPE: "HH:MM" Eastern beside a "YYYY-MM-DD"
+                # date on the same game. Skipped outright until
+                # 2026-09-07 — which left the pacer TIME-BLIND for the
+                # NFL all season: no pre-game window, no burst, no
+                # closing window, and no readiness pull, every one of
+                # them keyed on a kickoff list that was always empty.
+                ts = _eastern_epoch(g.get("date") or "", k)
+                if ts is not None:
+                    out.append(ts)
+                continue
             try:
                 out.append(_dt.datetime.fromisoformat(
                     k.replace("Z", "+00:00")).timestamp())

@@ -58,7 +58,11 @@ from engine import oddsbudget as B                            # noqa: E402
 
 NOW = dt.datetime(2026, 9, 3, 18, 0).timestamp()
 DAY = dt.date.fromtimestamp(NOW).isoformat()
-KICKOFFS = [NOW + 2 * 3600]          # inside the pre-game window
+# Inside the pre-game window (PRIME_BEFORE_S, 3.5h) and OUTSIDE the
+# readiness window (READY_BEFORE_S, 3h). The ceiling is the subject of
+# this file; the readiness pull is the one football exemption from it
+# and has its own file (tests/test_ready_window.py).
+KICKOFFS = [NOW + 3.25 * 3600]
 
 
 def _ledger(credits: int) -> Path:
