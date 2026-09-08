@@ -45,6 +45,19 @@ disagrees with the close by thirty points as a matter of course —
 feeding those to this bar would empty both shelves and reverse his call
 without asking.
 
+AND NOT ON A ROW RANKED ON THE MARKET'S NUMBER (2026-09-08). Four days
+after this file, football moneylines began ranking on the book's
+de-vigged number, which sorts winners better than the model's
+(likely.GAME_RANK_MARKET). The claim on such a row is the market's;
+the model's raw disagreement was measured against 1,356 NFL closes
+and says nothing about it (gamerank.measure_raw_bar), and the bar
+was refusing three eligible favourites in ten. So the screenshot's
+row ships now — ranked on the market's 67%, with the model's own 33%
+printed as the model's (the ratings' 53%, against the book's 67%),
+which is the contradiction this file opened with put right the other
+way round. tests/test_market_ranked_raw_bar.py
+holds the measurement; the pins below hold what did not change.
+
 Run directly: `python3 tests/test_game_claim.py`
 """
 
@@ -100,14 +113,24 @@ def test_the_card_stops_calling_the_books_number_its_own():
 
 
 @_no_information
-def test_the_screenshots_row_is_refused_by_the_board():
-    """THE BUG. Our ratings put Minnesota near a coin flip; the board
-    ranked them a 67% favourite on the book's number."""
+def test_the_screenshots_row_ships_with_the_models_own_number_beside_the_markets():
+    """THE BUG, AND WHERE IT WENT. Our ratings put Minnesota near a coin
+    flip; the board ranked them a 67% favourite on the book's number
+    while calling that number the model's. The row ranks on the market
+    by measured design now, so it ships — and the card no longer argues
+    with itself, because the model's own 33% is printed as the model's
+    and the 67% as the market's."""
     row = likely.from_game_bet(dict(_the_card()), "nfl")
     assert row is not None and row["player"].startswith("MIN"), row
-    why = likely.admissible(row)
-    assert why, "the board still admits a row the engine does not credit"
-    assert "disagree" in why, why
+    assert row["prob_source"] == "market", row["prob_source"]
+    assert likely.admissible(row) == "", likely.admissible(row)
+    assert row["engine_raw_prob"] is not None
+    assert abs(row["engine_raw_prob"] - row["fair_prob"]) > 0.10, "wrong fixture"
+    own = f'{row["engine_raw_prob"]:.0%}'
+    assert f"own rating has this side at {own}" in row["rank_note"], row["rank_note"]
+    # …and a row that ranks on the MODEL's number is still held to it.
+    model_ranked = dict(row, prob_source="model")
+    assert "disagree" in likely.admissible(model_ranked)
 
 
 @_no_information

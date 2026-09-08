@@ -262,8 +262,16 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
         eraw = _f(r.get("engine_raw_prob"))
         efair = _f(r.get("fair_prob"))
         if eraw is not None and efair is not None and abs(eraw - efair) > MAX_CREDIBLE_EDGE:
-            flags.append(f"RAW GAP model {eraw:.0%} vs book {efair:.0%} "
-                         f"before the shrink")
+            # On a row ranked on the market's number the disagreement is
+            # information, not a fault — the board admits it by measured
+            # design (likely.engine_credible, 2026-09-08). Printed under
+            # its own word so the audit still sees it.
+            if r.get("prob_source") == "market":
+                flags.append(f"OWN READ model {eraw:.0%} vs market {efair:.0%} "
+                             f"— ranked on the market, not barred")
+            else:
+                flags.append(f"RAW GAP model {eraw:.0%} vs book {efair:.0%} "
+                             f"before the shrink")
         proj, line = _f(r.get("projection")), _f(r.get("line"))
         if proj is not None and line is not None and side != "under" and proj < line:
             flags.append(f"PROJ<LINE {proj:.1f} < {line:g}")

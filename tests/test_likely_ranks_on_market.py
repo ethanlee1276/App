@@ -114,7 +114,9 @@ def test_a_moneyline_row_ranks_on_the_market_and_keeps_the_models_number():
         # The card's edge and EV are still the model's claim.
         assert row["edge"] == 0.04
         assert row["rank_note"].startswith("Ranked on the market’s number, 62%")
-        assert "The model rates this side at 66%" in row["rank_note"]
+        # The model's own number under the word "model" — the card carries
+        # no pre-shrink claim, so it is the card's own probability.
+        assert "The model’s own rating has this side at 66%" in row["rank_note"]
 
 
 def test_the_flip_is_decided_on_the_ranking_number():

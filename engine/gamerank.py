@@ -24,6 +24,7 @@ either way.
     python3 -m engine.gamerank              # every sport with history
     python3 -m engine.gamerank --sport nfl
     python3 -m engine.gamerank --sport mlb --save   # into the rank store
+    python3 -m engine.gamerank --sport nfl --raw-bar   # the raw-claim bar, measured
 
 MEASURED 2026-09-02 on this repo's history (NFL 2021-25, CFB 2022-25):
 
@@ -322,7 +323,7 @@ def _cfb_prior_table(mem, rows, before: str, seasons) -> None:
     mem.commit()
 
 
-def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
+def measure_cfb(conn, min_team_games: int = 4, keep=None) -> list[GameRank]:
     """College, with the PRODUCTION ratings rather than the plain floor.
 
     cfb_build prices from `teamrates.adjusted_ratings_for_season` — the
@@ -439,6 +440,9 @@ def measure_cfb(conn, min_team_games: int = 4) -> list[GameRank]:
                 if hs != as_:
                     out["moneyline"].pairs.append(
                         (float(cfbratings.win_prob(margin, fit)), hs > as_))
+                    if keep is not None:
+                        keep(_quoted(g["season"], g, q,
+                                     float(cfbratings.win_prob(margin, fit)), hs > as_))
                 else:
                     out["moneyline"].pushes += 1
     mem.close()
@@ -460,7 +464,7 @@ def _prior_table(mem, rows, before: tuple, seasons) -> None:
 
 
 def measure_nfl(conn, min_team_games: int = 4,
-                adjusted: bool = False) -> list[GameRank]:
+                adjusted: bool = False, keep=None) -> list[GameRank]:
     """The NFL, with the ratings the build SHIPS rather than the plain
     cumulative walk — the college precedent (`measure_cfb`), applied.
 
@@ -599,10 +603,149 @@ def measure_nfl(conn, min_team_games: int = 4,
                 if hs != as_:
                     out["moneyline"].pairs.append(
                         (float(nfl_win_prob(hr.net, ar.net)), hs > as_))
+                    if keep is not None:
+                        keep(_quoted(season, g, q, float(nfl_win_prob(hr.net, ar.net)),
+                                     hs > as_))
                 else:
                     out["moneyline"].pushes += 1
     mem.close()
     return [out[m].finish() for m in ("total", "spread", "team_total", "moneyline")]
+
+
+def _quoted(season, g, q, raw_home: float, home_won: bool) -> dict:
+    """One quoted, scored, non-tie game off a football walk, for `keep`:
+    the model's RAW home probability beside both closing prices."""
+    return {"season": season, "home": g["home"], "away": g["away"],
+            "home_ml": int(q[g["home"]]), "away_ml": int(q[g["away"]]),
+            "raw_home": raw_home, "home_won": bool(home_won)}
+
+
+@dataclass
+class RawBar:
+    """Does the model's raw disagreement with the close say anything
+    about the close? Counted on the favourites the likelihood board can
+    carry (`likely.MIN_PROB`, `likely.HEAVIEST_PRICE`), split by whether
+    `likely.MAX_CREDIBLE_EDGE` would have refused the row."""
+    sport: str
+    games: int = 0                 # quoted, scored, non-tie, rated
+    eligible: int = 0              # the board's favourites on the market's number
+    refused: int = 0               # …the raw bar would refuse
+    kept_claimed: float | None = None
+    kept_landed: float | None = None
+    refused_claimed: float | None = None
+    refused_landed: float | None = None
+    ci: tuple | None = None        # 95% bootstrap: refused gap minus kept gap
+    bands: list = field(default_factory=list)   # (lo, hi, n, claimed, landed)
+    note: str = ""
+
+
+#: Bands of the raw disagreement the refused rows are read in.
+RAW_BAR_BANDS = ((0.10, 0.15), (0.15, 0.20), (0.20, 0.30), (0.30, 1.01))
+
+
+def measure_raw_bar(conn, sport: str = "nfl", seed: int = 3,
+                    resamples: int = 2000) -> RawBar:
+    """The credibility bar on a market-ranked moneyline row, measured.
+
+    `likely.engine_credible` refuses a row whose RAW model claim sits
+    more than MAX_CREDIBLE_EDGE from the book's fair. On a row that
+    RANKS on the market's number (`likely.GAME_RANK_MARKET`) the claim
+    shown is the market's, so the question the bar should answer is
+    whether the model's disagreement says anything about that number:
+    does the market land differently on the games the model disputes?
+
+    Walks the same games `measure_nfl` / `measure_cfb` grade, takes the
+    favourite on the market's de-vigged number as the board would, and
+    reports the market's claimed and landed rates on the rows the bar
+    keeps against the rows it refuses, with a by-game bootstrap of the
+    difference and the refused rows by size of disagreement.
+
+    MEASURED 2026-09-08, NFL, 1,356 quoted games: 681 eligible, 207
+    refused (30%); kept claimed 61.4% landed 64.3%; refused claimed
+    61.4% landed 62.3%; 95% [-9.8%, +5.7%]. The bar was removing three
+    rows in ten and changing nothing measurable, and `engine_credible`
+    no longer applies it to a market-ranked row. College the same day,
+    2,729 games: 1,066 eligible, 401 refused (38%), kept 62.2% -> 60.2%,
+    refused 64.0% -> 63.8%, 95% [-4.3%, +7.8%].
+    """
+    import random
+    from .likely import HEAVIEST_PRICE, MAX_CREDIBLE_EDGE, MIN_PROB
+    from .odds import devig_two_way
+    r = RawBar(sport=sport)
+    rows: list = []
+    if sport == "nfl":
+        measure_nfl(conn, keep=rows.append)
+    elif sport == "cfb":
+        prepare(conn, "cfb")
+        measure_cfb(conn, keep=rows.append)
+    else:
+        r.note = "only the football walks carry the raw claim"
+        return r
+    recs = []
+    for g in rows:
+        fh, fa = devig_two_way(g["home_ml"], g["away_ml"])
+        if fh >= fa:
+            fair, raw, odds, won = fh, g["raw_home"], g["home_ml"], g["home_won"]
+        else:
+            fair, raw, odds, won = fa, 1.0 - g["raw_home"], g["away_ml"], not g["home_won"]
+        recs.append((float(fair), float(raw), int(odds), bool(won)))
+    r.games = len(recs)
+    elig = [x for x in recs if x[0] >= MIN_PROB and x[2] >= HEAVIEST_PRICE]
+    bad = [x for x in elig if abs(x[1] - x[0]) > MAX_CREDIBLE_EDGE]
+    keep = [x for x in elig if abs(x[1] - x[0]) <= MAX_CREDIBLE_EDGE]
+    r.eligible, r.refused = len(elig), len(bad)
+
+    def rate(xs):
+        if not xs:
+            return None, None
+        return (sum(x[0] for x in xs) / len(xs), sum(1.0 for x in xs if x[3]) / len(xs))
+
+    r.kept_claimed, r.kept_landed = rate(keep)
+    r.refused_claimed, r.refused_landed = rate(bad)
+    if keep and bad:
+        rng = random.Random(seed)
+        diffs = []
+        for _ in range(resamples):
+            a = [keep[rng.randrange(len(keep))] for _ in keep]
+            b = [bad[rng.randrange(len(bad))] for _ in bad]
+            ca, la = rate(a)
+            cb, lb = rate(b)
+            diffs.append((lb - cb) - (la - ca))
+        diffs.sort()
+        r.ci = (diffs[int(0.025 * len(diffs))], diffs[int(0.975 * len(diffs)) - 1])
+    for lo, hi in RAW_BAR_BANDS:
+        xs = [x for x in bad if lo < abs(x[1] - x[0]) <= hi]
+        c, l = rate(xs)
+        r.bands.append((lo, hi, len(xs), c, l))
+    if not elig:
+        r.note = "no favourite the board could carry — nothing to measure"
+    return r
+
+
+def raw_bar_lines(r: RawBar) -> list[str]:
+    from .likely import HEAVIEST_PRICE, MAX_CREDIBLE_EDGE, MIN_PROB
+    pc = lambda v: "   —  " if v is None else f"{v:6.1%}"       # noqa: E731
+    out = [f"raw-claim bar on market-ranked {r.sport.upper()} moneylines · "
+           f"{r.games:,} quoted games"]
+    if r.note:
+        out.append(f"  {r.note}")
+        return out
+    share = r.refused / r.eligible if r.eligible else 0.0
+    out += [f"  favourites the board could carry (fair >= {MIN_PROB:.0%}, "
+            f"price >= {HEAVIEST_PRICE}): {r.eligible:,}",
+            f"  …the raw bar (|raw - fair| > {MAX_CREDIBLE_EDGE:.0%}) would refuse: "
+            f"{r.refused:,} ({share:.0%})",
+            f"  market's number on the rows kept:    claimed {pc(r.kept_claimed)}  "
+            f"landed {pc(r.kept_landed)}",
+            f"  market's number on the rows refused: claimed {pc(r.refused_claimed)}  "
+            f"landed {pc(r.refused_landed)}"]
+    if r.ci:
+        out.append(f"  refused minus kept, landed-vs-claimed, 95% by game: "
+                   f"[{r.ci[0]:+.1%}, {r.ci[1]:+.1%}]")
+    for lo, hi, n, c, l in r.bands:
+        out.append(f"    disagreement {lo:.2f}-{min(hi, 1.0):.2f}: n={n:4d}  "
+                   f"claimed {pc(c)}  landed {pc(l)}")
+    return out
 
 
 def measure(conn, sport: str) -> list[GameRank]:
@@ -693,12 +836,19 @@ def main(argv=None) -> int:
     ap.add_argument("--sport", default="")
     ap.add_argument("--save", action="store_true",
                     help="write the measured markets into the rank store")
+    ap.add_argument("--raw-bar", action="store_true",
+                    help="the credibility bar on market-ranked moneylines, "
+                         "measured (see measure_raw_bar)")
     a = ap.parse_args(argv)
     conn = db.connect()
     try:
         sports = [a.sport] if a.sport else [s[0] for s in conn.execute(
             "SELECT DISTINCT sport FROM games WHERE home_score IS NOT NULL")]
         for sport in sports:
+            if a.raw_bar:
+                for ln in raw_bar_lines(measure_raw_bar(conn, sport)):
+                    print(ln)
+                continue
             if a.save:
                 measure_and_store(conn, sport, log=print)
                 continue

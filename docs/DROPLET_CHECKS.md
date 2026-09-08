@@ -756,6 +756,27 @@ cd /srv/qellys && ls -la web/data/live_nfl.json web/data/pbp/ | head
 ```
 
 
+## 8d. Moneylines on the Most Likely board (2026-09-08)
+
+Ethan: "just barely any money lines." A football moneyline row ranks
+on the market's number, and the credibility bar was still refusing it
+for the MODEL's disagreement with that number — three eligible
+favourites in ten on this repo's NFL closes, four in ten on the college
+ones, with no measurable difference
+in how the market's number landed on them (docs/LIKELY_GAME_LINES.md,
+"The raw claim on a market-ranked row"). The bar no longer applies to a
+market-ranked row. Re-measure it where the harvest lives:
+
+```bash
+cd /srv/qellys && python3 -m engine.gamerank --sport nfl --raw-bar
+cd /srv/qellys && python3 -m engine.gamerank --sport cfb --raw-bar
+```
+
+Expect the refused rows' landed rate to sit as near the market's
+claim as the kept rows' does. If a band of disagreement lands well
+under its claim on the droplet's larger sample, that is the evidence
+for a wider bar on that band — bring the printout.
+
 ## 9. The explainer, once its package and keys are on the box
 
 Ethan, 2026-09-05: "a plain English explainer per pick." Shipped the

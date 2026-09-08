@@ -6103,6 +6103,23 @@ function openFrom(spec) {
   if (kind === "player") return openPlayerRoute(target);
 }
 
+/* THE MODEL'S OWN NUMBER ON A MARKET-RANKED ROW. A football moneyline
+   ranks on the book's de-vigged number (likely.GAME_RANK_MARKET), so the
+   hero tile on that card is the market's figure and says so. This is
+   the tile that keeps the word "Model" honest beside it: the pre-shrink
+   claim when the card carries one, else the card's own probability.
+   Ethan, 2026-09-03, on a MIN −220 card: "none of these teams are
+   favored to win on any sports book" — a card printing the book's
+   number under the word MODEL cannot be argued with, because it is
+   arguing with itself. */
+function likelyOwnReadTile(r) {
+  if (!r || r.prob_source !== "market") return "";
+  const own = r.engine_raw_prob != null ? r.engine_raw_prob : r.win_prob;
+  if (own == null) return "";
+  return `<div class="metric"><div class="k">Model</div>
+        <div class="v">${pct(own)}</div></div>`;
+}
+
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
@@ -6199,8 +6216,9 @@ function likelyCard(r) {
         ${pct(r.model_prob)}</span>
     </div>
     <div class="metrics">
-      <div class="metric hero"><div class="k">Model</div>
+      <div class="metric hero"><div class="k">${r.prob_source === "market" ? "Market" : "Model"}</div>
         <div class="v">${pct(r.model_prob)}</div></div>
+      ${likelyOwnReadTile(r)}
       <div class="metric"><div class="k">Book implied</div>
         <div class="v">${r.implied_prob == null ? "—" : pct(r.implied_prob)}</div></div>
       ${r.projection == null ? "" : `<div class="metric"><div class="k">Projection</div>
@@ -6310,8 +6328,13 @@ function showableLikelyRow(r) {
   // too. `likely.engine_credible` drops these at build time; this gate
   // exists for the board file that predates a rule, which is exactly
   // how the -1200 unders survived their own ban in September.
-  if (shrinkArtefact({ raw_prob: (r || {}).engine_raw_prob,
-                       fair_prob: (r || {}).fair_prob })) return false;
+  // …EXCEPT ON A ROW RANKED ON THE MARKET'S NUMBER, whose claim is the
+  // book's and whose model disagreement is measured to carry nothing
+  // (likely.engine_credible, 2026-09-08). The raw number stays on the
+  // row for the Model tile; it is not a reason to hide the row.
+  if ((r || {}).prob_source !== "market"
+      && shrinkArtefact({ raw_prob: (r || {}).engine_raw_prob,
+                          fair_prob: (r || {}).fair_prob })) return false;
   const odds = (r || {}).odds;
   return odds == null || Number(odds) >= LIKELY_HEAVIEST_PRICE;
 }

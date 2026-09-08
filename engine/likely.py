@@ -30,7 +30,10 @@ probability the pricer put on its side and whether that side won:
                                     AUC 0.752 CFB (2,729 games)
     …and the market's own number    AUC 0.722 NFL · 0.791 CFB — better
                                     in both, so game rows rank on it
-                                    (GAME_RANK_MARKET, 2026-09-07)
+                                    (GAME_RANK_MARKET, 2026-09-07), and
+                                    the model's disagreement with it
+                                    does not bar a row (engine_credible,
+                                    measured 2026-09-08)
     who covers the spread           0.491 NFL · 0.496 CFB — a coin flip
     over or under the total         0.497 NFL · 0.503 CFB — a coin flip
     a team over its own number      0.513 NFL · 0.492 CFB — a coin flip
@@ -352,6 +355,35 @@ def engine_credible(row: dict) -> bool:
     raw claim (the touchdown chain, game cards) answers True and is
     judged by `_credible` on what it does carry.
     """
+    # NOT ON A ROW RANKED ON THE MARKET'S NUMBER. Ethan, 2026-09-08:
+    # "we have player props just barely any money lines." A football
+    # moneyline row ranks on the book's de-vigged number (GAME_RANK_MARKET)
+    # because that number sorts winners better than the model's; the
+    # row's claim IS the market's, and this bar was still refusing it
+    # whenever the model's own rating sat more than ten points away.
+    # Measured 2026-09-08 on this box's NFL closes (`gamerank
+    # --raw-bar`, 1,356 quoted games on the ratings the build ships):
+    #
+    #     favourites the board could carry (fair >= 55%, price >= -250)   681
+    #     …refused here for the model's raw disagreement                   207   30%
+    #     the market's number on the rows kept:     claimed 61.4%  landed 64.3%
+    #     the market's number on the rows refused:  claimed 61.4%  landed 62.3%
+    #     refused minus kept, 95% by game                        [-9.8%, +5.7%]
+    #     by size of the disagreement: 10-15 pts +2.2 · 15-20 -0.6 · 20-30 -1.9
+    #
+    # and college the same day (2,729 games): 1,066 eligible, 401 refused
+    # (38%); kept claimed 62.2% landed 60.2%; refused claimed 64.0%
+    # landed 63.8%; 95% [-4.3%, +7.8%].
+    #
+    # The market lands where it claims on the games the model disputes,
+    # at every size of dispute — which is what `gamecal` had already
+    # said of the same model from the other side (the slope of its
+    # disagreement against the close, -0.057 +/- 0.135: nothing). A bar
+    # that removes three rows in ten and changes nothing measurable is
+    # not a bar; it is a shelf a third empty. The model's own rating
+    # stays on the row (`engine_raw_prob`) and the note prints it.
+    if row.get("prob_source") == "market":
+        return True
     # ONLY the engine's pre-shrink claim. This board's own `raw_prob` is
     # the display number before the mixture, which is a different
     # quantity measured against a different thing — falling back to it
@@ -1022,11 +1054,27 @@ def from_game_bet(row: dict, sport: str = "nfl",
             f"{float(auc):.2f} against the close — a coin flip — so the "
             f"percentage is a read on this game, not a ranking.")
     elif source == "market":
+        # THE MODEL'S OWN NUMBER, not the book's under the word "model".
+        # `prob_model` is the card's `win_prob`, and on a football
+        # moneyline the measured haircut prices that AT the market
+        # (gamecal: the disagreement carries nothing), so it is the
+        # market's number twice over. The pre-shrink claim is the
+        # model's own read, and it is what a reader means by "the
+        # model" (tests/test_game_claim.py, the MIN -220 card).
+        own = prob_model if raw_claim is None else raw_claim
         rank_note = (
             f"Ranked on the market’s number, {prob:.0%}: the book’s de-vigged "
             f"price sorts {sport.upper()} winners at {float(auc):.2f} measured, "
-            f"against {float(model_auc):.2f} for the model’s own. The model "
-            f"rates this side at {prob_model:.0%}.")
+            f"against {float(model_auc):.2f} for the model’s own. The model’s "
+            f"own rating has this side at {own:.0%}.")
+        if (raw_claim is not None and fair is not None
+                and abs(raw_claim - float(fair)) > MAX_CREDIBLE_EDGE):
+            rank_note += (
+                " That disagreement does not bar the row: measured against "
+                "the close, the market’s number lands the same on the games "
+                "the model disputes as on the ones it agrees with, and the "
+                "model’s disagreement with the close carries no information "
+                "(engine.gamecal, engine.gamerank --raw-bar).")
     elif source == "sharp":
         rank_note = (
             f"Ranked on the sharp book’s fair, {prob:.0%} — a market number, "

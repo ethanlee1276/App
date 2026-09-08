@@ -150,6 +150,68 @@ plain-ratings walk had put the moneyline at 0.708. Not replayed: the
 recruiting prior blended in before week four and the FCS exclusion that
 needs the live team map, so it is still a floor, a higher one.
 
+## The raw claim on a market-ranked row (2026-09-08)
+
+Ethan, 2026-09-08: "we have player props just barley any money money
+lines are touchdown crap." The moneyline half of that was this bar.
+
+`likely.engine_credible` refuses a row whose raw model claim sits more
+than `MAX_CREDIBLE_EDGE` (ten points) from the book's de-vigged number —
+the Gelof guard, written for a prop whose 96% raw claim had been shrunk
+to 73% against a price that could not be real. A football moneyline row
+ranks on the market's number (above), so its claim IS the market's; the
+bar was still asked of the model's own rating, and refused the row
+whenever that rating sat more than ten points from the book.
+
+Measured 2026-09-08 on this box's NFL closes, on the ratings the build
+ships (`python3 -m engine.gamerank --sport nfl --raw-bar`):
+
+    quoted, scored, non-tie games with a four-game rating         1,356
+    favourites the board could carry (fair >= 55%, price >= -250)   681
+    …the raw bar would refuse                                        207   30%
+    the market's number on the rows kept:     claimed 61.4%  landed 64.3%
+    the market's number on the rows refused:  claimed 61.4%  landed 62.3%
+    refused minus kept, landed-vs-claimed, 95% by game     [-9.8%, +5.7%]
+    refused rows by size of disagreement:
+        10-15 pts  n=120  claimed 61.1%  landed 63.3%
+        15-20 pts  n= 54  claimed 61.7%  landed 61.1%
+        20-30 pts  n= 30  claimed 61.9%  landed 60.0%
+        30+ pts    n=  3  claimed 63.7%  landed 66.7%
+
+And college, the same day, on the production opponent-adjusted walk
+(`--sport cfb --raw-bar`, 2,729 quoted games):
+
+    favourites the board could carry                              1,066
+    …the raw bar would refuse                                        401   38%
+    the market's number on the rows kept:     claimed 62.2%  landed 60.2%
+    the market's number on the rows refused:  claimed 64.0%  landed 63.8%
+    refused minus kept, 95% by game                        [-4.3%, +7.8%]
+    by size of the disagreement: 10-15 pts +0.4 · 15-20 -4.8 · 20-30 +8.3 · 30+ -9.2 (n=14)
+
+The market lands where it claims on the games the model disputes, at
+every size of dispute, in both leagues. `engine.gamecal` had said the same of this model
+from the other side: the slope of its disagreement against the close is
+−0.057 ± 0.135, nothing, and the moneyline haircut it measures prices
+the card at the market. A bar that removed three eligible favourites in
+ten and changed nothing measurable was a shelf a third empty.
+
+So `engine_credible` answers True for a row whose `prob_source` is
+"market". The model's own rating stays on the row (`engine_raw_prob`);
+the row's note prints it as the model's and says why it does not bar;
+the card's hero tile is labelled "Market" with a "Model" tile beside it
+(`likelyOwnReadTile`); `showableLikelyRow` no longer hides the row; and
+the board lint prints the disagreement as OWN READ rather than RAW GAP.
+A row that ranks on the model's number (a sport with no market figure)
+is held to the bar exactly as before, and so is every prop row.
+
+Re-measure on the droplet, whose harvest joins more closes than the
+schedule alone:
+
+```
+cd /srv/qellys && python3 -m engine.gamerank --sport nfl --raw-bar
+cd /srv/qellys && python3 -m engine.gamerank --sport cfb --raw-bar
+```
+
 ## How a game card reaches the board
 
 `likely.from_game_bet` takes the card the edge board already built
