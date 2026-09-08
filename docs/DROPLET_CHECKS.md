@@ -701,6 +701,61 @@ been measured is whether the layer helps against the close —
 That measurement needs the CFBD talent cache by season, which only this
 box holds.
 
+## 8c. The Wednesday opener — what was verified here, and what only the box can say (2026-09-08)
+
+Ethan: "since nfl is going to be live and starting on wednsday, do one
+more scan and sweep of the site and make sure EVERYTHING is ready for
+nfl" and "the opener is on the 9th so we need to make sure we have that
+set in to."
+
+**Nothing in the code names a weekday.** The 9/9 opener was a P3 note in
+`NFL_READINESS.md` Phase 6 ("Week 1 opens Wednesday 9/9 20:20 NE@SEA in
+the nflverse schedule; the brief says Thursday 9/10") and the answer
+then is the answer now: the build reads the feed. Verified by running
+each assumption rather than reading it:
+
+| what | how it is decided | verified |
+|---|---|---|
+| Which week builds | `_current_nfl_week` — nearest game in nflverse's schedule, any weekday | nearest-game rule, no weekday term |
+| Season window | `seasons.window("nfl", 2026)` = 2026-09-01 → 2027-02-20 | the 9th is inside; `season_wait` already False since the 1st |
+| Kickoff epochs for the pacer | `launch._eastern_epoch(date, "HH:MM")` | `("2026-09-09","20:20")` matches the real 20:20 ET epoch exactly |
+| Readiness pull | `oddsbudget.ready_window`, 3h before the next kickoff | shut Tue 20:00 and Wed 16:00; **open from Wed 17:20**, and at 19:00 |
+| Live scores | `_live_scores_refresher` loops `("nfl","cfb","nba","wnba")` every 12s while anything is live | nfl is in the loop and in `ESPN_SCOREBOARD` |
+| Deep play-by-play | `livescore_build` writes `web/data/pbp/nfl_<event>.json` | `PBP_DIR` written for every league it builds |
+| Settlement | `maintenance` ingests nflverse weekly results daily, Aug–Feb | Wednesday's final settles on Thursday's pass |
+
+The only two places that named "the 10th" were prose in §8 of this
+file, corrected in the same commit.
+
+**On the box, Wednesday.** The readiness pull fires at 17:20 ET; before
+then its absence from the log is correct, not a fault:
+
+```bash
+cd /srv/qellys && grep -h '"readiness pull' data/cache/odds_decisions.jsonl | tail -3
+cd /srv/qellys && python3 -c "
+import json; b=json.load(open('web/data/recommendations.json'))
+g=b.get('games') or []; print(len(g),'games'); print(sorted({x.get('date') for x in g})[:3])
+print('kickoffs:', [x.get('kickoff') for x in g][:3])
+m=b.get('most_likely') or []
+print(len(m),'most likely,',sum(1 for r in m if r.get('rung')=='alt'),'on a rung')
+print(b.get('likely_census'))"
+```
+
+Expect the 9th among the dates, a `20:20` kickoff, and — after the
+ladder fix (2026-09-08) — rungs on the Most Likely board where the main
+line is a coin flip. A census still showing hundreds under the floor
+with `0 on a rung` means the ladders are not being bought: check
+`alt_lines` is non-empty on the recommendations, which needs a paid
+event pull (12 credits an NFL game, four of them the `_alternate`
+markets).
+
+During the game, the live page and the play-by-play page:
+
+```bash
+cd /srv/qellys && ls -la web/data/live_nfl.json web/data/pbp/ | head
+```
+
+
 ## 9. The explainer, once its package and keys are on the box
 
 Ethan, 2026-09-05: "a plain English explainer per pick." Shipped the
