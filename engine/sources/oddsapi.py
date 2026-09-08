@@ -1548,6 +1548,12 @@ class OddsAttachResult:
     # four-game slate is matched against every upcoming fixture. Counted,
     # never reported as a fault — they are supposed to miss.
     other_day_events: int = 0
+    #: Events refused because they are the OTHER meeting of the same two
+    #: teams — see `_same_meeting`. Counted rather than swallowed: a
+    #: rematch quietly relabelled onto this week's game is the wrong
+    #: price wearing the right team's name, which is the hardest kind of
+    #: wrong number to notice.
+    reversed_events: int = 0
     # Events that DID place on the slate but had no cached payload, in
     # cache_only mode. Without this a cached rebuild looks identical whether
     # the join improved or not: the events match, then vanish one line later
@@ -1657,11 +1663,25 @@ def _slate_days(games) -> set[str]:
 
     A day either side because kickoffs are UTC and a 7pm Eastern tip is
     already tomorrow there.
+
+    AND IT READ `kickoff`, WHICH FOOTBALL DOES NOT DATE. An NFL game's
+    kickoff is a bare Eastern clock — "20:20" — with the date two keys
+    away in `date`, exactly as `ledger._kickoff_map` had to discover for
+    the capture-lag stamp. Sliced to ten characters that is five, so
+    every football game was skipped, `slate_days` came back EMPTY, and
+    `_other_day` answers False for everything when it is: the filter was
+    inert on both football paths for the whole season.
+
+    That is what let a season-long payload put Week 12's prices on a
+    Week 1 card. See `_same_meeting` for the other half of it.
     """
     import datetime as _dt
     out: set[str] = set()
     for g in games:
         k = str(getattr(g, "kickoff", "") or "")[:10]
+        if len(k) != 10:
+            # THE DATE, when the clock does not carry one.
+            k = str(getattr(g, "date", "") or "")[:10]
         if len(k) != 10:
             continue
         try:
@@ -1683,6 +1703,52 @@ def _other_day(ev, slate_days: set[str]) -> bool:
     """
     c = str(ev.get("commence_time") or "")[:10]
     return bool(slate_days) and len(c) == 10 and c not in slate_days
+
+
+def _same_meeting(ev_home: str, ev_away: str, game) -> bool:
+    """Is this event the same MEETING of these two teams as `game`?
+
+    THE BUG THIS EXISTS FOR, found on 2026-09-09 with Week 1 hours away.
+    Both odds paths look a game up by `frozenset((home, away))`, which is
+    orientation-blind on purpose — it does not care which side of the
+    pair the endpoint calls home. In a league where two teams meet ONCE
+    that is harmless. The NFL plays its division rivals twice, home and
+    away, and the endpoint returns every fixture of the season in one
+    payload, so the September game and the November rematch are both in
+    the file and both match the same slate game.
+
+    The second one wins, and because home and away are reversed in a
+    rematch the prices land on the opposite teams. On the board Ethan was
+    reading:
+
+        GB @ MIN   board MIN -220 / GB +200   ← the Nov 15 MIN @ GB game
+        WAS @ PHI  board PHI +121 / WAS -125  ← the Nov 1 PHI @ WAS game
+        DAL @ NYG  board NYG -218 / DAL +180  ← the Jan 3 NYG @ DAL game
+        SF  @ LA   board LA  +120 / SF  -130  ← the Dec 13 LA @ SF game
+
+    Every one of those is an exact price from the rematch, wearing the
+    wrong team's name. Three of the four show the WRONG TEAM FAVOURED,
+    which is Ethan's report of 2026-09-03 word for word: "none of these
+    teams are favored to win on any sports book."
+
+    THE ASSIGNMENT IS WHAT MAKES IT SILENT. Neither path asks whether the
+    event it matched is the game it wants; the board path builds its
+    team map positionally (`{event home: slate home}`) and the event path
+    assigns `game.home_ml = mls[home]` off the EVENT's home. So a wrong
+    match does not read as missing data or a mismatch — it reads as a
+    perfectly ordinary price on the wrong team.
+
+    So the orientation is checked rather than assumed, and an event that
+    is the other meeting is refused. `_slate_days` above is the other
+    half: with football's dates restored, most rematches never get this
+    far. This is the bar that holds when they do — and it is the one that
+    holds for a baseball series, where three games run in the SAME
+    orientation on three consecutive days and only the date separates
+    them.
+    """
+    return (bool(ev_home) and bool(ev_away)
+            and ev_home == str(getattr(game, "home", "") or "")
+            and ev_away == str(getattr(game, "away", "") or ""))
 
 
 @dataclass
@@ -1712,6 +1778,12 @@ class BoardLinesResult:
     # 9 of 16 games looks exactly like a light week.
     dropped_events: list = field(default_factory=list)
     other_day_events: int = 0
+    #: Events refused because they are the OTHER meeting of the same two
+    #: teams — see `_same_meeting`. Counted rather than swallowed: a
+    #: rematch quietly relabelled onto this week's game is the wrong
+    #: price wearing the right team's name, which is the hardest kind of
+    #: wrong number to notice.
+    reversed_events: int = 0
 
 
 def apply_board_lines_to_slate(slate, api_key: str | None = None,
@@ -1804,17 +1876,28 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
                                              (ev.get("away_team", ""), away))
                               if not m]})
             continue
+        # ANOTHER DAY'S GAME IS NOT THIS SLATE'S, whether or not we
+        # happen to carry the pair. This check used to sit inside the
+        # `not legs` branch, so it only ever ran for pairs we did NOT
+        # have — which is precisely backwards: a pair we DO have is
+        # exactly the one a later fixture can be mistaken for. Paired
+        # with `_slate_days` reading football's date, this is what stops
+        # a season-long payload pricing Week 1 off Week 12.
+        if _other_day(ev, slate_days):
+            result.other_day_events += 1
+            continue
         pair = frozenset((home, away))
         legs = pair_games.get(pair) or []
         if not legs:
-            if _other_day(ev, slate_days):
-                result.other_day_events += 1
-            else:
-                result.dropped_events.append(
-                    {"reason": "mapped, but that pair is not on our slate",
-                     "home": ev.get("home_team", ""),
-                     "away": ev.get("away_team", ""),
-                     "mapped_to": [away, home]})
+            # Reaching here means the pair is not on the slate AND the
+            # kickoff is on a day the slate covers, which is a wiring bug
+            # rather than another day's fixture — the day case returned
+            # above.
+            result.dropped_events.append(
+                {"reason": "mapped, but that pair is not on our slate",
+                 "home": ev.get("home_team", ""),
+                 "away": ev.get("away_team", ""),
+                 "mapped_to": [away, home]})
             continue
         # A pair can hold two games (a doubleheader); the event's start time
         # picks the leg, exactly as the prop path does. Football has none,
@@ -1822,6 +1905,13 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         # doubleheader is a wrong price rather than a missing one.
         game = _leg_by_commence(legs, ev.get("commence_time") or "")
         if game is None:
+            continue
+        # THE OTHER MEETING IS A DIFFERENT GAME. See `_same_meeting`: the
+        # pair lookup is orientation-blind, so a rematch matches too, and
+        # the map built below is positional — it would relabel the
+        # rematch's prices onto this game's teams without a murmur.
+        if not _same_meeting(home, away, game):
+            result.reversed_events += 1
             continue
 
         # The parsers key on the exact strings THIS payload uses, so the map
@@ -2053,17 +2143,22 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                                              (ev.get("away_team", ""), away))
                               if not m]})
             continue
+        # ANOTHER DAY'S GAME IS NOT THIS SLATE'S — asked of every event,
+        # not only of pairs we do not carry. See the same change on the
+        # board-lines path and `_slate_days` for why it was inert.
+        if _other_day(ev, slate_days):
+            result.other_day_events += 1
+            continue
         if frozenset((home, away)) not in slate_pairs:
-            # A later date's game is not a fault, so it is not reported as
-            # one. Only a pair that should be on THIS slate and is not.
-            if not _other_day(ev, slate_days):
-                result.dropped_events.append(
-                    {"reason": "mapped, but that pair is not on our slate",
-                     "home": ev.get("home_team", ""),
-                     "away": ev.get("away_team", ""),
-                     "mapped_to": [away, home]})
-            else:
-                result.other_day_events += 1
+            # A later date's game is not a fault and never reaches here —
+            # it returned above. What is left is a pair that should be on
+            # THIS slate and is not, which is a wiring bug between our
+            # abbreviations and the table's.
+            result.dropped_events.append(
+                {"reason": "mapped, but that pair is not on our slate",
+                 "home": ev.get("home_team", ""),
+                 "away": ev.get("away_team", ""),
+                 "mapped_to": [away, home]})
             continue
         # WHICH FILE TO DATE. The age below is read off the cache file
         # named by the market list actually served; the deploy-day
@@ -2108,6 +2203,12 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         result.events_used += 1
         pair = frozenset((home, away))
         game = _leg_for_event(pair, ev.get("commence_time") or "")
+        # THE OTHER MEETING IS A DIFFERENT GAME — and on this path it
+        # would carry the wrong week's PROPS as well as the wrong game
+        # prices, so the whole event goes rather than just its lines.
+        if game is not None and not _same_meeting(home, away, game):
+            result.reversed_events += 1
+            continue
         # Prop lines only index when this event IS the leg the slate's props
         # were built for — a doubleheader's other leg has different lineups
         # and different prices, and mixing them corrupts every quote.
