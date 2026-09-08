@@ -544,6 +544,95 @@ def _is_disclosure(key: str, path: str) -> bool:
     return not path and key == "locked"
 
 
+def priced_rows(payload: dict, name: str = "") -> int:
+    """Paid rows in this payload that carry a REAL book price.
+
+    Not a row count. A quiet slate legitimately publishes few picks and a
+    finished one publishes none, so counting rows would refuse ordinary
+    days. What cannot be ordinary is a board that still has material on it
+    and has priced NONE of it, replacing one that priced plenty.
+    """
+    n = 0
+    for key in paid_keys_for(name):
+        for r in payload.get(key) or []:
+            if not isinstance(r, dict):
+                continue
+            if r.get("has_market") is True or str(r.get("book") or "").strip():
+                n += 1
+    return n
+
+
+def _odds_attempt_failed(payload: dict) -> bool:
+    """Does this board's OWN status say it could not get its odds?
+
+    THE DISTINCTION THE GUARD TURNS ON, and it is the whole reason the
+    guard is safe. There are two ways to publish a board with no prices
+    on it and they are not the same event:
+
+      * the books have not posted, or every cached price is past the show
+        ceiling and was honestly refused (see MAX_GAME_PRICE_SHOW_AGE).
+        That board is TRUE, it must be publishable, and refusing it would
+        leave stale prices on the page looking fresh — the failure #202
+        exists to prevent.
+      * the build could not reach its odds at all. That board is not a
+        finding about the market, it is a report about our own plumbing,
+        and it must never overwrite a board that knew the prices.
+
+    A board records which of those happened in `odds_status`, so the
+    question is asked of the payload rather than guessed from its shape.
+    """
+    st = payload.get("odds_status")
+    if not isinstance(st, dict) or not st.get("checked"):
+        return False
+    if str(st.get("error") or "").strip():
+        return True
+    return not st.get("matched") and not st.get("events")
+
+
+def would_downgrade(payload: dict, full_path, name: str = "") -> bool:
+    """Would publishing this replace a priced board with an unpriced one?
+
+    Ethan, 2026-09-09, two hours before the season opener, after a build
+    I told him to run could not see the box's API key: a board carrying
+    173 matched props and 21 priced games was republished with 286 props,
+    none priced, and no game prices at all. The build said "Wrote
+    web/data/recommendations.json" and meant it.
+
+    Since the prop flicker of 2026-09-01 `launch.refresh_nfl` has carried
+    the rule in as many words —
+    "NEVER DOWNGRADE A BOARD THAT HAS PROPS" — and it did not help,
+    because a build run directly goes around the launcher. A rule that
+    only holds on one path is a rule that holds until somebody takes
+    another path, and that somebody was me.
+
+    So it moves here, to the one door every board goes through. Three
+    conditions, all read off the payloads themselves:
+
+      * the board being replaced HAD priced rows;
+      * the board replacing it has NONE, while still carrying material;
+      * and its own `odds_status` says the odds attempt FAILED.
+
+    The third is what keeps an honest empty board publishable. See
+    `_odds_attempt_failed`.
+    """
+    full = Path(full_path)
+    if not full.is_file():
+        return False                     # nothing to protect yet
+    try:
+        old = json.loads(full.read_text())
+    except Exception:                                         # noqa: BLE001
+        return False                     # unreadable is not evidence
+    if not isinstance(old, dict):
+        return False
+    if priced_rows(payload, name):
+        return False                     # the new board has prices
+    if not priced_rows(old, name):
+        return False                     # the old one had none either
+    if not _odds_attempt_failed(payload):
+        return False                     # an honest unpriced board
+    return True
+
+
 def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     """Write both copies. Returns (public_path, full_path).
 
@@ -558,6 +647,19 @@ def publish(payload: dict, public_path, name: str = "") -> tuple[str, str]:
     built = _full_dir_for(public)
     built.mkdir(parents=True, exist_ok=True)
     full = built / label
+    # THE DOWNGRADE GUARD. See `would_downgrade`: a build that could not
+    # reach its odds must not overwrite a board that knew the prices.
+    # Loud rather than silent — a refusal nobody sees is the same failure
+    # in a quieter coat, and this prints into the same build output as
+    # the "Odds API unavailable" warning that precedes it.
+    if would_downgrade(payload, full, label):
+        print(f"\n⛔  REFUSED to publish {label}: this build has no priced "
+              f"rows and its own odds_status says the pull failed, while "
+              f"the board it would replace has "
+              f"{priced_rows(json.loads(full.read_text()), label)} priced "
+              f"row(s).\n    The existing board is KEPT. Fix the odds "
+              f"access and build again; nothing was overwritten.")
+        return (str(public), str(full))
     # Atomic on both copies (tmp + replace, same directory so the rename
     # cannot cross filesystems). The public file is what every phone polls
     # on a 15-30s clock while the refresher rewrites it every cycle — an
