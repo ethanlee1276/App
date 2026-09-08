@@ -6120,6 +6120,40 @@ function likelyOwnReadTile(r) {
         <div class="v">${pct(own)}</div></div>`;
 }
 
+/* HOW OLD THE PRICE BESIDE A ROW IS, in the row's own words.
+
+   Ethan, 2026-09-08: "I don't want you too stop working until we display
+   the right lines and prices the books show." The engine stopped
+   publishing a price it cannot date (oddsapi.MAX_GAME_PRICE_AGE) and
+   started buying a fresh one when the old one expires — but the reader
+   still had to take the number on trust, because the card said only
+   which book and never WHEN. A price with a book's name and a clock on
+   it is one he can check against his phone in two seconds; without the
+   clock, a number that has drifted since the pull looks exactly like a
+   number that is wrong.
+
+   Silent when the row carries no age: older board files, and every
+   sport that has not been wired to date its prices, keep the card they
+   had rather than growing an empty chip. */
+function priceAgeChip(r) {
+  // NULL IS NOT ZERO, and in this language it very nearly is: a
+  // proxy-priced row carries `price_age_s: null` — there is no book
+  // price on it to date — and `Number(null)` is 0, which would have
+  // printed "priced just now" beside a number no book ever posted. The
+  // exact class of lie this whole line of work exists to end, caught by
+  // its own test.
+  const raw = (r || {}).price_age_s;
+  if (raw === null || raw === undefined) return "";
+  const s = Number(raw);
+  if (!Number.isFinite(s) || s < 0) return "";
+  const ago = s < 90 ? "just now"
+    : s < 3600 ? `${Math.round(s / 60)}m ago`
+    : s < 172800 ? `${Math.round(s / 3600)}h ago`
+    : `${Math.round(s / 86400)}d ago`;
+  return `<span class="price-age" title="When the pull behind this price ran${
+    r.priced_from ? ` (${escapeHtml(r.priced_from)} pull)` : ""}">· priced ${ago}</span>`;
+}
+
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
@@ -6209,7 +6243,7 @@ function likelyCard(r) {
             <span class="ml-odds">${american(r.odds)}</span></div>
           <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}</div>
           <div class="pick">${label}
-            <span class="book">· ${escapeHtml(r.book)}</span></div>
+            <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
         </div>
       </div>
       <span class="grade" style="background:var(--good);color:#08130c">

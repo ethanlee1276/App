@@ -193,11 +193,60 @@ def test_the_college_card_carries_both_sides_from_the_shared_resolver():
     assert '"home_book": play.get("home_book", ""),' in src
 
 
-def test_the_page_prints_the_book_on_the_card():
+def test_the_page_prints_the_book_and_the_age_on_the_card():
     app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    css = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
     card = app[app.index("function likelyCard("):]
     card = card[:card.index("\nfunction ", 10)]
-    assert '<span class="book">· ${escapeHtml(r.book)}</span>' in card
+    assert '<span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}' in card
+    assert ".pick .price-age" in css
+
+
+def _node(js):
+    """Run the chip in node, or skip where node is not installed."""
+    import shutil, subprocess, tempfile
+    node = shutil.which("node")
+    if not node:
+        return None
+    app = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+    i = app.index("function priceAgeChip(")
+    fn = app[i:app.index("\n}", i) + 2]
+    prog = f"""
+      var escapeHtml = (s) => String(s == null ? "" : s);
+      {fn}
+      console.log(JSON.stringify((() => {{ {js} }})()));
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        out = subprocess.run([node, path], capture_output=True, text=True, timeout=30)
+    finally:
+        os.unlink(path)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout.strip())
+
+
+def test_the_age_chip_reads_in_the_units_a_reader_thinks_in():
+    got = _node("""
+      return {
+        fresh: priceAgeChip({ price_age_s: 30 }),
+        minutes: priceAgeChip({ price_age_s: 1800, priced_from: "board" }),
+        hours: priceAgeChip({ price_age_s: 5 * 3600 }),
+        days: priceAgeChip({ price_age_s: 3 * 86400 }),
+        none: priceAgeChip({}),
+        proxy: priceAgeChip({ price_age_s: null }),
+        junk: priceAgeChip({ price_age_s: "soon" }),
+      };
+    """)
+    if got is None:
+        return
+    assert "just now" in got["fresh"], got["fresh"]
+    assert "30m ago" in got["minutes"] and "board pull" in got["minutes"]
+    assert "5h ago" in got["hours"] and "3d ago" in got["days"]
+    # A row with no age keeps the card it had rather than growing an
+    # empty chip: older board files and undated sports must not regress.
+    assert got["none"] == "" and got["proxy"] == "" and got["junk"] == ""
 
 
 if __name__ == "__main__":
