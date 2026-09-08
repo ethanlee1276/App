@@ -14,6 +14,22 @@ test says cannot be trusted. A selection rule that has never been scored
 against the alternative it replaces is a second unmeasured claim
 standing where the first one was.
 
+THE QUESTION THIS COULD NOT ANSWER, AND NOW CAN
+-----------------------------------------------
+Everything below scores the bets we PLACED, because that is all the
+journal holds — so `recommended` is True on every row of it and the one
+question that decides whether the gate is worth having could not be
+asked: what happened to the props it turned DOWN.
+
+`backtest_from_stats` already knew. It walks the season forward, prices
+every prop from prior weeks only, and settles all of them;
+`SettledProp` carries `recommended` beside the outcome and
+`BacktestReport.settled` keeps every row. The candidate surface with
+outcomes had been sitting there the whole time and nothing read the
+refused half — the report's own betting numbers are documented
+"recommended bets only". `from_settled` and `gate_split` at the bottom
+of this file read it.
+
 THE QUESTION THIS CAN ANSWER
 ----------------------------
 Take the bets we actually placed and settled. Order them three ways,
@@ -134,8 +150,53 @@ def usable(rows) -> list[dict]:
             stake = 0.0
         out.append({"p": p, "odds": o, "won": r["status"] == "won",
                     "stake": stake, "sport": r.get("sport") or "",
-                    "market": r.get("market") or ""})
+                    "market": r.get("market") or "",
+                    # CARRIED FOR `gate_split`, ignored by everything
+                    # above it. A journal row has neither — the journal
+                    # only holds bets we PLACED, so `recommended` is True
+                    # on every one of them and `basis` is not recorded.
+                    # They arrive on rows built by `from_settled`.
+                    "recommended": bool(r.get("recommended", True)),
+                    "basis": r.get("basis") or ""})
     return out
+
+
+def from_settled(settled) -> list[dict]:
+    """`engine.backtest.SettledProp` rows in the shape `usable` reads.
+
+    THE POOL THIS MODULE COULD NOT SEE. Every function above scores the
+    bets we PLACED, because that is all the journal holds — and this
+    module's own docstring says so. The one question it therefore cannot
+    ask is the one that decides whether the gate is any good: what
+    happened to the props the gate turned DOWN.
+
+    `backtest_from_stats` already knows. It walks the season forward,
+    prices every prop from prior weeks only, and settles all of them
+    against the box score — `SettledProp` carries `recommended` beside
+    the outcome, and `BacktestReport.settled` keeps every row. The
+    candidate surface with outcomes has been sitting there; nothing ever
+    read the refused half of it.
+
+    PUSHES ARE DROPPED, not counted as losses. `SettledProp.outcome` is
+    None when the stat landed exactly on the line, and a push returns the
+    stake — scoring it either way would bias whichever arm holds more of
+    them.
+    """
+    rows = []
+    for sp in settled or []:
+        won = getattr(sp, "outcome", None)
+        if won is None:
+            continue
+        rows.append({
+            "status": "won" if won else "lost",
+            "hit_prob": getattr(sp, "hit_prob", None),
+            "odds": getattr(sp, "odds", None),
+            "stake_units": getattr(sp, "stake_units", 1.0),
+            "market": getattr(sp, "market", "") or "",
+            "recommended": bool(getattr(sp, "recommended", False)),
+            "basis": getattr(sp, "basis", "") or "",
+        })
+    return rows
 
 
 def _scores(pool: list[dict], order: str) -> list[float]:
@@ -255,6 +316,132 @@ def compare(rows, top_share: float = TOP_SHARE, stakes: str = "flat",
             "lo": None if lo is None else round(lo, 4),
             "hi": None if hi is None else round(hi, 4)}
     return res
+
+
+#: Settled candidates in EACH arm before `gate_split` will read. Lower
+#: than MIN_N because the split does not cut a top slice — both arms are
+#: whole populations, so the same precision needs fewer rows than the
+#: quarter-slice comparisons above.
+GATE_MIN_N = 60
+
+
+def _boot_two_sample(a: list[dict], b: list[dict], stakes: str,
+                     reps: int, seed: int):
+    """Percentile CI for ROI(a) - ROI(b) across TWO populations.
+
+    NOT `_boot_roi_diff`, and the difference matters. That one resamples
+    a single pool and re-cuts it, because the arms it compares are two
+    orderings of the SAME rows — the uncertainty it has to carry is
+    which rows each rule would have picked. Here the arms are different
+    rows: the props the gate admitted and the props it refused. Nothing
+    re-selects, so each arm is resampled within itself and the pairing
+    that `_boot_roi_diff` relies on does not exist.
+
+    Reusing that function here would have quietly reported a paired
+    interval for an unpaired comparison, which is narrower than the
+    truth — the failure mode that flatters exactly the kind of result
+    somebody wants to act on.
+    """
+    import random
+    rng = random.Random(seed)
+    if not a or not b:
+        return None, None
+    out = []
+    na, nb = len(a), len(b)
+    for _ in range(reps):
+        ra = _score_slice(a, [rng.randrange(na) for _ in range(na)],
+                          stakes)["roi"]
+        rb = _score_slice(b, [rng.randrange(nb) for _ in range(nb)],
+                          stakes)["roi"]
+        if ra is not None and rb is not None:
+            out.append(ra - rb)
+    if len(out) < reps // 2:
+        return None, None
+    out.sort()
+    return out[int(0.025 * len(out))], out[int(0.975 * len(out))]
+
+
+def gate_split(rows, stakes: str = "flat", min_n: int = GATE_MIN_N,
+               reps: int = 2000, seed: int = 20260909,
+               basis: str = "book") -> dict:
+    """What happened to the props the gate REFUSED.
+
+    The question `engine/backtest.py` had the data for and nobody asked,
+    and the one the journal can never answer: it holds the bets we
+    placed, so every row in it was admitted. Feed this
+    `from_settled(report.settled)` from a walk-forward and it scores both
+    halves of the candidate surface at a flat 1u.
+
+    WHAT A RESULT WOULD MEAN, and what it would not. If the refused arm
+    made money, the gate is leaving money on the table and the next
+    question is which refusal did it — this function does not know, and
+    saying which would need the refusal REASON on the row, which
+    `SettledProp` does not carry. If the refused arm lost, the gate is
+    earning its place. If the interval straddles zero, this sample says
+    nothing, which on a first season it very likely will.
+
+    ONLY BOOK-PRICED ROWS BY DEFAULT. `basis="naive"` rows were priced
+    against `build_slate`'s recent-form proxy at a synthetic -110, so
+    their "ROI" is the model scored against itself and beating it means
+    nothing about beating a market. `backtest.BacktestReport` segments
+    for the same reason. Pass basis="" to pool them anyway and the
+    reading will say the number is not market-relative.
+
+    THIS IS A COUNTERFACTUAL, and it rests on one assumption worth
+    stating: that we could have had those prices. For player props at
+    this size that is fair — we do not move a book's number — and it is
+    the same assumption every backtest in this repo already makes. It
+    would NOT be fair for a market where our own action is the price.
+    """
+    pool = [r for r in usable(rows)
+            if not basis or r.get("basis") == basis]
+    took = [r for r in pool if r["recommended"]]
+    left = [r for r in pool if not r["recommended"]]
+    res = {"n": len(pool), "basis": basis or "all", "stakes": stakes,
+           "min_n": min_n, "n_admitted": len(took), "n_refused": len(left),
+           "enough": len(took) >= min_n and len(left) >= min_n,
+           "admitted": None, "refused": None, "diff": {}}
+    if not res["enough"]:
+        res["note"] = (
+            f"{len(took)} admitted and {len(left)} refused candidates priced "
+            f"against a real book line; {min_n} in each arm is the floor for "
+            f"reading a difference")
+        return res
+    res["admitted"] = _score_slice(took, range(len(took)), stakes)
+    res["refused"] = _score_slice(left, range(len(left)), stakes)
+    ra, rb = res["admitted"]["roi"], res["refused"]["roi"]
+    lo, hi = _boot_two_sample(took, left, stakes, reps, seed)
+    res["diff"]["admitted-refused"] = {
+        "point": None if (ra is None or rb is None) else round(ra - rb, 4),
+        "lo": None if lo is None else round(lo, 4),
+        "hi": None if hi is None else round(hi, 4)}
+    return res
+
+
+def gate_reading(res: dict) -> str:
+    """One sentence about whether the gate is worth having."""
+    if not res.get("enough"):
+        return res.get("note") or "not enough settled candidates to read"
+    d = res["diff"].get("admitted-refused") or {}
+    lo, hi, pt = d.get("lo"), d.get("hi"), d.get("point")
+    na, nr = res["n_admitted"], res["n_refused"]
+    tail = ("" if res["basis"] == "book" else
+            " — and these are proxy-priced rows, so the number is not a "
+            "claim about beating a market")
+    if lo is None or hi is None or pt is None:
+        return "the two arms could not be scored against each other"
+    if lo > 0:
+        return (f"the gate earns its place: the {na} props it admitted beat "
+                f"the {nr} it refused by {pt:+.1%} ROI [{lo:+.1%}, {hi:+.1%}], "
+                f"the whole interval above zero{tail}")
+    if hi < 0:
+        return (f"the gate is COSTING money: the {nr} props it refused beat "
+                f"the {na} it admitted by {-pt:+.1%} ROI "
+                f"[{lo:+.1%}, {hi:+.1%}], the whole interval below zero — "
+                f"what it turns down is worth more than what it takes{tail}")
+    return (f"the gate is unproven either way: admitted minus refused is "
+            f"{pt:+.1%} ROI over {na} and {nr} candidates, interval "
+            f"[{lo:+.1%}, {hi:+.1%}] straddling zero{tail}")
 
 
 def reading(res: dict) -> str:

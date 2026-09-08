@@ -46,6 +46,16 @@ def main() -> None:
                     help="level = tendency vs the league; drift = the team vs "
                          "its OWN season, i.e. only what player form has not "
                          "already absorbed.")
+    ap.add_argument("--gate", action="store_true",
+                    help="score the props the gate REFUSED against the ones "
+                         "it admitted. The journal cannot answer this — it "
+                         "only holds bets we placed — but the walk-forward "
+                         "settles every candidate either way.")
+    ap.add_argument("--gate-basis", default="book", choices=("book", "naive", ""),
+                    help="which pricing basis --gate reads (default book). "
+                         "naive rows were priced against the recent-form "
+                         "proxy at a synthetic -110, so beating them says "
+                         "nothing about beating a market.")
     args = ap.parse_args()
 
     weeks = parse_weeks(args.weeks)
@@ -69,6 +79,48 @@ def main() -> None:
     print(report.summary())
     if report.n == 0:
         print("\n(No settled props — check that the stats CSV covers these weeks.)")
+    if args.gate:
+        gate_report(report, basis=args.gate_basis)
+
+
+def gate_report(report, basis: str = "book") -> None:
+    """Did the gate's refusals cost anything?
+
+    `report.summary()` above measures the bets the gate ADMITTED, which
+    is what a P&L is. It cannot say whether the board would have done
+    better taking the props it turned down, because that arm has never
+    been scored anywhere — the journal holds placed bets only, and every
+    row in it was admitted by construction.
+
+    The walk-forward settles the whole candidate surface, so the arm
+    exists; this prints it.
+    """
+    from engine.selectorder import from_settled, gate_split, gate_reading
+    res = gate_split(from_settled(report.settled), basis=basis)
+    print(f"\n{'='*70}\n  WHAT HAPPENED TO THE PROPS THE GATE REFUSED"
+          f"\n{'='*70}")
+    if not res["enough"]:
+        print(f"  {res['note']}.\n")
+        return
+    print(f"  {res['n']} settled candidates priced against a real book line, "
+          f"at one flat\n  unit each. Same weeks, same prices, same "
+          f"settling — the only difference\n  is which side of the gate "
+          f"they fell.\n")
+    print(f"    {'arm':<12}{'bets':>6}{'won':>6}{'hit':>9}"
+          f"{'staked':>10}{'net':>10}{'ROI':>9}")
+    for name, key in (("admitted", "admitted"), ("refused", "refused")):
+        r = res[key]
+        hit = f"{r['hit']:.1%}" if r["hit"] is not None else "—"
+        roi = f"{r['roi']:+.1%}" if r["roi"] is not None else "—"
+        print(f"    {name:<12}{r['bets']:>6}{r['wins']:>6}{hit:>9}"
+              f"{r['staked']:>10.1f}{r['net']:>+10.1f}{roi:>9}")
+    d = res["diff"]["admitted-refused"]
+    lo = "—" if d["lo"] is None else f"{d['lo']:+.1%}"
+    hi = "—" if d["hi"] is None else f"{d['hi']:+.1%}"
+    pt = "—" if d["point"] is None else f"{d['point']:+.1%}"
+    print(f"\n  DIFFERENCE IN ROI, bootstrap within each arm")
+    print(f"    admitted - refused   {pt}  [{lo}, {hi}]")
+    print(f"\n  {gate_reading(res)}.\n")
 
 
 if __name__ == "__main__":
