@@ -2333,6 +2333,216 @@ def _where_on_board(name: str) -> None:
 #: comparison possible at all.
 ML_DOCTOR_BOARDS = {"nfl": NFL_OUT, "cfb": CFB_OUT}
 
+#: A moneyline has no line — its PRICE is the number that was struck, so
+#: that is what `bet_audit` compares for it.
+ML_AUDIT_PRICE_ONLY = ("moneyline",)
+
+#: Markets whose journalled `line` is a TRANSFORM of the board's, so the
+#: raw numbers cannot be compared. `engine.ledger` stores a spread negated
+#: (so margin vs -spread grades as the push it is) and gives the zero-line
+#: markets a 0.5 placeholder. Comparing those two numbers would report
+#: every spread and total in the book as moved, which is worse than not
+#: checking them — so they are named as unchecked instead.
+ML_AUDIT_UNCOMPARABLE = ("spread", "total", "team_total")
+
+
+def bet_audit(sport: str = "nfl") -> None:
+    """Which open bets were struck on a line the board no longer shows?
+
+    Ethan, 2026-09-09, after the rematch bug was fixed: "should we also
+    check the nfl edge bets and see and fix what bets were placed with the
+    wrong lines. all we confirmed was the money lines was wrong but we
+    have no clue if the player props or anything like that is also wrong."
+
+    HE IS RIGHT, AND THE PROP EXPOSURE IS WORSE THAN THE MONEYLINE ONE.
+    The moneyline damage was visible because a price landed on the wrong
+    team and the favourite inverted. A prop's damage is invisible: the
+    event path indexes player lines by PLAYER, not by game —
+
+        index.setdefault(k, []).extend(lines)
+
+    — so a rematch that matched a Week 1 slate game had its November
+    prop lines appended to the SAME player key, and `best_over_line`
+    then shopped across both weeks. A Week 1 receiving-yards prop could
+    be priced off the November game's number. Same player, same market,
+    a different game, and nothing on the card to say so.
+
+    The scale is on the board's own counters. Before the fix the NFL
+    build reported `events 21` on a sixteen-game slate; after, `events
+    16`. Five event payloads were being fetched and indexed that were not
+    this week's games at all.
+
+    So this prints two things:
+
+      1. THE CONTAMINATING PULLS, named. Every cached event payload whose
+         kickoff is not on this slate's days — the files whose props were
+         merged into players who also play this week.
+      2. EVERY OPEN BET whose stored line no longer matches the line the
+         board shows for that player and market. A price that moved is
+         ordinary; a LINE that moved means the bet was struck on a
+         different number, which is the shape this bug leaves behind.
+
+    A line difference is not proof of contamination on its own — lines
+    move — and the report says so rather than accusing. What it does is
+    put every open position with a moved number in one place, which is
+    what a person needs before deciding whether to let one ride.
+    """
+    from engine import gate, ledger
+    from engine.sources.oddsapi import normalize_name
+    from engine.sources.fetch import CACHE_DIR
+
+    sport = (sport or "nfl").strip().lower()
+    rel = ML_DOCTOR_BOARDS.get(sport)
+    if rel is None:
+        print(f"No bet audit for {sport!r} — "
+              f"{', '.join(sorted(ML_DOCTOR_BOARDS))} only.")
+        return
+    print(f"Bet audit ({sport.upper()}) — open positions against the board "
+          f"we publish now\n")
+
+    src = gate.board_source(ROOT / rel)
+    if not src.is_file():
+        print(f"  board     {rel} does not exist — nothing to audit against.")
+        return
+    board = json.loads(src.read_text())
+    print(f"  board     read from {src}")
+
+    # 1. THE CONTAMINATING PULLS. A cached event payload for a game that
+    # is not on this slate had its props merged into this slate's players.
+    days = set()
+    for g in board.get("games") or []:
+        d = str(g.get("date") or "")[:10]
+        if len(d) == 10:
+            import datetime as _d
+            try:
+                dd = _d.date.fromisoformat(d)
+            except ValueError:
+                continue
+            days |= {(dd + _d.timedelta(days=n)).isoformat() for n in (-1, 0, 1)}
+    off = []
+    for path in sorted(CACHE_DIR.glob(f"odds_event_{sport}_*.json")):
+        try:
+            ev = json.loads(path.read_text())
+        except Exception:                                     # noqa: BLE001
+            continue
+        if not isinstance(ev, dict):
+            continue
+        when = str(ev.get("commence_time") or "")[:10]
+        if days and len(when) == 10 and when not in days:
+            off.append((when, str(ev.get("away_team") or ""),
+                        str(ev.get("home_team") or ""), path.name))
+    if not days:
+        print("  pulls     the board carries no game dates — cannot tell "
+              "this slate's payloads from any other week's.")
+    elif off:
+        print(f"  pulls     ⚠️  {len(off)} cached event payload(s) are for "
+              f"games NOT on this slate. Their player props were indexed "
+              f"by player, so they merged into this week's cards:")
+        for when, away, home, name in sorted(off):
+            print(f"              {when}  {away} @ {home}   ({name})")
+    else:
+        print("  pulls     every cached event payload is for a game on this "
+              "slate — nothing from another week was indexed.")
+
+    # 2. OPEN POSITIONS against what we publish now.
+    # BOTH BOOKS, and the Most Likely board needs a second key.
+    #
+    # Ethan, 2026-09-09: "also all the lines for the most likley bets, not
+    # just the edge bets." Its rows are indexed the same way, but a GAME
+    # row's `player` is the card label — "MIN ML" — while the journal
+    # stores the team, "MIN". Keyed on the label alone every likelihood
+    # moneyline would have come back OFF THE BOARD: an alarm on a healthy
+    # position, which is how a report stops being read. So a game row is
+    # registered under its team as well.
+    shown: dict[tuple, dict] = {}
+    for key in ("recommendations", "most_likely", "long_shots"):
+        for r in board.get(key) or []:
+            market = str(r.get("market") or "")
+            if not market:
+                continue
+            for name in (r.get("player"), r.get("team"), r.get("pick")):
+                if str(name or "").strip():
+                    shown.setdefault((normalize_name(str(name)), market), r)
+
+    conn = ledger.connect()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT date, player, market, side, line, odds, book, category, "
+        "stake_units FROM bets WHERE sport=? AND status='open' "
+        "AND stake_units > 0 ORDER BY category, player", (sport,))]
+    if not rows:
+        print("\n  bets      no open positions on this sport.")
+        return
+
+    moved, priced, gone, skipped, fine = [], [], [], [], 0
+    for b in rows:
+        market = str(b.get("market") or "")
+        row = shown.get((normalize_name(str(b.get("player") or "")), market))
+        if row is None:
+            gone.append(b)
+            continue
+        # WHAT IS COMPARABLE, AND WHAT IS NOT SAID AT ALL.
+        #
+        # A moneyline has no line, so its PRICE is the number that was
+        # struck and that is what gets compared. A spread, a total and a
+        # team total journal a TRANSFORM of the board's line — a spread
+        # is stored negated so the standard grader applies, and the
+        # zero-line markets store 0.5 — so comparing the two raw numbers
+        # would flag every one of them. A tool that reports the whole
+        # book as wrong is worth less than no tool, so these are counted
+        # and named as NOT CHECKED rather than guessed at.
+        if market in ML_AUDIT_PRICE_ONLY:
+            try:
+                if int(b.get("odds")) != int(row.get("odds")):
+                    priced.append((b, row))
+                else:
+                    fine += 1
+            except (TypeError, ValueError):
+                fine += 1
+            continue
+        if market in ML_AUDIT_UNCOMPARABLE:
+            skipped.append(b)
+            continue
+        try:
+            bl = float(b.get("line"))
+            nl = float(row.get("line"))
+        except (TypeError, ValueError):
+            fine += 1
+            continue
+        if abs(bl - nl) > 1e-9:
+            moved.append((b, row))
+        else:
+            fine += 1
+
+    print(f"\n  bets      {len(rows)} open · {fine} on the same number · "
+          f"{len(moved)} on a DIFFERENT number · {len(priced)} at a "
+          f"DIFFERENT price · {len(gone)} no longer on the board · "
+          f"{len(skipped)} not checked")
+    for b, row in priced:
+        print(f"              PRICE MOVED  {b['player']} {b['market']} "
+              f"@ {int(b.get('odds') or 0):+d} ({b.get('book') or '?'}, "
+              f"{b.get('category')})")
+        print(f"                          board now: "
+              f"{int(row.get('odds') or 0):+d} ({row.get('book') or '?'})")
+    for b in skipped:
+        print(f"              NOT CHECKED  {b['player']} {b['market']} — "
+              f"the journal stores this market's line as a transform of "
+              f"the board's, so the two numbers are not comparable raw")
+    for b, row in moved:
+        print(f"              LINE MOVED  {b['player']} {b['side']} "
+              f"{b['line']} {b['market']} @ {int(b.get('odds') or 0):+d} "
+              f"({b.get('book') or '?'}, {b.get('category')})")
+        print(f"                          board now: {row.get('side')} "
+              f"{row.get('line')} @ {int(row.get('odds') or 0):+d} "
+              f"({row.get('book') or '?'})")
+    for b in gone:
+        print(f"              OFF THE BOARD  {b['player']} {b['side']} "
+              f"{b['line']} {b['market']} ({b.get('category')})")
+    if moved or priced:
+        print("\n            A line that moved is not proof the bet was "
+              "struck on a bad number — lines move. It is the shape the "
+              "rematch bug leaves behind, so these are the positions to "
+              "look at first.")
+
 
 def ml_doctor(sport: str = "nfl") -> None:
     """Is the moneyline on the board the price a book is actually posting?
@@ -8087,7 +8297,7 @@ KNOWN_FLAGS = frozenset({
     "--doctor", "--epoch", "--gates", "--haircut", "--injuries",
     "--inspect-pick", "--learning", "--likely", "--matchup", "--memes",
     "--nfl-baseline", "--nightly", "--odds-audit", "--odds-doctor",
-    "--ml-doctor",
+    "--ml-doctor", "--bet-audit",
     "--odds-only", "--onoff", "--out", "--paper", "--parlay-report",
     "--parlays", "--paywall-audit", "--pbp", "--prefit", "--prereg",
     "--prescan", "--print-env", "--probe-live", "--probe-weighins",
@@ -8201,6 +8411,12 @@ def main() -> None:
         return
     if "--odds-doctor" in argv:
         odds_doctor()
+        return
+    if "--bet-audit" in argv:
+        i = argv.index("--bet-audit")
+        who = (argv[i + 1] if len(argv) > i + 1
+               and not argv[i + 1].startswith("-") else "nfl")
+        bet_audit(who)
         return
     if "--ml-doctor" in argv:
         i = argv.index("--ml-doctor")
