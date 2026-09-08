@@ -43,6 +43,7 @@ from __future__ import annotations
 import datetime as _dt
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from . import modelstate as _modelstate
@@ -192,6 +193,54 @@ def _in_band(r, band) -> bool:
     return lo <= p < hi or (hi >= 1.0 and p >= lo)
 
 
+#: A calendar day and nothing else. Deliberately a SHAPE check before a
+#: parse, because `date.fromisoformat` is not a validator here: on
+#: Python 3.11+ it happily accepts the ISO WEEK form, and
+#: `fromisoformat("2026-W01")` returns 2025-12-29 — a real date, in the
+#: wrong year, with no error. Parsing alone would therefore turn the
+#: football journal's week labels into December days and make the bug
+#: below worse rather than catching it.
+_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _is_day(value) -> bool:
+    """Can this journal date be placed on a calendar at all?
+
+    THE BUG THIS EXISTS FOR, and it is the one property this whole module
+    is built to guarantee. `bets.date` does not hold the same kind of
+    thing for every sport: the NFL journals a SEASON-WEEK LABEL —
+    "2026-W01", from `engine.sources.nflverse`'s slate key — while MLB,
+    CFB and the rest journal ISO days. `engine.ledger` has already had to
+    reason about this twice, in `--stranded` and in the record window,
+    and both times concluded that within its own year a week label sorts
+    ABOVE every ISO day, because "W" sorts above any digit.
+
+    For a display window that is the safe direction: a current-season
+    week is included rather than silently dropped. HERE IT IS EXACTLY
+    BACKWARDS. `verdict`'s one non-negotiable rule is that bets which
+    existed when the idea did cannot test it, enforced by `date > reg` —
+    and a week label passes that comparison unconditionally. Every NFL
+    bet in the journal has therefore been counted as "after" every
+    registration, whenever it was actually placed. The exclusion rule
+    reads healthy and does nothing, which is the failure this file's own
+    header calls the one this codebase finds in itself most often.
+
+    A row that cannot be placed in time is DROPPED, not guessed at, and
+    `verdict` reports how many it dropped. Silently collecting zero is
+    the other half of the same failure.
+    """
+    return bool(isinstance(value, str) and _ISO_DAY.match(value)
+                and _safe_day(value))
+
+
+def _safe_day(value: str) -> bool:
+    try:
+        _dt.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _side_of(r) -> str:
     """The side a bet took, in one spelling.
 
@@ -248,10 +297,19 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         return out
 
     reg = test["registered"]
-    fresh = [r for r in rows
-             if (r.get("date") or "") > reg
-             and r.get("sport") == test["sport"]
-             and r.get("status") in ("won", "lost")]
+    mine = [r for r in rows
+            if r.get("sport") == test["sport"]
+            and r.get("status") in ("won", "lost")]
+    # A ROW THAT CANNOT BE PLACED IN TIME IS DROPPED. See `_is_day`: the
+    # NFL journals a season-week label rather than a calendar day, and a
+    # week label sorts ABOVE every ISO date inside its own year — so
+    # `date > reg` waved every football bet through as "after the
+    # registration" no matter when it was taken. Counting them is the one
+    # thing this module exists to prevent, so they are excluded, and the
+    # number is carried on the result and said out loud in the reading.
+    # A silent zero is the same failure with the sign flipped.
+    undated = [r for r in mine if not _is_day(r.get("date"))]
+    fresh = [r for r in mine if _is_day(r.get("date")) and r["date"] > reg]
     # OPTIONAL, and absent from every test registered before 2026-08-27
     # — which is why `_terms_hash` only keys on the fields a test
     # actually carries. Adding a filter no existing test uses must not
@@ -306,13 +364,25 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         ref = [r for r in ref if _side_of(r) in want]
     out["n"] = len(pop)
     out["n_reference"] = len(ref)
+    out["undated"] = len(undated)
+    # THE SENTENCE THAT STOPS THIS BEING A SILENT ZERO. Without it a test
+    # blocked entirely by the journal's date format is indistinguishable
+    # from a quiet week, and the reader has no way to tell "nothing has
+    # happened yet" from "this can never collect anything".
+    unplaced = ("" if not undated else
+                f" {len(undated)} settled bet(s) were left out because "
+                f"their journal date is a season-week label rather than a "
+                f"day, so there is no way to tell whether they predate the "
+                f"registration; until that is fixed this test cannot "
+                f"collect them.")
 
     if len(pop) < test["min_n"]:
         out["status"] = "collecting"
         out["reading"] = (
             f"{len(pop)} of {test['min_n']} bets since {reg}. Nothing is "
             f"reported until the sample the terms named has arrived — "
-            f"peeking early and calling it is how noise becomes a finding.")
+            f"peeking early and calling it is how noise becomes a finding."
+            + unplaced)
         return out
 
     pv = [_flat_profit(r) for r in pop]
@@ -355,7 +425,8 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         + (f"The claim holds at the preregistered bar — {test['decides']}"
            if out["supported"] else
            "The claim does NOT clear the preregistered bar, so nothing "
-           "changes and the bucket stays."))
+           "changes and the bucket stays.")
+        + unplaced)
     return out
 
 
