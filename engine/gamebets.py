@@ -85,6 +85,27 @@ def nfl_win_prob(home_rating: float, away_rating: float) -> float:
     return clamp(normal_cdf(margin / NFL_MARGIN_SD), 0.01, 0.99)
 
 
+#: WHY THE EDGE BOARD WILL NOT STAKE THIS CARD, in the words it prints.
+#:
+#: Named rather than typed twice, because a likelihood row has to be able
+#: to REMOVE it. The two boards ask different questions of the same
+#: disagreement: the edge board is deciding whether to put money on our
+#: number, and a rating ten points from the close is a rating error; the
+#: likelihood board ranks on the MARKET's number, where that same
+#: disagreement was measured to carry nothing (`likely.engine_credible`,
+#: 2026-09-08). Ethan's screenshot of 2026-09-08 had both readings on one
+#: card — a green 67% headline over a red "a rating error, not an edge" —
+#: which is a card arguing with itself.
+RATING_ERROR_REASON = (
+    f"Model disagrees with the market by more than {MAX_CREDIBLE_EDGE:.0%} "
+    f"— a rating error, not an edge")
+
+#: The same refusal on the markets that are priced most efficiently.
+RATING_ERROR_REASON_EFFICIENT = (
+    f"Model disagrees with the market by more than {MAX_CREDIBLE_EDGE:.0%} "
+    f"— in a market this efficiently priced that is a rating error, not an edge")
+
+
 def spread_win_prob(sport: str, home_spread: float) -> float | None:
     """P(home win) implied by a posted spread, or None if this sport has
     no registered win curve.
@@ -417,8 +438,7 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
                       f"— a {edge:+.1%} edge on {pick} after the market haircut")
     reasons.extend(_calibration_note(sport, "moneyline"))
     if not credible:
-        reasons.insert(0, f"Model disagrees with the market by more than "
-                          f"{MAX_CREDIBLE_EDGE:.0%} — a rating error, not an edge")
+        reasons.insert(0, RATING_ERROR_REASON)
 
     return MoneylineRec(
         home=home, away=away, pick=pick, pick_is_home=is_home,
@@ -647,9 +667,7 @@ def _game_bet(bet_type, market_label, home, away, win, fair, edge, odds,
     grade = quality_letter(quality) if credible else "Pass"
     stake = _kelly_stake(win, odds) if grade != "Pass" else 0.0
     if not credible:
-        reasons = [f"Model disagrees with the market by more than "
-                   f"{MAX_CREDIBLE_EDGE:.0%} — in a market this efficiently "
-                   f"priced that is a rating error, not an edge"] + list(reasons)
+        reasons = [RATING_ERROR_REASON_EFFICIENT] + list(reasons)
     return {
         "bet_type": bet_type,
         "market": bet_type,

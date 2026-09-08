@@ -1107,6 +1107,23 @@ def from_game_bet(row: dict, sport: str = "nfl",
     except (TypeError, ValueError):
         ev = None
     reasons = list(row.get("reasons") or [])
+    # THE EDGE BOARD'S REFUSAL IS NOT THIS BOARD'S. Ethan, 2026-09-08,
+    # with the Vikings card on screen: a green "67% · the likely side"
+    # headline sitting over a red "Model disagrees with the market by
+    # more than 10% — a rating error, not an edge". Both sentences were
+    # true of their own board and the card carried them together, which
+    # is the same self-contradiction the Gelof card had in reverse.
+    #
+    # A row that ranks on the MARKET's number is not staking our rating,
+    # and the disagreement it names was measured to carry nothing
+    # against the close (`engine_credible`, `gamerank --raw-bar`). The
+    # row says what it IS doing in `rank_note`, which prints the model's
+    # own number and why it does not bar the row. So the staking
+    # refusal comes off, by name rather than by matching text.
+    if source == "market":
+        from .gamebets import RATING_ERROR_REASON, RATING_ERROR_REASON_EFFICIENT
+        gone = {RATING_ERROR_REASON, RATING_ERROR_REASON_EFFICIENT}
+        reasons = [r for r in reasons if r not in gone]
     if flipped:
         try:
             at = f" at {int(backed_odds):+d}"
