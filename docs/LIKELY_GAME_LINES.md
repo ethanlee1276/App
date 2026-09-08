@@ -254,6 +254,57 @@ payload rather than describing the game, while this one is sampling
 noise on real quotes. A ranked number survives noise; it does not
 survive a bias that moves with how many books a pull returned.
 
+## Every game price says which book is posting it, per side (2026-09-08)
+
+Ethan, twice in one day: "I don't want you too stop working until we
+display the right lines and prices the books show." The moneyline was
+named first because it was what he screenshotted and what the board ranks
+on. The spread and the total were still publishing a shopped price under
+no name, and the college board was doing something worse than that.
+
+**Why the side matters.** The best price on the Over and the best on the
+Under sit at different books far more often than they sit at one, and so
+do the two sides of a spread — that is the same fact that made the
+shopped de-vig wrong. So the resolvers are keyed by side:
+
+| market | resolver | keyed by |
+| --- | --- | --- |
+| moneyline | `oddsapi.best_h2h_books` | team abbreviation |
+| spread | `oddsapi.best_spread_books` | team abbreviation |
+| total | `oddsapi.best_total_books` | `over` / `under` |
+| team total | — | nothing quotes it |
+
+A team total is derived from the game total and the spread rather than
+read off a menu, so no book posts it and none is named. Naming one would
+put a real book against a number it never offered.
+
+**Two rules each resolver inherits from the price it names**, because a
+name that follows different rules than the number is a lie about the
+number:
+
+* the same book filter — the sharp reference is skipped, since nobody
+  here can bet it, so it is never the answer to "where do I get this";
+* the same published line. A book off the consensus number quotes
+  neither side of it and names neither side, and where no book is at the
+  line the parsers publish -110 — a price nobody is offering, which gets
+  no book's name at all.
+
+**One walk per market.** `_total_quotes` and `_spread_quotes` return
+`(point, price, book title)`, and both the parser and the resolver read
+them. Two separate walks over one payload can pick two different books
+for one price, and a card showing the right price under the wrong book is
+the failure this whole line of work has been chasing.
+
+**The college defect this closed.** `cfb_build._books_for` looked each
+market up on ONE fixed side — the home spread, the Over, the home
+moneyline — and handed that name to every card in the market. Its own
+docstring had the reason that was wrong: "naming the wrong book is worse
+than naming none — it sends you to a window that isn't quoting that
+price." An Under card printed the Over's book; an away spread printed the
+home side's. It is retired, replaced by `_book_for_side`, which asks the
+shared resolvers for the side the card actually took. One rule now names
+both leagues.
+
 ## The moneyline and the spread, read together (2026-09-08)
 
 Ethan, with two screenshots side by side — his sportsbook and our page:
