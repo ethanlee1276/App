@@ -191,6 +191,24 @@ BOARD_ODDS_COST = 3
 LINES_CLOCK = "nfl_lines"
 
 
+def _lines_stale(sport: str, tag: str = "lines") -> bool:
+    """Are the game prices on disk past the age ceiling for this sport?
+
+    True means the board is currently REFUSING to show them
+    (oddsapi.MAX_GAME_PRICE_AGE), so the cheap pull is no longer an
+    ordinary refresh — it is the difference between an empty shelf and a
+    real number, and `should_refresh` lets it past the cadence. False on
+    any error: a pacing question must never be answered by an exception,
+    and the ordinary cadence is the safe answer.
+    """
+    try:
+        from engine.sources import oddsapi
+        age = oddsapi.sport_cache_age(sport, tag)
+        return age is not None and not oddsapi.price_is_current(age)
+    except Exception:                                        # noqa: BLE001
+        return False
+
+
 def _slate_games(path: str) -> int:
     """Real game count on a built board (0 when missing/unreadable)."""
     try:
@@ -417,7 +435,8 @@ def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
 
 def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                      cost: int | None = None,
-                     credits: int | None = None) -> bool:
+                     credits: int | None = None,
+                     prices_stale: bool = False) -> bool:
     """Decide whether this refresh can afford to re-pull odds.
 
     Scores are free and always refresh; odds are metered, so they only ride
@@ -454,7 +473,7 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
                                 else _games_on_slate(out_path) + 1,
                                 kickoffs=kicks,
                                 sport=sport, share=_budget_share(sport),
-                                credits=credits)
+                                credits=credits, prices_stale=prices_stale)
     if not quiet:
         print(f"       {reason}")
     # WRITTEN DOWN WHETHER OR NOT IT WAS PRINTED. The loop runs quiet,
@@ -711,7 +730,8 @@ def refresh_nfl(quiet: bool = False) -> bool:
     elif _with_odds():
         args.append("--cached-odds")   # keep last paid prices; never overwrite with proxies
         if _slate_games(out) > 0 and _odds_affordable(
-                out, quiet, sport=LINES_CLOCK, credits=BOARD_ODDS_COST):
+                out, quiet, sport=LINES_CLOCK, credits=BOARD_ODDS_COST,
+                prices_stale=_lines_stale("nfl")):
             args.append("--board-odds")
             lines_spend = True
             lines_before = _paid_pull_baseline()
@@ -982,7 +1002,8 @@ def refresh_cfb(quiet: bool = False) -> bool:
         # cycle and whose every board read empty.
         if _slate_games(CFB_OUT) > 0 and _odds_affordable(
                 CFB_OUT, quiet, sport=CFB_LINES_CLOCK,
-                credits=CFB_LINES_COST):
+                credits=CFB_LINES_COST,
+                prices_stale=_lines_stale("cfb", "")):
             args.append("--lines-odds")
             lines_spend = True
             lines_before = _paid_pull_baseline()

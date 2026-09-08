@@ -994,17 +994,38 @@ def _window_hours_left(kickoffs, now: float) -> float:
     return max(0.0, (max(ks) + PRIME_AFTER_LAST_S - now)) / 3600.0
 
 
+#: The dearest pull the staleness override will authorise, in credits.
+#: The whole-slate game-lines call is three (`launch.BOARD_ODDS_COST`);
+#: the per-event prop pull is twelve a GAME and is not what this is for.
+#: Same shape and the same number as CLOSE_MAX_CREDITS, and for the same
+#: reason: an override that can authorise an expensive pull is not an
+#: override, it is a hole in the budget.
+STALE_MAX_CREDITS = 8
+
+
 def should_refresh(requests_per_refresh: int, now: float | None = None,
                    path: Path | str = STATE_PATH,
                    kickoffs=None, sport: str | None = None,
                    share: float = 1.0, credits: int | None = None,
+                   prices_stale: bool = False,
                    **kw) -> tuple[bool, str]:
     """Is an odds refresh affordable right now? Returns ``(ok, reason)``.
 
     ``sport`` selects that sport's own pacing clock (each slate holds its
     pull for its own pre-game window); ``share`` is its slice of the daily
     allowance when several slates are live. Omitting both keeps the legacy
-    single-clock behaviour."""
+    single-clock behaviour.
+
+    ``prices_stale`` says the prices this pull would replace are past
+    `oddsapi.MAX_GAME_PRICE_AGE` — old enough that the board is now
+    REFUSING to show them (2026-09-08). That turns the pull from an
+    ordinary refresh into the thing standing between the reader and an
+    empty shelf, so it overrides the ordinary cadence the way the close
+    and the readiness pull already do. Ethan, the same day: "I don't want
+    you too stop working until we display the right lines and prices the
+    books show." A ceiling that only blanks the board is half the job;
+    the other half is going and buying the price.
+    """
     now = now if now is not None else time.time()
     state = load(path)
     if state.retry_after_ts and now < state.retry_after_ts:
@@ -1043,6 +1064,18 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
                  f"{_fmt_clock(min(k for k in kickoffs if isinstance(k, (int, float)) and k >= now))} "
                  f"at {close_cost} credit(s) ({state.remaining} left this month)"
                  if ready else "")
+    # THE STALENESS PULL. The prices on disk are past the age ceiling, so
+    # the board is refusing to show them; this pull is what replaces an
+    # empty shelf with a real number. Bounded exactly like the close:
+    # cheap, behind the fifteen-minute floor, never below the reserve
+    # (the branches below refuse before it can reach them).
+    stale = bool(prices_stale and not closing and not ready
+                 and close_cost <= STALE_MAX_CREDITS
+                 and now - state.sport_ts(sport) >= MIN_REFRESH_GAP)
+    stale_why = (f"the prices on disk are past the age ceiling and the board "
+                 f"is refusing to show them — buying a current one at "
+                 f"{close_cost} credit(s) ({state.remaining} left this month)"
+                 if stale else "")
     # THE DAY'S BUDGET IS SET BEFORE THE BURST, and that is the whole
     # point of the cap: PRIME_BURST and the touchpoints redistribute the
     # day's credits toward the window, they do not add to them.
@@ -1053,6 +1086,9 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # the week grades as "no closing line" and teaches nothing.
         if closing:
             return True, close_why
+        # The staleness pull is NOT excepted here, and that is deliberate:
+        # a month at its reserve showing no price is the honest state of
+        # a plan with nothing left to spend, and the board says so.
         if now - state.last_refresh_ts >= PROBE_INTERVAL:
             return True, ("odds quota looked exhausted — probing once in case the "
                           "plan reset or the key changed")
@@ -1081,6 +1117,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     gap = min_seconds_between(requests_per_refresh, state, share=share,
                               credits=credits, **kw)
     waited = now - state.sport_ts(sport)
+    # Ahead of the ordinary cadence AND ahead of starvation mode: a
+    # twelve-hour sparse timer is no answer to a board that is refusing
+    # to show a price right now.
+    if stale:
+        return True, stale_why
     if gap == float("inf"):
         # Starvation mode: the daily allowance can't cover even one refresh,
         # but the month's spendable balance can. Allow a sparse pull so the
@@ -1152,6 +1193,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     # morning pull still has to price the slate before it kicks off.
     if already + per_refresh > budget and ready:
         return True, ready_why
+    # …nor is the staleness pull, for the same reason as both: the day's
+    # ceiling paces ORDINARY refreshes, and a board that is refusing to
+    # show its prices is not in the ordinary case.
+    if already + per_refresh > budget and stale:
+        return True, stale_why
     if already + per_refresh > budget:
         return False, (f"today's odds budget is spent for this slate "
                        f"({already} of {budget} credits; a pull costs "
