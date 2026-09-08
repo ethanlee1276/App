@@ -632,7 +632,7 @@ for sp in ('cfb', 'nfl'):
   build is not seeing finals — check `feed_error` (ESPN's standings
   feed) and whether `ingest.py cfb` has run; the table and the rankings
   are counted from the same rows.
-* NFL `ABSENT` before the 10th is correct; the page shows the wait and
+* NFL `ABSENT` before the opener (Wednesday the 9th) is correct; the page shows the wait and
   the 2025 model profile instead. After Week 1's finals ingest it fills
   in on its own.
 
@@ -651,10 +651,10 @@ import json; d = json.load(open('web/data/standings_nfl.json'))
 print('nfl games_counted', d.get('games_counted'), 'source', d.get('source'), 'rankings', 'ABSENT' if not d.get('unit_rankings') else 'PRESENT')"
 ```
 
-must say `games_counted 0` and `rankings ABSENT` until the 10th, then
+must say `games_counted 0` and `rankings ABSENT` until the opener on the 9th, then
 climb by 16 a week. A 49 that survives the deploy means ESPN ignored
 the parameter, and the fallback is to read the count off our own
-ingest before the 10th — say so and it is a small change.
+ingest before the opener — say so and it is a small change.
 
 **2026-09-08, asked a third time.** The section was drawn LAST on the
 page — under eight division tables on the NFL, under 130-odd conference

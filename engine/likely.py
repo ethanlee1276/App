@@ -667,6 +667,23 @@ def from_prop(row: dict, bettable, fits=None,
     if row.get("sharp_anchored") and row.get("raw_prob") is not None:
         prob = row.get("raw_prob")
     if prob is None or float(prob) < MIN_PROB:
+        # THE LADDER BEFORE THE FLOOR. A main line is hung where the book
+        # thinks the coin is fair, so its number sits near 50% — and this
+        # refusal fired on that number before `_best_rung` below was
+        # ever consulted. The ladders (2026-09-07) exist for exactly the
+        # row this turned away: the same stat at a lower number, priced
+        # heavier, where "most likely" is actually for sale. Ethan,
+        # 2026-09-08, off the droplet's census: 363 rows, 212 of them
+        # here, none on the board, none on a rung — the ladders were
+        # bought, carried, and never looked at, because every rung test
+        # fixture started at 0.56. A main line under the floor asks its
+        # ladder first; the floor's refusal is for a row whose every
+        # number is under it. `has_market` still gates the ladder, since
+        # a proxy-priced row has no real rungs to show.
+        rung = (_best_rung(row, market, fits)
+                if prob is not None and row.get("has_market") else None)
+        if rung is not None:
+            return _row_from(row, market, sport, bettable, prob, rung=rung)
         return _refuse(census, "under the likelihood floor")
     if not row.get("has_market"):
         return _refuse(census, "no real book price")
