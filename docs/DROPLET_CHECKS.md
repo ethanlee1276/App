@@ -2596,7 +2596,8 @@ cd /srv/qellys && sudo -u qellys python3 launch.py --ml-doctor        # NFL
 cd /srv/qellys && sudo -u qellys python3 launch.py --ml-doctor cfb
 ```
 
-It prints three sections and then decides:
+It prints one block per game on the board, matched to that game's own
+kickoff in the pull, and then decides:
 
 1. **What the cached pull holds** — every book's price per side out of
    `data/cache/odds_board_<sport>*.json`, with the best-per-side we would
@@ -2621,6 +2622,32 @@ than all of them.
   A published price shorter than the whole field cannot come from
   shopping, so it came from somewhere else or from an older payload; the
   `age=` on the row and the pull's own age say which.
-* `no cached pull to compare against` — nothing was checked. Deliberately
-  not phrased as a clean bill: a tool that reports an unchecked system as
-  healthy is worse than no tool, and silence reads as approval.
+* `no cached pull to compare against`, or `no game on the board matched
+  an event in the pull` — nothing was checked. Deliberately not phrased
+  as a clean bill: a tool that reports an unchecked system as healthy is
+  worse than no tool, and silence reads as approval.
+
+**`odds_status` is printed whole, and a missing key is the evidence.** No
+`board_*` entries means the cheap whole-slate line refresh
+(`--board-odds`) never ran for that build, so the game prices are
+whatever the per-event pull left — which on 2026-09-09 was 17.7 hours old
+while a 0.6-hour payload sat unused in the cache. `error` separates "never
+ran" from "ran and threw", and `source` says whether the event pull was
+fresh or served from cache.
+
+### The keying bug this tool shipped with, and what it cost
+
+The first cut keyed the pull's best price on the TEAM. The whole-slate
+payload is the whole SEASON — two hundred-odd games — so every team
+appears seventeen times and each entry was overwritten by that team's
+LAST game in the file. The verdict compared Week 1's Seattle price
+against Seattle's January one, and reported **thirteen mismatches on a
+sixteen-game slate** the hour it shipped.
+
+That is precisely the failure `odds_doctor` warns about in its own
+comment: *"A tool that reports a healthy system as broken costs more than
+no tool: it sends you looking for a fault that is not there, and it
+teaches you to discount the next true alarm."* It is now keyed on the
+matchup, keeps every kickoff, and takes the soonest one that has not
+started — pinned by
+`tests/test_ml_doctor.test_the_season_long_payload_does_not_collapse_onto_one_price_per_team`.

@@ -2337,7 +2337,7 @@ ML_DOCTOR_BOARDS = {"nfl": NFL_OUT, "cfb": CFB_OUT}
 def ml_doctor(sport: str = "nfl") -> None:
     """Is the moneyline on the board the price a book is actually posting?
 
-    THE QUESTION THAT HAS BEEN ASKED FOUR TIMES AND ANSWERED BY HAND
+    THE QUESTION THAT HAD BEEN ASKED FOUR TIMES AND ANSWERED BY HAND
     EVERY TIME. Ethan, with his sportsbook open beside ours, 2026-09-03:
     "These lines along with more are completely wrong, none of these
     teams are favored to win on any sports book." 2026-09-08: "I don't
@@ -2347,28 +2347,30 @@ def ml_doctor(sport: str = "nfl") -> None:
 
     Each time the answer needed the same three numbers side by side, and
     each time they were dug out with a one-off paste that was thrown
-    away. That is why the same report keeps coming back: nothing on this
+    away. That is why the same report kept coming back: nothing on this
     machine could show, in one place, what the books quoted, what we
     published, and whether those are the same number.
 
-    So it prints all three:
+    ONE ROW PER GAME ON THE BOARD, matched to its own kickoff in the
+    pull. The whole-slate payload is the whole SEASON — two hundred-odd
+    games — so a comparison keyed on the team alone reads this week's
+    Seattle price against Seattle's January one. The first cut of this
+    did exactly that and reported thirteen mismatches on a sixteen-game
+    slate, which is the failure `odds_doctor` warns about in its own
+    comment: a tool that calls a healthy system broken sends you hunting
+    a fault that is not there, and teaches you to discount the next true
+    alarm.
 
-      1. WHAT THE CACHED PULL HOLDS — every book's price per side,
-         straight out of `data/cache/odds_board_<sport>*.json`, with the
-         best-per-side we would publish marked. `parse_event_h2h` keeps
-         the most bettor-friendly price across books, so our number
-         should be the LONGEST in that list, never shorter than it.
-      2. WHAT THE BOARD PUBLISHED — the `home_ml`/`away_ml` on each game,
-         the freshness counters, and every Most Likely moneyline row with
-         its price, its book, its age and where it was priced from.
-      3. WHETHER THOSE AGREE — the verdict, computed rather than eyeballed.
+    A DISAGREEMENT IS THE FINDING, and there are two of them with
+    opposite fixes. If the pull says -118 and the board says -220, the
+    fault is between them and is ours. If the pull itself says -220, the
+    pull is the fault — a stale payload, or an event matched to the
+    wrong game — and the ages printed on both sides say which.
 
-    A DISAGREEMENT IS THE FINDING. If the cache says -118 and the board
-    says -220, the fault is between them and is ours. If the cache itself
-    says -220, the pull is the fault — a stale payload, a mismatched
-    event, or a market nobody is really posting — and the age printed
-    beside it says which. Those two have been confused with each other
-    every time this came up.
+    `odds_status` is printed WHOLE rather than filtered, because the
+    absence of a key is evidence: no `board_*` keys means the cheap
+    whole-slate line refresh never ran, and `error` says whether it ran
+    and threw.
 
     Reads the board through `gate.board_source`, like everything else
     that wants the board's own rows rather than the redacted copy.
@@ -2389,7 +2391,13 @@ def ml_doctor(sport: str = "nfl") -> None:
     # 1. THE PULL. Newest matching payload, because a cache tag can add a
     # suffix and picking the wrong file would compare the board against a
     # pull it never read.
-    shopped: dict[tuple[str, str], tuple[int, str]] = {}
+    #
+    # KEYED ON THE MATCHUP, NOT THE TEAM, and every kickoff kept: a
+    # division pair plays twice and both games are in this file. The
+    # reader below takes the soonest one, which is the game a board built
+    # today is about.
+    shopped: dict[tuple[str, str], list] = {}
+    pull_age = None
     paths = sorted(CACHE_DIR.glob(f"odds_board_{sport}*.json"),
                    key=lambda q: q.stat().st_mtime, reverse=True)
     if not paths:
@@ -2397,13 +2405,14 @@ def ml_doctor(sport: str = "nfl") -> None:
               f" — the board cannot have game prices from a slate pull.")
     else:
         path = paths[0]
-        age_h = (time.time() - path.stat().st_mtime) / 3600.0
-        print(f"  pull      {path.name} · {age_h:.1f} h old")
+        pull_age = (time.time() - path.stat().st_mtime) / 3600.0
         try:
             events = json.loads(path.read_text()) or []
         except Exception as exc:                              # noqa: BLE001
             events = []
-            print(f"            unreadable: {exc}")
+            print(f"  pull      {path.name} unreadable: {exc}")
+        n_ev = len(events) if isinstance(events, list) else 0
+        print(f"  pull      {path.name} · {pull_age:.1f} h old · {n_ev} event(s)")
         for ev in events if isinstance(events, list) else []:
             quotes: dict[str, list] = {}
             for bm in ev.get("bookmakers", []) or []:
@@ -2420,21 +2429,21 @@ def ml_doctor(sport: str = "nfl") -> None:
                             (title, int(o["price"])))
             if not quotes:
                 continue
-            home = str(ev.get("home_team") or "")
-            away = str(ev.get("away_team") or "")
-            print(f"\n            {away} @ {home}  ·  {ev.get('commence_time', '')}")
+            ha = TEAM_ABBR.get(str(ev.get("home_team") or ""))
+            aa = TEAM_ABBR.get(str(ev.get("away_team") or ""))
+            if not ha or not aa:
+                continue
+            best: dict[str, tuple[int, str]] = {}
             for team, qs in quotes.items():
-                # SAME RULE AS `parse_event_h2h`, or the comparison
-                # below would be against a number we never publish:
-                # highest American odds wins, which is monotone across
-                # the sign boundary.
+                # SAME RULE AS `parse_event_h2h`, or the comparison would
+                # be against a number we never publish: highest American
+                # odds wins, which is monotone across the sign boundary.
                 book, price = max(qs, key=lambda t: t[1])
                 abbr = TEAM_ABBR.get(team)
                 if abbr:
-                    shopped[(sport, abbr)] = (price, book)
-                print(f"              {team:<26} we publish {price:+d} at {book}")
-                print("                every book: "
-                      + ", ".join(f"{b} {p:+d}" for b, p in qs))
+                    best[abbr] = (price, book, sorted(qs, key=lambda t: -t[1]))
+            shopped.setdefault((ha, aa), []).append(
+                (str(ev.get("commence_time") or ""), best))
 
     # 2. THE BOARD.
     src = gate.board_source(ROOT / rel)
@@ -2448,27 +2457,55 @@ def ml_doctor(sport: str = "nfl") -> None:
         return
     print(f"\n  board     read from {src}")
     status = board.get("odds_status") or {}
+    # WHOLE, NOT FILTERED. A MISSING key is the evidence: no `board_*`
+    # entries means the cheap whole-slate refresh never ran at all, and
+    # `error` distinguishes "never ran" from "ran and threw".
     for key in sorted(status):
-        if "stale" in key or key.startswith("board_") or key in (
-                "checked", "matched", "events"):
-            print(f"            {key:<26} {status[key]}")
+        print(f"            {key:<26} {status[key]}")
+    if not any(k.startswith("board_") for k in status):
+        print("            ⚠️  no board_* keys — the whole-slate line "
+              "refresh did not run for this build (the sport build's "
+              "--board-odds), so the game prices are whatever the event "
+              "pull left, however old that is.")
 
-    print()
-    mismatches = []
+    # 3. GAME BY GAME, each against its own kickoff.
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    mismatches, checked = [], 0
     for g in board.get("games") or []:
+        home, away = str(g.get("home") or ""), str(g.get("away") or "")
         hm, am = int(g.get("home_ml") or 0), int(g.get("away_ml") or 0)
         if not hm and not am:
             continue
-        print(f"            {str(g.get('away')):>4} @ {str(g.get('home')):<4}"
-              f"   home_ml {hm:+5d}   away_ml {am:+5d}")
-        for abbr, ours in ((g.get("home"), hm), (g.get("away"), am)):
-            best = shopped.get((sport, str(abbr or "")))
+        print(f"\n            {away} @ {home}   board: {home} {hm:+d}"
+              f"   {away} {am:+d}")
+        legs = shopped.get((home, away)) or []
+        # THE SOONEST KICKOFF THAT HAS NOT STARTED. A division pair plays
+        # twice and the payload holds both; comparing against the wrong
+        # one is how the first cut of this invented mismatches.
+        future = sorted((w, b) for w, b in legs if w >= now)
+        leg = future[0] if future else (sorted(legs)[-1] if legs else None)
+        if leg is None:
+            print("              (no matching event in the pull)")
+            continue
+        when, best = leg
+        checked += 1
+        print(f"              pull  {when}")
+        for abbr, ours in ((home, hm), (away, am)):
+            got = best.get(abbr)
+            if not got:
+                print(f"                {abbr}: not quoted in the pull")
+                continue
+            price, book, every = got
+            flag = "" if ours == price else "   <-- differs"
+            print(f"                {abbr}: board {ours:+d} · pull's best "
+                  f"{price:+d} at {book}{flag}")
+            print("                    every book: "
+                  + ", ".join(f"{b} {p:+d}" for b, p in every))
             # SHORTER THAN THE FIELD IS THE BUG. We publish the longest
             # price per side, so ours can be better than one book's and
-            # never worse than every book's. A published number the pull
-            # cannot account for is the report Ethan keeps making.
-            if best and ours and ours < best[0]:
-                mismatches.append((abbr, ours, best[0], best[1]))
+            # never worse than every book's.
+            if ours and ours < price:
+                mismatches.append((abbr, when, ours, price, book))
 
     print()
     for r in board.get("most_likely") or []:
@@ -2482,25 +2519,38 @@ def ml_doctor(sport: str = "nfl") -> None:
               f" from={r.get('priced_from') or '?'}"
               f" age={'?' if age is None else format(float(age) / 3600.0, '.1f') + 'h'}")
 
-    # 3. THE VERDICT.
+    # 4. THE VERDICT.
     print()
     if not shopped:
         print("  verdict   no cached pull to compare against — this says "
               "nothing about whether the board is right, only that the "
               "comparison could not be made.")
+    elif not checked:
+        print("  verdict   no game on the board matched an event in the "
+              "pull — the comparison could not be made, which is itself "
+              "worth chasing.")
     elif mismatches:
         print(f"  verdict   ⚠️  {len(mismatches)} published price(s) are SHORTER "
-              f"than anything in the pull. We publish the best price per "
-              f"side, so this cannot happen from shopping — the number "
-              f"came from somewhere else, or from an older payload:")
-        for abbr, ours, best, book in mismatches:
-            print(f"              {abbr}: board {ours:+d}, pull's best "
-                  f"{best:+d} at {book}")
+              f"than anything in the pull, across {checked} game(s) checked. "
+              f"We publish the best price per side, so this cannot happen "
+              f"from shopping — the number came from somewhere else, or "
+              f"from an older payload:")
+        for abbr, when, ours, best_p, book in mismatches:
+            print(f"              {abbr} ({when[:10]}): board {ours:+d}, "
+                  f"pull's best {best_p:+d} at {book}")
+        if pull_age is not None:
+            print(f"            The pull is {pull_age:.1f} h old. If the ML "
+                  f"rows above say `from=event` with a larger age, the "
+                  f"board is carrying event-pull prices and never took "
+                  f"these.")
     else:
-        print("  verdict   every published moneyline matches the best price "
-              "in the pull. If a book on the phone still disagrees, it is "
-              "because we SHOP: our number is the longest across the field, "
-              "so it will beat any single book rather than match it.")
+        print(f"  verdict   every published moneyline across {checked} game(s) "
+              f"matches the best price in the pull. If a book on the phone "
+              f"still disagrees, it is because we SHOP: our number is the "
+              f"longest across the field, so it will beat any single book "
+              f"rather than match it.")
+
+
 
 
 def odds_doctor() -> None:

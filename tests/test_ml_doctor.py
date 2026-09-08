@@ -47,9 +47,10 @@ from engine.sources import fetch as _fetch                   # noqa: E402
 
 
 def _event(home="Minnesota Vikings", away="Green Bay Packers",
-           books=(("fanduel", -125, 105), ("draftkings", -118, 100))):
+           books=(("fanduel", -125, 105), ("draftkings", -118, 100)),
+           when="2026-09-14T17:00:00Z"):
     return {"home_team": home, "away_team": away,
-            "commence_time": "2026-09-14T17:00:00Z",
+            "commence_time": when,
             "bookmakers": [
                 {"key": k, "markets": [{"key": "h2h", "outcomes": [
                     {"name": home, "price": h}, {"name": away, "price": a}]}]}
@@ -100,7 +101,7 @@ def test_a_published_price_shorter_than_the_whole_field_is_the_finding():
     shopping."""
     out = _run([_event()], _board(home_ml=-220))
     assert "SHORTER than anything in the pull" in out, out
-    assert "MIN: board -220, pull's best -118 at DraftKings" in out, out
+    assert "MIN (2026-09-14): board -220, pull's best -118 at DraftKings" in out, out
 
 
 def test_agreement_says_so_and_says_why_a_phone_still_differs():
@@ -108,7 +109,7 @@ def test_agreement_says_so_and_says_why_a_phone_still_differs():
     being read as a bug. Our -118 will not match a phone showing -125,
     because we shop: the number is the longest across the field."""
     out = _run([_event()], _board(home_ml=-118, away_ml=105))
-    assert "every published moneyline matches" in out, out
+    assert "every published moneyline across 1 game(s) matches" in out, out
     assert "because we SHOP" in out, out
     assert "SHORTER" not in out
 
@@ -120,7 +121,7 @@ def test_the_sharp_book_is_skipped_exactly_as_the_parser_skips_it():
     ev = _event(books=(("fanduel", -125, 105), ("pinnacle", -101, 150)))
     out = _run([ev], _board(home_ml=-125, away_ml=105))
     assert "Pinnacle" not in out, out
-    assert "we publish -125 at FanDuel" in out, out
+    assert "MIN: board -125 · pull's best -125 at FanDuel" in out, out
     assert "SHORTER" not in out, out
 
 
@@ -162,6 +163,61 @@ def test_the_freshness_counters_ride_along():
     assert "board_shown_stale_prices" in out and "3" in out
     assert "h old" in out                      # the pull's own age
     assert "age=30.3h" in out                  # and the row's
+    assert "no board_* keys" not in out        # this build DID refresh
+
+
+def test_the_season_long_payload_does_not_collapse_onto_one_price_per_team():
+    """THE BUG IN THE FIRST CUT OF THIS TOOL, found on the droplet the
+    hour it shipped. The whole-slate payload is the whole SEASON, so
+    every team appears seventeen times; keyed on the team alone, each
+    entry was overwritten by that team's LAST game in the file and the
+    verdict compared this week's price against January's. It reported
+    thirteen mismatches on a sixteen-game slate.
+
+    Here the same pair meets twice. The board's game is the September
+    one, and the December leg must not be what it is measured against."""
+    week1 = _event(when="2026-09-14T17:00:00Z",
+                   books=(("fanduel", -125, 105), ("draftkings", -118, 100)))
+    week14 = _event(when="2026-12-14T17:00:00Z",
+                    books=(("fanduel", -400, 320), ("draftkings", -390, 330)))
+    out = _run([week1, week14], _board(home_ml=-118, away_ml=105))
+    assert "2026-09-14" in out, out
+    assert "every published moneyline" in out, out
+    assert "SHORTER" not in out, out
+
+
+def test_a_board_game_with_no_event_in_the_pull_says_so():
+    """Silence would read as agreement. A game the pull cannot account
+    for is its own finding — a team-name map that has rotted, or a slate
+    the pull never covered."""
+    out = _run([_event(home="Chicago Bears", away="Detroit Lions")],
+               _board(home_ml=-118, away_ml=105))
+    assert "(no matching event in the pull)" in out, out
+    assert "no game on the board matched an event" in out, out
+
+
+def test_a_build_that_never_refreshed_its_lines_is_named():
+    """The absence of a key is the evidence. No `board_*` entries in
+    `odds_status` means the cheap whole-slate refresh never ran, so the
+    game prices are whatever the event pull left — which is the
+    difference between a 0.6 h price and a 17.7 h one."""
+    board = _board()
+    board["odds_status"] = {"checked": True, "matched": 173}
+    out = _run([_event()], board)
+    assert "no board_* keys" in out, out
+    assert "--board-odds" in out, out
+
+
+def test_the_status_block_is_printed_whole():
+    """Filtering it is how the first run of this hid `source` and
+    `error`, which are exactly the two fields that separate "the refresh
+    never ran" from "it ran and threw"."""
+    board = _board()
+    board["odds_status"]["error"] = "boom"
+    board["odds_status"]["source"] = "cache"
+    out = _run([_event()], board)
+    assert "error" in out and "boom" in out
+    assert "source" in out and "cache" in out
 
 
 def test_the_flag_is_wired_and_the_board_map_covers_both_footballs():

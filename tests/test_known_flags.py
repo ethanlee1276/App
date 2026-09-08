@@ -197,6 +197,10 @@ def test_main_actually_calls_the_guard_before_anything_else():
 #: the next addition is a decision rather than a silent exemption.
 FOREIGN_PRINTED_FLAGS = {
     "--bg": "tailscale serve",
+    # `--ml-doctor` names it when a build shows no `board_*` counters:
+    # the whole-slate line refresh never ran, and the flag that runs it
+    # belongs to the sport builds, not to launch.py.
+    "--board-odds": "nfl_build.py / cfb_build.py",
     "--budget": "the odds harvester",
     "--cached-odds": "ufc_build.py / the sport builds",
     "--info": "stakecheck",
