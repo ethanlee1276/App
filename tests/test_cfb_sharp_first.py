@@ -51,8 +51,14 @@ RATINGS = {"TOL": TeamRating(net=3.0, off=2.0, def_=-1.0, games=13),
 
 
 def _lines(**kw):
+    # Books keyed by SIDE, the way `attach_odds` now carries them: the
+    # two sides of a market are routinely at different books, so a card
+    # has to be told which one it took (cfb_build._book_for_side).
     base = {"moneyline": (-160, 140), "spread": (-3.5, -110, -110),
-            "total": (52.5, -110, -110), "books": {"moneyline": "FanDuel"}}
+            "total": (52.5, -110, -110),
+            "ml_books": {"TOL": "FanDuel", "BGSU": "DraftKings"},
+            "spread_books": {"TOL": "FanDuel", "BGSU": "DraftKings"},
+            "total_books": {"over": "FanDuel", "under": "DraftKings"}}
     base.update(kw)
     return base
 
@@ -103,7 +109,9 @@ def test_attach_odds_carries_the_sharp_pair_on_the_entry():
     # The bettable aggregates still exclude the sharp book — the best
     # soft moneyline is FanDuel's −155/+140, not Pinnacle's −150.
     assert entry["moneyline"] == (-155, 140), entry["moneyline"]
-    assert "Pinnacle" not in entry["books"].values()
+    assert "Pinnacle" not in entry["ml_books"].values()
+    assert "Pinnacle" not in entry["spread_books"].values()
+    assert "Pinnacle" not in entry["total_books"].values()
 
 
 # --- pricing against it -----------------------------------------------------

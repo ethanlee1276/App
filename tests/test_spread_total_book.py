@@ -249,6 +249,106 @@ def test_a_game_priced_before_the_books_were_named_still_builds_a_card():
     assert got["spread:MIN"]["book"] == "" and got["total:Over"]["book"] == ""
 
 
+# --- and the college board, which was naming the wrong book -------------------
+def _cfb_event():
+    """Both sides genuinely split, because that is the ordinary case and
+    the one a single-sided lookup gets wrong: DraftKings is best on the
+    away spread and the Over, FanDuel on the home spread and the Under."""
+    def book(key, title, spread, total):
+        return {"key": key, "title": title, "markets": [
+            {"key": "h2h", "outcomes": [
+                {"name": "Toledo Rockets", "price": -160},
+                {"name": "Bowling Green Falcons", "price": 140}]},
+            {"key": "spreads", "outcomes": [
+                {"name": "Toledo Rockets", "point": -3.5, "price": spread[0]},
+                {"name": "Bowling Green Falcons", "point": 3.5, "price": spread[1]}]},
+            {"key": "totals", "outcomes": [
+                {"name": "Over", "point": 52.5, "price": total[0]},
+                {"name": "Under", "point": 52.5, "price": total[1]}]}]}
+    return {"id": "ev1", "home_team": "Toledo Rockets",
+            "away_team": "Bowling Green Falcons",
+            "bookmakers": [book("draftkings", "DraftKings", (-110, -110), (-110, -110)),
+                           book("fanduel", "FanDuel", (-108, -112), (-112, -108))]}
+
+
+def test_the_college_pull_keys_its_books_by_side():
+    import cfb_build as CB
+    from engine.sources import oddsapi
+    real = oddsapi.fetch_sport_odds
+    oddsapi.fetch_sport_odds = lambda *a, **k: ([_cfb_event()], {})
+    game = {"game_id": "g0", "home": "TOL", "away": "BGSU",
+            "kickoff": "2026-09-12T19:30Z", "date": "2026-09-12"}
+    try:
+        priced, _note = CB.attach_odds(
+            [game], {"toledo": "TOL", "bowling green": "BGSU"}, cache_only=True)
+    finally:
+        oddsapi.fetch_sport_odds = real
+    entry = priced["g0"]
+    assert entry["spread_books"] == {"TOL": "FanDuel", "BGSU": "DraftKings"}, entry
+    assert entry["total_books"] == {"over": "DraftKings", "under": "FanDuel"}, entry
+
+
+def test_the_college_card_names_the_side_it_took_not_the_home_side():
+    """What `_books_for` did: one lookup on the home spread and the Over,
+    handed to every card in the market. On this payload that put
+    FanDuel's name on a Bowling Green +3.5 card DraftKings is posting,
+    and DraftKings' on an Under FanDuel is posting."""
+    import cfb_build as CB
+    lines = {"spread_books": {"TOL": "FanDuel", "BGSU": "DraftKings"},
+             "total_books": {"over": "DraftKings", "under": "FanDuel"},
+             "ml_books": {"TOL": "DraftKings", "BGSU": "FanDuel"}}
+    at = lambda m, team="", side="": CB._book_for_side(m, team, side, lines,
+                                                       "TOL", "BGSU")
+    assert at("spread", team="TOL") == "FanDuel"
+    assert at("side", team="BGSU") == "DraftKings"
+    assert at("total", side="Over") == "DraftKings"
+    assert at("total", side="Under") == "FanDuel"
+    assert at("moneyline", team="BGSU") == "FanDuel"
+    # Nothing quotes a team total, so nothing is named for one.
+    assert at("team_total", team="TOL", side="Over") == ""
+    # A board built before the side-keyed maps existed names nobody
+    # rather than raising or borrowing a neighbouring market's book.
+    assert CB._book_for_side("total", "", "Under", {}, "TOL", "BGSU") == ""
+
+
+def test_the_college_board_names_the_book_on_an_away_spread_and_an_under():
+    """Through `build_plays`, not just the resolver — because the wiring
+    is where the old bug lived. The model here hates the home side of a
+    -14.5 spread and hates an 80.5 total, so the two cards it builds are
+    the AWAY spread and the UNDER: exactly the two `_books_for` named
+    wrong, and the two a reader would have taken to the wrong window."""
+    import cfb_build as CB
+    from engine.cfb import ratings as CR
+    from engine.teamrates import TeamRating
+    game = {"game_id": "g0", "home": "TOL", "away": "BGSU",
+            "home_conference": "SEC", "away_conference": "SEC",
+            "home_rank": None, "away_rank": None, "weekday": "Saturday",
+            "kickoff": "2026-09-12T19:30Z", "date": "2026-09-12",
+            "neutral_site": False, "label": "BGSU @ TOL",
+            "state": "scheduled", "qb_confirmed": True,
+            "participation_verified": True, "weather_checked": True,
+            "indoor": False}
+    ratings = {"TOL": TeamRating(net=3.0, off=2.0, def_=-1.0, games=13),
+               "BGSU": TeamRating(net=0.0, off=0.5, def_=0.5, games=13)}
+    lines = {"g0": {"moneyline": (-160, 140), "spread": (-14.5, -110, -110),
+                    "total": (80.5, -110, -110),
+                    "ml_books": {"TOL": "FanDuel", "BGSU": "DraftKings"},
+                    "spread_books": {"TOL": "FanDuel", "BGSU": "DraftKings"},
+                    "total_books": {"over": "FanDuel", "under": "DraftKings"}}}
+    plays = {p["market"]: p for p in
+             CB.build_plays([game], lines, ratings, CR.PRIOR, {}, {},
+                            skip=CB._taken_by_sharp([]))}
+    assert plays["side"]["shared"]["team"] == "BGSU", plays["side"]["selection"]
+    assert plays["side"]["book"] == "DraftKings", plays["side"]
+    assert plays["total"]["shared"]["side"] == "Under", plays["total"]["selection"]
+    assert plays["total"]["book"] == "DraftKings", plays["total"]
+    # Both sides ride along for each, the way the NFL card carries them.
+    assert plays["side"]["home_book"] == "FanDuel"
+    assert plays["side"]["away_book"] == "DraftKings"
+    assert plays["total"]["over_book"] == "FanDuel"
+    assert plays["total"]["under_book"] == "DraftKings"
+
+
 if __name__ == "__main__":
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     for name, fn in fns:

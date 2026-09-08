@@ -129,11 +129,16 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         sp = oddsapi.parse_event_spreads(ev, team_map, home, away)
         if sp:
             entry["spread"] = sp
+            # …and who is posting EACH SIDE of it, keyed by team, because
+            # the two sides' best prices sit at different books far more
+            # often than not (oddsapi.best_spread_books).
+            entry["spread_books"] = oddsapi.best_spread_books(
+                ev, team_map, home, away)
         tot = oddsapi.parse_event_totals(ev)
         if tot:
             entry["total"] = tot
+            entry["total_books"] = oddsapi.best_total_books(ev)
         if entry:
-            entry["books"] = _books_for(ev, entry, home, away, team_map)
             sharp = _sharp_for(ev, team_map, home, away)
             if sharp:
                 entry["sharp"] = sharp
@@ -409,44 +414,34 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     return scorers, lines, note, oldest
 
 
-def _books_for(ev: dict, entry: dict, home: str, away: str,
-               team_map: dict) -> dict:
-    """Which book is actually offering each chosen price.
+def _book_for_side(market: str, team: str, side: str, lines: dict,
+                   home: str, away: str) -> str:
+    """The book posting the side THIS card took.
 
-    The parsers take the best number across the field but don't say where
-    it came from, and naming the wrong book is worse than naming none —
-    it sends you to a window that isn't quoting that price.
+    What stood here was `_books_for`, which looked each market up on one
+    fixed side — the home spread, the Over, the home moneyline — and
+    handed that one name to every card in the market. Its own docstring
+    had the reason it was wrong: "naming the wrong book is worse than
+    naming none — it sends you to a window that isn't quoting that
+    price." An Under card printed the Over's book, and an away spread the
+    home side's, which is that failure exactly. The side-keyed resolvers
+    in `oddsapi` answer per side for both leagues off one collector, so
+    the name cannot come apart from the number.
+
+    Empty when nobody is posting the taken side at the published line —
+    the parsers publish -110 there and no book is offering it.
     """
-    from engine.sources.oddsapi import BOOK_TITLES, SHARP_BOOKS
-
-    wanted: dict[str, tuple] = {}
-    if "spread" in entry:
-        line, home_odds, _ = entry["spread"]
-        wanted["spread"] = ("spreads", home, line, home_odds)
-    if "total" in entry:
-        line, over_odds, _ = entry["total"]
-        wanted["total"] = ("totals", "Over", line, over_odds)
-    if "moneyline" in entry:
-        wanted["moneyline"] = ("h2h", home, None, entry["moneyline"][0])
-
-    found: dict[str, str] = {}
-    for bm in ev.get("bookmakers", []):
-        key = bm.get("key", "")
-        if key in SHARP_BOOKS:
-            continue
-        title = BOOK_TITLES.get(key, bm.get("title") or key)
-        for mkt in bm.get("markets", []):
-            for name, (mkey, who, point, price) in wanted.items():
-                if name in found or mkt.get("key") != mkey:
-                    continue
-                for o in mkt.get("outcomes", []):
-                    label = team_map.get(o.get("name", ""), o.get("name", ""))
-                    if label != who or o.get("price") != price:
-                        continue
-                    if point is not None and o.get("point") != point:
-                        continue
-                    found[name] = title
-    return found
+    team = (team or "").strip()
+    side = (side or "").strip().lower()
+    if market in ("moneyline", "spread", "side"):
+        key = "ml_books" if market == "moneyline" else "spread_books"
+        return ((lines.get(key) or {}).get(home if team == home else away, ""))
+    if market == "total":
+        return ((lines.get("total_books") or {})
+                .get("over" if side == "over" else "under", ""))
+    # A team total is derived from the game total and the spread rather
+    # than read off a menu, so no book quotes it and none is named.
+    return ""
 
 
 def _sharp_for(ev: dict, team_map: dict, home: str, away: str) -> dict:
@@ -725,7 +720,6 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
         proj_margin = (hr.net - ar.net) + (0.0 if neutral else fit.home_field)
         proj_total = gamebets.project_total("cfb", hr.off, hr.def_,
                                             ar.off, ar.def_)
-        books = lines.get("books") or {}
         common = {
             "game": g,
             "information_certainty": cfbstatus.certainty(g),
@@ -750,12 +744,16 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                                          proj_margin, home_spread,
                                          home_odds, away_odds, context)
             picked_home = card["team"] == g["home"]
+            _sb = lines.get("spread_books") or {}
             plays.append({**common, "market": "side",
                           "selection": card["pick_label"],
                           "line": card["line"], "odds": card["odds"],
                           "opposing_odds": away_odds if picked_home else home_odds,
                           "p_model": card["win_prob"],
-                          "book": books.get("spread", ""),
+                          "book": _book_for_side("spread", card["team"], "",
+                                                 lines, g["home"], g["away"]),
+                          "home_book": _sb.get(g["home"], ""),
+                          "away_book": _sb.get(g["away"], ""),
                           "environment_fit": cfbcontext.environment_fit(g, "side"),
                           "shared": card})
 
@@ -765,12 +763,16 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                                         proj_total, market_total,
                                         over_odds, under_odds, context=context)
             over = card["side"] == "Over"
+            _tb = lines.get("total_books") or {}
             plays.append({**common, "market": "total",
                           "selection": card["pick_label"],
                           "line": card["line"], "odds": card["odds"],
                           "opposing_odds": under_odds if over else over_odds,
                           "p_model": card["win_prob"],
-                          "book": books.get("total", ""),
+                          "book": _book_for_side("total", "", card["side"],
+                                                 lines, g["home"], g["away"]),
+                          "over_book": _tb.get("over", ""),
+                          "under_book": _tb.get("under", ""),
                           "environment_fit": cfbcontext.environment_fit(g, "total"),
                           "shared": card})
 
@@ -788,7 +790,8 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                           "line": 0.0, "odds": card["odds"],
                           "opposing_odds": away_ml if rec.pick_is_home else home_ml,
                           "p_model": card["win_prob"],
-                          "book": books.get("moneyline", ""),
+                          "book": _book_for_side("moneyline", card["team"], "",
+                                                 lines, g["home"], g["away"]),
                           "home_book": _mlb.get(g["home"], ""),
                           "away_book": _mlb.get(g["away"], ""),
                           "environment_fit": cfbcontext.environment_fit(g, "moneyline"),
@@ -860,7 +863,9 @@ def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
     card["conditional"] = False
     card["conditions_pending"] = []
     card["situational_tags"] = []
-    card["book"] = (lines.get("books") or {}).get(card["market"], "")
+    card["book"] = _book_for_side(card["market"], card.get("team", ""),
+                                  card.get("side", ""), lines,
+                                  g["home"], g["away"])
     card["sharp_anchored"] = True
     if not BET_GROUP_OF_FIVE and is_group_of_five(g):
         card["grade"] = "Pass"
@@ -1014,13 +1019,16 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "price_age_s": (play.get("price_age_s")
                         if play.get("price_age_s") is not None else None),
         "priced_from": "board",
-        # Whose price this is, on BOTH sides. `_books_for` names the book
-        # behind the side the card took; the likelihood board flips a
-        # card to the favourite, so it needs the other side's book too —
-        # off the same shared resolver the NFL path uses
-        # (`oddsapi.best_h2h_books`), so one rule names both leagues.
+        # Whose price this is, on BOTH sides. `_book_for_side` names the
+        # book behind the side the card took; the likelihood board flips
+        # a card to the favourite, so it needs the other side's book too
+        # — off the same shared resolvers the NFL path uses
+        # (`oddsapi.best_h2h_books`, `best_spread_books`,
+        # `best_total_books`), so one rule names both leagues.
         "home_book": play.get("home_book", ""),
         "away_book": play.get("away_book", ""),
+        "over_book": play.get("over_book", ""),
+        "under_book": play.get("under_book", ""),
         # IN PLAY, SAID ON THE CARD. Both other sports stamp this in
         # their `_finish_bet` and college never did, so every consumer
         # that refuses a live game — `likely.from_game_bet` most
