@@ -1901,3 +1901,89 @@ for r in json.load(open('web/data/recommendations.json'))['recommendations']:
 A man on reserve should print `IR` in the last column on every row he
 still has, and `recommended` False. If the books have pulled his props
 he prints nothing, which is the same fact from the other side.
+
+## The football pulls buy the alternate ladders, and the Most Likely board stands on them (2026-09-07)
+
+Ethan, after the census: "i prefer to do whatever gives us props and
+picks every single day ready for every game at least 3 hours before. i
+want to prioritize NFL and CFB over anything so if we gotta limit MLB
+pulls im ok with that."
+
+WHAT CHANGED. The NFL and college event pulls ask for the four
+`_alternate` player markets. A rung lands on `Prop.alt_lines`, apart
+from the shopped main line, and `likely.from_prop` picks the likeliest
+rung that clears the same bars the main line answers to — see
+docs/LIKELY_GAME_LINES.md, "The alternate ladder". An NFL event call
+costs twelve credits now, a college one nine; the pacer meters each
+league at its own price (`oddsbudget.credits_per_event`).
+
+THE DEPLOY-DAY MISS. The cache file is named by the market list, so the
+first cached rebuild after this deploys finds no payload under the new
+name. Both attach steps fall back to the last paid pull's base-market
+payload (`alt_fallback` in the attach result) until the next paid pull
+buys the ladders; the board keeps its main lines and game prices
+through the gap.
+
+Confirm after the first PAID NFL pull on the new code (the decisions
+ledger says when one landed):
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 - <<'EOF'
+import json, collections
+b = json.load(open("web/data/recommendations.json"))
+props = b.get("recommendations") or []
+with_ladder = [r for r in props if r.get("alt_lines")]
+print(len(props), "prop rows,", len(with_ladder), "with a ladder,",
+      sum(len(r["alt_lines"]) for r in with_ladder), "rungs in all")
+rows = b.get("most_likely") or []
+print("refused:", b.get("likely_census"))
+print(len(rows), "rows on the board;", sum(1 for r in rows if r.get("rung") == "alt"), "on a rung")
+for (m, pos), n in sorted(collections.Counter((r.get("market"), r.get("position") or "?") for r in rows).items()):
+    print(f"  {m:12s} {pos:4s} {n}")
+for r in rows[:8]:
+    tag = f"rung of {r.get('main_line')} ({r.get('main_odds')})" if r.get("rung") == "alt" else "main line"
+    print(f"  {r['player']:<22} {r['side']:<5} {r['line']:>6} {r['market']:<10} {r['odds']:>5}  {r['model_prob']:.0%}  {tag}")
+EOF
+```
+
+`with a ladder` at zero after a paid pull means the books are not
+posting alternates for this slate yet (they post them later in the
+week than main lines) or the request did not carry them — check the
+spend ledger's `detail` for `_alternate` in the market list. `on a
+rung` at zero with ladders present means every rung fell under the
+floor or past the credibility bar, which the census now counts by
+name.
+
+## Football is priced three hours before kickoff, and the pacer can see NFL kickoffs now (2026-09-07)
+
+THE FINDING UNDER THE REQUEST. The launcher's kickoff reader took only
+ISO times and skipped any time without a date; an NFL game's kickoff is
+"HH:MM" Eastern beside a "YYYY-MM-DD" date. So for the NFL the kickoff
+list had been empty all season, and everything the pacer keys on it —
+the pre-game window and its burst, the closing window, the window-aware
+starvation rule — never fired for the NFL. It reads the date and the
+Eastern clock now (`launch._eastern_epoch`).
+
+THE READINESS PULL. Once the next kickoff is within three hours
+(`oddsbudget.READY_BEFORE_S`), a football league that has not pulled
+since the window opened gets one pull through the day's ceiling and the
+ordinary gap. Never the reserve, once per window per sport, football
+only (`READY_SPORTS`). The pre-game window opens at three and a half
+hours so the burst is already running when it fires. Baseball weighs
+0.6 to football's 1.0 in the day's split (`launch.SPORT_WEIGHT`).
+
+What to look for on a Sunday, in the decisions ledger:
+
+```bash
+cd /srv/qellys && grep -h '"readiness pull' data/cache/odds_decisions*.jsonl | tail -5
+cd /srv/qellys && sudo -u qellys python3 -c "
+import launch
+print('NFL kickoffs the pacer can see:', len(launch._slate_kickoffs(launch.NFL_OUT)))
+print('CFB kickoffs:', len(launch._slate_kickoffs(launch.CFB_OUT)))"
+```
+
+The first line should show one `readiness pull` verdict per kickoff
+wave (1pm, 4pm, 8pm Eastern) on the `nfl` lane, each at the full
+event price. The kickoff count for the NFL should equal the number of
+games on the slate; zero means the games carry no `date` and the pacer
+is time-blind again.

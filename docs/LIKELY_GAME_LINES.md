@@ -209,3 +209,44 @@ team at the negated number, a team total the team at its number. Flat
   read off the record rather than guessed.
 * MLB: run the droplet command above and read the printed line before
   expecting a baseball moneyline on the board.
+
+## The alternate ladder (2026-09-07)
+
+Ethan, with the census in hand — 303 NFL prop rows, 215 under the
+floor, 49 with no real price, none shown: "i prefer to do whatever
+gives us props and picks every single day ... we need to be showing
+most likley props period."
+
+A main line is hung where the book thinks the coin is fair, so the
+calibrated number at it sits near 50% — the fitted mixture puts a
+62-yard projection at 40% over 62.5 — and a board that asks for 55% at
+a price no heavier than −250 could show nothing at main lines however
+good the model. The same books hang the same stat at other numbers,
+and that is where a 60–70% event is for sale.
+
+* The NFL and college event pulls buy the four `_alternate` markets
+  (`oddsapi.ALT_ODDS_TO_MARKET`). They are parsed with their own map
+  onto `Prop.alt_lines` and never into `Prop.lines`, because line
+  shopping takes the lowest line on the board and a ladder in the
+  shopped field would hand every card its cheapest rung as "the line".
+  The sharp book's rungs ride as `Prop.alt_sharp_lines`. An NFL event
+  call is twelve markets now (`oddsbudget.credits_per_event`), a
+  college one nine.
+* `likely._best_rung` holds every rung to the bars the main line is
+  held to, AT THE RUNG'S OWN NUMBERS: the mixture's probability at
+  that line (or the sharp book's de-vigged fair there when the market
+  has no fit, and nothing when it has neither), the 55% floor, the
+  −250 cap, a price a book could post, and the credibility bar against
+  the rung's own de-vigged price. Best price per (line, side) across
+  the bettable books; sharp-book rungs price and are never shown.
+  Highest probability wins, the main line wins when it is the likelier
+  number, and a rung stands in when the main line fails its own bars.
+* The row's `line` / `side` / `odds` / `model_prob` are the rung's, so
+  the journal grades the rung itself. `rung` says "alt" or "main";
+  `main_line` / `main_odds` / `main_book` ride beside an alt row and
+  the card says which book number it stands next to. `implied_prob`
+  is the rung's fair; `fair_prob` and `engine_raw_prob` stay the main
+  line's, so the engine's pre-shrink claim is judged where it was
+  made. No EV on a rung.
+
+Nothing about the floor, the cap or the credibility bar moved.
