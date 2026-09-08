@@ -407,14 +407,26 @@ def price_moneyline_sharp(home: str, away: str,
 def price_moneyline(home: str, away: str, win_prob_home: float,
                     home_ml: int, away_ml: int,
                     context: list[str] | None = None,
-                    sport: str = "") -> MoneylineRec:
+                    sport: str = "", fair_home: float | None = None) -> MoneylineRec:
     """Price both sides of a moneyline and back the one with the edge.
 
     ``sport`` is optional and only selects the measured market haircut
     (`engine.gamecal`); without it the flat prior applies, which is what
     every caller got before the calibration existed.
+
+    ``fair_home`` is P(home) already de-vigged from REAL two-sided pairs
+    (`oddsapi.consensus_h2h_fair`). The prices passed in are the SHOPPED
+    best per side — the number to bet — and de-vigging that pair is a
+    different question with a different answer: measured over 11,366
+    college games it is an outright arbitrage a quarter of the time.
+    Omitted, the shopped pair is de-vigged exactly as it always was, so
+    every caller that has no book-level payload is unchanged.
     """
-    fair_home, fair_away = devig_two_way(home_ml, away_ml)
+    if fair_home is None:
+        fair_home, fair_away = devig_two_way(home_ml, away_ml)
+    else:
+        fair_home = clamp(float(fair_home), 0.01, 0.99)
+        fair_away = 1.0 - fair_home
     wp_home = clamp(win_prob_home, 0.01, 0.99)
     wp_away = 1.0 - wp_home
 

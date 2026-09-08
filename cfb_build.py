@@ -119,8 +119,13 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         if mls.get(home) and mls.get(away):
             entry["moneyline"] = (mls[home], mls[away])
             # Who is offering each side, for a card a reader can check
-            # against his own phone (oddsapi.best_h2h_books).
+            # against his own phone (oddsapi.best_h2h_books)…
             entry["ml_books"] = oddsapi.best_h2h_books(ev, team_map)
+            # …and what the market implies, de-vigged from real two-sided
+            # pairs rather than the shopped one (consensus_h2h_fair).
+            _cf = oddsapi.consensus_h2h_fair(ev, team_map)
+            if _cf.get(home) is not None:
+                entry["ml_fair_home"] = float(_cf[home])
         sp = oddsapi.parse_event_spreads(ev, team_map, home, away)
         if sp:
             entry["spread"] = sp
@@ -774,7 +779,8 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
             wp_home = cfbratings.win_prob(proj_margin, fit)
             rec = gamebets.price_moneyline(g["home"], g["away"], wp_home,
                                            home_ml, away_ml, context,
-                                           sport="cfb")
+                                           sport="cfb",
+                                           fair_home=lines.get("ml_fair_home"))
             card = gamebets.moneyline_to_dict(rec)
             _mlb = lines.get("ml_books") or {}
             plays.append({**common, "market": "moneyline",

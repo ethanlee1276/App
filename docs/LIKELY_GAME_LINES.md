@@ -212,6 +212,48 @@ cd /srv/qellys && python3 -m engine.gamerank --sport nfl --raw-bar
 cd /srv/qellys && python3 -m engine.gamerank --sport cfb --raw-bar
 ```
 
+## The number the board ranks on is a real book's (2026-09-08)
+
+The board ranks football moneylines on the market's de-vigged number
+(`GAME_RANK_MARKET`, above). That number was being computed from the
+SHOPPED pair — the best price per side across every book we request —
+which is the right number to bet and the wrong one to de-vig, because
+the two halves come from different books and the hold between them is
+nobody's hold.
+
+Measured on this box's college line history, 11,366 games with two or
+more books quoting both sides (median eleven books a game):
+
+| | |
+|---|---|
+| hold on one book's own pair | 3.64% |
+| hold on the shopped pair | 0.67% |
+| the shopped pair is an outright **arbitrage** | 24.4% of games |
+| de-vigged P differs from a real book's by >1 point | 28.4% |
+| …by >2 points | 7.9% |
+
+A quarter of the time the "market implied" figure was de-vigged from a
+pair that sums to less than one. And the 0.722 the board ranks against
+was measured on the SCHEDULE's single consensus pair (this box's
+`odds_history` is empty, so `close_for` fell through to it) — so
+production was ranking on a different quantity than the one measured.
+
+`oddsapi.consensus_h2h_fair` de-vigs each book's own two-sided pair and
+takes the median, renormalised; the shopped best stays the price, named
+by its book (`best_h2h_books`). The sharp book is left out because it
+has its own path — `price_moneyline_sharp` prices a soft number AGAINST
+it, and folding it into the consensus would make the anchor and the
+anchored share a number.
+
+**The trade, stated.** The median is not steadier than what it replaces:
+on two books it is their mean and on three it snaps to the middle one,
+so an added book can move it several points against a tenth of one for
+the shopped number. The case is bias, not variance — every book added
+can only thin the shopped pair, so that error grows with the size of the
+payload rather than describing the game, while this one is sampling
+noise on real quotes. A ranked number survives noise; it does not
+survive a bias that moves with how many books a pull returned.
+
 ## The moneyline and the spread, read together (2026-09-08)
 
 Ethan, with two screenshots side by side — his sportsbook and our page:

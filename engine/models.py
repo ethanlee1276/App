@@ -315,6 +315,13 @@ class Game:
     #: verify; a price without one is a claim.
     home_ml_book: str = ""
     away_ml_book: str = ""
+    #: P(home) implied by the market, de-vigged from REAL two-sided pairs
+    #: — the median across the books that quote both sides, not the
+    #: shopped pair we publish as the price. 0.0 = not computed, and the
+    #: pricer then de-vigs the shopped pair exactly as it always did.
+    #: See `oddsapi.consensus_h2h_fair` for what the difference is worth,
+    #: measured.
+    home_ml_fair: float = 0.0
     # The sharp reference book's own two-sided prices (0 = not quoted) — the
     # fair-value anchor, never a price to take.
     sharp_home_ml: int = 0

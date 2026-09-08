@@ -763,7 +763,9 @@ def _game_bets(games, config: RuleConfig) -> list[dict]:
             else:
                 ml = _finish_bet(moneyline_to_dict(
                     price_moneyline(g.home, g.away, wp_home, g.home_ml, g.away_ml,
-                                    ctx, sport="nfl")), g, config)
+                                    ctx, sport="nfl",
+                                    fair_home=(getattr(g, "home_ml_fair", 0.0) or None))),
+                    g, config)
                 if not NFL_MODEL_GAME_RECOMMENDATIONS:
                     _info_only(ml, _NFL_NO_ANCHOR)
                 out.append(ml)

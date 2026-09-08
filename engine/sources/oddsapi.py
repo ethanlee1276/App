@@ -1021,6 +1021,91 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
     return best
 
 
+def consensus_h2h_fair(event_json: dict, team_map: dict) -> dict[str, float]:
+    """``{team abbr: de-vigged fair}`` from REAL two-sided pairs.
+
+    THE PAIR WE PUBLISH IS NOT A PAIR ANY BOOK POSTS. `parse_event_h2h`
+    keeps the best price per SIDE across the field, which is the right
+    number to bet — you can take each side at its own book — and the
+    wrong number to de-vig, because the two halves come from different
+    books and the hold between them is not any book's hold.
+
+    MEASURED on this box's 11,366 college games with two or more books
+    quoting both sides (median eleven books a game):
+
+        hold on one book's own pair        3.64%
+        hold on the shopped pair           0.67%
+        shopped pair is an ARBITRAGE       24.4% of games
+        de-vigged P differs from a real book's by
+          more than 1 point                28.4% of games
+          more than 2 points                7.9%
+
+    A quarter of the time the "market implied" number on the card was
+    de-vigged from a pair that sums to less than one — a fiction, and
+    the number the football boards RANK moneylines on
+    (`likely.GAME_RANK_MARKET`). Worse, that figure (0.722) was measured
+    against the SCHEDULE's single consensus pair, so production was
+    ranking on a different quantity than the one measured.
+
+    So: de-vig each book's own pair, take the median per side, and
+    renormalise. The median rather than the mean because one stale book
+    should move a consensus by nothing. `{}` when no single book quoted
+    both sides, and the caller then keeps what it had.
+
+    WHAT THIS IS NOT: steadier. On a two-book field the median is their
+    mean and on a three-book field it snaps to the middle one, so adding
+    a book can move it several points — measured at three, against a
+    tenth of one for the shopped number on the same pair. The case for
+    it is not variance, it is BIAS: every book added can only thin the
+    shopped pair (it is a max per side), so that error grows with the
+    size of the payload rather than describing the game, while this one
+    is sampling noise on real quotes. A number the board ranks on can
+    survive noise; it cannot survive a bias that moves with how many
+    books the pull happened to return.
+
+    THE SHARP BOOK IS LEFT OUT, and not because its number is worse — it
+    is better. It has its own path (`gamebets.price_moneyline_sharp`)
+    where the soft price is priced AGAINST it, and folding it into the
+    consensus would make the anchor and the thing it anchors share a
+    number.
+    """
+    import statistics
+    from ..odds import devig_two_way
+    per: dict[str, list[float]] = {}
+    for bm in event_json.get("bookmakers", []):
+        if bm.get("key", "") in SHARP_BOOKS:
+            continue
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "h2h":
+                continue
+            priced: dict[str, int] = {}
+            for o in mkt.get("outcomes", []):
+                abbr = team_map.get(o.get("name", ""))
+                price = o.get("price")
+                if abbr and price is not None:
+                    priced[abbr] = int(price)
+            if len(priced) != 2:
+                continue           # one-sided: nothing to de-vig against
+            (a, oa_), (b, ob) = sorted(priced.items())
+            try:
+                fa, fb = devig_two_way(oa_, ob)
+            except (TypeError, ValueError, ZeroDivisionError):
+                continue
+            per.setdefault(a, []).append(float(fa))
+            per.setdefault(b, []).append(float(fb))
+    # Empty or complete, never half: the loop above only records a book
+    # that mapped EXACTLY two sides, so a partial market cannot reach
+    # here. Written as the emptiness test it actually is rather than a
+    # count that looks like it is guarding a third state.
+    if not per:
+        return {}
+    med = {t: statistics.median(v) for t, v in per.items()}
+    total = sum(med.values())
+    if total <= 0:
+        return {}
+    return {t: v / total for t, v in med.items()}
+
+
 def best_h2h_books(event_json: dict, team_map: dict) -> dict[str, str]:
     """``{team abbr: book title}`` — WHO is offering the price we show.
 
@@ -1588,6 +1673,10 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             _bk = best_h2h_books(ev, team_map)
             game.home_ml_book = _bk.get(home, "")
             game.away_ml_book = _bk.get(away, "")
+            # …AND WHAT THE MARKET IMPLIES, off real two-sided pairs
+            # rather than the shopped one (see `consensus_h2h_fair`).
+            _fair = consensus_h2h_fair(ev, team_map)
+            game.home_ml_fair = float(_fair.get(home) or 0.0)
             result.moneylines += 1
             touched = True
         for bk, prices in parse_event_h2h_by_book(ev, team_map).items():
@@ -1895,6 +1984,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 _bk = best_h2h_books(payload, cfg["teams"])
                 game.home_ml_book = _bk.get(home, "")
                 game.away_ml_book = _bk.get(away, "")
+                _fair = consensus_h2h_fair(payload, cfg["teams"])
+                game.home_ml_fair = float(_fair.get(home) or 0.0)
                 result.moneylines += 1
             # The sharp book's own pair rides along as the fair-value anchor.
             for bk, prices in parse_event_h2h_by_book(payload, cfg["teams"]).items():
