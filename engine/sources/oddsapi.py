@@ -1021,6 +1021,40 @@ def parse_event_h2h(event_json: dict, team_map: dict) -> dict[str, int]:
     return best
 
 
+def best_h2h_books(event_json: dict, team_map: dict) -> dict[str, str]:
+    """``{team abbr: book title}`` — WHO is offering the price we show.
+
+    `parse_event_h2h` keeps the best price per side across the books we
+    request, which is the right number to publish and, until now, a
+    number with no name on it. The card said "best", so a reader holding
+    his phone could not check our -125 against the book that is actually
+    posting it. Ethan, 2026-09-08: "I don't want you too stop working
+    until we display the right lines and prices the books show."
+
+    Same rule as the price it names, or the name would be a lie: the
+    sharp reference is skipped (nobody here can bet it), ties go to the
+    first book seen, and a team with no quote gets no entry.
+    """
+    best: dict[str, tuple[int, str]] = {}
+    for bm in event_json.get("bookmakers", []):
+        key = bm.get("key", "")
+        if key in SHARP_BOOKS:
+            continue
+        title = BOOK_TITLES.get(key, key)
+        for mkt in bm.get("markets", []):
+            if mkt.get("key") != "h2h":
+                continue
+            for o in mkt.get("outcomes", []):
+                abbr = team_map.get(o.get("name", ""))
+                price = o.get("price")
+                if not abbr or price is None:
+                    continue
+                price = int(price)
+                if abbr not in best or price > best[abbr][0]:
+                    best[abbr] = (price, title)
+    return {abbr: title for abbr, (_p, title) in best.items()}
+
+
 def parse_event_h2h_by_book(event_json: dict, team_map: dict) -> dict[str, dict[str, int]]:
     """Moneylines per book: ``{book_title: {team_abbr: american_odds}}``.
 
@@ -1550,6 +1584,10 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         if mls.get(home) is not None and mls.get(away) is not None:
             game.home_ml = mls[home]
             game.away_ml = mls[away]
+            # WHO IS OFFERING IT — see `best_h2h_books`.
+            _bk = best_h2h_books(ev, team_map)
+            game.home_ml_book = _bk.get(home, "")
+            game.away_ml_book = _bk.get(away, "")
             result.moneylines += 1
             touched = True
         for bk, prices in parse_event_h2h_by_book(ev, team_map).items():
@@ -1854,6 +1892,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             if home in mls and away in mls:
                 game.home_ml = mls[home]
                 game.away_ml = mls[away]
+                _bk = best_h2h_books(payload, cfg["teams"])
+                game.home_ml_book = _bk.get(home, "")
+                game.away_ml_book = _bk.get(away, "")
                 result.moneylines += 1
             # The sharp book's own pair rides along as the fair-value anchor.
             for bk, prices in parse_event_h2h_by_book(payload, cfg["teams"]).items():

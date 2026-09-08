@@ -593,6 +593,14 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # engine.models.Game.price_age_s and oddsapi.MAX_GAME_PRICE_AGE).
     d["price_age_s"] = getattr(g, "price_age_s", None)
     d["priced_from"] = getattr(g, "priced_from", "") or ""
+    # …AND WHOSE PRICE IT IS. Both sides ride along, because the
+    # likelihood board flips a card to the favourite and the book has to
+    # flip with the price (`likely.from_game_bet`).
+    if (d.get("bet_type") or d.get("market")) == "moneyline":
+        d["home_book"] = getattr(g, "home_ml_book", "") or ""
+        d["away_book"] = getattr(g, "away_ml_book", "") or ""
+        _took = (d.get("team") or "").strip()
+        d["book"] = (d["home_book"] if _took == g.home else d["away_book"]) or ""
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner

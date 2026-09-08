@@ -1072,6 +1072,14 @@ def from_game_bet(row: dict, sport: str = "nfl",
         if market == "moneyline":
             other_odds = row.get("away_odds") if team == home else row.get("home_odds")
             other_odds = row.get("other_odds") if other_odds is None else other_odds
+            # THE BOOK FLIPS WITH THE PRICE. The two sides' best prices
+            # can be at different books, so a flipped row that kept the
+            # card's book would name a book that is not posting the
+            # number beside it — worse than naming none.
+            other_book = (row.get("away_book") if team == home
+                          else row.get("home_book"))
+            if other_book:
+                row = dict(row, book=other_book)
             team = away if team == home else home
             label = f"{team} ML"
         elif market == "spread":

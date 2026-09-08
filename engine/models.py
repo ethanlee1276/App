@@ -306,6 +306,15 @@ class Game:
     # game-level moneyline model in engine/gamebets.py.
     home_ml: int = 0
     away_ml: int = 0
+    #: WHICH BOOK is posting each of those prices. The price we publish is
+    #: the best across the books we request, and for three weeks it was
+    #: published as "best" — a number a reader could not check against
+    #: anything. Ethan, 2026-09-08: "I don't want you too stop working
+    #: until we display the right lines and prices the books show." A
+    #: price with a book's name on it is a price he can open his phone and
+    #: verify; a price without one is a claim.
+    home_ml_book: str = ""
+    away_ml_book: str = ""
     # The sharp reference book's own two-sided prices (0 = not quoted) — the
     # fair-value anchor, never a price to take.
     sharp_home_ml: int = 0

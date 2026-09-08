@@ -118,6 +118,9 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         mls = oddsapi.parse_event_h2h(ev, team_map)
         if mls.get(home) and mls.get(away):
             entry["moneyline"] = (mls[home], mls[away])
+            # Who is offering each side, for a card a reader can check
+            # against his own phone (oddsapi.best_h2h_books).
+            entry["ml_books"] = oddsapi.best_h2h_books(ev, team_map)
         sp = oddsapi.parse_event_spreads(ev, team_map, home, away)
         if sp:
             entry["spread"] = sp
@@ -773,12 +776,15 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
                                            home_ml, away_ml, context,
                                            sport="cfb")
             card = gamebets.moneyline_to_dict(rec)
+            _mlb = lines.get("ml_books") or {}
             plays.append({**common, "market": "moneyline",
                           "selection": card["pick_label"],
                           "line": 0.0, "odds": card["odds"],
                           "opposing_odds": away_ml if rec.pick_is_home else home_ml,
                           "p_model": card["win_prob"],
                           "book": books.get("moneyline", ""),
+                          "home_book": _mlb.get(g["home"], ""),
+                          "away_book": _mlb.get(g["away"], ""),
                           "environment_fit": cfbcontext.environment_fit(g, "moneyline"),
                           "shared": card})
     return plays
@@ -1002,6 +1008,13 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "price_age_s": (play.get("price_age_s")
                         if play.get("price_age_s") is not None else None),
         "priced_from": "board",
+        # Whose price this is, on BOTH sides. `_books_for` names the book
+        # behind the side the card took; the likelihood board flips a
+        # card to the favourite, so it needs the other side's book too —
+        # off the same shared resolver the NFL path uses
+        # (`oddsapi.best_h2h_books`), so one rule names both leagues.
+        "home_book": play.get("home_book", ""),
+        "away_book": play.get("away_book", ""),
         # IN PLAY, SAID ON THE CARD. Both other sports stamp this in
         # their `_finish_bet` and college never did, so every consumer
         # that refuses a live game — `likely.from_game_bet` most
