@@ -2345,6 +2345,14 @@ ML_AUDIT_PRICE_ONLY = ("moneyline",)
 #: checking them — so they are named as unchecked instead.
 ML_AUDIT_UNCOMPARABLE = ("spread", "total", "team_total")
 
+#: Journal buckets this audit cannot speak about, and why. `predmarket`
+#: is Kalshi — a different venue with its own tickers, priced by
+#: `engine/predmarkets.py` and never published on the sportsbook board —
+#: so every one of its rows would read OFF THE BOARD forever. The first
+#: run of this printed 155 of them, which buried eleven real findings
+#: under a wall of noise and is the exact way a report stops being read.
+ML_AUDIT_FOREIGN_BOOKS = ("predmarket",)
+
 
 def bet_audit(sport: str = "nfl") -> None:
     """Which open bets were struck on a line the board no longer shows?
@@ -2388,7 +2396,7 @@ def bet_audit(sport: str = "nfl") -> None:
     what a person needs before deciding whether to let one ride.
     """
     from engine import gate, ledger
-    from engine.sources.oddsapi import normalize_name
+    from engine.sources.oddsapi import normalize_name, TEAM_ABBR
     from engine.sources.fetch import CACHE_DIR
 
     sport = (sport or "nfl").strip().lower()
@@ -2464,11 +2472,35 @@ def bet_audit(sport: str = "nfl") -> None:
                 if str(name or "").strip():
                     shown.setdefault((normalize_name(str(name)), market), r)
 
+    # WHICH TEAMS THE CONTAMINATION COULD HAVE REACHED. A payload for
+    # another week merged its props into players by NAME, so the players
+    # at risk are the ones in the games those payloads are for. Every
+    # other moved line is ordinary movement or an alternate rung, and
+    # saying so is the difference between a finding and a wall of text.
+    hot: set[str] = set()
+    for _when, away, home, _name in off:
+        for full in (away, home):
+            ab = TEAM_ABBR.get(full)
+            if ab:
+                hot.add(ab)
+
     conn = ledger.connect()
+    marks = ",".join("?" * len(ML_AUDIT_FOREIGN_BOOKS))
     rows = [dict(r) for r in conn.execute(
-        "SELECT date, player, market, side, line, odds, book, category, "
-        "stake_units FROM bets WHERE sport=? AND status='open' "
-        "AND stake_units > 0 ORDER BY category, player", (sport,))]
+        f"SELECT date, player, market, side, line, odds, book, category, "
+        f"stake_units FROM bets WHERE sport=? AND status='open' "
+        f"AND stake_units > 0 AND category NOT IN ({marks}) "
+        f"ORDER BY category, player",
+        (sport, *ML_AUDIT_FOREIGN_BOOKS))]
+    foreign = conn.execute(
+        f"SELECT COUNT(*) FROM bets WHERE sport=? AND status='open' "
+        f"AND stake_units > 0 AND category IN ({marks})",
+        (sport, *ML_AUDIT_FOREIGN_BOOKS)).fetchone()[0]
+    if foreign:
+        print(f"\n  skipped   {foreign} open position(s) in "
+              f"{'/'.join(ML_AUDIT_FOREIGN_BOOKS)} — a different venue with "
+              f"its own tickers, never published on this board, so there is "
+              f"nothing here to compare them against.")
     if not rows:
         print("\n  bets      no open positions on this sport.")
         return
@@ -2527,21 +2559,50 @@ def bet_audit(sport: str = "nfl") -> None:
         print(f"              NOT CHECKED  {b['player']} {b['market']} — "
               f"the journal stores this market's line as a transform of "
               f"the board's, so the two numbers are not comparable raw")
+    def _hot(b, row) -> bool:
+        for name in (row.get("team"), row.get("pick"), b.get("player")):
+            if str(name or "").strip().upper() in hot:
+                return True
+        return False
+
     for b, row in moved:
+        flag = "   <-- AFFECTED GAME" if _hot(b, row) else ""
         print(f"              LINE MOVED  {b['player']} {b['side']} "
               f"{b['line']} {b['market']} @ {int(b.get('odds') or 0):+d} "
-              f"({b.get('book') or '?'}, {b.get('category')})")
+              f"({b.get('book') or '?'}, {b.get('category')}){flag}")
         print(f"                          board now: {row.get('side')} "
               f"{row.get('line')} @ {int(row.get('odds') or 0):+d} "
               f"({row.get('book') or '?'})")
-    for b in gone:
-        print(f"              OFF THE BOARD  {b['player']} {b['side']} "
-              f"{b['line']} {b['market']} ({b.get('category')})")
+    # OFF THE BOARD, SUMMARISED BY MARKET. Fifty long shots vanishing
+    # together is one fact — the scorer board did not publish this build —
+    # not fifty findings, and printing it fifty times is how the eleven
+    # rows above get lost.
+    if gone:
+        from collections import Counter as _C
+        by_market = _C(f"{b.get('category')}/{b.get('market')}" for b in gone)
+        print(f"              OFF THE BOARD  {len(gone)} position(s), by "
+              f"book and market:")
+        for k, n in sorted(by_market.items(), key=lambda kv: -kv[1]):
+            print(f"                          {n:>4}  {k}")
+        print("                          A whole market missing is one "
+              "fact about that market's build, not one finding per row.")
+    n_hot = sum(1 for b, row in moved + priced if _hot(b, row))
     if moved or priced:
         print("\n            A line that moved is not proof the bet was "
-              "struck on a bad number — lines move. It is the shape the "
-              "rematch bug leaves behind, so these are the positions to "
-              "look at first.")
+              "struck on a bad number. Lines move, and an ALTERNATE RUNG "
+              "is a deliberately lower line at a deliberately shorter "
+              "price — a bet at 49.5 @ -192 against a board showing 59.5 "
+              "@ -130 is the ladder working, not a corrupted number.")
+        if hot:
+            print(f"            {n_hot} of the {len(moved) + len(priced)} "
+                  f"are on players in the games whose payloads came from "
+                  f"another week ({', '.join(sorted(hot))}). Those are the "
+                  f"ones the rematch bug could actually have reached; the "
+                  f"rest are movement or rungs.")
+        else:
+            print("            No payload from another week is cached, so "
+                  "none of these can be the rematch bug — they are movement "
+                  "or rungs.")
 
 
 def ml_doctor(sport: str = "nfl") -> None:

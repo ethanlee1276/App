@@ -113,12 +113,18 @@ def test_a_bet_on_the_same_number_is_not_dragged_in():
     assert "1 on the same number" in out, out
 
 
-def test_a_position_the_board_has_dropped_is_its_own_answer():
-    """Not the same finding: the pick is gone rather than repriced, which
-    can mean the injury hold caught it or the game fell off the slate."""
-    out = _run(_board(), bets=[{"player": "Somebody Else"}])
-    assert "OFF THE BOARD  Somebody Else" in out, out
-    assert "1 no longer on the board" in out, out
+def test_a_position_the_board_has_dropped_is_summarised_not_listed():
+    """Not the same finding as a moved line: the pick is gone rather than
+    repriced. And it is summarised BY MARKET, because the first live run
+    printed fifty long shots one per line and buried eleven real findings
+    under them. Fifty scorer props vanishing together is one fact about
+    that market's build."""
+    out = _run(_board(), bets=[{"player": "A", "market": "anytime_td"},
+                               {"player": "B", "market": "anytime_td"},
+                               {"player": "C", "market": "anytime_td"}])
+    assert "OFF THE BOARD  3 position(s)" in out, out
+    assert "3  main/anytime_td" in out, out
+    assert "OFF THE BOARD  A" not in out, out
 
 
 def test_the_payloads_from_another_week_are_named():
@@ -252,6 +258,60 @@ def test_the_markets_whose_lines_are_stored_transformed_are_not_guessed_at():
     assert "NOT CHECKED  MIN spread" in out, out
     assert "LINE MOVED" not in out, out
     assert "1 not checked" in out, out
+
+
+def test_a_foreign_venue_is_excluded_and_counted():
+    """The first live run listed 155 Kalshi tickers as OFF THE BOARD.
+    They are a different venue with their own tickers, never published on
+    the sportsbook board, so there was never anything to compare them
+    against — and printing them is what made the report unreadable."""
+    out = _run(_board(), bets=[{"player": "KXNFLGAME-X", "market": "kalshi_ml",
+                                "category": "predmarket"},
+                               {"line": 68.5}])
+    assert "1 open position(s) in predmarket" in out, out
+    assert "KXNFLGAME-X" not in out, out
+    assert "1 open · 1 on the same number" in out, out
+
+
+def test_a_moved_line_in_an_affected_game_is_singled_out():
+    """THE finding, separated from the noise. A payload from another week
+    merged its props in by player name, so the players at risk are the
+    ones in THOSE games. Every other moved line is ordinary movement or
+    an alternate rung."""
+    board = _board(line=74.5)
+    board["recommendations"][0]["team"] = "MIN"
+    out = _run(board, bets=[{"line": 68.5}],
+               cached_events=[_ev("2026-11-15T18:00:00Z")])
+    assert "AFFECTED GAME" in out, out
+    assert "1 of the 1 are on players in the games whose payloads came " \
+           "from another week" in out, out
+
+
+def test_a_moved_line_in_a_clean_game_is_not_dressed_up_as_one():
+    board = _board(line=74.5)
+    board["recommendations"][0]["team"] = "DET"
+    out = _run(board, bets=[{"line": 68.5}],
+               cached_events=[_ev("2026-11-15T18:00:00Z")])
+    assert "AFFECTED GAME" not in out, out
+    assert "0 of the 1 are on players" in out, out
+
+
+def test_with_no_stray_payload_it_says_the_bug_cannot_be_the_cause():
+    """Movement is movement. If nothing from another week is cached there
+    is no mechanism, and saying so stops a clean report reading as an
+    open question."""
+    out = _run(_board(line=74.5), bets=[{"line": 68.5}],
+               cached_events=[_ev("2026-09-13T20:25:00Z")])
+    assert "none of these can be the rematch bug" in out, out
+
+
+def test_the_rung_explanation_is_on_the_page():
+    """The first live run's biggest category was alternate rungs — a bet
+    at 49.5 @ -192 against a board showing 59.5 @ -130 — and read without
+    that sentence every one of them looks like a corrupted number."""
+    out = _run(_board(line=74.5), bets=[{"line": 68.5}])
+    assert "ALTERNATE RUNG" in out, out
+    assert "the ladder working, not a corrupted number" in out, out
 
 
 def test_the_flag_is_wired():
