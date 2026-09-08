@@ -539,6 +539,40 @@ def get_api_key(explicit: str | None = None) -> str:
     return ring[0]
 
 
+def _key_for(explicit: str | None, cache_only: bool) -> str:
+    """The key to spend next — or nothing at all, when nothing will be spent.
+
+    THE ACCIDENT THIS EXISTS TO STOP, 2026-09-09, two hours before the
+    season opener. A build run by hand could not see the box's key, and
+    every fetch here resolved the key BEFORE it honoured `cache_only`. So
+    a cache-only pass — which touches no network, spends no credit and
+    only reads files already on disk — refused to read them, the build
+    fell back to proxy lines, and a good NFL board with 173 matched props
+    was republished with 286 props, none priced, and no game prices at
+    all. It was reported as a warning ("Odds API unavailable — keeping
+    proxy lines") on a run that had in fact just thrown the real prices
+    away.
+
+    A missing key means "you cannot BUY more odds". It has never meant
+    "you may not read the odds you already bought", and any path where
+    those two are the same sentence turns a lost environment variable —
+    a hand-run build, a cron that drops its env, a container that starts
+    before its secrets mount — into a wiped board.
+
+    So the demand for a key moves to the moment of spending. `cache_only`
+    gets an empty string, which builds a well-formed URL that `_request`
+    never sends; if such a call does fall through to the wire it comes
+    back unauthorised, raises `OddsAPIError`, and every caller here
+    already handles that as "nothing cached".
+    """
+    try:
+        return get_api_key(explicit)
+    except OddsAPIError:
+        if cache_only:
+            return ""
+        raise
+
+
 # --- name matching ----------------------------------------------------------
 _SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b", re.I)
 
@@ -694,7 +728,7 @@ def list_events(api_key: str | None = None, ttl: int = 300,
     caller asking for cache_only is asking not to SPEND, and this costs
     nothing.
     """
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     sport_key = SPORT_CONFIG[sport]["sport_key"]
     url = f"{ODDS_BASE}/sports/{sport_key}/events?{urllib.parse.urlencode({'apiKey': key})}"
     if cache_only:
@@ -736,7 +770,7 @@ def fetch_sport_odds(sport: str, api_key: str | None = None,
     conclude the books had stopped posting them. Callers narrowing the
     market list must pass a tag.
     """
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
     params = {
         "apiKey": key,
@@ -762,7 +796,7 @@ def fetch_outrights(sport: str, api_key: str | None = None,
     posted by fewer books than game lines, and asking for a fixed five can
     come back empty while three others are pricing it.
     """
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     sport_key = FUTURES_KEYS.get(sport)
     if not sport_key:
         return [], Quota()
@@ -833,7 +867,7 @@ def fetch_event_odds(event_id: str, api_key: str | None = None,
                      books: list[str] | None = None,
                      ttl: int = 300, sport: str = "nfl",
                      cache_only: bool = False) -> tuple[dict, Quota]:
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
     markets = markets or list(cfg["markets"])
     books = books or DEFAULT_BOOKS
@@ -1823,7 +1857,7 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
     other and this would read back a payload with no spreads or totals in
     it, and conclude the books had stopped posting them.
     """
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
     result = BoardLinesResult()
     result.from_cache = cache_only
@@ -2019,7 +2053,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     same call yields live lines. Props with no market found keep their proxy
     line and are reported in ``unmatched``. ``ttl`` is short (30s) for live use.
     """
-    key = get_api_key(api_key)
+    key = _key_for(api_key, cache_only)
     cfg = SPORT_CONFIG[sport]
     result = OddsAttachResult()
     result.from_cache = cache_only
