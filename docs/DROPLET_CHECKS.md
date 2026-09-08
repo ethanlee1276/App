@@ -2571,3 +2571,56 @@ print('  game rows with no book:', sum(1 for r in ml
   game rows carry no book name. The Most Likely board already refuses
   those; whether the edge board should refuse them too is not a question
   to answer by guessing at the count.
+
+## The moneyline doctor (2026-09-09)
+
+Ethan, four times now, with a sportsbook open beside the site:
+
+    2026-09-03  "These lines along with more are completely wrong, none
+                of these teams are favored to win on any sports book."
+    2026-09-08  "I don't want you too stop working until we display the
+                right lines and prices the books show."
+    2026-09-09  "FanDuel and draft kings show the lines in the screenshot
+                yet we show a different line. That's wrong."
+    2026-09-09  "i wanna focus on those moneyline props, they are still
+                showing the wrong lines on the site like before"
+
+Every one of those needed the same three numbers side by side, and every
+one of them got a one-off command that was thrown away afterwards. That
+is why the report keeps coming back with no accumulated answer: nothing
+on the box could show, in one place, what the books quoted, what we
+published, and whether those are the same number.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 launch.py --ml-doctor        # NFL
+cd /srv/qellys && sudo -u qellys python3 launch.py --ml-doctor cfb
+```
+
+It prints three sections and then decides:
+
+1. **What the cached pull holds** — every book's price per side out of
+   `data/cache/odds_board_<sport>*.json`, with the best-per-side we would
+   publish marked, and the payload's age. The sharp reference is skipped
+   exactly as `parse_event_h2h` skips it, because nobody here can bet it.
+2. **What the board published** — each game's `home_ml`/`away_ml`, the
+   freshness counters off `odds_status`, and every Most Likely moneyline
+   row with its price, its book, its age and where it was priced from.
+   Read through `gate.board_source`, so it is the board's own rows and
+   not the redacted copy.
+3. **The verdict**, computed rather than eyeballed.
+
+**How to read the verdict.** We publish the best price per side across
+the field, so our number can beat any one book and can never be worse
+than all of them.
+
+* `every published moneyline matches the best price in the pull` — the
+  board is doing its job. A phone showing −125 against our −118 is not a
+  bug; it is shopping, and the doctor says so in the same sentence.
+* `⚠️ N published price(s) are SHORTER than anything in the pull` — this
+  is the real fault, and it names the team, both numbers and the book.
+  A published price shorter than the whole field cannot come from
+  shopping, so it came from somewhere else or from an older payload; the
+  `age=` on the row and the pull's own age say which.
+* `no cached pull to compare against` — nothing was checked. Deliberately
+  not phrased as a clean bill: a tool that reports an unchecked system as
+  healthy is worse than no tool, and silence reads as approval.
