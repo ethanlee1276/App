@@ -379,7 +379,10 @@ def _long_shots(slate, usage: dict | None = None,
     every quoted scorer by model probability with NO window — the -260
     bell cow the script loves shows up there with his price and EV shown
     honestly, never journaled (see touchdowns.td_watchlist for Ethan's
-    ask and why the value bar itself did not move).
+    ask and why the value bar itself did not move). The watchlist is the
+    WHOLE ranked menu; the Long Shots page takes its five off the top
+    where the payload is assembled, and the likelihood board is offered
+    all of it.
 
     ``usage`` optionally carries MEASURED roles from ingested logs
     (engine.nflusage): per-player red-zone usage, snap shares, and each
@@ -451,7 +454,20 @@ def _long_shots(slate, usage: dict | None = None,
     # the value board is full — the shape of the complaint that built
     # this. Football always shows its most likely scorers.
     have = {p.get("player") for p in picks}
-    watch = [w for w in td_watchlist(candidates)
+    # EVERY QUOTED SCORER, RANKED — not the page's five. `td_watchlist`
+    # defaults to TD_WATCH_LIMIT because the Long Shots page shows five
+    # most-likely scorers under its value picks, and this function fed
+    # that same five to the likelihood board, which seats up to
+    # `likely.PER_MARKET` (eight) touchdown rows ABOVE a 55% floor. Five
+    # offered, one of them chalk past the price cap, and the floor
+    # taking its share left a Sunday board with two or three scorers
+    # while the sixth and seventh bell cows at -200 — over the floor,
+    # under the cap — were never handed in. Ethan, 2026-09-08: "we have
+    # player props just barely any money lines or touchdown." The board
+    # is offered the whole ranked list and applies its own cuts; the
+    # page's five is sliced where the page's key is published
+    # (`run_slate`).
+    watch = [w for w in td_watchlist(candidates, limit=0)
              if w.get("player") not in have]
     return picks, watch
 
@@ -957,6 +973,7 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
 
     recommended = [r for r in results if r["recommended"]]
     td_census: dict = {}
+    from .touchdowns import TD_WATCH_LIMIT as _TD_WATCH_LIMIT
     ls, ls_watch = _long_shots(slate, nfl_usage, td_census)
     # Built once and read twice — the board itself and the shelves it is
     # laid out on. Calling the builder again for the shelves would let
@@ -998,7 +1015,11 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         "player_stats": statlogs.for_board(results, "nfl"),
         "game_bets": game_bets,
         "long_shots": ls,
-        "longshot_watch": ls_watch,
+        # The page's five most-likely scorers, off the top of the ranked
+        # menu `_long_shots` returns whole. The likelihood board above
+        # was handed the whole menu; this key is the Long Shots page's
+        # shelf and keeps its size (touchdowns.TD_WATCH_LIMIT).
+        "longshot_watch": ls_watch[:_TD_WATCH_LIMIT],
         # THE OTHER BOARD, and the one the measurements actually support.
         # `long_shots` ranks by edge, which the model is demonstrably bad
         # at (claimed-edge AUC 0.468 on the site's own settle pass);
