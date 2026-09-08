@@ -1102,17 +1102,23 @@ function likelyStarted(r) {
   return Number.isFinite(t) && t <= Date.now();
 }
 
-/* A ROW SHOWN BECAUSE NOTHING CLEARED THE BAR.
+/* A ROW SHOWN BECAUSE NOTHING ON ITS SHELF CLEARED THE BAR.
 
    Ethan, 2026-09-08: "Also I don't want an empty boar either we need to
-   have picks period." `likely.build` answers that with a reserve pass —
-   the likelihood floor lowered, every other refusal asked exactly as it
-   was — and the rows it returns carry `reserve`. They are not the same
-   claim as an ordinary row and must never look like one: the whole
-   reason the fallback is allowed to exist is that it says what it is.
+   have picks period", and later the same day: "We have barely any
+   moneylines show and barley and touchdowns shown." `likely.build`
+   answers both with a reserve pass, run for each SHELF that came out
+   empty — the likelihood floor lowered, every other refusal asked
+   exactly as it was — and the rows it returns carry `reserve`. They are
+   not the same claim as an ordinary row and must never look like one:
+   the whole reason the fallback is allowed to exist is that it says what
+   it is.
 
-   The engine writes the sentence (`likely.RESERVE_NOTE`) so the page and
-   the card cannot drift into two different explanations of one row. */
+   The engine writes the sentence (`likely.reserve_note`, which names the
+   shelf the row is filling) so the page and the card cannot drift into
+   two different explanations of one row — and so a board carrying twenty
+   props and one reserve moneyline never claims "nothing on this slate
+   cleared it". */
 function reserveChip(r) {
   if (!(r || {}).reserve) return "";
   const note = String(r.reserve_note || "below the board’s usual bar");

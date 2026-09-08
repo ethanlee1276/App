@@ -379,15 +379,41 @@ MIN_PROB = 0.55
 #: out of the book.
 RESERVE_MIN_PROB = 0.40
 
-#: How many reserve rows ship. A page that normally carries forty and
-#: falls back to forty looks like an ordinary night; a handful reads as
-#: what it is — the closest things to the bar on a slate that cleared it
-#: with nothing.
+#: How many reserve rows ship PER EMPTY SHELF. A page that normally
+#: carries forty and falls back to forty looks like an ordinary night; a
+#: handful reads as what it is — the closest things to the bar on a
+#: shelf that cleared it with nothing.
+#:
+#: Per shelf rather than per board, since 2026-09-08. The reserve fired
+#: only when the WHOLE board came out empty, and Ethan's report was not
+#: that — "We have barely any moneylines show and barley and touchdowns
+#: shown" is a board carrying player props with two of its three shelves
+#: bare. A shelf with nothing on it is the empty page, for anyone who
+#: came to the board for that shelf.
 RESERVE_LIMIT = 12
 
 #: What a reserve row says about itself, on the row and on the card.
-RESERVE_NOTE = ("Below the board’s usual bar — shown because nothing on "
-                "this slate cleared it. Ranked, not recommended.")
+#:
+#: The sentence names the SHELF the row is filling, because the reserve
+#: is per shelf: a board carrying twenty player props and a reserve
+#: moneyline cannot truthfully say "nothing on this slate cleared it",
+#: and the label is the entire reason these rows are allowed to ship.
+RESERVE_SHELF_WORD = {"td": "touchdown row", "prop": "player prop",
+                      "game": "game line"}
+
+
+def reserve_note(kind: str = "") -> str:
+    """The label a reserve row carries, naming its own shelf."""
+    what = RESERVE_SHELF_WORD.get(kind or "", "")
+    return (f"Below the board’s usual bar — shown because no "
+            f"{what} on this slate cleared it. Ranked, not recommended."
+            if what else
+            "Below the board’s usual bar — shown because nothing on "
+            "this slate cleared it. Ranked, not recommended.")
+
+
+#: The board-wide wording, kept as the name the page and the tests knew.
+RESERVE_NOTE = reserve_note()
 
 
 def _floor(override) -> float:
@@ -1419,22 +1445,41 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         return out
 
     out = one_pass(None, funnel)
-    # THE PAGE DOES NOT GO BLANK. Ethan, 2026-09-08: "Also I don't want
-    # an empty boar either we need to have picks period." Nothing cleared
-    # the bar, so the bar is asked again one notch lower — the FLOOR
-    # only, and only when the alternative is a page with nothing on it.
-    # Every refusal that means "this number is wrong" is asked exactly as
-    # it was, which is why this can be done at all (see
-    # RESERVE_MIN_PROB). The standard pass keeps the census: the honest
-    # answer to "why is the board short" is what the real bar turned
-    # away, not what the fallback did.
-    reserve_used = 0
-    if not out:
+    # NO SHELF GOES BLANK. Ethan, 2026-09-08: "Also I don't want an empty
+    # boar either we need to have picks period", and then, the night
+    # before the opener: "We have barely any moneylines show and barley
+    # and touchdowns shown." The second report is the one that moved this
+    # from a board-wide fallback to a per-shelf one. A board carrying
+    # twenty player props and nothing under Touchdowns is not an empty
+    # board by this function's arithmetic, and it is exactly an empty
+    # page to the person who opened it for the touchdowns.
+    #
+    # So the bar is asked again one notch lower for each shelf that came
+    # out with nothing on it — the FLOOR only. Every refusal that means
+    # "this number is wrong" is asked exactly as it was, which is why
+    # this can be done at all (see RESERVE_MIN_PROB). The standard pass
+    # keeps the census: the honest answer to "why is the board short" is
+    # what the real bar turned away, not what the fallback did.
+    #
+    # A shelf that seated even one row is left alone. That also makes
+    # duplicates impossible without a second `seen` set: the only rows
+    # taken from the reserve pass belong to kinds that contributed
+    # nothing to `out`.
+    seated = {k: 0 for k in KINDS}
+    for r in out:
+        seated[r.get("kind") or "prop"] = seated.get(r.get("kind") or "prop", 0) + 1
+    empty = [k for k in KINDS if not seated.get(k)]
+    if empty:
         spare = one_pass(RESERVE_MIN_PROB, {k: _funnel() for k in KINDS})
         spare.sort(key=lambda r: -float(r["model_prob"] or 0.0))
-        for r in spare[:RESERVE_LIMIT]:
+        taken = {k: 0 for k in empty}
+        for r in spare:
+            kind = r.get("kind") or "prop"
+            if kind not in taken or taken[kind] >= RESERVE_LIMIT:
+                continue
+            taken[kind] += 1
             r["reserve"] = True
-            r["reserve_note"] = RESERVE_NOTE
+            r["reserve_note"] = reserve_note(kind)
             # `bettable` IS DELIBERATELY LEFT ALONE. It was set False here
             # first, on the reasoning that a reserve row is not a
             # recommendation — which is true, and the wrong field to say
@@ -1448,7 +1493,6 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             # what it is through `reserve` and its note; the book is kept
             # clean by `ledger.log_most_likely`, which refuses it.
             out.append(r)
-        reserve_used = len(out)
     out.sort(key=lambda r: -float(r["model_prob"] or 0.0))
     # TWO CAPS, ONE ORDER. Player rows keep LIMIT; game rows keep
     # GAME_LIMIT; the survivors are one list in probability order, so a

@@ -28,6 +28,17 @@ exists because of Ethan's own complaint on 2026-09-01 about "grabbing
 random -1200 props", so widening it to fill a quiet night would answer
 today's instruction by re-creating the bug he reported.
 
+AND THE RESERVE IS PER SHELF, not per board (2026-09-08, later the same
+day). It first fired only when `build` returned nothing at all, and
+Ethan's next report was not that: "We have barely any moneylines show
+and barley and touchdowns shown." That is a board carrying player props
+with two of its three shelves bare — not an empty board by the
+function's arithmetic, and exactly an empty page to the person who
+opened it for the touchdowns. Each KIND that comes out with nothing on
+it now draws its own reserve, and the label names the shelf it is
+filling, because a board with twenty props on it cannot truthfully say
+"nothing on this slate cleared it".
+
 Run directly: `python3 tests/test_board_never_empty.py`
 """
 
@@ -86,7 +97,7 @@ def test_nothing_clears_the_floor_so_the_closest_rows_ship_labelled():
     assert len(got) == 1, "the page must not be blank"
     row = got[0]
     assert row["reserve"] is True, row
-    assert row["reserve_note"] == K.RESERVE_NOTE
+    assert row["reserve_note"] == K.reserve_note("game")
     # …and `bettable` is NOT commandeered to say so. It means the market
     # has a price worth staking against, and the card spends it on "No
     # bettable price here — this market's fit against the book ran off
@@ -181,6 +192,111 @@ def test_the_label_actually_says_the_row_is_below_the_bar():
     note = K.RESERVE_NOTE.lower()
     assert "below" in note and "bar" in note, K.RESERVE_NOTE
     assert "not recommended" in note, K.RESERVE_NOTE
+    # …and the per-shelf wording says the same two things AND names the
+    # shelf, so a board with rows on it never claims to have none.
+    for kind, word in K.RESERVE_SHELF_WORD.items():
+        got = K.reserve_note(kind).lower()
+        assert "below" in got and "bar" in got, got
+        assert "not recommended" in got, got
+        assert word in got, (kind, got)
+        assert "nothing on this slate" not in got, \
+            f"the {kind} label denies the rows on the other shelves"
+
+
+# --- per shelf, not per board ---------------------------------------------
+#
+# Built on TD watch rows and game cards rather than props. Two kinds are
+# all it takes to prove "one shelf full, another empty", and the prop
+# maker runs a calibration mixture that would put a second moving part
+# into a test about shelf bookkeeping.
+def test_a_full_shelf_beside_an_empty_one_still_fills_the_empty_one():
+    """THE ONE THAT ANSWERS THE SECOND REPORT. Ethan, 2026-09-08: "We
+    have barely any moneylines show and barley and touchdowns shown."
+
+    A board-wide reserve reads this board as healthy — it has rows on it
+    — and publishes an empty Game lines shelf beside a full Touchdowns
+    shelf. The fixture is exactly that shape: a scorer who clears the
+    real bar, and a coin-flip game neither side of which does.
+    """
+    got = K.build([], td_watch=[_scorer(0.62, implied=0.55)],
+                  game_bets=[_coinflip()])
+    kinds = {r["kind"] for r in got}
+    assert kinds == {"td", "game"}, f"a shelf stayed empty beside a full one: {kinds}"
+    tds = [r for r in got if r["kind"] == "td"]
+    games = [r for r in got if r["kind"] == "game"]
+    # The shelf that cleared the bar is untouched — no label, no reserve.
+    assert len(tds) == 1 and not tds[0].get("reserve"), tds
+    # The shelf that did not is filled, and says so about ITSELF.
+    assert len(games) == 1 and games[0]["reserve"] is True, games
+    assert "game line" in games[0]["reserve_note"], games[0]["reserve_note"]
+    assert "nothing on this slate" not in games[0]["reserve_note"], \
+        "the label denies the touchdown row sitting next to it"
+
+
+def test_the_other_way_round_too():
+    """Full game shelf, empty touchdown shelf — Ethan's "barley and
+    touchdowns shown" in its own right, not a mirror worth assuming."""
+    got = K.build([], td_watch=[_scorer(0.45, implied=0.42)],
+                  game_bets=[_ml()])
+    kinds = {r["kind"] for r in got}
+    assert kinds == {"td", "game"}, kinds
+    td = next(r for r in got if r["kind"] == "td")
+    game = next(r for r in got if r["kind"] == "game")
+    assert td["reserve"] is True and "touchdown row" in td["reserve_note"], td
+    assert not game.get("reserve"), game
+
+
+def test_a_shelf_that_seated_a_row_never_draws_a_reserve():
+    """The reserve is a fallback, not a top-up. A shelf with one real row
+    on it is a working shelf, and adding sub-bar rows beneath it would
+    dilute a board that is doing its job — and would also be the one way
+    a row could appear twice, since the reserve pass re-offers every row
+    the standard pass already seated."""
+    strong = _scorer(0.62, implied=0.55, player="Clears The Bar")
+    weak = _scorer(0.45, implied=0.42, player="Does Not")
+    got = K.build([], td_watch=[strong, weak])
+    assert len(got) == 1, [r["player"] for r in got]
+    assert not got[0].get("reserve"), got
+    assert got[0]["player"] == "Clears The Bar", got
+
+
+def test_no_row_is_seated_twice_when_one_shelf_falls_back():
+    """The reserve pass runs every maker again at the lower floor, so it
+    re-offers rows the standard pass already seated. Only kinds that
+    contributed NOTHING are drawn from, which is what makes that safe —
+    pinned behaviourally rather than by reading the guard."""
+    got = K.build([], td_watch=[_scorer(0.62, implied=0.55, player="One"),
+                                _scorer(0.58, implied=0.52, player="Two")],
+                  game_bets=[_coinflip()])
+    keys = [(r.get("kind"), r.get("player"), r.get("market"), r.get("matchup"))
+            for r in got]
+    assert len(keys) == len(set(keys)), keys
+
+
+def test_every_shelf_empty_is_still_every_shelf_filled():
+    """The old board-wide case, which must keep working: nothing on
+    either shelf clears the bar, so both draw."""
+    got = K.build([], td_watch=[_scorer(0.45, implied=0.42)],
+                  game_bets=[_coinflip()])
+    assert {r["kind"] for r in got} == {"td", "game"}, got
+    assert all(r.get("reserve") for r in got), got
+
+
+def test_each_shelf_gets_its_own_cap():
+    """RESERVE_LIMIT is per shelf now, so two empty shelves may draw two
+    capfuls — and neither may draw more than one."""
+    n = K.RESERVE_LIMIT + 6
+    tds = [_scorer(round(0.41 + i * 0.004, 3), implied=0.40,
+                   player=f"Scorer {i}") for i in range(n)]
+    games = [_coinflip(home=f"H{i}", away=f"A{i}", team=f"H{i}",
+                       pick=f"H{i}", pick_label=f"H{i} ML",
+                       matchup=f"A{i} @ H{i}") for i in range(n)]
+    got = K.build([], td_watch=tds, game_bets=games)
+    by_kind = {}
+    for r in got:
+        by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
+    assert by_kind.get("td") == K.RESERVE_LIMIT, by_kind
+    assert by_kind.get("game") == K.RESERVE_LIMIT, by_kind
 
 
 def test_the_reserve_cap_stays_under_the_board_caps():
@@ -194,7 +310,13 @@ def test_the_reserve_cap_stays_under_the_board_caps():
     is found months later on a quiet Tuesday.
     """
     assert K.RESERVE_LIMIT <= K.GAME_LIMIT, "game rows would be trimmed"
-    assert K.RESERVE_LIMIT <= K.LIMIT, "player rows would be trimmed"
+    # TWO PLAYER SHELVES, one cap. The reserve is per kind, and "td" and
+    # "prop" are both player rows sharing LIMIT — so the worst case is
+    # both of them empty at once and drawing a full reserve each. The
+    # board-wide `RESERVE_LIMIT <= LIMIT` that stood while the reserve
+    # was board-wide is no longer the binding number.
+    assert 2 * K.RESERVE_LIMIT <= K.LIMIT, \
+        "a board with both player shelves empty would have its reserve cut"
 
 
 # --- the bars that never move ---------------------------------------------

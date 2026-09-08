@@ -267,6 +267,29 @@ It has two. **0.55 is still what it takes to be called a pick.**
 clears that — labelled on the card, capped at `RESERVE_LIMIT`, and kept
 out of the `likely` book.
 
+**Per shelf, not per board.** The reserve first fired only when `build`
+returned nothing at all. Ethan's next report, hours later, was not that:
+"We have barely any moneylines show and barley and touchdowns shown."
+That is a board carrying player props with two of its three shelves bare
+— not an empty board by the function's arithmetic, and exactly an empty
+page to the person who opened it for the touchdowns. So each KIND
+(`td`, `prop`, `game`) that comes out with nothing on it draws its own
+reserve, capped at `RESERVE_LIMIT` each, and a shelf that seated even
+one real row is left alone. Two consequences worth stating:
+
+* **The label names its shelf.** `reserve_note(kind)` writes "shown
+  because no touchdown row on this slate cleared it" rather than
+  "nothing on this slate", because a board with twenty props on it
+  cannot truthfully say it has nothing.
+* **No row can be seated twice** without a second `seen` set. The
+  reserve pass re-offers every row the standard pass already took, and
+  the only kinds drawn from are the ones that contributed nothing — so
+  the overlap is empty by construction.
+
+`RESERVE_LIMIT` must therefore stay under half of `LIMIT`: `td` and
+`prop` are both player rows sharing that cap, and both can be empty at
+once.
+
 **The split that makes this safe.** Every refusal on this board is one of
 two kinds, and only one kind may move:
 
