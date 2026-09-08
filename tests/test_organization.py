@@ -133,13 +133,11 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     js = _js()
     assert "_recordRooms(d, src, pmv, scope, scoped, receipts)" in js
     i = js.index("function _recordRooms(")
-    # `receipts` still lands inside the first room; the Records-by-book
-    # sections (Ethan, 2026-09-01) ride directly after it in the same
-    # room on the "all" scope. A sport's own sections LEAD its receipts
-    # instead (2026-09-05, asked a second time because they sat under
-    # everything), so the tail is guarded rather than repeated.
-    assert '+ (scoped ? "" : recBookSections(d.book_records, scope))],' \
-        in js[i:i + 2900]
+    # `receipts` still lands inside the first room, and it is the WHOLE
+    # room: since 2026-09-08 (Ethan: "everything's is just scattered
+    # around and unorganized") renderRecord builds it in one order for
+    # every scope and the rooms prefix or append nothing to it.
+    assert "     receipts]," in js[i:i + 2900]
 
 
 def test_the_receipts_room_opens_on_the_receipts():

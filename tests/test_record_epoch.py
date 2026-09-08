@@ -443,7 +443,7 @@ def test_the_edge_panel_is_the_last_thing_in_the_room():
     visitor and the record they came for."""
     js = _js()
     body = _fn(js, "async function renderRecord(")
-    i = body.index("const receipts = verdict")
+    i = body.index("const receipts = calendar")
     tail = body[i:]
     assert "verdict + edgePanel" not in tail, "the panel leads again"
     assert tail.index("recRecentSection") < tail.index("${edgePanel}")

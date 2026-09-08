@@ -204,11 +204,15 @@ def test_the_month_in_view_defaults_to_the_latest_and_arrows_only_where_there_is
     assert got["sub"] and got["panel"]
 
 
-def test_the_record_page_draws_it_under_the_curve_and_scopes_the_tap():
+def test_the_record_page_draws_it_first_and_scopes_the_tap():
+    """Under the curve when it shipped (09-05); at the top of the room since
+    2026-09-08 — Ethan: "Maybe we put the profit calendars at the top of
+    the pages" — see tests/test_record_spine.py for the whole order."""
     i = APP.index("async function renderRecord()")
     body = APP[i:APP.index("\nfunction _recordRooms(", i)]
     assert "_recCalScope = scope;" in body
-    assert "${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}\n    ${recCalendarHTML(src.curve)}" in body
+    assert "const calendar = recCalendarHTML(src.curve);" in body
+    assert "const receipts = calendar\n" in body, "the calendar no longer leads the room"
     assert 'host.querySelectorAll(".rc-day[data-date]")' in body
     assert "recCalDayOpen(el.dataset.date, src.curve, src.recent || [])" in body
     day = _fn("recCalDayOpen")

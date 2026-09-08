@@ -104,17 +104,24 @@ def test_a_sports_record_leads_with_its_book_sections():
     sections rendered LAST on a tab whose first screen is the curve. On
     the sport scope they now sit under the verdict, above the KPI cards."""
     js = _js()
-    i = js.index("const receipts = verdict +")
+    i = js.index("const receipts = calendar")
     lead = js[i:js.index('<div class="rec-process-row">', i)]
-    assert 'scoped ? recBookSections(d.book_records, scope) : ""' in lead, lead
+    # Under the verdict, above the curve, on every scope (pooled on
+    # "All bets" by the same call) since the room got one order (2026-09-08).
+    assert "recBookSections(d.book_records, scope)" in lead, lead
+    assert lead.index("verdict") < lead.index("recBookSections(") < lead.index("recAnalytics(")
 
 
-def test_the_all_scope_keeps_them_after_the_receipts_and_does_not_repeat():
+def test_the_all_scope_draws_them_once_in_the_same_place():
+    """They trailed the receipts on "All bets" and led them on a sport —
+    two orders for one room. One call now, in `receipts`, and the rooms
+    add nothing around it."""
     js = _js()
+    assert js.count("recBookSections(d.book_records, scope)") == 1, "rendered twice on one scope"
     i = js.index("function _recordRooms(")
     body = js[i:js.index("\nfunction ", i + 10)]
-    assert '(scoped ? "" : recBookSections(d.book_records, scope))' in body
-    assert body.count("recBookSections(") == 1, "rendered twice on one scope"
+    assert "recBookSections(" not in body
+    assert "     receipts]," in body
 
 
 def test_a_thin_book_says_so_by_the_ledgers_own_bar():

@@ -83,11 +83,13 @@ def test_the_verdict_leads_the_record_page():
     the bottom of the room on 2026-08-23 — a change that did not touch
     the verdict at all, and left it leading more clearly than before.
     """
-    i = APP.index("const receipts = verdict +")
-    assert i > 0, "the verdict no longer leads the Record page"
-    # And nothing was slipped in front of it inside the string either.
+    i = APP.index("const receipts = calendar")
+    assert i > 0, "the verdict no longer leads the Record page's numbers"
+    # The calendar sits above it by Ethan's call (2026-09-08, "put the
+    # profit calendars at the top"); among the NUMBERS the verdict is
+    # still first — nothing else was slipped in front of it.
     body = APP[i:APP.index("\n  `;", i)]
-    assert body.index("verdict") < body.index("recAnalytics")
+    assert body.index("verdict") < body.index("recBookSections(") < body.index("recAnalytics")
 
 
 def test_it_refuses_a_verdict_on_a_thin_book():

@@ -12829,16 +12829,32 @@ async function renderRecord() {
   // The page's lead — what happened, in units. Built as a string so it can
   // be handed to the first room rather than rendered above the tab bar,
   // which would leave the tabs floating in the middle of the page.
-  /* THE BOOK SECTIONS LEAD A SPORT'S RECORD. Ethan, 2026-09-05, asking
-     for the second time: "add to the record page for each sport sections
-     to the records, like the edge bets have a certain section and record
-     spot, the most likely bets have a record spot". They had existed
-     since 09-01 — as the LAST thing on this tab, under the curve, the
-     splits and a dozen settled rows, on a page that lands sport-scoped.
-     A section nobody scrolls to is a section nobody has. On the "all"
-     scope the Most Likely record still leads (08-31) and the pooled book
-     sections still ride after the receipts, so nothing moves there. */
-  const receipts = verdict + (scoped ? recBookSections(d.book_records, scope) : "") + `
+  /* ONE SPINE, CALENDAR FIRST. Ethan, 2026-09-08: "re organize all the
+     record pages for every sport as everything's is just scattered around
+     and unorganized. Maybe we put the profit calendars at the top of the
+     pages." This room ran verdict, book sections, the process row with
+     its long disclosure, two notes, the curve, the calendar, the splits,
+     the settled rows, the edge panel — and on "All bets" the Most Likely
+     record led and the pooled book sections trailed after everything, so
+     the two scopes read in different orders. The same order on every
+     scope now, top to bottom the way a reader asks: what happened by day
+     (the calendar), what it adds up to (the verdict and its two caveats),
+     by book, the curve, the splits, the settled picks, then how it is
+     measured (the process grade, the era, what counts as a tracked bet)
+     and last the working (is there an edge at all). The book sections
+     still lead a sport's numbers (09-01, 09-05) — they sit under the
+     verdict on every scope, pooled on "All bets". */
+  const calendar = recCalendarHTML(src.curve);
+  const receipts = calendar
+    + (scoped ? "" : recLikelySection(d.likely))
+    + verdict + unstaked + small
+    + recBookSections(d.book_records, scope) + `
+    ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
+    ${recSplitsSection(o, !!scoped)}
+    ${recRecentSection(src.recent || [], o.settled)}
+    <div class="section-title"><span class="st-ico">${icon("scale", 15)}</span>How this is measured
+      <span class="sub">— the decisions behind the record, the model era, and
+      what counts as a tracked bet</span></div>
     ${/* PROCESS ON ITS OWN ROW, per Ethan's render (2026-08-24). It was
          the sixth tile in the strip and it is not the same KIND of
          number as the other five: those are the record, this grades the
@@ -12890,12 +12906,6 @@ async function renderRecord() {
         ever moved the bankroll.`}`)}
       </div>
     </div>
-    ${unstaked}
-    ${small}
-    ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
-    ${recCalendarHTML(src.curve)}
-    ${recSplitsSection(o, !!scoped)}
-    ${recRecentSection(src.recent || [], o.settled)}
     ${edgePanel}
   `;
   host.innerHTML = scopeBar
@@ -12942,7 +12952,7 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
   // guards above are: a test proves this and can only read what is written.
   return subtabbedHTML("record", [
     ["receipts", "Receipts",
-     "what happened, in units — the curve, the splits, every settled pick",
+     "what happened, in units — the calendar, the verdict, every settled pick",
      // The paper/money split used to open this tab. Ethan, 2026-08-20:
      // "remove the paper bet section on the record page. its taking up to
      // much space and we dont really need that area any more."
@@ -12962,11 +12972,14 @@ function _recordRooms(d, src, pmv, scope, scoped, receipts) {
      // best at — and the record that decides whether money ever rides
      // on it — sat two tabs deep. It moves here, above the curve; the
      // honest under-100-settles refusal explains itself while the
-     // sample builds.
-     (scoped ? "" : recLikelySection(d.likely)) + receipts
-     // Pooled across sports on "all"; a sport's own sections lead its
-     // receipts instead (see renderRecord), so this must not repeat them.
-     + (scoped ? "" : recBookSections(d.book_records, scope))],
+     // sample builds. Since 2026-09-08 it rides inside `receipts`,
+     // under the calendar and above the verdict, on the "all" scope.
+     // ONE STRING, built in renderRecord in the order the reader asks
+     // (2026-09-08): the calendar, the Most Likely record on "All bets",
+     // the verdict, the books, the curve, the splits, the settled picks,
+     // how it is measured, and last the working. Nothing is prefixed or
+     // appended here, so the two scopes cannot drift into two orders.
+     receipts],
     ["products", "By product",
      "the buckets deliberately kept out of the main P&L",
      (scoped ? "" : recLongshotSection(d.longshots)) + (scoped ? "" : recParlaySection(d.parlays))
