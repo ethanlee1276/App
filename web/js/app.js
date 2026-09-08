@@ -6116,7 +6116,15 @@ function likelyCard(r) {
   const lean = r.ranked === false && r.rank_note
     ? `<div class="mini" style="opacity:.75;margin-top:4px">${escapeHtml(r.rank_note)}</div>`
     : "";
-  const cal = r.prob_source !== "mixture" ? "" :
+  // A RUNG OF THE LADDER says which book number it stands beside. The
+  // raw-read line below is the MAIN line's raw number and would mislead
+  // under a rung, so the rung says its own thing instead.
+  const cal = r.rung === "alt"
+    ? `<div class="mini" style="opacity:.6;margin-top:4px">
+       Alternate line — the book’s main number is ${r.main_line}
+       (${american(r.main_odds)}); this rung is ${r.prob_source === "sharp"
+         ? "priced from the sharp book’s pair" : "calibrated for this market’s shape"}.</div>`
+    : r.prob_source !== "mixture" ? "" :
     `<div class="mini" style="opacity:.6;margin-top:4px">
        Calibrated for this market’s shape — the model’s raw read was
        ${(Number(r.raw_prob || 0) * 100).toFixed(0)}%.</div>`;

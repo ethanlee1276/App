@@ -548,6 +548,84 @@ def _refuse(census, why: str):
     return None
 
 
+def _best_rung(row: dict, market: str, fits=None) -> dict | None:
+    """The likeliest priced number on the prop's alternate ladder, or None.
+
+    THE LADDER IS WHERE "MOST LIKELY" IS FOR SALE. A main line is hung
+    where the book thinks the coin is fair, so the calibrated number at
+    it sits near 50% and a board asking for 55% at no heavier than -250
+    had nothing to show (2026-09-07: 303 rows, 215 under the floor,
+    none shown). The same books hang the same stat at other numbers —
+    a back over 40.5 at -220 rather than over 62.5 at -110 — and those
+    are the rows Ethan asked for: "whatever gives us props and picks
+    every single day".
+
+    Every rung is held to the bars the main line is held to, at the
+    rung's own numbers: the mixture's probability AT THAT LINE (or the
+    sharp book's de-vigged fair there when the market has no fit), the
+    55% floor, the -250 cap, a price a book could post, and the
+    credibility bar against the rung's own de-vigged price. The best
+    price per (line, side) across the bettable books is what is shown,
+    exactly as the main line is shopped. Sharp-book rungs are never
+    shown (nobody here can bet them) and only ever price. Highest
+    probability wins.
+    """
+    from .odds import devig_two_way, is_sharp_book
+    alts = row.get("alt_lines") or []
+    if not alts:
+        return None
+    sharp: dict[float, tuple[float, float]] = {}
+    for ln in row.get("alt_sharp_lines") or []:
+        try:
+            if ln.get("over_odds") and ln.get("under_odds"):
+                sharp[float(ln["line"])] = devig_two_way(int(ln["over_odds"]),
+                                                         int(ln["under_odds"]))
+        except (TypeError, ValueError):
+            continue
+    best_price: dict[tuple[float, str], tuple[int, str, dict]] = {}
+    for ln in alts:
+        try:
+            line = float(ln.get("line"))
+        except (TypeError, ValueError):
+            continue
+        book = str(ln.get("book") or "")
+        if not book or book.lower() == "proxy" or is_sharp_book(book):
+            continue
+        for side, key in (("over", "over_odds"), ("under", "under_odds")):
+            try:
+                odds = int(ln.get(key) or 0)
+            except (TypeError, ValueError):
+                continue
+            if not odds or not _sane(odds) or odds < HEAVIEST_PRICE:
+                continue
+            prev = best_price.get((line, side))
+            if prev is None or odds > prev[0]:
+                best_price[(line, side)] = (odds, book, ln)
+    best = None
+    for (line, side), (odds, book, ln) in best_price.items():
+        p_over = display_prob(market, row.get("projection"), line,
+                              row.get("recent_values"), fits=fits)
+        source = "mixture"
+        if p_over is None:
+            pair = sharp.get(line)
+            if pair is None:
+                continue
+            p_over, source = pair[0], "sharp"
+        p = 1.0 - float(p_over) if side == "under" else float(p_over)
+        if p < MIN_PROB:
+            continue
+        fair_over, fair_under = devig_two_way(int(ln.get("over_odds") or 0),
+                                              int(ln.get("under_odds") or 0))
+        fair = fair_under if side == "under" else fair_over
+        if not _credible(p, fair):
+            continue
+        cand = {"line": line, "side": side, "book": book, "odds": odds,
+                "prob": p, "fair": fair, "source": source}
+        if best is None or p > best["prob"]:
+            best = cand
+    return best
+
+
 def from_prop(row: dict, bettable, fits=None,
               sport: str = "nfl", census: dict | None = None) -> dict | None:
     """One likelihood row from a published prop row, or None.
@@ -622,6 +700,15 @@ def from_prop(row: dict, bettable, fits=None,
     # — the half of the funnel `_refuse` exists to count, uncounted
     # again one function later. Ethan, 2026-09-07: "so what changed."
     # The census has to be able to answer that.
+    # THE LADDER, judged beside the main line. A rung that is likelier
+    # than the main number — or the only one of the two to clear the
+    # bars — is what the row shows; the main number stays on the row
+    # as `main_line` so the card can say which book number the rung
+    # stands beside. See `_best_rung`.
+    rung = _best_rung(row, market, fits)
+    main_ok = shown >= MIN_PROB and _credible(shown, row.get("fair_prob"))
+    if rung is not None and (not main_ok or rung["prob"] > shown):
+        return _row_from(row, market, sport, bettable, prob, rung=rung)
     if shown < MIN_PROB:
         return _refuse(census, "under the likelihood floor after calibration")
     # CREDIBILITY, AND THIS BOARD HAD NONE. Every other pick path refuses
@@ -642,6 +729,27 @@ def from_prop(row: dict, bettable, fits=None,
     # number toward the market has stopped saying what it believes.
     if not _credible(shown, row.get("fair_prob")):
         return _refuse(census, "disagrees with the market by more than we credit")
+    return _row_from(row, market, sport, bettable, prob, shown=shown, source=source)
+
+
+def _row_from(row: dict, market: str, sport: str, bettable, prob,
+              shown: float | None = None, source: str = "model",
+              rung: dict | None = None) -> dict:
+    """The likelihood row, from the main line or from a rung of the ladder."""
+    if rung is not None:
+        side, line, book, odds = rung["side"], rung["line"], rung["book"], rung["odds"]
+        shown, source = rung["prob"], rung["source"]
+        # The rung's own de-vigged price is what the shown number is
+        # judged against (`admissible`'s credibility bar reads
+        # `implied_prob`); the engine's pre-shrink claim is still judged
+        # against the MAIN line's fair, where it was made.
+        implied = round(float(rung["fair"]), 4)
+        ev = None
+    else:
+        side, line, book, odds = (row.get("side", ""), row.get("line"),
+                                  row.get("book", ""), row.get("odds"))
+        implied = row.get("fair_prob")
+        ev = row.get("ev_per_unit")
     return {
         # WHICH MAKER BUILT IT — "prop", "td" or "game" — so the page,
         # the journal and the lint branch on a flag rather than on the
@@ -650,13 +758,20 @@ def from_prop(row: dict, bettable, fits=None,
         "player": row.get("player", ""), "team": row.get("team", ""),
         "opponent": row.get("opponent", ""),
         "market": market, "market_label": row.get("market_label", market),
-        "side": row.get("side", ""), "line": row.get("line"),
-        "book": row.get("book", ""), "odds": row.get("odds"),
-        "model_prob": round(shown, 4),
+        "side": side, "line": line,
+        "book": book, "odds": odds,
+        "model_prob": round(float(shown), 4),
         # WHICH NUMBER THE READER IS LOOKING AT. A page that silently
         # swapped its probability source would be the opposite of the
         # point.
         "prob_source": source,
+        # WHICH NUMBER ON THE BOOK'S LADDER. "alt" rows carry the main
+        # line beside them so the card can say what the rung stands
+        # next to; the journal and the grader read `line`/`side`/`odds`
+        # and so grade the rung itself.
+        "rung": "alt" if rung is not None else "main",
+        "main_line": row.get("line"), "main_odds": row.get("odds"),
+        "main_book": row.get("book", ""), "main_side": row.get("side", ""),
         "raw_prob": round(float(prob), 4),
         # THE PRE-SHRINK CLAIM AND THE BOOK'S OWN NUMBER, carried so the
         # one bar can ask the engine's question (see `engine_credible`).
@@ -670,9 +785,9 @@ def from_prop(row: dict, bettable, fits=None,
         "sharp_anchored": bool(row.get("sharp_anchored")),
         "sharp_fair": row.get("sharp_fair"),
         "fair_prob": row.get("fair_prob"),
-        "implied_prob": row.get("fair_prob"),
+        "implied_prob": implied,
         "projection": row.get("projection"),
-        "ev_per_unit": row.get("ev_per_unit"),
+        "ev_per_unit": ev,
         # THE FLAG THAT KEEPS THIS HONEST. A market can rank without
         # being bettable, and a reader deserves to know which they are
         # looking at rather than inferring it from the absence of a
