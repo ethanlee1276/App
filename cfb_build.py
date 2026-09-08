@@ -963,6 +963,10 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         "home": game["home"], "away": game["away"],
         "matchup": f"{game['away']} @ {game['home']}",
         "date": game.get("date", ""), "kickoff": game.get("kickoff", ""),
+        # The game's own spread, for the coherence check every game card
+        # answers to — see likely.SPREAD_COHERENCE. The college feed's
+        # number is the HOME spread, the same convention the NFL's is.
+        "game_spread": game.get("spread"),
         # IN PLAY, SAID ON THE CARD. Both other sports stamp this in
         # their `_finish_bet` and college never did, so every consumer
         # that refuses a live game — `likely.from_game_bet` most

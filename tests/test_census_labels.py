@@ -27,6 +27,14 @@ names the one it judged:
   * the RAW claim, before the shrink, which is the only place a
     disagreement between ten and twenty points is still visible.
 
+A FOURTH KIND ARRIVED ON 2026-09-08 and it is not one of these three.
+`SPREAD_COHERENCE` refuses a moneyline that disagrees with its own
+game's SPREAD — two market numbers, neither of them ours, and the model
+is not a party to it. The rule below is therefore about naming rather
+than about the model: every disagreement label says WHICH TWO numbers
+disagreed, whether that is the model against the book or the book
+against itself.
+
 Run directly: `python3 tests/test_census_labels.py`
 """
 
@@ -104,10 +112,15 @@ def test_every_disagreement_label_says_which_number_disagreed():
     Each one names the probability it judged, so the census answers the
     question it exists for."""
     said = {lab for lab in _labels() if "disagree" in lab}
-    assert len(said) >= 3, said
+    assert len(said) >= 4, said
     for lab in said:
-        assert re.search(r"\bshown\b|\bown read\b|\braw\b", lab), \
-            f"a disagreement refusal that does not say which number: {lab!r}"
+        # Either it names which of OUR probabilities was judged…
+        model = re.search(r"\bshown\b|\bown read\b|\braw\b", lab)
+        # …or it names the two market numbers that disagreed with each
+        # other, which is a refusal the model is not a party to.
+        market = re.search(r"\bmoneyline\b", lab) and re.search(r"\bspread\b", lab)
+        assert model or market, \
+            f"a disagreement refusal that does not say which numbers: {lab!r}"
     # And the pair that read alike is gone in both directions.
     assert "disagrees with the market by more than we credit" not in said
     assert "the model and the market disagree by more than we credit" not in said

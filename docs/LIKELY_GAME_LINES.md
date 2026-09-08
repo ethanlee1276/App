@@ -212,6 +212,60 @@ cd /srv/qellys && python3 -m engine.gamerank --sport nfl --raw-bar
 cd /srv/qellys && python3 -m engine.gamerank --sport cfb --raw-bar
 ```
 
+## The moneyline and the spread, read together (2026-09-08)
+
+Ethan, with two screenshots side by side — his sportsbook and our page:
+
+    his book   DAL -3   ·  DAL -162 / NYG +136
+    our board  NYG ML -218, 66% likely, "the likely side"
+
+"Also the money lines we are showing on the most likley page is
+completely wrong."
+
+That card is wrong on its own terms. The spread on the game makes
+Dallas the favourite; the moneyline on the same card makes the Giants a
+66% favourite. Two numbers, one card, opposite conclusions — and until
+now nothing read them together, because a moneyline card carried the
+h2h pair and nothing else. The two feeds that fill them are different
+(the schedule's spread, the odds pull's h2h), so they can and do drift
+apart.
+
+This is the third report of this class. 2026-09-03: "The lines on the
+most likely best bet page ... are completely wrong so we are giving bad
+bets", and "A lot of the money lines and shit are wrong." Both were
+answered with freshness stamps (`priced_at`, `lines_priced_at`), which
+say a price is OLD and cannot say a price is WRONG.
+
+**Measured before it was barred.** On this box's 1,424 stored NFL closes
+carrying both a closing moneyline and a spread, the book's de-vigged
+P(home) against its own spread through the sport's win curve
+(`gamebets.spread_win_prob`):
+
+| | |
+|---|---|
+| median disagreement | 0.036 |
+| 99th percentile | 0.102 |
+| 99.9th percentile | 0.113 |
+| largest in five seasons | 0.118 |
+| games where the two named a different favourite | 0 of 1,424 |
+
+A book prices both markets off one opinion, so they never cross over and
+sit within about a tenth of each other. `likely.SPREAD_COHERENCE` is
+0.15 — above every disagreement five seasons of closes contain — and a
+moneyline further than that from its own game's spread is refused with
+its own census line. Both builds now stamp the game's spread onto every
+card they price (`pipeline._finish_bet`, `cfb_build.to_game_bet`), an
+unposted line staying None rather than becoming a zero, and the board
+lint flags the same pair on an older board file.
+
+**What it does not catch, stated plainly.** The other screenshot had MIN
+-1.5 with our board showing MIN ML -220 against the book's -125. Those
+two numbers of ours agree with each other — 0.083 apart, ordinary — so
+this bar passes it. That card is a price that is merely OLD, and age is
+a different question with a different answer (§8f of the droplet
+checks). The guard is not advertised as covering it, and
+tests/test_spread_ml_coherence.py pins that it does not.
+
 ## How a game card reaches the board
 
 `likely.from_game_bet` takes the card the edge board already built

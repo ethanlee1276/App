@@ -302,6 +302,15 @@ def lint_likely(rows: list[dict], injuries: dict, now=None) -> list[dict]:
                     flags.append("LEAN without its note")
             if r.get("flipped"):
                 flags.append("FLIP")
+            # The two numbers on one card, read together. A row this far
+            # from its own spread never reaches the board any more
+            # (likely.SPREAD_COHERENCE); an OLDER board file can still
+            # hold one, and that is what an audit is for.
+            if (r.get("market") or r.get("bet_type")) == "moneyline":
+                from .likely import _spread_disagrees
+                if _spread_disagrees(r, str(r.get("sport") or "nfl")):
+                    flags.append("SPREAD vs ML — the two markets disagree "
+                                 "about who wins")
             if not (r.get("home") and r.get("away") and (r.get("market") or r.get("bet_type"))):
                 flags.append("NO DOOR (home/away/market missing)")
         if _started(r, now):

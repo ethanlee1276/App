@@ -251,6 +251,39 @@ MIN_RANK_AUC = 0.60
 #: not a likelihood — the same guard the touchdown watch uses.
 SANE_ODDS = (-100000, 2000)
 
+#: How far a game's MONEYLINE and its own SPREAD may disagree about who
+#: wins before the pair is not a price any book has posted.
+#:
+#: Ethan, 2026-09-08, with two screenshots side by side — his book and
+#: our page: "Also the money lines we are showing on the most likley
+#: page is completely wrong." His book had DAL -3 and DAL -162 at the
+#: Giants; our board had NYG ML -218 as a 66% favourite. The two numbers
+#: on OUR OWN card disagreed about which team was going to win, and
+#: nothing looked at them together. It is the third report of this class
+#: (2026-09-03, twice: "The lines on the most likely best bet page ...
+#: are completely wrong so we are giving bad bets" and "A lot of the
+#: money lines and shit are wrong"), and the first two were answered
+#: with freshness stamps — which say a price is OLD and cannot say a
+#: price is WRONG.
+#:
+#: MEASURED, on this box's 1,424 stored NFL closes with both a closing
+#: moneyline and a spread (2026-09-08). For each, the book's de-vigged
+#: P(home) against the same book's spread read through the sport's own
+#: win curve (`gamebets.spread_win_prob`):
+#:
+#:     median gap  0.036      99th  0.102      99.9th  0.113
+#:     the largest disagreement in five seasons          0.118
+#:     games where the two named a different favourite   0 of 1,424
+#:
+#: A real book keeps its two markets within about a tenth of each other
+#: and never crosses over. So 0.15 is above every disagreement five
+#: seasons of closes contain, and a pair past it is not a price — it is
+#: two snapshots of different games, or one market read against the
+#: wrong side. Ethan's Giants card scores 0.199 and is refused; his
+#: Vikings card scores 0.083 and is NOT — that one is a price that is
+#: merely old, which this bar cannot see and does not pretend to.
+SPREAD_COHERENCE = 0.15
+
 #: The heaviest price the board will show. Ethan, 2026-09-01, reading
 #: the likely book's first settled night (52/73 won, ROI -11.2%, rows
 #: at -800/-1200/-1800): "i dont wanna be betting on -1200 or -1800
@@ -568,6 +601,36 @@ def admissible(row: dict) -> str:
     if status:
         return f"listed {status} — held until inactives confirm"
     return ""
+
+
+def _spread_disagrees(row: dict, sport: str) -> bool:
+    """Does this moneyline contradict its own game's posted spread?
+
+    Both numbers are read for the HOME side, so the comparison does not
+    depend on which side the card took. False whenever either number is
+    missing, or the sport has no registered win curve — an unmeasurable
+    row is not a refused one.
+    """
+    from .gamebets import spread_win_prob
+    spread = row.get("game_spread")
+    fair = row.get("fair_prob")
+    if spread is None or fair is None:
+        return False
+    from_spread = spread_win_prob(sport, spread)
+    if from_spread is None:
+        return False
+    try:
+        fair = float(fair)
+        # `fair_prob` is the de-vigged number for the side the CARD took.
+        home = row.get("home") or ""
+        took = row.get("team") or row.get("pick") or ""
+        is_home = row.get("pick_is_home")
+        if is_home is None:
+            is_home = bool(home) and took == home
+        from_price = fair if is_home else 1.0 - fair
+    except (TypeError, ValueError):
+        return False
+    return abs(from_price - float(from_spread)) > SPREAD_COHERENCE
 
 
 def _refuse(census, why: str):
@@ -967,6 +1030,15 @@ def from_game_bet(row: dict, sport: str = "nfl",
         return _refuse(census, "the game has already been played")
     if row.get("conditional"):
         return _refuse(census, "a conditional, which is a hold and not a pick")
+    # THE CARD'S TWO NUMBERS, READ TOGETHER (see SPREAD_COHERENCE). A
+    # moneyline is checked against the same game's posted spread, because
+    # a book prices both off one opinion and ours came from two feeds.
+    if market == "moneyline" and _spread_disagrees(row, sport):
+        # ONE LINE, ONE LITERAL, deliberately: a census label split
+        # across two source lines is one that neither a reader nor this
+        # module's own label linter (tests/test_census_labels.py) can
+        # find whole.
+        return _refuse(census, "the moneyline disagrees with this game’s own spread by more than any book has")
     # WHICH NUMBER ORDERS THE ROW — see `ranking_number`. `prob` is the
     # ranking number from here on; `prob_model` is the model's own read
     # for the same side, kept on the row and the card as the model's.

@@ -806,6 +806,56 @@ claim as the kept rows' does. If a band of disagreement lands well
 under its claim on the droplet's larger sample, that is the evidence
 for a wider bar on that band — bring the printout.
 
+## 8f. The moneyline that disagreed with its own spread (2026-09-08)
+
+Ethan sent two cards. One is now refused by measurement; the other can
+only be diagnosed on the box.
+
+**Refused:** a moneyline further than `likely.SPREAD_COHERENCE` (0.15)
+from its own game's posted spread, read through the sport's win curve.
+Measured on 1,424 stored NFL closes: a real book's two markets never
+name a different favourite and disagree by at most 0.118
+(docs/LIKELY_GAME_LINES.md). The census line is "the moneyline
+disagrees with this game's own spread by more than any book has".
+
+**Not refused, and this is the one to look at:** MIN -1.5 on his book
+with MIN -125, our board showing MIN ML -220. Our spread and our
+moneyline agree with each other, so nothing is internally wrong — the
+price is simply not the price the book is showing. That is either a
+stale pull or a mis-mapped event, and this prints which:
+
+```bash
+cd /srv/qellys && python3 -c "
+import json, time
+b = json.load(open('web/data/recommendations.json'))
+os_ = b.get('odds_status') or {}
+for k in ('priced_at','lines_priced_at','lines_at','board_moneylines','board_games'):
+    v = os_.get(k)
+    if isinstance(v,(int,float)) and v > 1e9:
+        print(f'  {k}: {(time.time()-v)/3600:.1f}h ago')
+    elif v is not None:
+        print(f'  {k}: {v}')
+print()
+for g in (b.get('game_bets') or []):
+    if g.get('market') != 'moneyline': continue
+    print(f\"  {g.get('matchup',''):<14} {g.get('pick_label',''):<9} \"
+          f\"{g.get('odds')}  home_odds={g.get('home_odds')} away_odds={g.get('away_odds')}  \"
+          f\"spread={g.get('game_spread')}  book={g.get('book','')}\")"
+```
+
+Read it this way:
+
+* `lines_priced_at` hours old with `board_moneylines` at zero means the
+  cheap game-lines refresh (`--board-odds`, three credits for the whole
+  slate) is not running or is not reaching these games — the moneyline
+  on the page is then as old as the last paid prop pull.
+* `game_spread` None on every row means no spread was posted for the
+  check to read, so the guard above is inert and only the clocks can
+  tell you anything.
+* prices that match no book on screen while the clocks are minutes old
+  is a mapping fault, not a staleness one: send the row and I will walk
+  the event map.
+
 ## 8e. The college Most Likely board (2026-09-08)
 
 Ethan, after the NFL work: "do all those checks on college football to

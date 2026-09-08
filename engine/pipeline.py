@@ -580,6 +580,13 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["started"] = started
     d["date"] = g.date
     d["kickoff"] = g.kickoff
+    # THE GAME'S OWN SPREAD, ON EVERY CARD IT PRICES. A moneyline card
+    # carries the h2h pair and nothing else, so nothing downstream could
+    # ask the one question that catches a broken price: does this
+    # moneyline agree with the same game's spread about who wins
+    # (`likely.SPREAD_COHERENCE`)? The number is the HOME spread and is
+    # None when no book posted one — an unposted line is not a zero.
+    d["game_spread"] = g.spread if g.spread_is_posted else None
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner

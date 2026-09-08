@@ -85,6 +85,34 @@ def nfl_win_prob(home_rating: float, away_rating: float) -> float:
     return clamp(normal_cdf(margin / NFL_MARGIN_SD), 0.01, 0.99)
 
 
+def spread_win_prob(sport: str, home_spread: float) -> float | None:
+    """P(home win) implied by a posted spread, or None if this sport has
+    no registered win curve.
+
+    `Game.spread` is the HOME number and negative when home is favoured,
+    so a home team laying 3 has a margin of +3. The curve is the sport's
+    own — the same one that prices its moneyline — which is what makes
+    the answer comparable to a book's de-vigged h2h price rather than to
+    an arbitrary conversion table.
+
+    None rather than a guess when the sport has not registered its
+    numbers: college football installs its measured home field and margin
+    spread at build time (`engine.cfb.ratings.install`), and outside a
+    build there is nothing to read. A caller that cannot get an answer
+    must not invent one.
+    """
+    curve = {"nfl": nfl_win_prob, "cfb": cfb_win_prob, "mlb": mlb_win_prob}.get(sport)
+    if curve is None:
+        return None
+    try:
+        # The margin is a rating edge on the HOME side; the curve adds
+        # that sport's home field itself, exactly as it does when the
+        # moneyline is priced from ratings.
+        return float(curve(-float(home_spread), 0.0))
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
 def cfb_win_prob(home_rating: float, away_rating: float) -> float:
     """P(home win) for college football, off ITS OWN registered numbers.
 
