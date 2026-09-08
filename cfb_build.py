@@ -1928,6 +1928,7 @@ def main() -> None:
             # count, because the bar was only applied on the prop path
             # college does not use.
             _ml_census: dict = {}
+            _ml_kinds: dict = {}
             # THE GAME CARDS RIDE ALONG (Ethan, 2026-09-02: "we have no
             # money lines or spreads or totals"). `out["game_bets"]` is
             # already built above; `likely.from_game_bet` keeps the
@@ -1945,7 +1946,8 @@ def main() -> None:
             out["most_likely"] = _likely(out.get("recommendations") or [],
                                          rows, watch, sport="cfb",
                                          census=_ml_census,
-                                         game_bets=out.get("game_bets") or [])
+                                         game_bets=out.get("game_bets") or [],
+                                         census_by_kind=_ml_kinds)
             # AND WHY THE PROP HALF IS EMPTY, WHEN IT IS. College's
             # yardage markets have a model and, until the box holding
             # the logs walks them, no measurement — so `from_prop`
@@ -1963,9 +1965,16 @@ def main() -> None:
                     _ml_census["no market measured to rank yet"] = \
                         _ml_census.get("no market measured to rank yet", 0) \
                         + len(_unmeasured)
+                    _pr = _ml_kinds.setdefault("prop", {}).setdefault("refused", {})
+                    _pr["no market measured to rank yet"] = \
+                        _pr.get("no market measured to rank yet", 0) + len(_unmeasured)
             except Exception:                                # noqa: BLE001
                 pass
             out["likely_census"] = _ml_census
+            # The same refusals per kind of row — scorer, prop, game —
+            # with offered / kept / shown, so an empty shelf says which
+            # bar (or which empty feed) emptied it. See likely.build.
+            out["likely_census_by_kind"] = _ml_kinds
             # THE SAME FURNITURE THE NFL BOARD CARRIES, and college had
             # none of it. `boardGuide` and the shelves both read the
             # payload, so a sport that omits them draws a likelihood

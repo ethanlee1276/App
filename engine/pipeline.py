@@ -476,7 +476,8 @@ from . import boards as _boards                          # noqa: E402
 
 
 def _likely_board(results: list, td_picks: list, td_watch: list,
-                  census: dict | None = None, game_bets=None) -> list:
+                  census: dict | None = None, game_bets=None,
+                  census_by_kind: dict | None = None) -> list:
     """The likelihood board — see `engine.likely` for why it exists.
 
     `game_bets` are the cards `_game_bets` priced for the edge board; the
@@ -485,7 +486,8 @@ def _likely_board(results: list, td_picks: list, td_watch: list,
     from .likely import build
     try:
         return build(results, td_picks, td_watch, sport="nfl",
-                     census=census, game_bets=game_bets)
+                     census=census, game_bets=game_bets,
+                     census_by_kind=census_by_kind)
     except Exception:                                         # noqa: BLE001
         # A second board must never cost the first one. This is an
         # additional view of rows that are already published; if it
@@ -980,8 +982,9 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
     # the two disagree about the same slate, which is the failure
     # `_likely_board`'s own header warns about one level up.
     _likely_census: dict = {}
+    _likely_kinds: dict = {}
     _likely = _likely_board(results, ls, ls_watch, census=_likely_census,
-                            game_bets=game_bets)
+                            game_bets=game_bets, census_by_kind=_likely_kinds)
     out = {
         "date": slate.date,
         "generated_from": "sample-slate",
@@ -1047,6 +1050,12 @@ def run_slate(slate: Slate | str | Path, config: RuleConfig | None = None,
         # exists: a board that comes up short has several causes and a
         # count that only reaches stdout is one nobody has.
         "likely_census": _likely_census,
+        # …AND WHERE EACH KIND OF ROW DIED. The flat census above is one
+        # line per reason across the scorer, prop and game makers; this
+        # is the same refusals per kind with what was offered, kept and
+        # shown, so "barely any moneylines" reads as an empty feed, the
+        # floor, or the cap rather than a guess (likely.build).
+        "likely_census_by_kind": _likely_kinds,
         # WHY THE BOARD IS THE SIZE IT IS, published rather than printed.
         # The first live run showed 11 touchdown rows with none measured,
         # and nothing in the artefact said whether that was thin menus,

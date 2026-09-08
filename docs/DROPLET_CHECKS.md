@@ -738,12 +738,30 @@ g=b.get('games') or []; print(len(g),'games'); print(sorted({x.get('date') for x
 print('kickoffs:', [x.get('kickoff') for x in g][:3])
 m=b.get('most_likely') or []
 print(len(m),'most likely,',sum(1 for r in m if r.get('rung')=='alt'),'on a rung')
-print(b.get('likely_census'))"
+print(b.get('likely_census'))
+for k,v in (b.get('likely_census_by_kind') or {}).items(): print(' ',k,v)"
 ```
 
 Expect the 9th among the dates, a `20:20` kickoff, and — after the
 ladder fix (2026-09-08) — rungs on the Most Likely board where the main
-line is a coin flip. A census still showing hundreds under the floor
+line is a coin flip.
+
+**Where each kind of row died** (`likely_census_by_kind`, 2026-09-08):
+one line each for `td`, `prop` and `game`, with `offered` (rows handed
+to the board — for `td` that is every quoted scorer, since the same
+day), `kept` (cleared the one bar), `duplicate`, `shown` (survived the
+per-kind caps) and `refused` by reason. Read it before guessing:
+
+* `td` offered 0 — no scorer menu was bought; check the touchdown
+  markets in the event pull.
+* `td` offered 40, refused 38 under the floor — the shown number for
+  real scorers sits under 55% after the market shrink; that is the
+  model, not the feed (engine.tdbook on this box measures whether the
+  market's number should order them instead).
+* `game` offered 16, refused under the floor and the cap — the slate's
+  favourites are priced outside -140 to -250, which the board cannot
+  help; anything refused as a disagreement is a fault (that bar no
+  longer applies to a market-ranked row, §8d). A census still showing hundreds under the floor
 with `0 on a rung` means the ladders are not being bought: check
 `alt_lines` is non-empty on the recommendations, which needs a paid
 event pull (12 credits an NFL game, four of them the `_alternate`

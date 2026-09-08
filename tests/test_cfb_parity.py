@@ -98,11 +98,14 @@ def test_the_floor_is_the_one_the_module_publishes():
 def test_the_gate_is_one_function_not_two_copies():
     src = _src("engine", "likely.py")
     assert "def admissible(row: dict) -> str:" in src
-    at = src.index("    def keep(got) -> bool:")
+    at = src.index("    def keep(got, kind: str) -> bool:")
     body = src[at:src.index("out.sort(", at)]
     # Every maker's loop goes through it — watch rows, prop rows and,
-    # since 2026-09-02, the game cards (likely.from_game_bet).
-    assert body.count("not keep(got)") == 3, body
+    # since 2026-09-02, the game cards (likely.from_game_bet). Since
+    # 2026-09-08 each says which kind of row it is handing in, so the
+    # census can be cut by kind; the gate is still the one function.
+    assert body.count("not keep(got, ") == 3, body
+    assert body.count("admissible(") == 1, "a second copy of the bar"
 
 
 # --- and it says why ------------------------------------------------------

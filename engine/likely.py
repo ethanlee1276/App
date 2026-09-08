@@ -1147,14 +1147,36 @@ def from_game_bet(row: dict, sport: str = "nfl",
     }
 
 
+#: The kinds of row the board is built from, in the order the makers run.
+KINDS = ("td", "prop", "game")
+
+
+def _funnel() -> dict:
+    return {"offered": 0, "kept": 0, "duplicate": 0, "shown": 0, "refused": {}}
+
+
 def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
           limit: int = LIMIT, fits=None, census: dict | None = None,
-          game_bets=None) -> list:
+          game_bets=None, census_by_kind: dict | None = None) -> list:
     """The likelihood board: every rankable market, ordered by probability.
 
     ORDERED BY PROBABILITY AND NOTHING ELSE. Sorting by EV, or breaking
     ties on it, would quietly rebuild the edge board under a different
     name — which is the exact failure this page exists to correct.
+
+    `census` is filled with {reason: count} across every row the board
+    turned away, as before. `census_by_kind` is filled with the same
+    refusals split by the kind of row — "td", "prop", "game" — each
+    with how many rows were OFFERED, how many the bar KEPT, how many
+    were a DUPLICATE of a row already seated, how many were SHOWN once
+    the caps ran, and the refusals by reason. Ethan, 2026-09-08: "we
+    have player props just barely any money lines or touchdown." The
+    flat census could not say where the moneylines and the scorers
+    went: "under the likelihood floor: 212" is one line for three
+    different shelves, and a shelf whose rows were never offered at all
+    prints nothing. Offered / kept / shown per kind is the funnel that
+    answers him — a "td" line reading offered 0 is an empty feed, one
+    reading offered 40 and refused 40 under the floor is the floor.
     """
     from .calibrate import is_reliable
 
@@ -1163,26 +1185,32 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
 
     out = []
     seen = set()
-    refused: dict = {}
+    funnel = {k: _funnel() for k in KINDS}
 
-    def keep(got) -> bool:
+    def keep(got, kind: str) -> bool:
         """The one gate. Every row passes through here or does not ship."""
         why = admissible(got)
         if why:
-            refused[why] = refused.get(why, 0) + 1
+            _refuse(funnel[kind]["refused"], why)
             return False
+        funnel[kind]["kept"] += 1
         return True
 
+    funnel["td"]["offered"] = len(td_picks or []) + len(td_watch or [])
     for row in (td_picks or []) + (td_watch or []):
         got = from_watch(row, sport=sport)
         key = (got["player"], got["team"], "anytime_td")
-        if key in seen or not keep(got):
+        if key in seen:
+            funnel["td"]["duplicate"] += 1
+            continue
+        if not keep(got, "td"):
             continue
         seen.add(key)
         out.append(got)
+    funnel["prop"]["offered"] = len(props or [])
     for row in props or []:
         got = from_prop(row, bettable, fits=fits, sport=sport,
-                        census=refused)
+                        census=funnel["prop"]["refused"])
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides — but
@@ -1191,7 +1219,10 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         if got is None:
             continue
         key = (got["player"], got["team"], got["market"])
-        if key in seen or not keep(got):
+        if key in seen:
+            funnel["prop"]["duplicate"] += 1
+            continue
+        if not keep(got, "prop"):
             continue
         seen.add(key)
         out.append(got)
@@ -1200,12 +1231,16 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # cfb_build.build_plays); a market the model has not been shown to
     # rank never leaves `from_game_bet`, and everything that does answers
     # to `keep` like every other row.
+    funnel["game"]["offered"] = len(game_bets or [])
     for row in game_bets or []:
-        got = from_game_bet(row, sport=sport, census=refused)
+        got = from_game_bet(row, sport=sport, census=funnel["game"]["refused"])
         if got is None:
             continue
         key = ("game", got["matchup"], got["market"], got["team"], got["side"])
-        if key in seen or not keep(got):
+        if key in seen:
+            funnel["game"]["duplicate"] += 1
+            continue
+        if not keep(got, "game"):
             continue
         seen.add(key)
         out.append(got)
@@ -1223,8 +1258,16 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # it. Filled in place rather than returned, so no existing caller
     # has to change and no row carries metadata that would follow it
     # into the journal.
+    for r in out:
+        funnel[r.get("kind") or "prop"]["shown"] += 1
+    refused: dict = {}
+    for kind in KINDS:
+        for why, n in funnel[kind]["refused"].items():
+            refused[why] = refused.get(why, 0) + n
     if census is not None:
         census.update(refused)
+    if census_by_kind is not None:
+        census_by_kind.update(funnel)
     return out
 
 
