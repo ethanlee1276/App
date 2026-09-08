@@ -53,6 +53,11 @@ def _prop(player="A Rusher", **kw):
 
 def _game(**kw):
     d = dict(bet_type="moneyline", market="moneyline", market_label="Moneyline",
+             # A real NFL/CFB game card always names the book posting the
+             # side it took, and the board refuses one that does not
+             # (tests/test_game_price_names_its_book.py). A fixture
+             # without it tests a card the system cannot produce.
+             book="DraftKings",
              has_market=True, home="DET", away="CHI", team="DET", pick="DET",
              pick_is_home=True, pick_label="DET ML", side="", line=0.0,
              matchup="CHI @ DET", win_prob=0.64, fair_prob=0.62, edge=0.02,
@@ -66,6 +71,7 @@ def _game(**kw):
 
 def _spread(**kw):
     d = dict(bet_type="spread", market="spread", market_label="Spread", has_market=True,
+    book="DraftKings",
              home="DET", away="CHI", team="DET", side="", line=-3.5, pick_label="DET -3.5",
              matchup="CHI @ DET", win_prob=0.52, fair_prob=0.50, edge=0.02, odds=-110,
              other_odds=-110, ev_per_unit=0.0, confidence=5.0, stake_units=0.0,

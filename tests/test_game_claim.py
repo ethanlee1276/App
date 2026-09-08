@@ -87,8 +87,14 @@ def _no_information(fn):
 
 def _ml(home, away, home_rating, away_rating, home_ml, away_ml):
     wp = G.nfl_win_prob(home_rating, away_rating)
-    return G.moneyline_to_dict(
-        G.price_moneyline(home, away, wp, home_ml, away_ml, sport="nfl"))
+    # THE BOOK RIDES ON THE CARD. `moneyline_to_dict` does not carry one
+    # — `pipeline._finish_bet` fills it off the `Game` — and the Most
+    # Likely board refuses a football game price it cannot attribute
+    # (2026-09-09, tests/test_game_price_names_its_book.py). Adding it
+    # here is what `_finish_bet` would have done on the real path.
+    return {**G.moneyline_to_dict(
+        G.price_moneyline(home, away, wp, home_ml, away_ml, sport="nfl")),
+        "book": "DraftKings"}
 
 
 #: The screenshot: GB @ MIN, our ratings making GB the better side, the
@@ -167,9 +173,12 @@ def test_an_unranked_lean_is_not_held_to_the_ranking_bar():
     # this change too, by the older bar on the shown number — checked
     # against HEAD rather than assumed, after the first version of this
     # test blamed that refusal on the new one.
+    # `book` is added the way `pipeline._finish_bet` adds it on the real
+    # path: `price_total`/`price_spread` do not carry one, and the board
+    # refuses a football game price it cannot attribute (2026-09-09).
     for card, what in ((G.price_total("nfl", "KC", "DEN", 41.0, 47.5, -110, -110), "total"),
                        (G.price_spread("nfl", "KC", "DEN", -3.5, -3.5), "spread")):
-        row = likely.from_game_bet(dict(card), "nfl")
+        row = likely.from_game_bet({**dict(card), "book": "DraftKings"}, "nfl")
         assert row is not None, f"the {what} lean was refused outright"
         assert row.get("engine_raw_prob") is None, \
             f"the {what} lean is being held to the ranking bar"

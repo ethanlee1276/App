@@ -580,6 +580,27 @@ def _sane(odds) -> bool:
     return SANE_ODDS[0] <= o <= SANE_ODDS[1] and is_quotable(o)
 
 
+#: Game markets a sportsbook actually posts a two-sided price for, and
+#: therefore the ones that must be able to name the book posting the side
+#: taken. `team_total` is deliberately absent: it is derived from the
+#: game total and the spread, so no book quotes it and none can be named
+#: — `pipeline._finish_bet` says exactly that in its own comment.
+BOOK_POSTED_GAME_MARKETS = ("moneyline", "spread", "total")
+
+#: Sports whose game cards are KNOWN to name the book posting each side,
+#: and therefore the ones where a missing name is a defect rather than a
+#: feature that has not been built.
+#:
+#: `pipeline._finish_bet` fills `home_ml_book`/`away_ml_book` and their
+#: spread and total twins off the `Game`, and `cfb_build._book_for_side`
+#: does the same for college. `engine.mlb.models.MLBGame` carries no such
+#: field at all, so an MLB game card has never had a book to give — and
+#: holding it to this bar tonight would empty a shelf that is in season,
+#: on the strength of a defect I have not measured there. It is the same
+#: defect and it deserves the same fix; it does not deserve to be
+#: discovered by Ethan on a live board. Task #206.
+BOOK_NAMED_SPORTS = ("nfl", "cfb")
+
 def admissible(row: dict, floor=None) -> str:
     """"" if this row belongs on the board, else why it does not.
 
@@ -1091,6 +1112,38 @@ def from_game_bet(row: dict, sport: str = "nfl",
     market = row.get("bet_type") or row.get("market") or ""
     if market not in GAME_MARKETS:
         return _refuse(census, "not a game market this board carries")
+    # AN UNATTRIBUTABLE PRICE IS NOT A PRICE.
+    #
+    # Ethan, 2026-09-09, with FanDuel and DraftKings open beside our
+    # board: his books had GB +105 / MIN -125 and DAL -162 / NYG +136;
+    # ours showed MIN ML -220 and NYG ML -218, both captioned "Moneyline
+    # · best". "That's wrong and needs to be fixed now."
+    #
+    # "best" was this function's own doing — `row.get("book") or "best"`,
+    # under a comment saying game cards carry no book name, which stopped
+    # being true when the moneyline, the spread and the total each
+    # learned to name their side's book. The fallback outlived the
+    # comment, so a card that arrived with no book printed one anyway. A
+    # made-up name is worse than none: it tells a reader the number was
+    # checked against a book when nothing checked it.
+    #
+    # A TRUTH BAR, so the reserve pass does not relax it (see
+    # RESERVE_MIN_PROB) — "we need picks" is not a reason to publish a
+    # price no book is posting. A shelf that empties here is a shelf
+    # reporting that its prices could not be sourced, which is honest and
+    # is a diagnosis; the alternative is a moneyline wrong by ninety-five
+    # cents on the dollar.
+    if (sport in BOOK_NAMED_SPORTS
+            and market in BOOK_POSTED_GAME_MARKETS
+            and not (row.get("book") or "").strip()
+            and not (row.get("home_book") or "").strip()
+            and not (row.get("away_book") or "").strip()):
+        # EITHER SIDE NAMING A BOOK IS ENOUGH TO PASS HERE. The flip to
+        # the favourite below rewrites `row["book"]` on its way past — a
+        # dog at FanDuel becomes a favourite at DraftKings — so the
+        # question this guard asks is whether ANY book is posting this
+        # game, not which one the row will end up showing.
+        return _refuse(census, "no book is posting this price")
     # MEASURED IS THE BAR FOR A GAME MARKET, not ranked (see
     # GAME_RANK_MEASURED). A market with a figure is shown with it; a
     # market with none is not shown at all.
@@ -1293,9 +1346,27 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # and silently reverse his call.
         "engine_raw_prob": raw_claim if ranked else None,
         "side": side, "line": line,
-        # A game card carries no book name on the NFL path; the journal
-        # has always written these as the shopped-best price.
-        "book": row.get("book") or "best", "odds": odds,
+        # THE BOOK POSTING THIS PRICE, or nothing at all.
+        #
+        # This read `row.get("book") or "best"`. The comment above it
+        # said "a game card carries no book name on the NFL path", which
+        # stopped being true when the moneyline, the spread and the
+        # total each learned to name their side's book — and the
+        # fallback outlived it, so a card with no book printed a book
+        # called "best" beside a real-looking price.
+        #
+        # Ethan, 2026-09-09, with his sportsbook open next to ours:
+        # "FanDuel and draft kings show the lines in the screenshot yet
+        # we show a different line. That's wrong." Both cards in that
+        # screenshot read "Moneyline · best". A name we made up is worse
+        # than no name: it tells a reader the number was checked against
+        # a book when nothing checked it. `admissible` refuses the row
+        # instead — see "no book is posting this price".
+        # READ HERE, NOT AT THE GUARD ABOVE. The flip to the favourite
+        # rewrites `row["book"]` on its way past — a dog at FanDuel
+        # becomes a favourite at DraftKings — so the name this card
+        # ends up showing is only settled by this point.
+        "book": row.get("book") or "", "odds": odds,
         # HOW OLD THIS PRICE IS, carried to the card. A row that cannot
         # date its own number is how three wrong-moneyline reports in a
         # week could not be told apart from three stale ones.

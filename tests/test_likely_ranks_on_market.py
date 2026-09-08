@@ -29,6 +29,11 @@ from engine import boards, db, likely as K                    # noqa: E402
 
 def _ml(**kw):
     d = dict(bet_type="moneyline", market="moneyline", market_label="Moneyline",
+             # A real NFL/CFB game card always names the book posting the
+             # side it took, and the board refuses one that does not
+             # (tests/test_game_price_names_its_book.py). A fixture
+             # without it tests a card the system cannot produce.
+             book="DraftKings",
              has_market=True, home="DET", away="NO", team="DET", pick="DET",
              pick_is_home=True, pick_label="DET ML", side="", line=0.0,
              matchup="NO @ DET", win_prob=0.66, fair_prob=0.62, edge=0.04,
@@ -43,6 +48,7 @@ def _ml(**kw):
 
 def _tot(**kw):
     d = dict(bet_type="total", market="total", market_label="Total", has_market=True,
+    book="DraftKings",
              home="DET", away="NO", team="", side="Over", line=47.5, pick_label="Over 47.5",
              matchup="NO @ DET", win_prob=0.60, fair_prob=0.52, edge=0.08, odds=-110,
              other_odds=-110, ev_per_unit=0.1, confidence=6.0, stake_units=0.0,

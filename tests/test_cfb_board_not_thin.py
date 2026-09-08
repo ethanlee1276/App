@@ -222,8 +222,12 @@ def _cfb_card(wp_home=0.47, home_ml=-220, away_ml=200):
                               sport="cfb"))
     finally:
         gamecal.shrink_for = real
+    # `book` the way `cfb_build._book_for_side` fills it on the real
+    # path: a football game price the board cannot attribute is refused
+    # (2026-09-09, tests/test_game_price_names_its_book.py).
     card.update({"home": "UGA", "away": "CLEM", "matchup": "CLEM @ UGA",
                  "date": "2026-09-12", "live": False, "started": False,
+                 "book": "DraftKings",
                  "conditional": False, "grade": "Pass", "recommended": False})
     return card
 

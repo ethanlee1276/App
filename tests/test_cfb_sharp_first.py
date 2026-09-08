@@ -207,6 +207,10 @@ def _model_card(**kw):
             "stake_units": 1.4, "stake_if_confirmed_units": 0.0,
             "stake_if_measured_units": 0.0, "conditional": False,
             "recommended": True, "reasons": ["Ratings: TOL +3.0, BGSU +0.0"],
+            # `book` the way `cfb_build._book_for_side` fills it: the
+            # board refuses a football game price it cannot attribute
+            # (2026-09-09, tests/test_game_price_names_its_book.py).
+            "book": "DraftKings",
             "date": "2026-09-12", "kickoff": "2026-09-12T19:30Z"}
     card.update(kw)
     return card

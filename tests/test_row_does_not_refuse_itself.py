@@ -64,9 +64,12 @@ def _card(home_rating=0.5, away_rating=1.1, home_ml=-220, away_ml=200):
            f"net pts/game (incl. home field)"]
     card = G.moneyline_to_dict(
         G.price_moneyline("MIN", "GB", wp, home_ml, away_ml, ctx, sport="nfl"))
+    # `book` the way `pipeline._finish_bet` fills it: the Most Likely
+    # board refuses a football game price it cannot attribute to one
+    # (2026-09-09, tests/test_game_price_names_its_book.py).
     card.update(home="MIN", away="GB", matchup="GB @ MIN", date="2026-09-13",
                 live=False, started=False, conditional=False,
-                game_spread=-1.5)
+                book="DraftKings", game_spread=-1.5)
     return card
 
 
@@ -129,6 +132,7 @@ def test_the_efficient_market_wording_comes_off_too():
                odds=-220, home_odds=-220, away_odds=200, ev_per_unit=-0.02,
                confidence=5.0, stake_units=0.0, grade="Pass", credible=False,
                headline="MIN ML", recommended=False, live=False,
+               book="DraftKings",
                date="2026-09-13", game_spread=-1.5, engine_raw_prob=0.47,
                reasons=[G.RATING_ERROR_REASON_EFFICIENT, "Power rating: even"])
     got = K.from_game_bet(row, "nfl")

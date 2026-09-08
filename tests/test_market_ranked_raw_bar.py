@@ -83,8 +83,14 @@ def _no_information(fn):
 
 def _ml(home, away, home_rating, away_rating, home_ml, away_ml):
     wp = G.nfl_win_prob(home_rating, away_rating)
-    return G.moneyline_to_dict(
-        G.price_moneyline(home, away, wp, home_ml, away_ml, sport="nfl"))
+    # THE BOOK RIDES ON THE CARD. `moneyline_to_dict` does not carry one
+    # — `pipeline._finish_bet` fills it off the `Game` — and the Most
+    # Likely board refuses a football game price it cannot attribute
+    # (2026-09-09, tests/test_game_price_names_its_book.py). Adding it
+    # here is what `_finish_bet` would have done on the real path.
+    return {**G.moneyline_to_dict(
+        G.price_moneyline(home, away, wp, home_ml, away_ml, sport="nfl")),
+        "book": "DraftKings"}
 
 
 def _the_card():

@@ -143,8 +143,14 @@ def test_showable_and_current_answer_the_two_different_questions():
 def _card(stale):
     from engine.pipeline import _finish_bet
     from engine.rules import RuleConfig
+    # THE BOOK IS PART OF THE FIXTURE, not decoration. A moneyline that
+    # cannot name the book posting it is refused outright now
+    # (tests/test_game_price_names_its_book.py), so a card without one
+    # would fail here for a reason that has nothing to do with age — and
+    # this file is about age.
     g = Game(home="MIN", away="GB", weather=Weather(), date="2026-09-13",
              home_ml=-125, away_ml=105, price_age_s=8 * 3600.0,
+             home_ml_book="DraftKings", away_ml_book="FanDuel",
              price_stale=stale)
     d = {"bet_type": "moneyline", "market": "moneyline", "team": "MIN",
          "grade": "B", "confidence": 9.0, "edge": 0.08, "odds": -125}

@@ -290,7 +290,7 @@ def test_the_age_rides_from_the_game_to_the_card_to_the_row():
                 odds=-125, home_odds=-125, away_odds=105, ev_per_unit=0.0,
                 confidence=6.0, stake_units=0.0, grade="Pass", credible=True,
                 headline="MIN ML", reasons=[], recommended=False, live=False,
-                date="2026-09-13", game_spread=-1.5,
+                date="2026-09-13", game_spread=-1.5, book="DraftKings",
                 price_age_s=1830.0, priced_from="board")
     row = K.from_game_bet(card, "nfl")
     assert row["price_age_s"] == 1830.0 and row["priced_from"] == "board"

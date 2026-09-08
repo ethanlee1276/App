@@ -28,10 +28,17 @@ from engine.rules import RuleConfig                            # noqa: E402
 
 
 def _game(**kw):
+    # EVERY PRICE NAMES ITS BOOK, the way a real attach leaves the game.
+    # `_finish_bet` reads these off the `Game`, and the Most Likely board
+    # refuses a football game price it cannot attribute (2026-09-09) —
+    # so a fixture without them is a game the odds path never touched.
     base = dict(home="KC", away="DEN", weather=Weather(dome=True),
                 home_rating=4.0, away_rating=-2.0,
                 home_off=3.0, home_def=-1.0, away_off=-2.0, away_def=1.0,
                 total=44.5, spread=-3.5, home_ml=-180, away_ml=155,
+                home_ml_book="DraftKings", away_ml_book="FanDuel",
+                home_spread_book="DraftKings", away_spread_book="FanDuel",
+                total_over_book="DraftKings", total_under_book="FanDuel",
                 total_over_odds=-110, total_under_odds=-110,
                 spread_home_odds=-110, spread_away_odds=-110)
     base.update(kw)

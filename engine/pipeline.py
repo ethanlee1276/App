@@ -644,6 +644,16 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # than a gap. Nothing here quotes one: the number is derived from
     # the game total and the spread, so there is no book posting it and
     # no name to print. See `price_team_total`.
+    #
+    # THE EDGE BOARD DOES NOT YET GATE ON A MISSING NAME, and that is a
+    # deliberate hold rather than an oversight. `likely.from_game_bet`
+    # refuses an unattributable football game price outright, which is
+    # what took MIN ML -220 off the page. Applying the same rule here
+    # would ALSO withdraw the recommendation from every NFL game bet on
+    # a build where the books happen to be missing — and whether that is
+    # the droplet's state tonight is exactly what cannot be checked from
+    # here. One unverified swing the night before Week 1 is enough.
+    # Task #207 measures it on the box and then closes this gap.
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner

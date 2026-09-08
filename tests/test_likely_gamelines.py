@@ -55,6 +55,11 @@ def _ml(**kw):
     """An NFL moneyline card as `gamebets.moneyline_to_dict` +
     `pipeline._finish_bet` publish it."""
     d = dict(bet_type="moneyline", market="moneyline", market_label="Moneyline",
+             # A real NFL/CFB game card always names the book posting the
+             # side it took, and the board refuses one that does not
+             # (tests/test_game_price_names_its_book.py). A fixture
+             # without it tests a card the system cannot produce.
+             book="DraftKings",
              has_market=True, home="DET", away="NO", team="DET", pick="DET",
              pick_is_home=True, pick_label="DET ML", side="", line=0.0,
              matchup="NO @ DET", win_prob=0.66, fair_prob=0.62, edge=0.04,
@@ -131,7 +136,15 @@ def test_a_moneyline_card_becomes_a_likelihood_row():
     assert row["prob_source"] == "market" and row["win_prob"] == 0.66
     assert row["player"] == "DET ML" and row["team"] == "DET"
     assert row["opponent"] == "NO" and row["matchup"] == "NO @ DET"
-    assert row["book"] == "best", "an NFL game card carries no book name"
+    # THE BOOK POSTING IT, and this line used to pin the opposite:
+    # `row["book"] == "best"`, with the comment "an NFL game card carries
+    # no book name". That was true when it was written and stopped being
+    # true when the moneyline learned to name its side's book — but the
+    # `or "best"` fallback outlived it, so a card with no book printed a
+    # book called "best" beside a real-looking price. Ethan caught it on
+    # 2026-09-09 with FanDuel open next to our -220. The name is the
+    # card's own now, and a card without one is refused.
+    assert row["book"] == "DraftKings", row["book"]
     assert row["rank_auc"] == K.GAME_RANK_MARKET["nfl"]["moneyline"]
     assert row["bettable"] is True and row["injury_status"] == ""
     # The id the page opens the game page by is built from these.
@@ -410,10 +423,18 @@ def _cfb_g5_slate():
             "weather_checked": False, "indoor": False}
     ratings = {"TOL": TeamRating(net=3.0, off=2.0, def_=-1.0, games=13),
                "BGSU": TeamRating(net=0.0, off=0.5, def_=0.5, games=13)}
+    # SIDE-KEYED BOOK NAMES, the shape `_book_for_side` reads. The old
+    # `books` key here named one book per market, which was the shape of
+    # the resolver `_book_for_side` replaced — so this fixture produced
+    # cards with no book at all, and the board now refuses those
+    # (tests/test_game_price_names_its_book.py). A real college card
+    # always names the book posting the side it took.
     priced = {"g1": {"moneyline": (-160, 140), "spread": (-3.5, -110, -110),
                      "total": (52.5, -110, -110),
-                     "books": {"moneyline": "dk", "spread": "dk",
-                               "total": "dk"}}}
+                     "ml_books": {"TOL": "DraftKings", "BGSU": "FanDuel"},
+                     "spread_books": {"TOL": "DraftKings", "BGSU": "FanDuel"},
+                     "total_books": {"over": "DraftKings",
+                                     "under": "FanDuel"}}}
     plays = CB.build_plays([game], priced, ratings, CR.PRIOR, {}, {})
     result = CP.run_cfb_slate(plays, meta={"ratings": {"fitted": False,
                                                        "games": 0}})
@@ -599,7 +620,10 @@ def test_a_moneyline_row_is_journaled_in_the_shape_the_settler_grades():
     assert got["category"] == "likely" and got["stake_dollars"] == 0.0
     # The journaled probability is the page's ranking number — the
     # market's 62% on an NFL moneyline — not the model's 66%.
-    assert got["hit_prob"] == 0.62 and got["book"] == "best"
+    # …and the journal records the book that posted it. It recorded the
+    # word "best" until 2026-09-09, which made the ledger unable to say
+    # afterwards whose price a settled game row was graded against.
+    assert got["hit_prob"] == 0.62 and got["book"] == "DraftKings", dict(got)
 
 
 def test_a_total_and_a_spread_row_take_their_settle_shapes():

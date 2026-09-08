@@ -730,7 +730,9 @@ def test_a_game_card_refused_by_its_maker_is_counted_too():
     census: dict = {}
     card = {"bet_type": "moneyline", "matchup": "A @ B", "home": "B",
             "away": "A", "team": "B", "win_prob": 0.62, "fair_prob": 0.60,
-            "odds": -150, "has_market": True}
+            # `book` because a real card names one and the board refuses
+            # a football game price it cannot attribute (2026-09-09).
+            "odds": -150, "has_market": True, "book": "DraftKings"}
     assert K.from_game_bet({**card, "conditional": True}, sport="cfb",
                            census=census) is None
     assert K.from_game_bet({**card, "live": True}, sport="cfb",
@@ -751,7 +753,9 @@ def test_an_empty_board_now_accounts_for_every_row_it_dropped():
              enumerate(["pass_yds", "rush_yds", "rec_yds", "receptions"])]
     card = {"bet_type": "moneyline", "matchup": "A @ B", "home": "B",
             "away": "A", "team": "B", "win_prob": 0.62, "fair_prob": 0.60,
-            "odds": -150, "has_market": True}
+            # `book` because a real card names one and the board refuses
+            # a football game price it cannot attribute (2026-09-09).
+            "odds": -150, "has_market": True, "book": "DraftKings"}
     census: dict = {}
     board = K.build(props, [], [], sport="cfb", census=census,
                     game_bets=[{**card, "conditional": True},

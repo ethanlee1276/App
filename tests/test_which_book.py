@@ -178,12 +178,22 @@ def test_an_unflipped_row_keeps_the_book_the_card_came_with():
     assert row["flipped"] is False and row["book"] == "DraftKings"
 
 
-def test_a_card_with_no_book_still_reads_best_rather_than_blank():
-    """Older board files and sports that do not resolve a book keep the
-    word they had — an empty chip beside a price is worse than a vague
-    one."""
-    row = K.from_game_bet(_card(home_book="", away_book="", book=""), "nfl")
-    assert row["book"] == "best"
+def test_a_card_with_no_book_is_refused_rather_than_called_best():
+    """THIS TEST USED TO PIN THE OPPOSITE, and the reasoning it gave was
+    the mistake: "an empty chip beside a price is worse than a vague
+    one". A vague chip is not vague — it reads as a book called "best",
+    which tells a reader the number was checked against somewhere. It was
+    not.
+
+    Ethan, 2026-09-09, holding FanDuel and DraftKings up next to our
+    board: his books had GB +105 / MIN -125, ours said MIN ML -220, and
+    the caption under it read "Moneyline · best". A price no book is
+    posting does not go on the page at all now."""
+    census = {}
+    row = K.from_game_bet(_card(home_book="", away_book="", book=""), "nfl",
+                          census=census)
+    assert row is None, row
+    assert census == {"no book is posting this price": 1}, census
 
 
 def test_the_college_card_carries_both_sides_from_the_shared_resolver():

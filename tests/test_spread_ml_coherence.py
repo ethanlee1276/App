@@ -58,6 +58,11 @@ def _card(home_spread, home_ml, away_ml, **kw):
     fair_home, fair_away = devig_two_way(home_ml, away_ml)
     home_first = kw.pop("home_first", True)
     d = dict(bet_type="moneyline", market="moneyline", market_label="Moneyline",
+             # A real NFL/CFB game card always names the book posting the
+             # side it took, and the board refuses one that does not
+             # (tests/test_game_price_names_its_book.py). A fixture
+             # without it tests a card the system cannot produce.
+             book="DraftKings",
              has_market=True, home="NYG", away="DAL",
              team="NYG" if home_first else "DAL", pick_is_home=home_first,
              pick_label=("NYG ML" if home_first else "DAL ML"), side="", line=0.0,
@@ -148,6 +153,7 @@ def test_only_the_moneyline_is_asked():
     """A spread row IS the spread; asking it to agree with itself would
     refuse the shelf Ethan asked for on 2026-09-02."""
     tot = dict(bet_type="total", market="total", market_label="Total",
+    book="DraftKings",
                has_market=True, home="NYG", away="DAL", team="", side="Over",
                line=48.5, pick_label="Over 48.5", matchup="DAL @ NYG",
                win_prob=0.60, fair_prob=0.52, edge=0.08, odds=-110,
