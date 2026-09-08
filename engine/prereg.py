@@ -61,6 +61,7 @@ def _terms_hash(t: dict) -> str:
     keyed = {k: t[k] for k in sorted(
         ("claim", "sport", "population", "compare_to", "metric",
          "markets", "price_band", "compare_price_band",
+         "sides", "compare_sides",
          "min_n", "z_threshold", "registered", "decides"))
         if k in t}
     return hashlib.sha256(
@@ -191,6 +192,25 @@ def _in_band(r, band) -> bool:
     return lo <= p < hi or (hi >= 1.0 and p >= lo)
 
 
+def _side_of(r) -> str:
+    """The side a bet took, in one spelling.
+
+    THE JOURNAL IS ALREADY CONSISTENT and this is not fixing it: every
+    writer into `bets.side` upper-cases, and `engine.ledger` folds the
+    YES/NO vocabulary onto OVER/UNDER at the moment it writes. Case is
+    normalised here anyway because a test's population is a hand-typed
+    list, and a registration that reads `["over"]` must not collect
+    nothing forever while looking healthy — the failure mode `TD_EDGE_NFL`
+    nearly died of, recorded in `verdict` twenty lines down.
+
+    Deliberately does NOT map YES/NO itself. That translation belongs to
+    the one writer that owns it; a second copy here is two rules that can
+    drift, and the drift would be invisible because both sides would
+    still return a plausible word.
+    """
+    return str(r.get("side") or "").strip().upper()
+
+
 def _mean_se(vals):
     n = len(vals)
     if n < 2:
@@ -268,6 +288,22 @@ def verdict(test: dict, rows: list[dict]) -> dict:
         pop = [r for r in pop if _in_band(r, test["price_band"])]
     if test.get("compare_price_band"):
         ref = [r for r in ref if _in_band(r, test["compare_price_band"])]
+    # THE SIDE TAKEN, when the test names one. Optional and absent from
+    # every test registered before 2026-09-09, added under the same rule
+    # as `markets` and `price_band` before it: `_terms_hash` keys on it
+    # only when a test carries it, so no existing registration's
+    # fingerprint moves and none of them are voided by this line
+    # existing.
+    #
+    # A test that splits on side puts the FULL grade ladder in both
+    # `population` and `compare_to`, exactly as a price split does; the
+    # sides are what separate the two arms.
+    if test.get("sides"):
+        want = {str(x).strip().upper() for x in test["sides"]}
+        pop = [r for r in pop if _side_of(r) in want]
+    if test.get("compare_sides"):
+        want = {str(x).strip().upper() for x in test["compare_sides"]}
+        ref = [r for r in ref if _side_of(r) in want]
     out["n"] = len(pop)
     out["n_reference"] = len(ref)
 
@@ -713,7 +749,7 @@ LONG_PRICE_MLB = {
 }
 
 
-ROW_SQL = ("SELECT date, sport, grade, market, odds, status, category "
+ROW_SQL = ("SELECT date, sport, grade, market, side, odds, status, category "
            "FROM bets WHERE status IN ('won','lost') "
            "AND category IN ('main','paper','longshot') "
            "AND stake_units > 0")
