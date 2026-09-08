@@ -24134,13 +24134,186 @@ function _mockSaveKeepers() {
   } catch (e) {}
 }
 
-function _mockFmt() { return MOCK_FORMATS[_mockFormat] || MOCK_FORMATS.ppr; }
+/* ---- League settings and mock settings ---------------------------------
+   Ethan, 2026-09-08, with a screenshot of FantasyPros' mock-draft settings
+   screen: "can you work on making the mock draft better. Here is an
+   example of more shit to add." Two cards on it: LEAGUE SETTINGS (scoring,
+   draft type, teams, a roster line) and MOCK DRAFT SETTINGS (draft
+   position, cheat sheet, pick clock). This is that, built on the format
+   machinery above rather than beside it.
+
+   SCORING AND LINE-UP ARE TWO SETTINGS, NOT ONE. The three formats above
+   each bundle a scoring tweak with a line-up; a real league picks each
+   independently — half PPR AND superflex, standard AND a TE premium. So
+   the reader sets scoring (a per-reception value: the board is full PPR,
+   so half is −0.5 a catch and standard is −1.0, exact on the carried
+   receptions) and a ROSTER (how many of each slot start, and the bench),
+   and `_mockFmt` composes the format from them: the line-up decides
+   replacement level, replacement decides VORP, VORP decides our board,
+   and the market's share bands follow the line-up's shape (a superflex
+   roster draws the superflex bands, a TE-premium scoring the TE bands).
+   Nothing here carries a hand-tuned ranking.
+
+   KICKER AND DEFENCE ARE ON THE ROSTER LINE AND NOT IN THE DRAFT. The
+   kit's board projects neither, and a mock that drafted blanks in rounds
+   fifteen and sixteen would be padding. The roster editor keeps them so
+   the line reads like the league's, the round count says how many of
+   them are drafted here, and the setup panel says why.
+
+   THE PICK CLOCK IS OPT-IN AND REAL. The room's own rule (see the draft
+   room notes below) is that a countdown on a CPU pick is an animation —
+   nothing is deciding on the other end. A clock on YOUR pick is a
+   different thing: it runs out, and something happens (the cheat sheet's
+   best legal player is drafted for you), which is the pressure a real
+   room puts on and the reason to practise under one. Off by default. */
+const MOCK_CFG_KEY = "qb_mock_cfg";
+const MOCK_SCORING = { ppr: { name: "PPR", rec: 1 },
+                       half: { name: "Half PPR", rec: 0.5 },
+                       std: { name: "Standard", rec: 0 } };
+const MOCK_DRAFT_TYPES = { snake: "Snake", linear: "Linear",
+                           "3rr": "3rd-round reversal" };
+const MOCK_SHEETS = { board: "Qellys board (VORP)", market: "Market order (ADP)" };
+const MOCK_CLOCKS = [0, 30, 60, 90, 120];
+const MOCK_TEAMS_RANGE = [6, 16];
+//: The slots a roster can carry, and the most of each the editor allows.
+const MOCK_ROSTER_MAX = { QB: 2, RB: 4, WR: 5, TE: 2, FLEX: 3, SFLEX: 1, K: 1, DST: 1, BN: 10 };
+const MOCK_DEFAULT_CFG = { scoring: "ppr", tePrem: 0, draftType: "snake",
+                           teams: 12, slot: 1, sheet: "board", clock: 0, chaos: 35,
+                           roster: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, SFLEX: 0,
+                                     K: 1, DST: 1, BN: 6 } };
+//: One-tap presets that fill the two cards the way a league of that
+//: kind usually runs. Each is a starting point, not a lock.
+const MOCK_PRESETS = {
+  ppr: { name: "PPR", scoring: "ppr", tePrem: 0,
+         roster: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, SFLEX: 0, K: 1, DST: 1, BN: 6 } },
+  half: { name: "Half PPR", scoring: "half", tePrem: 0,
+          roster: { QB: 1, RB: 2, WR: 3, TE: 1, FLEX: 1, SFLEX: 0, K: 1, DST: 1, BN: 6 } },
+  std: { name: "Standard", scoring: "std", tePrem: 0,
+         roster: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, SFLEX: 0, K: 1, DST: 1, BN: 6 } },
+  superflex: { name: "Superflex", scoring: "ppr", tePrem: 0,
+               roster: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 1, SFLEX: 1, K: 1, DST: 1, BN: 6 } },
+  te_prem: { name: "TE premium", scoring: "ppr", tePrem: 0.5,
+             roster: { QB: 1, RB: 2, WR: 2, TE: 1, FLEX: 2, SFLEX: 0, K: 1, DST: 1, BN: 6 } },
+};
+
+function _mockCleanCfg(raw) {
+  const d = MOCK_DEFAULT_CFG;
+  const c = (raw && typeof raw === "object") ? raw : {};
+  const num = (v, lo, hi, dflt) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt;
+  };
+  const roster = {};
+  for (const k in d.roster) {
+    roster[k] = num((c.roster || {})[k], 0, MOCK_ROSTER_MAX[k], d.roster[k]);
+  }
+  const teams = num(c.teams, MOCK_TEAMS_RANGE[0], MOCK_TEAMS_RANGE[1], d.teams);
+  return {
+    scoring: MOCK_SCORING[c.scoring] ? c.scoring : d.scoring,
+    tePrem: [0, 0.5, 1].includes(Number(c.tePrem)) ? Number(c.tePrem) : d.tePrem,
+    draftType: MOCK_DRAFT_TYPES[c.draftType] ? c.draftType : d.draftType,
+    teams, slot: num(c.slot, 1, teams, Math.min(d.slot, teams)),
+    sheet: MOCK_SHEETS[c.sheet] ? c.sheet : d.sheet,
+    clock: MOCK_CLOCKS.includes(Number(c.clock)) ? Number(c.clock) : d.clock,
+    chaos: num(c.chaos, 0, 100, d.chaos),
+    roster,
+  };
+}
+
+function _mockLoadCfg() {
+  try {
+    if (typeof localStorage === "undefined") return _mockCleanCfg(null);
+    return _mockCleanCfg(JSON.parse(localStorage.getItem(MOCK_CFG_KEY) || "null"));
+  } catch (e) { return _mockCleanCfg(null); }
+}
+let _mockCfg = _mockLoadCfg();
+
+function _mockSaveCfg() {
+  _mockCfg = _mockCleanCfg(_mockCfg);
+  try { localStorage.setItem(MOCK_CFG_KEY, JSON.stringify(_mockCfg)); } catch (e) {}
+}
+
+//: The starting line-up the roster implies, in the shape MOCK_FORMATS
+//: carries. Kicker and defence are not on it — see the note above.
+function _mockCfgSlots(cfg) {
+  const r = (cfg || _mockCfg).roster;
+  return { QB: r.QB, RB: r.RB, WR: r.WR, TE: r.TE, FLEX: r.FLEX, SFLEX: r.SFLEX };
+}
+
+//: Points per reception ON TOP OF the PPR the board already carries —
+//: negative for half and standard — plus the TE premium, on the
+//: receptions the board carries per game (never estimated).
+function _mockCfgBonus(cfg) {
+  const c = cfg || _mockCfg;
+  const per = (MOCK_SCORING[c.scoring] || MOCK_SCORING.ppr).rec - 1;
+  return { RB: per, WR: per, TE: per + (c.tePrem || 0), QB: 0 };
+}
+
+//: Which of the three share/cap presets the line-up draws: a second
+//: startable quarterback moves the position into round one, a paid
+//: catch at tight end moves that one. Keyed off the line-up and the
+//: scoring, never off a format name.
+function _mockCfgFormatKey(cfg) {
+  const c = cfg || _mockCfg;
+  if ((c.roster.SFLEX || 0) > 0) return "superflex";
+  if ((c.tePrem || 0) > 0) return "te_prem";
+  return "ppr";
+}
+
+function _mockCfgLabel(cfg) {
+  const c = cfg || _mockCfg;
+  const bits = [(MOCK_SCORING[c.scoring] || MOCK_SCORING.ppr).name];
+  if ((c.roster.SFLEX || 0) > 0) bits.push("Superflex");
+  if ((c.tePrem || 0) > 0) bits.push(`TE +${c.tePrem}`);
+  return bits.join(" · ");
+}
+
+//: How many rounds the league drafts, and how many of them happen HERE.
+//: The league's count is every roster slot; the drafted count drops the
+//: kicker and defence slots the board cannot fill, then bows to the
+//: board's own slack (see `_mockStart`'s note on the 88%).
+function _mockCfgRounds(cfg, poolLen, teams) {
+  const r = (cfg || _mockCfg).roster;
+  const league = ["QB", "RB", "WR", "TE", "FLEX", "SFLEX", "K", "DST", "BN"]
+    .reduce((s, k) => s + (r[k] || 0), 0);
+  const wanted = league - (r.K || 0) - (r.DST || 0);
+  const slack = Math.max(1, Math.floor((poolLen || 0) * 0.88 / Math.max(1, teams || 1)));
+  return { league, wanted, drafted: Math.max(1, Math.min(wanted, slack)),
+           skipped: (r.K || 0) + (r.DST || 0) };
+}
+
+//: The roster line, the way the screenshot writes it: "QB, 2RB, 3WR,
+//: WR/RB/TE, TE, K, DST, 6BN".
+function _mockRosterLine(cfg) {
+  const r = (cfg || _mockCfg).roster;
+  // In the order the screenshot writes them: the flex before the tight end.
+  const word = { QB: "QB", RB: "RB", WR: "WR", FLEX: "WR/RB/TE", TE: "TE",
+                 SFLEX: "QB/WR/RB/TE", K: "K", DST: "DST", BN: "BN" };
+  return Object.keys(word).filter((k) => r[k] > 0)
+    .map((k) => `${r[k] > 1 ? r[k] : ""}${word[k]}`).join(", ");
+}
+
+/* THE FORMAT, COMPOSED. The share bands and the caps come from the
+   preset the line-up draws; the line-up itself, the scoring bonus and the
+   label come from the settings. Caps rise with the roster so a league
+   starting three receivers and two flexes is allowed to hold them. */
+function _mockFmt() {
+  const base = MOCK_FORMATS[_mockFormat] || MOCK_FORMATS.ppr;
+  const slots = _mockCfgSlots();
+  const caps = {
+    QB: Math.max(base.caps.QB, slots.QB + slots.SFLEX + 1),
+    TE: Math.max(base.caps.TE, slots.TE + 1),
+    RB: Math.max(base.caps.RB, slots.RB + slots.FLEX + 3),
+    WR: Math.max(base.caps.WR, slots.WR + slots.FLEX + 3),
+  };
+  return { ...base, name: _mockCfgLabel(), slots, caps, bonus: _mockCfgBonus() };
+}
 
 /* The board under this format's scoring, with VORP re-derived from the
    line-up it implies. A format that changed projections and left VORP
    alone would move every tight end up the page and leave the number that
    decides the draft describing a different league. */
-function _mockScoreBoard(board, fmt) {
+function _mockScoreBoard(board, fmt, teams) {
   const rows = board.map((p) => {
     const per = (fmt.bonus || {})[p.position] || 0;
     const proj = per ? +( (p.proj || 0) + per * (p.rec_pg || 0) ).toFixed(1)
@@ -24151,7 +24324,11 @@ function _mockScoreBoard(board, fmt) {
   // the best player everyone else can have for nothing. Superflex moves
   // it for quarterbacks by roughly a full round of them, which is the
   // entire reason the format drafts differently.
-  const teams = (_mock && _mock.teams) || 12;
+  // THE LEAGUE'S SIZE, HANDED IN. This read `_mock.teams`, and at the
+  // moment the board is scored `_mock` is still the previous draft or
+  // null — so a ten-team league's replacement level was computed for a
+  // twelve-team one, every draft.
+  teams = teams || (_mock && _mock.teams) || 12;
   const starters = { QB: fmt.slots.QB + (fmt.slots.SFLEX || 0),
                      RB: fmt.slots.RB, WR: fmt.slots.WR, TE: fmt.slots.TE };
   const byPos = {};
@@ -24681,16 +24858,38 @@ function mockSurvival(m, sims) {
   };
 }
 
-function _mockPicker(pickIdx, teams) {
+//: The draft type of the draft in progress — read by `_mockPicker` when
+//: no kind is handed in, so every caller that asks "who picks here?"
+//: gets the same answer without threading a parameter through the
+//: Monte Carlo.
+let _mockDraftType = "snake";
+
+function _mockPicker(pickIdx, teams, kind) {
+  kind = kind || (typeof _mockDraftType === "string" ? _mockDraftType : "snake");
   const round = Math.floor(pickIdx / teams);
   const i = pickIdx % teams;
-  return round % 2 === 0 ? i : teams - 1 - i;          // the snake
+  if (kind === "linear") return i;                       // the same order every round
+  // THIRD-ROUND REVERSAL: the snake, except round three runs the same
+  // way as round two, so the seat that picked last in round one gets
+  // picks 2.01 AND 3.01 before the order turns again. From round four
+  // on it alternates as a snake does. The 1.01 seat's 1.01/2.12/3.12/
+  // 4.01 against the snake's 1.01/2.12/3.01/4.12.
+  const reverse = kind === "3rr"
+    ? (round === 1 || (round >= 2 && round % 2 === 0))
+    : round % 2 === 1;
+  return reverse ? teams - 1 - i : i;
 }
 
 function _mockStart(teams, slot) {
   const kit = _mockKit || {};
+  // THE SETTINGS DECIDE THE FORMAT AND THE ORDER, before anything reads
+  // either: the line-up picks the share preset, the scoring the bonus,
+  // and the draft type the picker every caller shares.
+  _mockFormat = _mockCfgFormatKey();
+  _mockDraftType = MOCK_DRAFT_TYPES[_mockCfg.draftType] ? _mockCfg.draftType : "snake";
+  _mockStopClock();
   // OUR order — value over replacement — is what the human is shown.
-  const pool = _mockScoreBoard((kit.board || []).slice(), _mockFmt());
+  const pool = _mockScoreBoard((kit.board || []).slice(), _mockFmt(), teams);
   // THE ROOM'S order is the market's, and the gap between the two is the
   // value column. Built once per draft, deterministic, and carried as a
   // rank per player so both the live CPU and the Monte Carlo read the
@@ -24723,7 +24922,16 @@ function _mockStart(teams, slot) {
             // roster caps holding — a third quarterback still turns up
             // occasionally on a CPU bench, which is the price of keeping
             // the draft eleven rounds long instead of ten.
-            rounds: Math.min(14, Math.floor(pool.length * 0.88 / teams)),
+            // THE ROSTER DECIDES THE ROUNDS NOW — starters plus bench,
+            // less the kicker and defence slots the board cannot fill —
+            // under the same slack. `_mockCfgRounds` carries all three
+            // numbers so the hero can say "16 rounds, 14 drafted here".
+            rounds: _mockCfgRounds(_mockCfg, pool.length, teams).drafted,
+            roundsInfo: _mockCfgRounds(_mockCfg, pool.length, teams),
+            type: _mockDraftType,
+            // A frozen copy of the settings this draft was started with,
+            // so a change in the panel cannot alter a draft in progress.
+            cfg: JSON.parse(JSON.stringify(_mockCfg)),
             rosters: Array.from({ length: teams }, () => []), log: [],
             personas, chaos: _mockChaos, sim: null, market, keepers };
   // The skip set needs `rounds` and `teams`, so it is built once the
@@ -24866,7 +25074,7 @@ function _mockAdvice(selected) {
   if (!best) return null;
   const count = (pos) => roster.filter((p) => p.position === pos).length;
   const thin = ["RB", "WR", "TE", "QB"].find((pos) =>
-    count(pos) < (MOCK_SLOTS[pos] || 1));
+    count(pos) < (_mockFmt().slots[pos] || 1));
   const bestThin = thin && _mock.pool.find((p) => p.position === thin);
   const parts = [];
   const looking = selected && selected.player !== best.player;
@@ -24921,7 +25129,8 @@ function _mockKeeperHTML(teams) {
           `<option value="${i + 1}">Room ${i + 2}</option>`).join("")}
       </select>
       <select id="mk-keep-round" class="mk-sel">
-        ${Array.from({ length: 14 }, (_, i) =>
+        ${Array.from({ length: Math.max(1, _mockCfgRounds(_mockCfg,
+            ((_mockKit || {}).board || []).length, teams).drafted) }, (_, i) =>
           `<option value="${i + 1}">Round ${i + 1}</option>`).join("")}
       </select>
       <button class="btn" id="mk-keep-add">Add</button>
@@ -25555,58 +25764,7 @@ function mockDraftHTML() {
       board, and this build has none yet — it fills with the season\u2019s
       first projections.</div>`;
   }
-  if (!_mock) {
-    return `<div class="section-title">Mock draft
-        <span class="sub">— snake order against value-hungry CPU rooms,
-        drafted from the kit\u2019s own 150-player board</span></div>
-      <div class="card" style="padding:16px 18px">
-        <div class="mk-setup">
-          <label>League size
-            <select id="mk-teams" class="mk-sel">
-              ${[8, 10, 12].map((n) => `<option ${n === 12 ? "selected" : ""}>${n}</option>`).join("")}
-            </select></label>
-          <label>Your pick
-            <select id="mk-slot" class="mk-sel">
-              ${Array.from({ length: 12 }, (_, i) => `<option>${i + 1}</option>`).join("")}
-            </select></label>
-          <label>Format
-            <select id="mk-format" class="mk-sel">
-              ${Object.entries(MOCK_FORMATS).map(([k, f]) =>
-                `<option value="${k}"${k === "ppr" ? " selected" : ""}>${
-                  escapeHtml(f.name)}</option>`).join("")}
-            </select></label>
-          <label>Room chaos
-            <select id="mk-chaos" class="mk-sel">
-              <option value="10">Chalk</option>
-              <option value="35" selected>Realistic</option>
-              <option value="65">Wild</option>
-              <option value="100">Chaos</option>
-            </select></label>
-          <button class="btn primary" id="mk-start">Start the draft</button>
-        </div>
-        ${_mockKeeperHTML(12)}
-        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
-          Every rival room is dealt one of ${MOCK_ARCHETYPES.length} builds and
-          keeps it all draft — Zero RB, Hero RB, WR hoarder, early QB, elite
-          TE and the rest — so the board falls differently every time and a
-          run on a position is sometimes real. <b>Room chaos</b> sets how far
-          they will stray from the board to do it.</p>
-        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
-          <b>Superflex</b> starts a second quarterback, so the position stops
-          having a free replacement and goes in the first round instead of
-          the tenth. <b>TE premium</b> pays half a point per tight-end
-          catch, computed from real receptions rather than a guessed catch
-          rate. Each format re-derives every projection, every VORP and the
-          order the rooms draft in — nothing here is a re-skin.</p>
-        <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
-          On every one of your picks the draft ahead of you is simulated
-          ${MOCK_SIMS.toLocaleString()} times, and each available player
-          carries how often he was still there when it came back to you.
-          Your finished roster is judged on its starters\u2019 projected PPG
-          against the room, and on where each pick beat or missed the board
-          — not on a letter grade nobody fitted.</p>
-      </div>`;
-  }
+  if (!_mock) return _mockSetupHTML(kit);
   const m = _mock;
   const total = m.teams * m.rounds;
   const round = Math.floor(m.pick / m.teams) + 1;
@@ -25652,7 +25810,11 @@ function mockDraftHTML() {
   }
 
   const sim = _mockSim();
-  const avail = m.pool.slice(0, 12).map((p) => `
+  // THE CHEAT SHEET ORDERS THE POOL. Our board (VORP) or the market's
+  // order (what the room pays) — the reader chose which list to draft
+  // from, and the list, the default card and the auto-pick all read it.
+  const sheet = _mockSheet(m);
+  const avail = sheet.slice(0, 12).map((p) => `
     <div class="mk-log-row">
       ${face(p, 32)}
       ${idBlock(p, ` · VORP +${(p.vorp || 0).toFixed(1)} · Tier ${p.tier || "—"}`)}
@@ -25683,7 +25845,7 @@ function mockDraftHTML() {
      never empty and the page opens on the pick it would recommend.
      Falls back the moment the selection is drafted by somebody else —
      a card describing a man who is off the board is worse than no card. */
-  let selected = m.pool.find((x) => x.player === _mockSel) || m.pool[0];
+  let selected = m.pool.find((x) => x.player === _mockSel) || sheet[0];
   const until = _mockPicksUntil(m);
   const advice = yourTurn ? _mockAdvice(selected) : null;
 
@@ -25704,7 +25866,7 @@ function mockDraftHTML() {
     : `<div class="mk-brow"><span class="mk-meta">No picks yet — the board
         fills as the room drafts.</span></div>`;
 
-  const poolList = m.pool.slice(0, 40).map((pl) => {
+  const poolList = sheet.slice(0, 40).map((pl) => {
     const sv = sim ? sim.survive.get(pl.player) : null;
     return `<div class="mk-brow mk-poolrow${pl.player === selected.player ? " sel" : ""}"
         data-mksel="${escapeAttr(pl.player)}">
@@ -25736,7 +25898,9 @@ function mockDraftHTML() {
       <div class="mk-hero-id">
         <div class="mk-hero-title">${iconMark("trophy", 26)} Mock draft</div>
         <div class="mk-hero-sub">${m.teams} teams · ${escapeHtml(_mockFmt().name)}
-          · ${m.rounds} rounds · seat ${m.you + 1}</div>
+          · ${escapeHtml(MOCK_DRAFT_TYPES[m.type] || "Snake")}
+          · ${m.rounds} rounds${m.roundsInfo && m.roundsInfo.skipped
+            ? ` of ${m.roundsInfo.league}` : ""} · seat ${m.you + 1}</div>
       </div>
       <div class="mk-hero-stats">
         <div class="mk-hs"><span class="k">Pick</span>
@@ -25748,7 +25912,9 @@ function mockDraftHTML() {
         <div class="mk-hs ${yourTurn ? "you" : ""}"><span class="k">On the clock</span>
           <span class="v">${yourTurn ? "You" : "Team " + (_mockPicker(m.pick, m.teams) + 1)}</span>
           <span class="s">${
-            until.onClock ? "it is your pick"
+            until.onClock ? (m.cfg && m.cfg.clock
+              ? `<span id="mk-clock" class="mk-clock">${m.cfg.clock}s left</span>`
+              : "it is your pick")
             : until.picks == null ? "no turn left this draft"
             : until.picks === 1 ? `you are up next \u2014 at ${_mockPickNo(until.next, m.teams)}`
             : `${until.picks} picks until you \u2014 at ${_mockPickNo(until.next, m.teams)}`}</span></div>
@@ -25779,6 +25945,244 @@ function mockDraftHTML() {
     ${yourTurn ? _mockWaitHTML(sim) : ""}
     ${_mockByeHTML(m.rosters[m.you])}
     <button class="btn" id="mk-reset" style="margin-top:12px">Abandon this draft</button>`;
+}
+
+/* THE SETUP PANEL — two cards, the way FantasyPros lays its own out
+   (Ethan, 2026-09-08): LEAGUE SETTINGS, then MOCK DRAFT SETTINGS, then
+   keepers, then the button. Every control writes `_mockCfg` and survives
+   a reload; the draft reads a frozen copy when it starts. */
+function _mockStep(key, value, lo, hi, opts) {
+  const o = opts || {};
+  return `<span class="mk-step" data-mkstep="${key}">
+    <button type="button" class="mk-step-btn" data-mkd="-1" aria-label="Fewer"
+      ${value <= lo ? "disabled" : ""}>\u2212</button>
+    <b>${o.label ? o.label(value) : value}</b>
+    <button type="button" class="mk-step-btn" data-mkd="1" aria-label="More"
+      ${value >= hi ? "disabled" : ""}>+</button></span>`;
+}
+
+function _mockSelect(id, options, value) {
+  return `<select id="${id}" class="mk-sel mk-sel-row">${options.map(([v, label]) =>
+    `<option value="${escapeAttr(String(v))}"${String(v) === String(value) ? " selected" : ""}>${
+      escapeHtml(label)}</option>`).join("")}</select>`;
+}
+
+function _mockSetupHTML(kit) {
+  const c = _mockCfg;
+  const board = (kit || _mockKit || {}).board || [];
+  const rounds = _mockCfgRounds(c, board.length, c.teams);
+  const ordinal = (n) => `${n}${n % 10 === 1 && n !== 11 ? "st"
+    : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
+  const row = (ic, label, control, sub) => `<div class="mk-row">
+    <span class="mk-row-k">${icon(ic, 15)} <span>${label}${
+      sub ? `<i class="mk-row-sub">${sub}</i>` : ""}</span></span>
+    <span class="mk-row-v">${control}</span></div>`;
+  const slotWord = { QB: "Quarterback", RB: "Running back", WR: "Wide receiver",
+                     TE: "Tight end", FLEX: "Flex (WR/RB/TE)",
+                     SFLEX: "Superflex (QB/WR/RB/TE)", K: "Kicker", DST: "Defence",
+                     BN: "Bench" };
+  const rosterRows = Object.keys(slotWord).map((k) => `<div class="mk-row mk-row-slot">
+    <span class="mk-row-k"><span>${slotWord[k]}${k === "K" || k === "DST"
+      ? `<i class="mk-row-sub">on the line, not drafted here</i>` : ""}</span></span>
+    <span class="mk-row-v">${_mockStep("roster." + k, c.roster[k], 0, MOCK_ROSTER_MAX[k])}</span>
+  </div>`).join("");
+  const presets = Object.entries(MOCK_PRESETS).map(([k, p]) =>
+    `<button type="button" class="chip mk-preset${
+      c.scoring === p.scoring && c.tePrem === p.tePrem
+      && Object.keys(p.roster).every((s) => c.roster[s] === p.roster[s]) ? " active" : ""}"
+      data-mkpreset="${k}">${escapeHtml(p.name)}</button>`).join("");
+  const sleeper = (typeof localStorage !== "undefined" && localStorage.getItem("ff_user"))
+    ? `<button type="button" class="btn mk-league-btn" id="mk-use-league">${
+        icon("trophy", 14)} Use my Sleeper league</button>
+       <span class="mk-row-sub" id="mk-league-note">${
+        _mockLeagueNote ? escapeHtml(_mockLeagueNote) : "settings, seat and draft type from your league"}</span>`
+    : `<span class="mk-row-sub">Link your Sleeper account on the Account page and
+        the league\u2019s own settings, seat and draft type fill this in.</span>`;
+  return `<div class="section-title">Mock draft
+      <span class="sub">— against ${c.teams - 1} CPU rooms with builds of their
+      own, drafted from the kit\u2019s own ${board.length}-player board</span></div>
+    <div class="mk-settings">
+      <div class="card mk-setcard">
+        <div class="mk-setcard-head">League settings</div>
+        <div class="mk-row mk-row-league"><span class="mk-row-k">${icon("trophy", 15)}
+          <span>Select league</span></span><span class="mk-row-v mk-row-v-wrap">${sleeper}</span></div>
+        <div class="mk-presets">${presets}</div>
+        ${row("list", "Scoring", _mockSelect("mk-scoring",
+          Object.entries(MOCK_SCORING).map(([k, s]) => [k, s.name]), c.scoring))}
+        ${row("list", "TE premium", _mockSelect("mk-teprem",
+          [[0, "None"], [0.5, "+0.5 per catch"], [1, "+1.0 per catch"]], c.tePrem),
+          "on the tight end\u2019s real receptions")}
+        ${row("target", "Draft type", _mockSelect("mk-type",
+          Object.entries(MOCK_DRAFT_TYPES), c.draftType))}
+        ${row("calendar", "Teams", _mockStep("teams", c.teams, MOCK_TEAMS_RANGE[0], MOCK_TEAMS_RANGE[1]))}
+        <details class="mk-roster"${c.roster.K || c.roster.DST ? "" : " open"}>
+          <summary class="mk-row"><span class="mk-row-k">${icon("book", 15)}
+            <span>Roster<i class="mk-row-sub">${escapeHtml(_mockRosterLine(c))}</i></span></span>
+            <span class="mk-row-v mk-row-chev">\u203a</span></summary>
+          ${rosterRows}
+          <p class="mk-keep-note">${rounds.league} rounds in this league, ${
+            rounds.drafted} drafted here${rounds.skipped
+              ? ` — the kit\u2019s board projects no kickers or defences, so those
+                 ${rounds.skipped} round${rounds.skipped === 1 ? "" : "s"} are not
+                 simulated rather than drafted as blanks`
+              : ""}${rounds.drafted < rounds.wanted
+              ? `; the board is ${board.length} deep, which at ${c.teams} teams
+                 carries ${rounds.drafted} rounds` : ""}.</p>
+        </details>
+      </div>
+      <div class="card mk-setcard">
+        <div class="mk-setcard-head">Mock draft settings</div>
+        ${row("target", "Draft position", _mockStep("slot", c.slot, 1, c.teams,
+          { label: ordinal }))}
+        ${row("book", "Cheat sheet", _mockSelect("mk-sheet",
+          Object.entries(MOCK_SHEETS), c.sheet),
+          c.sheet === "market" ? "the pool sorts the way the room drafts"
+            : "the pool sorts by value over replacement")}
+        ${row("clock", "Pick clock", _mockSelect("mk-clock",
+          MOCK_CLOCKS.map((s) => [s, s ? `${s} seconds` : "No clock"]), c.clock),
+          c.clock ? "runs on your picks; the cheat sheet drafts for you at zero"
+            : "your picks wait for you")}
+        ${row("people", "Room chaos", _mockSelect("mk-chaos",
+          [[10, "Chalk"], [35, "Realistic"], [65, "Wild"], [100, "Chaos"]], c.chaos),
+          "how far the rooms stray from the board")}
+        ${_mockKeeperHTML(c.teams)}
+      </div>
+    </div>
+    <button class="btn primary mk-startbtn" id="mk-start">Start the draft
+      <span class="mk-startsub">${c.teams} teams · ${escapeHtml(_mockCfgLabel(c))} ·
+        ${escapeHtml(MOCK_DRAFT_TYPES[c.draftType])} · pick ${c.slot} · ${rounds.drafted} rounds</span></button>
+    <div class="card" style="padding:14px 18px;margin-top:14px">
+      <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
+        Every rival room is dealt one of ${MOCK_ARCHETYPES.length} builds and
+        keeps it all draft — Zero RB, Hero RB, WR hoarder, early QB, elite
+        TE and the rest — so the board falls differently every time and a
+        run on a position is sometimes real. <b>Room chaos</b> sets how far
+        they will stray from the board to do it.</p>
+      <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
+        <b>Scoring</b> and the <b>roster</b> are set apart, the way a league
+        sets them. A superflex slot starts a second quarterback, so the
+        position stops having a free replacement and goes in the first
+        round instead of the tenth. A TE premium pays per tight-end catch,
+        computed from real receptions rather than a guessed catch rate.
+        Half PPR and standard take the same catches back off the board\u2019s
+        PPR numbers. Each setting re-derives every projection, every VORP
+        and the order the rooms draft in — nothing here is a re-skin.</p>
+      <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0">
+        On every one of your picks the draft ahead of you is simulated
+        ${MOCK_SIMS.toLocaleString()} times, and each available player
+        carries how often he was still there when it came back to you.
+        Your finished roster is judged on its starters\u2019 projected PPG
+        against the room, and on where each pick beat or missed the board
+        — not on a letter grade nobody fitted.</p>
+    </div>`;
+}
+
+/* ---- "Select league": the settings from YOUR Sleeper league ------------
+   The screenshot's top row, and the line under it: "More realistic mock
+   drafts using your league's settings." A league object carries the team
+   count, the roster slots and the scoring; its draft object carries the
+   type, the reversal round, the round count, the pick timer and your
+   seat. `_mockApplyLeague` is the mapping and is pure, so the suite can
+   run it on a fixture; `_mockUseLeague` is the fetch around it.
+
+   WHAT IS NOT MAPPED IS SAID. IDP, IR and taxi slots have no counterpart
+   here and are dropped; an auction draft is mocked as a snake, because
+   this room bids nothing; a TE bonus of some odd size rounds to the
+   nearest the panel offers. Every one of those is in the note the button
+   prints, so the reader knows what the room did with their league. */
+let _mockLeagueNote = "";
+
+//: Sleeper's roster_positions vocabulary → the editor's slots.
+const MOCK_SLEEPER_SLOT = { QB: "QB", RB: "RB", WR: "WR", TE: "TE", FLEX: "FLEX",
+                            REC_FLEX: "FLEX", WRRB_FLEX: "FLEX", SUPER_FLEX: "SFLEX",
+                            K: "K", DEF: "DST", BN: "BN" };
+
+function _mockApplyLeague(league, draft, userId, cfg) {
+  const c = cfg || _mockCfg;
+  const notes = [];
+  const lg = league || {};
+  const teams = parseInt(lg.total_rosters, 10);
+  if (teams >= MOCK_TEAMS_RANGE[0] && teams <= MOCK_TEAMS_RANGE[1]) {
+    c.teams = teams; notes.push(`${teams} teams`);
+  } else if (teams) {
+    notes.push(`${teams} teams is outside the ${MOCK_TEAMS_RANGE[0]}\u2013${MOCK_TEAMS_RANGE[1]} this room runs`);
+  }
+  const positions = Array.isArray(lg.roster_positions) ? lg.roster_positions : [];
+  if (positions.length) {
+    const roster = { QB: 0, RB: 0, WR: 0, TE: 0, FLEX: 0, SFLEX: 0, K: 0, DST: 0, BN: 0 };
+    const dropped = new Set();
+    for (const raw of positions) {
+      const slot = MOCK_SLEEPER_SLOT[String(raw || "").toUpperCase()];
+      if (slot) roster[slot] = Math.min(MOCK_ROSTER_MAX[slot], roster[slot] + 1);
+      else dropped.add(String(raw || "").toUpperCase());
+    }
+    c.roster = roster;
+    notes.push(`roster ${_mockRosterLine(c)}`);
+    if (dropped.size) notes.push(`${[...dropped].join("/")} slots have no place here and were dropped`);
+  }
+  const sc = lg.scoring_settings || {};
+  if (sc.rec != null) {
+    const rec = Number(sc.rec);
+    c.scoring = rec >= 0.75 ? "ppr" : rec >= 0.25 ? "half" : "std";
+    notes.push(MOCK_SCORING[c.scoring].name);
+  }
+  const teb = Number(sc.bonus_rec_te || 0);
+  c.tePrem = teb >= 0.75 ? 1 : teb >= 0.25 ? 0.5 : 0;
+  if (c.tePrem) notes.push(`TE +${c.tePrem} a catch`);
+  const d = draft || {};
+  const ds = d.settings || {};
+  if (d.type === "auction") {
+    c.draftType = "snake"; notes.push("an auction league, mocked here as a snake");
+  } else if (d.type === "linear") {
+    c.draftType = "linear"; notes.push("linear order");
+  } else if (d.type === "snake") {
+    c.draftType = Number(ds.reversal_round) === 3 ? "3rr" : "snake";
+    notes.push(c.draftType === "3rr" ? "3rd-round reversal" : "snake");
+  }
+  const timer = parseInt(ds.pick_timer, 10);
+  if (Number.isFinite(timer)) {
+    c.clock = timer <= 0 ? 0
+      : MOCK_CLOCKS.filter((s) => s > 0).reduce((best, s) =>
+          Math.abs(s - timer) < Math.abs(best - timer) ? s : best, MOCK_CLOCKS[1]);
+    notes.push(c.clock ? `${c.clock}s clock` : "no clock");
+  }
+  const order = d.draft_order || {};
+  const seat = userId != null ? parseInt(order[String(userId)], 10) : NaN;
+  if (Number.isFinite(seat) && seat >= 1 && seat <= c.teams) {
+    c.slot = seat; notes.push(`your seat is ${seat}`);
+  }
+  return notes;
+}
+
+async function _mockUseLeague() {
+  const say = (msg) => { _mockLeagueNote = msg; _mockRender(); };
+  const username = localStorage.getItem("ff_user");
+  if (!username) { say("Link your Sleeper account on the Account page first."); return; }
+  say("Reading your league\u2026");
+  try {
+    const user = window._slUser
+      || await sleeperGet(`user/${encodeURIComponent(username)}`);
+    if (!user || !user.user_id) throw new Error(`No Sleeper user named \u201c${username}\u201d`);
+    let leagueId = localStorage.getItem("ff_league");
+    if (!leagueId) {
+      let season = new Date().getFullYear();
+      let leagues = await sleeperGet(`user/${user.user_id}/leagues/nfl/${season}`) || [];
+      if (!leagues.length) {
+        season -= 1;
+        leagues = await sleeperGet(`user/${user.user_id}/leagues/nfl/${season}`) || [];
+      }
+      if (!leagues.length) throw new Error("No NFL leagues found on that account");
+      leagueId = leagues[0].league_id;
+    }
+    const league = await sleeperGet(`league/${leagueId}`);
+    let drafts = [];
+    try { drafts = await sleeperGet(`league/${leagueId}/drafts`) || []; } catch (e) { drafts = []; }
+    const applied = _mockApplyLeague(league, drafts[0] || null, user.user_id, _mockCfg);
+    _mockSaveCfg();
+    say(`${league.name || "Your league"}: ${applied.join(" · ") || "nothing to read"}.`);
+  } catch (e) {
+    say(String(e.message || e));
+  }
 }
 
 /* THE ONE PANEL ON THIS CARD MADE OF THINGS THAT ALREADY HAPPENED.
@@ -25843,22 +26247,94 @@ function _mockRender() {
   room.innerHTML = mockDraftHTML();
   const z = room.querySelector("#mk-trend");
   if (z) _mockTrend(z.dataset.mktrend);
+  _mockArmClock();
+}
+
+/* THE CHEAT SHEET: the pool in the order the reader chose to draft
+   from. Our board is value over replacement; the market's is what the
+   room pays, which is the order a drafter used to ADP expects. */
+function _mockSheet(m) {
+  const key = (m && m.cfg && m.cfg.sheet) || "board";
+  return key === "market" ? _mockByMarket(m) : m.pool;
+}
+
+/* ---- The pick clock -----------------------------------------------------
+   Yours, and only yours. A CPU pick is computed in under a millisecond
+   and a clock on it would be an animation; a clock on YOUR pick is the
+   pressure a real room puts on, and it is real because something happens
+   at zero: the cheat sheet's best available that your roster still has
+   room for is drafted for you, which is what every draft host does. Off
+   by default (`MOCK_DEFAULT_CFG.clock`), armed once per pick, and
+   stopped the moment the room is gone from the page. */
+let _mockClockTimer = null;
+let _mockClockPick = -1;
+
+function _mockStopClock() {
+  if (_mockClockTimer) { clearInterval(_mockClockTimer); _mockClockTimer = null; }
+  _mockClockPick = -1;
+}
+
+function _mockArmClock() {
+  const m = _mock;
+  if (!m || !m.cfg || !m.cfg.clock) { _mockStopClock(); return; }
+  const total = m.teams * m.rounds;
+  const yours = m.pick < total && _mockPicker(m.pick, m.teams) === m.you
+    && !_mockSkipped(m, m.pick);
+  if (!yours) { _mockStopClock(); return; }
+  if (_mockClockPick === m.pick && _mockClockTimer) return;   // already running for this pick
+  _mockStopClock();
+  _mockClockPick = m.pick;
+  let left = m.cfg.clock;
+  _mockClockTimer = setInterval(() => {
+    const el = document.getElementById("mk-clock");
+    // The room left the page, or the draft moved on without us.
+    if (!el || _mock !== m || m.pick !== _mockClockPick) { _mockStopClock(); return; }
+    left -= 1;
+    if (left > 0) {
+      el.textContent = `${left}s left`;
+      el.classList.toggle("mk-clock-low", left <= 10);
+      return;
+    }
+    _mockStopClock();
+    _mockAutoPick();
+  }, 1000);
+}
+
+//: The cheat sheet's best available your roster has room for — the
+//: same legality the rooms answer to, so a clock that ran out cannot
+//: hand you a third quarterback.
+function _mockAutoPick() {
+  const m = _mock;
+  if (!m) return;
+  const roster = m.rosters[m.you];
+  const counts = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  for (const p of roster) if (counts[p.position] != null) counts[p.position] += 1;
+  const round = Math.floor(m.pick / m.teams);
+  const sheet = _mockSheet(m);
+  const pick = sheet.find((p) => _mockNeedCounts(counts, p.position, round) > 0)
+    || sheet[0];
+  if (!pick) return;
+  _mockSel = null;
+  _mockTake(m.you, pick);
+  _mockAdvance();
 }
 
 function _mockBind(host) {
   const room = host.querySelector("#mock-room");
   if (!room) return;
   // Delegated, because the room's innerHTML is replaced on every pick.
+  // EVERY SETTING WRITES THE CONFIG AND RE-RENDERS, so the roster line,
+  // the round count and the button's summary are never a step behind
+  // the control that changed them.
+  const setCfg = (fn) => { fn(_mockCfg); _mockSaveCfg(); _mockRender(); };
   room.addEventListener("change", (e) => {
-    if (e.target.id !== "mk-teams") return;
-    // The slot picker follows the league size — an 8-team league has no
-    // pick eleven, and silently clamping a stale choice would start the
-    // reader from a seat they never chose.
-    const teams = parseInt(e.target.value, 10);
-    const slot = document.getElementById("mk-slot");
-    const keep = Math.min(teams, parseInt(slot.value, 10) || 1);
-    slot.innerHTML = Array.from({ length: teams }, (_, i) =>
-      `<option ${i + 1 === keep ? "selected" : ""}>${i + 1}</option>`).join("");
+    const t = e.target;
+    if (t.id === "mk-scoring") setCfg((c) => { c.scoring = t.value; });
+    else if (t.id === "mk-teprem") setCfg((c) => { c.tePrem = Number(t.value); });
+    else if (t.id === "mk-type") setCfg((c) => { c.draftType = t.value; });
+    else if (t.id === "mk-sheet") setCfg((c) => { c.sheet = t.value; });
+    else if (t.id === "mk-clock") setCfg((c) => { c.clock = Number(t.value); });
+    else if (t.id === "mk-chaos") setCfg((c) => { c.chaos = Number(t.value); });
   });
   room.addEventListener("click", (e) => {
     const t = e.target;
@@ -25884,25 +26360,49 @@ function _mockBind(host) {
       _mockRender();
       return;
     }
-    if (t.id === "mk-start") {
-      const teams = parseInt(document.getElementById("mk-teams").value, 10);
-      const slot = Math.min(teams,
-        parseInt(document.getElementById("mk-slot").value, 10));
-      const ch = document.getElementById("mk-chaos");
-      if (ch) _mockChaos = parseInt(ch.value, 10) || 35;
-      const fm = document.getElementById("mk-format");
-      // Set BEFORE _mockStart: the format decides the scoring, which
-      // decides VORP, which decides both boards.
-      if (fm && MOCK_FORMATS[fm.value]) _mockFormat = fm.value;
-      _mockStart(teams, slot);
+    const stepEl = t.closest && t.closest("[data-mkstep]");
+    if (stepEl && t.dataset && t.dataset.mkd) {
+      // Steppers: teams, your seat, and every roster slot. The seat
+      // follows the league size — a ten-team league has no pick eleven,
+      // and silently clamping a stale choice would start the reader
+      // from a seat they never chose, so the clean-up clamps it in the
+      // open and the panel shows the result.
+      const key = stepEl.dataset.mkstep;
+      const d = parseInt(t.dataset.mkd, 10) || 0;
+      setCfg((c) => {
+        if (key === "teams") c.teams += d;
+        else if (key === "slot") c.slot += d;
+        else if (key.startsWith("roster.")) {
+          const s = key.slice(7);
+          if (c.roster[s] != null) c.roster[s] += d;
+        }
+      });
+      return;
+    }
+    const presetEl = t.closest && t.closest("[data-mkpreset]");
+    if (presetEl && MOCK_PRESETS[presetEl.dataset.mkpreset]) {
+      const p = MOCK_PRESETS[presetEl.dataset.mkpreset];
+      setCfg((c) => { c.scoring = p.scoring; c.tePrem = p.tePrem;
+                      c.roster = { ...p.roster }; });
+      return;
+    }
+    if (t.id === "mk-use-league" || (t.closest && t.closest("#mk-use-league"))) {
+      _mockUseLeague();
+      return;
+    }
+    if (t.id === "mk-start" || (t.closest && t.closest("#mk-start"))) {
+      _mockSaveCfg();
+      _mockChaos = _mockCfg.chaos;
+      _mockStart(_mockCfg.teams, Math.min(_mockCfg.teams, _mockCfg.slot));
     } else if (t.id === "mk-reset" || t.id === "mk-again") {
-      _mock = null; _mockSel = null; _mockTab = "board"; _mockRender();
+      _mockStopClock();
+      _mock = null; _mockSel = null; _mockTab = "pool"; _mockRender();
     } else if (t.dataset && t.dataset.mkp) {
       const p = _mock.pool.find((x) => x.player === t.dataset.mkp);
       // The selection must not survive the man it names. Drafting him
       // takes him out of the pool, so the card falls back to the new best
       // available rather than describing somebody nobody can pick.
-      if (p) { _mockSel = null; _mockTake(_mock.you, p); _mockAdvance(); }
+      if (p) { _mockStopClock(); _mockSel = null; _mockTake(_mock.you, p); _mockAdvance(); }
     } else {
       // Selection and tabs are delegated off the closest carrier so a
       // click anywhere in a row works, including on the avatar.

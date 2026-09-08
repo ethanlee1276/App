@@ -40,7 +40,9 @@ def test_the_pool_is_the_kits_own_board():
     draft_kit in it, and the room told everyone the kit was empty."""
     assert "_mockKit = d.draft_kit || {}" in APP
     i = APP.index("function _mockStart(")
-    body = APP[i:i + 400]
+    # 900, not 400: the start now sets the format, the draft type and
+    # the clock from the settings before it scores the board (2026-09-08).
+    body = APP[i:i + 900]
     assert "_mockKit || {}" in body
     # VORP-ordered, but RE-DERIVED under the chosen format first: a
     # format that changed projections and left VORP alone would move every
@@ -464,11 +466,20 @@ def test_there_is_no_countdown_clock():
     people: a CPU pick is computed in under a millisecond. A countdown
     would be an animation pretending somebody is deciding on the other
     end, and the first reader who let it run out and watched nothing
-    happen would know. The SEAT on the clock is real and is shown."""
+    happen would know. The SEAT on the clock is real and is shown.
+
+    SINCE 2026-09-08 THERE IS A CLOCK, AND IT IS NOT THAT ONE. It runs
+    on YOUR pick only, it is off unless the settings turn it on, and it
+    is real because something happens at zero — the cheat sheet drafts
+    for you. The room's markup still carries no timer of its own; the
+    clock lives in `_mockArmClock`, past the room, and is pinned in
+    tests/test_mockdraft_settings.py."""
     room = APP[APP.index("function mockDraftHTML("):]
     room = room[:room.index("\nfunction _mockRender(")]
     for bad in ("setInterval", "00:", "countdown", "timeLeft", "secondsLeft"):
         assert bad not in room, f"a clock crept into the draft room: {bad!r}"
+    # The seat's line shows the clock only when the settings set one.
+    assert "m.cfg && m.cfg.clock" in room
 
 
 def test_the_clock_became_a_real_picks_until_you_counter():

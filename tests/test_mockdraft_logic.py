@@ -44,6 +44,24 @@ const code = [
   // Formats: the line-up, caps and share bands the rest reads from.
   grab("const MOCK_FORMATS = {", "\n};"),
   "let _mockFormat = 'ppr';",
+  // The settings the format is composed from (2026-09-08): scoring,
+  // roster, and the helpers that turn them into slots, bonus and caps.
+  grab("const MOCK_SCORING = {", "};"),
+  grab("const MOCK_DRAFT_TYPES = {", "};"),
+  grab("const MOCK_SHEETS = {", "};"),
+  grab("const MOCK_CLOCKS = [", "];"),
+  grab("const MOCK_TEAMS_RANGE = [", "];"),
+  grab("const MOCK_ROSTER_MAX = {", "};"),
+  grab("const MOCK_DEFAULT_CFG = {", "} };"),
+  grab("function _mockCleanCfg(", "\n}"),
+  grab("function _mockLoadCfg(", "\n}"),
+  "var _mockCfg = _mockLoadCfg();",
+  grab("function _mockCfgSlots(", "\n}"),
+  grab("function _mockCfgBonus(", "\n}"),
+  grab("function _mockCfgFormatKey(", "\n}"),
+  grab("function _mockCfgLabel(", "\n}"),
+  grab("function _mockCfgRounds(", "\n}"),
+  grab("function _mockRosterLine(", "\n}"),
   grab("function _mockFmt(", "\n}"),
   grab("const MOCK_SLOTS", ";"),
   // The caps the need curve now enforces — a room that only ever
@@ -58,9 +76,18 @@ const code = [
 eval(code);
 
 const out = {};
-// The snake over 12 teams, three rounds.
+// The snake over 12 teams, three rounds — and the two other orders a
+// league can run, asked for by name.
 out.snake = [];
 for (let p = 0; p < 36; p++) out.snake.push(_mockPicker(p, 12));
+out.linear = [];
+for (let p = 0; p < 24; p++) out.linear.push(_mockPicker(p, 12, "linear"));
+out.rr3 = [];
+for (let p = 0; p < 60; p++) out.rr3.push(_mockPicker(p, 12, "3rr"));
+// The default format the settings compose: PPR, one QB, two RB, two WR,
+// one TE, two flex — the same line-up the judge below is scored on.
+out.fmt_slots = _mockFmt().slots;
+out.fmt_bonus = _mockFmt().bonus;
 
 // Need discipline: a room holding one QB, asked about a second. Counts
 // rather than a roster array — the Monte Carlo carries counts, and
@@ -111,6 +138,28 @@ def test_the_snake_reverses_every_round_and_covers_every_room():
     # The turn (picks 12 and 13) belongs to the same room — the snake's
     # signature, and the reason slot 12 is not a punishment.
     assert r["snake"][11] == r["snake"][12] == 11
+
+
+def test_the_other_two_orders_are_what_a_league_means_by_them():
+    """Linear is the same order every round. Third-round reversal is the
+    snake except round three runs the way round two did, so the seat
+    that picked last in round one gets 2.01 AND 3.01 — from round four
+    on it alternates as a snake does."""
+    r = _run()
+    assert r["linear"] == list(range(12)) * 2
+    rounds = [r["rr3"][i * 12:(i + 1) * 12] for i in range(5)]
+    fwd, rev = list(range(12)), list(range(11, -1, -1))
+    assert rounds == [fwd, rev, rev, fwd, rev], rounds
+    # Seat 12's first four picks: 1.12, 2.01, 3.01, 4.12.
+    mine = [p for p in range(48) if r["rr3"][p] == 11]
+    assert mine == [11, 12, 24, 47], mine
+
+
+def test_the_settings_compose_the_default_format():
+    r = _run()
+    assert r["fmt_slots"] == {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2, "SFLEX": 0}
+    # Full PPR on a PPR board: nothing added or taken back per catch.
+    assert r["fmt_bonus"] == {"RB": 0, "WR": 0, "TE": 0, "QB": 0}
 
 
 def test_a_room_holding_a_quarterback_waits_on_the_second():

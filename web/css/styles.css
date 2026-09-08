@@ -7299,6 +7299,54 @@ button.rc-day b { font-size: var(--fs-sm); }
 /* The other end of the same distribution: from the 1.01 seat every name
    on the board is gone by your next turn, so a column of 0% is honest and
    useless by itself. These are the men who actually survive. */
+/* THE SETUP PANEL, to the FantasyPros settings screen Ethan sent
+   (2026-09-08): two cards of labelled rows, a control on the right of
+   each, steppers for the counts. */
+.mk-settings { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mk-setcard { padding: 6px 18px 12px; }
+.mk-setcard-head { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-mute); padding: 10px 0 4px; }
+.mk-row { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 11px 0; border-bottom: var(--hairline) solid var(--border-soft);
+  font-size: var(--fs-md); }
+.mk-row:last-child { border-bottom: 0; }
+.mk-row-k { display: inline-flex; align-items: center; gap: 10px; min-width: 0;
+  color: var(--text); }
+.mk-row-k .ic { color: var(--text-mute); flex: none; }
+.mk-row-sub { display: block; font-style: normal; font-size: var(--fs-xs);
+  color: var(--text-mute); margin-top: 2px; line-height: var(--lh-body); }
+.mk-row-v { flex: none; display: inline-flex; align-items: center; gap: 8px;
+  color: var(--text-mute); }
+.mk-row-v-wrap { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+.mk-row-chev { font-size: var(--fs-xl); line-height: 1; }
+.mk-sel-row { display: inline-block; margin: 0; }
+.mk-step { display: inline-flex; align-items: center; gap: 2px;
+  background: var(--fill-subtle); border-radius: 999px; padding: 2px; }
+.mk-step > b { min-width: 3.2em; text-align: center; color: var(--text);
+  font-variant-numeric: tabular-nums; }
+.mk-step-btn { width: 30px; height: 30px; border-radius: 999px; border: 0;
+  background: var(--panel-2); color: var(--text); font-size: var(--fs-lg);
+  line-height: 1; cursor: pointer; }
+.mk-step-btn:disabled { opacity: .35; cursor: default; }
+.mk-roster > summary { list-style: none; cursor: pointer; }
+.mk-roster > summary::-webkit-details-marker { display: none; }
+.mk-roster[open] .mk-row-chev { transform: rotate(90deg); }
+.mk-row-slot { padding: 7px 0 7px 26px; font-size: var(--fs-sm); }
+.mk-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 4px; }
+.mk-preset { cursor: pointer; }
+.mk-preset.active { border-color: var(--brand); color: var(--brand-2); }
+.mk-league-btn { padding: 6px 12px; }
+.mk-startbtn { width: 100%; margin-top: 14px; padding: 12px; display: flex;
+  flex-direction: column; align-items: center; gap: 2px;
+  font-size: var(--fs-md); font-weight: 800; }
+.mk-startsub { font-size: var(--fs-xs); font-weight: 500; opacity: .85; }
+/* The pick clock, on your picks only. */
+.mk-clock { font-variant-numeric: tabular-nums; font-weight: 700; }
+.mk-clock-low { color: var(--bad); }
+@media (max-width: 760px) {
+  .mk-settings { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Keepers. A collapsed block in setup, because most leagues have none
    and the ones that do set them once. */
 .mk-keepers { margin-top: 14px; border-top: var(--hairline) solid var(--border-soft);
