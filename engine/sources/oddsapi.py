@@ -1270,19 +1270,24 @@ def _modal_line(points: list[float]):
     return max(counts, key=lambda k: (counts[k], k))
 
 
-def parse_event_totals(event_json: dict, only_books: set | None = None):
-    """Return ``(line, best_over_odds, best_under_odds)`` for the game total,
-    or ``None``. Uses the consensus line and the best price on each side.
+def _total_quotes(event_json: dict, only_books: set | None = None):
+    """The game total's quotes as ``(overs, unders)``, each
+    ``[(point, price, book title)]`` in payload order.
 
-    Sharp reference books are excluded from the bettable aggregate;
-    ``only_books`` (API keys) restricts to those books instead — that's how
-    the sharp book's own pair is read out as the fair-value anchor."""
+    One walk, two readers: :func:`parse_event_totals` takes the numbers
+    and :func:`best_total_books` takes the name beside them. Written as
+    one function on purpose — a second walk written to name the book
+    could pick a different book than the walk that picked the price, and
+    a card that shows the right number under the wrong book's name is
+    the exact failure this work exists to end.
+    """
     overs: list[tuple] = []
     unders: list[tuple] = []
     for bm in event_json.get("bookmakers", []):
         bk = bm.get("key", "")
         if (bk in SHARP_BOOKS) if only_books is None else (bk not in only_books):
             continue
+        title = BOOK_TITLES.get(bk, bk)
         for mkt in bm.get("markets", []):
             if mkt.get("key") != "totals":
                 continue
@@ -1291,26 +1296,24 @@ def parse_event_totals(event_json: dict, only_books: set | None = None):
                 pt, pr = o.get("point"), o.get("price")
                 if pt is None or pr is None:
                     continue
-                (overs if name == "over" else unders).append((float(pt), int(pr)))
-    line = _modal_line([p for p, _ in overs])
-    if line is None:
-        return None
-    over_odds = max((pr for p, pr in overs if p == line), default=-110)
-    under_odds = max((pr for p, pr in unders if p == line), default=-110)
-    return line, over_odds, under_odds
+                (overs if name == "over" else unders).append(
+                    (float(pt), int(pr), title))
+    return overs, unders
 
 
-def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
-                        only_books: set | None = None):
-    """Return ``(home_spread, home_odds, away_odds)`` for the spread / run line,
-    or ``None``. The home team's point is the stored spread. Sharp books are
-    excluded unless ``only_books`` selects them explicitly."""
+def _spread_quotes(event_json: dict, team_map: dict, home: str, away: str,
+                   only_books: set | None = None):
+    """The spread's quotes as ``(home_pts, away_pts)``, each
+    ``[(point, price, book title)]`` in payload order. Shared by
+    :func:`parse_event_spreads` and :func:`best_spread_books` for the
+    reason given on :func:`_total_quotes`."""
     home_pts: list[tuple] = []
     away_pts: list[tuple] = []
     for bm in event_json.get("bookmakers", []):
         bk = bm.get("key", "")
         if (bk in SHARP_BOOKS) if only_books is None else (bk not in only_books):
             continue
+        title = BOOK_TITLES.get(bk, bk)
         for mkt in bm.get("markets", []):
             if mkt.get("key") != "spreads":
                 continue
@@ -1320,14 +1323,107 @@ def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
                 if not abbr or pt is None or pr is None:
                     continue
                 if abbr == home:
-                    home_pts.append((float(pt), int(pr)))
+                    home_pts.append((float(pt), int(pr), title))
                 elif abbr == away:
-                    away_pts.append((float(pt), int(pr)))
-    line = _modal_line([p for p, _ in home_pts])
+                    away_pts.append((float(pt), int(pr), title))
+    return home_pts, away_pts
+
+
+def _best_book(quotes) -> str:
+    """Which book posts the best price among ``(price, title)`` pairs.
+
+    Same rule as the number it names, or the name would be a lie:
+    strictly greater wins, so ties go to the first book the payload
+    listed, exactly as ``max`` picks the first maximal price. An empty
+    list — a side no book posted at the published line — gets NO name,
+    because the price shown there is the parsers' -110 fallback and no
+    book is offering it.
+    """
+    best: int | None = None
+    title = ""
+    for price, name in quotes:
+        if best is None or price > best:
+            best, title = price, name
+    return title
+
+
+def best_total_books(event_json: dict) -> dict[str, str]:
+    """``{"over"/"under": book title}`` — WHO is posting the total we show.
+
+    The moneyline learned to say this first (`best_h2h_books`); the
+    spread and the total kept publishing a shopped price with no name on
+    it, which is the same defect one market over. Ethan, 2026-09-08: "I
+    don't want you too stop working until we display the right lines and
+    prices the books show."
+
+    Read off the SAME quotes `parse_event_totals` prices from, at the
+    same published line, so the name and the number cannot come apart. A
+    side with no quote at that line is absent rather than guessed.
+    """
+    overs, unders = _total_quotes(event_json)
+    line = _modal_line([p for p, _pr, _bk in overs])
+    if line is None:
+        return {}
+    out = {}
+    over = _best_book([(pr, bk) for p, pr, bk in overs if p == line])
+    under = _best_book([(pr, bk) for p, pr, bk in unders if p == line])
+    if over:
+        out["over"] = over
+    if under:
+        out["under"] = under
+    return out
+
+
+def best_spread_books(event_json: dict, team_map: dict,
+                      home: str, away: str) -> dict[str, str]:
+    """``{team abbr: book title}`` — WHO is posting the spread we show.
+
+    The away side is looked up at ``-line``, the same mirror
+    `parse_event_spreads` prices it at: a book quoting the home team
+    -3.5 quotes the away team +3.5, and a book that has moved off the
+    consensus number posts neither, so it names nothing here either.
+    """
+    home_pts, away_pts = _spread_quotes(event_json, team_map, home, away)
+    line = _modal_line([p for p, _pr, _bk in home_pts])
+    if line is None:
+        return {}
+    out = {}
+    h = _best_book([(pr, bk) for p, pr, bk in home_pts if p == line])
+    a = _best_book([(pr, bk) for p, pr, bk in away_pts if p == -line])
+    if h:
+        out[home] = h
+    if a:
+        out[away] = a
+    return out
+
+
+def parse_event_totals(event_json: dict, only_books: set | None = None):
+    """Return ``(line, best_over_odds, best_under_odds)`` for the game total,
+    or ``None``. Uses the consensus line and the best price on each side.
+
+    Sharp reference books are excluded from the bettable aggregate;
+    ``only_books`` (API keys) restricts to those books instead — that's how
+    the sharp book's own pair is read out as the fair-value anchor."""
+    overs, unders = _total_quotes(event_json, only_books)
+    line = _modal_line([p for p, _pr, _bk in overs])
     if line is None:
         return None
-    home_odds = max((pr for p, pr in home_pts if p == line), default=-110)
-    away_odds = max((pr for p, pr in away_pts if p == -line), default=-110)
+    over_odds = max((pr for p, pr, _bk in overs if p == line), default=-110)
+    under_odds = max((pr for p, pr, _bk in unders if p == line), default=-110)
+    return line, over_odds, under_odds
+
+
+def parse_event_spreads(event_json: dict, team_map: dict, home: str, away: str,
+                        only_books: set | None = None):
+    """Return ``(home_spread, home_odds, away_odds)`` for the spread / run line,
+    or ``None``. The home team's point is the stored spread. Sharp books are
+    excluded unless ``only_books`` selects them explicitly."""
+    home_pts, away_pts = _spread_quotes(event_json, team_map, home, away, only_books)
+    line = _modal_line([p for p, _pr, _bk in home_pts])
+    if line is None:
+        return None
+    home_odds = max((pr for p, pr, _bk in home_pts if p == line), default=-110)
+    away_odds = max((pr for p, pr, _bk in away_pts if p == -line), default=-110)
     return line, home_odds, away_odds
 
 
@@ -1687,12 +1783,19 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         if tot:
             game.total, game.total_over_odds, game.total_under_odds = tot
             game.total_measured = True         # a book posted it
+            # …AND WHO POSTED IT (see `best_total_books`).
+            _tb = best_total_books(ev)
+            game.total_over_book = _tb.get("over", "")
+            game.total_under_book = _tb.get("under", "")
             result.totals += 1
             touched = True
         sp = parse_event_spreads(ev, team_map, home, away)
         if sp:
             game.spread, game.spread_home_odds, game.spread_away_odds = sp
             game.spread_measured = True        # a book posted it
+            _sb = best_spread_books(ev, team_map, home, away)
+            game.home_spread_book = _sb.get(home, "")
+            game.away_spread_book = _sb.get(away, "")
             result.spreads += 1
             touched = True
         stot = parse_event_totals(ev, only_books=SHARP_BOOKS)
@@ -1996,10 +2099,16 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             if tot:
                 game.total, game.total_over_odds, game.total_under_odds = tot
                 game.total_measured = True     # a book posted it
+                _tb = best_total_books(payload)
+                game.total_over_book = _tb.get("over", "")
+                game.total_under_book = _tb.get("under", "")
             sp = parse_event_spreads(payload, cfg["teams"], home, away)
             if sp:
                 game.spread, game.spread_home_odds, game.spread_away_odds = sp
                 game.spread_measured = True    # a book posted it
+                _sb = best_spread_books(payload, cfg["teams"], home, away)
+                game.home_spread_book = _sb.get(home, "")
+                game.away_spread_book = _sb.get(away, "")
             stot = parse_event_totals(payload, only_books=SHARP_BOOKS)
             if stot:
                 game.sharp_total, game.sharp_total_over_odds, \

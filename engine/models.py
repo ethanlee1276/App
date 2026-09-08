@@ -315,6 +315,18 @@ class Game:
     #: verify; a price without one is a claim.
     home_ml_book: str = ""
     away_ml_book: str = ""
+    #: …AND THE SAME FOR THE OTHER TWO GAME MARKETS. The moneyline was
+    #: what Ethan reported, so it was named first; the spread and the
+    #: total were still publishing a shopped price under no name at all,
+    #: which is the identical defect one market over. Keyed by side: the
+    #: spread by team abbreviation (a spread card is one team's), the
+    #: total by over/under. Empty when no book posted that side AT THE
+    #: PUBLISHED LINE — the parsers fall back to -110 there, and a made-up
+    #: price must not be given a real book's name.
+    home_spread_book: str = ""
+    away_spread_book: str = ""
+    total_over_book: str = ""
+    total_under_book: str = ""
     #: P(home) implied by the market, de-vigged from REAL two-sided pairs
     #: — the median across the books that quote both sides, not the
     #: shopped pair we publish as the price. 0.0 = not computed, and the

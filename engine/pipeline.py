@@ -596,11 +596,30 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # …AND WHOSE PRICE IT IS. Both sides ride along, because the
     # likelihood board flips a card to the favourite and the book has to
     # flip with the price (`likely.from_game_bet`).
-    if (d.get("bet_type") or d.get("market")) == "moneyline":
+    _mkt = (d.get("bet_type") or d.get("market")) or ""
+    if _mkt == "moneyline":
         d["home_book"] = getattr(g, "home_ml_book", "") or ""
         d["away_book"] = getattr(g, "away_ml_book", "") or ""
         _took = (d.get("team") or "").strip()
         d["book"] = (d["home_book"] if _took == g.home else d["away_book"]) or ""
+    elif _mkt == "spread":
+        # THE SPREAD GETS THE SAME NAME. It is the same shopped-price
+        # defect one market over, and the last one still open when the
+        # moneyline was fixed: "I don't want you too stop working until
+        # we display the right lines and prices the books show."
+        d["home_book"] = getattr(g, "home_spread_book", "") or ""
+        d["away_book"] = getattr(g, "away_spread_book", "") or ""
+        _took = (d.get("team") or "").strip()
+        d["book"] = (d["home_book"] if _took == g.home else d["away_book"]) or ""
+    elif _mkt == "total":
+        d["over_book"] = getattr(g, "total_over_book", "") or ""
+        d["under_book"] = getattr(g, "total_under_book", "") or ""
+        _side = (d.get("side") or "").strip().lower()
+        d["book"] = (d["over_book"] if _side == "over" else d["under_book"]) or ""
+    # A TEAM TOTAL GETS NO BOOK, and that is the honest answer rather
+    # than a gap. Nothing here quotes one: the number is derived from
+    # the game total and the spread, so there is no book posting it and
+    # no name to print. See `price_team_total`.
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner
