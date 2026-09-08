@@ -254,6 +254,45 @@ def test_the_over_claim_remedy_names_a_lever_that_moves():
     assert "temper_edge" in prereg.OVER_BIAS_NFL["decides"]
 
 
+def test_the_over_claim_records_the_count_that_declined_it():
+    """The sizing query came back 11 overs and 12 unders — every NFL
+    player-prop bet the edge board has journaled since 2025-09-01. A
+    measurement that decides against registering is worth exactly as much
+    as one that decides for it, and it is worth nothing if it lives in a
+    chat window instead of beside the terms it decided about."""
+    import inspect
+    src = inspect.getsource(prereg)
+    assert "MEASURED 2026-09-09, AND THE ANSWER IS NO" in src
+    assert "OVER    11" in src and "UNDER   12" in src
+
+
+def test_the_declined_terms_were_not_trimmed_to_fit_the_count():
+    """The tempting move is to drop min_n to 20 so the test can finish.
+    That is fitting the terms to the sample that just told us they do not
+    fit, and it would buy a verdict on a gap this sample could never
+    convict. The terms stay as drafted; the note carries the refusal.
+
+    Nothing here was frozen — `register()` is what freezes, and it was
+    never called — so this is discipline rather than a hash check. If a
+    later change lowers the bar deliberately, this fails and the note
+    above has to be rewritten to say so, which is the point."""
+    t = prereg.OVER_BIAS_NFL
+    assert t["min_n"] == 80, "trimmed to fit the count it failed"
+    assert t["sides"] == ["OVER"] and t["compare_sides"] == ["UNDER"]
+    assert t["markets"] == ["receptions", "pass_yds", "rush_yds", "rec_yds"]
+
+
+def test_the_note_names_what_would_make_the_question_askable():
+    """A declined test that says only "no" teaches the next reader
+    nothing. Both routes out are written down, and the first one names
+    the reason NOT to build its machinery yet."""
+    import inspect
+    src = inspect.getsource(prereg)
+    assert "POOL THE FOOTBALL" in src
+    assert "needs the CFB count first" in src
+    assert "STOP ASKING IT WITH ROI" in src
+
+
 def test_the_over_claim_says_its_evidence_is_a_lead_not_a_finding():
     """1.9 standard errors, in a table read after the fact. If the note
     ever stops saying so, the next reader inherits a finding that was

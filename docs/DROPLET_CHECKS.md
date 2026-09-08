@@ -2418,6 +2418,67 @@ for side, n in c.execute(\"\"\"
 * Send me both numbers. Registering is one line and I will not write it
   until they say the test can finish.
 
+### The answer, 2026-09-09: no
+
+    OVER    11
+    UNDER   12
+
+Twenty-three bets — every NFL player prop the edge board has journaled
+since 2025-09-01. `min_n: 80` needs roughly three more NFL seasons at
+that rate, so **`OVER_BIAS_NFL` is not registered**, and the terms are
+left exactly as drafted rather than trimmed to fit the count that failed
+them. Trimming would be fitting the test to the sample that just told us
+it does not fit.
+
+The count also says something the lead did not. The live book is 11 overs
+to 12 unders; the replay's admitted arm was 61 to 22. Those are different
+populations, but the production board is plainly not selecting
+three-to-one overs, which is the premise the whole lead rested on. A
+one-sided error in the PROJECTION and a one-sided SELECTION are two
+different claims, and the segment table ran them together.
+
+Two things are still unknown, and one query answers both. Is 23 a RATE or
+the startup artefact of a journal that only recently began carrying NFL
+props — and would pooling the college book make the question askable at
+all? The second half re-counts by category and market as well, because a
+population hiding under a market name nobody filtered on is the failure
+`TD_EDGE_NFL` nearly died of.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+import sqlite3; c = sqlite3.connect('data/ledger.db')
+print('football prop bets by sport, month and side')
+for row in c.execute("""
+    SELECT sport, substr(date,1,7) AS mon, side, COUNT(*) FROM bets
+      WHERE sport IN ('nfl','cfb')
+      AND market IN ('receptions','pass_yds','rush_yds','rec_yds')
+      AND category IN ('main','paper') AND stake_units > 0
+      AND date >= '2025-09-01'
+      GROUP BY sport, mon, side ORDER BY sport, mon, side"""):
+    print(' ', *row)
+print()
+print('every NFL bet by category and market')
+for row in c.execute("""
+    SELECT category, market, COUNT(*) FROM bets
+      WHERE sport='nfl' AND date >= '2025-09-01'
+      GROUP BY category, market ORDER BY COUNT(*) DESC"""):
+    print(' ', *row)"
+```
+
+* If the NFL months are spread evenly across last season, 23 is a rate
+  and the edge board bets NFL props about once a week — which is task
+  #164's real question, not this one's.
+* If they cluster in the last few weeks, 23 is a startup artefact and
+  says nothing about the forward rate; the sizing has to be re-asked
+  after a few live weeks rather than answered now.
+* The college rows decide whether pooling the two football leagues is
+  worth building. `verdict` filters on one `sport`; a `sports` field
+  would go in the same optional, only-hashed-when-carried way `sides`
+  did — but only if the pooled count can actually finish a test.
+* The second table is the paranoia check. If NFL props are sitting in a
+  category or under a market spelling the first query does not name, the
+  23 is a measurement artefact and everything above it is wrong.
+
 ## Reading the board's own rows, not the redacted copy (2026-09-09)
 
 A correction to a diagnosis I sent on 2026-09-08. I reported that the NFL

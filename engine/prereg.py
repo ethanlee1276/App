@@ -824,6 +824,59 @@ LONG_PRICE_MLB = {
 #: written. If it does not, the honest move is to lower `min_n` to what
 #: the runway actually reaches and say in `metric` what that costs, or
 #: to leave it drafted — not to register a clock that never rings.
+#:
+#: MEASURED 2026-09-09, AND THE ANSWER IS NO. Ethan ran it on the
+#: droplet. Every NFL player-prop bet the edge board has journaled since
+#: 2025-09-01 — a full season and the twelve months after it:
+#:
+#:     OVER    11
+#:     UNDER   12
+#:
+#: Twenty-three bets. `min_n: 80` needs roughly three more NFL seasons at
+#: that rate, so this is not registered, and it is not registered for
+#: precisely the reason `HEAVY_PRICE_EDGE` above it is not: a
+#: preregistration against a population the book does not bet reports "0
+#: of 80" forever while looking healthy, and looking healthy is what
+#: makes it worse than nothing. The terms below are LEFT EXACTLY AS
+#: DRAFTED rather than trimmed to fit, because a record of what was
+#: originally asked is the thing this module exists to keep. Nothing was
+#: frozen — `register()` is the call that freezes, and it was never made
+#: — so no goalpost has moved.
+#:
+#: AND THE COUNT SAYS SOMETHING THE LEAD DID NOT. The live book is 11
+#: overs to 12 unders. The replay's admitted arm was 61 to 22, three
+#: quarters overs. Those are different populations — the replay prices
+#: historical seasons through today's model, the journal is what the
+#: board actually took — but the production board is plainly not
+#: currently selecting three-to-one overs, which is the premise the
+#: whole lead rests on. That does not refute a one-sided error in the
+#: PROJECTION; it does say the SELECTION is not visibly lopsided, and
+#: those are two different claims that the segment table conflated.
+#:
+#: THE TWO LIVE OPTIONS, neither of them taken yet:
+#:
+#:   1. POOL THE FOOTBALL. The claim is about a projection model that
+#:      both leagues share, and college runs far more games. `verdict`
+#:      filters on ONE `sport`, so this needs a `sports` field added the
+#:      same optional, only-hashed-when-carried way `sides` was — and it
+#:      needs the CFB count first, because if college is thin too the
+#:      pooled test is just as dead and the field would be machinery
+#:      built for nothing.
+#:
+#:   2. STOP ASKING IT WITH ROI. Twenty-three settled bets can never
+#:      answer a 40-point ROI question, but the same 23 carry a
+#:      projection and an outcome, and calibration needs far fewer rows
+#:      than profit does. "Does the projection sit above the realised
+#:      number more often than chance" is a different, cheaper question
+#:      about the same suspected fault — and it is the hypothesis lab's
+#:      machine next door, not this one's.
+#:
+#: THE OTHER FINDING, and it is probably the bigger one: 23 NFL prop
+#: bets in a year is the edge board betting NFL props about once a week.
+#: Whether that is selectivity working or a filter quietly eating the
+#: board is task #164's actual question, and it is not answerable from
+#: this count alone — 23 could be a rate, or it could be the startup
+#: artefact of a journal that only began carrying NFL props recently.
 OVER_BIAS_NFL = {
     "id": "over-bias-nfl-2026-09",
     "claim": ("NFL player props the edge board recommends on the OVER lose "
