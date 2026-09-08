@@ -2479,6 +2479,41 @@ for row in c.execute("""
   category or under a market spelling the first query does not name, the
   23 is a measurement artefact and everything above it is wrong.
 
+### Which gate is eating the NFL props (task #164)
+
+Whichever way the count above lands, the question underneath it is why
+the edge board recommends so few NFL props at all — and that one does not
+need any new instrumentation. `engine/census.py` already publishes an
+ordered funnel into the board under `gate_census`, counting the FIRST
+failing gate per prop, and `bar_status` names any market whose minimum
+edge is unreachable after the selection haircut. Nothing on the terminal
+printed it for a long time, which is why "285 → 0" used to read as a dead
+board with no reason attached.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from pathlib import Path
+from engine import gate
+d = json.loads(gate.board_source(Path('web/data/recommendations.json')).read_text())
+c = d.get('counts') or {}
+print('props analyzed', c.get('props_analyzed'), '-> recommended', c.get('recommended'))
+for k, v in sorted((d.get('gate_census') or {}).items(), key=lambda kv: -(kv[1] if isinstance(kv[1], int) else 0)):
+    if v and k != 'calibration_markets':
+        print('  ', v, ' ', k)
+for note in (d.get('bar_status') or []):
+    print('   bar:', note)"
+```
+
+* Read it as a funnel: each prop is counted once, at the first gate it
+  failed, so the numbers sum to the props analyzed rather than past them.
+* `no_real_price` at the top means the board never got a say — that is an
+  odds-coverage problem, not a model one.
+* A `bar:` line is the important one. It means the market's minimum edge
+  CANNOT be cleared after the selection haircut, so no read however good
+  would have produced a bet — which looks identical to a quiet night in
+  every other view and is not the same fact at all.
+
 ## Reading the board's own rows, not the redacted copy (2026-09-09)
 
 A correction to a diagnosis I sent on 2026-09-08. I reported that the NFL
