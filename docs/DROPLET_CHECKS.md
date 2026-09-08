@@ -756,8 +756,19 @@ per-kind caps) and `refused` by reason. Read it before guessing:
   markets in the event pull.
 * `td` offered 40, refused 38 under the floor — the shown number for
   real scorers sits under 55% after the market shrink; that is the
-  model, not the feed (engine.tdbook on this box measures whether the
-  market's number should order them instead).
+  model, not the feed. Whether the market's number should order those
+  rows instead, the way it orders the moneylines, is one command on
+  the box that holds the touchdown closes:
+
+  ```bash
+  cd /srv/qellys && python3 -m engine.tdbook --rank
+  ```
+
+  It prints the model's and the market's ranking of who scores over
+  the same joined player-weeks with a bootstrap of the gap. "The market
+  ranks scorers better" with an interval clear of zero is the case for
+  ranking the scorer rows on the book's number; bring the printout and
+  the figure gets written down beside `likely.GAME_RANK_MARKET`.
 * `game` offered 16, refused under the floor and the cap — the slate's
   favourites are priced outside -140 to -250, which the board cannot
   help; anything refused as a disagreement is a fault (that bar no
@@ -833,9 +844,12 @@ number clears the 55% floor only between roughly −250 and −130 (0.546
 at −320, 0.547 at +110): the model reads college scorers flatter than
 the market does, and the shrink lands them just under the floor on
 either side of that band. Whether the market's number should order
-scorer rows instead — the way it orders the moneylines — is a
-measurement that needs the touchdown closes, and those live only on
-this box.
+scorer rows instead — the way it orders the moneylines — is
+`python3 -m engine.tdbook --rank`, which needs the touchdown closes and
+therefore this box. That command walks the NFL replay; the college
+equivalent needs `engine.cfbtdfit`'s samples joined to the college
+closes and does not exist yet, so read the NFL answer as the leading
+indicator and do not assume it transfers.
 
 The college prop half stays empty until a college prop market is
 measured (`no market measured to rank yet` in the census); when one is,

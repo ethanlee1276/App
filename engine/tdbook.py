@@ -611,8 +611,75 @@ def fit_lines(got, rows) -> list:
     return lines
 
 
+#: Joined player-weeks before the two rankings may be compared — the
+#: prop rank fitter's own floor (rankfit.MIN_PAIRS). A joined season is
+#: several thousand, so this is a floor and not a bar.
+MIN_RANK_ROWS = 2_000
+
+#: Resamples for the by-player-week bootstrap of the two AUCs' gap.
+RANK_RESAMPLES = 1_000
+
+
+def rank_report(rows: list, seed: int = 11, resamples: int = RANK_RESAMPLES) -> list[str]:
+    """Does the MARKET rank scorers better than the model?
+
+    Ethan, 2026-09-08: "we have player props just barley any money
+    money lines are touchdown crap." The touchdown half.
+
+    The likelihood board orders a row on a number only once that number
+    has been measured to rank the outcome. The model's figure is
+    `likely.RANK_AUC["anytime_td"]` (0.721, engine.tdbacktest). A
+    football MONEYLINE ranks on the book's number instead, because the
+    book's number was measured to sort winners better
+    (likely.GAME_RANK_MARKET, 2026-09-07). Nobody has measured the same
+    thing for scorers, because the touchdown closes live only where
+    `odds_history` does. This is that measurement: the AUC of the
+    model's probability and of the book's implied probability over the
+    same joined player-weeks (`joined`), and a bootstrap of the gap by
+    player-week. The verdict is spoken only when the interval clears
+    zero.
+
+    WHAT IT DECIDES, AND WHERE. If the market's figure clears the
+    model's, the scorer rows have the same case the moneylines had for
+    ranking on the market's number — and on the real board that moves
+    the -150 to -250 bell cows above the 55% floor, where the model's
+    shrunk number leaves them just under it. That change is made from
+    this printout, in `likely.from_watch`, with the figure written down
+    beside GAME_RANK_MARKET; it is not made here.
+    """
+    import random
+    from .rankfit import auc
+    if len(rows) < MIN_RANK_ROWS:
+        return [f"  who scores, ranked: {len(rows):,} joined player-weeks — needs "
+                f"{MIN_RANK_ROWS:,} before the two rankings can be compared"]
+    model = auc([(m, s) for m, _k, s in rows])
+    market = auc([(k, s) for _m, k, s in rows])
+    if model is None or market is None:
+        return ["  who scores, ranked: one-sided outcomes — no AUC"]
+    rng = random.Random(seed)
+    diffs = []
+    for _ in range(resamples):
+        draw = [rows[rng.randrange(len(rows))] for _ in rows]
+        a = auc([(m, s) for m, _k, s in draw])
+        b = auc([(k, s) for _m, k, s in draw])
+        if a is not None and b is not None:
+            diffs.append(b - a)
+    diffs.sort()
+    lo, hi = diffs[int(0.025 * len(diffs))], diffs[int(0.975 * len(diffs)) - 1]
+    verdict = ("the market ranks scorers better — the case the moneylines had"
+               if lo > 0 else
+               "the model ranks scorers better — leave the rows on its number"
+               if hi < 0 else "no measurable difference — leave the rows on the model")
+    return [f"  who scores, ranked · {len(rows):,} joined player-weeks",
+            f"    model   AUC {model:.4f}   (likely.RANK_AUC carries 0.721 from the replay)",
+            f"    market  AUC {market:.4f}   (the book's implied probability at the close)",
+            f"    market minus model, 95% by player-week: [{lo:+.4f}, {hi:+.4f}]",
+            f"    {verdict}"]
+
+
 __all__ = ["BANDS", "MIN_BAND", "MIN_FIT", "ROI_DEPTHS", "joined", "bands",
-           "board_priced", "report_lines", "roi_lines", "fit", "fit_lines"]
+           "board_priced", "report_lines", "roi_lines", "fit", "fit_lines",
+           "rank_report"]
 
 
 if __name__ == "__main__":                       # pragma: no cover
@@ -644,6 +711,14 @@ if __name__ == "__main__":                       # pragma: no cover
             print(f"  {len(rows):,} board rows with a real close\n")
         for line in roi_lines(rows):
             print(line)
+    elif "--rank" in argv:
+        rows = joined(conn)
+        if not rows:
+            print("  no joined player-weeks — this box has no odds_history, "
+                  "or no season is ingested")
+            sys.exit(1)
+        for line in rank_report(rows):
+            print(line)
     else:
         rows = joined(conn)
         if not rows:
@@ -652,5 +727,6 @@ if __name__ == "__main__":                       # pragma: no cover
             sys.exit(1)
         for line in report_lines(rows):
             print(line)
-        print("\n  --roi to price the board instead of grading its bands.")
+        print("\n  --roi to price the board instead of grading its bands; "
+              "--rank to ask whether the market ranks scorers better.")
     conn.close()
