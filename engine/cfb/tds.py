@@ -748,11 +748,38 @@ def weather_multiplier(weather: dict | None, pos: str
 #: wider than the value window on the juiced side by design.
 CFB_WATCH_ODDS = (-400, 1500)
 
-#: How many most-likely scorers the board carries. FIVE WAS THE NFL'S
+#: How many most-likely scorers the board SHOWS. FIVE WAS THE NFL'S
 #: NUMBER (touchdowns.TD_WATCH_LIMIT), copied across, and it is sized for
 #: the NFL's Sunday: sixteen games. College plays sixty-eight on the
 #: Saturday this repo's own readiness audit counted, so the same five rows
 #: were covering a slate four times the size.
+#:
+#: SHOWN, NOT OFFERED — 2026-09-08, Ethan: "do all those checks on
+#: college football to make sure none of the [rows] for the most likely
+#: [are] thin either." This number was applied HERE, truncating the
+#: ranked menu before `likely.admissible` had seen a row of it, and the
+#: board's own bars then came out of the twenty: the -250 price cap, an
+#: injury hold, a proxy quote, the 55% floor. On a college Saturday the
+#: top of a probability ranking is exactly where the chalk is, so the
+#: twenty most likely scorers are the rows most likely to be refused as
+#: chalk — and the twenty-first, priced inside the cap and perfectly
+#: showable, was never handed in. How many rows that costs on a real
+#: Saturday is not knowable from here and is exactly what
+#: `likely_census_by_kind` now reports (`td`: offered against shown);
+#: what IS certain is that the seats were being spent before the bar
+#: rather than by it, and nothing said so.
+#:
+#: THE WINDOW IS NARROW, which is why the waste mattered. Measured on
+#: this repo's own college fixture (tests/test_td_board.py's bell cow,
+#: eighteen carries a game with logged scores), the shown number clears
+#: the 55% floor from about -250 to -130 and falls under it on either
+#: side: -320 reads 0.546, +110 reads 0.547. Between the price cap above
+#: and the floor below there is roughly one price band in which a
+#: college scorer can appear at all.
+#:
+#: So the menu leaves here whole and this is the board's `limit` — the
+#: count of scorer rows that SURVIVE. The number and its reasoning are
+#: unchanged; what changed is which side of the bar it is applied on.
 #:
 #: IT MATTERS MORE HERE THAN IT DOES THERE, because these rows are not a
 #: strip under the value picks in college — they are the whole player half
@@ -1096,5 +1123,10 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
     rows = [p.to_dict() for p in chosen]
     have = {r.get("player") for r in rows}
     watch_rows.sort(key=lambda r: -r["model_prob"])
-    watch = [w for w in watch_rows if w["player"] not in have][:CFB_WATCH_LIMIT]
+    # THE WHOLE RANKED MENU (see CFB_WATCH_LIMIT). Truncating here spent
+    # the board's twenty seats on rows the board had not yet been
+    # allowed to refuse; the caller shows CFB_WATCH_LIMIT of whatever
+    # survives the bar and slices the page's own shelf to the same
+    # number.
+    watch = [w for w in watch_rows if w["player"] not in have]
     return rows, census, watch

@@ -1911,8 +1911,11 @@ def main() -> None:
             rows, census, watch = _tds.build_cfb_td_longshots(
                 conn, out["games"], quotes, day.year)
             out["long_shots"] = rows
-            # The most-likely-scorers list — shown, never journaled.
-            out["longshot_watch"] = watch
+            # The most-likely-scorers list — shown, never journaled. The
+            # page's shelf is the top of the ranked menu; the board below
+            # is offered the whole thing and applies its own bar first
+            # (engine.cfb.tds.CFB_WATCH_LIMIT).
+            out["longshot_watch"] = watch[:_tds.CFB_WATCH_LIMIT]
             # THE MAIN BOARD, ranked by likelihood rather than edge. The
             # college board prices touchdowns and nothing else, so this
             # is that one market ordered honestly — but it belongs on the
@@ -1943,8 +1946,25 @@ def main() -> None:
             # cannot reach a shelf either. Passing them is therefore
             # safe before the measurement exists: the board shows what
             # it can defend and nothing else.
+            # HOW MANY PLAYER ROWS COLLEGE SHOWS. `likely.LIMIT` is 40
+            # across every player market a sport can rank; college can
+            # rank exactly one — `anytime_td` at 0.675, every yardage
+            # market unmeasured — so the board's player half IS the
+            # scorer shelf, and its size is that shelf's own number
+            # (CFB_WATCH_LIMIT, 20: the slate ratio, deliberately short
+            # of 40 because at 0.675 the fortieth row is a much softer
+            # claim than the third). The day a college prop market is
+            # measured this stops being true, and the cap goes back to
+            # the board's own — read, not assumed, so nobody has to
+            # remember.
+            from engine.cfb.props import MARKETS as _pm
+            from engine.likely import LIMIT as _K_LIMIT, rankable as _rankable
+            _unmeasured = [m for m in _pm if not _rankable(m, "cfb")]
+            _player_limit = (_tds.CFB_WATCH_LIMIT
+                             if len(_unmeasured) == len(_pm) else _K_LIMIT)
             out["most_likely"] = _likely(out.get("recommendations") or [],
                                          rows, watch, sport="cfb",
+                                         limit=_player_limit,
                                          census=_ml_census,
                                          game_bets=out.get("game_bets") or [],
                                          census_by_kind=_ml_kinds)
@@ -1958,9 +1978,6 @@ def main() -> None:
             # different facts. The same sentence MLB and NBA publish,
             # counted per market so the funnel adds up.
             try:
-                from engine.cfb.props import MARKETS as _pm
-                from engine.likely import rankable as _rankable
-                _unmeasured = [m for m in _pm if not _rankable(m, "cfb")]
                 if _unmeasured and out.get("recommendations"):
                     _ml_census["no market measured to rank yet"] = \
                         _ml_census.get("no market measured to rank yet", 0) \

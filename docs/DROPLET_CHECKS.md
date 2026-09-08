@@ -795,6 +795,54 @@ claim as the kept rows' does. If a band of disagreement lands well
 under its claim on the droplet's larger sample, that is the evidence
 for a wider bar on that band — bring the printout.
 
+## 8e. The college Most Likely board (2026-09-08)
+
+Ethan, after the NFL work: "do all those checks on college football to
+make sure none of the [rows] for the most likely [are] thin either."
+All three, applied:
+
+| check | college |
+|---|---|
+| The scorer menu | Was cut to `CFB_WATCH_LIMIT` (20) BEFORE the bar; the board's floor, −250 cap and injury holds then came out of those twenty. The menu leaves `build_cfb_td_longshots` whole now and twenty is the board's `limit` — rows that survive. |
+| The market-ranked moneyline | Fixed for both leagues (§8d). College was hit harder: 401 of 1,066 eligible favourites refused (38%) against the NFL's 207 of 681 (30%). |
+| The by-kind census | `cfb_build` publishes `likely_census_by_kind` beside the flat census. |
+
+On a Saturday, read the college board the same way as the NFL's:
+
+```bash
+cd /srv/qellys && python3 -c "
+import json; b=json.load(open('web/data/cfb.json'))
+m=b.get('most_likely') or []
+print(len(m),'most likely ·',sum(1 for r in m if r.get('kind')=='td'),'scorers,',
+      sum(1 for r in m if r.get('kind')=='game'),'game rows')
+print(len(b.get('longshot_watch') or []),'on the page shelf (cap 20)')
+print(b.get('likely_census'))
+for k,v in (b.get('likely_census_by_kind') or {}).items(): print(' ',k,v)"
+```
+
+Expect `td` to show `offered` in the hundreds on a full Saturday and
+`shown` at twenty. `offered` at twenty exactly means the old truncation
+is still in the running build — check the deploy landed. `shown` well
+under twenty with a large `refused` count under the −250 cap is the
+board working: college prices its bell cows as chalk and the cap is
+Ethan's rule.
+
+The college window is narrow, which is worth knowing before reading a
+small `shown` as a fault. On this repo's own college fixture the shown
+number clears the 55% floor only between roughly −250 and −130 (0.546
+at −320, 0.547 at +110): the model reads college scorers flatter than
+the market does, and the shrink lands them just under the floor on
+either side of that band. Whether the market's number should order
+scorer rows instead — the way it orders the moneylines — is a
+measurement that needs the touchdown closes, and those live only on
+this box.
+
+The college prop half stays empty until a college prop market is
+measured (`no market measured to rank yet` in the census); when one is,
+the board's player cap goes back to `likely.LIMIT` on its own —
+`cfb_build` reads `likely.rankable`, it is not a number anybody has to
+remember to change.
+
 ## 9. The explainer, once its package and keys are on the box
 
 Ethan, 2026-09-05: "a plain English explainer per pick." Shipped the
