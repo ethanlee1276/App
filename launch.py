@@ -3167,6 +3167,7 @@ def _background_refresher(interval: int) -> None:
     while True:
         time.sleep(interval)
         _cycle_started = time.time()
+        _swept = "did not reach the sweep"
         # WHERE THE *LAST* CYCLE'S TIME WENT, and not a word about any
         # earlier one. `_STEP_S` is written per step and was never
         # cleared, so a cycle that stopped at CFB still reported MLB's
@@ -3206,10 +3207,27 @@ def _background_refresher(interval: int) -> None:
             if _BUILD_LOCK.acquire(blocking=False):
                 try:
                     refresh_all(quiet=True)
+                    _swept = "ran"
                 finally:
                     _BUILD_LOCK.release()
+            else:
+                # AND THE HEARTBEAT HAS TO SAY SO. A skipped cycle used
+                # to write a heartbeat indistinguishable from one that
+                # swept: same shape, same fields, `boards` and `step_s`
+                # holding whatever the build STILL RUNNING had laid down
+                # so far. Read on 2026-09-08 that looked exactly like a
+                # loop dying after CFB — nfl and cfb timed, mlb, nba and
+                # wnba with no record at all and nothing in `step_fail`
+                # to explain it. Nothing was wrong: the startup build was
+                # eleven boards from done and holding the lock.
+                #
+                # The skip itself is correct and stays (see the comment
+                # above it). What was missing is that the box knew which
+                # of the two it was and published neither.
+                _swept = "skipped — a build was already running"
         except Exception as exc:                   # noqa: BLE001
             print(f"  ⚠️  refresh cycle error: {exc} — retrying in {interval}s.")
+            _swept = f"raised before the sweep — {type(exc).__name__}"
         # Timed whether it succeeded or failed: a cycle that dies halfway
         # still tells us how long this box takes to get that far, and a
         # run of short failing cycles must not make the page believe the
@@ -3219,10 +3237,10 @@ def _background_refresher(interval: int) -> None:
         # heartbeat answers "is the LOOP alive", which file mtimes cannot —
         # a failing build and a dead thread both leave boards old, and only
         # one of them fixes itself.
-        _write_heartbeat(interval)
+        _write_heartbeat(interval, swept=_swept)
 
 
-def _write_heartbeat(interval: int) -> None:
+def _write_heartbeat(interval: int, swept: str = "ran") -> None:
     """web/data/heartbeat.json — one small fact per cycle, never fatal."""
     try:
         p = ROOT / "web" / "data" / "heartbeat.json"
@@ -3252,6 +3270,17 @@ def _write_heartbeat(interval: int) -> None:
             # nobody was tailing — "why is the whole site three hours
             # old" had no answer on the box.
             "step_fail": dict(_STEP_FAIL),
+            # WHETHER THIS CYCLE SWEPT AT ALL. `boards` and `step_s`
+            # above describe the last sweep, not necessarily this cycle —
+            # a cycle that skipped because a build held the lock still
+            # publishes them, and a partial set then reads as a loop that
+            # died halfway. This one field is the difference between "the
+            # sweep stopped after CFB" and "the sweep is still on CFB".
+            "swept": swept,
+            # True until the first full build finishes. A young process
+            # is the ordinary reason a sweep is still in flight, and
+            # after a deploy the process is always young.
+            "warming": _WARMING,
             # Which code is SERVING and whether it updates itself — read
             # by --boards, so "did my push land" stops being a journal
             # question asked over SSH from a phone.
@@ -4984,11 +5013,27 @@ def show_boards() -> None:
             if missing:
                 print(f"\n  no step raised, yet {len(missing)} board(s) have "
                       f"no record at all: {', '.join(missing)}.")
-                print("    Nothing threw, so the sweep did not fail — it "
-                      "did not get there. Either the process is young and "
-                      "still on its first cycle, or it is being restarted "
-                      "before one finishes (the auto-updater does that on "
-                      "every deploy).")
+                # THE BOX KNOWS WHICH IT IS, so this does not guess. The
+                # first cut of this message offered the reader two
+                # possibilities and left them to pick; `swept` and
+                # `warming` were added the same hour precisely so it
+                # would not have to.
+                swept = beat.get("swept")
+                if beat.get("warming"):
+                    print("    The first full build has not finished yet — "
+                          "this is a sweep IN FLIGHT, not one that stopped. "
+                          "After a deploy the process is always young, and "
+                          "the auto-updater deploys on every push.")
+                elif swept and swept != "ran":
+                    print(f"    The last cycle {swept} — so `boards` and "
+                          f"`step_s` above describe an EARLIER sweep, not "
+                          f"this cycle.")
+                else:
+                    print("    Nothing threw and the last cycle did sweep, "
+                          "so these boards were skipped inside it rather "
+                          "than failing — check the sport's own gate "
+                          "(budget, season window, empty slate) before the "
+                          "loop.")
     else:
         print("\n  no heartbeat.json — cannot say whether the loop is alive.")
     cyc = beat.get("cycle_p50_s") or _cycle_p50()

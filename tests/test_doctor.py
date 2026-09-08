@@ -253,8 +253,17 @@ def test_the_loop_leaves_a_heartbeat_and_the_check_reads_it():
     src = _launch()
     fn = src[src.index("def _background_refresher("):]
     fn = fn[:fn.index("\n\n\n")]
-    assert "_write_heartbeat(interval)" in fn
-    assert fn.index("except Exception") < fn.index("_write_heartbeat(interval)")
+    # Anchored on the CALL, not on its argument list: the cycle now also
+    # tells the heartbeat whether it swept at all (2026-09-08 — a cycle
+    # that skipped because a build held the lock wrote a beat
+    # indistinguishable from one that swept). Pinning the exact
+    # arguments made that a test failure instead of a new field.
+    assert "_write_heartbeat(interval" in fn
+    assert fn.index("except Exception") < fn.index("_write_heartbeat(interval")
+    # AFTER the guard, and the last thing in the cycle: a cycle that
+    # raised must still leave a pulse, or a dead loop and a failing one
+    # look the same from outside.
+    assert fn.rstrip().endswith("_write_heartbeat(interval, swept=_swept)")
     i = src.index("Product data (web/data/*.json")
     assert '"heartbeat.json"' in src[i:i + 2200], \
         "--check must read the pulse beside the per-file ages"

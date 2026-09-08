@@ -152,13 +152,70 @@ def test_boards_with_no_record_at_all_are_named_when_nothing_raised():
         assert name in out, out
 
 
-def test_it_separates_did_not_fail_from_did_not_get_there():
-    """The two have opposite fixes: a raise wants the traceback, a sweep
-    that never arrives wants the restart cadence. Naming which one this
-    is IS the diagnostic."""
-    out = _run(_beat())
-    assert "did not get there" in out, out
-    assert "restarted" in out, out
+def test_a_sweep_still_in_flight_is_not_reported_as_one_that_stopped():
+    """Ethan's paste, explained. `_BUILD_LOCK` makes a cycle SKIP the
+    sweep when a build is already running, and the skipped cycle still
+    writes a heartbeat — carrying the boards the in-progress build had
+    reached so far. NFL and CFB timed with nothing after them is what a
+    startup build eleven boards from done looks like, and it is also
+    exactly what a loop dying after CFB looks like."""
+    out = _run(_beat(warming=True, swept="skipped — a build was already "
+                                         "running"))
+    assert "IN FLIGHT" in out, out
+    assert "not one that stopped" in out, out
+
+
+def test_a_skipped_cycle_says_the_timings_belong_to_an_earlier_sweep():
+    """Without this the reader takes `step_s` as this cycle's, which is
+    the whole reason the paste read as a dying loop."""
+    out = _run(_beat(swept="skipped — a build was already running"))
+    assert "skipped" in out, out
+    assert "EARLIER sweep" in out, out
+
+
+def test_a_cycle_that_did_sweep_sends_the_reader_to_the_sport_not_the_loop():
+    """The third reading, and the only one where the loop is innocent
+    and the board is genuinely absent: the sweep ran, the step did not
+    raise, so the sport refused itself — a budget, a season window, an
+    empty slate. Pointing that reader at the refresher wastes the hunt."""
+    out = _run(_beat(swept="ran"))
+    assert "did sweep" in out, out
+    assert "the sport's own gate" in out, out
+
+
+def test_the_screen_does_not_guess_when_the_heartbeat_can_say():
+    """The first cut of this message offered two possibilities and left
+    the reader to pick between them. The box knew which it was."""
+    flight = _run(_beat(warming=True, swept="skipped — a build was "
+                                            "already running"))
+    ran = _run(_beat(swept="ran"))
+    assert flight != ran
+    assert "the sport's own gate" not in flight, flight
+    assert "IN FLIGHT" not in ran, ran
+
+
+def test_the_cycle_publishes_whether_it_swept_at_all():
+    """The field the three readings above are decided on. A skipped
+    cycle wrote a heartbeat indistinguishable from a sweeping one — same
+    shape, same fields, `boards` and `step_s` describing a build that had
+    not finished."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    cycle = src.split("def _background_refresher", 1)[1].split("\ndef ", 1)[0]
+    assert "_write_heartbeat(interval, swept=_swept)" in cycle, cycle[-400:]
+    assert '_swept = "ran"' in cycle
+    assert "_swept = \"skipped" in cycle
+    beat = src.split("def _write_heartbeat", 1)[1].split("\ndef ", 1)[0]
+    assert '"swept": swept' in beat
+    assert '"warming": _WARMING' in beat
+
+
+def test_the_skip_branch_is_still_a_skip_and_not_a_queue():
+    """The behaviour under the new field is unchanged and must stay
+    that way: the loop runs on a timer, so the next tick beats piling up
+    behind a build already writing the same files."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    cycle = src.split("def _background_refresher", 1)[1].split("\ndef ", 1)[0]
+    assert "_BUILD_LOCK.acquire(blocking=False)" in cycle
 
 
 def test_the_no_record_branch_yields_to_an_actual_failure():
