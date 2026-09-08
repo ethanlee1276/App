@@ -126,6 +126,18 @@ def _rec_to_dict(rec, prop, decision, proj, sport: str = "nfl") -> dict:
             {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
             for ln in prop.lines
         ],
+        # THE ALTERNATE LADDER, every rung with its own price, and the
+        # sharp book's rungs beside it. The Most Likely board picks its
+        # rung from here (`likely.from_prop`); nothing on the Edge board
+        # reads it.
+        "alt_lines": [
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            for ln in (getattr(prop, "alt_lines", None) or [])
+        ],
+        "alt_sharp_lines": [
+            {"book": ln.book, "line": ln.line, "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            for ln in (getattr(prop, "alt_sharp_lines", None) or [])
+        ],
         # Per-player history for the Players & Trending pages.
         "logs": [
             {**_log_wind(prop, g, sport),

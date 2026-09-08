@@ -121,7 +121,7 @@ def test_the_launcher_logs_every_verdict_measures_the_purchase_and_shows_the_led
     assert 'kind="bought"' in fin
     doc = _fn(LAUNCH, "odds_doctor")
     assert "oddsbudget.decisions(since=time.time() - 24 * 3600)" in doc and "latest per lane" in doc
-    assert "CFB_PLAYER_EVENT_COST = 5" in LAUNCH
+    assert "CFB_PLAYER_EVENT_COST = 9" in LAUNCH
 
 
 def test_the_player_event_cost_is_the_builds_own():

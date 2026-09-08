@@ -140,13 +140,13 @@ CFB_OUT = "web/data/cfb.json"
 # ("an invisible 4-8x overspend that burned 19k of a 20k plan in a
 # day"). The pull itself asks `oddsbudget.affordable_events` and buys
 # fewer games when the month cannot carry twelve.
-CFB_ODDS_COST = 3 + 12 * 5
+CFB_ODDS_COST = 3 + 12 * 9
 
 #: What ONE game's player-quote call costs college — `cfb_build.
 #: CREDITS_PER_EVENT`, pinned equal in tests/test_odds_decisions.py. A
 #: full pull that spent less than the board request plus one of these
 #: bought no player quotes, whatever the quota stamp says.
-CFB_PLAYER_EVENT_COST = 5
+CFB_PLAYER_EVENT_COST = 9
 
 #: The cheap half of that sum, on its own. `cfb_build.attach_odds` buys
 #: full-game markets for the ENTIRE board in one request — three credits
@@ -377,9 +377,10 @@ def _narrow_pull(out_path: str, sport: str | None = None) -> bool:
     spends less, and a broken import must not be a way to overspend.
     """
     try:
-        from engine.oddsbudget import wide_pull_affordable
+        from engine.oddsbudget import wide_pull_affordable, credits_per_event
         return not wide_pull_affordable(_games_on_slate(out_path) + 1,
-                                        share=_budget_share(sport))
+                                        share=_budget_share(sport),
+                                        per_event=credits_per_event(sport))
     except Exception:                                        # noqa: BLE001
         return True
 
@@ -412,6 +413,13 @@ def _odds_affordable(out_path: str, quiet: bool, sport: str | None = None,
     # know their real credit price say it directly (oddsbudget.
     # refresh_credits).
     kicks = _slate_kickoffs(out_path)
+    # THE PRICE IS STATED IN CREDITS FOR EVERY LEAGUE NOW. The pacer's
+    # generic per-event price is eight; the NFL's twelve-market call is
+    # not (engine/oddsbudget.credits_per_event), and a caller that lets
+    # the pacer multiply for it is metered at the wrong price.
+    if credits is None and cost is None:
+        from engine.oddsbudget import credits_per_event
+        credits = (_games_on_slate(out_path) + 1) * credits_per_event(sport)
     ok, reason = should_refresh(cost if cost is not None
                                 else _games_on_slate(out_path) + 1,
                                 kickoffs=kicks,

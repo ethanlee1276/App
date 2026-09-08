@@ -44,6 +44,24 @@ ODDS_TO_MARKET = {
 }
 MARKET_TO_ODDS = {v: k for k, v in ODDS_TO_MARKET.items()}
 
+#: THE ALTERNATE LADDERS, same four stats. A main line is hung where the
+#: book thinks the coin is fair, so a calibrated probability at it sits
+#: near 50% by construction and the Most Likely board — which asks for
+#: 55% and a price no heavier than -250 — had nothing to show at main
+#: lines (2026-09-07: 303 rows, 215 under the floor, none shown). The
+#: rungs are where a 60-70% event is actually for sale. Each key is one
+#: more market on every event call, billed per market per region like
+#: the rest, and `CREDITS_PER_EVENT` in engine/oddsbudget carries the
+#: new total. They map to the SAME engine market so a rung is priced by
+#: the same projection as the main line; they are parsed apart and land
+#: on `Prop.alt_lines`, never `Prop.lines`.
+ALT_ODDS_TO_MARKET = {
+    "player_pass_yds_alternate": PASS_YDS,
+    "player_rush_yds_alternate": RUSH_YDS,
+    "player_reception_yds_alternate": REC_YDS,
+    "player_receptions_alternate": RECEPTIONS,
+}
+
 # "Does this player score at all" markets. These are Yes/No with no line, so
 # they need their own parser — the over/under one above requires a point and
 # deliberately skips them.
@@ -168,7 +186,8 @@ SPORT_CONFIG = {
     # the TD board cannot exist without the quote (see _long_shots).
     "nfl": {"sport_key": "americanfootball_nfl",
             "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR,
-            "scorers": SCORER_ODDS_TO_MARKET},
+            "scorers": SCORER_ODDS_TO_MARKET,
+            "alternates": ALT_ODDS_TO_MARKET},
     "mlb": {"sport_key": "baseball_mlb",
             "markets": MLB_ODDS_TO_MARKET, "teams": MLB_TEAM_ABBR},
     "nba": {"sport_key": "basketball_nba",
@@ -206,7 +225,8 @@ SPORT_CONFIG = {
     # derived into the parsers.
     "cfb": {"sport_key": "americanfootball_ncaaf",
             "markets": ODDS_TO_MARKET, "teams": {},
-            "scorers": SCORER_ODDS_TO_MARKET},
+            "scorers": SCORER_ODDS_TO_MARKET,
+            "alternates": ALT_ODDS_TO_MARKET},
 }
 
 
@@ -1138,6 +1158,12 @@ class OddsAttachResult:
     # the join improved or not: the events match, then vanish one line later
     # because nobody ever paid for them.
     cache_misses: int = 0
+    # Props that received an alternate ladder (`Prop.alt_lines`), and
+    # cached rebuilds that were served the last paid pull's BASE-market
+    # payload because no payload with the ladder existed yet — the
+    # deploy-day case, see the fallback in `apply_odds_to_slate`.
+    alt_matched: int = 0
+    alt_fallback: int = 0
 
 
 def _team_key(name: str) -> str:
@@ -1515,10 +1541,17 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             slate_pairs = slate_pairs & active
     # Player-prop markets plus the three game markets in one request per event.
     scorer_map = cfg.get("scorers") or {}
-    markets = list(cfg["markets"]) + list(scorer_map) + ["h2h", "totals", "spreads"]
+    alt_map = cfg.get("alternates") or {}
+    markets = (list(cfg["markets"]) + list(scorer_map) + list(alt_map)
+               + ["h2h", "totals", "spreads"])
+    # The request as it was before the ladders — the payload a cached
+    # rebuild can still find on the day the ladders first ship.
+    base_markets = [m for m in markets if m not in alt_map]
     # Build a combined line index for the events that belong to this slate.
     index: dict[tuple[str, str], list[SportsbookLine]] = {}
     sharp_index: dict[tuple[str, str], list[SportsbookLine]] = {}
+    alt_index: dict[tuple[str, str], list[SportsbookLine]] = {}
+    alt_sharp_index: dict[tuple[str, str], list[SportsbookLine]] = {}
     menu: dict[tuple[str, str], dict] = {}
     # Yes/No scorer quotes, indexed the same way — parsed by their own
     # parser because the over/under one requires a point and these have
@@ -1596,14 +1629,32 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                                               books=books, ttl=ttl, sport=sport,
                                               cache_only=cache_only)
         except OddsAPIError:
-            if cache_only:
+            if not cache_only:
+                raise
+            # THE DEPLOY-DAY MISS. The cache file is named by the market
+            # list, so the first cached rebuild after the ladders ship
+            # finds no payload under the new name while the last paid
+            # pull's base-market payload sits beside it. Serving that
+            # keeps every main line and game price on the board until the
+            # next paid pull buys the ladders; the alternative was a board
+            # of proxies for a cycle, which is the "no real book price"
+            # census on a day nothing was wrong.
+            payload = None
+            if alt_map:
+                try:
+                    payload, quota = fetch_event_odds(
+                        ev["id"], key, markets=base_markets, books=books,
+                        ttl=ttl, sport=sport, cache_only=True)
+                    result.alt_fallback += 1
+                except OddsAPIError:
+                    payload = None
+            if payload is None:
                 # Never paid for, so there is nothing on disk. Counted: a
                 # cached rebuild otherwise looks identical whether the
                 # event join improved or not, because the newly-matched
                 # events match and then disappear on this line.
                 result.cache_misses += 1
                 continue
-            raise
         result.quota = quota
         result.events_used += 1
         pair = frozenset((home, away))
@@ -1621,6 +1672,15 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             # field — see `parse_event_sharp_lines`.
             for k, lines in parse_event_sharp_lines(payload, cfg["markets"]).items():
                 sharp_index.setdefault(k, []).extend(lines)
+            # THE LADDERS, parsed with their own map so a rung never lands
+            # in the shopped field. Absent from a payload bought before
+            # they shipped, or from a book that hangs none: empty, and
+            # the board is exactly what it was.
+            if alt_map:
+                for k, lines in parse_event_lines(payload, alt_map).items():
+                    alt_index.setdefault(k, []).extend(lines)
+                for k, lines in parse_event_sharp_lines(payload, alt_map).items():
+                    alt_sharp_index.setdefault(k, []).extend(lines)
             for k, disp in parse_event_players(payload, cfg["markets"]).items():
                 menu.setdefault(k, {"player": disp, "home": home, "away": away})
             if scorer_map:
@@ -1709,6 +1769,17 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 (normalize_name(prop.player), prop.market)) or [])
         else:
             result.unmatched.append(f"{prop.player} ({prop.market})")
+        # The ladder rides whether or not a main line matched: a rung is
+        # a real price with its own probability, and the Most Likely
+        # board can stand on one where the Edge board has no main line
+        # to shop. Under the EXACT key only — the loose first-initial
+        # fallback above is a safety net for a main line, and a wrong
+        # player's ladder is worse than none.
+        nk = (normalize_name(prop.player), prop.market)
+        prop.alt_lines = list(alt_index.get(nk) or [])
+        prop.alt_sharp_lines = list(alt_sharp_index.get(nk) or [])
+        if prop.alt_lines:
+            result.alt_matched += 1
 
     # The reverse gap: book-priced players with NO slate prop to land on
     # (not in a posted or projected lineup). Surface them so the caller can

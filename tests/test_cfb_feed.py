@@ -114,11 +114,15 @@ def test_every_event_call_is_now_billed_to_a_league():
 
 
 # --- what a pull costs, and who decides how much ----------------------
-def test_one_call_buys_five_markets_and_is_billed_for_five():
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 5
+def test_one_call_buys_nine_markets_and_is_billed_for_nine():
+    """Five since 2026-09-03; nine since 2026-09-07, when the four
+    alternate ladders joined (`oddsapi.ALT_ODDS_TO_MARKET`)."""
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 9
     assert B.PLAYER_MARKETS[0] == "player_anytime_td"
     for key in B.PLAYER_MARKETS[1:]:
-        assert key in O.ODDS_TO_MARKET, key
+        assert key in O.ODDS_TO_MARKET or key in O.ALT_ODDS_TO_MARKET, key
+    assert set(O.ALT_ODDS_TO_MARKET) <= set(B.PLAYER_MARKETS)
+    assert B.PLAYER_MARKETS_BASE == B.PLAYER_MARKETS[:5]
 
 
 def test_the_authorization_estimate_matches_the_worst_saturday():

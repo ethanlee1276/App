@@ -376,7 +376,7 @@ def test_the_whole_board_is_priced_in_one_request():
     assert "def fetch_sport_odds(" in src
     assert 'f"{ODDS_BASE}/sports/{cfg[\'sport_key\']}/odds"' in src
     launch = _read("launch.py")
-    assert "CFB_ODDS_COST = 3 + 12 * 5" in launch
+    assert "CFB_ODDS_COST = 3 + 12 * 9" in launch
     # IN CREDITS, AND THIS TEST PINNED THE FORM THAT GOT IT WRONG.
     # `cost=` feeds `should_refresh`'s FIRST parameter, which is an EVENT
     # COUNT that the pacer multiplies by CREDITS_PER_EVENT — so 63 credits

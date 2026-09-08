@@ -611,7 +611,10 @@ def test_attach_player_quotes_filters_caps_and_survives_cache_misses():
     # total is no longer struck out: it cannot carry a TOUCHDOWN price
     # (no implied total, no script) but a yardage prop needs neither, so
     # it goes last in the queue instead of off it.
-    assert len(calls) == B.PLAYER_EVENT_CAP, calls
+    # One call per capped game, plus the deploy-day fallback's second
+    # ask for the event with no cached payload under the ladder's name.
+    assert len({e for e, _m, _s in calls}) == B.PLAYER_EVENT_CAP, calls
+    assert len(calls) == B.PLAYER_EVENT_CAP + 1, calls
     # The cache miss was skipped, not fatal; everything else parsed —
     # and `pulled` counts what actually answered.
     assert len(out) == B.PLAYER_EVENT_CAP - 1, sorted(out)
@@ -632,7 +635,9 @@ def test_one_call_buys_every_player_market_for_that_game():
         assert sport == "cfb"
         assert list(markets) == B.PLAYER_MARKETS
         assert "player_anytime_td" in markets and "player_rush_yds" in markets
-    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 5
+        assert "player_rush_yds_alternate" in markets
+    # Five since 2026-09-03, nine since 2026-09-07 (the alternate ladders).
+    assert B.CREDITS_PER_EVENT == len(B.PLAYER_MARKETS) == 9
 
 
 def test_the_ranked_games_are_bought_first():
@@ -654,7 +659,14 @@ def test_the_ranked_games_are_bought_first():
     calls = []
     _quote_pull(games, priced, now, cap=4, calls=calls)
     assert B._TIER_ORDER["marquee"] < B._TIER_ORDER["low"]
-    assert sorted(e for e, _m, _s in calls) == ["e0", "e1", "e2", "e3"], calls
+    assert sorted({e for e, _m, _s in calls}) == ["e0", "e1", "e2", "e3"], calls
+    # The one event with no cached payload under the ladder's name is
+    # asked once more for the base-market payload (the deploy-day
+    # fallback) and nothing else is asked twice.
+    twice = [e for e in ("e0", "e1", "e2", "e3")
+             if sum(1 for c in calls if c[0] == e) > 1]
+    assert twice == ["e2"], calls
+    assert [m for e, m, _s in calls if e == "e2"][1] == tuple(B.PLAYER_MARKETS_BASE)
 
 
 def test_a_capped_pull_says_what_it_left_unpriced():

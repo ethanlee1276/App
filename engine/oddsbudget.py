@@ -47,7 +47,28 @@ ASSUMED_MONTHLY = 500
 # "requests" while the meter counted credits — an invisible 4-8x overspend
 # that burned 19k of a 20k plan in a day. Every affordability estimate now
 # multiplies the event count by this.
+#
+# THE GENERIC PRICE, and since 2026-09-07 not every league's. The NFL's
+# event call asks for twelve markets — the four player markets, the
+# anytime-TD market, three game markets, and the four alternate ladders
+# (`oddsapi.ALT_ODDS_TO_MARKET`) Ethan chose over a thinner pull:
+# "whatever gives us props and picks every single day". Metering that
+# pull at eight would authorise two thirds of what gets spent, the exact
+# failure this constant exists to end; metering baseball at twelve would
+# refuse pulls the month can afford. So the price is per league:
+# `credits_per_event(sport)` below, this constant for any league not
+# listed there.
 CREDITS_PER_EVENT = 8
+
+#: Leagues whose event call costs more than the generic eight. College
+#: is not here because it states its own price outright
+#: (cfb_build.CREDITS_PER_EVENT, passed as ``credits``).
+EVENT_CREDITS = {"nfl": 12}
+
+
+def credits_per_event(sport: str | None = None) -> int:
+    """What ONE event-scoped call costs this league, in credits."""
+    return int(EVENT_CREDITS.get(budget_sport(sport), CREDITS_PER_EVENT))
 # Live pricing may plan to spend only this share of what's left this month;
 # the rest stays for harvests, probes, and just-in-case.
 LIVE_SHARE = 0.5
@@ -845,7 +866,8 @@ WIDE_PULL_MARGIN = 8
 def wide_pull_affordable(requests_per_refresh: int,
                          state: "BudgetState | None" = None,
                          today: _dt.date | None = None,
-                         share: float = 1.0) -> bool:
+                         share: float = 1.0,
+                         per_event: int | None = None) -> bool:
     """Can today afford to price the WHOLE slate rather than a window?
 
     True when the day's allowance covers ``WIDE_PULL_MARGIN`` full-slate
@@ -853,7 +875,7 @@ def wide_pull_affordable(requests_per_refresh: int,
     what a smaller plan or a nearly spent month looks like.
     """
     state = state or load()
-    per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+    per_refresh = max(1, int(requests_per_refresh)) * int(per_event or CREDITS_PER_EVENT)
     allowance = int(daily_allowance(state, today) * share)
     return allowance >= per_refresh * WIDE_PULL_MARGIN
 
@@ -1093,7 +1115,11 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
         # the pull that lands so it fires once.
         if closing:
             return True, close_why
-        per_refresh = max(1, int(requests_per_refresh)) * CREDITS_PER_EVENT
+        # The fourth cost site, priced like the other three: a caller
+        # that stated its price in credits was being metered here at the
+        # generic per-event price, which for the NFL's twelve-market
+        # call under-charged the touchpoint pull by a third.
+        per_refresh = refresh_credits(requests_per_refresh, credits)
         if (touchpoint_due(state, sport, now)
                 and waited >= MIN_REFRESH_GAP
                 and state.remaining - RESERVE >= per_refresh):

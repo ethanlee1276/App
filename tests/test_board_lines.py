@@ -179,9 +179,13 @@ def test_the_credit_override_reaches_the_daily_cap():
     import inspect
     from engine import oddsbudget
     src = inspect.getsource(oddsbudget.should_refresh)
-    assert src.count("refresh_credits(requests_per_refresh, credits)") == 3, (
-        "one of the three per-refresh cost sites still multiplies an event "
+    # FOUR SINCE 2026-09-07: the touchpoint override was the last site
+    # multiplying an event count by the generic price, and the NFL's
+    # twelve-market call made that a third under.
+    assert src.count("refresh_credits(requests_per_refresh, credits)") == 4, (
+        "one of the four per-refresh cost sites still multiplies an event "
         "count by hand")
+    assert "* CREDITS_PER_EVENT" not in src
     assert "credits=credits" in src, "the cadence never sees the override"
     # The closing exemption is one of the three, and it is priced before
     # it is compared against its ceiling.

@@ -106,7 +106,7 @@ def test_the_two_halves_add_up_to_the_whole():
     lying about what the meter will bill."""
     import launch
     assert launch.CFB_LINES_COST == 3
-    assert launch.CFB_ODDS_COST == launch.CFB_LINES_COST + 12 * 5, (
+    assert launch.CFB_ODDS_COST == launch.CFB_LINES_COST + 12 * 9, (
         "the full cost is no longer the lines pull plus the player calls")
 
 

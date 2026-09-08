@@ -476,7 +476,9 @@ def build_slate(conn, games: list[dict], date: str, season: int,
     return Slate(date=str(date), teams=teams, games=game_objs, props=props)
 
 
-def attach_lines(slate, lines: dict, sharp: dict | None = None) -> tuple[int, int]:
+def attach_lines(slate, lines: dict, sharp: dict | None = None,
+                 alt: dict | None = None,
+                 alt_sharp: dict | None = None) -> tuple[int, int]:
     """Replace each prop's proxy line with the book's. ``(matched, total)``.
 
     ``sharp`` is the sharp book's own pairs in the same shape, from the
@@ -508,6 +510,10 @@ def attach_lines(slate, lines: dict, sharp: dict | None = None) -> tuple[int, in
             prop.lines = list(got)
             matched += 1
             prop.sharp_lines = list((sharp or {}).get(key) or [])
+        # The ladder rides whether or not a main line matched — see
+        # `oddsapi.apply_odds_to_slate`, the NFL's copy of this join.
+        prop.alt_lines = list((alt or {}).get(key) or [])
+        prop.alt_sharp_lines = list((alt_sharp or {}).get(key) or [])
     return matched, len(getattr(slate, "props", []))
 
 

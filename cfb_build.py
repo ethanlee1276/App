@@ -150,7 +150,18 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
 #: buys because it is the same sport.
 PLAYER_MARKETS = ["player_anytime_td", "player_pass_yds",
                   "player_rush_yds", "player_reception_yds",
-                  "player_receptions"]
+                  "player_receptions",
+                  # THE ALTERNATE LADDERS (2026-09-07), the same four
+                  # keys the NFL pull buys and for the same reason: at a
+                  # main line the Most Likely board has nothing it can
+                  # call likely. Four more credits a game, inside the
+                  # same PLAYER_EVENT_CAP.
+                  "player_pass_yds_alternate", "player_rush_yds_alternate",
+                  "player_reception_yds_alternate",
+                  "player_receptions_alternate"]
+#: The request as it was before the ladders — what a cached rebuild can
+#: still find on the day they first ship (see the fallback below).
+PLAYER_MARKETS_BASE = [m for m in PLAYER_MARKETS if not m.endswith("_alternate")]
 
 #: What one game costs, by the API's own rule — one credit per market per
 #: region, and every request this file makes is one region.
@@ -191,7 +202,9 @@ _TIER_ORDER = {MARQUEE: 0, STANDARD: 1, LOW: 2}
 def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                          api_key: str | None = None,
                          now=None, cap: int | None = None,
-                         sharp: dict | None = None
+                         sharp: dict | None = None,
+                         alt: dict | None = None,
+                         alt_sharp: dict | None = None
                          ) -> tuple[dict, dict, str]:
     """Player quotes for the board's best games — one call per game.
 
@@ -287,9 +300,17 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
                 event_id, api_key, markets=PLAYER_MARKETS,
                 sport="cfb", ttl=1800, cache_only=cache_only)
         except oddsapi.OddsAPIError:
-            if cache_only:
+            if not cache_only:
+                break                  # a live failure ends the spend, not the build
+            # THE DEPLOY-DAY MISS: no payload under the ladder's name
+            # yet, but the last paid pull's base-market payload is on
+            # disk. Same fallback as `oddsapi.apply_odds_to_slate`.
+            try:
+                payload, _quota = oddsapi.fetch_event_odds(
+                    event_id, api_key, markets=PLAYER_MARKETS_BASE,
+                    sport="cfb", ttl=1800, cache_only=True)
+            except oddsapi.OddsAPIError:
                 continue               # never paid for — nothing on disk
-            break                      # a live failure ends the spend, not the build
         # A LIVE PULL IS ZERO SECONDS OLD whatever was on disk before it.
         # `_request` only serves the cache under `cache_only` or inside
         # the 30-minute TTL, and both of those are what `age` measures.
@@ -310,6 +331,14 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
             for key, got in oddsapi.parse_event_sharp_lines(
                     payload, oddsapi.SPORT_CONFIG["cfb"]["markets"]).items():
                 sharp.setdefault(key, []).extend(got)
+        # The ladders, parsed with their own map — see `Prop.alt_lines`.
+        _alt_map = oddsapi.SPORT_CONFIG["cfb"].get("alternates") or {}
+        if alt is not None:
+            for key, got in oddsapi.parse_event_lines(payload, _alt_map).items():
+                alt.setdefault(key, []).extend(got)
+        if alt_sharp is not None:
+            for key, got in oddsapi.parse_event_sharp_lines(payload, _alt_map).items():
+                alt_sharp.setdefault(key, []).extend(got)
 
     note = (f"player quotes: {pulled} of {len(cands)} eligible game(s) "
             f"pulled at {CREDITS_PER_EVENT} credit(s) each"
@@ -1686,6 +1715,8 @@ def main() -> None:
     td_quotes: dict = {}
     prop_lines: dict = {}
     sharp_prop_lines: dict = {}          # the sharp book's pairs, apart
+    alt_prop_lines: dict = {}            # the alternate ladders, apart
+    alt_sharp_prop_lines: dict = {}      # …and the sharp book's rungs
     quotes_note = ("no odds pulled on this cycle — player prices are "
                    "metered per event, so they arrive on the cycles that "
                    "can afford them rather than every minute")
@@ -1698,7 +1729,9 @@ def main() -> None:
             # paid pull's prices are better than none.
             td_quotes, prop_lines, quotes_note, quotes_age = \
                 attach_player_quotes(games, priced, cache_only=not args.odds,
-                                     sharp=sharp_prop_lines)
+                                     sharp=sharp_prop_lines,
+                                     alt=alt_prop_lines,
+                                     alt_sharp=alt_sharp_prop_lines)
             print(f"  {quotes_note}")
         except Exception as _qexc:                           # noqa: BLE001
             quotes_note = f"player quotes unavailable: {_qexc}"
@@ -1719,7 +1752,9 @@ def main() -> None:
         # shown, and is never staked or journaled — `evaluate_prop`
         # reads the book name and refuses to call it a market.
         _matched, _total = _cfbprops.attach_lines(_prop_slate, prop_lines,
-                                                  sharp=sharp_prop_lines)
+                                                  sharp=sharp_prop_lines,
+                                                  alt=alt_prop_lines,
+                                                  alt_sharp=alt_sharp_prop_lines)
         prop_census["priced"] = _matched
         out["recommendations"] = _price_props(_prop_slate, sport="cfb")
         if prop_census.get("candidates"):

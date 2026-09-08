@@ -157,6 +157,19 @@ class Prop:
     #: `sources.oddsapi.parse_event_sharp_lines`. Empty means the sharp
     #: book did not quote it, and the model card prices as it always has.
     sharp_lines: list = field(default_factory=list)
+    #: THE ALTERNATE LADDER, kept apart from `lines` for the opposite
+    #: reason `sharp_lines` is: these ARE bettable, but they must never
+    #: be shopped as the main line. `odds.best_over_line` takes the
+    #: lowest line on the board, and a ladder of alternates would hand
+    #: every card its cheapest rung as "the line". `lines` stays the
+    #: book's main number; this is every other number the same books
+    #: hang for the same stat, each with its own price, and the Most
+    #: Likely board picks its rung from here (see `likely.from_prop`).
+    #: `alt_sharp_lines` is the sharp book's pairs on those rungs.
+    #: Ethan, 2026-09-07: "whatever gives us props and picks every
+    #: single day".
+    alt_lines: list = field(default_factory=list)
+    alt_sharp_lines: list = field(default_factory=list)
     # official headshot URL when a data source provides one (nflverse
     # weekly stats carry headshot_url); the UI falls back to an SVG avatar
     headshot: str = ""
