@@ -1750,6 +1750,13 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             else:
                 result.other_day_events += 1
             continue
+        # WHICH FILE TO DATE. The age below is read off the cache file
+        # named by the market list actually served; the deploy-day
+        # fallback serves the BASE-market file, and dating the ladder's
+        # name instead answers None — "nothing cached", current by
+        # construction — for a payload that may be days old. That is the
+        # any-age hole opened back up in one corner.
+        _age_markets = markets
         try:
             payload, quota = fetch_event_odds(ev["id"], key, markets=markets,
                                               books=books, ttl=ttl, sport=sport,
@@ -1772,6 +1779,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                         ev["id"], key, markets=base_markets, books=books,
                         ttl=ttl, sport=sport, cache_only=True)
                     result.alt_fallback += 1
+                    _age_markets = base_markets
                 except OddsAPIError:
                     payload = None
             if payload is None:
@@ -1795,7 +1803,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # player markets against MAX_PROP_PRICE_AGE, of the game markets
         # against MAX_GAME_PRICE_AGE. A cached payload is served at any
         # age (`_request`); these two questions are where "any" ends.
-        _age = event_cache_age(ev["id"], markets, books, sport)
+        _age = event_cache_age(ev["id"], _age_markets, books, sport)
         if props_ok and not price_is_current(_age, _max_prop_price_age()):
             # NOTHING off this payload reaches a prop: not a main line,
             # not a rung, not a scorer quote, not a menu entry. A prop

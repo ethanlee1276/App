@@ -373,6 +373,42 @@ def test_college_refuses_stale_player_quotes_and_says_so():
         oa.fetch_event_odds, oa.event_cache_age = real
 
 
+def test_the_deploy_day_fallback_is_dated_by_the_file_it_served():
+    """The first cached rebuild after the ladders ship finds no payload
+    under the ladder's cache name and serves the last pull's base-market
+    file instead. Dating the LADDER's name for that payload answers None
+    — nothing cached, current by construction — which would let a
+    days-old base payload straight under the ceiling."""
+    seen = []
+
+    def _ladder(markets):
+        return any(str(m).endswith("_alternate") for m in (markets or []))
+
+    def fake_fetch(eid, key, markets=None, books=None, ttl=300, sport="nfl",
+                   cache_only=False):
+        if _ladder(markets):
+            raise oa.OddsAPIError("no cached odds yet under the ladder's name")
+        return dict(PROP_EVENT), oa.Quota()
+
+    def fake_age(eid, markets=None, books=None, sport="nfl", now=None):
+        seen.append(list(markets or []))
+        # The ladder file does not exist; the base file is nine hours old.
+        return None if _ladder(markets) else 9 * 3600
+
+    real = (oa.list_events, oa.fetch_event_odds, oa.event_cache_age)
+    oa.list_events = lambda *a, **k: [dict(PROP_EVENT)]
+    oa.fetch_event_odds, oa.event_cache_age = fake_fetch, fake_age
+    slate = _prop_slate()
+    try:
+        res = oa.apply_odds_to_slate(slate, api_key="k", cache_only=True)
+    finally:
+        oa.list_events, oa.fetch_event_odds, oa.event_cache_age = real
+    assert res.alt_fallback == 1, res
+    assert seen and not _ladder(seen[-1]), "the age was read off the wrong file"
+    assert res.stale_prop_events == 1 and res.matched == 0, res
+    assert slate.games[0].home_ml == 0
+
+
 def test_the_nfl_build_reports_the_prop_refusals_too():
     nfl = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
     assert "event_stale_prop_events=res.stale_prop_events" in nfl
