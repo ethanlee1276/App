@@ -24898,8 +24898,10 @@ function _mockStart(teams, slot) {
   // Every room gets a persona, drawn once and kept for the draft — a
   // manager who is Zero-RB in round two and Robust-RB in round three is
   // not a manager. Your own seat gets one too, unused, so the array
-  // indexes by team without a special case.
-  const personas = Array.from({ length: teams }, () => _mockDrawArchetype());
+  // indexes by team without a special case. With a Sleeper league read,
+  // a room whose manager was measured is dealt THAT build, in the seat
+  // the league's draft order gives them (`_mockSeatRooms`).
+  const personas = _mockSeatRooms(teams, _mockLeague);
   // Keepers whose room still exists in this league size — shrinking from
   // twelve teams to eight must not leave a keeper owned by room ten.
   const keepers = (_mockKeepers || []).filter((k) => k.team < teams);
@@ -25824,9 +25826,8 @@ function mockDraftHTML() {
   const recent = m.log.slice(-m.teams).reverse().map((e) => `
     <div class="mk-log-row${e.team === m.you ? " you" : ""}">
       <span class="mk-pickno">${Math.floor(e.pick / m.teams) + 1}.${String(e.pick % m.teams + 1).padStart(2, "0")}</span>
-      <span class="mk-room" title="${escapeAttr(e.team === m.you ? "Your pick"
-        : ((m.personas || [])[e.team] || {}).name || "")}">${
-        e.team === m.you ? "You" : "Room " + (e.team + 1)}${
+      <span class="mk-room" title="${escapeAttr(_mockRoomTitle(m, e.team))}">${
+        escapeHtml(_mockRoomName(m, e.team))}${
         e.team === m.you ? "" : `<i class="mk-arch">${escapeHtml(
           (((m.personas || [])[e.team] || {}).name || "").split(" ")[0])}</i>`}</span>
       ${idBlock(e.player, "")}
@@ -25839,7 +25840,7 @@ function mockDraftHTML() {
   // stack on a phone — the board first either way, because that is the
   // thing you are choosing from.
   const onClock = yourTurn ? "You are on the clock"
-    : `Room ${_mockPicker(m.pick, m.teams) + 1} is picking`;
+    : `${_mockRoomName(m, _mockPicker(m.pick, m.teams))} is picking`;
 
   /* THE SELECTED PLAYER. Defaults to the best available, so the card is
      never empty and the page opens on the pick it would recommend.
@@ -25855,9 +25856,8 @@ function mockDraftHTML() {
   const boardList = m.log.length ? m.log.slice().reverse().map((e) => `
     <div class="mk-brow${e.team === m.you ? " you" : ""}">
       <span class="mk-bpick">${_mockPickNo(e.pick, m.teams)}</span>
-      <span class="mk-bteam" title="${escapeAttr(e.team === m.you ? "Your pick"
-        : ((m.personas || [])[e.team] || {}).name || "")}">${
-        e.team === m.you ? "You" : "Team " + (e.team + 1)}</span>
+      <span class="mk-bteam" title="${escapeAttr(_mockRoomTitle(m, e.team))}">${
+        escapeHtml(_mockRoomName(m, e.team))}</span>
       ${teamMark(e.player.team, 16, nflMap(), "nfl")}
       <span class="mk-bname" data-mksel="${escapeAttr(e.player.player)}">${
         escapeHtml(e.player.player)}</span>
@@ -25910,7 +25910,7 @@ function mockDraftHTML() {
         <div class="mk-hs"><span class="k">Overall</span>
           <span class="v">${m.pick + 1}<i>/${total}</i></span></div>
         <div class="mk-hs ${yourTurn ? "you" : ""}"><span class="k">On the clock</span>
-          <span class="v">${yourTurn ? "You" : "Team " + (_mockPicker(m.pick, m.teams) + 1)}</span>
+          <span class="v">${escapeHtml(_mockRoomName(m, _mockPicker(m.pick, m.teams)))}</span>
           <span class="s">${
             until.onClock ? (m.cfg && m.cfg.clock
               ? `<span id="mk-clock" class="mk-clock">${m.cfg.clock}s left</span>`
@@ -26006,6 +26006,7 @@ function _mockSetupHTML(kit) {
         <div class="mk-setcard-head">League settings</div>
         <div class="mk-row mk-row-league"><span class="mk-row-k">${icon("trophy", 15)}
           <span>Select league</span></span><span class="mk-row-v mk-row-v-wrap">${sleeper}</span></div>
+        ${_mockMatesHTML(c)}
         <div class="mk-presets">${presets}</div>
         ${row("list", "Scoring", _mockSelect("mk-scoring",
           Object.entries(MOCK_SCORING).map(([k, s]) => [k, s.name]), c.scoring))}
@@ -26057,7 +26058,10 @@ function _mockSetupHTML(kit) {
         keeps it all draft — Zero RB, Hero RB, WR hoarder, early QB, elite
         TE and the rest — so the board falls differently every time and a
         run on a position is sometimes real. <b>Room chaos</b> sets how far
-        they will stray from the board to do it.</p>
+        they will stray from the board to do it. With your Sleeper league
+        read, each room is dealt the build its manager actually drafted
+        last time \u2014 measured from their picks, not declared \u2014 and
+        sits in the seat the league\u2019s draft order gives them.</p>
       <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:0 0 8px">
         <b>Scoring</b> and the <b>roster</b> are set apart, the way a league
         sets them. A superflex slot starts a second quarterback, so the
@@ -26177,12 +26181,302 @@ async function _mockUseLeague() {
     const league = await sleeperGet(`league/${leagueId}`);
     let drafts = [];
     try { drafts = await sleeperGet(`league/${leagueId}/drafts`) || []; } catch (e) { drafts = []; }
-    const applied = _mockApplyLeague(league, drafts[0] || null, user.user_id, _mockCfg);
+    const current = drafts[0] || null;
+    const applied = _mockApplyLeague(league, current, user.user_id, _mockCfg);
     _mockSaveCfg();
+    // THE ROOM: who sits where, and how each of them drafted last time.
+    // The users for their names; the roster list only when the draft has
+    // no order yet; last season's league for the drafts to measure from.
+    let users = [], rosters = [], prevDrafts = [];
+    try { users = await sleeperGet(`league/${leagueId}/users`) || []; } catch (e) { users = []; }
+    if (!current || !Object.keys(current.draft_order || {}).length) {
+      try { rosters = await sleeperGet(`league/${leagueId}/rosters`) || []; } catch (e) { rosters = []; }
+    }
+    if (league.previous_league_id) {
+      try { prevDrafts = await sleeperGet(`league/${league.previous_league_id}/drafts`) || []; }
+      catch (e) { prevDrafts = []; }
+    }
+    // This season's draft first if it has happened, then last season's:
+    // the most recent draft a manager appears in decides their build.
+    const samples = [];
+    for (const d of [...drafts, ...prevDrafts]) {
+      if (!d || d.status !== "complete" || !d.draft_id) continue;
+      try { samples.push({ draft: d, picks: await sleeperGet(`draft/${d.draft_id}/picks`) || [] }); }
+      catch (e) { /* a draft that will not read is a draft not measured */ }
+      if (samples.length >= 2) break;
+    }
+    _mockLeague = _mockCleanLeague(_mockBuildLeague(league, current, users, rosters,
+                                                    samples, user.user_id));
+    _mockSaveLeague();
+    applied.push(_mockLeagueSummary(_mockLeague));
     say(`${league.name || "Your league"}: ${applied.join(" · ") || "nothing to read"}.`);
   } catch (e) {
     say(String(e.message || e));
   }
+}
+
+/* ---- "Leaguemates' draft tendencies" -------------------------------------
+   The second half of the screenshot's line under "Select League": "More
+   realistic mock drafts using your league's settings and leaguemates'
+   draft tendencies." A room of builds drawn from a weight table is a
+   room of strangers. Your league is eleven particular people, and the
+   one thing known about how each of them drafts is HOW THEY DRAFTED:
+   Sleeper keeps every pick of every past draft keyed by the manager who
+   made it, and the league object points at last season's league.
+
+   MEASURED, NOT DECLARED. Each manager's picks in the most recent
+   completed draft are read for the shapes the builds above describe —
+   no back in the first five rounds, three backs in five, three
+   receivers in four, one back early and nothing after, a quarterback
+   or a tight end early or late — and the room that manager sits in is
+   dealt the matching build instead of a draw from the table. The two
+   timing tells (quarterback, tight end) are read AGAINST THE ROOM'S OWN
+   MEDIAN, so a superflex league, where every quarterback goes early,
+   does not read as twelve early-QB managers. A manager with fewer than
+   five picks, or absent from every draft read, is unmeasured and draws
+   from the table as before; the panel says how many were measured and
+   from which draft, and lists the six rounds that decided each one.
+
+   KEEPER PICKS ARE NOT PICKS and are skipped: a round-one keeper is a
+   contract, not a tendency. A pick with no `picked_by` (a commissioner
+   or auto-pick) is charged to the seat that was on the clock.
+
+   The read is pure and the fetch is around it, the same split as the
+   settings above, so the suite runs the read on a fixture draft. */
+//: The shape is read from the first six rounds; fewer than five picks
+//: in the draft and the manager is unmeasured.
+const MOCK_TELL_ROUNDS = 6;
+const MOCK_TELL_MIN_PICKS = 5;
+//: The panel and the store keep this many characters of a Sleeper name.
+const MOCK_MATE_NAME_MAX = 28;
+
+//: One manager's picks → the numbers the tells are read from.
+function _mockShapeOf(picks) {
+  const own = (Array.isArray(picks) ? picks : [])
+    .filter((p) => p && !p.keeper && p.round >= 1)
+    .sort((a, b) => a.round - b.round);
+  const firstAt = (pos) => {
+    const p = own.find((x) => x.position === pos);
+    return p ? p.round : Infinity;
+  };
+  const countTo = (pos, r) => own.filter((p) => p.position === pos && p.round <= r).length;
+  return { picks: own.length, firstQB: firstAt("QB"), firstTE: firstAt("TE"),
+           firstRB: firstAt("RB"), rb4: countTo("RB", 4), rb5: countTo("RB", 5),
+           wr4: countTo("WR", 4),
+           line: own.filter((p) => p.round <= MOCK_TELL_ROUNDS)
+                    .map((p) => p.position || "?").join("-") };
+}
+
+//: The room's median first-QB and first-TE round, over the managers
+//: with enough picks to measure; null with fewer than three of them,
+//: because a median of two is one of them.
+function _mockRoomMedians(shapes) {
+  const med = (xs) => {
+    const v = xs.filter(Number.isFinite).sort((a, b) => a - b);
+    if (v.length < 3) return null;
+    const h = v.length >> 1;
+    return v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2;
+  };
+  const measured = shapes.filter((s) => s.picks >= MOCK_TELL_MIN_PICKS);
+  return { qb: med(measured.map((s) => s.firstQB)), te: med(measured.map((s) => s.firstTE)) };
+}
+
+//: A shape, against the room → a build key from MOCK_ARCHETYPES, or
+//: null when the manager cannot be measured. The order is the order of
+//: how much a tell says: a quarterback two rounds before the room says
+//: more than a balanced first four, and the first five rounds' backs
+//: say more than a late quarterback.
+function _mockTendency(s, room) {
+  if (!s || s.picks < MOCK_TELL_MIN_PICKS) return null;
+  const qbMed = room && Number.isFinite(room.qb) ? room.qb : null;
+  const teMed = room && Number.isFinite(room.te) ? room.te : null;
+  if (qbMed != null && s.firstQB <= qbMed - 2 && s.firstQB <= 6) return "early_qb";
+  if (teMed != null && s.firstTE <= teMed - 2 && s.firstTE <= 5) return "elite_te";
+  if (s.rb5 === 0) return "zero_rb";
+  if (s.rb5 === 1 && s.firstRB <= 2) return "hero_rb";
+  if (s.rb5 >= 3) return "robust_rb";
+  if (s.wr4 >= 3) return "wr_room";
+  if (qbMed != null && teMed != null
+      && s.firstQB >= qbMed + 2 && s.firstTE >= teMed + 2) return "late_round";
+  if (s.rb4 === 2 && s.wr4 === 2) return "balanced";
+  return "bpa";
+}
+
+//: One Sleeper draft with its picks → every manager's build and line.
+function _mockReadDraft(draft, picks) {
+  const d = draft || {};
+  const slotUser = {};
+  for (const [uid, slot] of Object.entries(d.draft_order || {})) slotUser[String(slot)] = String(uid);
+  const byUser = {};
+  for (const p of (Array.isArray(picks) ? picks : [])) {
+    if (!p) continue;
+    const who = String(p.picked_by || slotUser[String(p.draft_slot)] || "");
+    if (!who) continue;
+    (byUser[who] = byUser[who] || []).push({
+      round: parseInt(p.round, 10) || 0,
+      position: String((p.metadata || {}).position || "").toUpperCase(),
+      keeper: !!p.is_keeper });
+  }
+  const shapes = {};
+  for (const [uid, list] of Object.entries(byUser)) shapes[uid] = _mockShapeOf(list);
+  const room = _mockRoomMedians(Object.values(shapes));
+  const managers = {};
+  for (const [uid, sh] of Object.entries(shapes)) {
+    managers[uid] = { key: _mockTendency(sh, room), line: sh.line, picks: sh.picks };
+  }
+  return { season: String(d.season || ""), draftId: d.draft_id || null, managers, room };
+}
+
+//: The league, its current draft, its users, its rosters and the sample
+//: drafts (most recent first) → the seating the mock starts from.
+function _mockBuildLeague(league, draft, users, rosters, samples, userId) {
+  const lg = league || {};
+  const teams = parseInt(lg.total_rosters, 10) || 0;
+  const names = {};
+  for (const u of (Array.isArray(users) ? users : [])) {
+    if (!u || !u.user_id) continue;
+    const meta = u.metadata || {};
+    names[String(u.user_id)] = String(meta.team_name || u.display_name || u.username || "").trim();
+  }
+  // Seats from the draft's order; from the roster list until there is one.
+  const seatOf = {};
+  const order = (draft || {}).draft_order || {};
+  if (Object.keys(order).length) {
+    for (const [uid, slot] of Object.entries(order)) seatOf[String(uid)] = parseInt(slot, 10);
+  } else {
+    for (const r of (Array.isArray(rosters) ? rosters : [])) {
+      if (r && r.owner_id && r.roster_id) seatOf[String(r.owner_id)] = parseInt(r.roster_id, 10);
+    }
+  }
+  // The most recent draft a manager could be measured in decides.
+  const reads = (samples || []).map((x) => _mockReadDraft(x.draft, x.picks));
+  const seats = [];
+  for (const [uid, slot] of Object.entries(seatOf)) {
+    if (!(slot >= 1 && slot <= teams)) continue;
+    let tell = null, from = "";
+    for (const r of reads) {
+      const m = r.managers[uid];
+      if (m && m.key) { tell = m; from = r.season; break; }
+    }
+    seats.push({ slot, userId: uid, name: names[uid] || "", key: tell ? tell.key : null,
+                 line: tell ? tell.line : "", from });
+  }
+  seats.sort((a, b) => a.slot - b.slot);
+  const you = String(userId || "");
+  return { id: lg.league_id ? String(lg.league_id) : null, name: lg.name || "", teams, you, seats,
+           measured: seats.filter((s) => s.key && s.userId !== you).length,
+           from: reads.map((r) => r.season).filter(Boolean) };
+}
+
+/* The seating survives a reload, like the keepers and the settings: the
+   league is read once and mocked against a dozen times. */
+const MOCK_LEAGUE_KEY = "qb_mock_league";
+
+function _mockCleanLeague(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.seats)) return null;
+  const keys = new Set(MOCK_ARCHETYPES.map((a) => a.key));
+  const teams = parseInt(raw.teams, 10) || 0;
+  const you = String(raw.you || "");
+  const seats = raw.seats.map((s) => s && typeof s === "object" ? {
+    slot: parseInt(s.slot, 10) || 0, userId: String(s.userId || ""),
+    name: String(s.name || "").slice(0, MOCK_MATE_NAME_MAX),
+    key: keys.has(s.key) ? s.key : null,
+    line: String(s.line || "").slice(0, 40), from: String(s.from || "").slice(0, 8) } : null)
+    .filter((s) => s && s.slot >= 1 && s.slot <= teams);
+  return { id: raw.id ? String(raw.id) : null, name: String(raw.name || "").slice(0, 60),
+           teams, you, seats,
+           measured: seats.filter((s) => s.key && s.userId !== you).length,
+           from: Array.isArray(raw.from) ? raw.from.map(String).slice(0, 4) : [] };
+}
+
+let _mockLeague = (() => {
+  try { return _mockCleanLeague(JSON.parse(localStorage.getItem(MOCK_LEAGUE_KEY) || "null")); }
+  catch (e) { return null; }
+})();
+
+function _mockSaveLeague() {
+  try {
+    if (_mockLeague) localStorage.setItem(MOCK_LEAGUE_KEY, JSON.stringify(_mockLeague));
+    else localStorage.removeItem(MOCK_LEAGUE_KEY);
+  } catch (e) {}
+}
+
+//: "the 2025 draft" / "the 2026 and 2025 drafts".
+function _mockLeagueFrom(lg) {
+  const seasons = [...new Set((lg && lg.from) || [])];
+  if (!seasons.length) return "no completed draft";
+  return seasons.length === 1 ? `the ${seasons[0]} draft` : `the ${seasons.join(" and ")} drafts`;
+}
+
+function _mockLeagueSummary(lg) {
+  if (!lg || !lg.seats.length) return "no seats to read";
+  const rivals = lg.seats.filter((s) => s.userId !== lg.you).length;
+  return lg.from.length
+    ? `${lg.measured} of ${rivals} leaguemates measured from ${_mockLeagueFrom(lg)}`
+    : "no completed draft to measure your leaguemates from";
+}
+
+//: The personas for a draft of `teams` rooms: the table's draw for every
+//: room, then the league's measured build over it for every seated
+//: manager — but only when the league is the size being drafted, because
+//: a seat in a twelve-team order means nothing in a ten-team room.
+function _mockSeatRooms(teams, league) {
+  const personas = Array.from({ length: teams }, () => _mockDrawArchetype());
+  if (!league || league.teams !== teams || !Array.isArray(league.seats)) return personas;
+  for (const s of league.seats) {
+    const i = s.slot - 1;
+    if (!(i >= 0 && i < teams)) continue;
+    const arch = s.key ? MOCK_ARCHETYPES.find((a) => a.key === s.key) : null;
+    personas[i] = Object.assign({}, arch || personas[i], {
+      who: s.name || "", line: s.line || "", measured: !!arch, from: s.from || "" });
+  }
+  return personas;
+}
+
+//: What a room is called in the log and on the clock: the manager's
+//: name when the league gave one, "Room N" otherwise, "You" for yours.
+function _mockRoomName(m, ti) {
+  if (ti === m.you) return "You";
+  const p = (m.personas || [])[ti];
+  return p && p.who ? p.who : "Room " + (ti + 1);
+}
+
+function _mockRoomTitle(m, ti) {
+  if (ti === m.you) return "Your pick";
+  const p = (m.personas || [])[ti] || {};
+  if (!p.name) return "";
+  if (p.measured) return `${p.name} — measured from their ${p.from || "last"} draft: ${p.line}`;
+  return p.who ? `${p.name} — drawn, not measured` : p.name;
+}
+
+//: The panel's list: seat, name, measured build and the rounds behind it.
+function _mockMatesHTML(c) {
+  const lg = _mockLeague;
+  if (!lg || !Array.isArray(lg.seats) || !lg.seats.length) return "";
+  const rivals = lg.seats.filter((s) => s.userId !== lg.you).length;
+  // `note`, not `sub`: the file-wide guard against escaping an assembled
+  // markup string reads for a `sub` handed to escapeHtml, and this one
+  // is plain text.
+  const note = lg.teams === c.teams
+    ? `${lg.measured} of ${rivals} measured from ${_mockLeagueFrom(lg)}`
+    : `seated at ${lg.teams} teams — set ${lg.teams} teams to use them`;
+  const rows = lg.seats.map((s) => {
+    const you = s.userId === lg.you;
+    const arch = s.key ? MOCK_ARCHETYPES.find((a) => a.key === s.key) : null;
+    return `<div class="mk-row mk-row-slot">
+      <span class="mk-mate-name"><span class="mk-mate-seat">${s.slot}.</span>${
+        you ? `<span class="mk-mate-you">You</span>` : escapeHtml(s.name || "Room " + s.slot)}</span>
+      <span class="mk-row-v">${you ? "" : arch
+        ? `<span class="mk-mate-build">${escapeHtml(arch.name)}</span><span class="mk-mate-line">${
+            escapeHtml(s.line)}</span>`
+        : `<span class="mk-mate-draw">unmeasured — drawn</span>`}</span></div>`;
+  }).join("");
+  return `<details class="mk-roster mk-mates">
+          <summary class="mk-row"><span class="mk-row-k">${icon("people", 15)}
+            <span>Your leaguemates<i class="mk-row-sub">${escapeHtml(note)}</i></span></span>
+            <span class="mk-row-v mk-row-chev">›</span></summary>
+          ${rows}
+        </details>`;
 }
 
 /* THE ONE PANEL ON THIS CARD MADE OF THINGS THAT ALREADY HAPPENED.

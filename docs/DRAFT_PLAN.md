@@ -68,6 +68,18 @@ lists the changes; nothing re-projects on them), and the tendencies of
 one seat in your room. The plan is greedy, one round at a time, and it
 calls itself a plan rather than a promise.
 
+The mock draft is the exception on tendencies. With a Sleeper account
+linked, "Use my Sleeper league" reads the league's settings, seat and
+draft type, then the picks of the most recent completed draft (this
+season's if it has happened, else last season's through
+`previous_league_id`) and measures each manager's build from their
+first six rounds: no back in five, three backs in five, three receivers
+in four, one back early, a quarterback or tight end two rounds before
+or after the room's own median. Each rival room is dealt the measured
+build in the seat the draft order gives them; unmeasured managers draw
+from the table as before, and the panel says which is which
+(`_mockBuildLeague`, `_mockTendency` in `web/js/app.js`).
+
 ## Running it
 
 - The page: Fantasy → Around the league → Draft kit. The plan controls

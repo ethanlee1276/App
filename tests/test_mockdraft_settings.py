@@ -143,7 +143,8 @@ def test_the_league_import_reads_the_leagues_own_objects():
     src = _fn("_mockUseLeague")
     assert "sleeperGet(`league/${leagueId}`)" in src
     assert "sleeperGet(`league/${leagueId}/drafts`)" in src
-    assert "_mockApplyLeague(league, drafts[0] || null, user.user_id, _mockCfg)" in src
+    assert "const current = drafts[0] || null;" in src
+    assert "_mockApplyLeague(league, current, user.user_id, _mockCfg)" in src
     # The proxy allows exactly those paths.
     server = open(os.path.join(ROOT, "server.py"), encoding="utf-8").read()
     assert "league/\\d{1,25}(/rosters|/users|/drafts)?" in server

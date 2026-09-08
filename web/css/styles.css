@@ -7336,6 +7336,20 @@ button.rc-day b { font-size: var(--fs-sm); }
 .mk-preset { cursor: pointer; }
 .mk-preset.active { border-color: var(--brand); color: var(--brand-2); }
 .mk-league-btn { padding: 6px 12px; }
+/* Your leaguemates, seated: seat, name, the measured build and the six
+   rounds that decided it. A Sleeper team name is clipped, never wrapped,
+   in the panel and in the room labels alike. */
+.mk-mates .mk-row-slot { justify-content: space-between; }
+.mk-mate-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-mate-seat { color: var(--text-mute); font-variant-numeric: tabular-nums; min-width: 1.6em; }
+.mk-mate-you { color: var(--brand-2); font-weight: 600; }
+.mk-mate-build { color: var(--text); font-weight: 600; font-size: var(--fs-sm); }
+.mk-mate-line { color: var(--text-mute); font-size: var(--fs-2xs); letter-spacing: .04em;
+  margin-left: 6px; }
+.mk-mate-draw { color: var(--text-mute); font-style: italic; font-size: var(--fs-sm); }
+.mk-room, .mk-bteam { max-width: 9.5em; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
 .mk-startbtn { width: 100%; margin-top: 14px; padding: 12px; display: flex;
   flex-direction: column; align-items: center; gap: 2px;
   font-size: var(--fs-md); font-weight: 800; }
