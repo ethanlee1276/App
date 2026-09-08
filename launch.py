@@ -1312,6 +1312,9 @@ def _note_board(name: str, ok) -> bool:
 #: and nothing measured the addends — so "which build is eating the 45
 #: minutes" was a profiling session over SSH. Now it is one paste: the
 #: heartbeat publishes this and --boards prints it, worst first.
+#: Cleared at the top of every background cycle — see _background_refresher,
+#: which owns the cycle and times the three chores that run before the
+#: boards do.
 _STEP_S: dict = {}
 
 
@@ -3164,6 +3167,22 @@ def _background_refresher(interval: int) -> None:
     while True:
         time.sleep(interval)
         _cycle_started = time.time()
+        # WHERE THE *LAST* CYCLE'S TIME WENT, and not a word about any
+        # earlier one. `_STEP_S` is written per step and was never
+        # cleared, so a cycle that stopped at CFB still reported MLB's
+        # seconds from whichever earlier cycle last reached it — a total
+        # summed across cycles, printed under a heading that says one.
+        # The board records beside it carry their own timestamps and can
+        # stand alone; a bare duration cannot, so it has to be cleared or
+        # it lies.
+        #
+        # Cleared HERE and not inside refresh_all, because the cycle is
+        # the unit the heartbeat publishes: the maintenance, autosettle
+        # and doctor steps below are timed before the boards start, and
+        # a clear inside refresh_all would erase the three of them every
+        # cycle — losing exactly the "on fitter days those chores ARE
+        # the long cycle" case they were added to catch.
+        _STEP_S.clear()
         try:
             # Catches the date rolling over while the server runs overnight.
             # Clocked like the builds: the first cycle of the day carries
@@ -4936,6 +4955,40 @@ def show_boards() -> None:
             for k, v in sorted(steps.items(), key=lambda kv: -kv[1]):
                 if v >= 1:
                     print(f"    {k:<15} {v:>7.0f}s")
+        # WHICH STEP RAISED — recorded since the three-hour freeze of
+        # 2026-09-03 and, until now, never displayed by the one tool
+        # built to answer "why is the site stale". The heartbeat's own
+        # comment says it exists because a raise "left nothing behind but
+        # one line in a log nobody was tailing"; leaving it out of this
+        # report kept it exactly that far out of reach.
+        #
+        # Found 2026-09-08 chasing a loop that stops after CFB: the
+        # answer may already be sitting in heartbeat.json, unread. Same
+        # shape as reading the paywalled copy of a board, and as an
+        # odds_status filtered to the keys somebody thought to name — the
+        # data was there and the reader was not asking for it.
+        fails = beat.get("step_fail") or {}
+        if fails:
+            print(f"\n  ⚠️  {len(fails)} step(s) raised last cycle — isolated, "
+                  f"so the rest of the sweep continued, but these did not "
+                  f"rebuild:")
+            for k, v in sorted(fails.items()):
+                print(f"    {k:<15} {v}")
+        elif beat.get("boards"):
+            # An empty `step_fail` on a cycle that plainly did not finish
+            # is itself a finding: nothing RAISED, so the sweep either
+            # returned early or the process did not survive to the end of
+            # it. Saying so beats silence, which reads as "all well".
+            reached = set(beat.get("boards") or {})
+            missing = [b for b in BOARD_FILES if b not in reached]
+            if missing:
+                print(f"\n  no step raised, yet {len(missing)} board(s) have "
+                      f"no record at all: {', '.join(missing)}.")
+                print("    Nothing threw, so the sweep did not fail — it "
+                      "did not get there. Either the process is young and "
+                      "still on its first cycle, or it is being restarted "
+                      "before one finishes (the auto-updater does that on "
+                      "every deploy).")
     else:
         print("\n  no heartbeat.json — cannot say whether the loop is alive.")
     cyc = beat.get("cycle_p50_s") or _cycle_p50()
