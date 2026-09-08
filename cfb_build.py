@@ -307,6 +307,8 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     lines: dict = {}
     pulled = 0
     oldest = None                      # seconds; the stalest payload used
+    stale = 0                          # payloads refused for age
+    stale_oldest = 0.0
     for _tier, _pri, _ko, i, event_id in cands[:cap]:
         # BEFORE THE CALL, because a paid pull rewrites the file and the
         # age we want is the age of what this build is about to READ.
@@ -332,6 +334,14 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         # the 30-minute TTL, and both of those are what `age` measures.
         if not cache_only and (age is None or age >= 1800):
             age = 0.0
+        # THE CEILING (oddsapi.MAX_PROP_PRICE_AGE). This loop reported a
+        # stale payload's age and used it anyway; a scorer quote from
+        # Tuesday's pull priced as Saturday's pick is the false pick
+        # Ethan means, and a game with no quote is the honest state.
+        if not oddsapi.price_is_current(age, oddsapi._max_prop_price_age()):
+            stale += 1
+            stale_oldest = max(stale_oldest, float(age or 0.0))
+            continue
         if age is not None:
             oldest = age if oldest is None else max(oldest, age)
         pulled += 1
@@ -383,6 +393,11 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         note += (f" · {len(cands) - cap} left unpriced — the pull is capped "
                  f"at {cap} game(s) by attention tier "
                  f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})")
+    if stale:
+        note += (f" · {stale} game(s) kept NO player quotes: the cached payload "
+                 f"is {stale_oldest / 3600:.1f}h old, past the "
+                 f"{oddsapi._max_prop_price_age() / 3600:.0f}h ceiling "
+                 f"(QB_MAX_PROP_PRICE_AGE) — no price beats a wrong price")
     return scorers, lines, note, oldest
 
 

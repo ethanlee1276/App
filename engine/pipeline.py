@@ -894,6 +894,15 @@ def price_props(slate: Slate, config: RuleConfig | None = None,
                             game=game, sport=sport)
         decision = apply_rules(rec, prop, game, config)
         d = _rec_to_dict(rec, prop, decision, proj, sport)
+        # HOW OLD THE PRICE ON THIS ROW IS. The book line a prop was
+        # evaluated against came off the same event payload as its game's
+        # markets, so the game's stamp dates it (engine.models.Game
+        # .price_age_s). A proxy-priced row carries None: there is no
+        # book price on it to date.
+        _pg = slate.game_for(prop)
+        d["price_age_s"] = (getattr(_pg, "price_age_s", None)
+                            if rec.has_market else None)
+        d["priced_from"] = (getattr(_pg, "priced_from", "") or "") if rec.has_market else ""
         if team_notes and prop.market in (PASS_YDS, REC_YDS, RECEPTIONS):
             note = team_notes.get(prop.team)
             if note:

@@ -40,6 +40,18 @@ likely. So a payload past `MAX_GAME_PRICE_AGE` prices nothing: the game
 keeps no market, the board says "no real book price", and the build says
 loudly why. A missing price is a quiet shelf; a wrong price is a bet.
 
+AND THE PROPS, on their own knob. The first cut gated the game markets
+and left props dated-but-served, on the argument that gating them the
+day before the opener would empty the board on a declined cycle. Ethan
+repeated the ask word for word: "this could be our issue with not
+showing picks and shit bc we are pulling the wrong lines. Also that can
+make us give fake and false picks that can hurt us." A pick is a prop.
+A per-event payload past `MAX_PROP_PRICE_AGE` indexes no line, no rung,
+no menu entry and no scorer quote, so every prop on that game is
+proxy-priced and cannot be a pick; the college quote loop refuses the
+same way and says so in its note; every prop row that IS priced carries
+the age of the payload behind it.
+
 Run directly: `python3 tests/test_stale_price_ceiling.py`
 """
 
@@ -211,6 +223,160 @@ def test_the_docs_carry_the_root_cause_and_the_measurement():
     checks = open(os.path.join(ROOT, "docs", "DROPLET_CHECKS.md"), encoding="utf-8").read()
     assert "## 8g. Why the wrong moneylines kept coming back (2026-09-08)" in checks
     assert "QB_MAX_GAME_PRICE_AGE" in checks and "3.19%" in checks
+    assert "QB_MAX_PROP_PRICE_AGE" in checks and "event_stale_prop_events" in checks
+
+
+# --- the props, on their own knob ------------------------------------------------
+def test_the_prop_ceiling_is_its_own_knob():
+    assert oa.MAX_PROP_PRICE_AGE == 6 * 3600 and oa._max_prop_price_age() == 6 * 3600
+    os.environ["QB_MAX_PROP_PRICE_AGE"] = "43200"
+    try:
+        assert oa._max_prop_price_age() == 43200
+        assert oa._max_game_price_age() == 6 * 3600, "the two knobs are one knob"
+    finally:
+        del os.environ["QB_MAX_PROP_PRICE_AGE"]
+
+
+def _prop_slate():
+    from engine.models import (Team, DefenseProfile, Prop, GameLog,
+                               SportsbookLine, PASS_YDS)
+    from engine.data_loader import Slate
+    teams = {"KC": Team("KC", "KC", DefenseProfile("KC")),
+             "BUF": Team("BUF", "BUF", DefenseProfile("BUF"))}
+    game = Game(home="KC", away="BUF", weather=Weather(), date="2026-09-13",
+                kickoff="2026-09-13T20:25:00Z")
+    logs = [GameLog(week=w, opponent="X", value=260) for w in range(1, 6)]
+    prop = Prop(player="Josh Allen", team="BUF", opponent="KC", position="QB",
+                market=PASS_YDS, logs=logs, career_avg=255, vs_opponent_avg=None,
+                lines=[SportsbookLine(book="proxy", line=250.0)])
+    # A second man the payload never prices: his row stays proxy-priced
+    # on a game that IS dated, which is the case a stamp that ignores
+    # `has_market` gets wrong.
+    from engine.models import REC_YDS
+    unpriced = Prop(player="Dalton Kincaid", team="BUF", opponent="KC", position="TE",
+                    market=REC_YDS,
+                    logs=[GameLog(week=w, opponent="X", value=48) for w in range(1, 6)],
+                    career_avg=45, vs_opponent_avg=None,
+                    lines=[SportsbookLine(book="proxy", line=44.5)])
+    return Slate(date="2026-09-13", teams=teams, games=[game], props=[prop, unpriced])
+
+
+PROP_EVENT = {"id": "e1", "home_team": "Kansas City Chiefs",
+              "away_team": "Buffalo Bills",
+              "commence_time": "2026-09-13T20:25:00Z",
+              "bookmakers": [{"key": "draftkings", "title": "DraftKings", "markets": [
+                  {"key": "h2h", "outcomes": [
+                      {"name": "Kansas City Chiefs", "price": -140},
+                      {"name": "Buffalo Bills", "price": 120}]},
+                  {"key": "player_pass_yds", "outcomes": [
+                      {"name": "Over", "description": "Josh Allen", "price": -110,
+                       "point": 255.5},
+                      {"name": "Under", "description": "Josh Allen", "price": -110,
+                       "point": 255.5}]}]}]}
+
+
+def _attach_event(age_s):
+    """Run the per-event attach against PROP_EVENT read at a chosen age,
+    with the network and the cache directory out of the picture."""
+    real = (oa.list_events, oa.fetch_event_odds, oa.event_cache_age)
+    oa.list_events = lambda *a, **k: [dict(PROP_EVENT)]
+    oa.fetch_event_odds = lambda *a, **k: (dict(PROP_EVENT), oa.Quota())
+    oa.event_cache_age = lambda *a, **k: age_s
+    slate = _prop_slate()
+    try:
+        res = oa.apply_odds_to_slate(slate, api_key="k", cache_only=True)
+    finally:
+        oa.list_events, oa.fetch_event_odds, oa.event_cache_age = real
+    return res, slate
+
+
+def test_a_stale_event_payload_prices_no_prop_and_no_game():
+    res, slate = _attach_event(9 * 3600)
+    assert res.stale_prop_events == 1 and res.stale_game_prices == 1, res
+    assert res.stale_prop_age_s > 8 * 3600
+    assert res.matched == 0, "a stale line was matched to a prop"
+    prop = slate.props[0]
+    assert all(ln.book == "proxy" for ln in prop.lines), \
+        "a stale book line replaced the proxy"
+    g = slate.games[0]
+    assert g.home_ml == 0 and g.price_age_s is None
+
+
+def test_a_fresh_event_payload_prices_both_and_dates_the_game():
+    res, slate = _attach_event(1800)
+    assert res.stale_prop_events == 0 and res.stale_game_prices == 0, res
+    assert res.matched == 1, res
+    prop = slate.props[0]
+    assert any(ln.book != "proxy" and ln.line == 255.5 for ln in prop.lines)
+    g = slate.games[0]
+    assert (g.home_ml, g.away_ml) == (-140, 120)
+    assert g.price_age_s == 1800 and g.priced_from == "event"
+
+
+def test_the_two_ceilings_are_asked_separately():
+    """A box that widens the prop knob keeps the game knob: a nine-hour
+    payload can price the props and still not the moneyline."""
+    os.environ["QB_MAX_PROP_PRICE_AGE"] = "43200"
+    try:
+        res, slate = _attach_event(9 * 3600)
+    finally:
+        del os.environ["QB_MAX_PROP_PRICE_AGE"]
+    assert res.matched == 1 and res.stale_prop_events == 0, res
+    assert res.stale_game_prices == 1 and slate.games[0].home_ml == 0
+
+
+def test_a_priced_prop_row_carries_the_payloads_age():
+    from engine.pipeline import price_props
+    _res, slate = _attach_event(1800)
+    rows = price_props(slate, sport="nfl")
+    row = next(r for r in rows if r["player"] == "Josh Allen")
+    assert row["has_market"] is True
+    assert row["price_age_s"] == 1800 and row["priced_from"] == "event", row
+    # A proxy-priced row on the SAME dated game has no book price to
+    # date: the stamp follows the line, not the game.
+    other = next(r for r in rows if r["player"] == "Dalton Kincaid")
+    assert other["has_market"] is False and other["price_age_s"] is None, other
+    assert other["priced_from"] == ""
+    # And on a stale payload nobody is dated, because nobody was priced.
+    _res, slate = _attach_event(9 * 3600)
+    rows = price_props(slate, sport="nfl")
+    row = next(r for r in rows if r["player"] == "Josh Allen")
+    assert row["has_market"] is False and row["price_age_s"] is None
+
+
+def test_college_refuses_stale_player_quotes_and_says_so():
+    import datetime as dt
+    import cfb_build
+    t = dt.datetime(2026, 9, 12, 12, 0, tzinfo=dt.timezone.utc)
+    games = [{"game_id": "g1", "home": "UGA", "away": "CLEM",
+              "kickoff": (t + dt.timedelta(hours=6)).isoformat().replace("+00:00", "Z"),
+              "home_conference": "SEC", "away_conference": "ACC"}]
+    priced = {"g1": {"event_id": "ev1", "spread": (-13.5, -110, -110),
+                     "total": (55.5, -110, -110)}}
+    payload = {"bookmakers": [{"key": "draftkings", "title": "DraftKings", "markets": [
+        {"key": "player_anytime_td", "outcomes": [
+            {"name": "Yes", "description": "Nate Frazier", "price": -150},
+            {"name": "No", "description": "Nate Frazier", "price": 120}]}]}]}
+    real = (oa.fetch_event_odds, oa.event_cache_age)
+    oa.fetch_event_odds = lambda *a, **k: (payload, oa.Quota())
+    try:
+        oa.event_cache_age = lambda *a, **k: 9 * 3600
+        scorers, _lines, note, _oldest = cfb_build.attach_player_quotes(
+            games, priced, cache_only=True, api_key="k", now=t, cap=5)
+        assert scorers == {}, scorers
+        assert "kept NO player quotes" in note and "9.0h old" in note, note
+        oa.event_cache_age = lambda *a, **k: 1800
+        scorers, _lines, note, _oldest = cfb_build.attach_player_quotes(
+            games, priced, cache_only=True, api_key="k", now=t, cap=5)
+        assert scorers and "kept NO player quotes" not in note, note
+    finally:
+        oa.fetch_event_odds, oa.event_cache_age = real
+
+
+def test_the_nfl_build_reports_the_prop_refusals_too():
+    nfl = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
+    assert "event_stale_prop_events=res.stale_prop_events" in nfl
+    assert "kept NO player" in nfl and "QB_MAX_PROP_PRICE_AGE" in nfl
 
 
 if __name__ == "__main__":

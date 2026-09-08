@@ -150,6 +150,33 @@ def _max_game_price_age() -> float:
 
 MAX_GAME_PRICE_AGE = 6 * 3600.0
 
+
+#: The same ceiling for PLAYER markets, as its own knob.
+#:
+#: The first cut of this (2026-09-08, earlier the same day) gated the
+#: game markets and deliberately left props dated-but-served, on the
+#: argument that gating them the day before the opener would empty the
+#: board on a declined cycle. Ethan's answer, repeated word for word:
+#: "this could be our issue with not showing picks and shit bc we are
+#: pulling the wrong lines. Also that can make us give fake and false
+#: picks that can hurt us." A pick is a prop. A prop priced off a
+#: payload from days ago is the false pick he means, and an empty shelf
+#: is the honest state of a board with no current price. So props answer
+#: to a ceiling too — the same six hours by default, but a SEPARATE knob
+#: (QB_MAX_PROP_PRICE_AGE), because the two are bought differently: game
+#: lines refresh for three credits a slate, props for twelve a game, and
+#: a box that can afford one cadence and not the other should be able to
+#: say so without a deploy.
+def _max_prop_price_age() -> float:
+    import os as _os
+    try:
+        return float(_os.environ.get("QB_MAX_PROP_PRICE_AGE") or 6 * 3600)
+    except (TypeError, ValueError):
+        return 6 * 3600.0
+
+
+MAX_PROP_PRICE_AGE = 6 * 3600.0
+
 # The Odds API uses full team names; nflverse uses abbreviations.
 TEAM_ABBR = {
     "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
@@ -1206,6 +1233,11 @@ class OddsAttachResult:
     #: gated; they are dated on the game instead.
     stale_game_prices: int = 0
     stale_price_age_s: float = 0.0
+    #: Events whose PLAYER markets were refused for age
+    #: (MAX_PROP_PRICE_AGE) — no line, ladder, menu entry or scorer quote
+    #: was indexed off them — and the oldest such payload.
+    stale_prop_events: int = 0
+    stale_prop_age_s: float = 0.0
     # Players the books have priced who matched NO slate prop — the book's
     # menu knows who's playing before the official lineup does. Each entry:
     # {player, market, home, away, lines}.
@@ -1759,6 +1791,20 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         wanted = prop_leg.get(pair, 0)
         props_ok = (not wanted or game is None
                     or getattr(game, "game_number", 1) == wanted)
+        # HOW OLD THIS PAYLOAD IS, read once and asked twice: of the
+        # player markets against MAX_PROP_PRICE_AGE, of the game markets
+        # against MAX_GAME_PRICE_AGE. A cached payload is served at any
+        # age (`_request`); these two questions are where "any" ends.
+        _age = event_cache_age(ev["id"], markets, books, sport)
+        if props_ok and not price_is_current(_age, _max_prop_price_age()):
+            # NOTHING off this payload reaches a prop: not a main line,
+            # not a rung, not a scorer quote, not a menu entry. A prop
+            # with no book line is proxy-priced and never a pick, which
+            # is the honest state of a board with no current price.
+            result.stale_prop_events += 1
+            result.stale_prop_age_s = max(result.stale_prop_age_s or 0.0,
+                                          float(_age or 0.0))
+            props_ok = False
         if props_ok:
             for k, lines in parse_event_lines(payload, cfg["markets"]).items():
                 index.setdefault(k, []).extend(lines)
@@ -1786,10 +1832,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # …ONLY IF THE PAYLOAD IS YOUNG ENOUGH TO BE A PRICE. See
         # MAX_GAME_PRICE_AGE: this path serves a cached payload at any
         # age on a declined cycle, and a game market read off a stale one
-        # is the wrong number rather than an old one. Props are NOT gated
-        # here — they are dated on the game and reported, and gating them
-        # is a separate decision with the numbers now visible.
-        _age = event_cache_age(ev["id"], markets, books, sport)
+        # is the wrong number rather than an old one. The player markets
+        # were asked the same question above, against their own ceiling.
         if game is not None and not price_is_current(_age):
             result.stale_game_prices += 1
             result.stale_price_age_s = max(result.stale_price_age_s or 0.0,

@@ -13,6 +13,17 @@ whatever the last pull that reached it left on disk.
 Ethan, 2026-09-04: "I'm noticing lines for CFB that's wrong. Like for
 example, Cam Edward's on the Michigan state Spartans has a -300 line too
 score a touchdown but on our site we are showing -155."
+
+AND THEN THE AGE GOT A CEILING (2026-09-08). Reporting a three-day-old
+quote and using it anyway is what this file first pinned; four days
+later the same class of report came back for the third time and Ethan
+named the harm outright — "fake and false picks that can hurt us". A
+payload past `oddsapi.MAX_PROP_PRICE_AGE` is refused rather than dated:
+the game keeps no player quotes, the note says how old the payload was
+and which knob widens the ceiling, and `player_priced_at` dates only
+what was actually used. The "oldest quote" reading below still covers
+the band it was written for — older than the TTL, younger than the
+ceiling — which on the touchpoint cadence is the ordinary afternoon.
 """
 
 import datetime as dt
@@ -107,11 +118,26 @@ def _pull(age, cache_only=True):
         oa.fetch_event_odds, oa.event_cache_age = real_fetch, real_age
 
 
-def test_a_days_old_payload_says_so_on_the_board():
-    _s, _l, note, age = _pull(3 * 86400.0)
-    assert age == 3 * 86400.0
-    assert "oldest quote on this board" in note, note
-    assert "3.0 day(s) old" in note, note
+def test_a_days_old_payload_is_refused_not_reported():
+    """The pin this file shipped with said a three-day-old payload is used
+    and dated. It is refused now (tests/test_stale_price_ceiling.py has
+    the measurement): nothing was used, so nothing is dated, and the
+    note says what happened and how old the payload was."""
+    scorers, lines, note, age = _pull(3 * 86400.0)
+    assert scorers == {} and lines == {}, (scorers, lines)
+    assert age is None, "a refused payload must not date the board"
+    assert "kept NO player quotes" in note and "72.0h old" in note, note
+    assert "QB_MAX_PROP_PRICE_AGE" in note, note
+    assert "oldest quote on this board" not in note, note
+
+
+def test_the_reading_and_the_ceiling_meet_at_six_hours():
+    """Just inside the ceiling a payload is used and its age reported;
+    just past it, refused. The two cannot both be true of one age."""
+    _s, _l, note, age = _pull(6 * 3600.0 - 60.0)
+    assert age == 6 * 3600.0 - 60.0 and "oldest quote on this board" in note, note
+    _s, _l, note, age = _pull(6 * 3600.0 + 60.0)
+    assert age is None and "kept NO player quotes" in note, note
 
 
 def test_hours_are_reported_in_hours():

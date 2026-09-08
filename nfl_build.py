@@ -601,7 +601,9 @@ def main() -> None:
                                quota_remaining=res.quota.remaining,
                                source="cache" if res.from_cache else "fresh",
                                event_stale_prices=res.stale_game_prices,
-                               event_stale_age_s=round(res.stale_price_age_s or 0.0))
+                               event_stale_age_s=round(res.stale_price_age_s or 0.0),
+                               event_stale_prop_events=res.stale_prop_events,
+                               event_stale_prop_age_s=round(res.stale_prop_age_s or 0.0))
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
             if res.scorers_matched:
@@ -624,6 +626,14 @@ def main() -> None:
                     print(f"  ⚠️  quote journal skipped: {_exc}")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
+            if res.stale_prop_events:
+                print(f"  ⚠️  {res.stale_prop_events} game(s) kept NO player "
+                      f"prices: the cached event payload is "
+                      f"{(res.stale_prop_age_s or 0) / 3600:.1f}h old, past the "
+                      f"{oddsapi._max_prop_price_age() / 3600:.0f}h ceiling "
+                      f"(oddsapi.MAX_PROP_PRICE_AGE). Those props are "
+                      f"proxy-priced and cannot be picks. Buy a pull, or "
+                      f"raise QB_MAX_PROP_PRICE_AGE.")
             if res.stale_game_prices:
                 # LOUD, because this is the failure that reads as a quiet
                 # slate. Ethan, 2026-09-08: "this could be our issue with

@@ -845,9 +845,19 @@ likely.
 prices no game market: the game keeps no price, the board says "no real
 book price", and both builds print what they refused and how old it was.
 Every price that IS attached now carries its own age
-(`Game.price_age_s`, `priced_from`) onto the card and the row. Props are
-NOT gated — they are dated and reported, so the same question can be
-answered for them with numbers rather than guesses.
+(`Game.price_age_s`, `priced_from`) onto the card, the game row and the
+prop row.
+
+**Props answer to the same ceiling** (`oddsapi.MAX_PROP_PRICE_AGE`, 6h,
+its own knob `QB_MAX_PROP_PRICE_AGE`). The first cut left them dated
+but served; Ethan repeated the ask word for word — "this could be our
+issue with not showing picks ... fake and false picks that can hurt us"
+— and a pick IS a prop. A per-event payload past the ceiling indexes no
+line, no rung, no menu entry and no scorer quote, so every prop on that
+game is proxy-priced and cannot be a pick; the college quote loop
+refuses the same way and says so in `odds_status.player_quotes`. The
+two knobs are separate because the two pulls cost differently: game
+lines refresh for three credits a slate, props for twelve a game.
 
 Read it on the box:
 
@@ -857,6 +867,7 @@ import json
 b = json.load(open('web/data/recommendations.json'))
 os_ = b.get('odds_status') or {}
 for k in ('source','event_stale_prices','event_stale_age_s',
+          'event_stale_prop_events','event_stale_prop_age_s',
           'board_stale_prices','board_stale_age_s','board_moneylines'):
     if os_.get(k) is not None: print(f'  {k}: {os_[k]}')
 ages = [(g.get('matchup'), g.get('price_age_s'), g.get('priced_from'))
@@ -870,6 +881,14 @@ for m, a, src in ages[:8]:
 * `event_stale_prices` above zero means the per-event payload is past
   the ceiling and those games kept no price — buy a pull, or widen the
   ceiling with `QB_MAX_GAME_PRICE_AGE` (seconds) if the budget cannot.
+* `event_stale_prop_events` above zero is the same fact for the props:
+  those games' players are proxy-priced this cycle and none of them can
+  be a pick. A board that is thin with this number high is not a quiet
+  slate — it is a payload the pacer has not refreshed. Widen with
+  `QB_MAX_PROP_PRICE_AGE` only if the plan truly cannot afford the pull;
+  the touchpoints (7am, 12pm, 3pm, 6pm ET), the readiness pull three
+  hours before kickoff and the closing pull all sit inside six hours
+  during betting hours, so the ceiling should only bite overnight.
 * Every moneyline missing with `board_moneylines` at zero and no stale
   count means the cheap pull is not running at all — check the pacer.
 
