@@ -672,6 +672,35 @@ the two columns are not, the NFL board is missing `team_shapes` —
 should print `32 2025`.
 
 
+## 8b. The college talent card left the home page (2026-09-08)
+
+Ethan, with the card circled in week three: "do we really still need to
+show this on CFB still and was all that data actually being used." It is
+a build-status readout. It now lives on **Status** (with CFB selected as
+the league) under "The college talent prior", and says what the prior
+carries this week — `weight_now` and `games_median` on `cfb.json`'s
+`talent` block — instead of "~25% of a Week-1 projection". The home
+page shows nothing while a prior is in force, and the no-prior warning
+only while the prior would still carry 10% or more.
+
+```bash
+cd /srv/qellys && python3 -c "
+import json; t = json.load(open('web/data/cfb.json')).get('talent') or {}
+print('available', t.get('available'), 'teams', t.get('teams_with_prior'),
+      'weight_now', t.get('weight_now'), 'games_median', t.get('games_median'),
+      'layers', t.get('layers'))"
+```
+
+In week three expect `weight_now` near 0.19–0.21 and `games_median` 2
+or 3. All four inputs are used, unequally: the recruiting composite is
+the prior; blue-chip ratio only halves it where the two disagree on a
+roster's sign; returning production speeds or slows the decay by up to
+30%; the portal moves the prior by at most 2.5 points. What has never
+been measured is whether the layer helps against the close —
+`engine/gamerank.py`'s college walk leaves it out by its own admission.
+That measurement needs the CFBD talent cache by season, which only this
+box holds.
+
 ## 9. The explainer, once its package and keys are on the box
 
 Ethan, 2026-09-05: "a plain English explainer per pick." Shipped the

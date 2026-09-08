@@ -94,14 +94,20 @@ def test_a_prior_over_nobody_leaves_the_ratings_alone():
 
 
 def test_the_card_does_not_draw_a_success_on_the_empty_branch():
+    """The warning is its own function since 2026-09-08 (the in-force
+    card moved to the Status page, tests/test_talent_card_in_season.py);
+    the empty branch of the home page hands off to it and nothing else."""
     src = _src("web", "js", "app.js")
     at = src.index("function renderTalent()")
     body = src[at:src.index("if (!t.available)", at)
                + src[at:].index("return;\n  }")]
     empty = body[body.index("if (!t.available)"):]
-    assert 'iconMark("warn")' in empty
-    assert 'iconMark("check")' not in empty
-    assert "--warn" in empty and "--good" not in empty
+    assert "talentWarnHTML(t)" in empty
+    assert 'iconMark("check")' not in empty and "talentCardHTML" not in empty
+    warn = src[src.index("function talentWarnHTML("):src.index("function talentCardHTML(")]
+    assert 'iconMark("warn")' in warn
+    assert 'iconMark("check")' not in warn
+    assert "--warn" in warn and "--good" not in warn
 
 
 def test_the_card_says_which_feeds_answered_with_nothing():

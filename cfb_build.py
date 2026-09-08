@@ -456,8 +456,18 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
     from engine.sources import cfbd
     from engine.sources.fetch import DataUnavailable
 
+    # WHERE THE SEASON IS, before anything is fetched: the median games
+    # played across the rated teams, and the weight the prior's schedule
+    # would give it there. The page reads these to decide whether a
+    # missing prior is still worth a warning — by November it is not.
+    import statistics as _stats
+    _games = [int(r.games) for r in ratings.values()] if ratings else []
+    _games_med = int(_stats.median_low(_games)) if _games else 0
     report: dict = {"ratings": ratings, "available": False,
-                    "note": "", "fit": {}, "teams_with_prior": 0}
+                    "note": "", "fit": {}, "teams_with_prior": 0,
+                    "games_median": _games_med,
+                    "weight_now": T.prior_weight(_games_med),
+                    "weighted_teams": 0}
     try:
         raw_talent = cfbd.fetch_talent(year)
     except DataUnavailable as exc:
@@ -562,6 +572,12 @@ def attach_talent(conn, ratings: dict, year: int, lookup: dict) -> dict:
     # every layer between the API and the card. The only place the
     # difference exists is the row count, so that is what decides.
     in_force = bool(blend_report["teams"])
+    # THE READING, not the schedule: what the prior carries this week,
+    # measured over the teams that have one (engine/cfb/talent.py,
+    # `current_weight`). The card printed "~25% of a Week-1 projection"
+    # in week three; this is the number it prints now.
+    if in_force:
+        report.update(T.current_weight(ratings, prior, returning))
     report.update(
         ratings=blended if in_force else ratings, available=in_force,
         teams_with_prior=blend_report["teams"],

@@ -1990,38 +1990,77 @@ function renderAdvisories() {
    against opponents nobody has measured either — so "is it on, and which
    of its four inputs actually arrived" is a question the page has to be
    able to answer. A prior quietly running on recruiting alone, with the
-   portal missing, is a different number from a complete one. */
+   portal missing, is a different number from a complete one.
+
+   WHERE IT IS ANSWERED. Ethan, 2026-09-08, the card circled at the top of
+   the college home page in week three: "do we really still need to show
+   this on CFB still and was all that data actually being used." It is a
+   build-status readout, and it sat above the board saying the same thing
+   every day. The in-force card lives on the Status page now, with the
+   other feed readouts, and says what the prior carries THIS WEEK rather
+   than "~25% of a Week-1 projection". The home page keeps only the
+   warning — no prior in force — and only while a prior would still
+   matter; by November a missing 5% is not worth a banner. */
 function renderTalent() {
   const host = document.getElementById("talent-note");
   if (!host) return;
   const t = (state.data || {}).talent;
   if (state.sport !== "cfb" || !t) { host.innerHTML = ""; return; }
-
   if (!t.available) {
-    /* WHICH LAYERS ARRIVED EMPTY, on the card. `empty_layers` names the
-       feeds that answered 200 with no rows — a different fault from one
-       that failed, and the one that was invisible here for three weeks:
-       the card read `available` as "the fetch did not raise", so an
-       empty composite drew a green tick over the words "0 team(s)". */
-    const empty = (t.empty_layers || []).length
-      ? `<div class="mini" style="margin-top:6px;opacity:.8">Answered with no
-         rows: <b>${(t.empty_layers || []).map(escapeHtml).join(", ")}</b> —
-         these fetched cleanly and had nothing in them, which is not the same
-         as a feed that failed.</div>` : "";
-    host.innerHTML = `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
-      <div class="player">${iconMark("warn")}No preseason talent prior — running on results only</div>
-      <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
-        In September that means an unproven Alabama and an unproven Kent State
-        are both rated near average, which is wrong in a direction the market
-        will take money for. ${escapeHtml(t.note || "")}
-      </div>${empty}</div>`;
+    host.innerHTML = talentStillMatters(t) ? talentWarnHTML(t) : "";
     return;
   }
+  // In force: the Status page carries the card, not the board.
+  host.innerHTML = "";
+}
+
+//: A prior at or under ten percent of the rating is not worth a banner
+//: when it is missing; a build that has not said what it carries is
+//: treated as early season.
+function talentStillMatters(t) {
+  const w = t && t.weight_now != null ? Number(t.weight_now) : 1;
+  return w >= 0.10;
+}
+
+//: What the prior carries this week, in words the reader can check.
+function talentWeightLine(t) {
+  const w = t && t.weight_now != null ? Math.round(Number(t.weight_now) * 100) : null;
+  const g = t && t.games_median != null ? Number(t.games_median) : null;
+  if (w == null) return "It carries ~25% of a Week-1 projection and decays toward 5% by November.";
+  return `It carries <b>${w}%</b> of the net rating this week${
+    g != null ? ` (median ${g} game${g === 1 ? "" : "s"} played)` : ""} and
+    reaches its 5% floor by the tenth game, because by then a team’s own
+    results have answered the question.`;
+}
+
+function talentWarnHTML(t) {
+  /* WHICH LAYERS ARRIVED EMPTY, on the card. `empty_layers` names the
+     feeds that answered 200 with no rows — a different fault from one
+     that failed, and the one that was invisible here for three weeks:
+     the card read `available` as "the fetch did not raise", so an
+     empty composite drew a green tick over the words "0 team(s)". */
+  const empty = (t.empty_layers || []).length
+    ? `<div class="mini" style="margin-top:6px;opacity:.8">Answered with no
+       rows: <b>${(t.empty_layers || []).map(escapeHtml).join(", ")}</b> —
+       these fetched cleanly and had nothing in them, which is not the same
+       as a feed that failed.</div>` : "";
+  return `<div class="card" style="border-left:3px solid var(--warn);margin-bottom:12px">
+    <div class="player">${iconMark("warn")}No preseason talent prior — running on results only</div>
+    <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:5px">
+      In September that means an unproven Alabama and an unproven Kent State
+      are both rated near average, which is wrong in a direction the market
+      will take money for. ${escapeHtml(t.note || "")}
+    </div>${empty}</div>`;
+}
+
+function talentCardHTML(t) {
+  if (!t) return "";
+  if (!t.available) return talentWarnHTML(t);
   const L = t.layers || {};
   const chip = (name, n) => `<span class="chip ${n ? "good" : "down"}">${
     escapeHtml(name)} ${n ? n : "—"}</span>`;
   const fit = t.fit || {};
-  host.innerHTML = `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
+  return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
     <div class="player">${iconMark("check")}Preseason talent prior — ${t.teams_with_prior} team(s)</div>
     <div class="lf-chips" style="margin:6px 0">
       ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
@@ -2034,11 +2073,16 @@ function renderTalent() {
            ${fit.samples} completed team-seasons (r=${escapeHtml(String(fit.r))}).`
         : `The talent-to-points slope is still a documented prior rather than a
            fit — ${escapeHtml(fit.note || "")}`}
-      It carries ~25% of a Week-1 projection and decays toward 5% by November,
-      because by then a team’s own results have answered the question.
+      ${talentWeightLine(t)}
       ${(t.missing_layers || []).length
         ? `<b> Not loaded: ${escapeHtml((t.missing_layers || []).join(", "))}.</b>` : ""}
-    </div></div>`;
+    </div>
+    <div class="mini" style="margin-top:6px;opacity:.8">How the four inputs are
+      used: the recruiting composite IS the prior; blue-chip ratio only halves it
+      where the two disagree on a roster’s sign; returning production speeds or
+      slows its decay by up to 30%; the portal moves it by at most 2.5 points.
+      Its value against the closing line is unmeasured — the leak-free replays
+      that grade this model leave the prior out.</div></div>`;
 }
 
 function renderAll() {
@@ -28354,6 +28398,11 @@ async function renderStatus() {
         <span class="st-sub">${escapeHtml(
           (LEAGUE_LABEL[state.sport] || state.sport || "").toUpperCase())}</span></div>
     </div>
+    ${state.sport === "cfb" && d.talent ? `
+    <div class="section-title">The college talent prior
+      <span class="sub">— the preseason layer: which inputs arrived, and what it
+        carries this week.</span></div>
+    ${talentCardHTML(d.talent)}` : ""}
     <p class="es-sub">Every time on this page is read from the file the
     server actually holds, not from when this page fetched it — a board
     that stopped rebuilding this morning says so here even if the page

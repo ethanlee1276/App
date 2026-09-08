@@ -33,6 +33,7 @@ early, not rated lower forever.
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass
 
 # §5 — the prior's share of the projection: ~25% early, ~5% by November.
@@ -252,6 +253,34 @@ def apply_prior(ratings: dict, prior: dict[str, float],
         blended[team] = TeamRating(net=round(p + shift, 3), off=0.0,
                                    def_=0.0, games=0)
     return blended, report
+
+
+def current_weight(ratings: dict, prior: dict,
+                   returning: dict[str, dict] | None = None) -> dict:
+    """What the prior carries THIS WEEK, as one number a page can print.
+
+    The card said "~25% of a Week-1 projection" in week three, which is
+    the schedule, not a reading. This is the reading: the median, over
+    the teams that have a prior, of the weight `blend_rating` actually
+    gave it — a team with no games yet at 1.0, a team three games in
+    near 0.19 — with the median games played beside it so a reader can
+    see where the season is. The median, not the mean: in week one a
+    handful of teams that have not played sit at 1.0 and would drag a
+    mean toward a number no team is at.
+    """
+    ws: list[float] = []
+    gs: list[int] = []
+    for team in prior:
+        r = ratings.get(team)
+        n = int(r.games) if r is not None else 0
+        ret = (returning or {}).get(team, {}).get("overall")
+        ws.append(prior_weight(n, ret))
+        gs.append(n)
+    if not ws:
+        return {"weight_now": None, "games_median": None, "weighted_teams": 0}
+    return {"weight_now": round(statistics.median(ws), 3),
+            "games_median": int(statistics.median_low(gs)),
+            "weighted_teams": len(ws)}
 
 
 def team_seasons_from_db(conn, talent_by_year: dict[int, dict[str, float]],
