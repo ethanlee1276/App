@@ -341,6 +341,59 @@ LIMIT = 40
 #: everywhere rather than scoping it to props.
 MIN_PROB = 0.55
 
+#: THE FLOOR WHEN THE ALTERNATIVE IS AN EMPTY PAGE. Ethan, 2026-09-08:
+#: "Also I don't want an empty boar either we need to have picks period."
+#:
+#: He set MIN_PROB to 0.55 himself two days earlier, knowing it costs
+#: about half the game-lines shelf (see above). Both instructions stand,
+#: and they only look contradictory if the board has one bar. It has two
+#: now: 0.55 is still what it takes to be called a pick, and this is the
+#: floor for the rows shown when NOTHING clears that — labelled as below
+#: the bar, ordered by probability, never journalled and never staked.
+#:
+#: WHAT THIS DOES NOT RELAX, deliberately, because the difference is the
+#: whole design. A refusal on this board is one of two kinds:
+#:
+#:   * the number is WRONG or unknown — a proxy price, a price no book
+#:     could post, a stale quote, a probability that disagrees with the
+#:     market past MAX_CREDIBLE_EDGE, a moneyline that contradicts its
+#:     own spread, a player held for injury. Those stay. Showing a row
+#:     we believe is mispriced is how the last three weeks of wrong
+#:     lines happened, and "we need picks" is not a reason to publish a
+#:     number we think is false.
+#:   * the bet is not ATTRACTIVE enough — this floor, and HEAVIEST_PRICE.
+#:     Those are product judgements, and a product judgement that empties
+#:     the page is his call to overrule.
+#:
+#: HEAVIEST_PRICE IS NOT RELAXED EITHER, even though it is the second
+#: kind. The -250 cap exists because Ethan complained about exactly this
+#: on 2026-09-01 — "just grabbing random -1200 props" — so widening it to
+#: fill a quiet night would answer today's instruction by re-creating the
+#: bug he reported. The floor is what empties a board; the cap is what he
+#: asked for.
+#:
+#: 0.40 rather than lower: below it "most likely" is not a caveat away
+#: from honest, it is the wrong words on the page. And the band this
+#: admits is measured at a loss (45-60% went -7.68% over 184 settled
+#: rows) — which is precisely why these rows ship labelled, unstaked and
+#: out of the book.
+RESERVE_MIN_PROB = 0.40
+
+#: How many reserve rows ship. A page that normally carries forty and
+#: falls back to forty looks like an ordinary night; a handful reads as
+#: what it is — the closest things to the bar on a slate that cleared it
+#: with nothing.
+RESERVE_LIMIT = 12
+
+#: What a reserve row says about itself, on the row and on the card.
+RESERVE_NOTE = ("Below the board’s usual bar — shown because nothing on "
+                "this slate cleared it. Ranked, not recommended.")
+
+
+def _floor(override) -> float:
+    """The likelihood floor in force: MIN_PROB, or a reserve override."""
+    return MIN_PROB if override is None else float(override)
+
 #: How far the displayed probability may sit from the book's own de-vigged
 #: number before the row is refused — the same bar `engine.betting` uses,
 #: for the same reason.
@@ -501,8 +554,12 @@ def _sane(odds) -> bool:
     return SANE_ODDS[0] <= o <= SANE_ODDS[1] and is_quotable(o)
 
 
-def admissible(row: dict) -> str:
+def admissible(row: dict, floor=None) -> str:
     """"" if this row belongs on the board, else why it does not.
+
+    ``floor`` overrides MIN_PROB for the reserve pass and NOTHING else —
+    see RESERVE_MIN_PROB for why exactly one of these refusals is allowed
+    to move and the rest are not.
 
     ONE BAR, APPLIED TO EVERY ROW, WHATEVER BUILT IT. `build` takes rows
     from two makers — `from_prop` for the priced prop board and
@@ -535,7 +592,7 @@ def admissible(row: dict) -> str:
     prob = row.get("model_prob")
     if prob is None:
         return "no probability"
-    if float(prob) < MIN_PROB:
+    if float(prob) < _floor(floor):
         return "under the likelihood floor"
     if (row.get("book") or "").lower() == "proxy":
         # A fabricated price. `from_prop` catches this as `has_market`;
@@ -654,7 +711,7 @@ def _refuse(census, why: str):
     return None
 
 
-def _best_rung(row: dict, market: str, fits=None) -> dict | None:
+def _best_rung(row: dict, market: str, fits=None, floor=None) -> dict | None:
     """The likeliest priced number on the prop's alternate ladder, or None.
 
     THE LADDER IS WHERE "MOST LIKELY" IS FOR SALE. A main line is hung
@@ -718,7 +775,7 @@ def _best_rung(row: dict, market: str, fits=None) -> dict | None:
                 continue
             p_over, source = pair[0], "sharp"
         p = 1.0 - float(p_over) if side == "under" else float(p_over)
-        if p < MIN_PROB:
+        if p < _floor(floor):
             continue
         fair_over, fair_under = devig_two_way(int(ln.get("over_odds") or 0),
                                               int(ln.get("under_odds") or 0))
@@ -732,8 +789,8 @@ def _best_rung(row: dict, market: str, fits=None) -> dict | None:
     return best
 
 
-def from_prop(row: dict, bettable, fits=None,
-              sport: str = "nfl", census: dict | None = None) -> dict | None:
+def from_prop(row: dict, bettable, fits=None, sport: str = "nfl",
+              census: dict | None = None, floor=None) -> dict | None:
     """One likelihood row from a published prop row, or None.
 
     `row` is what `pipeline._rec_to_dict` already produces for EVERY
@@ -761,7 +818,7 @@ def from_prop(row: dict, bettable, fits=None,
     # either way. The sharp fair stays on the row as `sharp_fair`.
     if row.get("sharp_anchored") and row.get("raw_prob") is not None:
         prob = row.get("raw_prob")
-    if prob is None or float(prob) < MIN_PROB:
+    if prob is None or float(prob) < _floor(floor):
         # THE LADDER BEFORE THE FLOOR. A main line is hung where the book
         # thinks the coin is fair, so its number sits near 50% — and this
         # refusal fired on that number before `_best_rung` below was
@@ -828,11 +885,11 @@ def from_prop(row: dict, bettable, fits=None,
     # bars — is what the row shows; the main number stays on the row
     # as `main_line` so the card can say which book number the rung
     # stands beside. See `_best_rung`.
-    rung = _best_rung(row, market, fits)
-    main_ok = shown >= MIN_PROB and _credible(shown, row.get("fair_prob"))
+    rung = _best_rung(row, market, fits, floor=floor)
+    main_ok = shown >= _floor(floor) and _credible(shown, row.get("fair_prob"))
     if rung is not None and (not main_ok or rung["prob"] > shown):
         return _row_from(row, market, sport, bettable, prob, rung=rung)
-    if shown < MIN_PROB:
+    if shown < _floor(floor):
         return _refuse(census, "under the likelihood floor after calibration")
     # CREDIBILITY, AND THIS BOARD HAD NONE. Every other pick path refuses
     # a probability that disagrees with the market past
@@ -963,7 +1020,7 @@ def from_watch(row: dict, sport: str = "nfl") -> dict:
 
 
 def from_game_bet(row: dict, sport: str = "nfl",
-                  census: dict | None = None) -> dict | None:
+                  census: dict | None = None, floor=None) -> dict | None:
     """One likelihood row from a priced game bet, or None.
 
     `row` is the card the edge board already built — `gamebets._game_bet`,
@@ -1105,7 +1162,7 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # numbers about different teams.
         if raw_claim is not None:
             raw_claim = 1.0 - raw_claim
-    if prob < MIN_PROB:
+    if prob < _floor(floor):
         return _refuse(census, "under the likelihood floor")
     # The card's edge and EV are the MODEL's, as on every card: the
     # ranking number is what orders the board, not what the card claims.
@@ -1285,72 +1342,124 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     def bettable(market):
         return is_reliable(sport, market)
 
-    out = []
-    seen = set()
     funnel = {k: _funnel() for k in KINDS}
 
-    def keep(got, kind: str) -> bool:
-        """The one gate. Every row passes through here or does not ship."""
-        why = admissible(got)
-        if why:
-            _refuse(funnel[kind]["refused"], why)
-            return False
-        funnel[kind]["kept"] += 1
-        return True
+    def one_pass(floor, funnel):
+        """Every maker, every row, at one floor. Returns the rows kept.
 
-    funnel["td"]["offered"] = len(td_picks or []) + len(td_watch or [])
-    for row in (td_picks or []) + (td_watch or []):
-        got = from_watch(row, sport=sport)
-        key = (got["player"], got["team"], "anytime_td")
-        if key in seen:
-            funnel["td"]["duplicate"] += 1
-            continue
-        if not keep(got, "td"):
-            continue
-        seen.add(key)
-        out.append(got)
-    funnel["prop"]["offered"] = len(props or [])
-    for row in props or []:
-        got = from_prop(row, bettable, fits=fits, sport=sport,
-                        census=funnel["prop"]["refused"])
+        Lifted out of `build` so the reserve can ask the same question
+        with the same bar in every respect but one (see
+        RESERVE_MIN_PROB). Running it twice is cheap next to the risk of
+        a second, drifting copy of the admission logic — this module's
+        own docstring calls a rule enforced in one of several places
+        "this codebase's most-repeated bug", and two passes over one
+        function cannot disagree with each other.
+        """
+        out = []
+        seen = set()
+
+        def keep(got, kind: str) -> bool:
+            """The one gate. Every row passes through here or does not ship."""
+            why = admissible(got, floor=floor)
+            if why:
+                _refuse(funnel[kind]["refused"], why)
+                return False
+            funnel[kind]["kept"] += 1
+            return True
+
+        funnel["td"]["offered"] = len(td_picks or []) + len(td_watch or [])
+        for row in (td_picks or []) + (td_watch or []):
+            got = from_watch(row, sport=sport)
+            key = (got["player"], got["team"], "anytime_td")
+            if key in seen:
+                funnel["td"]["duplicate"] += 1
+                continue
+            if not keep(got, "td"):
+                continue
+            seen.add(key)
+            out.append(got)
+        funnel["prop"]["offered"] = len(props or [])
+        for row in props or []:
+            got = from_prop(row, bettable, fits=fits, sport=sport,
+                            census=funnel["prop"]["refused"], floor=floor)
         # `from_prop` already refuses on the same grounds and returns
         # None; it stays as a cheap pre-filter because the mixture work
         # below it is not cheap. `keep` is what actually decides — but
         # the pre-filter now counts what it turned away into the same
         # census, so the funnel adds up whichever of the two said no.
-        if got is None:
-            continue
-        key = (got["player"], got["team"], got["market"])
-        if key in seen:
-            funnel["prop"]["duplicate"] += 1
-            continue
-        if not keep(got, "prop"):
-            continue
-        seen.add(key)
-        out.append(got)
-    # THE THIRD MAKER, same bar. Game cards arrive from the edge board's
-    # own pricing (`pipeline._game_bets`, `mlb.pipeline._game_bets`,
-    # cfb_build.build_plays); a market the model has not been shown to
-    # rank never leaves `from_game_bet`, and everything that does answers
-    # to `keep` like every other row.
-    funnel["game"]["offered"] = len(game_bets or [])
-    for row in game_bets or []:
-        got = from_game_bet(row, sport=sport, census=funnel["game"]["refused"])
-        if got is None:
-            continue
-        key = ("game", got["matchup"], got["market"], got["team"], got["side"])
-        if key in seen:
-            funnel["game"]["duplicate"] += 1
-            continue
-        if not keep(got, "game"):
-            continue
-        seen.add(key)
-        out.append(got)
+            if got is None:
+                continue
+            key = (got["player"], got["team"], got["market"])
+            if key in seen:
+                funnel["prop"]["duplicate"] += 1
+                continue
+            if not keep(got, "prop"):
+                continue
+            seen.add(key)
+            out.append(got)
+        # THE THIRD MAKER, same bar. Game cards arrive from the edge
+        # board's own pricing (`pipeline._game_bets`,
+        # `mlb.pipeline._game_bets`, cfb_build.build_plays); a market the
+        # model has not been shown to rank never leaves `from_game_bet`,
+        # and everything that does answers to `keep` like every other row.
+        funnel["game"]["offered"] = len(game_bets or [])
+        for row in game_bets or []:
+            got = from_game_bet(row, sport=sport,
+                                census=funnel["game"]["refused"], floor=floor)
+            if got is None:
+                continue
+            key = ("game", got["matchup"], got["market"], got["team"], got["side"])
+            if key in seen:
+                funnel["game"]["duplicate"] += 1
+                continue
+            if not keep(got, "game"):
+                continue
+            seen.add(key)
+            out.append(got)
+        return out
+
+    out = one_pass(None, funnel)
+    # THE PAGE DOES NOT GO BLANK. Ethan, 2026-09-08: "Also I don't want
+    # an empty boar either we need to have picks period." Nothing cleared
+    # the bar, so the bar is asked again one notch lower — the FLOOR
+    # only, and only when the alternative is a page with nothing on it.
+    # Every refusal that means "this number is wrong" is asked exactly as
+    # it was, which is why this can be done at all (see
+    # RESERVE_MIN_PROB). The standard pass keeps the census: the honest
+    # answer to "why is the board short" is what the real bar turned
+    # away, not what the fallback did.
+    reserve_used = 0
+    if not out:
+        spare = one_pass(RESERVE_MIN_PROB, {k: _funnel() for k in KINDS})
+        spare.sort(key=lambda r: -float(r["model_prob"] or 0.0))
+        for r in spare[:RESERVE_LIMIT]:
+            r["reserve"] = True
+            r["reserve_note"] = RESERVE_NOTE
+            # `bettable` IS DELIBERATELY LEFT ALONE. It was set False here
+            # first, on the reasoning that a reserve row is not a
+            # recommendation — which is true, and the wrong field to say
+            # it with. On this board `bettable` means the MARKET has a
+            # price worth staking against, and the card renders it as
+            # "No bettable price here — this market's fit against the
+            # book ran off the end of its range". On a reserve row that
+            # is a false statement about a real quoted price, in service
+            # of a true one about the probability: exactly the kind of
+            # small lie the rest of this work is removing. The row says
+            # what it is through `reserve` and its note; the book is kept
+            # clean by `ledger.log_most_likely`, which refuses it.
+            out.append(r)
+        reserve_used = len(out)
     out.sort(key=lambda r: -float(r["model_prob"] or 0.0))
     # TWO CAPS, ONE ORDER. Player rows keep LIMIT; game rows keep
     # GAME_LIMIT; the survivors are one list in probability order, so a
     # 63% favourite still sits above a 55% catch and a Sunday's eighty
     # game leans cannot push the player rows off (see GAME_LIMIT).
+    # The reserve needs no exemption here and must not be given one:
+    # RESERVE_LIMIT is below both caps, and `_cut_players` back-fills to
+    # `limit`, so a reserve of that size passes through untouched. A
+    # guard for it would be a branch no test could ever reach. See
+    # `test_the_reserve_cap_stays_under_the_board_caps` for the invariant
+    # that keeps this true if someone raises RESERVE_LIMIT.
     players = _cut_players([r for r in out if r.get("kind") != "game"], limit)
     games = [r for r in out if r.get("kind") == "game"][:GAME_LIMIT]
     out = sorted(players + games, key=lambda r: -float(r["model_prob"] or 0.0))
@@ -1366,6 +1475,14 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     for kind in KINDS:
         for why, n in funnel[kind]["refused"].items():
             refused[why] = refused.get(why, 0) + n
+    # THE RESERVE IS NOT COUNTED HERE, and the first version of this got
+    # it wrong. A "reserve ran" key was written into `census`, which broke
+    # the invariant `test_likely_census_by_kind` holds — the flat census
+    # is exactly the per-kind refusals summed — and, worse, the page's
+    # `likelyRefusedNote` totals these values as "N turned down". A row
+    # the board SHOWED would have been counted as a row it refused, on
+    # exactly the nights the number matters. The rows say it themselves:
+    # every reserve row carries `reserve`, so nothing here has to.
     if census is not None:
         census.update(refused)
     if census_by_kind is not None:

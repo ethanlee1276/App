@@ -1102,6 +1102,23 @@ function likelyStarted(r) {
   return Number.isFinite(t) && t <= Date.now();
 }
 
+/* A ROW SHOWN BECAUSE NOTHING CLEARED THE BAR.
+
+   Ethan, 2026-09-08: "Also I don't want an empty boar either we need to
+   have picks period." `likely.build` answers that with a reserve pass —
+   the likelihood floor lowered, every other refusal asked exactly as it
+   was — and the rows it returns carry `reserve`. They are not the same
+   claim as an ordinary row and must never look like one: the whole
+   reason the fallback is allowed to exist is that it says what it is.
+
+   The engine writes the sentence (`likely.RESERVE_NOTE`) so the page and
+   the card cannot drift into two different explanations of one row. */
+function reserveChip(r) {
+  if (!(r || {}).reserve) return "";
+  const note = String(r.reserve_note || "below the board’s usual bar");
+  return `<span class="chip warn" title="${escapeAttr(note)}">below the bar</span>`;
+}
+
 function startedChip(r) {
   return likelyStarted(r)
     ? `<span class="chip warn" title="This game is under way. The board ranks
@@ -6241,7 +6258,7 @@ function likelyCard(r) {
         <div>
           <div class="player">${escapeHtml(who)}
             <span class="ml-odds">${american(r.odds)}</span></div>
-          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}</div>
+          <div class="subtitle">${sub}${when ? ` · ${escapeHtml(when)}` : ""}${startedChip(r) ? ` ${startedChip(r)}` : ""}${reserveChip(r) ? ` ${reserveChip(r)}` : ""}</div>
           <div class="pick">${label}
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
         </div>
@@ -6396,7 +6413,8 @@ function likelyRefusedNote(census, shown) {
     .map(([k, n]) => `${n} ${escapeHtml(k)}`);
   return `<div class="ls-note" style="opacity:.75">
     <b>${shown} shown, ${total} turned down.</b> ${parts.join(" · ")}. The bar is
-    the same for every row and the board would rather be short than lower it.</div>`;
+    the same for every row; the board would rather be short than lower it, and
+    lowers the likelihood floor only when that would leave the page blank.</div>`;
 }
 
 /* THE BANKROLL RULE EMPTIED THE BOARD — not a filter, not a missing feed.
@@ -6423,9 +6441,16 @@ function likelyEmptyWhy(census) {
   }
   const parts = Object.entries(c).map(([k, n]) => `${n} ${escapeHtml(k)}`);
   if (parts.length) {
-    return `Tonight’s slate was checked and nothing cleared the board’s
-      bar — ${parts.join(" · ")}. The board would rather sit empty than
-      lower it.`;
+    /* THIS SENTENCE USED TO END "the board would rather sit empty than
+       lower it", which stopped being true on 2026-09-08. It now lowers
+       the FLOOR — and only the floor — rather than show nothing, so the
+       page reaching this state at all means even that found no row: the
+       prices are missing or every one of them failed a check about
+       whether the number is right. Saying "nothing cleared the bar"
+       here would now be the wrong half of the story. */
+    return `Tonight’s slate was checked and no row could be priced from a
+      current, credible book number — ${parts.join(" · ")}. Rows below the
+      usual bar are shown when there are any; there were none.`;
   }
   return `This board needs priced player props on the slate. It fills
     in as the books post their menus.`;

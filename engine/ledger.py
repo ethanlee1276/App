@@ -822,6 +822,22 @@ def log_most_likely(conn, result: dict, flat_stake: float = 0.1,
             continue
         if r.get("model_prob") is None:
             continue
+        # A RESERVE ROW IS NOT A RESULT. `likely.build` ships rows from
+        # below the floor when nothing cleared it, so the page is never
+        # blank (Ethan, 2026-09-08: "Also I don't want an empty boar
+        # either we need to have picks period"). They are labelled on the
+        # card, and they must not enter the book: this bucket exists to
+        # answer whether the figure a reader acted on was true, and rows
+        # the board itself says did not clear the bar would make that
+        # number answer a different question on every quiet night —
+        # quietly, and only on the nights the record is thinnest.
+        #
+        # Asked here as well as in the builder, for the reason the proxy
+        # guard above gives in its own words: the journal is the last
+        # line of defence against fictional P&L, and a board filter is
+        # one refactor away from not being one.
+        if r.get("reserve"):
+            continue
         player = r["player"]
         if r.get("kind") == "game" or market in GAME_MARKETS:
             # A GAME ROW, in the shapes `log_recommendations` writes for

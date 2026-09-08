@@ -89,15 +89,37 @@ def test_a_good_row_still_reaches_it():
 
 
 def test_the_floor_is_the_one_the_module_publishes():
-    """Not a second copy that can drift from MIN_PROB."""
+    """Not a second copy that can drift from MIN_PROB.
+
+    RE-ANCHORED 2026-09-08. This asserted that a row a hair under the
+    floor produced an EMPTY board, which stopped being the whole truth
+    when Ethan said "I don't want an empty boar either we need to have
+    picks period". The floor is still exactly what it was — the bar to
+    be called a pick — and a row beneath it is still refused as one. It
+    now comes back labelled `reserve` instead of not coming back, on the
+    nights when refusing it would leave the page blank. Both halves are
+    pinned here so neither can drift: it must not pass as an ordinary
+    row, and it must not vanish.
+    """
     just_under = likely.MIN_PROB - 0.01
-    assert _cfb([_watch("Low", just_under)]) == []
-    assert len(_cfb([_watch("Ok", likely.MIN_PROB)])) == 1
+    low = _cfb([_watch("Low", just_under)])
+    assert [r.get("reserve") for r in low] == [True], low
+    assert low[0]["model_prob"] < likely.MIN_PROB
+    # The row that DOES clear it is an ordinary row, carrying no label.
+    ok = _cfb([_watch("Ok", likely.MIN_PROB)])
+    assert len(ok) == 1 and not ok[0].get("reserve"), ok
+    # …and beside a row that clears, the sub-floor row is gone entirely:
+    # the fallback is for an empty board, not a second tier on a good one.
+    both = _cfb([_watch("Low", just_under), _watch("Ok", likely.MIN_PROB)])
+    assert [r["player"] for r in both] == ["Ok"], both
 
 
 def test_the_gate_is_one_function_not_two_copies():
     src = _src("engine", "likely.py")
-    assert "def admissible(row: dict) -> str:" in src
+    # `floor` arrived 2026-09-08 for the reserve pass and is the ONLY
+    # override the bar takes — see `likely.RESERVE_MIN_PROB`. Pinned with
+    # the parameter named, so a second knob cannot be added quietly.
+    assert "def admissible(row: dict, floor=None) -> str:" in src
     at = src.index("    def keep(got, kind: str) -> bool:")
     body = src[at:src.index("out.sort(", at)]
     # Every maker's loop goes through it — watch rows, prop rows and,

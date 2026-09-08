@@ -254,6 +254,51 @@ payload rather than describing the game, while this one is sampling
 noise on real quotes. A ranked number survives noise; it does not
 survive a bias that moves with how many books a pull returned.
 
+## The page is never blank, and never shows a number we doubt (2026-09-08)
+
+Ethan, the same day he asked for the right prices: "Also I don't want an
+empty boar either we need to have picks period." Two days before that he
+had set MIN_PROB to 0.55 himself, having been shown it costs about half
+the game-lines shelf. Both instructions stand. They only conflict if the
+board has one bar.
+
+It has two. **0.55 is still what it takes to be called a pick.**
+`RESERVE_MIN_PROB` (0.40) is the floor for what is shown when nothing
+clears that — labelled on the card, capped at `RESERVE_LIMIT`, and kept
+out of the `likely` book.
+
+**The split that makes this safe.** Every refusal on this board is one of
+two kinds, and only one kind may move:
+
+| kind | examples | may the reserve relax it? |
+| --- | --- | --- |
+| the number is wrong or unknown | proxy price, price no book could post, stale quote, disagrees with the market past `MAX_CREDIBLE_EDGE`, moneyline contradicting its own spread, player held for injury | **never** |
+| the bet is not attractive enough | the likelihood floor, `HEAVIEST_PRICE` | the floor only |
+
+"We need picks" is not a reason to publish a number we believe is false —
+that is the failure the rest of 2026-09-08 was spent removing. So a quiet
+night gets rows from lower down; a night whose prices are missing or
+untrustworthy still gets none, and says so.
+
+**The chalk cap does not move either**, although it is the second kind.
+It exists because of Ethan's own complaint on 2026-09-01 about "grabbing
+random -1200 props", so widening it to fill an empty page would answer
+one instruction by re-creating the bug behind another. The floor is what
+empties a board; the cap is what he asked for.
+
+**What the reserve does not do.** It cannot manufacture rows. If the
+board is empty because no current price could be read at all, the reserve
+finds nothing either and the page says the prices are missing rather than
+blaming its own bar. That is the state `oddsapi`'s age ceiling and the
+pacer's staleness override exist to prevent, and it is the one case where
+the page still has nothing on it.
+
+**Kept out of the record.** `ledger.log_most_likely` refuses a `reserve`
+row. That bucket exists to answer whether the figure a reader acted on
+was true, and rows the board itself says did not clear the bar would make
+that number answer a different question on exactly the quiet nights the
+record is thinnest.
+
 ## Every game price says which book is posting it, per side (2026-09-08)
 
 Ethan, twice in one day: "I don't want you too stop working until we
