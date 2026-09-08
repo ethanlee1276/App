@@ -75,6 +75,12 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     from engine.sources import oddsapi
 
     by_pair = {frozenset((g["home"], g["away"])): g for g in games}
+    # WHICH DAYS THIS SLATE COVERS. One request returns the WHOLE SEASON,
+    # so without this a Saturday board can be priced off a fixture months
+    # away — see `oddsapi.slate_days` and the note on the two refusals in
+    # the loop below.
+    days = oddsapi.slate_days(games)
+    other_day = reversed_events = 0
     try:
         events, quota = oddsapi.fetch_sport_odds(
             "cfb", api_key=api_key, cache_only=cache_only)
@@ -115,8 +121,31 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
         if not home or not away:
             unmatched.append(f"{away_raw} @ {home_raw}")
             continue
+        # ANOTHER WEEK'S FIXTURE IS NOT THIS SLATE'S GAME.
+        #
+        # The NFL had this bug and college was never even asked the
+        # question: there was no date check here at all. One request
+        # covers the entire season, `by_pair` is keyed on a FROZENSET, and
+        # the two rules below are what stop a December fixture pricing a
+        # September card. College plays most opponents once, so the
+        # collision is rarer than the NFL's home-and-away — but a
+        # conference title game is a rematch of a regular-season meeting
+        # and a bowl can be too, and when it happens nothing here would
+        # have said so.
+        if oddsapi.other_day(ev, days):
+            other_day += 1
+            continue
         game = by_pair.get(frozenset((home, away)))
         if not game:
+            continue
+        # …AND THE OTHER MEETING IS A DIFFERENT GAME. `entry["moneyline"]`
+        # below is written as (this EVENT's home price, its away price)
+        # and read downstream as the SLATE game's home and away, so a
+        # reversed fixture does not read as a mismatch. It reads as an
+        # ordinary price on the wrong team, which is exactly what the NFL
+        # board did on the night of the season opener.
+        if not oddsapi.same_meeting(home, away, game):
+            reversed_events += 1
             continue
         # The parsers key on the exact strings this feed uses, so build the
         # map from the event itself rather than guessing at spellings.
@@ -175,6 +204,15 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     note = f"{len(priced)} of {len(games)} games priced from 1 request"
     if unmatched:
         note += f" · {len(unmatched)} unmatched ({', '.join(unmatched[:3])}…)"
+    # THE TWO REFUSALS, COUNTED. A board that quietly prices 40 of 60
+    # games looks exactly like a light Saturday — this function's own
+    # docstring says so about unmatched names, and the same is true of a
+    # fixture refused for being another week's. Silence is what let the
+    # NFL carry a December price on a September card for six days.
+    if other_day:
+        note += f" · {other_day} fixture(s) for another week"
+    if reversed_events:
+        note += f" · {reversed_events} the other meeting of the same pair"
     if cache_only:
         note += " (cached)"
     return priced, note

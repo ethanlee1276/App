@@ -307,10 +307,10 @@ def test_a_later_days_game_is_not_reported_as_a_drop():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
         encoding="utf-8").read()
-    i = src.index("def _other_day(ev")
-    body = src[i:src.index("\n@dataclass", i)]
+    i = src.index("def other_day(ev")
+    body = src[i:src.index("\ndef same_meeting(", i)]
     assert "commence_time" in body, \
-        "_other_day no longer reads the event's start time"
+        "other_day no longer reads the event's start time"
     # And EVERY drop report must consult it before recording a fault.
     #
     # There are two paths now — the per-event prop pull and the cheap
@@ -322,8 +322,18 @@ def test_a_later_days_game_is_not_reported_as_a_drop():
     sites = [m.start() for m in re.finditer(
         r'"mapped, but that pair is not on our slate"', src)]
     assert len(sites) >= 2, "a drop path disappeared — re-check this rule"
+    # THE RULE GOT STRONGER ON 2026-09-09 AND THIS FOLLOWS IT. The check
+    # used to sit beside each drop report; it now runs at the top of the
+    # loop, before the pair is even looked up, because asking it only
+    # about pairs we do NOT carry was backwards — a pair we DO carry is
+    # exactly the one a later fixture gets mistaken for. So the assertion
+    # is that every drop site has an early `other_day` return above it in
+    # the same function, not merely within a few lines.
+    guards = [m.start() for m in re.finditer(
+        r"if other_day\(ev, days\):", src)]
+    assert len(guards) >= 2, "the day filter is gone from a path"
     for j in sites:
-        assert "_other_day(ev, slate_days)" in src[j - 500:j], (
+        assert any(g < j for g in guards), (
             f"a drop report at offset {j} records a fault without asking "
             f"whether the game is simply on another day")
 
@@ -335,14 +345,14 @@ def test_the_slate_day_window_spans_the_utc_rollover():
     src = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "engine", "sources", "oddsapi.py"),
         encoding="utf-8").read()
-    # The window now lives in `_slate_days`, shared by both odds paths
+    # The window now lives in `slate_days`, shared by both odds paths
     # (2026-09-03) rather than built inline in each — so this reads the one
     # definition, and would catch a caller that stopped using it.
-    i = src.index("def _slate_days(games)")
-    body = src[i:src.index("\ndef _other_day(", i)]
+    i = src.index("def slate_days(games)")
+    body = src[i:src.index("\ndef other_day(", i)]
     assert "(-1, 0, 1)" in body, "the day-either-side window is gone"
     assert body.count("timedelta(days=n)") == 1
-    assert src.count("_slate_days(slate.games)") == 2, (
+    assert src.count("slate_days(slate.games)") == 2, (
         "one of the two odds paths builds its own day window again")
 
 

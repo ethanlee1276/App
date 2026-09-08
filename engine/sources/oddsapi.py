@@ -1583,7 +1583,7 @@ class OddsAttachResult:
     # never reported as a fault — they are supposed to miss.
     other_day_events: int = 0
     #: Events refused because they are the OTHER meeting of the same two
-    #: teams — see `_same_meeting`. Counted rather than swallowed: a
+    #: teams — see `same_meeting`. Counted rather than swallowed: a
     #: rematch quietly relabelled onto this week's game is the wrong
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
@@ -1692,7 +1692,21 @@ def _is_active(game, window_hours: float) -> bool:
         return True
 
 
-def _slate_days(games) -> set[str]:
+def _field(game, name: str) -> str:
+    """One field off a slate game, whether it is an object or a dict.
+
+    The NFL slate carries `engine.models.Game` objects and the college
+    one carries plain dicts (`cfbdata.parse_scoreboard`). Both paths need
+    the same three rules below, and a rule that only reads attributes is
+    a rule college silently does not get — which is exactly how the two
+    football leagues ended up with the same bug and only one fix.
+    """
+    if isinstance(game, dict):
+        return str(game.get(name) or "")
+    return str(getattr(game, name, "") or "")
+
+
+def slate_days(games) -> set[str]:
     """The calendar days this slate covers, a day either side.
 
     Both odds paths match against a list the endpoint returns with NO date
@@ -1708,19 +1722,19 @@ def _slate_days(games) -> set[str]:
     away in `date`, exactly as `ledger._kickoff_map` had to discover for
     the capture-lag stamp. Sliced to ten characters that is five, so
     every football game was skipped, `slate_days` came back EMPTY, and
-    `_other_day` answers False for everything when it is: the filter was
+    `other_day` answers False for everything when it is: the filter was
     inert on both football paths for the whole season.
 
     That is what let a season-long payload put Week 12's prices on a
-    Week 1 card. See `_same_meeting` for the other half of it.
+    Week 1 card. See `same_meeting` for the other half of it.
     """
     import datetime as _dt
     out: set[str] = set()
     for g in games:
-        k = str(getattr(g, "kickoff", "") or "")[:10]
+        k = _field(g, "kickoff")[:10]
         if len(k) != 10:
             # THE DATE, when the clock does not carry one.
-            k = str(getattr(g, "date", "") or "")[:10]
+            k = _field(g, "date")[:10]
         if len(k) != 10:
             continue
         try:
@@ -1731,7 +1745,7 @@ def _slate_days(games) -> set[str]:
     return out
 
 
-def _other_day(ev, slate_days: set[str]) -> bool:
+def other_day(ev, slate_days: set[str]) -> bool:
     """Is this event for a day our slate does not cover?
 
     ONE DEFINITION, TWO CALLERS. Reporting another day's game as a drop
@@ -1744,7 +1758,7 @@ def _other_day(ev, slate_days: set[str]) -> bool:
     return bool(slate_days) and len(c) == 10 and c not in slate_days
 
 
-def _same_meeting(ev_home: str, ev_away: str, game) -> bool:
+def same_meeting(ev_home: str, ev_away: str, game) -> bool:
     """Is this event the same MEETING of these two teams as `game`?
 
     THE BUG THIS EXISTS FOR, found on 2026-09-09 with Week 1 hours away.
@@ -1778,7 +1792,7 @@ def _same_meeting(ev_home: str, ev_away: str, game) -> bool:
     perfectly ordinary price on the wrong team.
 
     So the orientation is checked rather than assumed, and an event that
-    is the other meeting is refused. `_slate_days` above is the other
+    is the other meeting is refused. `slate_days` above is the other
     half: with football's dates restored, most rematches never get this
     far. This is the bar that holds when they do — and it is the one that
     holds for a baseball series, where three games run in the SAME
@@ -1786,8 +1800,8 @@ def _same_meeting(ev_home: str, ev_away: str, game) -> bool:
     them.
     """
     return (bool(ev_home) and bool(ev_away)
-            and ev_home == str(getattr(game, "home", "") or "")
-            and ev_away == str(getattr(game, "away", "") or ""))
+            and ev_home == _field(game, "home")
+            and ev_away == _field(game, "away"))
 
 
 @dataclass
@@ -1818,7 +1832,7 @@ class BoardLinesResult:
     dropped_events: list = field(default_factory=list)
     other_day_events: int = 0
     #: Events refused because they are the OTHER meeting of the same two
-    #: teams — see `_same_meeting`. Counted rather than swallowed: a
+    #: teams — see `same_meeting`. Counted rather than swallowed: a
     #: rematch quietly relabelled onto this week's game is the wrong
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
@@ -1892,7 +1906,7 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
     def _abbr(name: str) -> str | None:
         return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
 
-    slate_days = _slate_days(slate.games)
+    days = slate_days(slate.games)
 
     try:
         events, quota = fetch_sport_odds(
@@ -1925,9 +1939,9 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         # `not legs` branch, so it only ever ran for pairs we did NOT
         # have — which is precisely backwards: a pair we DO have is
         # exactly the one a later fixture can be mistaken for. Paired
-        # with `_slate_days` reading football's date, this is what stops
+        # with `slate_days` reading football's date, this is what stops
         # a season-long payload pricing Week 1 off Week 12.
-        if _other_day(ev, slate_days):
+        if other_day(ev, days):
             result.other_day_events += 1
             continue
         pair = frozenset((home, away))
@@ -1950,11 +1964,11 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         game = _leg_by_commence(legs, ev.get("commence_time") or "")
         if game is None:
             continue
-        # THE OTHER MEETING IS A DIFFERENT GAME. See `_same_meeting`: the
+        # THE OTHER MEETING IS A DIFFERENT GAME. See `same_meeting`: the
         # pair lookup is orientation-blind, so a rematch matches too, and
         # the map built below is positional — it would relabel the
         # rematch's prices onto this game's teams without a murmur.
-        if not _same_meeting(home, away, game):
+        if not same_meeting(home, away, game):
             result.reversed_events += 1
             continue
         # A FRESHER PRICE IS NEVER REPLACED BY AN OLDER ONE.
@@ -2173,9 +2187,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
     def _abbr(name: str) -> str | None:
         return slate_names.get(_team_key(name)) or cfg["teams"].get(name)
 
-    # WHICH DAYS THIS SLATE COVERS — `_slate_days` / `_other_day` above,
+    # WHICH DAYS THIS SLATE COVERS — `slate_days` / `other_day` above,
     # shared with the board-lines path so the rule has one definition.
-    slate_days = _slate_days(slate.games)
+    days = slate_days(slate.games)
 
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
@@ -2204,8 +2218,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
             continue
         # ANOTHER DAY'S GAME IS NOT THIS SLATE'S — asked of every event,
         # not only of pairs we do not carry. See the same change on the
-        # board-lines path and `_slate_days` for why it was inert.
-        if _other_day(ev, slate_days):
+        # board-lines path and `slate_days` for why it was inert.
+        if other_day(ev, days):
             result.other_day_events += 1
             continue
         if frozenset((home, away)) not in slate_pairs:
@@ -2265,7 +2279,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # THE OTHER MEETING IS A DIFFERENT GAME — and on this path it
         # would carry the wrong week's PROPS as well as the wrong game
         # prices, so the whole event goes rather than just its lines.
-        if game is not None and not _same_meeting(home, away, game):
+        if game is not None and not same_meeting(home, away, game):
             result.reversed_events += 1
             continue
         # Prop lines only index when this event IS the leg the slate's props
