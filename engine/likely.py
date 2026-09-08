@@ -498,19 +498,30 @@ def admissible(row: dict) -> str:
     if int(row["odds"]) < HEAVIEST_PRICE:
         return f"heavier than {HEAVIEST_PRICE} — chalk, not a pick"
     if not _credible(prob, row.get("implied_prob")):
-        return "disagrees with the market by more than we credit"
+        return "the shown probability disagrees with the market by more than we credit"
+    # EACH REFUSAL NAMES ITS OWN NUMBER. Three different questions are
+    # asked of three different probabilities here, and until 2026-09-08
+    # two of them answered in sentences a reader could not tell apart —
+    # "disagrees with the market by more than we credit" and "the model
+    # and the market disagree by more than we credit", the same words in
+    # a different order. On the droplet's census they printed as two
+    # lines splitting 98 refused rows between them, and the one thing a
+    # census exists to say — WHICH bar killed the board — was the one
+    # thing those two lines could not. They say which number now: the
+    # SHOWN probability, the model's OWN READ, the RAW claim.
+    #
     # A row that RANKS on a market number still carries the model's own
     # read as its card, and a model that disagrees with the book by more
     # than we credit is our error wherever the row is sorted — the
     # Gelof guard, asked of the number the card prints.
     if (row.get("prob_source") in ("market", "sharp") and row.get("win_prob") is not None
             and not _credible(float(row["win_prob"]), row.get("implied_prob"))):
-        return "disagrees with the market by more than we credit"
+        return "the model's own read disagrees with the market by more than we credit"
     # …and the same question asked of the claim BEFORE the shrink, which
     # is the only place a big disagreement is still visible. See
     # `engine_credible`.
     if not engine_credible(row):
-        return "the model and the market disagree by more than we credit"
+        return "the raw model claim, before the shrink, disagrees with the market by more than we credit"
     # THE INJURY HOLD, WHICH THIS BOARD NEVER HAD. `rules.apply_rules`
     # holds a Questionable / Doubtful / Out player "until inactives
     # confirm status" — and only the edge board read that decision. This
@@ -728,7 +739,7 @@ def from_prop(row: dict, bettable, fits=None,
     # REFUSED, NOT SHRUNK: a likelihood board that quietly moves its
     # number toward the market has stopped saying what it believes.
     if not _credible(shown, row.get("fair_prob")):
-        return _refuse(census, "disagrees with the market by more than we credit")
+        return _refuse(census, "the shown probability disagrees with the market by more than we credit")
     return _row_from(row, market, sport, bettable, prob, shown=shown, source=source)
 
 

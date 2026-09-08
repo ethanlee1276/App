@@ -330,7 +330,7 @@ def test_the_one_bar_applies_to_game_rows_too():
 def test_a_credibility_refusal_is_censused():
     census: dict = {}
     K.build([], game_bets=[_ml(win_prob=0.80, fair_prob=0.62)], census=census)
-    assert census == {"disagrees with the market by more than we credit": 1}, census
+    assert census == {"the model's own read disagrees with the market by more than we credit": 1}, census
 
 
 def test_game_rows_sit_beside_player_rows_ordered_by_probability():

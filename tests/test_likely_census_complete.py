@@ -58,7 +58,7 @@ def test_a_row_the_mixture_walks_away_from_the_book_is_counted():
     fair of 0.40 is twenty points away, past what we credit."""
     census = {}
     assert K.from_prop(_row(fair_prob=0.40), _always, fits=FITS, census=census) is None
-    assert census == {"disagrees with the market by more than we credit": 1}, census
+    assert census == {"the shown probability disagrees with the market by more than we credit": 1}, census
     # The control: the same row against a 0.55 fair is on the board.
     census = {}
     assert K.from_prop(_row(), _always, fits=FITS, census=census) is not None

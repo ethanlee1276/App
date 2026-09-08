@@ -158,7 +158,7 @@ def test_the_model_credibility_bar_still_refuses_a_market_ranked_row():
     with the book by 18 points — the card still prints that number."""
     census: dict = {}
     assert K.build([], game_bets=[_ml(win_prob=0.80, fair_prob=0.62)], census=census) == []
-    assert census == {"disagrees with the market by more than we credit": 1}, census
+    assert census == {"the model's own read disagrees with the market by more than we credit": 1}, census
     got = K.build([], game_bets=[_ml()])
     assert len(got) == 1 and got[0]["prob_source"] == "market"
 

@@ -514,7 +514,7 @@ def test_a_row_the_engine_calls_a_data_error_is_off_this_board_too():
            "book": "theScore Bet", "implied_prob": 0.63,
            "engine_raw_prob": 0.963, "fair_prob": 0.63}
     assert K.admissible(row) == \
-        "the model and the market disagree by more than we credit"
+        "the raw model claim, before the shrink, disagrees with the market by more than we credit"
     # The band that made the old check useless: 15 raw points, shrunk to
     # well under the cap.
     fifteen = {**row, "engine_raw_prob": 0.78, "model_prob": 0.675}
