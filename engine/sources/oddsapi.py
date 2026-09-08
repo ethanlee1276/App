@@ -177,6 +177,57 @@ def _max_prop_price_age() -> float:
 
 MAX_PROP_PRICE_AGE = 6 * 3600.0
 
+
+#: HOW OLD IS TOO OLD TO SHOW AT ALL — as against too old to BET, above.
+#:
+#: The ceilings above shipped 2026-09-08 as a single hard refusal at six
+#: hours: past it, a game's markets and an event's player markets were
+#: dropped outright. Hours later, the opener a day away:
+#:
+#:     "We have barely any moneylines show and barley and touchdowns
+#:      shown. We need to fix that immediately."
+#:
+#: That is this refusal doing exactly what it was written to do, on a box
+#: whose odds pull had not run inside six hours. A declined budget cycle,
+#: spent credits or the pacer's own gap and EVERY game line and EVERY
+#: touchdown quote disappears at once.
+#:
+#: THE ERROR WAS CONFLATING TWO QUESTIONS. A price from this morning is
+#: not a WRONG price — it is a real quote that may have moved, and the
+#: card already carries its age (`price_age_s`, drawn as a chip). "Too
+#: old to stake" and "too old to put on the page" are different bars, and
+#: collapsing them turned a labelling problem into an empty board, which
+#: is its own way of being useless.
+#:
+#: So there are two now. Inside MAX_*_PRICE_AGE a row is FRESH and may be
+#: recommended. Between that and this, the row SHOWS, carries its age,
+#: and is marked `price_stale` so nothing downstream can present it as a
+#: current recommendation. Past this, the number is too old to mean
+#: anything about tonight and is dropped as before.
+#:
+#: Forty-eight hours because a line two days old is still recognisably
+#: this week's market — Week 1 prices are hung on the Monday — while a
+#: number older than that is describing a different injury report.
+#: QB_MAX_GAME_PRICE_SHOW_AGE / QB_MAX_PROP_PRICE_SHOW_AGE override.
+def _max_game_price_show_age() -> float:
+    import os as _os
+    try:
+        return float(_os.environ.get("QB_MAX_GAME_PRICE_SHOW_AGE") or 48 * 3600)
+    except (TypeError, ValueError):
+        return 48 * 3600.0
+
+
+def _max_prop_price_show_age() -> float:
+    import os as _os
+    try:
+        return float(_os.environ.get("QB_MAX_PROP_PRICE_SHOW_AGE") or 48 * 3600)
+    except (TypeError, ValueError):
+        return 48 * 3600.0
+
+
+MAX_GAME_PRICE_SHOW_AGE = 48 * 3600.0
+MAX_PROP_PRICE_SHOW_AGE = 48 * 3600.0
+
 # The Odds API uses full team names; nflverse uses abbreviations.
 TEAM_ABBR = {
     "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
@@ -866,6 +917,19 @@ def price_is_current(age: float | None, now_max: float | None = None) -> bool:
     return float(age) <= (now_max if now_max is not None else _max_game_price_age())
 
 
+def price_is_showable(age: float | None, now_max: float | None = None) -> bool:
+    """May a payload this old go on the page AT ALL?
+
+    The wider of the two ceilings — see MAX_GAME_PRICE_SHOW_AGE. A row
+    between this and `price_is_current` shows with its age on it and is
+    marked `price_stale`; past this it is dropped.
+    """
+    if age is None:
+        return True
+    return float(age) <= (now_max if now_max is not None
+                          else _max_game_price_show_age())
+
+
 def event_cache_age(event_id: str, markets: list[str] | None = None,
                     books: list[str] | None = None, sport: str = "nfl",
                     now: float | None = None) -> float | None:
@@ -1443,11 +1507,18 @@ class OddsAttachResult:
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
     from_cache: bool = False     # prices reused from the last paid pull
-    #: Games whose GAME markets were refused for age (MAX_GAME_PRICE_AGE),
-    #: and the oldest age refused. Props from the same payload are not
-    #: gated; they are dated on the game instead.
+    #: Games whose GAME markets were REFUSED for age — past
+    #: MAX_GAME_PRICE_SHOW_AGE, so nothing off that payload reaches the
+    #: page — and the oldest age refused.
     stale_game_prices: int = 0
     stale_price_age_s: float = 0.0
+    #: Games priced from a payload between MAX_GAME_PRICE_AGE and
+    #: MAX_GAME_PRICE_SHOW_AGE: SHOWN, marked `price_stale`, and never
+    #: recommended. Counted apart from the refusals because a build note
+    #: that adds the two together says "kept NO price" about games whose
+    #: price is on the board — see `Game.price_stale`.
+    shown_stale_game_prices: int = 0
+    shown_stale_price_age_s: float = 0.0
     #: Events whose PLAYER markets were refused for age
     #: (MAX_PROP_PRICE_AGE) — no line, ladder, menu entry or scorer quote
     #: was indexed off them — and the oldest such payload.
@@ -1622,12 +1693,17 @@ class BoardLinesResult:
     totals: int = 0
     spreads: int = 0
     events_seen: int = 0         # events the endpoint returned
-    #: Games whose price was refused for age — see MAX_GAME_PRICE_AGE —
-    #: and how old the oldest of them was. A board that prices nothing
-    #: because its pull is a day behind must say that, not read as a
-    #: quiet slate.
+    #: Games whose price was REFUSED for age — see
+    #: MAX_GAME_PRICE_SHOW_AGE — and how old the oldest of them was. A
+    #: board that prices nothing because its pull is a day behind must
+    #: say that, not read as a quiet slate.
     stale_game_prices: int = 0
     stale_price_age_s: float = 0.0
+    #: Games priced past MAX_GAME_PRICE_AGE but inside the show ceiling:
+    #: on the board, marked, unrecommended. Kept apart from the refusals
+    #: so no note can call a shown price a dropped one.
+    shown_stale_game_prices: int = 0
+    shown_stale_price_age_s: float = 0.0
     quota: Quota = field(default_factory=Quota)
     from_cache: bool = False
     # Same two failure modes apply_odds_to_slate names separately, for the
@@ -1754,12 +1830,21 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         team_map = {ev.get("home_team", ""): home, ev.get("away_team", ""): away}
         # The whole-slate payload is one file, so one age dates every
         # price in it (see MAX_GAME_PRICE_AGE).
-        if not price_is_current(board_age):
+        # PAST THE SHOW CEILING the number is dropped exactly as before.
+        # Between the two, it is attached and MARKED, because a board with
+        # a dated price on a labelled card beats a board with nothing on
+        # it (see MAX_GAME_PRICE_SHOW_AGE).
+        if not price_is_showable(board_age):
             result.stale_game_prices += 1
             result.stale_price_age_s = float(board_age or 0.0)
             continue
         game.price_age_s = board_age
         game.priced_from = "board"
+        game.price_stale = not price_is_current(board_age)
+        if game.price_stale:
+            result.shown_stale_game_prices += 1
+            result.shown_stale_price_age_s = max(
+                result.shown_stale_price_age_s or 0.0, float(board_age or 0.0))
         touched = False
         mls = parse_event_h2h(ev, team_map)
         if mls.get(home) is not None and mls.get(away) is not None:
@@ -2034,7 +2119,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # against MAX_GAME_PRICE_AGE. A cached payload is served at any
         # age (`_request`); these two questions are where "any" ends.
         _age = event_cache_age(ev["id"], _age_markets, books, sport)
-        if props_ok and not price_is_current(_age, _max_prop_price_age()):
+        if props_ok and not price_is_showable(_age, _max_prop_price_show_age()):
             # NOTHING off this payload reaches a prop: not a main line,
             # not a rung, not a scorer quote, not a menu entry. A prop
             # with no book line is proxy-priced and never a pick, which
@@ -2072,7 +2157,7 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         # age on a declined cycle, and a game market read off a stale one
         # is the wrong number rather than an old one. The player markets
         # were asked the same question above, against their own ceiling.
-        if game is not None and not price_is_current(_age):
+        if game is not None and not price_is_showable(_age):
             result.stale_game_prices += 1
             result.stale_price_age_s = max(result.stale_price_age_s or 0.0,
                                            float(_age or 0.0))
@@ -2080,6 +2165,11 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
         if game is not None:
             game.price_age_s = _age
             game.priced_from = "event"
+            game.price_stale = not price_is_current(_age)
+            if game.price_stale:
+                result.shown_stale_game_prices += 1
+                result.shown_stale_price_age_s = max(
+                    result.shown_stale_price_age_s or 0.0, float(_age or 0.0))
             mls = parse_event_h2h(payload, cfg["teams"])
             if home in mls and away in mls:
                 game.home_ml = mls[home]

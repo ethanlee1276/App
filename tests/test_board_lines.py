@@ -427,9 +427,27 @@ def test_the_lines_get_their_own_stamp():
     assert "if _lts:" in seg, "an absent lines pull would stamp anyway"
 
 
+def _board_odds_block() -> str:
+    """The whole `if args.board_odds:` body, bounded by indentation.
+
+    Bounded by a character count first, which worked until the block grew
+    — a build that added a diagnostic line pushed the guard out of the
+    window and the test read as "the guard is gone". A block is a block;
+    measure it that way.
+    """
+    lines = BUILD.splitlines()
+    start = next(n for n, ln in enumerate(lines) if "if args.board_odds:" in ln)
+    col = len(lines[start]) - len(lines[start].lstrip())
+    out = [lines[start]]
+    for ln in lines[start + 1:]:
+        if ln.strip() and (len(ln) - len(ln.lstrip())) <= col:
+            break
+        out.append(ln)
+    return "\n".join(out)
+
+
 def test_the_stamp_is_only_written_when_a_pull_actually_priced():
-    i = BUILD.index("if args.board_odds:")
-    seg = BUILD[i:i + 2200]
+    seg = _board_odds_block()
     assert "if bres.games_priced:" in seg, \
         "a pull that priced nothing would still claim fresh lines"
     j = seg.index("if bres.games_priced:")

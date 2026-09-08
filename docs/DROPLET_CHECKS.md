@@ -841,23 +841,49 @@ the extreme stale case):
 One game in thirty priced off a stale pull shows the wrong side as most
 likely.
 
-**The fix.** A payload older than `oddsapi.MAX_GAME_PRICE_AGE` (6h)
-prices no game market: the game keeps no price, the board says "no real
-book price", and both builds print what they refused and how old it was.
-Every price that IS attached now carries its own age
-(`Game.price_age_s`, `priced_from`) onto the card, the game row and the
-prop row.
+**The fix, as first shipped.** A payload older than
+`oddsapi.MAX_GAME_PRICE_AGE` (6h) priced no game market: the game kept
+no price, the board said "no real book price", and both builds printed
+what they refused and how old it was. Every price that IS attached
+carries its own age (`Game.price_age_s`, `priced_from`) onto the card,
+the game row and the prop row.
 
-**Props answer to the same ceiling** (`oddsapi.MAX_PROP_PRICE_AGE`, 6h,
-its own knob `QB_MAX_PROP_PRICE_AGE`). The first cut left them dated
+**And then the ceiling had to split in two, the same day.** One hard
+ceiling at six hours refused every price the droplet had not re-pulled
+inside six hours — which, on a box whose paid pulls are budgeted across
+four touchpoints, is most of the day. The boards emptied. Ethan, the
+night before the Week 1 opener: "We have barely any moneylines show and
+barley and touchdowns shown." So there are now two bars, and only the
+wider one refuses:
+
+| knob | default | what it decides |
+|---|---|---|
+| `QB_MAX_GAME_PRICE_AGE` / `QB_MAX_PROP_PRICE_AGE` | 6h | the FRESHNESS bar. Past it the price is shown with its age on the card, the row carries `price_stale`, and `recommended` is false whatever the edge says. |
+| `QB_MAX_GAME_PRICE_SHOW_AGE` / `QB_MAX_PROP_PRICE_SHOW_AGE` | 48h | the SHOW ceiling. Past it the price is refused outright, exactly as the measurement above says it must be. |
+
+The measurement did not change and neither did what it implies about a
+stale price — one game in thirty names the wrong favourite. What changed
+is the answer to "and therefore what". Between six and forty-eight hours
+the honest move is to publish the last paid pull's real number with its
+age attached; past forty-eight, no price beats a wrong price.
+
+The two counts are reported separately on purpose. `*_stale_prices`
+means REFUSED (the build prints "kept NO price"); `*_shown_stale_prices`
+means shown, dated and unrecommended. Adding them together would print
+"kept NO price" about a game whose price is on the board.
+
+**Props answer to the same pair of ceilings** (`MAX_PROP_PRICE_AGE` 6h,
+`MAX_PROP_PRICE_SHOW_AGE` 48h, each with its own knob). The first cut left them dated
 but served; Ethan repeated the ask word for word — "this could be our
 issue with not showing picks ... fake and false picks that can hurt us"
-— and a pick IS a prop. A per-event payload past the ceiling indexes no
-line, no rung, no menu entry and no scorer quote, so every prop on that
-game is proxy-priced and cannot be a pick; the college quote loop
-refuses the same way and says so in `odds_status.player_quotes`. The
-two knobs are separate because the two pulls cost differently: game
-lines refresh for three credits a slate, props for twelve a game.
+— and a pick IS a prop. A per-event payload past the SHOW ceiling
+indexes no line, no rung, no menu entry and no scorer quote, so every
+prop on that game is proxy-priced and cannot be a pick; the college
+quote loop refuses the same way and says so in
+`odds_status.player_quotes`. Between the two bars the quotes are kept
+and the note says "shown and marked, not recommended". The game and prop
+knobs are separate because the two pulls cost differently: game lines
+refresh for three credits a slate, props for twelve a game.
 
 Read it on the box:
 
@@ -868,7 +894,10 @@ b = json.load(open('web/data/recommendations.json'))
 os_ = b.get('odds_status') or {}
 for k in ('source','event_stale_prices','event_stale_age_s',
           'event_stale_prop_events','event_stale_prop_age_s',
-          'board_stale_prices','board_stale_age_s','board_moneylines'):
+          'event_shown_stale_prices','event_shown_stale_age_s',
+          'board_stale_prices','board_stale_age_s',
+          'board_shown_stale_prices','board_shown_stale_age_s',
+          'board_moneylines'):
     if os_.get(k) is not None: print(f'  {k}: {os_[k]}')
 ages = [(g.get('matchup'), g.get('price_age_s'), g.get('priced_from'))
         for g in (b.get('game_bets') or []) if g.get('market') == 'moneyline']
@@ -879,8 +908,15 @@ for m, a, src in ages[:8]:
 * Rows reading `from board` with an age in minutes are the cheap
   whole-slate pull working as intended.
 * `event_stale_prices` above zero means the per-event payload is past
-  the ceiling and those games kept no price — buy a pull, or widen the
-  ceiling with `QB_MAX_GAME_PRICE_AGE` (seconds) if the budget cannot.
+  the SHOW ceiling (48h) and those games kept no price at all — buy a
+  pull, or widen it with `QB_MAX_GAME_PRICE_SHOW_AGE` (seconds) if the
+  budget truly cannot. This should be rare: 48 hours is a box that has
+  not successfully pulled in two days.
+* `event_shown_stale_prices` / `board_shown_stale_prices` above zero is
+  the ORDINARY declined-cycle state, not a fault: those games are priced
+  from a pull older than six hours, the cards say so, and none of them
+  can be recommended. A high count with a low `board_moneylines` is
+  worth a pull; a high count on its own is the pacer doing its job.
 * `event_stale_prop_events` above zero is the same fact for the props:
   those games' players are proxy-priced this cycle and none of them can
   be a pick. A board that is thin with this number high is not a quiet

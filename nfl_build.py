@@ -602,6 +602,9 @@ def main() -> None:
                                source="cache" if res.from_cache else "fresh",
                                event_stale_prices=res.stale_game_prices,
                                event_stale_age_s=round(res.stale_price_age_s or 0.0),
+                               event_shown_stale_prices=res.shown_stale_game_prices,
+                               event_shown_stale_age_s=round(
+                                   res.shown_stale_price_age_s or 0.0),
                                event_stale_prop_events=res.stale_prop_events,
                                event_stale_prop_age_s=round(res.stale_prop_age_s or 0.0))
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
@@ -644,8 +647,19 @@ def main() -> None:
                       f"the cached event payload is "
                       f"{(res.stale_price_age_s or 0) / 3600:.1f}h old, past "
                       f"the {oddsapi._max_game_price_age() / 3600:.0f}h "
-                      f"ceiling (oddsapi.MAX_GAME_PRICE_AGE). Buy a fresh "
-                      f"pull, or raise QB_MAX_GAME_PRICE_AGE.")
+                      f"ceiling (oddsapi.MAX_GAME_PRICE_SHOW_AGE). Buy a "
+                      f"fresh pull, or raise QB_MAX_GAME_PRICE_SHOW_AGE.")
+            if res.shown_stale_game_prices:
+                # SHOWN, NOT DROPPED, and said in its own sentence. These
+                # are counted apart from the refusals above for one
+                # reason: adding them together would print "kept NO
+                # price" about a game whose price is on the board.
+                print(f"  ℹ️  {res.shown_stale_game_prices} game(s) priced "
+                      f"from a payload "
+                      f"{(res.shown_stale_price_age_s or 0) / 3600:.1f}h old, "
+                      f"past the {oddsapi._max_game_price_age() / 3600:.0f}h "
+                      f"freshness bar (oddsapi.MAX_GAME_PRICE_AGE). Shown "
+                      f"with their age on the card and never recommended.")
             if res.unmatched:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
@@ -694,14 +708,25 @@ def main() -> None:
                 board_totals=bres.totals,
                 board_spreads=bres.spreads,
                 board_stale_prices=bres.stale_game_prices,
-                board_stale_age_s=round(bres.stale_price_age_s or 0.0))
+                board_stale_age_s=round(bres.stale_price_age_s or 0.0),
+                board_shown_stale_prices=bres.shown_stale_game_prices,
+                board_shown_stale_age_s=round(
+                    bres.shown_stale_price_age_s or 0.0))
             if bres.stale_game_prices:
                 print(f"\n⚠️  {bres.stale_game_prices} game price(s) refused "
                       f"as stale — the cached pull is "
                       f"{(bres.stale_price_age_s or 0) / 3600:.1f}h old, past "
-                      f"the {oddsapi._max_game_price_age() / 3600:.0f}h ceiling. "
-                      f"No price beats a wrong price; raise "
-                      f"QB_MAX_GAME_PRICE_AGE to widen it.")
+                      f"the {oddsapi._max_game_price_show_age() / 3600:.0f}h "
+                      f"ceiling. No price beats a wrong price; raise "
+                      f"QB_MAX_GAME_PRICE_SHOW_AGE to widen it.")
+            if bres.shown_stale_game_prices:
+                print(f"\nℹ️  {bres.shown_stale_game_prices} game price(s) "
+                      f"past the "
+                      f"{oddsapi._max_game_price_age() / 3600:.0f}h freshness "
+                      f"bar and shown anyway, marked and unrecommended — the "
+                      f"cached pull is "
+                      f"{(bres.shown_stale_price_age_s or 0) / 3600:.1f}h old. "
+                      f"An empty board is worse than a dated one.")
             if bres.quota.remaining is not None:
                 odds_status["quota_remaining"] = bres.quota.remaining
             print(f"\nGame lines: refreshed {bres.games_priced} of "

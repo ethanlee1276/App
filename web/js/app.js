@@ -6167,6 +6167,20 @@ function priceAgeChip(r) {
     : s < 3600 ? `${Math.round(s / 60)}m ago`
     : s < 172800 ? `${Math.round(s / 3600)}h ago`
     : `${Math.round(s / 86400)}d ago`;
+  // PAST THE FRESHNESS BAR THE CHIP CHANGES ITS TONE, because the row is
+  // now making a weaker claim. The engine ships two ceilings
+  // (oddsapi.MAX_GAME_PRICE_SHOW_AGE): inside the first the price is
+  // current, between them it is a real quote that may have moved and the
+  // row is shown rather than dropped — which is the whole reason the
+  // board is not empty on a cycle the budget declined. A reader has to
+  // be able to see which of the two he is looking at without doing the
+  // arithmetic himself.
+  if ((r || {}).price_stale) {
+    return `<span class="price-age warn" title="This price is older than our
+      freshness bar. It is a real quote from the book named, but it may have
+      moved since — we show it rather than leave the board empty, and we do
+      not recommend it until a fresh pull confirms it.">· priced ${ago} — may have moved</span>`;
+  }
   return `<span class="price-age" title="When the pull behind this price ran${
     r.priced_from ? ` (${escapeHtml(r.priced_from)} pull)` : ""}">· priced ${ago}</span>`;
 }

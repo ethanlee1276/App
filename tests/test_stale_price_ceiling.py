@@ -52,6 +52,29 @@ proxy-priced and cannot be a pick; the college quote loop refuses the
 same way and says so in its note; every prop row that IS priced carries
 the age of the payload behind it.
 
+AND THEN ONE CEILING BECAME TWO (2026-09-08, hours later). Everything
+above stands and none of it moves; what changed is where "too old to
+use" sits. A single six-hour ceiling refused every price the droplet had
+not re-pulled inside six hours, and on a box whose paid pulls are
+budgeted that is most of the day — so the boards emptied. Ethan, the
+night before the Week 1 opener: "We have barely any moneylines show and
+barley and touchdowns shown."
+
+  * MAX_GAME_PRICE_AGE / MAX_PROP_PRICE_AGE (6h) is now the FRESHNESS
+    bar. Past it a price is not fresh enough to RECOMMEND: the row
+    carries `price_stale`, the card says how old the number is, and
+    `recommended` is false whatever the edge says.
+  * MAX_GAME_PRICE_SHOW_AGE / MAX_PROP_PRICE_SHOW_AGE (48h) is the SHOW
+    ceiling, and it is the one that refuses. Past it the price is
+    dropped exactly as the measurement above says it must be.
+
+The measurement did not change and neither did the conclusion drawn
+from it — a stale price still names the wrong favourite one game in
+thirty. What changed is the answer to "and therefore what": between six
+and forty-eight hours the honest move is to show the number with its age
+attached, not to publish an empty page. Past forty-eight hours no price
+beats a wrong price, and that is still the rule.
+
 Run directly: `python3 tests/test_stale_price_ceiling.py`
 """
 
@@ -66,6 +89,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 from engine.models import Game, Weather                        # noqa: E402
 from engine.sources import oddsapi as oa                       # noqa: E402
+
+#: An age past the SHOW ceiling, where a payload is refused outright.
+#: Named rather than spelled inline because every "prices nothing" test
+#: below needs the same fact — that this is past 48h and not merely past
+#: 6h — and a bare `9 * 3600` in those tests is what quietly stopped
+#: being past the ceiling when the ceiling split.
+PAST_SHOW = 3 * 86400.0
+
+#: An age between the two: too old to recommend, young enough to show.
+SHOWN_STALE = 9 * 3600.0
 
 
 def _event(home="Minnesota Vikings", away="Green Bay Packers",
@@ -122,6 +155,31 @@ def test_the_ceiling_is_six_hours_and_the_box_can_widen_it():
     assert oa.price_is_current(None) is True
 
 
+def test_the_show_ceiling_is_its_own_wider_knob():
+    """The bar that REFUSES is not the bar that stops a recommendation,
+    and the box can move each without moving the other."""
+    assert oa.MAX_GAME_PRICE_SHOW_AGE == 48 * 3600
+    assert oa.MAX_PROP_PRICE_SHOW_AGE == 48 * 3600
+    assert oa._max_game_price_show_age() == 48 * 3600
+    assert oa._max_prop_price_show_age() == 48 * 3600
+    assert oa.MAX_GAME_PRICE_SHOW_AGE > oa.MAX_GAME_PRICE_AGE
+    assert oa.MAX_PROP_PRICE_SHOW_AGE > oa.MAX_PROP_PRICE_AGE
+    # SHOWABLE is the wider question, and it answers yes where
+    # `price_is_current` answers no — that band is the whole point.
+    assert oa.price_is_showable(SHOWN_STALE) is True
+    assert oa.price_is_current(SHOWN_STALE) is False
+    assert oa.price_is_showable(PAST_SHOW) is False
+    assert oa.price_is_showable(None) is True
+    os.environ["QB_MAX_GAME_PRICE_SHOW_AGE"] = "7200"
+    try:
+        assert oa._max_game_price_show_age() == 7200
+        assert oa.price_is_showable(3 * 3600) is False
+        assert oa._max_prop_price_show_age() == 48 * 3600, \
+            "the two show knobs are one knob"
+    finally:
+        del os.environ["QB_MAX_GAME_PRICE_SHOW_AGE"]
+
+
 def test_a_payload_that_was_never_written_has_no_age_rather_than_a_zero():
     restore = _with_cache(60, [])
     try:
@@ -133,17 +191,38 @@ def test_a_payload_that_was_never_written_has_no_age_rather_than_a_zero():
 
 
 # --- the whole-slate pull ------------------------------------------------------
-def test_a_stale_whole_slate_payload_prices_nothing_and_says_so():
+def test_a_whole_slate_payload_past_the_show_ceiling_prices_nothing():
     slate = _slate()
-    restore = _with_cache(9 * 3600, [_event()])
+    restore = _with_cache(PAST_SHOW, [_event()])
     try:
         res = oa.apply_board_lines_to_slate(slate, api_key="k", cache_only=True)
     finally:
         restore()
     assert res.stale_game_prices == 1 and res.moneylines == 0, res
-    assert res.stale_price_age_s > 8 * 3600
+    assert res.stale_price_age_s > 2 * 86400
+    assert res.shown_stale_game_prices == 0, "a refusal was counted as a showing"
     g = slate.games[0]
     assert g.home_ml == 0 and g.away_ml == 0, "a stale price was attached anyway"
+
+
+def test_a_whole_slate_payload_between_the_two_prices_and_marks_it():
+    """The band the split exists for. Nine hours is past the freshness
+    bar and nowhere near the show ceiling: the price goes on the board,
+    the game carries `price_stale`, and the two counters do not blur —
+    `stale_game_prices` still means REFUSED."""
+    slate = _slate()
+    restore = _with_cache(SHOWN_STALE, [_event()])
+    try:
+        res = oa.apply_board_lines_to_slate(slate, api_key="k", cache_only=True)
+    finally:
+        restore()
+    assert res.moneylines == 1, res
+    assert res.stale_game_prices == 0, "a shown price was counted as refused"
+    assert res.shown_stale_game_prices == 1, res
+    assert res.shown_stale_price_age_s > 8 * 3600, res
+    g = slate.games[0]
+    assert (g.home_ml, g.away_ml) == (-125, 105)
+    assert g.price_stale is True, "the board shows a dated price unmarked"
 
 
 def test_a_fresh_whole_slate_payload_prices_the_game_and_dates_it():
@@ -154,9 +233,11 @@ def test_a_fresh_whole_slate_payload_prices_the_game_and_dates_it():
     finally:
         restore()
     assert res.moneylines == 1 and res.stale_game_prices == 0, res
+    assert res.shown_stale_game_prices == 0, res
     g = slate.games[0]
     assert (g.home_ml, g.away_ml) == (-125, 105)
     assert 1700 < g.price_age_s < 1900 and g.priced_from == "board", g.price_age_s
+    assert g.price_stale is False, "a fresh price was marked dated"
 
 
 def test_the_screenshots_price_cannot_come_from_a_live_payload():
@@ -178,14 +259,18 @@ def test_the_screenshots_price_cannot_come_from_a_live_payload():
 
 # --- the college path ----------------------------------------------------------
 def test_college_refuses_a_stale_board_with_a_note_a_reader_can_act_on():
+    """Past the SHOW ceiling the college board still returns nothing and
+    still says why. Thirty hours used to land here; it does not any more,
+    which is the whole change — a Saturday-morning board whose pull is a
+    day behind now prices and labels rather than going blank."""
     import cfb_build
-    restore = _with_cache(30 * 3600, [], name="odds_board_cfb.json")
+    restore = _with_cache(PAST_SHOW, [], name="odds_board_cfb.json")
     try:
         priced, note = cfb_build.attach_odds([], {}, api_key="k", cache_only=True)
     finally:
         restore()
     assert priced == {} and "stale" in note, note
-    assert "30.0h" in note and "6h ceiling" in note, note
+    assert "72.0h" in note and "48h ceiling" in note, note
 
 
 # --- the age reaches the card and the row --------------------------------------
@@ -216,7 +301,26 @@ def test_both_builds_report_what_they_refused():
     assert "event_stale_prices=res.stale_game_prices" in nfl
     assert "board_stale_prices=bres.stale_game_prices" in nfl
     assert "game(s) kept NO price" in nfl
-    assert "QB_MAX_GAME_PRICE_AGE" in nfl
+    # The REFUSAL names the knob that refuses. Naming the freshness knob
+    # here sent a reader to widen a dial that would not have changed
+    # anything they were looking at.
+    assert "QB_MAX_GAME_PRICE_SHOW_AGE" in nfl
+
+
+def test_both_builds_report_what_they_showed_dated_too():
+    """A count of refusals and a count of showings, in two sentences.
+
+    Adding them together is the bug this pins: the refusal line reads
+    "kept NO price", and a game priced from a nine-hour payload has a
+    price. Both builds now publish the two figures separately, so no
+    reader and no status file can confuse a labelled price with a
+    missing one."""
+    nfl = open(os.path.join(ROOT, "nfl_build.py"), encoding="utf-8").read()
+    assert "event_shown_stale_prices=res.shown_stale_game_prices" in nfl
+    assert "board_shown_stale_prices=bres.shown_stale_game_prices" in nfl
+    assert "freshness bar" in nfl
+    cfb = open(os.path.join(ROOT, "cfb_build.py"), encoding="utf-8").read()
+    assert "shown_stale" in cfb and "shown and marked, not recommended" in cfb
 
 
 def test_the_docs_carry_the_root_cause_and_the_measurement():
@@ -290,10 +394,10 @@ def _attach_event(age_s):
     return res, slate
 
 
-def test_a_stale_event_payload_prices_no_prop_and_no_game():
-    res, slate = _attach_event(9 * 3600)
+def test_an_event_payload_past_the_show_ceiling_prices_no_prop_and_no_game():
+    res, slate = _attach_event(PAST_SHOW)
     assert res.stale_prop_events == 1 and res.stale_game_prices == 1, res
-    assert res.stale_prop_age_s > 8 * 3600
+    assert res.stale_prop_age_s > 2 * 86400
     assert res.matched == 0, "a stale line was matched to a prop"
     prop = slate.props[0]
     assert all(ln.book == "proxy" for ln in prop.lines), \
@@ -302,25 +406,46 @@ def test_a_stale_event_payload_prices_no_prop_and_no_game():
     assert g.home_ml == 0 and g.price_age_s is None
 
 
+def test_an_event_payload_between_the_two_prices_both_and_marks_the_game():
+    """Nine hours: too old to recommend, young enough to show. Both the
+    prop line and the moneyline land, and the game says it is dated."""
+    res, slate = _attach_event(SHOWN_STALE)
+    assert res.matched == 1, "a showable payload priced no prop"
+    assert res.stale_prop_events == 0 and res.stale_game_prices == 0, res
+    assert res.shown_stale_game_prices == 1, res
+    prop = slate.props[0]
+    assert any(ln.book != "proxy" and ln.line == 255.5 for ln in prop.lines)
+    g = slate.games[0]
+    assert (g.home_ml, g.away_ml) == (-140, 120)
+    assert g.price_stale is True and g.price_age_s == SHOWN_STALE
+
+
 def test_a_fresh_event_payload_prices_both_and_dates_the_game():
     res, slate = _attach_event(1800)
     assert res.stale_prop_events == 0 and res.stale_game_prices == 0, res
+    assert res.shown_stale_game_prices == 0, res
     assert res.matched == 1, res
     prop = slate.props[0]
     assert any(ln.book != "proxy" and ln.line == 255.5 for ln in prop.lines)
     g = slate.games[0]
     assert (g.home_ml, g.away_ml) == (-140, 120)
     assert g.price_age_s == 1800 and g.priced_from == "event"
+    assert g.price_stale is False
 
 
-def test_the_two_ceilings_are_asked_separately():
-    """A box that widens the prop knob keeps the game knob: a nine-hour
-    payload can price the props and still not the moneyline."""
-    os.environ["QB_MAX_PROP_PRICE_AGE"] = "43200"
+def test_the_two_show_ceilings_are_asked_separately():
+    """A box that widens the prop SHOW knob keeps the game one: a
+    three-day payload can price the props and still not the moneyline.
+
+    Written against the freshness knobs first, which stopped separating
+    anything the moment neither of them refused — the knob that decides
+    whether a price appears at all is the show knob, and that is the one
+    a box has to be able to move on its own."""
+    os.environ["QB_MAX_PROP_PRICE_SHOW_AGE"] = str(int(5 * 86400))
     try:
-        res, slate = _attach_event(9 * 3600)
+        res, slate = _attach_event(PAST_SHOW)
     finally:
-        del os.environ["QB_MAX_PROP_PRICE_AGE"]
+        del os.environ["QB_MAX_PROP_PRICE_SHOW_AGE"]
     assert res.matched == 1 and res.stale_prop_events == 0, res
     assert res.stale_game_prices == 1 and slate.games[0].home_ml == 0
 
@@ -337,11 +462,16 @@ def test_a_priced_prop_row_carries_the_payloads_age():
     other = next(r for r in rows if r["player"] == "Dalton Kincaid")
     assert other["has_market"] is False and other["price_age_s"] is None, other
     assert other["priced_from"] == ""
-    # And on a stale payload nobody is dated, because nobody was priced.
-    _res, slate = _attach_event(9 * 3600)
+    # Past the SHOW ceiling nobody is dated, because nobody was priced.
+    _res, slate = _attach_event(PAST_SHOW)
     rows = price_props(slate, sport="nfl")
     row = next(r for r in rows if r["player"] == "Josh Allen")
     assert row["has_market"] is False and row["price_age_s"] is None
+    # …and between the two he IS priced, dated, and not recommended.
+    _res, slate = _attach_event(SHOWN_STALE)
+    rows = price_props(slate, sport="nfl")
+    row = next(r for r in rows if r["player"] == "Josh Allen")
+    assert row["has_market"] is True and row["price_age_s"] == SHOWN_STALE, row
 
 
 def test_college_refuses_stale_player_quotes_and_says_so():
@@ -360,11 +490,20 @@ def test_college_refuses_stale_player_quotes_and_says_so():
     real = (oa.fetch_event_odds, oa.event_cache_age)
     oa.fetch_event_odds = lambda *a, **k: (payload, oa.Quota())
     try:
-        oa.event_cache_age = lambda *a, **k: 9 * 3600
+        oa.event_cache_age = lambda *a, **k: PAST_SHOW
         scorers, _lines, note, _oldest = cfb_build.attach_player_quotes(
             games, priced, cache_only=True, api_key="k", now=t, cap=5)
         assert scorers == {}, scorers
-        assert "kept NO player quotes" in note and "9.0h old" in note, note
+        assert "kept NO player quotes" in note and "72.0h old" in note, note
+        # …and inside the show ceiling the quotes are KEPT and labelled,
+        # which is the difference between a shelf with touchdowns on it
+        # and the empty one Ethan was looking at.
+        oa.event_cache_age = lambda *a, **k: SHOWN_STALE
+        scorers, _lines, note, _oldest = cfb_build.attach_player_quotes(
+            games, priced, cache_only=True, api_key="k", now=t, cap=5)
+        assert scorers, "a showable payload kept no scorer quotes"
+        assert "shown and marked, not recommended" in note, note
+        assert "kept NO player quotes" not in note, note
         oa.event_cache_age = lambda *a, **k: 1800
         scorers, _lines, note, _oldest = cfb_build.attach_player_quotes(
             games, priced, cache_only=True, api_key="k", now=t, cap=5)
@@ -392,8 +531,8 @@ def test_the_deploy_day_fallback_is_dated_by_the_file_it_served():
 
     def fake_age(eid, markets=None, books=None, sport="nfl", now=None):
         seen.append(list(markets or []))
-        # The ladder file does not exist; the base file is nine hours old.
-        return None if _ladder(markets) else 9 * 3600
+        # The ladder file does not exist; the base file is three days old.
+        return None if _ladder(markets) else PAST_SHOW
 
     real = (oa.list_events, oa.fetch_event_odds, oa.event_cache_age)
     oa.list_events = lambda *a, **k: [dict(PROP_EVENT)]

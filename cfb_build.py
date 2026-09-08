@@ -87,11 +87,19 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     # pull from Tuesday and nothing would say so. See
     # oddsapi.MAX_GAME_PRICE_AGE for what that costs, measured.
     board_age = oddsapi.sport_cache_age("cfb")
-    if not oddsapi.price_is_current(board_age):
+    # TWO CEILINGS, NOT ONE. This returned {} — a blank college board —
+    # for any pull older than six hours, which on a box whose budget
+    # declined a cycle is every Saturday morning. Past the SHOW ceiling
+    # the refusal stands; between the two the board is priced and every
+    # entry carries `price_stale`, so the cards say the number is dated
+    # rather than the page saying nothing at all. See
+    # oddsapi.MAX_GAME_PRICE_SHOW_AGE.
+    if not oddsapi.price_is_showable(board_age):
         hrs = (board_age or 0.0) / 3600.0
         return {}, (f"odds refused as stale: the last pull is {hrs:.1f}h old, "
-                    f"past the {oddsapi._max_game_price_age() / 3600:.0f}h "
+                    f"past the {oddsapi._max_game_price_show_age() / 3600:.0f}h "
                     f"ceiling — no price beats a wrong price")
+    board_stale = not oddsapi.price_is_current(board_age)
 
     priced: dict[str, dict] = {}
     unmatched: list[str] = []
@@ -149,6 +157,9 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
             # card can date its own number rather than borrowing the
             # board's clock (engine.models.Game.price_age_s).
             entry["price_age_s"] = board_age
+            # …and whether that age is past the freshness bar, so the
+            # card can say "dated" rather than the board saying nothing.
+            entry["price_stale"] = board_stale
             priced[game["game_id"]] = entry
 
     if learned:
@@ -320,8 +331,10 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
     lines: dict = {}
     pulled = 0
     oldest = None                      # seconds; the stalest payload used
-    stale = 0                          # payloads refused for age
+    stale = 0                          # payloads refused: past the SHOW ceiling
     stale_oldest = 0.0
+    shown_stale = 0                    # payloads kept but past the FRESH bar
+    shown_stale_oldest = 0.0
     for _tier, _pri, _ko, i, event_id in cands[:cap]:
         # BEFORE THE CALL, because a paid pull rewrites the file and the
         # age we want is the age of what this build is about to READ.
@@ -351,10 +364,18 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         # stale payload's age and used it anyway; a scorer quote from
         # Tuesday's pull priced as Saturday's pick is the false pick
         # Ethan means, and a game with no quote is the honest state.
-        if not oddsapi.price_is_current(age, oddsapi._max_prop_price_age()):
+        if not oddsapi.price_is_showable(age, oddsapi._max_prop_price_show_age()):
             stale += 1
             stale_oldest = max(stale_oldest, float(age or 0.0))
             continue
+        # Inside the show ceiling but past the freshness bar: KEPT, and
+        # counted on its own line. Counting it with the refusals would
+        # have the note say "kept NO player quotes" about games whose
+        # quotes are on the board — the board would be calling itself a
+        # liar in its own footer.
+        if not oddsapi.price_is_current(age, oddsapi._max_prop_price_age()):
+            shown_stale += 1
+            shown_stale_oldest = max(shown_stale_oldest, float(age or 0.0))
         if age is not None:
             oldest = age if oldest is None else max(oldest, age)
         pulled += 1
@@ -406,11 +427,20 @@ def attach_player_quotes(games: list[dict], priced: dict, cache_only: bool,
         note += (f" · {len(cands) - cap} left unpriced — the pull is capped "
                  f"at {cap} game(s) by attention tier "
                  f"({'budget pacing' if cap < PLAYER_EVENT_CAP else 'board policy'})")
+    if shown_stale:
+        # SHOWN, AND SAID SO. Between the freshness bar and the show
+        # ceiling the last paid pull's real price is the best number
+        # anyone has; refusing it left the board with barely any
+        # touchdowns on it. The card carries the same warning.
+        note += (f" · {shown_stale} game(s) priced from a pull "
+                 f"{shown_stale_oldest / 3600:.1f}h old, past the "
+                 f"{oddsapi._max_prop_price_age() / 3600:.0f}h freshness bar "
+                 f"(QB_MAX_PROP_PRICE_AGE) — shown and marked, not recommended")
     if stale:
         note += (f" · {stale} game(s) kept NO player quotes: the cached payload "
                  f"is {stale_oldest / 3600:.1f}h old, past the "
-                 f"{oddsapi._max_prop_price_age() / 3600:.0f}h ceiling "
-                 f"(QB_MAX_PROP_PRICE_AGE) — no price beats a wrong price")
+                 f"{oddsapi._max_prop_price_show_age() / 3600:.0f}h ceiling "
+                 f"(QB_MAX_PROP_PRICE_SHOW_AGE) — no price beats a wrong price")
     return scorers, lines, note, oldest
 
 
@@ -729,6 +759,12 @@ def build_plays(games: list[dict], priced: dict, ratings: dict,
             "situational_fit": cfbcontext.situational_fit(tags),
             "matchup_fit": cfbcontext.matchup_fit(hr.games, ar.games),
             "situational_tags": tags,
+            # HOW OLD THE PRICE BEHIND THIS PLAY IS, and whether that age
+            # is past the freshness bar. `_card` reads both off the play;
+            # neither was ever put on one, so every college card dated
+            # itself None. The board carries them per entry (attach_odds).
+            "price_age_s": lines.get("price_age_s"),
+            "price_stale": bool(lines.get("price_stale")),
         }
         context = [f"Ratings: {g['home']} {hr.net:+.1f}, {g['away']} "
                    f"{ar.net:+.1f} net points/game over "
@@ -866,6 +902,15 @@ def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
     card["book"] = _book_for_side(card["market"], card.get("team", ""),
                                   card.get("side", ""), lines,
                                   g["home"], g["away"])
+    # The age of the price this card was built on, and whether it is past
+    # the freshness bar — same two fields the model cards carry, so a
+    # sharp card cannot be the one row on the page with no date on it.
+    card["price_age_s"] = lines.get("price_age_s")
+    card["price_stale"] = bool(lines.get("price_stale"))
+    if card["price_stale"]:
+        card.setdefault("warnings", []).append(
+            "Price is older than our freshness bar — shown with its age, "
+            "not recommended until a fresh pull confirms it")
     card["sharp_anchored"] = True
     if not BET_GROUP_OF_FIVE and is_group_of_five(g):
         card["grade"] = "Pass"
@@ -876,6 +921,7 @@ def _finish_sharp(card: dict, g: dict, lines: dict) -> dict:
             "Game already started — a pre-game price cannot be taken in play")
     card["recommended"] = (card["grade"] not in ("Pass", "Lean")
                            and float(card.get("stake_units") or 0) > 0
+                           and not card["price_stale"]
                            and not started)
     return card
 
@@ -1018,6 +1064,7 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         # How old the payload behind this card's prices was, in seconds.
         "price_age_s": (play.get("price_age_s")
                         if play.get("price_age_s") is not None else None),
+        "price_stale": bool(play.get("price_stale")),
         "priced_from": "board",
         # Whose price this is, on BOTH sides. `_book_for_side` names the
         # book behind the side the card took; the likelihood board flips

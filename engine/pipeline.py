@@ -560,11 +560,23 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     started = game_has_started(g)
     # No Leans (docs §10): a lean is a bet that failed the filter published
     # anyway. Lean-graded game bets still render, but never as picks.
+    # A STALE PRICE IS SHOWN, NEVER RECOMMENDED. The two ceilings in
+    # `oddsapi` split "too old to bet" from "too old to show": between
+    # them the card goes on the page with its age on it, and this is
+    # where the second half of that promise is kept. Reading the flag off
+    # the game rather than the row because `_finish_bet` is the one place
+    # every game card passes through.
+    _stale_price = bool(getattr(g, "price_stale", False))
     d["recommended"] = (d["grade"] not in ("Pass", "Lean")
                         and d["confidence"] >= config.min_confidence
                         and d["edge"] >= config.min_edge
                         and d["odds"] >= config.max_juice
+                        and not _stale_price
                         and not (config.block_live_games and started))
+    if _stale_price:
+        d.setdefault("warnings", []).append(
+            "Price is older than our freshness bar — shown with its age, "
+            "not recommended until a fresh pull confirms it")
     if started:
         d.setdefault("warnings", []).append(
             "Game already started — pre-game model cannot price an in-play market")
@@ -593,6 +605,12 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # engine.models.Game.price_age_s and oddsapi.MAX_GAME_PRICE_AGE).
     d["price_age_s"] = getattr(g, "price_age_s", None)
     d["priced_from"] = getattr(g, "priced_from", "") or ""
+    # …AND WHETHER THAT AGE IS PAST THE FRESHNESS BAR. The row still
+    # SHOWS — an empty board is its own failure (Ethan, 2026-09-08: "We
+    # have barely any moneylines show and barley and touchdowns shown")
+    # — but a price that may have moved cannot be handed to a reader as a
+    # current recommendation, so `recommended` is withdrawn below.
+    d["price_stale"] = bool(getattr(g, "price_stale", False))
     # …AND WHOSE PRICE IT IS. Both sides ride along, because the
     # likelihood board flips a card to the favourite and the book has to
     # flip with the price (`likely.from_game_bet`).

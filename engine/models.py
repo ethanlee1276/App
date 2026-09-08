@@ -362,6 +362,12 @@ class Game:
     #: could tell an old price from a wrong one.
     price_age_s: float | None = None
     priced_from: str = ""
+    #: True when the price is OLDER than the freshness ceiling but still
+    #: inside the show ceiling — a real quote that may have moved. The
+    #: row goes on the page carrying its age; nothing may present it as a
+    #: current recommendation. See `oddsapi.MAX_GAME_PRICE_SHOW_AGE` for
+    #: why showing-and-labelling beats refusing.
+    price_stale: bool = False
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (points scored / allowed vs league baseline) for the

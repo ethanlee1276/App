@@ -24,6 +24,17 @@ and which knob widens the ceiling, and `player_priced_at` dates only
 what was actually used. The "oldest quote" reading below still covers
 the band it was written for — older than the TTL, younger than the
 ceiling — which on the touchpoint cadence is the ordinary afternoon.
+
+AND THEN THE CEILING SPLIT IN TWO (same day, hours later). One ceiling
+at six hours refused every price the droplet had not re-pulled inside
+six hours, which on a box whose pull runs every forty-five minutes but
+whose network is not always up meant a board with almost nothing on it —
+Ethan: "We have barely any moneylines show and barley and touchdowns
+shown." Six hours is now the FRESHNESS bar, above which a price is not
+fresh enough to RECOMMEND; forty-eight hours is the SHOW ceiling, above
+which it is not worth showing at all. Between them the price goes on the
+board carrying its age, because the last paid pull's real number beats
+an empty shelf and beats a proxy.
 """
 
 import datetime as dt
@@ -122,22 +133,51 @@ def test_a_days_old_payload_is_refused_not_reported():
     """The pin this file shipped with said a three-day-old payload is used
     and dated. It is refused now (tests/test_stale_price_ceiling.py has
     the measurement): nothing was used, so nothing is dated, and the
-    note says what happened and how old the payload was."""
+    note says what happened and how old the payload was.
+
+    Three days is past the SHOW ceiling too, so this case did not move
+    when the ceiling split in two — only the knob it names did."""
     scorers, lines, note, age = _pull(3 * 86400.0)
     assert scorers == {} and lines == {}, (scorers, lines)
     assert age is None, "a refused payload must not date the board"
     assert "kept NO player quotes" in note and "72.0h old" in note, note
-    assert "QB_MAX_PROP_PRICE_AGE" in note, note
+    assert "QB_MAX_PROP_PRICE_SHOW_AGE" in note, note
     assert "oldest quote on this board" not in note, note
 
 
-def test_the_reading_and_the_ceiling_meet_at_six_hours():
-    """Just inside the ceiling a payload is used and its age reported;
-    just past it, refused. The two cannot both be true of one age."""
+def test_the_freshness_bar_marks_and_the_show_ceiling_refuses():
+    """The single six-hour ceiling this test was written for became two
+    (2026-09-08). Six hours is where a price stops being FRESH enough to
+    recommend; forty-eight is where it stops being worth SHOWING at all.
+    Between them the last paid pull's real price goes on the board with
+    a warning, because refusing it emptied the touchdown shelf on the
+    eve of Week 1 — Ethan: "barely and touchdowns shown"."""
+    import engine.sources.oddsapi as O
+    # Inside both: used, dated, no warning about it.
     _s, _l, note, age = _pull(6 * 3600.0 - 60.0)
-    assert age == 6 * 3600.0 - 60.0 and "oldest quote on this board" in note, note
+    assert age == 6 * 3600.0 - 60.0, age
+    assert "oldest quote on this board" in note, note
+    assert "kept NO player quotes" not in note, note
+    assert "shown and marked" not in note, note
+    # Past the freshness bar, inside the show ceiling: KEPT and marked.
     _s, _l, note, age = _pull(6 * 3600.0 + 60.0)
-    assert age is None and "kept NO player quotes" in note, note
+    assert age == 6 * 3600.0 + 60.0, "a showable payload must still date the board"
+    assert "shown and marked, not recommended" in note, note
+    assert "kept NO player quotes" not in note, \
+        "the footer calls a quote on the board a quote it never kept"
+    # Past the show ceiling: refused, and nothing dates the board.
+    _s, _l, note, age = _pull(O.MAX_PROP_PRICE_SHOW_AGE + 60.0)
+    assert age is None, age
+    assert "kept NO player quotes" in note, note
+
+
+def test_the_two_ceilings_are_not_the_same_number():
+    """A show ceiling equal to the freshness bar is the regression this
+    split undid: every price past six hours vanishes instead of being
+    labelled."""
+    import engine.sources.oddsapi as O
+    assert O.MAX_PROP_PRICE_SHOW_AGE > O.MAX_PROP_PRICE_AGE, \
+        (O.MAX_PROP_PRICE_SHOW_AGE, O.MAX_PROP_PRICE_AGE)
 
 
 def test_hours_are_reported_in_hours():
