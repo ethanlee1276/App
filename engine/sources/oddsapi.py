@@ -1588,6 +1588,11 @@ class OddsAttachResult:
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
     reversed_events: int = 0
+    #: Games left alone because the price already on them is YOUNGER than
+    #: this payload. A refresh that makes a number older is not a
+    #: refresh, and the count says how often this pass had nothing to
+    #: add rather than leaving that as silence.
+    older_than_attached: int = 0
     # Events that DID place on the slate but had no cached payload, in
     # cache_only mode. Without this a cached rebuild looks identical whether
     # the join improved or not: the events match, then vanish one line later
@@ -1818,6 +1823,11 @@ class BoardLinesResult:
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
     reversed_events: int = 0
+    #: Games left alone because the price already on them is YOUNGER than
+    #: this payload. A refresh that makes a number older is not a
+    #: refresh, and the count says how often this pass had nothing to
+    #: add rather than leaving that as silence.
+    older_than_attached: int = 0
 
 
 def apply_board_lines_to_slate(slate, api_key: str | None = None,
@@ -1946,6 +1956,21 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         # rematch's prices onto this game's teams without a murmur.
         if not _same_meeting(home, away, game):
             result.reversed_events += 1
+            continue
+        # A FRESHER PRICE IS NEVER REPLACED BY AN OLDER ONE.
+        #
+        # This pass runs AFTER the event pull, so without this it would
+        # overwrite whatever that attached — and on a cycle where the
+        # event payload is minutes old and this file is hours old, the
+        # cheap refresh would be a downgrade wearing the word "refresh".
+        # The reverse is the case it exists for: an event payload
+        # eighteen hours old beside a whole-slate pull twelve minutes
+        # old, which is what the board carried on the night of the
+        # season opener.
+        _cur = getattr(game, "price_age_s", None)
+        if (_cur is not None and board_age is not None
+                and float(_cur) < float(board_age)):
+            result.older_than_attached += 1
             continue
 
         # The parsers key on the exact strings THIS payload uses, so the map

@@ -281,6 +281,20 @@ def _mem_report() -> None:
               f"resident — a smaller problem than a spike, but a lasting one)")
 
 
+def _with_board_cache(sport: str = "nfl") -> bool:
+    """Is there a whole-slate lines payload on disk to read for free?
+
+    The pacer decides whether to BUY one. This decides whether there is
+    one to LOOK AT, which is a different question and costs nothing to
+    answer — see the note at the call site.
+    """
+    try:
+        from engine.sources.fetch import CACHE_DIR
+        return any(CACHE_DIR.glob(f"odds_board_{sport}*.json"))
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build an nflverse slate and run the model.")
     ap.add_argument("season", type=int)
@@ -698,11 +712,29 @@ def main() -> None:
     # SECOND stamp rather than an overwrite of the first: a board whose
     # spread is four minutes old and whose props are two hours old must
     # not report one number for both.
-    if args.board_odds:
+    # THE BUDGET GATES THE PULL, NOT THE READ.
+    #
+    # `--board-odds` means "you may SPEND three credits to refresh the
+    # whole slate's game lines". It never meant "you may look at the
+    # payload we already bought", and on 2026-09-09 those two were the
+    # same sentence: the board carried 18-hour-old event prices while a
+    # 12-minute-old whole-slate payload sat unread in the cache, because
+    # the pacer had declined the spend on that cycle. Reading a file
+    # costs nothing, so a cache-only pass runs either way, and
+    # `apply_board_lines_to_slate` refuses to make any price older than
+    # the one already on the game (see `older_than_attached`).
+    #
+    # Ethan, 2026-09-03, on prices an hour behind the page: "Getting the
+    # wrong numbers can fuck our picks bad."
+    if args.board_odds or _with_board_cache("nfl"):
         try:
             books = args.books.split(",") if args.books else None
-            bres = oddsapi.apply_board_lines_to_slate(slate, books=books)
+            bres = oddsapi.apply_board_lines_to_slate(
+                slate, books=books, cache_only=not args.board_odds)
             odds_status.update(
+                board_from_cache=not args.board_odds,
+                board_older_than_attached=bres.older_than_attached,
+                board_reversed_events=bres.reversed_events,
                 board_games=bres.games_priced,
                 board_moneylines=bres.moneylines,
                 board_totals=bres.totals,
@@ -729,11 +761,25 @@ def main() -> None:
                       f"An empty board is worse than a dated one.")
             if bres.quota.remaining is not None:
                 odds_status["quota_remaining"] = bres.quota.remaining
+            # SAY WHICH IT WAS. "from 1 request" on a pass that made no
+            # request is a small lie of the exact kind this file keeps
+            # having to unpick, and the difference matters: one costs
+            # three credits and one costs nothing.
+            _how = ("from the cached pull (no request)" if not args.board_odds
+                    else f"from 1 request (quota remaining "
+                         f"{bres.quota.remaining})")
             print(f"\nGame lines: refreshed {bres.games_priced} of "
-                  f"{len(slate.games)} game(s) from 1 request — "
+                  f"{len(slate.games)} game(s) {_how} — "
                   f"{bres.moneylines} moneyline, {bres.spreads} spread, "
-                  f"{bres.totals} total (quota remaining "
-                  f"{bres.quota.remaining}).")
+                  f"{bres.totals} total.")
+            if bres.older_than_attached:
+                print(f"  {bres.older_than_attached} game(s) left alone — "
+                      f"the price already on them is younger than this "
+                      f"payload, and a refresh that makes a number older "
+                      f"is not a refresh.")
+            if bres.reversed_events:
+                print(f"  {bres.reversed_events} event(s) refused as the "
+                      f"other meeting of the same two teams.")
             for d in bres.dropped_events[:4]:
                 print(f"  ⚠️  {d.get('away', '')} @ {d.get('home', '')}: "
                       f"{d.get('reason', '')}")

@@ -400,15 +400,26 @@ def test_cached_with_nothing_on_disk_is_empty_not_an_error():
 
 # --- the build ---------------------------------------------------------------
 def test_the_build_takes_the_flag_and_runs_it_after_the_cached_prices():
-    """Order is the point: --board-odds layers OVER --cached-odds, so the
-    cached game prices are overwritten with current ones and the cached
-    prop prices are left alone. Running it first would have the cached
-    pull put hour-old moneylines back."""
+    """Order is the point: the game-lines pass layers OVER --cached-odds,
+    so the cached game prices are refreshed and the cached prop prices are
+    left alone. Running it first would have the cached pull put hour-old
+    moneylines back.
+
+    THE CONDITION WIDENED ON 2026-09-09 and the ordering did not. The
+    pass now runs whenever there is a payload to READ, not only when the
+    pacer authorised a SPEND — see tests/test_free_lines.py. What keeps
+    that safe is the freshness rule inside `apply_board_lines_to_slate`,
+    which refuses to make any price older than the one already attached;
+    the ordering pinned here is what makes that rule the only thing
+    standing between the two passes."""
     assert '"--board-odds"' in BUILD, "the flag is gone"
     cached = BUILD.index("if args.odds or args.cached_odds:")
-    board = BUILD.index("if args.board_odds:")
+    board = BUILD.index('if args.board_odds or _with_board_cache("nfl"):')
     assert board > cached, "the cheap refresh runs before the cached one"
     assert "apply_board_lines_to_slate" in BUILD
+    # And the spend is still gated on the flag: reading is free, buying
+    # is not.
+    assert "cache_only=not args.board_odds" in BUILD
 
 
 def test_the_lines_get_their_own_stamp():
@@ -428,7 +439,7 @@ def test_the_lines_get_their_own_stamp():
 
 
 def _board_odds_block() -> str:
-    """The whole `if args.board_odds:` body, bounded by indentation.
+    """The whole game-lines pass body, bounded by indentation.
 
     Bounded by a character count first, which worked until the block grew
     — a build that added a diagnostic line pushed the guard out of the
@@ -436,7 +447,8 @@ def _board_odds_block() -> str:
     measure it that way.
     """
     lines = BUILD.splitlines()
-    start = next(n for n, ln in enumerate(lines) if "if args.board_odds:" in ln)
+    start = next(n for n, ln in enumerate(lines)
+                 if "if args.board_odds or _with_board_cache" in ln)
     col = len(lines[start]) - len(lines[start].lstrip())
     out = [lines[start]]
     for ln in lines[start + 1:]:
