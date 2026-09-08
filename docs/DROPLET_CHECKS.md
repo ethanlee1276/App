@@ -656,6 +656,21 @@ climb by 16 a week. A 49 that survives the deploy means ESPN ignored
 the parameter, and the fallback is to read the count off our own
 ingest before the 10th — say so and it is a small change.
 
+**2026-09-08, asked a third time.** The section was drawn LAST on the
+page — under eight division tables on the NFL, under 130-odd conference
+rows on the CFB — and the page's empty-table branch returned before
+reaching it, so an NFL feed that answers with no teams before kickoff
+hid the 09-05 wait section entirely. The rankings lead the football
+page now (the nav button says "Rankings"), an empty table no longer
+hides them, and the page title reads "NFL rankings & standings". What
+to see, no command needed: open Rankings on the NFL and the first
+heading is **Team rankings**, thirty-two teams ranked on 2025 until the
+first 2026 finals; on the CFB the same heading, ranked on this season's
+finished games (82 teams on 09-05). If the NFL heading is there but
+the two columns are not, the NFL board is missing `team_shapes` —
+`python3 -c "import json; d=json.load(open('web/data/recommendations.json')); print(len(d.get('team_shapes') or {}), d.get('team_shapes_season'))"`
+should print `32 2025`.
+
 
 ## 9. The explainer, once its package and keys are on the box
 

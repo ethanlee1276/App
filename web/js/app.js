@@ -21712,11 +21712,12 @@ function unitRankingsWaitHTML(d) {
         d.first_games ? ` — first games ${escapeHtml(d.first_games)}` : ""}.
         Scoring rankings start with the first finals.`
     : d.feed_error
-      ? `No ${season} scoring rankings yet — the league feed was unreachable
-         on the last build, and fewer than four teams have a finished game
-         on file.`
-      : `No ${season} scoring rankings yet — fewer than four teams have a
-         finished game on file.`;
+      ? `${season} has no scoring rankings of its own yet — the league feed
+         was unreachable on the last build, and fewer than four teams have
+         a finished game on file.`
+      : `${season} has no scoring rankings of its own yet — fewer than four
+         teams have a finished game on file. They start with the first
+         finals.`;
   const shapes = (state.data || {}).team_shapes || {};
   const shapeSeason = (state.data || {}).team_shapes_season || "";
   const teams = Object.keys(shapes).filter((t) => shapes[t] && shapes[t].raw);
@@ -21754,9 +21755,15 @@ function unitRankingsWaitHTML(d) {
         ${col("Defense", `points allowed per game, ${shapeSeason}`, "defense", true)}
       </div>`;
   }
+  // The heading says what is ranked BELOW it: last season's finished
+  // games until this one has its first, not "no rankings" over a table
+  // of thirty-two ranked teams.
   return `
     <div class="section-title">Team rankings
-      <span class="sub">— scoring offense and defense, from finished games</span></div>
+      <span class="sub">— scoring offense and defense${fallback
+        ? ` · ranked on the ${escapeHtml(String(shapeSeason))} season’s finished
+           games until ${escapeHtml(String(season))} has its first`
+        : ", from finished games"}</span></div>
     <p class="rail-quiet" style="margin:0 0 ${fallback ? "6px" : "22px"}">${why}</p>
     ${fallback}`;
 }
@@ -21767,8 +21774,10 @@ async function renderStandings() {
   const sport = state.sport || "nfl";
   const d = await loadStandings(sport);
   const title = document.getElementById("standings-title");
+  const isFootball = sport === "nfl" || sport === "cfb";
   if (title) title.childNodes[0].nodeValue =
-    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} standings `;
+    `${(SPORT_META[sport] || {}).label || sport.toUpperCase()} ${
+      isFootball ? "rankings & standings" : "standings"} `;
   const sub = document.getElementById("standings-sub");
   if (sub) {
     /* WHERE THE NUMBERS CAME FROM. The page used to say "counted from our
@@ -21794,8 +21803,18 @@ async function renderStandings() {
               : "— counted from our own results.");
   }
   const groups = d.groups || [];
+  /* THE RANKINGS LEAD ON A FOOTBALL PAGE. Ethan asked on 09-02, 09-05
+     and 09-08 in the same words: "For nfl and cfb on the rankings page,
+     we should have a section ranking the current ranking for teams
+     defense and offense." Built on 09-02 and drawn LAST — under eight
+     division tables on the NFL, under 130-odd rows on the CFB — and the
+     empty-table branch below returned before reaching them, which before
+     Week 1 is the NFL on every day the feed answers with no teams. The
+     nav button that opens this page says "Rankings": the rankings are
+     the first thing on it now, and an empty table cannot hide them. */
+  const rankings = unitRankingsHTML(d.unit_rankings, d);
   if (!groups.length) {
-    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+    host.innerHTML = `${rankings}<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
       <h3>${d.season_wait
         ? `Waiting on the ${d.season} season`
         : "No standings yet"}</h3><p>${escapeHtml(d.note
@@ -21817,11 +21836,12 @@ async function renderStandings() {
         counted games, not the league’s table.</b> ${escapeHtml(d.note)}</p></div>` : "";
   host.innerHTML = `
     ${fallbackBanner}
+    ${rankings}
     ${b.started ? `<div class="section-title tight">Postseason
         <span class="sub">— every matchup here was played. Series scores are
         games won, so an unfinished series shows where it stands.</span></div>
       ${bracketHTML(b)}` : ""}
-    <div class="section-title"${b.started ? "" : ' style="margin-top:0"'}>Teams
+    <div class="section-title"${b.started || rankings ? "" : ' style="margin-top:0"'}>Teams
       <span class="sub">— ${groups.length} group(s)</span></div>
     ${groups.length > 2 ? `<div class="std-chips">
       <button class="al-cat${!_stdGroup ? " on" : ""}" type="button"
@@ -21837,7 +21857,6 @@ async function renderStandings() {
           || (g.label || g.conference || "") === _stdGroup)
         .map((g) => standingsGroupHTML(g, d.score_label)).join("")}
     </div>
-    ${unitRankingsHTML(d.unit_rankings, d)}
     ${pressureHTML(d.pressure, d)}
     ${b.started ? "" : seedsHTML(d.projected_seeds)}
     ${b.started ? "" : `<div class="ls-note">${escapeHtml(b.note || "")}</div>`}`;

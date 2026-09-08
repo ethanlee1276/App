@@ -75,7 +75,10 @@ def test_the_scoring_rankings_render_exactly_as_before_when_present():
 
 
 def test_the_page_hands_the_table_over():
-    assert "${unitRankingsHTML(d.unit_rankings, d)}" in APP
+    # Drawn once into `rankings` and placed FIRST on the page (2026-09-08,
+    # tests/test_rankings_lead.py), not slotted at the bottom.
+    assert "const rankings = unitRankingsHTML(d.unit_rankings, d);" in APP
+    assert "${rankings}" in APP
 
 
 if __name__ == "__main__":
