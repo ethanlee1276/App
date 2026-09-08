@@ -262,8 +262,14 @@ def test_the_over_claim_records_the_count_that_declined_it():
     chat window instead of beside the terms it decided about."""
     import inspect
     src = inspect.getsource(prereg)
-    assert "MEASURED 2026-09-09, AND THE ANSWER IS NO" in src
+    assert "MEASURED 2026-09-09, AND STILL NOT REGISTERED" in src
     assert "OVER    11" in src and "UNDER   12" in src
+    # The first reading of that count was wrong, and the note has to keep
+    # saying so: the `date >= '2025-09-01'` window filtered nothing,
+    # because a season-week label passes it unconditionally. Deleting the
+    # correction would leave a plausible, wrong story behind.
+    assert "THE FIRST READING WAS WRONG" in src
+    assert "Register it when the NFL journal" in src
 
 
 def test_the_declined_terms_were_not_trimmed_to_fit_the_count():
@@ -291,6 +297,16 @@ def test_the_note_names_what_would_make_the_question_askable():
     assert "POOL THE FOOTBALL" in src
     assert "needs the CFB count first" in src
     assert "STOP ASKING IT WITH ROI" in src
+
+
+def test_the_gate_census_reading_is_recorded_beside_it():
+    """286 analysed, 8 recommended, and the funnel under it. That is what
+    task #164 has to answer, and a number that lives only in a chat
+    window is a number the next reader has to take on trust."""
+    import inspect
+    src = inspect.getsource(prereg)
+    assert "286 props" in src and "108 died at" in src
+    assert "No market's bar" in src
 
 
 def test_the_over_claim_says_its_evidence_is_a_lead_not_a_finding():

@@ -896,27 +896,44 @@ LONG_PRICE_MLB = {
 #: the runway actually reaches and say in `metric` what that costs, or
 #: to leave it drafted — not to register a clock that never rings.
 #:
-#: MEASURED 2026-09-09, AND THE ANSWER IS NO. Ethan ran it on the
-#: droplet. Every NFL player-prop bet the edge board has journaled since
-#: 2025-09-01 — a full season and the twelve months after it:
+#: MEASURED 2026-09-09, AND STILL NOT REGISTERED — but for a different
+#: reason than the first reading of the count suggested. Ethan ran it on
+#: the droplet:
 #:
 #:     OVER    11
 #:     UNDER   12
 #:
-#: Twenty-three bets. `min_n: 80` needs roughly three more NFL seasons at
-#: that rate, so this is not registered, and it is not registered for
-#: precisely the reason `HEAVY_PRICE_EDGE` above it is not: a
-#: preregistration against a population the book does not bet reports "0
-#: of 80" forever while looking healthy, and looking healthy is what
-#: makes it worse than nothing. The terms below are LEFT EXACTLY AS
-#: DRAFTED rather than trimmed to fit, because a record of what was
-#: originally asked is the thing this module exists to keep. Nothing was
-#: frozen — `register()` is the call that freezes, and it was never made
-#: — so no goalpost has moved.
+#: THE FIRST READING WAS WRONG AND IT IS WORTH SAYING WHY, because the
+#: mistake is the same one `_is_day` was written for an hour later. The
+#: query carried `AND date >= '2025-09-01'`, and that clause filtered
+#: NOTHING: the NFL journals a season-week label, and a week label sorts
+#: above every ISO day in its own year, so every football row passed the
+#: window unconditionally. So 23 is not "a season's worth". It is EVERY
+#: NFL player-prop bet this journal has ever held, and all of them sit
+#: under one season-week prefix, on the day the season opens. The NFL
+#: prop book starts at Week 1; there is no history behind it at all.
 #:
-#: AND THE COUNT SAYS SOMETHING THE LEAD DID NOT. The live book is 11
-#: overs to 12 unders. The replay's admitted arm was 61 to 22, three
-#: quarters overs. Those are different populations — the replay prices
+#: Which flips the sizing. Twenty-three bets in the first week is about
+#: eleven OVERs a week, and `min_n: 80` then arrives around week seven —
+#: comfortably inside an 18-week season. The population is NOT too thin.
+#:
+#: WHAT BLOCKS IT NOW IS THE JOURNAL, NOT THE RATE. Until `bets.date`
+#: carries a calendar day for the NFL, `verdict` drops every football row
+#: it cannot place in time (see `_is_day`), so this test would sit at "0
+#: of 80" forever and say so out loud. That is the correct behaviour and
+#: it is still a blocker: registering now would start a clock against a
+#: population the reader cannot see. Register it when the NFL journal
+#: writes a day.
+#:
+#: The terms below are LEFT EXACTLY AS DRAFTED rather than trimmed,
+#: because a record of what was originally asked is the thing this module
+#: exists to keep. Nothing was frozen — `register()` is the call that
+#: freezes, and it was never made — so no goalpost has moved.
+#:
+#: AND THE COUNT SAYS SOMETHING THE LEAD DID NOT — more sharply now that
+#: the rows are known to be a single week's selection rather than a
+#: year's. Week 1 went out 11 overs to 12 unders. The replay's admitted
+#: arm was 61 to 22, three quarters overs. Those are different populations — the replay prices
 #: historical seasons through today's model, the journal is what the
 #: board actually took — but the production board is plainly not
 #: currently selecting three-to-one overs, which is the premise the
@@ -942,12 +959,12 @@ LONG_PRICE_MLB = {
 #:      about the same suspected fault — and it is the hypothesis lab's
 #:      machine next door, not this one's.
 #:
-#: THE OTHER FINDING, and it is probably the bigger one: 23 NFL prop
-#: bets in a year is the edge board betting NFL props about once a week.
-#: Whether that is selectivity working or a filter quietly eating the
-#: board is task #164's actual question, and it is not answerable from
-#: this count alone — 23 could be a rate, or it could be the startup
-#: artefact of a journal that only began carrying NFL props recently.
+#: THE OTHER FINDING, from the gate census the same evening: 286 props
+#: analysed, 8 recommended. 113 never got a real price, 108 died at
+#: calibration, 56 graded Pass, 1 was held on an injury. No market's bar
+#: was unreachable, which rules out the worst case — the board is
+#: refusing props, not being refused by its own thresholds. The 108 is
+#: task #164's actual question.
 OVER_BIAS_NFL = {
     "id": "over-bias-nfl-2026-09",
     "claim": ("NFL player props the edge board recommends on the OVER lose "

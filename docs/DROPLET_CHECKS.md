@@ -2418,31 +2418,43 @@ for side, n in c.execute(\"\"\"
 * Send me both numbers. Registering is one line and I will not write it
   until they say the test can finish.
 
-### The answer, 2026-09-09: no
+### The answer, 2026-09-09 — and what the answer turned out to mean
 
     OVER    11
     UNDER   12
 
-Twenty-three bets — every NFL player prop the edge board has journaled
-since 2025-09-01. `min_n: 80` needs roughly three more NFL seasons at
-that rate, so **`OVER_BIAS_NFL` is not registered**, and the terms are
-left exactly as drafted rather than trimmed to fit the count that failed
-them. Trimming would be fitting the test to the sample that just told us
-it does not fit.
+Twenty-three bets, and the first thing to say is that **the window in
+that query filtered nothing**. `AND date >= '2025-09-01'` looks like it
+scopes to last season. It does not: the NFL journals a season-week label
+(`2026-W01`, from the slate key in `engine/sources/nflverse.py`), and a
+week label string-sorts above every ISO day in its own year. Every
+football row passed the window unconditionally.
 
-The count also says something the lead did not. The live book is 11 overs
-to 12 unders; the replay's admitted arm was 61 to 22. Those are different
-populations, but the production board is plainly not selecting
-three-to-one overs, which is the premise the whole lead rested on. A
-one-sided error in the PROJECTION and a one-sided SELECTION are two
-different claims, and the segment table ran them together.
+So 23 is not a season's worth. It is **every NFL player-prop bet this
+journal has ever held**, all under one season-week prefix, on the day the
+season opens. The NFL prop book starts at Week 1 with no history behind
+it — which flips the sizing entirely: 23 bets in the first week is about
+eleven OVERs a week, and `min_n: 80` lands around week seven, comfortably
+inside an 18-week season.
 
-Two things are still unknown, and one query answers both. Is 23 a RATE or
-the startup artefact of a journal that only recently began carrying NFL
-props — and would pooling the college book make the question askable at
-all? The second half re-counts by category and market as well, because a
-population hiding under a market name nobody filtered on is the failure
-`TD_EDGE_NFL` nearly died of.
+**`OVER_BIAS_NFL` is still not registered, for a different reason.**
+Until `bets.date` carries a calendar day for the NFL, `verdict` drops
+every football row it cannot place in time, so the test would sit at "0
+of 80" forever — correctly, and out loud, but forever. It is blocked on
+the journal, not on the rate. Register it when the NFL journal writes a
+day.
+
+The near-parity reading survives and gets sharper: Week 1's actual
+selection went out 11 overs to 12 unders, against the replay's 61 to 22.
+The production board is not selecting three-to-one overs, which was the
+premise the whole lead rested on. A one-sided error in the PROJECTION and
+a one-sided SELECTION are two different claims, and the segment table ran
+them together.
+
+One query is still worth running, to see whether pooling the college book
+would make the question askable and to check that no NFL props are hiding
+under a category or market spelling the first query did not name — the
+failure `TD_EDGE_NFL` nearly died of.
 
 ```bash
 cd /srv/qellys && sudo -u qellys python3 -c "
@@ -2465,12 +2477,9 @@ for row in c.execute("""
     print(' ', *row)"
 ```
 
-* If the NFL months are spread evenly across last season, 23 is a rate
-  and the edge board bets NFL props about once a week — which is task
-  #164's real question, not this one's.
-* If they cluster in the last few weeks, 23 is a startup artefact and
-  says nothing about the forward rate; the sizing has to be re-asked
-  after a few live weeks rather than answered now.
+* NFL rows will all read `2026-W0` in the month column. That is not a
+  month — it is the first seven characters of the season-week label, and
+  seeing it there is how this was found.
 * The college rows decide whether pooling the two football leagues is
   worth building. `verdict` filters on one `sport`; a `sports` field
   would go in the same optional, only-hashed-when-carried way `sides`
