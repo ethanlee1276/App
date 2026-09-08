@@ -108,10 +108,23 @@ def test_the_floor_is_the_one_the_module_publishes():
     # The row that DOES clear it is an ordinary row, carrying no label.
     ok = _cfb([_watch("Ok", likely.MIN_PROB)])
     assert len(ok) == 1 and not ok[0].get("reserve"), ok
-    # …and beside a row that clears, the sub-floor row is gone entirely:
-    # the fallback is for an empty board, not a second tier on a good one.
+    # …and beside a row that clears, the sub-floor row is STILL SHOWN,
+    # labelled and underneath it. This pinned the opposite until
+    # 2026-09-09 — "the fallback is for an empty board, not a second tier
+    # on a good one" — and Ethan's screenshot that morning is the reason
+    # it moved: a Touchdown shelf holding exactly one row, against 390
+    # rows refused under the floor. "Still showing no touchdown props or
+    # rushing props." One row is not a board, and with MIN_PROB at 0.55
+    # against anytime-TD probabilities that sit at 20-45% it will keep
+    # being one row. A thin shelf is topped up to RESERVE_LIMIT now.
+    #
+    # What has NOT moved: the row that cleared is first, carries no
+    # label, and the one below it says exactly what it is.
     both = _cfb([_watch("Low", just_under), _watch("Ok", likely.MIN_PROB)])
-    assert [r["player"] for r in both] == ["Ok"], both
+    assert [r["player"] for r in both] == ["Ok", "Low"], both
+    assert not both[0].get("reserve"), both[0]
+    assert both[1].get("reserve") is True, both[1]
+    assert "only 1 touchdown row" in both[1]["reserve_note"], both[1]
 
 
 def test_the_gate_is_one_function_not_two_copies():

@@ -402,14 +402,26 @@ RESERVE_SHELF_WORD = {"td": "touchdown row", "prop": "player prop",
                       "game": "game line"}
 
 
-def reserve_note(kind: str = "") -> str:
-    """The label a reserve row carries, naming its own shelf."""
+def reserve_note(kind: str = "", seated: int = 0) -> str:
+    """The label a reserve row carries, naming its own shelf.
+
+    TWO SENTENCES, because the shelf is topped up rather than only
+    filled. "No touchdown row on this slate cleared it" is false the
+    moment one did — and a shelf holding one real row plus eleven
+    reserve rows is exactly that case. The label is the entire reason
+    these rows are allowed to ship, so it does not get to overstate by
+    one row any more than by a whole board.
+    """
     what = RESERVE_SHELF_WORD.get(kind or "", "")
+    if not what:
+        return ("Below the board’s usual bar — shown because nothing on "
+                "this slate cleared it. Ranked, not recommended.")
+    if seated:
+        return (f"Below the board’s usual bar — shown because only "
+                f"{seated} {what}{'' if seated == 1 else 's'} on this slate "
+                f"cleared it. Ranked, not recommended.")
     return (f"Below the board’s usual bar — shown because no "
-            f"{what} on this slate cleared it. Ranked, not recommended."
-            if what else
-            "Below the board’s usual bar — shown because nothing on "
-            "this slate cleared it. Ranked, not recommended.")
+            f"{what} on this slate cleared it. Ranked, not recommended.")
 
 
 #: The board-wide wording, kept as the name the page and the tests knew.
@@ -1441,7 +1453,7 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
 
     funnel = {k: _funnel() for k in KINDS}
 
-    def one_pass(floor, funnel):
+    def one_pass(floor, funnel, seen=None):
         """Every maker, every row, at one floor. Returns the rows kept.
 
         Lifted out of `build` so the reserve can ask the same question
@@ -1453,7 +1465,12 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
         function cannot disagree with each other.
         """
         out = []
-        seen = set()
+        # THE CALLER MAY HAND IN WHAT IS ALREADY SEATED. The top-up pass
+        # re-offers every row the standard pass took, so it has to know
+        # them — and it has to know them by the SAME key this function
+        # builds, or the dedupe is a second, drifting copy of the rule.
+        # Passing the set in is how that is guaranteed.
+        seen = set() if seen is None else seen
 
         def keep(got, kind: str) -> bool:
             """The one gate. Every row passes through here or does not ship."""
@@ -1515,7 +1532,8 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
             out.append(got)
         return out
 
-    out = one_pass(None, funnel)
+    seated_keys: set = set()
+    out = one_pass(None, funnel, seated_keys)
     # NO SHELF GOES BLANK. Ethan, 2026-09-08: "Also I don't want an empty
     # boar either we need to have picks period", and then, the night
     # before the opener: "We have barely any moneylines show and barley
@@ -1532,25 +1550,47 @@ def build(props: list, td_picks=None, td_watch=None, sport: str = "nfl",
     # keeps the census: the honest answer to "why is the board short" is
     # what the real bar turned away, not what the fallback did.
     #
-    # A shelf that seated even one row is left alone. That also makes
-    # duplicates impossible without a second `seen` set: the only rows
-    # taken from the reserve pass belong to kinds that contributed
-    # nothing to `out`.
+    # THIN COUNTS AS EMPTY, and that is the second correction this
+    # fallback has needed. It first fired only on a wholly empty board;
+    # then only on a wholly empty SHELF. Ethan, 2026-09-09, looking at a
+    # board whose Touchdown shelf held exactly one row and whose Rushing
+    # shelf held five, against 390 rows refused under the floor: "Still
+    # showing no touchdown props or rushing props."
+    #
+    # He is right, and the arithmetic says why. `MIN_PROB` is 0.55, and
+    # anytime-touchdown probabilities cluster between 20% and 45% — only
+    # a bell cow in a good spot clears 55%. So that shelf is near-empty
+    # BY CONSTRUCTION, not because the slate is quiet, and a rule that
+    # waits for it to reach exactly zero will wait forever while showing
+    # one row.
+    #
+    # So each shelf is topped up to RESERVE_LIMIT rather than filled only
+    # when bare. Rows that cleared the real bar keep their places and
+    # their absence of a label; the reserve fills what is left.
+    #
+    # `seated_keys` is what makes that safe. The reserve pass re-offers
+    # every row the standard pass already took, and a shelf that is being
+    # topped up has taken some — so without it, the same touchdown would
+    # appear twice, once labelled. Seeding the pass with the keys it
+    # already issued means the dedupe uses one definition of "the same
+    # row" rather than two.
     seated = {k: 0 for k in KINDS}
     for r in out:
         seated[r.get("kind") or "prop"] = seated.get(r.get("kind") or "prop", 0) + 1
-    empty = [k for k in KINDS if not seated.get(k)]
-    if empty:
-        spare = one_pass(RESERVE_MIN_PROB, {k: _funnel() for k in KINDS})
+    thin = [k for k in KINDS if seated.get(k, 0) < RESERVE_LIMIT]
+    if thin:
+        spare = one_pass(RESERVE_MIN_PROB, {k: _funnel() for k in KINDS},
+                         seated_keys)
         spare.sort(key=lambda r: -float(r["model_prob"] or 0.0))
-        taken = {k: 0 for k in empty}
+        taken = {k: 0 for k in thin}
         for r in spare:
             kind = r.get("kind") or "prop"
-            if kind not in taken or taken[kind] >= RESERVE_LIMIT:
+            if (kind not in taken
+                    or seated.get(kind, 0) + taken[kind] >= RESERVE_LIMIT):
                 continue
             taken[kind] += 1
             r["reserve"] = True
-            r["reserve_note"] = reserve_note(kind)
+            r["reserve_note"] = reserve_note(kind, seated.get(kind, 0))
             # `bettable` IS DELIBERATELY LEFT ALONE. It was set False here
             # first, on the reasoning that a reserve row is not a
             # recommendation — which is true, and the wrong field to say

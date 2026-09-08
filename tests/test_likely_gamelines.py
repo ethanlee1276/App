@@ -505,8 +505,19 @@ def test_the_college_moneyline_reaches_the_likely_board_from_a_refusal():
     # whose card clears the floor. What is pinned here is that these two
     # are turned away by the floor and SAY SO, rather than vanishing into
     # an uncounted no-op the way the whole game half did on 2026-09-03.
-    assert set(kinds) == {"moneyline"}, sorted(kinds)
+    # THE SPREAD AND TOTAL ARE STILL REFUSED BY THE FLOOR — that is what
+    # the census says, and it is what this test is about. Since
+    # 2026-09-09 they also come back LABELLED underneath the moneyline,
+    # because the game shelf is thin and a thin shelf is topped up
+    # (Ethan: "Still showing no touchdown props or rushing props").
+    # Refused and shown-with-a-label are not in tension: the census
+    # records what the bar did, the label records why the row is there.
+    assert set(kinds) == {"moneyline", "spread", "total"}, sorted(kinds)
     assert census.get("under the likelihood floor") == 2, census
+    assert not kinds["moneyline"].get("reserve"), kinds["moneyline"]
+    for m in ("spread", "total"):
+        assert kinds[m].get("reserve") is True, kinds[m]
+        assert "only 1 game line" in kinds[m]["reserve_note"], kinds[m]
     assert all(r["stake_units"] == 0.0 and r["recommended"] is False
                for r in board), "this board ranks and never sizes"
 

@@ -273,18 +273,31 @@ returned nothing at all. Ethan's next report, hours later, was not that:
 That is a board carrying player props with two of its three shelves bare
 — not an empty board by the function's arithmetic, and exactly an empty
 page to the person who opened it for the touchdowns. So each KIND
-(`td`, `prop`, `game`) that comes out with nothing on it draws its own
-reserve, capped at `RESERVE_LIMIT` each, and a shelf that seated even
-one real row is left alone. Two consequences worth stating:
+(`td`, `prop`, `game`) draws its own reserve.
 
-* **The label names its shelf.** `reserve_note(kind)` writes "shown
-  because no touchdown row on this slate cleared it" rather than
-  "nothing on this slate", because a board with twenty props on it
-  cannot truthfully say it has nothing.
-* **No row can be seated twice** without a second `seen` set. The
-  reserve pass re-offers every row the standard pass already took, and
-  the only kinds drawn from are the ones that contributed nothing — so
-  the overlap is empty by construction.
+**And thin counts as empty.** The next morning: Touchdown scorers 1,
+Rushing yards 5, against 390 rows refused under the floor. "Still
+showing no touchdown props or rushing props." He is right, and the
+arithmetic says why — `MIN_PROB` is 0.55 and anytime-touchdown
+probabilities cluster between 20% and 45%, so only a bell cow in a good
+spot clears the bar. That shelf is near-empty BY CONSTRUCTION, and a
+rule that waits for it to reach exactly zero waits forever while showing
+one row. Each shelf is topped up to `RESERVE_LIMIT` instead: rows that
+cleared the real bar keep their places and their absence of a label, and
+the reserve fills what is left. A shelf already at the cap draws
+nothing. Two consequences worth stating:
+
+* **The label names its shelf and counts it.** `reserve_note(kind,
+  seated)` writes "shown because no touchdown row on this slate cleared
+  it" when the shelf was bare and "shown because only 1 touchdown row on
+  this slate cleared it" when it was topped up. A board with twenty
+  props on it cannot truthfully say it has nothing, and a shelf with one
+  pick on it cannot say nothing cleared.
+* **No row can be seated twice.** A shelf being topped up has already
+  taken some of what the reserve pass is about to re-offer, so `build`
+  seeds that pass with the keys the first one issued (`seated_keys`).
+  Passing the set in rather than re-deriving it is what keeps one
+  definition of "the same row" instead of two.
 
 `RESERVE_LIMIT` must therefore stay under half of `LIMIT`: `td` and
 `prop` are both player rows sharing that cap, and both can be empty at

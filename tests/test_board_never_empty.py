@@ -246,18 +246,74 @@ def test_the_other_way_round_too():
     assert not game.get("reserve"), game
 
 
-def test_a_shelf_that_seated_a_row_never_draws_a_reserve():
-    """The reserve is a fallback, not a top-up. A shelf with one real row
-    on it is a working shelf, and adding sub-bar rows beneath it would
-    dilute a board that is doing its job — and would also be the one way
-    a row could appear twice, since the reserve pass re-offers every row
-    the standard pass already seated."""
+def test_a_shelf_with_one_row_on_it_is_topped_up_not_left_alone():
+    """THIS TEST USED TO PIN THE OPPOSITE — "a shelf with one real row on
+    it is a working shelf" — and Ethan disagreed with a screenshot.
+
+    2026-09-09: Touchdown scorers 1, Rushing yards 5, and 390 rows
+    refused under the floor. "Still showing no touchdown props or
+    rushing props." One row is not a board to the person who opened the
+    page for that shelf, and MIN_PROB 0.55 against anytime-TD
+    probabilities that cluster at 20-45% means it will keep being one
+    row. So a thin shelf is topped up to RESERVE_LIMIT.
+
+    The row that cleared the real bar keeps its place AND its lack of a
+    label: it is a pick, and the rows under it are not."""
     strong = _scorer(0.62, implied=0.55, player="Clears The Bar")
     weak = _scorer(0.45, implied=0.42, player="Does Not")
     got = K.build([], td_watch=[strong, weak])
-    assert len(got) == 1, [r["player"] for r in got]
-    assert not got[0].get("reserve"), got
-    assert got[0]["player"] == "Clears The Bar", got
+    assert len(got) == 2, [r["player"] for r in got]
+    real = [r for r in got if not r.get("reserve")]
+    spare = [r for r in got if r.get("reserve")]
+    assert [r["player"] for r in real] == ["Clears The Bar"], real
+    assert [r["player"] for r in spare] == ["Does Not"], spare
+    # …and the label counts what DID clear, rather than claiming nothing did.
+    assert "only 1 touchdown row" in spare[0]["reserve_note"], \
+        spare[0]["reserve_note"]
+
+
+def test_a_full_shelf_is_not_topped_up():
+    """The top-up stops at RESERVE_LIMIT. A shelf already carrying that
+    many real rows is a working shelf and draws nothing."""
+    rows = [_scorer(round(0.60 + i * 0.004, 3), implied=0.55,
+                    player=f"Real {i}") for i in range(K.RESERVE_LIMIT)]
+    rows.append(_scorer(0.45, implied=0.42, player="Below"))
+    got = K.build([], td_watch=rows)
+    assert len(got) == K.RESERVE_LIMIT, len(got)
+    assert not any(r.get("reserve") for r in got), \
+        [r["player"] for r in got if r.get("reserve")]
+
+
+def test_the_top_up_counts_the_real_rows_toward_the_cap():
+    """RESERVE_LIMIT is the shelf's total, not the reserve's own budget.
+
+    Three real rows and a pile of sub-floor ones make a shelf of twelve,
+    not of fifteen. Written after a mutant that dropped the seated count
+    from the cap survived every other test here: the full-shelf case
+    below never reaches this arithmetic, because a shelf already at the
+    cap is not thin and draws nothing at all.
+    """
+    rows = [_scorer(round(0.60 + i * 0.004, 3), implied=0.55,
+                    player=f"Real {i}") for i in range(3)]
+    rows += [_scorer(round(0.41 + i * 0.004, 3), implied=0.40,
+                     player=f"Spare {i}") for i in range(20)]
+    got = K.build([], td_watch=rows)
+    assert len(got) == K.RESERVE_LIMIT, len(got)
+    assert sum(1 for r in got if not r.get("reserve")) == 3, got
+    assert sum(1 for r in got if r.get("reserve")) == K.RESERVE_LIMIT - 3, got
+
+
+def test_a_topped_up_shelf_never_shows_the_same_row_twice():
+    """The reserve pass re-offers every row the standard pass took, so a
+    shelf being topped up has already seated some of what it is about to
+    be handed. `seated_keys` is what stops the same touchdown appearing
+    once as a pick and once labelled."""
+    rows = [_scorer(0.62, implied=0.55, player="Clears The Bar"),
+            _scorer(0.58, implied=0.52, player="Also Clears"),
+            _scorer(0.45, implied=0.42, player="Does Not")]
+    got = K.build([], td_watch=rows)
+    names = [r["player"] for r in got]
+    assert len(names) == len(set(names)), names
 
 
 def test_no_row_is_seated_twice_when_one_shelf_falls_back():

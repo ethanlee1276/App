@@ -97,13 +97,26 @@ def test_each_kind_counts_what_it_was_offered_kept_and_refused():
         props=[_prop(), _prop("No Market", has_market=False)],
         game_bets=[_game(), _spread()])
     assert set(kinds) == {"td", "prop", "game"}, kinds
+    # KEPT AND SHOWN ARE DIFFERENT NUMBERS, and the gap is the reserve.
+    # `kept` counts rows that cleared the real bar; `shown` counts rows
+    # that reached the page, which since 2026-09-09 includes the labelled
+    # rows a thin shelf is topped up with. The sub-floor touchdown and
+    # the sub-floor game line below are refused at the real bar — the
+    # census says so — and shown underneath the rows that cleared.
+    # The sub-floor TD is NOT topped up, and the reason is the whole
+    # design: it sits 18 points under the market's own number, which is
+    # `MAX_CREDIBLE_EDGE` — a TRUTH bar. The reserve relaxes the floor
+    # and nothing else, so a row the board thinks is mispriced stays off
+    # the page whether the shelf is thin or not.
     assert kinds["td"] == {"offered": 3, "kept": 1, "duplicate": 1, "shown": 1,
                            "refused": {FLOOR: 1}}, kinds["td"]
     assert kinds["prop"] == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 1,
                              "refused": {"no real book price": 1}}, kinds["prop"]
-    assert kinds["game"] == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 1,
+    assert kinds["game"] == {"offered": 2, "kept": 1, "duplicate": 0, "shown": 2,
                              "refused": {FLOOR: 1}}, kinds["game"]
-    assert sorted(r["kind"] for r in board) == ["game", "prop", "td"]
+    assert sorted(r["kind"] for r in board) == ["game", "game", "prop", "td"]
+    # …and the one row beyond those that cleared says what it is.
+    assert sum(1 for r in board if r.get("reserve")) == 1, board
 
 
 def test_the_flat_census_is_the_kinds_summed():
@@ -127,9 +140,21 @@ def test_the_funnel_adds_up_for_every_kind():
         td_picks=[_td("a"), _td("b", prob=0.2)], td_watch=[_td("a"), _td("c")],
         props=[_prop("p"), _prop("p"), _prop("r", has_market=False)],
         game_bets=[_game(), _game(), _spread()])
+    # SHOWN MINUS THE RESERVE IS WHAT THE BAR KEPT. This asserted
+    # `shown <= kept` until 2026-09-09, which was true while every row on
+    # the page had cleared the real bar. A thin shelf is topped up now,
+    # so the page can carry rows the bar refused — and the gap between
+    # the two numbers is exactly those rows, which is the invariant worth
+    # holding: nothing appears that the census cannot account for.
+    reserve_by_kind: dict = {}
+    for r in _board:
+        if r.get("reserve"):
+            k = r.get("kind") or "prop"
+            reserve_by_kind[k] = reserve_by_kind.get(k, 0) + 1
     for kind, f in kinds.items():
         assert f["offered"] == f["kept"] + f["duplicate"] + sum(f["refused"].values()), (kind, f)
-        assert f["shown"] <= f["kept"], (kind, f)
+        assert f["shown"] - reserve_by_kind.get(kind, 0) <= f["kept"], \
+            (kind, f, reserve_by_kind)
     assert kinds["prop"]["duplicate"] == 1 and kinds["game"]["duplicate"] == 1
 
 
