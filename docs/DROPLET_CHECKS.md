@@ -806,6 +806,73 @@ claim as the kept rows' does. If a band of disagreement lands well
 under its claim on the droplet's larger sample, that is the evidence
 for a wider bar on that band — bring the printout.
 
+## 8g. Why the wrong moneylines kept coming back (2026-09-08)
+
+Third report in a week, and the first one with a root cause rather than
+another stamp. Ethan: "this could be our issue with not showing picks
+and shit bc we are pulling the wrong lines. Also that can make us give
+fake and false picks that can hurt us."
+
+**The cause.** `oddsapi._request` with `cache_only` serves the cached
+payload at ANY age — deliberately, because on a cycle the pacer declines
+the last paid pull's real prices beat proxies — and nothing bounded
+"any" or recorded which payload a price came off. The board-level
+`priced_at` dates the last PULL, not the payload each game was filled
+from, and on a cached cycle those are hours apart by design. So no fact
+existed that could tell an old price from a wrong one.
+
+That the screenshots were stale rather than mis-mapped is provable
+without the box: DraftKings is in `DEFAULT_BOOKS` and `parse_event_h2h`
+keeps the BEST price per side across the books we request, so a payload
+holding DK at −125 cannot publish −220 for the same team.
+
+**What it costs, measured** on this box's 5,241 college games with both
+an opening and a closing moneyline from one book (an opening price being
+the extreme stale case):
+
+| | |
+|---|---|
+| median move | 0.020 |
+| 90th percentile | 0.066 |
+| 99th percentile | 0.136 |
+| open and close named a different favourite | 3.19% |
+| moved more than ten points | 3.5% |
+
+One game in thirty priced off a stale pull shows the wrong side as most
+likely.
+
+**The fix.** A payload older than `oddsapi.MAX_GAME_PRICE_AGE` (6h)
+prices no game market: the game keeps no price, the board says "no real
+book price", and both builds print what they refused and how old it was.
+Every price that IS attached now carries its own age
+(`Game.price_age_s`, `priced_from`) onto the card and the row. Props are
+NOT gated — they are dated and reported, so the same question can be
+answered for them with numbers rather than guesses.
+
+Read it on the box:
+
+```bash
+cd /srv/qellys && python3 -c "
+import json
+b = json.load(open('web/data/recommendations.json'))
+os_ = b.get('odds_status') or {}
+for k in ('source','event_stale_prices','event_stale_age_s',
+          'board_stale_prices','board_stale_age_s','board_moneylines'):
+    if os_.get(k) is not None: print(f'  {k}: {os_[k]}')
+ages = [(g.get('matchup'), g.get('price_age_s'), g.get('priced_from'))
+        for g in (b.get('game_bets') or []) if g.get('market') == 'moneyline']
+for m, a, src in ages[:8]:
+    print(f'  {m:<14} {\"never priced\" if a is None else f\"{a/3600:.1f}h\"} from {src or \"?\"}')"
+```
+
+* Rows reading `from board` with an age in minutes are the cheap
+  whole-slate pull working as intended.
+* `event_stale_prices` above zero means the per-event payload is past
+  the ceiling and those games kept no price — buy a pull, or widen the
+  ceiling with `QB_MAX_GAME_PRICE_AGE` (seconds) if the budget cannot.
+* Every moneyline missing with `board_moneylines` at zero and no stale
+  count means the cheap pull is not running at all — check the pacer.
+
 ## 8f. The moneyline that disagreed with its own spread (2026-09-08)
 
 Ethan sent two cards. One is now refused by measurement; the other can

@@ -1205,6 +1205,11 @@ def from_game_bet(row: dict, sport: str = "nfl",
         # A game card carries no book name on the NFL path; the journal
         # has always written these as the shopped-best price.
         "book": row.get("book") or "best", "odds": odds,
+        # HOW OLD THIS PRICE IS, carried to the card. A row that cannot
+        # date its own number is how three wrong-moneyline reports in a
+        # week could not be told apart from three stale ones.
+        "price_age_s": row.get("price_age_s"),
+        "priced_from": row.get("priced_from") or "",
         "model_prob": round(prob, 4),
         "prob_source": source,
         "raw_prob": round(prob, 4),

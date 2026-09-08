@@ -599,7 +599,9 @@ def main() -> None:
             odds_status.update(matched=res.matched, events=res.events_used,
                                moneylines=res.moneylines,
                                quota_remaining=res.quota.remaining,
-                               source="cache" if res.from_cache else "fresh")
+                               source="cache" if res.from_cache else "fresh",
+                               event_stale_prices=res.stale_game_prices,
+                               event_stale_age_s=round(res.stale_price_age_s or 0.0))
             print(f"\nOdds API: matched {res.matched} props across {res.events_used} games "
                   f"(quota remaining {res.quota.remaining}).")
             if res.scorers_matched:
@@ -622,6 +624,18 @@ def main() -> None:
                     print(f"  ⚠️  quote journal skipped: {_exc}")
             if res.moneylines:
                 print(f"  Moneylines attached to {res.moneylines} game(s).")
+            if res.stale_game_prices:
+                # LOUD, because this is the failure that reads as a quiet
+                # slate. Ethan, 2026-09-08: "this could be our issue with
+                # not showing picks and shit bc we are pulling the wrong
+                # lines." A refused price shows as a missing market; a
+                # silent one shows as a wrong bet.
+                print(f"  ⚠️  {res.stale_game_prices} game(s) kept NO price: "
+                      f"the cached event payload is "
+                      f"{(res.stale_price_age_s or 0) / 3600:.1f}h old, past "
+                      f"the {oddsapi._max_game_price_age() / 3600:.0f}h "
+                      f"ceiling (oddsapi.MAX_GAME_PRICE_AGE). Buy a fresh "
+                      f"pull, or raise QB_MAX_GAME_PRICE_AGE.")
             if res.unmatched:
                 print(f"  No line found for {len(res.unmatched)}: "
                       f"{', '.join(res.unmatched[:6])}{' …' if len(res.unmatched) > 6 else ''}")
@@ -668,7 +682,16 @@ def main() -> None:
                 board_games=bres.games_priced,
                 board_moneylines=bres.moneylines,
                 board_totals=bres.totals,
-                board_spreads=bres.spreads)
+                board_spreads=bres.spreads,
+                board_stale_prices=bres.stale_game_prices,
+                board_stale_age_s=round(bres.stale_price_age_s or 0.0))
+            if bres.stale_game_prices:
+                print(f"\n⚠️  {bres.stale_game_prices} game price(s) refused "
+                      f"as stale — the cached pull is "
+                      f"{(bres.stale_price_age_s or 0) / 3600:.1f}h old, past "
+                      f"the {oddsapi._max_game_price_age() / 3600:.0f}h ceiling. "
+                      f"No price beats a wrong price; raise "
+                      f"QB_MAX_GAME_PRICE_AGE to widen it.")
             if bres.quota.remaining is not None:
                 odds_status["quota_remaining"] = bres.quota.remaining
             print(f"\nGame lines: refreshed {bres.games_priced} of "

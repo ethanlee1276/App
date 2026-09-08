@@ -81,6 +81,18 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
     except oddsapi.OddsAPIError as exc:
         return {}, f"odds unavailable: {exc}"
 
+    # THE SAME AGE CEILING THE NFL PATH ANSWERS TO. `fetch_sport_odds`
+    # with cache_only serves the last payload at ANY age, so on a cycle
+    # the budget declines this loop would price a Saturday board off a
+    # pull from Tuesday and nothing would say so. See
+    # oddsapi.MAX_GAME_PRICE_AGE for what that costs, measured.
+    board_age = oddsapi.sport_cache_age("cfb")
+    if not oddsapi.price_is_current(board_age):
+        hrs = (board_age or 0.0) / 3600.0
+        return {}, (f"odds refused as stale: the last pull is {hrs:.1f}h old, "
+                    f"past the {oddsapi._max_game_price_age() / 3600:.0f}h "
+                    f"ceiling — no price beats a wrong price")
+
     priced: dict[str, dict] = {}
     unmatched: list[str] = []
     # Every name this board resolves is written down (engine/cfbteams):
@@ -120,6 +132,10 @@ def attach_odds(games: list[dict], lookup: dict, cache_only: bool,
             # The event's own id rides along so the TD-quote pull below
             # can ask for player markets without a second events call.
             entry["event_id"] = ev.get("id", "")
+            # …and how old the payload these prices came off was, so the
+            # card can date its own number rather than borrowing the
+            # board's clock (engine.models.Game.price_age_s).
+            entry["price_age_s"] = board_age
             priced[game["game_id"]] = entry
 
     if learned:
@@ -967,6 +983,10 @@ def to_game_bet(card: dict, play: dict, game: dict) -> dict:
         # answers to — see likely.SPREAD_COHERENCE. The college feed's
         # number is the HOME spread, the same convention the NFL's is.
         "game_spread": game.get("spread"),
+        # How old the payload behind this card's prices was, in seconds.
+        "price_age_s": (play.get("price_age_s")
+                        if play.get("price_age_s") is not None else None),
+        "priced_from": "board",
         # IN PLAY, SAID ON THE CARD. Both other sports stamp this in
         # their `_finish_bet` and college never did, so every consumer
         # that refuses a live game — `likely.from_game_bet` most

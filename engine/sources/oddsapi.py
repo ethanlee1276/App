@@ -106,6 +106,50 @@ BOOK_TITLES = {
 # sharp reference must never be quoted as the price to take.
 SHARP_BOOKS = {"pinnacle"}
 
+#: The oldest a cached payload may be and still price a GAME market.
+#:
+#: THE BUG THIS ENDS. `_request` with `cache_only` "serves the cached copy
+#: at ANY age and never touches the network" — deliberately, because the
+#: last paid pull's real prices beat proxies on a cycle the budget
+#: declines. What nobody bounded is how old "any" gets. Ethan, 2026-09-08,
+#: with his sportsbook beside our page: MIN -125 there, MIN ML -220 on our
+#: Most Likely board, and the same story on a second game. Every book he
+#: can bet is in `DEFAULT_BOOKS` and `parse_event_h2h` keeps the BEST
+#: price per side across them, so a live payload could not have produced
+#: -220 while DraftKings showed -125. The payload was old, and no field
+#: anywhere carried its age.
+#:
+#: WHAT STALENESS COSTS, MEASURED. This box holds 5,241 college games with
+#: both an OPENING and a CLOSING moneyline from one book — an opening
+#: price being the extreme case of a stale one. De-vigged and compared:
+#:
+#:     median move 0.020 · 90th 0.066 · 99th 0.136
+#:     the open and the close named a DIFFERENT favourite  3.19%
+#:     moved more than ten points of win probability        3.5%
+#:
+#: So one game in thirty published from a stale pull shows the wrong side
+#: as "most likely". On a sixteen-game Sunday that is half a game every
+#: week, and Ethan's answer to that is not negotiable: "that can make us
+#: give fake and false picks that can hurt us."
+#:
+#: SIX HOURS IS A POLICY, NOT A MEASUREMENT, and it is written here rather
+#: than buried so it can be argued with. The cheap whole-slate game-lines
+#: pull costs three credits (`apply_board_lines_to_slate`), so a board
+#: that cannot refresh its game markets inside six hours has a budget
+#: fault, and a budget fault should surface as a MISSING price — which the
+#: census already knows how to say, "no real book price" — rather than as
+#: a wrong one. Override on the box with QB_MAX_GAME_PRICE_AGE (seconds)
+#: rather than a deploy.
+def _max_game_price_age() -> float:
+    import os as _os
+    try:
+        return float(_os.environ.get("QB_MAX_GAME_PRICE_AGE") or 6 * 3600)
+    except (TypeError, ValueError):
+        return 6 * 3600.0
+
+
+MAX_GAME_PRICE_AGE = 6 * 3600.0
+
 # The Odds API uses full team names; nflverse uses abbreviations.
 TEAM_ABBR = {
     "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL",
@@ -767,6 +811,34 @@ def event_cache_name(event_id: str, markets: list[str] | None = None,
     return f"odds_event_{sport}_{event_id}_{tag}.json"
 
 
+def sport_cache_age(sport: str = "nfl", cache_tag: str = "",
+                    now: float | None = None) -> float | None:
+    """Seconds since the whole-slate odds payload was written, or None.
+
+    The board-level twin of `event_cache_age`: `fetch_sport_odds` writes
+    one file for the entire slate, so one age dates every game price that
+    pull attached.
+    """
+    path = CACHE_DIR / f"odds_board_{sport}{('_' + cache_tag) if cache_tag else ''}.json"
+    try:
+        return max(0.0, (now if now is not None else time.time())
+                   - path.stat().st_mtime)
+    except OSError:
+        return None
+
+
+def price_is_current(age: float | None, now_max: float | None = None) -> bool:
+    """May a payload this old price a GAME market? See MAX_GAME_PRICE_AGE.
+
+    An age of None is a payload that was just fetched (nothing cached to
+    date), which is current by construction — the caller has the bytes in
+    hand.
+    """
+    if age is None:
+        return True
+    return float(age) <= (now_max if now_max is not None else _max_game_price_age())
+
+
 def event_cache_age(event_id: str, markets: list[str] | None = None,
                     books: list[str] | None = None, sport: str = "nfl",
                     now: float | None = None) -> float | None:
@@ -1129,6 +1201,11 @@ class OddsAttachResult:
     events_used: int = 0
     moneylines: int = 0          # games that got real h2h prices attached
     from_cache: bool = False     # prices reused from the last paid pull
+    #: Games whose GAME markets were refused for age (MAX_GAME_PRICE_AGE),
+    #: and the oldest age refused. Props from the same payload are not
+    #: gated; they are dated on the game instead.
+    stale_game_prices: int = 0
+    stale_price_age_s: float = 0.0
     # Players the books have priced who matched NO slate prop — the book's
     # menu knows who's playing before the official lineup does. Each entry:
     # {player, market, home, away, lines}.
@@ -1298,6 +1375,12 @@ class BoardLinesResult:
     totals: int = 0
     spreads: int = 0
     events_seen: int = 0         # events the endpoint returned
+    #: Games whose price was refused for age — see MAX_GAME_PRICE_AGE —
+    #: and how old the oldest of them was. A board that prices nothing
+    #: because its pull is a day behind must say that, not read as a
+    #: quiet slate.
+    stale_game_prices: int = 0
+    stale_price_age_s: float = 0.0
     quota: Quota = field(default_factory=Quota)
     from_cache: bool = False
     # Same two failure modes apply_odds_to_slate names separately, for the
@@ -1383,6 +1466,9 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         raise
     result.quota = quota
     result.events_seen = len(events)
+    # ONE FILE, ONE AGE. `fetch_sport_odds` writes the whole slate's
+    # payload to a single cache file, so this dates every price below.
+    board_age = sport_cache_age(sport, "lines")
 
     for ev in events:
         home = _abbr(ev.get("home_team", ""))
@@ -1419,6 +1505,14 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
         # comes off the event rather than out of a table (cfb_build reached
         # the same conclusion about 134 schools that rot on reshuffle).
         team_map = {ev.get("home_team", ""): home, ev.get("away_team", ""): away}
+        # The whole-slate payload is one file, so one age dates every
+        # price in it (see MAX_GAME_PRICE_AGE).
+        if not price_is_current(board_age):
+            result.stale_game_prices += 1
+            result.stale_price_age_s = float(board_age or 0.0)
+            continue
+        game.price_age_s = board_age
+        game.priced_from = "board"
         touched = False
         mls = parse_event_h2h(ev, team_map)
         if mls.get(home) is not None and mls.get(away) is not None:
@@ -1688,7 +1782,22 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                     scorer_index.setdefault(k, []).extend(quotes)
         # Attach real game-market prices to the matching game (each leg gets
         # its own moneyline/total/spread).
+        #
+        # …ONLY IF THE PAYLOAD IS YOUNG ENOUGH TO BE A PRICE. See
+        # MAX_GAME_PRICE_AGE: this path serves a cached payload at any
+        # age on a declined cycle, and a game market read off a stale one
+        # is the wrong number rather than an old one. Props are NOT gated
+        # here — they are dated on the game and reported, and gating them
+        # is a separate decision with the numbers now visible.
+        _age = event_cache_age(ev["id"], markets, books, sport)
+        if game is not None and not price_is_current(_age):
+            result.stale_game_prices += 1
+            result.stale_price_age_s = max(result.stale_price_age_s or 0.0,
+                                           float(_age or 0.0))
+            game = None
         if game is not None:
+            game.price_age_s = _age
+            game.priced_from = "event"
             mls = parse_event_h2h(payload, cfg["teams"])
             if home in mls and away in mls:
                 game.home_ml = mls[home]

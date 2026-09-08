@@ -587,6 +587,12 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     # (`likely.SPREAD_COHERENCE`)? The number is the HOME spread and is
     # None when no book posted one — an unposted line is not a zero.
     d["game_spread"] = g.spread if g.spread_is_posted else None
+    # …AND HOW OLD THE PRICE IS. The board's `priced_at` dates the last
+    # PULL; this dates the payload THIS game's markets were actually read
+    # from, which on a cached cycle are hours apart (see
+    # engine.models.Game.price_age_s and oddsapi.MAX_GAME_PRICE_AGE).
+    d["price_age_s"] = getattr(g, "price_age_s", None)
+    d["priced_from"] = getattr(g, "priced_from", "") or ""
     # Schedule fatigue, for the side the bet is actually about. A short week
     # or a body clock three hours out is a spread's business at least as
     # much as a prop's, so a game bet that journals NULL leaves the miner

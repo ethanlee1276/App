@@ -316,6 +316,24 @@ class Game:
     sharp_spread: float = 0.0
     sharp_spread_home_odds: int = 0
     sharp_spread_away_odds: int = 0
+    #: HOW OLD THE PAYLOAD THAT PRICED THIS GAME WAS, in seconds, at the
+    #: moment its markets were attached — and which pull it came from
+    #: ("event", the per-event props payload; "board", the cheap
+    #: whole-slate game-lines pull). None and "" when nothing priced it.
+    #:
+    #: Ethan, 2026-09-08, third report of wrong moneylines: "We need to
+    #: find the problem with that because it continues to happen ... this
+    #: could be our issue with not showing picks and shit bc we are
+    #: pulling the wrong lines." The problem was that a price carried no
+    #: age at all. `oddsapi._request` serves a cached payload at ANY age
+    #: by design — that is the free tier's whole point — so a price from
+    #: a pull days ago and a price from four minutes ago arrived in the
+    #: same field, looked identical to every reader, and the board-level
+    #: `priced_at` stamp dates the last PULL rather than the payload each
+    #: game was actually filled from. There was no fact anywhere that
+    #: could tell an old price from a wrong one.
+    price_age_s: float | None = None
+    priced_from: str = ""
     home_rating: float = 0.0
     away_rating: float = 0.0
     # Offense/defense split (points scored / allowed vs league baseline) for the
