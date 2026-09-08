@@ -21537,12 +21537,15 @@ window._stdUnitsToggle = () => { _stdUnitsAll = !_stdUnitsAll; renderStandings()
    clutch (one-score games won), reliability (won as the favourite),
    comeback (won as the underdog — the MARKET'S underdog, and the page
    says so, because we hold no half-time scores yet), choke (one-score
-   games lost as the favourite). Three places read them: a ranked
+   games lost as the favourite). Four places read them: a ranked
    section on the standings page, a two-team table on the game page,
-   and a line on the live card that reads the situation — a one-score
-   game late, a favourite trailing — against the two teams' rates. The
-   live line is the only one that changes during a game; the rates
-   under it are season counts and do not pretend otherwise. */
+   a line on the live card that reads the situation — a one-score
+   game late, a favourite trailing — against the two teams' rates, and
+   (2026-09-08) a card on the play-by-play page that makes the same
+   reading every twelve seconds off the deep file and lights the two
+   cells being asked. The live readings are the only things that change
+   during a game; the rates under them are season counts and do not
+   pretend otherwise. */
 const PRESSURE_RATES = [
   ["clutch", "Clutch", "one-score games won"],
   ["reliability", "Reliability", "won as the favourite"],
@@ -21701,6 +21704,101 @@ function pressurePairHTML(sport, g) {
       <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
         `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
     </div>`;
+}
+
+/* ---- Under pressure, live, on the play-by-play page --------------------
+   Ethan, 2026-09-08: "I know we added under pressure data for teams, like
+   clutch win % and reliability % and comeback % and choke % and see if we
+   can have that as live data as well like when games are going. That's
+   something we should be showing on the live play by play page yeah? And
+   use live data for it where we can."
+
+   The rates are season counts (engine/pressure.py) and do not change
+   during a game. What changes is the QUESTION the scoreboard asks of
+   them — which is what `pressureSituation` reads for the live card's one
+   line, and what this reads every twelve seconds off the deep file's
+   live block: the score, the period, the clock, who has the ball. It
+   says which rate is being asked of whom and lights those two cells in
+   the table; beside them sits the one live number this site holds that
+   IS a probability — the live market's de-vigged moneyline, when the
+   board tracks it for this game. Nothing here is a model number: a
+   clutch rate is a count, and the market's number is the market's. Pure,
+   run in node by tests/test_pbp_pressure.py. */
+function pressureMoment({ sport, d, boardGame, pr }) {
+  const teams = (pr && pr.teams) || {};
+  const home = d.home, away = d.away;
+  const h = teams[home], a = teams[away];
+  if (!h || !a) return null;
+  const lv = d.live || {};
+  const g = { home, away, live: lv,
+              favorite: (boardGame || {}).favorite, spread: (boardGame || {}).spread };
+  const line = pressureSituation({ sport, g, pr });
+  const live = lv.state === "live" && lv.home_score != null && lv.away_score != null;
+  const margin = live ? Math.abs(lv.home_score - lv.away_score) : null;
+  const one = live && margin <= (PRESSURE_ONE_SCORE[sport] || 0);
+  const late = live && pressureLate(sport, lv.period);
+  const fav = pressureFav(g);
+  const dog = fav === home ? away : fav === away ? home : null;
+  const lead = !live ? null
+    : lv.home_score > lv.away_score ? home : lv.away_score > lv.home_score ? away : null;
+  // WHICH RATE THE SCOREBOARD IS ASKING, of whom — the same reading the
+  // sentence makes, as cells the table can light.
+  const asks = [];
+  if (live && fav && dog && lead && lead !== fav) {
+    asks.push({ team: fav, rate: "reliability" }, { team: dog, rate: "comeback" });
+  } else if (one && late && fav && dog) {
+    asks.push({ team: fav, rate: "choke" }, { team: dog, rate: "clutch" });
+  } else if (one && late) {
+    asks.push({ team: home, rate: "clutch" }, { team: away, rate: "clutch" });
+  } else if (!live) {
+    asks.push({ team: home, rate: "clutch" }, { team: away, rate: "clutch" });
+  }
+  const chips = [];
+  if (live) {
+    const unit = sport === "mlb" ? (margin === 1 ? "run" : "runs") : "points";
+    chips.push(one ? "one-score game" : `${margin}-${unit.replace(/s$/, "")} game`);
+    if (late) chips.push(sport === "mlb" ? "late innings" : "late");
+    if (fav && lead && lead !== fav) chips.push(`${fav} trails as the favourite`);
+    if (lv.possession) chips.push(`${lv.possession} has the ball`);
+  }
+  const t = (boardGame || {}).line_track;
+  const market = t && t.now != null ? { home, now: t.now, opened: t.opened } : null;
+  return { line, asks, chips, live, market, fav, lead, margin, one, late };
+}
+
+function pbpPressureHTML(d, league, boardGame) {
+  const pr = (_standingsCache[league] || {}).pressure;
+  if (!pr) return "";
+  const m = pressureMoment({ sport: league, d, boardGame, pr });
+  if (!m) return "";
+  const teams = pr.teams || {};
+  const asked = (t, k) => m.asks.some((x) => x.team === t && x.rate === k);
+  const rows = [d.away, d.home].map((t) => [t, teams[t] || {}]);
+  return `<div class="card pbp-pressure">
+    <div class="pbp-rail-head">Under pressure${
+      m.live ? ` <span class="lb-live">${icon("dot", 10)} LIVE</span>` : ""}
+      <span class="mini">${escapeHtml(String(pr.season_used))} · one-score means within ${
+        escapeHtml(pressureUnit(pr))}</span></div>
+    ${m.chips.length ? `<div class="pbp-pr-chips">${m.chips.map((c) =>
+      `<span class="chip">${escapeHtml(c)}</span>`).join("")}</div>` : ""}
+    <p class="pbp-pr-line">${escapeHtml(m.line)}</p>
+    ${m.market ? `<p class="pbp-pr-market">Live market: <b>${escapeHtml(d.home)} ${
+      Number(m.market.now).toFixed(0)}%</b> to win, from ${
+      Number(m.market.opened).toFixed(0)}% at the open — the market’s number, not ours.</p>` : ""}
+    <div class="pr-table">
+      <span class="lb-th"></span>${PRESSURE_RATES.map(([, t]) =>
+        `<span class="lb-th">${t}</span>`).join("")}
+      ${rows.map(([t, r]) => `<span class="lb-tm">${teamMarkIn(league, t, 20)} ${escapeHtml(t)}
+          <span class="k">${escapeHtml(r.record || "")}</span></span>${
+        PRESSURE_RATES.map(([k]) => `<b${asked(t, k) ? ' class="pbp-pr-asked"' : ""}>${
+          pressurePct(r[k])}</b>`).join("")}`).join("")}
+    </div>
+    <div class="pr-defs">${PRESSURE_RATES.map(([, t, n]) =>
+      `<span><b>${t}</b> ${escapeHtml(n)}</span>`).join("")}</div>
+    <p class="mini" style="opacity:.6">Season counts from ${escapeHtml(String(pr.season_used))}
+      finished games; the scoreboard decides which one is being asked, ${
+      m.live ? "re-read with every pass of the fast loop" : "and asks nothing until the game starts"}.</p>
+  </div>`;
 }
 
 function unitRankingsHTML(ur, d) {
@@ -34239,6 +34337,10 @@ async function renderPbpPage() {
       boardFetch(`data/pbp/${encodeURIComponent(league)}_${encodeURIComponent(event)}.json`,
                  { cache: "no-store" }),
       pbpStripGames(league),
+      // The league's standings, for the two teams' under-pressure rates
+      // (2026-09-08): cached after the first read, so the card draws
+      // synchronously with the rest of the page on every pass.
+      pressureWarm([league]),
     ]);
     strip = games;
     if (res.ok) d = await res.json();
@@ -34336,6 +34438,7 @@ async function renderPbpPage() {
           ${pbpRailHTML(d, league)}
         </div>
         ${winProb}
+        ${pbpPressureHTML(d, league, boardGame)}
       </aside>
     </div>`;
   wire();

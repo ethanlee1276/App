@@ -6809,6 +6809,16 @@ body.has-rail .shell {
   color: var(--text-dim); font-size: var(--fs-sm); line-height: var(--lh-body); }
 .lb-pressure .lb-pk { color: var(--text-mute); font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: .04em; margin-right: 6px; }
+/* The play-by-play page's under-pressure card (2026-09-08): the moment's
+   chips, the one-line reading, the live market's number, and the two-team
+   table with the two cells the scoreboard is asking lit. */
+.pbp-pressure .pbp-rail-head .lb-live { margin-left: 6px; }
+.pbp-pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.pbp-pr-line { margin: 0 0 8px; color: var(--text-dim); font-size: var(--fs-sm);
+  line-height: var(--lh-body); }
+.pbp-pr-market { margin: 0 0 10px; color: var(--text-body); font-size: var(--fs-sm);
+  line-height: var(--lh-body); }
+.pbp-pr-asked { color: var(--gold); }
 .gp-note-list { margin: 0; padding-left: 18px; color: var(--text-body);
   font-size: var(--fs-sm); }
 .gp-note-list li { margin: 4px 0; }
