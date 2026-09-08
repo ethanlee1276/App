@@ -9,6 +9,31 @@
  * playerAvatar() uses rec.headshot if present and falls back to the SVG.
  */
 
+/* THE ONE PLACE an inline `onload` is allowed to touch its own parent.
+ *
+ * An image's `onload` is asynchronous, and this site re-renders whole
+ * containers — the 30-second refresh, a sport switch, the deferred
+ * second half of the MLB board. A photo that finishes loading after its
+ * card was replaced fires `onload` on a DETACHED node: `parentNode` is
+ * null, `null.classList` throws, and the global error handler blames the
+ * whole page for a corpse's callback. The reader gets "Sorry — part of
+ * this page failed to draw" over a page that drew perfectly.
+ *
+ * Ethan reported that banner on 2026-08-25 and again on 2026-09-08. The
+ * first fix guarded the two `onload` sites in app.js and never reached
+ * the three in this file — and the ones here are on every team logo on
+ * every card, which is why it came straight back.
+ *
+ * So the guard does not live at the call sites any more. It lives here,
+ * once, and every inline handler calls it.
+ * `tests/test_no_detached_onload.py` fails the build if a new handler
+ * reaches for `parentNode` on its own.
+ */
+function artOn(el, cls) {
+  const parent = el && el.parentNode;
+  if (parent && parent.classList) parent.classList.add(cls);
+}
+
 const DEFAULT_TEAM = { name: "", nick: "", primary: "#3a4668", secondary: "#8893b5", tertiary: "#dfe4f5" };
 // app.js points window.ACTIVE_TEAMS at the current sport's color dict
 // (NFL TEAMS or MLB_TEAMS) — abbreviations collide across leagues, so a
@@ -115,7 +140,7 @@ function playerAvatar(name, abbr, opts = {}) {
       <img class="avatar-photo" src="${escapeAttr(small)}" alt="" loading="lazy"
            decoding="async"${small === opts.headshot ? ""
              : ` data-full="${escapeAttr(opts.headshot)}"`}
-           onload="this.parentNode.classList.add('art-on')"
+           onload="artOn(this,'art-on')"
            onerror="${swap}"/></span>`;
   }
   const t = team(abbr, opts.map);
@@ -311,7 +336,7 @@ function teamMark(abbr, size = 20, src = null, sport = null) {
   const img = url
     ? `<img class="team-logo" src="${escapeAttr(url)}" width="${size}"
             height="${size}" alt="" loading="lazy" decoding="async"
-            onload="this.parentNode.classList.add('art-on')"
+            onload="artOn(this,'art-on')"
             onerror="this.remove()">`
     : "";
   return `<span class="team-mark-wrap" style="width:${size}px;height:${size}px"
@@ -346,7 +371,7 @@ function leagueMark(sport, size = 20) {
   const img = key
     ? `<img class="team-logo" src="https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${key}.png&w=${size * 2}&h=${size * 2}"
             width="${size}" height="${size}" alt="" loading="lazy"
-            decoding="async" onload="this.parentNode.classList.add('art-on')"
+            decoding="async" onload="artOn(this,'art-on')"
             onerror="this.remove()">`
     : "";
   return `<span class="team-mark-wrap league-mark" style="width:${size}px;height:${size}px"

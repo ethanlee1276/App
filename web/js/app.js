@@ -4807,7 +4807,7 @@ function gameCard(g) {
           // drawing stays as the fallback when every photo 404s, because
           // then onload never fires and nothing is hidden.
           return `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-          onload="this.parentNode&&this.parentNode.classList.add('vp-on')"
+          onload="artOn(this,'vp-on')"
           src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
           ${fam ? `data-alt="${venueSrc(`img/venues/variants/${fam}-${venueVariant(homeTeam)}.jpg`)}"
           onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;
@@ -8466,7 +8466,7 @@ function renderGamePage() {
   // Same onload mark as the board cards: a painted photo drops the
   // blurred SVG scene under it (see .vp-on in the stylesheet).
   const gpPhoto = `<img class="venue-photo" alt="" loading="lazy" decoding="async"
-      onload="this.parentNode&&this.parentNode.classList.add('vp-on')"
+      onload="artOn(this,'vp-on')"
       src="${venueSrc(`img/venues/${escapeHtml(state.sport)}/${escapeHtml(g.home)}.jpg`)}"
       ${gpFam ? `data-alt="${venueSrc(`img/venues/variants/${gpFam}-${venueVariant((window.ACTIVE_TEAMS || {})[g.home] || {})}.jpg`)}"
       onerror="vpFall(this)"` : `onerror="this.remove()"`}/>`;

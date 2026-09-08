@@ -426,7 +426,13 @@ def test_a_dead_cdn_still_lands_on_the_drawn_chip():
     assert 'onerror="this.remove()"' in body
     # art-on is set by onload ALONE — never at build time, or the chip
     # would be hidden under an image that never arrives.
-    assert "classList.add('art-on')" in body
+    #
+    # The class is added through `artOn` rather than inline since
+    # 2026-09-08: `this.parentNode.classList` throws when the image
+    # finishes loading after its card was replaced, and the page then
+    # apologised for itself. `artOn` is the one guarded place, and
+    # tests/test_no_detached_onload.py holds that rule for every handler.
+    assert 'onload="artOn(this,\'art-on\')"' in body
     assert body.count("art-on") == 1, "art-on must come from onload only"
 
 if __name__ == "__main__":
