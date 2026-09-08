@@ -2359,3 +2359,110 @@ wave (1pm, 4pm, 8pm Eastern) on the `nfl` lane, each at the full
 event price. The kickoff count for the NFL should equal the number of
 games on the slate; zero means the games carry no `date` and the pacer
 is time-blind again.
+
+## Sizing the over/under test before it is registered (2026-09-09)
+
+The refusal audit from the day before Week 1 —
+`backtest.py --gate --real-lines`, 3,339 NFL props with a real harvested
+close — printed a segment table nobody had asked for in advance. Split by
+the side taken, the 83 props the gate ADMITTED read:
+
+    side     bets     ROI at a flat unit
+    OVER       61          -24.7%
+    UNDER      22          +20.8%
+
+A 45.5-point gap at roughly 1.9 standard errors, found by reading a
+table. That is a lead, not a finding: the same run also printed a grade
+split and a basis split, and this is simply the cell that read worst.
+`gradecheck` refused to convict the B+ bucket at 2.1 for the same reason.
+
+What makes it worth a preregistration rather than a shrug is that it has
+a mechanism. A projection model biased HIGH produces overs, not a
+symmetric spread of overs and unders — so a one-sided error is the shape
+you would expect if a recency shade or a usage estimate fitted on healthy
+weeks were running hot. A grade bucket has no such story behind it.
+
+`OVER_BIAS_NFL` is drafted in `engine/prereg.py` and **is not
+registered** — `ensure_registered` does not call it. One line there
+activates it, and that line is not written until `min_n: 80` is known to
+be reachable. `HEAVY_PRICE_EDGE` two blocks above it has sat unregistered
+since 2026-09-06 for exactly this reason: a test against a population the
+book never bets sits at "0 of 80" forever while looking perfectly
+healthy.
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+import sqlite3; c = sqlite3.connect('data/ledger.db')
+for side, n in c.execute(\"\"\"
+    SELECT side, COUNT(*) FROM bets WHERE sport='nfl'
+      AND market IN ('receptions','pass_yds','rush_yds','rec_yds')
+      AND category IN ('main','paper') AND stake_units > 0
+      AND date >= '2025-09-01' GROUP BY side\"\"\"):
+    print(' ', side, n)"
+```
+
+* COUNTS ONLY, per side, no ROI column — the same rule §16 states. A
+  threshold chosen after seeing which side happened to lose is fitted to
+  the sample that suggested it; counts carry no outcome information, so
+  sizing on them cannot bias what the test finds.
+* Last season is the runway estimate: 18 weeks. If the OVER count over
+  that stretch puts 80 inside a season, `min_n: 80` is reachable as
+  written. If it is a handful, the honest move is a lower `min_n` with
+  the cost stated, or leaving it drafted — not registering a clock that
+  never rings.
+* The UNDER count matters too, and it is the one that decides how sharp
+  the test can be. At the ratio the audit saw (22 to 61) an 80-over
+  sample can only convict a gap of about 41 points. Near parity it
+  reaches about 30. Either way it can catch a badly one-sided board; it
+  cannot certify that a ten-point tilt is absent.
+* Send me both numbers. Registering is one line and I will not write it
+  until they say the test can finish.
+
+## Reading the board's own rows, not the redacted copy (2026-09-09)
+
+A correction to a diagnosis I sent on 2026-09-08. I reported that the NFL
+board was "publishing zero rows" after a script of mine read
+`web/data/recommendations.json` and found `most_likely`, `recommendations`
+and `game_bets` all empty. **That was my error, not the board's.**
+`web/data/` holds the PUBLIC copy, and `engine/gate.py` strips every paid
+key out of it — `most_likely`, `board_shelves`, `recommendations`,
+`game_bets`, `long_shots` and the rest. An empty list there is the
+paywall working, not a build failing.
+
+`gate.board_source()` exists precisely to stop this mistake, and its own
+docstring lists three tools that had already made it —
+`parlays.arbitrate_slate`, `parlaycheck.py`, and `launch.py
+--odds-doctor`, which "counted priced games off the public copy and
+reported 0 of 15". Mine was the fourth. Any audit of what the board holds
+goes through it:
+
+```bash
+cd /srv/qellys && sudo -u qellys python3 -c "
+import json
+from collections import Counter
+from pathlib import Path
+from engine import gate
+src = gate.board_source(Path('web/data/recommendations.json'))
+d = json.loads(src.read_text())
+print('read:', src)
+for k in ('most_likely','board_shelves','recommendations','game_bets','long_shots'):
+    v = d.get(k)
+    print(f'  {k:16s}', len(v) if isinstance(v, list) else type(v).__name__)
+ml = d.get('most_likely') or []
+print('  by kind :', dict(Counter((r.get('kind') or 'prop') for r in ml)))
+print('  reserve :', sum(1 for r in ml if r.get('reserve')))
+print('  game rows with no book:', sum(1 for r in ml
+      if r.get('kind') == 'game' and not (r.get('book') or '').strip()))"
+```
+
+* `read:` should print a path under `data/built/`. If it prints the
+  `web/data/` path back, there is no private copy on this box — either
+  the board predates `data/built/` or `publish()` has never run — and
+  every count below it is the redacted one.
+* The per-kind funnel the build itself prints is the other half of the
+  answer, and on 2026-09-09 it said td 12, prop 27, game 12 shown. A
+  board holding 51 rows is a healthy board.
+* The last line is the measurement task #207 is waiting on: how many NFL
+  game rows carry no book name. The Most Likely board already refuses
+  those; whether the edge board should refuse them too is not a question
+  to answer by guessing at the count.

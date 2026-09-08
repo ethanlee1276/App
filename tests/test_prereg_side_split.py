@@ -169,6 +169,98 @@ def test_the_journal_query_carries_the_side():
     assert "side" in prereg.ROW_SQL
 
 
+# --- the drafted claim ------------------------------------------------------
+#
+# `OVER_BIAS_NFL` is written but not registered. These pin the two things
+# that would make it useless if they were wrong: that nobody started its
+# clock without saying so, and that the arms it names are the arms it
+# means.
+
+
+def _over_test(**kw):
+    t = dict(prereg.OVER_BIAS_NFL, registered="2026-09-09",
+             z_threshold=prereg.Z_THRESHOLD)
+    t.update(kw)
+    t["hash"] = prereg._terms_hash(t)
+    return t
+
+
+def test_the_over_claim_is_drafted_and_not_yet_registered():
+    """Ethan reads the terms before they are frozen, and one number has
+    to come off the droplet first — how many NFL prop bets the board
+    journals in a week, which decides whether min_n is reachable at all.
+    `ensure_registered` is the call that starts the clock, so it must not
+    carry this one yet."""
+    path = os.path.join(tempfile.mkdtemp(), "prereg.json")
+    ids = {t["id"] for t in prereg.ensure_registered(path)["tests"]}
+    assert prereg.OVER_BIAS_NFL["id"] not in ids
+    # And the reason is written down where the next reader will find it,
+    # rather than living in a commit message.
+    import inspect
+    src = inspect.getsource(prereg)
+    assert "NOT YET REGISTERED" in src
+    assert "SELECT side, COUNT(*) FROM bets" in src
+
+
+def test_the_over_claim_scopes_the_game_lines_out_of_its_own_arm():
+    """`engine.ledger` journals a moneyline, a spread and a total all
+    with side='OVER' — the word is a placeholder on a game bet, not a
+    direction. Unscoped, this test would fill its OVER arm with team bets
+    and answer a question about game lines while claiming to answer one
+    about props."""
+    rows = _sided(80, 30, 60, 40)
+    rows += [{"date": "2026-09-20", "sport": "nfl", "grade": "A",
+              "odds": -110, "side": "OVER", "market": mkt, "status": "lost"}
+             for mkt in ("moneyline", "spread", "total", "team_total")
+             for _ in range(25)]
+    v = prereg.verdict(_over_test(), rows)
+    assert v["n"] == 80, v
+    for mkt in ("moneyline", "spread", "total", "team_total"):
+        assert mkt not in prereg.OVER_BIAS_NFL["markets"], mkt
+
+
+def test_the_over_claim_leaves_the_scorer_board_out():
+    """anytime_td and pass_td journal in the `longshot` bucket, not this
+    one, and they have no UNDER at all — a side split over a market that
+    only ever takes one side compares a population against an empty
+    reference and calls the difference a finding."""
+    for mkt in ("anytime_td", "pass_td"):
+        assert mkt not in prereg.OVER_BIAS_NFL["markets"], mkt
+    assert "categories" not in prereg.OVER_BIAS_NFL
+
+
+def test_the_over_claim_is_framed_the_way_verdict_reads_it():
+    """The full grade ladder on both arms, so only the side separates
+    them. A grade filter here would be a second cut on a sample already
+    too small for one."""
+    t = prereg.OVER_BIAS_NFL
+    assert t["population"] == t["compare_to"]
+    assert t["sides"] == ["OVER"] and t["compare_sides"] == ["UNDER"]
+    # And it decides, both ways, once the sample it named arrives.
+    bad = prereg.verdict(_over_test(), _sided(80, 24, 30, 20))
+    assert bad["status"] == "decided" and bad["supported"], bad
+    good = prereg.verdict(_over_test(), _sided(80, 44, 30, 12))
+    assert good["status"] == "decided" and not good["supported"], good
+
+
+def test_the_over_claim_remedy_names_a_lever_that_moves():
+    """`A_BAND_NFL` had to be superseded because its remedy named a
+    constant that had stopped deciding a stake — a preregistration whose
+    fix is inert is this module's own failure mode wearing the uniform of
+    a result. The haircut is a live argument, so check it is still one."""
+    import inspect
+    from engine import betting
+    assert "shrink" in inspect.signature(betting.temper_edge).parameters
+    assert "temper_edge" in prereg.OVER_BIAS_NFL["decides"]
+
+
+def test_the_over_claim_says_its_evidence_is_a_lead_not_a_finding():
+    """1.9 standard errors, in a table read after the fact. If the note
+    ever stops saying so, the next reader inherits a finding that was
+    never earned."""
+    assert "lead and not a finding" in prereg.OVER_BIAS_NFL["why_now"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

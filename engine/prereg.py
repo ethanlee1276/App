@@ -749,6 +749,113 @@ LONG_PRICE_MLB = {
 }
 
 
+#: DRAFTED 2026-09-09, NOT YET REGISTERED — one line in
+#: `ensure_registered` starts it collecting, and one number has to be
+#: checked on the droplet before that line is worth writing. See the
+#: last paragraph.
+#:
+#: WHERE IT CAME FROM. The refusal audit, run on the droplet the day
+#: before Week 1: `backtest.py --gate --real-lines` over 6,339 replayed
+#: NFL props, 3,339 of which had a real harvested close. Of the 83 bets
+#: the gate ADMITTED on a real book price, split by the side taken:
+#:
+#:     side     bets     ROI at a flat unit
+#:     OVER       61          -24.7%
+#:     UNDER      22          +20.8%
+#:
+#: A 45.5-point gap on roughly 1.9 standard errors.
+#:
+#: WHY THAT IS NOT A RESULT. Nobody asked that question in advance. The
+#: same run printed a grade split (A +12.4% over 19, B+ -19.7% over 64)
+#: and a basis split, and the side split is simply the one that read
+#: worst. Picking the ugliest cell of a table nobody preregistered and
+#: reporting its z is the move `gradecheck` refused to make on the B+
+#: bucket at 2.1, and this is weaker than that was. It is a lead.
+#:
+#: WHY THE CLAIM IS PLAUSIBLE ANYWAY, which is what makes it worth a
+#: registration rather than a shrug. The prop model projects a level and
+#: bets the side of the posted number it lands on; anything that biases
+#: the projection UP — a recency shade, a usage estimate fitted on
+#: healthy weeks, a missing snap-count haircut — produces OVERs, not a
+#: symmetric spread of overs and unders. A one-sided error therefore has
+#: a mechanism, unlike a grade bucket, which does not.
+#:
+#: MARKETS ARE MANDATORY HERE, and not for tidiness. `engine.ledger`
+#: journals a moneyline, a spread and a total ALL with `side='OVER'` —
+#: the word is a placeholder on a game bet, not a direction. Left
+#: unscoped this test would fill its OVER arm with team bets and answer
+#: a question about game lines while claiming to answer one about props.
+#: The four markets named are the edge board's player-prop menu
+#: (engine.quality.MARKET_TIER tiers 1 and 2). `anytime_td` and
+#: `pass_td` are deliberately out: they are the long-shot board, they
+#: journal in the `longshot` bucket rather than this one, and they have
+#: no UNDER to compare against at all.
+#:
+#: WHAT IT WOULD CHANGE. `engine.betting.temper_edge` already takes the
+#: haircut as a parameter and callers already vary it by market tier
+#: (engine.quality.TIER_SHRINK). A supported claim makes it vary by side
+#: as well: an OVER keeps less of its raw disagreement with the book
+#: than an UNDER does. That is a live lever on the number the gate
+#: prices, not a constant that stopped deciding anything — the failure
+#: `supersede` was written for when `A_BAND_NFL`'s remedy went inert.
+#:
+#: THE HONEST LIMIT, stated before it collects rather than after. At the
+#: per-bet spread a -110 prop carries, 80 OVERs against the ~29 UNDERs
+#: that ratio implies can only convict a gap of about 41 points — near
+#: enough to the 45.5 observed that a real but smaller bias would report
+#: "not supported". If the sides arrive nearer parity it reaches about
+#: 30. This can catch a board that is badly one-sided. It cannot certify
+#: that a ten-point tilt is not there.
+#:
+#: THE NUMBER TO CHECK BEFORE REGISTERING, which is the whole reason
+#: this is drafted rather than live. `HEAVY_PRICE_EDGE` sits unregistered
+#: two blocks up because its band holds 26 bets in the entire book: a
+#: test that cannot finish is worse than no test, because it looks like
+#: one. Nobody here knows how many NFL player-prop bets the edge board
+#: journals in a week, and 18 weeks is the whole runway. One query on
+#: the droplet settles it:
+#:
+#:     SELECT side, COUNT(*) FROM bets WHERE sport='nfl'
+#:       AND market IN ('receptions','pass_yds','rush_yds','rec_yds')
+#:       AND category IN ('main','paper') AND stake_units > 0
+#:       AND date >= '2025-09-01' GROUP BY side;
+#:
+#: If last season's rate puts 80 OVERs inside the season, register it as
+#: written. If it does not, the honest move is to lower `min_n` to what
+#: the runway actually reaches and say in `metric` what that costs, or
+#: to leave it drafted — not to register a clock that never rings.
+OVER_BIAS_NFL = {
+    "id": "over-bias-nfl-2026-09",
+    "claim": ("NFL player props the edge board recommends on the OVER lose "
+              "more than the ones it recommends on the UNDER, at the same "
+              "stake: the model's disagreement with the book is one-sided"),
+    "sport": "nfl",
+    # THE FULL LADDER IN BOTH ARMS. The sides are what separate them, the
+    # same way the price bands separate the two price tests. A grade
+    # filter here would be a second cut on a sample already too small for
+    # one.
+    "population": ["A+", "A", "B+"],
+    "compare_to": ["A+", "A", "B+"],
+    "sides": ["OVER"],
+    "compare_sides": ["UNDER"],
+    "markets": ["receptions", "pass_yds", "rush_yds", "rec_yds"],
+    "metric": "ROI at a flat 1u, split on the side taken",
+    "min_n": 80,
+    "decides": ("the market haircut varies by side as well as by market "
+                "tier — the `shrink` argument engine.betting.temper_edge "
+                "already takes, fed a smaller number for an OVER than for "
+                "an UNDER"),
+    "why_now": ("the refusal audit's own segment table put the 61 admitted "
+                "OVERs at -24.7% against +20.8% for the 22 UNDERs, on real "
+                "harvested closes. That is a table read after the fact, so "
+                "it is a lead and not a finding — but a projection model "
+                "biased high produces exactly this asymmetry and nothing "
+                "else in the run has a mechanism behind it. Week 1 opens "
+                "tomorrow, so the forward sample starts from an empty "
+                "season rather than from rows the lead already saw."),
+}
+
+
 ROW_SQL = ("SELECT date, sport, grade, market, side, odds, status, category "
            "FROM bets WHERE status IN ('won','lost') "
            "AND category IN ('main','paper','longshot') "
