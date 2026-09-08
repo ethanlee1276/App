@@ -394,6 +394,7 @@ def _long_shots(slate, usage: dict | None = None,
     from .models import ANYTIME_TD
     from .touchdowns import build_td_longshots, td_watchlist
     from .fantasy import _short_key
+    from .odds import bettable_lines
 
     from .nflusage import from_maps, usage_keys
     usage = usage or {}
@@ -409,7 +410,12 @@ def _long_shots(slate, usage: dict | None = None,
     for prop in slate.props:
         if prop.market != ANYTIME_TD or not prop.lines:
             continue
-        best = max(prop.lines, key=lambda ln: ln.over_odds)
+        # NOT `max(prop.lines, ...)`. `parse_event_scorers` indexes every
+        # book in the payload including the sharp one, and on a longshot
+        # the sharp book's thin margin makes it the LONGEST price on the
+        # board — so a bare max named a book the reader cannot bet at.
+        # See `odds.bettable_lines` for the whole shape of it.
+        best = max(bettable_lines(prop.lines), key=lambda ln: ln.over_odds)
         keys = usage_keys(prop.player, prop.team, team_of)
         candidates.append({
             "prop": prop, "game": slate.game_for(prop),

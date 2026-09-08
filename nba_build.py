@@ -183,6 +183,12 @@ def best_two_way(lines) -> tuple | None:
     if not by_line:
         return None
     line, quotes = max(by_line.items(), key=lambda kv: len(kv[1]))
+    # The book named here is the one the card tells a reader to go to, so
+    # the sharp reference is dropped before the shop — see
+    # `engine.odds.bettable_lines`, and the fallback there for a line
+    # only the sharp book quotes.
+    from engine.odds import bettable_lines
+    quotes = bettable_lines(quotes)
     over = max(quotes, key=lambda l: l.over_odds)
     under = max(quotes, key=lambda l: l.under_odds)
     return line, over.over_odds, under.under_odds, over.book

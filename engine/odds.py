@@ -367,6 +367,40 @@ def best_over_line(lines: list[SportsbookLine], hold: float | None = None) -> Be
     return best
 
 
+def bettable_lines(lines: list) -> list:
+    """The quotes a reader could actually take, or the whole field.
+
+    `best_over_line` has refused to shop a sharp book since the day
+    `SHARP_BOOKS` was written — "the sharp reference must never be quoted
+    as the price to take" — and three boards never went through it. Each
+    picked its displayed price with a bare `max(lines, key=over_odds)`:
+    the NFL anytime-touchdown board (`pipeline._long_shots`), the
+    home-run board (`mlb.pipeline._long_shots`) and the NBA prop board
+    (`nba_build.best_two_way`).
+
+    On a LONGSHOT that is the worst place for the gap to be. The sharp
+    book runs the thinnest margin, so on a +600 dog it is often the
+    LONGEST price quoted — which is exactly what `max` is hunting for. So
+    those cards named a book Ethan has no account with, beside a number
+    no book he can reach was offering. To him that is a wrong price, and
+    it is the fourth week he has reported one.
+
+    THE FALLBACK IS DELIBERATE and matches `best_over_line`'s: a market
+    only the sharp book quotes still returns its line. Dropping the
+    player instead would turn a bad price into an empty shelf, which is
+    the failure that reads as an ordinary result — and the caller's own
+    gate is what refuses to price it.
+
+    The de-vig is untouched. `devig.board_fair` takes the median across
+    everyone who quoted the player and the sharp book belongs in that
+    median; this is only about the price we tell someone to take.
+    """
+    if not lines:
+        return lines
+    keep = [ln for ln in lines if not is_sharp_book(getattr(ln, "book", "") or "")]
+    return keep or lines
+
+
 def best_under_line(lines: list[SportsbookLine], hold: float | None = None) -> BestLine:
     """Pick the most bettor-friendly UNDER line across books.
 

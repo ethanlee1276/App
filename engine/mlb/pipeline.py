@@ -80,7 +80,11 @@ def _long_shots(slate) -> tuple[list[dict], list[dict], dict, list[dict]]:
         if not overs:
             continue
         diag["posted_half"] += 1
-        best = max(overs, key=lambda ln: ln.over_odds)
+        # The sharp book is not a price anyone here can take, and on a
+        # +450 home run it is regularly the longest one quoted — see
+        # `odds.bettable_lines`.
+        from ..odds import bettable_lines
+        best = max(bettable_lines(overs), key=lambda ln: ln.over_odds)
         if (best.book or "").lower() != "proxy":
             diag["real_priced"] += 1
             if 100 < int(best.over_odds) <= 1500:
