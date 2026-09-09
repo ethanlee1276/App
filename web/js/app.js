@@ -21868,6 +21868,37 @@ function pressureMoment({ sport, d, boardGame, pr }) {
   return { line, asks, chips, live, market, fav, lead, margin, one, late };
 }
 
+function pbpModelWinProbHTML(d) {
+  /* OUR live read of the game, beside the market's.
+   *
+   * `engine/livewp` computes this server-side and `livescore_build`
+   * copies it onto the row the deep play-by-play file carries, so the
+   * maths lives in exactly one place. Writing the normal CDF again in
+   * JavaScript is the two-copies-of-one-rule mistake that left baseball
+   * game cards with no book name for a fortnight.
+   *
+   * Absent for good reasons the page does not need to distinguish: a
+   * pre-game card, overtime, a clock the feed did not give, or a sport
+   * with no measured margin variance. No block, no card — never a
+   * neutral 50%, which looks like information and is not.
+   */
+  const wp = ((d || {}).live || {}).win_prob;
+  if (!wp || wp.home_win_prob == null) return "";
+  const rows = [[wp.home, wp.home_win_prob], [wp.away, wp.away_win_prob]];
+  return `<div class="card pbp-wp">
+    <div class="pbp-rail-head">Win probability
+      <span class="mini">${escapeHtml(wp.basis)}</span></div>
+    ${rows.map(([t, p]) => `<div class="pbp-wp-row">
+      <span class="pbp-wp-tm">${escapeHtml(String(t || ""))}</span>
+      <span class="pbp-wp-bar"><i style="transform:scaleX(${
+        Math.max(0, Math.min(1, Number(p))).toFixed(3)})"></i></span>
+      <b>${Math.round(Number(p) * 100)}%</b></div>`).join("")}
+    ${wp.possession_blind ? `<p class="mini pbp-wp-blind">${escapeHtml(wp.caveat)}</p>` : ""}
+    <p class="mini" style="opacity:.6">Ours, from the score and the clock — not a
+      price, and nothing is staked on it.</p>
+  </div>`;
+}
+
 function pbpPressureHTML(d, league, boardGame) {
   const pr = (_standingsCache[league] || {}).pressure;
   if (!pr) return "";
@@ -34540,6 +34571,7 @@ async function renderPbpPage() {
           ${pbpRailHTML(d, league)}
         </div>
         ${winProb}
+        ${pbpModelWinProbHTML(d)}
         ${pbpPressureHTML(d, league, boardGame)}
       </aside>
     </div>`;

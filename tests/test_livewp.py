@@ -356,6 +356,85 @@ def test_the_reading_is_nested_so_absent_is_not_zero():
     assert "home_win_prob" not in _live_row()
 
 
+# ------------------------------------------------ and onto the page itself
+
+APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
+CSS = open(os.path.join(ROOT, "web", "css", "styles.css"), encoding="utf-8").read()
+
+
+def _card_fn():
+    i = APP.index("function pbpModelWinProbHTML(")
+    return APP[i:APP.index("\nfunction ", i + 10)]
+
+
+def test_the_card_is_drawn_in_the_play_by_play_rail():
+    page = APP[APP.index("async function renderPbpPage("):]
+    page = page[:page.index("\n}\n")]
+    assert "${pbpModelWinProbHTML(d)}" in page, page[-600:]
+
+
+def test_it_reads_the_server_side_number_and_does_not_recompute_it():
+    """The maths lives in `engine/livewp`. Writing the normal CDF again
+    in JavaScript is the two-copies-of-one-rule mistake that left
+    baseball game cards with no book name for a fortnight."""
+    card = _card_fn()
+    assert "live || {}).win_prob" in card
+    for banned in ("Math.exp", "Math.sqrt", "erf", "MARGIN_SD"):
+        assert banned not in card, banned
+
+
+def test_no_block_means_no_card_rather_than_a_neutral_fifty():
+    """Absent is the answer for a pre-game card, overtime, an unreadable
+    clock, or a sport with no measured variance — and the page does not
+    need to tell those apart. A 50% on a game that has not kicked off
+    looks like information and is not."""
+    card = _card_fn()
+    assert 'if (!wp || wp.home_win_prob == null) return "";' in card
+    # The only early exit is the empty string. A fallback probability
+    # anywhere in here would be the card inventing a reading the server
+    # deliberately declined to give it.
+    code = "\n".join(ln for ln in card.splitlines()
+                      if not ln.strip().startswith(("*", "/*")))
+    assert code.count("return ") == 2, code          # the guard, and the card
+    assert 'return "";' in code
+
+
+def test_both_teams_are_drawn_not_just_the_favourite():
+    card = _card_fn()
+    assert "[wp.home, wp.home_win_prob], [wp.away, wp.away_win_prob]" in card
+
+
+def test_the_endgame_caveat_is_rendered_when_the_row_carries_it():
+    card = _card_fn()
+    assert "wp.possession_blind ?" in card
+    assert "escapeHtml(wp.caveat)" in card
+
+
+def test_every_value_from_the_payload_is_escaped():
+    """Team abbreviations and the basis string come from a feed. This
+    file has been bitten by unescaped feed text before."""
+    card = _card_fn()
+    assert "escapeHtml(wp.basis)" in card
+    assert "escapeHtml(String(t || \"\"))" in card
+
+
+def test_the_card_says_it_is_ours_and_that_nothing_is_staked_on_it():
+    """The rail already carries the market's line track directly above.
+    Two probabilities about one game, unlabelled, is worse than one."""
+    card = _card_fn()
+    assert "Ours" in card
+    assert "not a" in card and "staked" in card
+
+
+def test_the_bar_has_styling_to_render_at_all():
+    """Each class needs its OWN rule, not merely the substring:
+    `.pbp-wp-bar i` contains `.pbp-wp-bar`, so a plain `in` check passes
+    while the bar itself has no height and renders as nothing."""
+    import re as _re
+    for cls in (".pbp-wp-row", ".pbp-wp-bar", ".pbp-wp-blind", ".pbp-wp-tm"):
+        assert _re.search(_re.escape(cls) + r"\s*\{", CSS), cls
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

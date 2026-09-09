@@ -9632,3 +9632,23 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-dot.foul { background: var(--warn); }
 .pbp-dot.inplay { background: var(--brand); }
 .pbp-mark { display: inline-flex; margin-top: 1px; }
+
+/* Live win probability, in the play-by-play rail. Ours, beside the
+   market's line track above it — two numbers about the same game from
+   two sources, which is the comparison this product is for. */
+.pbp-wp-row { display: grid; grid-template-columns: 3.5rem 1fr 2.6rem;
+  align-items: center; gap: 8px; margin: 6px 0; }
+.pbp-wp-tm { font-weight: 600; letter-spacing: .01em; color: var(--text); }
+.pbp-wp-bar { height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--panel-3); }
+/* SCALED, NOT WIDENED. Animating `width` reflows the row every frame
+   and the design guard refuses it; a transform is composited. The bar is
+   full width and squeezed from the left, so `scaleX(0.81)` reads as 81%. */
+.pbp-wp-bar i { display: block; height: 100%; width: 100%; border-radius: 999px;
+  background: var(--brand); transform-origin: left center;
+  transition: transform var(--dur-slow) var(--ease-out); }
+.pbp-wp-row b { text-align: right; font-variant-numeric: tabular-nums; }
+/* The caveat is not fine print: inside a one-score endgame it is the
+   most important line on the card, because that is where a margin model
+   without possession is most confidently wrong. */
+.pbp-wp-blind { color: var(--warn); opacity: 1; }

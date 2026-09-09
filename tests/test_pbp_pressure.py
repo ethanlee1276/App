@@ -60,7 +60,13 @@ def test_the_page_warms_the_leagues_standings_and_draws_the_card_in_the_rail():
     assert "pressureWarm([league])," in page, "the rates are never loaded for the page"
     i = page.index("pressureWarm([league]),")
     assert i < page.index("if (res.ok) d = await res.json();"), "warmed after the render"
-    assert "        ${winProb}\n        ${pbpPressureHTML(d, league, boardGame)}\n      </aside>" in page
+    # THE CARD IS IN THE RAIL AND THE MARKET'S NUMBER IS ABOVE IT, which
+    # is what this ever meant. Pinning the two lines as ADJACENT broke on
+    # 2026-09-09 when our own live win probability landed between them —
+    # a third card in the same rail, which is not a regression in either
+    # of these. Ordered, not adjacent.
+    rail = page[page.index("${winProb}"):page.index("</aside>")]
+    assert "${pbpPressureHTML(d, league, boardGame)}" in rail, rail
 
 
 def test_the_card_reads_the_cache_and_lights_the_cells_being_asked():
