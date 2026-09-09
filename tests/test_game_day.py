@@ -206,6 +206,12 @@ def _hist():
                      (gid, home, away, day))
     conn.execute("INSERT INTO player_game_logs VALUES "
                  "('nfl',2026,'001','GB@MIN','Jordan Love','GB','pass_yds')")
+    # LOGGED LAST SEASON ONLY — no row for the week being placed, which
+    # is every prop on a game that has not been played yet.
+    conn.execute("INSERT INTO player_game_logs VALUES "
+                 "('nfl',2025,'014','DAL@NYG','Malik Nabers','NYG','rec_yds')")
+    conn.execute("INSERT INTO player_game_logs VALUES "
+                 "('nfl',2025,'009','NE@SEA','Rhamondre Stevenson','NE','rush_yds')")
     # TWO MEN, ONE NAME, one week — the ambiguity the len()==1 guards
     # exist for. Shared names are ordinary in football rosters, and a
     # double-ingest produces the same shape.
@@ -262,6 +268,43 @@ def test_a_prop_lands_on_the_day_its_player_actually_played():
     res = ledger.backfill_game_days(conn, hist)
     assert _day(conn, "Jordan Love") == "2026-09-13"
     assert res["filled"] == 1 and res["unresolved"] == 0, res
+
+
+def test_a_prop_lands_when_every_club_the_player_could_be_on_plays_that_day():
+    """The 206 rows of 2026-09-09: Week 1 props with no log row yet,
+    because the games had not been played. His club from last season is
+    not evidence about this week — players move — but the SCHEDULE is:
+    NYG play Sunday, so a bet on a man who might be a Giant is on a
+    Sunday game whether or not he still is one."""
+    conn, hist = _db(), _hist()
+    _unstamped(conn, "nfl", "2026-W01", "Malik Nabers", "rec_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    assert _day(conn, "Malik Nabers") == "2026-09-13"
+    assert res["by_route"].get("player's clubs all play that day") == 1, res
+
+
+def test_a_prop_is_refused_when_his_clubs_play_on_different_days():
+    """NE open on the Thursday. A player who could be a Patriot or a
+    Giant has two possible days and the schedule does not settle it, so
+    it stands down — which is the case where guessing costs most."""
+    conn, hist = _db(), _hist()
+    hist.execute("INSERT INTO player_game_logs VALUES "
+                 "('nfl',2024,'003','DAL@NYG','Rhamondre Stevenson','NYG','rush_yds')")
+    hist.commit()
+    _unstamped(conn, "nfl", "2026-W01", "Rhamondre Stevenson", "rush_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    assert _day(conn, "Rhamondre Stevenson") is None
+    assert res["unresolved"] == 1, res
+
+
+def test_a_played_game_still_beats_the_schedule_inference():
+    """Route 2 is exact — the log says which game he was ON THE FIELD
+    for. It must be consulted first, or a man who moved mid-season gets
+    placed by a club he no longer plays for."""
+    conn, hist = _db(), _hist()
+    _unstamped(conn, "nfl", "2026-W01", "Jordan Love", "pass_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    assert res["by_route"].get("player log") == 1, res
 
 
 def test_a_game_bet_lands_via_the_team_it_names():

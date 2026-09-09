@@ -2216,6 +2216,34 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
                 (season, period, player)).fetchall()
             if len(r) == 1:
                 return r[0][0], "player log"
+        # 2b. THE PLAYER'S TEAM, when every team he could be on played
+        #     the same day. A Week 1 prop has no log row yet — the game
+        #     has not been played — so route 2 finds nothing, which is
+        #     exactly the state 206 rows were in on 2026-09-09.
+        #
+        #     His team from other weeks is not evidence about THIS week:
+        #     players change clubs, and a wrong team is a wrong Sunday,
+        #     which is the invisible error this whole function refuses to
+        #     make. But it does not have to be. Take every team he has
+        #     ever logged for, look up when each of them plays this week,
+        #     and if those dates agree the answer holds no matter which
+        #     team is the right one. That is not an inference about the
+        #     player at all; it is a fact about the schedule.
+        #
+        #     Most of an NFL week is Sunday, so this places the bulk of a
+        #     slate and stands down on the Thursday and Monday games —
+        #     which are the ones where being wrong would matter most.
+        if player:
+            r = hist_conn.execute(
+                "SELECT DISTINCT g.date FROM games g WHERE g.sport='nfl' "
+                "AND g.season=? AND g.period=? AND g.date IS NOT NULL "
+                "AND (g.home IN (SELECT DISTINCT team FROM player_game_logs "
+                "                WHERE sport='nfl' AND player=?) "
+                " OR  g.away IN (SELECT DISTINCT team FROM player_game_logs "
+                "                WHERE sport='nfl' AND player=?))",
+                (season, period, player, player)).fetchall()
+            if len(r) == 1:
+                return r[0][0], "player's clubs all play that day"
         # 3. A game bet: the team, or the matchup key with spaces removed.
         if player:
             r = hist_conn.execute(
