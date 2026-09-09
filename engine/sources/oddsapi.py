@@ -1587,6 +1587,23 @@ class OddsAttachResult:
     #: rematch quietly relabelled onto this week's game is the wrong
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
+    #: GAME PRICES CARRIED WITH NO BOOK NAMED, per market — the number
+    #: task #207 was held open to get. The likelihood board already
+    #: refuses an unattributable football game price outright (that is
+    #: what took MIN ML -220 off the page); the EDGE board does not, and
+    #: the reason it does not is that nobody knew how many
+    #: recommendations the same rule would withdraw. Applying it blind
+    #: the night before Week 1 was one unverified swing too many.
+    #:
+    #: So: counted, never enforced. `--ml-doctor` prints `odds_status`
+    #: whole, so one paste says whether the rule costs nothing (attribute
+    #: everything, close the gap) or costs a shelf (it does not, and the
+    #: hold was right). Tonight's moneyline evidence is 16 of 16 games
+    #: named on BOTH sides, across seven books — spread and total have
+    #: never been counted at all, which is exactly the hole this fills.
+    unattributed_ml: int = 0
+    unattributed_spread: int = 0
+    unattributed_total: int = 0
     reversed_events: int = 0
     #: Games left alone because the price already on them is YOUNGER than
     #: this payload. A refresh that makes a number older is not a
@@ -1836,6 +1853,23 @@ class BoardLinesResult:
     #: rematch quietly relabelled onto this week's game is the wrong
     #: price wearing the right team's name, which is the hardest kind of
     #: wrong number to notice.
+    #: GAME PRICES CARRIED WITH NO BOOK NAMED, per market — the number
+    #: task #207 was held open to get. The likelihood board already
+    #: refuses an unattributable football game price outright (that is
+    #: what took MIN ML -220 off the page); the EDGE board does not, and
+    #: the reason it does not is that nobody knew how many
+    #: recommendations the same rule would withdraw. Applying it blind
+    #: the night before Week 1 was one unverified swing too many.
+    #:
+    #: So: counted, never enforced. `--ml-doctor` prints `odds_status`
+    #: whole, so one paste says whether the rule costs nothing (attribute
+    #: everything, close the gap) or costs a shelf (it does not, and the
+    #: hold was right). Tonight's moneyline evidence is 16 of 16 games
+    #: named on BOTH sides, across seven books — spread and total have
+    #: never been counted at all, which is exactly the hole this fills.
+    unattributed_ml: int = 0
+    unattributed_spread: int = 0
+    unattributed_total: int = 0
     reversed_events: int = 0
     #: Games left alone because the price already on them is YOUNGER than
     #: this payload. A refresh that makes a number older is not a
@@ -2017,6 +2051,9 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             _bk = best_h2h_books(ev, team_map)
             game.home_ml_book = _bk.get(home, "")
             game.away_ml_book = _bk.get(away, "")
+            # COUNTED, NOT ENFORCED — see `unattributed_ml`.
+            if not (game.home_ml_book and game.away_ml_book):
+                result.unattributed_ml += 1
             # …AND WHAT THE MARKET IMPLIES, off real two-sided pairs
             # rather than the shopped one (see `consensus_h2h_fair`).
             _fair = consensus_h2h_fair(ev, team_map)
@@ -2035,6 +2072,8 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             _tb = best_total_books(ev)
             game.total_over_book = _tb.get("over", "")
             game.total_under_book = _tb.get("under", "")
+            if not (game.total_over_book and game.total_under_book):
+                result.unattributed_total += 1
             result.totals += 1
             touched = True
         sp = parse_event_spreads(ev, team_map, home, away)
@@ -2044,6 +2083,8 @@ def apply_board_lines_to_slate(slate, api_key: str | None = None,
             _sb = best_spread_books(ev, team_map, home, away)
             game.home_spread_book = _sb.get(home, "")
             game.away_spread_book = _sb.get(away, "")
+            if not (game.home_spread_book and game.away_spread_book):
+                result.unattributed_spread += 1
             result.spreads += 1
             touched = True
         stot = parse_event_totals(ev, only_books=SHARP_BOOKS)
@@ -2351,6 +2392,9 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 _bk = best_h2h_books(payload, cfg["teams"])
                 game.home_ml_book = _bk.get(home, "")
                 game.away_ml_book = _bk.get(away, "")
+                # COUNTED, NOT ENFORCED — see `unattributed_ml`.
+                if not (game.home_ml_book and game.away_ml_book):
+                    result.unattributed_ml += 1
                 _fair = consensus_h2h_fair(payload, cfg["teams"])
                 game.home_ml_fair = float(_fair.get(home) or 0.0)
                 result.moneylines += 1
@@ -2366,6 +2410,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 _tb = best_total_books(payload)
                 game.total_over_book = _tb.get("over", "")
                 game.total_under_book = _tb.get("under", "")
+                if not (game.total_over_book and game.total_under_book):
+                    result.unattributed_total += 1
             sp = parse_event_spreads(payload, cfg["teams"], home, away)
             if sp:
                 game.spread, game.spread_home_odds, game.spread_away_odds = sp
@@ -2373,6 +2419,8 @@ def apply_odds_to_slate(slate, api_key: str | None = None,
                 _sb = best_spread_books(payload, cfg["teams"], home, away)
                 game.home_spread_book = _sb.get(home, "")
                 game.away_spread_book = _sb.get(away, "")
+                if not (game.home_spread_book and game.away_spread_book):
+                    result.unattributed_spread += 1
             stot = parse_event_totals(payload, only_books=SHARP_BOOKS)
             if stot:
                 game.sharp_total, game.sharp_total_over_odds, \

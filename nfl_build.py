@@ -612,6 +612,12 @@ def main() -> None:
             real_odds = res.matched > 0 or res.events_used > 0
             odds_status.update(matched=res.matched, events=res.events_used,
                                moneylines=res.moneylines,
+                               # The same count off the event path, so a
+                               # build that never took the board path is
+                               # not silently uncounted (#207).
+                               event_unattributed_ml=res.unattributed_ml,
+                               event_unattributed_spread=res.unattributed_spread,
+                               event_unattributed_total=res.unattributed_total,
                                quota_remaining=res.quota.remaining,
                                source="cache" if res.from_cache else "fresh",
                                event_stale_prices=res.stale_game_prices,
@@ -735,6 +741,13 @@ def main() -> None:
                 board_from_cache=not args.board_odds,
                 board_older_than_attached=bres.older_than_attached,
                 board_reversed_events=bres.reversed_events,
+                # HOW MANY GAME PRICES CARRY NO BOOK NAME, per market.
+                # Counted only — see oddsapi.unattributed_ml for why the
+                # edge board does not yet refuse them, and what number
+                # would close that hold.
+                board_unattributed_ml=bres.unattributed_ml,
+                board_unattributed_spread=bres.unattributed_spread,
+                board_unattributed_total=bres.unattributed_total,
                 board_games=bres.games_priced,
                 board_moneylines=bres.moneylines,
                 board_totals=bres.totals,
