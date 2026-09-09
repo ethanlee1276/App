@@ -95,8 +95,12 @@ def test_both_inserts_write_the_stamp():
     lands. Capturing only one of them answers only half the question, and
     the half it drops is the one that decides whether the veto pays."""
     src = open(os.path.join(ROOT, "engine", "ledger.py"), encoding="utf-8").read()
-    main_ins = src[src.index("INSERT OR IGNORE INTO bets (ts, sport, date, "
-                             "player, market, side, line, "):]
+    # Anchored on a column list unique to the MAIN insert rather than on
+    # its opening words: the statement now leads with `game_day` (the NFL
+    # week-label fix, 2026-09-08), and pinning the first four columns
+    # made adding a fifth read as a missing movement stamp.
+    main_ins = src[src.index("stake_dollars, status, category, leg, "
+                             "proj_minutes"):]
     assert "move_delta, move_steam" in main_ins[:1200]
     loose = src[src.index("category='loose'"):]
     assert "move_delta, move_steam" in loose[:1400] or \

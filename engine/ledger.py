@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS bets (
     status TEXT DEFAULT 'open', actual REAL,
     pnl_units REAL, pnl_dollars REAL, closing_line REAL,
     category TEXT DEFAULT 'main',
+    game_day TEXT,
     UNIQUE (sport, date, player, market, category)
 );
 """
@@ -253,6 +254,34 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
         conn.execute("ALTER TABLE bets ADD COLUMN why_note TEXT")
     except sqlite3.OperationalError:
         pass
+    # THE DAY THE GAME WAS ACTUALLY PLAYED, beside the settle key.
+    #
+    # `date` is a JOIN KEY, not a calendar date, and for the NFL it is a
+    # week label — "2026-W01", from nflverse's slate key. That is not an
+    # oversight to fix in place: NFL results are filed in the history DB
+    # under season + period "001", `_hist_where` resolves the label onto
+    # them, and this file already says twice what happens if you put an
+    # ISO day there instead — "a TD bet dated with the game's ISO Sunday
+    # would query a period nothing is filed under and sit open forever".
+    #
+    # So the settle key stays, and the calendar gets a column of its own.
+    # Everything that asks a DATE question — the profit calendar, the
+    # equity curve, every `date >= ?` window — was reading the join key
+    # and getting a label, which does three things at once:
+    #
+    #   * every Week 1 bet collapses into one bucket on the calendar;
+    #   * "W" sorts above every digit, so that bucket lands at the far
+    #     right of the curve no matter when the games were played;
+    #   * `date >= '2026-08-01'` is TRUE for every week label ever
+    #     written, so a one-month window silently contains every NFL bet
+    #     in the journal.
+    #
+    # NULL on every row written before this column existed, which is what
+    # `day_expr` below falls back for.
+    try:
+        conn.execute("ALTER TABLE bets ADD COLUMN game_day TEXT")
+    except sqlite3.OperationalError:
+        pass
     for k, v in DEFAULTS.items():
         conn.execute("INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)", (k, v))
     conn.commit()
@@ -268,6 +297,54 @@ def get_cfg(conn, key: str) -> str:
 def set_cfg(conn, key: str, value) -> None:
     conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit()
+
+
+# --- the calendar day, kept apart from the settle key -----------------------
+
+#: A real calendar day and nothing else. `date.fromisoformat` is NOT a
+#: validator here: on Python 3.11+ it accepts "2026-W01" and returns
+#: 2025-12-29 without complaint, so a parse-only guard would hand the
+#: calendar a confident wrong answer instead of no answer. Shape first.
+_ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def game_day_for(row: dict, slate_date: str = "") -> str:
+    """The calendar day this bet's game is played, or "" if unknowable.
+
+    Tried in order of how directly each field means "the day this game
+    is played": the row's own `game_date` (the NFL's comes from
+    nflverse's `gameday`, a real local date), then the row's `date`,
+    then the slate's. Every candidate goes through the shape check, so a
+    week label falls through to the next one rather than becoming a day.
+
+    `commence_time` IS DELIBERATELY NOT CONSULTED, though every odds row
+    carries one. It is a UTC instant, and a Sunday-night kickoff is
+    00:20Z on Monday — slicing ten characters off it files half the NFL
+    week on the wrong day. That is the same UTC drift `_journal_longshot_rows`
+    already documents costing thirty home-run bets their settle.
+    """
+    for cand in (row.get("game_date"), row.get("date"), slate_date):
+        text = str(cand or "").strip()
+        if _ISO_DAY_RE.match(text):
+            return text
+    return ""
+
+
+def day_expr(table: str = "") -> str:
+    """SQL for "the day this bet belongs to", for grouping and windowing.
+
+    ONE EXPRESSION, because there are several readers and they must agree
+    — a calendar that buckets one way and a footer that sums another is
+    the disagreement `pnl_curve`'s own comment was written about.
+
+    Falls back to `date` for rows journalled before `game_day` existed.
+    That leaves the NFL's old week-labelled rows exactly where they were,
+    which is wrong but is not made wrong BY this: they carry no day, and
+    inventing one would be worse than showing the label. `--backfill-days`
+    is what actually moves them.
+    """
+    p = f"{table}." if table else ""
+    return f"COALESCE(NULLIF({p}game_day, ''), {p}date)"
 
 
 def set_paper_mode(conn, on: bool) -> None:
@@ -551,16 +628,22 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         # rather than whatever the store holds by the time it settles.
         temp, bias = cal_correction(sport, r["market"])
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
+            "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, category, leg, proj_minutes, lead_min, "
             "park_hr, wind_out, roofed, lineup_slot, lineup_conf, rest_days, "
             "body_clock, pen_own, pen_opp, raw_prob, cal_temp, cal_bias, "
             "fair_consensus, consensus_books, move_delta, move_steam, "
             "move_first_sharp, velo_delta, tto_proj, opp_zone_rate) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, "
             "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
+            # `date` is the SETTLE KEY and stays whatever the sport files
+            # its results under; `game_day` is the calendar. For every
+            # daily sport they are the same string. For the NFL the first
+            # is "2026-W01" and the second is the Sunday.
+            (game_day_for(r, date),
+             now, sport, date, r["player"], r["market"], r.get("side", "OVER"),
              r["line"], r.get("book", ""), r.get("odds", -110), r.get("projection"),
              r.get("hit_prob"), r.get("edge"), r.get("confidence"), r.get("grade"),
              stake_units,
@@ -649,12 +732,14 @@ def log_recommendations(conn, result: dict, only_recommended: bool = True) -> in
         if stake_units <= 0:
             continue                     # not a bet — see above
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, side, line, "
+            "INSERT OR IGNORE INTO bets (game_day, ts, sport, date, player, "
+            "market, side, line, "
             "book, odds, projection, hit_prob, edge, confidence, grade, stake_units, "
             "stake_dollars, status, leg, rest_days, body_clock, lead_min, "
             "wind_out, roofed) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
-            (now, sport, date, player, market, side, line,
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', ?, ?, ?, ?, ?, ?)",
+            (game_day_for(r, date),
+             now, sport, date, player, market, side, line,
              r.get("book", "best"), r.get("odds", -110), None,
              r.get("win_prob"), r.get("edge"), r.get("confidence"),
              r.get("grade"), stake_units, round(stake_units * unit_dollars, 2),
@@ -3861,7 +3946,15 @@ def pnl_curve(conn, sport: str | None = None,
     # ROI the verdict prints from performance(). It was not: this summed
     # every stake, the verdict skipped the pushes, and the page carried
     # both numbers for one book.
-    q = ("SELECT date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
+    # THE CALENDAR DAY, not the settle key. `date` is a join key whose
+    # NFL value is a week label, and this query groups, windows and
+    # ORDERs by it — so before `game_day` existed, every Week 1 NFL bet
+    # landed in one bucket, that bucket sorted to the far right of the
+    # curve ("W" outranks every digit), and `date >= ?` was TRUE for a
+    # week label whatever the window asked for. A one-month chart quietly
+    # contained every NFL bet in the journal.
+    day = day_expr()
+    q = (f"SELECT {day} AS date, SUM(pnl_units) AS day_u, COUNT(*) AS n, "
          "SUM(status='won') AS w, SUM(status='lost') AS l, "
          "SUM(CASE WHEN status='push' THEN 0 ELSE stake_units END) AS staked, "
          "SUM(COALESCE(pnl_dollars, 0)) AS day_d, "
@@ -3881,9 +3974,9 @@ def pnl_curve(conn, sport: str | None = None,
     # curve is the more convincing of the two, so the disagreement would
     # read as the headline lying.
     if since:
-        q += " AND date >= ?"
+        q += f" AND {day} >= ?"
         args.append(since)
-    q += " GROUP BY date ORDER BY date"
+    q += f" GROUP BY {day} ORDER BY {day}"
     out, cum = [], 0.0
     for r in conn.execute(q, args):
         cum += r["day_u"] or 0.0

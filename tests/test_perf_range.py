@@ -47,10 +47,14 @@ FN = APP[APP.index("async function renderHomePerf()"):APP.index("/* The right ra
 def _ledger(rows):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE bets (id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                 "date TEXT, sport TEXT, odds INTEGER, stake_units REAL, "
-                 "stake_dollars REAL, status TEXT, pnl_units REAL, "
-                 "pnl_dollars REAL, category TEXT)")
+    # THE REAL TABLE, not a hand-picked subset of it. This fixture used
+    # to declare the nine columns the window arithmetic reads, which made
+    # it narrower than production — and the day `pnl_curve` learned to
+    # read `game_day` (the NFL week-label fix, 2026-09-08) this file
+    # failed with "no such column" while nothing was wrong with the code.
+    # A fixture that is narrower than production tests a schema that does
+    # not exist.
+    conn.executescript(ledger._BETS_TABLE)
     conn.executemany(
         "INSERT INTO bets (date, sport, odds, stake_units, stake_dollars, "
         "status, pnl_units, pnl_dollars, category) VALUES (?,?,?,?,?,?,?,?,?)",
