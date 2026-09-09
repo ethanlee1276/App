@@ -82,10 +82,12 @@ def _paywalled(sport="nfl", rows=None):
     full.parent.mkdir(parents=True, exist_ok=True)
     board = {"recommendations": rows, "counts": {}, "games": []}
     full.write_text(json.dumps(board))
-    # Exactly what publish() leaves behind: same file, paid keys gone.
-    stripped = {k: v for k, v in board.items()
-                if k not in gate.paid_keys_for(pub.name)}
-    pub.write_text(json.dumps(stripped))
+    # Exactly what publish() leaves behind — through gate.redact itself,
+    # not a hand-rolled imitation of it. The real strip keeps the key and
+    # empties it ("0 picks tonight" is true and is not a paywall), which
+    # is precisely why every reader downstream saw a legal empty list
+    # rather than a KeyError.
+    pub.write_text(json.dumps(gate.redact(board, pub.name)))
     return tmp
 
 
@@ -112,7 +114,8 @@ def test_the_public_copy_really_does_lose_the_picks():
         (tmp / "web" / "data" / "recommendations.json").read_text())
     full = json.loads(
         (tmp / "data" / "built" / "recommendations.json").read_text())
-    assert pub.get("recommendations") in (None, [])
+    assert pub.get("recommendations") == [], pub
+    assert "recommendations" in pub, "the key survives; only the rows go"
     assert len(full["recommendations"]) == 3
 
 
