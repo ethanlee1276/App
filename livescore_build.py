@@ -118,7 +118,41 @@ def utc_stamp() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _row(r: dict) -> dict:
+def _win_prob(league: str, st, home: str, away: str) -> dict | None:
+    """The live win-probability block for one game, or None to show none.
+
+    NO PREGAME LINE IS PASSED, deliberately. This builder polls every few
+    seconds and holds no board; reaching for one here would put a
+    paywalled file read on the fast clock for a number that matters most
+    in the first quarter and barely at all after. The front end merges
+    this row with the board card that already carries `game_spread`, and
+    that is where the prior belongs — until then this is the score and
+    the clock, which is what `basis` says it is.
+
+    Returns None rather than a neutral 50% whenever the clock cannot be
+    read: overtime, a pre-game card, a shape the feed did not give. An
+    absent panel is honest; a confident coin flip on a game that has not
+    kicked off is not.
+    """
+    from engine import livewp
+    left = livewp.seconds_left(league, getattr(st, "period", None),
+                               getattr(st, "clock", None))
+    if left is None:
+        return None
+    try:
+        margin = float(st.home_score) - float(st.away_score)
+    except (TypeError, ValueError):
+        return None
+    try:
+        return livewp.reading(league, home, away, margin, left)
+    except Exception:                                      # noqa: BLE001
+        # A sport with no measured margin SD refuses here — see
+        # `gamebets._sd`. That is the right answer and it must not take
+        # the scoreboard down with it: the page still wants the score.
+        return None
+
+
+def _row(r: dict, league: str = "") -> dict:
     """One game in the shape `app.js`'s fetchAllLive merge expects.
 
     `home` and `away` are the LEAGUE BOARD'S abbreviations, resolved by
@@ -146,6 +180,15 @@ def _row(r: dict) -> dict:
         live["yard_line"] = st.yard_line
     if st.possession:
         live["possession"] = st.possession
+    # WIN PROBABILITY, and only when the clock could actually be read.
+    # Written as a nested block rather than loose keys so a card can tell
+    # "this game has no reading" from "this field happened to be zero" —
+    # the same reason `yard_line` is absent rather than null above.
+    if st.state == "live":
+        _wp = _win_prob(str(league or "").lower(), st,
+                        r.get("home") or "", r.get("away") or "")
+        if _wp:
+            live["win_prob"] = _wp
     out = {"event_id": r["event_id"], "home": r["home"], "away": r["away"],
            "home_name": r["home_name"], "away_name": r["away_name"],
            "live": live}
@@ -185,7 +228,7 @@ def build(league: str, pbp_dir: Path | None = None) -> dict:
         return {"generated_at": now, "league": league, "games": [],
                 "note": f"{league.upper()} scoreboard unreadable — "
                         f"{type(exc).__name__}: {exc}"}
-    games = [_row(r) for r in rows]
+    games = [_row(r, league) for r in rows]
     games.sort(key=lambda g: (g["live"]["start_time"] or "", g["event_id"]))
     out = {"generated_at": now, "league": league, "games": games}
     out["plays_note"] = attach_plays(games, league, pbp_dir=pbp_dir)

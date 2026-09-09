@@ -214,6 +214,148 @@ def test_the_idea_list_no_longer_calls_this_impossible():
         "IDEAS.md still lists live win probability as unbuildable"
 
 
+# ------------------------------------------------- the clock, off the feed
+
+def test_a_period_and_a_clock_become_seconds_of_regulation():
+    assert livewp.seconds_left("nfl", 1, "15:00") == 3600
+    assert livewp.seconds_left("nfl", 3, "05:00") == 1200
+    assert livewp.seconds_left("nfl", 4, "0:00") == 0
+
+
+def test_basketball_quarters_are_shorter_and_are_not_footballs():
+    """Twelve-minute quarters, not fifteen. A shared period length would
+    put every hoops game an hour ahead of itself."""
+    assert livewp.seconds_left("nba", 4, "2:00") == 120
+    assert livewp.seconds_left("nba", 1, "12:00") == 2880
+
+
+def test_a_tenths_clock_parses_rather_than_failing():
+    """ESPN gives "00:37.5" inside the last minute. Refusing it would
+    blank the panel exactly when the game is most worth watching."""
+    assert livewp.seconds_left("nfl", 4, "00:37.5") == 37.5
+
+
+def test_overtime_returns_no_reading_at_all():
+    """Past regulation this model has no claim: overtime is a fresh coin
+    flip with its own rules. Pretending the clock ran to zero would print
+    a certainty on a tied game."""
+    assert livewp.seconds_left("nfl", 5, "10:00") is None
+
+
+def test_a_missing_clock_is_not_read_as_a_final():
+    """Guessing "0:00" from an empty string turns every pre-game card
+    into a finished game — the failure that reads as ordinary data."""
+    assert livewp.seconds_left("nfl", 2, "") is None
+    assert livewp.seconds_left("nfl", 2, None) is None
+    assert livewp.seconds_left("nfl", None, "10:00") is None
+
+
+def test_a_clock_too_long_for_the_period_is_refused():
+    """20:00 in an NFL quarter is not an NFL clock. Trusting it would
+    make the game longer than the sport."""
+    assert livewp.seconds_left("nfl", 2, "20:00") is None
+
+
+def test_a_sport_with_no_clock_table_is_refused_not_guessed():
+    assert livewp.seconds_left("mlb", 4, "5:00") is None
+    assert livewp.seconds_left("cricket", 1, "5:00") is None
+
+
+def test_the_period_count_and_the_regulation_length_cannot_disagree():
+    """Both tables are consulted for the same fact. If one gains a sport
+    the other has not, a period length silently becomes wrong rather
+    than absent."""
+    assert set(livewp.PERIODS) <= set(livewp.REGULATION_S)
+    for sport, n in livewp.PERIODS.items():
+        assert livewp.REGULATION_S[sport] % n == 0, sport
+
+
+# ------------------------------------------- and onto the live scoreboard
+
+
+class _State:
+    """The `livescores` state object, cut to what `_row` reads."""
+    state = "live"
+    home_score, away_score = 17, 10
+    period, clock = 3, "05:00"
+    detail = start_time = ""
+    yard_line = possession = None
+
+
+def _live_row(league="nfl", **kw):
+    import livescore_build as lb
+    st = _State()
+    for k, v in kw.items():
+        setattr(st, k, v)
+    return lb._row({"event_id": "1", "home": "SEA", "away": "NE",
+                    "home_name": "Seahawks", "away_name": "Patriots",
+                    "live": st}, league)["live"]
+
+
+def test_a_live_football_game_carries_a_reading():
+    wp = _live_row()["win_prob"]
+    assert wp["leader"] == "SEA"
+    assert 0.5 < wp["home_win_prob"] < 1.0
+    assert wp["seconds_left"] == 1200
+
+
+def test_the_leader_is_named_by_its_own_abbreviation():
+    """"home" and "away" in a payload make the front end resolve them
+    again against a merge key it has already resolved once, and that
+    round trip is where the live tab lost a league to another one."""
+    wp = _live_row(home_score=10, away_score=17)["win_prob"]
+    assert wp["leader"] == "NE", wp
+
+
+def test_a_pre_game_card_gets_no_reading_rather_than_a_coin_flip():
+    """A confident 50% on a game that has not kicked off is worse than
+    an absent panel: it looks like information."""
+    assert "win_prob" not in _live_row(state="pre", period=0, clock="")
+
+
+def test_a_final_gets_no_live_reading():
+    """The scoreboard already says who won. A panel restating it as
+    100% is noise on the one card that needs none."""
+    assert "win_prob" not in _live_row(state="post")
+
+
+def test_a_sport_with_no_clock_table_shows_no_panel_and_still_scores():
+    """Baseball has no game clock at all, so there is nothing to read."""
+    row = _live_row(league="mlb")
+    assert "win_prob" not in row
+    assert row["home_score"] == 17
+
+
+def test_a_refused_margin_sd_is_swallowed_and_the_score_survives():
+    """BASKETBALL, not baseball — and the difference is the whole test.
+    MLB bails on the clock before the SD is ever consulted, so it never
+    exercises the refusal. NBA parses a clock fine and then `_sd` raises
+    for having no measured margin variance. That raise must not take the
+    scoreboard down with it: the page still wants the score."""
+    from engine.gamebets import MARGIN_SD
+    from engine import livewp as _wp
+    assert _wp.seconds_left("nba", 4, "02:00") == 120   # the clock is fine
+    assert "nba" not in MARGIN_SD                       # the variance is not
+    row = _live_row(league="nba", period=4, clock="02:00")
+    assert "win_prob" not in row
+    assert row["home_score"] == 17
+
+
+def test_the_endgame_caveat_reaches_the_payload():
+    wp = _live_row(home_score=13, away_score=10, period=4,
+                   clock="02:00")["win_prob"]
+    assert wp["possession_blind"] is True
+    assert "possession" in wp["caveat"]
+
+
+def test_the_reading_is_nested_so_absent_is_not_zero():
+    """Loose keys would hand the card `null` to tell apart from "this
+    sport has no such thing", which are different facts — the same
+    reason `yard_line` is absent rather than null beside it."""
+    assert isinstance(_live_row()["win_prob"], dict)
+    assert "home_win_prob" not in _live_row()
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

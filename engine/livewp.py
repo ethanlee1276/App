@@ -71,6 +71,56 @@ BLIND_S = 300
 BLIND_MARGIN = {"nfl": 8, "cfb": 8, "nba": 6, "wnba": 6}
 
 
+#: How many periods a regulation game has, and how long each runs.
+#: Derived from REGULATION_S rather than repeated, so the two cannot
+#: disagree about how long a game is.
+PERIODS = {"nfl": 4, "cfb": 4, "nba": 4, "wnba": 4}
+
+
+def seconds_left(sport: str, period, clock) -> float | None:
+    """Seconds left in REGULATION, from a period number and a game clock.
+
+    Returns None when the answer is not a number this model can use, and
+    that is a real answer rather than a failure:
+
+      * OVERTIME. Past regulation the margin model has no claim at all —
+        overtime is a fresh coin flip with its own rules, and pretending
+        the clock ran to zero would print a certainty on a tied game.
+      * A clock the feed did not give, or gave in a shape we have not
+        verified. Guessing "0:00" from an empty string would turn every
+        pre-game card into a final.
+
+    The caller shows nothing rather than something wrong. `livescores`
+    hands this straight through from ESPN, so the shapes are theirs.
+    """
+    key = str(sport or "").lower()
+    periods = PERIODS.get(key)
+    total = REGULATION_S.get(key)
+    if not periods or not total:
+        return None
+    try:
+        per = int(period)
+    except (TypeError, ValueError):
+        return None
+    if per < 1 or per > periods:
+        return None                    # pre-game, or overtime — see above
+    per_len = total / periods
+    text = str(clock or "").strip()
+    if not text:
+        return None
+    try:
+        if ":" in text:
+            mins, _, secs = text.partition(":")
+            left_in_period = int(mins or 0) * 60 + float(secs or 0)
+        else:
+            left_in_period = float(text)
+    except ValueError:
+        return None
+    if left_in_period < 0 or left_in_period > per_len:
+        return None                    # not a clock for this sport
+    return left_in_period + (periods - per) * per_len
+
+
 def win_prob(sport: str, margin: float, seconds_left: float,
              pregame_margin: float = 0.0,
              regulation_s: float | None = None) -> float:
