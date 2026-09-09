@@ -5235,6 +5235,7 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     point at."""
     import json as _json
     from engine.betting import BASE_THRESHOLDS, favourite_surcharge, net_edge
+    from engine.calibrate import is_reliable as _reliable, shut_reason
     _GRADE_FLOOR = min(net_min for _, _, net_min in BASE_THRESHOLDS)
     from engine import gate as _gate
     rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
@@ -5315,6 +5316,14 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
             # the number looks.
             "started": any("already started" in w
                            for w in (r.get("warnings") or [])),
+            # SHUT BY CALIBRATION, which is not a bar and cannot be
+            # relaxed. `engine/calibrate.SHUT_MARKETS` hard-refuses
+            # nfl:rush_yds (AUC 0.479 against real closes) and
+            # nfl:rec_yds (0.47) — the model ranks the yardage well and
+            # cannot price the line — and `is_reliable` refuses any
+            # market whose fit pinned to the edge of its grid.
+            "market": r.get("market") or "",
+            "shut": not _reliable(sport, r.get("market") or ""),
         })
     started_n = sum(1 for x in rows if x["started"])
     if started_n:
@@ -5336,8 +5345,16 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
           f"as bad data\n  {sum(1 for x in rows if x['edge'] > ceiling)} / "
           f"{len(rows)} props exceed it\n")
 
+    # THE SHUT GATE COMES FIRST, above every number. A market the engine
+    # refuses to price is not a prop that failed a bar — it is a prop
+    # that was never eligible, and putting it anywhere further down let
+    # its deaths pile onto whichever numeric gate happened to catch them.
+    # On 2026-09-09 that gate was "engine graded it", and the report's
+    # advice — "relaxing it alone would add 9 more" — was advice to put
+    # rushing and receiving yards back on a board they were measured off.
     gates = [
         ("game hasn't started yet", lambda x: not x["started"]),
+        ("market is one we can price at all", lambda x: not x["shut"]),
         ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
         ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
         (f"clears the graded bar (net ≥ {_GRADE_FLOOR*100:.1f}pt "
@@ -5350,6 +5367,18 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     print("Each gate on its own:")
     for name, fn in gates:
         print(f"  {sum(1 for x in rows if fn(x)):>5} / {len(rows)}   {name}")
+    shut_by: dict[str, int] = {}
+    for x in rows:
+        if x["shut"]:
+            shut_by[x["market"]] = shut_by.get(x["market"], 0) + 1
+    if shut_by:
+        print(f"\n{sum(shut_by.values())} of {len(rows)} are in a market "
+              f"this model cannot price, so no threshold reaches them:")
+        for m, n in sorted(shut_by.items(), key=lambda kv: -kv[1]):
+            why = shut_reason(sport, m)
+            print(f"  {n:>5}  {m} — "
+                  + (why if why else "calibration fit pinned to the edge "
+                                     "of its search grid"))
     print("\nCumulative (a pick must clear every one):")
     surviving = rows
     for name, fn in gates:
@@ -5382,7 +5411,17 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         # everything but this gate, but how many MORE would clear if it
         # went. A gate that costs nothing is not the one to argue about.
         gain = worst_n - len(surviving)
-        if gain > 0:
+        if gain > 0 and worst == "market is one we can price at all":
+            # NOT "relax it". This gate is a measured refusal, not a
+            # threshold — the fix is a distribution that prices the
+            # market, and until there is one, the honest board does not
+            # offer it. See engine/calibrate.SHUT_MARKETS.
+            print(f"\nBiggest single loss: “{worst}” — {gain} more would "
+                  f"clear every other gate. They are NOT available: this "
+                  f"is a measured refusal, not a bar to lower, and the "
+                  f"only thing that reopens it is a model that can price "
+                  f"the market.")
+        elif gain > 0:
             print(f"\nCostliest gate: “{worst}” — relaxing it alone would "
                   f"add {gain} more, taking the board to {worst_n}.")
         else:

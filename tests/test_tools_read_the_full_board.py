@@ -63,8 +63,8 @@ def _empty_ledger():
 
 
 def _prop(player="Puka Nacua", odds=-115, hit=0.62, rec=True, edge=0.05,
-          conf=7.4):
-    return {"player": player, "market": "rec_yds", "side": "over",
+          conf=7.4, market="receptions"):
+    return {"player": player, "market": market, "side": "over",
             "line": 64.5, "odds": odds, "hit_prob": hit, "edge": edge,
             "has_market": True, "recommended": rec, "confidence": conf,
             "grade": "Play", "reasons": ["Measured: 12-game usage baseline"]}
@@ -237,6 +237,70 @@ def test_an_empty_board_still_gets_the_binding_gate_sentence():
     """Unchanged, and the case the original code was written for."""
     out = _run(launch.why_empty, _paywalled(rows=_band(6, conf=3.0)), "nfl")
     assert "Binding gate" in out, out
+
+
+# ------------------------------------------- the market the model refuses
+
+def test_a_shut_market_is_its_own_gate_and_not_the_graders_fault():
+    """2026-09-09, the real board: 173 priced props, 164 graded Pass, and
+    the report named "engine graded it" as the costliest gate. It is not.
+    `engine/calibrate.SHUT_MARKETS` hard-refuses nfl:rush_yds (AUC 0.479
+    against real closes) and nfl:rec_yds (0.47) — every prop in them dies
+    before a threshold is consulted, and with no gate of their own their
+    deaths landed on whichever numeric gate caught them."""
+    rows = _band(3) + _band(9, market="rush_yds")
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    line = [ln for ln in out.splitlines()
+            if ln.strip().endswith("market is one we can price at all")
+            and "/" in ln]
+    assert len(line) == 1, out
+    assert line[0].split()[0] == "3", line          # 3 of 12 are priceable
+    assert line[0].split()[2] == "12", line
+
+
+def test_it_names_the_shut_markets_and_says_why_each_is_shut():
+    """"calibration 172" is a mystery; "rushing yards is shut: AUC 0.479
+    against real closes" is something to act on. The reason is quoted
+    from calibrate, not paraphrased here, so the two cannot drift."""
+    from engine.calibrate import shut_reason
+    out = _run(launch.why_empty,
+               _paywalled(rows=_band(9, market="rush_yds")), "nfl")
+    assert "cannot price" in out, out
+    assert "rush_yds" in out, out
+    assert shut_reason("nfl", "rush_yds")[:40] in out, out
+
+
+def test_the_shut_gate_is_never_offered_as_something_to_relax():
+    """The advice the old report gave — "relaxing it alone would add 9
+    more" — was advice to put rushing and receiving yards back on a board
+    they were measured off. There is no bar here to lower."""
+    rows = _band(3) + _band(9, market="rush_yds")
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    assert "Costliest gate" not in out, out
+    assert "measured refusal, not a bar to lower" in out, out
+
+
+def test_a_priceable_market_is_still_offered_as_relaxable():
+    """The negative control: an ordinary threshold IS worth arguing
+    about, and must keep saying so."""
+    rows = _band(3) + _band(9, conf=3.0)
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    assert "Costliest gate" in out, out
+    assert "measured refusal" not in out, out
+
+
+def test_the_shut_gate_sits_above_every_numeric_one():
+    """Order is the finding. Below them, a shut prop is first counted as
+    a grading failure or an edge failure, and the report then blames the
+    bar that happened to catch it."""
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    fn = src.split("def why_empty", 1)[1].split("\ndef ", 1)[0]
+    # From the list literal onward — the gate labels are unique enough to
+    # order by, and the list itself cannot be split on "]" because the
+    # lambdas inside it carry subscripts.
+    block = fn.split("gates = [", 1)[1]
+    assert block.index("we can price at all") < block.index("grade ≠ Pass")
+    assert block.index("we can price at all") < block.index("net edge > 0")
 
 
 if __name__ == "__main__":
