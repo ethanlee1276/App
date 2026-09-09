@@ -2485,6 +2485,15 @@ select.calc-in { width: auto; font-weight: 600; }
 /* ---------------- The book report card (Scanner) ---------------- */
 .br-head { margin-top: 22px; }
 
+/* The line that checks our own sharp-book list against the table above
+   it. Agate, same weight as .sw-note — it is a footnote about our
+   judgement, not a headline — but the named books are bold, because the
+   whole reason it is on the page is that somebody should be able to see
+   WHICH book we called sharp and were wrong about. */
+.br-vs { margin: 9px 2px 0; color: var(--text-mute); font-size: var(--fs-2xs);
+         line-height: var(--lh-body); max-width: var(--measure-wide); }
+.br-vs b { color: var(--text); font-weight: 700; }
+
 /* ---------------- Delivery mechanics (roadmap #8) ---------------- */
 /* The same one-shot flash the live ticks use — a card whose number
    moved in the last rebuild says so once, then goes quiet. */

@@ -13948,6 +13948,62 @@ function renderScanner() {
    what renderScanner just drew. */
 let _brCache = null, _brAt = 0;
 
+/* Whether our own sharp-book list survives the table above it.
+
+   `engine/booksharp.compare_to_the_list` calls itself "the point of the
+   whole module" and it is right: the ranking is interesting, but the
+   question worth asking is whether the hand-written list — the one
+   `engine.odds.is_sharp_book` consults before we will quote a book as a
+   reference price — is backed by anything. The build has computed that
+   on every cycle and published it in `vs_list`. No page named the
+   field, so the answer shipped to the browser and stopped there.
+
+   IT RENDERS WHEN THE ANSWER IS "the list checks out" TOO. A check that
+   is invisible whenever it passes is a check nobody believes when it
+   fails, and this one is a claim about our own judgement. */
+
+/* Below this many ranked books, "top half" and "bottom half" are two
+   and two, and saying a book is in the wrong half of a four-row table
+   dressed as three is a stronger claim than the sample can carry. */
+const VS_MIN_BOOKS = 4;
+
+function bookVsListHTML(vs) {
+  if (!vs) return "";                       // a build older than the field
+  const n = Number(vs.n_ranked) || 0;
+  if (!n) return "";                        // the card is not drawn either
+  const name = (a) => (a || []).map((b) => escapeHtml(b)).join(", ");
+  if (n < VS_MIN_BOOKS) {
+    return `<p class="br-vs">Only ${plural(n, "book")} clears the sample bar
+      so far — too thin to say which half of this table anybody is in, which
+      is the check this line is here to make.</p>`;
+  }
+  const named = vs.asserted_sharp || [];
+  const bad = vs.asserted_but_not || [];
+  const unnamed = vs.sharp_but_unnamed || [];
+  const bits = [];
+  if (!named.length) {
+    bits.push(`None of the books we treat as sharp has enough tracked series
+      here yet, so this table cannot check that list.`);
+  } else {
+    bits.push(`We treat ${name(named)} as sharp — the ${
+      pluralWord(named.length, "book", "books")} allowed to set the reference
+      price we measure a quote against.`);
+    bits.push(bad.length
+      ? `<b>${name(bad)}</b> ${pluralWord(bad.length, "prices", "price")} in
+         the bottom half of this table. We call ${
+         pluralWord(bad.length, "it", "them")} sharp; our own snapshots do not.`
+      : `Every one of them sits in the top half of this table.`);
+  }
+  if (unnamed.length) {
+    bits.push(`<b>${name(unnamed)}</b> ${
+      pluralWord(unnamed.length, "is", "are")} in the measured top three and
+      not on that list.`);
+  }
+  bits.push(`This compares early prices to the closing consensus and nothing
+    else, and it has not changed which books we shop.`);
+  return `<p class="br-vs">${bits.join(" ")}</p>`;
+}
+
 async function renderBookReport() {
   const host = document.getElementById("scanner-body");
   if (!host || document.getElementById("bookreport-card")) return;
@@ -13988,6 +14044,7 @@ async function renderBookReport() {
               Math.round(100 * (b.lead_rate || 0))}% · n=${b.n}</span>
           </div>`).join("")}
       </div>
+      ${bookVsListHTML(d.vs_list)}
       <p style="opacity:.55;font-size:.85em;margin-top:8px">Cut ${escapeHtml(String(d.generated_at || "").slice(0, 10))}
         from ${d.min_series}+ tracked series per book. Books below the sample bar are unranked, not absent.</p>
     </div>`);
