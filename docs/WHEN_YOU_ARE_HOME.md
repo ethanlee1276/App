@@ -233,6 +233,52 @@ cd /srv/qellys && python3 launch.py --why-empty nfl | head -40
 
 ---
 
+## 5b. Which numbers we compute and nobody ever sees (read-only)
+
+You asked for *"every single piece of data we have"*. I checked every
+file in `web/data/` has a reader — that part came back clean. Checking
+every FIELD INSIDE those files is this, and it only works where real
+data lives, because half the fields are null on my machine and a null
+tells you nothing.
+
+```bash
+cd /srv/qellys && python3 -m engine.feedaudit
+```
+
+It prints every key the build publishes that no page names. Two kinds
+land in that list and they look identical from the outside:
+
+* something computed correctly every cycle that nobody can see — a
+  feature that is silently off; or
+* an internal the build needs and the front end was never meant to read,
+  which is fine.
+
+Read the marks, not just the names:
+
+* **no mark** — the field is carrying real values on the box and no page
+  shows them. This is the short list and the interesting one.
+* **`[always empty]`** — nobody reads it AND it is empty in the file. On
+  the droplet that is a stronger signal than on my machine, but still
+  check before deleting anything.
+* **`internal — <reason>`** — already classified, only shown with
+  `--all`. If a name in the report should be here instead, tell me the
+  name and I will write the reason down beside it.
+
+It never exits nonzero and it touches nothing. One feed at a time if the
+list is long:
+
+```bash
+cd /srv/qellys && python3 -m engine.feedaudit record.json
+```
+
+Paste me the output and I will turn each line into either a fix or a
+sentence in the allow-list. On my box the names carrying real values
+were `starting_bankroll`, `clv_coverage`, `curve_from`, `predmarket`,
+`staked_d` and `tax_by_book` — I expect that list to look different
+where the real numbers are.
+
+---
+
 ## 6. If the site ever feels slow while you are on it
 
 Run this WHILE it feels slow, not after — it is a snapshot:
