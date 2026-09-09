@@ -30601,6 +30601,46 @@ function openPlayerRoute(slug) {
   return true;
 }
 
+/* THE ADDRESS BAR MUST NOT NAME A PAGE NOBODY IS ON.
+
+   Both routers — `initialView` at boot and the hashchange handler — end
+   with a guard that returns when the hash matches nothing they know. That
+   is the right call about the VIEW: an unknown hash should not move
+   anybody. It was the wrong call about the URL, which was left pointing
+   at whatever was typed. Reproduced 2026-09-09 with `#rankings`, which
+   reads like a real page and is not one (the rankings live on the
+   standings page): the injuries page stayed on screen and the address bar
+   said #rankings. Copy that URL, send it to somebody, and they get a
+   third thing.
+
+   It is the same lie the hashchange handler's own comment was written to
+   stop — "the URL and the page must never disagree" — and the branch
+   directly above this one, the one that refuses a tab the current sport
+   does not have, already does exactly this. This just gives the
+   fall-through the same manners.
+
+   `replaceState`, never `pushState`: a correction must not become a
+   history entry, or Back would land on the bad URL and bounce forward
+   again. It also does not fire `hashchange`, so this cannot recurse. */
+function urlBackToView() {
+  /* AN EMPTY HASH IS NOT A LIE, and this line is here because the first
+     version of this function did not have it. The bare address is the
+     canonical one for the board, and the boot router reaches this code on
+     a plain visit — no hash matches nothing, by definition. So every
+     visit to qellysbook.com quietly became qellysbook.com/#recommended:
+     caught in a browser before it shipped, and it would have changed what
+     everybody copies off the home page in exchange for nothing. */
+  if (!location.hash || location.hash === "#") return;
+  const want = "#" + (state.view || "recommended");
+  try {
+    history.replaceState({ view: state.view }, "", want);
+  } catch (e) {
+    /* A file:// page has no session history to rewrite. The view is
+       already right; only the address bar stays wrong, and that is not
+       worth throwing over. */
+  }
+}
+
 function initialView() {
   const h = (location.hash || "").replace("#", "");
   if (entityRoute(h)) return;
@@ -30640,7 +30680,11 @@ function initialView() {
   // standalone page. The league branch above covers it and four more
   // besides, so the special case went with the table that replaced it.
   if (STANDALONE_MODES.includes(h)) { enterStandaloneMode(h); return; }
-  if (VIEW_ORDER.includes(h)) switchView(h);
+  if (VIEW_ORDER.includes(h)) { switchView(h); return; }
+  // Nothing above claimed it. The default view is what is on screen,
+  // so the URL is put back to that rather than left naming a page
+  // this app does not have.
+  urlBackToView();
 }
 
 /* ============================================================
@@ -32214,7 +32258,10 @@ function bind() {
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) return;
+    if (!VIEW_ORDER.includes(h) || !document.getElementById(`view-${h}`)) {
+      urlBackToView();
+      return;
+    }
     // A tab this sport does not have stays unreachable by URL — and the
     // address bar is put back, because refusing to navigate while leaving
     // the URL pointing at the page you refused is the same lie in reverse.
