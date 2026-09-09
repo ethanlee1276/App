@@ -549,6 +549,42 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 }
 .subnav-wrap { margin-bottom: 4px; }
 
+/* THE ROOM INDEX — every room named and described, before you have to
+   guess which tab holds what. Ethan, 2026-09-09: "it's so cool
+   information that we hide … we need to find a better way to show this
+   information on these pages without hiding them in little buttons."
+
+   Auto-fit rather than a fixed column count: this renders eight rooms on
+   Fantasy and would render fewer elsewhere, and a grid told to make four
+   columns draws four columns whether or not there are four things. */
+.room-index {
+  display: grid; gap: 8px; margin: 0 0 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+}
+.room-card {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  cursor: pointer; border-radius: var(--radius-sm);
+  background: var(--fill-subtle);
+  border: var(--hairline) solid var(--border);
+  padding: 11px 13px; font-family: var(--font-sans);
+  transition: background var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+}
+.room-card:hover {
+  background: var(--fill-hover); border-color: var(--text-mute);
+}
+.rc-name {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--text);
+  line-height: var(--lh-tight);
+}
+/* The description the tab bar used to throw away for every room but one.
+   `--measure-tight` because these sit in a narrow column and a sentence
+   allowed to run the full card width reads as a paragraph, not a label. */
+.rc-what {
+  font-size: var(--fs-xs); color: var(--text-dim); font-weight: 500;
+  line-height: var(--lh-snug); max-width: var(--measure-tight);
+}
+
 /* A section title directly under a sub-tab bar is redundant with the tab
    you just pressed, so the first one in a room loses its top margin and
    the room breathes instead. */

@@ -101,12 +101,23 @@ def test_the_tabs_are_a_real_tablist_for_a_keyboard():
     """Five buttons a keyboard user has to Tab through to reach the sixth is
     not navigation, it is an obstacle course."""
     js = _js()
-    i = js.index("function subtabbedHTML(")
-    body = js[i:i + 1600]
+    # SLICED TO THE END OF THE FUNCTION, NOT A FIXED BYTE COUNT. Both
+    # windows here were `[:1600]`, and on 2026-09-09 the room index put a
+    # paragraph of comment inside `subtabbedHTML` — which pushed
+    # role="tablist" past character 1600 and failed a keyboard-access
+    # test with a change that touched no keyboard behaviour at all.
+    # test_the_fantasy_page_is_four_rooms carries a comment calling this
+    # "the same slice bug this suite keeps relearning"; it was still
+    # being relearned two tests below the place that said so.
+    def _fn(name):
+        i = js.index(f"function {name}(")
+        return js[i:js.index("\nfunction ", i + 1)]
+
+    body = _fn("subtabbedHTML")
     assert 'role="tablist"' in body and 'role="tab"' in body
     assert 'role="tabpanel"' in body
     assert 'aria-selected' in body
-    bind = js[js.index("function bindSubtabs("):][:1600]
+    bind = _fn("bindSubtabs")
     assert "ArrowRight" in bind and "ArrowLeft" in bind
 
 
@@ -174,7 +185,13 @@ def test_the_fantasy_page_is_four_rooms():
     # which is the same slice bug this suite keeps relearning. The claim
     # is that the four rooms exist, not that they fit in a byte count.
     i = js.index('subtabbedHTML("fantasy"')
-    body = js[i:js.index("]) + _ffFoot", i)]
+    # Sliced to `_ffFoot` itself, not to the exact closing punctuation of
+    # the call. That punctuation changed on 2026-09-09 when the room
+    # index arrived as an options argument — `]) + _ffFoot` became
+    # `], { index: true }) + _ffFoot` — and this test failed for a reason
+    # that has nothing to do with the four rooms it is about. Third time
+    # this slice has bitten; anchoring on the name ends it.
+    body = js[i:js.index("_ffFoot", i)]
     for room in ("usage", "trade", "scripts", "league"):
         assert f'"{room}"' in body, room
 

@@ -172,6 +172,67 @@ def test_the_filled_pills_use_the_token_that_flips_with_the_theme():
         "a below-the-bar row is filled like a pick, arguing with its own chip"
 
 
+def test_every_room_is_named_and_described_on_arrival():
+    """Ethan, 2026-09-09: "it kinda hides really cool features that we
+    have, like the mock draft and the calendar for the fantasy and the
+    around the league and the game scripts … it's so cool information
+    that we hide."
+
+    The descriptions were never missing. Every group carries one in
+    `g[2]`, and the bar rendered exactly ONE — the active room's —
+    throwing the other seven away on every render."""
+    fn = _nocomments(_fn(_js(), "subtabbedHTML"))
+    assert "room-index" in fn, "no index is built"
+    assert "data-roomjump" in fn
+    assert "rc-what" in fn, "the index names rooms without saying what is in them"
+    # It reads g[2] — the SAME description the hint line uses, not a
+    # second set of copy that can drift from it.
+    i = fn.index("room-index")
+    assert "g[2]" in fn[i:i + 500], "the index invented its own descriptions"
+
+
+def test_the_index_is_opt_in_so_it_does_not_restyle_two_other_pages():
+    """Record and Players are roomed too. Switching them on as a side
+    effect of fixing Fantasy is how a change nobody asked for ships."""
+    js = _js()
+    fn = _nocomments(_fn(js, "subtabbedHTML"))
+    assert "(opts || {}).index" in fn, "the index is unconditional"
+    i = js.index('subtabbedHTML("fantasy"')
+    assert "{ index: true }" in js[i:js.index("_ffFoot", i)], \
+        "Fantasy — the page with eight rooms — does not ask for it"
+    for other in ('subtabbedHTML("record"', 'subtabbedHTML("players"'):
+        if other in js:
+            j = js.index(other)
+            assert "index: true" not in js[j:j + 3000], \
+                f"{other} was switched on without being asked"
+
+
+def test_an_index_card_opens_the_room_through_the_same_switch():
+    """Two code paths for "open a room" is two chances for the tab bar,
+    the panels and the hint to disagree about which room is open."""
+    bind = _nocomments(_fn(_js(), "bindSubtabs"))
+    assert "data-roomjump" in bind, "the index cards are decorative"
+    i = bind.index("data-roomjump")
+    assert "show(" in bind[i:i + 400], "a card does not call show()"
+    # And a card is NOT a .subnav-btn. If it were, it would take the
+    # active fill too, and two things on screen would claim to be the
+    # current tab.
+    card = _nocomments(_fn(_js(), "subtabbedHTML"))
+    i = card.index("room-card")
+    assert "subnav-btn" not in card[i - 200:i + 200], \
+        "an index card is styled as a tab and will fight the real one"
+
+
+def test_an_index_card_is_shaped_like_a_control():
+    css = _css()
+    r = _rule(css, ".room-card")
+    assert "background: var(--fill-subtle)" in r
+    assert "border: var(--hairline) solid var(--border)" in r
+    assert "cursor: pointer" in r
+    hover = _rule(css, ".room-card:hover")
+    assert "background: var(--fill-hover)" in hover
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

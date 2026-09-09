@@ -12167,7 +12167,7 @@ const _subtab = {};
  * `groups` is [[id, label, hint, html], ...] in display order.
  * Returns the whole block: tab bar plus panels, ready to assign.
  */
-function subtabbedHTML(view, groups) {
+function subtabbedHTML(view, groups, opts) {
   const live = groups.filter((g) => (g[3] || "").trim());
   if (live.length < 2) return live.map((g) => g[3]).join("");
   const want = _subtab[view];
@@ -12182,7 +12182,39 @@ function subtabbedHTML(view, groups) {
   const panels = live.map((g) => `
     <div class="subgroup" data-subgroup="${escapeAttr(g[0])}" role="tabpanel"
          ${g[0] === active ? "" : "hidden"}>${g[3]}</div>`).join("");
+  /* THE INDEX: EVERY ROOM NAMED AND DESCRIBED, ON ARRIVAL.
+     Ethan, 2026-09-09: "it kinda hides really cool features that we have,
+     like the mock draft and the calendar for the fantasy and the around
+     the league and the game scripts and all that. Like, it's so cool
+     information that we hide."
+
+     The descriptions were already written. Every group carries one in
+     `g[2]`, and this function rendered exactly ONE of them — the active
+     room's — into a single italic line, throwing the other seven away on
+     every render. The Fantasy page describes eight rooms and showed one
+     sentence about one of them.
+
+     So the index is not new copy. It is the copy we already had, all of
+     it, at once.
+
+     OPT-IN PER VIEW, not automatic. Record and Players are roomed too
+     and their room counts are small enough that the tab row alone
+     carries them; switching those pages on as a side effect of fixing
+     Fantasy is how a change nobody asked for ships. Fantasy asks for it
+     because Fantasy is the page with eight rooms and the page Ethan
+     named.
+
+     It is deliberately redundant with the tab row above it, and the
+     redundancy is the point: the row is for SWITCHING once you know what
+     is there, the index is for finding out what is there at all. */
+  const index = !(opts || {}).index ? "" : `
+    <div class="room-index">${live.map((g) => `
+      <button class="room-card" type="button" data-roomjump="${escapeAttr(g[0])}">
+        <span class="rc-name">${escapeHtml(g[1])}</span>
+        ${g[2] ? `<span class="rc-what">${escapeHtml(g[2])}</span>` : ""}
+      </button>`).join("")}</div>`;
   return `<div class="subnav-wrap" data-subnav="${escapeAttr(view)}">
+    ${index}
     <div class="subnav" role="tablist" aria-label="Sections">${tabs}</div>
     <p class="subnav-hint">${escapeHtml(hint)}</p>
   </div>${panels}`;
@@ -12350,6 +12382,13 @@ function bindSubtabs(host) {
       p.hidden = p.dataset.subgroup !== id;
     });
   };
+  // The index cards open a room through the SAME `show`, so the tab
+  // bar, the panels and the hint all stay in step with them. They are
+  // not `.subnav-btn`s: a card that took the active fill would leave two
+  // things on screen claiming to be the current tab.
+  wrap.querySelectorAll("[data-roomjump]").forEach((c) => {
+    c.addEventListener("click", () => show(c.dataset.roomjump));
+  });
   btns.forEach((b, i) => {
     b.addEventListener("click", () => show(b.dataset.subtab));
     b.addEventListener("keydown", (e) => {
@@ -17928,7 +17967,7 @@ async function renderFantasy() {
      // The Sleeper pulse moved to the Waivers tab, beside our own signal
      // — the two are the same question asked of two different sources.
      + offseasonHTML(off) + draftKit],
-  ]) + _ffFoot;
+  ], { index: true }) + _ffFoot;
   bindSubtabs(host);
   _mockBind(host);
   const more = document.getElementById("usage-more");
