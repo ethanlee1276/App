@@ -1010,6 +1010,27 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ---------------- counting things out loud ----------------
+   "4 row(s)" is a programmer's shrug printed at a reader. It says the
+   author knew the number could be one and decided the reader could do
+   the grammar. Every page on this site had it — fifty-odd of them, on
+   the board, the Record page, the import screen, the draft room — and
+   two render functions had already grown their own private `plural`
+   helper rather than type it, which is the tell that the shape was
+   wanted everywhere and owned nowhere.
+
+   `plural` prints the count with the word; `pluralWord` gives the word
+   alone, for the handful of places that build the noun in one statement
+   and the number in another. Both take an explicit plural for the words
+   English does not form by adding s (loss/losses), so nothing has to
+   guess. */
+function pluralWord(n, one, many) {
+  return Number(n) === 1 ? one : (many || one + "s");
+}
+function plural(n, one, many) {
+  return `${n} ${pluralWord(n, one, many)}`;
+}
+
 /* ---------------- date / kickoff formatting ---------------- */
 function formatGameDate(dateStr) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || "");
@@ -2084,7 +2105,7 @@ function talentCardHTML(t) {
     escapeHtml(name)} ${n ? n : "—"}</span>`;
   const fit = t.fit || {};
   return `<div class="card" style="border-left:3px solid var(--good);margin-bottom:12px">
-    <div class="player">${iconMark("check")}Preseason talent prior — ${t.teams_with_prior} team(s)</div>
+    <div class="player">${iconMark("check")}Preseason talent prior — ${plural(t.teams_with_prior, "team")}</div>
     <div class="lf-chips" style="margin:6px 0">
       ${chip("recruiting", L.talent)}${chip("blue-chip", L.blue_chip)}
       ${chip("returning", L.returning)}${chip("portal", L.portal)}
@@ -2255,7 +2276,7 @@ async function renderFutures() {
   }
   host.innerHTML = futuresDoctrine(d) + futuresTeamTable(d) + futuresTotals(d)
     + `<p class="rec-stamp">Built ${escapeHtml(d.generated_at || "")}
-       · ${d.fixtures_remaining || 0} game(s) left to play
+       · ${plural(d.fixtures_remaining || 0, "game")} left to play
        · ${(d.trials || 0).toLocaleString()} simulations.</p>`;
   revealChildren(host);
 }
@@ -2388,7 +2409,7 @@ function renderEmptySlate() {
       <div class="es-title">Games tonight, but no player history to project from</div>
       <div class="es-sub">Every prop on this board is built from stored game
       logs, and this database has
-      <b>${gap.players_found || 0}</b> player(s) with any history for tonight’s
+      <b>${gap.players_found || 0}</b> ${pluralWord(gap.players_found || 0, "player")} with any history for tonight’s
       teams — a prop needs three games. Nothing is broken and no odds are
       wasted; this league’s game logs just have not been loaded yet, and the
       board fills on the refresh after they are.</div>`;
@@ -3215,7 +3236,7 @@ function censusFunnelHTML() {
   const rows = !live.length ? "" : [
     pre.length ? sub("Never reached the model") + pre.map(line).join("") : "",
     gates.length
-      ? sub(`Priced and rejected — ${reached} prop(s) reached the model`)
+      ? sub(`Priced and rejected — ${plural(reached, "prop")} reached the model`)
         + gates.map(line).join("")
       : "",
   ].join("");
@@ -3571,7 +3592,7 @@ function renderLivePicks() {
       finished awaiting the official settle, or waiting on first pitch. Never new in-play
       bets — everything here was placed pre-game.`,
     "No open edge bets on today’s card.",
-    `${edge.length} open edge bet(s) on today’s card${elsewhere
+    `${edge.length} open edge ${pluralWord(edge.length, "bet")} on today’s card${elsewhere
           ? ` · ${elsewhere} open on other boards — a different sport, or a week that has not been played yet.`
             + ` This tab tracks THIS league’s card; the Record page counts them all`
           : ""}. A bet journals the moment it’s recommended and stays here until it
@@ -3582,7 +3603,7 @@ function renderLivePicks() {
     `the likelihood board’s rows, tracked the same way — a read on who hits,
       journaled at a flat stake with no dollar exposure, graded on its own book.`,
     "No open Most Likely bets on today’s card — rows journal from the Most Likely board when it publishes.",
-    `${likely.length} Most Likely row(s) on today’s card. These are ranked by measured
+    `${plural(likely.length, "Most Likely row")} on today’s card. These are ranked by measured
         likelihood, not by edge against the price, and settle on the likelihood book
         the Record page keeps separately.`);
 }
@@ -3691,7 +3712,7 @@ function renderIncentives() {
       <span style="flex:1;min-width:150px;font-weight:600">${escapeHtml(r.player || "")}</span>
       <span style="min-width:130px">${(r.total ?? 0).toLocaleString()} of ${(r.threshold ?? 0).toLocaleString()} ${escapeHtml(r.stat_label || "")}</span>
       <span style="font-variant-numeric:tabular-nums" title="What he still needs, against his own per-game pace (${r.pace ?? "—"})">
-        ${r.need > 0 ? `needs ${r.need.toLocaleString()} in ${r.games_left} game(s)` : "done"}</span>
+        ${r.need > 0 ? `needs ${r.need.toLocaleString()} in ${plural(r.games_left, "game")}` : "done"}</span>
       <span style="font-weight:700">${money(r.bonus_usd ?? 0)}</span>
       <span class="chip" style="color:${tone(r.status)}">${escapeHtml(r.status || "")}</span>
     </div>`).join("") : `
@@ -4262,7 +4283,7 @@ function renderStats() {
     // it loudest.
     ud > 0 && settings().stake !== "units"
       ? { k: "Suggested exposure", to: exposure * ud, dec: 2, pre: "$",
-          sub: `${exposure.toFixed(2)}u across ${staked.length} new bet(s)`
+          sub: `${exposure.toFixed(2)}u across ${staked.length} new ${pluralWord(staked.length, "bet")}`
             + (riding.length ? ` · riding money is already staked` : "") }
       : { k: "Suggested exposure", to: exposure, dec: 2, suf: "u",
           sub: riding.length ? "new bets only — riding money is already staked" : "" },
@@ -5069,7 +5090,7 @@ function renderTonight() {
     <div class="ml-rows">${ml.map(likelyRow).join("")}</div>` : ""}
     <div class="section-title${ml.length ? " minor" : ""}">Our edge bets
       <span class="sub">— every pick that clears the bar, journaled and staked.
-      ${n} bet(s).</span></div>
+      ${plural(n, "bet")}.</span></div>
     ${boardGuide("recommendations")}
     <div class="cards">${props.map(cardHTML).join("")}</div>
     ${bets.length ? `<div class="section-title minor">Game lines</div>
@@ -5426,9 +5447,9 @@ function renderRecommended() {
     } else if (recs.length && !real.length) {
       msg = noMarketExplainer();
     } else if (real.length && started.length === real.length) {
-      msg = `${real.length} prop(s) carry real prices, but every one is on a
+      msg = `${plural(real.length, "prop")} carry real prices, but every one is on a
         game that has already started — pre-game picks are never made against
-        in-play lines. The other ${recs.length - real.length} prop(s) are
+        in-play lines. The other ${plural(recs.length - real.length, "prop")} are
         waiting on real book prices, which books post close to first pitch.
         The board fills as tonight’s prices arrive; no slider changes that.`;
     } else if (!recs.length && censusTotal() > 0) {
@@ -5518,7 +5539,7 @@ function renderRecommended() {
     const hrNote = k.toLowerCase() === "home runs"
       ? ` · top 3 only — the full board is on the Long Shots page` : "";
     return `<div class="section-title subhead" style="grid-column:1/-1">
-        ${escapeHtml(k)} <span class="sub">— ${rows.length} prop(s)${nRec ? `, ${nRec} recommended` : ""}${hrNote}</span>
+        ${escapeHtml(k)} <span class="sub">— ${plural(rows.length, "prop")}${nRec ? `, ${nRec} recommended` : ""}${hrNote}</span>
       </div>` + rows.map(cardHTML).join("");
   }).join("");
   // "Analyzed 1030 → showing 3" is alarming unless the page says where the
@@ -5533,7 +5554,7 @@ function renderRecommended() {
   const hidden = recs.length - visible.length - elsewhere.length;
   if (hidden > 0) {
     host.innerHTML += `<p class="list-note" style="grid-column:1/-1;margin-top:14px">
-      ${hidden} more analyzed prop(s) not shown — ${state.showAll
+      ${plural(hidden, "more analyzed prop")} not shown — ${state.showAll
         ? "held upstream of the sliders"
         : "held (unconfirmed lineup, edge below the bar, or no real price yet). Toggle “show non-recommended” to browse everything"}.</p>`;
   }
@@ -6556,8 +6577,8 @@ function renderLikely() {
     <div class="ls-note">Ranked by how likely we think it is, not by how good
     the price is — the opposite of Long Shots, and on purpose. The price is
     shown on every row and is never what ordered it.${rankOnly ? ` ${rankOnly}
-    row(s) sit in markets we can rank but not price — they carry a note saying
-    so.` : ""}</div>
+    ${pluralWord(rankOnly, "row")} ${rankOnly === 1 ? "sits" : "sit"} in markets we can rank but not
+    price — ${rankOnly === 1 ? "it carries" : "they carry"} a note saying so.` : ""}</div>
     ${likelyRefusedNote(state.data.likely_census, rows.length)}`;
   /* SHELVES, NOT ONE FLAT LIST. Ethan, 2026-08-30: "for someone betting
      nfl, they wanna find good props and td props, so lets lay it out that
@@ -6702,7 +6723,7 @@ function renderLongShots() {
   // showing it" even when his price holds no value, and top-up
   // semantics would hide him exactly on the weeks the value board is
   // full.
-  note.innerHTML = `<div class="ls-note">Top ${picks.length} pick(s), ranked by
+  note.innerHTML = `<div class="ls-note">Top ${picks.length} ${pluralWord(picks.length, "pick")}, ranked by
     <b>edge</b>, never by payout — the same ${picks.length === 1 ? "one" : picks.length}
     featured on the Recommended page.${!watch.length ? "" : mlb
     ? ` Topped up to three with the
@@ -7037,11 +7058,11 @@ function longshotEmptyReason(mlb) {
              "are attached yet — books post HR props close to game time, and the " +
              "board fills on the next odds refresh.";
     if (!dg.plus_money)
-      return `${dg.real_priced} home-run price(s) are attached but none are ` +
+      return `${plural(dg.real_priced, "home-run price")} ${dg.real_priced === 1 ? "is" : "are"} attached but none are ` +
              "plus-money in a believable range right now. This usually means " +
              "games are in progress (in-play prices) — tomorrow’s board resets " +
              "with fresh pre-game quotes.";
-    return `${dg.plus_money} real plus-money price(s) exist but every one failed ` +
+    return `${plural(dg.plus_money, "real plus-money price")} ${dg.plus_money === 1 ? "exists" : "exist"} but every one failed ` +
            "a sanity guard (edge cap or odds window). If this persists on a " +
            "pre-game board, something is wrong — worth reporting.";
   }
@@ -8667,7 +8688,7 @@ function renderGamePage() {
           <div class="es-sub">Either the model passes on everything here, or books haven’t
           posted prices for it yet.</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
-            Show all ${props.length} analyzed prop(s) anyway</button>` : ""}</div>`}
+            Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}
 
     ${shots.length ? `<div class="section-title">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
@@ -8924,7 +8945,7 @@ async function renderPlayers() {
                 <strong>${escapeHtml(m.player)}</strong>${leagueBadge(m.sport)}${injTag(m.sport || state.sport || "nfl", m.player)}
                 <div style="font-size:.85em;color:var(--text-mute)">
                   ${m.team ? `${teamMarkIn(m.sport, m.team, 14)} ${escapeHtml(teamNameIn(m.sport, m.team))} · ` : ""}${escapeHtml(m.position || "—")}
-                  · ${m.games} ${m.sport === "ufc" ? "tracked fight(s)" : "game(s) logged"}</div>
+                  · ${m.sport === "ufc" ? `tracked ${pluralWord(m.games, "fight")}` : `${pluralWord(m.games, "game")} logged`}</div>
               </div>
               <button class="btn" data-lookup="${escapeAttr(m.player)}">Profile</button>
             </div>`).join("")}`;
@@ -8958,7 +8979,7 @@ async function renderPlayers() {
               <div style="font-size:.85em;color:var(--text-mute)">
                 ${teamMark(m.team, 14)} ${escapeHtml(teamName(m.team))}
                 · ${escapeHtml(m.position || "—")}
-                ${m.games ? `· ${m.games} game(s) logged` : ""}
+                ${m.games ? `· ${plural(m.games, "game")} logged` : ""}
                 ${m.status ? `· ${escapeHtml(m.status)}` : ""}</div>
             </div>
             <button class="btn" onclick="openRoster('${escapeHtml(m.team)}')">Roster</button>
@@ -10441,12 +10462,12 @@ function recParlaySection(pz) {
   const verdict = sc.n
     ? `<div class="pl-verdict" style="color:var(--${
         sc.singles_better ? "warn" : "good"})">
-       Across ${sc.n} ${rec.graded ? "recommended" : "graded"} ticket(s): parlays
+       Across ${sc.n} ${rec.graded ? "recommended" : "graded"} ${pluralWord(sc.n, "ticket")}: parlays
        <strong>${sc.parlay_units >= 0 ? "+" : ""}${sc.parlay_units.toFixed(2)}u</strong>,
        the same legs bet singly
        <strong>${sc.singles_units >= 0 ? "+" : ""}${sc.singles_units.toFixed(2)}u</strong>.
        ${sc.n < PARLAY_RATE_FLOOR
-         ? `That is ${sc.n} ticket(s) — a difference, not a finding.`
+         ? `That is ${plural(sc.n, "ticket")} — a difference, not a finding.`
          : sc.singles_better
            ? "Singles were better — the structure is costing money."
            : "The structure has paid for itself so far."}</div>`
@@ -10566,7 +10587,7 @@ function parlaySplitHTML(pz, q) {
   const rec = q.recommended || {}, no = q.not_qualified || {};
   const body = line("Recommended — the screen said yes", rec,
                     rec.graded < PARLAY_RATE_FLOOR
-                      ? `${rec.graded} ticket(s) is not a record yet; the bar
+                      ? `${plural(rec.graded, "ticket")} ${rec.graded === 1 ? "is" : "are"} not a record yet; the bar
                          is ${pz.promotion ? pz.promotion.tickets_required : 100}`
                       : "")
     + line("Refused — shown, never recommended", no,
@@ -10999,7 +11020,7 @@ function recCalibrationSplits(s) {
   if (!mk && !hz) return "";
   const held = s.markets_held_back
     ? `<p style="margin:6px 0 0;font-size:.82em;opacity:.55">
-        ${s.markets_held_back} more market(s) haven’t reached ${s.min_n} graded
+        ${plural(s.markets_held_back, "more market")} haven’t reached ${s.min_n} graded
         picks. They’re in the headline number above — they just can’t carry a
         row of their own yet, because the band would be wider than any miss it
         could show.</p>` : "";
@@ -11107,7 +11128,7 @@ function recRestatedSection(rs, sport) {
     <div class="stats">
       <div class="tile"><div class="k">Restated record</div>
         <div class="v">${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ""}</div>
-        <div class="tile-sub">${(r.settled ?? 0).toLocaleString()} pick(s) re-sized</div></div>
+        <div class="tile-sub">${(r.settled ?? 0).toLocaleString()} ${pluralWord(r.settled ?? 0, "pick")} re-sized</div></div>
       <div class="tile"><div class="k">Units staked</div>
         <div class="v">${(r.units_staked ?? 0).toLocaleString()}</div></div>
       <div class="tile"><div class="k">Net units</div>
@@ -11117,7 +11138,7 @@ function recRestatedSection(rs, sport) {
         <div class="tile-sub">weighted by conviction, not by ticket count</div></div>
     </div>
     ${r.excluded ? `<p class="list-note" style="margin-top:8px">${r.excluded.toLocaleString()}
-      old pick(s) are excluded — at their journaled probability and price,
+      old ${pluralWord(r.excluded, "pick")} are excluded — at their journaled probability and price,
       today’s Kelly would not have made those bets at all.</p>` : ""}`;
 }
 
@@ -12620,7 +12641,7 @@ function recEdgePanel(e, trend, overall) {
                      missing == null
                        ? "Awaiting the next measured run"
                        : missing
-                       ? `${missing} settled pick(s) have no stored probability`
+                       ? `${plural(missing, "settled pick")} ${missing === 1 ? "has" : "have"} no stored probability`
                        : "No missing model features",
                      missing ? "" : missing == null ? "" : "pos")}
       ${statCardHTML("chart", "Sample size", e.n == null ? "—" : e.n,
@@ -12907,8 +12928,8 @@ async function renderRecord() {
     return;
   }
   const unstaked = o.unstaked
-    ? `<p class="list-note" style="margin-top:10px">${iconMark("dash")}${o.unstaked} older settled pick(s)
-       are held out of this record: a grading bug sized them at 0.00 units, so they
+    ? `<p class="list-note" style="margin-top:10px">${iconMark("dash")}${plural(o.unstaked, "older settled pick")}
+       ${o.unstaked === 1 ? "is" : "are"} held out of this record: a grading bug sized them at 0.00 units, so they
        were never really bets. They stay out rather than being quietly restaked at a
        size nobody chose.</p>` : "";
   // Under the ledger's own bar the verdict already says "too early to
@@ -12994,8 +13015,8 @@ async function renderRecord() {
                 + "close was still a good bet. Only counts picks where we "
                 + "captured the closing line.",
             extra: nProc ? `<ul class="rp-bullets">
-              <li class="good">${pr.lucky_wins || 0} lucky win(s)</li>
-              <li class="bad">${pr.unlucky_losses || 0} good-bet loss(es)</li>
+              <li class="good">${plural(pr.lucky_wins || 0, "lucky win")}</li>
+              <li class="bad">${pr.unlucky_losses || 0} good-bet ${pluralWord(pr.unlucky_losses || 0, "loss", "losses")}</li>
             </ul>` : "" })}
       <div class="rec-process-side">
         ${recEpochHTML(d, src)}
@@ -13501,7 +13522,7 @@ function noMarketExplainer() {
   if (quiet) return quiet;
   if (os && os.checked && os.matched === 0)
     return `The odds feed answered at ${os.at || "last refresh"} but had no
-            player-prop prices yet (checked ${os.events} game(s)) — books post
+            player-prop prices yet (checked ${plural(os.events, "game")}) — books post
             MLB props closer to first pitch. The board fills automatically as
             real prices arrive.`;
   return `Waiting on real sportsbook prices — picks are never recommended
@@ -13626,12 +13647,11 @@ function renderEdgeBoard() {
      describes it has to say which. */
   const schedOnly = String((state.data || {}).generated_from || "")
     === "schedule-only";
-  const basis = schedOnly
-    ? `market(s) priced off team ratings against the schedule’s own lines at
+  const basis = (n) => schedOnly
+    ? `${plural(n, "market")} priced off team ratings against the schedule’s own lines at
        the standard −110 — no book prices were pulled for this slate`
-    : "market(s) priced against a real book number";
-  note.innerHTML = `<b>${plays}</b> clear your current sliders · ${rows.length}
-    ${basis}. One side of every two-way
+    : `${plural(n, "market")} priced against a real book number`;
+  note.innerHTML = `<b>${plays}</b> clear your current sliders · ${basis(rows.length)}. One side of every two-way
     market always prices positive — the two sides' edges sum to zero by
     construction — so the length of this list is not a signal. Checked = a tracked
     bet; everything else is a watchlist.`;
@@ -13653,7 +13673,7 @@ function renderEdgeBoard() {
     const band = shown.filter((r) => test(r.odds));
     if (!band.length) return "";
     return `<div class="section-title">${title}
-        <span class="sub">— ${band.length} bet(s)</span></div>
+        <span class="sub">— ${plural(band.length, "bet")}</span></div>
       <div class="card" style="padding:0">${band.map(edgeRowHTML).join("")}</div>`;
   }).join("") || "");
 }
@@ -13743,7 +13763,7 @@ function renderScanner() {
     <span style="flex:1"><strong>${escapeHtml(t.bet)}</strong>
       <span style="display:block;opacity:.65;font-size:.85em">
         ${escapeHtml(t.book)} ${american(t.odds)} · the other
-        ${t.books_compared - 1} book(s) average ${american(t.fair_odds)}</span></span>
+        ${plural(t.books_compared - 1, "book")} ${t.books_compared - 1 === 1 ? "averages" : "average"} ${american(t.fair_odds)}</span></span>
     <span style="min-width:150px;text-align:right">
       <span style="color:var(--good);font-weight:700">${t.gap_pts.toFixed(2)} pts cheap</span>
       <span style="display:block;opacity:.6;font-size:.85em">
@@ -14726,7 +14746,7 @@ async function renderIntel() {
             <div class="player"><span class="wallet">${extLink(
               `https://polymarket.com/profile/${f.wallet}`,
               escapeHtml(traderLabel(f)))}</span></div>
-            <div class="subtitle">${pmAgo(f.ts)} · ${f.wallet_trades} trade(s) on our tape</div>
+            <div class="subtitle">${pmAgo(f.ts)} · ${plural(f.wallet_trades, "trade")} on our tape</div>
             <div class="pick">${escapeHtml(f.side)} ${escapeHtml(f.outcome)}
               <span class="book">· ${usd(f.usd)}</span></div>
           </div>
@@ -15425,10 +15445,10 @@ function mbBulkShow(text) {
     </tr>`).join("");
   box.innerHTML = `
     <div class="mb-bulk-summary">
-      ${fresh.length} bet(s) ready to add
+      ${plural(fresh.length, "bet")} ready to add
       ${dupes.length ? ` · ${dupes.length} already logged` : ""}
       ${_mbGraded ? ` · ${_mbGraded} of those settled from this file` : ""}
-      ${parsed.skipped.length ? ` · ${parsed.skipped.length} row(s) unreadable` : ""}
+      ${parsed.skipped.length ? ` · ${plural(parsed.skipped.length, "row")} unreadable` : ""}
       ${mapped.length ? `<span class="mb-bulk-cols">columns matched: ${mapped.join(", ")}</span>` : ""}
     </div>
     ${parsed.skipped.slice(0, 5).map((s) =>
@@ -15441,10 +15461,10 @@ function mbBulkShow(text) {
         <tbody>${sample}</tbody></table></div>
       ${fresh.length > 8 ? `<div class="mb-import-note">…and ${fresh.length - 8} more</div>` : ""}
       <button class="btn mb-add" type="button" onclick="mbBulkCommit()">
-        Add ${fresh.length} bet(s)</button>`
+        Add ${plural(fresh.length, "bet")}</button>`
     : `<div class="mb-import-note">${_mbGraded
-        ? `Nothing new to add — but ${_mbGraded} bet(s) you had already
-           logged were settled from this file.`
+        ? `Nothing new to add — but ${plural(_mbGraded, "bet")} you had already
+           logged ${_mbGraded === 1 ? "was" : "were"} settled from this file.`
         : "Nothing new to add from that file."}</div>`}`;
 }
 
@@ -15650,7 +15670,7 @@ function renderMyBets() {
       <div id="mb-bulk-preview"></div>
     </details>
     <div class="stats">
-      ${tile("Net profit", mbMoney(st.profit, true), `${st.settled} settled bet(s)`, pcolor(st.profit))}
+      ${tile("Net profit", mbMoney(st.profit, true), `${st.settled} settled ${pluralWord(st.settled, "bet")}`, pcolor(st.profit))}
       ${tile("ROI", st.roi == null ? "—" : (100 * st.roi).toFixed(1) + "%", "profit ÷ staked")}
       ${tile("Record", `${st.wins}–${st.losses}${st.pushes ? `–${st.pushes}` : ""}`,
              st.winPct == null ? "no decisions yet" : (100 * st.winPct).toFixed(0) + "% win")}
@@ -21157,7 +21177,7 @@ function transactionsHTML(tx) {
   const moves = (tx && tx.moves) || [];
   if (!moves.length) {
     return `<div class="ls-note">No team changes across the
-      ${tx && tx.days ? tx.days : 0} day(s) tracked so far. This list fills
+      ${plural(tx && tx.days ? tx.days : 0, "day")} tracked so far. This list fills
       itself in: each build records where every player is, and a trade is
       simply the day that answer changed.</div>`;
   }
@@ -22890,7 +22910,7 @@ function initRankBoard() {
   if (saved) box.value = saved;
   const say = () => {
     const n = Object.keys(ffRankParseImport(box.value)).length;
-    if (note) note.textContent = n ? `${n} player(s) read` : "";
+    if (note) note.textContent = n ? `${plural(n, "player")} read` : "";
   };
   say();
   apply.addEventListener("click", () => {
@@ -23493,7 +23513,7 @@ function dkAssistAdviceHTML(a, plan) {
     <div class="dk-advice">
       <div class="dk-advice-head">
         Seat ${a.slot} of ${a.teams} · ${a.on_the_clock ? "ON THE CLOCK"
-          : `next pick ${a.next_pick == null ? "—" : a.next_pick} — ${a.picks_until == null ? "—" : a.picks_until} pick(s) away`}
+          : `next pick ${a.next_pick == null ? "—" : a.next_pick} — ${a.picks_until == null ? "—" : a.picks_until} ${pluralWord(a.picks_until, "pick")} away`}
         <span class="dk-window">room reach ${a.window} deep${a.window_fitted ? "" : " (prior — too few picks to fit yet)"}</span>
       </div>
       ${take ? `<div class="dk-take">
@@ -27163,7 +27183,7 @@ async function dkAdvice(draftId) {
     <div class="dk-advice">
       <div class="dk-advice-head">
         Seat ${a.slot} of ${a.teams} · ${a.on_the_clock ? "ON THE CLOCK"
-          : `next pick ${a.next_pick} — ${a.picks_until} pick(s) away`}
+          : `next pick ${a.next_pick} — ${plural(a.picks_until, "pick")} away`}
         <span class="dk-window">room reach ${a.window} deep${
           a.window_fitted ? "" : " (prior — too few picks to fit yet)"}</span>
       </div>
@@ -27311,7 +27331,7 @@ function intelWeights(w) {
       `${escapeHtml(h.key === "*" ? "overall" : h.key)}: ${escapeHtml(h.why || "")}`);
     const why = held.length ? ` ${escapeHtml(held.join("; "))}` : "";
     return `${head}<div class="card">${panelEmpty(
-      `Still on the assigned weights — ${w.n || 0} resolved flag(s) carry a `
+      `Still on the assigned weights — ${plural(w.n || 0, "resolved flag")} ${(w.n || 0) === 1 ? "carries" : "carry"} a `
       + `recorded breakdown so far.${why}`)}</div>`;
   }
   const label = {size: "Position size", impact: "Order-book impact",
@@ -28109,7 +28129,7 @@ async function renderUFC() {
       if (!w) return "";
       if (w.missed) {
         return `<div class="card" style="border-left:3px solid var(--bad);margin-bottom:12px">
-          <div class="player">${icon('cross')} ${w.missed} fighter(s) missed weight</div>
+          <div class="player">${icon('cross')} ${plural(w.missed, "fighter")} missed weight</div>
           <div style="color:var(--text-body);font-size:var(--fs-md);margin-top:4px">Their fights are
           gated off the pick list automatically — that is what KILL IF always said and now
           enforces. ${w.unrecorded} weigh-in(s) still unrecorded.</div></div>`;
@@ -28155,7 +28175,7 @@ async function renderUFC() {
         rows.forEach((m) => seen.add(m));
         if (!rows.length) continue;
         html += `<div class="section-title">${title}
-            <span class="sub">— ${rows.length} fight(s) · ${sub}</span></div>
+            <span class="sub">— ${plural(rows.length, "fight")} · ${sub}</span></div>
           <div class="cards wide">${rows.map(passCard).join("")}</div>`;
       }
       const rest = list.filter((m) => !seen.has(m));
@@ -28439,7 +28459,7 @@ async function renderMethodology() {
       most likely to be wrong in a way nothing here would catch.</p>
       ${cal && cal.buckets && cal.buckets.length ? `<p><b>Right now:</b>
         the calibration curve is built from
-        ${escapeHtml(String(cal.n || 0))} settled pick(s). The Record page
+        ${escapeHtml(String(cal.n || 0))} settled ${pluralWord(cal.n || 0, "pick")}. The Record page
         draws it — claimed against landed, bucket by bucket. If those two
         columns diverge, the model is over-claiming and that is visible
         there before it is visible anywhere else.</p>` : ""}
@@ -28624,7 +28644,7 @@ async function renderStatus() {
   const cycle = hb && hb.cycle_p50_s
     ? `A full rebuild of every board takes about
        <b>${Math.round(hb.cycle_p50_s / 60)} min</b> on this machine, measured
-       over ${escapeHtml(String(hb.cycles_timed || 0))} cycle(s).`
+       over ${escapeHtml(String(hb.cycles_timed || 0))} ${pluralWord(hb.cycles_timed || 0, "cycle")}.`
     : `This machine has not timed a full cycle yet, so "stale" falls back to
        the page’s own floor rather than to a measured one.`;
   const beat = hb && hb.at_epoch
@@ -28645,7 +28665,7 @@ async function renderStatus() {
           os.priced_at ? `pulled ${escapeHtml(
             ageText(Date.now() / 1000 - os.priced_at))} ago` : "not pulled yet"}</span>
         <span class="st-sub">${os.books != null
-          ? escapeHtml(`${os.books} book(s)`) : ""}</span></div>
+          ? escapeHtml(plural(os.books, "book")) : ""}</span></div>
       <div class="st-row"><span class="st-k">Lineups</span>
         <span class="st-v ${inj.confirmed ? "st-good" : "st-off"}">${
           inj.confirmed != null && inj.total != null
@@ -29018,7 +29038,7 @@ async function renderWhy() {
         ${tile("Avg CLV", o.avg_clv == null ? "—" : (o.avg_clv >= 0 ? "+" : "") + o.avg_clv.toFixed(2) + " pts",
                "did the market move our way after we bet")}
         ${tile("Process record", procN ? `${proc.good || 0} good · ${proc.bad || 0} bad` : "—",
-               procN ? `${proc.lucky_wins || 0} lucky win(s) admitted` : "grades vs the closing line")}
+               procN ? `${plural(proc.lucky_wins || 0, "lucky win")} admitted` : "grades vs the closing line")}
         ${tile("Forecast test", cal && cal.brier_edge != null ? (cal.brier_edge > 0 ? "beating the close" : "not yet") : "—", brierLine)}
       </div>
       <p style="margin-top:8px"><button class="btn ghost" id="why-see-record">See the full record →</button></p>`
@@ -32640,13 +32660,14 @@ async function renderHomePerf() {
   // What the numbers cover, in words, on every range including all-time.
   // The chip says which button is lit; this says what was counted, which
   // is the thing that was ambiguous.
-  const betWord = scopedToSport ? `${sportName} bet(s)` : "bet(s)";
+  const betWord = (n) => scopedToSport
+    ? `${sportName} ${pluralWord(n, "bet")}` : pluralWord(n, "bet");
   const scopeLine = partial
     ? `<span class="perf-window">showing the whole book — rebuild the
        record for per-week figures</span>`
     : `<span class="perf-window">${!isFinite(days)
-        ? `all ${all.settled} settled ${betWord}`
-        : `${o.settled} settled ${betWord} over ${curve.length} graded day(s)`
+        ? `all ${all.settled} settled ${betWord(all.settled)}`
+        : `${o.settled} settled ${betWord(o.settled)} over ${plural(curve.length, "graded day")}`
       }${sportName && !scopedToSport
         ? ` — no ${sportName} picks settled yet, whole book shown` : ""}</span>`;
   const pcol = (v) => v > 0 ? "var(--good)" : v < 0 ? "var(--bad)" : "var(--text-mute)";
@@ -32754,7 +32775,7 @@ async function renderHomePerf() {
             ? sportName + " " : ""}performance</span>
           ${perfChips || `<span class="perf-window">${curve.length > 1
             ? "last " + curve.length + " graded days"
-            : scopedToSport ? `all ${all.settled} settled ${sportName} bet(s)`
+            : scopedToSport ? `all ${all.settled} settled ${sportName} ${pluralWord(all.settled, "bet")}`
             : "the whole book"}${
             sportName && !scopedToSport
               ? ` — no ${sportName} picks settled yet` : ""}</span>`}</div>

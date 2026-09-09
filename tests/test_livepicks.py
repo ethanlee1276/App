@@ -224,7 +224,9 @@ def test_the_page_does_not_call_a_future_bet_older():
     # footer belongs to the edge one, so the phrase gained a word. The
     # needle is asserted before it is used — a bare `.index` on a moved
     # anchor raises ValueError into a runner that catches nothing.
-    needle = "open edge bet(s) on today\u2019s card"
+    # RE-ANCHORED 2026-09-09: "bet(s)" became a real plural — the noun is
+    # now chosen by the count, so the literal is no longer in the file.
+    needle = 'open edge ${pluralWord(edge.length, "bet")} on today\u2019s card'
     assert needle in js, "the edge panel's footer moved"
     i = js.index(needle)
     line = js[i:i + 400]

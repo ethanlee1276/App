@@ -279,7 +279,8 @@ def test_a_row_with_no_club_draws_no_team_chip():
     js = _js()
     body = _fn(js, "async function renderPlayers(")
     assert "${m.team ? `${teamMarkIn(" in body
-    assert "tracked fight(s)" in body
+    # "fight(s)" became a real plural on 2026-09-09; the chip is the same chip.
+    assert 'tracked ${pluralWord(m.games, "fight")}' in body
 
 
 # --- the grade-evidence false alarm --------------------------------------

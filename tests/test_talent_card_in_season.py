@@ -156,7 +156,13 @@ function grab(name, end) {
 }
 var escapeHtml = (s) => String(s == null ? "" : s);
 var iconMark = (n) => `[${n}]`;
-eval([grab("function talentStillMatters(", "\n}"),
+// The card counts teams out loud, so it needs the real pluraliser. Grabbed
+// from app.js rather than stubbed: a stub here would keep passing on the
+// day the real one changed, which is the failure this harness exists to
+// avoid.
+eval([grab("function pluralWord(", "\n}"),
+      grab("function plural(", "\n}"),
+      grab("function talentStillMatters(", "\n}"),
       grab("function talentWeightLine(", "\n}"),
       grab("function talentWarnHTML(", "\n}"),
       grab("function talentCardHTML(", "\n}")].join("\n"));

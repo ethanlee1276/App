@@ -167,7 +167,11 @@ def test_the_panel_says_what_it_counted():
     summed, which is the part that was ambiguous. `betWord` joined on
     2026-08-17 — the sport-scoped panel counts "MLB bet(s)", the
     whole-book one plain "bet(s)" — and the sentence shape is the same."""
-    assert "settled ${betWord} over" in FN and "graded day(s)" in FN
+    # RE-ANCHORED 2026-09-09: `betWord` became a function of the count and
+    # "day(s)" a real plural, so both literals moved. The claim is the
+    # same — the panel says what it counted and over how long.
+    assert "settled ${betWord(o.settled)} over" in FN \
+        and '${plural(curve.length, "graded day")}' in FN
     assert "const scopeLine" in FN
 
 
