@@ -185,21 +185,79 @@ if [[ "${1:-}" == "--check" ]]; then
     fi
     tmp="$(mktemp)"
     gunzip -c "$newest" > "$tmp"
-    if python3 - "$tmp" <<'PY'
-import sqlite3, sys
+    # THE LIVE FILE IS PASSED IN TOO, so the backup can be checked against
+    # what it is supposed to be a copy OF. Absent when restoring on a
+    # different box, which is fine and says so rather than failing.
+    if KEEP_HINT="$KEEP" python3 - "$tmp" "$ROOT/$db" <<'PYCHECK'
+import os
+import sqlite3
+import sys
+
 # A corrupt backup is an EXPECTED outcome of this check, not a crash —
 # reporting it as a stack trace buries the one line that matters.
+def counts(path):
+    """``{table: rows}`` for a database, or None if it cannot be read."""
+    try:
+        c = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+        names = [r[0] for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+            " AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        out = {}
+        for t in names:
+            out[t] = c.execute('SELECT COUNT(*) FROM "%s"' % t).fetchone()[0]
+        c.close()
+        return out
+    except sqlite3.DatabaseError:
+        return None
+
 try:
     c = sqlite3.connect(sys.argv[1])
     ok = c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-    n = c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
     c.close()
 except sqlite3.DatabaseError as exc:
-    print(f"  unreadable: {exc}")
+    print("  unreadable: %s" % exc)
     sys.exit(1)
-print(f"  {n} table(s)")
-sys.exit(0 if ok and n else 1)
-PY
+
+back = counts(sys.argv[1])
+if back is None:
+    print("  unreadable")
+    sys.exit(1)
+if not ok:
+    print("  integrity_check failed")
+    sys.exit(1)
+if not back:
+    print("  no tables at all")
+    sys.exit(1)
+
+# WHAT IS ACTUALLY IN IT, not how many tables it has. The line here used
+# to print "3 table(s)" and pass, which is the whole reason this section
+# was rewritten: a backup of a ZEROED database has a perfect schema and a
+# clean integrity_check. Demonstrated 2026-09-09 — five users in the live
+# file, none in the backup, and this printed "ok: accounts".
+big = sorted(back.items(), key=lambda kv: -kv[1])[:4]
+print("  " + ", ".join("%d %s" % (n, t) for t, n in big)
+      + (" (+%d more)" % (len(back) - len(big)) if len(back) > len(big) else ""))
+
+live = counts(sys.argv[2]) if os.path.exists(sys.argv[2]) else None
+if live is None:
+    print("  (no live copy here to compare against — structure only)")
+    sys.exit(0)
+
+# THE ONE COMPARISON THAT CANNOT CRY WOLF. A backup is always older than
+# the live file, so holding FEWER rows is normal, and alarming on that
+# would fire every single night until nobody read this output any more. A
+# table with rows in the live database and NONE in the backup is not lag;
+# it is a faithful copy of something that was already gone.
+lost = sorted(t for t, n in live.items() if n and not back.get(t, 0))
+if lost:
+    print("  EMPTY IN THE BACKUP but not live: " + ", ".join(lost))
+    print("  That is what a zeroed database looks like once it has been")
+    print("  backed up. The last good copy is %s nightlies from being"
+          % os.environ.get("KEEP_HINT", "?"))
+    print("  dropped by the retention sweep — go and find it now.")
+    sys.exit(1)
+sys.exit(0)
+PYCHECK
     then
       age="$(( ($(date +%s) - $(stat -c %Y "$newest" 2>/dev/null || stat -f %m "$newest")) / 3600 ))"
       echo "ok: $name  (${age}h old, $(basename "$newest"))"

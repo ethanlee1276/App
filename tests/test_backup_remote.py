@@ -339,6 +339,121 @@ def test_a_down_remote_does_not_fail_the_script():
         f"script's exit code again, and deploy.sh dies on it")
 
 
+# --- what is IN the backup, not just its shape -------------------------------
+def _plant(stub, name, rows):
+    """Write a backup of `ledger.db`'s shape holding `rows` fixture bets."""
+    raw = os.path.join(stub.dir, f"planted-{name}.db")
+    if os.path.exists(raw):
+        os.unlink(raw)
+    db = sqlite3.connect(raw)
+    db.execute("CREATE TABLE fixture_bets (id INTEGER PRIMARY KEY)")
+    for i in range(rows):
+        db.execute("INSERT INTO fixture_bets (id) VALUES (?)", (i + 1,))
+    db.commit()
+    db.close()
+    out = os.path.join(stub.backups, f"ledger-{name}.db.gz")
+    os.makedirs(stub.backups, exist_ok=True)
+    with open(raw, "rb") as fh, gzip.open(out, "wb") as gz:
+        shutil.copyfileobj(fh, gz)
+    return out
+
+
+def _live_rows(stub, rows):
+    """Set the fixture tree's live ledger.db to hold `rows` bets."""
+    db = sqlite3.connect(os.path.join(stub.tree, "data", "ledger.db"))
+    db.execute("DELETE FROM fixture_bets")
+    for i in range(rows):
+        db.execute("INSERT INTO fixture_bets (id) VALUES (?)", (i + 1,))
+    db.commit()
+    db.close()
+
+
+def test_check_catches_a_backup_of_a_database_that_was_already_zeroed():
+    """THE FAILURE THIS EXISTS FOR, and it used to pass.
+
+    `--check` restored the newest backup, ran `integrity_check`, counted
+    TABLES, and said ok. A zeroed database has a perfect schema and a
+    clean integrity check, so a backup of one passed every gate. It was
+    demonstrated on 2026-09-09 with five accounts in the live file and
+    none in the backup: the output was `ok: accounts`.
+
+    That is the worst shape a backup bug can take. The nightly job keeps
+    faithfully snapshotting the empty file, the check keeps saying ok,
+    and after KEEP nightlies every copy that still held the data has
+    rotated out — so the alarm has to fire on the FIRST one."""
+    with Stub() as s:
+        _live_rows(s, 5)
+        _plant(s, "20260909T040000Z", 0)
+        r = s.run("--check", remote=s.remote)
+        # The verdict on THIS database, not the exit code: Stub leaves
+        # accounts.db out on purpose, so --check always exits non-zero
+        # here for a reason that has nothing to do with the claim.
+        assert "ok: ledger" not in r.stdout, (
+            "a backup with no rows, of a database that has rows, passed:\n"
+            + r.stdout)
+        assert "EMPTY IN THE BACKUP" in r.stdout, r.stdout
+        assert "fixture_bets" in r.stdout, \
+            "the alarm does not name which table went missing"
+
+
+def test_check_says_what_is_in_the_backup():
+    """"3 table(s)" is not a fact anybody can act on. The counts are, and
+    they are what makes the empty case visible at a glance rather than
+    only when the comparison fires."""
+    with Stub() as s:
+        _live_rows(s, 3)
+        _plant(s, "20260909T040000Z", 3)
+        r = s.run("--check", remote=s.remote)
+        assert "3 fixture_bets" in r.stdout, r.stdout
+        assert "table(s)" not in r.stdout, \
+            "still reporting the table count instead of the contents"
+
+
+def test_a_backup_that_is_merely_OLDER_is_not_an_alarm():
+    """THE FALSE ALARM THAT WOULD HAVE KILLED THIS CHECK. A backup is
+    taken nightly and the live file keeps growing all day, so holding
+    fewer rows is the normal case — every single night. A check that
+    complained about it would be ignored within a week, and then the real
+    one would be ignored with it."""
+    with Stub() as s:
+        _plant(s, "20260909T040000Z", 2)
+        _live_rows(s, 500)                 # a busy day since the snapshot
+        r = s.run("--check", remote=s.remote)
+        assert "ok: ledger" in r.stdout, (
+            "a normal overnight lag was reported as a problem:\n" + r.stdout)
+        assert "EMPTY IN THE BACKUP" not in r.stdout
+
+
+def test_a_table_that_is_empty_in_both_is_not_an_alarm():
+    """A table nobody has written to yet — `sessions` on a quiet box — is
+    empty in the live file and empty in the backup. That is agreement,
+    not loss."""
+    with Stub() as s:
+        db = sqlite3.connect(os.path.join(s.tree, "data", "ledger.db"))
+        db.execute("CREATE TABLE fixture_empty (id INTEGER PRIMARY KEY)")
+        db.commit()
+        db.close()
+        s.run(remote=s.remote)             # a real backup of that state
+        r = s.run("--check", remote=s.remote)
+        assert "ok: ledger" in r.stdout, r.stdout
+        assert "EMPTY IN THE BACKUP" not in r.stdout
+
+
+def test_the_comparison_is_skipped_when_there_is_no_live_copy_to_compare_to():
+    """Restoring onto a fresh box is a legitimate thing to do, and there
+    the live file does not exist yet. Structure-only is the honest answer
+    there — failing would make the check useless in exactly the situation
+    it is most needed."""
+    with Stub() as s:
+        _plant(s, "20260909T040000Z", 4)
+        os.unlink(os.path.join(s.tree, "data", "ledger.db"))
+        r = s.run("--check", remote=s.remote)
+        assert "ok: ledger" in r.stdout, r.stdout
+        assert "no live copy here" in r.stdout, r.stdout
+        assert "4 fixture_bets" in r.stdout, \
+            "the counts should still be reported without a live copy"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

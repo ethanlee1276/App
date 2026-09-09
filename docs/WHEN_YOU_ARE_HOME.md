@@ -181,6 +181,49 @@ of thing you find out about from a friend who cannot get in.
 
 ---
 
+## 4c. Backups — the one where the downside is unrecoverable
+
+Now that there is money and real accounts, this is the highest-stakes
+thing on the box. The script itself is good (it uses SQLite's backup API
+rather than `cp`, so a snapshot taken mid-write is still consistent), and
+I fixed a real hole in its verifier today — see the commit. What it
+cannot tell me from here is whether the nightly job is actually RUNNING
+and whether the offsite copy exists.
+
+```bash
+cd /srv/qellys && ./deploy/backup.sh --check
+```
+
+Read three things in that output:
+
+* **`ok: accounts (Nh old, ...)`** followed by a row count. It now prints
+  what is IN the backup — `5 users`, and so on. Until today it printed
+  "3 table(s)" and would have said `ok` for a backup holding NOTHING,
+  which I demonstrated: five accounts live, zero in the backup, verdict
+  ok. If you ever see **`EMPTY IN THE BACKUP`**, stop and tell me — that
+  message means the last good copy is a countdown away from rotating out.
+* **The age.** Over 48h and it says STALE, which means the 4am cron is
+  not running.
+* **`OFFSITE:`**. If it says `none`, every backup is on the same disk as
+  the database, which survives a mistake but not a dead droplet.
+
+If offsite is not set up, this proves a destination end to end before
+trusting it:
+
+```bash
+cd /srv/qellys && QB_BACKUP_REMOTE=b2:qellys-backups/db ./deploy/backup.sh --test-remote
+```
+
+And the cron line, if `--check` says the backups are stale:
+
+```bash
+crontab -l | grep -c backup.sh    # 0 means it was never installed
+```
+
+`docs/BACKUPS.md` has the full setup including the Backblaze/S3 route.
+
+---
+
 ## 5. Board health, same as always (read-only)
 
 ```bash
