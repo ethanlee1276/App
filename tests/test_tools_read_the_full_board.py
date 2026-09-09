@@ -239,6 +239,50 @@ def test_an_empty_board_still_gets_the_binding_gate_sentence():
     assert "Binding gate" in out, out
 
 
+# ------------------------------- a bar is scored over the props it saw
+
+def test_a_bar_is_counted_over_the_eligible_pool_not_the_whole_board():
+    """2026-09-09's real board read "credible (edge ≤ 5%) 75 / 173" with
+    108 of that 173 sitting in markets the model refuses to price. The
+    denominator hid the answer: there was no way to see how much of the
+    98 over the ceiling was simply the shut yardage markets shouting."""
+    rows = _band(3) + _band(9, market="rush_yds")
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    bar = [ln for ln in out.splitlines() if "grade ≠ Pass" in ln and "/" in ln]
+    assert len(bar) == 1, out
+    assert bar[0].split()[2] == "3", bar     # the 3 eligible, not the 12
+
+
+def test_eligibility_is_still_scored_over_everything():
+    """The two structural refusals are about the whole board by
+    definition — "9 of 12 are in a shut market" is the fact, and scoring
+    it over the eligible pool would make it 0 of 3 and say nothing."""
+    rows = _band(3) + _band(9, market="rush_yds")
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    line = [ln for ln in out.splitlines()
+            if "we can price at all" in ln and "/" in ln]
+    assert line[0].split()[2] == "12", line
+
+
+def test_the_report_says_which_denominator_it_is_using():
+    """A number whose base is not stated is the thing that went wrong
+    here. Both sections now name theirs."""
+    rows = _band(3) + _band(9, market="rush_yds")
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    assert "Eligible at all:" in out, out
+    assert "over the 3 eligible" in out, out
+    assert "never a candidate" in out, out
+
+
+def test_a_board_with_nothing_eligible_says_no_bar_was_consulted():
+    """Otherwise it prints a column of "0 / 0" and invites the reader to
+    tune bars that were never reached."""
+    out = _run(launch.why_empty,
+               _paywalled(rows=_band(6, market="rush_yds")), "nfl")
+    assert "no bar has been consulted" in out, out
+    assert "0 / 0" not in out, out
+
+
 # ------------------------------------------- the market the model refuses
 
 def test_a_shut_market_is_its_own_gate_and_not_the_graders_fault():
@@ -290,17 +334,24 @@ def test_a_priceable_market_is_still_offered_as_relaxable():
 
 
 def test_the_shut_gate_sits_above_every_numeric_one():
-    """Order is the finding. Below them, a shut prop is first counted as
-    a grading failure or an edge failure, and the report then blames the
-    bar that happened to catch it."""
+    """Order is the finding, and it is now structural: the shut check is
+    an ELIGIBILITY test, and eligibility is consulted before any bar.
+    Below them, a shut prop is first counted as a grading failure or an
+    edge failure, and the report then blames the bar that caught it."""
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     fn = src.split("def why_empty", 1)[1].split("\ndef ", 1)[0]
-    # From the list literal onward — the gate labels are unique enough to
-    # order by, and the list itself cannot be split on "]" because the
-    # lambdas inside it carry subscripts.
-    block = fn.split("gates = [", 1)[1]
-    assert block.index("we can price at all") < block.index("grade ≠ Pass")
-    assert block.index("we can price at all") < block.index("net edge > 0")
+    assert fn.index("eligibility = [") < fn.index("bars = [")
+    elig = fn[fn.index("eligibility = ["):fn.index("bars = [")]
+    bars = fn[fn.index("bars = ["):fn.index("gates = eligibility + bars")]
+    assert "we can price at all" in elig, elig
+    assert "already started" in elig or "started" in elig, elig
+    # And it is NOT a bar — a bar is a candidate measured and found
+    # short, which a prop in a shut market never was.
+    assert "we can price at all" not in bars, bars
+    assert "grade ≠ Pass" in bars and "net edge > 0" in bars
+    # The walk is eligibility first, by construction rather than by the
+    # order somebody happened to type the list in.
+    assert "gates = eligibility + bars" in fn
 
 
 if __name__ == "__main__":

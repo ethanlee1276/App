@@ -5352,9 +5352,19 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     # On 2026-09-09 that gate was "engine graded it", and the report's
     # advice — "relaxing it alone would add 9 more" — was advice to put
     # rushing and receiving yards back on a board they were measured off.
-    gates = [
+    # TWO KINDS OF REFUSAL, and mixing them is what made every count
+    # below misleading. A game already kicked off and a market the model
+    # cannot price are ELIGIBILITY: the prop was never a candidate. The
+    # rest are BARS: a candidate measured and found short. Reporting a
+    # bar as "75 / 173" when 108 of that 173 were never eligible tells
+    # you nothing about the bar — 2026-09-09's board read "credible
+    # 75/173" with no way to see how much of the 98 over the ceiling was
+    # simply the shut yardage markets shouting.
+    eligibility = [
         ("game hasn't started yet", lambda x: not x["started"]),
         ("market is one we can price at all", lambda x: not x["shut"]),
+    ]
+    bars = [
         ("engine graded it (grade ≠ Pass)", lambda x: x["grade"] != "Pass"),
         ("beats the price at all (net edge > 0)", lambda x: x["net"] > 0),
         (f"clears the graded bar (net ≥ {_GRADE_FLOOR*100:.1f}pt "
@@ -5364,9 +5374,20 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         (f"edge-vs-fair ≥ {min_edge:.0%} (slider)", lambda x: x["edge"] >= min_edge),
         (f"price ≥ {max_juice} (slider)", lambda x: x["odds"] >= max_juice),
     ]
-    print("Each gate on its own:")
-    for name, fn in gates:
+    gates = eligibility + bars
+    eligible = [x for x in rows if all(fn(x) for _, fn in eligibility)]
+    print("Eligible at all:")
+    for name, fn in eligibility:
         print(f"  {sum(1 for x in rows if fn(x)):>5} / {len(rows)}   {name}")
+    if eligible:
+        print(f"\nEach bar on its own, over the {len(eligible)} eligible — "
+              f"NOT over all {len(rows)}, because a bar cannot be blamed "
+              f"for a prop\nthat was never a candidate:")
+        for name, fn in bars:
+            print(f"  {sum(1 for x in eligible if fn(x)):>5} / "
+                  f"{len(eligible)}   {name}")
+    else:
+        print("\nNothing is eligible, so no bar has been consulted at all.")
     shut_by: dict[str, int] = {}
     for x in rows:
         if x["shut"]:
