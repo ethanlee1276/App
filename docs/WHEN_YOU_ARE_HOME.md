@@ -15,6 +15,67 @@ as they are done.
 
 ---
 
+## 0. THE SITE IS DOWN — run this first, before anything else
+
+Ethan, 2026-09-09, with a photo: *"the site crashed. It won't load
+anything and won't show logos."*
+
+**What that screenshot actually says.** The page frame, the buttons and
+the nav all drew — that is the service worker serving the shell it
+cached. `/data/` and `/api/` are the only things it NEVER caches, on
+purpose, because a stale board is worse than an honest error. So "10
+boards failed to load" plus a working-looking page means one thing: **the
+app is not answering, and the browser is showing you a photograph of it.**
+The missing logos are the same fact — images are not cached either.
+
+**Bring it back first, ask why second.** The journal keeps the history, so
+restarting costs you no evidence:
+
+```bash
+sudo systemctl restart qellys && sleep 3 && curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/data/recommendations.json
+```
+
+`200` means it is back. Anything else, keep going.
+
+**Then paste me all of this at once** — it answers every likely cause in
+one go, and I cannot see any of it from here:
+
+```bash
+echo "=== service ==="; systemctl status qellys --no-pager -l | head -15
+echo "=== restarts ==="; systemctl show qellys -p NRestarts -p MemoryPeak -p MemoryCurrent
+echo "=== last 40 log lines ==="; journalctl -u qellys -n 40 --no-pager
+echo "=== was it OOM-killed? ==="; sudo dmesg -T 2>/dev/null | grep -iE "killed process|out of memory" | tail -5
+echo "=== disk ==="; df -h /srv /var | sed 1d
+echo "=== memory ==="; free -m
+echo "=== are the board files even there ==="; ls -la /srv/qellys/web/data/*.json 2>/dev/null | head -5
+echo "=== how old are they ==="; date; find /srv/qellys/web/data -name '*.json' -newermt '-2 hours' | wc -l
+echo "=== which commit is deployed ==="; cd /srv/qellys && git log --oneline -3
+```
+
+**The three things it can be, and what each looks like:**
+
+* **Out of memory.** `NRestarts` climbing, `dmesg` naming a killed
+  process. This box is 2GB with `MemoryMax=1600M` and it has done this
+  before (2026-09-02, the in-process Wednesday refit). Restarting works
+  and it comes back.
+* **Out of disk.** `df` at 100%. The builds write and the app cannot.
+  Clear the cache directory, not the data: the boards are the product.
+* **A bad deploy.** The auto-updater pulls every five minutes, so a
+  commit that will not import takes the service down within five minutes
+  of being pushed. `journalctl` shows a traceback on startup rather than
+  a request. If that is what it is:
+
+```bash
+cd /srv/qellys && git log --oneline -5          # find the last one that worked
+sudo systemctl stop qellys-update.timer         # stop the updater re-pulling it
+cd /srv/qellys && git checkout <that-commit> && sudo systemctl restart qellys
+```
+
+Tell me the commit and I will fix forward; do not leave the updater off
+longer than that, or the boards stop rebuilding.
+
+---
+
 ## 1. The one thing that needs your hands (2 minutes)
 
 A `git pull` does not install a systemd unit. The auto-updater restarts
