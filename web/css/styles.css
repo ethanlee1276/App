@@ -3665,12 +3665,22 @@ body.msg-thread-open .footer { display: none; }
    was already respected in the padding — the home indicator was thought
    about and the island was not.
 
-   The subtraction lives in the CARD'S max-height and not as padding on
-   this overlay, which is what I tried first and measured as useless: a
-   flex item taller than its container overflows straight past the
-   container's padding, so `align-items: flex-end` plus `padding-top`
-   clamps nothing at all. Height is the only thing that binds. */
-#ffd-overlay { position: fixed; inset: 0; z-index: 70; display: none;
+   NO VIEWPORT UNITS AT ALL, which is the third version of this fix and
+   the one that stops depending on what iOS means by a viewport. `top`
+   and `bottom` give this overlay a DEFINITE height — the visible area
+   minus the island — and a percentage `max-height` on the card below
+   resolves against exactly that. So the card cannot be taller than the
+   room under the island, by construction, whatever `vh` and `dvh` are
+   doing on the device.
+
+   Padding on this element would not have done it: a flex item taller
+   than its container overflows straight past the container's padding, so
+   `align-items: flex-end` plus `padding-top` clamps nothing. Measured —
+   a 5000px card under a 200px-padded overlay sat at top −4068. Shrinking
+   the CONTAINING BLOCK is the thing that binds. */
+#ffd-overlay { position: fixed; left: 0; right: 0; bottom: 0;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 70; display: none;
   background: rgba(0, 0, 0, .55); align-items: flex-end;
   justify-content: center; }
 #ffd-overlay.open { display: flex; }
@@ -3678,19 +3688,20 @@ body.ffd-open { overflow: hidden; }
 .ffd-card { overscroll-behavior: contain; background: var(--panel-2);
   border: var(--hairline) solid var(--border);
   width: 100%; max-width: 560px; overflow-y: auto;
-  max-height: 82vh;
-  max-height: calc(82dvh - env(safe-area-inset-top, 0px));
+  max-height: 92%;
   padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 761px) {
   #ffd-overlay { align-items: center; }
-  .ffd-card { max-height: 76vh;
-              max-height: calc(76dvh - env(safe-area-inset-top, 0px)); }
+  .ffd-card { max-height: 82%; }
 }
 /* The player peek — the riding rows' popup. Same shape as the fantasy
    dossier above (bottom sheet on a phone, centred card on a desktop),
    deliberately NOT the same element: that one is fantasy-specific and
    carries an NFL profile upgrade this has no use for. */
-#pk-overlay { position: fixed; inset: 0; z-index: 70; display: none;
+/* Same shape as the fantasy dossier above, and the same island. */
+#pk-overlay { position: fixed; left: 0; right: 0; bottom: 0;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 70; display: none;
   background: rgba(0, 0, 0, .55); align-items: flex-end;
   justify-content: center; }
 #pk-overlay.open { display: flex; }
@@ -3735,8 +3746,7 @@ body.pk-open { overflow: hidden; }
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
   width: 100%; max-width: 620px; overflow-y: auto;
-  max-height: 86vh;
-  max-height: calc(86dvh - env(safe-area-inset-top, 0px));
+  max-height: 92%;
   padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
 /* The card inside is already a card. A second border and a second
    background around it reads as a box in a box. */
@@ -3749,9 +3759,7 @@ body.pk-open { overflow: hidden; }
   font-size: var(--fs-sm); text-align: center; }
 @media (min-width: 761px) {
   #pk-overlay { align-items: center; }
-  .pk-card { max-height: 82vh;
-             max-height: calc(82dvh - env(safe-area-inset-top, 0px));
-             border-radius: var(--radius); }
+  .pk-card { max-height: 86%; border-radius: var(--radius); }
 }
 
 /* Menu diagnostics — only rendered when something went wrong, so it is
@@ -3799,8 +3807,10 @@ body.pk-open { overflow: hidden; }
    upgrades to this when the profile API answers. */
 /* The full profile — the tallest thing this overlay ever holds, and the
    one Ethan photographed. */
-.ffd-card.ffd-full { max-width: 980px; max-height: 92vh;
-  max-height: calc(92dvh - env(safe-area-inset-top, 0px)); }
+/* 96 and not 100: a bottom sheet that fills every pixel stops reading as
+   a sheet — the strip of dimmed page above it is what says there is
+   something behind to go back to, and it is the tap target for closing. */
+.ffd-card.ffd-full { max-width: 980px; max-height: 96%; }
 .ffp-name { font-size: calc(var(--fs-lg) * 1.35); }
 .ffp-bios { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
 .ffp-bio { display: inline-flex; flex-direction: column; gap: 1px;

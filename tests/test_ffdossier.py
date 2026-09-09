@@ -113,82 +113,130 @@ def test_the_dossier_is_styled():
         "the page must not scroll under the sheet"
 
 
-
 # ------------------------------------------------- the Dynamic Island
-
-#: Every bottom sheet on the site. Both are drawn the same way — pinned
-#: to the bottom, sized against the viewport — so both had the same bug.
-_SHEETS = (".ffd-card", ".ffd-card.ffd-full", ".pk-card")
-
 
 def _css():
     return open(os.path.join(ROOT, "web", "css", "styles.css"),
                 encoding="utf-8").read()
 
 
-def _max_heights():
-    """Every `max-height` declaration on a sheet, in source order."""
+def _rule(sel):
+    css = _css()
+    i = css.index(sel + " {")
+    return css[i:css.index("}", i)]
+
+
+def test_the_sheet_can_never_be_drawn_under_the_island():
+    """Ethan, 2026-09-09, with a photo of Cam Skattebo's profile: the
+    name, the team, the bio row and the close button all sitting under
+    the status bar and the Dynamic Island.
+
+    THE FIX IS THE CONTAINING BLOCK, and it took three goes to get there.
+
+    First I padded the overlay, reasoning that a flex container whose
+    content box starts below the island cannot place a child above it.
+    Measured: it clamps nothing. A flex item taller than its container
+    overflows straight past the container's padding — a 5000px card under
+    a 200px-padded overlay sat at top −4068.
+
+    Second I subtracted the inset from the card's `max-height` in `dvh`,
+    because `vh` on iOS is the LARGE viewport and a bottom-anchored sheet
+    sized in it overflows off the top. That was right about the units and
+    still left the sheet's size a calculation that had to come out
+    correct on a device I cannot run.
+
+    This is neither. `top` and `bottom` give the overlay a DEFINITE
+    height — the visible area minus the island — and a percentage
+    max-height on the card resolves against exactly that box. The card
+    cannot be taller than the room under the island because there is no
+    arithmetic left to get wrong, and no viewport unit involved at all.
+    """
+    for sel in ("#ffd-overlay", "#pk-overlay"):
+        rule = _rule(sel)
+        assert "top: env(safe-area-inset-top" in rule, \
+            f"{sel} still starts at the top of the screen"
+        assert "bottom: 0" in rule and "inset: 0" not in rule, \
+            f"{sel} is back to inset:0, which puts the island inside it"
+
+
+def test_no_sheet_is_sized_against_a_viewport_it_cannot_measure():
+    """A percentage of the overlay is the whole point. Any `vh` or `dvh`
+    here is a return to sizing against something iOS defines differently
+    from what is on screen."""
     import re
     css = _css()
-    out = {}
     for m in re.finditer(r"max-height:\s*([^;]+);", css):
         head = css.rfind("{", 0, m.start())
-        sel = css[css.rfind("}", 0, head) + 1:head].strip().splitlines()[-1]
-        sel = sel.strip()
-        if any(s in sel for s in ("ffd-card", "pk-card")):
-            out.setdefault(sel, []).append(m.group(1).strip())
-    return out
-
-
-def test_no_sheet_is_measured_against_the_viewport_it_does_not_have():
-    """Ethan, 2026-09-09, photographing Cam Skattebo's profile: the sheet
-    opened under the status bar and the Dynamic Island ate the name, the
-    team and the close button.
-
-    `vh` ON iOS IS THE LARGE VIEWPORT — the height the page would have if
-    the browser chrome were hidden. A sheet sized at 92vh and pinned to
-    the BOTTOM is therefore taller than the space actually on screen, and
-    the excess goes off the top where the island is. `dvh` is the
-    viewport as it currently is.
-
-    Every `vh` declaration keeps a `dvh` one after it — the fallback in
-    front for browsers that do not know the unit, the real answer
-    second."""
-    for sel, decls in _max_heights().items():
-        assert any("dvh" in d for d in decls), \
-            f"{sel} is sized in vh with no dvh after it"
-        vh = [i for i, d in enumerate(decls) if "dvh" not in d and "vh" in d]
-        dvh = [i for i, d in enumerate(decls) if "dvh" in d]
-        if vh and dvh:
-            assert min(vh) < min(dvh), \
-                f"{sel} puts the fallback after the answer, so it wins"
-
-
-def test_every_sheet_subtracts_the_island_from_its_own_height():
-    """And the subtraction is in the HEIGHT, not padding on the overlay.
-
-    That is what I tried first, and measured as useless: a flex item
-    taller than its container overflows straight past the container's
-    padding, so `align-items: flex-end` plus `padding-top` clamps
-    nothing. Height is the only thing that binds. Chromium, 430x932: a
-    5000px card under a 200px-padded overlay sat at top -4068."""
-    for sel, decls in _max_heights().items():
-        dvh = [d for d in decls if "dvh" in d]
-        assert dvh, sel
-        for d in dvh:
-            assert "env(safe-area-inset-top" in d, \
-                f"{sel} can still be drawn under the Dynamic Island: {d}"
+        sel = css[css.rfind("}", 0, head) + 1:head].strip().splitlines()[-1].strip()
+        if "ffd-card" in sel or "pk-card" in sel:
+            assert "vh" not in m.group(1), (sel, m.group(1))
+            assert "%" in m.group(1), (sel, m.group(1))
 
 
 def test_the_home_indicator_is_still_accounted_for():
     """It always was — the bottom inset was in the padding and the top
     was not. Regressing it while fixing the other end would be a poor
     trade."""
-    css = _css()
     for sel in (".ffd-card", ".pk-card"):
-        i = css.index(sel + " {")
-        rule = css[i:css.index("}", i)]
-        assert "env(safe-area-inset-bottom" in rule, sel
+        assert "env(safe-area-inset-bottom" in _rule(sel), sel
+
+
+def test_the_island_is_cleared_in_a_real_browser():
+    """The property, executed, with an island substituted for the `env`
+    that Chromium reports as zero — INCLUDING the overflow case, which is
+    the one my first fix passed by inspection and failed in fact.
+
+    Opt-in like the other browser tests: `QB_BROWSER_TESTS=1`.
+    """
+    if os.environ.get("QB_BROWSER_TESTS") != "1":
+        print("      (skipped: set QB_BROWSER_TESTS=1)")
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("      (skipped: no Playwright)")
+        return
+    import rendercheck
+
+    chromium = os.environ.get(
+        "CHROMIUM_PATH", "/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
+    srv, port = rendercheck._serve()
+    ISLAND = 59
+    try:
+        with sync_playwright() as pw:
+            kw = {"args": ["--no-sandbox", "--disable-dev-shm-usage",
+                           "--disable-gpu"]}
+            if os.path.exists(chromium):
+                kw["executable_path"] = chromium
+            browser = pw.chromium.launch(**kw)
+            page = browser.new_page(viewport={"width": 430, "height": 932},
+                                    is_mobile=True, has_touch=True)
+            page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="load")
+            page.wait_for_timeout(1200)
+            page.add_style_tag(content=f"#ffd-overlay{{top:{ISLAND}px}}")
+            got = page.evaluate("""(island) => {
+              // BUILT BY HAND, because the overlay is created on the
+              // first open and this fixture has no fantasy payload to
+              // open one from. The geometry is the claim; the contents
+              // are not. Same ids and classes, so the same CSS applies.
+              const ov = document.createElement('div');
+              ov.id = 'ffd-overlay';
+              ov.className = 'open';
+              ov.innerHTML = '<div class="ffd-card ffd-full">'
+                + '<div style="height:4000px">tall</div></div>';
+              document.body.appendChild(ov);
+              const r = ov.querySelector('.ffd-card').getBoundingClientRect();
+              return { top: Math.round(r.top), height: Math.round(r.height),
+                       island: island };
+            }""", ISLAND)
+            browser.close()
+    finally:
+        srv.shutdown()
+    assert got["top"] >= got["island"], (
+        "content four thousand pixels tall pushed the sheet under the "
+        f"island: {got}")
+    # …and it is a SHEET, not a takeover: some of the dimmed page shows.
+    assert got["top"] > got["island"], got
 
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
