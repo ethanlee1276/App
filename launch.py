@@ -9995,12 +9995,23 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
         promo = configured[promo_id]
         plans = ", ".join(BI.PLANS[p]["name"] for p in promo["plans"])
         cap = int(promo.get("max_redemptions") or 0)
+        # THE WORD COMES FROM THE CODE'S STATE, NOT FROM THE FLAG TYPED.
+        # This read `"MISSING" if not create else "inactive"`, so the same
+        # code in the same condition was reported two different ways
+        # depending on which command you ran, and the one word that was
+        # never true was the alarming one: a spent code exists at Stripe,
+        # it is just used up. On 2026-09-09 that cost an hour of an
+        # outage hunting for codes that had never been absent.
         if row.get("created"):
             state = "created"
         elif row.get("active"):
             state = "already there"
+        elif not row.get("found"):
+            state = "MISSING"
+        elif row.get("spent"):
+            state = "spent"
         else:
-            state = "MISSING" if not create else "inactive"
+            state = "switched off"
         used = row.get("redeemed")
         spent = (f", {used}/{cap} used" if cap and used is not None
                  else f", {used} used" if used else
@@ -10012,7 +10023,11 @@ def _stripe_promos_cli(secret_key: str, create: bool) -> None:
               f"  ({state})")
         for problem in row.get("problems") or []:
             print(f"               ⚠️  {problem}")
-    if not create and any(r.get("problems") for r in res.values()):
+    # ONLY WHEN SOMETHING IS ACTUALLY ABSENT. Offered against a spent or
+    # a switched-off code this line is advice that cannot work — the
+    # setup path finds the code already there and changes nothing — and
+    # it reads as the explanation for the problem above it.
+    if not create and any(not r.get("found") for r in res.values()):
         print("               `python3 launch.py --stripe-setup` creates "
               "what is missing.")
 

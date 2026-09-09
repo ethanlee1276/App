@@ -382,10 +382,19 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
     """
     out: dict = {}
     for promo_id, promo in BI.promos().items():
+        # `found` is the fact the report could not otherwise get at:
+        # whether this code EXISTS at Stripe. Without it the caller has
+        # to guess from whether it passed `create`, which is a fact about
+        # the flag typed and not about the code — and on 2026-09-09 that
+        # made `--promos` call four live-but-spent codes "MISSING" while
+        # `--promos-setup` called the same four "inactive", during an
+        # incident where two customers could not pay.
         row = {"code": promo["code"], "coupon": None, "created": False,
-               "active": False, "problems": []}
+               "active": False, "found": False, "spent": False,
+               "problems": []}
         existing = find_promotion_code(secret_key, promo["code"])
         if existing:
+            row["found"] = True
             row["active"] = bool(existing.get("active"))
             coupon = existing.get("coupon") or {}
             row["coupon"] = coupon.get("id")
@@ -394,9 +403,28 @@ def ensure_promos(secret_key: str, create: bool = True) -> dict:
             row["redeemed"] = int(existing.get("times_redeemed") or 0)
             row["cap"] = existing.get("max_redemptions")
             if not row["active"]:
-                row["problems"].append(
-                    "the code exists at Stripe but is switched OFF — "
-                    "nobody can use it until it is reactivated there")
+                # SPENT AND SWITCHED OFF ARE DIFFERENT PROBLEMS, and
+                # telling somebody to reactivate a code that has already
+                # been redeemed its full number of times sends them to a
+                # dashboard toggle that will not help. A single-use code
+                # is the defence that cannot be walked around, so it is
+                # also the one that runs out quietly.
+                cap = row.get("cap")
+                used = row.get("redeemed")
+                try:
+                    finished = bool(cap) and used is not None and used >= int(cap)
+                except (TypeError, ValueError):              # noqa: BLE001
+                    finished = False
+                if finished:
+                    row["spent"] = True
+                    row["problems"].append(
+                        f"the code has been redeemed its {int(cap)} time"
+                        f"{'s' if int(cap) != 1 else ''} and is finished — "
+                        "reactivating it will not help; issue a new code")
+                else:
+                    row["problems"].append(
+                        "the code exists at Stripe but is switched OFF — "
+                        "nobody can use it until it is reactivated there")
             out[promo_id] = row
             continue
         if not create:

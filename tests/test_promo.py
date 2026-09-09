@@ -454,6 +454,62 @@ def test_setup_reports_a_deactivated_code_instead_of_passing_it():
     assert any("switched OFF" in p for p in row["problems"]), row
 
 
+def _promo_row(payload, create):
+    """`ensure_promos` against one canned Stripe answer."""
+    from engine import stripeset as SS
+
+    def fake_get(url, key, timeout=20, headers=None):
+        return {"data": ([payload] if payload else [])}
+
+    real, BI._get = BI._get, fake_get
+    try:
+        return _with_promo(lambda: SS.ensure_promos("sk_test_x",
+                                                    create=create))[FAKE]
+    finally:
+        BI._get = real
+
+
+COUPON = {"id": "co_1", "percent_off": 75, "duration": "repeating",
+          "duration_in_months": 2}
+
+
+def test_a_spent_code_is_not_reported_as_a_missing_one():
+    """Ethan, 2026-09-09, mid-incident: two customers could not pay and
+    both had tried a promo code. `--promos` called four of his codes
+    MISSING while `--promos-setup` called the same four inactive, and
+    neither word was true — they existed and were used up. The report
+    sent the hunt at Stripe's catalogue instead of at the caps.
+
+    A code that EXISTS is never MISSING, whichever command asked."""
+    spent = {"code": FAKE, "active": False, "coupon": COUPON,
+             "times_redeemed": 1, "max_redemptions": 1}
+    for create in (False, True):
+        row = _promo_row(spent, create)
+        assert row["found"] is True, create
+        assert row["spent"] is True, create
+        # The advice has to change too: there is no toggle for this.
+        assert any("finished" in p for p in row["problems"]), row["problems"]
+        assert not any("reactivated there" in p for p in row["problems"]), \
+            "a used-up code cannot be fixed by reactivating it"
+
+
+def test_switched_off_and_used_up_are_told_apart():
+    """Both are inactive; only one can be undone in the dashboard."""
+    off = {"code": FAKE, "active": False, "coupon": COUPON,
+           "times_redeemed": 0, "max_redemptions": 1}
+    row = _promo_row(off, False)
+    assert row["found"] is True and row["spent"] is False
+    assert any("switched OFF" in p for p in row["problems"]), row["problems"]
+
+
+def test_a_code_that_really_is_absent_still_says_so():
+    """The fix must not make MISSING unreachable — that word is right
+    when Stripe has never heard of the code."""
+    row = _promo_row(None, False)
+    assert row["found"] is False
+    assert any("not created yet" in p for p in row["problems"]), row
+
+
 def test_a_refused_call_says_which_call_it_was():
     """`billing._get` and `billing._post` produce byte-identical text for
     a refusal, so "Stripe refused the request (HTTP 400)" named neither
