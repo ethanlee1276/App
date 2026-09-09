@@ -5356,21 +5356,40 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
         surviving = [x for x in surviving if fn(x)]
         print(f"  {len(surviving):>5} left after: {name}")
 
+    # WHICH GATE COSTS THE MOST, measured by dropping each one on its own
+    # and counting what would then survive. Computed for every board, not
+    # only an empty one: the question "which gate is doing the killing" is
+    # the same question at 0 of 286 and at 5 of 286, and until now the
+    # answer was printed for the first and withheld for the second.
+    #
+    # Ethan's standing rule is "I don't want an empty board either, we
+    # need to have picks period", so THIN is the state this tool is opened
+    # in far more often than EMPTY — and thin was the case it had nothing
+    # to say about.
+    worst, worst_n = None, -1
+    for name, fn in gates:
+        pool = rows
+        for n2, f2 in gates:
+            if n2 == name:
+                continue
+            pool = [x for x in pool if f2(x)]
+        if len(pool) > worst_n:
+            worst, worst_n = name, len(pool)
     if surviving:
         print(f"\n{len(surviving)} prop(s) SHOULD be recommended — if the board "
               f"shows none, that's a bug worth reporting.")
+        # The number that is actually actionable: not how many clear
+        # everything but this gate, but how many MORE would clear if it
+        # went. A gate that costs nothing is not the one to argue about.
+        gain = worst_n - len(surviving)
+        if gain > 0:
+            print(f"\nCostliest gate: “{worst}” — relaxing it alone would "
+                  f"add {gain} more, taking the board to {worst_n}.")
+        else:
+            print("\nNo single gate is holding anything back: every prop "
+                  "that dies is refused by more than one of them, so there "
+                  "is no one bar to argue about.")
     else:
-        # Name the gate that eliminated the most survivors — the real cause.
-        worst, worst_n = None, -1
-        for name, fn in gates:
-            pool = rows
-            for n2, f2 in gates:
-                if n2 == name:
-                    continue
-                pool = [x for x in pool if f2(x)]
-            killed = len(pool)
-            if killed > worst_n:
-                worst, worst_n = name, killed
         print(f"\nBinding gate: “{worst}” — {worst_n} prop(s) clear everything "
               f"else and die there.")
 

@@ -62,10 +62,11 @@ def _empty_ledger():
     return db
 
 
-def _prop(player="Puka Nacua", odds=-115, hit=0.62, rec=True):
+def _prop(player="Puka Nacua", odds=-115, hit=0.62, rec=True, edge=0.05,
+          conf=7.4):
     return {"player": player, "market": "rec_yds", "side": "over",
-            "line": 64.5, "odds": odds, "hit_prob": hit,
-            "has_market": True, "recommended": rec, "confidence": 7.4,
+            "line": 64.5, "odds": odds, "hit_prob": hit, "edge": edge,
+            "has_market": True, "recommended": rec, "confidence": conf,
             "grade": "Play", "reasons": ["Measured: 12-game usage baseline"]}
 
 
@@ -191,6 +192,51 @@ def test_the_tier_check_is_loud_when_it_measured_nothing():
     block = src[i:i + 3200]
     assert "nothing was measured" in block, block[-800:]
     assert "not the same" in block
+
+
+# ------------------------------------------ which gate costs the most, always
+
+def _band(n, **kw):
+    """n props identical except for one field, so a single gate binds."""
+    return [_prop(player=f"P{i}", **kw) for i in range(n)]
+
+
+def test_a_thin_board_is_told_which_gate_costs_it_the_most():
+    """The gap this tool had exactly where #164 needs it. The costliest
+    gate was computed only when NOTHING survived, so at 5 of 286 — thin,
+    which is the state Ethan actually opens this in — the screen went
+    quiet about the one thing it had just worked out."""
+    rows = _band(3) + _band(9, conf=3.0)   # 9 die on confidence alone
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    assert "SHOULD be recommended" in out, out
+    assert "Costliest gate" in out, out
+
+
+def test_the_costliest_gate_is_quoted_as_what_it_would_ADD():
+    """"12 clear everything but this one" is not actionable when 3 of
+    them already clear everything. The number worth arguing about is the
+    9 you would gain."""
+    rows = _band(3) + _band(9, conf=3.0)
+    out = _run(launch.why_empty, _paywalled(rows=rows), "nfl")
+    line = [ln for ln in out.splitlines() if "Costliest gate" in ln]
+    assert len(line) == 1, out
+    assert "add 9 more" in line[0], line
+    assert "to 12" in line[0], line
+
+
+def test_no_gate_is_blamed_when_none_is_on_its_own_binding():
+    """A prop refused by two gates is not evidence against either. Naming
+    a costliest gate anyway would send the reader to loosen a bar that
+    buys nothing."""
+    out = _run(launch.why_empty, _paywalled(rows=_band(4)), "nfl")
+    assert "No single gate is holding anything back" in out, out
+    assert "Costliest gate" not in out, out
+
+
+def test_an_empty_board_still_gets_the_binding_gate_sentence():
+    """Unchanged, and the case the original code was written for."""
+    out = _run(launch.why_empty, _paywalled(rows=_band(6, conf=3.0)), "nfl")
+    assert "Binding gate" in out, out
 
 
 if __name__ == "__main__":
