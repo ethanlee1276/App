@@ -3870,9 +3870,15 @@ def preflight() -> None:
     try:
         from engine.knowledge import tier_of as _tier, unregistered as _unreg
         _rs = []
+        from engine import gate as _gate_k
         for _rel in ("web/data/recommendations.json",
                      "web/data/mlb_recommendations.json"):
-            _p = ROOT / _rel
+            # THROUGH gate.board_source: `reasons` ride on the paid rows,
+            # so with the wall up this measured coverage over zero of them
+            # and the `if _rs:` guard below turned that into silence. A
+            # check that stops checking and says nothing is worse than one
+            # that fails, because nothing on the screen changes.
+            _p = _gate_k.board_source(ROOT / _rel)
             if not _p.is_file():
                 continue
             for _c in (_json.loads(_p.read_text()).get("recommendations") or []):
@@ -3897,6 +3903,15 @@ def preflight() -> None:
             else:
                 print(f"{ok} Knowledge tiers: all {len(_rs)} reasons labelled "
                       f"measured / historical / inference")
+        else:
+            # NOT SILENCE. Zero reasons is not a pass — it is this check
+            # finding nothing to check, which is what it did on every
+            # paywalled box until the read above went through
+            # board_source. A check that quietly stops checking leaves
+            # the screen looking exactly as it does when all is well.
+            print(f"{warn} Knowledge tiers: no reasons found on either "
+                  f"board — nothing was measured, which is not the same "
+                  f"as nothing being wrong.")
     except Exception as exc:  # noqa: BLE001
         print(f"{warn} Knowledge tiers: not checked ({exc})")
 
@@ -4473,9 +4488,16 @@ def why_many(sport: str = "mlb", days: int = 21) -> None:
     from collections import Counter
     from engine import ledger
 
+    from engine import gate as _gate
     rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
            else "web/data/recommendations.json")
-    p = ROOT / rel
+    # THROUGH gate.board_source. `recommendations` is a PAID key: with the
+    # wall up, web/data holds the board with every pick stripped out, so
+    # this walked an empty list and reported honestly on nothing. That is
+    # the fifth tool to make this mistake — board_source's own docstring
+    # names three, --boards was the fourth — and it is the worst place for
+    # it, because the question you open this tool with is "why so few".
+    p = _gate.board_source(ROOT / rel)
     if not p.is_file():
         print(f"No board built yet at {rel} — start the launcher first.")
         return
@@ -5214,9 +5236,15 @@ def why_empty(sport: str = "mlb", min_conf: float = 6.0,
     import json as _json
     from engine.betting import BASE_THRESHOLDS, favourite_surcharge, net_edge
     _GRADE_FLOOR = min(net_min for _, _, net_min in BASE_THRESHOLDS)
+    from engine import gate as _gate
     rel = ("web/data/mlb_recommendations.json" if sport == "mlb"
            else "web/data/recommendations.json")
-    p = ROOT / rel
+    # THROUGH gate.board_source, for the same reason as --why-many above,
+    # and with a worse failure: this one has a branch for an empty list.
+    # With the wall up it printed "has no analyzed props at all" over a
+    # board holding 286 of them — a tool built to explain an empty board
+    # inventing the emptiness it then explained.
+    p = _gate.board_source(ROOT / rel)
     if not p.is_file():
         print(f"No board built yet at {rel} — start the launcher first.")
         return
