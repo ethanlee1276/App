@@ -263,6 +263,64 @@ def test_the_view_has_a_section_and_a_place_in_the_order():
         "VIEW_ORDER animates as though you had gone backwards to reach it"
 
 
+
+# --------------------------------------------- the tap that had to work
+
+def test_the_chip_names_the_league_it_was_drawn_for():
+    """Ethan hit this within an hour of the page shipping: tapping "Los
+    Angeles Rams" on the search page returned the server's own "unknown
+    sport" and drew an empty page.
+
+    The handler was taking `_teamState.sport`, which is `""` until a team
+    page has been opened — so the FIRST tap anybody makes, from the
+    search box, sent `sport=` and was rejected. Every test I had passed,
+    because I had exercised the chip's markup and the team page's route
+    and never the click between them.
+
+    The chip carries the league now. That is the right source and not
+    merely the working one: the ambiguity chooser is drawn on a page that
+    may itself have been reached by a shared link into another league, so
+    `state.sport` is not reliably the team's league either. Whoever drew
+    the chip knew which league it was; it says so.
+    """
+    for fn in ("renderTeamHits", "renderTeamPage"):
+        body = _fn(fn)
+        assert "data-team-open=" in body, fn
+        assert "data-team-sport=" in body, \
+            f"{fn} draws a chip that cannot say which league it means"
+
+
+def test_the_handler_reads_the_league_off_the_chip_before_anything_else():
+    import re as _re
+    i = APP.index('e.target.closest("[data-team-open]")')
+    body = APP[i:i + 1400]
+    # COMMENTS STRIPPED FIRST. The block carries a paragraph explaining
+    # the bug, and that paragraph NAMES `_teamState.sport` — so the
+    # ordering check below read the explanation as the code and failed on
+    # a correct fix. Third time this trap has been sprung in this repo.
+    code = _re.sub(r"/\*.*?\*/", "", body, flags=_re.S)
+    code = _re.sub(r"(?<!:)//[^\n]*", "", code)
+    assert "pick.dataset.teamSport ||" in code, code[:300]
+    # The fallbacks are a belt, and they must not come FIRST — reading
+    # `_teamState.sport` before the chip is exactly the bug.
+    assert code.index("pick.dataset.teamSport") < code.index("_teamState.sport")
+
+
+def test_a_cold_search_tap_sends_a_real_sport():
+    """The failure, reproduced without a browser: `_teamState` at its
+    initial value, a chip drawn by the search page, and the argument the
+    handler would actually pass. `""` is what the server rejects."""
+    got = _run("""
+      let _teamState = { sport: "", team: "", vs: "", data: null };
+      let sent = null;
+      function openTeam(sport, team, vs) { sent = [sport, team, vs]; }
+      const pick = { dataset: { teamSport: "nfl", teamOpen: "Los Angeles Rams" } };
+      openTeam(pick.dataset.teamSport || _teamState.sport || state.sport,
+               pick.dataset.teamOpen, "");
+      console.log(JSON.stringify(sent));""", [])
+    assert got == ["nfl", "Los Angeles Rams", ""], got
+    assert got[0], "the endpoint rejects an empty sport with 400 unknown sport"
+
 if __name__ == "__main__":
     if not shutil.which("node"):
         print("SKIP node is not installed; this file executes the renderer. "

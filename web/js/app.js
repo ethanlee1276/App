@@ -24381,6 +24381,7 @@ function renderTeamHits() {
       and its history against any opponent.</span></div>
     <div class="std-chips">
       ${hits.map((t) => `<button type="button" class="al-cat tm-hit"
+        data-team-sport="${escapeAttr(state.sport)}"
         data-team-open="${escapeAttr(t.name)}">
         ${teamMark(t.abbr, 16, nflMap(), state.sport)}
         ${escapeHtml(t.name)}</button>`).join("")}
@@ -24626,7 +24627,8 @@ function renderTeamPage() {
       <span class="sub">— “${escapeHtml(d.query || st.team)}” is more than
       one team, so this asks rather than picking.</span></div>
       <div class="std-chips">${d.resolved.map((r) => `<button type="button"
-        class="al-cat" data-team-open="${escapeAttr(r.team)}">
+        class="al-cat" data-team-sport="${escapeAttr(d.sport)}"
+        data-team-open="${escapeAttr(r.team)}">
         ${escapeHtml(r.name || r.team)}</button>`).join("")}</div>`;
     return;
   }
@@ -24673,7 +24675,21 @@ document.addEventListener("click", (e) => {
                       ? "" : opp.dataset.teamVs);
   }
   const pick = e.target.closest && e.target.closest("[data-team-open]");
-  if (pick) return openTeam(_teamState.sport, pick.dataset.teamOpen, "");
+  if (pick) {
+    /* THE LEAGUE COMES OFF THE CHIP, and this is the bug Ethan hit
+       within an hour of it shipping: the handler took `_teamState.sport`,
+       which is `""` until a team page has been opened. Tapping "Los
+       Angeles Rams" from the SEARCH page — the first thing anybody does
+       — sent `sport=` and got back the server's own "unknown sport".
+
+       The chip is the right source anyway, not just the working one. The
+       chooser is drawn on a team page that may itself have been reached
+       by a shared link into another league, so `state.sport` is not
+       reliably the league the team belongs to either. Whoever drew the
+       chip knew; it says so. */
+    return openTeam(pick.dataset.teamSport || _teamState.sport || state.sport,
+                    pick.dataset.teamOpen, "");
+  }
 });
 
 /* ---------------- The fantasy calendar ----------------
