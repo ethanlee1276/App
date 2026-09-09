@@ -42,6 +42,27 @@ qellysbook.com {
 	# refactor most likely to happen by accident.
 	handle /api/* {
 		reverse_proxy 127.0.0.1:8000 {
+			# HOLD THE REQUEST WHILE THE APP RESTARTS.
+			#
+			# `systemctl restart` is a hard stop and start — Type=simple,
+			# no ExecReload, no signal handling in launch.py — so for a
+			# second or two the socket refuses connections. Caddy's default
+			# for a single upstream is to give up on the first refused dial
+			# and answer 502, and a 502 is worse than a wait: the service
+			# worker treats an ANSWERED request as the wire being up, so the
+			# page draws an empty board instead of saying it could not
+			# reach us. That is the screenshot Ethan sent on opener day.
+			#
+			# Eight deploys in one afternoon is eight of those windows. This
+			# turns each one into a pause nobody notices.
+			#
+			# DIAL FAILURES ONLY. Without a `retry_match` this retries when
+			# Caddy could not get a connection at all — the request was
+			# never delivered, so replaying it is safe even for a POST. A
+			# request the app accepted and then failed is NOT retried, which
+			# is the property that keeps a double-charge impossible.
+			lb_try_duration 6s
+			lb_try_interval 200ms
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
@@ -67,6 +88,27 @@ qellysbook.com {
 	# out" is not true of a file the app never sees.
 	handle /sw.js {
 		reverse_proxy 127.0.0.1:8000 {
+			# HOLD THE REQUEST WHILE THE APP RESTARTS.
+			#
+			# `systemctl restart` is a hard stop and start — Type=simple,
+			# no ExecReload, no signal handling in launch.py — so for a
+			# second or two the socket refuses connections. Caddy's default
+			# for a single upstream is to give up on the first refused dial
+			# and answer 502, and a 502 is worse than a wait: the service
+			# worker treats an ANSWERED request as the wire being up, so the
+			# page draws an empty board instead of saying it could not
+			# reach us. That is the screenshot Ethan sent on opener day.
+			#
+			# Eight deploys in one afternoon is eight of those windows. This
+			# turns each one into a pause nobody notices.
+			#
+			# DIAL FAILURES ONLY. Without a `retry_match` this retries when
+			# Caddy could not get a connection at all — the request was
+			# never delivered, so replaying it is safe even for a POST. A
+			# request the app accepted and then failed is NOT retried, which
+			# is the property that keeps a double-charge impossible.
+			lb_try_duration 6s
+			lb_try_interval 200ms
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
@@ -95,6 +137,27 @@ qellysbook.com {
 	# token, and the reader would press Unsubscribe and stay subscribed.
 	handle /unsubscribe* {
 		reverse_proxy 127.0.0.1:8000 {
+			# HOLD THE REQUEST WHILE THE APP RESTARTS.
+			#
+			# `systemctl restart` is a hard stop and start — Type=simple,
+			# no ExecReload, no signal handling in launch.py — so for a
+			# second or two the socket refuses connections. Caddy's default
+			# for a single upstream is to give up on the first refused dial
+			# and answer 502, and a 502 is worse than a wait: the service
+			# worker treats an ANSWERED request as the wire being up, so the
+			# page draws an empty board instead of saying it could not
+			# reach us. That is the screenshot Ethan sent on opener day.
+			#
+			# Eight deploys in one afternoon is eight of those windows. This
+			# turns each one into a pause nobody notices.
+			#
+			# DIAL FAILURES ONLY. Without a `retry_match` this retries when
+			# Caddy could not get a connection at all — the request was
+			# never delivered, so replaying it is safe even for a POST. A
+			# request the app accepted and then failed is NOT retried, which
+			# is the property that keeps a double-charge impossible.
+			lb_try_duration 6s
+			lb_try_interval 200ms
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
@@ -111,6 +174,27 @@ qellysbook.com {
 	@entity path /player/* /game/* /pick/*
 	handle @entity {
 		reverse_proxy 127.0.0.1:8000 {
+			# HOLD THE REQUEST WHILE THE APP RESTARTS.
+			#
+			# `systemctl restart` is a hard stop and start — Type=simple,
+			# no ExecReload, no signal handling in launch.py — so for a
+			# second or two the socket refuses connections. Caddy's default
+			# for a single upstream is to give up on the first refused dial
+			# and answer 502, and a 502 is worse than a wait: the service
+			# worker treats an ANSWERED request as the wire being up, so the
+			# page draws an empty board instead of saying it could not
+			# reach us. That is the screenshot Ethan sent on opener day.
+			#
+			# Eight deploys in one afternoon is eight of those windows. This
+			# turns each one into a pause nobody notices.
+			#
+			# DIAL FAILURES ONLY. Without a `retry_match` this retries when
+			# Caddy could not get a connection at all — the request was
+			# never delivered, so replaying it is safe even for a POST. A
+			# request the app accepted and then failed is NOT retried, which
+			# is the property that keeps a double-charge impossible.
+			lb_try_duration 6s
+			lb_try_interval 200ms
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
@@ -119,6 +203,27 @@ qellysbook.com {
 	@sections path /mlb /nfl /nba /wnba /cfb /ufc /record /live /tonight /streak /feed /scanner /longshots /futures /injuries /weather /standings /rosters /players /mybets /bankroll /lab /intel /fantasy /about /why /methodology /status /changelog
 	handle @sections {
 		reverse_proxy 127.0.0.1:8000 {
+			# HOLD THE REQUEST WHILE THE APP RESTARTS.
+			#
+			# `systemctl restart` is a hard stop and start — Type=simple,
+			# no ExecReload, no signal handling in launch.py — so for a
+			# second or two the socket refuses connections. Caddy's default
+			# for a single upstream is to give up on the first refused dial
+			# and answer 502, and a 502 is worse than a wait: the service
+			# worker treats an ANSWERED request as the wire being up, so the
+			# page draws an empty board instead of saying it could not
+			# reach us. That is the screenshot Ethan sent on opener day.
+			#
+			# Eight deploys in one afternoon is eight of those windows. This
+			# turns each one into a pause nobody notices.
+			#
+			# DIAL FAILURES ONLY. Without a `retry_match` this retries when
+			# Caddy could not get a connection at all — the request was
+			# never delivered, so replaying it is safe even for a POST. A
+			# request the app accepted and then failed is NOT retried, which
+			# is the property that keeps a double-charge impossible.
+			lb_try_duration 6s
+			lb_try_interval 200ms
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Host {host}
