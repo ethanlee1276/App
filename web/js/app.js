@@ -8801,6 +8801,11 @@ function renderGamePage() {
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
 
+    ${likelies.length ? `<div class="section-title">Most likely to hit
+        <span class="sub">— ranked by how often they land, not by how good the
+        price is; kept in its own book, never in the headline record</span></div>
+      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
+
     ${betsShown.length ? `<div class="section-title">Game bets
         <span class="sub">— moneyline, spread and totals from the team model</span></div>
       <div class="cards gp-cards">${betsShown.map(gameBetCard).join("")}</div>` : ""}
@@ -8834,11 +8839,6 @@ function renderGamePage() {
           posted prices for it yet.</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}
-
-    ${likelies.length ? `<div class="section-title">Most likely to hit
-        <span class="sub">— ranked by how often they land, not by how good the
-        price is; kept in its own book, never in the headline record</span></div>
-      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
 
     ${shots.length ? `<div class="section-title">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>

@@ -101,6 +101,26 @@ def test_the_likelihood_rows_get_their_own_labelled_tile():
         "the tile does not say these are tracked separately"
 
 
+def test_the_likelihood_section_leads():
+    """Ethan, 2026-09-09, once it was on the page: "we should show the
+    most likley to hit first."
+
+    It is the section with rows on it most nights — the edge book refuses
+    far more than it takes, and on the Week 1 opener it was one prop
+    against two likelihood rows. Leading with the empty half buried the
+    full one under a scroll.
+
+    Pinned by POSITION, because nothing else would notice: moving a
+    section is a cut and a paste that renders perfectly either way."""
+    page = _nocomments(_fn(_js(), "renderGamePage"))
+    lead = page.index("Most likely to hit")
+    for later in ('<div class="section-title">Game bets',
+                  "[...byMarket.keys()]",
+                  '<div class="section-title">Long shots'):
+        assert lead < page.index(later), \
+            f"the likelihood section fell below {later!r}"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
