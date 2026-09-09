@@ -8562,6 +8562,31 @@ function renderGamePage() {
     .filter((b) => b.home === g.home && b.away === g.away);
   const betsShown = bets.filter((b) => (state.showAll ? true : b._ok));
   const shots = (state.data.long_shots || []).filter((r) => propInGame(r, g));
+  /* THE OTHER BOARD, WHICH THIS PAGE HAS NEVER DRAWN. Ethan, 2026-09-09,
+     looking at the Week 1 opener: "when you click on a game on the
+     reccomended page and u scroll down to the reccomended props, is that
+     showing just edge bets? if so, we need to show both edge bets and
+     most likley bets."
+
+     It was. `recommendations`, `game_bets` and `long_shots` are all one
+     book — the edge book — and the likelihood board was never read here
+     at all. On NE/SEA that meant a page showing one prop while two of
+     its players sat on the Most Likely board, with nothing on screen to
+     say the other rows existed.
+
+     ITS OWN SECTION, AND OUT OF THE HEADLINE COUNT. The two books do not
+     share a record and must not (tests/test_books_never_bleed.py); a
+     page that adds them into one "Recommended" number is exactly where
+     that separation would start to rot. So the tile is separate, the
+     section is separate, and the wording says which book you are looking
+     at — the same way Long shots already does.
+
+     `showableLikelyRow` is the gate the Most Likely page itself applies,
+     so a row refused there is refused here rather than surfacing on a
+     page nobody thought to re-check. */
+  const likelies = (state.data.most_likely || [])
+    .filter(showableLikelyRow)
+    .filter((r) => propInGame(r, g));
 
   // The header re-uses the same art the strip card draws, at full width.
   const art = mlb ? ballpark(g) : nba ? court(g) : stadium(g);
@@ -8770,6 +8795,8 @@ function renderGamePage() {
         <div class="tile-sub">props &amp; game bets</div></div>
       <div class="tile"><div class="k">Game bets</div><div class="v">${bets.filter((b) => b._ok).length}</div>
         <div class="tile-sub">moneyline, spread, totals</div></div>
+      <div class="tile"><div class="k">Most likely</div><div class="v">${likelies.length}</div>
+        <div class="tile-sub">ranked by likelihood · own book</div></div>
       <div class="tile"><div class="k">Long shots</div><div class="v">${shots.length}</div>
         <div class="tile-sub">${mlb ? "home runs" : nba ? "none for NBA" : "anytime TDs"} · tracked separately</div></div>
     </div>
@@ -8807,6 +8834,11 @@ function renderGamePage() {
           posted prices for it yet.</div>
           ${props.length ? `<button class="btn ghost" id="gp-showall" style="margin-top:12px">
             Show all ${props.length} analyzed ${pluralWord(props.length, "prop")} anyway</button>` : ""}</div>`}
+
+    ${likelies.length ? `<div class="section-title">Most likely to hit
+        <span class="sub">— ranked by how often they land, not by how good the
+        price is; kept in its own book, never in the headline record</span></div>
+      <div class="cards gp-cards">${likelies.map(likelyCard).join("")}</div>` : ""}
 
     ${shots.length ? `<div class="section-title">Long shots
         <span class="sub">— tracked in their own bucket, never in the headline record</span></div>
