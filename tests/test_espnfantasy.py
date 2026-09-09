@@ -55,17 +55,28 @@ PAYLOAD = {
     },
     "teams": [
         {"id": 1, "name": "Mine", "owners": ["{ABC}"], "roster": {"entries": [
-            {"playerPoolEntry": {"player": {"fullName": "Jalen Hurts",
+            # Slot 0 is the QB seat: in the lineup.
+            {"lineupSlotId": 0,
+             "playerPoolEntry": {"player": {"fullName": "Jalen Hurts",
                                             "defaultPositionId": 1}}},
-            {"playerPoolEntry": {"player": {"fullName": "Bijan Robinson",
+            # Slot 20 is ESPN's bench.
+            {"lineupSlotId": 20,
+             "playerPoolEntry": {"player": {"fullName": "Bijan Robinson",
                                             "defaultPositionId": 2}}},
-            {"playerPoolEntry": {"player": {"fullName": "No Position",
+            {"lineupSlotId": 20,
+             "playerPoolEntry": {"player": {"fullName": "No Position",
                                             "defaultPositionId": 77}}},
         ]}},
         {"id": 2, "location": "Other", "nickname": "Guys", "owners": ["{XYZ}"],
          "roster": {"entries": [
-             {"playerPoolEntry": {"player": {"fullName": "Puka Nacua",
+             # Slot 88 is an IDP seat this repo does not model. He is
+             # still PLAYING, and the parser must not call that benched.
+             {"lineupSlotId": 88,
+              "playerPoolEntry": {"player": {"fullName": "Puka Nacua",
                                              "defaultPositionId": 3}}},
+             # No slot on the entry at all.
+             {"playerPoolEntry": {"player": {"fullName": "Slotless Guy",
+                                             "defaultPositionId": 4}}},
          ]}},
     ],
 }
@@ -183,6 +194,36 @@ def test_a_payload_with_no_roster_settings_raises():
 def test_every_team_comes_back_with_a_readable_label():
     got = ef.parse_rosters(PAYLOAD)
     assert set(got) == {"Mine", "Other Guys"}
+
+
+def test_the_lineup_he_has_set_comes_through():
+    """Ethan, 2026-09-09: "when they sync their ESPN league or their
+    Sleeper league or both." The desk can only say what to CHANGE if it
+    knows what he has got in, and this parser was throwing
+    `lineupSlotId` away — the same hole the Sleeper path had until the
+    day before."""
+    mine = ef.parse_rosters(PAYLOAD)["Mine"]
+    by = {r["player"]: r["starting"] for r in mine}
+    assert by == {"Jalen Hurts": True, "Bijan Robinson": False}, by
+
+
+def test_a_slot_we_do_not_model_is_a_man_who_is_playing():
+    """The reason the rule is written as a BENCH list rather than a
+    starter list. An IDP seat or a taxi squad is a slot this repo has no
+    name for, and reading an unknown id as "benched" would tell somebody
+    to start a linebacker who is already in."""
+    them = {r["player"]: r["starting"]
+            for r in ef.parse_rosters(PAYLOAD)["Other Guys"]}
+    assert them["Puka Nacua"] is True, "an unmodelled slot read as benched"
+
+
+def test_an_entry_with_no_slot_at_all_is_not_claimed_as_a_starter():
+    """Absent is not the same as started. Putting a man in the lineup on
+    the strength of a missing field is the one direction that costs
+    somebody a week."""
+    them = {r["player"]: r["starting"]
+            for r in ef.parse_rosters(PAYLOAD)["Other Guys"]}
+    assert them["Slotless Guy"] is False
 
 
 def test_a_player_whose_position_we_cannot_read_is_dropped():

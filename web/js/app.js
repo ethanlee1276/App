@@ -22405,6 +22405,14 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      his. */
   _ffDesk = d;
   host.innerHTML = ffH2HHTML(d) + ffLineupHTML(d) + ffScoringGapsHTML(d)
+    /* HERE, NOT ON THE SLEEPER CARD, which is where it first shipped.
+       Ethan, 2026-09-09: "when they sync their ESPN league or their
+       Sleeper league or both." `renderLeagueDesk` is the one function
+       all three platforms come through, and its payload already carries
+       the whole roster — the best lineup plus the bench — so drawing
+       from here means an ESPN-only reader gets his calendar without a
+       second copy of the code deciding who his players are. */
+    + ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d))
     + ffTradesHTML(d) + ffStandingsHTML(d);
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
     b.addEventListener("click", () => ffLogTrade(b)));
@@ -24713,13 +24721,42 @@ document.addEventListener("click", (e) => {
    a handcuffed back, a rookie tight end, a defence. Silently ranking six
    of his eleven and calling it his calendar would be the worst kind of
    quiet, so the count is on the strip and the missing men are named. */
+/* Every player on his team, out of the desk's own answer.
+
+   `lineup.starters` is the best legal lineup and `lineup.bench` is
+   everyone it did not seat, so together they are the roster — whichever
+   platform handed it over. Reading it from here rather than from each
+   platform's own sync is the difference between one definition of "his
+   players" and three that can drift apart. */
+function ffDeskRoster(d) {
+  const L = (d || {}).lineup || {};
+  const seen = new Set();
+  const out = [];
+  for (const r of (L.starters || []).concat(L.bench || [])) {
+    const name = r && r.player;
+    if (!name || seen.has(ffNorm(name))) continue;
+    seen.add(ffNorm(name));
+    out.push({ name, pos: r.position || "" });
+  }
+  return out;
+}
+
 function ffRosterCalendarHTML(d, myRows) {
   const board = ((d.draft_kit || {}).board || []);
-  const kit = new Set(board.map((r) => ffNorm(r.player)));
   const mine = (myRows || []).filter((r) => r.name);
+  if (!mine.length) return "";
+  /* NO BOARD IS A DIFFERENT SENTENCE from "none of your players are on
+     it", and this block sits on a tab where nothing else would say
+     either. The desk can answer before the fantasy payload has landed,
+     and it answers at all on a machine whose draft kit never built. */
+  if (!board.length) {
+    return `<p class="rank-help">${icon("warn")} The projection board has
+      not loaded here yet, so there is no calendar to scale your roster
+      against. It fills with the Fantasy tab.</p>`;
+  }
+  const kit = new Set(board.map((r) => ffNorm(r.player)));
   const covered = mine.filter((r) => kit.has(ffNorm(r.name)));
   const absent = mine.filter((r) => !kit.has(ffNorm(r.name)));
-  if (!mine.length) return "";
   if (!covered.length) {
     return `<div class="empty-slate"><div class="es-icon">${icon("calendar", 30)}</div>
       <div class="es-title">None of your players are on the projection board</div>
@@ -27953,8 +27990,7 @@ function renderSleeperPanel(d, ctx) {
       `${panelEmpty("Every notable riser is already rostered here.")}`}</div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 2px 8px">Boards use PPR scoring;
       custom-scoring recompute lands with the in-season update.</p>
-  </div>
-  ${ffRosterCalendarHTML(d, myRows)}`;
+  </div>`;
 
   const sel = document.getElementById("sleeper-league");
   if (sel) sel.addEventListener("change", () => {

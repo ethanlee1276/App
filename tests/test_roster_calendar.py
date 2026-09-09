@@ -126,7 +126,7 @@ def _run(script, inj=None):
                "ffNorm", "pluralWord", "plural", "_ffCalS", "_ffImpliedAvg",
                "_ffDayEnv", "_ffDayBoard", "_ffCalSay", "_ffCalQual",
                "ffCalendarHTML", "ffCalDayHTML", "ffCalPanelHTML",
-               "ffRosterCalendarHTML"))
+               "ffDeskRoster", "ffRosterCalendarHTML"))
            + "\n" + script)
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
         fh.write(src)
@@ -276,6 +276,63 @@ def test_a_tap_moves_only_the_calendar_it_landed_in():
     assert got[2] is True, "the redraw lost the namespace"
     assert got[3] is False, "the redraw lost the roster filter"
 
+
+
+# --------------------------------------- every platform, one definition
+
+def test_the_roster_comes_from_the_desk_so_every_platform_gets_one():
+    """Ethan, 2026-09-09: "when they sync their ESPN league or their
+    Sleeper league or both."
+
+    The calendar first shipped inside the Sleeper card, which meant an
+    ESPN-only reader never saw one. `renderLeagueDesk` is the single
+    function all three platforms come through, and its payload already
+    carries the whole roster — the best lineup plus everyone it did not
+    seat — so that is where "his players" gets defined, once."""
+    got = _run("""
+      const desk = { lineup: {
+        starters: [{ slot: "WR", player: "Mine Wr", position: "WR" },
+                   { slot: "RB", player: null }],
+        bench: [{ player: "Deep Bench", position: "TE" },
+                { player: "Mine Wr", position: "WR" }] } };
+      console.log(JSON.stringify(ffDeskRoster(desk)));""")
+    assert [r["name"] for r in got] == ["Mine Wr", "Deep Bench"], got
+    # An unfilled slot carries `player: null` and must not become a
+    # roster row called "null"; a man in the lineup must not be counted
+    # twice because he also turns up in another list.
+    assert all(r["name"] for r in got)
+
+
+def test_an_empty_slot_or_an_absent_lineup_is_simply_no_roster():
+    for desk in ("null", "{}", '{"lineup": {}}',
+                 '{"lineup": {"starters": [{"slot": "QB", "player": null}]}}'):
+        got = _run("console.log(JSON.stringify(ffDeskRoster(%s)));" % desk)
+        assert got == [], (desk, got)
+
+
+def test_no_projection_board_says_so_rather_than_blaming_his_roster():
+    """The desk can answer before the fantasy payload lands. "The board
+    is not here" and "none of your players are on it" are two different
+    facts, and this tab carries nothing else that would say either."""
+    got = _run("console.log(JSON.stringify(ffRosterCalendarHTML("
+               '{ draft_kit: { board: [] } },'
+               '[{ name: "Mine Wr", pos: "WR" }])));')
+    got = " ".join(got.split())
+    assert "projection board has not loaded here yet" in got, got
+    assert "None of your players" not in got
+
+
+def test_the_desk_draws_it_and_the_sleeper_card_no_longer_does():
+    """One instance, or the Sleeper reader gets two calendars and the
+    `roster` namespace has two elements fighting over one selection."""
+    assert APP.count("ffRosterCalendarHTML(") == 2, \
+        "expected the definition and exactly one call site"
+    i = APP.index("async function renderLeagueDesk(")
+    body = APP[i:APP.index("\n/* ---------------- The team you are", i)]
+    assert "ffRosterCalendarHTML(_ffData || {}, ffDeskRoster(d))" in body
+    j = APP.index("function renderSleeperPanel(")
+    panel = APP[j:APP.index("\n/* ============", j)]
+    assert "ffRosterCalendarHTML" not in panel
 
 if __name__ == "__main__":
     if not shutil.which("node"):

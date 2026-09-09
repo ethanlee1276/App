@@ -58,6 +58,23 @@ SLOT_IDS = {
 #: ESPN position ids for a player's actual position.
 POSITION_IDS = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DEF"}
 
+#: The slot ids that mean "not in the lineup". Everything else is.
+#:
+#: Ethan, 2026-09-09: "This should work with someone synced fantasy league
+#: so when they sync their ESPN league or their Sleeper league or both."
+#: The desk can only tell him what to CHANGE if it knows what he has got
+#: in, and `parse_rosters` was throwing `lineupSlotId` away — the same
+#: hole the Sleeper path had until the day before. On Sleeper the answer
+#: comes from a `starters` array; here it is per entry.
+#:
+#: STATED AS A BENCH LIST, NOT A STARTER LIST, on purpose. A slot id we
+#: do not model — an IDP seat, a taxi squad — still holds a man who is
+#: PLAYING, and reading an unknown id as "benched" would tell somebody to
+#: start a linebacker who is already in. ESPN parks a player in 20 or 21
+#: exactly when he is not in the lineup, and those are the two we can say
+#: something certain about.
+BENCH_SLOT_IDS = {20, 21}
+
 #: ESPN `statId` → the scoring key `fantasy_lineup` understands.
 #:
 #: DELIBERATELY SHORT. Only the ids this repo can act on are here, and
@@ -166,7 +183,14 @@ def parse_slots(payload: dict) -> list[str]:
 
 
 def parse_rosters(payload: dict) -> dict:
-    """``{team label: [{player, position}]}`` for every team in the league."""
+    """``{team label: [{player, position, starting}]}`` for every team.
+
+    ``starting`` is whether ESPN has him in the lineup right now, which is
+    what lets the desk say what to change rather than only what the best
+    lineup would be. Absent `lineupSlotId` reads as NOT started: an entry
+    with no slot on it is a roster row we cannot place, and claiming he is
+    in would put a man in the lineup on the strength of a missing field.
+    """
     teams = (payload or {}).get("teams")
     if teams is None:
         raise DataUnavailable(
@@ -182,8 +206,11 @@ def parse_rosters(payload: dict) -> dict:
             p = ((entry.get("playerPoolEntry") or {}).get("player") or {})
             name = p.get("fullName") or ""
             pos = POSITION_IDS.get(p.get("defaultPositionId"))
+            slot = entry.get("lineupSlotId")
             if name and pos:
-                rows.append({"player": name, "position": pos})
+                rows.append({"player": name, "position": pos,
+                             "starting": (slot is not None
+                                          and int(slot) not in BENCH_SLOT_IDS)})
         out[label] = rows
     return out
 
