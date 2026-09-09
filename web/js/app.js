@@ -6,6 +6,28 @@
  * (avatars, stadiums, wind, sparklines).
  */
 
+/* THE PLAY-BY-PLAY'S PEEK TOGGLE, DECLARED UP HERE ON PURPOSE.
+
+   It belongs beside `renderPbpPage`, six hundred lines from the bottom,
+   and that is where it was. `openPbp` assigns it — and `openPbp` is
+   reachable from `initialView()`, which the boot block CALLS at the top
+   level, a thousand lines above the declaration. Cold, that is a
+   ReferenceError in the temporal dead zone: evaluation stops on the spot,
+   three thousand lines never define, and somebody who followed a
+   #pbp/nfl/<id> link out of a group chat lands on the board with the
+   address bar still claiming the game.
+
+   It survived because nobody reaches a deep link by clicking. In the app
+   the file has long since finished evaluating and the same link is fine;
+   only a cold load — which is every link anyone SENDS — hits it. Found
+   2026-09-09, live for the opener, by opening one in a real browser.
+
+   tests/test_app_loads.py boots every deep-link shape now, so the next
+   one of these fails a test instead of a Wednesday night. */
+let _pbpShowAll = false;
+let _pbpTimer = null;
+let _pbpStrip = { at: 0, league: "", games: [] };
+
 const state = {
   data: null, minConf: 6.0, minEdge: 2.0, maxJuice: -350, showAll: false,
   view: "recommended", search: "",
@@ -33238,8 +33260,9 @@ function liveCardHTML({ sport, g, bets }) {
    is standing on that league — a free page never asks the paid board
    for them. Nothing here reads a play's sentence; every row is the
    structured one the parsers composed. */
-let _pbpTimer = null;
-let _pbpStrip = { at: 0, league: "", games: [] };
+/* `_pbpTimer` and `_pbpStrip` are declared at the top of the file for the
+   same reason `_pbpShowAll` is — `renderPbpPage` reads both, and a cold
+   #pbp/... link renders the page during evaluation. */
 
 /* Fast scoreboard rows merged into board games, keyed the way the Live
    tab keys them — away@home. The fast file knows the score, the clock,
@@ -33289,7 +33312,8 @@ function armDashLive(seen) {
     else armDashLive(seen);
   }, DASH_LIVE_EVERY_MS);
 }
-let _pbpShowAll = false;
+/* `_pbpShowAll` used to live here, beside its readers. It is declared
+   near the top of the file now — see the comment there. */
 let _pbpTab = "info";           // info | props | injuries | players
 
 /* ---------------- The page's other rooms ----------------

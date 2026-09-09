@@ -143,6 +143,22 @@ globalThis.IntersectionObserver = class { observe(){} disconnect(){} };
 globalThis.ResizeObserver = globalThis.IntersectionObserver;
 globalThis.window = globalThis;
 
+// AN ASYNC THROW IS STILL A BROKEN PAGE. `renderPbpPage` is an `async
+// function`, so a ReferenceError inside it does not propagate out of
+// `runInThisContext` — it becomes a rejected promise, and this harness
+// used to call process.exit before Node ever reported it. That is
+// exactly how the second half of the 2026-09-09 deep-link bug
+// (`_pbpTimer`) passed this file while a real browser logged it. Both
+// hooks, and a tick of the event loop below, so the boot's own async
+// work has a chance to fail out loud.
+process.on("uncaughtException", (e) => {
+  if (!asyncErr) asyncErr = "async: " + String((e && e.message) || e);
+});
+process.on("unhandledRejection", (e) => {
+  if (!asyncErr) asyncErr = "async: " + String((e && e.message) || e);
+});
+let asyncErr = null;
+
 const fs = require("fs");
 const vm = require("vm");
 const src = fs.readFileSync(process.argv[2], "utf8");
@@ -185,12 +201,19 @@ if (out.ok) {
     if (seen === "undefined") out.missingValues.push(name);
   }
 }
-console.log(JSON.stringify(out));
-// EXIT, do not fall off the end. The app's boot block starts intervals
-// (the live loop, the clock), and a pending timer keeps Node's event loop
-// alive for ever — the check would pass and then hang, which reads as a
-// broken test rather than a working one.
-process.exit(0);
+// ONE TICK BEFORE REPORTING, so a rejection raised by the boot's own
+// async work is on the books. setTimeout and not setImmediate: an
+// unhandled rejection is reported after the microtask queue drains, and
+// a macrotask is the cheapest way to be behind it.
+setTimeout(() => {
+  if (asyncErr) { out.ok = false; out.error = out.error || asyncErr; }
+  console.log(JSON.stringify(out));
+  // EXIT, do not fall off the end. The app's boot block starts intervals
+  // (the live loop, the clock), and a pending timer keeps Node's event
+  // loop alive for ever — the check would pass and then hang, which reads
+  // as a broken test rather than a working one.
+  process.exit(0);
+}, 50);
 """
 
 
@@ -287,6 +310,42 @@ def test_a_landing_on_every_tab_boots():
     bad = {v: r["error"] for v, r in got.items() if not r["ok"]}
     assert not bad, "a landing on these tabs throws during boot — a blank site for " \
         "anyone whose address bar carries the tab:\n  " + "\n  ".join(f"#{v}: {e}" for v, e in bad.items())
+
+
+#: Every SHAPE `initialView` routes that is not a bare view name. The tab
+#: walk above covers VIEW_ORDER; these are the branches beside it —
+#: entity links, the play-by-play deep link, a league as a destination,
+#: the migrated bookmark, and a hash that matches nothing at all. The ids
+#: are deliberately fake: none of these has to FIND anything, it has to
+#: survive being asked, because the ask happens during evaluation.
+DEEP_ROUTES = [
+    "#pbp/nfl/401671800", "#pbp/mlb/777001", "#pbp/cfb/401628000", "#pbp/nfl",
+    "#game/2026-09-09-NE-SEA", "#game/nfl/2026-09-09-NE-SEA",
+    "#prop/whatever", "#pick/nfl/whatever", "#player/nfl/josh-jacobs",
+    "#player/somebody", "#friend/tok3n",
+    "#nfl", "#mlb", "#cfb", "#parlays", "#nothing-is-here",
+]
+
+
+def test_a_landing_on_every_deep_link_boots():
+    """The tab walk beside this one only tries bare view names, and the
+    routes that carry an id are the ones people actually SEND each other:
+    a play-by-play link out of a group chat, a player page, an invite.
+
+    Found on 2026-09-09, live for the NFL opener, by opening
+    #pbp/nfl/<id> in a real browser: `openPbp` assigns `_pbpShowAll`,
+    which is declared six hundred lines BELOW the boot block that calls
+    it. Cold, that is a ReferenceError at the top level — evaluation
+    stops there, three thousand lines never define, and the reader lands
+    on the board with the address bar still claiming the game. Warm, in
+    the app, the same link is fine, which is why it survived: nobody
+    reaches a deep link by clicking."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        got = dict(zip(DEEP_ROUTES, pool.map(_run, DEEP_ROUTES)))
+    bad = {h: r["error"] for h, r in got.items() if not r["ok"]}
+    assert not bad, "these links throw during boot — a broken page for anyone " \
+        "who follows one:\n  " + "\n  ".join(f"{h}: {e}" for h, e in bad.items())
 
 
 def test_a_constant_the_view_switch_reads_late_is_caught():
