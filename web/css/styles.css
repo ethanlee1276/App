@@ -2482,6 +2482,15 @@ select.calc-in { width: auto; font-weight: 600; }
 /* Phone: the sparkline is the first thing to give. */
 @media (max-width: 480px) { .sw-spark { display: none; } }
 
+/* A roster row that opens the player. It looks like the rows around it
+   on purpose — the affordance is the pointer and the hover, not a chevron
+   the phone has no room for. The focus ring is the same one every other
+   door on the page wears, because a keyboard user arriving here should
+   not have to learn a second visual language. */
+.ffrow-door { cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.ffrow-door:hover { background: var(--fill-subtle); }
+.ffrow-door:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+
 /* ---------------- The book report card (Scanner) ---------------- */
 .br-head { margin-top: 22px; }
 

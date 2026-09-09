@@ -24109,6 +24109,18 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { closeFfDossier(); closePeek(); }
+  /* A div with role="button" and tabindex="0" has told the screen
+     reader it is operable. Enter and Space are what that promise
+     means, and until now only the mouse could keep it — the calendar
+     cells and cards have carried the role since they shipped. Routed
+     through .click() rather than duplicating each handler, so there is
+     one behaviour to keep correct instead of two that can drift. */
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target && e.target.closest
+    && e.target.closest("[data-dossier],[data-calday],[data-calpick]");
+  if (!el) return;
+  e.preventDefault();
+  el.click();
 });
 
 /* ---------------- The fantasy calendar ----------------
@@ -27589,8 +27601,26 @@ function renderSleeperPanel(d, ctx) {
     (POS_ORDER[a.pos] ?? 9) - (POS_ORDER[b.pos] ?? 9)
     || (b.u ? b.u.fp_pg : 0) - (a.u ? a.u.fp_pg : 0));
 
+  /* THE ROW IS A DOOR. Ethan, 2026-09-09, with his own Sleeper roster on
+     screen: "when you click on a player, it will show you weekly fantasy
+     projections, and trade targets and if you should bench them for that
+     week." Every other player on this page already opens the dossier —
+     the kit board, the calendar cards, the usage rows — and this list,
+     the one list that is HIS, was the only place a name was inert.
+
+     Nothing new is fetched: `_ffDossierInfo` joins by name across the
+     kit, usage, buy/sell, rankings, camp and the offseason moves, and a
+     player none of them know gets the dossier's own "no fantasy read on
+     him this season" rather than an empty panel.
+
+     role=button with tabindex and NO key handler is worse than no role
+     at all — it tells a screen reader this is operable and then ignores
+     Enter. The delegated keydown below makes that true, and picks up the
+     calendar cells that have been claiming the same role since August. */
   const rowHTML = (r) => `
-    <div class="drow" style="display:flex;align-items:center;gap:12px;padding:8px 16px;
+    <div class="drow ffrow-door" data-dossier="${escapeAttr(r.name)}"
+        role="button" tabindex="0"
+        style="display:flex;align-items:center;gap:12px;padding:8px 16px;
         border-bottom:1px solid rgba(255,255,255,.05)">
       <span style="flex:0 0 auto">${playerAvatar(r.name, r.team, { map: nflMap(), headshot: (r.u || {}).headshot || _ffDossierInfo(r.name).headshot })}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
