@@ -158,9 +158,22 @@ def test_the_parse_census_shows_when_a_feed_was_read_away():
 
 # --- and it says what to do -----------------------------------------------
 def test_it_names_the_usual_cause_of_a_frozen_board():
-    out = _run()
-    assert "returns without writing" in out
-    assert "keeping the" in out
+    """It now says this ONLY about a board that actually is one, and it
+    names which (2026-09-08): the line printed on every run, healthy or
+    not, so it was a standing warning about a condition usually not
+    happening — which is how a real one gets skimmed past. The advice
+    itself is unchanged and still has to arrive with the finding."""
+    name = _board("frozenone", {"games": [1]}, age_hours=6)
+    old = list(launch._CYCLE_S)
+    launch._CYCLE_S[:] = [300.0, 300.0]           # a measured cycle to beat
+    try:
+        out = _run()
+    finally:
+        launch._CYCLE_S[:] = old
+        launch.BOARD_FILES.pop(name, None)
+    assert "returns without writing" in out, out
+    assert "keeping the" in out, out
+    assert name.upper() in out.split("older than a whole cycle")[0], out
 
 
 def test_the_college_build_gets_the_same_ceiling_as_the_mlb_one():

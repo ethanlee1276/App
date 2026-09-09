@@ -37,6 +37,7 @@ import pathlib
 import re
 import sys
 import tempfile
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -44,12 +45,25 @@ sys.path.insert(0, ROOT)
 import launch                                                # noqa: E402
 
 
-def _run(beat=None):
-    """Stand up a tree holding one heartbeat, run --boards, return output."""
+def _run(beat=None, aged=None):
+    """Stand up a tree holding one heartbeat, run --boards, return output.
+
+    `aged` maps a board name to its age in hours; both copies are written
+    (`gate.board_source` redirects a web/data path to the private one, and
+    the age comes off whichever it lands on)."""
     tmp = pathlib.Path(tempfile.mkdtemp())
     (tmp / "web" / "data").mkdir(parents=True)
+    (tmp / "data" / "built").mkdir(parents=True)
     if beat is not None:
         (tmp / "web" / "data" / "heartbeat.json").write_text(json.dumps(beat))
+    for name, hours in (aged or {}).items():
+        body = json.dumps({"games": [], "recommendations": []})
+        when = time.time() - hours * 3600
+        for f in (tmp / launch.BOARD_FILES[name],
+                  tmp / "data" / "built" /
+                  pathlib.Path(launch.BOARD_FILES[name]).name):
+            f.write_text(body)
+            os.utime(f, (when, when))
     old = launch.ROOT
     launch.ROOT = tmp
     try:
@@ -280,6 +294,58 @@ def test_step_fail_is_still_cleared_by_the_sweep_that_owns_it():
     src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
     sweep = src.split("\ndef refresh_all", 1)[1].split("\ndef ", 1)[0]
     assert "_STEP_FAIL.clear()" in sweep
+
+
+# ------------------------------------------------- the empty timing heading
+
+def test_a_cycle_that_skipped_the_sweep_says_so_instead_of_printing_a_zero():
+    """Read 2026-09-08 as "where the last cycle's time went (0s total)"
+    under five boards that had all just rebuilt. The cycle had timed its
+    three chores at under a second each and skipped the sweep, because
+    the startup build still held the lock. A complete, healthy answer,
+    printed as a zero."""
+    out = _run(_beat(step_s={"maintenance": 0.2, "autosettle": 0.1},
+                     swept="skipped — a build was already running"))
+    assert "0s total" not in out, out
+    assert "did not sweep" in out, out
+    assert "Nothing is wrong" in out, out
+
+
+def test_the_timing_block_still_prints_a_real_cycle():
+    """The screen's original job, unchanged: when the sweep did run, name
+    the builds spending the minutes, worst first."""
+    out = _run(_beat(step_s={"nfl": 99.0, "cfb": 16.0}, swept="ran"))
+    assert "115s total" in out, out
+    assert "nfl" in out and "99s" in out
+    assert "did not sweep" not in out, out
+
+
+# --------------------------------------------- the standing stale warning
+
+def test_the_stale_warning_names_the_board_it_is_about():
+    """It used to print on every run, healthy or not — a permanent
+    warning about a condition that was usually not happening, which is
+    how a real one gets skimmed past. Same argument as the daily check
+    being silent when nothing is wrong."""
+    out = _run(_beat(cycle_p50_s=300), aged={"mlb": 6.0, "nfl": 0.02})
+    line = [ln for ln in out.splitlines() if "older than a whole cycle" in ln]
+    assert len(line) == 1, out
+    assert "MLB" in line[0], line
+    assert "NFL" not in line[0], line          # NFL is current; leave it out
+    assert "not being written" in out, out
+
+
+def test_a_board_younger_than_a_cycle_raises_no_warning():
+    out = _run(_beat(cycle_p50_s=300), aged={"nfl": 0.02, "mlb": 0.02})
+    assert "not being written" not in out, out
+
+
+def test_an_unmeasured_cycle_makes_no_staleness_claim():
+    """A young process has no cycle to compare against. Warning on a
+    number it does not have is exactly the misattribution Ethan caught
+    the oversubscription line making."""
+    out = _run(_beat(cycle_p50_s=None), aged={"mlb": 6.0})
+    assert "not being written" not in out, out
 
 
 if __name__ == "__main__":

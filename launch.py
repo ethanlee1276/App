@@ -4978,12 +4978,29 @@ def show_boards() -> None:
         # same ~45 minutes, the cycle IS the staleness, and this names
         # the builds actually spending it.
         steps = beat.get("step_s") or {}
-        if steps:
+        swept = beat.get("swept")
+        shown = [(k, v) for k, v in sorted(steps.items(), key=lambda kv: -kv[1])
+                 if isinstance(v, (int, float)) and v >= 1]
+        if shown:
             total = sum(v for v in steps.values() if isinstance(v, (int, float)))
             print(f"\n  where the last cycle's time went ({total:.0f}s total)")
-            for k, v in sorted(steps.items(), key=lambda kv: -kv[1]):
-                if v >= 1:
-                    print(f"    {k:<15} {v:>7.0f}s")
+            for k, v in shown:
+                print(f"    {k:<15} {v:>7.0f}s")
+        elif steps or swept:
+            # A HEADING OVER NOTHING IS THE MISLEADING CASE, not the
+            # harmless one. Read 2026-09-08 as "where the last cycle's
+            # time went (0s total)" under boards that had all just
+            # rebuilt: the cycle had timed its three chores at under a
+            # second each and skipped the sweep, because the startup
+            # build still held the lock. That is a complete and healthy
+            # answer, and the screen printed a zero instead of it.
+            print(f"\n  the last cycle did not sweep — "
+                  f"{swept or 'no sweep recorded'}.")
+            if swept and swept.startswith("skipped"):
+                print("    The board times above are that build's, not this "
+                      "cycle's. Nothing is wrong; a sweep was already "
+                      "running and the loop correctly did not start a "
+                      "second one.")
         # WHICH STEP RAISED — recorded since the three-hour freeze of
         # 2026-09-03 and, until now, never displayed by the one tool
         # built to answer "why is the site stale". The heartbeat's own
@@ -5018,7 +5035,6 @@ def show_boards() -> None:
                 # possibilities and left them to pick; `swept` and
                 # `warming` were added the same hour precisely so it
                 # would not have to.
-                swept = beat.get("swept")
                 if beat.get("warming"):
                     print("    The first full build has not finished yet — "
                           "this is a sweep IN FLIGHT, not one that stopped. "
@@ -5039,10 +5055,21 @@ def show_boards() -> None:
     cyc = beat.get("cycle_p50_s") or _cycle_p50()
     print(f"\n  typical refresh cycle: "
           f"{f'{cyc:.0f}s' if cyc else 'not measured yet'}")
-    print("\n  A board older than the cycle is not being written. The usual "
-          "cause is a\n  build that returns without writing — a feed it "
-          "cannot reach, keeping the\n  last board rather than publishing "
-          "an empty one.\n")
+    # ONLY WHEN A BOARD ACTUALLY IS. This printed on every run, healthy
+    # or not — a standing warning about a condition that was usually not
+    # happening, which is how a real one gets skimmed past. Same argument
+    # as the daily check being silent when nothing is wrong.
+    behind = [n for n, a, *_ in rows
+              if a is not None and cyc and a * 3600 > cyc * 1.5]
+    if behind:
+        print(f"\n  {', '.join(n.upper() for n in behind)} "
+              f"{'is' if len(behind) == 1 else 'are'} older than a whole "
+              f"cycle, so {'it is' if len(behind) == 1 else 'they are'} not "
+              f"being written. The usual\n  cause is a build that returns "
+              f"without writing — a feed it cannot reach,\n  keeping the "
+              f"last board rather than publishing an empty one.\n")
+    else:
+        print()
 
 
 def show_likely() -> None:
