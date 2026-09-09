@@ -405,6 +405,48 @@ the events are the hard part, and they are done.
 
 ---
 
+## In-game live win probability — SHIPPED 2026-09-09
+
+**This entry used to be three lines below, under "needs data we do not
+have": "Needs play-by-play at a latency we do not have."** That was true
+on 2026-08-20 and stopped being true on 2026-09-05, when #136 put fast
+live scores on NFL, CFB, NBA and WNBA, #137 put MLB play-by-play on the
+same clock, and #138 landed football drives off verified ESPN shapes.
+The blocker was retired by other work and nobody came back to the list —
+which is the ordinary way a list rots, and the reason this note replaces
+the entry rather than quietly deleting it.
+
+**What it is built from:** `engine/livewp.py`, and nothing new. The
+remaining margin is Normal(mu, sd) with `mu` the pregame expected home
+margin times the fraction of the game still to play, and `sd` the
+sport's own `gamebets.MARGIN_SD` times the square root of that fraction.
+P(home) is the normal CDF of the current margin plus that mean over that
+SD. The SD is the same constant the pregame moneyline is priced from, so
+this is the game model read from later in the evening rather than a
+second opinion with its own numbers to drift.
+
+**What it costs:** nothing per game. No fetch, no credits, no store — it
+is arithmetic over the score, the clock and a line already on the card.
+
+**What it cannot do, and says so on every row.** No possession, no down,
+no distance, no timeouts. Three points up with the ball and forty
+seconds left is a win; three up having just punted is a coin flip; this
+prints the same number for both. `possession_blind` marks that window
+(one score, under five minutes) and the row carries the sentence.
+
+**Football and baseball only, for now.** `gamebets.MARGIN_SD` has a
+measured final-margin SD for those and none for the hoops boards, and
+`_sd` refuses rather than borrowing another league's variance. The
+regulation clock for NBA and WNBA is in the table already; measure their
+margin SD and both turn on with no change to the module.
+
+**Not a price.** Nothing bets or journals off it. The day it becomes an
+input to a stake it needs the measurement against real in-game closes
+that it has never had — the same bar in `docs/THE_INFORMATION_TEST.md`
+that every other new input had to clear.
+
+---
+
 ## Ideas that need data we do not have
 
 Kept so they are not re-proposed every month.
@@ -417,8 +459,6 @@ Kept so they are not re-proposed every month.
   is paid and licence-restricted.
 * **Beat-writer and news sentiment.** Needs a text corpus and a fitted
   model; without both it is a vibe with a number printed on it.
-* **In-game live win probability.** Needs play-by-play at a latency we do
-  not have.
 
 ---
 
