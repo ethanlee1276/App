@@ -798,6 +798,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._receipts_csv()
         if parsed.path in ("/api/record/day", "/api/record/day/"):
             return self._record_day(parse_qs(parsed.query))
+        if parsed.path in ("/api/team", "/api/team/"):
+            return self._team(parse_qs(parsed.query))
         if parsed.path in ("/api/explain", "/api/explain/"):
             return self._explain(parse_qs(parsed.query))
         if parsed.path in ("/unsubscribe", "/unsubscribe/"):
@@ -3030,6 +3032,81 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
         nothing happens.
         """
         return self._unsubscribe(query)
+
+    def _team(self, q):
+        """A team's record, its ranks, and its history against anybody.
+
+        Ethan, 2026-09-09: "I should be able to search for the Los Angeles
+        Rams, and look at how they've played against any team in the
+        past." `engine.teamdex` is the arithmetic; this is the door.
+
+        NOT GATED, on the same reasoning as the receipts CSV and the
+        profit calendar: every number is a finished scoreline, already
+        public, and a stranger who lands here having searched for two
+        team names is the best advertisement this site has. The picks are
+        the product; who beat whom in 2023 is not.
+
+        Three shapes out of one call, so a page draws in one request:
+        `resolved` when the name is ambiguous and the reader has to
+        choose, `profile` + `opponents` for a team on its own, and
+        `head_to_head` when an opponent is named.
+        """
+        import re as _re
+        sport = (q.get("sport") or [""])[0].lower()[:5]
+        name = (q.get("team") or [""])[0][:80]
+        opp = (q.get("vs") or [""])[0][:80]
+        if not _re.fullmatch(r"[a-z]{2,5}", sport or ""):
+            return self._send(400, b'{"error":"unknown sport"}', ".json")
+        if not name.strip():
+            return self._send(400, b'{"error":"team is required"}', ".json")
+        try:
+            from engine import teamdex
+            from engine.db import connect
+            conn = connect()
+            try:
+                known = teamdex.teams(conn, sport)
+                if not known:
+                    # A SPORT WITH NO FINALS ON THIS BOX is a real state,
+                    # not an error: baseball's history has not been
+                    # ingested here. Saying so lets the page print the
+                    # reason instead of an empty table.
+                    return self._send(200, json.dumps({
+                        "sport": sport, "resolved": [], "no_finals": True,
+                    }).encode(), ".json")
+                hits = teamdex.resolve(name, sport, known)
+                if not hits:
+                    return self._send(200, json.dumps({
+                        "sport": sport, "query": name, "resolved": [],
+                    }).encode(), ".json")
+                if len(hits) > 1 and teamdex._norm(name) not in {
+                        teamdex._norm(h) for h in hits}:
+                    # AMBIGUOUS, and the page asks rather than guessing.
+                    # "Los Angeles" is two teams; picking one for him is
+                    # how a lookup becomes a lie he cannot see.
+                    return self._send(200, json.dumps({
+                        "sport": sport, "query": name,
+                        "resolved": [{"team": t,
+                                      "name": teamdex.label(t, sport)}
+                                     for t in hits],
+                    }).encode(), ".json")
+                team = hits[0]
+                out = {"sport": sport, "team": team,
+                       "name": teamdex.label(team, sport),
+                       "profile": teamdex.profile(conn, sport, team),
+                       "opponents": teamdex.opponents(conn, sport, team)}
+                if opp.strip():
+                    rivals = teamdex.resolve(opp, sport, known)
+                    if rivals:
+                        out["head_to_head"] = teamdex.head_to_head(
+                            conn, sport, team, rivals[0])
+                    else:
+                        out["vs_unknown"] = opp
+                return self._send(200, json.dumps(out).encode(), ".json")
+            finally:
+                conn.close()
+        except Exception:                                    # noqa: BLE001
+            return self._send(503, b'{"error":"team history unavailable"}',
+                              ".json")
 
     def _record_day(self, q):
         """One slate day's settled picks — the profit calendar's tap.

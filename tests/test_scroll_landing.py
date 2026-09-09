@@ -81,12 +81,14 @@ def test_every_view_change_sets_a_position():
     dozen views never touch."""
     js = _js()
     body = _fn(js, "_switchViewNow")
-    # Three since 2026-09-05: the play-by-play page returns early for the
-    # same reason the game page does — it writes its own #pbp/… hash and
-    # must not reach the tail's `#${name}` write — so it carries its own
-    # call too (tests/test_pbp_page.py pins the call in that branch).
-    assert body.count("_landScroll(") == 3, (
-        "the game page and the play-by-play page return early, so each "
+    # FOUR since 2026-09-09, and the count only ever goes up for one
+    # reason: a view that writes its own deep-link hash has to return
+    # before the tail's `#${name}` write, and a branch that returns early
+    # must land its own scroll. The game page, the play-by-play page and
+    # now the team page (#team/nfl/LA/SEA) each carry one; the fourth is
+    # the tail, covering every view that does not return early.
+    assert body.count("_landScroll(") == 4, (
+        "the game, play-by-play and team pages return early, so each "
         "needs its own call — and the tail needs the one that covers "
         "every other view")
     # …and the tail call is the LAST thing, after the async renders above

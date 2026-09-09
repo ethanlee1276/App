@@ -8908,6 +8908,7 @@ async function renderPlayers() {
   const seq = ++_playersSeq;
   renderSearchScope();
   renderSearchRecent();
+  renderTeamHits();
   const q = state.search.trim().toLowerCase();
   // Cached after the first call; every profile header tags a current
   // designation from it, whatever the sport.
@@ -24322,6 +24323,359 @@ document.addEventListener("keydown", (e) => {
   el.click();
 });
 
+
+/* Teams the search box matched, drawn above the players.
+
+   Ethan, 2026-09-09: "I should be able to search for the Los Angeles
+   Rams." "Rams" is a team and not a player, and asking him to pick a
+   mode before he has typed anything is the kind of thing a search box
+   does when nobody has used it.
+
+   MATCHED IN THE BROWSER, off the colour dictionary the page already
+   loads for its logos — `TEAMS` carries `name`, `nick` and `loc` per
+   abbreviation. A request per keystroke would be the obvious way and the
+   wrong one: this fires on every character typed. The endpoint still
+   resolves the name server-side when the page opens, so the two can
+   never end up disagreeing about who "LA" is; this only decides what to
+   OFFER. */
+function teamSearchHits(q) {
+  const map = nflMap() || {};
+  const want = String(q || "").toLowerCase().trim();
+  if (want.length < 2) return [];
+  const out = [];
+  for (const abbr of Object.keys(map)) {
+    const t = map[abbr] || {};
+    const fields = [abbr, t.name, t.nick, t.loc]
+      .filter(Boolean).map((x) => String(x).toLowerCase());
+    // The abbreviation matches only EXACTLY. Two letters inside a
+    // colour key is not a search, it is a coincidence — "ne" would
+    // otherwise pull half the league through "Minnesota".
+    const hit = fields.some((f, i) => i === 0 ? f === want
+      : (f === want || f.startsWith(want)
+         || f.split(" ").some((w) => w === want)));
+    if (hit) out.push({ abbr, name: t.name || t.nick || abbr });
+  }
+  /* ONE CHIP PER TEAM, NOT PER KEY. The colour dictionary carries the
+     franchise's old abbreviations too — the Rams answer to LA, LAR and
+     STL — so "rams" offered three identical chips, two of which open a
+     page with no games on it. Found by opening the page rather than by
+     reading it. */
+  const seen = new Set();
+  return out.filter((t) => {
+    const k = ffNorm(t.name);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 6);
+}
+
+function renderTeamHits() {
+  const host = document.getElementById("team-hits");
+  if (!host) return;
+  const hits = teamSearchHits(state.search);
+  host.hidden = !hits.length;
+  if (!hits.length) { host.innerHTML = ""; return; }
+  host.innerHTML = `
+    <div class="section-title minor">${plural(hits.length, "team")}
+      <span class="sub">— open one for its record, where each unit ranked,
+      and its history against any opponent.</span></div>
+    <div class="std-chips">
+      ${hits.map((t) => `<button type="button" class="al-cat tm-hit"
+        data-team-open="${escapeAttr(t.name)}">
+        ${teamMark(t.abbr, 16, nflMap(), state.sport)}
+        ${escapeHtml(t.name)}</button>`).join("")}
+    </div>`;
+}
+
+/* #team/nfl/LA/SEA — a real address for a matchup history, so it can be
+   sent to somebody.
+
+   ONE FUNCTION, TWO ROUTERS. `initialView` handles a cold load and the
+   hashchange listener handles a click, and this app has been caught once
+   already with a branch in one and not the other — the #parlays
+   migration, which worked from a link and not from a bookmark, and has
+   a comment about it upstairs. Split on "/" rather than parsed with a
+   regex, because a college key is `espn:61` and the colon is not a
+   delimiter. Sport first, because "LA" is a different club in different
+   leagues and the page must never have to guess which. */
+function teamRoute(h) {
+  if (!h || h.slice(0, 5) !== "team/") return false;
+  const parts = h.slice(5).split("/").map((x) => {
+    try { return decodeURIComponent(x); } catch (e) { return x; }
+  });
+  if (parts[0] && parts[1]) {
+    openTeam(parts[0], parts[1], parts[2] || "");
+  } else {
+    switchView("players");         // half an address is the search page
+  }
+  return true;
+}
+
+/* ---------------- The team page ---------------------------------------
+
+   Ethan, 2026-09-09: "we need to add a feature where you can look up an
+   actual team and show the past stats versus another team. Example, I
+   should be able to search for the Los Angeles Rams, and look at how
+   they've played against any team in the past. And it should also show
+   any other data and shit for teams that would be useful like offense
+   rank and defense rank and past wins and loss and shit like that."
+
+   Every number is `engine/teamdex` reading finals we already hold, and
+   the page's whole job is to say what each one IS. Two habits carry that:
+
+     * A RANK NEVER TRAVELS WITHOUT ITS FIELD. "7th" means one thing in a
+       32-team league and another in a 137-team college season, and the
+       number alone cannot say which — so it is always "7th of 32".
+     * THE LINE IS SIGNED FOR THE TEAM ON SCREEN. The stored spread is
+       the HOME team's; printing it under the Rams when Seattle was home
+       is correct arithmetic answering somebody else's question. The
+       engine flips it, and the column is headed with his own team.
+
+   One request draws the page — profile, opponents and the head-to-head
+   together — because two round trips is two chances to show half of it. */
+
+let _teamState = { sport: "", team: "", vs: "", data: null, loading: false };
+
+function teamHref(sport, team, vs) {
+  return "#team/" + encodeURIComponent(sport) + "/" + encodeURIComponent(team)
+    + (vs ? "/" + encodeURIComponent(vs) : "");
+}
+
+async function openTeam(sport, team, vs) {
+  if (_teamState.team !== team || _teamState.sport !== sport) {
+    _teamOppAll = false;             // a new team starts collapsed again
+  }
+  _teamState = { sport, team, vs: vs || "", data: null, loading: true };
+  // `_switchViewNow` draws the page and writes the address bar — see the
+  // `name === "team"` branch there, and the comment on why it cannot be
+  // done from here.
+  switchView("team", true);
+  let d = null;
+  try {
+    const url = `/api/team?sport=${encodeURIComponent(sport)}`
+      + `&team=${encodeURIComponent(team)}`
+      + (vs ? `&vs=${encodeURIComponent(vs)}` : "");
+    const r = await fetch(url);
+    d = await r.json();
+    if (!r.ok) throw new Error((d && d.error) || "team history unavailable");
+  } catch (e) {
+    d = { error: String((e && e.message) || e) };
+  }
+  // IDENTITY-GUARDED, the same way `load` is. Two taps in a row on two
+  // teams means two requests in flight, and the slow one landing second
+  // would draw the team he already navigated away from.
+  if (_teamState.sport !== sport || _teamState.team !== team
+      || _teamState.vs !== (vs || "")) return;
+  _teamState.data = d;
+  _teamState.loading = false;
+  renderTeamPage();
+}
+
+function teamRecordLine(r) {
+  if (!r || !r.games) return "";
+  const ats = r.ats_w + r.ats_l + r.ats_p;
+  const ou = r.over + r.under + r.ou_p;
+  const bits = [`<b>${escapeHtml(r.record)}</b>`,
+                `${r.pf_per_game} scored · ${r.pa_per_game} allowed`];
+  if (ats) bits.push(`${r.ats_w}-${r.ats_l}${r.ats_p ? "-" + r.ats_p : ""} ATS`);
+  if (ou) bits.push(`${r.over}-${r.under}${r.ou_p ? "-" + r.ou_p : ""} O/U`);
+  return bits.join(" · ");
+}
+
+function teamSeasonsHTML(p) {
+  const rows = (p || {}).seasons || [];
+  if (!rows.length) return "";
+  return `
+    <div class="section-title">Season by season
+      <span class="sub">— record, points a game either way, and where each
+      unit ranked IN THAT SEASON. A rank without the field it came from is
+      not a fact anybody can use.</span></div>
+    <div class="rank-scroll"><table class="rank-table"><thead><tr>
+      <th>Season</th><th>Record</th><th>Scored</th><th>Allowed</th>
+      <th>Offense</th><th>Defense</th><th>ATS</th><th>O/U</th>
+      </tr></thead><tbody>
+      ${rows.map((r) => `<tr>
+        <td>${r.season}</td>
+        <td class="rank-name">${escapeHtml(r.record)}</td>
+        <td>${r.pf_per_game}</td>
+        <td>${r.pa_per_game}</td>
+        <td>${r.offense_rank ? `${r.offense_rank} of ${r.teams_ranked}`
+              : '<span class="rank-none">—</span>'}</td>
+        <td>${r.defense_rank ? `${r.defense_rank} of ${r.teams_ranked}`
+              : '<span class="rank-none">—</span>'}</td>
+        <td>${r.ats_w + r.ats_l + r.ats_p
+              ? `${r.ats_w}-${r.ats_l}${r.ats_p ? "-" + r.ats_p : ""}`
+              : '<span class="rank-none">no line</span>'}</td>
+        <td>${r.over + r.under + r.ou_p
+              ? `${r.over}-${r.under}${r.ou_p ? "-" + r.ou_p : ""}`
+              : '<span class="rank-none">no total</span>'}</td>
+      </tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+/* How many opponents to show before the list is a wall. Measured on a
+   430px phone: a full NFL list is 31 chips and nine rows, which pushed
+   the head-to-head table — the thing he came for — off the bottom of two
+   screens. The chips are ordered most-played first, so the first dozen
+   are the rivalries and the rest is the long tail. */
+const TEAM_OPP_SHOWN = 12;
+let _teamOppAll = false;
+
+function teamOppPickerHTML(d) {
+  const list = d.opponents || [];
+  if (!list.length) return "";
+  const picked = (d.head_to_head || {}).opponent;
+  // A chosen opponent is ALWAYS drawn, wherever he sits in the tail —
+  // collapsing the list must never hide the one that is currently on.
+  const shown = _teamOppAll ? list
+    : list.filter((o, i) => i < TEAM_OPP_SHOWN || o.team === picked);
+  const hidden = list.length - shown.length;
+  return `
+    <div class="section-title">Against
+      <span class="sub">— only teams there are finals against, so a chip
+      never opens an empty page. Most-played first.</span></div>
+    <div class="std-chips">
+      ${shown.map((o) => `<button type="button"
+        class="al-cat tm-opp${o.team === picked ? " on" : ""}"
+        data-team-vs="${escapeAttr(o.team)}"
+        aria-pressed="${o.team === picked}">
+        ${escapeHtml(o.name || o.team)}
+        <span class="tm-n">${o.games}</span></button>`).join("")}
+      ${hidden > 0 ? `<button type="button" class="al-cat tm-more"
+        data-team-more="1">+${hidden} more</button>` : ""}
+      ${_teamOppAll && list.length > TEAM_OPP_SHOWN ? `<button type="button"
+        class="al-cat tm-more" data-team-more="0">Show fewer</button>` : ""}
+    </div>`;
+}
+
+function teamH2HHTML(h, sport) {
+  if (!h) return "";
+  if (!(h.games || []).length) {
+    return `<p class="rank-help">No finals between
+      ${escapeHtml(h.name)} and ${escapeHtml(h.opponent_name)} in the seasons
+      we hold.</p>`;
+  }
+  const s = h.summary;
+  return `
+    <div class="section-title">${escapeHtml(h.name)} vs ${escapeHtml(h.opponent_name)}
+      <span class="sub">— ${teamRecordLine(s)}</span></div>
+    <div class="rank-scroll"><table class="rank-table"><thead><tr>
+      <th>Season</th><th></th><th class="rank-name">Result</th>
+      <th>Score</th><th>Line</th><th>ATS</th><th>Total</th>
+      </tr></thead><tbody>
+      ${h.games.map((g) => `<tr>
+        <td>${g.season}${g.period ? ` · ${escapeHtml(_teamWeek(sport, g.period))}` : ""}</td>
+        <td>${g.at_home ? "vs" : "at"}</td>
+        <td class="rank-name"><b class="${g.result === "W" ? "tm-w"
+            : g.result === "L" ? "tm-l" : ""}">${g.result}</b>
+          ${g.margin > 0 ? "+" : ""}${g.margin}</td>
+        <td>${g.points_for}–${g.points_against}</td>
+        <td>${g.line == null ? '<span class="rank-none">—</span>'
+              : (g.line > 0 ? "+" : "") + g.line}</td>
+        <td>${g.covered === null || g.covered === undefined
+              ? '<span class="rank-none">—</span>'
+              : g.covered === "push" ? "push" : g.covered ? "cover" : "no"}</td>
+        <td>${g.total == null ? '<span class="rank-none">—</span>'
+              : `${g.total} ${g.ou || ""}`}</td>
+      </tr>`).join("")}
+    </tbody></table></div>
+    <p class="rank-help">The line is HIS number, not the home team’s — a
+      minus means he was laying it. A game we hold no line for still counts
+      in the record above and is left blank here rather than graded.</p>`;
+}
+
+/* A period is "021" — the week within the season. NFL weeks past 18 are
+   the playoffs and saying "Week 21" out loud is worse than saying
+   nothing, so those are named. */
+function _teamWeek(sport, period) {
+  const n = parseInt(period, 10);
+  if (!n) return String(period || "");
+  if (sport === "nfl" && n > 18) {
+    return ({ 19: "Wild Card", 20: "Divisional", 21: "Conf. Champ",
+              22: "Super Bowl" })[n] || `Week ${n}`;
+  }
+  return `Week ${n}`;
+}
+
+function renderTeamPage() {
+  const host = document.getElementById("team-page");
+  if (!host) return;
+  const st = _teamState;
+  if (st.loading || !st.data) {
+    host.innerHTML = `<p class="loading">Reading ${
+      escapeHtml(st.team || "the team")}’s finals…</p>`;
+    return;
+  }
+  const d = st.data;
+  if (d.error) {
+    host.innerHTML = `<div class="warning">${icon("warn")} ${escapeHtml(d.error)}</div>`;
+    return;
+  }
+  if (d.no_finals) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+      <div class="es-title">No finished games ingested for this league</div>
+      <div class="es-sub">Team history is built from finals this site has
+        already loaded. Nothing has been ingested for
+        ${escapeHtml((LEAGUE_LABEL[d.sport] || d.sport || "").toUpperCase())} here,
+        so there is no record to show — which is a gap in our data rather
+        than in the team’s.</div></div>`;
+    return;
+  }
+  if ((d.resolved || []).length) {
+    host.innerHTML = `<div class="section-title">Which one?
+      <span class="sub">— “${escapeHtml(d.query || st.team)}” is more than
+      one team, so this asks rather than picking.</span></div>
+      <div class="std-chips">${d.resolved.map((r) => `<button type="button"
+        class="al-cat" data-team-open="${escapeAttr(r.team)}">
+        ${escapeHtml(r.name || r.team)}</button>`).join("")}</div>`;
+    return;
+  }
+  if (!d.profile) {
+    host.innerHTML = `<div class="empty-slate"><div class="es-icon">${icon("chart", 30)}</div>
+      <div class="es-title">No team matched “${escapeHtml(st.team)}”</div>
+      <div class="es-sub">Try the city, the nickname or the abbreviation —
+        “Los Angeles Rams”, “Rams” or “LA”.</div></div>`;
+    return;
+  }
+  const p = d.profile;
+  host.innerHTML = `
+    <div class="card-head">
+      <div><div class="player">${escapeHtml(p.name || p.team)}</div>
+        <div class="subtitle">${escapeHtml(
+          (LEAGUE_LABEL[d.sport] || d.sport || "").toUpperCase())} ·
+          ${teamRecordLine(p.career) || "no finals on file"}</div></div>
+    </div>
+    ${d.vs_unknown ? `<div class="warning">${icon("warn")} No team here
+      matched “${escapeHtml(d.vs_unknown)}” — the history below is
+      ${escapeHtml(p.name)} on its own.</div>` : ""}
+    ${teamSeasonsHTML(p)}
+    ${teamOppPickerHTML(d)}
+    ${teamH2HHTML(d.head_to_head, d.sport)}
+    <p class="rank-help">Built from the finished games this site has
+      ingested${(p.seasons || []).length
+        ? ` — ${p.seasons[p.seasons.length - 1].season} to ${p.seasons[0].season}`
+        : ""}. Not a projection and not a pick: a record.</p>`;
+}
+
+/* Delegated, because the page redraws itself on every chip. */
+document.addEventListener("click", (e) => {
+  const more = e.target.closest && e.target.closest("[data-team-more]");
+  if (more) {
+    _teamOppAll = more.dataset.teamMore === "1";
+    renderTeamPage();
+    return;
+  }
+  const opp = e.target.closest && e.target.closest("[data-team-vs]");
+  if (opp) {
+    return openTeam(_teamState.sport, _teamState.team,
+                    opp.dataset.teamVs === (_teamState.data
+                      && (_teamState.data.head_to_head || {}).opponent)
+                      ? "" : opp.dataset.teamVs);
+  }
+  const pick = e.target.closest && e.target.closest("[data-team-open]");
+  if (pick) return openTeam(_teamState.sport, pick.dataset.teamOpen, "");
+});
+
 /* ---------------- The fantasy calendar ----------------
    Ethan, 2026-08-18: "a calendar layout page displaying the best
    possible player to play in fantasy for that day … click on that
@@ -29656,7 +30010,7 @@ function watchSectionSubs() {
    and the test is right to insist every one of them is named. The note
    sits above rather than inline because that test parses this literal by
    splitting on commas, and a comment inside it stops being a flat list. */
-const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
+const VIEW_ORDER = ["recommended", "prop", "game", "pbp", "tonight", "live", "edge", "scanner", "likely", "longshots", "futures", "trending", "players", "rosters", "injuries", "weather", "alerts", "messages", "streak", "standings", "team", "bankroll", "mybets", "account", "record", "lab", "intel", "fantasy", "memes", "ufc", "why", "about", "methodology", "status", "discord", "signup", "paywall", "checkout"];
 
 /* Tab changes go through the browser's own View Transitions API (Ethan,
    2026-08-19: "add more animations"). Worth knowing what this is NOT: no
@@ -29830,6 +30184,24 @@ function _switchViewNow(name, push, dir) {
         ? `#pick/${encodeURIComponent(state.propId)}`
         : `#prop/${encodeURIComponent(state.propId)}`);
     }
+  }
+  if (name === "team") {
+    /* WRITTEN HERE, not in `openTeam`, and that is the bug this line
+       fixes rather than the feature it adds. `switchView` runs through
+       the View Transitions API, so its own `pushState("#team")` lands
+       AFTER anything the caller wrote — the address bar said "#team"
+       while the page showed the Rams against Arizona, and the link a
+       reader copied opened a different page. Every other deep view
+       writes its URL from right here for the same reason. */
+    renderTeamPage();
+    if (_teamState.team) {
+      history.replaceState({ view: "team" }, "",
+                           teamHref(_teamState.sport, _teamState.team,
+                                    _teamState.vs));
+    }
+    moveIndicator();
+    _landScroll(name, leaving);
+    return;
   }
   if (name === "game") {
     renderGamePage();
@@ -31137,6 +31509,7 @@ function initialView() {
     switchView("recommended");
     return;
   }
+  if (teamRoute(h)) return;
   if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
   if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }
@@ -32689,6 +33062,7 @@ function bind() {
       switchView("recommended");
       return;
     }
+    if (teamRoute(h)) return;
     if (h.startsWith("pbp/")) { openPbpHash(h.slice(4)); return; }
     if (h.startsWith("game/")) { openGame(decodeURIComponent(h.slice(5))); return; }
   if (h.startsWith("prop/")) { openProp(decodeURIComponent(h.slice(5))); return; }

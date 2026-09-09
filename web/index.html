@@ -1126,9 +1126,22 @@
       <div class="std-chips search-recent" id="search-recent" hidden></div>
       <div class="search-wrap">
         <span class="ico"><svg class="ic" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4.3"/><path d="M10.4 10.4L14 14"/></svg></span>
-        <input id="player-search" type="text" placeholder="Search a player… (e.g. Amon-Ra, Jacobs)" autocomplete="off" aria-label="Search a player" />
+        <input id="player-search" type="text" placeholder="Search a player or a team… (e.g. Amon-Ra, Rams)" autocomplete="off" aria-label="Search a player or a team" />
       </div>
+      <!-- Teams the query matched, above the players. Ethan,
+           2026-09-09: "I should be able to search for the Los Angeles
+           Rams, and look at how they've played against any team in the
+           past." A name like "Rams" is a team and not a player, so the
+           box answers both questions rather than making him pick a mode
+           before he has typed anything. -->
+      <div id="team-hits" hidden></div>
       <div class="player-grid" id="players"></div>
+    </section>
+
+    <!-- One team: its record season by season, where each unit ranked,
+         and its history against whichever opponent is picked. -->
+    <section class="view" id="view-team">
+      <div id="team-page"></div>
     </section>
   </main>
 

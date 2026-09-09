@@ -2504,6 +2504,18 @@ select.calc-in { width: auto; font-weight: 600; }
 .ffd-verdict.up { color: var(--good); }
 .ffd-verdict.down { color: var(--bad); }
 
+/* ---------------- The team page ---------------- */
+/* An opponent chip carries how many meetings there are, because "11" and
+   "1" are very different pages behind the same word and the reader
+   should know which he is opening before he taps it. */
+.tm-opp .tm-n { margin-left: 6px; opacity: .55; font-variant-numeric: tabular-nums; }
+.tm-hit { display: inline-flex; align-items: center; gap: 7px; }
+.tm-more { opacity: .7; }
+/* The result letter. Colour is never the whole message — W and L are
+   already the words, and the tint only makes a long column scannable. */
+.tm-w { color: var(--good); }
+.tm-l { color: var(--bad); }
+
 /* ---------------- The book report card (Scanner) ---------------- */
 .br-head { margin-top: 22px; }
 
