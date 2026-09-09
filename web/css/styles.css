@@ -6099,6 +6099,14 @@ body.has-rail .shell {
   color: var(--text-body); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .rv-early b { color: var(--text); }
 
+/* The money/paper sentence. Quieter than `.rv-early`, which is a warning
+   with a panel behind it — this is not a caveat, it is the SCOPE of the
+   number above it, and a reader who is not asking should skim past. */
+.rv-split { margin: 14px 0 0; color: var(--text-body);
+  font-size: var(--fs-sm); line-height: var(--lh-snug);
+  max-width: var(--measure-wide); }
+.rv-split b { color: var(--text); font-weight: 700; }
+
 @media (max-width: 900px) {
   /* Five across is unreadable on a phone; two rows of the same tiles is
      the same information at a size a thumb can read. */

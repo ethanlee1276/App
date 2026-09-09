@@ -12933,6 +12933,62 @@ function recEdgePanel(e, trend, overall) {
    most dishonest thing this page could do is turn a 1-0 record into
    "landed 100%", and a panel built to be persuasive is exactly the one
    that would. */
+/* HOW MUCH OF THIS RECORD IS REAL MONEY.
+
+   `engine/ledger.performance` has published the split since it was
+   written, and said in its own comment why:
+
+       "The two counts below say the split out loud so a reader never
+        has to infer it from a suspiciously small dollar figure beside
+        a large unit one."
+
+   Nothing ever rendered them. `money_bets` and `paper_bets` appear zero
+   times in this file, so the page showed exactly the shape that comment
+   was written to prevent: a unit figure pooling both books beside a
+   dollar figure that, by construction, counts only the picks with money
+   on them. A reader who noticed the gap had no way to explain it — and
+   on a site whose whole pitch is a public record, "is any of this real?"
+   is the first question a sceptic asks.
+
+   POOLED IN UNITS, MONEY ONLY IN DOLLARS, which is deliberate and not a
+   bug: a paper row settles with `pnl_dollars` 0 because no dollars were
+   ever at risk. Pooling the books in units is honest; pooling them in
+   dollars would run money through the bankroll that never existed. The
+   missing part was the sentence naming which number is which.
+
+   THE RECORD PAGE ONLY. `memeVerdictHTML` shares this markup and is a
+   different book with its own rules; it is not called from here.
+
+   ABSENT FIELDS RENDER NOTHING. A record.json built before this shipped
+   carries neither count, and a sentence about a split we cannot see is
+   worse than no sentence at all. */
+function moneySplitHTML(o) {
+  const money = (o || {}).money_bets;
+  const paper = (o || {}).paper_bets;
+  if (money == null || paper == null) return "";
+  if (!money && !paper) return "";
+  const d = o.net_dollars;
+  const cash = d == null ? ""
+    : ` <b>${d < 0 ? trueMinus("-") + "$" : "+$"}${Math.abs(d).toFixed(2)}</b>`;
+  let body;
+  if (!paper) {
+    body = `Every settled pick here had real money on it${
+      cash ? `, for${cash} on the bankroll` : ""}.`;
+  } else if (!money) {
+    body = `Nothing here has had money on it yet — every pick is paper,
+      journaled at the price it was actually offered and graded the same
+      way, but never staked. The units above are real; there are no
+      dollars because none were ever at risk.`;
+  } else {
+    body = `<b>${money}</b> of these settled picks had real money on
+      them${cash ? `, for${cash}` : ""}. The other <b>${paper}</b>
+      ${paper === 1 ? "is" : "are"} paper — same prices, same grading, no
+      stake. The unit figure above pools both; the dollar figure counts
+      only the picks that were actually bet.`;
+  }
+  return `<p class="rv-split">${body}</p>`;
+}
+
 function recordVerdictHTML(src, scopeLabel) {
   const o = (src && src.overall) || {};
   const cal = src && src.calibration;
@@ -13038,6 +13094,7 @@ function recordVerdictHTML(src, scopeLabel) {
              "what happened",
              claimed == null ? "" : (landed >= claimed ? "good" : "warn"))}
     </div>
+    ${moneySplitHTML(o)}
     ${thin ? `<p class="rv-early">${icon("warn", 14)}
         <b>Too early to call.</b> ${settled} graded pick${settled === 1 ? "" : "s"}
         against the ${need} this page needs before a rate means anything.
