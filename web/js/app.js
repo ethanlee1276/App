@@ -18495,11 +18495,26 @@ async function acctLandAfterAuth(say = () => {}) {
   }
 
   if (walled) {
+    // THEY ALREADY PICKED ONE. Sending somebody who chose a plan two
+    // minutes ago back to the list of plans is the confusing half of
+    // this flow — they read it as the choice not having registered.
+    const want = takePendingPlan();
+    if (want) {
+      _coPlan = _coPlanById(want);
+      say(`Account created — carrying on with the ${_coPlan.name} plan.`);
+      renderCheckout();
+      _switchViewNow("checkout", false, 0);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
     say("Signed in. This account does not have a plan yet — here are the "
         + "options.");
     renderPaywall();
     _switchViewNow("paywall", false, 0);
   } else {
+    // Paid already, so a plan they were part-way through buying is moot.
+    // Left behind it would ambush the next sign-in on this device.
+    takePendingPlan();
     say("Signed in — taking you in…");
     switchView(dcFirstStop().replace("#", ""), true);
   }
@@ -19822,6 +19837,10 @@ function checkoutHTML() {
 
         <div class="co-pay" id="co-pay">
             <div class="co-payhead">Payment</div>
+            <p class="co-note co-acct">Your subscription attaches to an
+              account, so this makes you one on the way through — email and
+              a password, nothing else. If you already have one you will be
+              asked to sign in.</p>
             <button class="btn primary co-go" data-plan="${escapeAttr(pl.id)}"
                     onclick="coPay(this)">${trial
               ? `Start my ${tDays} free days`
@@ -20102,9 +20121,13 @@ window.coPay = async function (btn) {
     });
     const d = await r.json().catch(() => null);
     if (r.status === 401) {
-      say("Sign in first — your subscription has to attach to an account. "
-        + "Opening that now; come back here when you are in.");
-      setTimeout(() => { _switchViewNow("account", false, 0); }, 900);
+      // The plan is kept so signing up can come straight back to it.
+      // "Come back here when you are in" used to be the whole plan, and
+      // "here" was a page they then had to find again.
+      rememberPendingPlan(plan);
+      say("One step first: a subscription has to attach to an account, so "
+        + "we will make you one now. You will come straight back here.");
+      setTimeout(() => { _switchViewNow("account", false, 0); }, 1200);
       btn.disabled = false; btn.textContent = was;
       return;
     }
@@ -30170,6 +30193,41 @@ function inviteURL(token) {
 }
 
 const PENDING_INVITE_KEY = "qb_pending_invite";
+
+/* THE PLAN SOMEBODY WAS BUYING WHEN THEY HIT THE SIGN-IN WALL.
+
+   Ethan, 2026-09-09, after two customers went through it: "it let them
+   make an account. It was a little confusing." It was. The loop they
+   walked was: read the plans, pick one, read the checkout, press the big
+   button — and only THEN get told an account is needed, get bounced to
+   the sign-up form, make the account, and get returned to the PLANS PAGE
+   to pick a plan again. They had already picked it. Twice, by the end.
+
+   Same shape as the invite token directly above, and for the same
+   stated reason: the link is why this person just signed in, and
+   forgetting it is a funnel with a hole in the bottom. A chosen plan is
+   why this person just signed UP, and it was being dropped on the floor.
+
+   localStorage and not a variable, because the sign-in path reloads the
+   page in one of its branches and an in-memory plan would not survive
+   it. */
+const PENDING_PLAN_KEY = "qb_pending_plan";
+
+function rememberPendingPlan(id) {
+  try { localStorage.setItem(PENDING_PLAN_KEY, String(id || "")); } catch (e) {}
+}
+
+/* Reads it and CLEARS it in the same breath: a plan left behind would
+   hijack the next sign-in on this device, which is a stranger's problem
+   on a shared phone. */
+function takePendingPlan() {
+  let id = "";
+  try {
+    id = localStorage.getItem(PENDING_PLAN_KEY) || "";
+    localStorage.removeItem(PENDING_PLAN_KEY);
+  } catch (e) { return ""; }
+  return id;
+}
 
 /* Opening a friend's link. Signed in: accept on the spot. Signed out:
    the token waits in localStorage and the sign-in screen opens — and
