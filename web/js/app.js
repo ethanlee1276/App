@@ -8853,7 +8853,7 @@ function renderGamePage() {
       (no power-conference side, edge under the tier’s bar, or a Pass grade). The
       number and the price are on ${bets.length - betsShown.length === 1
         ? "it" : "them"}; the money is not.
-      <button class="btn-quiet" id="gp-showbets" type="button"
+      <button class="btn ghost" id="gp-showbets" type="button"
         >Show ${bets.length - betsShown.length} anyway</button></p>` : ""}
 
     ${shown.length ? [...byMarket.keys()].map((k) => `
@@ -8887,7 +8887,7 @@ function renderGamePage() {
     const slot = document.getElementById("gp-pbp-slot");
     pbpIdFor(g, state.sport).then((id) => {
       if (!id || !slot || !slot.isConnected) return;
-      slot.innerHTML = `<button type="button" class="btn-quiet gp-pbp-door" id="gp-pbp-door">${
+      slot.innerHTML = `<button type="button" class="btn ghost gp-pbp-door" id="gp-pbp-door">${
         isLive ? `<span class="live-dot sm"></span>Watch play-by-play` : "Play-by-play"} →</button>`;
       slot.firstElementChild.addEventListener("click", () => openPbp(state.sport, id, "game"));
     }).catch(() => {});

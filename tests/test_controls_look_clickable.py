@@ -35,6 +35,11 @@ def _css():
                 encoding="utf-8").read()
 
 
+def _read_js():
+    return open(os.path.join(HERE, "web", "js", "app.js"),
+                encoding="utf-8").read()
+
+
 def _rule(css, selector):
     """The declarations of the FIRST rule for this exact selector.
 
@@ -231,6 +236,39 @@ def test_an_index_card_is_shaped_like_a_control():
     assert "cursor: pointer" in r
     hover = _rule(css, ".room-card:hover")
     assert "background: var(--fill-hover)" in hover
+
+
+def test_a_text_button_is_at_least_a_link():
+    """`.btn-quiet` carried the SAME recipe the sub-tabs had — no fill, no
+    edge, `--text-mute` ink — in eleven more places, which is why the tab
+    fix could not be the whole of Ethan's complaint.
+
+    An underline rather than the tab's fill, and the distinction is the
+    point: these sit inside sentences and beside headings. A filled chip
+    in running text claims the weight of a primary action for something
+    that undoes navigation, which is a worse lie than a quiet one. They
+    are links, so they look like links."""
+    r = _rule(_css(), ".btn-quiet")
+    assert "text-decoration: underline" in r, \
+        "a text button with no underline is indistinguishable from text"
+    assert "color: var(--text-dim)" in r, "still the faintest-but-one ink"
+    assert "color: var(--text-mute)" not in r
+    # The tap target was already honest here and must stay that way.
+    assert "min-height: 40px" in r
+
+
+def test_a_door_is_not_a_link():
+    """Two of the eleven were not links at all. `gp-pbp-door` opens the
+    whole play-by-play page; `gp-showbets` reveals five bets the page is
+    holding back — the exact "hides really cool features" Ethan named.
+    Those wear `.btn ghost`, which this design already owns, rather than
+    being shouted at inside the quiet class."""
+    js = _read_js()
+    for door in ("gp-pbp-door", "gp-showbets"):
+        i = js.index(f'id="{door}"')
+        tag = js.rindex("<button", 0, i)
+        assert "btn ghost" in js[tag:i], f"{door} is still a text button"
+        assert "btn-quiet" not in js[tag:i], f"{door} kept the quiet class"
 
 
 if __name__ == "__main__":

@@ -3102,10 +3102,30 @@ select.calc-in { width: auto; font-weight: 600; }
 .pp-nav + .card, .pp-nav + .gp-hero { margin-top: 10px; }
 .pp-nav-right { display: inline-flex; align-items: center; gap: 8px;
   flex-wrap: wrap; }
+/* THE SAME RECIPE THE SUB-TABS HAD, in eleven more places. Ethan,
+   2026-09-09: "a lot of our buttons blending in with the text on the
+   site so you can't really tell their buttons or tabs." This was
+   `background: none; border: 0; color: var(--text-mute)` — no fill, no
+   edge, and the faintest-but-one ink, which is the definition of a
+   control that is not one.
+
+   AN UNDERLINE RATHER THAN THE TAB'S FILL, because these are not tabs.
+   They sit inside sentences and beside headings — "Show 5 anyway" ends a
+   paragraph, "← Back to the board" tops a page — and a filled chip in
+   running text is a worse lie than a quiet one: it claims the weight of
+   a primary action for a thing that undoes navigation. A link is what
+   they are, so a link is what they now look like.
+
+   The two that were NOT links moved out of this class entirely rather
+   than being shouted at here: `gp-pbp-door` opens the whole play-by-play
+   page and `gp-showbets` reveals five bets the page has hidden. Doors
+   wear `.btn ghost`, which this design already owns. */
 .btn-quiet { background: none; border: 0; box-shadow: none; cursor: pointer;
-  padding: 8px 2px; min-height: 40px; color: var(--text-mute);
+  padding: 8px 2px; min-height: 40px; color: var(--text-dim);
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-thickness: var(--hairline);
   font: inherit; font-size: var(--fs-sm); font-weight: 600; }
-.btn-quiet:hover { color: var(--text); }
+.btn-quiet:hover { color: var(--text); text-decoration-color: var(--brand); }
 .pp-actions { display: flex; margin-top: 12px;
   border-top: var(--hairline) solid var(--border-soft); }
 .pp-actions .btn { flex: 1 1 0; margin: 0; border: 0; border-radius: 0;
