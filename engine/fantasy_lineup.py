@@ -333,6 +333,10 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
             # played. Distinct from `exact`, which is about whether this
             # LEAGUE's scoring could be applied — a different question.
             "projected": bool(m.get("_from_board")),
+            # WHO HE HAS ACTUALLY GOT IN. Optional, and absent on the
+            # platforms whose league read does not carry it — see the
+            # `current` block below for what that costs.
+            "starting": bool(r.get("starting")),
         })
     seated = assign(rows, slots)
     starters = []
@@ -343,27 +347,80 @@ def lineup(roster: list[dict], roster_positions, scoring: dict,
     bench = sorted((r for r in rows if r["player"] not in started),
                    key=lambda r: -r["points"])
 
-    # WHAT EACH DECISION IS WORTH. A lineup with no deltas is an
-    # instruction; with them it is an argument you can disagree with.
+    # WHAT TO CHANGE, against the lineup he has actually got in.
+    #
+    # THE BUG THIS ENDS, and it is a quiet one. `swaps` used to compare
+    # `starters` against `bench` — but `starters` IS `assign`, a
+    # maximum-weight matching, so no bench player can beat the starter
+    # whose seat he is eligible for: that swap would raise the total and
+    # the matching would already have made it. The list was therefore
+    # empty by construction, on every roster, forever. Three thousand
+    # random rosters produced zero swaps, which is not a coincidence,
+    # it is the proof. The desk's "Change these" section could never
+    # render, and its fallback — "Nothing to change, this is already the
+    # best legal lineup on your roster" — printed every single week. It
+    # was TRUE of the lineup we computed and said nothing at all about
+    # the lineup he had set, which is the only lineup he can change.
+    #
+    # So the comparison is now against `starting`: the players he has in
+    # right now. Out = someone he is starting who is not in the best
+    # lineup. In = someone in the best lineup he has on the bench.
+    #
+    # HIS TOTAL IS SCORED AT HIS OWN BEST ARRANGEMENT of the players he
+    # picked — `assign` again, over that subset — rather than at the
+    # slots he literally used, because two of the three platforms do not
+    # tell us which slot each starter sits in. That makes `gain_total` a
+    # LOWER BOUND on what the change is worth: if he has also mis-slotted
+    # someone, he is losing more than this, never less. The note says so.
+    have = {r["player"] for r in rows if r.get("starting")}
+    current = None
     swaps = []
-    for s in starters:
-        if not s.get("player"):
-            continue
-        best = None
-        for b in bench:
-            if not _eligible(s["slot"], b["position"]):
-                continue
-            if best is None or b["points"] > best["points"]:
-                best = b
-        if best and best["points"] > s["points"] + 1e-9:
-            swaps.append({"slot": s["slot"], "out": s["player"],
-                          "in": best["player"],
-                          "gain": round(best["points"] - s["points"], 2)})
+    if have:
+        def _total(names):
+            seat = assign([r for r in rows if r["player"] in names], slots)
+            return round(sum(p["points"] for p in seat.values()), 2)
+
+        base = _total(have)
+        current = {"players": sorted(have), "total": base}
+        slot_of = {p["player"]: slots[si] for si, p in seated.items()}
+        outs = sorted((r for r in rows
+                       if r.get("starting") and r["player"] not in started),
+                      key=lambda r: r["points"])
+        ins = sorted((p for p in seated.values() if p["player"] not in have),
+                     key=lambda p: -p["points"])
+        # EACH GAIN IS THAT ONE CHANGE, RE-SCORED, and the first draft of
+        # this got it wrong in a way worth remembering. Subtracting the
+        # benched man's points from the started man's gave 17.0 for a
+        # swap actually worth 12.0 — because the player coming out was
+        # not the one whose seat the newcomer takes. Seating the whole
+        # lineup again with the single move applied answers the question
+        # a manager is really asking: if I make THIS change and nothing
+        # else, what do I gain?
+        #
+        # So these do not sum to `gain_total`, and should not: two moves
+        # can compete for the same seat. Each row is true on its own; the
+        # header total is true about all of them together.
+        for i, inp in enumerate(ins):
+            outp = outs[i] if i < len(outs) else None
+            after = set(have) | {inp["player"]}
+            if outp:
+                after.discard(outp["player"])
+            swaps.append({"slot": slot_of.get(inp["player"], ""),
+                          "out": outp["player"] if outp else None,
+                          "in": inp["player"],
+                          "gain": round(_total(after) - base, 2)})
     return {
         "slots": slots,
         "starters": starters,
         "bench": bench,
         "total": round(sum(s["points"] for s in starters), 2),
+        # None, not [], when the platform never told us who he started.
+        # An empty list means "nothing to change" and that is a different
+        # sentence from "we cannot see your lineup" — the desk prints
+        # them apart.
+        "current": current,
+        "gain_total": (round(sum(s["points"] for s in starters)
+                             - current["total"], 2) if current else None),
         "swaps": sorted(swaps, key=lambda s: -s["gain"]),
         "exact": all(r["exact"] for r in rows) if rows else True,
         # Named, not just counted: "three of your starters are projected"

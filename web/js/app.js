@@ -22499,6 +22499,52 @@ function ffStandingsHTML(d) {
     </div>`;
 }
 
+/* Change these — against the lineup you HAVE GOT IN, not against the
+   one we computed.
+
+   This section could not render before, and the reason is worth keeping
+   written down. `lineup.swaps` compared the optimal starters to the
+   bench; the optimal starters come out of a maximum-weight assignment,
+   so no bench player can beat the starter whose seat he is eligible for.
+   The list was empty by construction on every roster, and the fallback
+   below it — "nothing to change" — printed every week. True of the
+   lineup we computed; silent about the one he can actually change.
+
+   Three states now, and they are three different sentences:
+     * we cannot see your lineup (the platform link does not carry it);
+     * we can, and it is already the best one;
+     * we can, and here is what to move.
+   Collapsing the first into either of the others is how a page starts
+   lying politely. */
+function ldSwapsHTML(L) {
+  const cur = L.current;
+  if (!cur) {
+    return `<p class="rank-help">${icon("warn")} This league link tells us
+      who is on your roster but not who you have started, so the table
+      above is the best legal lineup rather than a list of changes.</p>`;
+  }
+  const swaps = L.swaps || [];
+  if (!swaps.length) {
+    return `<p class="rank-help">${icon("check")} Nothing to change — the
+      lineup you have in IS the best legal one on your roster.</p>`;
+  }
+  return `<div class="ld-swaps">
+    <div class="rank-fight-head">Change these
+      <span class="sub">— worth ${L.gain_total > 0 ? "+" : ""}${
+        L.gain_total} projected points against the ${cur.total} you have in</span></div>
+    ${swaps.map((w) => `<div class="rank-fight-row">
+      <b>${escapeHtml(w.slot || "")}</b>
+      ${w.out ? `<span class="chip down">out ${escapeHtml(w.out)}</span>`
+        : `<span class="chip">empty slot</span>`}
+      <span class="chip up">in ${escapeHtml(w.in)}</span>
+      <span class="rank-spread">${w.gain > 0 ? "+" : ""}${w.gain}</span></div>`).join("")}
+    <p class="rank-help">Your total is scored at the BEST arrangement of the
+      players you started, because two of the three platforms do not tell us
+      which slot each one sits in. So that gain is a floor: if you have also
+      mis-slotted somebody, you are losing more than this, never less.</p>
+  </div>`;
+}
+
 function ffLineupHTML(d) {
   const L = d.lineup || {};
   const starters = L.starters || [];
@@ -22521,15 +22567,7 @@ function ffLineupHTML(d) {
           <td>${s.points ?? "\u2014"}</td>
           <td class="rank-none">${s.base_ppr ?? "\u2014"}</td></tr>`).join("")}
       </tbody></table></div>
-      ${(L.swaps || []).length ? `<div class="ld-swaps">
-        <div class="rank-fight-head">Change these</div>
-        ${L.swaps.map((w) => `<div class="rank-fight-row">
-          <b>${escapeHtml(w.slot)}</b>
-          <span class="chip down">out ${escapeHtml(w.out)}</span>
-          <span class="chip up">in ${escapeHtml(w.in)}</span>
-          <span class="rank-spread">+${w.gain}</span></div>`).join("")}
-      </div>` : `<p class="rank-help">Nothing to change \u2014 this is already
-        the best legal lineup on your roster.</p>`}
+      ${ldSwapsHTML(L)}
       ${L.exact === false ? `<p class="rank-help">${icon("warn")} Scored from
         the PPR baseline with your league\u2019s differences applied where we
         store the component. These could not be adjusted for:

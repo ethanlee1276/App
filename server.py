@@ -1201,6 +1201,13 @@ class Handler(BaseHTTPRequestHandler):
                               ".json")
 
         def rows_for(roster):
+            # WHO HE HAS GOT IN, carried through. Sleeper's `starters` is
+            # the lineup he has actually set; without it the desk can
+            # only ever score the best lineup and never say which of his
+            # choices to change, which is the question he opened the page
+            # with. The array can contain "0" for an empty slot, which
+            # matches no player id and quietly drops out.
+            seated = {str(x) for x in ((roster or {}).get("starters") or [])}
             out = []
             for pid in (roster or {}).get("players") or []:
                 p = (players or {}).get(str(pid)) or {}
@@ -1208,7 +1215,8 @@ class Handler(BaseHTTPRequestHandler):
                                             p.get("last_name")) if x)
                 pos = (p.get("position") or "").upper()
                 if name and pos:
-                    out.append({"player": name, "position": pos})
+                    out.append({"player": name, "position": pos,
+                                "starting": str(pid) in seated})
             return out
 
         owner = {}
