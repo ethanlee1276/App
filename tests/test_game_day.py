@@ -429,6 +429,56 @@ def test_the_flag_is_wired_and_dry_by_default():
     assert "--apply" in fn
 
 
+# --------------------------------------------- why a row was not placed
+
+def test_an_unplaced_row_names_its_own_reason():
+    """The 2026-09-09 run printed one guess over every remaining row:
+    "most of these are weeks the history database has not ingested yet".
+    It was false for nearly all of them — the week WAS ingested, which is
+    how 128 other rows came out of it. What was missing was the player.
+    Advice naming the wrong cause sends the reader to run an ingest that
+    changes nothing, and then to distrust the tool when it does."""
+    conn, hist = _db(), _hist()
+    _unstamped(conn, "nfl", "2026-W01", "Nobody Onfile", "rec_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    why = list(res["by_reason"])
+    assert len(why) == 1, res
+    assert "no team on file" in why[0], why
+
+
+def test_an_ambiguous_player_is_not_reported_as_a_missing_player():
+    """Two different failures with two different answers: one waits for
+    the week to be played, the other never resolves and does not need to
+    be chased."""
+    conn, hist = _db(), _hist()
+    hist.execute("INSERT INTO player_game_logs VALUES "
+                 "('nfl',2024,'003','DAL@NYG','Rhamondre Stevenson','NYG','rush_yds')")
+    hist.commit()
+    _unstamped(conn, "nfl", "2026-W01", "Rhamondre Stevenson", "rush_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    why = list(res["by_reason"])
+    assert "different" in why[0], why
+    assert "no team on file" not in why[0], why
+
+
+def test_a_week_the_database_has_never_seen_says_to_ingest_it():
+    """The one case where the original advice WAS right, kept and now
+    given only to the rows it is true of."""
+    conn, hist = _db(), _hist()
+    _unstamped(conn, "nfl", "2019-W07", "Somebody", "rec_yds")
+    res = ledger.backfill_game_days(conn, hist)
+    why = list(res["by_reason"])
+    assert "not in the history database" in why[0], why
+    assert "ingest.py nfl" in why[0], why
+
+
+def test_the_reasons_are_printed_and_counted_rather_than_summarised():
+    src = open(os.path.join(ROOT, "launch.py"), encoding="utf-8").read()
+    fn = src.split("def backfill_days", 1)[1].split("\ndef ", 1)[0]
+    assert 'res.get("by_reason")' in fn, fn
+    assert "Most of these are weeks" not in fn, "the one-guess line is back"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

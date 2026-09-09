@@ -4494,14 +4494,15 @@ def backfill_days(dry_run: bool = True) -> None:
         print("    That is the honest answer, not a failure: a bucket "
               "labelled \"2026-W01\" is\n    visibly a week, where a "
               "guessed Sunday would be invisibly the wrong day.")
-        # THE REAL COMMAND. The first draft of this line said
-        # "--ingest nfl", which launch.py cannot parse and no tool
-        # spells that way — tests/test_known_flags.py caught it, which is
-        # exactly what that guard exists for: an operator who types a
-        # printed flag must not get the server instead of an error.
-        print("    Most of these are weeks the history database has not "
-              "ingested yet.\n    `python3 ingest.py nfl --refresh` fills "
-              "them in, then run this again.")
+        # WHY, COUNTED — not one guess covering all of them. This line
+        # used to read "most of these are weeks the history database has
+        # not ingested yet", and on the 2026-09-09 run that was false for
+        # nearly every remaining row: the week WAS ingested, which is how
+        # 128 other rows were placed out of it. Advice naming the wrong
+        # cause sends the reader to run an ingest that changes nothing.
+        for why, n in sorted((res.get("by_reason") or {}).items(),
+                             key=lambda kv: -kv[1]):
+            print(f"\n    {n:>6}  {why}")
     if dry_run and res["filled"]:
         print("\n  Nothing was written. Re-run with --apply.")
 

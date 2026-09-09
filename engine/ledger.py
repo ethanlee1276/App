@@ -2170,22 +2170,23 @@ def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
     """
     from .db import connect as _hist
     close = hist_conn if hist_conn is not None else _hist()
-    out = {"filled": 0, "unresolved": 0, "by_route": {}}
+    out = {"filled": 0, "unresolved": 0, "by_route": {}, "by_reason": {}}
     rows = conn.execute(
         "SELECT id, sport, date, player, market FROM bets "
         "WHERE game_day IS NULL OR game_day = ''").fetchall()
     for b in rows:
-        day, route = "", ""
+        day, route, why = "", "", "not an NFL week label and not a day"
         text = str(b["date"] or "")
         if _ISO_DAY_RE.match(text):
-            day, route = text, "already a day"
+            day, route, why = text, "already a day", ""
         else:
             m = _NFL_WEEK_DATE.match(text)
             if m and b["sport"] == "nfl":
                 season, period = int(m.group(1)), f"{int(m.group(2)):03d}"
-                day, route = _week_day_for(close, b, season, period)
+                day, route, why = _week_day_for(close, b, season, period)
         if not day:
             out["unresolved"] += 1
+            out["by_reason"][why] = out["by_reason"].get(why, 0) + 1
             continue
         out["by_route"][route] = out["by_route"].get(route, 0) + 1
         out["filled"] += 1
@@ -2201,8 +2202,19 @@ def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
 
 
 def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
-    """(day, how) for one NFL bet inside a week, or ("", "") if unplaceable."""
+    """(day, how, why) for one NFL bet inside a week.
+
+    On failure `day` and `how` are empty and `why` names the ACTUAL
+    reason, because the first version of this printed one guess for all
+    of them: "most of these are weeks the history database has not
+    ingested yet". On the 2026-09-09 run that was false for nearly every
+    remaining row — the week was ingested, which is how 24 game bets and
+    104 props were placed from it. What was missing was the player.
+    Advice that names the wrong cause sends the reader to run an ingest
+    that changes nothing, and then to distrust the tool when it does.
+    """
     player = str(b["player"] or "").strip()
+    clubs = False
     try:
         # 2. The player's own log row — the strongest evidence there is,
         #    because it says which game he was ON THE FIELD for.
@@ -2215,7 +2227,7 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
                 " AND l.player=? AND g.date IS NOT NULL",
                 (season, period, player)).fetchall()
             if len(r) == 1:
-                return r[0][0], "player log"
+                return r[0][0], "player log", ""
         # 2b. THE PLAYER'S TEAM, when every team he could be on played
         #     the same day. A Week 1 prop has no log row yet — the game
         #     has not been played — so route 2 finds nothing, which is
@@ -2243,7 +2255,8 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
                 "                WHERE sport='nfl' AND player=?))",
                 (season, period, player, player)).fetchall()
             if len(r) == 1:
-                return r[0][0], "player's clubs all play that day"
+                return r[0][0], "player's clubs all play that day", ""
+            clubs = bool(r)
         # 3. A game bet: the team, or the matchup key with spaces removed.
         if player:
             r = hist_conn.execute(
@@ -2252,20 +2265,31 @@ def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
                 "AND (home=? OR away=? OR REPLACE(game_id,' ','')=?)",
                 (season, period, player, player, player)).fetchall()
             if len(r) == 1:
-                return r[0][0], "team or matchup"
+                return r[0][0], "team or matchup", ""
         # 4. A week with one date needs no evidence about the row at all.
         r = hist_conn.execute(
             "SELECT DISTINCT date FROM games WHERE sport='nfl' "
             "AND season=? AND period=? AND date IS NOT NULL",
             (season, period)).fetchall()
         if len(r) == 1:
-            return r[0][0], "only one day that week"
+            return r[0][0], "only one day that week", ""
+        if not r:
+            return "", "", ("the week is not in the history database — "
+                            "`python3 ingest.py nfl --refresh` adds it")
+        if clubs:
+            return "", "", ("this player's possible clubs play on different "
+                            "days that week, so the schedule does not "
+                            "settle it")
+        if player:
+            return "", "", ("no team on file for this player — a rookie, or "
+                            "a name the logs spell differently. His own game "
+                            "log places him the moment the week is played")
     except Exception:                                      # noqa: BLE001
         # A pre-migration or unreadable history DB means no bridge, which
         # is the state every one of these rows is already in. Never let a
         # backfill be the thing that breaks the journal.
-        return "", ""
-    return "", ""
+        return "", "", "the history database could not be read"
+    return "", "", "no route placed it"
 
 
 def close_at(index: dict, player: str, dates: list):
