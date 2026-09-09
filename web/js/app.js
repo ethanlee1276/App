@@ -1335,7 +1335,60 @@ function locksAwayWhatWeHold(next, held) {
   return !!(next && next.locked_reason) && !!(held && !held.locked_reason);
 }
 
+/* ONE BOARD LOAD AT A TIME, NO MATTER HOW HARD SOMEBODY PULLS.
+
+   Ethan, 2026-09-09: "think like a degenerate that gambles all the time
+   and will be constantly checking the app". So I measured what one does.
+   Fifty tab switches leak nothing — six intervals before and six after,
+   the node count flat — and an idle tab costs six requests a minute
+   against a ceiling of three hundred. That part was already right.
+
+   Pull-to-refresh was not. Twenty refreshes fired twenty full board
+   fetches, because nothing asked whether one was already on the wire.
+   On a phone on a bad connection that is the same board downloaded five
+   times over, five renders of it, and five times the work on the box —
+   all for one person who just wanted to know if the line moved.
+
+   Callers JOIN the load in flight rather than being turned away, so a
+   pull still resolves and its spinner still stops; it just resolves on
+   the answer already coming. The key includes the sliders, so moving one
+   correctly starts a new load rather than joining a load for different
+   numbers.
+
+   THE BOUND IS THE IMPORTANT HALF. `fetch` has no timeout: a connection
+   that hangs — a phone walking into a lift, which is the exact reader
+   this is for — would leave the slot occupied for ever and the board
+   would never refresh again in that tab. Worse than the problem. So a
+   load older than LOAD_JOIN_MS is not joined; the next caller starts a
+   fresh one and the stale promise is left to settle into nothing. */
+const LOAD_JOIN_MS = 15000;
+let _loadInFlight = null;
+let _loadKey = "";
+let _loadAt = 0;
+
 async function load(quiet = false) {
+  const key = [state.sport, state.minConf, state.minEdge, state.maxJuice].join("|");
+  if (_loadInFlight && _loadKey === key && Date.now() - _loadAt < LOAD_JOIN_MS) {
+    // The spinner is the feedback for a DELIBERATE refresh, and joining
+    // must not swallow it — the brand is left spinning by the load that
+    // is already running, which clears it when it lands.
+    if (!quiet) {
+      const b = document.getElementById("brand-home");
+      if (b) b.classList.add("loading");
+    }
+    return _loadInFlight;
+  }
+  const p = _loadNow(quiet);
+  _loadInFlight = p;
+  _loadKey = key;
+  _loadAt = Date.now();
+  // `finally` and not `then`: a load that threw has to free the slot too,
+  // or one failed refresh wedges every later one for fifteen seconds.
+  p.finally(() => { if (_loadInFlight === p) { _loadInFlight = null; _loadKey = ""; } });
+  return p;
+}
+
+async function _loadNow(quiet = false) {
   state.quiet = quiet;                       // silent re-render (no entrance anim)
   if (!quiet) showSkeleton();
   // What this machine's rebuild actually costs, so "stale" can mean

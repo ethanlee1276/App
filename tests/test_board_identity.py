@@ -43,7 +43,9 @@ APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 
 def _load_body():
-    i = APP.index("async function load(")
+    # RE-ANCHORED 2026-09-09: the body moved to `_loadNow`; `load` is the
+    # coalescer in front of it.
+    i = APP.index("async function _loadNow(")
     j = APP.index(") {", i) + 2
     depth = 0
     for k in range(j, len(APP)):

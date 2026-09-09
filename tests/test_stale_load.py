@@ -36,7 +36,7 @@ def _fn(name):
 
 
 def test_the_load_remembers_which_league_asked():
-    body = _fn("load")
+    body = _fn("_loadNow")
     assert "const asked = state.sport;" in body
     assert "const overtaken = () => state.sport !== asked;" in body
     # Captured BEFORE the first await, or it would read the new league.
@@ -47,7 +47,7 @@ def test_every_await_in_the_load_is_followed_by_the_check():
     """Six awaits stand between asking and drawing — the API fetch, its
     body, the fallback fetch, its body — plus the two catch paths and the
     final render. Each is a place the league can have moved."""
-    body = _fn("load")
+    body = _fn("_loadNow")
     assert body.count("if (overtaken()) return;") >= 6, body.count("if (overtaken()) return;")
     # The check sits between the fetch and any assignment to the slate.
     for m in re.finditer(r"await fetch\(", body):
@@ -59,7 +59,7 @@ def test_every_await_in_the_load_is_followed_by_the_check():
 
 
 def test_the_render_is_the_last_thing_gated():
-    body = _fn("load")
+    body = _fn("_loadNow")
     # EVERY render in the load, not the first: the light copy's first
     # paint (2026-09-05) renders too, and the rule is the same for it —
     # the last identity check before a render comes after the last await.
@@ -83,7 +83,7 @@ def test_render_all_refuses_a_board_that_is_not_this_leagues():
 
 def test_the_identity_guards_are_still_there():
     """This sits ON TOP of the 2026-08-25 fix, not instead of it."""
-    body = _fn("load")
+    body = _fn("_loadNow")
     # The 2026-09-05 light board added a third clause — a light copy is
     # not "held" — and left the two this test was written for in place.
     assert "const holding = state.data && _boardFor === meta.api && !state.lightBoard;" in body

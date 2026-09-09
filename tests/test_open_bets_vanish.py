@@ -61,6 +61,10 @@ if not shutil.which("node"):
 APP = open(os.path.join(ROOT, "web", "js", "app.js"), encoding="utf-8").read()
 
 
+# RE-ANCHORED 2026-09-09: the loading body is `_loadNow` now. `load`
+# in front of it only decides whether to start one or join the one
+# already on the wire (tests/test_load_coalesce.py).
+
 def _fn(name, kind="function"):
     i = APP.index(f"{kind} {name}(")
     depth = 0
@@ -140,7 +144,11 @@ def _run(setup, plan):
            + _fn("normalizeSlate") + "\n"
            + _fn("locksAwayWhatWeHold") + "\n"
            + _fn("lightNameFor") + "\n"
-           + _fn("load", kind="async function") + "\n"
+           + _fn("_loadNow", kind="async function") + "\n"
+           + "// `load` is the coalescer; the body under test is `_loadNow`. Aliased\n"
+             "// so this harness exercises the load itself rather than the guard in\n"
+             "// front of it — which has its own file, tests/test_load_coalesce.py.\n"
+             "const load = _loadNow;\n"
            + setup + "\n"
            + f"PLAN = {json.dumps(plan)};\n"
            + """
@@ -288,7 +296,7 @@ def test_the_guard_reads_the_field_the_engine_actually_stamps():
 def test_every_assignment_to_the_slate_still_records_its_board():
     """Held from tests/test_board_identity.py, because this change adds a
     path that assigns nothing and it must not disturb the ones that do."""
-    body = _fn("load", kind="async function")
+    body = _fn("_loadNow", kind="async function")
     for at in [m.start() for m in re.finditer(r"state\.data\s*=", body)]:
         assert "_boardFor = meta.api" in body[at:at + 400], \
             " ".join(body[at:at + 90].split())

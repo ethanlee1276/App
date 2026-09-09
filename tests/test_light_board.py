@@ -135,7 +135,10 @@ def test_the_page_names_the_light_copy_from_the_boards_own_file():
 
 
 def _load_body():
-    i = APP.index("async function load(quiet = false)")
+    # RE-ANCHORED 2026-09-09: `load` is now a thin coalescer in front of
+    # `_loadNow`, which carries the body this checks. Same code, one
+    # name further in.
+    i = APP.index("async function _loadNow(quiet = false)")
     return APP[i:APP.index("\n}", i)]
 
 
@@ -167,7 +170,10 @@ def _run_light(setup, plan, light):
     import test_open_bets_vanish as H
     src = (H._STUBS
            + H._fn("normalizeSlate") + "\n" + H._fn("locksAwayWhatWeHold") + "\n"
-           + H._fn("lightNameFor") + "\n" + H._fn("load", kind="async function") + "\n"
+           + H._fn("lightNameFor") + "\n"
+           + H._fn("_loadNow", kind="async function") + "\n"
+           # `load` is the coalescer now; this harness wants the load itself.
+           + "const load = _loadNow;\n"
            + "state.lightBoard = false; const PAINTS = [];\n"
            + "renderAll = () => PAINTS.push({ n: (state.data.live_picks || []).length, light: !!state.lightBoard });\n"
            + (f"paidFetch = async (name) => ({{ ok: true, status: 200, headers: {{ get: () => null }}, "
