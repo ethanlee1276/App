@@ -152,6 +152,49 @@ def test_every_internal_carries_a_reason():
             f"{name} is allow-listed without saying why"
 
 
+def test_a_key_that_is_a_label_is_not_mistaken_for_a_field():
+    """The first run on real data reported 1,169 unread fields and nine
+    in ten of them were players. `player_stats` and `carried` are keyed
+    by name, `likely_census` by the refusal sentence — the page indexes
+    all three by value, so no key is ever spelled out, so every player in
+    the NFL came back looking like a feature nobody could see.
+
+    The rule is shape, not a list of names: a field is a bare identifier,
+    a label has spaces and punctuation in it."""
+    walked = feedaudit._walk({
+        "player_stats": {"Josh Allen": {"g": 1}, "J.P. Crawford": {"g": 2}},
+        "likely_census": {"under the likelihood floor": 389},
+        "game_census": {"with a side that has no team rating": 2},
+        "record": {"money_bets": 11, "paper_bets": 2},
+        "predmarket": {"w": 1},
+    })
+    # The maps themselves are still asked about — one of them really
+    # could be unread, and that is the question this tool exists for.
+    for held in ("player_stats", "likely_census", "record", "predmarket"):
+        assert held in walked, held
+    # Their labels are not.
+    leaked = [w for w in walked if " " in w]
+    assert not leaked, f"labels reported as fields: {leaked}"
+    # And a real nested field beside them still is.
+    assert "record.money_bets" in walked
+    assert "record.paper_bets" in walked
+    assert "predmarket.w" in walked
+
+
+def test_a_label_inside_a_list_row_is_dropped_too():
+    """`recent[]` rows carry ordinary fields AND, on some feeds, a
+    per-player map. The list descent is a second code path and got the
+    reading wrong on its own before this."""
+    walked = feedaudit._walk(
+        {"recent": [{"closing_line": -110, "why_tag": None,
+                     "Josh Allen": 1, "2026-08-25": 2}]})
+    assert "recent[].closing_line" in walked
+    assert "recent[].why_tag" in walked, \
+        "a real field on a row is still reported"
+    assert "recent[].Josh Allen" not in walked
+    assert "recent[].2026-08-25" not in walked
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

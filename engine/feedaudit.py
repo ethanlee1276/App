@@ -79,6 +79,29 @@ _MIN_LEN = 4
 #: row identifier, not a field somebody forgot to render.
 _DATA_KEY = re.compile(r"^(\d{4}-\d{2}-\d{2}|[A-Z0-9]{2,5}|\d+)$")
 
+#: …and the same question asked the other way round. A field name in
+#: this codebase is a bare identifier, because the build writes it that
+#: way. A key with a SPACE or a comma or a bracket in it is a row LABEL —
+#: a player ("Josh Allen"), a refusal sentence ("under the likelihood
+#: floor"), a census bucket ("with a side that has no team rating").
+#:
+#: This exists because of what the first run against real data looked
+#: like: 1,169 fields reported unread, and roughly nine in ten of them
+#: were the NFL and MLB player lists inside `player_stats` and
+#: `carried`. The page indexes those by name, so nothing ever spells a
+#: key out, so every player in both leagues came back looking like a
+#: feature nobody could see. The dozen findings that mattered were
+#: buried under three hundred lines of roster. A tool that has to be
+#: hand-filtered before it can be read is a tool nobody runs twice.
+#:
+#: THE TRADE, stated so it is not discovered later: a genuine field
+#: spelled with a hyphen or a space would be skipped here and never
+#: reported. Nothing in `web/data/` is spelled that way. The alternative
+#: — adding each of these maps to DYNAMIC by hand, for ever, as the
+#: build grows new ones — is the whack-a-mole this replaces, and it
+#: fails silently every time somebody forgets.
+_FIELD_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 
 def _readers() -> str:
     out = []
@@ -96,13 +119,17 @@ def _walk(obj, prefix="", depth=0, out=None):
     if depth > 1 or not isinstance(obj, dict):
         return out
     for k, v in obj.items():
-        if _DATA_KEY.match(k):
-            continue                     # a row id, not a field name
+        if _DATA_KEY.match(k) or not _FIELD_KEY.match(k):
+            continue                     # a row id or a label, not a field
         out.append(prefix + k)
         if depth == 0 and isinstance(v, dict) and k not in DYNAMIC:
             _walk(v, k + ".", depth + 1, out)
         if depth == 0 and isinstance(v, list) and v and isinstance(v[0], dict):
             for kk in v[0]:
+                # Row dicts get the same reading as anything else: a
+                # `recent[]` entry keyed by a player name is data too.
+                if _DATA_KEY.match(kk) or not _FIELD_KEY.match(kk):
+                    continue
                 out.append(k + "[]." + kk)
     return out
 
