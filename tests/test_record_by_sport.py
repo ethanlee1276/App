@@ -152,6 +152,30 @@ def _read(*parts):
         return fh.read()
 
 
+def test_every_scope_chip_counts_the_same_thing():
+    """ALL BETS 17 · NFL 13 · MLB 17, on the phone on opening night. The
+    17 was every settled row; the 13 was the NFL's OPEN ones, reached
+    through a `settled || open` fallback because the NFL had nothing
+    graded yet. Two quantities, one badge shape, and they do not add up.
+
+    The fallback also made the count fall: the NFL badge would have read
+    13 until the season's first bet graded and then dropped to 1. Summed,
+    every chip is the same quantity — rows journaled in that scope — the
+    sports add to All bets, and it only ever climbs."""
+    import re
+    js = _read("web", "js", "app.js")
+    fn = js[js.index("function recordScopeHTML(d, scope)"):]
+    fn = fn[:fn.index("\n}")]
+    assert "const journaled = (o) => ((o || {}).settled || 0) + ((o || {}).open || 0);" in fn
+    assert "journaled(d.overall)" in fn, "the All bets chip counts something else"
+    assert "journaled(r.overall)" in fn, "a sport chip counts something else"
+    # The prose below names the shape it is banning, and a grep that
+    # reads comments would be satisfied by a comment. Code only.
+    code = re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", fn, flags=re.S))
+    assert "settled || open" not in code, \
+        "the fallback is back — the badge drops when a bet grades"
+
+
 def test_the_record_page_defaults_to_the_sport_you_came_from():
     js = _read("web", "js", "app.js")
     assert "_recordScope" in js

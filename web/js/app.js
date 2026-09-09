@@ -11896,16 +11896,33 @@ function recordScopeHTML(d, scope) {
   const btn = (key, label, n) => `<button class="rec-scope${
     scope === key ? " active" : ""}" data-scope="${escapeHtml(key)}">${
     escapeHtml(label)}${n != null ? ` <span class="rec-scope-n">${n}</span>` : ""}</button>`;
-  const parts = [btn("all", "All bets", (d.overall || {}).settled)];
+  /* EVERY CHIP COUNTS THE SAME THING — rows journaled in that scope,
+     open and settled together.
+
+     They did not. "All bets" carried `overall.settled` while a sport
+     carried `settled || open`, so the two badges were different
+     quantities wearing the same shape. Caught on the phone on 2026-09-09,
+     opening night, where the page read ALL BETS 17 · NFL 13 · MLB 17 —
+     a reader adds 13 and 17, gets 30, and is looking at a total of 17.
+     It was not an arithmetic error: 17 was every SETTLED row and 13 was
+     the NFL's OPEN ones, because the NFL had nothing settled yet and the
+     `||` fell through.
+
+     The worse half was what happened next. The fallback means the NFL
+     badge would have read 13 all evening and then dropped to 1 the
+     instant the first bet of the season graded — a count that goes DOWN
+     as more happens is the kind of thing you screenshot and send me.
+     Summed, it only ever climbs, the sports add up to All bets, and the
+     open/settled split is still one line below on the panel itself. */
+  const journaled = (o) => ((o || {}).settled || 0) + ((o || {}).open || 0);
+  const parts = [btn("all", "All bets", journaled(d.overall))];
   parts.push(btn("intel", "Prediction Market", null));
   for (const sp of tracked) {
     const r = (d.by_sport || {})[sp] || {};
-    const settled = (r.overall || {}).settled || 0;
-    const open = (r.overall || {}).open || 0;
     // A sport with nothing journaled is still listed. Hiding it would
     // make "no bets yet" and "no such board" look identical.
     parts.push(btn(sp, (SPORT_META[sp] || {}).name || sp.toUpperCase(),
-                   settled || open || 0));
+                   journaled(r.overall)));
   }
   return `<div class="rec-scopes">${parts.join("")}</div>`;
 }
