@@ -18466,7 +18466,7 @@ window.acctAuth = async function (btn, mode) {
    the redacted ones. Re-rendering would show a subscriber the free
    version of their own product and look like the payment had not worked.
    A reload re-fetches with the new cookie and recomputes the wall from
-   scratch, which is why `coApplyFree` reloads after a code is redeemed.
+   scratch, which is why redeeming a code reloads rather than re-renders.
 
    It cuts the other way too: a visitor who arrived un-walled and signed
    in to an UNPAID account has to reload, because the hashchange guard
@@ -18701,8 +18701,14 @@ const FAQ = [
   ["Do you guarantee I will win money?",
    "No, and be suspicious of anyone who does. No model wins every night. " +
    "Every number here is a probability, not a promise."],
+  // POINTS AT THE ACCOUNT PAGE, because the box that used to be on this
+  // one is gone (2026-09-09). It also draws the distinction the box was
+  // blurring: a code from us is free access and needs no card; a discount
+  // on a paid plan is Stripe's field on Stripe's page.
   ["I have a code.",
-   "Enter it in the box above — it applies immediately and needs no card."],
+   "Enter it on your account page — it applies immediately and needs no " +
+   "card. A discount code for a paid plan is different: that one goes in " +
+   "on Stripe’s own page when you check out."],
 ];
 
 /* The FAQ as this reader should see it.
@@ -19088,8 +19094,6 @@ function paywallHTML(rec, status) {
       site. The only difference is how long you commit for and how much you
       save.</p>
     <div class="pw-plans">${PLANS.map(plan).join("")}</div>
-
-    <div class="card pw-code" id="pw-code"></div>
 
     <div class="pw-trust">
       <div class="pw-guar">
@@ -19647,12 +19651,21 @@ async function renderPaywall() {
     const r = await boardFetch("/data/record.json", { cache: "no-cache" });
     if (r.ok) rec = await r.json();
   } catch (e) { /* the shop still renders without the proof strip */ }
+  /* NO CODE BOX ON THE PLANS PAGE. Ethan, 2026-09-09, with a screenshot
+     of it circled: "removing where it lets you put the promo codes in on
+     the actual site since you can only put them in on the stripe page."
+
+     He is right about the thing that was confusing. A DISCOUNT code goes
+     in Stripe's own field, on Stripe's page — this box never took one and
+     never could. It takes a comp code, which is a different object: it
+     writes an entitlement here and involves no card at all. Two different
+     things wearing one label, three inches above a Pay button.
+
+     The redeem path is NOT gone; it lives on the account page, which is
+     in WALL_OPEN, so somebody holding a code can still reach it while
+     walled. What is gone is being asked for a code at the moment of
+     paying, which is where the two get confused. */
   host.innerHTML = paywallHTML(rec, _pwStatus);
-  // The code box is the one control that works with no processor at all,
-  // so it is mounted from the same builder the account page uses rather
-  // than being re-written here and drifting from it.
-  const slot = document.getElementById("pw-code");
-  if (slot) slot.innerHTML = codeBoxHTML((_pwStatus && _pwStatus.codes) || {});
 }
 
 let _pwStatus = null;
@@ -19773,31 +19786,18 @@ async function paidReturnWait() {
    written directly. That path is live now. */
 
 let _coPlan = null;      // the plan being bought
-let _coCode = null;      // {code, months} once a code is accepted
 
 function _coPlanById(id) {
   return PLANS.find((p) => p.id === id) || PLANS[0];
 }
 
-/* Does the code cover the whole term? A twelve-month code against a
-   monthly plan does, and then some; a one-month code against a yearly
-   plan does not, and saying "free" there would be a lie the checkout
-   cannot honour. */
-function _coCovers(plan, code) {
-  return !!(code && code.months >= plan.months);
-}
-
 function checkoutHTML() {
   const pl = _coPlan || PLANS[0];
-  const covered = _coCovers(pl, _coCode);
-  /* THE TRIAL AT THE MOMENT OF COMMITMENT. A code that covers the term
-     wins — it charges nothing and needs no card at all, so a trial on
-     top of it would be a smaller offer described as a bigger one. */
   const tDays = (_pwStatus && _pwStatus.trial_days) || 0;
-  const trial = !covered && tDays > 0
+  const trial = tDays > 0
     && pl.id === ((_pwStatus && _pwStatus.trial_plan) || "")
     && !(_pwStatus && _pwStatus.trial_eligible === false);
-  const total = (covered || trial) ? 0 : pl.price;
+  const total = trial ? 0 : pl.price;
   return `
   <div class="co">
     <div class="co-grid">
@@ -19807,12 +19807,6 @@ function checkoutHTML() {
             <span class="co-sub">${escapeHtml(pl.cadence)}</span></div>
           <div class="co-amt">$${pl.price}</div>
         </div>
-        ${_coCode ? `<div class="co-coupon">
-          ${iconMark("tag", 13)}
-          <span>${escapeHtml(_coCode.code)} — ${_coCode.months} month${
-            _coCode.months === 1 ? "" : "s"}${covered ? "" : ", less than this term"}</span>
-          <button class="co-x" onclick="coDropCode()" aria-label="Remove code">×</button>
-        </div>` : ""}
         ${trial ? `<div class="co-line co-trialline">
           <div><b>${tDays}-day free trial</b>
             <span class="co-sub">applied to this plan</span></div>
@@ -19826,16 +19820,7 @@ function checkoutHTML() {
           starting in ${tDays} days. Cancel before then and you are not
           charged anything.</p>` : ""}
 
-        ${covered ? `
-          <div class="co-free">
-            ${iconMark("check", 15)}
-            <div><b>Nothing to pay.</b> Your code covers this whole term,
-              so there is no card to enter and nothing to cancel later.</div>
-          </div>
-          <button class="btn primary co-go" onclick="coApplyFree(this)">
-            Start with my code</button>
-        ` : `
-          <div class="co-pay" id="co-pay">
+        <div class="co-pay" id="co-pay">
             <div class="co-payhead">Payment</div>
             <button class="btn primary co-go" data-plan="${escapeAttr(pl.id)}"
                     onclick="coPay(this)">${trial
@@ -19855,19 +19840,7 @@ function checkoutHTML() {
             <p class="co-note">Cancel any time from your account page, which
               opens Stripe’s portal. A plan you cancel runs to the date you
               have already paid through.</p>
-          </div>
-        `}
-
-        ${!_coCode ? `
-        <div class="co-codebox">
-          <label for="co-code">Have a code?</label>
-          <div class="acct-row">
-            <input class="acct-in code-in" id="co-code" type="text"
-                   autocomplete="off" spellcheck="false" placeholder="Enter your code">
-            <button class="btn" onclick="coTryCode(this)">Apply</button>
-          </div>
-          <p class="acct-note code-note" id="co-note"></p>
-        </div>` : ""}
+        </div>
 
         <button class="btn ghost co-back" onclick="coBack()">← Back to plans</button>
       </section>
@@ -19898,60 +19871,8 @@ function renderCheckout() {
 }
 
 window.coBack = function () {
-  _coCode = null;
   renderPaywall();
   _switchViewNow("paywall", false, 0);
-};
-
-window.coDropCode = function () { _coCode = null; renderCheckout(); };
-
-window.coTryCode = async function (btn) {
-  const input = document.getElementById("co-code");
-  const note = document.getElementById("co-note");
-  const say = (t) => { if (note) note.textContent = t; };
-  const code = (input && input.value || "").trim();
-  if (!code) return say("Enter the code first.");
-  btn.disabled = true;
-  const was = btn.textContent;
-  btn.textContent = "Checking…";
-  try {
-    const r = await fetch("/api/billing/redeem", {
-      method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-    const d = await r.json().catch(() => null);
-    if (!d) return say("Server not reachable.");
-    if (!d.ok) return say(d.error || "That code is not valid.");
-    // REDEEMED ALREADY, not "pending checkout". The grant is written the
-    // moment the server accepts it, so the summary shows what is true
-    // rather than an intention.
-    _coCode = { code: d.code, months: d.months };
-    renderCheckout();
-  } catch (e) {
-    say("Server not reachable.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = was;
-  }
-};
-
-window.coApplyFree = async function (btn) {
-  btn.disabled = true;
-  btn.textContent = "Opening the site…";
-  // The entitlement is already written; this just re-reads it and drops
-  // the wall. A reload would do the same and lose the scroll position.
-  const walled = await paywallCheck();
-  if (walled) {
-    btn.disabled = false;
-    btn.textContent = "Start with my code";
-    const note = document.getElementById("co-note");
-    if (note) note.textContent = "That code did not open the site. Reload and try again.";
-    return;
-  }
-  document.body.classList.remove("walled");
-  location.hash = "#recommended";
-  location.reload();
 };
 
 /* WHICH PLAN, IN WORDS, ON THE ACCOUNT PAGE.
@@ -20136,7 +20057,6 @@ async function _billGo(btn, path, payload) {
 
 window.coStart = function (btn) {
   _coPlan = _coPlanById(btn.dataset.plan);
-  _coCode = null;
   renderCheckout();
   _switchViewNow("checkout", false, 0);
   window.scrollTo({ top: 0, behavior: "auto" });

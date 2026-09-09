@@ -633,41 +633,63 @@ def test_no_card_field_is_ever_served_by_us():
         "nothing tells the reader the card does not come here"
 
 
-def test_a_code_covering_the_term_needs_no_processor_at_all():
-    """The reason this page is worth having before the processor question
-    is settled: a hundred percent off means there is nothing to charge.
-    Verified in a browser — yearly went $225 to $0 with USFARATHANE and
-    offered to open the site with no card."""
+def test_the_checkout_asks_for_a_card_and_never_for_a_code():
+    """RETIRED 2026-09-09, and the two tests this replaces were right for
+    the world they were written in. Their premise — "the reason this page
+    is worth having before the processor question is settled" — expired
+    when Stripe went live: a comp code redeemed at checkout was the way in
+    while there was no processor, and now there is one.
+
+    Ethan, with the box circled in a screenshot: "removing where it lets
+    you put the promo codes in on the actual site since you can only put
+    them in on the stripe page." A DISCOUNT code goes in Stripe's own
+    field on Stripe's page; this box only ever took a comp code, which is
+    a different object, and having them share a label three inches above
+    a Pay button is the confusion he hit.
+
+    Comp codes are NOT gone — `codeBoxHTML` still renders on the account
+    page, which is in WALL_OPEN, so a code already handed out still
+    redeems. What is gone is being asked for one while paying."""
     app = _read("web", "js", "app.js")
-    fn = app[app.index("function _coCovers("):]
-    fn = fn[:fn.index("\n}")]
-    assert "code.months >= plan.months" in fn, \
-        "coverage is not compared against the term being bought"
     body = app[app.index("function checkoutHTML("):]
     body = body[:body.index("\nfunction renderCheckout(")]
-    assert "Nothing to pay" in body and "coApplyFree" in body
+    for gone in ("co-codebox", "coTryCode", "coApplyFree", "_coCode",
+                 "Nothing to pay", "less than this term"):
+        assert gone not in body, \
+            f"the checkout still carries the comp-code path: {gone}"
+    assert "coPay(this)" in body, "the checkout no longer offers to take a card"
 
 
-def test_a_short_code_against_a_long_term_does_not_read_as_free():
-    """A one-month code against a yearly plan does not cover it, and
-    saying "free" there would be a promise the checkout cannot honour."""
+def test_a_code_can_still_be_redeemed_somewhere_a_walled_visitor_can_reach():
+    """The half of the removal that would be a silent break. Somebody
+    holding a comp code sees the wall, and if the only redeem box lived
+    behind it they could never get in — and nobody would find out until a
+    friend of Ethan's could not use the code he gave them."""
+    app = _read("web", "js", "app.js")
+    fn = app[app.index("async function renderBilling("):]
+    fn = fn[:fn.index("\n/* \"Have a code?\"")]
+    assert "codeBoxHTML(" in fn, "the account page lost the redeem box too"
+    order = app[app.index("const WALL_OPEN = ["):]
+    order = order[:order.index("]")]
+    assert '"account"' in order, \
+        "the account page is behind the wall, so a code cannot be redeemed at all"
+
+
+def test_the_total_is_derived_and_never_asserted():
+    """The $0 on the checkout has to come from something. It used to
+    depend on `covered` — whether a comp code reached the term — and now
+    the only thing that zeroes it is the trial. Either way the property
+    is the same one, and it is why this survived the code box: the total
+    is DERIVED from what the reader owes today, not typed."""
     app = _read("web", "js", "app.js")
     body = app[app.index("function checkoutHTML("):]
     body = body[:body.index("\nfunction renderCheckout(")]
-    assert "less than this term" in body, \
-        "a partial code is presented as though it covered the whole plan"
-    # The expression grew a second term when the 3-day trial landed:
-    # `(covered || trial) ? 0 : pl.price`. The claim is unchanged — the
-    # total is DERIVED from whether this reader owes anything today, not
-    # asserted — so this checks the shape rather than one spelling of it.
     total = re.search(r"const total = ([^;]+);", body)
     assert total, "the total is no longer computed in checkoutHTML"
-    assert "covered" in total.group(1), \
-        "the total does not depend on whether the code actually covers it"
+    assert "trial" in total.group(1), \
+        "the total does not depend on whether a trial applies"
     assert "pl.price" in total.group(1), \
         "the total is not derived from the plan's price"
-    # …and a code that does NOT cover the term must not zero it.
-    assert "covered ?" in body or "covered ||" in body
 
 
 def test_the_buy_button_is_the_loudest_thing_on_the_page():

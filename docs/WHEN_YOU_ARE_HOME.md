@@ -152,6 +152,35 @@ Two numbers I care about in that output:
 
 ---
 
+## 4b. The code box is gone from the two paying screens — check the third
+
+Removed 2026-09-09 at your ask: the "Have a code?" box is off the PLANS
+page and off the CHECKOUT page, which are the two you circled.
+
+It is still on the ACCOUNT page, deliberately. That box never took a
+Stripe discount code and never could — those go in Stripe's own field on
+Stripe's page. It takes a COMP code, which writes free access here with
+no card at all. If I had deleted all three, any code you have already
+handed out would have stopped working with nothing to say so.
+
+I could not verify the account page from here because it needs a signed-in
+session. Two minutes on your phone, signed in:
+
+1. Open the account page. There should still be a **Have a code?** box.
+2. Type any nonsense and press Apply — it should say the code is not
+   valid, not throw or go blank.
+3. Plans page and checkout page: **no** code box anywhere. The FAQ entry
+   "I have a code." now says to use the account page, and says plainly
+   that a discount code for a paid plan is a different thing that goes in
+   on Stripe's page.
+
+If you would rather comp codes went away entirely, say so and I will take
+the account box out too — it is one line. I did not do it unasked because
+it is a working capability you did not mention, and losing it is the kind
+of thing you find out about from a friend who cannot get in.
+
+---
+
 ## 5. Board health, same as always (read-only)
 
 ```bash
