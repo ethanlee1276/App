@@ -113,6 +113,83 @@ def test_the_dossier_is_styled():
         "the page must not scroll under the sheet"
 
 
+
+# ------------------------------------------------- the Dynamic Island
+
+#: Every bottom sheet on the site. Both are drawn the same way — pinned
+#: to the bottom, sized against the viewport — so both had the same bug.
+_SHEETS = (".ffd-card", ".ffd-card.ffd-full", ".pk-card")
+
+
+def _css():
+    return open(os.path.join(ROOT, "web", "css", "styles.css"),
+                encoding="utf-8").read()
+
+
+def _max_heights():
+    """Every `max-height` declaration on a sheet, in source order."""
+    import re
+    css = _css()
+    out = {}
+    for m in re.finditer(r"max-height:\s*([^;]+);", css):
+        head = css.rfind("{", 0, m.start())
+        sel = css[css.rfind("}", 0, head) + 1:head].strip().splitlines()[-1]
+        sel = sel.strip()
+        if any(s in sel for s in ("ffd-card", "pk-card")):
+            out.setdefault(sel, []).append(m.group(1).strip())
+    return out
+
+
+def test_no_sheet_is_measured_against_the_viewport_it_does_not_have():
+    """Ethan, 2026-09-09, photographing Cam Skattebo's profile: the sheet
+    opened under the status bar and the Dynamic Island ate the name, the
+    team and the close button.
+
+    `vh` ON iOS IS THE LARGE VIEWPORT — the height the page would have if
+    the browser chrome were hidden. A sheet sized at 92vh and pinned to
+    the BOTTOM is therefore taller than the space actually on screen, and
+    the excess goes off the top where the island is. `dvh` is the
+    viewport as it currently is.
+
+    Every `vh` declaration keeps a `dvh` one after it — the fallback in
+    front for browsers that do not know the unit, the real answer
+    second."""
+    for sel, decls in _max_heights().items():
+        assert any("dvh" in d for d in decls), \
+            f"{sel} is sized in vh with no dvh after it"
+        vh = [i for i, d in enumerate(decls) if "dvh" not in d and "vh" in d]
+        dvh = [i for i, d in enumerate(decls) if "dvh" in d]
+        if vh and dvh:
+            assert min(vh) < min(dvh), \
+                f"{sel} puts the fallback after the answer, so it wins"
+
+
+def test_every_sheet_subtracts_the_island_from_its_own_height():
+    """And the subtraction is in the HEIGHT, not padding on the overlay.
+
+    That is what I tried first, and measured as useless: a flex item
+    taller than its container overflows straight past the container's
+    padding, so `align-items: flex-end` plus `padding-top` clamps
+    nothing. Height is the only thing that binds. Chromium, 430x932: a
+    5000px card under a 200px-padded overlay sat at top -4068."""
+    for sel, decls in _max_heights().items():
+        dvh = [d for d in decls if "dvh" in d]
+        assert dvh, sel
+        for d in dvh:
+            assert "env(safe-area-inset-top" in d, \
+                f"{sel} can still be drawn under the Dynamic Island: {d}"
+
+
+def test_the_home_indicator_is_still_accounted_for():
+    """It always was — the bottom inset was in the padding and the top
+    was not. Regressing it while fixing the other end would be a poor
+    trade."""
+    css = _css()
+    for sel in (".ffd-card", ".pk-card"):
+        i = css.index(sel + " {")
+        rule = css[i:css.index("}", i)]
+        assert "env(safe-area-inset-bottom" in rule, sel
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

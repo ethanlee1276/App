@@ -3647,6 +3647,29 @@ body.msg-thread-open .footer { display: none; }
    desktop. One overlay reused for every open; sections only render when
    the surface behind them has the row. */
 [data-dossier] { cursor: pointer; }
+/* THE DYNAMIC ISLAND ATE THE PLAYER'S NAME. Ethan, 2026-09-09, with a
+   photo of Cam Skattebo's profile: the sheet opened tall enough that its
+   header — the name, the team, the close button — sat under the status
+   bar and the island, unreadable and untappable.
+
+   TWO CAUSES, and fixing either alone leaves the other.
+
+   `vh` ON iOS IS THE LARGE VIEWPORT — the height the page would have if
+   the browser chrome were hidden. A sheet sized at 92vh and anchored to
+   the BOTTOM is therefore taller than the space actually on screen, and
+   the excess goes off the top. `dvh` is the viewport as it currently is,
+   which is the only honest unit for a bottom sheet; the `vh` line stays
+   in front of it as the fallback for anything that does not know `dvh`.
+
+   AND NOTHING SUBTRACTED THE TOP INSET. `env(safe-area-inset-bottom)`
+   was already respected in the padding — the home indicator was thought
+   about and the island was not.
+
+   The subtraction lives in the CARD'S max-height and not as padding on
+   this overlay, which is what I tried first and measured as useless: a
+   flex item taller than its container overflows straight past the
+   container's padding, so `align-items: flex-end` plus `padding-top`
+   clamps nothing at all. Height is the only thing that binds. */
 #ffd-overlay { position: fixed; inset: 0; z-index: 70; display: none;
   background: rgba(0, 0, 0, .55); align-items: flex-end;
   justify-content: center; }
@@ -3654,11 +3677,14 @@ body.msg-thread-open .footer { display: none; }
 body.ffd-open { overflow: hidden; }
 .ffd-card { overscroll-behavior: contain; background: var(--panel-2);
   border: var(--hairline) solid var(--border);
-  width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto;
+  width: 100%; max-width: 560px; overflow-y: auto;
+  max-height: 82vh;
+  max-height: calc(82dvh - env(safe-area-inset-top, 0px));
   padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 761px) {
   #ffd-overlay { align-items: center; }
-  .ffd-card { max-height: 76vh; }
+  .ffd-card { max-height: 76vh;
+              max-height: calc(76dvh - env(safe-area-inset-top, 0px)); }
 }
 /* The player peek — the riding rows' popup. Same shape as the fantasy
    dossier above (bottom sheet on a phone, centred card on a desktop),
@@ -3708,7 +3734,9 @@ body.pk-open { overflow: hidden; }
   position: relative; background: var(--panel-2);
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
-  width: 100%; max-width: 620px; max-height: 86vh; overflow-y: auto;
+  width: 100%; max-width: 620px; overflow-y: auto;
+  max-height: 86vh;
+  max-height: calc(86dvh - env(safe-area-inset-top, 0px));
   padding: 16px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
 /* The card inside is already a card. A second border and a second
    background around it reads as a box in a box. */
@@ -3721,7 +3749,9 @@ body.pk-open { overflow: hidden; }
   font-size: var(--fs-sm); text-align: center; }
 @media (min-width: 761px) {
   #pk-overlay { align-items: center; }
-  .pk-card { max-height: 82vh; border-radius: var(--radius); }
+  .pk-card { max-height: 82vh;
+             max-height: calc(82dvh - env(safe-area-inset-top, 0px));
+             border-radius: var(--radius); }
 }
 
 /* Menu diagnostics — only rendered when something went wrong, so it is
@@ -3767,7 +3797,10 @@ body.pk-open { overflow: hidden; }
 
 /* The FULL profile page (Ethan's render, 2026-08-18) — the compact card
    upgrades to this when the profile API answers. */
-.ffd-card.ffd-full { max-width: 980px; max-height: 92vh; }
+/* The full profile — the tallest thing this overlay ever holds, and the
+   one Ethan photographed. */
+.ffd-card.ffd-full { max-width: 980px; max-height: 92vh;
+  max-height: calc(92dvh - env(safe-area-inset-top, 0px)); }
 .ffp-name { font-size: calc(var(--fs-lg) * 1.35); }
 .ffp-bios { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
 .ffp-bio { display: inline-flex; flex-direction: column; gap: 1px;
