@@ -2491,6 +2491,19 @@ select.calc-in { width: auto; font-weight: 600; }
 .ffrow-door:hover { background: var(--fill-subtle); }
 .ffrow-door:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 
+/* The verdict line in the player panel: START HIM / BENCH HIM. It is
+   the one sentence a manager opened the panel for, so it gets size and a
+   colour, and the reasoning under it stays agate. Colour is never the
+   whole message — the word is always there too, because a red chip and a
+   green chip are the same chip to a colour-blind reader. */
+.ffd-call { margin: 8px 2px 0; font-size: var(--fs-sm);
+            line-height: var(--lh-snug); color: var(--text-dim); }
+.ffd-verdict { display: inline-block; margin-right: 8px; font-weight: 800;
+               letter-spacing: .04em; font-size: var(--fs-xs);
+               color: var(--text); }
+.ffd-verdict.up { color: var(--good); }
+.ffd-verdict.down { color: var(--bad); }
+
 /* ---------------- The book report card (Scanner) ---------------- */
 .br-head { margin-top: 22px; }
 

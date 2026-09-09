@@ -22370,6 +22370,13 @@ const tierColor = (t) => TIER_COLORS[Math.min(t - 1, TIER_COLORS.length - 1)];
 async function renderLeagueDesk(leagueId, userId, platform, hostId) {
   const host = document.getElementById(hostId || "league-desk");
   if (!host) return;
+  /* CLEARED FIRST, on every path. `_ffDesk` is what the player panel
+     reads to say start or bench, so a desk left over from the league
+     that was selected a moment ago must never answer for this one — and
+     "this one" includes a league he has no roster in, a league that
+     failed to load, and no league at all. One clear here beats a clear
+     on each way out, which is how one of them gets missed. */
+  _ffDesk = null;
   if (!leagueId) { host.innerHTML = ""; return; }
   host.innerHTML = `<p class="loading">Reading your league\u2019s scoring and rosters\u2026</p>`;
   let d;
@@ -22390,6 +22397,13 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
       right league above.</div>`;
     return;
   }
+  /* KEPT, so the player panel can answer with it: the dossier's "this
+     week" block needs the league's OWN scoring and slots to say start or
+     bench, and re-fetching them per player would hit Sleeper once per
+     tap. Reached only past the `has_me` return above, so a payload
+     describing somebody else's team can never become a verdict about
+     his. */
+  _ffDesk = d;
   host.innerHTML = ffH2HHTML(d) + ffLineupHTML(d) + ffScoringGapsHTML(d)
     + ffTradesHTML(d) + ffStandingsHTML(d);
   host.querySelectorAll("[data-logtrade]").forEach((b) =>
@@ -23722,6 +23736,17 @@ function dkBindPlan() {
    them has the row — an empty panel would be a guess wearing a
    heading. */
 let _ffData = null;               // the fantasy payload, captured at render
+/* The last league desk that belonged to the reader — his league's
+   scoring and slots, his best lineup, and what to change against the one
+   he has in. Parked beside `_ffData` because it is the same kind of
+   state: a payload one renderer fetched that another renderer needs, and
+   both are declared above the line where `initialView()` runs, which is
+   the constraint that actually matters here (tests/test_app_loads.py).
+
+   Only ever set from a desk whose `has_me` is true. A desk for a league
+   the reader has no roster in describes somebody else's team, and
+   answering "start him" out of that would be worse than silence. */
+let _ffDesk = null;
 
 function _ffDossierInfo(name) {
   const d = _ffData || {};
@@ -23753,12 +23778,140 @@ function _ffDossierInfo(name) {
   return info;
 }
 
+/* ---------------- This week: his game, and start or bench -------------
+
+   Ethan, 2026-09-09: "it will show you weekly fantasy projections, and
+   trade targets and if you should bench them for that week."
+
+   Trade targets the panel already had. This is the other two, and they
+   are TWO DIFFERENT NUMBERS that must not be blended into one:
+
+     * THE DAY. His team's next game on the schedule we hold, scored the
+       way the start calendar scores every card — the board's baseline
+       times that game's environment (implied team points against the
+       league average). Week-specific, and it is a projection.
+     * THE CALL. Start or bench, out of the league desk: his own
+       league's scoring and slots applied to season-long per-game
+       averages. NOT week-specific, and saying otherwise would dress a
+       season average as a weekly one.
+
+   So each is labelled with what it is. Printing "14.2 this week" over a
+   season mean is the exact class of mistake `docs` keeps a page about.
+
+   Without a linked league there is no call to make — only the day — and
+   the block says so and points at the Account page rather than inventing
+   a start/sit against a roster it cannot see. */
+
+function _ffPlayerDay(d, name, team) {
+  if (!team) return null;
+  const days = _ffDayEnv(d);
+  const today = new Date().toISOString().slice(0, 10);
+  const date = Object.keys(days).sort().find((iso) =>
+    iso >= today && days[iso].some((e) => e.team === team));
+  if (!date) return null;
+  const { rows, out } = _ffDayBoard(d, date);
+  return {
+    date,
+    env: days[date].find((e) => e.team === team) || null,
+    x: rows.find((v) => v.r.player === name) || null,
+    ruled: out.find((v) => v.r.player === name) || null,
+  };
+}
+
+/* His seat in the league desk's answer, or why there is not one. */
+function _ffPlayerSeat(name) {
+  const L = ((_ffDesk || {}).lineup) || null;
+  if (!L) return { state: "no-league" };
+  const same = (a) => ffNorm(a) === ffNorm(name);
+  const seat = (L.starters || []).find((x) => x.player && same(x.player));
+  const out = (L.swaps || []).find((w) => w.out && same(w.out));
+  const into = (L.swaps || []).find((w) => same(w.in));
+  const benched = (L.bench || []).some((b) => b.player && same(b.player));
+  if (!seat && !benched) return { state: "not-yours" };
+  // Order matters: a man the desk wants IN is a start call even though
+  // he is on the bench right now, and a man it wants OUT is a bench call
+  // even though he is in the best-lineup table for some other seat.
+  if (into) return { state: "start", slot: into.slot, gain: into.gain,
+                     over: into.out };
+  if (out) return { state: "bench", slot: out.slot, gain: out.gain,
+                    behind: out.in };
+  if (seat && L.current) return { state: "keep", slot: seat.slot,
+                                  points: seat.points };
+  if (seat) return { state: "best", slot: seat.slot, points: seat.points };
+  return { state: "sit" };
+}
+
+function ffThisWeekHTML(info) {
+  const d = _ffData || {};
+  const day = _ffPlayerDay(d, info.name, info.team);
+  const seat = _ffPlayerSeat(info.name);
+  const bits = [];
+
+  if (day && day.ruled) {
+    bits.push(`<p class="ffd-note" style="color:${injTone(day.ruled.inj.status)}">
+      Ruled out for ${_ffCalSay(day.date)} — ${escapeHtml(day.ruled.inj.status)}${
+      day.ruled.inj.injury ? `, ${escapeHtml(day.ruled.inj.injury)}` : ""}.
+      He cannot be the play on any day he is not playing.</p>`);
+  } else if (day && day.x) {
+    const { r, e, mult, score } = day.x;
+    bits.push(`<div class="ffcal-p-proj">
+      <b class="ffcal-p-n">${score.toFixed(1)}</b>
+      <span class="k">projected for ${_ffCalSay(day.date)}
+        ${e.home ? "vs" : "at"} ${nflName(e.opp)} — baseline ${r.proj}
+        × ${mult.toFixed(2)} game environment</span></div>`);
+  } else if (day && day.env) {
+    bits.push(`<p class="ffd-note">${_ffCalSay(day.date)}
+      ${day.env.home ? "vs" : "at"} ${nflName(day.env.opp)}. He is not on the
+      draft board, so there is no projection to scale — the matchup is all
+      we have on him.</p>`);
+  } else {
+    bits.push(`<p class="ffd-note">No upcoming game for
+      ${escapeHtml(nflName(info.team) || info.team || "his team")} on the
+      schedule we hold.</p>`);
+  }
+
+  const call = {
+    "no-league": `<p class="ffd-note">No league linked, so this is a
+      projection and not a start/sit call. Link Sleeper on the Account page
+      and this line becomes your own league’s scoring and slots.</p>`,
+    "not-yours": `<p class="ffd-note">Not on your roster in the league you
+      have open.</p>`,
+    start: () => `<p class="ffd-call"><b class="ffd-verdict up">START HIM</b>
+      He is on your bench and the ${escapeHtml(seat.slot || "")} seat is his:
+      worth ${seat.gain > 0 ? "+" : ""}${seat.gain} projected points${
+      seat.over ? ` over ${escapeHtml(seat.over)}` : ""}.</p>`,
+    bench: () => `<p class="ffd-call"><b class="ffd-verdict down">BENCH HIM</b>
+      ${escapeHtml(seat.behind)} in the ${escapeHtml(seat.slot || "")} seat is
+      worth ${seat.gain > 0 ? "+" : ""}${seat.gain} projected points instead.</p>`,
+    keep: () => `<p class="ffd-call"><b class="ffd-verdict up">STARTING</b>
+      ${escapeHtml(seat.slot || "")}, ${seat.points} projected — and that is
+      right: he is in the best legal lineup on your roster.</p>`,
+    best: () => `<p class="ffd-call"><b class="ffd-verdict">IN THE BEST LINEUP</b>
+      ${escapeHtml(seat.slot || "")}, ${seat.points} projected. This league
+      link does not tell us who you have actually started, so that is where
+      he belongs rather than a change to make.</p>`,
+    sit: `<p class="ffd-call"><b class="ffd-verdict down">BENCH</b>
+      He is not in the best legal lineup on your roster this week.</p>`,
+  }[seat.state];
+  bits.push(typeof call === "function" ? call() : (call || ""));
+  if (seat.state !== "no-league" && seat.state !== "not-yours") {
+    bits.push(`<p class="ffd-note">The call is scored under your league’s own
+      scoring and slots, on season-long per-game averages — not on the day
+      projection above it. Two different numbers, both real.</p>`);
+  }
+  return `<div class="ffd-sect"><div class="ffd-h">This week</div>
+    ${bits.join("")}</div>`;
+}
+
 function ffDossierHTML(info) {
   const sect = (title, body) =>
     `<div class="ffd-sect"><div class="ffd-h">${title}</div>${body}</div>`;
   const stat = (k, v) => v == null || v === "" ? ""
     : `<span class="ffd-stat"><span class="k">${k}</span><b>${v}</b></span>`;
-  const parts = [];
+  // FIRST, because it is the question he opened the panel with. Draft
+  // value and camp battles are context; "do I start him on Sunday" is
+  // the decision.
+  const parts = [ffThisWeekHTML(info)];
   const k = info.kit;
   if (k && k.proj != null) {
     parts.push(sect("Draft value", `<div class="ffd-stats">
@@ -23809,7 +23962,7 @@ function ffDossierHTML(info) {
       → ${escapeHtml(info.move.to || "?")} — last season\u2019s volume came in a
       different offense.</p>`));
   }
-  if (!parts.length) {
+  if (parts.length === 1) {           // the week block, and nothing else
     parts.push(`<p class="ffd-note">No fantasy read on him this season —
       the boards are built from last season\u2019s volume and this camp.</p>`);
   }
