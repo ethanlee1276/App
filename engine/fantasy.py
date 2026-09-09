@@ -208,14 +208,48 @@ def usage_board(conn, season: int, limit: int = BOARD_LIMIT) -> list[dict]:
     return out[:limit]
 
 
+#: Positions this fit cannot describe, and therefore does not.
+#:
+#: The regression is `fp ≈ a*targets + b*carries` with NO intercept, so it
+#: can only price a position whose scoring IS targets and carries. A
+#: quarterback's is passing, and passing is not a regressor here.
+#:
+#: BOTH CALLERS ALREADY SAY SO, in their own words. `buy_sell_board`:
+#: "their scoring is passing-driven and both expectation models here only
+#: see targets and carries." `fantasy_draft._players`: "Passing production
+#: has no volume model here." Each skips quarterbacks before it looks a
+#: rate up — so the QB coefficients were computed for nobody.
+#:
+#: They were still PUBLISHED. `fantasy_build` writes this dict straight
+#: into fantasy.json, and on this box it said a QB target is worth 3.556
+#: PPR points and a QB carry 2.943. Those are not small numbers and they
+#: are not real ones: with passing out of the regressors and no intercept,
+#: the coefficients absorb whatever happens to correlate with a
+#: quarterback being on the field. No page read the field, so nothing
+#: displayed them and nothing caught them; `engine/feedaudit.py` did, by
+#: asking which published fields no page reads.
+#:
+#: Named rather than allow-listed on purpose. Every other position in the
+#: weekly data scores on touches — fullbacks included — and kickers and
+#: defenses never clear the targets-plus-carries floor the boards apply.
+#: The rule is "a position whose scoring these two regressors cannot see",
+#: and in NFL data that is the quarterback.
+NO_VOLUME_FIT = ("QB",)
+
+
 def league_rates(conn, season: int,
                  min_rows: int = 50) -> dict[str, tuple[float, float]]:
     """Per-position PPR value of one target and one carry, fit from our own
     season data (least squares on player-weeks). Self-derived — no magic
-    constants to go stale."""
+    constants to go stale.
+
+    A position in `NO_VOLUME_FIT` is absent rather than approximate.
+    """
     data = _weekly(conn, season)
     by_pos: dict[str, list[tuple[float, float, float]]] = {}
     for p in data["players"].values():
+        if (p["position"] or "").upper() in NO_VOLUME_FIT:
+            continue
         for wk, m in p["weeks"].items():
             by_pos.setdefault(p["position"], []).append(
                 (m.get("targets", 0.0), m.get("carries", 0.0),

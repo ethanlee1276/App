@@ -130,6 +130,63 @@ def test_usage_rows_built_from_weekly_stats():
     assert qb["pass_att"] == 38.0
 
 
+
+
+def _seed_a_quarterback(conn):
+    """Twelve weeks of the shape that breaks a touch fit: heavy scoring,
+    almost no touches. Two scrambles a week and 22 PPR points, because
+    the points came from throwing and throwing is not a regressor."""
+    rows = []
+    for wk in range(1, 13):
+        rows += [_row("Pocket Passer", "BUF", "QB", wk, "carries", 2),
+                 _row("Pocket Passer", "BUF", "QB", wk, "fp_ppr", 22.0)]
+    db.upsert_player_logs(conn, rows)
+
+
+def test_the_touch_fit_refuses_the_position_it_cannot_price():
+    """`fp ≈ a*targets + b*carries` with no intercept cannot see passing,
+    so for a quarterback the coefficients absorb whatever correlates with
+    him playing. Both boards already skip QBs before looking a rate up —
+    but `fantasy_build` publishes this dict into fantasy.json whole, so
+    the fabricated coefficients shipped to the browser with nothing
+    reading them. Absent beats approximate."""
+    conn = db.connect(":memory:")
+    _seed(conn)
+    _seed_a_quarterback(conn)
+    rates = league_rates(conn, 2025, min_rows=10)
+    assert "QB" not in rates, rates
+    # The real positions are untouched — this refuses one fit, it does
+    # not narrow the board.
+    assert "WR" in rates and "RB" in rates, rates
+
+
+def test_what_the_quarterback_fit_would_have_claimed():
+    """The stakes, stated as arithmetic rather than as an opinion.
+
+    Two carries a week and 22 points: a fit that sees only carries has to
+    put 11 PPR points on a carry, and the 3.0 clamp then files that as a
+    plausible-looking 3.0. That is the failure mode — not an obviously
+    broken number, a fabricated one of believable size.
+    """
+    from engine.fantasy import NO_VOLUME_FIT
+    conn = db.connect(":memory:")
+    _seed_a_quarterback(conn)
+    assert 22.0 / 2 > 3.0, "the seed no longer produces a clamped fit"
+    assert "QB" in NO_VOLUME_FIT
+    assert league_rates(conn, 2025, min_rows=10) == {}
+
+
+def test_both_boards_still_agree_with_the_fit_about_quarterbacks():
+    """The refusal is not a new rule, it is the rule both consumers
+    already followed moved to where the number is made. If either board
+    ever stops skipping QBs it will now get None instead of a fake
+    coefficient, which is the safe direction."""
+    import inspect
+    from engine import fantasy, fantasy_draft
+    for src in (inspect.getsource(fantasy.buy_sell_board),
+                inspect.getsource(fantasy_draft._players)):
+        assert '"QB"' in src, "a board stopped naming the position it skips"
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

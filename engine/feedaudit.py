@@ -54,6 +54,15 @@ INTERNAL = {
     "bucket_pts": "the calibration chart is drawn from `buckets`",
     "min_row_n": "the floor the CLV board applies before it will draw",
     "stats_season": "which season the offseason fallback pulled from",
+    # CLASSIFIED BY LOOKING, not by assuming. It is the touch fit the
+    # buy/sell and draft boards use to turn volume into expected points,
+    # and it is the basis behind the `expected_ppg` column those boards
+    # already show. It stays off the page because half of it is fit on
+    # volume that barely exists — a tight end takes ~0 carries a season,
+    # so the per-carry coefficient beside his per-target one is noise
+    # wearing two decimal places. A number like that needs its sample
+    # printed next to it or it should not be printed at all.
+    "rates": "the touch fit behind expected_ppg; per-position, build-side",
 }
 
 #: Maps the front end indexes by a variable rather than by name —
