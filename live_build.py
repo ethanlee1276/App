@@ -151,7 +151,25 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
     cost the scoreboard the card, so each game is guarded on its own and
     the failures are counted rather than raised.
     """
+    # WHY THIS LIST IS THE SIZE IT IS, ON EVERY GAME. Ethan's standing
+    # complaint about the site is failures that read as ordinary empty
+    # results, and the play rail was the cleanest example left: the page
+    # drew "No plays yet." whether the game had not kicked off, the feed
+    # was unreachable, or the game was past the fetch cap. Three
+    # different situations, one sentence, and only one of them is the
+    # reader's own patience.
+    #
+    # THE NOTE THIS FUNCTION RETURNS IS NOT THAT ANSWER. It is one line
+    # for the whole board in operator language ("plays: 3 of 4 live
+    # game(s), 1 feed(s) unreachable, 2 deep file(s)") — the right thing
+    # for a build log and the wrong thing to put in front of somebody
+    # deciding whether to bet a game. This is per GAME, and it is a state
+    # rather than a sentence so the page owns the wording.
+    for g in games:
+        g["plays_state"] = "idle"
     live = [g for g in games if g["live"]["state"] == "live"]
+    for g in live[PLAYS_MAX_GAMES:]:
+        g["plays_state"] = "capped"
     if not live:
         return "no games in progress — no plays fetched"
     from engine.mlb.sources.pbp import fetch_live_playbyplay, recent_plays
@@ -160,8 +178,10 @@ def attach_plays(games: list[dict], pbp_dir: Path | None = None) -> str:
         try:
             payload = fetch_live_playbyplay(g["game_pk"])
             g["plays"] = recent_plays(payload, PLAYS_PER_GAME)
+            g["plays_state"] = "ok"
             got += 1
         except Exception:                                    # noqa: BLE001
+            g["plays_state"] = "unreachable"
             failed += 1                # the card keeps its score
             continue
         # THE DEEP FILE, from the payload already in hand (Ethan,

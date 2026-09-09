@@ -231,13 +231,36 @@ def test_the_card_draws_the_plays():
     assert "${playsHTML(g)}" in src, "it is defined and never called"
 
 
-def test_a_card_with_no_plays_draws_nothing_at_all():
+def test_a_card_with_no_plays_never_draws_an_empty_strip():
     """Football and basketball cards go through the same renderer, and an
-    empty strip with a border on it is a visible bug on every one."""
+    empty strip with a border on it is a visible bug on every one.
+
+    RE-ANCHORED 2026-09-09, and the claim is unchanged. This was pinned
+    to the literal line `if (!plays.length) return "";`, so it failed the
+    day the empty rail learned to say WHY it is empty — a feed that could
+    not be reached now says so instead of drawing nothing, which is the
+    thing that made "no plays" and "no play feed" look identical.
+
+    What this defended is still defended, and is what is checked now: the
+    bordered container never appears with nothing in it, and a game that
+    has not started draws nothing at all rather than a line of furniture
+    on every card of a full slate.
+    """
     src = _app()
     i = src.index("function playsHTML(")
     body = src[i:src.index("\nfunction ", i + 1)]
-    assert 'if (!plays.length) return "";' in body, body[:300]
+    j = body.index("if (!plays.length)")
+    empty = body[j:body.index("const ord =", j)]
+    assert "lb-plays" not in empty, \
+        f"the bordered strip is drawn with no plays in it: {empty}"
+    assert 'return why ? ' in empty and ': "";' in empty, \
+        "an unrecognised state no longer falls through to drawing nothing"
+    # The states that stay silent are the ones where a sentence would be
+    # furniture: a scheduled game, and a payload built before the field
+    # existed. Both must be absent from the table.
+    table = src[src.index("const PLAYS_EMPTY = {"):]
+    table = table[:table.index("};")]
+    assert "idle:" not in table, "a scheduled game was given a sentence"
 
 
 def test_the_style_exists_so_the_strip_is_not_unstyled_text():

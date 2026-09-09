@@ -35673,9 +35673,44 @@ async function renderPbpPage() {
    theirs.
 
    Newest LAST, because that is how a play-by-play reads. */
+/* AN EMPTY RAIL SAYS WHY IT IS EMPTY.
+
+   Ethan's standing complaint about this site is failures that read as
+   ordinary empty results, and this was the cleanest one left: with no
+   plays, `playsHTML` returned "" and the live card drew NOTHING. Not a
+   sentence, not a shrug — the rail simply was not there, which reads as
+   "this game has no play-by-play" whether the game had not kicked off,
+   the feed was unreachable, or the game was past the fetch cap.
+
+   The builds have always known which of those it was; `attach_plays`
+   returns a note saying so and both builders print it TO THE LOG. That
+   note is the wrong thing to show a customer — it is one line for the
+   whole board in operator language ("plays: 3 of 4 live game(s), 1
+   feed(s) unreachable") — so the builds now mark each GAME with a state
+   and the wording lives here, where the reader is.
+
+   `ok` with no plays is the honest "nothing has happened yet", and
+   `idle` says nothing at all: the card already shows that the game has
+   not started, and a second sentence repeating it on every scheduled
+   game is noise on the busiest screen we have.
+
+   AN UNKNOWN STATE IS SILENT TOO. A droplet serving a `live_*.json`
+   built before this shipped has no `plays_state`, and inventing a
+   sentence for data that predates the field is how a fix becomes its own
+   bug report. */
+const PLAYS_EMPTY = {
+  unreachable: "We could not reach the play feed for this game. The score above is still live.",
+  capped: "Scores only for this one right now — the play feed takes the busiest games first.",
+  no_source: "No play-by-play source for this league yet.",
+  ok: "No plays yet.",
+};
+
 function playsHTML(g) {
   const plays = (g.plays || []).filter((p) => p && p.event);
-  if (!plays.length) return "";
+  if (!plays.length) {
+    const why = PLAYS_EMPTY[(g || {}).plays_state];
+    return why ? `<p class="rail-quiet lb-why">${escapeHtml(why)}</p>` : "";
+  }
   /* FOOTBALL ROWS, from the drives block the droplet probe saw on a live
      college game (2026-09-05). Composed from the numbers — period,
      clock, down, distance, yards gained, ESPN's type label — and never
