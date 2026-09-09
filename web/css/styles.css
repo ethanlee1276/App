@@ -1900,6 +1900,48 @@ main { view-transition-name: page; }
 }
 .card.longshot .metrics { grid-template-columns: repeat(4, 1fr); }
 
+/* THE LIKELIHOOD BOARD GETS THE SAME LANGUAGE THE EDGE BOARD SPEAKS.
+   Ethan, 2026-09-09: "with the top picks, we don't really have any of
+   the background of that highlighted … the edge bets, we have them
+   highlighted in gold, and they're green, and they show emojis and all
+   this, and they look really good, and it looks like those are the
+   better bets."
+
+   Two things were wrong and only one of them was visible. The card never
+   set `--grade-color`, so `.card::before` painted its 4px stripe in
+   `--text-faint` — every row on the board wearing the colour the system
+   uses for the least important thing on a page. And the percentage pill
+   was hardcoded `background: var(--good)` inline on EVERY row, so a 48%
+   read and a 71% read were the same shade of green: a highlight that
+   highlights everything, which is the same as none.
+
+   `--brand-ink` on both filled tiers rather than a hex. It is the token
+   that means "text ON the accent" and it flips with the theme, which the
+   inline `#08130c` could not — that hex was near-black on green in the
+   dark theme and near-black on DARK green in the light one. */
+.card.longshot.lk-top { --grade-color: var(--brand); }
+.card.longshot.lk-mid { --grade-color: var(--good); }
+/* lk-low sets NOTHING on purpose, and the absence is the design.
+   `.card::before` already falls back to the faintest token, so a rule
+   here would render identically while spending one of the eight uses
+   `test_contrast` rations to stop text being demoted — and that test
+   counts the raw file, so even naming the token in this sentence would
+   spend one. Below the bar IS the unstyled state. */
+.card.longshot.lk-top .grade.lk-pct {
+  background: var(--brand); border-color: var(--brand);
+  color: var(--brand-ink);
+}
+.card.longshot.lk-mid .grade.lk-pct {
+  background: var(--good); border-color: var(--good);
+  color: var(--brand-ink);
+}
+/* A row shown only because nothing cleared the bar does not get a fill.
+   It carries a "below the bar" chip already; colouring it like a pick
+   would argue with its own label. */
+.card.longshot.lk-low .grade.lk-pct {
+  background: none; border-color: var(--border); color: var(--text-dim);
+}
+
 
 /* ============================================================
    Sharp & minimal overrides — flat surfaces, hairline borders,

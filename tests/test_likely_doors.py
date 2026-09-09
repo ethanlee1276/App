@@ -32,7 +32,11 @@ def _fn(js, name):
 def test_the_most_likely_card_is_a_door():
     js = _js()
     card = _fn(js, "likelyCard")
-    assert '<article class="card longshot"${likelyDoor(r)}>' in card
+    # The class list carries a probability tier since 2026-09-09; the
+    # claim here is the DOOR, so match around the classes rather than
+    # re-pinning them and failing on the next visual change.
+    assert re.search(r'<article class="card longshot[^"]*"\$\{likelyDoor\(r\)\}>',
+                     card), "the card is no longer its own door"
     door = _fn(js, "likelyDoor")
     assert "data-prop=" in door and "data-player-page=" in door
     assert "propOpenable(r) && findProp(id)" in door

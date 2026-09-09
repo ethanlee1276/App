@@ -6330,6 +6330,34 @@ function priceAgeChip(r) {
     r.priced_from ? ` (${escapeHtml(r.priced_from)} pull)` : ""}">· priced ${ago}</span>`;
 }
 
+function likelyTier(r) {
+  /* WHICH OF THE THREE THINGS THIS ROW IS. Ethan, 2026-09-09: "with the
+     top picks, we don't really have any of the background of that
+     highlighted, so it's hard to show or tell that, like, these are good
+     picks because the edge bets, we have them highlighted in gold, and
+     they're green … it looks like those are the better bets."
+
+     He is right, and the cause is one line missing rather than a card
+     that was never styled. `.card::before` paints a 4px stripe down every
+     card from `--grade-color`; edge cards set it, `.card.longshot` never
+     did, so every likelihood row fell through to the default —
+     `--text-faint`, the faintest token in the system. The board the
+     sidebar tells people to START HERE on was painting each of its rows
+     in the colour reserved for the least important thing on screen.
+
+     THE TIERS ARE THE ENGINE'S OWN DISTINCTIONS, not thresholds invented
+     to make a gradient. `reserve` is likely.RESERVE_MIN_PROB — the row is
+     shown only because nothing cleared the bar, and it is already
+     labelled "below the bar" on the card itself. `bettable` false is a
+     market we can rank but not price. What is left is a row that cleared
+     MIN_PROB, which is 0.55, which Ethan set himself. Picking a prettier
+     number here — 0.65 for a gold tier, say — would be inventing a claim
+     the measurements do not make and painting it the most confident
+     colour we own. */
+  if ((r || {}).reserve) return "lk-low";
+  return (r || {}).bettable ? "lk-top" : "lk-mid";
+}
+
 function likelyCard(r) {
   const pct = (x) => `${(Number(x || 0) * 100).toFixed(0)}%`;
   const spark = likelySpark(r);
@@ -6411,7 +6439,7 @@ function likelyCard(r) {
   const who = game ? (r.pick_label || r.player) : r.player;
   const sub = game ? escapeHtml(r.matchup || "")
     : `${teamName(r.team)}${r.opponent ? ` vs ${teamName(r.opponent)}` : ""}`;
-  return `<article class="card longshot"${likelyDoor(r)}>
+  return `<article class="card longshot ${likelyTier(r)}"${likelyDoor(r)}>
     <div class="card-head">
       <div class="card-id">${mark}
         <div>
@@ -6422,8 +6450,7 @@ function likelyCard(r) {
             <span class="book">· ${escapeHtml(r.book)}</span>${priceAgeChip(r)}</div>
         </div>
       </div>
-      <span class="grade" style="background:var(--good);color:#08130c">
-        ${pct(r.model_prob)}</span>
+      <span class="grade lk-pct">${pct(r.model_prob)}</span>
     </div>
     <div class="metrics">
       <div class="metric hero"><div class="k">${r.prob_source === "market" ? "Market" : "Model"}</div>
