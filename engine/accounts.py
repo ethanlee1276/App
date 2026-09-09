@@ -60,6 +60,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -187,9 +188,10 @@ def hash_password(password: str, salt: bytes | None = None) -> str:
     recipe.
     """
     salt = salt or secrets.token_bytes(16)
-    dk = hashlib.scrypt(str(password).encode("utf-8"), salt=salt,
-                        n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P,
-                        dklen=SCRYPT_DKLEN, maxmem=SCRYPT_MAXMEM)
+    with _AUTH_SLOTS:                       # 16MB a call — see AUTH_CONCURRENCY
+        dk = hashlib.scrypt(str(password).encode("utf-8"), salt=salt,
+                            n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P,
+                            dklen=SCRYPT_DKLEN, maxmem=SCRYPT_MAXMEM)
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${salt.hex()}${dk.hex()}"
 
 
@@ -203,13 +205,50 @@ def verify_password(stored: str, password: str) -> bool:
         algo, n, r, p, salt_hex, want = str(stored or "").split("$")
         if algo != "scrypt":
             return False
-        dk = hashlib.scrypt(str(password).encode("utf-8"),
-                            salt=bytes.fromhex(salt_hex),
-                            n=int(n), r=int(r), p=int(p),
-                            dklen=len(want) // 2, maxmem=SCRYPT_MAXMEM)
+        with _AUTH_SLOTS:                   # 16MB a call — see AUTH_CONCURRENCY
+            dk = hashlib.scrypt(str(password).encode("utf-8"),
+                                salt=bytes.fromhex(salt_hex),
+                                n=int(n), r=int(r), p=int(p),
+                                dklen=len(want) // 2, maxmem=SCRYPT_MAXMEM)
     except (ValueError, TypeError, MemoryError):
         return False
     return hmac.compare_digest(dk.hex(), want)
+
+
+#: HOW MANY PASSWORD HASHES MAY BE IN FLIGHT AT ONCE.
+#:
+#: scrypt is memory-hard on purpose — that is the whole reason it was
+#: chosen over PBKDF2 — and `128 * N * r` here is 16MB PER CALL. The
+#: server's own ceiling (`MAX_INFLIGHT`, 64) bounds THREADS, and the
+#: comment justifying 64 says "each is a sqlite read measured in
+#: milliseconds". That is true of every route except these two, and
+#: these two are the ones a burst lands on.
+#:
+#: Measured 2026-09-09, threads all calling `hash_password`:
+#:
+#:    1 concurrent   0.06s   peak RSS  51 MB
+#:    8 concurrent   0.24s   peak RSS 163 MB
+#:   32 concurrent   0.79s   peak RSS 516 MB
+#:   64 concurrent   1.67s   peak RSS 963 MB
+#:
+#: 963MB is the whole droplet, and what dies is the process — every
+#: signed-in session with it. The per-IP limiter upstream caps the RATE
+#: (20/min) and says nothing about CONCURRENCY: twenty requests from one
+#: address may all be in flight in the same second, and several addresses
+#: multiply it.
+#:
+#: 8 is chosen off that table: 163MB is affordable, and at 57ms a hash it
+#: still clears ~140 sign-ins a second, which is orders of magnitude past
+#: anything this site will see. Over the limit, callers WAIT rather than
+#: fail — a queued sign-in that takes an extra 200ms is invisible, and a
+#: 503 on the sign-up form is not.
+#:
+#: Deliberately here and not in server.py: this covers every caller —
+#: sign-up, sign-in, the change-password path, and the dummy verify that
+#: equalizes timing for unknown emails — rather than the routes somebody
+#: remembered to wrap.
+AUTH_CONCURRENCY = max(1, int(os.environ.get("QB_AUTH_CONCURRENCY", "") or 8))
+_AUTH_SLOTS = threading.Semaphore(AUTH_CONCURRENCY)
 
 
 #: Burned when the email does not exist, so a login against an unknown

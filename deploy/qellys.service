@@ -129,6 +129,47 @@ OOMPolicy=continue
 #   sudo systemctl daemon-reload && sudo systemctl restart qellys
 Environment=TZ=America/New_York
 
+# ONE MALLOC ARENA PER TWO CORES, NOT PER THREAD.
+#
+# glibc gives each thread its own arena and does not hand a freed block
+# back across arenas. `hashlib.scrypt` asks for 16MB a call — memory-hard
+# is the point of it — so a burst of sign-ins leaves one retained 16MB
+# block per thread that ever hashed, and RSS follows the number of
+# CALLERS rather than the number running at once.
+#
+# Measured 2026-09-09 on this code, threads all hashing a password:
+#
+#                        default arenas    MALLOC_ARENA_MAX=2
+#     8 concurrent           147 MB              147 MB
+#    32 concurrent           436 MB              180 MB
+#    64 concurrent           616 MB              219 MB
+#   128 concurrent           841 MB              229 MB
+#
+# (Those are WITH the in-process ceiling that landed in the same commit;
+# without it 64 concurrent peaked at 963 MB.) Flat instead of linear, and
+# slightly FASTER — 0.83s against 1.17s at 64 — because fewer arenas is
+# better locality, not worse.
+#
+# It matters here specifically because of what MemoryMax does when it is
+# approached rather than hit: 2026-08-17, the cgroup sat at 826M of 900M
+# mid-build and the kernel reclaimed instead of killing — three hours of
+# thrash, no OOM line, no traceback. 600MB of transient allocator
+# retention is enough to walk a busy evening into that state, and this is
+# the cheapest way to not find out.
+#
+# The whole process inherits it, builds included. That is intended: the
+# refresh loop holds _BUILD_LOCK so only one build runs at a time, so
+# there is no arena contention to lose, and a lower floor is exactly what
+# a box with a 1600M cap and an OOM history wants.
+#
+# NOT PICKED UP BY A GIT PULL. The auto-updater restarts this unit; it
+# does not re-copy it. After this change reaches the box:
+#   sudo cp deploy/qellys.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl restart qellys
+# Confirm with: tr '\0' '\n' < /proc/$(systemctl show -p MainPID
+#   --value qellys)/environ | grep MALLOC
+Environment=MALLOC_ARENA_MAX=2
+
 # Secrets come from a file root owns and this user can only read.
 # Never put them on the ExecStart line: /proc makes command lines
 # readable by every account on the box.
