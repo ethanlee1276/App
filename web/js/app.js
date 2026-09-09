@@ -1748,23 +1748,66 @@ const REFERENCE_VIEWS = ["why", "about", "methodology"];
    which makes the signal self-correcting without any reset discipline. */
 const _wire = new Map();
 
+/* ONE RETRY, BECAUSE EVERY DEPLOY IS A HOLE IN THE SITE.
+
+   Ethan, 2026-09-09, on NFL opening day: "the site crashed. It won't
+   load anything and won't show logos", then a minute later "it loads on
+   my phone but my buddy's won't."
+
+   Two phones disagreeing is not a crash — it is a WINDOW. The
+   auto-updater pulls every five minutes and `systemctl restart`s the
+   service on any change, which is a hard stop and start: for the second
+   or two it takes to come back, every connection is refused. Anybody who
+   opens the page inside that window gets the shell from the service
+   worker cache — which is why it looks like a working site — and a
+   thrown fetch on all ten boards, which is the banner. I pushed eight
+   times that afternoon. Eight windows, on the day the new subscribers
+   arrived.
+
+   The deploy is not going to stop restarting the service, and the fix is
+   not to deploy less. One retry, a beat later, rides straight over it.
+
+   502/503/504 COUNT TOO, and that case is worse than a throw. Caddy
+   stays up while the app is down, so it answers on the app's behalf —
+   `_wire` records "answered", the banner stays silent, and the page
+   quietly draws an empty board as though the model had nothing to say.
+   A gateway error is the wire failing with better manners.
+
+   Only GETs come through here (checked: no call site sets a method), so
+   a retry cannot repeat a write. */
+const BOARD_RETRY_MS = 1200;
+const BOARD_RETRY_CODES = new Set([502, 503, 504]);
+
 async function boardFetch(url, opts) {
   const key = String(url).split("?")[0];
-  try {
-    const res = await fetch(url, opts);
-    _wire.set(key, true);          // answered, even if 404 — see above
-    return res;
-  } catch (e) {
-    const first = !_wire.has(key) || _wire.get(key);
-    _wire.set(key, false);
-    // A LAZY VIEW'S FETCH FAILS LONG AFTER THE LOAD CYCLE DREW THE BAR.
-    // Without this the banner only ever appears if the very first pull
-    // failed, which is the least likely case — most boards are fetched
-    // when their view is opened. Re-drawn on the first failure for a
-    // given URL only, so a flapping feed cannot spin the renderer.
-    if (first) { try { refreshStaleBar(); } catch (e2) {} }
-    throw e;
+  const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+  let thrown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await nap(BOARD_RETRY_MS);
+    try {
+      const res = await fetch(url, opts);
+      if (BOARD_RETRY_CODES.has(res.status) && attempt === 0) continue;
+      // A 404 still counts as answered — see above. A gateway error on
+      // the LAST attempt does not: the app never saw the request.
+      if (BOARD_RETRY_CODES.has(res.status)) {
+        thrown = new Error(`gateway ${res.status}`);
+        break;
+      }
+      _wire.set(key, true);
+      return res;
+    } catch (e) {
+      thrown = e;
+    }
   }
+  const first = !_wire.has(key) || _wire.get(key);
+  _wire.set(key, false);
+  // A LAZY VIEW'S FETCH FAILS LONG AFTER THE LOAD CYCLE DREW THE BAR.
+  // Without this the banner only ever appears if the very first pull
+  // failed, which is the least likely case — most boards are fetched
+  // when their view is opened. Re-drawn on the first failure for a
+  // given URL only, so a flapping feed cannot spin the renderer.
+  if (first) { try { refreshStaleBar(); } catch (e2) {} }
+  throw thrown;
 }
 
 /* ---- A WHOLLY-PAID BOARD ------------------------------------------------
