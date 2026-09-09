@@ -24326,8 +24326,27 @@ document.addEventListener("keydown", (e) => {
    baseline × (implied ÷ league-average implied) — shown as that
    arithmetic, never as an oracle. A man ruled out or on IR cannot be
    the best play on any day, so the out-tier is excluded by name. */
-let _ffCalSel = null;
-let _ffCalPick = null;    // player loaded in the right-hand read panel
+/* TWO CALENDARS NOW, so the selection cannot be one variable.
+
+   Ethan, 2026-09-09: "we'll still show the calendar that we already
+   show. I will show a different one with that person fantasy players
+   they have." The second one is the same component filtered to his
+   synced roster — which means two of them are on screen at once, and a
+   single `_ffCalSel` would have them fighting over which day is open:
+   tap Thursday on your roster's calendar and the league-wide one jumps
+   to Thursday as well, or worse, re-renders showing your roster.
+
+   So the three pieces of selection state are per NAMESPACE, and the
+   options each instance was drawn with are kept beside them so a
+   re-render after a tap can rebuild the same calendar rather than a
+   default one. */
+const FFCAL_STATE = {
+  days:   { sel: null, pick: null, month: null },
+  roster: { sel: null, pick: null, month: null },
+};
+const FFCAL_OPTS = {};
+
+function _ffCalS(ns) { return FFCAL_STATE[ns] || FFCAL_STATE.days; }
 
 function _ffImpliedAvg(d) {
   const vals = [];
@@ -24362,13 +24381,16 @@ function _ffDayEnv(d) {
 /* The day's board: every kit player whose team plays that date, scored
    and sorted. Ruled-out players are RETURNED separately so the panel
    can say who was excluded instead of silently thinning. */
-function _ffDayBoard(d, date) {
+function _ffDayBoard(d, date, only) {
   const env = _ffDayEnv(d)[date] || [];
   const byTeam = {};
   env.forEach((e) => { byTeam[e.team] = e; });
   const avg = _ffImpliedAvg(d);
   const rows = [], out = [];
   for (const r of ((d.draft_kit || {}).board || [])) {
+    // `only` is a Set of ffNorm'd names — his roster. Absent on the
+    // league-wide calendar, which is every player the board carries.
+    if (only && !only.has(ffNorm(r.player))) continue;
     const e = byTeam[r.team];
     if (!e) continue;
     const inj = injFind("nfl", r.player);
@@ -24389,7 +24411,6 @@ const FFCAL_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 const FFCAL_MON_FULL = ["January", "February", "March", "April", "May",
                         "June", "July", "August", "September", "October",
                         "November", "December"];
-let _ffCalMonth = null;   // "YYYY-MM" being shown
 
 function _ffCalSay(date) {
   const [y, m, dd] = date.split("-").map(Number);
@@ -24400,11 +24421,11 @@ function _ffCalSay(date) {
 /* Per-date slate quality, from the same score every card prints.
    "Elite" is the top quarter of game days BY that number — the cut is
    computed from the season itself, never hand-picked. */
-function _ffCalQual(d) {
+function _ffCalQual(d, only) {
   const days = _ffDayEnv(d);
   const out = {};
   for (const date of Object.keys(days)) {
-    const { rows } = _ffDayBoard(d, date);
+    const { rows } = _ffDayBoard(d, date, only);
     const top = rows.slice(0, 5);
     out[date] = { games: days[date].length / 2, best: top[0] || null,
                   top5: top.length
@@ -24418,7 +24439,14 @@ function _ffCalQual(d) {
   return out;
 }
 
-function ffCalendarHTML(d) {
+function ffCalendarHTML(d, opts) {
+  /* `opts` = {ns, only, title, sub, empty}. Omitted entirely by the
+     league-wide caller, which is the default and stays the default. */
+  const o = opts || {};
+  const ns = o.ns || "days";
+  const only = o.only || null;
+  const st = _ffCalS(ns);
+  FFCAL_OPTS[ns] = o;
   const days = _ffDayEnv(d);
   const dates = Object.keys(days).sort();
   if (!dates.length) {
@@ -24427,10 +24455,10 @@ function ffCalendarHTML(d) {
       <div class="es-sub">The calendar builds from the league schedule the fantasy
         build reads — it fills on the next build once the schedule cache exists.</div></div>`;
   }
-  if (!_ffCalSel || !days[_ffCalSel]) _ffCalSel = dates[0];
-  if (!_ffCalMonth) _ffCalMonth = _ffCalSel.slice(0, 7);
-  const qual = _ffCalQual(d);
-  const [yy, mm] = _ffCalMonth.split("-").map(Number);
+  if (!st.sel || !days[st.sel]) st.sel = dates[0];
+  if (!st.month) st.month = st.sel.slice(0, 7);
+  const qual = _ffCalQual(d, only);
+  const [yy, mm] = st.month.split("-").map(Number);
   // Weeks covering the shown month: the Sunday on/before the 1st,
   // through the Saturday after the last day. Neighbour-month days stay
   // visible but dimmed, the way every calendar reads.
@@ -24447,7 +24475,7 @@ function ffCalendarHTML(d) {
     const inMonth = dt.getUTCMonth() === mm - 1;
     const q = days[iso] ? qual[iso] : null;
     cells.push(`<div class="ffcal-cell${q ? "" : " ffcal-empty"}${
-        inMonth ? "" : " ffcal-other"}${iso === _ffCalSel ? " sel" : ""}${
+        inMonth ? "" : " ffcal-other"}${iso === st.sel ? " sel" : ""}${
         q && q.tier === "elite" ? " ffcal-elite" : ""}"${
         q ? ` data-calday="${iso}" role="button" tabindex="0"` : ""}${
         q && q.best ? ` title="${escapeAttr(q.best.r.player)} \u2014 ${
@@ -24460,8 +24488,8 @@ function ffCalendarHTML(d) {
         <span class="ffcal-pts">${q.best.score.toFixed(1)}</span></span>` : ""}
     </div>`);
   }
-  const sel = qual[_ffCalSel] || {};
-  const board = _ffDayBoard(d, _ffCalSel);
+  const sel = qual[st.sel] || {};
+  const board = _ffDayBoard(d, st.sel, only);
   const outN = board.out.length;
   // The render's per-sport count chips, translated to the one league
   // this calendar actually covers: playable positions on the day.
@@ -24474,10 +24502,11 @@ function ffCalendarHTML(d) {
     .filter((p) => posN[p])
     .map((p) => `<span class="chip">${escapeHtml(p)} ${posN[p]}</span>`).join("");
   return `
-    <div class="section-title">The start calendar
-      <span class="sub">— each game day wears its best play: the board’s projection
+    <div class="ffcal-root" data-ffcal="${escapeAttr(ns)}">
+    <div class="section-title">${escapeHtml(o.title || "The start calendar")}
+      <span class="sub">— ${o.sub || `each game day wears its best play: the board’s projection
       scaled by that day’s game environment. Tap a day for the top five and the
-      arithmetic behind each.</span></div>
+      arithmetic behind each.`}</span></div>
     <div class="ffcal-legend">
       <span><span class="ffcal-mark elite"></span> Elite slate — a top-quarter
         day by projected points</span>
@@ -24495,7 +24524,7 @@ function ffCalendarHTML(d) {
     <div class="ffcal-head">${FFCAL_DOW.map((w) => `<span>${w}</span>`).join("")}</div>
     <div class="ffcal-grid" id="ffcal-grid">${cells.join("")}</div>
     <div class="card ffcal-summary">
-      <div class="ffcal-sumtop"><b>${_ffCalSay(_ffCalSel)}</b>
+      <div class="ffcal-sumtop"><b>${_ffCalSay(st.sel)}</b>
       ${sel.tier === "elite" ? `<span class="chip up">ELITE SLATE</span>` : ""}</div>
       <span class="ffcal-sumsub">${sel.games || 0} game${sel.games === 1 ? "" : "s"}
         · top five average ${(sel.top5 || 0).toFixed(1)} projected${outN
@@ -24503,16 +24532,18 @@ function ffCalendarHTML(d) {
       ${posChips ? `<div class="ffcal-poschips">${posChips}</div>` : ""}
     </div>
     </div>
-    <div class="ffcal-mid" id="ffcal-day">${ffCalDayHTML(d, _ffCalSel)}</div>
-    <aside class="card ffcal-panel">${ffCalPanelHTML(d, _ffCalSel)}</aside>
+    <div class="ffcal-mid">${ffCalDayHTML(d, st.sel, ns, only)}</div>
+    <aside class="card ffcal-panel">${ffCalPanelHTML(d, st.sel, ns, only)}</aside>
+    </div>
     </div>`;
 }
 
-function ffCalDayHTML(d, date) {
-  const { rows, out } = _ffDayBoard(d, date);
+function ffCalDayHTML(d, date, ns, only) {
+  const st = _ffCalS(ns || "days");
+  const { rows, out } = _ffDayBoard(d, date, only);
   if (!rows.length) return "";
-  const pickName = rows.some((x) => x.r.player === _ffCalPick)
-    ? _ffCalPick : rows[0].r.player;
+  const pickName = rows.some((x) => x.r.player === st.pick)
+    ? st.pick : rows[0].r.player;
   // The render's middle column: compact ranked cards. The analysis they
   // used to carry inline now loads into the right-hand panel on tap.
   const card = (x, i) => {
@@ -24545,13 +24576,14 @@ function ffCalDayHTML(d, date) {
    baseline, the environment multiplier with its denominator, the
    script, the usage share — plus the two-team matchup tiles built from
    the implied points the environment term already runs on. */
-function ffCalPanelHTML(d, date) {
-  const { rows } = _ffDayBoard(d, date);
+function ffCalPanelHTML(d, date, ns, only) {
+  const st = _ffCalS(ns || "days");
+  const { rows } = _ffDayBoard(d, date, only);
   if (!rows.length) {
     return `<p class="ffd-note">Tap a game day on the calendar and this
       panel carries the read on its best play.</p>`;
   }
-  const x = rows.find((v) => v.r.player === _ffCalPick) || rows[0];
+  const x = rows.find((v) => v.r.player === st.pick) || rows[0];
   const { r, e, inj, mult, score } = x;
   const avg = _ffImpliedAvg(d);
   const u = ((d.usage || []).find((w) => w.player === r.player)) || null;
@@ -24629,28 +24661,87 @@ document.addEventListener("click", (e) => {
   const cell = !nav && e.target && e.target.closest("[data-calday]");
   const pick = !nav && !cell && e.target && e.target.closest("[data-calpick]");
   if (!nav && !cell && !pick) return;
+  /* WHICH CALENDAR WAS TAPPED. Two are on the page — the league-wide
+     one and the reader's own roster — so the target's own root says
+     whose selection to move and which options to redraw with. Without
+     this, tapping Thursday on one would move the other. */
+  const root = (nav || cell || pick).closest("[data-ffcal]");
+  const ns = (root && root.dataset.ffcal) || "days";
+  const st = _ffCalS(ns);
   if (nav) {
     if (nav.dataset.calnav === "first") {
-      _ffCalMonth = null;             // recomputed from the first slate
-      _ffCalSel = null;
+      st.month = null;                // recomputed from the first slate
+      st.sel = null;
     } else {
-      const [y, m] = (_ffCalMonth || "").split("-").map(Number);
+      const [y, m] = (st.month || "").split("-").map(Number);
       if (!y) return;
       const dt = new Date(Date.UTC(y, m - 1 + Number(nav.dataset.calnav), 1));
-      _ffCalMonth = dt.toISOString().slice(0, 7);
+      st.month = dt.toISOString().slice(0, 7);
     }
-    _ffCalPick = null;                // a new day gets its own best play
+    st.pick = null;                   // a new day gets its own best play
   } else if (cell) {
-    _ffCalSel = cell.dataset.calday;
-    _ffCalPick = null;
+    st.sel = cell.dataset.calday;
+    st.pick = null;
   } else {
-    _ffCalPick = pick.dataset.calpick;
+    st.pick = pick.dataset.calpick;
   }
-  // Whole-tab re-render: the grid marks, the summary strip and the day
-  // panel all move together, and the join is cheap.
-  const zone = document.querySelector('[data-subgroup="days"]');
-  if (zone) zone.innerHTML = ffCalendarHTML(_ffData);
+  // Re-render THAT calendar in place: the grid marks, the summary strip
+  // and the day panel all move together, and the join is cheap.
+  // `outerHTML` rather than a host lookup, so the instance replaces
+  // itself wherever on the page it happens to be drawn.
+  if (root) root.outerHTML = ffCalendarHTML(_ffData, FFCAL_OPTS[ns] || {});
 });
+
+/* ---------------- The same calendar, but only your players ----------
+
+   Ethan, 2026-09-09: "we can show the calendar like we use for the
+   fantasy projections for how players were due on that certain day, but
+   what we need to do is make that calendar specific to a players league
+   if they have their league sync, so we'll still show the calendar that
+   we already show. I will show a different one with that person fantasy
+   players they have."
+
+   Same component, same arithmetic, one filter. Nothing here re-derives a
+   projection — the difference between the two calendars is the SET of
+   players each is allowed to rank, which is what makes them comparable:
+   the day the league calls elite and the day YOUR roster calls elite are
+   the same number computed over different rosters, and seeing them
+   disagree is the point.
+
+   THE ONE THING IT MUST SAY OUT LOUD. The board carries 150 players and
+   a roster is fifteen, most of whom are on it and some of whom are not —
+   a handcuffed back, a rookie tight end, a defence. Silently ranking six
+   of his eleven and calling it his calendar would be the worst kind of
+   quiet, so the count is on the strip and the missing men are named. */
+function ffRosterCalendarHTML(d, myRows) {
+  const board = ((d.draft_kit || {}).board || []);
+  const kit = new Set(board.map((r) => ffNorm(r.player)));
+  const mine = (myRows || []).filter((r) => r.name);
+  const covered = mine.filter((r) => kit.has(ffNorm(r.name)));
+  const absent = mine.filter((r) => !kit.has(ffNorm(r.name)));
+  if (!mine.length) return "";
+  if (!covered.length) {
+    return `<div class="empty-slate"><div class="es-icon">${icon("calendar", 30)}</div>
+      <div class="es-title">None of your players are on the projection board</div>
+      <div class="es-sub">The calendar ranks a day by scaling a player’s
+        projection with that game’s environment, and the board is built from
+        last season’s volume — so anybody who has not played, or who plays a
+        position it does not project, has nothing to scale. Yours:
+        ${escapeHtml(mine.map((r) => r.name).join(", "))}.</div></div>`;
+  }
+  const sub = `the same arithmetic as the calendar above, over
+    ${plural(covered.length, "player")} on your roster${absent.length
+      ? ` — ${plural(absent.length, "other")} (${escapeHtml(
+          absent.slice(0, 4).map((r) => r.name).join(", "))}${
+          absent.length > 4 ? ", …" : ""}) ${
+          pluralWord(absent.length, "is", "are")} not on the projection board,
+          so there is nothing to scale for ${
+          pluralWord(absent.length, "him", "them")}` : ""}.`;
+  return ffCalendarHTML(d, {
+    ns: "roster", only: new Set(covered.map((r) => ffNorm(r.name))),
+    title: "Your start calendar", sub,
+  });
+}
 
 /* ---------------- Mock draft simulator ----------------
    Ethan, 2026-08-18: "Add a mock draft simulator." A snake draft against
@@ -27862,7 +27953,8 @@ function renderSleeperPanel(d, ctx) {
       `${panelEmpty("Every notable riser is already rostered here.")}`}</div>
     <p style="color:var(--text-mute);font-size:var(--fs-sm);margin:10px 2px 8px">Boards use PPR scoring;
       custom-scoring recompute lands with the in-season update.</p>
-  </div>`;
+  </div>
+  ${ffRosterCalendarHTML(d, myRows)}`;
 
   const sel = document.getElementById("sleeper-league");
   if (sel) sel.addEventListener("change", () => {

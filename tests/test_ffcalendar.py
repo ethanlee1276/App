@@ -84,7 +84,14 @@ def test_the_day_math_runs_under_node():
     node = shutil.which("node")
     if not node:
         return
-    i = APP.index("let _ffCalSel = null;")
+    # RE-ANCHORED 2026-09-09. The three module-level selection variables
+    # this used to start at (`let _ffCalSel = null;`) became a per-
+    # namespace map when a second calendar — the reader's own roster —
+    # joined the page. The needle is asserted before `.index` so a future
+    # rename fails with a sentence instead of a bare ValueError.
+    head = "const FFCAL_STATE = {"
+    assert head in APP, "the calendar's selection state was renamed again"
+    i = APP.index(head)
     fns = APP[i:APP.index("const FFCAL_DOW", i)]
     check = """
 const injFind = (sport, name) => name === "Hurt Guy"
