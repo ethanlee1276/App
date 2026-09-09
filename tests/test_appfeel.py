@@ -63,9 +63,43 @@ def test_the_strip_has_a_placeholder_shaped_like_what_replaces_it():
     assert "skeleton-game" in body
     assert "!strip.children.length" in body, \
         "it would flash placeholders over cards that are already up"
-    i = CSS.index(".skeleton-game {")
+    i = CSS.index("\n.skeleton-game {")   # the base rule, not a scoped one
     rule = CSS[i:CSS.index("}", i)]
-    assert "272px" in rule, "the strip's card is 272 wide; this is not"
+    assert "height: 354px" in rule, \
+        "the strip's card is 354 tall; a shorter placeholder is a jump"
+
+
+def _strip_width_rules():
+    """Every CSS rule that gives the STRIP's card a width.
+
+    Scoped to the strip on purpose — `.game-card` unqualified also
+    dresses the grid view and the game page, where the placeholder
+    never appears.
+    """
+    out = []
+    for chunk in CSS.split("}"):
+        sel, _, decls = chunk.rpartition("{")
+        if ".game-card" not in sel:
+            continue
+        if not any(s in sel for s in (".hero-games", ".games-scroller", "#games")):
+            continue
+        if not any(d in decls for d in ("min-width", "flex-basis", "width:")):
+            continue
+        out.append((sel.strip().splitlines()[-1].strip(), decls.strip()))
+    return out
+
+
+def test_the_placeholder_is_named_in_every_rule_that_sizes_the_card():
+    """It was sized once, by hand, in one number — and that number was
+    right for six days. The strip was re-cut and the hero card picked up
+    a min-width ladder, neither of which mentioned the placeholder, so a
+    272px stand-in was holding space for a card that is 257 wide on a
+    phone and 380 on a desktop. Naming it in the same rules is what
+    stops the next re-cut from doing it again."""
+    rules = _strip_width_rules()
+    assert len(rules) >= 5, f"the strip is sized somewhere this cannot see: {rules}"
+    missed = [sel for sel, _ in rules if ".skeleton-game" not in sel]
+    assert not missed, f"these size the card and not its placeholder: {missed}"
 
 
 def test_no_animation_survives_a_reduced_motion_request():

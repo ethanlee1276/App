@@ -651,7 +651,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.12); }
    paddings tighten. Scoped to .games-scroller on purpose: the grid
    view and the game page keep the full-size art, because there the art
    IS the content rather than the scene-setter. */
-.games-scroller .game-card { flex-basis: 228px; }
+.games-scroller .game-card, .games-scroller .skeleton-game { flex-basis: 228px; }
 .games-scroller .stadium-wrap { position: relative; height: 86px;
   overflow: hidden; }
 .games-scroller .stadium-wrap .stadium { width: 100%; height: 100%; }
@@ -1421,11 +1421,25 @@ svg[data-scrub] { touch-action: pan-y; }
   animation: shimmer 1.3s ease-in-out infinite;
 }
 @keyframes shimmer { from { background-position: 140% 0; } to { background-position: -40% 0; } }
-/* The strip's placeholder, shaped like the card that replaces it — same
-   272px flex basis, same radius, roughly the same height — so the real
-   cards arriving move nothing. */
+/* The strip's placeholder, shaped like the card that replaces it — so the
+   real cards arriving move nothing.
+
+   WIDTH IS NOT WRITTEN HERE. It was, once: a flat 272px, correct on the
+   day it shipped (2026-08-25) and wrong by the end of the week. The strip
+   was re-sized on 08-31 and the hero card had already picked up a min-width
+   ladder — 380 desktop, 300 under 900, 66vw on a phone — none of which the
+   placeholder was named in. Measured 2026-09-09 on this box: the card is
+   257 wide at 390, 300 at 820, 380 at 1440, and the placeholder was 272 at
+   every one of them. So the placeholder is now named in the SAME rules that
+   size the card, at every breakpoint, and tracks it from here on.
+
+   Height cannot be borrowed that way — a placeholder has no content to be
+   tall — so it is measured: 354px, the strip's card height on nfl, mlb and
+   cfb at all three widths (the row stretches every card to the tallest, so
+   it is one number, not three). It was 246, which put a 108px jump under
+   everything below the strip on every first paint the skeletons covered. */
 .skeleton-game {
-  flex: 0 0 272px; height: 246px; border-radius: var(--radius);
+  flex: 0 0 228px; height: 354px; border-radius: var(--radius);
   border: var(--hairline) solid var(--border-soft);
   background: var(--skeleton); background-size: 220% 100%;
   animation: shimmer 1.3s ease-in-out infinite;
@@ -2070,8 +2084,10 @@ select.calc-in { width: auto; font-weight: 600; }
    scrolled past. */
 .hero-title { margin-top: 4px; }
 .hero-games { padding-bottom: 6px; }
-.hero-games .game-card { min-width: 380px; }
-@media (max-width: 900px) { .hero-games .game-card { min-width: 300px; } }
+.hero-games .game-card, .hero-games .skeleton-game { min-width: 380px; }
+@media (max-width: 900px) {
+  .hero-games .game-card, .hero-games .skeleton-game { min-width: 300px; }
+}
 
 
 /* --- Typographic hierarchy -------------------------------------------
@@ -3956,7 +3972,7 @@ body.pk-open { overflow: hidden; }
   .rec-chart .rc-net { font-size: var(--fs-2xl); }
 
   .view { padding: 14px 12px 48px; }
-  .hero-games .game-card { min-width: 262px; }
+  .hero-games .game-card, .hero-games .skeleton-game { min-width: 262px; }
   /* The lead keeps its own full-width row here; the three that give it
      context share the row below. Two equal columns would put the answer
      beside a supporting number at the same width, which is the shape this
@@ -6185,7 +6201,7 @@ body.has-rail .shell {
 #games.games-grid { display: grid !important;
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   overflow: visible; }
-#games.games-grid .game-card { min-width: 0; }
+#games.games-grid .game-card, #games.games-grid .skeleton-game { min-width: 0; }
 
 /* The card column, centred like the render. */
 .hero-games .game-card { text-align: center; }
@@ -6345,7 +6361,7 @@ body.has-rail .shell {
   /* RE-ORDERED 2026-08-11 (Ethan: "top bets, the stadiums, then roi")
      — the order lives in the DOM now, one order on every screen, so
      the phone-only flex reordering retired. */
-  .hero-games .game-card { min-width: 66vw; }
+  .hero-games .game-card, .hero-games .skeleton-game { min-width: 66vw; }
   .lb-grid { grid-template-columns: 1fr; }
 }
 
