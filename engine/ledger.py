@@ -2142,6 +2142,104 @@ def close_dates(hist_conn, b, team: str | None = None) -> list:
         return []
 
 
+def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
+    """Give rows journalled before `game_day` existed the day they were played.
+
+    Only ever FILLS a NULL. It never overwrites a stamped row and never
+    touches `date`, which is the settle key — a backfill that moved the
+    key would unsettle the journal to tidy a chart.
+
+    Four ways to place a row, tried hardest-evidence first, and it stops
+    rather than guessing:
+
+      1. `date` is already an ISO day. Every daily sport lands here and
+         the answer is exact — a copy, not an inference.
+      2. An NFL prop: the player's own log row names the game he played
+         in that week, and `games.date` is that game's kickoff day.
+      3. An NFL game bet: `player` IS the team (moneyline, spread and
+         team_total all store it there), so the week narrows to that
+         team's one fixture. A game TOTAL stores the matchup key instead,
+         which is `games.game_id` with the spaces taken out.
+      4. The week has exactly one date anyway — a Thursday-only week, or
+         a season whose ingest holds one game.
+
+    Anything else stays NULL and is counted as unresolved, which is the
+    honest answer: `day_expr` then falls back to the week label, and a
+    row sitting in a bucket labelled "2026-W01" is at least visibly a
+    week rather than invisibly the wrong Sunday.
+    """
+    from .db import connect as _hist
+    close = hist_conn if hist_conn is not None else _hist()
+    out = {"filled": 0, "unresolved": 0, "by_route": {}}
+    rows = conn.execute(
+        "SELECT id, sport, date, player, market FROM bets "
+        "WHERE game_day IS NULL OR game_day = ''").fetchall()
+    for b in rows:
+        day, route = "", ""
+        text = str(b["date"] or "")
+        if _ISO_DAY_RE.match(text):
+            day, route = text, "already a day"
+        else:
+            m = _NFL_WEEK_DATE.match(text)
+            if m and b["sport"] == "nfl":
+                season, period = int(m.group(1)), f"{int(m.group(2)):03d}"
+                day, route = _week_day_for(close, b, season, period)
+        if not day:
+            out["unresolved"] += 1
+            continue
+        out["by_route"][route] = out["by_route"].get(route, 0) + 1
+        out["filled"] += 1
+        # `filled` counts what a real run WOULD write, so a dry run and
+        # the run that follows it report the same number — a preview
+        # whose figures move when you commit is not a preview.
+        if not dry_run:
+            conn.execute("UPDATE bets SET game_day=? WHERE id=?",
+                         (day, b["id"]))
+    if not dry_run:
+        conn.commit()
+    return out
+
+
+def _week_day_for(hist_conn, b, season: int, period: str) -> tuple:
+    """(day, how) for one NFL bet inside a week, or ("", "") if unplaceable."""
+    player = str(b["player"] or "").strip()
+    try:
+        # 2. The player's own log row — the strongest evidence there is,
+        #    because it says which game he was ON THE FIELD for.
+        if player:
+            r = hist_conn.execute(
+                "SELECT DISTINCT g.date FROM player_game_logs l "
+                "JOIN games g ON g.sport=l.sport AND g.season=l.season "
+                " AND g.period=l.period AND g.game_id=l.game_id "
+                "WHERE l.sport='nfl' AND l.season=? AND l.period=? "
+                " AND l.player=? AND g.date IS NOT NULL",
+                (season, period, player)).fetchall()
+            if len(r) == 1:
+                return r[0][0], "player log"
+        # 3. A game bet: the team, or the matchup key with spaces removed.
+        if player:
+            r = hist_conn.execute(
+                "SELECT DISTINCT date FROM games WHERE sport='nfl' "
+                "AND season=? AND period=? AND date IS NOT NULL "
+                "AND (home=? OR away=? OR REPLACE(game_id,' ','')=?)",
+                (season, period, player, player, player)).fetchall()
+            if len(r) == 1:
+                return r[0][0], "team or matchup"
+        # 4. A week with one date needs no evidence about the row at all.
+        r = hist_conn.execute(
+            "SELECT DISTINCT date FROM games WHERE sport='nfl' "
+            "AND season=? AND period=? AND date IS NOT NULL",
+            (season, period)).fetchall()
+        if len(r) == 1:
+            return r[0][0], "only one day that week"
+    except Exception:                                      # noqa: BLE001
+        # A pre-migration or unreadable history DB means no bridge, which
+        # is the state every one of these rows is already in. Never let a
+        # backfill be the thing that breaks the journal.
+        return "", ""
+    return "", ""
+
+
 def close_at(index: dict, player: str, dates: list):
     """First close found for `player` across `dates`, or None.
 

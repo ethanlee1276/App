@@ -4470,6 +4470,42 @@ def odds_audit() -> None:
         print("\n  No odds cache on this machine — nothing to reconstruct.")
 
 
+def backfill_days(dry_run: bool = True) -> None:
+    """`--backfill-days` — give old journal rows the day they were played.
+
+    DRY BY DEFAULT, and `--apply` is what writes. This edits the money
+    ledger; a flag that changes 2.2 MB of history on a typo is the wrong
+    default, and the preview costs one read.
+    """
+    from engine import ledger as _led, db as _db
+    conn = _led.connect()
+    try:
+        res = _led.backfill_game_days(conn, _db.connect(), dry_run=dry_run)
+    except Exception as exc:                              # noqa: BLE001
+        print(f"  ⚠️  backfill failed: {type(exc).__name__}: {exc}")
+        return
+    head = "WOULD FILL (dry run)" if dry_run else "FILLED"
+    print(f"\n{head}: {res['filled']} row(s)")
+    for route, n in sorted(res["by_route"].items(), key=lambda kv: -kv[1]):
+        print(f"  {n:>6}  {route}")
+    if res["unresolved"]:
+        print(f"\n  {res['unresolved']} row(s) could not be placed and keep "
+              f"their week label.")
+        print("    That is the honest answer, not a failure: a bucket "
+              "labelled \"2026-W01\" is\n    visibly a week, where a "
+              "guessed Sunday would be invisibly the wrong day.")
+        # THE REAL COMMAND. The first draft of this line said
+        # "--ingest nfl", which launch.py cannot parse and no tool
+        # spells that way — tests/test_known_flags.py caught it, which is
+        # exactly what that guard exists for: an operator who types a
+        # printed flag must not get the server instead of an error.
+        print("    Most of these are weeks the history database has not "
+              "ingested yet.\n    `python3 ingest.py nfl --refresh` fills "
+              "them in, then run this again.")
+    if dry_run and res["filled"]:
+        print("\n  Nothing was written. Re-run with --apply.")
+
+
 def why_many(sport: str = "mlb", days: int = 21) -> None:
     """The inverse of --why-empty: why is tonight's board BIGGER than usual?
 
@@ -8606,7 +8642,7 @@ KNOWN_FLAGS = frozenset({
     "--stripe-webhook", "--stuck", "--title", "--todo", "--unbuilt",
     "--velo", "--venues", "--void-unplayed", "--weigh-in", "--why-bet",
     "--why-empty", "--why-live", "--why-many", "--why-open", "--why-pick",
-    "--why-ufc",
+    "--why-ufc", "--backfill-days",
 })
 
 
@@ -9084,6 +9120,9 @@ def main() -> None:
         return
     if "--odds-audit" in argv:
         odds_audit()
+        raise SystemExit(0)
+    if "--backfill-days" in argv:
+        backfill_days(dry_run="--apply" not in argv)
         raise SystemExit(0)
     if "--why-many" in argv:
         i = argv.index("--why-many")
