@@ -463,6 +463,54 @@ def price_moneyline(home: str, away: str, win_prob_home: float,
     )
 
 
+def attach_books(d: dict, g) -> dict:
+    """Name the book posting the side this card actually took.
+
+    ONE RULE, ONE PLACE, and it lived in two. The football pipeline grew
+    this in `engine/pipeline._finish_bet`; the MLB pipeline has its own
+    `_finish_bet` and never grew it at all, so every baseball game card
+    published a price with no book beside it while the same markets on
+    the football boards named one. The Game objects already carry the
+    names — `apply_odds_to_slate` and `apply_board_lines_to_slate` are
+    sport-agnostic and set them on every slate they touch — so nothing
+    was missing but the line that copies them onto the row.
+
+    BOTH SIDES RIDE ALONG, not just the one taken. The likelihood board
+    flips a card to the favourite (`likely.from_game_bet`) and the book
+    has to flip with the price, or the row names the shop that quoted a
+    side it is no longer showing.
+
+    Ethan, 2026-09-08: "I don't want you too stop working until we
+    display the right lines and prices the books show." A price with no
+    shop beside it is the same complaint one step earlier — it cannot be
+    checked against a phone at all.
+
+    A TEAM TOTAL GETS NO BOOK, and that is the honest answer rather than
+    a gap: the number is derived from the game total and the spread, so
+    there is no book posting it and no name to print. See
+    `price_team_total`.
+    """
+    market = (d.get("bet_type") or d.get("market")) or ""
+    home = getattr(g, "home", "")
+    if market == "moneyline":
+        d["home_book"] = getattr(g, "home_ml_book", "") or ""
+        d["away_book"] = getattr(g, "away_ml_book", "") or ""
+        took = (d.get("team") or "").strip()
+        d["book"] = (d["home_book"] if took == home else d["away_book"]) or ""
+    elif market == "spread":
+        d["home_book"] = getattr(g, "home_spread_book", "") or ""
+        d["away_book"] = getattr(g, "away_spread_book", "") or ""
+        took = (d.get("team") or "").strip()
+        d["book"] = (d["home_book"] if took == home else d["away_book"]) or ""
+    elif market == "total":
+        d["over_book"] = getattr(g, "total_over_book", "") or ""
+        d["under_book"] = getattr(g, "total_under_book", "") or ""
+        side = (d.get("side") or "").strip().lower()
+        d["book"] = (d["over_book"] if side == "over"
+                     else d["under_book"]) or ""
+    return d
+
+
 def moneyline_to_dict(rec: MoneylineRec) -> dict:
     """Serialize a moneyline rec for the pipeline JSON / web UI."""
     return {

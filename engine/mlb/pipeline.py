@@ -166,6 +166,15 @@ def _finish_bet(d: dict, g, config: RuleConfig) -> dict:
     d["started"] = started
     d["date"] = g.date
     d["kickoff"] = g.kickoff
+    # WHOSE PRICE IT IS. The football boards have named the book on every
+    # game card since 2026-09-07; baseball published the same markets with
+    # no shop beside the number, which is a price a reader cannot check
+    # against a phone. The names were already on the Game — the odds
+    # appliers are sport-agnostic and set them on every slate — so nothing
+    # was missing here but the line that copies them across. One rule, in
+    # `gamebets.attach_books`, now called from both pipelines.
+    from ..gamebets import attach_books as _attach_books
+    _attach_books(d, g)
     if getattr(g, "doubleheader", False):
         # The journal stamps this as the bet's leg — the settler grades a
         # DH team bet against ITS game, not a coin-flip choice of two.
