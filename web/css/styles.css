@@ -488,25 +488,55 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
    family, obviously lower rank — which is what a reader needs in order
    to know where they are without reading anything. */
 .subnav {
-  display: flex; flex-wrap: wrap; gap: 4px;
-  border-bottom: var(--hairline) solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 6px;
   margin: 0 0 4px;
 }
+/* A TAB HAS TO LOOK LIKE SOMETHING YOU CAN PRESS. Ethan, 2026-09-09,
+   with people on the site: "a lot of our buttons blending in with the
+   text on the site so you can't really tell their buttons or tabs …
+   it kinda hides really cool features that we have, like the mock draft
+   and the calendar."
+
+   He is describing what this rule used to be. An inactive tab had
+   `border: 0; background: transparent; color: var(--text-mute)` — no
+   fill, no edge, no shape. It WAS body copy that happened to be
+   clickable, and the only evidence the row was navigation at all was a
+   2px underline under the one already selected. Eight rooms on the
+   Fantasy page sit behind that row: trade targets, game scripts,
+   rankings, the calendar, the mock draft, around the league. Meanwhile
+   `.chip`, which is usually not interactive at all, carries a fill AND
+   a border. The site had it backwards.
+
+   THE SHAPE IS THE FILL AND THE EDGE, NOT A CORNER. The old comment here
+   refused a radius because "a rounded tab is a different design
+   language", and that is still right — but it read as though roundness
+   were the only way to make a control look like one. `--radius-sm` is 0
+   in this system, so the token does that job on its own, and what makes
+   these read as pressable is that they now have a surface and a
+   boundary. Square, like everything else.
+
+   The active tab takes the brand fill rather than an underline. On a row
+   that wraps to two lines on a phone — which it must, because a
+   scrolling tab row is the draggable bar Ethan caught on 2026-08-18 — an
+   underline on line one is easy to miss entirely. A filled tab is not. */
 .subnav-btn {
-  border: 0; background: transparent; cursor: pointer;
+  cursor: pointer; border-radius: var(--radius-sm);
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
-  /* No radius. This redesign is hairlines and square corners throughout —
-     a rounded tab is a different design language, and `test_nightform`
-     exists to catch exactly that drift. */
-  color: var(--text-mute); padding: 7px 11px;
-  /* The active underline sits ON the bar's hairline rather than beside
-     it — a 1px rule 1px away from another 1px rule reads as a smudge. */
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: var(--fill-subtle);
+  border: var(--hairline) solid var(--border);
+  color: var(--text-dim); padding: 9px 14px;
   transition: color var(--dur-base) var(--ease-out),
+              background var(--dur-base) var(--ease-out),
               border-color var(--dur-base) var(--ease-out);
 }
-.subnav-btn:hover { color: var(--text); }
-.subnav-btn.active { color: var(--text); border-bottom-color: var(--brand-2); }
+.subnav-btn:hover {
+  color: var(--text); background: var(--fill-hover);
+  border-color: var(--text-mute);
+}
+.subnav-btn.active {
+  background: var(--brand); border-color: var(--brand);
+  color: var(--brand-ink); font-weight: 700;
+}
 .subnav-btn:focus-visible { outline-offset: 2px; }
 
 /* The hint is the answer to "which tab has what", which is a thing Ethan
