@@ -22994,11 +22994,22 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
      from this payload, so a calendar left over from the league selected
      a moment ago would be somebody else's roster under this league's
      name. Every way out of this function below either paints a real one
-     or leaves this sentence standing. */
-  paintMyCalendar(`<p class="rank-help">${icon("warn")} Your own start
-    calendar needs a league that answers — see the message on
-    <b>Around the league</b>.</p>`);
-  if (!leagueId) { host.innerHTML = ""; paintMyCalendar(ffCalMinePromptHTML()); return; }
+     or replaces this line with the reason it could not.
+
+     A LOADING LINE, NOT A WARNING. This used to say "Your own start
+     calendar needs a league that answers — see the message on Around the
+     league", under a warning triangle, and it said it HERE — before the
+     fetch below has been made. Nothing has failed at this point; the
+     league is being read. Ethan photographed that sentence on 2026-09-10
+     and reasonably read it as the feature being broken. */
+  paintMyCalendar(`<p class="loading">Reading your ${escapeHtml(
+    platform === "espn" ? "ESPN" : platform === "yahoo" ? "Yahoo" : "Sleeper"
+  )} roster\u2026</p>`, true);
+  if (!leagueId) {
+    host.innerHTML = "";
+    paintMyCalendar(ffCalMinePromptHTML(), true);
+    return;
+  }
   host.innerHTML = `<p class="loading">Reading your league\u2019s scoring and rosters\u2026</p>`;
   let d;
   try {
@@ -23008,8 +23019,17 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
     d = await r.json();
     if (!r.ok) throw new Error(d && d.error);
   } catch (e) {
+    const why = String((e && e.message) || e);
     host.innerHTML = `<div class="warning">${icon("warn")} League desk unavailable: ${
-      escapeHtml(String((e && e.message) || e))}</div>`;
+      escapeHtml(why)}</div>`;
+    /* THE REASON GOES WHERE THE READER IS. This exit used to return
+       without touching the calendar, so the Calendar tab kept a pointer
+       at a message on another tab — the one exit of the four that did
+       not say what was actually wrong. */
+    paintMyCalendar(`<p class="rank-help">${icon("warn")} Your league did not
+      answer, so there is no roster to build your own calendar from:
+      ${escapeHtml(why)}. The league-wide calendar below is unaffected.</p>`,
+      true);
     return;
   }
   if (!d.has_me) {
@@ -23020,7 +23040,8 @@ async function renderLeagueDesk(leagueId, userId, platform, hostId) {
     // says which fact is missing rather than pointing at another tab.
     paintMyCalendar(`<p class="rank-help">${icon("warn")} No roster in the
       selected league belongs to you, so there is nobody to build your own
-      calendar from. Pick your league under <b>Around the league</b>.</p>`);
+      calendar from. Pick your league under <b>Around the league</b>.</p>`,
+      true);
     return;
   }
   /* KEPT, so the player panel can answer with it: the dossier's "this
@@ -25913,9 +25934,43 @@ function ffDeskRoster(d) {
    when it answers, but every subtab panel is in the DOM (hidden), so
    the target is always there to fill. A missing host is not an error —
    the desk also runs on pages that have no calendar tab at all. */
-function paintMyCalendar(html) {
+/* ONE WRITER FOR THE CALENDAR TAB, and it knows the difference between
+   a real calendar and a sentence standing in for one.
+
+   Ethan, 2026-09-10, photographing the Calendar tab: "It's still not
+   showing the calendars in fantasy curated to the users specific draft
+   lineup and league. It also says this" — over a warning triangle
+   reading "Your own start calendar needs a league that answers".
+
+   TWO DEFECTS MET THERE. That sentence was painted BEFORE the fetch it
+   describes, so it was the loading state, dressed as an error, standing
+   for the whole of a request that reads a league's scoring, its rosters
+   and Sleeper's five-megabyte player dump. Nothing had failed when it
+   said that. And the second: a reader on the Calendar tab was told to go
+   read a message on a DIFFERENT tab, because the real reason was written
+   into the desk's own host and the calendar only ever got the pointer.
+
+   THE `tentative` FLAG is the third fix, and it is about two platforms.
+   Sleeper and ESPN each start their own desk, both draw this one
+   calendar, and they finish in whatever order the network decides — so
+   an ESPN league with no roster of his could land after Sleeper's real
+   calendar and replace it with an apology. A stand-in never overwrites a
+   real calendar; a real calendar always wins.
+
+   The flag resets itself when `#ffcal-mine` is a different ELEMENT than
+   the one last written to, which is precisely the event that matters: a
+   fresh `renderFantasy` rebuilt the page, so nothing is on screen yet
+   and the loading line should show again. No caller has to remember. */
+let _ffCalHost = null;
+let _ffCalReal = false;
+
+function paintMyCalendar(html, tentative) {
   const host = document.getElementById("ffcal-mine");
-  if (host) host.innerHTML = html || "";
+  if (!host) return;
+  if (host !== _ffCalHost) { _ffCalHost = host; _ffCalReal = false; }
+  if (tentative && _ffCalReal) return;
+  host.innerHTML = html || "";
+  _ffCalReal = !tentative;
 }
 
 /* WHAT THE CALENDAR TAB SAYS BEFORE A LEAGUE IS LINKED. Not an empty
