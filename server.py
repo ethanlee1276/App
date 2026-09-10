@@ -699,6 +699,31 @@ def sw_body(web: Path = WEB) -> bytes:
     return out
 
 
+def _squad_or_empty(teamdex, conn, sport, team):
+    """`teamdex.squad`, or an empty one that says why.
+
+    The page draws nothing for an empty `positions`, so a failure here
+    costs the squad section and nothing else — the record, the ranks and
+    the head-to-heads above it come from a different query against a
+    different table, and they have been right since 2026-09-09.
+
+    A MODULE FUNCTION, NOT A METHOD, and the reason is worth writing
+    down because the first cut got it wrong in a way that reads as
+    correct. Inside `_team` a bare `_squad_or_empty(...)` is a GLOBAL
+    lookup, not an attribute one; as a `@staticmethod` it raised
+    NameError, the handler's own `except Exception` turned that into a
+    503, and the whole team page went blank. `tests/test_team_endpoint`
+    caught it because it calls the handler with a stand-in for `self` —
+    which is also why `self._squad_or_empty` would not have worked
+    either.
+    """
+    try:
+        return teamdex.squad(conn, sport, team)
+    except Exception:                                        # noqa: BLE001
+        return {"season": None, "positions": [], "players": 0,
+                "error": "player logs unavailable"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter logging
         sys.stderr.write("  %s\n" % (fmt % args))
@@ -3093,7 +3118,16 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                 out = {"sport": sport, "team": team,
                        "name": teamdex.label(team, sport),
                        "profile": teamdex.profile(conn, sport, team),
-                       "opponents": teamdex.opponents(conn, sport, team)}
+                       "opponents": teamdex.opponents(conn, sport, team),
+                       # WHO PLAYS FOR IT. Ethan, 2026-09-10: "We should
+                       # be showing more info too when you look up a team
+                       # on the search page. We should show a depth chart
+                       # and player stats and all that shit." Its own
+                       # try: a squad is the newest thing on this page
+                       # and the record below it has been right since
+                       # 09-09 — one bad read of `player_game_logs` must
+                       # not take a working page down with it.
+                       "squad": _squad_or_empty(teamdex, conn, sport, team)}
                 if opp.strip():
                     rivals = teamdex.resolve(opp, sport, known)
                     if rivals:

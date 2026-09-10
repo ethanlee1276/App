@@ -8108,6 +8108,50 @@ button.rc-day b { font-size: var(--fs-sm); }
   border-top: var(--hairline) solid var(--border); }
 .rank-import summary { cursor: pointer; font-size: var(--fs-sm);
   color: var(--text-dim); }
+/* THE SQUAD ON A TEAM PAGE — who plays here, by position, with what he
+   has done. Ethan, 2026-09-10: "We should show a depth chart and player
+   stats and all that shit."
+
+   ROWS, NOT A TABLE, and the reason is the phone. A squad row carries
+   four things of very different lengths — a name, a games count and two
+   stat lines — and a table would either scroll sideways (the season
+   table above it already has to, and one horizontal scroller a page is
+   plenty) or crush the name to two characters. A flex row lets the
+   stats wrap under the name at 390px and sit beside it on a laptop,
+   which is the same treatment `.rl-row` gets on the Record page. */
+.tsq { display: flex; flex-direction: column; gap: 14px; }
+.tsq-pos-k {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-mute);
+  padding: 0 2px 6px; border-bottom: var(--hairline) solid var(--border-soft);
+}
+.tsq-more { font-weight: 600; letter-spacing: .04em; text-transform: none;
+  opacity: .7; }
+.tsq-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  width: 100%; padding: 9px 2px; border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--text-dim); font: inherit;
+  font-size: var(--fs-sm); text-align: left; cursor: pointer;
+  border-bottom: var(--hairline) solid var(--border-soft);
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.tsq-row:hover { background: var(--panel-2); color: var(--text); }
+.tsq-who { font-weight: 700; color: var(--text); }
+.tsq-gp { font-size: var(--fs-xs); color: var(--text-mute);
+  font-variant-numeric: tabular-nums; }
+/* The stats take the rest of the row and wrap to their own line on a
+   phone rather than squeezing the name — `flex: 1 0 100%` below 560. */
+.tsq-stats { flex: 1 1 auto; text-align: right; font-size: var(--fs-xs);
+  color: var(--text-mute); font-variant-numeric: tabular-nums; }
+.tsq-stats b { color: var(--text-dim); font-weight: 700; }
+.tsq-tot { opacity: .65; }
+.tsq-sep { padding: 0 6px; opacity: .5; }
+@media (max-width: 560px) {
+  .tsq-stats { flex: 1 0 100%; text-align: left; }
+}
+
 .rank-help { color: var(--text-mute); font-size: var(--fs-xs); }
 .rank-import textarea { width: 100%; margin-top: 8px; padding: 9px 12px;
   background: var(--panel-2); color: inherit; font-family: inherit;

@@ -24931,6 +24931,55 @@ function teamRecordLine(r) {
   return bits.join(" · ");
 }
 
+/* WHO PLAYS FOR IT, BY POSITION, AND WHAT THEY HAVE ACTUALLY DONE.
+
+   Ethan, 2026-09-10, on the Rams page: "We should be showing more info
+   too when you look up a team on the search page. We should show a depth
+   chart and player stats and all that shit."
+
+   A DEPTH CHART MEASURED RATHER THAN PUBLISHED, and the difference is
+   worth being honest about on the page as well as in the engine.
+   nflverse publishes a real one — what a coach filed — and it is NFL
+   only. This orders each position by what the players did: games first,
+   then that position's leading market. It covers every league the site
+   ingests and it cannot go stale against a chart nobody refiled, but it
+   cannot call a Week 1 starter who has not played yet either. The note
+   under the section says so rather than letting a reader assume.
+
+   Every name is a door to the player page, which is the whole point of
+   putting a squad here: the team page is where somebody arrives from
+   search, and until now it was a dead end with a table on it. */
+function teamSquadHTML(sq, sport) {
+  const groups = ((sq || {}).positions || []).filter(
+    (g) => (g.players || []).length);
+  if (!groups.length) return "";
+  const stat = (st) => `${escapeHtml(marketWord(st.market))}
+    <b>${st.per_game}</b><span class="tsq-tot">/g · ${st.total} total</span>`;
+  const body = groups.map((g) => `
+    <div class="tsq-pos">
+      <div class="tsq-pos-k">${escapeHtml(g.position)}${
+        g.listed > (g.players || []).length
+          ? `<span class="tsq-more">${g.listed} listed</span>` : ""}</div>
+      ${(g.players || []).map((w) => `
+        <button class="tsq-row" type="button"
+                data-player-page="${escapeAttr(slugify(w.player))}">
+          <span class="tsq-who">${escapeHtml(w.player)}</span>
+          <span class="tsq-gp">${w.games} G</span>
+          <span class="tsq-stats">${(w.stats || []).slice(0, 2)
+            .map(stat).join('<span class="tsq-sep">·</span>')}</span>
+        </button>`).join("")}
+    </div>`).join("");
+  return `
+    <div class="section-title">Squad${sq.season ? ` · ${sq.season}` : ""}
+      <span class="sub">— every player with a game logged for this team,
+      by position, ordered by what he actually did rather than by a chart
+      somebody filed. Tap a name for his own page.</span></div>
+    <div class="tsq">${body}</div>
+    <p class="rank-help">Built from the game logs this site has ingested,
+      so a player who has not taken a snap for this team yet is not here —
+      which in the first week of a season is most of a roster.</p>`;
+}
+
 function teamSeasonsHTML(p) {
   const rows = (p || {}).seasons || [];
   if (!rows.length) return "";
@@ -25099,6 +25148,7 @@ function renderTeamPage() {
       matched “${escapeHtml(d.vs_unknown)}” — the history below is
       ${escapeHtml(p.name)} on its own.</div>` : ""}
     ${teamSeasonsHTML(p)}
+    ${teamSquadHTML(d.squad, d.sport)}
     ${teamOppPickerHTML(d)}
     ${teamH2HHTML(d.head_to_head, d.sport)}
     <p class="rank-help">Built from the finished games this site has

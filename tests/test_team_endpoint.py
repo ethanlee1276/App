@@ -130,6 +130,26 @@ def test_an_exact_name_is_answered_even_though_it_also_prefix_matches():
     assert out["profile"]["career"]["record"] == "2-2", out["profile"]
 
 
+def test_the_answer_carries_a_squad_alongside_the_record():
+    """Added 2026-09-10 with the squad — Ethan: "We should show a depth
+    chart and player stats and all that shit."
+
+    THIS TEST IS ALSO THE 503 GUARD. The squad helper shipped as a
+    `@staticmethod` and `_team` called it by bare name, which is a
+    GLOBAL lookup rather than an attribute one; it raised NameError, the
+    handler's own `except Exception` turned that into a 503, and the
+    whole team page — record, ranks, head-to-heads, all of it — went
+    blank behind a feature that was meant to add to it. An empty squad is
+    fine here; a missing key or a 503 is not."""
+    code, out = _call(sport="nfl", team="Los Angeles Rams")
+    assert code == 200, out
+    assert "squad" in out, "the squad never reached the page"
+    assert out["squad"]["positions"] == [], \
+        "these fixtures log no player games"
+    assert out["profile"]["career"]["record"] == "2-2", \
+        "the record went down with the squad"
+
+
 def test_typing_the_abbreviation_is_an_answer_even_when_a_city_shares_it():
     """"LA" is the Rams' key AND the first two letters of Las Vegas, so
     the resolver hands back two candidates. He typed the abbreviation

@@ -357,3 +357,130 @@ def head_to_head(conn, sport: str, team: str, opp: str) -> dict:
     return {"sport": sport, "team": team, "opponent": opp,
             "name": label(team, sport), "opponent_name": label(opp, sport),
             "games": games, "summary": _finish(acc)}
+
+
+#: WHICH LINE LEADS A POSITION. A quarterback's row is about passing
+#: yards and a receiver's is about catches, and a squad list that sorted
+#: every position on the same market would rank the whole offence by
+#: whichever stat the quarterback happens to dominate. Falls back to the
+#: player's own biggest total when a position is not here — a college
+#: roster carries positions this table has never seen, and guessing at
+#: them is worse than reading the numbers.
+LEAD_MARKET = {
+    "QB": "pass_yds", "RB": "rush_yds", "FB": "rush_yds",
+    "WR": "rec_yds", "TE": "rec_yds",
+    "C": "hits", "1B": "hits", "2B": "hits", "3B": "hits", "SS": "hits",
+    "LF": "hits", "CF": "hits", "RF": "hits", "DH": "hits", "OF": "hits",
+    "G": "pts", "F": "pts", "PG": "pts", "SG": "pts", "SF": "pts",
+    "PF": "pts",
+}
+
+#: How many players a position lists before the rest are folded away.
+#: A 90-man NFL roster is not a page.
+SQUAD_PER_POSITION = 6
+
+
+def _latest_season(conn, sport: str, team: str) -> int | None:
+    row = conn.execute(
+        "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
+        (sport, team)).fetchone()
+    return row[0] if row and row[0] is not None else None
+
+
+def squad(conn, sport: str, team: str, season: int | None = None,
+          per_position: int = SQUAD_PER_POSITION) -> dict:
+    """Who plays for this team, by position, and what they have done.
+
+    Ethan, 2026-09-10, looking at the Rams page: "We should be showing
+    more info too when you look up a team on the search page. We should
+    show a depth chart and player stats and all that shit."
+
+    THIS IS A DEPTH CHART MEASURED RATHER THAN PUBLISHED, and the
+    difference is worth stating because it cuts both ways. nflverse
+    publishes a real one — `engine/sources/depthcharts` reads it — and it
+    is what a coach filed, which is the right answer to "who is listed
+    first" and is NFL-only. This orders each position by what the players
+    actually did: games first, then the position's leading market. It
+    covers every league this repo ingests, it cannot go stale against a
+    depth chart nobody refiled, and it answers the question a bettor is
+    really asking — who gets the ball. What it cannot do is call a Week 1
+    starter who has not played yet, and the row count says so.
+
+    Everything comes out of `player_game_logs`, the same table the props
+    grade against, so a name here is a name the rest of the site can
+    price. No feed is called and no roster file is read: a player who has
+    not taken a snap for this team is not on this list, which is honest
+    rather than complete.
+    """
+    season = season if season is not None else _latest_season(conn, sport, team)
+    if season is None:
+        return {"season": None, "positions": [], "players": 0}
+    rows = conn.execute(
+        "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
+        "COUNT(DISTINCT game_id) games FROM player_game_logs "
+        "WHERE sport=? AND team=? AND season=? AND player<>'' "
+        "GROUP BY player, position, market", (sport, team, season)).fetchall()
+    by_player: dict = {}
+    for r in rows:
+        who = by_player.setdefault(
+            str(r["player"]), {"player": str(r["player"]),
+                               "position": str(r["position"] or ""),
+                               "games": 0, "stats": {}})
+        who["games"] = max(who["games"], int(r["games"] or 0))
+        # A position can differ between a player's rows (a feed changing
+        # its mind mid-season); the first non-empty one wins rather than
+        # the last, so the list does not reshuffle on a re-ingest.
+        if not who["position"] and r["position"]:
+            who["position"] = str(r["position"])
+        who["stats"][str(r["market"])] = {
+            "market": str(r["market"]),
+            "total": round(float(r["total"] or 0.0), 1),
+            "per_game": round(float(r["total"] or 0.0)
+                              / max(1, int(r["games"] or 1)), 1),
+            "games": int(r["games"] or 0)}
+    groups: dict = {}
+    for who in by_player.values():
+        lead = LEAD_MARKET.get(who["position"])
+        stats = who["stats"]
+        if lead not in stats:
+            # The player's own biggest number, which is what a reader
+            # reads him by when the table has never seen his position.
+            lead = max(stats, key=lambda m: stats[m]["total"]) if stats else ""
+        who["lead_market"] = lead
+        who["stats"] = sorted(stats.values(),
+                              key=lambda st: (st["market"] != lead,
+                                              -st["total"]))
+        groups.setdefault(who["position"], []).append(who)
+    out = []
+    for pos, players in groups.items():
+        players.sort(key=lambda w: (-w["games"],
+                                    -(w["stats"][0]["total"] if w["stats"] else 0),
+                                    w["player"]))
+        out.append({"position": pos or "—",
+                    "players": players[:max(1, per_position)],
+                    "listed": len(players)})
+    out.sort(key=lambda g: (_POSITION_ORDER.get(g["position"], 99),
+                            g["position"]))
+    return {"season": season, "positions": out, "players": len(by_player)}
+
+
+def _position_order() -> dict:
+    """The roster page's own ordering, borrowed rather than restated.
+
+    `engine/rosters` already decides that a quarterback comes before a
+    linebacker and a starting pitcher before a catcher; two tables would
+    drift and the drift would show as two pages listing one squad in two
+    orders. Imported through a function so a change there cannot break
+    an import here.
+    """
+    try:
+        from .rosters import MLB_POSITION_ORDER, POSITION_ORDER
+    except Exception:                                       # noqa: BLE001
+        return {}
+    out = dict(POSITION_ORDER)
+    for pos, at in MLB_POSITION_ORDER.items():
+        out.setdefault(pos, 100 + at)
+    return out
+
+
+_POSITION_ORDER = _position_order()
