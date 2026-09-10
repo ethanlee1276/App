@@ -163,6 +163,48 @@ def test_build_slate_end_to_end(monkeypatch):
     assert result["counts"]["props_analyzed"] == len(yardage)
 
 
+# --- the outage of 2026-09-10 -----------------------------------------------
+def test_every_market_a_position_gets_can_be_placed_at_a_position():
+    """THE OUTAGE. `build_slate` carried its own hand-written map from
+    market to position — `{PASS_YDS: "QB", RUSH_YDS: "RB", …}` — beside
+    `POSITION_MARKETS`, the table that decides which markets a position
+    is given. Passing touchdowns were added to the TABLE and not to the
+    literal, so the first quarterback with a second spec raised
+    `KeyError: 'pass_td'` out of `build_slate`. Not one prop came back,
+    so the NFL board and the Most Likely board were both empty for two
+    hours on the Thursday of Week 1.
+
+    Ethan, 17:58: "all the edge bets and most likely bets for nfl
+    disappeared." Player search kept working the whole time, which was
+    the tell: it reads `player_game_logs` and never touches the slate.
+
+    THE ASSERTION IS THE INVARIANT, not the market that broke it: every
+    market any position is given must resolve to a position. A sixth
+    market added tomorrow is covered by this without anybody editing it.
+    """
+    from engine.sources.nflverse import _POSITION_OF, POSITION_MARKETS
+    for position, markets in POSITION_MARKETS.items():
+        for market, _role in markets:
+            assert _POSITION_OF.get(market) == position, (market, position)
+
+
+def test_the_position_lookup_is_derived_and_not_a_second_copy():
+    """A literal here is the defect itself: two tables that must agree,
+    one of which nobody remembers to edit. This module's own
+    `resolve_market_keys` note already carries the lesson — "THE SECOND
+    COPY OF THIS MAP WAS THE BUG"."""
+    import os
+    import re
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "engine", "sources", "nflverse.py"),
+               encoding="utf-8").read()
+    code = re.sub(r"#.*$", "", src, flags=re.M)
+    assert "_POSITION_OF[spec.market]" in code
+    # No hand-written market->position literal anywhere in the CODE.
+    assert not re.search(r"\{\s*PASS_YDS:\s*\"QB\"", code), \
+        "the second copy of the map is back"
+
+
 if __name__ == "__main__":
     import types
     class MP:  # minimal monkeypatch shim so the file runs without pytest

@@ -445,6 +445,14 @@ def build_defense_profiles(rows: list[dict], upto_week: int) -> dict[str, Defens
 
 # --- slate assembly ---------------------------------------------------------
 # Default markets to build per position when auto-selecting players.
+#: Which position a market belongs to — the inverse of the table below,
+#: built once so the two can never disagree. See the outage note at its
+#: only use in `build_slate`.
+def _position_of() -> dict:
+    return {market: pos for pos, markets in POSITION_MARKETS.items()
+            for market, _role in markets}
+
+
 POSITION_MARKETS = {
     # A QUARTERBACK HAS TWO MARKETS, not one. Passing touchdowns were
     # missing from this table, so no `Prop` existed for a quote to
@@ -456,6 +464,9 @@ POSITION_MARKETS = {
     "WR": [(REC_YDS, "wr1")],
     "TE": [(RECEPTIONS, "te")],
 }
+
+#: Built at import, after the table above exists.
+_POSITION_OF = _position_of()
 
 
 def _round_half(x: float) -> float:
@@ -706,7 +717,26 @@ def build_slate(season: int, week: int, upto_week: int | None = None,
         if baseline <= 0:
             continue
         line = _round_half(baseline) - 0.5  # a touch under baseline, like a book
-        pos = {PASS_YDS: "QB", RUSH_YDS: "RB", REC_YDS: "WR", RECEPTIONS: "TE"}[spec.market]
+        # DERIVED FROM `POSITION_MARKETS`, NOT A SECOND COPY OF IT.
+        #
+        # THE OUTAGE OF 2026-09-10. This line was a hand-written literal
+        # naming four markets, and `POSITION_MARKETS` twenty lines up is
+        # the table that decides which markets a position actually gets.
+        # Passing touchdowns were added THERE and not here, so the moment
+        # a quarterback produced a second spec this raised
+        # `KeyError: 'pass_td'` — out of `build_slate`, so not one prop
+        # was returned, so the NFL board and the Most Likely board were
+        # both empty for two hours on the Thursday of Week 1.
+        #
+        # Ethan, 17:58: "all the edge bets and most likely bets for nfl
+        # disappeared." Player search kept working throughout, which is
+        # the tell I should have read first: it reads `player_game_logs`
+        # and never touches the slate.
+        #
+        # Inverted from the one table so a third market cannot diverge
+        # again — this file's own `resolve_market_keys` note already says
+        # it: "THE SECOND COPY OF THIS MAP WAS THE BUG."
+        pos = _POSITION_OF[spec.market]
         props.append(Prop(
             player=spec.player,
             team=team,
