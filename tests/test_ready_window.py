@@ -80,7 +80,7 @@ def test_the_readiness_pull_goes_through_the_ordinary_gap_for_football_only():
     # The cheap lines lane spends the NFL's money and is the NFL for
     # this purpose too: through the day's ceiling with its league.
     real = ob.spent_today
-    ob.spent_today = lambda now=None, sport=None: 10 ** 6
+    ob.spent_today = lambda *a, **k: 10 ** 6
     try:
         p = _state(_tmp(), remaining=20000, last=NOW - 2 * 3600, sport="nfl_lines")
         ok, why = should_refresh(0, now=NOW, path=p, kickoffs=[KICK],
@@ -92,7 +92,7 @@ def test_the_readiness_pull_goes_through_the_ordinary_gap_for_football_only():
 
 def test_the_readiness_pull_goes_through_the_days_ceiling():
     real = ob.spent_today
-    ob.spent_today = lambda now=None, sport=None: 10 ** 6
+    ob.spent_today = lambda *a, **k: 10 ** 6
     try:
         # An ordinary-priced pull (the day can afford several; the
         # ledger says the day already spent them all).

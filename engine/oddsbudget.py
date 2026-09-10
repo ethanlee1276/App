@@ -202,6 +202,47 @@ DECISIONS_KEEP = 4000
 CREDIT_COST = {"live_event": 8, "live_board": 8, "live_events": 1,
                "hist_event": 38, "hist_events": 10}
 
+#: THE HARVEST'S OWN KINDS — `/historical/` calls, named by
+#: `oddsapi._classify`. They buy CLOSING lines for games that are already
+#: over, so a bet can be graded against the number it should have got.
+#:
+#: WHY THEY ARE NAMED HERE. The day's ceiling in `should_refresh` paces
+#: the board pull: "the ceiling never blocks the day's FIRST pull; it
+#: stops the second, third and fortieth." It metered that promise against
+#: every credit the league spent, and the harvest is not a board pull —
+#: it spends without asking this ceiling and then counts against it. One
+#: lane writing to a meter it never reads.
+#:
+#: Measured on the droplet, 2026-09-10, baseball:
+#:
+#:     ceiling                  136 credits (9.3% of the day)
+#:     hist_event  ×9           225
+#:     hist_events ×1            10
+#:     live_* (the board)         0
+#:     board pulls authorised     0 in 24h, against 235 holds
+#:     "today's odds budget is spent for this slate (235 of 136
+#:      credits; a pull costs 48)"
+#:
+#: The harvest alone was 173% of the day's allowance, so the board pull —
+#: 48 credits, affordable twice over — was refused before it ever asked.
+#: For sixty-five hours, which is past the 48h show ceiling, so every one
+#: of the 290 props fell back to a proxy line and BOTH boards emptied.
+#: Ethan, that evening: "We haven't been getting any edge bets or most
+#: likely bets for mlb for a while now."
+#:
+#: Football never noticed: its ceiling is four times baseball's and its
+#: harvest is small, so the same rule has been broken all season for the
+#: one league that could not absorb it.
+#:
+#: EXCLUDED BY NAME, NOT BY A POSITIVE LIST, so a kind added later counts
+#: against the ceiling until somebody decides otherwise. That errs toward
+#: under-spending, which is the direction this module already prefers.
+#:
+#: THE MONTH'S GUARD IS UNTOUCHED. `RESERVE` and the balance refusal above
+#: still bound every credit; this only stops one lane's spend from
+#: silently disabling another's.
+HARVEST_KINDS = frozenset({"hist_event", "hist_events", "hist_board"})
+
 
 def log_spend(kind: str, sport: str = "", credits: int | None = None,
               detail: str = "", path: Path | str | None = None) -> None:
@@ -253,11 +294,18 @@ def budget_sport(sport: str | None) -> str:
 
 def spent_today(now: float | None = None,
                 path: Path | str | None = None,
-                sport: str | None = None) -> int:
+                sport: str | None = None,
+                exclude: frozenset | set | None = None) -> int:
     """Credits already spent today, from the ledger every paid call writes.
 
     ``sport`` NARROWS IT TO ONE LEAGUE'S SPEND, and omitting it where a
     per-sport budget is being checked is a bug with a name.
+
+    ``exclude`` DROPS WHOLE LANES from the total — see HARVEST_KINDS. A
+    report about what a league spent wants every credit; the ceiling that
+    paces the board pull wants the credits that ceiling actually governs.
+    Omitting it keeps the whole-ledger answer, which is what every caller
+    but that one ceiling wants.
 
     The cap compares this against `daily_allowance` times the sport's
     SHARE — one league's slice of the day. Summing every league's spend
@@ -296,13 +344,21 @@ def spent_today(now: float | None = None,
         stamp = (f.stat().st_mtime, f.stat().st_size)
     except OSError:
         return 0                      # no ledger yet: nothing spent
-    key = (day, want)
+    # …AND THE KINDS ARE PART OF THE KEY. Two callers now ask two
+    # different questions of the same ledger — "what did this league
+    # spend" and "what did its PACED lanes spend" — and a cache keyed on
+    # the league alone would answer the second with the first, which is
+    # the bug this parameter exists to fix, reintroduced one layer down.
+    skip = frozenset(exclude or ())
+    key = (day, want, skip)
     hit = _TODAY_CACHE.get(key)
     if hit and hit[0] == stamp:
         return hit[1]
     total = 0
     for r in read_spend(f):
         if str(r.get("iso", ""))[:10] != day:
+            continue
+        if skip and str(r.get("kind", "") or "") in skip:
             continue
         got = str(r.get("sport", "") or "")
         # UNATTRIBUTED SPEND COUNTS AGAINST EVERYONE, not against nobody.
@@ -1190,7 +1246,10 @@ def should_refresh(requests_per_refresh: int, now: float | None = None,
     per_refresh = refresh_credits(requests_per_refresh, credits)
     budget = max(int(daily_allowance(state, kw.get("today")) * base_share),
                  per_refresh)
-    already = spent_today(now, sport=sport)
+    # METERED AGAINST THE LANES THIS CEILING PACES — see HARVEST_KINDS
+    # for the sixty-five hours of empty baseball boards that came of
+    # metering it against every credit the league spent.
+    already = spent_today(now, sport=sport, exclude=HARVEST_KINDS)
     # …and the close is not refused by the day's ceiling either: the
     # ceiling paces ORDINARY refreshes, and this is the one pull whose
     # value does not come back tomorrow.
