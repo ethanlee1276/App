@@ -109,6 +109,13 @@ def build(sport: str, season: int | None = None,
     conn = connect()
     try:
         confs = cfb_conferences() if sport == "cfb" else None
+        # HOW MANY TEAMS THE MAP COVERED, carried out to the caller so the
+        # build log can say it. Silence is what let this break twice: the
+        # docstring above records the first time (a filename no builder
+        # ever wrote), and `except: return {}` swallowed that for as long
+        # as it lasted. `_live_table` forty lines down states the rule
+        # this now follows — "Failure is a STRING, not a silence."
+        conf_seen = len(confs or {})
         if waiting:
             # DO NOT ASK THE FEED FOR A SEASON NOBODY HAS PLAYED. Some
             # feeds 404, some return last season relabelled, some return
@@ -172,6 +179,8 @@ def build(sport: str, season: int | None = None,
         table["unit_rankings"] = ur
     if under_pressure:
         table["pressure"] = under_pressure
+    if sport == "cfb":
+        table["conf_map"] = conf_seen
     return table
 
 
@@ -219,6 +228,25 @@ def main() -> None:
             bits.append(f"bracket: {len(b['bracket']['rounds'])} round(s)")
         print(f"Standings {sport.upper()}: " + ", ".join(bits)
               + (f" — {b['note']}" if b["note"] else ""))
+        # A COLLEGE TABLE UNDER ONE HEADING IS A 188-ROW WALL. Measured in
+        # Chromium at 390x844 on 2026-09-10: one "League" card, 10,430px,
+        # 12.4 phone screens, 71% of the page — and the conference chips
+        # that would cut it never draw, because they need more than two
+        # groups. Whenever the map is empty this says so, with the reason
+        # it is empty being the next thing worth looking at.
+        # Warned on the SYMPTOM, not the input. When the league's own
+        # feed answers it carries each team's conference itself and the
+        # map is only an override, so an empty map is harmless there —
+        # warning on it would cry wolf on every good build. One group is
+        # the thing a reader actually meets.
+        if sport == "cfb" and len(b.get("groups") or []) < 2:
+            print(f"  ! college standings are ONE group of "
+                  f"{b['team_count']} teams — the conference chips need "
+                  f"more than two and cannot draw, so this is one card a "
+                  f"reader scrolls. conference map covered "
+                  f"{b.get('conf_map', 0)} team(s); cfb_conferences() "
+                  f"reads web/data/cfb.json and wants "
+                  f"home_conference/home_conf on each game.")
 
 
 if __name__ == "__main__":
