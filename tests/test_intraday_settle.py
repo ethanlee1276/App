@@ -47,8 +47,12 @@ def test_a_league_is_only_pulled_when_it_has_an_open_pick_that_day():
     i = SRC.index("def ingest_for_open_bets(")
     block = SRC[i:i + 2200]
     assert "_has_open(lconn, league, [d])" in block
-    helper = SRC[SRC.index("def _has_open("):]
-    assert "WHERE status='open' AND sport=?" in helper[:400], \
+    # To the next top-level def, not a fixed character count: this once
+    # failed only because `_has_open` grew a docstring and pushed its own
+    # SQL past character 400.
+    i = SRC.index("def _has_open(")
+    helper = SRC[i:SRC.index("\ndef ", i + 1)]
+    assert "WHERE status='open' AND sport=?" in helper, \
         "the open-pick check is not scoped to the league being ingested"
 
 

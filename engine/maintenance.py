@@ -381,12 +381,42 @@ SETTLE_LOOKBACK_DAYS = 3
 
 
 def _open_bet_days(lconn, today: _dt.date, lookback: int) -> list[str]:
-    """Distinct slate dates that still have open picks, newest-relevant
-    first. Anything older than the lookback is the daily job's problem."""
+    """Distinct CALENDAR days that still have open picks, oldest first.
+    Anything older than the lookback is the daily job's problem.
+
+    THE COLUMN IS NOT THE CALENDAR, AND FOR FOOTBALL IT NEVER WAS.
+    ``bets.date`` is the SLATE LABEL — an ISO day for the daily sports, and
+    for the NFL a WEEK, "2026-W01". Windowing on it compares that label
+    against "2026-09-08" as text, and 'W' sorts after every digit, so no
+    week label is ever inside any window this function can build. Every NFL
+    pick was invisible here.
+
+    That cost far more than one skipped ingest. `settle_open` returns
+    EARLY when this list comes back empty, so on a night whose only open
+    picks were football, the intraday settle did not run at all — no
+    ingest, no grade, no parlay pass. And `_has_open(lconn, "nfl", days)`
+    can never be true against a list this cannot contain, which is why no
+    football results pull could be wired to that gate.
+
+    `ledger.day_expr` is the one expression for "the day this bet belongs
+    to", and its own docstring says why there must only be one: several
+    readers window the journal and they have to agree. It reads
+    ``game_day`` — the real kickoff date, taken from nflverse's
+    ``gameday`` when the pick was journalled — and falls back to ``date``
+    for the daily sports, where the label already IS the day.
+
+    Rows journalled BEFORE ``game_day`` existed carry no kickoff date, so
+    they still fall back to a week label and still sit outside the window.
+    That is not made wrong by this change and inventing a day for them
+    would be worse; ``--backfill-days`` is what moves them.
+    """
+    from . import ledger
+    day = ledger.day_expr()
     floor = (today - _dt.timedelta(days=lookback - 1)).isoformat()
     rows = lconn.execute(
-        "SELECT DISTINCT date FROM bets WHERE status='open' AND date >= ? "
-        "AND date <= ? ORDER BY date", (floor, today.isoformat())).fetchall()
+        f"SELECT DISTINCT {day} AS d FROM bets WHERE status='open' "
+        f"AND {day} >= ? AND {day} <= ? ORDER BY d",
+        (floor, today.isoformat())).fetchall()
     return [r[0] for r in rows if r[0]]
 
 
@@ -568,12 +598,22 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
 
 
 def _has_open(lconn, sport: str, days: list[str]) -> bool:
+    """Does this league have an open pick on any of these CALENDAR days?
+
+    Matched on `ledger.day_expr` for the same reason `_open_bet_days`
+    selects it: the days handed in are calendar days, and an NFL bet's
+    ``date`` column is a week label that can never equal one. Matching on
+    the raw column meant a football league could not answer yes here even
+    when the caller had just been told the day was open.
+    """
     if not days:
         return False
+    from . import ledger
     marks = ",".join("?" * len(days))
     return bool(lconn.execute(
         f"SELECT 1 FROM bets WHERE status='open' AND sport=? "
-        f"AND date IN ({marks}) LIMIT 1", (sport, *days)).fetchone())
+        f"AND {ledger.day_expr()} IN ({marks}) LIMIT 1",
+        (sport, *days)).fetchone())
 
 
 def _hoops_ingesters():
