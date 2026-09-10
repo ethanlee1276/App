@@ -200,6 +200,25 @@ def test_the_chips_still_look_like_chips():
     assert "color: var(--brand-ink)" in active
 
 
+def test_the_strip_does_not_follow_the_page_down():
+    """Ethan, 2026-09-10: "this bar follows the page when you scroll."
+
+    It shipped `position: sticky; top: var(--topbar-h)` on the argument
+    that the league label should stay with the board it labels. On a
+    phone the strip wraps to TWO ROWS, so sticky pinned about 90px of
+    chrome beneath an already-fixed topbar and every card scrolled past
+    half-drawn behind it. The topbar is the one fixed thing; this is
+    board furniture and it scrolls with the board."""
+    i = CSS.index(".sportbar {")
+    rule = CSS[i:CSS.index("}", i)]
+    assert "position:" not in rule, f"the strip is positioned again: {rule.strip()!r}"
+    assert "top:" not in rule, rule
+    # Still the lid of the board — the ground and the rule under it stay,
+    # so removing the stick does not turn it into floating text.
+    assert "background: var(--bg)" in rule, rule
+    assert "border-bottom:" in rule, rule
+
+
 if __name__ == "__main__":
     fails = ran = 0
     for name, fn in sorted(globals().items()):

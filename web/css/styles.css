@@ -5827,10 +5827,22 @@ body.has-rail .shell {
    finger leaves it, half a chip clipped at the edge. Two rows on a
    phone, one on a laptop, and nothing hidden at either size.
 
-   STICKY UNDER THE TOPBAR, because the answer to "what am I looking at"
-   should not scroll away from the board it labels. */
+   IT SCROLLS WITH THE PAGE. It shipped sticky under the topbar on the
+   argument that "what am I looking at" should not scroll away from the
+   board it labels, and that argument lost to the thing itself: on a
+   phone the strip is TWO ROWS, so a sticky version pins about 90px of
+   chrome under a topbar that is already fixed, and every card on the
+   way past slides behind it half-drawn. Ethan, 2026-09-10, with the
+   Bet tracker card clipped mid-sentence by the chip row: "this bar
+   follows the page when you scroll."
+
+   The league is not in doubt while you read a board — every card on it
+   is that league, the picker sits at the top where you left it, and one
+   flick of the thumb brings it back. A second fixed bar costs real
+   screen on the smallest screen to answer a question nobody was
+   asking. The background and the rule under it stay: it is still the
+   lid of the board, it just does not follow you down. */
 .sportbar {
-  position: sticky; top: var(--topbar-h); z-index: 30;
   background: var(--bg); border-bottom: var(--hairline) solid var(--border-soft);
   padding: 10px 0;
 }
