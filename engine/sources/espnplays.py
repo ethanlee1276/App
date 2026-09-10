@@ -65,6 +65,23 @@ the type label, the score, the points a shot was worth — the same
 position `engine/mlb/sources/pbp.recent_plays` takes with MLB's
 `description`, and the injuries page's news section before it.
 
+ONE THING IS READ OUT OF THAT PROSE AND IT IS NOT PROSE: WHO WAS ON THE
+PLAY. Ethan, 2026-09-10: "Ok dont use there exact sentence then. We can
+still use that idea tho too push free information the public can view."
+A football play carries no athlete id — the probe found `teamParticipants`
+keyed by TEAM and nothing finer — so the only field linking a play to a
+person is the sentence, and a play-by-play that cannot say who caught the
+ball is not one.
+
+`_football_players` closes that gap without taking any expression: it
+matches the sentence against the BOX SCORE'S OWN ROSTER and keeps the
+names it recognises. Nothing is parsed out of the prose and nothing is
+stored from it — the input is a closed list of people already in this
+payload as structured athlete records, the output is which of them the
+play mentions, and the sentence is discarded in the same breath. A name
+is a fact about the game and free to anyone; the paragraph is ESPN's
+writing and stays theirs. The row's wording is the site's own.
+
 NFL IS INFERRED, NOT YET SEEN. The NFL probe ran pre-game and showed no
 drives (correct for a game that has not kicked off). It is the same
 `sports/football` API one segment over, so this module serves both — and
@@ -76,6 +93,7 @@ yields no plays and says so, rather than an empty strip that reads as
 from __future__ import annotations
 
 import json
+import re
 
 from .fetch import DEFAULT_AGENT, fetch_text
 from .livescores import ESPN_SCOREBOARD, _side_key, endzone_to_yard_line
@@ -172,6 +190,10 @@ def football_plays(payload: dict, league: str = "cfb",
     what lets a row carry `spot` — see `_football_row`. Without them the
     rows are exactly what they were, minus that one key.
     """
+    # ONE ROSTER PER PAYLOAD, not per play: `_athletes` walks the whole
+    # box score, and doing that a hundred and fifty times a game to
+    # answer the same question would be the expensive way to be correct.
+    roster = tuple(_athletes(payload).values())
     rows: list[dict] = []
     seen: set = set()
     for drive in _drives(payload):
@@ -184,12 +206,12 @@ def football_plays(payload: dict, league: str = "cfb",
                 continue
             if pid:
                 seen.add(pid)
-            rows.append(_football_row(p, team, home, away))
+            rows.append(_football_row(p, team, home, away, roster))
     return rows[-limit:] if limit and limit > 0 else rows
 
 
 def _football_row(p: dict, team: str, home: str = "",
-                  away: str = "") -> dict:
+                  away: str = "", roster=()) -> dict:
     """One play as the structured row the card and the page both draw.
 
     `spot` IS THE ONE DERIVED FIELD HERE and it is only present when it
@@ -211,6 +233,21 @@ def _football_row(p: dict, team: str, home: str = "",
     The raw `yard_line` stays on the row untouched and unused by any
     drawing — see the warning in `livescores.spot_to_yard_line` about
     its zero point.
+
+    `players` NAMES WHO DID IT, and is the other derived field here.
+    Ethan, 2026-09-10: "we should show what player go what reception or
+    yard you know what i mean, jot just +19 reception."
+
+    A basketball play carries `participants[].athlete.id` and resolves
+    straight through `_athletes`. The probe found no athlete id anywhere
+    on a football play — what it has is `teamParticipants`, a list of
+    two, keyed by TEAM — so the only field connecting this play to a
+    person is the sentence. `_football_players` reads it against the box
+    score's own roster and keeps only the names; ESPN's wording is never
+    stored and never published. See that function for why a roster match
+    is the safe shape and why it refuses rather than guesses.
+
+    Absent rather than empty when nothing resolved, like `spot` above.
     """
     pid = str(p.get("id") or "")
     start = p.get("start") or {}
@@ -233,6 +270,9 @@ def _football_row(p: dict, team: str, home: str = "",
         "away_score": _int(p.get("awayScore")),
         "home_score": _int(p.get("homeScore")),
     }
+    who = _football_players(p.get("text"), roster)
+    if who:
+        row["players"] = who
     spot = endzone_to_yard_line(start.get("yardsToEndzone"), home, away, team)
     if spot is not None:
         row["spot"] = spot
@@ -259,6 +299,7 @@ def football_drives(payload: dict, league: str = "cfb",
     de-duplicate by their own id. `scoring` is derived from the plays
     rather than read off a drive flag the probe did not list.
     """
+    roster = tuple(_athletes(payload).values())
     by_id: dict[str, dict] = {}
     order: list[str] = []
     for n, drive in enumerate(_drives(payload)):
@@ -274,7 +315,7 @@ def football_drives(payload: dict, league: str = "cfb",
                 continue
             if pid:
                 seen.add(pid)
-            rows.append(_football_row(p, team, home, away))
+            rows.append(_football_row(p, team, home, away, roster))
         entry = {
             "id": did,
             "team": team,
@@ -341,6 +382,67 @@ def _athletes(payload: dict) -> dict[str, str]:
                 if aid and name:
                     out[aid] = name
     return out
+
+
+#: Everything ESPN puts in brackets on a play — "(tackle by C.Gonzalez)",
+#: "(J.Doe kick)". Cut before matching, so a tackler is never mistaken for
+#: the man who carried the ball. A structural cut on a parenthetical, not
+#: a judgement about what the words mean.
+_FB_AFTER = re.compile(r"[(\[]")
+
+
+def _football_players(text: str, roster) -> list[str]:
+    """Which of THIS GAME'S players a play involved, in order, or [].
+
+    THE FACTS, NOT THE SENTENCE. Ethan, 2026-09-10, after the first cut
+    of this carried ESPN's own wording: "Ok dont use there exact sentence
+    then. We can still use that idea tho too push free information the
+    public can view." He is drawing the right line, and it is the line
+    the law draws too — who caught a pass is a fact, free to anyone; the
+    paragraph ESPN wrote about it is their writing. `docs/LAUNCH.md` says
+    to assume no right to the second, and `test_prose_never_reaches_a_
+    deep_file` holds this repo to that.
+
+    So the sentence is read here, in memory, and thrown away. What
+    survives onto the row is a list of NAMES.
+
+    IT IS A ROSTER MATCH, NOT A PARSE, and that is the whole reason this
+    is safe enough to ship. `roster` is every player in this game's box
+    score — structured athlete records, the same source a basketball row
+    already resolves its name from. Nothing here invents a name or reads
+    one out of prose; it asks which of a CLOSED LIST of people this play
+    mentions. A name that is not on the team sheet cannot come out of
+    this function.
+
+    AMBIGUITY IS REFUSED, NOT GUESSED — the rule the rest of this file
+    settles every hard case with. ESPN abbreviates a first name
+    ("S.Darnold"), so two players sharing a surname and an initial
+    produce the same match; when that happens BOTH are dropped and the
+    row carries fewer names. A missing name reads as a plainer line. A
+    wrong name reads exactly like a right one.
+    """
+    words = _FB_AFTER.split(str(text or ""), 1)[0]
+    if not words.strip():
+        return []
+    at: dict[int, set] = {}
+    for full in roster or ():
+        parts = str(full or "").split()
+        if len(parts) < 2:
+            continue
+        first, last = parts[0], " ".join(parts[1:])
+        # "Sam Darnold", "S.Darnold" and "S. Darnold" all name the same
+        # man; the surname must match whole ("Brown" is not "Browning").
+        # The spelled-out form needs the space it is written with —
+        # "Sam Darnold", not "SamDarnold". Without `\s+` on that branch
+        # only the abbreviated form ever matched, which is most of an NFL
+        # feed and none of a college one.
+        pat = re.compile(r"\b(?:%s\s+|%s\.\s?)%s\b" % (
+            re.escape(first), re.escape(first[:1]), re.escape(last)))
+        m = pat.search(words)
+        if m:
+            at.setdefault(m.start(), set()).add(full)
+    return [next(iter(who)) for pos, who in sorted(at.items())
+            if len(who) == 1]
 
 
 def _sides_from_boxscore(payload: dict, league: str) -> dict[str, str]:

@@ -36354,6 +36354,27 @@ function playsHTML(g) {
      the drive's team resolved into the board's own vocabulary, so it is
      the same string the card's home/away carry. */
   const ord = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+  /* WHO DID IT. Ethan, 2026-09-10: "lets make the play by play look
+     better to. we should show what player go what reception or yard you
+     know what i mean, jot just +19 reception."
+
+     He was reading `SEA · Pass Reception +19 · 2nd & 7` — a category, a
+     number and a situation, with nobody in it. A hoops row has a name
+     because a basketball play carries an athlete id; a football play
+     carries none, so `espnplays._football_players` recovers the names by
+     matching the feed's sentence against the box score's own roster and
+     keeps only the names. The sentence itself is never stored and never
+     drawn — `docs/LAUNCH.md` says to assume no right to ESPN's writing,
+     and Ethan's call was the same one: "dont use there exact sentence
+     then. We can still use that idea tho too push free information the
+     public can view." The wording below is the site's own.
+
+     TWO NAMES GET AN ARROW, ONE DOES NOT. A pass resolves to thrower
+     then catcher and the arrow is the fact of the play; a rush resolves
+     to one man, and anything else — a penalty, a kick, a sack with a
+     credited defender — is a list, joined by the same middot the row
+     already uses. The arrow is never drawn over a relationship the row
+     cannot vouch for. */
   const footballRow = (p) => {
     const q = p.period ? `Q${p.period}` : "";
     const when = `${q}${p.clock ? ` ${p.clock}` : ""}`;
@@ -36363,9 +36384,13 @@ function playsHTML(g) {
       : p.scoring ? ` <span class="lb-rbi">SCORE</span>` : "";
     const at = (p.away_score != null && p.home_score != null)
       ? `<span class="lb-pscore">${p.away_score}–${p.home_score}</span>` : "";
+    const names = (p.players || []).filter(Boolean).map(escapeHtml);
+    const pass = /pass|reception/i.test(String(p.event || ""));
+    const who = names.length === 2 && pass ? names.join(" → ") : names.join(" · ");
     return `<div class="lb-play${p.scoring ? " scoring" : ""}${p.turnover ? " turnover" : ""}">
       <span class="lb-inn">${escapeHtml(when)}</span>
       <span class="lb-what">${escapeHtml(p.team || "")}${p.team ? " · " : ""}${
+        who ? `<b>${who}</b> · ` : ""}${
         escapeHtml(p.event)}${escapeHtml(yds)}${escapeHtml(dd)}${flag}</span>
       ${at}</div>`;
   };
