@@ -87,6 +87,18 @@ from .yardagefit import display_prob
 #: being.
 RANK_AUC = {
     "anytime_td": 0.721,
+    #: PASSING touchdowns, measured 2026-09-10 on this box's own
+    #: `player_game_logs`: the blend in `engine/passtd` fitted on
+    #: 2021-2024 and scored on HELD-OUT 2025 sorts a quarterback who
+    #: throws at least one from one who does not at 0.687 over 647
+    #: games. The in-sample figure was 0.715 and this is deliberately
+    #: not that one — the whole point of holding a season back is to
+    #: publish the number that survived it.
+    #:
+    #: Sits just under the scorers' 0.721, which is the right
+    #: neighbourhood: it is the same kind of question about the same
+    #: kind of event, asked of the man who throws it.
+    "pass_td": 0.687,
     "receptions": 0.770,
     "rush_yds": 0.761,
     "rec_yds": 0.733,

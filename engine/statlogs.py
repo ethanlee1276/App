@@ -46,7 +46,23 @@ SPORT_MARKETS = {
             # MARKET_LABELS) — the page dedupes chips BY LABEL, so a
             # different spelling here would put the same stat on two
             # chips whenever the market is also priced.
-            ("anytime_td", "Anytime TD")),
+            ("anytime_td", "Anytime TD"),
+            # THE QUARTERBACK'S OWN TOUCHDOWNS, missing from this tuple
+            # since it was written. Ethan, 2026-09-10: "when we search a
+            # QB, we are not showing passing touchdown stats at all."
+            # The rows have been on disk the whole time —
+            # `ingest.NFL_USAGE_MARKETS` has stored `pass_td` per
+            # player-week since August — and this list, which is what
+            # the search page draws its chips from, simply did not name
+            # the market. Anytime TD is the man who SCORES; this is the
+            # man who throws it, and a quarterback's page showed neither
+            # his own number nor any hint one existed.
+            #
+            # Label matched to `models.MARKET_LABELS[PASS_TD]` for the
+            # dedupe-by-label reason the anytime_td note gives above:
+            # `pass_td` is now a priced market too, so a second spelling
+            # here would draw one stat on two chips.
+            ("pass_td", "Passing TDs")),
     "mlb": (("total_bases", "Total Bases"), ("hits", "Hits"),
             ("home_runs", "Home Runs"), ("strikeouts", "Strikeouts"),
             ("outs", "Outs Recorded")),
@@ -61,9 +77,13 @@ SPORT_MARKETS = {
     # the "no free player-level feed covers 134 programs" line in the
     # front end was stale, and this is the layer that retires it. Same
     # labels as the NFL's for the same dedupe-by-label reason above.
+    # College keeps the same shape, and `sources.cfbstats.MARKETS`
+    # writes `pass_td` for it too — a college quarterback's page was
+    # missing the column for the same reason the NFL's was.
     "cfb": (("pass_yds", "Passing Yards"), ("rush_yds", "Rushing Yards"),
             ("rec_yds", "Receiving Yards"), ("receptions", "Receptions"),
-            ("carries", "Carries"), ("targets", "Targets")),
+            ("carries", "Carries"), ("targets", "Targets"),
+            ("pass_td", "Passing TDs")),
 }
 
 N_GAMES = 10       # what a profile chart can legibly hold

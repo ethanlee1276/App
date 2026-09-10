@@ -68,14 +68,25 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
         assert oa.SPORT_CONFIG[sport]["alternates"] is oa.ALT_ODDS_TO_MARKET, sport
     for sport in ("mlb", "nba", "wnba", "ufc"):
         assert not oa.SPORT_CONFIG[sport].get("alternates"), sport
-    # 4 props + 1 scorer + 3 game markets + 4 ladders, per event per region.
+    # 5 props + 1 scorer + 3 game markets + 4 ladders, per event per
+    # region. Five since 2026-09-10, when the NFL added
+    # `player_pass_tds` (engine/passtd.py); college stayed at four,
+    # measured out.
+    #
+    # DERIVED, NOT REPEATED. The literal 12 was written beside this sum
+    # and both had to be edited together, which is one edit too many —
+    # the budget's job is to equal what the config asks for, and that is
+    # the assertion.
     cfg = oa.SPORT_CONFIG["nfl"]
     n = len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3
-    assert n == 12 == B.credits_per_event("nfl") == B.EVENT_CREDITS["nfl"]
+    assert n == B.credits_per_event("nfl") == B.EVENT_CREDITS["nfl"], n
+    assert len(cfg["markets"]) == 5, "the NFL should be buying five prop markets"
     # Baseball buys no ladders and keeps the generic price; the cheap
     # lines lane spends the NFL's money at the NFL's price.
     assert B.credits_per_event("mlb") == B.CREDITS_PER_EVENT == 8
-    assert B.credits_per_event("nfl_lines") == 12
+    # The lines lane spends the SPORT'S money (`budget_sport`), so it
+    # answers the sport's own event price — not a price of its own.
+    assert B.credits_per_event("nfl_lines") == B.EVENT_CREDITS["nfl"]
     assert B.credits_per_event(None) == 8
     src = inspect.getsource(oa.apply_odds_to_slate)
     assert "+ list(alt_map)" in src, "the ladders are not on the request"

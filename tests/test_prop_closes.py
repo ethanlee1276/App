@@ -197,7 +197,21 @@ def test_nothing_harvested_is_reported_as_missing_and_names_the_markets():
     conn = db.connect(":memory:")
     layer = _layer(conn, "nfl")
     assert layer.state == C.MISSING
-    assert "receptions" in layer.detail
+    # NAMED OR COUNTED, never one market by hand. `_names` prints the
+    # first four and tallies the rest, so `"receptions" in layer.detail`
+    # was really an assertion about where receptions falls in the
+    # alphabet — it passed for a year and then failed the day a sixth NFL
+    # market (`pass_td`) sorted above it and pushed it behind the "+2
+    # more". Nothing about the report had changed.
+    boarded = C._prop_markets("nfl")
+    named = [m for m in boarded if m in layer.detail]
+    assert named, f"the report names no market at all: {layer.detail}"
+    missing = len(boarded) - len(named)
+    assert not missing or f"(+{missing} more)" in layer.detail, \
+        f"{missing} of {len(boarded)} market(s) named nowhere: {layer.detail}"
+    # And the FIX line is where the operator gets all of them, which is
+    # what makes the cap above safe to have.
+    assert all(m in layer.fix for m in boarded), layer.fix
     assert "synthetic -110" in layer.detail
     # WHAT the synthetic -110 applies to. Forward bets are journaled at
     # the real book price they were taken at; it is the walk-forward

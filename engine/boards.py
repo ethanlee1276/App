@@ -222,9 +222,19 @@ FOOTBALL_SHELVES = (
     ("rushing", "Rushing yards", ("rush_yds",),
      "Backfield workload. Ranks well; the price fit is shut, so these "
      "are a read rather than a card."),
-    ("passing", "Passing yards", ("pass_yds",),
-     "Quarterback volume. The weakest ranking of the five and labelled "
-     "as such rather than mixed in silently."),
+    # PASSING TOUCHDOWNS JOINED THE YARDS on 2026-09-10 (Ethan: "we also
+    # don't display that as a pick in the edge bets or most likely
+    # bets"). One shelf rather than two, because they are the same
+    # question about the same player and a reader scanning for his
+    # quarterback should find both in one place. The shelf's header
+    # figure is the MINIMUM across its markets (`_shelf_auc`), so adding
+    # the weaker of the two cannot flatter the stronger — 0.687 against
+    # passing yards' 0.691, near enough that the header barely moves.
+    ("passing", "Passing", ("pass_yds", "pass_td"),
+     "Quarterback volume and the touchdowns that come with it. The "
+     "weakest ranking on the board and labelled as such rather than "
+     "mixed in silently — passing yards sort at 0.691 and passing "
+     "touchdowns at 0.687, both measured, both barely above the bar."),
     # GAME LINES, LAST. Ethan, 2026-09-02: "we have no money lines or
     # spreads or totals or anything like that." Measured the same day
     # (engine.gamerank): the model ranks who WINS (0.64) and sorts

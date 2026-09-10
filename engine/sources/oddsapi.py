@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from .fetch import CACHE_DIR, USER_AGENT
 from ..secrets import load_local_secrets
 from ..models import (
-    SportsbookLine, PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS,
+    SportsbookLine, PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS,
 )
 
 ODDS_BASE = "https://api.the-odds-api.com/v4"
@@ -42,7 +42,31 @@ ODDS_TO_MARKET = {
     "player_reception_yds": REC_YDS,
     "player_receptions": RECEPTIONS,
 }
-MARKET_TO_ODDS = {v: k for k, v in ODDS_TO_MARKET.items()}
+
+#: THE NFL BUYS ONE MORE, and this is the only market either football
+#: league prices that the other does not.
+#:
+#: Ethan, 2026-09-10: "we also don't display that as a pick in the edge
+#: bets or most likely bets". `player_pass_tds` was never requested, so
+#: no book price for a quarterback's touchdowns has ever entered this
+#: system — see engine/passtd.py for the model and the measurement.
+#:
+#: COLLEGE IS DELIBERATELY OUT, and the reason is measured rather than
+#: chosen. Run 2026-09-10 against this box's own 4,474 college
+#: quarterback-games (619 passers, 2022-2025), the same projection sorts
+#: a college passer who throws two or more from one who does not at
+#: 0.5925 — BELOW `likely.MIN_RANK_AUC` — and the one-or-more question
+#: cannot be scored at all, because at a college base rate of 1.86 per
+#: game there are almost no negatives to rank against. So the market
+#: would be bought, and then have nothing honest to say. The NFL's own
+#: figure is 0.687 on held-out 2025.
+#:
+#: The two leagues still SHARE the four above by reference, which is
+#: what `tests/test_cfb_feed` is protecting: the divergence is one
+#: named key with a measurement behind it, not two lists drifting.
+NFL_ODDS_TO_MARKET = {**ODDS_TO_MARKET, "player_pass_tds": PASS_TD}
+
+MARKET_TO_ODDS = {v: k for k, v in NFL_ODDS_TO_MARKET.items()}
 
 #: THE ALTERNATE LADDERS, same four stats. A main line is hung where the
 #: book thinks the coin is fair, so a calibrated probability at it sits
@@ -306,8 +330,11 @@ SPORT_CONFIG = {
     # event call — the API bills per market per region — so adding one
     # raises an NFL event pull from 7 to 8 credits. Priced in on purpose:
     # the TD board cannot exist without the quote (see _long_shots).
+    # …and NFL_ODDS_TO_MARKET, which is the shared four PLUS the
+    # quarterback's touchdown market. College is measured out of it —
+    # see the note on that constant.
     "nfl": {"sport_key": "americanfootball_nfl",
-            "markets": ODDS_TO_MARKET, "teams": TEAM_ABBR,
+            "markets": NFL_ODDS_TO_MARKET, "teams": TEAM_ABBR,
             "scorers": SCORER_ODDS_TO_MARKET,
             "alternates": ALT_ODDS_TO_MARKET},
     "mlb": {"sport_key": "baseball_mlb",

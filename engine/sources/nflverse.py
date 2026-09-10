@@ -23,7 +23,7 @@ from .fetch import (fetch_csv, load_local_csv, CACHE_DIR, DataUnavailable,
 from .. import carry as _carry
 from ..models import (
     Team, DefenseProfile, Weather, Game, Prop, GameLog, SportsbookLine,
-    PASS_YDS, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
+    PASS_YDS, PASS_TD, RUSH_YDS, REC_YDS, RECEPTIONS, ANYTIME_TD,
 )
 from ..data_loader import Slate
 
@@ -47,6 +47,7 @@ def _weekly_stats_urls(season: int) -> list[str]:
 # Which stat column feeds each market, with fallbacks across schema versions.
 MARKET_COLUMNS = {
     PASS_YDS: ("passing_yards",),
+    PASS_TD: ("passing_tds",),
     RUSH_YDS: ("rushing_yards",),
     REC_YDS: ("receiving_yards",),
     RECEPTIONS: ("receptions",),
@@ -445,7 +446,12 @@ def build_defense_profiles(rows: list[dict], upto_week: int) -> dict[str, Defens
 # --- slate assembly ---------------------------------------------------------
 # Default markets to build per position when auto-selecting players.
 POSITION_MARKETS = {
-    "QB": [(PASS_YDS, "starter")],
+    # A QUARTERBACK HAS TWO MARKETS, not one. Passing touchdowns were
+    # missing from this table, so no `Prop` existed for a quote to
+    # attach to and the board could not have carried one even after the
+    # odds key was added (engine/passtd.py). The role string is the same
+    # — he is the starter for both.
+    "QB": [(PASS_YDS, "starter"), (PASS_TD, "starter")],
     "RB": [(RUSH_YDS, "rb1")],
     "WR": [(REC_YDS, "wr1")],
     "TE": [(RECEPTIONS, "te")],

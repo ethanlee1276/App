@@ -23,6 +23,13 @@ RUSH_YDS = "rush_yds"
 REC_YDS = "rec_yds"
 RECEPTIONS = "receptions"
 ANYTIME_TD = "anytime_td"        # scores a touchdown (rushing or receiving)
+#: PASSING touchdowns — the quarterback's own market, and a different
+#: question from ANYTIME_TD, which pays the man who scores rather than
+#: the man who throws it (`ingest.nfl_td_rows` says so where it excludes
+#: passing TDs from the anytime rows). Ethan, 2026-09-10: "when we search
+#: a QB, we are not showing passing touchdown stats at all, and we also
+#: don't display that as a pick in the edge bets or most likely bets".
+PASS_TD = "pass_td"
 
 # Human labels for the markets, used in the UI and explanations.
 MARKET_LABELS = {
@@ -31,6 +38,7 @@ MARKET_LABELS = {
     REC_YDS: "Receiving Yards",
     RECEPTIONS: "Receptions",
     ANYTIME_TD: "Anytime TD",
+    PASS_TD: "Passing TDs",
 }
 
 
