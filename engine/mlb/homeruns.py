@@ -32,6 +32,7 @@ from .models import MLBProp, MLBGame, HOME_RUNS, MARKET_LABELS
 from .parks import get_park
 from ..longshots import (
     LongShot, MLB_HR_ODDS, prob_at_least_one, in_odds_window, build_pick, select,
+    YES_SIDE, YES_LINE,
 )
 from ..statmath import clamp
 
@@ -322,7 +323,7 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
             # to surface it. Matched to the value pick's own row so one
             # bet has one id, and to the journal's OVER 0.5.
             "market": "home_runs", "market_label": "Home Run",
-            "side": "OVER", "line": 0.5,
+            "side": YES_SIDE, "line": YES_LINE,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),

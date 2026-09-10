@@ -82,6 +82,21 @@ CFB_TD_ODDS = (-200, 900)
 NFL_AVG_TEAM_POINTS = 22.6
 NFL_AVG_TEAM_OFF_TDS = 2.4
 
+#: ONE BET, ONE SPELLING. Every market this chain prices is the same
+#: shape of question — does this happen at least once — an anytime
+#: touchdown, a home run. There is no other number to take, the journal
+#: grades it as OVER 0.5, and `web/js/app.js:propId` builds a row's id
+#: out of `player|market|side|line`, so a row that names neither cannot
+#: be addressed at all.
+#:
+#: Written here rather than at each row because three builders were
+#: spelling it separately — the NFL watch, the college watch, the home-run
+#: watch — and a value pick was not spelling it at all. Two lists that
+#: disagree about which bet a row is are two rows for one bet, and the
+#: board's own dedupe (`pipeline._long_shots`) assumes they agree.
+YES_SIDE = "OVER"
+YES_LINE = 0.5
+
 
 @dataclass
 class LongShot:
@@ -145,6 +160,29 @@ class LongShot:
     headshot: str = ""
     #: The §10 0–100 score the grade is read from (one grade, 2026-09-02).
     quality: int = 0
+    #: WHAT THE PROP PAGE DRAWS, and what a value pick has never carried.
+    #: `renderPropPage` reads one field per section — `logs` for the game
+    #: log, `form` for the windows, `all_lines` for the shop strip — and
+    #: draws nothing when the key is absent, which is the right thing for
+    #: it to do and reads as a broken page. Every one of these is already
+    #: on the `Prop` the pick was built from; nothing copied them across,
+    #: exactly as `headshot` above was not copied for a fortnight.
+    #:
+    #: It costs more than an empty page. `propOpenable` opens a card only
+    #: when it can see three games, so a scorer with no log is not a door
+    #: at all — and `likelyDoor` then falls back to the PLAYER page.
+    #: Ethan, 2026-09-10: "when you click on props from the most likely,
+    #: it pulls up the search page with the player on there." The watch
+    #: rows were fixed on the 10th; the value picks are the same defect,
+    #: one list over.
+    #:
+    #: Defaulted empty, so a chain that has no game log yet (college —
+    #: its candidates are built from a usage table, not a Prop) builds
+    #: exactly as before and shows exactly what it can prove.
+    logs: list = field(default_factory=list)
+    form: dict = field(default_factory=dict)
+    all_lines: list = field(default_factory=list)
+    recent_values: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -167,6 +205,15 @@ class LongShot:
             "vig_listed": self.vig_listed,
             "game_date": self.game_date, "game_kickoff": self.game_kickoff,
             "live": self.live, "headshot": self.headshot,
+            # WHICH BET THIS IS, spelled once for the whole chain — see
+            # YES_SIDE. Without a side and a line `propId` cannot build
+            # an id for the row, `quotesForSide` cannot tell the shop's
+            # own answer from an off-the-field price, and `attach_series`
+            # skips it, which is why a value pick drew no tape either.
+            "side": YES_SIDE, "line": YES_LINE,
+            "logs": self.logs, "form": self.form,
+            "all_lines": self.all_lines,
+            "recent_values": self.recent_values,
             "headline": f"{self.player} — {self.market_label} ({self.odds:+d})",
         }
 

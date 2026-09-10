@@ -50,6 +50,7 @@ from .models import Game, Prop, Team, ANYTIME_TD, MARKET_LABELS
 from .longshots import (
     LongShot, NFL_TD_ODDS, NFL_AVG_TEAM_POINTS, NFL_AVG_TEAM_OFF_TDS,
     prob_at_least_one, in_odds_window, build_pick, select,
+    YES_SIDE, YES_LINE,
 )
 from .statmath import clamp
 
@@ -425,6 +426,41 @@ def _td_form(vals: list) -> dict:
             "season": avg(vals), "career": None, "vs_opponent": None}
 
 
+def prop_depth(prop) -> dict:
+    """The four page fields a scorer row carries, off its own `Prop`.
+
+    `logs`, `form`, `all_lines` and `recent_values` — the keys
+    `pipeline._rec_to_dict` publishes for an ordinary prop, spelled the
+    same way, because the prop page is one page and must not need a
+    second shape to read.
+
+    Shared by the watch list and the value picks. It was written on the
+    watch alone first, which left the value picks with an empty page and
+    no door at all — `propOpenable` needs three games before it will open
+    a card, so a pick with no log fell through `likelyDoor` to the PLAYER
+    page. Ethan, 2026-09-10: "it pulls up the search page with the player
+    on there." One helper so the two lists cannot drift apart again.
+
+    `logs` carries no wind or park keys — `pipeline._log_wind` adds those
+    and importing it here would close a cycle (pipeline imports this
+    module). `propLogRows` reads weather defensively and prints none,
+    which is right for a market that never showed it.
+    """
+    logs = list(getattr(prop, "logs", None) or ())
+    vals = [g.value for g in logs]
+    return {
+        "logs": [{"week": g.week, "opponent": g.opponent,
+                  "value": g.value, "home": g.home} for g in logs],
+        "form": _td_form(vals),
+        "all_lines": [
+            {"book": ln.book, "line": ln.line,
+             "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+            for ln in (getattr(prop, "lines", None) or ())],
+        # TDs per game, most recent first — the spark at line 0.5.
+        "recent_values": vals[:12],
+    }
+
+
 def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
                  ) -> list[dict]:
     """The week's most likely scorers, ranked by model probability —
@@ -502,10 +538,12 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             # reads `rec.side`/`rec.line`), so a player who is on both
             # lists has ONE id rather than two descriptions of one bet.
             # OVER 0.5 is also how the journal writes it and how
-            # `settle_from_history` grades it.
+            # `settle_from_history` grades it — and it is now written in
+            # ONE place, `longshots.YES_SIDE`, because three watch
+            # builders were each spelling it separately.
             "market": ANYTIME_TD,
             "market_label": MARKET_LABELS.get(ANYTIME_TD, "Anytime TD"),
-            "side": "OVER", "line": 0.5,
+            "side": YES_SIDE, "line": YES_LINE,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
             "book_prob": round(american_to_prob(odds), 4),
@@ -522,34 +560,14 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             # shipping it with a single sentence of reasoning while the
             # value picks carried the full chain had it exactly backwards.
             "reasons": info["reasons"],
-            # TDs per game, most recent first — the spark at line 0.5.
-            "recent_values": [g.value for g in prop.logs][:12],
-            # THE THREE SECTIONS THE PROP PAGE COULD NOT DRAW. Ethan,
+            # THE FOUR SECTIONS THE PROP PAGE COULD NOT DRAW. Ethan,
             # 2026-09-10, once the touchdown rows finally opened their
             # page: "it's not showing the last five games. or the shop
             # the price. for the form or how the line is moving today."
-            #
-            # Every one of them was a missing FIELD rather than a broken
-            # renderer, and all three were already in scope here — the
-            # row was flattening `prop.logs` to twelve bare numbers and
-            # throwing the rest away, and never looked at `prop.lines`
-            # at all. `_rec_to_dict` publishes exactly these keys for an
-            # ordinary prop, so they are spelled the same way: a page
-            # that reads one shape must not need a second.
-            #
-            # `logs` has no wind or park keys — `pipeline._log_wind`
-            # adds those and importing it here would close a cycle
-            # (pipeline imports this module). `propLogRows` reads them
-            # defensively and simply prints no weather, which is right
-            # for a market where it was never shown anyway.
-            "logs": [{"week": g.week, "opponent": g.opponent,
-                      "value": g.value, "home": g.home}
-                     for g in prop.logs],
-            "form": _td_form([g.value for g in prop.logs]),
-            "all_lines": [
-                {"book": ln.book, "line": ln.line,
-                 "over_odds": ln.over_odds, "under_odds": ln.under_odds}
-                for ln in (getattr(prop, "lines", None) or [])],
+            # Every one was a missing FIELD rather than a broken
+            # renderer — see `prop_depth`, which the value picks now
+            # read too.
+            **prop_depth(prop),
             "caveats": (list(info["caveats"]) + (
                 [f"{prop.player} listed {status} — hold until inactives "
                  f"confirm status"] if status else [])),
@@ -600,6 +618,16 @@ def build_td_longshots(candidates: list[dict], limit: int = 6,
         if pick:
             pick.game_date = getattr(game, "date", "")
             pick.game_kickoff = getattr(game, "kickoff", "")
+            # THE PAGE, on the value picks too. `build_pick` prices; it
+            # has never seen a game log, and `LongShot` carried none — so
+            # a scorer the board actually RECOMMENDS had no chart, no
+            # form, no shop strip, and (because `propOpenable` wants
+            # three games before it opens a card) no door: the Most
+            # Likely row for him fell through to the search page. The
+            # watch rows were given this on 2026-09-10 and the picks were
+            # not, which is the same defect one list over.
+            for k, v in prop_depth(prop).items():
+                setattr(pick, k, v)
             pick.live = bool(getattr(game, "live", None) and game.live.state == "live")
             snap = c.get("snap_share")
             if snap is not None:

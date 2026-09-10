@@ -50,7 +50,7 @@ cannot be told from noise.
 from __future__ import annotations
 
 from ..longshots import (CFB_TD_ODDS, prob_at_least_one, in_odds_window,
-                         build_pick, select)
+                         build_pick, select, YES_SIDE, YES_LINE)
 from ..sources.oddsapi import best_scorer_price
 from ..statmath import clamp
 
@@ -1068,7 +1068,7 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         # as OVER 0.5.
                         "market": "anytime_td",
                         "market_label": "Anytime TD",
-                        "side": "OVER", "line": 0.5,
+                        "side": YES_SIDE, "line": YES_LINE,
                         "shop_refused": shop_refused,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),

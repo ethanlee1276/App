@@ -58,23 +58,25 @@ def _watch_row():
 
 
 # --- the three fields that were in scope and discarded ----------------------
+# They are read out of `prop_depth`, which both the watch list and the
+# value picks now spread — see `test_the_keys_match_...` for the link.
 def test_the_row_carries_the_game_log_not_just_the_spark():
     """`recent_values` is twelve bare numbers for the card's sparkline;
     the page's "Last N games" needs the opponent and the week beside each
     one, which `prop.logs` has and the row was dropping."""
-    block = _watch_row()
+    block = _depth_helper()
     assert '"logs": [{"week": g.week, "opponent": g.opponent,' in block
     assert '"recent_values"' in block, "the card's spark must survive too"
 
 
 def test_the_row_carries_its_form_windows():
-    assert '"form": _td_form(' in _watch_row()
+    assert '"form": _td_form(' in _depth_helper()
 
 
 def test_the_row_carries_every_book_that_quoted_it():
     """Shopping matters more here than almost anywhere — an
     anytime-touchdown price moves 40 cents between books."""
-    block = _watch_row()
+    block = _depth_helper()
     assert '"all_lines": [' in block
     assert '"over_odds": ln.over_odds, "under_odds": ln.under_odds' in block
 
@@ -132,12 +134,25 @@ def test_each_section_draws_nothing_without_its_key():
         assert guard in APP[j:APP.index("\n}", j)], fn
 
 
+def _depth_helper():
+    i = TD.index("def prop_depth(")
+    return TD[i:TD.index("\ndef ", i + 1)]
+
+
 def test_the_keys_match_the_ordinary_prop_rows_own_spelling():
-    """A page that reads one shape must not need a second."""
+    """A page that reads one shape must not need a second.
+
+    The keys moved into `prop_depth` on 2026-09-10, so that the VALUE
+    picks could read the same four fields — they had none of them, and a
+    scorer the board recommends was therefore not even a door. The watch
+    row spreads the helper; the helper is where the spelling lives."""
     pipe = _src("engine", "pipeline.py")
+    helper = _depth_helper()
     for key in ('"logs": [', '"form": {', '"all_lines": ['):
         assert key in pipe, f"{key} is not what an ordinary prop publishes"
-        assert key.split(":")[0] + ":" in _watch_row()
+        assert key.split(":")[0] + ":" in helper, key
+    assert "**prop_depth(prop)" in _watch_row(), \
+        "the watch row no longer reads the shared helper"
 
 
 if __name__ == "__main__":

@@ -267,7 +267,14 @@ def test_every_watchlist_row_says_what_market_it_is():
     for mod in ("engine/touchdowns.py", "engine/cfb/tds.py",
                 "engine/mlb/homeruns.py"):
         src = _src(mod)
-        assert '"side": "OVER", "line": 0.5,' in src, \
+        # SPELLED EITHER WAY. What must be true is that the row names a
+        # side and a line at all; where the words come from is not this
+        # test's business. They moved to `longshots.YES_SIDE`/`YES_LINE`
+        # on 2026-09-10 — one place for one bet, because the value picks
+        # were not spelling it anywhere — and a literal match called that
+        # a regression, which it was not.
+        assert ('"side": YES_SIDE, "line": YES_LINE,' in src
+                or '"side": "OVER", "line": 0.5,' in src), \
             f"{mod}'s watch row still has no side or line"
 
 
