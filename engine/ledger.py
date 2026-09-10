@@ -1264,12 +1264,26 @@ def log_predmarket(conn, recs: list[dict], date: str | None = None) -> int:
         model_p = r.get("model_p")
         p_side = (float(model_p) if side == "YES" else 1 - float(model_p)) \
             if model_p is not None else None
+        # THE DAY THE CONTRACT IS ABOUT, not the day the desk spoke.
+        # This insert never wrote `game_day` at all, so every row left
+        # here NULL and `day_expr` fell back to `date` — which for this
+        # bucket alone is the RECOMMENDATION day. The two can be a month
+        # apart: on 2026-08-11 the desk journaled 130 NFL game contracts
+        # for September, and every one of them bucketed into August on
+        # the profit calendar, the curve and the settle window.
+        #
+        # `predmarket_event_date` exists for exactly this and was written
+        # against the same problem one layer down; reading the ticker
+        # here is what stops the hole opening again on every new row.
+        # Falls back to the slate date when a ticker carries no date,
+        # which is the state every row was already in.
         cur = conn.execute(
-            "INSERT OR IGNORE INTO bets (ts, sport, date, player, market, "
-            "side, line, book, odds, hit_prob, edge, grade, stake_units, "
-            "stake_dollars, status, category) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'predmarket')",
-            (now, r.get("sport", "kalshi"), date, r["ticker"],
+            "INSERT OR IGNORE INTO bets (ts, sport, date, game_day, player, "
+            "market, side, line, book, odds, hit_prob, edge, grade, "
+            "stake_units, stake_dollars, status, category) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'open', 'predmarket')",
+            (now, r.get("sport", "kalshi"), date,
+             predmarket_event_date(r["ticker"]) or date, r["ticker"],
              r.get("desk", "kalshi_ml"), side, round(cost * 100, 1),
              "kalshi", _price_to_american(cost), p_side,
              (r.get("edge_pts") or 0) / 100.0,
@@ -2200,12 +2214,23 @@ def backfill_game_days(conn, hist_conn=None, dry_run: bool = False) -> dict:
     close = hist_conn if hist_conn is not None else _hist()
     out = {"filled": 0, "unresolved": 0, "by_route": {}, "by_reason": {}}
     rows = conn.execute(
-        "SELECT id, sport, date, player, market FROM bets "
+        "SELECT id, sport, date, player, market, category FROM bets "
         "WHERE game_day IS NULL OR game_day = ''").fetchall()
     for b in rows:
         day, route, why = "", "", "not an NFL week label and not a day"
         text = str(b["date"] or "")
-        if _ISO_DAY_RE.match(text):
+        # 0. A PREDICTION-MARKET CONTRACT, WHOSE TICKER KNOWS BETTER THAN
+        #    ITS DATE COLUMN. This has to run BEFORE route 1, and that
+        #    ordering is the whole point: a Kalshi row's `date` IS an ISO
+        #    day, so route 1 matched it, copied it, and called the job
+        #    done — filing a September contract under the August day the
+        #    desk recommended it. Route 1's "a copy, not an inference" is
+        #    true and is the wrong copy for this one bucket.
+        if str(b["category"] or "") == "predmarket":
+            ev = predmarket_event_date(b["player"])
+            if ev:
+                day, route, why = ev, "ticker event date", ""
+        if not day and _ISO_DAY_RE.match(text):
             day, route, why = text, "already a day", ""
         else:
             m = _NFL_WEEK_DATE.match(text)
