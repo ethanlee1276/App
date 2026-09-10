@@ -55,11 +55,15 @@ ODDS_TO_MARKET = {
 #: chosen. Run 2026-09-10 against this box's own 4,474 college
 #: quarterback-games (619 passers, 2022-2025), the same projection sorts
 #: a college passer who throws two or more from one who does not at
-#: 0.5925 — BELOW `likely.MIN_RANK_AUC` — and the one-or-more question
-#: cannot be scored at all, because at a college base rate of 1.86 per
-#: game there are almost no negatives to rank against. So the market
-#: would be bought, and then have nothing honest to say. The NFL's own
-#: figure is 0.687 on held-out 2025.
+#: 0.5925 — BELOW `likely.MIN_RANK_AUC`. Re-measured on 2026-09-10 with
+#: a COLLEGE anchor rather than the NFL's (the first run shrank college
+#: passers toward 1.211 when their own mean is 1.862) it is 0.5556 for
+#: 2+ and 0.5422 for 3+, still under the floor, and the naive career
+#: rate matches both. The one-or-more question is unscoreable for a DATA
+#: reason set out in `engine.passtd`: the college feed wrote no row for a
+#: passer who threw and did not score, so the sample has no negatives in
+#: it. So the market would be bought, and then have nothing honest to
+#: say. The NFL's own figure is 0.687 on held-out 2025.
 #:
 #: The two leagues still SHARE the four above by reference, which is
 #: what `tests/test_cfb_feed` is protecting: the divergence is one

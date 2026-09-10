@@ -167,7 +167,12 @@ def test_a_rushing_play_whose_scorer_is_somebody_else_credits_nobody():
     player."""
     out = _parse([_play(yards_to_goal="3", rush_player="Nate Frazier",
                         rush_yds="3", touchdown_player="Someone Else")])
-    assert _value(out, "Nate Frazier", "rush_td") is None   # zero, unwritten
+    # A WRITTEN ZERO, not an absent row. Until 2026-09-10 a carrier who
+    # did not score wrote no `rush_td` at all, which made the log "games
+    # in which he scored" — the survivorship `ZERO_WHEN` already fixed
+    # for the yardage markets and had never been given to the three
+    # touchdown ones. He carried, so the opportunity is on the record.
+    assert _value(out, "Nate Frazier", "rush_td") == 0
     assert _value(out, "Nate Frazier", "anytime_td") == 0
 
 
@@ -218,9 +223,18 @@ def test_every_player_who_touched_the_ball_gets_an_anytime_td_row():
 
 
 def test_empty_markets_are_not_written():
+    """A market with no evidence behind it writes nothing. A market whose
+    OPPORTUNITY is on the record writes a zero — which is the test above
+    generalised: "a walk-forward that only ever sees scorers has no
+    negative cases and measures nothing" was the argument for
+    `anytime_td`, and on 2026-09-10 it was extended to the three
+    component touchdown markets that had never been given it. He carried,
+    so `rush_td` is a real zero; he never threw or caught, so nothing
+    passing or receiving appears at all."""
     out = _parse([_play(rush_player="RB", rush_yds="4")])
     markets = {r["market"] for r in out["rows"]}
-    assert markets == {"anytime_td", "carries", "rush_yds"}
+    assert markets == {"anytime_td", "carries", "rush_yds", "rush_td"}
+    assert not markets & {"pass_td", "rec_td", "pass_yds", "receptions"}
 
 
 # --- the roster join --------------------------------------------------
@@ -392,7 +406,39 @@ def test_the_zero_needs_the_opportunity_behind_it():
 
 def test_the_opportunity_columns_are_named_rather_than_inferred():
     assert C.ZERO_WHEN == {"rush_yds": "carries", "rec_yds": "receptions",
-                           "pass_yds": "pass_att"}
+                           "pass_yds": "pass_att",
+                           "pass_td": "pass_att", "rush_td": "carries",
+                           "rec_td": "receptions"}
+    # EVERY COMPANION IS A MARKET THIS PARSER ACTUALLY WRITES. A name
+    # that is merely plausible — "pass_attempts" for "pass_att" — makes
+    # the rule inert and silently restores the survivorship it exists to
+    # remove, with nothing on screen to say so.
+    for market, opportunity in C.ZERO_WHEN.items():
+        assert market in C.MARKETS, market
+        assert opportunity in C.MARKETS, opportunity
+
+
+def test_the_three_touchdown_markets_record_the_games_he_did_not_score():
+    """Ethan, 2026-09-10, asking for passing-TD props on the Most Likely
+    board for college as well as the NFL.
+
+    The answer was no, and the reason is this line. `pass_td` held 4,474
+    college rows on this box and NOT ONE was a zero — every game in the
+    sample a positive by construction — so the question "can the model
+    sort a passer who throws one from one who does not" was not answered
+    no, it was UNSCOREABLE. The NFL's log, from another feed, carries
+    1,146 zeros in 3,423 quarterback-games.
+
+    `anytime_td` is the one college market with a measured ranking on
+    that board, and it is the one market in ALWAYS. Same cause."""
+    assert set(C.ZERO_WHEN) >= {"pass_td", "rush_td", "rec_td"}
+    # THE PASSER'S BLANK GAME, end to end through the parser: he threw
+    # and nobody scored, so the row exists and reads zero.
+    out = _parse([_play(completion_player="Carson Beck",
+                        reception_player="Arian Smith",
+                        completion_yds="14", reception_yds="14")])
+    assert _value(out, "Carson Beck", "pass_td") == 0
+    assert _value(out, "Arian Smith", "rec_td") == 0
 
 
 def test_the_markets_with_no_opportunity_column_are_left_alone():

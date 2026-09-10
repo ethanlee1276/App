@@ -47,7 +47,40 @@ carries 0.687 for exactly that reason.
 
 0.687 clears `likely.MIN_RANK_AUC` (0.60) comfortably and sits just under
 the anytime-touchdown board's 0.721, which is the right neighbourhood —
-they are the same kind of question about the same kind of event.
+they are the same kind of question about the same kind of event. The row
+therefore reaches the Most Likely board, on the passing shelf beside
+passing yards.
+
+COLLEGE DOES NOT, AND THE FIRST REASON THIS FILE GAVE FOR THAT WAS
+WRONG. It said the one-or-more question "cannot be scored at all,
+because at a college base rate of 1.86 per game there are almost no
+negatives to rank against". The base rate is not the cause. Re-measured
+2026-09-10 on this box's 4,474 college quarterback-games (619 passers,
+2022-2025), fitted on 2022-24 and scored on held-out 2025, with a
+COLLEGE anchor this time — the first run shrank college passers toward
+the NFL's 1.211 when their own mean is 1.862, which is a mis-specified
+prior applied to a league it was not measured on:
+
+    2+ passing TDs     AUC 0.5556   (n = 497)
+    3+ passing TDs     AUC 0.5422   (n = 497)
+    1+ passing TD      unscoreable
+
+    career rate alone, same season
+    2+ 0.5600     3+ 0.5460
+
+Both figures sit under the 0.60 floor, and the naive career rate matches
+or beats the fitted blend on each — so the model is not merely weak
+there, it is adding nothing over an average.
+
+AND THE ONE-OR-MORE QUESTION IS UNSCOREABLE FOR A DATA REASON, not a
+base-rate one: `sources.cfbstats` wrote no row at all for a passer who
+threw and did not score, so all 4,474 rows have a value of 1 or more and
+the sample contains no negatives by construction. The NFL's log, from a
+different feed, carries 1,146 zeros in 3,423 games. `cfbstats.ZERO_WHEN`
+now covers the three touchdown markets, so a re-ingest will produce
+those negatives — at which point this measurement is worth repeating and
+the college figures above should be read as provisional, taken on a
+sample of games in which the passer had already thrown one.
 
 WHAT IT DOES NOT SAY. Ranking is not edge. This measures whether the
 model can sort quarterbacks by how likely they are to throw one; it says

@@ -177,6 +177,76 @@ def test_it_stays_quarantined_on_the_edge_board():
         "the quarantine the scorer board answers to must apply here too"
 
 
+# --- both boards, and the one that is refused -------------------------------
+def test_the_nfl_row_reaches_the_most_likely_board_and_not_only_the_table():
+    """Ethan, 2026-09-10: "Make sure we show passing touchdown props on
+    the most likely bets too for CFB and nfl."
+
+    A `RANK_AUC` entry is PERMISSION, not arrival — this repo has shipped
+    four features this week that were built and unreachable. So the check
+    drives a real row through `likely.from_prop` and asserts a row comes
+    out the other side carrying the published figure."""
+    from engine.calibrate import is_reliable
+    from engine.likely import from_prop
+    row = {"player": "Josh Allen", "team": "BUF", "opponent": "NYJ",
+           "position": "QB", "market": PASS_TD, "market_label": "Passing TDs",
+           "side": "OVER", "line": 1.5, "odds": -125, "book": "DraftKings",
+           "hit_prob": 0.62, "raw_prob": 0.62, "fair_prob": 0.55,
+           "projection": 1.9, "edge": 0.02, "grade": "B", "tier": 3,
+           "has_market": True,
+           "all_lines": [{"book": "DraftKings", "line": 1.5,
+                          "over_odds": -125, "under_odds": 105}],
+           "logs": [{"week": w, "opponent": "X", "value": v, "home": True}
+                    for w, v in zip(range(8, 0, -1), [2, 1, 3, 2, 1, 2, 2, 3])],
+           "sport": "nfl"}
+    census = {}
+    got = from_prop(row, lambda m: is_reliable("nfl", m), sport="nfl",
+                    census=census)
+    assert got is not None, census
+    assert got["market"] == PASS_TD
+    assert got["rank_auc"] == RANK_AUC["pass_td"]
+
+    # THE SAME ROW ON THE COLLEGE BOARD IS REFUSED, and by the gate that
+    # is about the measurement rather than by an accident of the fixture.
+    census = {}
+    assert from_prop(dict(row, sport="cfb"),
+                     lambda m: is_reliable("cfb", m), sport="cfb",
+                     census=census) is None
+    assert "no measured ranking for this market yet" in census
+
+
+def test_the_college_refusal_is_a_measurement_and_says_so():
+    """Ethan asked for CFB too. The answer is no, and a no has to carry
+    its number or it is just a preference. Re-measured with a COLLEGE
+    anchor on 2026-09-10: 0.5556 at 2+, 0.5422 at 3+, both under the
+    floor, with the naive career rate matching them."""
+    from engine.likely import rank_auc
+    assert rank_auc("cfb", "pass_td") is None, \
+        "college was given a figure without one being measured"
+    src = open(os.path.join(ROOT, "engine", "passtd.py"),
+               encoding="utf-8").read()
+    for fact in ("0.5556", "0.5422", "1.862", "4,474"):
+        assert fact in src, fact
+    # AND THE FIRST EXPLANATION, WHICH WAS WRONG, IS GONE. It blamed the
+    # college base rate; the cause is that the feed wrote no losing row.
+    assert "almost no negatives to rank against" not in src
+
+
+def test_the_college_feed_now_records_the_games_he_did_not_score():
+    """The reason 1+ was unscoreable: `pass_td` held 4,474 college rows
+    and not one of them was a zero. A ranking measurement needs
+    negatives, and `anytime_td` — the one college market with a measured
+    ranking — is the one market whose feed already wrote them."""
+    from engine.sources.cfbstats import ALWAYS, MARKETS, ZERO_WHEN
+    for market, opportunity in (("pass_td", "pass_att"),
+                                ("rush_td", "carries"),
+                                ("rec_td", "receptions")):
+        assert ZERO_WHEN.get(market) == opportunity, market
+        assert opportunity in MARKETS, opportunity
+    assert "anytime_td" in ALWAYS, \
+        "the market that proved the rule stopped writing its zeros"
+
+
 def test_the_measurement_is_written_down_where_the_model_lives():
     """A number in a table with no provenance is a number nobody can
     check. The module note carries the sample, the split and both

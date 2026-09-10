@@ -191,8 +191,35 @@ ALWAYS = ("anytime_td",)
 #: ``pass_yds`` to ``pass_att``, so a college passing projection can now
 #: be built the way every other market's is, as recent volume times
 #: season-long efficiency, rather than from yards alone.
+#: THE THREE TOUCHDOWN MARKETS WERE NEVER GIVEN THIS RULE, and the
+#: paragraph above describes their defect exactly: a passer who threw
+#: thirty times and scored none wrote no ``pass_td`` row at all, so the
+#: log that comes back is "games in which he threw a touchdown".
+#:
+#: Measured on this box, 2026-09-10: ``pass_td`` held 4,474 college rows
+#: and ZERO of them were a zero — minimum value 1.0 across four seasons.
+#: ``rush_td`` and ``rec_td`` the same, 6,486 and 7,240 rows, no zeros in
+#: either. The NFL's own log, which comes from a different feed, is 1,146
+#: zeros in 3,423 quarterback-games: a third of them.
+#:
+#: WHAT IT COST, and it is the reason this entry exists rather than a
+#: tidiness argument. A ranking measurement needs negatives. Asked
+#: whether the projection can sort a college passer who throws one from
+#: one who does not, the answer was not "no" — it was UNSCOREABLE, every
+#: game in the sample a positive by construction. And ``anytime_td``,
+#: the one college market with a measured ranking on the Most Likely
+#: board (0.675), is the one market in ALWAYS: the only one whose feed
+#: writes zeros. That is not a coincidence, it is this line.
+#:
+#: The opportunity columns were already here — a passer's attempts, a
+#: back's carries, a receiver's catches all prove the phase happened —
+#: so this is the same rule the yardage markets got, applied to the
+#: three that were missed. It writes no row for a player who never
+#: touched the ball.
 ZERO_WHEN = {"rush_yds": "carries", "rec_yds": "receptions",
-             "pass_yds": "pass_att"}
+             "pass_yds": "pass_att",
+             "pass_td": "pass_att", "rush_td": "carries",
+             "rec_td": "receptions"}
 
 #: Emitted in this order so an ingest log reads the way a box score does.
 MARKETS = ("anytime_td", "carries", "rush_yds", "receptions", "rec_yds",
