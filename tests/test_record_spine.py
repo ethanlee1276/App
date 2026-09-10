@@ -36,7 +36,7 @@ def _receipts():
 
 ORDER = [
     "const receipts = calendar",
-    'recLikelySection(d.likely)',
+    "recLikelySection(scoped ?",
     "+ verdict + unstaked + small",
     "recBookSections(d.book_records, scope)",
     "recAnalytics(src.curve",
@@ -73,7 +73,7 @@ def test_the_rooms_add_nothing_around_the_string():
     rooms = APP[i:APP.index("\nfunction ", i + 10)]
     assert "     receipts]," in rooms
     assert "recLikelySection(" not in rooms and "recBookSections(" not in rooms
-    assert APP.count("recLikelySection(d.likely)") == 1
+    assert APP.count("recLikelySection(scoped ?") == 1
     assert APP.count("recBookSections(d.book_records, scope)") == 1
     assert "the calendar, the verdict, every settled pick" in rooms
 

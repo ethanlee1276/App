@@ -348,13 +348,18 @@ def test_the_record_payload_carries_it():
 
 def test_the_record_page_draws_it():
     src = _src("web", "js", "app.js")
-    assert "function recLikelySection(lk)" in src
-    assert "recLikelySection(d.likely)" in src
+    assert "function recLikelySection(lk, scope)" in src
+    # On EVERY scope since 2026-09-10: the pooled report under "All bets",
+    # that league's own under a league. It used to be omitted entirely on
+    # a league scope — Ethan: "the most likley paper bets for nfl are not
+    # showing on nfl."
+    assert "recLikelySection(scoped ? (d.likely_by_sport || {})[scope]" in src
+    assert 'scoped ? "" : recLikelySection' not in src
 
 
 def test_the_page_shows_the_verdict_rather_than_burying_it():
     src = _src("web", "js", "app.js")
-    at = src.index("function recLikelySection(lk)")
+    at = src.index("function recLikelySection(lk, scope)")
     body = src[at:src.index("function recLongshotSection(ls)", at)]
     assert "lk.verdict" in body
     # Above the tiles, not under them — a number that looks like a result
@@ -364,7 +369,7 @@ def test_the_page_shows_the_verdict_rather_than_burying_it():
 
 def test_the_page_says_calibration_is_not_profit():
     src = _src("web", "js", "app.js")
-    at = src.index("function recLikelySection(lk)")
+    at = src.index("function recLikelySection(lk, scope)")
     body = src[at:src.index("function recLongshotSection(ls)", at)]
     assert "still lose" in body and "money stays off" in body
 

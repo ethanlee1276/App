@@ -5108,8 +5108,23 @@ LIKELY_VERDICT_N = 100
 LIKELY_BANDS = ((0.30, 0.45), (0.45, 0.60), (0.60, 0.75), (0.75, 1.01))
 
 
-def likely_report(conn, since: str | None = None) -> dict:
+def likely_report(conn, since: str | None = None,
+                  sport: str | None = None) -> dict:
     """The Most Likely scoreboard — the paper record, read back.
+
+    ``sport`` cuts the whole report to one league. Ethan, 2026-09-10:
+    "the most likley paper bets for nfl are not showing on nfl. and the
+    most likley paper bets for mlb ar enot showing on lb and so forth."
+    The Record page has a scope per sport and this report had no way to
+    answer one, so the page dropped the entire section on every scope but
+    "All bets" — the paper book was readable only pooled, which for a
+    standing order to make EACH sport's board pay ("make sure you dont
+    stop testing each sport until the most likley for eavh sport is
+    making money and positive roi", 2026-09-01) is the wrong cut.
+
+    Every query below takes the filter, so a scoped report's bands, its
+    market shelves, its open count, its receipts and its VERDICT are all
+    that sport's own — not a pooled number wearing a sport's label.
 
     Ethan, 2026-08-30: "we should also record the bets on the most likley
     page and if it does good then we will attack money and roi and shit
@@ -5136,13 +5151,19 @@ def likely_report(conn, since: str | None = None) -> dict:
     """
     win = " AND date >= ?" if since else ""
     wargs: tuple = (since,) if since else ()
-    p = performance(conn, category="likely", since=since)
+    # ONE FILTER, APPENDED TO EVERY QUERY IN THIS FUNCTION. Threading it
+    # through some of them and not others is how a page ends up printing
+    # one sport's calibration beside every sport's ROI.
+    sw = " AND sport=?" if sport else ""
+    sargs: tuple = (sport,) if sport else ()
+    p = performance(conn, sport=sport, category="likely", since=since)
     graded = ("AND status IN ('won','lost') AND category='likely'")
 
     row = conn.execute(
         "SELECT COUNT(*) n, AVG(hit_prob) claimed, "
         "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual "
-        "FROM bets WHERE 1=1 " + graded + win, wargs).fetchone()
+        "FROM bets WHERE 1=1 " + graded + win + sw,
+        wargs + sargs).fetchone()
     n = row["n"] or 0
     claimed = row["claimed"]
     actual = row["actual"]
@@ -5169,8 +5190,9 @@ def likely_report(conn, since: str | None = None) -> dict:
             "SELECT COUNT(*) n, AVG(hit_prob) claimed, "
             "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
-            "FROM bets WHERE hit_prob >= ? AND hit_prob < ? " + graded + win,
-            (lo, hi) + wargs).fetchone()
+            "FROM bets WHERE hit_prob >= ? AND hit_prob < ? "
+            + graded + win + sw,
+            (lo, hi) + wargs + sargs).fetchone()
         if not r["n"]:
             continue
         p["bands"].append({
@@ -5188,7 +5210,8 @@ def likely_report(conn, since: str | None = None) -> dict:
             "AVG(hit_prob) claimed, "
             "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
-            "FROM bets WHERE 1=1 " + graded + win + " GROUP BY market", wargs):
+            "FROM bets WHERE 1=1 " + graded + win + sw
+            + " GROUP BY market", wargs + sargs):
         p["by_market"][r["market"]] = {
             "n": r["n"], "w": r["w"],
             "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
@@ -5208,8 +5231,8 @@ def likely_report(conn, since: str | None = None) -> dict:
             "AVG(hit_prob) claimed, "
             "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
-            "FROM bets WHERE 1=1 " + graded + win + " GROUP BY sport",
-            wargs):
+            "FROM bets WHERE 1=1 " + graded + win + sw + " GROUP BY sport",
+            wargs + sargs):
         entry = {"n": r["n"], "w": r["w"], "net_u": round(r["u"], 2),
                  "claimed": (round(r["claimed"], 4)
                              if r["claimed"] is not None else None),
@@ -5235,8 +5258,8 @@ def likely_report(conn, since: str | None = None) -> dict:
             "AVG(CASE WHEN status='won' THEN 1.0 ELSE 0.0 END) actual, "
             "COALESCE(SUM(pnl_units),0) u, COALESCE(SUM(stake_units),0) s "
             "FROM bets WHERE market IN (%s) " % ",".join("?" * len(GAME_MARKETS))
-            + graded + win + " GROUP BY sport, market",
-            tuple(GAME_MARKETS) + wargs):
+            + graded + win + sw + " GROUP BY sport, market",
+            tuple(GAME_MARKETS) + wargs + sargs):
         p["by_sport_market"].setdefault(r["sport"], {})[r["market"]] = {
             "n": r["n"], "w": r["w"],
             "claimed": round(r["claimed"], 4) if r["claimed"] is not None else None,
@@ -5245,9 +5268,10 @@ def likely_report(conn, since: str | None = None) -> dict:
 
     p["open"] = conn.execute(
         "SELECT COUNT(*) FROM bets WHERE category='likely' "
-        "AND status='open'").fetchone()[0]
+        "AND status='open'" + sw, sargs).fetchone()[0]
     p["recent"] = recent_settled(conn, limit=15, category="likely",
-                                 since=since)
+                                 sport=sport, since=since)
+    p["sport"] = sport or ""
     p["needed"] = LIKELY_VERDICT_N
     p["enough"] = n >= LIKELY_VERDICT_N
     p["verdict"] = _likely_verdict(p)
@@ -5890,6 +5914,28 @@ def export_json(conn, path) -> None:
         # and roi and shit to it." This is what "does good" is checked
         # against.
         "likely": likely_report(conn, since=since),
+        # THE SAME REPORT, PER SPORT. The Record page has a scope per
+        # league, and this section had no per-sport cut to render — so the
+        # page dropped it entirely on every scope but "All bets". Ethan,
+        # 2026-09-10: "the most likley paper bets for nfl are not showing
+        # on nfl. and the most likley paper bets for mlb ar enot showing
+        # on lb and so forth."
+        #
+        # It is the pooled report's own function with a filter, so a
+        # sport's bands, shelves, receipts and verdict are all computed on
+        # that sport's rows — a page cannot show one league's calibration
+        # beside every league's ROI, because there is no path here that
+        # mixes them.
+        #
+        # A sport with nothing in this book is OMITTED rather than emitted
+        # empty: the renderer draws nothing for an absent entry, and six
+        # empty blobs with their own receipt lists is weight in a payload
+        # every visitor downloads.
+        "likely_by_sport": {
+            sp: rep for sp, rep in
+            ((sp, likely_report(conn, since=since, sport=sp))
+             for sp in TRACKED_SPORTS)
+            if rep.get("settled") or rep.get("open")},
         # Per sport × per book × per market — the Record page's section
         # spots (edge / most likely / long shots), with the market rows
         # the page labels via market_words above.

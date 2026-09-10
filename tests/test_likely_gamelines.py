@@ -669,15 +669,15 @@ def test_the_page_shows_that_cut_where_a_reader_will_see_it():
     that got `likely_report` written in the first place. The weekly log
     is for whoever reads logs; the Record page is where a reader goes."""
     js = _src("web", "js", "app.js")
-    assert "function recLikelyGameLines(lk)" in js
+    assert "function recLikelyGameLines(lk, sp)" in js
     body = _fn(js, "recLikelyGameLines")
     assert "by_sport_market" in body
     assert "marketWord(m)" in body, "a raw market key would reach the column"
     # It is drawn from the section that owns the likely book, not bolted
     # onto some other table.
-    sec = js[js.index("function recLikelySection(lk)"):]
+    sec = js[js.index("function recLikelySection(lk, scope)"):]
     sec = sec[:sec.index("\nfunction ")]
-    assert "recLikelyGameLines(lk)" in sec
+    assert "recLikelyGameLines(lk, sp)" in sec
     # And it says why the pooled table above it is not enough.
     assert "different models" in body
 

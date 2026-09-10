@@ -11032,8 +11032,13 @@ function recLeadtimeSection(lt) {
     an instruction: bet sooner.</div>`;
 }
 
-function recLikelySection(lk) {
+function recLikelySection(lk, scope) {
   if (!lk || (!lk.settled && !lk.open)) return "";
+  // The league whose rows these are, or "" on the pooled scope. Read off
+  // the REPORT rather than the page's scope, so a mislabelled section is
+  // impossible: `ledger.likely_report` stamps the sport it filtered on.
+  const sp = String((lk || {}).sport || "");
+  const spName = sp ? ((SPORT_META[sp] || {}).name || sp.toUpperCase()) : "";
   const cal = lk.calibration || {};
   const pct = (x) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
   const bands = (lk.bands || []).map((b) => `
@@ -11051,8 +11056,11 @@ function recLikelySection(lk) {
       <span class="rl-pnl ${toneOf(d.roi)}">${d.roi >= 0 ? "+" : ""}${(d.roi * 100).toFixed(1)}%</span>
     </div>`).join("");
   return `
-    <div class="section-title">Most Likely — the paper record
-      <span class="sub">— journaled nightly at no risk, graded like every other bet</span></div>
+    <div class="section-title">Most Likely — the paper record${
+      spName ? ` · ${escapeHtml(spName)}` : ""}
+      <span class="sub">— journaled nightly at no risk, graded like every other
+      bet${spName ? `. ${escapeHtml(spName)} rows only — every number in this
+      section is that league’s own` : ""}</span></div>
     ${recDisclosure("What this is and what it is not", `The board claims to
       rank who actually hits, and until it has a settled record that claim rests
       on a backtest. So the top of it is written down every night at a nominal
@@ -11091,7 +11099,7 @@ function recLikelySection(lk) {
       these are the shelves on the board. If one holds up and another does not,
       that is a shelf-level decision.</div>
       <div class="card" style="padding:0;margin-top:6px">${markets}</div>` : ""}
-    ${recLikelyGameLines(lk)}`;
+    ${recLikelyGameLines(lk, sp)}`;
 }
 
 /* THE GAME ROWS, PER SPORT, because the table above pools them.
@@ -11107,7 +11115,7 @@ function recLikelySection(lk) {
    maintenance log already prints it. This is the same cut on the page a
    reader actually opens, which is the rule this bucket exists under —
    a measurement nobody can read is not a measurement. */
-function recLikelyGameLines(lk) {
+function recLikelyGameLines(lk, sp) {
   const by = (lk || {}).by_sport_market || {};
   const sports = Object.keys(by).sort();
   if (!sports.length) return "";
@@ -11127,10 +11135,15 @@ function recLikelyGameLines(lk) {
     }).join("");
   }).join("");
   if (!rows) return "";
-  return `<div style="opacity:.7;font-size:.9em;margin-top:14px">Game lines, per
-    sport — the table above pools them, and an NFL moneyline and an MLB one are
-    different models. Moneylines are ranked; spreads and totals ride as leans and
-    say so on the board.</div>
+  // The lede changes with the cut. On a league's own page the sports are
+  // not being separated — there is only one — so promising a per-sport
+  // split would describe a table the reader is not looking at.
+  return `<div style="opacity:.7;font-size:.9em;margin-top:14px">${sp
+    ? `Game lines by market. Moneylines are ranked; spreads and totals ride as
+       leans and say so on the board.`
+    : `Game lines, per sport — the table above pools them, and an NFL moneyline
+       and an MLB one are different models. Moneylines are ranked; spreads and
+       totals ride as leans and say so on the board.`}</div>
     <div class="card" style="padding:0;margin-top:6px">${rows}</div>`;
 }
 
@@ -13442,8 +13455,18 @@ async function renderRecord() {
      still lead a sport's numbers (09-01, 09-05) — they sit under the
      verdict on every scope, pooled on "All bets". */
   const calendar = recCalendarHTML(src.curve);
+  /* THE PAPER BOOK, ON EVERY SCOPE. This read `scoped ? "" : ...`, so
+     the entire Most Likely record vanished the moment a reader pressed a
+     league — Ethan, 2026-09-10: "the most likley paper bets for nfl are
+     not showing on nfl. and the most likley paper bets for mlb ar enot
+     showing on lb and so forth." The section was omitted rather than
+     scoped because `ledger.likely_report` had no per-sport cut to hand
+     it; it does now, and the page renders that sport's own report.
+     An absent entry (a league with nothing in this book yet) renders
+     nothing, exactly as before. */
   const receipts = calendar
-    + (scoped ? "" : recLikelySection(d.likely))
+    + recLikelySection(scoped ? (d.likely_by_sport || {})[scope] : d.likely,
+                       scope)
     + verdict + unstaked + small
     + recBookSections(d.book_records, scope) + `
     ${recAnalytics(src.curve, o, ((d.model_eras || {}).eras) || [])}
