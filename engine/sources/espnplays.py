@@ -93,9 +93,30 @@ FOOTBALL = ("nfl", "cfb")
 #: and is served on the same inference: confirmed by its first live game.
 HOOPS = ("nba", "wnba")
 
-#: A drive moves a few times a minute; the scoreboard loop runs every
-#: twelve seconds. Thirty seconds is one refetch per two or three polls.
-LIVE_TTL = 30
+#: ONE FETCH PER POLL, which is the floor: the scoreboard loop runs
+#: every `LIVE_FAST_S` — twelve seconds — and nothing is gained by
+#: caching a summary for longer than the gap between the two builds
+#: that would read it.
+#:
+#: This was thirty, "one refetch per two or three polls", written when
+#: the argument was that a drive only moves a few times a minute. That
+#: is true of a DRIVE and false of the thing on the screen: this cache
+#: holds the play list itself, so a play that happened was up to thirty
+#: seconds old before the builder had even seen it, and everything
+#: downstream added to that. It was the largest single term in the
+#: delay Ethan reported on 2026-09-10 watching a live game.
+#:
+#: WHAT IT COSTS, said plainly, because the number it replaces was
+#: chosen for cost. One keyless request per live game per poll, capped
+#: at `livescore_build.PLAYS_MAX_GAMES` (eight) — so five a minute per
+#: game, forty a minute on the worst college Saturday, against sixteen
+#: before. No odds credits either way. The ceiling that matters is this
+#: box's one core, and the cap is what holds it: eight summaries is
+#: eight whatever the clock says. If a Saturday ever does show it, the
+#: lever is the CAP, not this — a game past the cap keeps its score and
+#: says so, which is a better failure than every game running a minute
+#: behind.
+LIVE_TTL = 12
 
 
 def fetch_summary(league: str, event_id: str, ttl: int = LIVE_TTL) -> dict:

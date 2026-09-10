@@ -320,6 +320,34 @@ qellysbook.com {
 	@built path /data/*.json
 	header @built Cache-Control "public, max-age=60"
 
+	# ...EXCEPT THE ONES THAT CHANGE EVERY TWELVE SECONDS. The live
+	# scoreboards and the deep play-by-play files are rewritten by the
+	# fast loop on `LIVE_FAST_S` — twelve seconds — and this rule was
+	# telling every shared cache between the box and the reader to hold
+	# them for SIXTY. A minute of cache on a board built every forty-five
+	# minutes is invisible; a minute of cache on a file that is the
+	# score of a game in progress is the whole complaint. Ethan,
+	# 2026-09-10, watching the play-by-play page during Patriots at
+	# Seahawks: "its working now but definetly delayed."
+	#
+	# THE PAGE'S OWN `no-store` DOES NOT COVER THIS. That is a REQUEST
+	# directive: it stops the browser reusing its own copy, and says
+	# nothing to a CDN or any other shared cache in between, which
+	# answers from what the origin last told IT to keep. The fix has to
+	# be on the response, from here.
+	#
+	# `no-cache` is store-and-revalidate, not "do not store": the copy
+	# is kept and a conditional request confirms it, so an unchanged
+	# file still costs a 304 rather than a re-download. Same trade the
+	# brand assets above take, for the same reason.
+	#
+	# Listed as two patterns rather than one, because the wildcard in
+	# `/data/*.json` sits in the last segment and `pbp/` is a directory
+	# deeper. A rule that silently stopped matching here would restore
+	# the delay with nothing to see.
+	@fast path /data/live_*.json /data/pbp/*.json
+	header @fast Cache-Control "no-cache"
+
 	log {
 		output file /var/log/caddy/qellys.log {
 			roll_size 10mb
