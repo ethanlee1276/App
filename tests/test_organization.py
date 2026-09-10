@@ -67,6 +67,17 @@ def _fn(js, decl):
     return js[i:j]
 
 
+def _rule(css, sel):
+    """One CSS rule, cut at its own closing brace.
+
+    `_fn`'s argument, in the other language. A rule read as `css[i:i+260]`
+    is a tripwire on how long the DECLARATIONS happen to be, not on the
+    one that matters.
+    """
+    i = css.index(sel)
+    return css[i:css.index("}", i)]
+
+
 # --- the component -----------------------------------------------------------
 def test_a_room_with_nothing_in_it_is_never_given_a_tab():
     """THE RULE THAT MAKES THIS SAFE. The Record page hides most of its
@@ -74,8 +85,7 @@ def test_a_room_with_nothing_in_it_is_never_given_a_tab():
     rooms and open two empty ones. Groups are built as strings first and
     only the ones with content become tabs."""
     js = _js()
-    i = js.index("function subtabbedHTML(")
-    body = js[i:i + 1400]
+    body = _fn(js, "function subtabbedHTML(")
     assert 'groups.filter((g) => (g[3] || "").trim())' in body, body[:400]
 
 
@@ -83,8 +93,7 @@ def test_a_single_live_room_renders_with_no_bar_at_all():
     """Nothing becomes unreachable and nothing gains a tab bar it does not
     need — one room is just a page, exactly as before sub-tabs existed."""
     js = _js()
-    i = js.index("function subtabbedHTML(")
-    body = js[i:i + 1400]
+    body = _fn(js, "function subtabbedHTML(")
     assert "if (live.length < 2) return" in body
 
 
@@ -93,8 +102,7 @@ def test_the_room_you_were_in_is_remembered():
     kind of small tax that makes people stop opening it."""
     js = _js()
     assert "const _subtab = {}" in js
-    i = js.index("function bindSubtabs(")
-    assert "_subtab[view] = id" in js[i:i + 1200]
+    assert "_subtab[view] = id" in _fn(js, "function bindSubtabs(")
 
 
 def test_the_tabs_are_a_real_tablist_for_a_keyboard():
@@ -132,8 +140,7 @@ def test_the_record_page_is_five_rooms_not_one_column():
     """22 sections in a single scroll was the worst offender by roughly ten
     times. They were never 22 subjects."""
     js = _js()
-    i = js.index("function _recordRooms(")
-    body = js[i:js.index("\nfunction ", i + 10)]
+    body = _fn(js, "function _recordRooms(")
     for room in ("receipts", "products", "calibration", "learning", "health"):
         assert f'"{room}"' in body, room
 
@@ -143,12 +150,12 @@ def test_the_record_lead_is_inside_its_room_not_above_the_bar():
     the bar floating in the middle of the page with content on both sides."""
     js = _js()
     assert "_recordRooms(d, src, pmv, scope, scoped, receipts)" in js
-    i = js.index("function _recordRooms(")
+    room = _fn(js, "function _recordRooms(")
     # `receipts` still lands inside the first room, and it is the WHOLE
     # room: since 2026-09-08 (Ethan: "everything's is just scattered
     # around and unorganized") renderRecord builds it in one order for
     # every scope and the rooms prefix or append nothing to it.
-    assert "     receipts]," in js[i:i + 2900]
+    assert "     receipts]," in room
 
 
 def test_the_receipts_room_opens_on_the_receipts():
@@ -219,8 +226,10 @@ def test_an_unsearched_player_page_does_not_draw_every_profile():
     box was filtering a DOM that had already been built in full."""
     js = _js()
     assert "function playerBrowseCap(" in js
-    i = js.index("const capped = !q && players.length > cap")
-    body = js[i:i + 600]
+    # The cap is DECIDED in playerBrowseCap and APPLIED in renderPlayers,
+    # so this is bounded by the function that does the applying.
+    body = _fn(js, "function renderPlayers(")
+    assert "const capped = !q && players.length > cap" in body
     assert "players.slice(0, cap)" in body
 
 
@@ -313,8 +322,7 @@ def test_the_browse_cap_is_smaller_where_the_grid_is_one_column():
     point nine screens, which is the original complaint again on the device
     least able to afford it."""
     js = _js()
-    i = js.index("function playerBrowseCap(")
-    body = js[i:i + 400]
+    body = _fn(js, "function playerBrowseCap(")
     assert "max-width: 760px" in body, body
     ns = re.findall(r"\b(\d+)\b", body.split("return")[1])
     assert "4" in ns and "12" in ns, ns
@@ -331,8 +339,7 @@ def test_the_cap_is_read_at_render_not_captured_once():
 def test_a_browser_without_matchmedia_gets_the_desktop_cap():
     """Failing open to FOUR would quietly halve a laptop's browse list."""
     js = _js()
-    i = js.index("function playerBrowseCap(")
-    body = js[i:i + 400]
+    body = _fn(js, "function playerBrowseCap(")
     assert "window.matchMedia" in body and "typeof window" in body
     # The ELSE branch is the desktop number. Verified in node across all
     # three shapes: no matchMedia -> 12, desktop -> 12, phone -> 4. The
@@ -368,8 +375,7 @@ def test_the_ranks_differ_by_size_and_weight_not_only_colour():
     """The mute tokens are already at the bottom of what stays legible —
     see the contrast ratchet — so rank cannot be spent on colour."""
     css = _read("web", "css", "styles.css")
-    i = css.index(".section-title.minor {")
-    block = css[i:i + 260]
+    block = _rule(css, ".section-title.minor {")
     assert "font-size" in block
     assert "text-transform" in block or "letter-spacing" in block
 
@@ -393,8 +399,7 @@ def test_the_hint_is_set_on_first_load_too():
     actually arrive at — which is what the first version did."""
     js = _js()
     assert "function syncNavHint(" in js
-    i = js.index("function syncNavHint(")
-    assert 'querySelector(".nav-btn.active")' in js[i:i + 500]
+    assert 'querySelector(".nav-btn.active")' in _fn(js, "function syncNavHint(")
     assert js.count("syncNavHint(") >= 3          # def + switch + startup
 
 
@@ -404,8 +409,7 @@ def test_the_hint_sits_under_the_tabs_rather_than_wherever_flex_put_it():
     data-hint, and the bar's running hint line retired — display:none,
     not deleted, so syncNavHint keeps a target and nothing null-crashes."""
     css = _read("web", "css", "styles.css")
-    i = css.index(".nav-hint {")
-    assert "display: none" in css[i:i + 120]
+    assert "display: none" in _rule(css, ".nav-hint {")
     html = _read("web", "index.html")
     assert html.count("data-hint=") >= 10, "the per-page hints are gone"
 
@@ -492,8 +496,7 @@ def test_the_rooms_are_rejudged_on_every_render_not_decided_once():
     # The slider path re-renders the board and must re-group with it.
     assert ("renderGameBets(); renderRecommended(); groupRecommended();"
             in js)
-    i = js.index("function subtabbedDOM(")
-    body = js[i:i + 3600]
+    body = _fn(js, "function subtabbedDOM(")
     assert "const live = groups.filter" in body, "emptiness must be recomputed"
 
 
@@ -502,8 +505,7 @@ def test_emptiness_is_judged_by_content_not_by_height():
     display:none — so an offsetHeight test would call every room but the
     open one empty and collapse the bar to a single tab."""
     js = _js()
-    i = js.index("function subtabbedDOM(")
-    body = js[i:i + 3600]
+    body = _fn(js, "function subtabbedDOM(")
     filled = body[body.index("const filled ="):body.index("const live =")]
     assert "offsetHeight" not in filled and "getBoundingClientRect" not in filled
     assert "textContent" in filled and "children.length" in filled
@@ -516,8 +518,7 @@ def test_an_empty_rooms_panel_is_hidden_and_never_removed():
     whose target has been deleted fails silently for the rest of the
     session."""
     js = _js()
-    i = js.index("function subtabbedDOM(")
-    body = js[i:i + 3600]
+    body = _fn(js, "function subtabbedDOM(")
     assert ".remove()" not in body and "removeChild" not in body
 
 
