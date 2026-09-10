@@ -25212,10 +25212,27 @@ function teamHref(sport, team, vs) {
 }
 
 async function openTeam(sport, team, vs) {
-  if (_teamState.team !== team || _teamState.sport !== sport) {
-    _teamOppAll = false;             // a new team starts collapsed again
-  }
-  _teamState = { sport, team, vs: vs || "", data: null, loading: true };
+  /* PRESSING AN OPPONENT CHIP IS A FILTER, NOT A NAVIGATION.
+
+     Ethan, 2026-09-10: "When you click on a team in the 'against'
+     section, it shoots you back up too the top of the page then you have
+     too scroll all the way back down too get to it."
+
+     Two separate things were doing that and both are here. This line
+     used to set `data: null` unconditionally, which throws away the page
+     he is looking at — `renderTeamPage` then draws one line, "Reading
+     the Rams' finals…", the document collapses to a single paragraph and
+     the browser clamps his scroll to the top because there is nothing
+     left to be scrolled past. And `_landScroll` sent him to y=0 anyway.
+
+     So the SAME team with a different opponent keeps its data and its
+     place; a DIFFERENT team is a real navigation and still starts at the
+     top, which is what you want when the whole page has changed. */
+  const same = _teamState.team === team && _teamState.sport === sport;
+  if (!same) _teamOppAll = false;    // a new team starts collapsed again
+  if (same && state.view === "team") _holdScroll = true;
+  _teamState = { sport, team, vs: vs || "",
+                 data: same ? _teamState.data : null, loading: true };
   // `_switchViewNow` draws the page and writes the address bar — see the
   // `name === "team"` branch there, and the comment on why it cannot be
   // done from here.
@@ -25408,10 +25425,14 @@ function teamSeasonsHTML(p) {
 const TEAM_OPP_SHOWN = 12;
 let _teamOppAll = false;
 
-function teamOppPickerHTML(d) {
+function teamOppPickerHTML(d, picked) {
   const list = d.opponents || [];
   if (!list.length) return "";
-  const picked = (d.head_to_head || {}).opponent;
+  // THE CHIP THAT WAS PRESSED, which during a fetch is not yet the one
+  // the payload knows about. Defaulted to the payload's own answer so a
+  // caller that has no pending selection — and every test that calls
+  // this directly — behaves exactly as before.
+  if (picked === undefined) picked = (d.head_to_head || {}).opponent;
   // A chosen opponent is ALWAYS drawn, wherever he sits in the tail —
   // collapsing the list must never hide the one that is currently on.
   const shown = _teamOppAll ? list
@@ -25488,7 +25509,10 @@ function renderTeamPage() {
   const host = document.getElementById("team-page");
   if (!host) return;
   const st = _teamState;
-  if (st.loading || !st.data) {
+  // THE LOADING LINE IS FOR A PAGE THAT IS NOT DRAWN YET. With a team
+  // already on screen and only the opponent changing, replacing it with
+  // one paragraph is what collapsed the document and lost his place.
+  if (!st.data) {
     host.innerHTML = `<p class="loading">Reading ${
       escapeHtml(st.team || "the team")}’s finals…</p>`;
     return;
@@ -25558,8 +25582,11 @@ function renderTeamPage() {
 
           Nothing else moved: stats still sit above the squad, which is
           ESPN's order and what `test_team_stat_tables` pins. */""}
-    ${teamOppPickerHTML(d)}
-    ${teamH2HHTML(d.head_to_head, d.sport)}
+    ${teamOppPickerHTML(d, _teamState.vs)}
+    ${st.loading
+      ? `<p class="loading">Reading ${escapeHtml(p.name || p.team)}’s
+          record against them…</p>`
+      : teamH2HHTML(d.head_to_head, d.sport)}
     ${teamSeasonsHTML(p)}
     ${teamStatsHTML(d.stats, d.sport)}
     ${teamSquadHTML(d.squad, d.sport)}
@@ -31129,7 +31156,15 @@ let _boardReturn = null;              // { view, y } while inside a detail
 
 const DETAIL_VIEWS = ["prop", "game", "pbp"];
 
+/* A ONE-SHOT: the next view landing keeps the scroll where it is.
+
+   Set by a caller that is re-entering a view it is already on with the
+   same content above the fold — an opponent chip on the team page. It is
+   cleared on use so it can never leak into the next real navigation. */
+let _holdScroll = false;
+
 function _landScroll(name, leaving) {
+  if (_holdScroll) { _holdScroll = false; return; }
   let y = 0;
   if (_boardReturn && name === _boardReturn.view
       && DETAIL_VIEWS.includes(leaving)) {

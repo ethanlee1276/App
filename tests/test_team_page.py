@@ -81,6 +81,10 @@ _TEAMS = {
 }
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _windows                                             # noqa: E402
+
+
 def _app():
     return open(os.path.join(ROOT, "web", "js", "app.js"),
                 encoding="utf-8").read()
@@ -149,14 +153,18 @@ def test_the_chip_hands_the_server_a_name_not_a_key():
 
 # --------------------------------------------------------- the opponents
 
-def _picker(n, picked=None):
+def _picker(n, picked=None, pending=None):
+    """`picked` is what the PAYLOAD says; `pending` is the chip just
+    pressed, which during a fetch is not yet the same thing. Passing no
+    `pending` exercises the one-argument call every other caller makes."""
     d = {"opponents": [{"team": f"T{i}", "name": f"Team {i}", "games": n - i}
                        for i in range(n)]}
     if picked:
         d["head_to_head"] = {"opponent": picked}
+    args = json.dumps(d) + ("" if pending is None else ", " + json.dumps(pending))
     return _run(
         "let _teamOppAll = false;\n"
-        f"console.log(JSON.stringify(teamOppPickerHTML({json.dumps(d)})));",
+        f"console.log(JSON.stringify(teamOppPickerHTML({args})));",
         ["teamOppPickerHTML"], ["TEAM_OPP_SHOWN"])
 
 
@@ -345,13 +353,17 @@ def test_the_opponent_picker_opens_the_page():
     app = _app()
     i = app.index("function renderTeamPage(")
     body = app[i:]
-    picker = body.index("${teamOppPickerHTML(d)}")
-    h2h = body.index("${teamH2HHTML(d.head_to_head, d.sport)}")
+    # THE CALL, not its argument list. This pinned `${teamOppPickerHTML(d)}`
+    # and broke within the hour when the picker grew a second argument —
+    # a change about which chip lights up, which could not have moved the
+    # block on the page.
+    picker = body.index("teamOppPickerHTML(d")
+    h2h = body.index("teamH2HHTML(d.head_to_head, d.sport)")
     for later in ("${teamSeasonsHTML(p)}", "${teamStatsHTML(d.stats, d.sport)}",
                   "${teamSquadHTML(d.squad, d.sport)}"):
         assert picker < body.index(later), f"the picker still draws under {later}"
-    assert h2h < body.index("${teamSeasonsHTML(p)}"), \
-        "the matchup table is below the season table again"
+    assert h2h < body.index("${teamSeasonsHTML(p)}"), (
+        "the matchup table is below the season table again")
     # THE TABLE FOLLOWS ITS OWN PICKER, which is the one ordering inside
     # the block that matters: chips you press, then what they answered.
     assert picker < h2h
@@ -375,7 +387,98 @@ def test_the_unmatched_opponent_warning_stays_with_the_picker():
     app = _app()
     i = app.index("function renderTeamPage(")
     body = app[i:]
-    assert body.index("d.vs_unknown") < body.index("${teamOppPickerHTML(d)}")
+    assert body.index("d.vs_unknown") < body.index("teamOppPickerHTML(d")
+
+
+# --- an opponent chip is a filter, not a navigation -------------------------
+def test_pressing_a_chip_keeps_the_page_it_is_drawn_on():
+    """Ethan, 2026-09-10: "When you click on a team in the 'against'
+    section, it shoots you back up too the top of the page then you have
+    too scroll all the way back down too get to it."
+
+    TWO CAUSES, and the first is why the second could not be worked
+    around. `openTeam` set `data: null` on every call, so `renderTeamPage`
+    drew one paragraph — "Reading the Rams' finals…" — the document
+    collapsed to a single line and the browser had nowhere to hold his
+    scroll. Keeping the data is what makes the position keepable at
+    all."""
+    app = _app()
+    fn = _windows.block(app, "async function openTeam(")
+    assert "data: same ? _teamState.data : null" in fn, \
+        "the page he is on is thrown away again"
+    assert "const same = _teamState.team === team && _teamState.sport === sport" in fn
+    # A DIFFERENT TEAM IS A REAL NAVIGATION and still starts at the top —
+    # the whole page changed, so his old place means nothing.
+    assert "if (!same) _teamOppAll = false" in fn
+    # AND THE GUARD THAT CONSUMES IT. Keeping the data is worth nothing
+    # if the renderer still replaces a drawn page with the loading line
+    # whenever a fetch is in flight — which is what `st.loading || …`
+    # did, and what the mutation sweep caught this assertion not
+    # covering. The loading line is for a page that is NOT DRAWN YET.
+    render = _windows.block(_app(), "function renderTeamPage(")
+    assert "if (!st.data) {" in render
+    assert "if (st.loading || !st.data)" not in render, \
+        "a page with data on it is blanked while the next answer loads"
+
+
+def test_the_landing_holds_his_place_only_when_asked():
+    """The second cause. `_landScroll` sent every team landing to y=0,
+    including one that never left the page."""
+    app = _app()
+    fn = _windows.block(app, "function _landScroll(")
+    assert "if (_holdScroll) { _holdScroll = false; return; }" in fn, \
+        "the landing scrolls to the top unconditionally again"
+    # A ONE-SHOT, CLEARED ON USE. A flag left standing would silently
+    # cancel the scroll reset on the next real navigation.
+    open_fn = _windows.block(app, "async function openTeam(")
+    assert 'if (same && state.view === "team") _holdScroll = true;' in open_fn
+    # DECLARED ABOVE THE LINE THAT BOOTS THE ROUTER, which is the
+    # discipline this file's own comment at `initialView` records: a
+    # `let` referenced during boot before its declaration is a TDZ
+    # ReferenceError, and `initialView` routes straight into `openTeam`
+    # for a #team/… link.
+    assert app.index("let _holdScroll = false;") < app.index("\ninitialView();")
+
+
+def test_the_chip_that_was_pressed_lights_before_the_answer_lands():
+    """Otherwise the tap does nothing visible for the length of a fetch
+    and the PREVIOUS opponent stays lit, which reads as the press having
+    missed."""
+    assert "${teamOppPickerHTML(d, _teamState.vs)}" in _app()
+    # The payload still says T0; T3 is the chip under his finger.
+    out = _picker(6, picked="T0", pending="T3")
+    assert out.count('aria-pressed="true"') == 1, "two chips claim to be on"
+    i = out.index('aria-pressed="true"')
+    assert 'data-team-vs="T3"' in out[max(0, i - 120):i], out[max(0, i - 120):i]
+
+
+def test_pressing_the_lit_chip_again_lights_nothing():
+    """The handler sends "" to deselect. The payload's own answer is
+    still the old opponent, so falling back to it would leave the chip
+    lit and the deselect looking ignored."""
+    out = _picker(6, picked="T0", pending="")
+    assert 'aria-pressed="true"' not in out, out
+
+
+def test_the_picker_called_with_one_argument_is_unchanged():
+    """The default keeps every existing caller — and every other test in
+    this file — behaving exactly as it did."""
+    out = _picker(6, picked="T0")
+    assert out.count('aria-pressed="true"') == 1
+    i = out.index('aria-pressed="true"')
+    assert 'data-team-vs="T0"' in out[max(0, i - 120):i]
+
+
+def test_the_stale_table_is_not_shown_under_the_new_opponents_name():
+    """The games of the LAST opponent sitting under a heading naming the
+    new one is a lie on screen, and a worse one than a spinner."""
+    app = _app()
+    i = app.index("function renderTeamPage(")
+    body = app[i:]
+    j = body.index("teamOppPickerHTML(d, _teamState.vs)")
+    after = body[j:j + 400]
+    assert "st.loading" in after, "the previous matchup is drawn while loading"
+    assert "teamH2HHTML(d.head_to_head, d.sport)" in after
 
 
 if __name__ == "__main__":
