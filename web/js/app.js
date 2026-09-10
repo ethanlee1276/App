@@ -24989,8 +24989,18 @@ function teamSquadHTML(sq, sport) {
   const groups = ((sq || {}).positions || []).filter(
     (g) => (g.players || []).length);
   if (!groups.length) return "";
-  const stat = (st) => `${escapeHtml(marketWord(st.market))}
-    <b>${st.per_game}</b><span class="tsq-tot">/g · ${st.total} total</span>`;
+  /* A RATE PRINTS AS A RATE. `snap_pct` is a share of snaps, 0-1, and
+     the row used to read "Snap Pct 0/g · 0.3 total" — seven games of
+     four percent added into a number that means nothing, beside a
+     per-game figure that rounded to zero (Ethan's Rams page,
+     2026-09-10). The engine now says which markets are rates; this
+     prints them as one percentage and no total. */
+  const stat = (st) => (st.rate
+    ? `${escapeHtml(marketWord(st.market))}
+       <b>${Math.round(st.per_game * 100)}%</b><span class="tsq-tot">
+       of snaps</span>`
+    : `${escapeHtml(marketWord(st.market))}
+       <b>${st.per_game}</b><span class="tsq-tot">/g · ${st.total} total</span>`);
   const body = groups.map((g) => `
     <div class="tsq-pos">
       <div class="tsq-pos-k">${escapeHtml(g.position)}${

@@ -33,6 +33,8 @@ Read-only, and everything is handed a connection. No network, no clock.
 
 from __future__ import annotations
 
+import re
+
 
 def _num(v):
     try:
@@ -379,12 +381,63 @@ LEAD_MARKET = {
 #: A 90-man NFL roster is not a page.
 SQUAD_PER_POSITION = 6
 
+#: Markets whose value is a RATE, not a count, so summing them is
+#: meaningless. Ethan's Rams page, 2026-09-10, showed "Nick Vannett —
+#: Snap Pct 0/g · 0.3 total": seven games at a four-percent snap share
+#: added up to 0.3 of nothing, and the per-game number rounded to zero.
+#: A rate's honest summary is its mean, printed as a percentage.
+#:
+#: `snap_pct` is the only one this table holds today (`ingest.
+#: snap_count_rows` writes it 0-1). Kept as a set rather than a name
+#: check so the next one is a one-line change and not a new bug.
+RATE_MARKETS = {"snap_pct"}
+
 
 def _latest_season(conn, sport: str, team: str) -> int | None:
     row = conn.execute(
         "SELECT MAX(season) FROM player_game_logs WHERE sport=? AND team=?",
         (sport, team)).fetchone()
     return row[0] if row and row[0] is not None else None
+
+
+_ABBREV = re.compile(r"^[A-Za-z]\.")
+
+
+def _is_abbreviated(name: str) -> bool:
+    """"K.Williams" — a first initial, a dot, and no first name.
+
+    The one shape `sources.nflpbp` writes and the one shape that cannot
+    identify a person on its own. A full name never matches it.
+    """
+    return bool(_ABBREV.match(str(name or "").strip()))
+
+
+def _absorb(who: dict, r) -> None:
+    """Fold one (player, market) group row into a squad entry."""
+    name = str(r["player"])
+    who["games"] = max(who["games"], int(r["games"] or 0))
+    # A position can differ between a player's rows (a feed changing its
+    # mind mid-season); the first non-empty one wins rather than the
+    # last, so the list does not reshuffle on a re-ingest.
+    if not who["position"] and r["position"]:
+        who["position"] = str(r["position"])
+    # …and a full name always beats an abbreviation for the row's label.
+    if _is_abbreviated(who["player"]) and not _is_abbreviated(name):
+        who["player"] = name
+    market = str(r["market"])
+    games = int(r["games"] or 0)
+    total = float(r["total"] or 0.0)
+    rate = market in RATE_MARKETS
+    who["stats"][market] = {
+        "market": market,
+        # A RATE HAS NO TOTAL. See RATE_MARKETS: seven games of snap
+        # share do not add up to anything, and printing "0.3 total"
+        # beside a number that means 4% of snaps is worse than printing
+        # nothing at all.
+        "total": None if rate else round(total, 1),
+        "rate": rate,
+        "per_game": round(total / max(1, games), 3 if rate else 1),
+        "games": games}
 
 
 def squad(conn, sport: str, team: str, season: int | None = None,
@@ -412,6 +465,7 @@ def squad(conn, sport: str, team: str, season: int | None = None,
     not taken a snap for this team is not on this list, which is honest
     rather than complete.
     """
+    from .fantasy import _fold, _short_key
     season = season if season is not None else _latest_season(conn, sport, team)
     if season is None:
         return {"season": None, "positions": [], "players": 0}
@@ -420,24 +474,58 @@ def squad(conn, sport: str, team: str, season: int | None = None,
         "COUNT(DISTINCT game_id) games FROM player_game_logs "
         "WHERE sport=? AND team=? AND season=? AND player<>'' "
         "GROUP BY player, position, market", (sport, team, season)).fetchall()
+    # ONE PLAYER, ONE ROW. `player_game_logs` holds two NFL feeds under
+    # one schema and they do not spell a name the same way: the weekly
+    # box score writes "Kyren Williams" with a position,
+    # `sources.nflpbp.xfp_player_rows` writes "K.Williams" with an EMPTY
+    # one and says so in its own docstring. Grouped on the raw string,
+    # every skill player came out twice — once under his position and
+    # once in a nameless bucket at the bottom of the page. Ethan's Rams
+    # screenshot, 2026-09-10: a "— 14 listed" group holding K.Williams,
+    # B.Corum, P.Nacua, D.Adams, C.Parkinson and D.Allen, every one of
+    # them already listed above under RB, WR or TE.
+    #
+    # THE FOLD RUNS ONE WAY ONLY, and that is the whole care in it. An
+    # abbreviated row cannot name a person — "D.Moore" is Devin or
+    # Dennis and the row does not know — so it JOINS a full name rather
+    # than merging with one. Two full names that differ stay two people
+    # however alike their initials are; `fantasy._short_key` is
+    # deliberately loose (2025 logged two ('d','moore') and two
+    # ('m','evans')) and loose is right for a lookup and wrong for an
+    # identity.
+    #
+    # An abbreviation that matches no full name, or matches two, is left
+    # as its own row rather than guessed at — the same refusal
+    # `sources.livescores.ingest_finals` makes about an ambiguous
+    # fixture. Nothing is dropped, which is what a college feed with no
+    # roster position needs.
     by_player: dict = {}
+    short_rows: list = []
     for r in rows:
+        name = str(r["player"])
+        if _is_abbreviated(name):
+            short_rows.append(r)
+            continue
+        key = (_short_key(name, team), _fold(name))
         who = by_player.setdefault(
-            str(r["player"]), {"player": str(r["player"]),
-                               "position": str(r["position"] or ""),
-                               "games": 0, "stats": {}})
-        who["games"] = max(who["games"], int(r["games"] or 0))
-        # A position can differ between a player's rows (a feed changing
-        # its mind mid-season); the first non-empty one wins rather than
-        # the last, so the list does not reshuffle on a re-ingest.
-        if not who["position"] and r["position"]:
-            who["position"] = str(r["position"])
-        who["stats"][str(r["market"])] = {
-            "market": str(r["market"]),
-            "total": round(float(r["total"] or 0.0), 1),
-            "per_game": round(float(r["total"] or 0.0)
-                              / max(1, int(r["games"] or 1)), 1),
-            "games": int(r["games"] or 0)}
+            key, {"player": name, "position": str(r["position"] or ""),
+                  "games": 0, "stats": {}})
+        _absorb(who, r)
+    # …then the abbreviations, each onto its one full name or onto
+    # nobody. Built after the full names so the answer cannot depend on
+    # ingest order.
+    full_by_key: dict = {}
+    for (short, _full), who in by_player.items():
+        full_by_key.setdefault(short, []).append(who)
+    for r in short_rows:
+        name = str(r["player"])
+        hits = full_by_key.get(_short_key(name, team)) or []
+        who = hits[0] if len(hits) == 1 else by_player.setdefault(
+            (_short_key(name, team), _fold(name)),
+            {"player": name, "position": str(r["position"] or ""),
+             "games": 0, "stats": {}})
+        _absorb(who, r)
+
     groups: dict = {}
     for who in by_player.values():
         lead = LEAD_MARKET.get(who["position"])
@@ -445,16 +533,22 @@ def squad(conn, sport: str, team: str, season: int | None = None,
         if lead not in stats:
             # The player's own biggest number, which is what a reader
             # reads him by when the table has never seen his position.
-            lead = max(stats, key=lambda m: stats[m]["total"]) if stats else ""
+            # COUNTS ONLY: a rate has no size to be biggest, and a snap
+            # share is not what anyone reads a tight end by. A man who
+            # has nothing else still leads on it — that is all he has.
+            counts = [m for m in stats if not stats[m]["rate"]]
+            lead = (max(counts, key=lambda m: stats[m]["total"]) if counts
+                    else (max(stats) if stats else ""))
         who["lead_market"] = lead
         who["stats"] = sorted(stats.values(),
                               key=lambda st: (st["market"] != lead,
-                                              -st["total"]))
+                                              st["rate"], -(st["total"] or 0.0)))
         groups.setdefault(who["position"], []).append(who)
     out = []
     for pos, players in groups.items():
         players.sort(key=lambda w: (-w["games"],
-                                    -(w["stats"][0]["total"] if w["stats"] else 0),
+                                    -((w["stats"][0]["total"] or 0.0)
+                                      if w["stats"] else 0.0),
                                     w["player"]))
         out.append({"position": pos or "—",
                     "players": players[:max(1, per_position)],
