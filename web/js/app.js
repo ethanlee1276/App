@@ -4644,12 +4644,26 @@ function renderGames() {
      hits that cache, computes the same stamp and stops, so this cannot
      loop. It also warms the id `openGameOrPlays` needs, which is what
      the old line was for. */
-  if (LIVE_FAST[state.sport]) {
+  if (LIVE_FAST[state.sport] && !_dashRedrawing) {
     const seen = fastLiveStamp(games);
+    /* AT MOST ONE EXTRA RENDER, BY CONSTRUCTION. The stamp comparison
+       below already settles on the second pass — `pbpStripGames` caches
+       for fifteen seconds, so the redraw re-reads the same rows and
+       stops. That is an argument; this is a guarantee. A re-render that
+       can re-arm itself is one bad input away from spinning the tab,
+       and a spinning tab reads as "the site won't load", which is not a
+       bug report anybody should have to file twice. The flag is cleared
+       in `finally`, so an early return or a throw cannot leave the warm
+       switched off for the rest of the session. */
+    _dashRedrawing = true;
     pbpStripGames(state.sport).then(() => {
-      if (state.view !== "recommended" || !document.getElementById("games")) return;
-      if (fastLiveStamp(dashLiveGames()) !== seen) renderGames();
-    }).catch(() => {});
+      try {
+        if (state.view !== "recommended" || !document.getElementById("games")) return;
+        if (fastLiveStamp(dashLiveGames()) === seen) return;
+        renderGames();
+        renderRail();          // the rail draws the same games; see renderRail
+      } finally { _dashRedrawing = false; }
+    }, () => { _dashRedrawing = false; });
   }
   // …and while a game is in progress, keep the cards on the fast clock:
   // re-read the scoreboard and redraw ONLY when the live state moved.
@@ -33988,7 +34002,16 @@ function renderRail() {
 
   renderRailDesk();
 
-  const games = (d.games || []).filter((g) => (g.live || {}).state === "live");
+  /* THE SAME MERGED VIEW THE CARDS DRAW, not the raw board. This read
+     `d.games` — `state.data`, the model board on its 45-minute cycle —
+     while the stadium strip six inches to its left reads the fast
+     scoreboard. So on 2026-09-10 the card said LIVE Q3 8:11, 10-0, 4th
+     & 5 at NE 11, and this panel said "No games in progress right now",
+     on the same screen at the same moment. The comment above this
+     function claimed they came from "the same live states"; they did
+     not. Third reader of the board where the merged view was meant,
+     after `renderGames` and `armDashLive`. */
+  const games = dashLiveGames().filter((g) => (g.live || {}).state === "live");
   const nLive = games.length;
   const badge = document.getElementById("sb-live-badge");
   if (badge) { badge.hidden = !nLive; badge.textContent = nLive || ""; }
@@ -34505,6 +34528,11 @@ function fastLiveStamp(games) {
             lv.outs, lv.balls, lv.strikes, lv.bases || null];
   }));
 }
+
+//: True while a warm-triggered redraw is in flight — see the note at
+//: the call site in `renderGames`. It makes the extra render bounded at
+//: one rather than merely convergent.
+let _dashRedrawing = false;
 
 //: The dashboard's own live clock. Sixteen seconds clears
 //: `pbpStripGames`' fifteen-second cache, so every tick is a real read.

@@ -84,7 +84,7 @@ def test_a_card_on_the_board_goes_through_the_live_aware_door():
     # caused it. The door's contract is that the id is in hand before
     # the tap; fetching it always is strictly more of that, not less.
     assert "pbpStripGames(state.sport)" in body, "the fast file is asked for before the tap"
-    assert 'if (LIVE_FAST[state.sport]) {' in body, body[-900:]
+    assert 'if (LIVE_FAST[state.sport] && !_dashRedrawing) {' in body, body[-900:]
     assert '(g.live || {}).state === "live") && LIVE_FAST[state.sport]' not in body, \
         "the warm-up is gated on the board again — see tests/test_dash_live_deadlock.py"
 

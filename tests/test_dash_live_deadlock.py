@@ -101,9 +101,40 @@ def test_the_redraw_cannot_loop():
     before = body[:i]
     after = body[i:]
     assert "const seen = fastLiveStamp(games);" in before, before[-300:]
-    assert "!== seen) renderGames();" in after, after[:400]
+    # The unchanged case leaves without redrawing — that is the fixed
+    # point. (Spelled as an early return since the redraw grew a second
+    # statement; the contract is the comparison, not its punctuation.)
+    assert "=== seen) return;" in after, after[:500]
     # Unconditional re-entry would spin forever.
     assert not re.search(r"then\(\(\)\s*=>\s*\{?\s*renderGames\(\);", after), after[:400]
+
+
+def test_the_rail_draws_the_same_live_games_as_the_cards():
+    """Ethan, 2026-09-10, one screenshot: the stadium card reads LIVE Q3
+    8:11, 10-0, "4th & 5 at NE 11", and the LIVE NOW panel six inches to
+    its right reads "No games in progress right now."
+
+    `renderRail` read `state.data.games` — the raw model board — while
+    the strip beside it read the merged view. Its own docstring claimed
+    both came from "the same live states the stadium strip draws"."""
+    body = _code(_fn("renderRail"))
+    assert "dashLiveGames()" in body, "the rail still reads the raw board"
+    assert 'const games = (d.games || []).filter' not in body, body[:600]
+
+
+def test_the_redraw_is_bounded_at_one_not_merely_convergent():
+    """A re-render that can re-arm itself is one bad input away from
+    spinning the tab, and a spinning tab reads as "the site won't
+    load". The stamp check makes it converge; the flag makes it
+    impossible."""
+    body = _code(_render_games())
+    assert "!_dashRedrawing" in body, "the warm can re-enter itself"
+    assert "_dashRedrawing = true;" in body, body[-700:]
+    assert "finally { _dashRedrawing = false; }" in body, \
+        "an early return would leave the warm switched off for good"
+    # Cleared on rejection too, or one failed fetch kills it for the session.
+    assert "() => { _dashRedrawing = false; }" in body, body[-700:]
+    assert "let _dashRedrawing = false;" in APP
 
 
 def test_the_merge_still_lets_board_only_fields_survive():
