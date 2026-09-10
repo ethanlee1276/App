@@ -118,6 +118,9 @@ def _answers():
         stopped: liveFeedWhy("nfl", {ok: true, note: "", stamp: old}, now),
         quiet:   liveFeedWhy("nfl", {ok: true, note: "", stamp: fresh}, now),
         nostamp: liveFeedWhy("nfl", {ok: true, note: "", stamp: ""}, now),
+        board:   liveFeedWhy("nfl", {ok: true, note: "", stamp: fresh, board: "HTTP 404"}, now),
+        boardQuiet: liveFeedWhy("nfl", {ok: true, note: "", stamp: fresh, board: ""}, now),
+        scoresWin: liveFeedWhy("nfl", {ok: true, note: NOTE, stamp: fresh, board: "HTTP 404"}, now),
         missing: liveFeedWhy("nfl", undefined, now),
         htmlOne: liveFeedWhyHTML("nfl", {nfl: {ok: true, note: NOTE, stamp: fresh},
                                          mlb: {ok: false, note: "", stamp: ""}}, now),
@@ -157,6 +160,22 @@ def test_a_stopped_loop_is_named_by_the_files_own_age():
     assert "not running" in got["stopped"], got["stopped"]
 
 
+def test_a_board_that_did_not_load_is_named_but_not_confused_with_the_score():
+    """The model board and the fast scoreboard are different files and
+    different losses. A missing board costs the cards their odds grid
+    and their win-probability track; it does not cost anybody the score,
+    and saying otherwise on a night the scores are fine is its own lie."""
+    got, _ = _answers()
+    if got is None:
+        print("  SKIP node not installed"); return
+    assert "HTTP 404" in got["board"], got["board"]
+    assert "scores are unaffected" in got["board"], got["board"]
+    assert got["boardQuiet"] == "", got["boardQuiet"]
+    # A scoreboard that could not be reached is the bigger fact and wins
+    # the one line there is room for.
+    assert got["scoresWin"] == got["note"], got["scoresWin"]
+
+
 def test_a_quiet_afternoon_gets_no_warning():
     """The fourth case, and the common one. A feed that answered
     recently with nothing in progress is not a fault, and a red line on
@@ -188,11 +207,39 @@ def test_the_chip_decides_which_leagues_are_explained():
 
 
 # --- the wiring, which is what actually broke -------------------------------
+def test_the_fast_scoreboard_is_read_even_when_the_model_board_is_not():
+    """THE BUG ETHAN HIT, 2026-09-10. `fetchAllLive` opened with
+    `if (!r.ok) return;` on the LEAGUE'S MODEL BOARD, so a board that
+    404d or half-wrote during a rebuild took the whole league off the
+    Live tab — including the fast scoreboard file, which was on the
+    droplet two seconds old carrying "16 games, 1 live, 1 deep file".
+
+    The fast file exists so that scores do not wait on the model board.
+    Waiting on it to EXIST is the same dependency wearing a different
+    hat."""
+    i = APP.index("async function fetchAllLive()")
+    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
+    head = body[:body.index("if (LIVE_FAST[sport])")]
+    # CODE ONLY. The comment above that fetch quotes the old line to say
+    # what it did, and a test that cannot tell prose from an instruction
+    # would forbid ever writing the history down.
+    code = re.sub(r"/\*.*?\*/", "", head, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+    assert "if (!r.ok) return;" not in code, \
+        "the model board can take the fast scoreboard down with it again"
+    assert "if (r.ok) d = await r.json();" in head, head
+    # The board's failure is recorded rather than swallowed, and rides
+    # on the same per-league state the sentences are built from.
+    assert 'board = `HTTP ${r.status}`' in head, head
+    assert 'board = "unreadable"' in head, head
+    assert "stamp: String(df.generated_at || \"\"), board }" in body, body[-900:]
+
+
 def test_the_fetch_keeps_the_note_and_the_stamp_it_used_to_drop():
     """`fetchAllLive` read `games` and nothing else. Both fields the
     builder writes for this purpose must come out of it."""
     i = APP.index("async function fetchAllLive()")
-    body = APP[i:APP.index("\n/*:", i)]
+    body = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
     assert "df.note" in body, "the note is dropped again"
     assert "df.generated_at" in body, "the stamp is dropped again"
     assert "_liveFeedState[sport] = feed" in body, body[-600:]

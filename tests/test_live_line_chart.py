@@ -163,8 +163,11 @@ def test_the_fast_scoreboard_merges_instead_of_replacing():
     every live card the day the fast loop shipped. The merge keeps fast
     fields where both speak (they are fresher) and board-only fields
     alive."""
+    # THE FUNCTION, NOT A BYTE COUNT — the third window in this file's
+    # neighbourhood to break on a comment (2026-09-10). Its last line is
+    # where it ends, and that anchor cannot be pushed out by prose.
     i = APP.index("async function fetchAllLive(")
-    fn = APP[i:i + 3000]
+    fn = APP[i:APP.index("_liveAll = { at: Date.now(), games: out };", i)]
     assert "byKey" in fn and "...bg, ...fg" in fn
     assert "games = df.games;" not in fn, "wholesale replacement is back"
 
@@ -208,10 +211,15 @@ def test_cfb_marks_survive_the_cross_sport_live_tab():
     i = APP.index("function teamsForSport(")
     assert "_cfbTeams ||" in APP[i:i + 500]
     j = APP.index("async function fetchAllLive(")
-    # Widened 2026-09-01: the fetch grew a revalidation comment above the
-    # line this reads (no-cache over no-store), and the window is not the
-    # contract — the assignment is.
-    assert '_cfbTeams = d.teams' in APP[j:j + 1400]
+    # NOT A BYTE WINDOW ANY MORE. This said 1400 and was widened from
+    # 900 on 2026-09-01 when the fetch grew a revalidation comment, then
+    # broke again on 2026-09-10 when it grew the note explaining why the
+    # model board is no longer required. Counting higher each time makes
+    # the test a tripwire on comment length. Its own comment already had
+    # the right answer — "the window is not the contract, the assignment
+    # is" — so the slice now runs to the function's own last line.
+    body = APP[j:APP.index("_liveAll = { at: Date.now(), games: out };", j)]
+    assert '_cfbTeams = d.teams' in body
 
 
 def test_cfb_games_speak_the_live_dict_every_other_league_speaks():

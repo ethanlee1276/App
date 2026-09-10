@@ -34221,6 +34221,27 @@ async function fetchAllLive() {
   if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
   const out = [];
   await Promise.all(Object.entries(LIVE_FEEDS).map(async ([sport, url]) => {
+    /* THE SCORES DO NOT WAIT ON THE MODEL BOARD. Not for latency — that
+       is the 2026-08-16 fix the note under LIVE_FAST describes — and,
+       from 2026-09-10, not for AVAILABILITY either, which this function
+       had backwards from the day the fast files shipped.
+
+       It opened `const r = await fetch(url); if (!r.ok) return;` where
+       `url` is the LEAGUE'S MODEL BOARD. A board that 404s, half-writes
+       during a rebuild, or throws in `r.json()` took the whole league
+       out of the Live tab — including the fast scoreboard file, which
+       was sitting on disk two seconds old with the game, the score and
+       the drive in it, and was never fetched. Ethan, 2026-09-10: "we
+       are not showing the live play by plays for nfl. its not even
+       showing the nfl game is live", with `live_nfl.json` on the
+       droplet reading "16 games, 1 live, 1 deep file" at that moment.
+
+       So the board is now READ BUT NOT REQUIRED: its failure costs the
+       cards their odds grid and their win-probability track, which are
+       board-only facts, and costs the scoreboard nothing. A score is
+       the thing somebody watching a game came for. */
+    let d = {};
+    let board = "";
     try {
       /* REVALIDATE, NEVER TRUST BLIND, NEVER RE-DOWNLOAD BLIND. This
          fires every 30 seconds on the Live tab for every league's board
@@ -34233,8 +34254,14 @@ async function fetchAllLive() {
          files, so the browser cache holding them is fine — the paid
          board rides /api with its own rules. */
       const r = await fetch(url, { cache: "no-cache" });
-      if (!r.ok) return;
-      const d = await r.json();
+      if (r.ok) d = await r.json();
+      else board = `HTTP ${r.status}`;
+    } catch (e) {
+      // A body that will not parse is a board that did not load. Naming
+      // it "unreadable" rather than swallowing it is the whole point.
+      board = "unreadable";
+    }
+    try {
       if (sport === "cfb" && d.teams) _cfbTeams = d.teams;
       // The fast scoreboard when this sport has one, the board otherwise.
       // FALLING BACK IS THE POINT: a missing or unbuilt live file must
@@ -34246,13 +34273,13 @@ async function fetchAllLive() {
         // `_liveFeedState`. Assumed failed until it answers, so a fetch
         // that throws below leaves a state that says so rather than one
         // that says nothing.
-        let feed = { ok: false, note: "", stamp: "" };
+        let feed = { ok: false, note: "", stamp: "", board };
         try {
           const rf = await fetch(LIVE_FAST[sport], { cache: "no-store" });
           if (rf.ok) {
             const df = await rf.json();
             feed = { ok: true, note: String(df.note || ""),
-                     stamp: String(df.generated_at || "") };
+                     stamp: String(df.generated_at || ""), board };
             if (Array.isArray(df.games) && df.games.length) {
               // MERGE, never replace. The fast file knows the score and
               // the clock; the BOARD knows the odds grid and the live
@@ -34321,6 +34348,14 @@ function liveFeedWhy(sport, feed, now) {
   if (isFinite(t) && (now - t) / 1000 > LIVE_FEED_STALE_S)
     return `${label} live scores were last refreshed ${Math.round((now - t) / 60000)}`
       + ` min ago — the fast scoreboard loop is not running.`;
+  // The MODEL BOARD, which is a different file and a smaller loss: it
+  // carries the odds grid and the win-probability track, not the score.
+  // It used to take the whole league down with it (see `fetchAllLive`)
+  // and now costs only what it actually owns — but a league whose board
+  // is missing still deserves to say so rather than look ordinary.
+  if (feed.board)
+    return `${label} board did not load (${feed.board}) — scores are unaffected,`
+      + ` but this league’s cards will show no prices or charts.`;
   return "";
 }
 

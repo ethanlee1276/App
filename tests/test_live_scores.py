@@ -138,19 +138,30 @@ def test_the_page_reads_scores_from_the_fast_file():
     # Window widened 2026-08-18: the merge-not-replace fix (and its
     # comment) grew the function past the old 1800 chars.
     i = app.index("async function fetchAllLive")
-    body = app[i:i + 3400]
+    body = _live_fetch_body(app)
     assert "LIVE_FAST[sport]" in body, "the fast file is declared but unused"
     # The BETS still come from the slow board: a price minutes old is
     # defensible, a score minutes old is not.
     assert "d.game_bets" in body
 
 
+def _live_fetch_body(app):
+    """`fetchAllLive` whole, START TO ITS OWN LAST LINE.
+
+    This was `app[i:i + 3400]`, widened from 1800 on 2026-08-18 and
+    broken again on 2026-09-10 — both times by a COMMENT, which is a
+    test that punishes writing down why the code is the way it is. The
+    function ends where it assigns its cache; that is a structural
+    anchor and it does not move when the prose does."""
+    i = app.index("async function fetchAllLive")
+    return app[i:app.index("_liveAll = { at: Date.now(), games: out };", i)]
+
+
 def test_a_missing_fast_file_leaves_the_page_as_it_was():
     """The fast loop can be a minute behind a fresh deploy. Falling back to
     the board is what stops that minute being an empty Live Now page."""
     app = _read("web", "js", "app.js")
-    i = app.index("async function fetchAllLive")
-    body = app[i:i + 3400]
+    body = _live_fetch_body(app)
     assert "let games = d.games || []" in body, "no fallback source"
     assert "df.games.length" in body, "an empty fast file would blank the page"
 
