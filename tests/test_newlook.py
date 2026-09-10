@@ -175,12 +175,13 @@ def test_the_library_folds_and_remembers():
     sb = HTML[HTML.index('id="sidebar"'):HTML.index("</aside>")]
     # Four since the 2026-08-25 menu reorganisation added Proof — the
     # trust pages as rows instead of footer chips (test_trust pins it).
-    # Five since 2026-09-10: "Beyond the book" took Prediction Market,
-    # Fantasy and Rocket Radar back out of the league strip, folded for
-    # the same reason Library is — visited deliberately, not nightly.
-    assert sb.count('class="sb-label sb-fold"') == 5, \
-        "the foldable heads changed — Betting, Library, My Book, " \
-        "Beyond the book, Proof"
+    # It went to five for half a day on 2026-09-10 when Prediction
+    # Market, Fantasy and Rocket Radar landed in a "Beyond the book"
+    # fold, and back to four the same day: Ethan, "We dont want features
+    # like that hidden from the user." They lead the drawer as tiles now
+    # (.sb-apps), behind nothing.
+    assert sb.count('class="sb-label sb-fold"') == 4, \
+        "the foldable heads changed — Betting, Library, My Book, Proof"
     for fold in ('data-fold="library"', 'data-fold="proof"'):
         seg = sb[sb.index(fold):]
         assert 'aria-expanded="false"' in seg[:220], \

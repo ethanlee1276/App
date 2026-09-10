@@ -5962,6 +5962,56 @@ body.has-rail .shell {
 .sb-greet span { color: var(--text-mute); font-size: var(--fs-sm); }
 .sb-greet b { font-size: var(--fs-md); font-weight: 800; color: var(--text); }
 
+/* THE THREE PRODUCTS THAT ARE NOT PART OF THE BOOK, leading the drawer.
+
+   Ethan, 2026-09-10: "The predict, fantasy, and Memes buttons should be
+   at the top of the three bar menu I think. We dont want features like
+   that hidden from the user. Maybe we keep them and buttons too."
+
+   TILES RATHER THAN ROWS, and the reason is arithmetic as much as
+   taste. Three more `.sb-item` rows is ~120px of drawer before
+   Dashboard; one 3-up grid is ~64px, which is what lets them lead
+   without pushing the nightly rows off the first screen of a phone.
+   They also read as a different KIND of thing that way — the column
+   under them is places inside the book, these are three separate
+   products — which is the same difference-in-kind argument the league
+   strip is built on.
+
+   Sized against the NARROW case: the desktop rail is 208px, so 180px of
+   content, so 56px a tile after the gaps. The label is sentence case at
+   `--fs-xs` rather than the uppercase this file uses for chips
+   elsewhere — "PREDICT" tracked out does not fit 48px of content box
+   and "Predict" does, with room. On a phone the drawer is
+   min(84vw, 330px), where every tile has ~100px and none of this
+   binds. */
+.sb-apps {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  /* Same reason `.sb-greet` carries it: the sidebar is a flex column and
+     will crush a child to nothing once the drawer's content runs past
+     its own height. */
+  flex: 0 0 auto;
+}
+.sb-app {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 5px; width: 100%; min-height: 62px;
+  padding: 9px 3px; cursor: pointer; text-align: center;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm); background: var(--panel);
+  color: var(--text-dim); font: inherit; font-size: var(--fs-xs);
+  font-weight: 700; line-height: var(--lh-tight);
+  /* A label that outgrows its tile clips rather than widening the grid
+     and pushing the third one off the rail. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.sb-app .sb-ico { width: 19px; height: 19px; }
+.sb-app:hover { background: var(--panel-2); color: var(--text); }
+.sb-app.active { background: var(--grad-chip); color: var(--text);
+  border-color: var(--brand); }
+.sb-app.active .sb-ico, .sb-app:hover .sb-ico { color: var(--brand-2); }
+
 .sb-sec { display: flex; flex-direction: column; gap: 4px; }
 .sb-label { margin: 12px 10px 4px; font-size: var(--fs-2xs); font-weight: 800;
   letter-spacing: .16em; text-transform: uppercase; color: var(--text-mute); }

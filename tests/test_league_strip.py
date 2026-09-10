@@ -114,28 +114,70 @@ def test_the_three_that_are_not_leagues_kept_a_home():
             f"{code} left the strip and landed nowhere"
 
 
-def test_they_are_folded_rather_than_promoted_into_the_open_tier():
-    """The two-tier drawer's rule (tests/test_drawer_tiers): the
-    always-open tier is what a bettor opens nightly, and these are
-    visited deliberately. Measured at 21 rows / 1051px on a 390x844
-    phone; three more open rows would have walked that back."""
+def test_they_lead_the_drawer_rather_than_hiding_in_a_fold():
+    """They spent half a day in a folded "Beyond the book" group. Ethan:
+    "The predict, fantasy, and Memes buttons should be at the top of the
+    three bar menu I think. We dont want features like that hidden from
+    the user."
+
+    Nothing folds them and nothing ships them hidden — a whole product
+    behind two taps is what a features page exists to argue against."""
     body = _nocomments_html(HTML)
-    i = body.index('<div class="sb-group" data-group="beyond"')
+    i = body.index('<div class="sb-apps"')
     grp = body[i:body.index("</div>", i)]
     for code in MARKETS:
-        assert f'data-sport="{code}"' in grp, f"{code} is not in the fold"
-    assert "hidden" in body[i:i + 120], "the fold ships open"
-    head = body[:i]
-    assert 'data-fold="beyond"' in head, "the group has no heading to fold it"
+        assert f'data-sport="{code}"' in grp, f"{code} does not lead the drawer"
+    # `aria-hidden` on the icons is not the [hidden] attribute; matching
+    # the bare substring caught the svg and failed a passing page.
+    assert not re.search(r'(?<!aria-)\bhidden\b', grp), \
+        "a product ships hidden"
+    assert "sb-fold" not in grp and 'data-fold' not in body[i - 400:i], \
+        "they are behind a fold again"
 
 
-def test_the_moved_rows_switch_the_sport_rather_than_the_view():
+def test_nothing_in_the_drawer_folds_them_away_from_anywhere():
+    """The fold they were in is gone, not merely bypassed — a heading
+    with nothing under it is a tap that does nothing."""
+    assert 'data-group="beyond"' not in HTML
+    assert 'data-fold="beyond"' not in HTML
+
+
+def test_they_lead_it_ahead_of_the_nav_column():
+    """`#sport-switch` is the nav column proper, and its own comment says
+    what is left in it is "one kind of thing: places you can go." These
+    are three separate products, so they sit above it rather than in
+    it."""
+    body = _nocomments_html(HTML)
+    assert body.index('<div class="sb-apps"') < body.index('id="sport-switch"')
+    assert body.index('class="sb-greet"') < body.index('<div class="sb-apps"'), \
+        "they are above the greeting rather than under it"
+
+
+def test_they_are_buttons_rather_than_three_more_menu_rows():
+    """The other half of what Ethan asked for — "Maybe we keep them and
+    buttons too" — and the arithmetic that lets them lead at all: three
+    `.sb-item` rows is ~120px of drawer before Dashboard, one 3-up grid
+    of tiles is ~64px."""
+    body = _nocomments_html(HTML)
+    i = body.index('<div class="sb-apps"')
+    grp = body[i:body.index("</div>", i)]
+    # The container's own class is `sb-apps`, so a bare "sb-app" count
+    # includes it and comes back one high.
+    assert grp.count("sport-btn sb-app") == len(MARKETS), \
+        "a product is not wearing the tile treatment"
+    assert "sb-item" not in grp, "they are plain menu rows again"
+    rule = _rule(CSS, ".sb-apps")
+    assert "grid-template-columns: repeat(3" in rule, \
+        "the tiles are not a 3-up row"
+
+
+def test_the_leading_tiles_switch_the_sport_rather_than_the_view():
     """`sport-btn` + `data-kind="tool"`, the same handle My Bets and
-    Record use a tier above — these change `state.sport`, and a
-    `nav-btn` row would be wired to a router that has no view by that
+    Record use in the column below — these change `state.sport`, and a
+    `nav-btn` would be wired to a router that has no view by that
     name."""
     body = _nocomments_html(HTML)
-    i = body.index('<div class="sb-group" data-group="beyond"')
+    i = body.index('<div class="sb-apps"')
     grp = body[i:body.index("</div>", i)]
     for code in MARKETS:
         j = grp.index(f'data-sport="{code}"')
