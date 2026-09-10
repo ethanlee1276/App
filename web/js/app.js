@@ -4546,8 +4546,7 @@ function renderGames() {
      (the play-by-play door asks for them below); they were simply never
      merged into the cards. Same merge the Live tab uses: fast fields
      win where both speak, board-only fields survive. */
-  const games = mergeFastLive([...(state.data.games || [])],
-                              _pbpStrip.league === state.sport ? _pbpStrip.games : []);
+  const games = dashLiveGames();
   const host = document.getElementById("games");
   /* THE BOARD MAY BE SHOWING A FUTURE SLATE. Football is weekly: the
      college build advances past an empty date to the next day the feed
@@ -4628,11 +4627,30 @@ function renderGames() {
   revealChildren(host);
   enableTilt(host);
   if (typeof syncStripArrows === "function") syncStripArrows();
-  // A game in progress opens its play-by-play (see openGameOrPlays),
-  // whose id lives in the league's fast scoreboard — asked for now, so
-  // the tap is instant rather than a fetch long.
-  if (games.some((g) => (g.live || {}).state === "live") && LIVE_FAST[state.sport])
-    pbpStripGames(state.sport).catch(() => {});
+  /* THE FAST SCOREBOARD IS ASKED FOR UNCONDITIONALLY, and that is the
+     whole fix here. This line used to read `if (games.some(live) &&
+     LIVE_FAST[sport])` — it only fetched the fast file when a game was
+     ALREADY known to be live, and the only thing that could know that
+     was the fast file. A deadlock: `state.data` is the model board on
+     its 45-minute cycle, so a game that kicked at 8:20 kept drawing as
+     "Wed, Sep 9 · 8:20 PM ET", no score, no LIVE mark, until the next
+     board build happened to notice. Ethan, 2026-09-10, an hour and a
+     half after kickoff: "the patriots game is still not showing it's
+     live."
+
+     It costs nothing to always ask: `pbpStripGames` caches for fifteen
+     seconds and the file is the small one. When the answer changes the
+     live state the cards are drawing, redraw once — the second pass
+     hits that cache, computes the same stamp and stops, so this cannot
+     loop. It also warms the id `openGameOrPlays` needs, which is what
+     the old line was for. */
+  if (LIVE_FAST[state.sport]) {
+    const seen = fastLiveStamp(games);
+    pbpStripGames(state.sport).then(() => {
+      if (state.view !== "recommended" || !document.getElementById("games")) return;
+      if (fastLiveStamp(dashLiveGames()) !== seen) renderGames();
+    }).catch(() => {});
+  }
   // …and while a game is in progress, keep the cards on the fast clock:
   // re-read the scoreboard and redraw ONLY when the live state moved.
   armDashLive(fastLiveStamp(games));
@@ -34466,6 +34484,16 @@ function mergeFastLive(boardGames, fastGames) {
   });
 }
 
+/* THE DASHBOARD'S GAMES WITH THE FAST SCOREBOARD MERGED IN, in one
+   place because three readers need the same answer and the question is
+   easy to get subtly wrong: the board says what the 45-minute build
+   knew, the fast file says what is true now, and only the merge of the
+   two is what the reader is looking at. */
+function dashLiveGames() {
+  return mergeFastLive([...((state.data || {}).games || [])],
+                       _pbpStrip.league === state.sport ? _pbpStrip.games : []);
+}
+
 /* One string that changes when any live fact on the cards changes —
    score, period, outs, count, bases — and NOT when a board-only field
    does. The dashboard redraws on this, so a quiet scoreboard costs no
@@ -34487,14 +34515,18 @@ function armDashLive(seen) {
   clearTimeout(_dashLiveTimer);
   _dashLiveTimer = null;
   if (state.view !== "recommended" || !LIVE_FAST[state.sport]) return;
-  const games = (state.data || {}).games || [];
-  if (!games.some((g) => (g.live || {}).state === "live")) return;
+  // ON WHAT THE CARDS ARE SHOWING, not on what the board remembers.
+  // This read `state.data.games` — the model board alone — so the clock
+  // that keeps a live card moving could not start until the 45-minute
+  // build agreed the game had started. Half of the same deadlock the
+  // warm-up above documents: fixing the fetch and leaving this would
+  // have drawn the score once and then frozen it.
+  if (!dashLiveGames().some((g) => (g.live || {}).state === "live")) return;
   _dashLiveTimer = setTimeout(async () => {
     _dashLiveTimer = null;
     if (state.view !== "recommended") return;           // moved on
-    let fast = [];
-    try { fast = await pbpStripGames(state.sport); } catch (e) { fast = []; }
-    const now = fastLiveStamp(mergeFastLive((state.data || {}).games || [], fast));
+    try { await pbpStripGames(state.sport); } catch (e) {}
+    const now = fastLiveStamp(dashLiveGames());
     if (now !== seen && document.getElementById("games")) renderGames();   // re-arms
     else armDashLive(seen);
   }, DASH_LIVE_EVERY_MS);

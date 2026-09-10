@@ -1,0 +1,133 @@
+"""A game that kicked off ninety minutes ago, drawn as upcoming.
+
+Ethan, 2026-09-10, 9:55pm ET, looking at the Home page an hour and a
+half after an 8:20 kickoff: "the patriots game is still not showing it's
+live." The card read "Wed, Sep 9 · 8:20 PM ET" with no score and no LIVE
+mark, while `web/data/live_nfl.json` on the droplet said, at that
+moment, sixteen games, ONE LIVE, one deep play-by-play file, two seconds
+old.
+
+THE DASHBOARD WAS IN A DEADLOCK WITH ITSELF. `renderGames` merges the
+fast scoreboard into the board's cards, but it merges whatever
+`pbpStripGames` last left in `_pbpStrip` — it does not fetch. The two
+things that fetched were both guarded the same way:
+
+    if (games.some(live) && LIVE_FAST[sport]) pbpStripGames(sport)
+    armDashLive: if (!state.data.games.some(live)) return;
+
+Both ask "is a game live?" of the MODEL BOARD, which is rebuilt on the
+45-minute cycle. So the fast file was only fetched once a game was
+already known to be live, and the only source that could know that was
+the fast file. Until the slow board caught up, nothing asked.
+
+This is the same shape as the Live tab bug fixed hours earlier the same
+night — the fast path gated behind the slow one — in a different
+function, which is why that fix did not reach this screen.
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+APP = (ROOT / "web" / "js" / "app.js").read_text()
+
+
+def _fn(name):
+    i = APP.index(f"function {name}(")
+    ends = [APP.find(m, i + 10)
+            for m in ("\nfunction ", "\nasync function ", "\nconst ", "\nlet ", "\n/* ", "\n/*:")]
+    ends = [e for e in ends if e != -1] or [len(APP)]
+    return APP[i:min(ends)]
+
+
+def _render_games():
+    """`renderGames` whole — anchored on its own last statement, never a
+    byte count. Three fixed windows in this neighbourhood broke on a
+    comment earlier tonight; not adding a fourth."""
+    i = APP.index("function renderGames(")
+    return APP[i:APP.index("armDashLive(fastLiveStamp(games));", i) + 60]
+
+
+def _code(js):
+    js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
+    return re.sub(r"//[^\n]*", "", js)
+
+
+def test_the_board_no_longer_decides_whether_we_ask_the_scoreboard():
+    """THE DEADLOCK ITSELF. The fetch must not be conditional on a live
+    game, because the fetch is how a live game is discovered."""
+    body = _code(_render_games())
+    assert "pbpStripGames(state.sport)" in body, "the fast file is never fetched"
+    fetch = body.index("pbpStripGames(state.sport)")
+    guard = body.rindex("if (", 0, fetch)
+    condition = body[guard:fetch]
+    assert "some(" not in condition, \
+        f"the fetch is still gated on a game already being live: {condition.strip()!r}"
+    assert "LIVE_FAST[state.sport]" in condition, condition
+
+
+def test_the_fast_clock_arms_on_the_merged_state_not_the_board():
+    """Fixing the fetch and leaving this would draw the score once and
+    then freeze it: the 16-second clock still would not start."""
+    body = _code(_fn("armDashLive"))
+    assert "dashLiveGames()" in body, body
+    assert "(state.data || {}).games" not in body, \
+        "the clock still asks the model board whether anything is live"
+
+
+def test_one_merged_view_serves_every_reader():
+    """Three readers need the same answer — the cards, the redraw check
+    and the clock — and a fourth copy of the merge is how they drift."""
+    assert "function dashLiveGames()" in APP
+    body = _code(_fn("dashLiveGames"))
+    assert "mergeFastLive(" in body and "_pbpStrip.games" in body, body
+    # renderGames reads it rather than open-coding the merge again.
+    rg = _code(_render_games())
+    assert "const games = dashLiveGames();" in rg, rg[:400]
+    assert rg.count("mergeFastLive(") == 0, "renderGames merges a second time"
+
+
+def test_the_redraw_cannot_loop():
+    """`renderGames` re-entering itself needs a fixed point. The second
+    pass hits `pbpStripGames`' 15-second cache, computes the same stamp
+    and stops — so the comparison must be against a stamp taken BEFORE
+    the fetch, and the redraw must be conditional on it changing."""
+    body = _code(_render_games())
+    i = body.index("pbpStripGames(state.sport)")
+    before = body[:i]
+    after = body[i:]
+    assert "const seen = fastLiveStamp(games);" in before, before[-300:]
+    assert "!== seen) renderGames();" in after, after[:400]
+    # Unconditional re-entry would spin forever.
+    assert not re.search(r"then\(\(\)\s*=>\s*\{?\s*renderGames\(\);", after), after[:400]
+
+
+def test_the_merge_still_lets_board_only_fields_survive():
+    """The fast file carries no odds grid and no win-probability track.
+    Wholesale replacement unplugged both in August; this is the guard
+    that the fix above did not quietly reintroduce."""
+    body = _code(_fn("mergeFastLive"))
+    assert "...bg" in body and "...(bg.live || {})" in body, body
+    assert "return bg;" in body, "a game the fast file does not know must survive as it was"
+
+
+if __name__ == "__main__":
+    fails = ran = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                ran += 1
+                print(f"  ok  {name}")
+            except AssertionError as exc:
+                fails += 1
+                print(f"  FAIL {name}: {exc}")
+            except Exception as exc:                          # noqa: BLE001
+                fails += 1
+                print(f"  FAIL {name}: {type(exc).__name__}: {exc}")
+    print(f"\n{ran} tests passed." if not fails else f"\n{fails} failed")
+    sys.exit(1 if fails else 0)

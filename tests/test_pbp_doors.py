@@ -76,8 +76,17 @@ def test_a_card_on_the_board_goes_through_the_live_aware_door():
     body = _fn("renderGames")
     assert "const open = () => openGameOrPlays(el.dataset.gid);" in body
     assert "const open = () => openGame(" not in body, "the card no longer opens the game page blind"
-    assert "pbpStripGames(state.sport).catch(() => {});" in body, "the fast file is asked for before the tap"
-    assert '(g.live || {}).state === "live") && LIVE_FAST[state.sport]' in body
+    # THE WARM-UP IS NOW UNCONDITIONAL (2026-09-10). It read
+    # `if (games.some(live) && LIVE_FAST[sport]) pbpStripGames(sport)`,
+    # which asked the 45-minute model board whether to fetch the file
+    # that is the only thing that knows — a deadlock that left a live
+    # game drawing as upcoming, and this test was pinning the guard that
+    # caused it. The door's contract is that the id is in hand before
+    # the tap; fetching it always is strictly more of that, not less.
+    assert "pbpStripGames(state.sport)" in body, "the fast file is asked for before the tap"
+    assert 'if (LIVE_FAST[state.sport]) {' in body, body[-900:]
+    assert '(g.live || {}).state === "live") && LIVE_FAST[state.sport]' not in body, \
+        "the warm-up is gated on the board again — see tests/test_dash_live_deadlock.py"
 
 
 def test_a_live_game_opens_the_play_by_play_and_any_other_the_game_page():

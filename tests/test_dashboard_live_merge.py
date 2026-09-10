@@ -96,9 +96,16 @@ def test_the_stamp_moves_on_a_runner_and_not_on_a_board_field():
 
 
 def test_the_dashboard_merges_and_re_arms_only_on_a_change():
+    # THE MERGE MOVED, THE CONTRACT DID NOT (2026-09-10). It sat inline
+    # in `renderGames`; three readers needed the same answer, so it is
+    # now `dashLiveGames()` and this asserts the same two facts one call
+    # away — the board is merged with the fast rows, and only with the
+    # rows belonging to the league on screen.
     src = _fn("renderGames")
-    assert "mergeFastLive([...(state.data.games || [])]" in src
-    assert "_pbpStrip.league === state.sport ? _pbpStrip.games : []" in src
+    assert "const games = dashLiveGames();" in src, src[:400]
+    merged = _fn("dashLiveGames")
+    assert "mergeFastLive([...((state.data || {}).games || [])]" in merged, merged
+    assert "_pbpStrip.league === state.sport ? _pbpStrip.games : []" in merged, merged
     assert "armDashLive(fastLiveStamp(games))" in src
     arm = _fn("armDashLive")
     assert 'state.view !== "recommended"' in arm, "the clock must stop when the dashboard is left"
