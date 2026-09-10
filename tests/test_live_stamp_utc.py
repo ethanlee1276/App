@@ -121,7 +121,12 @@ def test_the_reader_only_assumes_utc_when_the_stamp_names_no_zone():
     node = shutil.which("node")
     if not node:
         print("  SKIP node not installed"); return
-    prog = _fn("pbpAgo") + """
+    # TWO functions now: the zone rule came out of `pbpAgo` into `utcMs`
+    # when a second reader started subtracting from these stamps (the
+    # Live tab's stopped-loop check). The rule under test is the same
+    # one; it just lives one call away, so the program under node needs
+    # both halves.
+    prog = _fn("utcMs") + _fn("pbpAgo") + """
       const t = new Date(Date.now() - 120000);
       const pad = (n) => String(n).padStart(2, "0");
       const utc = `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`

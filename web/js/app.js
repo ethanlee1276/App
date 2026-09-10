@@ -34197,6 +34197,26 @@ let _liveChip = "all";
 //: away, and stays chosen until the sport changes again.
 let _liveChipSport = null;
 
+/* WHAT EACH FAST FILE SAID, beside the games it carried: `{ok, note,
+   stamp}` per league, rewritten on every poll that reads one.
+
+   THE FILE ALREADY KNEW AND NOBODY ASKED. `livescore_build.build`
+   writes a `note` whenever the scoreboard could not be reached — "NFL
+   scoreboard unreachable — 403 Forbidden" — and its docstring says why
+   in as many words: "An empty list with no note and an empty list
+   because ESPN refused the request look identical to every reader
+   downstream." The reader below was that reader. It took `games` and
+   dropped the rest on the floor, so the Live tab drew the same
+   sentence — "No games in progress right now" — whether nothing was
+   on, ESPN had refused us, or the loop that writes the file had been
+   dead since Tuesday.
+
+   Ethan, 2026-09-10: "we are not showing the live play by plays for
+   nfl. its not even showing the nfl game is live." Three different
+   situations, one sentence, and no way from the page to tell which —
+   the failure this site keeps hitting and the one he keeps naming. */
+let _liveFeedState = {};
+
 async function fetchAllLive() {
   if (Date.now() - _liveAll.at < 30000) return _liveAll.games;
   const out = [];
@@ -34222,10 +34242,17 @@ async function fetchAllLive() {
       // the fast loop can be a minute behind a fresh deploy.
       let games = d.games || [];
       if (LIVE_FAST[sport]) {
+        // WHAT THE FILE SAID, whether or not it had games — see
+        // `_liveFeedState`. Assumed failed until it answers, so a fetch
+        // that throws below leaves a state that says so rather than one
+        // that says nothing.
+        let feed = { ok: false, note: "", stamp: "" };
         try {
           const rf = await fetch(LIVE_FAST[sport], { cache: "no-store" });
           if (rf.ok) {
             const df = await rf.json();
+            feed = { ok: true, note: String(df.note || ""),
+                     stamp: String(df.generated_at || "") };
             if (Array.isArray(df.games) && df.games.length) {
               // MERGE, never replace. The fast file knows the score and
               // the clock; the BOARD knows the odds grid and the live
@@ -34244,6 +34271,7 @@ async function fetchAllLive() {
             }
           }
         } catch (e) {}
+        _liveFeedState[sport] = feed;
       }
       games.forEach((g) => {
         if ((g.live || {}).state === "live") out.push({ sport, g,
@@ -34253,6 +34281,58 @@ async function fetchAllLive() {
   }));
   _liveAll = { at: Date.now(), games: out };
   return out;
+}
+
+/*: A fast scoreboard file older than this is not a quiet afternoon, it
+    is a stopped loop. `launch._live_scores_refresher` writes every
+    LIVE_FAST_S (12s) while anything is on and every LIVE_IDLE_S (180s)
+    when nothing is, and `_run_build`'s guillotine falls at 180s — so
+    the widest honest gap between two writes is about six minutes. Ten
+    leaves room for a slow box without letting a loop that died last
+    week read as an evening with no games. */
+const LIVE_FEED_STALE_S = 600;
+
+/* WHY A LEAGUE'S SHELF IS EMPTY, in a sentence a reader can act on.
+
+   Pure — the league, what its fast file said (`_liveFeedState`), and
+   the clock — so it is testable without a page.
+
+   THE THREE ANSWERS ARE DIFFERENT FACTS, which is the whole point:
+     · the file did not load at all — the deploy is mid-restart, or the
+       board is not being served;
+     · the file loaded and CARRIES A NOTE — the builder could not reach
+       the scoreboard and wrote down why, in its own words, which are
+       more specific than anything this function could invent;
+     · the file loaded, has no note, and is older than a stopped loop —
+       nobody is writing it, and the scores on the page are whatever
+       was true when it stopped.
+
+   Returns "" for the fourth case, which is the ordinary one: a feed
+   that answered, recently, with nothing in progress. The line above
+   the shelf already says nobody is playing, and repeating it here
+   would put a warning on every quiet Tuesday. */
+function liveFeedWhy(sport, feed, now) {
+  const label = LEAGUE_LABEL[sport] || String(sport || "").toUpperCase();
+  if (!feed) return "";
+  if (!feed.ok)
+    return `${label} live scores could not be loaded — the scoreboard file did not answer.`;
+  if (feed.note) return String(feed.note);
+  const t = utcMs(feed.stamp);
+  if (isFinite(t) && (now - t) / 1000 > LIVE_FEED_STALE_S)
+    return `${label} live scores were last refreshed ${Math.round((now - t) / 60000)}`
+      + ` min ago — the fast scoreboard loop is not running.`;
+  return "";
+}
+
+/* Those sentences for the leagues the chip covers, in feed order. */
+function liveFeedWhyHTML(chip, feeds, now) {
+  const sports = chip === "all" ? Object.keys(LIVE_FEEDS) : [chip];
+  const lines = sports
+    .map((s) => liveFeedWhy(s, (feeds || {})[s], now))
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return `<div class="lb-dark" style="margin:0 0 22px">${lines.map((w) =>
+    `<p class="rail-quiet lb-why">${escapeHtml(w)}</p>`).join("")}</div>`;
 }
 
 function liveCardHTML({ sport, g, bets }) {
@@ -34568,12 +34648,28 @@ function pbpTime(iso) {
  * worth naming: a file written a second in the future by clock skew
  * should read "updated 0s ago", not a negative minute count, and the
  * clamp is what stopped this bug being obvious in the other direction. */
-function pbpAgo(stamp) {
-  if (!stamp) return "";
-  const raw = String(stamp);
-  // Anything after the time that looks like a zone: Z, +hh:mm, -hh:mm.
+/* Milliseconds for a builder's stamp, or NaN if it is not a time.
+
+   A stamp that names no zone is read as UTC, because that is what the
+   builders write — `livescore_build.utc_stamp` is the one helper both
+   of them go through, and the four-hour bug it exists to prevent is
+   written up in tests/test_live_stamp_utc.py. Anything after the time
+   that looks like a zone (Z, +hh:mm, -hh:mm) is honoured as given.
+
+   ITS OWN FUNCTION because there are now TWO readers that subtract from
+   these stamps rather than slice them for a clock face: `pbpAgo`, which
+   says how old a play-by-play file is, and `liveFeedWhy`, which decides
+   whether a fast scoreboard file is old enough to mean the loop writing
+   it has stopped. One convention, one place. */
+function utcMs(stamp) {
+  const raw = String(stamp || "");
+  if (!raw) return NaN;
   const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw);
-  const t = Date.parse(zoned ? raw : raw + "Z");
+  return Date.parse(zoned ? raw : raw + "Z");
+}
+
+function pbpAgo(stamp) {
+  const t = utcMs(stamp);
   if (!isFinite(t)) return "";
   const s = Math.max(0, Math.round((Date.now() - t) / 1000));
   return s < 90 ? `updated ${s}s ago` : `updated ${Math.round(s / 60)} min ago`;
@@ -36010,10 +36106,15 @@ async function renderLiveBoard() {
   }
   const shown = games.filter((x) => _liveChip === "all" || x.sport === _liveChip);
   if (!games.length) {
+    // AND WHY, when a feed can say. Without this the sentence above is
+    // a guess dressed as a fact — see `liveFeedWhy`. The gap under the
+    // sentence moves to whichever paragraph ends up last.
+    const why = liveFeedWhyHTML(_liveChip, _liveFeedState, Date.now());
     host.innerHTML = `<div class="section-title">Live now
         <span class="sub">— every game in progress across the sports we model</span></div>
-      <p class="rail-quiet" style="margin:0 0 22px">No games in progress right now —
-      the board below tracks tonight’s open bets as they start.</p>`;
+      <p class="rail-quiet" style="margin:0 0 ${why ? 6 : 22}px">No games in progress
+      right now — the board below tracks tonight’s open bets as they start.</p>
+      ${why}`;
     return;
   }
   /* SHELVED BY LEAGUE ON "ALL". Ethan, 2026-09-01, from this very tab:
@@ -36027,10 +36128,13 @@ async function renderLiveBoard() {
   // THE SELECTED SPORT HAS NOTHING ON, others do. Rendering an empty
   // grid under a chip row reads as a broken page; say which league is
   // dark and how many games are live elsewhere.
+  const darkWhy = _liveChip !== "all" && !shown.length
+    ? liveFeedWhyHTML(_liveChip, _liveFeedState, Date.now()) : "";
   const nothingHere = _liveChip !== "all" && !shown.length
-    ? `<p class="rail-quiet" style="margin:0 0 22px">No ${escapeHtml(
+    ? `<p class="rail-quiet" style="margin:0 0 ${darkWhy ? 6 : 22}px">No ${escapeHtml(
         LEAGUE_LABEL[_liveChip] || _liveChip.toUpperCase())} games in progress
-        right now — ${games.length} live across the other leagues (choose All).</p>`
+        right now — ${games.length} live across the other leagues (choose All).</p>
+       ${darkWhy}`
     : "";
   const shelved = _liveChip === "all"
     ? Object.keys(LIVE_FEEDS).filter((s) => bySport[s]).map((s) => `
