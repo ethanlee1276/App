@@ -594,6 +594,40 @@ def ingest_for_open_bets(lconn, hconn, days: list[str], log=print) -> dict:
             except Exception:  # noqa: BLE001
                 log(f"  ⚠️  {league.upper()} results for {d} unavailable — "
                     f"those picks stay open")
+    # FOOTBALL, WHICH HAD NO INTRADAY RESULTS PULL AT ALL. Both leagues
+    # grade a game bet off `games.home_score`, and until now the only
+    # writer of one was the once-a-day nflverse schedule refresh — so an
+    # NFL final at 11pm could not settle a thing until the next morning's
+    # chores, which `docs/DROPLET_CHECKS.md` recorded as intended
+    # ("Wednesday's final settles on Thursday's pass"). Ethan, 2026-09-10,
+    # half an hour after the Week 1 opener: "also none of the nfl bets
+    # settled from tonight yet."
+    #
+    # `livescores.ingest_finals` fills the blank score on a fixture the
+    # schedule already wrote, from the same keyless scoreboard the live
+    # board polls every twelve seconds. Not the day loop above: one
+    # scoreboard call covers the whole slate, so it is asked once per
+    # league rather than once per open day.
+    #
+    # PLAYER PROPS ARE NOT SETTLED BY THIS. Their actuals live in
+    # `player_game_logs`, which for the NFL comes from the nflverse weekly
+    # file and still lands within a day. Game bets — moneyline, spread,
+    # total, team total — are what this closes, and they are the ones
+    # whose answer was on the screen already.
+    for league in ("nfl", "cfb"):
+        if not _has_open(lconn, league, days):
+            continue
+        try:
+            from .sources import livescores
+            fin = livescores.ingest_finals(hconn, league)
+            if fin["games"]:
+                log(f"  {league.upper()} finals: {fin['games']} game(s) "
+                    f"scored from the live scoreboard")
+            for s in fin["skipped"]:
+                log(f"  ⚠️  {s}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"  ⚠️  {league.upper()} finals unavailable ({exc}) — those "
+                f"picks stay open until the daily pass")
     return res
 
 

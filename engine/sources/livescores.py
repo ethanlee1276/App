@@ -341,3 +341,86 @@ def attach_live(slate) -> int:
             g.live = live
             n += 1
     return n
+
+
+def ingest_finals(conn, league: str = "nfl", ttl: int = 30) -> dict:
+    """Fill in the final score on fixtures the schedule already knows.
+
+    THE HALF-HOUR ETHAN WAITED. 2026-09-10, about thirty minutes after the
+    Week 1 opener went final: "also none of the nfl bets settled from
+    tonight yet. game ended about 30 mins ago". They could not have. A
+    football game bet grades off `games.home_score`, and the only thing
+    that has ever written one is the once-a-day nflverse schedule refresh
+    in `maintenance.run_if_due` — so `docs/DROPLET_CHECKS.md` states the
+    behaviour as designed: "Wednesday's final settles on Thursday's pass".
+    Meanwhile the site had the score on screen the whole time, twelve
+    seconds after it happened, off this very scoreboard.
+
+    So this is the bridge, and every line of it is a guard:
+
+    * IT ONLY EVER WRITES A FINAL. `attach_live`'s docstring ends with
+      "nothing downstream settles from this overlay", which was true and
+      is what made the overlay safe to be loose with. This one does
+      settle, so an in-progress score must never reach the table — the
+      settler cannot tell a partial score from a finished one, and
+      `_game_bet_evidence` was written about exactly that failure on the
+      NBA schedule parser: props graded off partial stats self-heal on
+      the next pass, game bets never do.
+
+    * IT ONLY EVER FILLS A BLANK. The UPDATE carries its own
+      ``home_score IS NULL``, so a score already ingested from nflverse —
+      the authority, corrected and official — can never be overwritten by
+      a scoreboard reading.
+
+    * IT NEVER CREATES A FIXTURE. Only an UPDATE, keyed on a row the
+      schedule already wrote, so this cannot invent a game, cannot guess a
+      season or a week, and cannot duplicate a row under a period it
+      derived wrongly. A fixture nobody scheduled here simply waits for
+      the daily pass, which is where it always waited.
+
+    * AMBIGUITY IS REFUSED, NOT GUESSED. Two candidate rows for one pair
+      means the pair does not identify a fixture, and grading against a
+      coin-flip choice would put a wrong number in the record — worse than
+      an open bet, because nothing downstream can tell it from a right one.
+
+    Matched on the pair AND the date within a day (`_near_in_time`), for
+    the reason that function exists: ESPN stamps UTC and nflverse stores
+    the local gameday, so every Sunday-night kickoff disagrees by one.
+    The date is also what keeps an August exhibition between two teams who
+    also meet in Week 1 off the Week 1 row.
+
+    Returns ``{"games": n, "waiting": n, "skipped": [...]}``. Raises
+    `DataUnavailable` like its neighbours when the host is blocked.
+    """
+    result: dict = {"games": 0, "waiting": 0, "skipped": []}
+    for r in fetch_rows(league, ttl=ttl):
+        live = r["live"]
+        if live.state != "final":
+            if live.state == "live":
+                result["waiting"] += 1
+            continue
+        if live.home_score is None or live.away_score is None:
+            result["skipped"].append(
+                f"{league} {r['away']}@{r['home']}: final with no score")
+            continue
+        rows = [g for g in conn.execute(
+            "SELECT season, period, game_id, date FROM games "
+            "WHERE sport=? AND home=? AND away=? AND home_score IS NULL",
+            (league, r["home"], r["away"])).fetchall()
+            if _near_in_time(g["date"] or "", live.start_time)]
+        if len(rows) != 1:
+            if len(rows) > 1:
+                result["skipped"].append(
+                    f"{league} {r['away']}@{r['home']}: {len(rows)} scheduled "
+                    f"fixtures near {live.start_time[:10]} — refusing to guess")
+            continue
+        g = rows[0]
+        conn.execute(
+            "UPDATE games SET home_score=?, away_score=? WHERE sport=? AND "
+            "season=? AND period=? AND game_id=? AND home_score IS NULL",
+            (float(live.home_score), float(live.away_score), league,
+             g["season"], g["period"], g["game_id"]))
+        result["games"] += 1
+    if result["games"]:
+        conn.commit()
+    return result

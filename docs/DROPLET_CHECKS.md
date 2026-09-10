@@ -722,7 +722,8 @@ each assumption rather than reading it:
 | Readiness pull | `oddsbudget.ready_window`, 3h before the next kickoff | shut Tue 20:00 and Wed 16:00; **open from Wed 17:20**, and at 19:00 |
 | Live scores | `_live_scores_refresher` loops `("nfl","cfb","nba","wnba")` every 12s while anything is live | nfl is in the loop and in `ESPN_SCOREBOARD` |
 | Deep play-by-play | `livescore_build` writes `web/data/pbp/nfl_<event>.json` | `PBP_DIR` written for every league it builds |
-| Settlement | `maintenance` ingests nflverse weekly results daily, Aug–Feb | Wednesday's final settles on Thursday's pass |
+| Settlement — game bets | `livescores.ingest_finals` fills the blank score on a scheduled fixture from the live scoreboard, on the 5-minute intraday pass | a moneyline/spread/total settles minutes after the whistle |
+| Settlement — player props | `maintenance` ingests nflverse weekly results daily, Aug–Feb | Wednesday's props settle on Thursday's pass; the weekly stats file is the only source of an actual |
 
 The only two places that named "the 10th" were prose in §8 of this
 file, corrected in the same commit.
