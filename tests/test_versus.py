@@ -19,6 +19,7 @@ Run directly: `python3 tests/test_versus.py`
 """
 
 import os
+import re
 import sys
 import tempfile
 
@@ -203,8 +204,16 @@ def test_the_page_offers_stored_opponents_and_sends_the_choice_verbatim():
     assert "function vsBlockHTML(" in src
     # Both card variants carry the tail, so a priced star and a
     # searched-up bench player get the same option.
-    assert "pricedProfileHTML(priced.get(mkt), chips, vsTail)" in src
-    assert "historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail)" in src
+    #
+    # THE TAIL REACHES THE CALL, not the exact spelling of the call. This
+    # pinned the whole argument list, which broke the day the priced card
+    # grew a fourth argument (`deep`, 2026-09-10) — a change that had
+    # nothing to do with the versus block and could not have removed it.
+    assert re.search(r"pricedProfileHTML\(priced\.get\(mkt\), chips, vsTail\b",
+                     src), "the priced card no longer gets the versus tail"
+    assert re.search(
+        r"historyProfileHTML\(rows\[0\], mkt, stats\[mkt\] \|\| \[\], chips, vsTail\b",
+        src), "the history card no longer gets the versus tail"
     # The picker is a select built from the endpoint's own opponent
     # keys — no free-typed team name anywhere in the flow.
     i = src.index('e.target.closest(".vs-open")')

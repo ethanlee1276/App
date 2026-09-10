@@ -1210,6 +1210,17 @@ svg[data-scrub] { touch-action: pan-y; }
 .profile-pick .lbl { font-size: var(--fs-md); font-weight: 700; }
 .profile-pick .lbl small { color: var(--text-mute); font-weight: 500; display: block; }
 
+/* A SEARCHED PLAYER'S CARD AND THE PROP PAGE'S OWN SECTIONS, one unit.
+   The wrapper is structural rather than decorative: the market chips
+   re-render by replacing the element they sit inside, and without
+   something enclosing both, a chip switch would swap the chart and leave
+   the previous market's price table and sim lab beneath it. So it earns
+   spacing and nothing else — every block inside already carries its own
+   card styling from the prop page. */
+.profile-deep { display: block; }
+.prof-depth { margin-top: 14px; }
+.prof-depth > .section-title:first-child { margin-top: 0; }
+
 .log-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; }
 .log-table th, .log-table td { text-align: left; padding: 6px 18px; font-size: var(--fs-sm); }
 .log-table th { color: var(--text-mute); font-weight: 600; text-transform: uppercase; font-size: var(--fs-2xs); letter-spacing: .4px; }

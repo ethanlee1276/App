@@ -136,7 +136,19 @@ def test_the_sim_lab_draws_from_the_models_own_curve():
     assert "r.hit_prob" in body and "r.projection" in body
     assert "return null" in body, "no degenerate-prop refusal"
     assert "the model’s own curve" in APP
-    assert "simLabHTML(r)" in APP and "bindSimLab(r)" in APP
+    # DRAWN, AND WIRED. The wiring was a per-page bind reaching for
+    # `getElementById("sim-run")`; it became a delegated listener keyed by
+    # the prop when the player search card started drawing the same block
+    # and one page could hold several. Pinning the old call name would
+    # have pinned the single-lab assumption along with it.
+    assert "simLabHTML(r)" in APP
+    assert 'e.target.closest(".sim-run")' in APP, "nothing runs the sim"
+    assert "runSim(lab, P)" in APP
+    i = APP.index("function runSim(")
+    run = APP[i:APP.index("\n}", i)]
+    assert 'lab.querySelector(".sim-bars")' in run and \
+        'lab.querySelector(".sim-read")' in run, \
+        "the sim writes by id again, so a second lab on the page is dead"
 
 
 def test_the_already_live_halves_still_have_their_homes():

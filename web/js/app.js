@@ -8588,7 +8588,6 @@ function renderPropPage() {
   const b = document.getElementById("pp-back");
   if (b) b.addEventListener("click", () => switchView("recommended"));
   if (typeof fillMeters === "function") fillMeters(host);
-  bindSimLab(r);
 }
 
 /* ============================================================
@@ -8657,10 +8656,10 @@ function simLabHTML(r) {
       itself. Every draw comes from the model’s own curve for this prop — the same
       one the hit probability was computed from — so this is the pick’s uncertainty
       made visible, not new information.</span></div>
-    <div class="card sim-lab">
-      <button class="btn ghost" id="sim-run">Run tonight ×2,000</button>
-      <span class="sim-read" id="sim-read"></span>
-      <div class="sim-bars" id="sim-bars" aria-hidden="true"></div>
+    <div class="card sim-lab" data-sim="${escapeAttr(propId(r))}">
+      <button class="btn ghost sim-run">Run tonight ×2,000</button>
+      <span class="sim-read"></span>
+      <div class="sim-bars" aria-hidden="true"></div>
       <p class="sim-note">${escapeHtml(`Normal approximation around the projection —
         counts like receptions are continuous here on purpose, and no simulated
         night changes the pick. A ${Math.round((simParams(r) || {}).pOver * 100)}% over
@@ -8668,50 +8667,69 @@ function simLabHTML(r) {
     </div>`;
 }
 
-function bindSimLab(r) {
-  const btn = document.getElementById("sim-run");
+/* ONE LISTENER FOR EVERY SIM ON THE PAGE, keyed by the prop.
+
+   This was a per-page bind reaching for `getElementById("sim-run")`,
+   which was correct exactly while the sim lab existed on one page at a
+   time. The player search card now carries the same block, and that page
+   draws a card per matching player: three elements all named `sim-run`
+   in one document, the lookup answering with the first whatever was
+   clicked, and two labs that never run. So it moved to the delegation
+   `.prof-tab` and `.vs-open` already use, for the reason their own
+   comments give — these cards are innerHTML'd away on every refresh and
+   are drawn in more than one place.
+
+   The row is resolved through `findProp`, the lookup every other door on
+   the site goes through, rather than a registry that would have to be
+   kept in step with the board. */
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest && e.target.closest(".sim-run");
   if (!btn) return;
-  const P = simParams(r);
+  const lab = btn.closest(".sim-lab");
+  if (!lab || lab.dataset.running) return;
+  const r = findProp(lab.dataset.sim);
+  const P = r && simParams(r);
   if (!P) return;
-  let running = false;
-  btn.addEventListener("click", () => {
-    if (running) return;
-    running = true;
-    const bars = document.getElementById("sim-bars");
-    const read = document.getElementById("sim-read");
-    const BINS = 34, TOTAL = 2000, FRAMES = 26;
-    const lo = P.proj - 3.4 * P.sd, hi = P.proj + 3.4 * P.sd;
-    const counts = new Array(BINS).fill(0);
-    const lineBin = Math.max(0, Math.min(BINS - 1,
-      Math.floor((P.line - lo) / (hi - lo) * BINS)));
-    bars.innerHTML = new Array(BINS).fill(0).map((_, i) =>
-      `<i class="${i > lineBin ? "ov" : ""}"></i>`).join("");
-    const els = [...bars.children];
-    let drawn = 0, overs = 0;
-    const frame = () => {
-      const batch = Math.min(Math.ceil(TOTAL / FRAMES), TOTAL - drawn);
-      for (let i = 0; i < batch; i++) {
-        const u1 = Math.random() || 1e-9, u2 = Math.random();
-        const x = P.proj + P.sd
-          * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-        if (x > P.line) overs++;
-        const bin = Math.max(0, Math.min(BINS - 1,
-          Math.floor((x - lo) / (hi - lo) * BINS)));
-        counts[bin]++;
-      }
-      drawn += batch;
-      const peak = Math.max(...counts, 1);
-      els.forEach((el, i) => {
-        el.style.transform = `scaleY(${Math.max(0.02, counts[i] / peak).toFixed(3)})`;
-      });
-      read.textContent = `${drawn.toLocaleString()} nights · over ${P.line} in ${
-        (100 * overs / drawn).toFixed(1)}% (the model says ${
-        (100 * P.pOver).toFixed(0)}%)`;
-      if (drawn < TOTAL) requestAnimationFrame(frame);
-      else running = false;
-    };
-    requestAnimationFrame(frame);
-  });
+  lab.dataset.running = "1";
+  runSim(lab, P);
+});
+
+function runSim(lab, P) {
+  const bars = lab.querySelector(".sim-bars");
+  const read = lab.querySelector(".sim-read");
+  if (!bars || !read) return;
+  const BINS = 34, TOTAL = 2000, FRAMES = 26;
+  const lo = P.proj - 3.4 * P.sd, hi = P.proj + 3.4 * P.sd;
+  const counts = new Array(BINS).fill(0);
+  const lineBin = Math.max(0, Math.min(BINS - 1,
+    Math.floor((P.line - lo) / (hi - lo) * BINS)));
+  bars.innerHTML = new Array(BINS).fill(0).map((_, i) =>
+    `<i class="${i > lineBin ? "ov" : ""}"></i>`).join("");
+  const els = [...bars.children];
+  let drawn = 0, overs = 0;
+  const frame = () => {
+    const batch = Math.min(Math.ceil(TOTAL / FRAMES), TOTAL - drawn);
+    for (let i = 0; i < batch; i++) {
+      const u1 = Math.random() || 1e-9, u2 = Math.random();
+      const x = P.proj + P.sd
+        * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      if (x > P.line) overs++;
+      const bin = Math.max(0, Math.min(BINS - 1,
+        Math.floor((x - lo) / (hi - lo) * BINS)));
+      counts[bin]++;
+    }
+    drawn += batch;
+    const peak = Math.max(...counts, 1);
+    els.forEach((el, i) => {
+      el.style.transform = `scaleY(${Math.max(0.02, counts[i] / peak).toFixed(3)})`;
+    });
+    read.textContent = `${drawn.toLocaleString()} nights · over ${P.line} in ${
+      (100 * overs / drawn).toFixed(1)}% (the model says ${
+      (100 * P.pOver).toFixed(0)}%)`;
+    if (drawn < TOTAL) requestAnimationFrame(frame);
+    else delete lab.dataset.running;
+  };
+  requestAnimationFrame(frame);
 }
 
 function openGame(gid) {
@@ -9487,7 +9505,12 @@ async function renderPlayers() {
         <span class="sub">— no priced ${escapeHtml(lgWord)} player is spelled exactly
         “${escapeHtml(state.search)}”, so ${players.length > 1
           ? "these are the nearest names" : "this is the nearest name"}</span></div>` : "")
-    + shown.map(profileHTML).join("");
+    /* NOT `shown.map(profileHTML)`. `map` hands its callback the INDEX
+       as a second argument, so the bare reference would pass 0, 1, 2…
+       where the options object goes — and `{deep}` off a number is
+       undefined, which is the shallow card. It would have looked like
+       the flag simply did not work. */
+    + shown.map((p) => profileHTML(p, { deep: !!q })).join("");
   fillMeters(host);
   revealChildren(host);
 }
@@ -9531,10 +9554,17 @@ document.addEventListener("click", (e) => {
   const chip = e.target.closest && e.target.closest(".prof-tab");
   if (!chip) return;
   _profTab[chip.dataset.player] = chip.dataset.mkt;
-  const card = chip.closest(".profile");
+  /* THE OUTERMOST UNIT, and the depth it was drawn at. A deep card is a
+     `.profile-deep` wrapper around the article and the prop page's own
+     sections; replacing the article alone would swap the chart and leave
+     the OLD market's price table, tape and sim lab sitting under it. The
+     flag is read back off the DOM rather than remembered, so a chip
+     switch cannot quietly turn a deep card shallow. */
+  const card = chip.closest(".profile-deep") || chip.closest(".profile");
   if (!card) return;
   const tmp = document.createElement("div");
-  tmp.innerHTML = profileHTML(chip.dataset.player);
+  tmp.innerHTML = profileHTML(chip.dataset.player,
+                              { deep: card.classList.contains("profile-deep") });
   const fresh = tmp.firstElementChild;
   if (!fresh) return;
   fresh.classList.add("reveal", "in");     // already on screen — no re-entrance
@@ -9838,7 +9868,28 @@ function openRoster(team) {
    pretending there is a bet (no line, no pick block, and the card says
    so). Ethan, 2026-08-17: "i should be able to see how they did with
    multipul props." */
-function profileHTML(player) {
+/* `deep` — Ethan, 2026-09-10: "when you search a player, we need to
+   combine the page we just did where we show the sims and versus and all
+   that shit with the current bar charts and all of that."
+
+   Two pages had grown up beside each other answering the same question.
+   The PROP PAGE carries the depth — shop the price, how the line moved
+   today, the game script, what the pick had to clear, its comparables
+   and the sim lab. THIS card carries the bar chart, the form tiles, the
+   market chips and the log table. Neither had the other's half, and the
+   card is the one a reader lands on when they type a name, which is
+   nearly always how they arrive.
+
+   IT IS A FLAG RATHER THAN THE NEW DEFAULT, and the reason is measured
+   and already written down forty lines below in `renderPlayers`: with no
+   query that page once rendered 293 full profiles, 139,451 pixels of
+   them. Multiplying an unsearched browse by eight more sections would
+   walk straight back into it. So a SEARCH — one man, asked about by name
+   — gets the depth; a browse stays a list. `openPlayerRoute` sets the
+   search box before it renders, so the addressable player page is always
+   the deep one. */
+function profileHTML(player, opts) {
+  const deep = !!(opts && opts.deep);
   const rows = _profRows.get(player) || [];
   const stats = playerStats(player) || {};
   // A searched-up league player rides in on a HEAD-ONLY row (no
@@ -9863,7 +9914,7 @@ function profileHTML(player) {
   const vsTail = vsBlockHTML(player, (rows[0] && rows[0].sport) || state.sport,
                              (rows[0] && rows[0].opponent) || "");
   return priced.has(mkt)
-    ? pricedProfileHTML(priced.get(mkt), chips, vsTail)
+    ? pricedProfileHTML(priced.get(mkt), chips, vsTail, deep)
     : historyProfileHTML(rows[0], mkt, stats[mkt] || [], chips, vsTail);
 }
 
@@ -10002,7 +10053,7 @@ function _profileHead(r, right) {
       </div>`;
 }
 
-function pricedProfileHTML(r, chips, tail = "") {
+function pricedProfileHTML(r, chips, tail = "", deep = false) {
   const f = r.form || {};
   const tiles = [["L1", f.last1], ["L3", f.last3], ["L5", f.last5], ["L10", f.last10], ["Season", f.season]]
     .map(([k, v]) => `<div class="form-tile"><div class="k">${k}</div><div class="v">${v == null ? "—" : v}</div></div>`).join("");
@@ -10018,7 +10069,13 @@ function pricedProfileHTML(r, chips, tail = "") {
       <td class="num ${hit ? "hit" : "miss"}">${l.value}</td></tr>`;
   }).join("");
   const grad = `linear-gradient(135deg, ${teamPrimary(r.team)}, transparent)`;
-  return `
+  /* ONE OUTERMOST ELEMENT, always. The market chips re-render this card
+     by replacing the element they sit inside, so a deep render that
+     returned an article AND its sections as siblings would swap the
+     article and leave the previous market's price table and sim lab
+     sitting underneath the new market's chart. The wrapper is what makes
+     the depth part of the card rather than something next to it. */
+  const art = `
     <article class="profile" style="--profile-grad:${grad}">
       ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>`)}
       ${chips}
@@ -10042,6 +10099,41 @@ function pricedProfileHTML(r, chips, tail = "") {
       </div>
       ${tail}
     </article>`;
+  return deep
+    ? `<div class="profile-deep">${art}${propDepthHTML(r)}</div>`
+    : art;
+}
+
+/* THE PROP PAGE'S OWN SECTIONS, drawn under the profile card.
+
+   Every one of these is the prop page's function called unchanged — not
+   a second implementation of the same block, which is the trap the peek
+   overlay's comment already names ("a second implementation of that card
+   would be a second thing to keep in step with the first"). Each returns
+   "" when its data is absent, so a market with no book table and no tape
+   draws exactly the card it drew before.
+
+   NO SECOND VERSUS BLOCK and no second log table: the card above already
+   carries both, and the whole point of combining the two pages is one of
+   each rather than two. What is added is only what the card did not have.
+
+   Order follows the prop page's: the price and its movement first (what
+   you would act on), then the read, then what the pick had to survive,
+   then the toy. */
+function propDepthHTML(r) {
+  const reasons = (r.reasons || []).slice(0, 8)
+    .map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  return `<div class="prof-depth">
+    ${booksTableHTML(r)}
+    ${lineMoveHTML(r)}
+    ${scriptCardHTML(r)}
+    ${reasons ? `<div class="section-title minor">Why this pick</div>
+      <div class="card"><ul class="reasons">${reasons}</ul></div>` : ""}
+    ${chainHTML(r)}
+    ${checksHTML(r)}
+    ${compsHTML(r)}
+    ${simLabHTML(r)}
+  </div>`;
 }
 
 /* A market nobody priced tonight: the history IS the content. Chart and
