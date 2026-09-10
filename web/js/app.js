@@ -10120,9 +10120,26 @@ document.addEventListener("change", async (e) => {
 //: every lookup here needs it: CIN is the Bengals and the Reds, and the
 //: injury boards are per-sport too. A row without one is a row from the
 //: board already on screen, so the active tab is the right answer.
-function _profileHead(r, right) {
+function _profileHead(r, right, door = "") {
+  /* `door` — Ethan, 2026-09-10, asking a second time with the same
+     screenshots: "When you search up a player, you should be able to
+     click on them, and then it will pull up this page showing more
+     information."
+
+     The first answer put that door on the PICK BLOCK, which is the row
+     that names the bet — correct, and at the bottom of a card that now
+     runs a screen and a half on a phone. "Click on THEM" means the
+     player: the face and the name, at the top, which is what a reader
+     reaches for and what was still inert.
+
+     Passed IN rather than computed here, because this head is also drawn
+     for a searched-up player with nothing priced tonight
+     (`historyProfileHTML`). That row has no market, no line and no side,
+     so `propId` would build an id out of empty strings and the door
+     would open a page that does not exist. Only the priced card knows it
+     has a bet to point at. */
   const lg = r.sport || state.sport;
-  return `<div class="profile-head">
+  return `<div class="profile-head"${door}>
         ${playerAvatar(r.player, r.team, { size: 60, headshot: r.headshot })}
         <div class="meta"><div class="nm">${escapeHtml(r.player)}${
           r.sport && r.sport !== state.sport ? leagueBadge(r.sport) : ""
@@ -10158,7 +10175,8 @@ function pricedProfileHTML(r, chips, tail = "", deep = false) {
      the depth part of the card rather than something next to it. */
   const art = `
     <article class="profile" style="--profile-grad:${grad}">
-      ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${escapeHtml(r.grade)}</span>`)}
+      ${_profileHead(r, `<span class="grade ${gradeClass(r.grade)}">${
+        escapeHtml(r.grade)}</span>`, propAttrs(r))}
       ${chips}
       <div class="form-tiles">${tiles}</div>
       <div class="profile-spark">${gamelogBars(vals, {

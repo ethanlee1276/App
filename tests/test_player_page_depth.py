@@ -48,6 +48,21 @@ def _rule(sel):
     return CSS[i:CSS.index("}", i)]
 
 
+def _code(name):
+    """One function's CODE, with its prose removed.
+
+    FOUR ASSERTIONS IN THIS FILE FAILED AGAINST THEIR OWN COMMENTS before
+    this existed — a note explaining why something must NOT appear names
+    the very identifier the assertion is scanning for. `_fn` is kept as
+    it is because other tests here legitimately assert on comment
+    content (the 139,451px measurement, the model's-own-curve copy); the
+    distinction is whether the claim is about what the page RENDERS or
+    about what the file SAYS, and those want different text.
+    """
+    src = re.sub(r"/\*.*?\*/", " ", _fn(name), flags=re.S)
+    return re.sub(r"(?m)^\s*//.*$", " ", src)
+
+
 def _fn(name):
     """The body of one JS function, by name."""
     i = APP.index(f"function {name}(")
@@ -206,6 +221,34 @@ def test_the_pick_block_opens_the_props_own_page():
     assert "propOpenable(r)" in fn, "the arrow appears on rows with no page"
 
 
+def test_clicking_the_player_himself_opens_the_page():
+    """Ethan, 2026-09-10, a second time with the same screenshots: "When
+    you search up a player, you should be able to click on them, and then
+    it will pull up this page showing more information."
+
+    The first answer put the door on the pick block — the row that names
+    the bet, which is right, and which sits at the BOTTOM of a card that
+    now runs a screen and a half on a phone. "Click on THEM" is the face
+    and the name at the top, and that was still inert."""
+    fn = _fn("pricedProfileHTML")
+    assert "propAttrs(r))}" in fn, "the head is not handed a door"
+    head = _fn("_profileHead")
+    assert '<div class="profile-head"${door}>' in head
+
+
+def test_an_unpriced_players_head_is_never_a_door():
+    """The same head is drawn for a searched-up player with nothing
+    priced tonight. That row has no market, no line and no side, so
+    `propId` would build an id out of empty strings and the door would
+    open a page that does not exist."""
+    assert "propAttrs" not in _code("historyProfileHTML"), \
+        "the history card grew a door"
+    # PASSED IN, NOT COMPUTED IN THE HEAD — which is what keeps that true
+    # without the head having to know which caller it has.
+    head = _code("_profileHead")
+    assert "propAttrs" not in head and "propId" not in head
+
+
 def test_the_door_is_the_pick_and_not_the_whole_card():
     """A deep card runs several screens and contains the market chips,
     the versus select and the sim lab. A click target that tall swallows
@@ -236,6 +279,7 @@ def test_the_door_looks_like_one():
     """Ethan, 2026-09-09: a lot of the buttons blend into the text, so
     you cannot tell they are buttons."""
     assert "cursor: pointer" in _rule(".profile-pick[data-prop]")
+    assert "cursor: pointer" in _rule(".profile-head[data-prop]")
     assert ".profile-pick .pp-go" in CSS
 
 

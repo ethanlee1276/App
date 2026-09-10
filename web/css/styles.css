@@ -1269,6 +1269,8 @@ svg[data-scrub] { touch-action: pan-y; }
    you can't really tell their buttons or tabs." The pick block on a
    profile card opens the bet's own page, so it takes the pointer and an
    arrow — the same affordance the board's own cards carry. */
+.profile-head[data-prop] { cursor: pointer; }
+.profile-head[data-prop]:hover .nm { color: var(--brand); }
 .profile-pick[data-prop] { cursor: pointer; }
 .profile-pick[data-prop]:hover { background: var(--fill-hover); }
 .profile-pick .pp-go { color: var(--text-mute); font-weight: 700; }

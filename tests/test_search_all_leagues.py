@@ -307,8 +307,13 @@ def test_a_searched_row_carries_its_league_into_the_profile_card():
     js = _js()
     assert "sport: m.sport" in _fn(js, "async function renderPlayers("), \
         "the head-only row dropped its league"
-    k = js.index("function _profileHead(")
-    head = js[k:k + 1200]
+    # `_fn`, NOT `js[k:k + 1200]`. This test sat two lines below that
+    # helper's own docstring — "NEVER A FIXED SLICE … five false
+    # failures, the last of them for a COMMENT added inside it" — and
+    # was itself a fixed slice. It went red on 2026-09-10 for the sixth
+    # time in the same way, when a note explaining the head's new door
+    # pushed `teamMarkIn(` past the window.
+    head = _fn(js, "function _profileHead(")
     assert "r.sport || state.sport" in head
     for helper in ("teamMarkIn(", "teamNameIn("):
         assert helper in head, helper
