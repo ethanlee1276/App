@@ -119,6 +119,62 @@ def test_the_page_is_wired_and_styled():
     assert ".ft-row {" in CSS and ".ft-jump {" in CSS
 
 
+def test_the_page_keeps_up_with_what_shipped():
+    """A features page is only true on the day it was written.
+
+    Ethan, 2026-09-10: "make sure too update the feature page too show
+    all the new things we added today." The list went up that morning and
+    was already behind by that evening — four things shipped after it,
+    and a brochure that stops tracking the product is worse than no
+    brochure, because it reads as current.
+
+    Each of these is a surface a reader can reach today, named the way
+    the page names it. They are checked by SUBSTANCE rather than by
+    exact sentence, so the copy can be rewritten without the test
+    turning into a spelling exam.
+    """
+    rows = [(t, d) for _, _, rs in _table() for t, d, _ in rs]
+    blob = " ".join(f"{t} {d}" for t, d in rows).lower()
+    for what, needle in (
+            ("the searched card IS the prop page", "the same page, not two"),
+            ("the sim lab", "two thousand times"),
+            ("a quarterback's passing touchdowns", "passing touchdowns"),
+            ("the team page's opponent picker", "pick an opponent"),
+    ):
+        assert needle in blob, f"{what} is not on the features page"
+
+
+def test_the_page_never_sells_a_market_we_do_not_buy():
+    """THE ONE THAT COULD LIE WITHOUT ANYBODY EDITING IT.
+
+    Passing touchdowns are modelled, ranked and shelved, but the odds
+    key was rolled back off the NFL request on 2026-09-10 after it took
+    every NFL prop down with it (see `engine.sources.oddsapi`). So no
+    book price is bought for the market, no pass_td row can clear
+    `likely.admissible` — it refuses a proxy quote — and none can be
+    recommended: `betting.has_market` is False, which blanks the edge.
+
+    What the page may say is what a reader gets: a projection and the
+    history behind it. What it may NOT say is that the market is priced,
+    picked or on a board. And the trigger is the CONFIGURATION rather
+    than the calendar — restore the key and this test stops constraining
+    the sentence by itself, which is the only version of this check that
+    does not rot.
+    """
+    from engine.sources import oddsapi
+
+    if oddsapi.PASS_TD_ODDS_KEY in oddsapi.NFL_ODDS_TO_MARKET:
+        return                       # bought again — the row may sell it
+    rows = [(t, d) for _, _, rs in _table() for t, d, _ in rs]
+    row = [d for t, d in rows if "passing touchdowns" in t.lower()]
+    assert row, "the passing-touchdown row is gone"
+    said = row[0].lower()
+    for word in ("priced", "book’s price", "most likely", "edge board",
+                 "bet it", "as a pick"):
+        assert word not in said, \
+            f"the passing-touchdown row promises {word!r}, and no price is bought"
+
+
 def test_a_row_without_a_door_does_not_draw_an_arrow():
     """An arrow that does nothing is worse than no arrow."""
     body = APP[APP.index("function renderFeatures()"):APP.index("const REFERENCE_VIEWS = ")]
