@@ -12552,49 +12552,64 @@ function subtabbedHTML(view, groups, opts) {
   if (live.length < 2) return live.map((g) => g[3]).join("");
   const want = _subtab[view];
   const active = live.some((g) => g[0] === want) ? want : live[0][0];
-  const tabs = live.map((g) => `
-    <button class="subnav-btn${g[0] === active ? " active" : ""}" role="tab"
-            type="button" data-subtab="${escapeAttr(g[0])}"
-            aria-selected="${g[0] === active}"
-            tabindex="${g[0] === active ? "0" : "-1"}"
-            title="${escapeAttr(g[2] || "")}">${escapeHtml(g[1])}</button>`).join("");
-  const hint = (live.find((g) => g[0] === active) || [])[2] || "";
   const panels = live.map((g) => `
     <div class="subgroup" data-subgroup="${escapeAttr(g[0])}" role="tabpanel"
          ${g[0] === active ? "" : "hidden"}>${g[3]}</div>`).join("");
-  /* THE INDEX: EVERY ROOM NAMED AND DESCRIBED, ON ARRIVAL.
+  const attrs = (g) => `type="button" role="tab"
+            data-subtab="${escapeAttr(g[0])}"
+            aria-selected="${g[0] === active}"
+            tabindex="${g[0] === active ? "0" : "-1"}"
+            title="${escapeAttr(g[2] || "")}"`;
+
+  /* THE INDEX: EVERY ROOM NAMED AND DESCRIBED, AND IT IS THE TAB ROW.
+
      Ethan, 2026-09-09: "it kinda hides really cool features that we have,
      like the mock draft and the calendar for the fantasy and the around
      the league and the game scripts and all that. Like, it's so cool
-     information that we hide."
+     information that we hide." The descriptions were already written —
+     every group carries one in `g[2]` — and this function rendered
+     exactly ONE of them, the active room's, into a single italic line.
+     Eight rooms described, one sentence shown.
 
-     The descriptions were already written. Every group carries one in
-     `g[2]`, and this function rendered exactly ONE of them — the active
-     room's — into a single italic line, throwing the other seven away on
-     every render. The Fantasy page describes eight rooms and showed one
-     sentence about one of them.
+     The first fix drew the described cards ABOVE the tab row and kept
+     both, and the comment here said so in as many words: "It is
+     deliberately redundant with the tab row above it, and the redundancy
+     is the point." Ethan, 2026-09-10, circling the whole block: "fix
+     this page, we show all these repeated buttons."
 
-     So the index is not new copy. It is the copy we already had, all of
-     it, at once.
+     He is right and the old comment was wrong. What was on screen was
+     the same list of eight rooms three times over — as cards, as chips,
+     and then the active room's sentence a third time in italics under
+     both. "Find out what is there" and "switch to it" are not two jobs
+     needing two controls; they are one control that says what each room
+     holds. So the CARD IS THE TAB: same `data-subtab`, same `show`, same
+     roving tabindex and arrow keys, and the active one takes the brand
+     fill the chip used to.
 
-     OPT-IN PER VIEW, not automatic. Record and Players are roomed too
-     and their room counts are small enough that the tab row alone
-     carries them; switching those pages on as a side effect of fixing
-     Fantasy is how a change nobody asked for ships. Fantasy asks for it
-     because Fantasy is the page with eight rooms and the page Ethan
-     named.
+     The hint line goes with the chips. It was the active room's own
+     description, and that sentence is now on the card the reader just
+     pressed. */
+  if ((opts || {}).index) {
+    return `<div class="subnav-wrap" data-subnav="${escapeAttr(view)}">
+      <div class="room-index" role="tablist" aria-label="Sections">${
+        live.map((g) => `
+        <button class="room-card subnav-btn${g[0] === active ? " active" : ""}"
+                ${attrs(g)}>
+          <span class="rc-name">${escapeHtml(g[1])}</span>
+          ${g[2] ? `<span class="rc-what">${escapeHtml(g[2])}</span>` : ""}
+        </button>`).join("")}</div>
+    </div>${panels}`;
+  }
 
-     It is deliberately redundant with the tab row above it, and the
-     redundancy is the point: the row is for SWITCHING once you know what
-     is there, the index is for finding out what is there at all. */
-  const index = !(opts || {}).index ? "" : `
-    <div class="room-index">${live.map((g) => `
-      <button class="room-card" type="button" data-roomjump="${escapeAttr(g[0])}">
-        <span class="rc-name">${escapeHtml(g[1])}</span>
-        ${g[2] ? `<span class="rc-what">${escapeHtml(g[2])}</span>` : ""}
-      </button>`).join("")}</div>`;
+  /* EVERY OTHER ROOMED PAGE keeps the chip row and the hint. Record,
+     Players and the rest carry three or four rooms whose names say what
+     they are; switching those to described cards as a side effect of
+     fixing Fantasy is how a change nobody asked for ships. */
+  const tabs = live.map((g) => `
+    <button class="subnav-btn${g[0] === active ? " active" : ""}"
+            ${attrs(g)}>${escapeHtml(g[1])}</button>`).join("");
+  const hint = (live.find((g) => g[0] === active) || [])[2] || "";
   return `<div class="subnav-wrap" data-subnav="${escapeAttr(view)}">
-    ${index}
     <div class="subnav" role="tablist" aria-label="Sections">${tabs}</div>
     <p class="subnav-hint">${escapeHtml(hint)}</p>
   </div>${panels}`;
@@ -12762,13 +12777,6 @@ function bindSubtabs(host) {
       p.hidden = p.dataset.subgroup !== id;
     });
   };
-  // The index cards open a room through the SAME `show`, so the tab
-  // bar, the panels and the hint all stay in step with them. They are
-  // not `.subnav-btn`s: a card that took the active fill would leave two
-  // things on screen claiming to be the current tab.
-  wrap.querySelectorAll("[data-roomjump]").forEach((c) => {
-    c.addEventListener("click", () => show(c.dataset.roomjump));
-  });
   btns.forEach((b, i) => {
     b.addEventListener("click", () => show(b.dataset.subtab));
     b.addEventListener("keydown", (e) => {

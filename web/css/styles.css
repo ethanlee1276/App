@@ -550,10 +550,18 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
 }
 .subnav-wrap { margin-bottom: 4px; }
 
-/* THE ROOM INDEX — every room named and described, before you have to
-   guess which tab holds what. Ethan, 2026-09-09: "it's so cool
-   information that we hide … we need to find a better way to show this
-   information on these pages without hiding them in little buttons."
+/* THE ROOM INDEX — every room named and described, AND it is the tab row.
+
+   Ethan, 2026-09-09: "it's so cool information that we hide … we need to
+   find a better way to show this information on these pages without
+   hiding them in little buttons." The first answer put these described
+   cards above the chip row and kept both. Ethan, 2026-09-10, circling
+   the lot: "fix this page, we show all these repeated buttons" — the
+   same eight rooms were on screen three times, as cards, as chips, and
+   as the active room's sentence a third time in italics beneath them.
+
+   So a card carries `.subnav-btn` as well and IS the tab: same fill when
+   active, same keyboard, one control.
 
    Auto-fit rather than a fixed column count: this renders eight rooms on
    Fantasy and would render fewer elsewhere, and a grid told to make four
@@ -585,6 +593,14 @@ main { max-width: 1360px; margin: 0 auto; overflow-x: clip; }
   font-size: var(--fs-xs); color: var(--text-dim); font-weight: 500;
   line-height: var(--lh-snug); max-width: var(--measure-tight);
 }
+/* THE SELECTED ROOM. `.subnav-btn.active` already paints the card with
+   the brand fill — it out-specifies `.room-card` — but the two spans
+   inside set their own colours and would keep sitting at `--text` and
+   `--text-dim` on top of it. The description stays subordinate to the
+   name the way it is on every other card; it just does so by weight
+   rather than by a colour that has stopped contrasting. */
+.room-card.active .rc-name { color: var(--brand-ink); }
+.room-card.active .rc-what { color: var(--brand-ink); opacity: 0.78; }
 
 /* A section title directly under a sub-tab bar is redundant with the tab
    you just pressed, so the first one in a room loses its top margin and

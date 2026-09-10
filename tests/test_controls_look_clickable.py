@@ -188,12 +188,11 @@ def test_every_room_is_named_and_described_on_arrival():
     throwing the other seven away on every render."""
     fn = _nocomments(_fn(_js(), "subtabbedHTML"))
     assert "room-index" in fn, "no index is built"
-    assert "data-roomjump" in fn
     assert "rc-what" in fn, "the index names rooms without saying what is in them"
-    # It reads g[2] — the SAME description the hint line uses, not a
-    # second set of copy that can drift from it.
+    # It reads g[2] — the SAME description the chip row's hint line uses
+    # on every other page, not a second set of copy that can drift.
     i = fn.index("room-index")
-    assert "g[2]" in fn[i:i + 500], "the index invented its own descriptions"
+    assert "g[2]" in fn[i:i + 600], "the index invented its own descriptions"
 
 
 def test_the_index_is_opt_in_so_it_does_not_restyle_two_other_pages():
@@ -212,20 +211,60 @@ def test_the_index_is_opt_in_so_it_does_not_restyle_two_other_pages():
                 f"{other} was switched on without being asked"
 
 
-def test_an_index_card_opens_the_room_through_the_same_switch():
-    """Two code paths for "open a room" is two chances for the tab bar,
-    the panels and the hint to disagree about which room is open."""
+def test_the_index_card_is_the_tab_and_there_is_no_second_row():
+    """Ethan, 2026-09-10, circling the whole block on the Fantasy page:
+    "fix this page, we show all these repeated buttons."
+
+    He is right, and the comment the 09-09 change left behind was wrong:
+    it said the cards were "deliberately redundant with the tab row above
+    it, and the redundancy is the point". What that produced was the same
+    eight rooms on screen three times — as described cards, as chips, and
+    then the active room's sentence a THIRD time in italics under both.
+
+    "Find out what is there" and "switch to it" are one job. So the card
+    IS the tab, and the indexed branch returns before a chip row or a
+    hint line is built at all."""
+    fn = _nocomments(_fn(_js(), "subtabbedHTML"))
+    i = fn.index("room-index")
+    card = fn[i:fn.index("</button>", i)]
+    # ONE ATTRIBUTE BUILDER for both shapes, so a card cannot be wired
+    # differently from a chip. Asserted through the builder rather than
+    # by looking for `data-subtab` spelled inside the card's markup,
+    # which is where the first cut of this test looked and did not find
+    # it.
+    assert "${attrs(g)}" in card, "the card is not wired like a tab"
+    assert "subnav-btn" in card, "the card does not take the tab's active fill"
+    at = fn[fn.index("const attrs ="):fn.index("if ((opts")]
+    assert "data-subtab=" in at, "the shared builder stopped naming the room"
+    assert 'role="tab"' in at and "tabindex=" in at
+    # NEVER BUILT, not merely hidden — so there is nothing to drift.
+    assert fn.index("return", i) < fn.index('class="subnav"'), (
+        "the indexed page still draws a chip row under its cards")
+    head = fn[i:fn.index('class="subnav"')]
+    assert "subnav-hint" not in head, (
+        "the active room's description is still printed a second time")
+
+
+def test_one_switch_drives_the_rooms_however_they_are_drawn():
+    """Two code paths for "open a room" is two chances for the control
+    and the panels to disagree about which room is open. There is one,
+    and it is `.subnav-btn` — which the cards now are."""
     bind = _nocomments(_fn(_js(), "bindSubtabs"))
-    assert "data-roomjump" in bind, "the index cards are decorative"
-    i = bind.index("data-roomjump")
-    assert "show(" in bind[i:i + 400], "a card does not call show()"
-    # And a card is NOT a .subnav-btn. If it were, it would take the
-    # active fill too, and two things on screen would claim to be the
-    # current tab.
-    card = _nocomments(_fn(_js(), "subtabbedHTML"))
-    i = card.index("room-card")
-    assert "subnav-btn" not in card[i - 200:i + 200], \
-        "an index card is styled as a tab and will fight the real one"
+    assert "roomjump" not in bind, (
+        "the second path is back; a card and a chip can now disagree")
+    assert ".subnav-btn" in bind and "show(b.dataset.subtab)" in bind
+    # ARROW KEYS TOO. A tablist that answers only a mouse is the defect
+    # the roster rows were fixed for on 2026-09-09.
+    assert "ArrowRight" in bind and "next.focus()" in bind
+
+
+def test_the_selected_card_stays_readable_on_the_brand_fill():
+    """`.subnav-btn.active` out-specifies `.room-card` and paints the
+    card. The two spans inside set their own colours and would otherwise
+    sit at --text-dim on top of it."""
+    css = _css()
+    assert "var(--brand-ink)" in _rule(css, ".room-card.active .rc-name")
+    assert "var(--brand-ink)" in _rule(css, ".room-card.active .rc-what")
 
 
 def test_an_index_card_is_shaped_like_a_control():
