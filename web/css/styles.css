@@ -9841,11 +9841,51 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-prop-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: var(--hairline) solid var(--border-soft); }
 .pbp-prop-row:last-child { border-bottom: 0; }
 .pbp-prop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.pbp-box { margin-bottom: 10px; }
-.pbp-box-head { display: flex; align-items: center; gap: 6px; font-weight: 700; margin: 6px 0 4px; }
-.pbp-box-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: var(--fs-sm);
+.pbp-box { margin-bottom: 18px; }
+.pbp-box-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin: 10px 0 6px;
+  font-size: var(--fs-md); }
+/* THE BOX SCORE, AS A BOX SCORE.
+   ---------------------------------------------------------------------
+   It was one wrapped line of `Label 19 · Label 4 · Label 5` per player,
+   in whatever order the parser filled the fields — every number wearing
+   its own label because there was no column to inherit one from, and no
+   way to compare two players without reading both sentences. Ethan,
+   2026-09-10: "make this look better and more organized and just more
+   visually appealing."
+
+   Columns do the labelling once. `tabular-nums` is what makes a column
+   of figures actually line up — without it the digits are
+   proportionally spaced and 111 sits narrower than 100, which is a
+   column that reads crooked for no reason anybody can name.
+
+   The player column is a `<th scope="row">` and the heads are
+   `scope="col"`, so a screen reader announces "A.J. Brown, targets, 4"
+   rather than reading a grid of loose numbers. That costs nothing and
+   is the whole difference between a table and a layout. */
+.pbp-bx-wrap { overflow-x: auto; margin: 0 0 14px; }
+.pbp-bx { width: 100%; border-collapse: collapse; font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums; }
+.pbp-bx thead th { text-align: right; padding: 4px 0 6px 12px; font-size: var(--fs-xs);
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-mute); font-weight: 700;
+  border-bottom: var(--hairline) solid var(--border); white-space: nowrap; }
+.pbp-bx tbody th, .pbp-bx tbody td { padding: 7px 0 7px 12px;
   border-bottom: var(--hairline) solid var(--border-soft); }
-.pbp-box-line { color: var(--text-mute); text-align: right; }
+.pbp-bx tbody tr:last-child th, .pbp-bx tbody tr:last-child td { border-bottom: 0; }
+.pbp-bx td { text-align: right; white-space: nowrap; }
+/* The name column carries the group heading in `thead` and the player
+   in `tbody`, so it is the only left-aligned one and the only one that
+   may wrap. `width: 100%` on a table cell is the old trick that makes
+   this column take the slack and the figure columns stay their own
+   width. */
+.pbp-bx .pbp-bx-who { text-align: left; padding-left: 0; width: 100%;
+  font-weight: 600; color: var(--text); }
+.pbp-bx thead .pbp-bx-who { font-weight: 800; color: var(--text); letter-spacing: .04em; }
+.pbp-bx .pbp-bx-who .mini { color: var(--text-mute); margin-left: 6px; font-weight: 500; }
+/* Team totals is the same table with two team columns; the labels are
+   sentences rather than three-letter heads, so they keep their case. */
+.pbp-tot thead th { text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); }
+.pbp-tot tbody th { font-weight: 500; color: var(--text-mute); }
+.pbp-tot td { font-weight: 700; }
 .pbp-tab-door { margin-left: auto; background: none; border: 0; color: var(--text-mute); font: inherit; cursor: pointer; }
 .pbp-tab-door:hover { color: var(--text); }
 /* The doors between the game page and the play-by-play, and the card's
@@ -9857,6 +9897,10 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 .pbp-info-card { display: flex; gap: 10px; align-items: center; background: var(--panel);
   border: var(--hairline) solid var(--border); border-radius: var(--radius-lg); padding: 10px 12px; }
 .pbp-info-ico { color: var(--gold); display: inline-flex; }
+/* The label above the value, small and quiet, so the tile reads as a
+   question and an answer rather than two facts of equal weight. */
+.pbp-info-k { font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-mute); font-weight: 700; }
 /* THE PLAY FEED IS CUT OFF AND SCROLLS ITSELF.
    ---------------------------------------------------------------------
    Ethan, 2026-09-06, circling the rail: "we should just make this menu

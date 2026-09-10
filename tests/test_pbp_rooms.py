@@ -161,8 +161,14 @@ def test_the_page_has_four_real_tabs_and_says_what_is_not_built():
     assert "if (state.sport !== league) {" in props and "No open bets on this game." in props
     players = _fn("pbpPlayersHTML")
     assert "No box score on file yet" in players and "the fields the open-bet tracker reads, nothing more" in players
-    assert "marketWord(k)" in players, "the market words the record uses"
-    for sel in (".pbp-tab.active", ".pbp-prop-row", ".pbp-box-row"):
+    # THE ROOM IS A TABLE NOW (2026-09-10), so the market words moved
+    # from the player line into the column heads — same words, same
+    # source, one level down. The room's contract is that the record's
+    # vocabulary is what labels the numbers, not that it does so inline.
+    heads = _fn("pbpBoxGroupHTML") + _fn("pbpBoxGenericHTML")
+    assert "marketWord(k)" in heads, "the market words the record uses"
+    assert "pbpBoxGroupHTML(mine, g)" in players and "pbpBoxGenericHTML(" in players, players
+    for sel in (".pbp-tab.active", ".pbp-prop-row", ".pbp-bx-who"):
         assert sel in CSS, sel
     assert "min-height: 44px" in CSS[CSS.index(".pbp-tab {"):CSS.index(".pbp-tab.active")], "a thumb-sized tab"
 
