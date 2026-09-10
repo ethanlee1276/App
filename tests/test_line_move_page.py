@@ -84,14 +84,38 @@ def test_the_tape_is_hung_on_priced_picks_with_two_points_or_more():
     assert "line_series" not in recs[2] and "line_series" not in recs[3]
 
 
+def _call_args(src: str, fn: str) -> str:
+    """The argument text of ``fn(...)``, paren-matched.
+
+    A literal string match on the whole call was what this test used
+    until 2026-09-10, and it failed the day the NFL call grew a second
+    and third list. The call's SHAPE is not what is being pinned here —
+    where its rows come from is.
+    """
+    i = src.index(fn + "(") + len(fn) + 1
+    depth, j = 1, i
+    while depth:
+        depth += {"(": 1, ")": -1}.get(src[j], 0)
+        j += 1
+    return src[i:j - 1]
+
+
 def test_the_three_builds_that_record_snapshots_hang_it_from_the_same_rows():
-    for name, call in (("nfl_build.py", 'attach_series(result["recommendations"], _today)'),
-                       ("mlb_build.py", 'attach_series(result["recommendations"], _today)'),
-                       ("nba_build.py", "_attach_series(recs, _today)")):
+    # ONE READ, REUSED. `_today` is streamed once and passed to both
+    # `analyze` and the series pass, and the priced picks are in that
+    # pass. Which OTHER lists a build also hangs the tape on is its own
+    # business — the NFL adds its long shots and its touchdown watch, so
+    # that a scorer's page can draw today's tape too.
+    for name, fn, rows in (("nfl_build.py", "attach_series", 'result["recommendations"]'),
+                           ("mlb_build.py", "attach_series", 'result["recommendations"]'),
+                           ("nba_build.py", "_attach_series", "recs")):
         src = (ROOT / name).read_text()
         assert "_today = todays_rows(stream_history())" in src, name
         assert "analyze(_today)" in src, name
-        assert call in src, f"{name}: the series must come from the same rows, read once"
+        assert fn + "(" in src, f"{name}: nothing hangs the tape on the picks"
+        args = _call_args(src, fn)
+        assert "_today" in args, f"{name}: the series must come from the same rows, read once"
+        assert rows in args, f"{name}: the priced picks must be in the series pass"
         assert src.count("todays_rows(stream_history())") == src.count("_today = todays_rows(stream_history())") \
             + (1 if name == "nfl_build.py" else 0), f"{name}: the snapshot file streamed more than it needs"
 

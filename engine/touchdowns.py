@@ -409,6 +409,22 @@ TD_WATCH_ODDS = (-400, 1500)
 TD_WATCH_LIMIT = 5
 
 
+def _td_form(vals: list) -> dict:
+    """The same six windows `pipeline._rec_to_dict` publishes as `form`.
+
+    Restated rather than imported because pipeline imports this module,
+    and a shared helper would have to live in a third place for the sake
+    of six averages. The KEYS are what matter — `propFormRows` reads
+    them by name — so they are copied exactly.
+    """
+    def avg(xs):
+        xs = [float(v) for v in xs if v is not None]
+        return round(sum(xs) / len(xs), 3) if xs else None
+    return {"last1": avg(vals[:1]), "last3": avg(vals[:3]),
+            "last5": avg(vals[:5]), "last10": avg(vals[:10]),
+            "season": avg(vals), "career": None, "vs_opponent": None}
+
+
 def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
                  ) -> list[dict]:
     """The week's most likely scorers, ranked by model probability —
@@ -508,6 +524,32 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "reasons": info["reasons"],
             # TDs per game, most recent first — the spark at line 0.5.
             "recent_values": [g.value for g in prop.logs][:12],
+            # THE THREE SECTIONS THE PROP PAGE COULD NOT DRAW. Ethan,
+            # 2026-09-10, once the touchdown rows finally opened their
+            # page: "it's not showing the last five games. or the shop
+            # the price. for the form or how the line is moving today."
+            #
+            # Every one of them was a missing FIELD rather than a broken
+            # renderer, and all three were already in scope here — the
+            # row was flattening `prop.logs` to twelve bare numbers and
+            # throwing the rest away, and never looked at `prop.lines`
+            # at all. `_rec_to_dict` publishes exactly these keys for an
+            # ordinary prop, so they are spelled the same way: a page
+            # that reads one shape must not need a second.
+            #
+            # `logs` has no wind or park keys — `pipeline._log_wind`
+            # adds those and importing it here would close a cycle
+            # (pipeline imports this module). `propLogRows` reads them
+            # defensively and simply prints no weather, which is right
+            # for a market where it was never shown anyway.
+            "logs": [{"week": g.week, "opponent": g.opponent,
+                      "value": g.value, "home": g.home}
+                     for g in prop.logs],
+            "form": _td_form([g.value for g in prop.logs]),
+            "all_lines": [
+                {"book": ln.book, "line": ln.line,
+                 "over_odds": ln.over_odds, "under_odds": ln.under_odds}
+                for ln in (getattr(prop, "lines", None) or [])],
             "caveats": (list(info["caveats"]) + (
                 [f"{prop.player} listed {status} — hold until inactives "
                  f"confirm status"] if status else [])),

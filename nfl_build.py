@@ -997,7 +997,21 @@ def main() -> None:
             annotate_recommendations(result["recommendations"], analyze(_today))
             # Today's tape on every priced pick, for the prop page's own
             # line chart (Ethan, 2026-09-05). Same rows, read once.
-            _ns = attach_series(result["recommendations"], _today)
+            #
+            # THE TOUCHDOWN BOARDS GET IT TOO. This read
+            # `result["recommendations"]` alone, so the one section of
+            # the prop page that comes from the tape rather than from
+            # the row — "How the line moved today" — was blank on every
+            # scorer, on both TD lists, for as long as they have had a
+            # page to open. Ethan, 2026-09-10: "or ... how the line is
+            # moving today." Same rows, same pass, no extra read;
+            # `attach_series` skips anything whose side is not OVER or
+            # UNDER, which is why the watchlist could not have been
+            # served before it was stamped with one.
+            _ns = attach_series(result["recommendations"]
+                                + (result.get("long_shots") or [])
+                                + (result.get("longshot_watch") or []),
+                                _today)
             if _ns:
                 print(f"  Line series: {_ns} pick(s) carry today's tape.")
         except Exception as exc:
