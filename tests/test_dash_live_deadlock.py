@@ -137,6 +137,39 @@ def test_the_redraw_is_bounded_at_one_not_merely_convergent():
     assert "let _dashRedrawing = false;" in APP
 
 
+def test_no_reader_asks_the_45_MINUTE_BOARD_whether_a_game_is_live():
+    """THE SWEEP, because finding these one at a time did not work.
+
+    Five separate readers asked `state.data.games` — the model board on
+    its 45-minute cycle — whether anything was in progress, and each was
+    found only when a symptom reached Ethan: the cards (the game drawn
+    as upcoming ninety minutes after kickoff), the fast clock (the score
+    would have frozen), the rail ("No games in progress" beside a LIVE
+    card), `findGame` (the play-by-play door opening the game page
+    instead), and the auto-refresh (the poll that would have noticed
+    never started). Same bug, five addresses, three separate pushes.
+
+    So this is enumerated rather than remembered: any expression that
+    decides a game is live may not source it from the board."""
+    live = [(n, ln) for n, ln in enumerate(APP.splitlines(), 1)
+            if 'state === "live"' in ln]
+    assert len(live) > 10, f"only {len(live)} live checks found — did the spelling change?"
+    for n, ln in live:
+        assert "state.data" not in ln, f"app.js:{n} asks the raw board: {ln.strip()!r}"
+        assert "d.games" not in ln, f"app.js:{n} asks the raw board: {ln.strip()!r}"
+
+
+def test_the_door_and_the_poll_read_the_merged_view():
+    """The two that reach the board through one indirection, which is
+    how they survived the sweep above."""
+    door = _code(_fn("openGameOrPlays"))
+    assert "findGame(gid)" in door, door
+    i = APP.index("const findGame = ")
+    assert "dashLiveGames()" in APP[i:APP.index(";", i)], APP[i:i + 200]
+    poll = _code(_fn("manageAutoRefresh"))
+    assert "dashLiveGames().some(" in poll, poll[:400]
+
+
 def test_the_merge_still_lets_board_only_fields_survive():
     """The fast file carries no odds grid and no win-probability track.
     Wholesale replacement unplugged both in August; this is the guard

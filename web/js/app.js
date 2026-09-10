@@ -1623,7 +1623,12 @@ window.addEventListener("focus", refreshOnReturn);
 
 /* Poll for live updates every 30s while any game is in progress. */
 function manageAutoRefresh() {
-  const hasLive = (state.data?.games || []).some((g) => (g.live || {}).state === "live");
+  // THE MERGED VIEW — this decides whether the 30-second poll runs at
+  // all, off the same 45-minute board that could not tell a kicked-off
+  // game from a scheduled one. A live game that the board had not
+  // noticed yet also did not get the refresh that would have let it
+  // notice. Same read, fifth place.
+  const hasLive = dashLiveGames().some((g) => (g.live || {}).state === "live");
   const el = document.getElementById("live-refresh");
   // The freshness chip is ALWAYS shown. Two reasons: "how old is this?" is
   // worth answering on every page, not only when a game happens to be in
@@ -4686,7 +4691,18 @@ const gameId = (g) => `${g.date || ""}_${g.away}@${g.home}${(g.game_number || 1)
    clean URL open a game without a second lookup path, and what keeps
    every #game/2026-09-09_NE@SEA link already in somebody's messages
    working. */
-const findGame = (gid) => (((state.data || {}).games) || [])
+/* THE MERGED VIEW, because callers ask this row whether its game is
+   live. `openGameOrPlays` does exactly that — "live? open the
+   play-by-play, otherwise the game page" — and this returned the raw
+   model board, so on 2026-09-10 the card said LIVE Q3 8:11 with a
+   PLAY-BY-PLAY door on it and tapping it opened the game page instead,
+   because the 45-minute board still had the game as scheduled. Ethan:
+   "the live play by play screen is not working and or showing."
+
+   The merge only ever replaces `live`; `gameId` and `gameSlug` read the
+   date and the sides off the board row exactly as before, so every
+   #game/2026-09-09_NE@SEA link keeps resolving. */
+const findGame = (gid) => dashLiveGames()
   .find((g) => gameId(g) === gid || (gid && gameSlug(g) === gid));
 
 /* Venue render art. Ethan supplied one night render per lighting colour
