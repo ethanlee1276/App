@@ -10017,3 +10017,38 @@ body.walled .a2hs { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
    most important line on the card, because that is where a margin model
    without possession is most confidently wrong. */
 .pbp-wp-blind { color: var(--warn); opacity: 1; }
+
+
+/* ---------------- Everything it does ----------------
+   The features page. A row is a door where the thing has its own screen
+   and a plain block where it lives inside another one, and the two look
+   different on purpose: an arrow that does nothing is worse than no
+   arrow. Both are the same width and rhythm so the list still reads as
+   one list. */
+.ft-lede { color: var(--text-mute); font-size: var(--fs-md); margin: 0 0 14px;
+  max-width: var(--measure); }
+.ft-jumps { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+.ft-jump { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px;
+  border: var(--hairline) solid var(--border); border-radius: 999px; background: var(--panel);
+  color: var(--text-mute); font-size: var(--fs-xs); font-weight: 700; letter-spacing: .04em;
+  text-decoration: none; text-transform: uppercase; }
+.ft-jump:hover { color: var(--text); border-color: var(--brand-2); }
+.ft-sec { margin: 0 0 26px; scroll-margin-top: calc(var(--topbar-h) + 16px); }
+.ft-list { display: grid; gap: 8px; }
+/* `text-align: left` and `font: inherit` because half these rows are
+   <button> and a button does neither by default — the two shapes have to
+   sit in the same column without one of them centring itself. */
+.ft-row { display: flex; align-items: flex-start; gap: 14px; width: 100%; text-align: left;
+  font: inherit; background: var(--panel); border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-lg); padding: 13px 15px; color: var(--text); }
+.ft-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ft-row-main b { font-size: var(--fs-md); }
+.ft-row-main span { color: var(--text-mute); font-size: var(--fs-sm);
+  line-height: var(--lh-snug); }
+.ft-row.door { cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out); }
+.ft-row.door:hover { border-color: var(--brand-2); }
+.ft-go { color: var(--gold); font-weight: 800; padding-top: 2px; }
+@media (max-width: 760px) {
+  .ft-row { padding: 12px; }
+  .ft-jump { min-height: 38px; }
+}

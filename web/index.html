@@ -471,6 +471,10 @@
                 title="Why this beats a picks service">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9a2.8 2.8 0 1 1 3.6 2.7c-.9.3-.8 1-.8 1.8M12 17v.1"/></svg>
           Why Us</button>
+        <button class="sport-btn sb-item" data-sport="features" data-kind="tool"
+                title="Every board, tool and page on the site">
+          <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19.5" cy="18" r="1.6"/></svg>
+          Features</button>
         <button class="sport-btn sb-item" data-sport="about" data-kind="tool"
                 title="What this site is and isn’t — and the responsible-gambling terms">
           <svg class="sb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v.1M12 11v6"/></svg>
@@ -1023,6 +1027,23 @@
     </section>
 
     <!-- About — what this site is, and the honest terms it comes with -->
+    <!-- EVERY FEATURE, in one list a stranger can read before paying.
+         Ethan, 2026-09-10: "add a features page so new users can go and
+         look at every single feature the site offers … down to the draft
+         simulator and being able too look up past player or team stats
+         vs specific teams and litterally everything."
+
+         The body is rendered from `FEATURES` in app.js rather than
+         written out here, so a row cannot name a destination that does
+         not exist — see the note on that table, and the test that walks
+         it against the sidebar in both directions. -->
+    <section class="view" id="view-features">
+      <div class="section-title">Everything it does
+        <span class="sub">— every board, tool and page on the site, and where each one
+        lives. Free to read, whether or not you have a plan.</span></div>
+      <div id="features-body"></div>
+    </section>
+
     <section class="view" id="view-about">
       <div class="section-title">What this is
         <span class="sub">— read this first if you’ve just landed here: what the

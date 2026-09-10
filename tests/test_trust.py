@@ -148,7 +148,14 @@ def test_it_names_what_is_fitted_and_what_is_not():
 def test_the_page_is_registered_everywhere_a_page_has_to_be():
     assert 'id="view-methodology"' in HTML and 'id="methodology-body"' in HTML
     assert 'id="view-status"' in HTML and 'id="status-body"' in HTML
-    assert '"about", "methodology", "status"' in APP, "missing from VIEW_ORDER"
+    # MEMBERSHIP, NOT ADJACENCY. This asserted the three names in a row
+    # and broke on 2026-09-10 when the features page was registered
+    # between two of them — the contract is that the router knows these
+    # views, never that nothing may be added beside them.
+    order = APP[APP.index("const VIEW_ORDER = ["):]
+    order = order[:order.index("];")]
+    for name in ("methodology", "status", "about"):
+        assert f'"{name}"' in order, f"{name} missing from VIEW_ORDER"
     assert '"methodology", "status",' in APP, "missing from STANDALONE_MODES"
     assert 'data-sport="methodology"' in HTML and 'data-sport="status"' in HTML
 
