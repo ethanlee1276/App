@@ -180,6 +180,13 @@ def resolve_market_keys(sport: str, names: list[str]) -> list[str]:
     # be graded against. Inverted from the same map the live path parses
     # with, so the two cannot drift.
     to_api.update({v: k for k, v in SCORER_ODDS_TO_MARKET.items()})
+    # AND THE MARKETS WE MODEL BUT DO NOT ASK FOR TONIGHT. A name has to
+    # translate whether or not the live pull requests it — see
+    # `oddsapi.MODELLED_NOT_REQUESTED`. Buying it is refused downstream
+    # by `unreadable_markets`, which reads the request map, so this
+    # cannot quietly put a market back on a call.
+    from .oddsapi import MODELLED_NOT_REQUESTED
+    to_api.update({v: k for k, v in MODELLED_NOT_REQUESTED.items()})
     # GAME MARKETS TOO, for the reason `GAME_MARKET_KEYS` records: the
     # docstring above said they "pass through untouched" and expected
     # every caller to have translated them first. One did and one did

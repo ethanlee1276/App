@@ -63,13 +63,14 @@ CREDITS_PER_EVENT = 8
 #: Leagues whose event call costs more than the generic eight. College
 #: is not here because it states its own price outright
 #: (cfb_build.CREDITS_PER_EVENT, passed as ``credits``).
-#: NFL was twelve — four main lines, four alternate ladders, the scorer
-#: market and the game markets. Thirteen since 2026-09-10, when
-#: `player_pass_tds` joined the request: a quarterback's touchdown market
-#: is billed like any other, per market per region, and a budget that
-#: does not count it plans with a number that is wrong in the direction
-#: that overspends.
-EVENT_CREDITS = {"nfl": 13}
+#: NFL: four main lines, four alternate ladders, the scorer market and
+#: the game markets. This went to thirteen on 2026-09-10 when
+#: `player_pass_tds` joined the request, and back to twelve the same
+#: afternoon when that key was rolled back — see the incident note in
+#: `sources.oddsapi`. The rule the number follows is unchanged: one
+#: credit per market per region per event, so this counts what the
+#: request actually asks for and nothing it does not.
+EVENT_CREDITS = {"nfl": 12}
 
 
 def credits_per_event(sport: str | None = None) -> int:

@@ -80,7 +80,11 @@ def test_the_four_ladders_are_on_the_call_and_priced_into_the_pull():
     cfg = oa.SPORT_CONFIG["nfl"]
     n = len(cfg["markets"]) + len(cfg["scorers"]) + len(cfg["alternates"]) + 3
     assert n == B.credits_per_event("nfl") == B.EVENT_CREDITS["nfl"], n
-    assert len(cfg["markets"]) == 5, "the NFL should be buying five prop markets"
+    # FOUR. It was briefly five on 2026-09-10 when `player_pass_tds`
+    # joined the request, and back to four the same afternoon — see the
+    # incident note in `sources.oddsapi`. The derived sum above is the
+    # assertion that matters; this one just says which four.
+    assert len(cfg["markets"]) == 4, sorted(cfg["markets"])
     # Baseball buys no ladders and keeps the generic price; the cheap
     # lines lane spends the NFL's money at the NFL's price.
     assert B.credits_per_event("mlb") == B.CREDITS_PER_EVENT == 8

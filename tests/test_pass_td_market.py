@@ -70,23 +70,49 @@ def test_the_stat_chip_and_the_priced_market_wear_one_label():
 
 
 # --- the quote and the prop -------------------------------------------------
-def test_the_odds_feed_is_asked_for_the_market():
-    """ON THE NFL MAP, and only there. The first cut of this change put
-    the key on the four-market map both football leagues share, which
-    bought it for college too — where the same projection scores 0.5925,
-    below `MIN_RANK_AUC`, so the credits would buy a market with nothing
-    honest to say. The split is one named key with a measurement behind
-    it (`oddsapi.NFL_ODDS_TO_MARKET`'s note carries both figures)."""
-    from engine.sources.oddsapi import (ODDS_TO_MARKET, MARKET_TO_ODDS,
-                                        NFL_ODDS_TO_MARKET, SPORT_CONFIG)
-    assert NFL_ODDS_TO_MARKET["player_pass_tds"] == PASS_TD
-    assert MARKET_TO_ODDS[PASS_TD] == "player_pass_tds"
-    assert "player_pass_tds" not in ODDS_TO_MARKET, \
-        "the shared map buys this for college as well"
-    # THE MAP THE REQUEST ACTUALLY USES. A constant nothing is wired to
-    # is a constant that buys nothing.
-    assert SPORT_CONFIG["nfl"]["markets"] is NFL_ODDS_TO_MARKET
-    assert "player_pass_tds" not in SPORT_CONFIG["cfb"]["markets"]
+def test_the_market_is_modelled_and_shelved_but_not_bought():
+    """THE INCIDENT, 2026-09-10. `player_pass_tds` went onto the NFL odds
+    request at 16:36 UTC and deployed at ~16:41. Ethan at 17:58: "all the
+    edge bets and most likely bets for nfl disappeared" — inside the last
+    thirty minutes, which is the first board rebuild after that deploy.
+
+    `fetch_event_odds` joins this map's keys into ONE `markets=`
+    parameter per event, so a key the API will not serve does not cost
+    that one market, it costs the whole event — every market, every NFL
+    game. Both boards are built from those props, which is why both went
+    at once and why CFB, which was deliberately never given the key, was
+    untouched.
+
+    So the request is back to the four it was buying at 16:35. Everything
+    else stays: the market is still modelled, still ranked, still
+    shelved. What is rolled back is asking the book for it."""
+    from engine.sources.oddsapi import (NFL_ODDS_TO_MARKET, ODDS_TO_MARKET,
+                                        PASS_TD_ODDS_KEY, SPORT_CONFIG)
+    assert PASS_TD_ODDS_KEY == "player_pass_tds"
+    assert PASS_TD_ODDS_KEY not in SPORT_CONFIG["nfl"]["markets"], \
+        "the key is back on the request without the guard that makes it safe"
+    assert PASS_TD_ODDS_KEY not in SPORT_CONFIG["cfb"]["markets"]
+    assert NFL_ODDS_TO_MARKET == ODDS_TO_MARKET
+    # AND THE BUDGET COUNTS WHAT IS ACTUALLY ASKED FOR. It went to 13
+    # with the key and back to 12 without it; a budget that counts a
+    # market nobody requests plans with a number wrong in the direction
+    # that under-spends.
+    from engine.oddsbudget import credits_per_event
+    assert credits_per_event("nfl") == 12
+
+
+def test_one_unusable_market_must_not_be_able_to_empty_the_board():
+    """The defect worth fixing, named where somebody will find it before
+    re-adding the key. Every market for an event goes in a single
+    request, so the blast radius of one bad key is the entire NFL board —
+    and nothing in the code says so until it happens."""
+    import os
+    src = open(os.path.join(ROOT, "engine", "sources", "oddsapi.py"),
+               encoding="utf-8").read()
+    i = src.index("def fetch_event_odds(")
+    assert '",".join(markets)' in src[i:i + 900], \
+        "the request no longer joins its markets — re-read this note"
+    assert "TO PUT IT BACK" in src, "the re-enable conditions are gone"
 
 
 def test_a_quarterback_gets_a_prop_for_it():
@@ -94,14 +120,6 @@ def test_a_quarterback_gets_a_prop_for_it():
     assert PASS_TD in [m for m, _role in POSITION_MARKETS["QB"]]
     assert MARKET_COLUMNS[PASS_TD] == ("passing_tds",), \
         "the log column must be the passing one, not a touchdown sum"
-
-
-def test_the_extra_market_is_paid_for():
-    """Every market on an event call is billed. A budget that does not
-    count the new one plans with a number wrong in the direction that
-    overspends."""
-    from engine.oddsbudget import credits_per_event
-    assert credits_per_event("nfl") == 13
 
 
 # --- the model --------------------------------------------------------------

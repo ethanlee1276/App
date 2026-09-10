@@ -68,7 +68,49 @@ ODDS_TO_MARKET = {
 #: The two leagues still SHARE the four above by reference, which is
 #: what `tests/test_cfb_feed` is protecting: the divergence is one
 #: named key with a measurement behind it, not two lists drifting.
-NFL_ODDS_TO_MARKET = {**ODDS_TO_MARKET, "player_pass_tds": PASS_TD}
+#: NOT IN THE REQUEST, since 2026-09-10 17:5x — see the incident note
+#: below. The map still exists because the market is modelled, priced and
+#: shelved; what is rolled back is ASKING THE BOOK FOR IT.
+NFL_ODDS_TO_MARKET = dict(ODDS_TO_MARKET)
+
+#: THE INCIDENT. `player_pass_tds` was added to this map at 16:36 UTC and
+#: deployed at ~16:41. Ethan, 17:58: "all the edge bets and most likely
+#: bets for nfl disappeared" — inside the last thirty minutes, which is
+#: the first board rebuild after that deploy.
+#:
+#: EVERY MARKET GOES IN ONE REQUEST. `fetch_event_odds` joins this map's
+#: keys into a single `markets=` parameter per event, so a key the API
+#: will not serve does not cost us that market — it costs us the whole
+#: event, every market on it, for every NFL game. Both boards are built
+#: from those props, which is why both emptied at once and why CFB, which
+#: was deliberately never given this key, kept working.
+#:
+#: NOT PROVEN AGAINST THE API — this box has no route to it, and the
+#: mechanism above is the reading that fits the timing, the blast radius
+#: and the one league spared. It is rolled back rather than debugged live
+#: because the configuration it replaced is known to work.
+#:
+#: TO PUT IT BACK: verify the key against the API's own market list for
+#: `americanfootball_nfl` FIRST, and then make the request tolerate one
+#: bad key rather than trusting the next one — a single unusable market
+#: silently taking down every prop on the board is the defect worth
+#: fixing here, and it will outlive this market.
+PASS_TD_ODDS_KEY = "player_pass_tds"
+
+#: MODELLED, GRADEABLE, NOT ON THE LIVE REQUEST. Two different questions
+#: wear the same table and this split is what separates them: "what does
+#: this market's name translate to" is not "what do we ask the book for
+#: tonight". `pass_td` is priced, ranked and shelved, so the harvest has
+#: to be able to SPELL it — `test_oddsapi` requires every market the
+#: board can bet to resolve to a real key, and it is right to, because a
+#: market that cannot be translated settles with no closing line and no
+#: way to ever know whether it beat a price.
+#:
+#: Buying it is still refused, and by a gate that does not depend on
+#: anybody remembering this: `oddshistory.parse_map` reads the REQUEST
+#: map, so `unreadable_markets` reports this key as one the parser would
+#: throw away and `_harvest_fix` declines to spend on it.
+MODELLED_NOT_REQUESTED = {PASS_TD_ODDS_KEY: PASS_TD}
 
 MARKET_TO_ODDS = {v: k for k, v in NFL_ODDS_TO_MARKET.items()}
 
