@@ -209,9 +209,21 @@ def test_the_record_scopes_wear_the_same_purple_as_every_other_filter():
     seg = CSS[i:i + 900]
     assert "var(--grad-brand)" in seg, "the active scope is not brand-filled"
     assert "border-bottom-color" not in seg, "the underline treatment survived"
-    # And it is the SAME fill the sidebar's sport chips use, not a new one.
-    j = CSS.index(".sportbar-in .sport-btn.active")
+    # And it is the SAME fill every other PAGE-LEVEL filter row uses,
+    # not a new one — the Live tab's league chips are the sibling.
+    j = CSS.index(".lb-chip.active")
     assert "var(--grad-brand)" in CSS[j:j + 200]
+    # NOT the league strip, which stopped being a pill on 2026-09-10.
+    # It used to be checked here, and that was the whole trouble: the
+    # strip sits directly above these chips now, so wearing their fill
+    # made two rows of the same object stacked, both saying NFL, meaning
+    # different things. Ethan: "it looks like the record page buttons
+    # and our actual sports buttons at the top are together, but they're
+    # not and that's confusing." The strip is chrome; these are page
+    # controls; tests/test_league_strip.py holds them apart.
+    k = CSS.index(".sportbar-in .sport-btn.active")
+    assert "var(--grad-brand)" not in CSS[k:k + 200], \
+        "the league strip is wearing the page's selected-pill fill again"
 
 
 def test_the_alert_rows_still_come_from_the_three_real_feeds():

@@ -184,20 +184,60 @@ def test_the_wall_hides_the_strip_too():
         "the sport switcher renders on the pricing wall"
 
 
-def test_the_chips_still_look_like_chips():
-    """They kept the sidebar's fill, hairline and brand-gradient active
-    state on the way over — the same active fill `.rec-scope` was matched
-    to on 2026-08-24, so the site has one selected-pill look and not two.
-    Only the width rule changed: three-to-a-row was right in a 208px
-    column and wrong in a full-width strip."""
-    r = _rule(CSS, ".sportbar-in .sport-btn")
-    assert "border: var(--hairline) solid var(--border)" in r
-    assert "background: var(--panel)" in r
-    assert "33.3%" not in r, "the chips are still sized for a 208px column"
+def test_the_strip_is_chrome_and_the_page_keeps_the_pills():
+    """Ethan, 2026-09-10, on the Record page on his phone: "it looks
+    like the record page buttons and our actual sports buttons at the
+    top are together, but they're not and that's confusing … that looks
+    very sloppy and just bunched together."
+
+    THE TEST THAT USED TO LIVE HERE EXPLAINED THE CAUSE IN ITS OWN
+    DOCSTRING. These chips were given `.rec-scope`'s fill, hairline and
+    brand-gradient active state deliberately — "so the site has one
+    selected-pill look and not two". That was right while they lived in
+    the SIDEBAR, a different region of the screen. It became wrong the
+    moment they moved directly above a page body, because the Record
+    page's own scope chips are pills too: two wrapped rows of them, with
+    a gold-filled NFL among them. Two racks of the same object, stacked,
+    both saying NFL, meaning two different things.
+
+    So the contract inverted, and the way to hold an inverted contract
+    is to assert the two APART rather than to assert each alone. A
+    change that makes the strip look like a page control again fails
+    here even if it looks perfectly reasonable on its own line."""
+    strip = _rule(CSS, ".sportbar-in .sport-btn")
     active = _rule(CSS, ".sportbar-in .sport-btn.active")
-    assert "background: var(--grad-brand)" in active, \
-        "the selected league is no longer filled"
-    assert "color: var(--brand-ink)" in active
+    page = _rule(CSS, ".rec-scope")
+    page_on = _rule(CSS, ".rec-scope.active")
+
+    # The page's chips are still pills — that is the thing being
+    # differed FROM, so it is asserted rather than assumed.
+    assert "border-radius" in page and "background:" in page, page
+    assert "background: var(--grad-brand)" in page_on, page_on
+
+    # And the strip is not one: no fill, no box, no radius.
+    assert "background: none" in strip, strip
+    assert "border: 0" in strip, strip
+    assert "border-radius: 0" in strip, strip
+    assert "var(--panel)" not in strip, "the strip wears the pill's fill again"
+
+    # The selected league is a word with a rule under it.
+    assert "var(--grad-brand)" not in active, \
+        "the strip wears the page's selected-pill fill again"
+    assert "color: var(--gold)" in active, active
+    assert "border-bottom-color: var(--gold)" in active, active
+
+    # The band belongs to the header, not to the top of the page.
+    bar = _rule(CSS, ".sportbar")
+    assert "background: var(--topbar-bg)" in bar, bar
+    assert "border-bottom:" in bar, bar
+
+
+def test_losing_the_box_did_not_lose_the_tap_target():
+    """44px is the tap size. It used to fall out of the chip's padding
+    and fill; with both gone it has to be asked for."""
+    i = CSS.index(".sportbar-in .sport-btn { min-height: 44px")
+    media = CSS.rindex("@media", 0, i)
+    assert "max-width" in CSS[media:media + 40], CSS[media:media + 60]
 
 
 def test_the_strip_does_not_follow_the_page_down():
@@ -213,9 +253,11 @@ def test_the_strip_does_not_follow_the_page_down():
     rule = CSS[i:CSS.index("}", i)]
     assert "position:" not in rule, f"the strip is positioned again: {rule.strip()!r}"
     assert "top:" not in rule, rule
-    # Still the lid of the board — the ground and the rule under it stay,
-    # so removing the stick does not turn it into floating text.
-    assert "background: var(--bg)" in rule, rule
+    # Still a band — a ground and the rule under it stay, so removing
+    # the stick does not turn it into floating text. WHICH ground moved
+    # on 2026-09-10 (page to header, see the chrome test above) and the
+    # contract here was never which one: it is that there IS one.
+    assert "background: var(--" in rule, rule
     assert "border-bottom:" in rule, rule
 
 

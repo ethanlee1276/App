@@ -5842,12 +5842,37 @@ body.has-rail .shell {
    screen on the smallest screen to answer a question nobody was
    asking. The background and the rule under it stay: it is still the
    lid of the board, it just does not follow you down. */
+/* IT IS PART OF THE HEADER, NOT THE TOP OF THE PAGE.
+
+   Ethan, 2026-09-10, on the Record page on his phone: "it looks like
+   the record page buttons and our actual sports buttons at the top are
+   together, but they're not and that's confusing … that looks very
+   sloppy and just bunched together."
+
+   He is right and the cause is written down two rules below, in the
+   test that guarded it: these chips were given `.rec-scope`'s exact
+   fill, hairline and brand-gradient active state on purpose, "so the
+   site has one selected-pill look and not two". That was correct while
+   they lived in the SIDEBAR — a different region of the screen
+   entirely. It became wrong the moment they moved directly above the
+   page body, because the Record page's own scope chips are pills too,
+   in two wrapped rows, with a gold-filled NFL in them. Two racks of
+   the same object, stacked, both saying NFL, meaning two completely
+   different things: which league the site is on, and which league the
+   record is cut to.
+
+   Sameness is the bug, so the fix is difference IN KIND rather than in
+   spacing. The strip takes the topbar's own ground and becomes flat
+   text with an underline — chrome. Anything filled and rounded below
+   it is a control that belongs to the page. A reader does not have to
+   be told that; it is the difference between a tab and a button, and
+   they already know it. */
 .sportbar {
-  background: var(--bg); border-bottom: var(--hairline) solid var(--border-soft);
-  padding: 10px 0;
+  background: var(--topbar-bg); border-bottom: var(--hairline) solid var(--border);
+  padding: 2px 0 0;
 }
 .sportbar-in {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 0 2px;
   /* Aligned with `.view`, which is what sits under it. */
   padding: 0 26px;
 }
@@ -5861,25 +5886,30 @@ body.has-rail .shell {
   width: 0; align-self: stretch; margin: 2px 6px;
   border-left: var(--hairline) solid var(--border);
 }
-/* The chips themselves, carried over from the sidebar unchanged apart
-   from the box they sit in: same fill, same hairline, same brand-gradient
-   active state every other filter row on the site uses (`.rec-scope` was
-   matched to it on purpose, 2026-08-24). One rule did change — three to a
-   row was right for a 208px column and is wrong in a full-width strip, so
-   each chip is now as wide as its own word. */
-.sportbar-in .sport-btn { flex: 0 0 auto; border: var(--hairline) solid var(--border);
-  background: var(--panel); color: var(--text-mute); cursor: pointer; font: inherit;
+/* TABS, NOT PILLS — see the note on `.sportbar`. No fill, no box, no
+   radius: the whole point is that this cannot be mistaken for the
+   filled chips a page puts under it. The selected league is the gold
+   word with a rule under it, which is the same active state
+   `.pbp-tabs` uses, so the site still has ONE tab look and one pill
+   look rather than three of each.
+
+   The underline is 2px and sits directly on the bar's own hairline, so
+   a wrapped second row underlines correctly too. It is a `border`, not
+   a painted box — `tests/test_hairlines` cares, and so does anybody
+   later trying to find where that line comes from. */
+.sportbar-in .sport-btn { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--text-mute); cursor: pointer; font: inherit;
   font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
-  padding: 8px 13px; border-radius: var(--radius-sm); text-align: center; text-transform: uppercase;
-  transition: all var(--dur-fast) var(--ease-out); }
-.sportbar-in .sport-btn:hover { color: var(--text); border-color: var(--brand-2); }
-.sportbar-in .sport-btn.active { background: var(--grad-brand); border-color: transparent;
-  color: var(--brand-ink); box-shadow: var(--glow); }
+  padding: 11px 11px 9px; border-radius: 0; text-align: center; text-transform: uppercase;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out); }
+.sportbar-in .sport-btn:hover { color: var(--text); }
+.sportbar-in .sport-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
 
 @media (max-width: 760px) {
-  .sportbar { padding: 8px 0; }
+  .sportbar { padding: 0; }
   /* `.view` drops to 12px here; the strip tracks it. */
-  .sportbar-in { padding: 0 12px; gap: 5px; }
+  .sportbar-in { padding: 0 8px; gap: 0; }
   /* THE HAIRLINE GOES WHERE THE ROW WRAPS. Measured at 390px: all six
      leagues fit line one, so the separator became the last thing on that
      line — a 1px tick floating against the right margin, dividing
@@ -6319,7 +6349,11 @@ body.has-rail .shell {
      line rhythm of every paragraph on the site to fix something nobody
      mis-taps. The rule is "standalone control" versus "word in a
      sentence", not a number applied to every anchor. */
-  .sportbar-in .sport-btn { min-height: 44px; }
+  /* A THUMB STILL HAS TO HIT IT. Losing the box does not license
+     losing the target: 44px is the tap size, and with the fill gone it
+     has to be asked for explicitly rather than falling out of the
+     padding. */
+  .sportbar-in .sport-btn { min-height: 44px; padding: 0 10px; }
 
   /* THE BAR SHRINKS FROM HERE, not from 760. Drawer mode starts at this
      width, which is the point at which the bar stops having room — and
