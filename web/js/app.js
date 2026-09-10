@@ -8042,6 +8042,18 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     openPeek(who.dataset.peek);
   }
+  /* …and the player door, which had no keyboard at all. A BUTTON needs
+     none — the browser fires its click on Enter and Space — but
+     `likelyDoor` puts this on an <article> with role="link", and the
+     team stat table puts it on a <tr>. Both had told a screen reader
+     they were operable and then answered only a mouse. The `a, button`
+     guard at the top of this handler is what keeps the real buttons
+     from firing twice. */
+  const guy = e.target.closest("[data-player-page]");
+  if (guy) {
+    e.preventDefault();
+    openPlayerRoute(guy.dataset.playerPage);
+  }
 });
 
 /* Either spelling, same as findGame: the long identity every card
@@ -24985,6 +24997,64 @@ function teamRecordLine(r) {
    Every name is a door to the player page, which is the whole point of
    putting a squad here: the team page is where somebody arrives from
    search, and until now it was a dead end with a table on it. */
+/* THE STAT PAGE, ESPN-shaped. Ethan, 2026-09-10, with their team tab
+   open beside ours: "now the ESPN uses theirs as an example of how we
+   should make ours work and the data we could show." Theirs is a
+   leaders strip over Passing / Rushing / Receiving; this is the same
+   page built out of `player_game_logs`, the table the props already
+   grade against.
+
+   The COLUMNS come from the engine rather than from here, and that is
+   deliberate: a column exists when somebody on the team has a number
+   for it, so the college board draws the six its feed writes and the
+   NFL draws eight, with no second table to keep in step. What neither
+   draws is LNG or BIG — a longest run is a play-level fact and a game
+   log does not hold the plays. */
+function teamLeadersHTML(st) {
+  const rows = ((st || {}).leaders || []).filter((L) => L && L.player);
+  if (!rows.length) return "";
+  return `<div class="tld">${rows.map((L) => `
+    <button class="tld-card" type="button"
+            data-player-page="${escapeAttr(slugify(L.player))}">
+      <span class="tld-k">${escapeHtml(L.title)} yards</span>
+      <span class="tld-who">${escapeHtml(L.player)}${L.position
+        ? ` <span class="tld-pos">${escapeHtml(L.position)}</span>` : ""}</span>
+      <span class="tld-v">${Math.round(L.value).toLocaleString()}</span>
+    </button>`).join("")}</div>`;
+}
+
+function teamStatsHTML(st, sport) {
+  const sections = ((st || {}).sections || []).filter(
+    (x) => (x.rows || []).length);
+  if (!sections.length) return "";
+  const num = (v) => (v == null ? "—"
+    : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : String(v)));
+  const body = sections.map((sec) => `
+    <div class="section-title minor">${escapeHtml(sec.title)}</div>
+    <div class="rank-scroll"><table class="rank-table"><thead><tr>
+      <th>Name</th>${(sec.columns || []).map(
+        (c) => `<th>${escapeHtml(c)}</th>`).join("")}
+      </tr></thead><tbody>
+      ${(sec.rows || []).map((r) => `<tr class="tst-row" tabindex="0"
+          role="link" data-player-page="${escapeAttr(slugify(r.player))}">
+        <td class="rank-name">${escapeHtml(r.player)}${r.position
+          ? ` <span class="tst-pos">${escapeHtml(r.position)}</span>` : ""}</td>
+        ${(r.cells || []).map((v) => `<td>${num(v)}</td>`).join("")}
+      </tr>`).join("")}
+      </tbody></table></div>`).join("");
+  return `
+    ${teamLeadersHTML(st)}
+    <div class="section-title">Team stats${st.season ? ` · ${st.season}` : ""}
+      <span class="sub">— every player with a game logged for this team,
+      ranked by yards. Tap a row for his own page.</span></div>
+    ${body}
+    <p class="rank-help">Totals and averages are computed from the game
+      logs this site ingests, which is why there is no longest-play or
+      20-plus column: a game log holds the yards, not the plays that
+      made them. A column nobody on this team has a number for is left
+      out rather than filled with dashes.</p>`;
+}
+
 function teamSquadHTML(sq, sport) {
   const groups = ((sq || {}).positions || []).filter(
     (g) => (g.players || []).length);
@@ -25194,6 +25264,7 @@ function renderTeamPage() {
       matched “${escapeHtml(d.vs_unknown)}” — the history below is
       ${escapeHtml(p.name)} on its own.</div>` : ""}
     ${teamSeasonsHTML(p)}
+    ${teamStatsHTML(d.stats, d.sport)}
     ${teamSquadHTML(d.squad, d.sport)}
     ${teamOppPickerHTML(d)}
     ${teamH2HHTML(d.head_to_head, d.sport)}
@@ -37220,6 +37291,32 @@ function buzzOnSettle(rows) {
     if (window.MutationObserver)
       new MutationObserver(sync).observe(sb, { childList: true, subtree: true });
     sync();
+  })();
+  /* THE SAME FADE, ONE AXIS OVER. The season and stat tables have
+     always scrolled sideways and never said so — Ethan's Rams
+     screenshot, 2026-09-10, shows the ATS column cut mid-digit at the
+     viewport edge, which reads as a broken table rather than as a wide
+     one. `.rank-more` carries the mask only while there is more to the
+     right, so at the end of the scroll the last column reads whole; a
+     permanent mask would dim it forever, the defect `.sb-more`'s own
+     note warns about. Delegated to the document because these tables
+     are rendered and re-rendered by half a dozen views. */
+  (() => {
+    const sync = (el) => el.classList.toggle("rank-more",
+      el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    const all = () => document.querySelectorAll(".rank-scroll").forEach(sync);
+    document.addEventListener("scroll", (e) => {
+      const el = e.target;
+      if (el && el.classList && el.classList.contains("rank-scroll")) sync(el);
+    }, true);
+    window.addEventListener("resize", all, { passive: true });
+    // Same guard as the rail above: every real browser has this, the
+    // suite's eval harness does not, and a boot-time throw here is a
+    // blank page in the failure mode it exists to catch.
+    if (window.MutationObserver)
+      new MutationObserver(all).observe(document.body,
+                                        { childList: true, subtree: true });
+    all();
   })();
   // Anchor items (Top Picks, Stadiums): go Home, then scroll to the block.
   document.querySelectorAll(".sb-anchor").forEach((b) =>

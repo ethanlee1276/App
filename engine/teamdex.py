@@ -440,65 +440,44 @@ def _absorb(who: dict, r) -> None:
         "games": games}
 
 
-def squad(conn, sport: str, team: str, season: int | None = None,
-          per_position: int = SQUAD_PER_POSITION) -> dict:
-    """Who plays for this team, by position, and what they have done.
+def _roster(conn, sport: str, team: str, season: int) -> dict:
+    """``{key: {player, position, games, stats}}`` for one team-season.
 
-    Ethan, 2026-09-10, looking at the Rams page: "We should be showing
-    more info too when you look up a team on the search page. We should
-    show a depth chart and player stats and all that shit."
+    ONE PLAYER, ONE ROW, and one place that decides it — `squad` draws
+    the depth chart from this and `stat_tables` draws the stat page, so
+    a name cannot be Kyren Williams on one and K.Williams on the other.
 
-    THIS IS A DEPTH CHART MEASURED RATHER THAN PUBLISHED, and the
-    difference is worth stating because it cuts both ways. nflverse
-    publishes a real one — `engine/sources/depthcharts` reads it — and it
-    is what a coach filed, which is the right answer to "who is listed
-    first" and is NFL-only. This orders each position by what the players
-    actually did: games first, then the position's leading market. It
-    covers every league this repo ingests, it cannot go stale against a
-    depth chart nobody refiled, and it answers the question a bettor is
-    really asking — who gets the ball. What it cannot do is call a Week 1
-    starter who has not played yet, and the row count says so.
+    `player_game_logs` holds two NFL feeds under one schema and they do
+    not spell a name the same way: the weekly box score writes "Kyren
+    Williams" with a position, `sources.nflpbp.xfp_player_rows` writes
+    "K.Williams" with an EMPTY one and says so in its own docstring.
+    Grouped on the raw string, every skill player came out twice — once
+    under his position and once in a nameless bucket at the bottom of
+    the page. Ethan's Rams screenshot, 2026-09-10: a "— 14 listed"
+    group holding K.Williams, B.Corum, P.Nacua, D.Adams, C.Parkinson
+    and D.Allen, every one of them already listed above.
 
-    Everything comes out of `player_game_logs`, the same table the props
-    grade against, so a name here is a name the rest of the site can
-    price. No feed is called and no roster file is read: a player who has
-    not taken a snap for this team is not on this list, which is honest
-    rather than complete.
+    THE FOLD RUNS ONE WAY ONLY, and that is the whole care in it. An
+    abbreviated row cannot name a person — "D.Moore" is Devin or Dennis
+    and the row does not know — so it JOINS a full name rather than
+    merging with one. Two full names that differ stay two people
+    however alike their initials are; `fantasy._short_key` is
+    deliberately loose (2025 logged two ('d','moore') and two
+    ('m','evans')) and loose is right for a lookup and wrong for an
+    identity.
+
+    An abbreviation that matches no full name, or matches two, is left
+    as its own row rather than guessed at — the same refusal
+    `sources.livescores.ingest_finals` makes about an ambiguous
+    fixture. Nothing is dropped, which is what a college feed with no
+    roster position needs.
     """
     from .fantasy import _fold, _short_key
-    season = season if season is not None else _latest_season(conn, sport, team)
-    if season is None:
-        return {"season": None, "positions": [], "players": 0}
     rows = conn.execute(
         "SELECT player, position, market, COUNT(*) n, SUM(value) total, "
         "COUNT(DISTINCT game_id) games FROM player_game_logs "
         "WHERE sport=? AND team=? AND season=? AND player<>'' "
         "GROUP BY player, position, market", (sport, team, season)).fetchall()
-    # ONE PLAYER, ONE ROW. `player_game_logs` holds two NFL feeds under
-    # one schema and they do not spell a name the same way: the weekly
-    # box score writes "Kyren Williams" with a position,
-    # `sources.nflpbp.xfp_player_rows` writes "K.Williams" with an EMPTY
-    # one and says so in its own docstring. Grouped on the raw string,
-    # every skill player came out twice — once under his position and
-    # once in a nameless bucket at the bottom of the page. Ethan's Rams
-    # screenshot, 2026-09-10: a "— 14 listed" group holding K.Williams,
-    # B.Corum, P.Nacua, D.Adams, C.Parkinson and D.Allen, every one of
-    # them already listed above under RB, WR or TE.
-    #
-    # THE FOLD RUNS ONE WAY ONLY, and that is the whole care in it. An
-    # abbreviated row cannot name a person — "D.Moore" is Devin or
-    # Dennis and the row does not know — so it JOINS a full name rather
-    # than merging with one. Two full names that differ stay two people
-    # however alike their initials are; `fantasy._short_key` is
-    # deliberately loose (2025 logged two ('d','moore') and two
-    # ('m','evans')) and loose is right for a lookup and wrong for an
-    # identity.
-    #
-    # An abbreviation that matches no full name, or matches two, is left
-    # as its own row rather than guessed at — the same refusal
-    # `sources.livescores.ingest_finals` makes about an ambiguous
-    # fixture. Nothing is dropped, which is what a college feed with no
-    # roster position needs.
     by_player: dict = {}
     short_rows: list = []
     for r in rows:
@@ -525,7 +504,38 @@ def squad(conn, sport: str, team: str, season: int | None = None,
             {"player": name, "position": str(r["position"] or ""),
              "games": 0, "stats": {}})
         _absorb(who, r)
+    return by_player
 
+
+def squad(conn, sport: str, team: str, season: int | None = None,
+          per_position: int = SQUAD_PER_POSITION) -> dict:
+    """Who plays for this team, by position, and what they have done.
+
+    Ethan, 2026-09-10, looking at the Rams page: "We should be showing
+    more info too when you look up a team on the search page. We should
+    show a depth chart and player stats and all that shit."
+
+    THIS IS A DEPTH CHART MEASURED RATHER THAN PUBLISHED, and the
+    difference is worth stating because it cuts both ways. nflverse
+    publishes a real one — `engine/sources/depthcharts` reads it — and it
+    is what a coach filed, which is the right answer to "who is listed
+    first" and is NFL-only. This orders each position by what the players
+    actually did: games first, then the position's leading market. It
+    covers every league this repo ingests, it cannot go stale against a
+    depth chart nobody refiled, and it answers the question a bettor is
+    really asking — who gets the ball. What it cannot do is call a Week 1
+    starter who has not played yet, and the row count says so.
+
+    Everything comes out of `player_game_logs`, the same table the props
+    grade against, so a name here is a name the rest of the site can
+    price. No feed is called and no roster file is read: a player who has
+    not taken a snap for this team is not on this list, which is honest
+    rather than complete.
+    """
+    season = season if season is not None else _latest_season(conn, sport, team)
+    if season is None:
+        return {"season": None, "positions": [], "players": 0}
+    by_player = _roster(conn, sport, team, season)
     groups: dict = {}
     for who in by_player.values():
         lead = LEAD_MARKET.get(who["position"])
@@ -578,3 +588,140 @@ def _position_order() -> dict:
 
 
 _POSITION_ORDER = _position_order()
+
+
+#: THE ESPN TEAM-STATS PAGE, built only from what this repo stores.
+#:
+#: Ethan, 2026-09-10, with an ESPN screenshot beside ours: "now the ESPN
+#: uses theirs as an example of how we should make ours work and the data
+#: we could show." Theirs runs Passing / Rushing / Receiving with a
+#: leaders strip on top, and every column below is one this site can
+#: actually compute out of `player_game_logs`.
+#:
+#: WHAT IS DELIBERATELY ABSENT: ESPN prints LNG (longest play) and BIG
+#: (plays over 20 yards) and CMP/CMP%. Those are play-level facts and a
+#: completion count, and this table holds neither — a game log has the
+#: yards, not the plays that made them. Inventing an AVG from yards over
+#: attempts is arithmetic; inventing a longest run is not, so those
+#: columns are not here rather than being estimated. AIR is the reverse
+#: case: ESPN has no such column and nflverse gives us air yards, so the
+#: receiving table shows one they do not.
+#:
+#: Each column is ``(label, kind, market, second market)``:
+#:   gp        games played (the section's own volume market decides)
+#:   sum       the season total for that market
+#:   ratio     first market divided by second — yards per carry
+#:   per_game  the season total over games played
+STAT_SECTIONS = {
+    "football": (
+        {"key": "passing", "title": "Passing", "sort": "pass_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("ATT", "sum", "pass_att", None),
+                     ("YDS", "sum", "pass_yds", None),
+                     ("AVG", "ratio", "pass_yds", "pass_att"),
+                     ("TD", "sum", "pass_td", None),
+                     ("INT", "sum", "pass_int", None),
+                     ("YDS/G", "per_game", "pass_yds", None))},
+        {"key": "rushing", "title": "Rushing", "sort": "rush_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("CAR", "sum", "carries", None),
+                     ("YDS", "sum", "rush_yds", None),
+                     ("AVG", "ratio", "rush_yds", "carries"),
+                     ("TD", "sum", "rush_td", None),
+                     ("YDS/G", "per_game", "rush_yds", None))},
+        {"key": "receiving", "title": "Receiving", "sort": "rec_yds",
+         "columns": (("GP", "gp", None, None),
+                     ("REC", "sum", "receptions", None),
+                     ("TGTS", "sum", "targets", None),
+                     ("YDS", "sum", "rec_yds", None),
+                     ("AVG", "ratio", "rec_yds", "receptions"),
+                     ("TD", "sum", "rec_td", None),
+                     ("AIR", "sum", "air_yards", None),
+                     ("YDS/G", "per_game", "rec_yds", None))},
+    ),
+}
+
+#: Which set of sections a sport gets. Only football has one today —
+#: baseball and basketball box scores are a different shape and a
+#: pitching table pretending to be a passing table would be worse than
+#: no table. `stat_tables` returns nothing for them and the page draws
+#: nothing, which is the honest answer until they get their own.
+STAT_SPORTS = {"nfl": "football", "cfb": "football"}
+
+#: How many rows a section prints. ESPN lists everyone who touched the
+#: ball; a page does not need the punter who took one snap.
+STAT_ROWS = 10
+
+
+def _cell(who: dict, kind: str, market, second):
+    """One table cell, or None when this player has nothing to put in it.
+
+    None rather than 0 throughout, because they are different claims: a
+    quarterback with no interceptions logged and a wide receiver who
+    cannot throw one are not the same row, and a column where nobody has
+    anything is dropped rather than filled with zeroes.
+    """
+    stats = who.get("stats") or {}
+    if kind == "gp":
+        return who.get("games") or None
+    st = stats.get(market)
+    if st is None or st.get("total") is None:
+        return None
+    if kind == "sum":
+        return st["total"]
+    if kind == "per_game":
+        return round(st["total"] / max(1, who.get("games") or 1), 1)
+    if kind == "ratio":
+        den = stats.get(second)
+        if den is None or not den.get("total"):
+            return None
+        return round(st["total"] / den["total"], 1)
+    return None
+
+
+def stat_tables(conn, sport: str, team: str, season: int | None = None,
+                rows: int = STAT_ROWS) -> dict:
+    """``{"season", "sections": [...], "leaders": [...]}`` — the team's
+    own stat page, ESPN-shaped, from the logs this site already grades on.
+
+    Reads the SAME folded player map `squad` does, so a name cannot
+    appear here under one spelling and there under another (see `_roster`
+    for why that fold exists at all).
+
+    A section is dropped when nobody on the team has a number in its
+    sorting market, and a COLUMN is dropped when nobody in the section
+    has a number in it — which is how the college board gets the six
+    columns its feed writes without a second table to maintain: college
+    has no targets, no air yards and no interceptions, and the header
+    simply does not mention them.
+    """
+    shape = STAT_SPORTS.get(str(sport or "").lower())
+    if not shape:
+        return {"season": None, "sections": [], "leaders": []}
+    season = season if season is not None else _latest_season(conn, sport, team)
+    if season is None:
+        return {"season": None, "sections": [], "leaders": []}
+    people = _roster(conn, sport, team, season)
+    sections, leaders = [], []
+    for spec in STAT_SECTIONS[shape]:
+        here = [w for w in people.values()
+                if ((w.get("stats") or {}).get(spec["sort"]) or {}).get("total")]
+        if not here:
+            continue
+        here.sort(key=lambda w: -(w["stats"][spec["sort"]]["total"] or 0.0))
+        here = here[:max(1, rows)]
+        cells = [[_cell(w, kind, m, m2) for _lab, kind, m, m2
+                  in spec["columns"]] for w in here]
+        keep = [i for i, _c in enumerate(spec["columns"])
+                if any(row[i] is not None for row in cells)]
+        sections.append({
+            "key": spec["key"], "title": spec["title"],
+            "columns": [spec["columns"][i][0] for i in keep],
+            "rows": [{"player": w["player"], "position": w["position"],
+                      "cells": [cells[n][i] for i in keep]}
+                     for n, w in enumerate(here)]})
+        leaders.append({"title": spec["title"], "player": here[0]["player"],
+                        "position": here[0]["position"],
+                        "market": spec["sort"],
+                        "value": here[0]["stats"][spec["sort"]]["total"]})
+    return {"season": season, "sections": sections, "leaders": leaders}

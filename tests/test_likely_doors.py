@@ -69,9 +69,16 @@ def test_the_prop_page_carries_the_versus_block():
 
 
 def test_a_card_wide_player_door_yields_to_its_own_controls():
+    """THE CLICK listener, named by its own comment rather than by the
+    first mention of the selector anywhere in the file. A keyboard
+    handler for the same door landed above it on 2026-09-10 and took
+    the bare `index()` with it — the guard being asserted is this
+    listener's, and the keydown path has its own `a, button, input,
+    select` guard at the top of its handler."""
     js = _js()
-    i = js.index('e.target.closest("[data-player-page]")')
-    block = js[i:i + 400]
+    i = js.index("// A whole card can be this door now (likelyDoor)")
+    block = js[i - 300:i + 400]
+    assert 'e.target.closest("[data-player-page]")' in block
     assert 'closest("a, button, input, label, select, .chip")' in block
 
 

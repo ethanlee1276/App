@@ -268,6 +268,7 @@
   /* The "more below" fade for scroll rails — a mask, so the color is
      alpha only and no theme ever has to restate it. */
   --mask-more: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
+  --mask-more-x: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   /* The stub pages' big numeral, filled with the brand ramp. */
   --grad-brand: linear-gradient(180deg, var(--brand-2), var(--brand));
   /* The draft room's hero strip. A token rather than a rule, because a
@@ -8050,7 +8051,50 @@ button.rc-day b { font-size: var(--fs-sm); }
   .agate th { letter-spacing: .04em; }
 }
 
-.rank-scroll { overflow: auto; margin-top: 10px; max-height: 62vh; }
+/* THE RIGHT EDGE SAID NOTHING. Ethan's Rams screenshot, 2026-09-10,
+   shows the season table cut mid-digit at the viewport edge. It has
+   always scrolled sideways and nothing on the page said so, so it read
+   as broken rather than as wider than the phone.
+
+   THE FADE RIDES A CLASS, exactly as `.sidebar.sb-more` does and for
+   the reason written there: "a permanent mask would fade the final
+   line even at the end of the scroll, which is the same defect wearing
+   a gradient". Same defect, same fix, one axis over. `scrollbar-gutter`
+   keeps a desktop scrollbar off the last column. */
+.rank-scroll {
+  overflow: auto; margin-top: 10px; max-height: 62vh;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+.rank-scroll.rank-more {
+  -webkit-mask-image: var(--mask-more-x);
+  mask-image: var(--mask-more-x); }
+
+/* Team leaders — ESPN's three header cards, the same three facts. */
+.tld { display: grid; gap: 10px; margin-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.tld-card {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 12px 14px; border-radius: var(--radius);
+  border: var(--hairline) solid var(--border-soft); background: var(--panel-2);
+  color: var(--text-dim); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.tld-card:hover { border-color: var(--brand); }
+.tld-k { font-size: var(--fs-2xs); font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-mute); }
+.tld-who { font-size: var(--fs-sm); font-weight: 700; color: var(--text); }
+.tld-pos { font-size: var(--fs-2xs); color: var(--text-mute);
+  letter-spacing: .08em; }
+.tld-v { font-size: var(--fs-xl); font-weight: 800; color: var(--text);
+  font-variant-numeric: tabular-nums; line-height: var(--lh-tight); }
+
+/* Stat-table rows are doors to the player, like the squad rows above. */
+.tst-row { cursor: pointer; }
+.tst-row:hover { background: var(--panel-2); }
+.tst-row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.tst-pos { font-size: var(--fs-2xs); color: var(--text-mute);
+  letter-spacing: .08em; }
 .rank-table { width: 100%; border-collapse: collapse;
   font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .rank-table th, .rank-table td { padding: 5px 10px; text-align: right;

@@ -413,7 +413,13 @@ def test_every_prop_reaches_the_player_page():
     # the door yields to a card's own controls since 2026-09-02, and the
     # guard sits between the lookup and the open.
     from _windows import until
-    listener = until(APP, 'e.target.closest("[data-player-page]")', "});")
+    # ANCHORED ON THE CLICK LISTENER'S OWN COMMENT, not on the first
+    # mention of the selector: a keydown handler for the same door
+    # landed above it on 2026-09-10 (a `role="link"` row had told a
+    # screen reader it was operable and answered only a mouse), and
+    # this window would otherwise open on that one instead.
+    listener = until(APP, "// A whole card can be this door now (likelyDoor)",
+                     "});")
     assert "openPlayerRoute(b.dataset.playerPage)" in listener
 
 

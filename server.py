@@ -724,6 +724,18 @@ def _squad_or_empty(teamdex, conn, sport, team):
                 "error": "player logs unavailable"}
 
 
+def _stats_or_empty(teamdex, conn, sport, team):
+    """`teamdex.stat_tables`, guarded the same way and for the same
+    reason — see `_squad_or_empty` above. A second section that draws
+    nothing is a second section that draws nothing; it must not be a
+    third way to take the whole page down."""
+    try:
+        return teamdex.stat_tables(conn, sport, team)
+    except Exception:                                        # noqa: BLE001
+        return {"season": None, "sections": [], "leaders": [],
+                "error": "player logs unavailable"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter logging
         sys.stderr.write("  %s\n" % (fmt % args))
@@ -3127,7 +3139,13 @@ p{color:#b8ada1}a{color:#e8b64c}</style></head><body><main>
                        # and the record below it has been right since
                        # 09-09 — one bad read of `player_game_logs` must
                        # not take a working page down with it.
-                       "squad": _squad_or_empty(teamdex, conn, sport, team)}
+                       "squad": _squad_or_empty(teamdex, conn, sport, team),
+                       # The stat page ESPN's own team tab draws —
+                       # leaders, then Passing/Rushing/Receiving. Same
+                       # guard, same reason (Ethan, 2026-09-10: "ESPN
+                       # uses theirs as an example of how we should make
+                       # ours work and the data we could show").
+                       "stats": _stats_or_empty(teamdex, conn, sport, team)}
                 if opp.strip():
                     rivals = teamdex.resolve(opp, sport, known)
                     if rivals:
