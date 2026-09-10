@@ -64,6 +64,16 @@ RUNG = {"kind": "prop", "player": "Jaxon Smith-Njigba", "market": "rec_yds",
 #: The same row taken straight off the main line.
 ROW = dict(RUNG, line=65.5, rung="main")
 
+#: THE ANYTIME TOUCHDOWN, which has no line at all. `likely.from_watch`
+#: writes side "yes" and line None; the long-shot board and the journal
+#: both spell it OVER 0.5, which is how it settles. Two of `propId`'s
+#: four parts disagree, so the exact lookup misses on every scorer row.
+TD_ROW = {"kind": "td", "player": "Kyren Williams", "market": "anytime_td",
+          "side": "yes", "line": None, "rung": "main",
+          "recent_values": [1, 0, 2, 1]}
+TD_PROP = {"player": "Kyren Williams", "market": "anytime_td",
+           "side": "OVER", "line": 0.5, "recent_values": [1, 0, 2, 1]}
+
 
 def _run(props, row, call="likelyDoor"):
     """Call one door against a board holding exactly `props`."""
@@ -124,6 +134,67 @@ def test_a_main_line_row_was_never_broken_and_still_is_not():
     if got is None:
         return
     assert "data-prop=" in got and "|65.5" in got
+
+
+# --- the touchdown scorers --------------------------------------------------
+def test_a_scorer_row_opens_its_touchdown_prop():
+    """Ethan, 2026-09-10, after the rung fix landed: "it did not work for
+    the anytime touchdown scorers on the most likely. It still takes you
+    to the search page." A different id mismatch in the same door."""
+    got = _run([TD_PROP], TD_ROW)
+    if got is None:
+        return
+    assert "data-prop=" in got, f"a scorer still opens the player page: {got}"
+    assert "Kyren Williams|anytime_td|OVER|0.5" in got, got
+
+
+def test_the_shelf_row_opens_it_too():
+    got = _run([TD_PROP], TD_ROW, call="likelyOpen")
+    if got is None:
+        return
+    assert got.strip() == \
+        'data-open="prop:Kyren Williams|anytime_td|OVER|0.5"', got
+
+
+def test_the_side_may_be_spelled_either_way():
+    """Neither spelling is wrong and neither is worth churning the
+    journal to unify — on a market with no line the side is not part of
+    what identifies the bet."""
+    for side in ("OVER", "yes", "Yes", ""):
+        got = _run([dict(TD_PROP, side=side)], TD_ROW)
+        if got is None:
+            return
+        assert "data-prop=" in got, f"side={side!r} broke the match"
+
+
+def test_two_props_for_one_player_and_market_are_refused():
+    """The pair no longer identifies a prop, and a coin-flip choice
+    would open a page about the wrong bet."""
+    got = _run([TD_PROP, dict(TD_PROP, line=1.5)], TD_ROW)
+    if got is None:
+        return
+    assert "data-player-page=" in got and "data-prop=" not in got
+
+
+def test_a_scorer_with_no_prop_on_the_board_takes_the_player_page():
+    """`openProp` on an id the board does not carry shows its own empty
+    state, so there is genuinely no page to open — the likelihood board
+    is offered the WHOLE ranked menu while the props board carries a
+    slice of it."""
+    got = _run([], TD_ROW)
+    if got is None:
+        return
+    assert "data-player-page=" in got
+
+
+def test_a_market_with_a_line_does_not_take_the_line_less_path():
+    """It is the missing line that licenses matching on two fields. A
+    yardage row with a line still has to agree on all four, or a rung
+    would resolve to whichever prop shared its player and market."""
+    got = _run([MAIN], dict(RUNG, rung="main", line=49.5))
+    if got is None:
+        return
+    assert "data-player-page=" in got, got
 
 
 # --- what it still refuses --------------------------------------------------

@@ -6446,9 +6446,38 @@ function likelyProp(r) {
   if (!r || !r.player) return null;
   const exact = findProp(propId(r));
   if (exact) return exact;
-  if (r.rung !== "alt" || r.main_line == null) return null;
-  return findProp(propId({ player: r.player, market: r.market,
-                           side: r.main_side || r.side, line: r.main_line }));
+  if (r.rung === "alt" && r.main_line != null) {
+    const main = findProp(propId({ player: r.player, market: r.market,
+                                   side: r.main_side || r.side,
+                                   line: r.main_line }));
+    if (main) return main;
+  }
+  /* A MARKET WITH NO LINE TO AGREE ON — the anytime touchdown, and the
+     half of Ethan's report the rung fix did not reach: "it did not work
+     for the anytime touchdown scorers on the most likely. It still takes
+     you to the search page."
+
+     `propId` is `player|market|side|line`, and a scorer row has no line
+     at all (`likely.from_watch` writes `line: null`) while the two
+     boards spell the side differently — the likelihood row says "yes",
+     the long-shot board and the journal both say OVER 0.5, which is how
+     it settles. Two of the four parts disagree, so the exact lookup
+     misses every time, on every touchdown row, for both leagues.
+
+     Neither spelling is wrong and neither is worth churning the journal
+     to unify. On a market with no line `player|market` already
+     identifies the bet — a man scores or he does not, there is one such
+     prop per player per game — so that is what it matches on.
+
+     AMBIGUITY IS STILL REFUSED. More than one candidate means the pair
+     does not identify a prop, and the row takes the player page rather
+     than opening a coin-flip choice. */
+  if (r.line == null) {
+    const same = allProps().filter(
+      (x) => x && x.player === r.player && x.market === r.market);
+    return same.length === 1 ? same[0] : null;
+  }
+  return null;
 }
 /* ASKED OF THE PROP, NOT OF THE ROW. `propOpenable` tests whether there
    is enough history to draw the page, and the page draws the PROP —
