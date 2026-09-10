@@ -6475,7 +6475,14 @@ function likelyProp(r) {
   if (r.line == null) {
     const same = allProps().filter(
       (x) => x && x.player === r.player && x.market === r.market);
-    return same.length === 1 ? same[0] : null;
+    if (!same.length) return null;
+    /* ONE BET MAY BE LISTED TWICE. A scorer past the value bar is on
+       BOTH the picks list and the watchlist, and `allProps` pools them —
+       so counting rows would refuse the very players who are most worth
+       opening. What has to be unambiguous is the BET, so the count that
+       matters is of distinct ids. */
+    const ids = new Set(same.map(propId));
+    return ids.size === 1 ? same[0] : null;
   }
   return null;
 }

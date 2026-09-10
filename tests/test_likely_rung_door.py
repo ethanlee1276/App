@@ -167,13 +167,25 @@ def test_the_side_may_be_spelled_either_way():
         assert "data-prop=" in got, f"side={side!r} broke the match"
 
 
-def test_two_props_for_one_player_and_market_are_refused():
+def test_two_different_bets_for_one_player_and_market_are_refused():
     """The pair no longer identifies a prop, and a coin-flip choice
     would open a page about the wrong bet."""
     got = _run([TD_PROP, dict(TD_PROP, line=1.5)], TD_ROW)
     if got is None:
         return
     assert "data-player-page=" in got and "data-prop=" not in got
+
+
+def test_one_bet_listed_twice_is_not_an_ambiguity():
+    """A scorer past the value bar is on BOTH the picks list and the
+    watchlist, and `allProps` pools them — so counting ROWS would refuse
+    exactly the players most worth opening. The count that matters is of
+    distinct bets."""
+    got = _run([TD_PROP, dict(TD_PROP)], TD_ROW)
+    if got is None:
+        return
+    assert "data-prop=" in got, f"a doubly-listed scorer was refused: {got}"
+    assert "Kyren Williams|anytime_td|OVER|0.5" in got
 
 
 def test_a_scorer_with_no_prop_on_the_board_takes_the_player_page():
@@ -233,6 +245,39 @@ def test_the_openable_test_reads_the_prop_not_the_row():
     i = APP.index("function likelyOpenableProp(")
     body = APP[i:APP.index("\n}", i)]
     assert "propOpenable(t)" in body and "propOpenable(r)" not in body
+
+
+# --- the row says what bet it is --------------------------------------------
+def _src(*parts):
+    return open(os.path.join(ROOT, *parts), encoding="utf-8").read()
+
+
+def test_every_watchlist_row_says_what_market_it_is():
+    """THE ACTUAL CAUSE, and both earlier fixes aimed past it.
+
+    A watchlist row carried a player, a price and a probability — and no
+    market, no side, no line. `propId` is `player|market|side|line`, so
+    it could not build an id for one of these at all: the market came
+    back undefined and every lookup missed. Two fixes went into the
+    DOOR (the rung's line, then the line-less market) while the row it
+    was looking for could not be identified by any of them.
+
+    Every watchlist in the repo had the hole — football's was simply the
+    one anybody clicked."""
+    for mod in ("engine/touchdowns.py", "engine/cfb/tds.py",
+                "engine/mlb/homeruns.py"):
+        src = _src(mod)
+        assert '"side": "OVER", "line": 0.5,' in src, \
+            f"{mod}'s watch row still has no side or line"
+
+
+def test_the_watch_row_is_stamped_with_the_picks_own_market():
+    """One bet, one id. A player on both lists must not produce two
+    descriptions of the same wager."""
+    assert '"market": ANYTIME_TD,' in _src("engine/touchdowns.py")
+    assert '"market": "anytime_td",' in _src("engine/cfb/tds.py")
+    assert '"market": "home_runs", "market_label": "Home Run",' in \
+        _src("engine/mlb/homeruns.py")
 
 
 # --- the neighbours are untouched -------------------------------------------

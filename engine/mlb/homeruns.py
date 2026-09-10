@@ -311,6 +311,18 @@ def hr_watchlist(candidates: list[dict], limit: int | None = 10) -> list[dict]:
             "player": prop.player, "team": prop.team,
             "opponent": prop.opponent, "book": c.get("book", ""),
             "odds": odds,
+            # WHAT BET THIS IS — see the same stamp in
+            # engine/touchdowns.td_watchlist. Every watchlist in this
+            # repo had the same hole: a row carried a player, a price
+            # and a probability and no market, side or line, so
+            # `propId` could not build an id for it and every reader
+            # that resolves a row by its bet fell through to the player
+            # page. Baseball's watch list has never been the one
+            # anybody clicked, which is why it took the football boards
+            # to surface it. Matched to the value pick's own row so one
+            # bet has one id, and to the journal's OVER 0.5.
+            "market": "home_runs", "market_label": "Home Run",
+            "side": "OVER", "line": 0.5,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
             "ev_per_unit": round(prob * american_to_decimal(odds) - 1.0, 4),

@@ -472,6 +472,24 @@ def td_watchlist(candidates: list[dict], limit: int = TD_WATCH_LIMIT
             "player": prop.player, "team": prop.team,
             "opponent": prop.opponent, "book": c.get("book", ""),
             "odds": odds,
+            # WHAT BET THIS IS, which the row never said. A watchlist
+            # row carried a player, a price and a probability and no
+            # market, side or line at all — so `propId`
+            # (player|market|side|line) could not build an id for it,
+            # `findProp` could not find it, and every surface that
+            # resolves a row by its bet fell through to a player-page
+            # fallback. Ethan hit it as the Most Likely touchdown
+            # scorers opening the search page, twice, after two fixes
+            # aimed at the wrong fields.
+            #
+            # Stamped to match the VALUE PICK's own row (`_rec_to_dict`
+            # reads `rec.side`/`rec.line`), so a player who is on both
+            # lists has ONE id rather than two descriptions of one bet.
+            # OVER 0.5 is also how the journal writes it and how
+            # `settle_from_history` grades it.
+            "market": ANYTIME_TD,
+            "market_label": MARKET_LABELS.get(ANYTIME_TD, "Anytime TD"),
+            "side": "OVER", "line": 0.5,
             "model_prob": round(prob, 4),
             "implied_prob": round(implied, 4),
             "book_prob": round(american_to_prob(odds), 4),

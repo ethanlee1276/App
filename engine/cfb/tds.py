@@ -1057,6 +1057,18 @@ def build_cfb_td_longshots(conn, games: list[dict], quotes_by_game: dict,
                         "player": u["player"], "team": side,
                         "opponent": opp, "book": best.get("book", ""),
                         "odds": odds,
+                        # WHAT BET THIS IS — see the same stamp in
+                        # engine/touchdowns.td_watchlist. A watchlist
+                        # row carried no market, side or line, so
+                        # `propId` could not build an id for it and
+                        # every reader that resolves a row by its bet
+                        # fell through to the player page. Matched to
+                        # the value pick's own row so one bet has one
+                        # id, and to the journal, which grades a scorer
+                        # as OVER 0.5.
+                        "market": "anytime_td",
+                        "market_label": "Anytime TD",
+                        "side": "OVER", "line": 0.5,
                         "shop_refused": shop_refused,
                         "model_prob": round(wp, 4),
                         "implied_prob": round(wimp, 4),
